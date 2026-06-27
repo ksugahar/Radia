@@ -3051,6 +3051,15 @@ std::vector<double> TetMoment1Probe(const std::vector<double>& V, const std::vec
     rad_hdiv::TetMoment1(Vv, rr, out);
     return {out[0], out[1], out[2]};
 }
+// CURVED P2 triangle charge potential probe (validates the curved-panel Duffy against the Python prototype).
+double CurvedTriPotentialProbe(const std::vector<double>& nodes, int e0, int e1,
+                               const std::vector<double>& p, const std::vector<double>& gl,
+                               const std::vector<double>& gw) {
+    double nn[6][3], pp[3];
+    for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k) nn[i][k] = nodes[3*i+k];
+    for (int k = 0; k < 3; ++k) pp[k] = p[k];
+    return rad_hdiv::CurvedTriPotential(nn, e0, e1, pp, gl.data(), gw.data(), (int)gl.size());
+}
 std::vector<double> TetVolFieldLinearProbe(const std::vector<double>& V, const std::vector<double>& r,
                                            double rho0, const std::vector<double>& g) {
     double Vv[4][3], rr[3], gg[3], out[3];
@@ -3181,6 +3190,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "Surface second moment INT_T r'(x)r'/R dS' (V=9, r=3) -> 9 (row-major 3x3).  == triangle_potential_moment2.");
     m.def("_hdiv_tet_moment1", &radia_hdivvim::TetMoment1Probe, py::arg("V"), py::arg("r"),
           "Volume first moment INT_V r'/R dV' (V=12, r=3) -> 3-vector.  == tet_newtonian_moment.");
+    m.def("_hdiv_curved_tri_potential", &radia_hdivvim::CurvedTriPotentialProbe,
+          py::arg("nodes"), py::arg("e0"), py::arg("e1"), py::arg("p"), py::arg("gl"), py::arg("gw"),
+          "CURVED P2 triangle surface-charge potential INT xi^e0 eta^e1 /|p-X(xi)| dA_curved via the "
+          "reference Duffy (nodes=18 P2 nodes row-major, p=3, gl/gw = nq-pt Gauss-Legendre on [0,1]).");
     m.def("_hdiv_tet_volfield_linear", &radia_hdivvim::TetVolFieldLinearProbe,
           py::arg("V"), py::arg("r"), py::arg("rho0"), py::arg("g"),
           "Linear volume-charge field (V=12, r=3, rho0 scalar, g=3) -> 3-vector.  == tet_volume_field_linear.");
@@ -6357,7 +6370,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     // ========================================================================
     // Phase B: time-harmonic dyadic Stratton-Chu reconstruction.
-    // Resolves Phase 2 KNOWN_LIMITATION (66% near-field undershoot from
+    // Resolves the former Phase 2 66% near-field undershoot from
     // missing (1/k^2) grad-grad psi term).
     // ========================================================================
     m.def("_EquivalenceSourceHarmonic",
@@ -6432,7 +6445,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
             Full Stratton-Chu: includes the (1/k^2) grad-grad-psi term
             that the scalar form omits.  Resolves the deep-near-field
-            undershoot (Phase 2 KNOWN_LIMITATION).
+            undershoot seen before the dyadic-kernel fix.
 
             Args:
                 centroids: (N_faces, 3) face centroids [m]

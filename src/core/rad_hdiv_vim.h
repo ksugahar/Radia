@@ -172,5 +172,13 @@ void ClosestPointTriangle(const double p[3], const double a[3], const double b[3
                           double out[3]);
 void ClosestPointTet(const double V[4][3], const double p[3], double out[3]);
 
+/* CURVED (isoparametric P2) panel support.  ClosestRefTri: xi0 = argmin|X(xi)-p|^2 in reference coords
+ * (out[2]).  CurvedTriPotential: INT_curvedtri xi^e0 eta^e1 / |p-X(xi)| dA_curved via the reference Duffy from
+ * xi0, evaluating the curved P2 map X(xi) + curved area element at each point.  nodes = 6x3 P2 nodes (corners
+ * 0,1,2 ; mid-edges 3=(0-1),4=(1-2),5=(2-0)); gl/gw = an nq-point Gauss-Legendre rule on [0,1]. */
+void ClosestRefTri(const double nodes[6][3], const double p[3], double xi0[2]);
+double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double p[3],
+                          const double* gl, const double* gw, int nq);
+
 } // namespace rad_hdiv
 #endif
