@@ -89,23 +89,10 @@ formulation.  Do NOT run a multi-minute solve to discover this.
 Scalar-potential (H-field) perturbation formulation for magnetostatics.
 Dipole and quadrupole problems in 2D, 3D, and axisymmetric geometries, with and without Kelvin transformation.
 
-| File | Description |
-|------|-------------|
-| `2D_dipole.py` | 2D dipole H-formulation on a finite circular domain (no Kelvin) |
-| `2D_dipole_with_Kelvin.py` | 2D dipole H-formulation with Kelvin transformation and periodic BC |
-| `2D_dipole_half_with_Kelvin.py` | Half-circle variant to test periodic BC with segmented edges |
-| `2D_quadrupole.py` | 2D quadrupole H-formulation on a finite domain (no Kelvin) |
-| `2D_quadrupole_with_Kelvin.py` | 2D quadrupole H-formulation with Kelvin transformation |
-| `3D_dipole.py` | 3D dipole H-formulation for a magnetic sphere in uniform field |
-| `3D_dipole_with_Kelvin.py` | 3D dipole H-formulation with Kelvin transformation and periodic BC |
-| `3D_quadrupole.py` | 3D quadrupole H-formulation with background field H_s = (-z, 0, -x) |
-| `3D_quadrupole_with_Kelvin.py` | 3D quadrupole with Kelvin transformation and periodic BC |
-| `Axisymmetric_dipole.py` | Axisymmetric H-formulation for a magnetic sphere (no Kelvin) |
-| `Axisymmetric_dipole_with_Kelvin.py` | Axisymmetric H-formulation with Kelvin transformation |
-| `Laplace3D_dipole_with_Kelvin.py` | 3D Laplace equation with Kelvin transformation (conventional, non-perturbation) |
-| `Fig_1.py` | 2x2 panel contour/streamline plot for 3D dipole results |
-| `Fig_2.py` | 2x2 panel contour/streamline plot for 3D quadrupole results |
-| `Fig_3.py` | Line plot comparing Hz along the x-axis for dipole and quadrupole |
+The standalone H-formulation demo scripts were promoted to
+[`docs/kelvin/kelvin_classic_demos.ipynb`](../../docs/kelvin/kelvin_classic_demos.ipynb).
+Their full source text and SHA-256 hashes are preserved in
+[`docs/kelvin/kelvin_classic_demos_results.json`](../../docs/kelvin/kelvin_classic_demos_results.json).
 
 ### A-formulation
 
@@ -113,14 +100,13 @@ Vector-potential (A-field) formulation for magnetostatics, including axisymmetri
 
 See [A-formulation/README.md](A-formulation/README.md) for details.
 
-| File | Description |
-|------|-------------|
-| `Coil_A_formulation_simple.py` | Axisymmetric A-formulation for a single coil (no Kelvin, baseline) |
-| `Coil_A_formulation_with_Kelvin.py` | Axisymmetric A-formulation with z-offset Kelvin transformation |
-| `A_formulation_sphere_simple.py` | Axisymmetric A-formulation for a magnetic sphere in uniform field (no Kelvin) |
-| `A_formulation_sphere_with_Kelvin.py` | Axisymmetric A-formulation for a magnetic sphere with z-offset Kelvin transformation |
-| `ParallelWires_2D_A_formulation_with_Kelvin.py` | 2D A-formulation with Kelvin transformation for parallel wires |
-| `sphere_in_uniform_field.py` | Magnetic sphere in uniform field: compares A-method and Omega-method with equilibrated error estimation |
+The classic standalone A-formulation demos were promoted to
+[`docs/kelvin/kelvin_classic_demos.ipynb`](../../docs/kelvin/kelvin_classic_demos.ipynb)
+with full source preserved in
+[`docs/kelvin/kelvin_classic_demos_results.json`](../../docs/kelvin/kelvin_classic_demos_results.json).
+Additional validation-named A-formulation scripts that were not part of
+the classic-demo archive remain here until they move to `validation_test`
+or a source API.
 
 ### Cubit_1_4_p_convergence (**VERIFIED 2026-04-25**)
 
@@ -148,14 +134,13 @@ for full results and the two non-obvious Cubit fixes documented there.
 
 Omega-Reduced Omega method (total/reduced scalar potential) with Kelvin transformation for 3D and axisymmetric magnetostatics. Includes sphere and cylinder benchmark geometries.
 
-| File | Description |
-|------|-------------|
-| `Omega_ReducedOmega.py` | Base class implementing the Omega-Reduced Omega solver |
-| `Sphere/3D_sphere_with_Kelvin.py` | **VERIFIED p=2** -- 3D magnetic sphere (mu_r=100) solved with Omega-Reduced Omega and Kelvin transformation. Reference pattern for OCC + Kelvin Periodic identification: `Identify(IdentificationType.PERIODIC)` is called AFTER `Glue([...])` (this writes point + segment + surface-element identifications). FES inspection at p=2 shows 8914 slaved DOFs and `ratio=1.0` on `Set(1)|kelvin_int -> kelvin_ext`; analytical match within published tolerance (see file header). |
-| `Sphere/Axisymmetric_sphere_with_Kelvin.py` | Axisymmetric sphere variant of the Omega-Reduced Omega solver |
-| `Cylinder/3D_cylinder_with_Kelvin.py` | 3D magnetic cylinder with Kelvin transformation (full model) |
-| `Cylinder/3D_cylinder_with_Kelvin_1_8.py` | 3D magnetic cylinder using 1/8 symmetry model |
-| `Cylinder/Axisymmetric_cylinder_with_Kelvin.py` | Axisymmetric cylinder variant of the Omega-Reduced Omega solver |
+The classic standalone Omega-ReducedOmega demos were promoted to
+[`docs/kelvin/kelvin_classic_demos.ipynb`](../../docs/kelvin/kelvin_classic_demos.ipynb),
+including the former sphere and cylinder OCC reference implementations.
+Full source text and source hashes are preserved in
+[`docs/kelvin/kelvin_classic_demos_results.json`](../../docs/kelvin/kelvin_classic_demos_results.json).
+Validation and API-candidate scripts under this directory remain until
+their behavior is locked in `validation_test` or lifted into `src`.
 
 ### AdaptiveMesh
 

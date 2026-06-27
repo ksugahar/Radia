@@ -1,0 +1,260 @@
+{
+  "schema": "radia.docs.gmsh_animation.inspect.v1",
+  "generated_at_utc": "2026-06-27T03:53:21Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2"
+  },
+  "example_dir": "examples/gmsh_animation",
+  "files": {
+    "animation_geo": "examples/gmsh_animation/animation.geo",
+    "rotor_animation_msh": "examples/gmsh_animation/rotor_animation.msh",
+    "rotor_vol": "examples/gmsh_animation/rotor.vol",
+    "stator_step": "examples/gmsh_animation/stator.step"
+  },
+  "geo_merges": [
+    "stator.step",
+    "rotor_animation.msh"
+  ],
+  "msh": {
+    "path": "examples/gmsh_animation/rotor_animation.msh",
+    "bytes": 3116107,
+    "mesh_format": "4.1 0 8",
+    "nodes": {
+      "entity_blocks": 1,
+      "num_nodes": 2430,
+      "min_node_tag": 1,
+      "max_node_tag": 2430
+    },
+    "elements": {
+      "entity_blocks": 1,
+      "num_elements": 1003,
+      "min_element_tag": 1,
+      "max_element_tag": 1003
+    },
+    "node_data_count": 21,
+    "node_data": [
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.0,
+        "time_step": 0,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0,
+        "max_norm": 0.0,
+        "mean_norm": 0.0
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.05,
+        "time_step": 1,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0075,
+        "max_norm": 0.0075,
+        "mean_norm": 0.007500000000000205
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.1,
+        "time_step": 2,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.015,
+        "max_norm": 0.015,
+        "mean_norm": 0.01500000000000041
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.15,
+        "time_step": 3,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0225,
+        "max_norm": 0.0225,
+        "mean_norm": 0.02250000000000072
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.2,
+        "time_step": 4,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.03,
+        "max_norm": 0.03,
+        "mean_norm": 0.03000000000000082
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.25,
+        "time_step": 5,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0375,
+        "max_norm": 0.0375,
+        "mean_norm": 0.03749999999999901
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.3,
+        "time_step": 6,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.045,
+        "max_norm": 0.045,
+        "mean_norm": 0.04500000000000144
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.35,
+        "time_step": 7,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0525,
+        "max_norm": 0.0525,
+        "mean_norm": 0.05249999999999778
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.4,
+        "time_step": 8,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.06,
+        "max_norm": 0.06,
+        "mean_norm": 0.06000000000000164
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.45,
+        "time_step": 9,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0675,
+        "max_norm": 0.0675,
+        "mean_norm": 0.06749999999999766
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.5,
+        "time_step": 10,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.075,
+        "max_norm": 0.075,
+        "mean_norm": 0.07499999999999803
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.55,
+        "time_step": 11,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0825,
+        "max_norm": 0.0825,
+        "mean_norm": 0.08250000000000286
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.6,
+        "time_step": 12,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.09,
+        "max_norm": 0.09,
+        "mean_norm": 0.09000000000000288
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.65,
+        "time_step": 13,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.0975,
+        "max_norm": 0.0975,
+        "mean_norm": 0.09749999999999708
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.7,
+        "time_step": 14,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.105,
+        "max_norm": 0.105,
+        "mean_norm": 0.10499999999999556
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.75,
+        "time_step": 15,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.1125,
+        "max_norm": 0.1125,
+        "mean_norm": 0.1125000000000051
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.8,
+        "time_step": 16,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.12,
+        "max_norm": 0.12,
+        "mean_norm": 0.12000000000000328
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.85,
+        "time_step": 17,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.1275,
+        "max_norm": 0.1275,
+        "mean_norm": 0.12749999999999803
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.9,
+        "time_step": 18,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.135,
+        "max_norm": 0.135,
+        "mean_norm": 0.13499999999999532
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 0.95,
+        "time_step": 19,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.1425,
+        "max_norm": 0.1425,
+        "mean_norm": 0.14249999999999993
+      },
+      {
+        "name": "Displacement [m]",
+        "time_value": 1.0,
+        "time_step": 20,
+        "num_components": 3,
+        "num_entries": 2430,
+        "min_norm": 0.15,
+        "max_norm": 0.15,
+        "mean_norm": 0.14999999999999605
+      }
+    ]
+  },
+  "checks": {
+    "is_msh_v41": true,
+    "has_vector_node_data": true,
+    "time_values_monotone": true,
+    "max_displacement_monotone": true,
+    "final_displacement_m": 0.15,
+    "expected_final_displacement_m": 0.15,
+    "final_displacement_close": true
+  }
+}

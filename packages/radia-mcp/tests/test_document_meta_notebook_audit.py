@@ -123,6 +123,47 @@ def test_examples_notebook_audit_flags_unexecuted_notebook_and_py_review(tmp_pat
     assert result["notebooks_without_saved_results"]
 
 
+def test_examples_notebook_audit_reports_validation_test_lane(tmp_path):
+    repo = tmp_path
+    topic = repo / "examples" / "demo"
+    topic.mkdir(parents=True)
+    (topic / "validation_demo.py").write_text("print('validation')\n", encoding="utf-8")
+    vtest = repo / "validation_test" / "demo"
+    vtest.mkdir(parents=True)
+    (vtest / "test_demo.py").write_text(
+        'SOURCE = "examples/demo/validation_demo.py"\n',
+        encoding="utf-8",
+    )
+    (repo / "docs").mkdir()
+
+    result = document_meta_examples_notebook_audit(str(repo), "demo")
+    row = result["topics"][0]
+
+    assert row["validation_class"] is True
+    assert row["validation_test_reference_count"] == 1
+    assert row["promotion_lane"] == "validation_test_or_keep_validation_corpus"
+    assert result["summary"]["validation_class_topics"] == 1
+    assert result["validation_reviews"][0]["topic"] == "demo"
+
+
+def test_examples_notebook_audit_uses_kelvin_docs_alias(tmp_path):
+    repo = tmp_path
+    topic = repo / "examples" / "kelvin_transformation"
+    topic.mkdir(parents=True)
+    (topic / "demo.py").write_text("print('kelvin')\n", encoding="utf-8")
+    docs = repo / "docs" / "kelvin"
+    docs.mkdir(parents=True)
+    _write_notebook(docs / "kelvin_examples_migration.ipynb",
+                    executed=True, outputs=True)
+
+    result = document_meta_examples_notebook_audit(str(repo), "kelvin_transformation")
+    row = result["topics"][0]
+
+    assert row["docs_notebook_count"] == 1
+    assert row["result_saved_notebook_count"] == 1
+    assert row["status"] == "notebook_result_saved"
+
+
 def test_panel_layout_audit_reports_old_path_references(tmp_path):
     repo = tmp_path
     (repo / "examples").mkdir()

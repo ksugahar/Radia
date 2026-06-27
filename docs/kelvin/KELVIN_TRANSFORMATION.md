@@ -597,8 +597,7 @@ API: `radia.kelvin_material.make_reduced_potential_background_cf`.
 
 ### 7.4.1 Kameari Canonical Pattern (boundary-integral source, NOT bulk)
 
-⭐ **Reference**: Kameari (2025/10/14 slides),
-`W:/00_CAE/NGSolve/亀有/4-05.pdf`. 
+⭐ **Reference**: Kameari (2025/10/14 slides; private slide deck).
 
 The historical "(ν-ν₀) bulk source" reduced-A form (next subsection §7.5)
 is one route. Kameari's canonical NGSolve+Kelvin recipe takes a
@@ -675,7 +674,9 @@ a(A_r, v) = (J, v)_inner - ∫_full ν · (∇×A_s) · (∇×v) dV
 The inner contribution cancels via Ampere's law (where A_s = Biot-Savart
 satisfies ν₀ Maxwell as expected).
 
-**Validation** (`examples/.../Coil_3D_A_HCurl_PEEC_source.py`, 2026-05-04):
+**Validation** (archived classic source
+`examples/.../Coil_3D_A_HCurl_PEEC_source.py`, preserved in
+`docs/kelvin/kelvin_classic_demos_results.json`, 2026-05-04):
 
 | Linear form | L (FEM) | Analytical | Error |
 |---|---|---|---|
@@ -902,6 +903,10 @@ case, but Kelvin transformation handles both cases uniformly.
 | `docs/kelvin/Supplement/ErrorEstimator.md` | Equilibrated error estimator theory (adaptive mesh) |
 | `docs/kelvin/Supplement/CG-smoother.md` | CG-smoother acceleration for error estimation |
 | `docs/kelvin/Supplement/cg_smoother_demo.ipynb` | Runnable CG-smoother showcase (executed, embedded outputs) |
+| `docs/kelvin/kelvin_examples_migration.ipynb` | Result-bearing initial migration ledger for `examples/kelvin_transformation/`: 226 Python files classified into docs / validation_test / src-api / memory lanes, synchronized with JSON |
+| `docs/kelvin/kelvin_classic_demos.ipynb` | Result-bearing source map for the 37 classic A/H/Omega/Radia-IEM Kelvin demos; the standalone example scripts were pruned after full-source JSON preservation |
+| `docs/kelvin/kelvin_adaptive_mesh_archive.ipynb` | Result-bearing full-source archive for 59 AdaptiveMesh scripts; the first 45 repetitive `order=*` runners were pruned after source-hash preservation |
+| `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb` | Result-bearing full-source archive for 122 DtN-spectrum scripts, separating API/validation-locked scripts before future pruning |
 | `docs/kelvin/Supplement/experiment_cg_smoother_equilibration.py` | Test script for CG-smoother |
 | `examples/kelvin_transformation/CONVENTION.md` | Canonical convention declaration (one-page) |
 | `docs/solver/FEM_KELVIN_PLAN.md` | Implementation plan and status |
@@ -911,10 +916,10 @@ case, but Kelvin transformation handles both cases uniformly.
 | File | Description |
 |------|-------------|
 | `tests/test_kelvin_source.py` | 11 unit tests (involution, pullback, Biot-Savart) |
-| `examples/kelvin_transformation/A-formulation/` | 12 A-formulation examples |
-| `examples/kelvin_transformation/H-formulation/` | 14 H-formulation examples |
-| `examples/kelvin_transformation/Omega_ReducedOmega/` | Omega + coil source examples |
-| `examples/kelvin_transformation/AdaptiveMesh/` | h/p adaptive refinement |
+| `docs/kelvin/kelvin_classic_demos.ipynb` | Rendered docs layer for the 37 pruned classic formulation demos (A-form, H-form, Omega-ReducedOmega, Radia IEM vs FEM sphere), synchronized with full-source JSON |
+| `examples/kelvin_transformation/Cubit_1_4_p_convergence/` | Validation-backed sample covered by `validation_test/cubit/test_kelvin_1_4_p_convergence.py` |
+| `examples/kelvin_transformation/DtN_spectrum/` | Open-boundary / DtN research prototypes; stable behavior should promote into `src/radia/open_boundary` or `validation_test` before pruning |
+| `docs/kelvin/kelvin_adaptive_mesh_archive.ipynb` | Archived source for AdaptiveMesh studies; repetitive per-order runners are no longer kept as standalone example scripts |
 
 ### MCP Knowledge
 
