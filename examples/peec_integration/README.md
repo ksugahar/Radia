@@ -24,7 +24,6 @@ peec_integration/
 ├── spice/                   # SPICE / Verilog-A export
 ├── benchmarks/              # Benchmarks and comparisons
 ├── verification/            # Verification, validation, and debug scripts
-├── algorithm_development/   # Algorithm derivation scripts
 ├── analysis/                # Analysis and paper figure generation
 ├── gmsh_models/             # Historical GMSH fixtures and .vol migration demos
 ├── data/                    # Measurement data (CSV)
@@ -32,6 +31,9 @@ peec_integration/
 ```
 
 Each folder contains its own `README.md`.
+Dowell continued-fraction derivation scripts have been promoted to
+`docs/peec_integration/algorithm_development/` with result-bearing notebook
+archives preserving the original examples source hashes.
 
 ### Demo Folders
 
@@ -53,9 +55,6 @@ cd examples/peec_integration
 
 # PRIMA + Dowell correction verification
 python spice/prima_with_dowell_correction.py
-
-# Continued-fraction coefficient derivation
-python algorithm_development/derive_dowell_cf_algorithm.py
 
 # PEEC + PRIMA integration demo
 python spice/demo_peec_prima_reduction.py

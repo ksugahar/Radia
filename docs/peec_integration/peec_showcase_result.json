@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:29Z",
+  "generated_at_utc": "2026-06-27T10:16:34.765299Z",
   "notebook": "docs/peec_integration/peec_showcase.ipynb",
-  "notebook_sha256": "56278b3092a22b8898bcac7b7d2af98962feb5d7781e14fc5457d6aad173af77",
+  "notebook_sha256": "83470cf8e9121c9581290c78c75cc9516d683ab72b932229a45f6de50425e2b1",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
