@@ -149,7 +149,6 @@ debugging.
 
 After Mathematica verification, the production NGSolve code lives in:
 - `src/radia/panels/calc_fem_kelvin.py::_solve_hoibc_cascade` (planned)
-- `examples/peec/hoibc_validation_ellipsoid.py` (planned)
 
 Reference MCP: `mcp-server-mathematica` for actual symbolic computation
 from a Cubit panel session.

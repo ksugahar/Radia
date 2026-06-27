@@ -4513,7 +4513,6 @@ Separation ensures:
 | Open source | - | - | - | Yes (pip install) |
 
 ## Reference
-- docs/research/ENERGY_BASED_B_INPUT_PLAY.md
 """
 
 
