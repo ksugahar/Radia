@@ -10,9 +10,10 @@ Writes three .vol meshes (gitignored) into argv[1]:
                        + periodic kelvin_int<->kelvin_ext + a 'GND' vertex).
                        This is the --iron-vol the material-aware kernel consumes.
 
-The iron Kelvin geometry mirrors the VERIFIED demo_oo /
-docs/kelvin/kelvin_dtn_spectrum_archive.ipynb reduced-potential model (the coil at
-r~0.29 fits inside the r=0.35 iron inner radius; the DSV r=0.05 sits inside).
+The iron Kelvin geometry mirrors the maintained material-aware stream-function
+validation model in `validation_test/kelvin_dtn_spectrum/act8_03_general_iron_design.py`
+(the coil at r~0.29 fits inside the r=0.35 iron inner radius; the DSV r=0.05
+sits inside).
 
 Run inside a SUBPROCESS (the golden test does this) so NGSolve/Netgen stays out
 of the pytest process.  Deterministic for fixed geometry + maxh.
