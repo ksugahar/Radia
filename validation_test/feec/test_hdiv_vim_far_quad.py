@@ -1,8 +1,9 @@
 """Golden: the ORDER-0 analytic charge-Gram FAR low-order double-quadrature (`far_quad`) is the
 PRECISION-PRESERVING build speedup.
 
-The Gram build dominates the HDiv-VIM cost (per-pair analytic quadrature).  For the +N CG tet path the
-production default is the fast near/far split `near_factor=2` with `far_quad=4`: NEAR pairs use the exact
+The Gram build dominates the HDiv-VIM cost (per-pair analytic quadrature).  For the +N CG analytic path
+(tet/tri and polytope hex/wedge), the production default is the fast near/far split `near_factor=2` with
+`far_quad=4`: NEAR pairs use the exact
 analytic entry, FAR pairs a degree-2 double-quadrature of 1/r (4-pt tet / 3-pt tri).  Unlike the bare
 centroid-monopole far (`far_quad=0`, O((size/r)^2)), the low-order quadrature is O((size/r)^4), so it
 REPRODUCES the all-analytic Gram -- this is what lets the ~4.5x faster build stay golden-accurate.
@@ -22,6 +23,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
+from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 from radia.vim import hdiv_demag_solve  # noqa: E402
 
@@ -31,6 +33,11 @@ HEXT = ng.CoefficientFunction((0, 0, H0))
 
 def _tet_cube(h=0.28):
     return ng.Mesh(OCCGeometry(Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))).GenerateMesh(maxh=h))
+
+
+def _hex_cube(n=6):
+    return MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=n,
+                                mapping=lambda x, y, z: (x - 0.5, y - 0.5, z - 0.5))
 
 
 def test_far_quad_reproduces_exact_monopole_does_not():
@@ -57,6 +64,24 @@ def test_far_quad_reproduces_exact_monopole_does_not():
     with ng.TaskManager():
         df = hdiv_demag_solve(mesh, 100.0, HEXT)
     assert abs(df["demag"] - fq["demag"]) < 5e-4, "default tet CG path should use the far_quad fast build"
+
+
+def test_far_quad_polytope_hex_reproduces_exact():
+    """POLYTOPE (hex/wedge) far_quad: on a structured-hex cube the degree-2 far rule on the centroid-fan
+    sub-tets / sub-triangles reproduces the all-analytic demag, while the monopole far deviates more.
+    Guards the hex/wedge half of the precision-preserving fast build."""
+    mesh = _hex_cube()
+    with ng.TaskManager():
+        ex = hdiv_demag_solve(mesh, 100.0, HEXT, near_factor=1e30)            # exact all-analytic
+        fq = hdiv_demag_solve(mesh, 100.0, HEXT, near_factor=2.0, far_quad=4)  # precision-preserving fast
+        mp = hdiv_demag_solve(mesh, 100.0, HEXT, near_factor=2.0, far_quad=0)  # lossy monopole far
+    assert abs(fq["demag"] - ex["demag"]) < 5e-4, f"hex far_quad demag {fq['demag']} vs exact {ex['demag']}"
+    d_fq = abs(fq["demag"] - ex["demag"]); d_mp = abs(mp["demag"] - ex["demag"])
+    assert d_fq < d_mp, f"hex far_quad ({d_fq:.2e}) should beat monopole ({d_mp:.2e})"
+    # the default path on a hex (polytope) body uses the fast far_quad build too (cg_analytic, not tet-only)
+    with ng.TaskManager():
+        df = hdiv_demag_solve(mesh, 100.0, HEXT)
+    assert abs(df["demag"] - fq["demag"]) < 5e-4, "default hex CG path should use the far_quad fast build"
 
 
 def test_far_quad_only_applies_to_near_far_split():

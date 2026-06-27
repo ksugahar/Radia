@@ -135,7 +135,7 @@ public:
     // rule (4-pt tet / 3-pt tri) -- ~16 cheap evals/pair (vs the full analytic's ~1e3 transcendentals), but
     // accurate to O((size/r)^4) so it reproduces the all-analytic Gram (verified: sphere transverse 7.26e-4
     // == exact 7.25e-4, vs monopole 1.19e-3).  This is the precision-preserving build speedup: near=analytic,
-    // far=low-quad.  Tet/tri analytic mode only (the polytope ctor keeps monopole far).
+    // far=low-quad.  Tet/tri and polytope analytic modes both support this option.
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
                         int n_el, double near_factor = 1e30,
@@ -160,12 +160,17 @@ public:
     // uses, so an all-tet/all-triangle mesh routed through here would agree with the tet mode to quadrature
     // precision (it is NOT routed here: the tet mode is kept bit-identical via cell_verts/face_verts).
     // near_factor: identical NEAR/FAR build split as the analytic mode (default 1e30 = all-analytic).
+    // far_quad: same precision-preserving far option as the tet/tri ctor, here on the polytope (hex/wedge)
+    // charges -- the low-order FAR rule is a degree-2 quadrature on the SAME centroid-fan sub-tets (cells,
+    // 4-pt) / sub-triangles (faces, 3-pt) used for the outer quad, so it reproduces the all-analytic Gram
+    // for hex/wedge far pairs at ~monopole cost.  0 (default) = centroid-monopole far.
     RadHACApKChargeGram(std::vector<double> cell_tris, std::vector<int> cell_troff,
                         std::vector<double> cell_cent, std::vector<double> cell_meas,
                         std::vector<double> face_tris, std::vector<int> face_troff,
                         std::vector<double> face_cent, std::vector<double> face_meas,
                         int n_el, double near_factor = 1e30,
-                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        int far_quad = 0);
 
     // HIGH-ORDER (order-p) mode: POLYNOMIAL charges (a monomial basis on each host element), the order-p
     // extension validated against the dense Python build_demag_highorder.  charge_host[c] = host element

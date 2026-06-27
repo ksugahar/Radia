@@ -3475,13 +3475,13 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::vector<double> face_tris, std::vector<int> face_troff,
                          std::vector<double> face_cent, std::vector<double> face_meas,
                          int n_el, double eps, int leaf, double eta, double near_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs) {
+                         std::vector<int> image_masks, std::vector<double> image_signs, int far_quad) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(cell_tris), std::move(cell_troff),
                                              std::move(cell_cent), std::move(cell_meas),
                                              std::move(face_tris), std::move(face_troff),
                                              std::move(face_cent), std::move(face_meas), n_el, near_factor,
-                                             std::move(image_masks), std::move(image_signs)));
+                                             std::move(image_masks), std::move(image_signs), far_quad));
                  RadHACApKParams p;
                  p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
                  if (!mgr->BuildHMatrix(p)) throw std::runtime_error("polytope charge Gram H-matrix build failed");
@@ -3492,6 +3492,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("n_el"), py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              py::arg("near_factor") = 1e30,
              py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("far_quad") = 0,
              "POLYTOPE mode (hex/wedge cells + quad faces): the EXACT analytic charge Gram for any "
              "flat-faced convex cell, the triangulation supplied from Python.  cell_tris is a flat "
              "triangle soup (9 doubles/tri) of all cells' convex-hull triangles, cell_troff [n_el+1] the "
@@ -3499,7 +3500,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "normal ref), cell_meas [n_el] the cell volume; face_tris/face_troff/face_cent/face_meas the "
              "boundary faces' sub-triangles (quad->2).  Entry = divergence-theorem polytope potential x "
              "centroid-fan / Dunavant outer quadrature (matches dense analytic_charge_gram polytope path). "
-             "near_factor (default 1e30 = all-analytic); pass ~2 for the NEAR/FAR build speedup.")
+             "near_factor (default 1e30 = all-analytic); pass ~2 for the NEAR/FAR build speedup. far_quad>0 "
+             "uses the precision-preserving low-order double-quad far (degree-2 on the sub-tets/sub-tris).")
         .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
                          std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
                          std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
