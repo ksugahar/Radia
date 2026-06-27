@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "generated_at_utc": "2026-06-27T20:12:15Z",
   "notebook": "docs/hysteresis/hysteresis_validation.ipynb",
-  "notebook_sha256": "e4374b207a3276e18e53efc583e965d55677f17c8648e04bfa3c5813911cac86",
+  "notebook_sha256": "0a6f1e604594695d22419114dabea650d1dae4a8abe725c2b47b1d8de2e91d9a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -28,8 +28,8 @@
     {
       "cell_index": 2,
       "execution_count": 1,
-      "source_sha256": "f6b1f47dd2f66fe41290be07b9d2c09e58e72251b802707110331de222880a4f",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_circular.png'))",
+      "source_sha256": "4dc54f1700973f5455d558103d9ece991b429037e46265047fc9ecff1a66c88a",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_bqm_circular.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -53,8 +53,8 @@
     {
       "cell_index": 4,
       "execution_count": 2,
-      "source_sha256": "06dc891ccbf7521c7b64d70566433f38e19c138fce372ff1f3ceef9e4bf6c521",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_ellipsoid.png'))",
+      "source_sha256": "b23a1230478cb42a0824b98146426cebf672b4e5eb386e67bfe547d4c675429c",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_bqm_ellipsoid.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -78,8 +78,8 @@
     {
       "cell_index": 6,
       "execution_count": 3,
-      "source_sha256": "86e541997c2d09e1b2dbed70e867e9fb73ef254f274c3e3867485141b5492218",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_binput.png'))",
+      "source_sha256": "ad3c1b0ab3b3fd247d28deba9dcf7a4fc35f5efa902c9206ddfebba10ec5e2cb",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_bqm_binput.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -103,8 +103,8 @@
     {
       "cell_index": 8,
       "execution_count": 4,
-      "source_sha256": "e77c1903a160f471a0f04d1fa0793a968325dfc2bb4aa40127697ecfbb150bad",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_hinput_vs_binput.png'))",
+      "source_sha256": "24560296e53671cdfe3ec01e6f48c952c3f322ab83d672c869201f169d8f46c6",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_bqm_hinput_vs_binput.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -128,8 +128,8 @@
     {
       "cell_index": 10,
       "execution_count": 5,
-      "source_sha256": "6861803da808ea91f7efa9825319217c1da449095b36f46a04e91597c150aede",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_inverse_fsolve.png'))",
+      "source_sha256": "bbc834502dd7a8c77c43a8c25d3c7e9ae7b1dc4522b820f275f24955cbc2c1a3",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_bqm_inverse_fsolve.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -153,8 +153,8 @@
     {
       "cell_index": 12,
       "execution_count": 6,
-      "source_sha256": "b53953ffc2ad337693ca898546bf53d7036230f1f179e5b80ce00f59fea2a1c3",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_play_to_energy.png'))",
+      "source_sha256": "4e54dff5399a4b3bbd91767ce31d8a170945b3bca39ce7216b1bc7336c04f6e2",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_play_to_energy.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -178,8 +178,8 @@
     {
       "cell_index": 14,
       "execution_count": 7,
-      "source_sha256": "7166df8ae2cf40e54b569d0c9791182fbe39495dd9ecc3085787e782b910f3c4",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/play_vs_energy/figures/compare_play_vs_energy.png'))",
+      "source_sha256": "65aa40715086144ebdd12cb6532fe6ef4a4351a54103af2b6cf2f977234e124a",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/play_vs_energy/figures/compare_play_vs_energy.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -203,8 +203,8 @@
     {
       "cell_index": 16,
       "execution_count": 8,
-      "source_sha256": "5769ff3031675ff2a81ff3447073a40541579b3ed83b27bf5f3e4681e4e92dd6",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_cpp_hysteresis.png'))",
+      "source_sha256": "15b3c1c452752d9086071e798eb5e9ef7e2d55808433e78cc699c48667f554dd",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_cpp_hysteresis.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -228,8 +228,8 @@
     {
       "cell_index": 18,
       "execution_count": 9,
-      "source_sha256": "7c0ad7fd7079ff1ea0d1b1826e59a315dc350adde43f14b729d18f2ff882a190",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_cpp_vs_play.png'))",
+      "source_sha256": "03bca0b6945e355d0701024341c4c6ab8d91b488adcded40a5dccacb9c0f70db",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_cpp_vs_play.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -253,8 +253,8 @@
     {
       "cell_index": 20,
       "execution_count": 10,
-      "source_sha256": "711f7a5dce0c831ed754a3896bb19e38da25d6c2b7148ff9ca6eac8a43bab700",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_egger_inverse.png'))",
+      "source_sha256": "b66bfaa1d103f6734a217fc1415216b5715adec9712ed7bafbe27cad9ecafa43",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_egger_inverse.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -278,8 +278,8 @@
     {
       "cell_index": 22,
       "execution_count": 11,
-      "source_sha256": "1e7edda6daff048e633c0f1b5a5705e53f18c143657a70802ad7c348d1de6dd9",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_egger_vs_bqm.png'))",
+      "source_sha256": "9fba38b5bc26c2d2d49487ad9c64b4bf1b4fb4be98f11ec7b828d1d8fa15366b",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_egger_vs_bqm.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -303,8 +303,8 @@
     {
       "cell_index": 24,
       "execution_count": 12,
-      "source_sha256": "2a80595f96e7a28093192c8c38cb8a522988ac1a4c4abb10c19825f1ffa9f166",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_coenergy.png'))",
+      "source_sha256": "f90c2b1541ee021e7c9e4e950beb58a97864b45422f6c2563a48f3df5b6bd798",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_coenergy.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -328,8 +328,8 @@
     {
       "cell_index": 26,
       "execution_count": 13,
-      "source_sha256": "98d009e32e1263d8fbb84356f1cf5c70db46694fbde35dd690f58b3decb9ffc9",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_coenergy_feasibility.png'))",
+      "source_sha256": "c9f35c97e316ff463e332ea6ccc2c6fd9f1a332f2e83b68597ce384f6e37f3b9",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/hysteresis/verify_coenergy_feasibility.png'))",
       "outputs": [
         {
           "output_type": "display_data",
