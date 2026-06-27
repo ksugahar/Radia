@@ -12,7 +12,7 @@ readable FEM/BEM setup data:
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_material_interface.py
+    python validation_test/cubit_mesh_export/validation_vol_material_interface.py
 """
 
 from __future__ import annotations

@@ -6716,7 +6716,7 @@ repo.
 | Low-frequency Helmholtz kernel | `validation_low_frequency_helmholtz_kernel_summary.json` | stable singular-plus-regular BEM kernel split |
 | Spherical/planar DtN | `validation_spherical_dtn_modes_summary.json`, `validation_planar_dtn_symbol_summary.json` | exact radiation Robin/DtN sign gates |
 | Baffled piston and boundary power | `validation_baffled_piston_radiation_summary.json`, `validation_acoustic_boundary_power_summary.json` | acoustic power and impedance conventions |
-| Netgen `.vol` tri/tet mesh | `examples/cubit_mesh_export/validation_vol_*_summary.json` | `.vol` tri/tet parser, boundary inventory, incidence, quality |
+| Netgen `.vol` tri/tet mesh | `validation_test/cubit_mesh_export/validation_vol_*_summary.json` | `.vol` tri/tet parser, boundary inventory, incidence, quality |
 | build123d to mesh/CAD checks | `validation_test/build123d_netgen_gmsh_flow/validation_*_summary.json` | CAD face pressure/traction rows, area/volume consistency |
 | Electromagnetic force and torque | `validation_test/electric_machine/validation_*_summary.json` | `force_validation("method_map")`, `force_validation("cross_validation")` |
 | RF/waveguide momentum | `examples/rf_waveguide/validation_*_summary.json` | radiation pressure, S-parameter momentum, TE/TM cutoff gates |

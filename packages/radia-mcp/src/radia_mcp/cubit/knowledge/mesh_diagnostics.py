@@ -563,8 +563,8 @@ solver-neutral `.vol` intake checks as an independent confirmation.
 Recommended public checks:
 
 ```powershell
-python examples/cubit_mesh_export/validation_vol_tet_quality.py --vol C:\\temp\\model.vol
-python examples/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol C:\\temp\\model.vol
+python validation_test/cubit_mesh_export/validation_vol_tet_quality.py --vol C:\\temp\\model.vol
+python validation_test/cubit_mesh_export/validation_vol_surface_triangle_quality.py --vol C:\\temp\\model.vol
 ```
 
 `NetgenTriTetVolMesh.surface_triangle_quality_summary()` reports boundary

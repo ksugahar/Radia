@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_edge_inventory.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_edge_inventory.py
 
 For a CAD sideset exported as triangles, boundary-local perimeter edges and
 within-boundary split/diagonal edges should be easy to distinguish.  This

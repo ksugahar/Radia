@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_p1_trace_matrix.py
+    python validation_test/cubit_mesh_export/validation_vol_p1_trace_matrix.py
 
 For first-order H1 FEM and first-order scalar BEM on the same tri/tet mesh, the
 boundary trace is a boolean gather matrix.  In one-based sparse COO notation:
