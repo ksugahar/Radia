@@ -91,7 +91,7 @@ a closed-form analytic solution**. The result is a library you can trust an AI t
 ### 20+ "COMSOL-class" problems, each validated and baked in
 
 Each model ships as a **reusable helper + runnable example + regression test + queryable
-knowledge** (`examples/comsol_class/`, `ngsolve_usage(...)`), so the server gets smarter,
+knowledge** (`ngsolve_usage(...)`), so the server gets smarter,
 not just a pile of scripts. Agreement with the closed form is typically **well under 1 %**:
 
 | Domain | Examples (validation vs closed form) |

@@ -3,7 +3,7 @@
 A spectral (DtN-matrix) explanation of the coarse-mesh accuracy that Kameari
 demonstrated empirically (by mesh refinement) for the Kelvin transformation.
 This does NOT reimplement Kelvin (the lab's radia.kelvin_* toolkit already does
-that, comsol_class #3).  It MEASURES the effective exterior DtN two ways and
+that).  It MEASURES the effective exterior DtN two ways and
 shows both give the spectral fact that explains the coarse-mesh accuracy:
   Part A  the BEM matrix  Lambda_h = V^-1(-1/2 M + K)  (boundary only), and
   Part B  the KELVIN closure realised by volume FEM on the inverted ball.

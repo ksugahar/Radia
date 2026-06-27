@@ -1,6 +1,6 @@
 r"""Rectangular waveguide cutoff via 2D Helmholtz eigenmodes -- regression test (#53).
 
-The wave-physics entry in the comsol_class series. TE modes = NEUMANN Laplacian, TM modes =
+The wave-physics validation entry. TE modes = NEUMANN Laplacian, TM modes =
 DIRICHLET Laplacian on the cross-section; the eigenvalues are the squared cutoff wavenumbers
 k_c^2, with f_c = c k_c/(2 pi). Validated against the exact rectangular spectrum
 f_c,mn = (c/2) sqrt((m/a)^2 + (n/b)^2). Closed-form helper (tool-independent) + an FE eigensolve."""
