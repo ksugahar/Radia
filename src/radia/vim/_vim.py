@@ -88,17 +88,20 @@ def _ngsolve_affine(trafo, eltype, ndim):
 def _change_of_basis(fe, mons, refP, refW, dim, trafo, Vmesh):
     """L2/SurfaceL2 -> monomial change-of-basis, in the GRAM's cell_verts geometry frame.
 
-    CRITICAL (root cause of the high-order demag bug, 2026-06-13): NGSolve's L2/SurfaceL2 `CalcShape` uses its
+    CRITICAL (root cause of the high-order demag bug, 2026-06-13, corrected 2026-06-28): NGSolve's L2/SurfaceL2 `CalcShape` uses its
     OWN reference-element frame (ref(0,0,0)->the LAST mesh vertex, the standard Netgen ordering), but the C++
     charge-Gram interprets the resulting monomials via `cell_verts` in MESH-VERTEX order (ref(0,0,0)->V0).  If
     the monomials are built in NGSolve's frame (the old code evaluated m_a and CalcShape at the same pt), the
     charge B feeds the Gram is geometrically scrambled by a fixed vertex permutation -- INVISIBLE to every
     uniform-M / demag-factor test (uniform M has div M = 0 => no volume charge) but it makes non-uniform
-    (high-order) solves diverge: the demag operator under-counts divM-heavy modes, which the chi*(...) solve
-    then amplifies.  So we evaluate the MONOMIAL at the cell_verts-frame coord `g` that corresponds to the
-    same physical point as the NGSolve-ref point `pt` (via GetTrafo), keeping CalcShape at `pt`.  This lands
-    the monomial coefficients in the Gram's frame.  The map is a fixed reference permutation (NGSolve orders
-    local vertices consistently), so computing it from one element of each type is exact for all.
+    (high-order) solves diverge.  A later M4 audit found the remaining trap: the transform cannot be reused
+    from one representative element.  NGSolve orients high-order shapes and the element map by each element's
+    global vertex order, so `_charge_basis` must call this helper per element with that element's `trafo` and
+    mesh-vertex frame.
+
+    We evaluate the MONOMIAL at the cell_verts-frame coord `g` that corresponds to the same physical point as
+    the NGSolve-ref point `pt` (via GetTrafo), keeping CalcShape at `pt`.  This lands the monomial coefficients
+    in the Gram's frame for the specific element being processed.
 
     C[a][k] = INT m_a(g(pt)) phi_k(pt), Mmono[a][b] = INT m_a(g(pt)) m_b(g(pt)); S = Mmono^{-1} C.  The
     quadrature is exact for the polynomial degree, so integrating over pt (vs g) is immaterial."""
