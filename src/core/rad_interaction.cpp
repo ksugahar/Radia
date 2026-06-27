@@ -747,8 +747,7 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 
 //-------------------------------------------------------------------------
 //=========================================================================
-// Variable DOF support for hybrid MSC + standard element analysis
-// Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
+// Variable DOF support for hybrid collocation MMMM + standard element analysis.
 //=========================================================================
 //-------------------------------------------------------------------------
 
@@ -908,7 +907,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	bool hasSymmetry = (AmOfElemWithSym > AmOfMainElem);
 
 	// Check if we have any MSC elements (5 DOF wedges or 6 DOF hexahedra)
-	// MSC elements require Yano midpoint evaluation which is more complex
+	// Surface-charge collocation elements require midpoint evaluation, which is more complex.
 	bool hasMSCElements = false;
 	for(int i = 0; i < AmOfMainElem && !hasMSCElements; i++)
 	{
@@ -986,7 +985,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// Compute the interaction block based on DOF types
 				// FAST PATH: Only for 3x3 blocks (tetrahedra)
 				// MSC hexahedra (6 DOF) fall through to slow path for correctness
-				// (MSC requires Yano midpoint evaluation and proper transforms)
+				// (surface-charge collocation requires midpoint evaluation and proper transforms)
 				if(dof_row == 3 && dof_col == 3)
 				{
 					// 3x3 N-matrix computation: H_field at row center from col magnetization
@@ -1999,7 +1998,7 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 //=========================================================================
 // PrecomputeHexaGeometry: Pre-compute hexahedron face geometry
 // Hexahedra have 6 quadrilateral faces, each split into 2 triangles
-// Reference: Yano MSC method for hexahedral elements
+// Reference path for hexahedral surface-charge collocation elements.
 //=========================================================================
 
 void radTInteraction::PrecomputeHexaGeometry()
@@ -2346,7 +2345,7 @@ void radTInteraction::BuildFaceGeom(std::vector<double>& Gflat) const
 // CentroidFieldGradFromFace: the reusable single-(target,source) kernel of the moment formulation -- field
 // H[3] + grad gH[6] (xx,yy,zz,xy,xz,yz, RAW = before the 1/4pi factor) at target centroid ce3 from ONE unit
 // surface-charge face (V4 corners, srcCenter = the face's element center, area), INCLUDING the IMA mirror
-// images.  isSelf drops the original yano center charge (singularity-free); each IMA mirror always carries
+// images.  isSelf drops the original collocation center charge (singularity-free); each IMA mirror always carries
 // its (reflected) center charge.  Shared by BuildCentroidFieldGrad (dense Cflat) and MomentSystemEntry
 // (on-demand H-matrix entry) so the two never diverge.  Caller applies 1/4pi.
 //=========================================================================
@@ -2536,185 +2535,6 @@ static int momentResidualEigenmodes(const double Ae[], const double d[][3], int 
 }
 
 //=========================================================================
-// RadMomentGalerkinAssemble: parallel C++ assembly of the SYMMETRIC moment-Galerkin MMMM moment basis for a
-// MIXED list of polyhedra -- tetrahedra (4 verts), pyramids (5), wedges/prisms (6) and hexahedra (8), the same
-// element zoo the old yano-type MSC handled.  C++ port of the radia.moment_galerkin._assemble per-element loop
-// (reuses momentResidualEigenmodes so the quad eigenmodes match collocation MMMM bit-for-bit).  Per element it
-// builds: face geometry (outward unit normal, area, centroid, d=fc-c, divergence-theorem volume Ve), the
-// moment->face-charge columns (3 dipole = n_f, + (nFace-4) quad = residual eigenmodes phi), the boundary
-// sub-triangles, and the magnetization mass block We (diag Ve + the quad Gram Dm_q:M2:Dm_r).  The second moment
-// M2 = INT (x-c)(x-c) dV is a UNIFIED star-triangulation quadrature: each boundary triangle T forms a sub-tet
-// (c,T) and a 4-point degree-2 tet rule integrates it -- exact for the (flat-faced) charge model on EVERY
-// element type, so no per-type quadrature is needed.
-//   ndof per element = 3 + max(0, nFace-4)  ->  tet 3, pyramid/wedge 4, hex 5.
-//   B_/M_ {rows,cols,data}: variable-block COO (zeros INCLUDED; the Python wrapper filters them).
-//   vols: n_elem.   face_tris: n_charge*9.   ndof_elem/dof_off: per-element DOF count + global DOF start.
-// Degenerate (zero-area) faces yield NaN volumes, which the Python wrapper detects and rejects (fail-loud).
-//=========================================================================
-static inline void rmg_cross3(const double a[3], const double b[3], double o[3])
-{
-	o[0] = a[1]*b[2] - a[2]*b[1]; o[1] = a[2]*b[0] - a[0]*b[2]; o[2] = a[0]*b[1] - a[1]*b[0];
-}
-static inline double rmg_det3(const double M[3][3])
-{
-	return M[0][0]*(M[1][1]*M[2][2] - M[1][2]*M[2][1])
-	     - M[0][1]*(M[1][0]*M[2][2] - M[1][2]*M[2][0])
-	     + M[0][2]*(M[1][0]*M[2][1] - M[1][1]*M[2][0]);
-}
-
-// Element face tables (0-indexed; the radia / netgen vertex-order convention).  faces[f] = {nv, v0,v1,v2,v3};
-// nv=3 (triangle) or 4 (quad).  Returns the face count.  vc = vertex count selects the element type.
-static int mg_element_faces(int vc, int faces[6][5])
-{
-	if(vc == 4) {  // tetrahedron: 4 triangular faces (TETRA_FACES)
-		static const int F[4][5] = {{3,0,1,3,-1},{3,1,2,3,-1},{3,2,0,3,-1},{3,0,2,1,-1}};
-		for(int i=0;i<4;i++) for(int j=0;j<5;j++) faces[i][j]=F[i][j]; return 4;
-	}
-	if(vc == 5) {  // pyramid: 1 quad base + 4 triangles (PYRAMID_FACES)
-		static const int F[5][5] = {{4,0,3,2,1},{3,0,1,4,-1},{3,1,2,4,-1},{3,2,3,4,-1},{3,3,0,4,-1}};
-		for(int i=0;i<5;i++) for(int j=0;j<5;j++) faces[i][j]=F[i][j]; return 5;
-	}
-	if(vc == 6) {  // wedge / prism: 2 triangles + 3 quads (WEDGE_FACES)
-		static const int F[5][5] = {{3,0,2,1,-1},{3,3,4,5,-1},{4,0,1,4,3},{4,1,2,5,4},{4,2,0,3,5}};
-		for(int i=0;i<5;i++) for(int j=0;j<5;j++) faces[i][j]=F[i][j]; return 5;
-	}
-	// hexahedron (vc==8): 6 quads (the moment_galerkin hex convention; same face SETS as netgen HEX_FACES)
-	static const int F[6][5] = {{4,0,1,2,3},{4,4,5,6,7},{4,0,1,5,4},{4,3,2,6,7},{4,0,3,7,4},{4,1,2,6,5}};
-	for(int i=0;i<6;i++) for(int j=0;j<5;j++) faces[i][j]=F[i][j]; return 6;
-}
-
-void RadMomentGalerkinAssemble(
-	const double* verts, const int* vcounts, int n_elem, bool quad,
-	std::vector<int>& B_rows, std::vector<int>& B_cols, std::vector<double>& B_data,
-	std::vector<int>& M_rows, std::vector<int>& M_cols, std::vector<double>& M_data,
-	std::vector<double>& vols, std::vector<double>& face_tris,
-	std::vector<int>& ndof_elem, std::vector<int>& dof_off,
-	int& n_charge, int& ndof_total)
-{
-	// --- per-element metadata + prefix-sum offsets (serial; cheap) ---
-	std::vector<size_t> voff(n_elem+1, 0), coff(n_elem+1, 0), doff(n_elem+1, 0),
-	                    boff(n_elem+1, 0), moff(n_elem+1, 0);
-	std::vector<int> nFv(n_elem), nchg(n_elem), ndv(n_elem);
-	for(int e=0;e<n_elem;e++) {
-		int vc = vcounts[e];
-		int nF = (vc==4) ? 4 : (vc==8) ? 6 : 5;          // tet 4, hex 6, pyramid/wedge 5
-		int nc = (vc==4) ? 4 : (vc==5) ? 6 : (vc==6) ? 8 : 12;  // boundary triangles
-		nFv[e]=nF; nchg[e]=nc; ndv[e] = 3 + (quad ? (nF-4) : 0);
-		voff[e+1]=voff[e]+vc; coff[e+1]=coff[e]+nc; doff[e+1]=doff[e]+ndv[e];
-		boff[e+1]=boff[e]+(size_t)nc*ndv[e]; moff[e+1]=moff[e]+(size_t)ndv[e]*ndv[e];
-	}
-	n_charge = (int)coff[n_elem]; ndof_total = (int)doff[n_elem];
-	B_rows.assign(boff[n_elem],0); B_cols.assign(boff[n_elem],0); B_data.assign(boff[n_elem],0.0);
-	M_rows.assign(moff[n_elem],0); M_cols.assign(moff[n_elem],0); M_data.assign(moff[n_elem],0.0);
-	vols.assign((size_t)n_elem,0.0); face_tris.assign(coff[n_elem]*9,0.0);
-	ndof_elem.assign((size_t)n_elem,0); dof_off.assign((size_t)n_elem,0);
-	for(int e=0;e<n_elem;e++){ ndof_elem[e]=ndv[e]; dof_off[e]=(int)doff[e]; }
-
-	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-	ngcore::ParallelFor(ngcore::IntRange(n_elem), [&](size_t e)
-	{
-		const int vc = vcounts[e];
-		int faces[6][5]; const int nF = mg_element_faces(vc, faces);
-		const int dpe = ndv[e];
-		const double* Vp = verts + voff[e]*3;
-		double V[8][3];
-		for(int i=0;i<vc;i++){ V[i][0]=Vp[i*3]; V[i][1]=Vp[i*3+1]; V[i][2]=Vp[i*3+2]; }
-		double c[3]={0,0,0};
-		for(int i=0;i<vc;i++){ c[0]+=V[i][0]; c[1]+=V[i][1]; c[2]+=V[i][2]; }
-		c[0]/=vc; c[1]/=vc; c[2]/=vc;
-		double fc[6][3], nf[6][3], Ae[6], d[6][3];
-		for(int f=0; f<nF; f++)
-		{
-			const int nv = faces[f][0];
-			const double* P0=V[faces[f][1]]; const double* P1=V[faces[f][2]]; const double* P2=V[faces[f][3]];
-			const double* P3 = (nv==4) ? V[faces[f][4]] : nullptr;
-			double fcen[3];
-			if(nv==4) for(int k=0;k<3;k++) fcen[k]=(P0[k]+P1[k]+P2[k]+P3[k])/4.0;
-			else      for(int k=0;k<3;k++) fcen[k]=(P0[k]+P1[k]+P2[k])/3.0;
-			double a1[3],a2[3]; for(int k=0;k<3;k++){ a1[k]=P1[k]-P0[k]; a2[k]=P2[k]-P0[k]; }
-			double cc1[3]; rmg_cross3(a1,a2,cc1);
-			double nv0[3]={cc1[0],cc1[1],cc1[2]}, area = 0.5*std::sqrt(cc1[0]*cc1[0]+cc1[1]*cc1[1]+cc1[2]*cc1[2]);
-			if(nv==4) {
-				double a3[3]; for(int k=0;k<3;k++) a3[k]=P3[k]-P0[k];
-				double cc2[3]; rmg_cross3(a2,a3,cc2);
-				for(int k=0;k<3;k++) nv0[k]+=cc2[k];
-				area += 0.5*std::sqrt(cc2[0]*cc2[0]+cc2[1]*cc2[1]+cc2[2]*cc2[2]);
-			}
-			double nrm=std::sqrt(nv0[0]*nv0[0]+nv0[1]*nv0[1]+nv0[2]*nv0[2]);
-			nv0[0]/=nrm; nv0[1]/=nrm; nv0[2]/=nrm;   // nrm==0 (degenerate) -> NaN, caught in Python
-			double dotc=nv0[0]*(fcen[0]-c[0])+nv0[1]*(fcen[1]-c[1])+nv0[2]*(fcen[2]-c[2]);
-			if(dotc<0.0){ nv0[0]=-nv0[0]; nv0[1]=-nv0[1]; nv0[2]=-nv0[2]; }
-			for(int k=0;k<3;k++){ fc[f][k]=fcen[k]; nf[f][k]=nv0[k]; d[f][k]=fcen[k]-c[k]; }
-			Ae[f]=area;
-		}
-		double Ve=0.0;
-		for(int f=0;f<nF;f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
-		Ve/=3.0; vols[e]=Ve;
-		double col[6][5];
-		for(int f=0;f<nF;f++){ col[f][0]=nf[f][0]; col[f][1]=nf[f][1]; col[f][2]=nf[f][2];
-		                       col[f][3]=0.0; col[f][4]=0.0; }
-		double phi[6][6]; int nq=0;
-		if(quad) {
-			nq = momentResidualEigenmodes(Ae, d, nF, phi);   // nF-4 modes (0 for tet, 1 wedge/pyramid, 2 hex)
-			for(int q=0;q<nq;q++) for(int f=0;f<nF;f++) col[f][3+q]=phi[q][f];
-		}
-		// --- triangulate faces -> charges (B + face_tris) + accumulate the star-triangulation M2 ---
-		const double A4=0.5854101966249685, B4=0.1381966011250105;   // 4-pt degree-2 tet rule (a + 3b = 1)
-		double M2[3][3]={{0,0,0},{0,0,0},{0,0,0}};
-		int t=0;
-		for(int f=0; f<nF; f++)
-		{
-			const int nv=faces[f][0]; const int ntri=(nv==3)?1:2;
-			const double* P[4]; for(int j=0;j<nv;j++) P[j]=V[faces[f][1+j]];
-			for(int tl=0; tl<ntri; tl++)
-			{
-				const double* T0=P[0]; const double* T1=(tl==0)?P[1]:P[2]; const double* T2=(tl==0)?P[2]:P[3];
-				size_t cg = coff[e] + t;
-				size_t fto = coff[e]*9 + (size_t)t*9;
-				for(int k=0;k<3;k++){ face_tris[fto+0+k]=T0[k]; face_tris[fto+3+k]=T1[k]; face_tris[fto+6+k]=T2[k]; }
-				for(int a=0;a<dpe;a++){
-					size_t oi = boff[e] + (size_t)t*dpe + a;
-					B_rows[oi]=(int)cg; B_cols[oi]=dof_off[e]+a; B_data[oi]=col[f][a];
-				}
-				// sub-tet (c,T0,T1,T2): 4-pt degree-2 rule, M2 += sum w*(x-c)(x-c)
-				double rt0[3],rt1[3],rt2[3];
-				for(int k=0;k<3;k++){ rt0[k]=T0[k]-c[k]; rt1[k]=T1[k]-c[k]; rt2[k]=T2[k]-c[k]; }
-				double Jm[3][3]={{rt0[0],rt1[0],rt2[0]},{rt0[1],rt1[1],rt2[1]},{rt0[2],rt1[2],rt2[2]}};
-				double Vsub=std::fabs(rmg_det3(Jm))/6.0, w=Vsub/4.0;
-				double rp[4][3];
-				for(int k=0;k<3;k++){
-					rp[0][k]=B4*(rt0[k]+rt1[k]+rt2[k]);
-					rp[1][k]=A4*rt0[k]+B4*rt1[k]+B4*rt2[k];
-					rp[2][k]=B4*rt0[k]+A4*rt1[k]+B4*rt2[k];
-					rp[3][k]=B4*rt0[k]+B4*rt1[k]+A4*rt2[k];
-				}
-				for(int p=0;p<4;p++) for(int i2=0;i2<3;i2++) for(int j2=0;j2<3;j2++) M2[i2][j2]+=w*rp[p][i2]*rp[p][j2];
-				t++;
-			}
-		}
-		// --- magnetization mass block We (dpe x dpe): diag Ve (dipole) + Dm_q:M2:Dm_r (quad) ---
-		double Dm[2][3][3];
-		for(int q=0;q<nq;q++) for(int i2=0;i2<3;i2++) for(int j2=0;j2<3;j2++){
-			double s=0.0; for(int f=0;f<nF;f++) s += phi[q][f]*nf[f][i2]*d[f][j2];
-			Dm[q][i2][j2]=s;
-		}
-		for(int i=0;i<dpe;i++) for(int j=0;j<dpe;j++){
-			double val=0.0;
-			if(i<3 && j<3) { if(i==j) val=Ve; }
-			else if(i>=3 && j>=3) {
-				int q=i-3, rn=j-3;
-				for(int i2=0;i2<3;i2++) for(int j2=0;j2<3;j2++){
-					double dm_m2=0.0; for(int k=0;k<3;k++) dm_m2 += Dm[q][i2][k]*M2[k][j2];
-					val += dm_m2 * Dm[rn][i2][j2];
-				}
-			}
-			size_t mi = moff[e] + (size_t)i*dpe + j;
-			M_rows[mi]=dof_off[e]+i; M_cols[mi]=dof_off[e]+j; M_data[mi]=val;
-		}
-	});
-}
-
-//=========================================================================
 // CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: hex with 6 DOF +
 // wedge with 5 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
 // layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
@@ -2735,7 +2555,7 @@ void radTInteraction::CollectMomentElems(std::vector<int>& out) const
 //   SELF face (same element): bare charged-face field, no center charge.  The centroid is interior, at
 //     finite distance from every face, so the integrand is smooth -> exact by Gauss quadrature, and it is
 //     patch-test exact (single cube -> demag N=1/3).
-//   MUTUAL face: yano dipole layer = (bare face) - area*(point charge @ source element center).  The
+//   MUTUAL face: collocation MMMM dipole layer = (bare face) - area*(point charge @ source element center).  The
 //     per-face center charge is REQUIRED (without it a regular grid develops a charge-free dipole-free
 //     quadrupole near-null mode); the source center is at finite distance from this centroid -> finite.
 //     Excluding it for SELF is exactly where it would be singular -> the kernel is singularity-free.

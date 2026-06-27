@@ -30,7 +30,7 @@ def _clean():
 
 
 def _cube_Mz(method, image=None, L=0.01, center=(0.0, 0.0, 0.0)):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     cx, cy, cz = center
     v = [[cx - L, cy - L, cz - L], [cx + L, cy - L, cz - L], [cx + L, cy + L, cz - L], [cx - L, cy + L, cz - L],
          [cx - L, cy - L, cz + L], [cx + L, cy - L, cz + L], [cx + L, cy + L, cz + L], [cx - L, cy + L, cz + L]]
@@ -63,7 +63,7 @@ def test_method1_matrix_free_multihex_external_field():
     MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
 
     def solve_extB(method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-10)
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-10)
         objs = []
         for ix in range(2):
             for iy in range(2):
@@ -93,7 +93,7 @@ def test_method1_parallel_hotpath_12hex_matches_method0():
     MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
 
     def solve_extB(method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-10)
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-10)
         objs = []
         for ix in range(2):
             for iy in range(2):
@@ -162,7 +162,7 @@ def test_method2_hacapk_multihex_external_field():
     MU0 = 4e-7 * np.pi; mu_r = 200.0; L = 0.01
 
     def solve_extB(method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = []
         for iz in range(2):
             for ix in range(3):
@@ -197,7 +197,7 @@ def test_method2_nonlinear_matches_method0():
     Msat = 2.15 / MU0
 
     def solve(method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = []
         for iz in range(2):
             for ix in range(3):
@@ -238,7 +238,7 @@ def test_wedge_moment_matches_hex_externally():
     wB = [[L, 0, 0], [L, L, 0], [0, L, 0], [L, 0, L], [L, L, L], [0, L, L]]      # upper-right triangle prism
 
     def solve(build, method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = build()
         for o in objs:
             rad.MatApl(o, rad.MatLin(1000.0))
@@ -275,7 +275,7 @@ def test_mixed_hex_wedge_moment():
                 [[L, 0, z0], [L, L, z0], [0, L, z0], [L, 0, z0+L], [L, L, z0+L], [0, L, z0+L]]]
 
     def solve(mixed, method):
-        rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-9)
         objs = [rad.ObjHexahedron(hx(0.0), [0, 0, 0])]
         objs += ([rad.ObjWedge(w, [0, 0, 0]) for w in wg(L)] if mixed else [rad.ObjHexahedron(hx(L), [0, 0, 0])])
         for o in objs:
@@ -312,7 +312,7 @@ def _ima_boxes_half():
 
 
 def _ima_solve(boxes, Happ, image):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron(b, [0, 0, 0]) for b in boxes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(200.0))
@@ -343,7 +343,7 @@ def test_moment_entry_reproduces_system():
     via MomentSystemEntry) reproduces the moment system: (1) re-normalizing A_raw's rows == the normalized
     BuildMomentSystem A (machine precision); (2) the UN-normalized A_raw solves to the SAME magnetization
     (the row 2-norm is a diagonal scaling -> direct solve invariant -- the premise the H-LU path rests on)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     mu_r = 50.0; chi = mu_r - 1.0; L = 0.01
     objs = []                                          # 2x2x1 grid of hexes (mutual + local entries to test)
     for ix in range(2):
@@ -374,7 +374,7 @@ def test_moment_hmatrix_matvec_equals_dense():
     reproduces the dense A_raw matvec.  MomentHMatrixProbe builds the H-matrix + compares H-matvec(x) to
     dense A_raw @ x.  (Compression-at-scale -- n_lowrank/compression growing with N -- is exercised in
     C:/temp/verify_moment_hmatrix.py on the larger C-yoke; here we lock matvec correctness.)"""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     mu_r = 200.0; chi = mu_r - 1.0; L = 0.01
     objs = []                                          # 3x3x2 grid of hexes (some off-diagonal structure)
     for iz in range(2):
@@ -406,7 +406,7 @@ def test_moment_nonlinear_picard_matches_linear_in_linear_regime():
     v = [[-L, -L, -L], [L, -L, -L], [L, L, -L], [-L, L, -L], [-L, -L, L], [L, -L, L], [L, L, L], [-L, L, L]]
 
     def solve(make_mat):
-        rad.UtiDelAll(); rad.set_demag_backend("yano")
+        rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
         h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, make_mat())   # build material AFTER UtiDelAll
         rad.Solve(rad.ObjCnt([h, rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H_app])]), 1e-8, 500, 0)
         return rad.ObjM(h)["magnetization"][2]

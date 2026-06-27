@@ -85,9 +85,9 @@ def _solve_Mnorm(objs, bckg, method):
 def test_healthy_method2_matches_lu_no_raise():
     """(1) small cube, mu_r=1000: method-2 H-LU converges, matches method-0 dense LU, guard does NOT fire."""
     bckg = lambda p: [0.0, 0.0, MU0 * 1e3]
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(hacapk_hlu_precond=False, bicgstab_tol=1e-10)
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(hacapk_hlu_precond=False, bicgstab_tol=1e-10)
     Mlu = _solve_Mnorm(_cube(3, 0.01, 1000.0), bckg, 0)
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(hacapk_hlu_precond=True, bicgstab_tol=1e-10)
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(hacapk_hlu_precond=True, bicgstab_tol=1e-10)
     Mh = _solve_Mnorm(_cube(3, 0.01, 1000.0), bckg, 2)   # must NOT raise
     rel = abs(Mh - Mlu) / max(Mlu, 1e-30)
     assert rel < 1e-4, f"healthy method-2 H-LU field != LU (rel {rel:.2e}); guard may be false-firing"
@@ -100,9 +100,9 @@ def test_no_silent_wrong_on_loopheavy_divergence(krylov):
     The factor self-test is solver-independent, so both BiCGSTAB and GMRES fail loud here."""
     bckg = lambda p: [0.0, MU0 * 1e3, 0.0]
     NXY, NZ, MU_R = 40, 2, 1000.0   # 7296 DoF; factor round-trip ~2.7e6 >> 1e3 -> self-test fires up front
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(hacapk_hlu_precond=False, bicgstab_tol=1e-8)
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(hacapk_hlu_precond=False, bicgstab_tol=1e-8)
     Mlu = _solve_Mnorm(_cyoke(NXY, NZ, MU_R), bckg, 0)
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     rad.SolverConfig(hacapk_hlu_precond=True, bicgstab_tol=1e-8, moment_krylov=krylov)
     raised = False
     Mh = None

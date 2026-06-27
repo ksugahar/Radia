@@ -32,7 +32,7 @@ validation_test/feec/test_hdiv_vim_system_hlu.py::test_system_hlu_tet_materializ
 tests/test_maxwell_stress_torque.py::test_torque_matches_lorentz_couple  # 19.356s
 tests/test_maxwell_stress_torque.py::test_transverse_field_zero_torque  # 18.687s
 validation_test/feec/test_clebsch_hodograph_research.py::test_accel_pole_ends_fem_open_boundary  # 18.623s
-validation_test/feec/parity_vs_msc/test_linear_cube_parity.py::test_yano_hdiv_cube_linear_parity  # 18.560s
+validation_test/feec/parity_vs_msc/test_linear_cube_parity.py::test_collocation_mmmm_hdiv_cube_linear_parity  # 18.560s
 validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_different_mu_physics  # 17.636s
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_dipole_saturation_3d_aform  # 16.814s
 validation_test/feec/test_hdiv_vim_bem_demag.py::test_spheroid_full_tensor_and_sum_rule  # 15.746s
@@ -44,7 +44,7 @@ validation_test/feec/test_hdiv_vim_pm_mixing.py::test_pm_nonlinear_touching_fail
 tests/test_pm_cylinder_aform.py::test_external_dipole_on_axis  # 13.700s
 tests/test_pm_cylinder_aform.py::test_internal_field_is_half_mu0_M  # 13.412s
 tests/test_hex_hcurl_aformulation.py::test_hcurl_high_order_accuracy  # 12.769s
-validation_test/feec/test_hdiv_vim_pm_mixing.py::test_pm_nonlinear_iron_airgap_parity_vs_yano  # 12.698s
+validation_test/feec/test_hdiv_vim_pm_mixing.py::test_pm_nonlinear_iron_airgap_parity_vs_radia_reference  # 12.698s
 validation_test/feec/test_hdiv_vim_bem_demag.py::test_triaxial_ellipsoid_full_anisotropy  # 12.574s
 tests/coil_from_cad/test_keiko_outsideline_centerline.py::test_keiko_outsideline_centerline_covers_lead  # 12.491s
 validation_test/feec/test_hdiv_vim_chargegram_polytope.py::test_polytope_chargegram_compressed[wedge]  # 12.174s

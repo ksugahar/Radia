@@ -413,7 +413,7 @@ EXP int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey);
 
 /** Per moment-element centroid demag field+gradient functionals (the parameter-free moment formulation kernel).
 For each moment element, the demag field H and gradient gradH at the element CENTROID as linear functionals
-of every source DOF charge (SELF = bare charged face; MUTUAL = yano dipole layer, singularity-free).
+of every source DOF charge (SELF = bare charged face; MUTUAL = collocation MMMM dipole layer, singularity-free).
 ROW-MAJOR (nMom x 9 x DOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g -> C[(h*9+k)*DOF+g].
 @param pC [out] flat array (nMom*9*DOF, row-major), or nullptr to query nMom/DOF
 @param pNHex [out] number of moment elements (historical parameter name)

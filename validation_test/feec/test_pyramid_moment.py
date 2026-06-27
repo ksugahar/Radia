@@ -43,7 +43,7 @@ def test_pyramid_exists_and_pm_field_finite():
 
 def test_pyramid_soft_iron_magnetizes_axially():
     """A symmetric soft-iron pyramid in a uniform Hz magnetizes in +z (moment path), transverse ~ 0."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     L = 0.01
     base = [(-L, -L, -0.005), (L, -L, -0.005), (L, L, -0.005), (-L, L, -0.005)]
     p = _pyramid(base, (0, 0, 0.015))
@@ -56,7 +56,7 @@ def test_pyramid_soft_iron_magnetizes_axially():
 
 
 def _cube_Mz(build):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = build()
     for o in objs:
         rad.MatApl(o, rad.MatLin(1000.0))

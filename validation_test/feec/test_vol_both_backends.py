@@ -3,7 +3,7 @@ solves with BOTH demag backends -- six-face surface-charge MSC and the FEEC HDiv
 set_demag_backend.  .vol is the SOLE Cubit<->NGSolve mesh interchange, so netgen owns the mesh
 orientation (no hand-built-mesh boundary-winding pitfalls).  This locks:
   (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a both-backend soft-iron container;
-  (2) the HDiv path (default) and the yano path (set_demag_backend('yano')) BOTH solve on it and
+  (2) the HDiv path (default) and the collocation MMMM path (set_demag_backend('collocation_mmmm')) BOTH solve on it and
       agree to within the RT0-vs-MSC discretization gap on a structured hex cube (~few %)."""
 import math
 
@@ -39,7 +39,7 @@ def _solve_from_vol(path, backend):
             res = rad.Solve(rad.ObjCnt([iron, bkg]), 1e-6, 2000, 0)
         if isinstance(res, dict) and "M_avg" in res:               # HDiv path returns the solve dict
             return res["M_avg"][2]
-        objm = rad.ObjM(iron)                                      # yano path -> read back via ObjM
+        objm = rad.ObjM(iron)                                      # collocation MMMM path -> read back via ObjM
         return sum(m[2] for (_c, m) in objm) / len(objm)
     finally:
         rad.UtiDelAll()
@@ -51,12 +51,15 @@ def test_vol_solves_with_both_backends(tmp_path):
     _make_vol(vol)
 
     mz_hdiv = _solve_from_vol(vol, "hdiv")
-    mz_yano = _solve_from_vol(vol, "yano")
+    mz_collocation = _solve_from_vol(vol, "collocation_mmmm")
 
     # chi = mu_r-1 = 99, cube demag ~1/3 -> M_avg_z ~ 99*H0/(1+99/3) ~ 2912; the discretized non-uniform
     # M_avg runs a bit higher.  Lock a generous physical band for BOTH backends.
-    for name, mz in (("hdiv", mz_hdiv), ("yano", mz_yano)):
+    for name, mz in (("hdiv", mz_hdiv), ("collocation_mmmm", mz_collocation)):
         assert 2.5e3 < mz < 4.0e3, f"{name} from .vol gave unphysical M_avg_z={mz:.1f}"
 
-    rel = abs(mz_hdiv - mz_yano) / abs(mz_yano)
-    assert rel < 0.06, f"HDiv {mz_hdiv:.1f} vs yano {mz_yano:.1f} from same .vol differ {rel*100:.1f}% (> RT0-vs-MSC)"
+    rel = abs(mz_hdiv - mz_collocation) / abs(mz_collocation)
+    assert rel < 0.06, (
+        f"HDiv {mz_hdiv:.1f} vs collocation MMMM {mz_collocation:.1f} "
+        f"from same .vol differ {rel*100:.1f}% (> RT0-vs-MSC)"
+    )
