@@ -1093,31 +1093,48 @@ double RadHACApKPointKernel::GetInteractionMatrixElement(int i, int j) const
 
 RadHACApKChargeGaussOperator::RadHACApKChargeGaussOperator(
     std::vector<double> point_coords,
-    std::vector<int> point_charge,
-    std::vector<double> point_weight,
+    std::vector<int> P_pt,
+    std::vector<int> P_chg,
+    std::vector<double> P_coef,
     int n_charge,
     std::vector<int> corr_i,
     std::vector<int> corr_j,
     std::vector<double> corr_v)
     : m_ncharge(n_charge),
       m_point_coords(std::move(point_coords)),
-      m_point_charge(std::move(point_charge)),
-      m_point_weight(std::move(point_weight)),
       m_corr_i(std::move(corr_i)),
       m_corr_j(std::move(corr_j)),
       m_corr_v(std::move(corr_v))
 {
-    const int npt = (int)m_point_weight.size();
-    if ((int)m_point_coords.size() != 3*npt || (int)m_point_charge.size() != npt)
-        throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent point array sizes");
+    m_npoint = (int)(m_point_coords.size() / 3);
+    if ((int)m_point_coords.size() != 3 * m_npoint)
+        throw std::runtime_error("RadHACApKChargeGaussOperator: point_coords size not a multiple of 3");
+    const size_t nnz = P_coef.size();
+    if (P_pt.size() != nnz || P_chg.size() != nnz)
+        throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent P-scatter array sizes");
     if ((int)m_corr_i.size() != (int)m_corr_j.size() || (int)m_corr_i.size() != (int)m_corr_v.size())
         throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent correction array sizes");
-    m_charge_points.assign((size_t)m_ncharge, {});
-    for (int p = 0; p < npt; ++p) {
-        const int a = m_point_charge[(size_t)p];
-        if (a < 0 || a >= m_ncharge)
-            throw std::runtime_error("RadHACApKChargeGaussOperator: point_charge out of range");
-        m_charge_points[(size_t)a].push_back(p);
+    // Build BOTH CSR orientations of the scatter P from the COO triple (counting-sort by point, by charge).
+    m_pt_indptr.assign((size_t)m_npoint + 1, 0);
+    m_chg_indptr.assign((size_t)m_ncharge + 1, 0);
+    for (size_t k = 0; k < nnz; ++k) {
+        const int p = P_pt[k], a = P_chg[k];
+        if (p < 0 || p >= m_npoint) throw std::runtime_error("RadHACApKChargeGaussOperator: P_pt out of range");
+        if (a < 0 || a >= m_ncharge) throw std::runtime_error("RadHACApKChargeGaussOperator: P_chg out of range");
+        ++m_pt_indptr[(size_t)p + 1];
+        ++m_chg_indptr[(size_t)a + 1];
+    }
+    for (int p = 0; p < m_npoint; ++p)  m_pt_indptr[(size_t)p + 1]  += m_pt_indptr[(size_t)p];
+    for (int a = 0; a < m_ncharge; ++a) m_chg_indptr[(size_t)a + 1] += m_chg_indptr[(size_t)a];
+    m_pt_charge.resize(nnz);  m_pt_coef.resize(nnz);
+    m_chg_point.resize(nnz);  m_chg_coef.resize(nnz);
+    std::vector<int> pcur(m_pt_indptr.begin(), m_pt_indptr.end() - 1);
+    std::vector<int> ccur(m_chg_indptr.begin(), m_chg_indptr.end() - 1);
+    for (size_t k = 0; k < nnz; ++k) {
+        const int p = P_pt[k], a = P_chg[k];
+        const double c = P_coef[k];
+        const int ip = pcur[(size_t)p]++;  m_pt_charge[(size_t)ip] = a; m_pt_coef[(size_t)ip] = c;
+        const int ic = ccur[(size_t)a]++;  m_chg_point[(size_t)ic] = p; m_chg_coef[(size_t)ic] = c;
     }
     m_corr_map.reserve(m_corr_v.size() * 2 + 1);
     for (size_t k = 0; k < m_corr_v.size(); ++k) {
@@ -1136,21 +1153,22 @@ bool RadHACApKChargeGaussOperator::BuildHMatrix(const RadHACApKParams& params)
 
 double RadHACApKChargeGaussOperator::PointDirectEntry(int a, int b) const
 {
+    // (1/4pi) sum_{p in supp(a)} sum_{q in supp(b), q!=p} coef_a(p) coef_b(q) / |x_p - x_q|.
     double s = 0.0;
-    const std::vector<int>& Pa = m_charge_points[(size_t)a];
-    const std::vector<int>& Pb = m_charge_points[(size_t)b];
-    for (int p : Pa) {
+    for (int ka = m_chg_indptr[(size_t)a]; ka < m_chg_indptr[(size_t)a + 1]; ++ka) {
+        const int p = m_chg_point[(size_t)ka];
+        const double ca = m_chg_coef[(size_t)ka];
         const double x0 = m_point_coords[(size_t)3*p];
         const double x1 = m_point_coords[(size_t)3*p + 1];
         const double x2 = m_point_coords[(size_t)3*p + 2];
-        const double wp = m_point_weight[(size_t)p];
-        for (int q : Pb) {
+        for (int kb = m_chg_indptr[(size_t)b]; kb < m_chg_indptr[(size_t)b + 1]; ++kb) {
+            const int q = m_chg_point[(size_t)kb];
             if (p == q) continue;
             const double dx = x0 - m_point_coords[(size_t)3*q];
             const double dy = x1 - m_point_coords[(size_t)3*q + 1];
             const double dz = x2 - m_point_coords[(size_t)3*q + 2];
             const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r > 1e-300) s += wp * m_point_weight[(size_t)q] * RAD_INV_FOUR_PI / r;
+            if (r > 1e-300) s += ca * m_chg_coef[(size_t)kb] * RAD_INV_FOUR_PI / r;
         }
     }
     return s;
@@ -1170,15 +1188,20 @@ void RadHACApKChargeGaussOperator::MatVec(const std::vector<double>& q, std::vec
         throw std::runtime_error("RadHACApKChargeGaussOperator.MatVec: H-matrix is not built");
     if ((int)q.size() != m_ncharge)
         throw std::runtime_error("RadHACApKChargeGaussOperator.MatVec: q size mismatch");
-    const int npt = (int)m_point_weight.size();
-    std::vector<double> point_rhs((size_t)npt, 0.0), point_phi((size_t)npt, 0.0);
-    ngcore::ParallelFor(ngcore::IntRange(npt), [&](size_t p) {
-        point_rhs[p] = m_point_weight[p] * q[(size_t)m_point_charge[p]];
+    std::vector<double> point_rhs((size_t)m_npoint, 0.0), point_phi((size_t)m_npoint, 0.0);
+    // scatter: point_rhs[p] = sum_{(a,coef) at p} coef * q[a]   (per-point CSR -> lock-free)
+    ngcore::ParallelFor(ngcore::IntRange(m_npoint), [&](size_t p) {
+        double s = 0.0;
+        for (int k = m_pt_indptr[p]; k < m_pt_indptr[p + 1]; ++k) s += m_pt_coef[(size_t)k] * q[(size_t)m_pt_charge[(size_t)k]];
+        point_rhs[p] = s;
     });
     m_kernel->MatVec(point_rhs, point_phi);
     y.assign((size_t)m_ncharge, 0.0);
-    ngcore::ParallelFor(ngcore::IntRange(npt), [&](size_t p) {
-        ngcore::AtomicAdd(y[(size_t)m_point_charge[p]], m_point_weight[p] * point_phi[p]);
+    // gather: y[a] = sum_{(p,coef) of a} coef * point_phi[p]   (per-charge CSR -> lock-free)
+    ngcore::ParallelFor(ngcore::IntRange(m_ncharge), [&](size_t a) {
+        double s = 0.0;
+        for (int k = m_chg_indptr[a]; k < m_chg_indptr[a + 1]; ++k) s += m_chg_coef[(size_t)k] * point_phi[(size_t)m_chg_point[(size_t)k]];
+        y[a] = s;
     });
     ngcore::ParallelFor(ngcore::IntRange((int)m_corr_v.size()), [&](size_t k) {
         ngcore::AtomicAdd(y[(size_t)m_corr_i[k]], m_corr_v[k] * q[(size_t)m_corr_j[k]]);

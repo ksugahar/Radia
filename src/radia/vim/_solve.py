@@ -200,9 +200,12 @@ def _build_charge_gauss_gram(d, all_tet, gram_eps, leaf, eta, near_factor,
         corr_i.append(int(a)); corr_j.append(int(b)); corr_v.append(float(delta))
         if a != b:
             corr_i.append(int(b)); corr_j.append(int(a)); corr_v.append(float(delta))
+    # order-0 / RT0 = the TRIVIAL P scatter: one entry per point (P_pt=p, P_chg=owner, P_coef=weight).
+    n_point = len(point_weight)
     return _rp._ChargeGaussHMatrix(
-        point_coords=list(map(float, point_coords)), point_charge=list(map(int, point_charge)),
-        point_weight=list(map(float, point_weight)), n_charge=int(d["n_charge"]),
+        point_coords=list(map(float, point_coords)),
+        P_pt=list(range(n_point)), P_chg=list(map(int, point_charge)),
+        P_coef=list(map(float, point_weight)), n_charge=int(d["n_charge"]),
         corr_i=corr_i, corr_j=corr_j, corr_v=corr_v,
         eps=gram_eps, leaf=leaf, eta=eta)
 
