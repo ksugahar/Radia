@@ -38,7 +38,7 @@ def _tet(cx, L=0.01):
 
 def test_mixed_mmm_msc_solve_raises():
     """A single demag Solve mixing a tet (MMM, 3 DOF) and a hex (MSC, 6 DOF) soft iron -> Error204."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     t = rad.ObjTetrahedron(_tet(0.0), [0, 0, 0]); rad.MatApl(t, rad.MatLin(1000.0))
     h = rad.ObjHexahedron(_hex(0.1), [0, 0, 0]); rad.MatApl(h, rad.MatLin(1000.0))
     cont = rad.ObjCnt([t, h, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])])
@@ -49,7 +49,7 @@ def test_mixed_mmm_msc_solve_raises():
 
 def test_binput_hysteresis_on_msc_raises():
     """B-input hysteresis (b_input_newton) on a hex (MSC) soft iron -> Error205 (3-DOF MMM only)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     K = 3
     eta = np.array([0.0, 0.5, 1.0])
     r = np.linspace(0, 2.0, 20)
@@ -68,7 +68,7 @@ def test_binput_hysteresis_on_msc_raises():
 
 def test_pure_hex_moment_still_solves():
     """KEPT: a pure-hex soft iron magnetizes in an applied field via the multipole-moment MMM solver."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     h = rad.ObjHexahedron(_hex(0.0), [0, 0, 0]); rad.MatApl(h, rad.MatLin(1000.0))
     rad.Solve(rad.ObjCnt([h, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])]), 1e-6, 1000, 0)
     Mz = rad.ObjM(h)["magnetization"][2]

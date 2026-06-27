@@ -43,12 +43,15 @@ def test_soft_iron_both_backends_from_vol(tmp_path):
         return mz, bz
 
     mz_hdiv, _ = run("hdiv")
-    mz_yano, _ = run("yano")
+    mz_collocation, _ = run("collocation_mmmm")
 
-    for name, mz in (("hdiv", mz_hdiv), ("yano", mz_yano)):
+    for name, mz in (("hdiv", mz_hdiv), ("collocation_mmmm", mz_collocation)):
         assert 2.5e3 < mz < 4.0e3, f"SoftIron({name}) unphysical M_avg_z={mz:.1f}"
-    rel = abs(mz_hdiv - mz_yano) / abs(mz_yano)
-    assert rel < 0.06, f"SoftIron hdiv {mz_hdiv:.1f} vs yano {mz_yano:.1f} differ {rel*100:.1f}%"
+    rel = abs(mz_hdiv - mz_collocation) / abs(mz_collocation)
+    assert rel < 0.06, (
+        f"SoftIron hdiv {mz_hdiv:.1f} vs collocation MMMM {mz_collocation:.1f} "
+        f"differ {rel*100:.1f}%"
+    )
 
 
 def test_soft_iron_repr_and_auto(tmp_path):

@@ -3570,6 +3570,34 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "monomial-weighted outer quad x the subtraction inner potential (matches dense build_demag_highorder). "
              "ref_*_lo + ho_far_factor (<inf) enable the accuracy-preserving NEAR/FAR adaptive quadrature: far "
              "pairs (|c_a-c_b| > ho_far_factor*(size_a+size_b)) use the cheap LOW-quad plain double-Gauss.")
+        .def(py::init([](std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
+                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                         std::vector<double> curve_gl, std::vector<double> curve_gw,
+                         double eps, int leaf, double eta, bool build) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(cell_nodes), std::move(face_nodes), n_el, curve_order,
+                                             std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                                             std::move(ref_tet_pts), std::move(ref_tet_w),
+                                             std::move(ref_tri_pts), std::move(ref_tri_w),
+                                             std::move(curve_gl), std::move(curve_gw)));
+                 if (build) {
+                     RadHACApKParams p;
+                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("curved charge Gram H-matrix build failed");
+                 }
+                 return mgr;
+             }),
+             py::arg("cell_nodes"), py::arg("face_nodes"), py::arg("n_el"), py::arg("curve_order"),
+             py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
+             py::arg("ref_tet_pts"), py::arg("ref_tet_w"), py::arg("ref_tri_pts"), py::arg("ref_tri_w"),
+             py::arg("curve_gl"), py::arg("curve_gw"),
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
+             "CURVED HIGH-ORDER (isoparametric P2) mode: monomial charges on a mesh.Curve(2) geometry. "
+             "cell_nodes [n_el*30] (10 P2 nodes/tet), face_nodes [n_bf*18] (6 P2 nodes/tri); curve_order=2. "
+             "Outer quad = curved P2 map + curved measure; inner = the curved Duffy (curve_gl/gw = nq-pt "
+             "Gauss-Legendre on [0,1]). Curved helps near-surface FIELD/flux accuracy, NOT the demag factor.")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
         .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
@@ -3751,46 +3779,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
                  return d;
              }, "H-matrix stats dict.");
-
-    // Parallel C++ assembly of the moment-Galerkin MMMM moment basis (defined in rad_interaction.cpp).
-    extern void RadMomentGalerkinAssemble(
-        const double*, const int*, int, bool,
-        std::vector<int>&, std::vector<int>&, std::vector<double>&,
-        std::vector<int>&, std::vector<int>&, std::vector<double>&,
-        std::vector<double>&, std::vector<double>&,
-        std::vector<int>&, std::vector<int>&, int&, int&);
-    m.def("_moment_galerkin_assemble",
-          [](const std::vector<double>& verts, const std::vector<int>& vcounts, bool quad) {
-              int n_elem = (int)vcounts.size();
-              size_t need = 0;
-              for (int v : vcounts) {
-                  if (v != 4 && v != 5 && v != 6 && v != 8)
-                      throw std::runtime_error("_moment_galerkin_assemble: vcounts must be 4/5/6/8 (tet/pyr/wedge/hex)");
-                  need += (size_t)v * 3;
-              }
-              if (verts.size() != need)
-                  throw std::runtime_error("_moment_galerkin_assemble: verts size != sum(vcounts)*3");
-              std::vector<int> Br, Bc, Mr, Mc, ndof_elem, dof_off;
-              std::vector<double> Bd, Md, vols, ft;
-              int n_charge = 0, ndof_total = 0;
-              RadMomentGalerkinAssemble(verts.data(), vcounts.data(), n_elem, quad,
-                                        Br, Bc, Bd, Mr, Mc, Md, vols, ft, ndof_elem, dof_off,
-                                        n_charge, ndof_total);
-              py::dict d;
-              d["B_rows"] = Br; d["B_cols"] = Bc; d["B_data"] = Bd;
-              d["M_rows"] = Mr; d["M_cols"] = Mc; d["M_data"] = Md;
-              d["vols"] = vols; d["face_tris"] = ft;
-              d["ndof_elem"] = ndof_elem; d["dof_off"] = dof_off;
-              d["n_charge"] = n_charge; d["ndof_total"] = ndof_total;
-              return d;
-          },
-          py::arg("verts"), py::arg("vcounts"), py::arg("quad"),
-          "Parallel C++ assembly of the moment-Galerkin MMMM moment basis for a MIXED element list "
-          "(tet=4, pyramid=5, wedge=6, hex=8 verts). Returns dict(B COO B_rows/B_cols/B_data, M_mass COO "
-          "M_rows/M_cols/M_data [both zeros included; filter in Python], vols [n_elem], face_tris [n_charge*9], "
-          "ndof_elem [per-element DOF = 3+max(0,nFace-4)], dof_off [per-element global DOF start], n_charge, "
-          "ndof_total). verts = flat sum(vcounts)*3 (each element's vertices in radia corner order); quad=False "
-          "-> 3-DOF dipole/element, quad=True -> +(nFace-4) residual-eigenmode quad DOF.");
 
     // ========================================================================
     // Object Creation
@@ -4126,7 +4114,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
               CENTROID as linear functionals of every source DOF charge:
                 SELF face  -> bare charged-face field (interior centroid, finite, no center
                               charge -- patch-test exact: single cube -> demag N=1/3);
-                MUTUAL face -> yano dipole layer = bare face - area*(point @ source center)
+                MUTUAL face -> collocation MMMM dipole layer = bare face - area*(point @ source center)
                               (finite distance -> singularity-free).
               Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.
 

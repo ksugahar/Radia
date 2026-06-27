@@ -35,7 +35,7 @@ def _clean():
 
 def _iron_block_extB(analytic, method, n=2, mu_r=200.0, L=0.01):
     """Solve an n x n x n iron-hex block in a uniform Hz with the chosen face kernel + method; return ext B."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     rad.SolverConfig(bicgstab_tol=1e-10, moment_analytic_kernel=bool(analytic))
     objs = []
     for ix in range(n):
@@ -89,7 +89,7 @@ def test_analytic_kernel_cube_demag_physical():
     """A single iron cube in uniform Hz with the analytic kernel (method 0) magnetizes with demag ~1/3 ->
     M_z ~ 3*H0, transverse ~ 0.  Confirms the analytic path produces CORRECT physics (not merely 'differs
     from Gauss')."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     rad.SolverConfig(moment_analytic_kernel=True)
     L = 0.01
     v = [[-L, -L, -L], [L, -L, -L], [L, L, -L], [-L, L, -L],

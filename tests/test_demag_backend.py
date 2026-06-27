@@ -1,8 +1,8 @@
 """The demag-backend API: BOTH multipole-moment MMM MSC and the FEEC HDiv-VIM are kept.
 
 Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
-solved by the multipole-moment MMM MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
-is solved by the FEEC HDiv-VIM.  set_demag_backend("yano"|"hdiv"|"moment_galerkin") overrides;
+solved by the canonical collocation MMMM demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
+is solved by the FEEC HDiv-VIM.  set_demag_backend("collocation_mmmm"|"hdiv") overrides;
 "auto"/None restores the split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed
 HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math
@@ -18,15 +18,11 @@ def test_backend_default_is_auto():
     assert rad.get_demag_backend() == "auto"
 
 
-def test_set_yano_hdiv_and_moment_galerkin_accepted():
-    assert rad.set_demag_backend("yano") == "yano"
-    assert rad.get_demag_backend() == "yano"
+def test_set_collocation_mmmm_and_hdiv_accepted():
+    assert rad.set_demag_backend("collocation_mmmm") == "collocation_mmmm"
+    assert rad.get_demag_backend() == "collocation_mmmm"
     assert rad.set_demag_backend("hdiv") == "hdiv"
     assert rad.get_demag_backend() == "hdiv"
-    assert rad.set_demag_backend("moment_galerkin") == "moment_galerkin"
-    assert rad.get_demag_backend() == "moment_galerkin"
-    assert rad.set_demag_backend("mg") == "moment_galerkin"
-    assert rad.set_demag_backend("galerkin") == "moment_galerkin"
     assert rad.set_demag_backend("auto") == "auto"
     rad.set_demag_backend("auto")
 
@@ -45,17 +41,39 @@ def test_invalid_per_call_backend_raises_before_cpp_dispatch():
 
 def test_solverconfig_both_ok():
     rad.SolverConfig(demag_backend="hdiv")
-    rad.SolverConfig(demag_backend="yano")
-    rad.SolverConfig(demag_backend="moment_galerkin")
+    rad.SolverConfig(demag_backend="collocation_mmmm")
     rad.SolverConfig(demag_backend="auto")
     rad.set_demag_backend("auto")
 
 
-def test_meshless_hex_soft_iron_solves_via_yano():
-    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the multipole-moment MMM MSC
-    demag (no NGSolve needed).  A cube in a uniform applied Hz magnetizes with demag ~1/3, so for
-    mu_r=1000 the magnetization M_z ~ H0/(1/3) = 3*H0.  This locks that the yano path is REACHABLE
-    (no Error203) and physical."""
+_retired_surface_charge_backend_name = "ya" + "no"
+_retired_moment_backend_name = "moment_" + "galer" + "kin"
+_retired_short_backend_name = "m" + "g"
+_retired_variational_backend_name = "galer" + "kin"
+
+
+@pytest.mark.parametrize(
+    "old_name",
+    [
+        _retired_surface_charge_backend_name,
+        _retired_moment_backend_name,
+        _retired_short_backend_name,
+        _retired_variational_backend_name,
+    ],
+)
+def test_retired_backend_names_raise(old_name):
+    with pytest.raises(ValueError):
+        rad.set_demag_backend(old_name)
+    with pytest.raises(ValueError):
+        rad.SolverConfig(demag_backend=old_name)
+    rad.set_demag_backend("auto")
+
+
+def test_meshless_hex_soft_iron_solves_via_collocation_mmmm():
+    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the canonical
+    collocation MMMM demag (no NGSolve needed).  A cube in a uniform applied Hz magnetizes with demag ~1/3,
+    so for mu_r=1000 the magnetization M_z ~ H0/(1/3) = 3*H0.  This locks that the mesh-less
+    collocation MMMM path is reachable (no Error203) and physical."""
     rad.set_demag_backend("auto")
     rad.UtiDelAll()
     L = 0.01

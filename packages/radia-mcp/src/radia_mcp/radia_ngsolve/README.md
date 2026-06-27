@@ -29,7 +29,7 @@ mcp-server-radia-ngsolve             # stdio server
 | **NGSolve usage** | `ngsolve_usage`, `ngsolve_examples`, `ngsolve_recipe_<topic>` |
 | **Closed-form analytical** | `analytical_formulas` (11 topics: Wakao Part 1-9, cuboid_average_field, validation_use_cases) |
 | **PEEC inductance** | `peec_inductance`, `peec_filament_dispatch` |
-| **MMM core** | `mmm_core` (sign convention, EIEM2 eval, 1/(4pi) convention) |
+| **MMM core** | `mmm_core` (collocation MMMM sign convention, moment rows, 1/(4pi) convention) |
 | **sparsesolv** | `compact_ams_preconditioner`, `cocr_solver` (HYPRE-free, TaskManager-native) |
 | **CLN SIBC orthogonal** | `cln_sibc_orthogonal` — Hierarchical Cauer SIBC (lab specialty) |
 | **Mesh + I/O** | `netgen_workflow`, `vol_format_inspect`, `vol_file_lint` |

@@ -2141,8 +2141,7 @@ bool radTRelaxationMethNo_1::NeedsDenseMatrix() const
 }
 
 //=========================================================================
-// Variable DOF Solver Methods for Hybrid MSC + Standard Element Analysis
-// Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
+// Variable DOF Solver Methods for hybrid collocation MMMM + standard element analysis.
 //=========================================================================
 
 //-------------------------------------------------------------------------

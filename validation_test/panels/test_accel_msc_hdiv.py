@@ -10,7 +10,7 @@ Locks:
       panel routes the coil field into the HDiv-VIM solve correctly;
   (2) demag_backend='hdiv' on a MULTI-material .vol (yoke + air) returns a clean error (iron-only);
   (3) demag_backend='hdiv' with an IMA symmetry string returns a clean error (not supported yet);
-  (4) demag_backend='yano' returns a clean error (not a backend for this panel).
+  (4) demag_backend='collocation_mmmm' returns a clean error (not a backend for this panel).
 
 Also guards the 2026-06-17 coil-bug fix: solve_msc used to rad.UtiDelAll() AFTER building the coil
 (destroying it); now the iron responds to the coil, so M_avg is large (~1e5 A/m), not ~0.
@@ -99,14 +99,14 @@ def test_hdiv_panel_magnetizes(tmp_path, coil_script):
     assert abs(mz_h) > 1e4, f"hdiv M_avg_z={mz_h:.1f} too small -- coil field missing?"
 
 
-def test_yano_backend_removed(tmp_path, coil_script):
-    """demag_backend='yano' returns a clean error -- this panel is HDiv-VIM only."""
+def test_collocation_mmmm_backend_rejected(tmp_path, coil_script):
+    """demag_backend='collocation_mmmm' returns a clean error -- this panel is HDiv-VIM only."""
     from calc_accel_msc import solve_msc
     vol = _iron_only_yoke_vol(tmp_path / "yoke.vol")
     r = solve_msc(coil_script=coil_script, vol_file=vol, mat=_linear_mat(),
-                  demag_backend="yano", solver=0, tol=1e-6, max_iter=400)
+                  demag_backend="collocation_mmmm", solver=0, tol=1e-6, max_iter=400)
     assert "error" in r, r
-    assert "yano" in r["error"].lower() and "panel" in r["error"].lower()
+    assert "collocation_mmmm" in r["error"].lower() and "panel" in r["error"].lower()
 
 
 def test_hdiv_rejects_multimaterial(tmp_path, coil_script):
