@@ -19,6 +19,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_envelope_row, enclosing_box,
                                           enclosure_clearance_row, enclosure_difference_region,
                                           shape_measurement_row, shape_measurement_rows,
+                                          box_through_cylinder_reference_row,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
                                           box_face_pressure_moment_rows,
@@ -32,6 +33,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_measurement_health_summary,
                                           shape_bbox_pair_clearance_summary,
                                           shape_parameter_sweep_summary)
+from radia_mcp.build123d.build123d_knowledge import get_build123d_documentation
 from build123d import Box, Compound, Pos
 
 
@@ -41,6 +43,17 @@ def _vol(obj):
 
 def _valid(obj):
     return all(s.is_valid for s in obj.solids()) if isinstance(obj, Compound) else obj.is_valid
+
+
+def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
+    doc = get_build123d_documentation("lab_policy")
+
+    assert "tet-only path" in doc
+    assert "build123d → Netgen (tet) → Radia" in doc
+    assert "hex path + mixed-mesh CAD fallback" in doc
+    assert "pyramid transition elements" in doc
+    assert "cubit_vol_inventory" in doc
+    assert "box_through_cylinder_reference_row" in doc
 
 
 def test_annular_segment_volume_and_validity():
@@ -128,6 +141,29 @@ def test_shape_measurement_row_matches_box_geometry():
     assert row["bounding_box"]["size"] == pytest.approx([2.0, 3.0, 4.0])
     assert row["bounding_box"]["diagonal"] == pytest.approx(math.sqrt(29.0))
     assert row["characteristic_length"] == pytest.approx(4.0)
+
+
+def test_box_through_cylinder_reference_matches_build123d_mass_properties():
+    from build123d import Align, Cylinder
+
+    x, y, z, radius = 4.0, 3.0, 2.0, 0.4
+    part = Box(x, y, z) - Cylinder(
+        radius=radius,
+        height=1.5 * z,
+        align=(Align.CENTER, Align.CENTER, Align.CENTER),
+    )
+    part = part.solid()
+    part.label = "box_hole"
+
+    reference = [box_through_cylinder_reference_row(x, y, z, radius, axis="z", label="box_hole")]
+    measured = [shape_measurement_row(part)]
+    health = shape_measurement_health_summary(reference, measured, rtol=1.0e-12, bbox_atol=1.0e-12)
+
+    assert health["status"] == "ok"
+    assert health["comparison_summary"]["max_volume_rel_error"] < 1.0e-14
+    assert health["comparison_summary"]["max_area_rel_error"] < 1.0e-14
+    assert health["comparison_summary"]["max_bbox_abs_error"] == pytest.approx(0.0)
+    assert reference[0]["policy"] == "analytic_box_through_cylinder_mass_property_reference"
 
 
 def test_shape_measurement_rows_follow_assembly_children():
