@@ -696,7 +696,7 @@ Module: `radia_mcp.literature_index.server`
 
 ## `mcp-server-document-meta`
 
-_Cross-cutting document/repo helpers: deadline, version diff, templates, lint-all, result-saving notebook audits, examples->docs promotion audits, and root-level panels migration impact checks._
+_Cross-cutting document/repo helpers: deadline, version diff, templates, lint-all, result-saving notebook audits, examples->docs/validation_test promotion audits, and root-level panels migration impact checks._
 
 Module: `radia_mcp.document_meta.server`
 
@@ -704,7 +704,7 @@ Module: `radia_mcp.document_meta.server`
 |---|---|
 | `document_meta_deadline_countdown` | 任意の締切までの日数と推奨アクションを返す。 |
 | `document_meta_diff_versions` | 2 つのテキスト file の unified diff を返す (作文 version 比較)。 |
-| `document_meta_examples_notebook_audit` | Audit examples -> docs/ipynb promotion state for the Radia repo. |
+| `document_meta_examples_notebook_audit` | Audit examples -> docs/ipynb or validation_test promotion state. |
 | `document_meta_lint_all` | Run every applicable radia-mcp lint over one text / TeX file. |
 | `document_meta_notebook_result_audit` | Audit docs notebooks for saved results and synchronized result JSON. |
 | `document_meta_panel_layout_audit` | Audit impact of moving panel surfaces toward repo-root ``panels/``. |

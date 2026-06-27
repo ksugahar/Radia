@@ -309,6 +309,23 @@ it has crossed that bar; otherwise distill to `memory/` and leave the tracked tr
 clean. This is the research-lifecycle complement to the "Sample Promotion Ladder"
 (tests → examples → panels) and "No Development Cruft" policies above.
 
+### Validation-Class Examples Promotion Lane (2026-06-27)
+
+Validation-class material does not promote only to `docs/`.  The runnable
+verification lane is the repository's actual `validation_test/` directory (not a
+separate `tests_validation/` tree): long solver checks, release gates,
+p-convergence, cross-validation, optional-dependency checks, and
+environment-specific tests belong there when they need an executable regression
+surface outside normal CI.
+
+A result-bearing `docs/<topic>/*.ipynb` may still be the human-facing showcase:
+theory + code + saved plots/tables + adjacent synchronized JSON.  But it is the
+rendered explanation, not a substitute for the validation executable.  If an
+`examples/<topic>` item has `validation_*.py`, `validate_*.py`,
+`*_summary.json`, or references from `validation_test/`, classify it first as
+`validation_test` / protected-validation-corpus material; add or refresh docs
+only as the synchronized showcase layer.
+
 ### Documentation Format: Markdown for Dev Docs, ipynb for Method/Implementation Explanations (2026-06-27)
 
 **POLICY** (Sugahara): pick the documentation format by **what the document is**:

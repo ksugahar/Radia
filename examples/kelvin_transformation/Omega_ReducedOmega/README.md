@@ -6,7 +6,9 @@
 
 ## 符号規約
 
-本実装（Omega_ReducedOmega.py）では以下の符号規約を採用：
+docs に昇格した classic 実装群（`docs/kelvin/kelvin_classic_demos.ipynb`
+および `docs/kelvin/kelvin_classic_demos_results.json` に保存）では、
+以下の符号規約を採用：
 
 $$
 \mathbf{H} = \nabla \Omega

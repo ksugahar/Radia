@@ -13,6 +13,10 @@
 
 ## Folder Structure
 
+Per-order runner scripts under `order=*/.../*.py` have been promoted to
+`docs/kelvin/kelvin_adaptive_mesh_archive.ipynb`; full source text and SHA-256
+hashes live in `docs/kelvin/kelvin_adaptive_mesh_archive_results.json`.
+
 ```
 平行2線/
 ├── order=2/
@@ -89,11 +93,8 @@ For smooth solutions with polynomial order p:
 
 ## Usage
 
-Run any script directly:
-```bash
-cd order=2/Refine_with_zz_estimator
-python ParallelWires_2D_adaptive_with_Kelvin.py
-```
+The historical per-order runner source is now read from
+`docs/kelvin/kelvin_adaptive_mesh_archive.ipynb` and its synchronized JSON.
 
 ## Dependencies
 

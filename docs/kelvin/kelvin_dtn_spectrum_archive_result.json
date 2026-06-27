@@ -1,0 +1,110 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T04:02:21Z",
+  "notebook": "docs/kelvin/kelvin_dtn_spectrum_archive.ipynb",
+  "notebook_sha256": "f7389b8f707e55ef5a194ad9df1ee8859f40dbd308e788ec4a6eb9eccfe78190",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/kelvin/kelvin_dtn_spectrum_archive.ipynb",
+    "cells": 4,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 2,
+    "output_count": 6,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "90a05e7d658900c440f03f6fc3dd673990ec2fedb2b609cb691d9ced0de66e3c",
+      "source_preview": "from pathlib import Path\nimport json\nimport re\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'kelvin_examples_migration.py').exists():\n    NOTEBOOK_DIR = Path('docs/kelvin').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom kelvin_examples_migration import build_migration_report, build_source_archive, markdown_table, write_report_json\n\narchive_path = NOTEBOOK_DIR / 'kelvin_dtn_spectrum_archive_results.json'\nreport = build_migration_report()\narchive = build_source_archive(\n    report,\n    lanes=['open_boundary_src_api_or_validation', 'validation_test_or_src_api_locked', 'validation_test_candidate'],\n    path_contains='examples/kelvin_transformation/DtN_spectrum/',\n    include_source=True,\n)\nfor row in archive['files']:\n    name = Path(row['path']).name\n    m = re.match(r'act(\\d+)_', name)\n    row['act_group'] = f'act{m.group(1)}' if m else 'misc'\narchive['summary']['by_act_group'] = {}\nfor row in archive['files']:\n    archive['summary']['by_act_group'][row['act_group'",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 503,
+          "text_sha256": "b52f5babb16684164447a753a94a3222edc0217cdafa3d40d5498bcb95fc38b8",
+          "text_preview": "{\n  \"archived_files\": 122,\n  \"archived_lines\": 18927,\n  \"archived_bytes\": 1050293,\n  \"by_lane\": {\n    \"open_boundary_src_api_or_validation\": 104,\n    \"validation_test_or_src_api_locked\": 16,\n    \"validation_test_candidate\": 2\n  },\n  \"by_group\": {\n    \"DtN_spectrum\": 122\n  },\n  \"by_act_group\": {\n    \"act0\": 6,\n    \"act1\": 7,\n    \"act2\": 15,\n    \"act3\": 7,\n    \"act4\": 7,\n    \"act5\": 9,\n    \"act6\": 13,\n    \"act7\": 40,\n    \"act8\": 17,\n    \"misc\": 1\n  }\n}\n\nwrote kelvin_dtn_spectrum_archive_results.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "1060485615668bc75e1a23b79e25f805700ea814147eb5491c5fa12a337d9273",
+      "source_preview": "from IPython.display import Markdown, display\n\ndisplay(Markdown('## DtN scripts by act group'))\ndisplay(Markdown(markdown_table([\n    {'act_group': k, 'files': v} for k, v in sorted(archive['summary']['by_act_group'].items())\n], ['act_group', 'files'], max_rows=20)))\n\ndisplay(Markdown('## Referenced / locked DtN scripts'))\nlocked = [row for row in archive['files'] if row['reference_hit_count_reported'] or row['validation_named']]\ndisplay(Markdown(markdown_table([\n    {\n        'path': row['path'],\n        'lane': row['migration_lane'],\n        'refs': row['reference_hit_count_reported'],\n        'validation': row['validation_named'],\n        'sha256': row['source']['sha256'][:12],\n    }\n    for row in locked\n], ['path', 'lane', 'refs', 'validation', 'sha256'], max_rows=80)))\nprint(f'locked scripts shown: {len(locked)}')",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 25,
+          "text_sha256": "ebb157bef6abf9f2ac81355cc18b366a7bbdba519e5b5574953d64ea5f40a2a8",
+          "text_preview": "locked scripts shown: 18\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

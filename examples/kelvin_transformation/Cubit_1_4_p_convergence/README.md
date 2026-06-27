@@ -70,7 +70,9 @@ OCC fix differently.
 
 **Empirically validated rule**: Cubit-meshed `sphere` Neumann
 correction needs `-specialcf.normal(mesh.dim)` (same sign as the
-OCC reference).  The reference `3D_sphere_with_Kelvin.py` already uses
+OCC reference).  The archived classic reference
+`Omega_ReducedOmega/Sphere/3D_sphere_with_Kelvin.py` (preserved in
+`docs/kelvin/kelvin_classic_demos_results.json`) already uses
 `-specialcf.normal`, so Cubit-meshed solvers should follow the same
 sign convention.
 
