@@ -96,6 +96,17 @@ def test_fail_loud_on_nonmagnetic():
             hdiv_demag_solve(mesh, 1.0, _HEXT)
 
 
+def test_order_gt0_fail_loud():
+    """High-order (order>0) material solve is NOT production-ready: the order-p charge Gram is validated
+    only for the demag FACTOR (surface charges, rho=-div M=0 for uniform M); the material solve exercises
+    the VOLUME charges where order-p is LESS accurate than RT0 (order-1 M_avg ~2x high on coarse meshes).
+    hdiv_demag_solve(order>0) must RAISE, not silently return a wrong M (Repository-First / No-Fallbacks)."""
+    mesh = _sphere(h=0.7)
+    with pytest.raises(NotImplementedError):
+        with ng.TaskManager():
+            hdiv_demag_solve(mesh, 100.0, _HEXT, order=2)
+
+
 def test_requires_exactly_one_material_spec():
     """Exactly one of mu_r (linear) / bh_table (nonlinear) -> else RAISE."""
     mesh = _sphere()
