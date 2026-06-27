@@ -224,8 +224,8 @@ public:
     // RIESZ map) built once from the COO (mI,mJ,mV) -- ~3-5x fewer iters, nearly mu_r-flat; `prec` is
     // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
     // symmetric=true (DEFAULT): G is applied via the EXACTLY-symmetric H-matvec (MatVecSym, upper-tri
-    // leaves define both triangles), so the +N CG operator is machine-symmetric and CG is robust at ALL
-    // N (the independently-ACA'd off-diagonal asymmetry that broke CG past ~20k is gone).  symmetric=false
+    // leaves define both triangles), so the +N CG operator is machine-symmetric and removes the reported
+    // independently-ACA'd off-diagonal asymmetry failure mode.  symmetric=false
     // uses the general (asymmetric) MatVec (legacy / cross-check only).
     std::vector<double> SolveLinearMaterial(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,

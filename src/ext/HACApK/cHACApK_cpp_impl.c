@@ -981,7 +981,8 @@ static void matvec_transpose_thread_func(int tid, int nthr, void *data) {
  * partition is symmetric, so every above-diagonal block is covered by an upper leaf (nstrtl < nstrtt);
  * that leaf supplies BOTH its own block (x[t]->y[l]) AND the mirror as its transpose (x[l]->y[t]),
  * so the lower triangle is the EXACT transpose of the upper regardless of the (independently-ACA'd)
- * lower leaves -- which is what makes the operator machine-symmetric and CG/MINRES robust at all N.
+ * lower leaves -- which makes the operator machine-symmetric and removes the ACA-asymmetry failure mode
+ * for CG/MINRES.
  * Strictly-lower leaves (nstrtl > nstrtt) are SKIPPED (their pair is handled by the upper mirror);
  * diagonal leaves (nstrtl == nstrtt, the dense self/near block filled exactly from the symmetric
  * kernel) are applied once. */

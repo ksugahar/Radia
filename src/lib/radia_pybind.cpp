@@ -3562,7 +3562,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return y;
              }, py::arg("x"),
              "G_sym q -- EXACTLY symmetric H-matvec (upper-triangular leaves define both triangles), "
-             "so CG/MINRES on B^T G_sym B stay robust at all N (the ACA asymmetry that breaks CG is gone).")
+             "so CG/MINRES on B^T G_sym B use a machine-symmetric operator (the ACA-asymmetry failure mode is removed).")
         .def("entry", &RadHACApKChargeGram::GetInteractionMatrixElement, py::arg("i"), py::arg("j"),
              "Charge-Gram entry G[i,j] from the analytic / polytope / high-order kernel.")
         .def("solve_linear_material",
@@ -3672,7 +3672,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
              "DEFAULT linear demag solve ENTIRELY in C++: SPD +N system ((1/chi)M_mass + B^T G B) m = rhs "
              "by CG preconditioned with a PARDISO SPD factor of the RT0 mass M_mass (the MASS RIESZ map). "
-             "symmetric=true (default) applies G via the EXACTLY-symmetric H-matvec so CG is robust at all N; "
+             "symmetric=true (default) applies G via the EXACTLY-symmetric H-matvec so CG sees a symmetric operator; "
              "symmetric=false uses the general (asymmetric ACA) matvec. Returns {m, iters}.")
         .def("solve_material_minres_mass_riesz",
              [](RadHACApKChargeGram& s,
