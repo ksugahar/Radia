@@ -161,22 +161,33 @@ def _charge_basis(fes, quad):
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
     bdof = [list(L2b.GetDofNrs(e)) for e in bels]
     mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
-    # change-of-basis built in the GRAM's cell_verts frame (see _change_of_basis docstring): element 0's
-    # NGSolve transform + mesh-order vertices land the monomial coeffs in the frame the C++ Gram interprets
-    # `charge_expo` in.  The ref-corner->local-vertex permutation is constant per element type (exact for all).
-    Sv = _change_of_basis(L2v.GetFE(vels[0]), mons_v, *_tet_ref(quad), dim=3,
-                          trafo=mesh.GetTrafo(vels[0]), Vmesh=vV[0])
-    Ss = _change_of_basis(L2b.GetFE(bels[0]), mons_s, *_tri_ref(quad), dim=2,
-                          trafo=mesh.GetTrafo(bels[0]), Vmesh=bV[0])
-
-    Sv_sp, Ss_sp = sp.csr_matrix(Sv), sp.csr_matrix(Ss)         # change-of-basis kept sparse (block x block)
+    # PER-ELEMENT change-of-basis into the GRAM's cell_verts frame.  The map from the L2/SurfaceL2 shape
+    # coefficients to the monomial charge the C++ Gram interprets is NOT the same for every element: NGSolve
+    # builds the element map AND orients the (high-order) shape functions by the element's GLOBAL vertex order,
+    # so both the ref-frame affine map and the shape orientation vary per element.  The old code computed ONE
+    # change-of-basis S from element 0 and reused it for all elements -- this geometrically scrambles the
+    # monomial charge of every differently-oriented element, injecting a SPURIOUS NET CHARGE (broken neutrality:
+    # a real M has INT rho + INT_bnd sigma = 0).  It is INVISIBLE to every uniform-M / demag-FACTOR test
+    # (constant charge -> the monopole error cancels), but the spurious monopole has huge Coulomb self-energy,
+    # so the high-order demag operator N = B^T G B gets UNPHYSICAL eigenvalues > 1 (a true demag spectrum is in
+    # [0,1]: p=1 max 1.22 / 3 modes, p=2 max 8.0 / 15 modes) and the high-order MATERIAL solve over-magnetizes
+    # ~2x (p=1) / ~4x (p=2).  Computing S PER ELEMENT restores neutrality, eig in [0,1], and the correct
+    # material M (p=1/p=2 then agree with order-0 instead of blowing up).  No cache: S depends on the per-
+    # element shape orientation (NOT just the affine map), so a geometry-only key is unsafe; the per-element
+    # _change_of_basis is a tiny dense solve, negligible vs the O(N^2) Gram build.  See memory
+    # hdiv-highorder-material-solve-wrong round 4.
+    rtq, rsq = _tet_ref(quad), _tri_ref(quad)
     Brows, host, kind, expo = [], [], [], []
     for c in range(len(vels)):
-        blk = Sv_sp @ Bv_d[vdof[c], :]                          # sparse (nmons_v x ndof)
+        Sv = sp.csr_matrix(_change_of_basis(L2v.GetFE(vels[c]), mons_v, *rtq, dim=3,
+                                            trafo=mesh.GetTrafo(vels[c]), Vmesh=vV[c]))
+        blk = Sv @ Bv_d[vdof[c], :]                             # sparse (nmons_v x ndof)
         for a, (i, j, k) in enumerate(mons_v):
             Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     for f in range(len(bels)):
-        blk = Ss_sp @ Bb_d[bdof[f], :]                          # sparse (nmons_s x ndof)
+        Ss = sp.csr_matrix(_change_of_basis(L2b.GetFE(bels[f]), mons_s, *rsq, dim=2,
+                                            trafo=mesh.GetTrafo(bels[f]), Vmesh=bV[f]))
+        blk = Ss @ Bb_d[bdof[f], :]                             # sparse (nmons_s x ndof)
         for a, (i, j) in enumerate(mons_s):
             Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
     B = sp.vstack(Brows).tocsr()                                # (n_charge, ndof)
