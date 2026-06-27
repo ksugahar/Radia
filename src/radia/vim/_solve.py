@@ -348,6 +348,33 @@ def _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmr
     return np.asarray(m, float), it["n"]
 
 
+def _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit):
+    """PER-REGION linear solve ENTIRELY in C++: the SYMMETRIC Galerkin system (M_{1/chi} + N) m = M_mass h_ext
+    by symmetric mass-Riesz CG, where W = M_{1/chi} = INT (1/chi(x)) u.v dx is BOTH the system mass AND the
+    Riesz preconditioner.  Passing W as the 'mass' COO with inv_chi=1.0 makes the C++ kernel
+    (`solve_linear_material_mass_riesz`, symmetric=True) compute A = 1.0*W + B^T G B and precondition with
+    W^{-1} (PARDISO) -- the SAME all-C++ symmetric CG as the uniform path, generalized to per-region chi.
+    The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + PARDISO W-solve + vector ops); only
+    the NGSolve assembly of W and the RHS mass M_mass stays Python (assembly is NGSolve's job).  The
+    symmetric 1/chi-weighted Galerkin form is CG-able (W, N both symmetric); it differs from the form-1 GMRES
+    operator (M_mass + M_chi M_mass^-1 N) by O(h) at material interfaces -- both are consistent, and for a
+    UNIFORM region it is bit-identical to the scalar +N system."""
+    rhs = np.asarray(Mm @ h_ext).ravel()
+    B = B.tocsr(); W_coo = sp.coo_matrix(W)
+    res = H.solve_linear_material_mass_riesz(
+        list(map(int, B.indptr)), list(map(int, B.indices)), list(map(float, B.data)),
+        int(n_face), list(map(int, W_coo.row)), list(map(int, W_coo.col)),
+        list(map(float, W_coo.data)), 1.0, list(map(float, rhs)), tol, int(maxit))
+    iters = int(res["iters"])
+    if iters >= int(maxit):                      # fail-loud (No-Fallbacks)
+        raise RuntimeError(
+            "hdiv_demag_solve (per-region symmetric mass-riesz CG): did NOT converge in %d iters "
+            "(n_face=%d).  The (M_{1/chi} + N) operator is SPD, so a non-convergence means an ill-"
+            "conditioned material/mesh; tighten gram_eps or raise maxit, or cross-check with "
+            "linear_solver='gmres' (the form-1 GMRES)." % (maxit, n_face))
+    return np.asarray(res["m"], float), iters
+
+
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=None, far_quad=None, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
@@ -544,12 +571,21 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                                      tol, maxit, gmres_restart, b_extra=b_pm)
         elif mu_r is not None:
             if isinstance(mu_r, dict):
-                if linear_solver in ("cpp-cg", "hlu"):
-                    raise ValueError("hdiv_demag_solve: linear_solver=%r does not yet support "
-                                     "per-region mu_r" % (linear_solver,))
-                M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
-                m, iters = _solve_linear(Mm, M_chi, N_apply, _get_Mfac(), _get_Mprec(), n_face, h_ext,
-                                         tol, maxit, gmres_restart)
+                if linear_solver == "hlu":
+                    raise ValueError("hdiv_demag_solve: linear_solver='hlu' does not support per-region mu_r")
+                if linear_solver in ("auto", "cpp-cg"):
+                    # PER-REGION default: all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
+                    # (M_{1/chi} + N) m = M_mass h_ext (W = the 1/chi-weighted HDiv mass is both the system
+                    # mass and the Riesz preconditioner).  Same C++ symmetric CG as the uniform path; only the
+                    # NGSolve assembly of W stays Python.  'gmres'/'python' keep the form-1 GMRES cross-check.
+                    W = _build_invchi_mass(mesh, fes, mu_r, n_face)
+                    m, iters = _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit)
+                    solver_used = "mass-riesz-cg"
+                else:                                  # gmres / python: form-1 GMRES (asymmetry-tolerant)
+                    M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
+                    m, iters = _solve_linear(Mm, M_chi, N_apply, _get_Mfac(), _get_Mprec(), n_face, h_ext,
+                                             tol, maxit, gmres_restart)
+                    solver_used = "mass-riesz-gmres" if linear_solver == "gmres" else "python-gmres"
             elif linear_solver in ("auto", "cpp-cg"):
                 # DEFAULT: all-C++ mass-Riesz CG on the +N system, with G applied via the EXACTLY-SYMMETRIC
                 # charge-Gram H-matvec (matvec_sym -- upper-triangular leaves define both triangles, so the
@@ -617,6 +653,25 @@ def _build_chi_mass(mesh, fes, mu_r, Mm, n_face):
     if chi <= 0.0:
         raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
     return chi * Mm
+
+
+def _build_invchi_mass(mesh, fes, mu_r, n_face):
+    """The 1/chi-weighted HDiv mass M_{1/chi} = INT (1/chi(x)) u.v dx for the SYMMETRIC per-region Galerkin
+    system A = M_{1/chi} + N (the CG-able all-C++ form -- see _solve_linear_W_cpp).  `mu_r` is a dict
+    {material: mu_r} (each > 1).  Fail-loud (No-Fallbacks): every mesh material specified, each mu_r > 1."""
+    mats = list(mesh.GetMaterials())
+    missing = sorted(set(mats) - set(mu_r))
+    if missing:
+        raise ValueError("hdiv_demag_solve: mu_r dict missing region(s) %s; mesh materials are %s"
+                         % (missing, mats))
+    bad = {r: mu_r[r] for r in mats if float(mu_r[r]) <= 1.0}
+    if bad:
+        raise ValueError("hdiv_demag_solve: every region mu_r must be > 1 (got %s)" % bad)
+    invchi_cf = mesh.MaterialCF({r: 1.0 / (float(mu_r[r]) - 1.0) for r in mats})
+    u, v = fes.TnT()
+    a = ng.BilinearForm(fes); a += invchi_cf * u * v * ng.dx; a.Assemble()
+    r, c, val = a.mat.COO()
+    return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))), shape=(n_face, n_face))
 
 
 def _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face):
