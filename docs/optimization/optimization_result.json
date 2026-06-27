@@ -1,14 +1,14 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:29Z",
+  "generated_at_utc": "2026-06-27T08:46:19Z",
   "notebook": "docs/optimization/optimization.ipynb",
-  "notebook_sha256": "eff146a8ebf5961e86c0234b1ee8d746665eb5b2406d027b9ca3e3c8ea675395",
+  "notebook_sha256": "7ae03b8879f207679d70b291c940eba489adcb94b13c92acab416c3e957e9253",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "optuna_version": "4.9.0"
   },
   "summary": {
     "path": "docs/optimization/optimization.ipynb",
@@ -28,32 +28,40 @@
     {
       "cell_index": 2,
       "execution_count": 1,
-      "source_sha256": "55e9c04398758baa8f85b009a3e1268f85bb906af14e73b3a7a0ff272e2443be",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class Optuna study for a waveguide dielectric slab.\n\nThe objective is a small CAE-style RF design task: choose a dielectric constant\nand slab length in a WR-90-like TE10 guide so that the one-section slab is\nnearly transparent at 10 GHz.  Analytic half-wave candidates are enqueued, then\nOptuna records a reproducible TPE study.  The final feasible trial is selected\nwith radia-mcp's dependency-free record helpers.\n\nOptuna is intentionally optional and external to radia-mcp.\n\nRun:\n\n    python examples/optimization/validation_optuna_waveguide_slab.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport optuna\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.waveguide import waveguide_dielectric_sl",
+      "source_sha256": "017607c782ffdbafd239ea8fd90fd6bd6df2f772e51c378f593eccbcd10c587f",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class Optuna study for a waveguide dielectric slab.\n\nThe objective",
       "outputs": [
         {
-          "output_type": "stream",
           "name": "stdout",
-          "text_chars": 364,
-          "text_sha256": "22a59ec6a983d5afb93eac59b32397b9a138c12d55cbf608ebe0b09724bf39c2",
-          "text_preview": "[optuna] version=4.9.0, trials=40, seed=20260624\n[enqueue] 4 analytic half-wave candidates\n[best] trial=0 |S11|=3.920114e-17 eps=1.5 length=14.490750650 mm\n[best feasible] trial=0 |S11|=3.920114e-17 delivered=1.000000000000 violation=0.000e+00\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\optimization\\validation_optuna_waveguide_slab_summary.json\n",
-          "text_truncated": false
+          "output_type": "stream",
+          "text": [
+            "[optuna] version=4.9.0, trials=40, seed=20260624\n",
+            "[enqueue] 4 analytic half-wave candidates\n",
+            "[best] trial=0 |S11|=3.920114e-17 eps=1.5 length=14.490750650 mm\n",
+            "[best feasible] trial=0 |S11|=3.920114e-17 delivered=1.000000000000 violation=0.000e+00\n",
+            "[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\optimization\\validation_optuna_waveguide_slab_summary.json\n"
+          ]
         }
       ]
     },
     {
       "cell_index": 4,
       "execution_count": 2,
-      "source_sha256": "7641e23607b999ad77ff52063097fddd1d66edb505d81afefb28e820e7cc14c4",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class Optuna study for a waveguide Bragg stopband filter.\n\nThe objective is a compact CAE-style RF optimization task: tune a 3-period\nhigh/low-permittivity TE10 waveguide stack to suppress transmission at 10 GHz.\nAnalytic quarter-wave candidates are enqueued, then Optuna records a\nreproducible TPE study.  The final feasible trial is selected with radia-mcp's\ndependency-free record helpers.\n\nOptuna is intentionally optional and external to radia-mcp.\n\nRun:\n\n    python examples/optimization/validation_optuna_waveguide_bragg_filter.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nimport optuna\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.waveguide import C0, waveguide_cascade_sparams  # noqa:",
+      "source_sha256": "7db7cb66a59460cc5b7b6f551bb951e977a99f2458780c36ed392f8cc6e6d35d",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class Optuna study for a waveguide Bragg stopband filter.\n\nThe obj",
       "outputs": [
         {
-          "output_type": "stream",
           "name": "stdout",
-          "text_chars": 517,
-          "text_sha256": "d8d6674e3fcfe06dbd695ae1f6595d6186ab3df3335f63b4f65a077e1cd150f6",
-          "text_preview": "[optuna] version=4.9.0, trials=50, seed=20260624\n[enqueue] 3 analytic quarter-wave candidates\n  trial= 0 |S21|=0.198360 reflected=0.960653 eps_hi=4 eps_lo=1.2\n  trial= 1 |S21|=0.074178 reflected=0.994498 eps_hi=6 eps_lo=1.05\n  trial= 2 |S21|=0.111927 reflected=0.987472 eps_hi=5 eps_lo=1.1\n[best feasible] trial=1 |S21|=0.074178 |S11|=0.997245 reflected=0.994497688055 violation=0.000e+00\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\optimization\\validation_optuna_waveguide_bragg_filter_summary.json\n",
-          "text_truncated": false
+          "output_type": "stream",
+          "text": [
+            "[optuna] version=4.9.0, trials=50, seed=20260624\n",
+            "[enqueue] 3 analytic quarter-wave candidates\n",
+            "  trial= 0 |S21|=0.198360 reflected=0.960653 eps_hi=4 eps_lo=1.2\n",
+            "  trial= 1 |S21|=0.074178 reflected=0.994498 eps_hi=6 eps_lo=1.05\n",
+            "  trial= 2 |S21|=0.111927 reflected=0.987472 eps_hi=5 eps_lo=1.1\n",
+            "[best feasible] trial=1 |S21|=0.074178 |S11|=0.997245 reflected=0.994497688055 violation=0.000e+00\n",
+            "[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\optimization\\validation_optuna_waveguide_bragg_filter_summary.json\n"
+          ]
         }
       ]
     }
