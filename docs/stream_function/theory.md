@@ -1,5 +1,8 @@
 # Theory — Stream-function method + (ACA+)+TSVD
 
+> Runnable companion: [`theory.ipynb`](theory.ipynb) executes this method live
+> (the derivations/literature stay here; the notebook produces the numbers).
+
 ## The inverse problem
 
 Given a desired magnetic field component (typically `Bz`) at a set of
