@@ -262,9 +262,9 @@ careful remeshing.
   the 12 readable FEM validation scripts, their summary JSON payloads, full
   source, and SHA-256 hashes, executed and synchronized with
   ``docs/fem_readable/fem_readable_validation_archive_results.json``.
-- ``examples/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
+- ``validation_test/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
-- ``examples/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
+- ``validation_test/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
   named `.vol` sidesets to constant vector-traction force/moment rows and
   generic resultant reduction.
 - ``validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:

@@ -1,0 +1,112 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T21:40:28Z",
+  "notebook": "docs/cubit_mesh_export/cubit_mesh_export_examples_archive.ipynb",
+  "notebook_sha256": "b0264f31bd901be0889a95f3708dc380cd98f6afcf3183e761f52c0e15e0d364",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/cubit_mesh_export/cubit_mesh_export_examples_archive.ipynb",
+    "cells": 8,
+    "code_cells": 4,
+    "executed_code_cells": 4,
+    "code_cells_with_outputs": 4,
+    "output_count": 5,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "52e6ab8e48922c37c8d6fea17be967ab85032942bebab531a8bb85912afecefb",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\narchive_path = Path('cubit_mesh_export_examples_archive_results.json')\nif not archive_path.exists():\n    archive_path = Path('docs/cubit_mesh_export/cubit_mesh_export_examples_archive_results.json')\ndata = json.loads(archive_path.read_text(encoding='utf-8'))\ncounts = data['counts']\nprint(f\"topic={data['topic']}\")\nprint(f\"python_scripts={counts['python_scripts']}\")\nprint(f\"topic_json_files={counts['topic_json_files']}\")\nprint(f\"media_files={counts['media_files']}\")\nprint(f\"promotion_lane={data['promotion_lane']}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 116,
+          "text_sha256": "ceec94f6902478ae60aec7de953b254461aac815ebd9d816cab9a74fc5c7db6b",
+          "text_preview": "topic=cubit_mesh_export\npython_scripts=25\ntopic_json_files=20\nmedia_files=0\npromotion_lane=topic_docs_first_archive\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "6843f052ee7a64f660e9509277253a1db0d34c47befa33db5dc473f62c4dc66a",
+      "source_preview": "header = '| # | script | lines | json refs | docstring |\\n|---:|---|---:|---:|---|'\nbody = []\nfor i, rec in enumerate(data['records'], 1):\n    doc = (rec.get('docstring_first_line') or '').replace('|', '\\\\|')\n    body.append(f\"| {i} | `{rec['path']}` | {rec['line_count']} | {len(rec.get('attached_json', []))} | {doc} |\")\ndisplay(Markdown('\\n'.join([header] + body)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "839ef98cc7a6a169d05c51643b314e573a0bfaf975e9fb71767960211ec7464c",
+      "source_preview": "assert counts['python_scripts'] == len(data['records'])\nassert all(len(rec['sha256']) == 64 for rec in data['records'])\nassert all(rec.get('source') for rec in data['records'])\nprint('archive integrity: ok')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 22,
+          "text_sha256": "9a08371424f162629f3adc46f13cda47685d744b3641c36ab336a8741834ef54",
+          "text_preview": "archive integrity: ok\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "0d127e6aa7fccb29552f46caf43f3c8b26d3741e3cdcbddd0767be12cc337084",
+      "source_preview": "rows = data.get('topic_json_files', [])\nif rows:\n    header = '| # | json | sha256 | keys |\\n|---:|---|---|---|'\n    body = []\n    for i, row in enumerate(rows, 1):\n        payload = row.get('payload')\n        keys = ', '.join(list(payload.keys())[:8]) if isinstance(payload, dict) else type(payload).__name__\n        body.append(f\"| {i} | `{row['path']}` | `{row['sha256'][:12]}` | {keys.replace('|', '\\\\|')} |\")\n    display(Markdown('\\n'.join([header] + body)))\nelse:\n    print('no existing JSON payloads found')\n\nmedia = data.get('media_files', [])\nprint(f\"media artifacts indexed: {len(media)}\")",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 27,
+          "text_sha256": "a6375beec0892b17514fced3c0f4657f9e47636442983251bb259a07d4ced444",
+          "text_preview": "media artifacts indexed: 0\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

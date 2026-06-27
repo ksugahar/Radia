@@ -11,7 +11,7 @@ is used as a shared FEM/BEM mesh:
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_inventory.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_inventory.py
 """
 
 from __future__ import annotations

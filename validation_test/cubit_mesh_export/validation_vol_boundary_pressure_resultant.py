@@ -7,8 +7,8 @@ can consume directly.
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_pressure_resultant.py
-    python examples/cubit_mesh_export/validation_vol_boundary_pressure_resultant.py --vol C:\\temp\\box.vol
+    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_resultant.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_resultant.py --vol C:\\temp\\box.vol
 """
 
 from __future__ import annotations
