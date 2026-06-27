@@ -5,6 +5,11 @@ Cross-cutting document helpers that do not belong to one document type:
   * document_meta_diff_versions      -- unified diff of two manuscript versions
   * document_meta_template_loader    -- LaTeX skeletons (IEEE/IEEJ/APS/Beamer/JSPS)
   * document_meta_lint_all           -- run every applicable radia-mcp lint over a file
+  * document_meta_write_notebook_result_json -- write versioned JSON sidecar from saved outputs
+  * document_meta_write_docs_notebook_result_jsons -- batch sidecars for docs notebooks
+  * document_meta_notebook_result_audit -- check ipynb saved outputs + JSON sidecars
+  * document_meta_examples_notebook_audit -- examples -> result-saving docs notebook audit
+  * document_meta_panel_layout_audit -- root-level panels migration impact audit
 
 Promoted + REDESIGNED 2026-06-02 from mcp-server-document.document_meta
 (LAB-private) to radia-mcp (public PyPI).  The redesign replaced the old
@@ -36,7 +41,8 @@ register_status_tool(
         "Cross-cutting document helpers: deadline countdown, manuscript "
         "version diff, LaTeX template scaffolding, and an all-domain lint "
         "orchestrator (registry over radia-mcp presentation / paper_writing "
-        "/ poster lints; grant lint stays LAB-private)."
+        "/ poster lints; grant lint stays LAB-private), plus Radia repo "
+        "notebook-result and panel-layout audits."
     ),
     subpackage="radia_mcp.document_meta",
     related_servers=["presentation", "paper-writing", "poster", "bibliography"],

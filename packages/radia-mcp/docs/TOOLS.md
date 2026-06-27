@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **336 tools** across 38 MCP servers.
+Total: **346 tools** across 39 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -42,6 +42,7 @@ Total: **336 tools** across 38 MCP servers.
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
+| [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 10 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 9 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
 
@@ -692,6 +693,25 @@ Module: `radia_mcp.literature_index.server`
 | `literature_search` | Search the lab literature corpus by filename keywords. |
 | `literature_semantic_search` | Semantic search over indexed text via ChromaDB + sentence-transformers |
 | `literature_stats` | Index statistics + cache info. |
+
+## `mcp-server-document-meta`
+
+_Cross-cutting document/repo helpers: deadline, version diff, templates, lint-all, result-saving notebook audits, examples->docs promotion audits, and root-level panels migration impact checks._
+
+Module: `radia_mcp.document_meta.server`
+
+| Tool | Description |
+|---|---|
+| `document_meta_deadline_countdown` | 任意の締切までの日数と推奨アクションを返す。 |
+| `document_meta_diff_versions` | 2 つのテキスト file の unified diff を返す (作文 version 比較)。 |
+| `document_meta_examples_notebook_audit` | Audit examples -> docs/ipynb promotion state for the Radia repo. |
+| `document_meta_lint_all` | Run every applicable radia-mcp lint over one text / TeX file. |
+| `document_meta_notebook_result_audit` | Audit docs notebooks for saved results and synchronized result JSON. |
+| `document_meta_panel_layout_audit` | Audit impact of moving panel surfaces toward repo-root ``panels/``. |
+| `document_meta_status` | (no description) |
+| `document_meta_template_loader` | 学術 document の定型 skeleton を返す。 |
+| `document_meta_write_docs_notebook_result_jsons` | Batch-write synchronized result JSON sidecars for executed docs notebooks. |
+| `document_meta_write_notebook_result_json` | Write a durable JSON sidecar summarising a saved-result notebook. |
 
 ## `mcp-server-radia-meta`
 
