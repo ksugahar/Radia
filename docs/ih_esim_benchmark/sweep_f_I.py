@@ -1,4 +1,4 @@
-"""IH per-element ESIM (f, I_port) sweep — 4 freqs x 4 currents = 16 cases.
+"""IH per-element ESIM (f, I_port) dense sweep.
 
 For each combination of frequency and port current, run BOTH the
 scalar-Karl and per-element-Karl variants and collect P_wp, |H_t|
@@ -7,13 +7,14 @@ JSON.
 
 The output is a 2D heatmap of (per-element-vs-scalar P_wp gap) vs
 (f, I) showing the operating regime where per-element ESIM matters
-most for IH design.  Figure target: IGTE journal paper.
+most for IH design.  Figure target: IGTE 2026 digest.
 
-Run time: ~5 min per ESIM case (cell-solver loop dominates),
-~5 min per scalar case -> 16 x 2 x 5 min = ~2.5 hours total.
+Grid: 9 currents x 6 frequencies x 2 modes = 108 cases.
+Run time on LAB is typically 3--4 hours, depending on high-current
+stall behaviour.
 
 Usage:
-    python examples/ih_esim_benchmark/sweep_f_I.py [OUT_DIR]
+    python docs/ih_esim_benchmark/sweep_f_I.py [OUT_DIR]
 
 Output:
     <OUT_DIR>/sweep_results.json    -- aggregated results
@@ -96,7 +97,7 @@ def run_one(freq_hz: float, current_A: float, per_panel: bool,
 def main():
     # Data Persistence Policy: canonical run writes JSON into the repo
     # (committed alongside the figure), NOT into transient C:/temp.
-    out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "sweep_data"
+    out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "sweep_data_dense"
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"Sweep output dir: {out_dir}")
     print(f"Cases: {len(FREQS_HZ) * len(CURRENTS_A) * 2}")

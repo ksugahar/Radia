@@ -20,13 +20,13 @@ in different outer solvers:
 
 ```bash
 # Step 1 — cell-solver cross-check vs analytical Bessel I_0
-python examples/ih_esim_benchmark/analytical_bessel_baseline.py
+python docs/ih_esim_benchmark/analytical_bessel_baseline.py
 
 # Step 2 — full 3-path × 4-frequency benchmark (~12 min total)
-python examples/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
+python docs/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
 
 # Step 3 — plots
-python examples/ih_esim_benchmark/plot.py
+python docs/ih_esim_benchmark/plot.py
 ```
 
 Outputs:
@@ -150,11 +150,11 @@ artifacts described below.
 
 ```bash
 # Dense (9 × 6 × 2 = 108 cases), output directory is committed:
-python examples/ih_esim_benchmark/sweep_f_I.py \
-       examples/ih_esim_benchmark/sweep_data_dense
+python docs/ih_esim_benchmark/sweep_f_I.py \
+       docs/ih_esim_benchmark/sweep_data_dense
 
 # Render Fig. 1 (auto-switches to log-log contour when n_runs >= 108):
-python examples/ih_esim_benchmark/plot_digest_figure.py
+python docs/ih_esim_benchmark/plot_digest_figure.py
 ```
 
 108 cases = 9 currents `{1, 2, 5, 10, 20, 50, 100, 200, 500} A` ×
@@ -224,40 +224,26 @@ are likely qualitatively right but quantitatively unreliable.
 ### Source-of-truth artifacts
 
 All sweep data is committed under
-[`examples/ih_esim_benchmark/sweep_data_dense/`](sweep_data_dense/):
+[`docs/ih_esim_benchmark/sweep_data_dense/`](sweep_data_dense/):
 
   - `I*_f*_scalar.json` — 54 scalar per-case JSONs
   - `I*_f*_per_panel.json` — 54 per-element per-case JSONs
   - `sweep_results.json` — 108 aggregated runs
 
 The Fig. 1(b) side-wall |Z_s| at the max-gap case is extracted to
-[`sweep_data/I500_f10k_Zs_side_field.json`](sweep_data/I500_f10k_Zs_side_field.json)
+[`sweep_data_dense/I500_f10k_Zs_side_field.json`](sweep_data_dense/I500_f10k_Zs_side_field.json)
 (561 vertices, |Z_s| range 4.5--16.5 mΩ).  Regenerate with:
 
 ```bash
-python examples/ih_esim_benchmark/plot_digest_figure.py --regen-zs-field
+python docs/ih_esim_benchmark/plot_digest_figure.py --regen-zs-field
 ```
-
-### Galerkin-localization pitfall (DO NOT redo)
-
-An early prototype of the per-DOF `|H_t|_i` extraction used
-`|H_t|_i² ∝ φ_i (Kφ)_i` (a "Galerkin localization" of the bilinear
-form `aᵀ K a = ∫|∇φ|²`).  This samples the **surface Laplacian**, not
-the gradient norm.  It mis-places the saturation hot-spot on the
-workpiece — and crucially **flips the sign of the per-vs-scalar
-disagreement**: it gave `+48 %` (scalar under-estimating) at
-`I=100 A, f=50 kHz`, where the correct value is `-38.5 %` (scalar
-**over**-estimating).
 
 The current production code uses **triangle-wise P1 gradient
 `∇_s φ = Σ_j φ_j ∇N_j` area-weighted to vertices** (see
 `bem_sibc_solver.extract_H_t_per_dof_grad`, used at
-`src/radia/panels/calc_inductance.py:849-851`).  The inline comment
-at that call site warns against the legacy Galerkin formula.
-
-Earlier-draft documentation that still quoted the `+48 %` headline
-(e.g. `docs/esim/CROSS_VALIDATION.md` § 6b pre-2026-05-24) has
-been updated to the corrected `-38.5 %` value.
+`src/radia/panels/calc_inductance.py:849-851`).  The current source of truth is the dense 108-case sweep in
+`sweep_data_dense/`, with the `I=100 A, f=50 kHz` cell giving
+`P_per/P_scalar - 1 = -38.5 %`.
 
 ---
 
@@ -266,7 +252,7 @@ been updated to the corrected `-38.5 %` value.
 - Only one workpiece geometry (cylindrical steel, ih_fem_kelvin_demo
   sample).  Sharp-cornered or strongly anisotropic-H_t workpieces
   will widen the inter-path discrepancy.
-- Only four frequencies; no convergence-vs-mesh study.
+- No convergence-vs-mesh study for this digest sweep.
 - No external commercial-solver (Ansys, COMSOL) cross-check; the
   accuracy claim is intra-Radia only.  External cross-check is a
   Phase A.2 follow-up.

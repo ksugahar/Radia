@@ -222,7 +222,7 @@ relaxation parameter less relevant.
 |---|---|---|
 | `--impedance-model esim requires --bh-file` | ESIM requested without a BH table | Pass `--bh-file <path>`; see § 2 |
 | `BH curve is empty` / `not monotone in H` | Malformed BH-file | Verify two-column ASCII, ascending H, includes (0, 0) |
-| `ESIM:NOT-CONVERGED after N iter` | Karl loop hit `max_iter` before `dZ < tol` | First inspect `esim_history` with [`plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py).  If `Z_s_abs` / `H_t_rms` are plateaued and only the per-DOF `dZ_max` failed to drop, the run is usable (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4).  Otherwise: raise `--esim-max-iter` or lower `--esim-relax`; check BH curve monotonicity. |
+| `ESIM:NOT-CONVERGED after N iter` | Karl loop hit `max_iter` before `dZ < tol` | First inspect `esim_history` with [`plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py).  If `Z_s_abs` / `H_t_rms` are plateaued and only the per-DOF `dZ_max` failed to drop, the run is usable (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4).  Otherwise: raise `--esim-max-iter` or lower `--esim-relax`; check BH curve monotonicity. |
 | `--esim-per-panel ... wp-bem-backend hacapk` | per-panel ESIM not yet supported on HACApK | Use `--wp-bem-backend intree-dense`, or fall back to scalar Z_s |
 | `cell solver SCIPY_AVAILABLE False` | scipy not installed in the calc-side Python | `pip install scipy` |
 
@@ -237,7 +237,7 @@ relaxation parameter less relevant.
 - Integration tests:
   [`tests/test_esim_integration.py`](../../tests/test_esim_integration.py)
 - Benchmark (Bessel linear baseline):
-  [`examples/ih_esim_benchmark/`](../../examples/ih_esim_benchmark/)
+  [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/)
 - Material loader (BH file parser):
   [`src/radia/em_material.py`](../../src/radia/em_material.py)
 - Radia IH panel UI (drives all three CLIs):
@@ -245,4 +245,4 @@ relaxation parameter less relevant.
 
 ---
 
-**Document version**: 2026-05-18, written against radia v4.55.3.
+**Document version**: 2026-05-30, written against radia v4.67.0+.
