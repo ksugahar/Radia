@@ -3727,6 +3727,31 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return d;
              }, "H-matrix stats dict.");
 
+    // Parallel C++ assembly of the moment-Galerkin MMMM moment basis (defined in rad_interaction.cpp).
+    extern void RadMomentGalerkinAssembleHex(
+        const double*, int, bool, std::vector<int>&, std::vector<int>&, std::vector<double>&,
+        std::vector<double>&, std::vector<double>&, std::vector<double>&, int&, int&);
+    m.def("_moment_galerkin_assemble_hex",
+          [](const std::vector<double>& hexverts, int n_hex, bool quad) {
+              if ((int)hexverts.size() != n_hex * 24)
+                  throw std::runtime_error("_moment_galerkin_assemble_hex: hexverts must be n_hex*24 doubles");
+              std::vector<int> Br, Bc; std::vector<double> Bd, vols, ft, Wb;
+              int n_charge = 0, ndof_per = 0;
+              RadMomentGalerkinAssembleHex(hexverts.data(), n_hex, quad, Br, Bc, Bd, vols, ft, Wb,
+                                           n_charge, ndof_per);
+              py::dict d;
+              d["B_rows"] = Br; d["B_cols"] = Bc; d["B_data"] = Bd;
+              d["vols"] = vols; d["face_tris"] = ft; d["Wblocks"] = Wb;
+              d["n_charge"] = n_charge; d["ndof_per"] = ndof_per;
+              return d;
+          },
+          py::arg("hexverts"), py::arg("n_hex"), py::arg("quad"),
+          "Parallel C++ assembly of the moment-Galerkin MMMM moment basis: returns dict(B COO triplets "
+          "B_rows/B_cols/B_data [n_hex*12*ndof_per, zeros included], vols [n_hex], face_tris [n_hex*12*9 "
+          "boundary sub-triangles], Wblocks [n_hex*25 quad mass blocks, empty for dipole], n_charge, ndof_per). "
+          "hexverts = n_hex*24 flat (8 verts xyz, standard hex corner order); quad=False -> 3-DOF dipole, "
+          "quad=True -> 5-DOF (+2 quad residual eigenmodes).");
+
     // ========================================================================
     // Object Creation
     // ========================================================================
