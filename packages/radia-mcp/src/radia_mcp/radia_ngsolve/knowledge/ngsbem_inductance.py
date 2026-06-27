@@ -49,8 +49,7 @@ coarse, use **p-refinement** (`order>0`) or **quad elements** (from Cubit), or -
 preferred for inductance -- use the **Radia PEEC filament/panel extractor**
 (`radia.peec_*`, Neumann-formula based) which does not have this closed-surface
 rank-deficiency. (Verified 2026-06-27; rendered in
-`docs/bem_extractor/bem_inductance_limitations.ipynb`, with the retired source
-preserved in `docs/bem_extractor/bem_extractor_examples_archive_results.json`.
+`docs/bem_extractor/bem_inductance_limitations.ipynb`.
 This is a negative/limitation result, kept as knowledge.)
 
 ## When to Use ngsolve.bem

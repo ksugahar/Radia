@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T22:16:43Z",
+  "generated_at_utc": "2026-06-27T22:49:41Z",
   "notebook": "docs/ngsolve_user_meeting/volume_area_convergence.ipynb",
-  "notebook_sha256": "f7c8cdb10cff3d6518bb323358a0c816335cbf0041c94ca280707f4fa6c361e3",
+  "notebook_sha256": "38927c293dd693c5165f39a43935cd73a41c24e51862374cf12df43d977d0b7e",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

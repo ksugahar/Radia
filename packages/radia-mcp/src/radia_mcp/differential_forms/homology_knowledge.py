@@ -226,9 +226,7 @@ multi-valued iff a current threads a hole, period != 0).  Verified:
 `validation_test/feec/test_cohomology.py` (b_1 + the curl-free unit-circulation cut
 basis) and `validation_test/feec/test_tomega_cohomology_cut.py` (the straight-wire
 T-Omega solve: `H_phi = I/(2 pi r)`, `oint H.dl = NI`).  Human-facing
-showcase: executed/rendered `docs/cohomology/tomega_wire.ipynb`, with the
-retired examples-path source preserved in
-`docs/cohomology/cohomology_examples_archive_results.json`.
+showcase: executed/rendered `docs/cohomology/tomega_wire.ipynb`.
 
 ## Sanity check for meshes
 Before running a curl-curl solver, compute χ from your mesh.  If it

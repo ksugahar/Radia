@@ -3,10 +3,9 @@
 Analytic-gated RF and microwave validation scripts for rectangular waveguide,
 S-parameters, and cavity-style post-processing.
 
-The docs-facing archive is
-`docs/rf_waveguide/rf_waveguide_examples_archive.ipynb`, and this directory is
-the executable validation surface. Each script refreshes its adjacent summary
-JSON with `schema`, `generated_at_utc`, and runtime version metadata.
+This directory is the executable validation surface. Each script refreshes its
+adjacent summary JSON with `schema`, `generated_at_utc`, and runtime version
+metadata, so no separate docs-layer source archive is required.
 
 | Example | Shows | Capabilities used |
 |---|---|---|

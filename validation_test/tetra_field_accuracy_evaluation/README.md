@@ -2,8 +2,8 @@
 
 This folder contains validation-class scripts to evaluate the accuracy of
 magnetic field computation from tetrahedral meshes in Radia using the MSC
-(Magnetic Surface Charge) method. The human-facing archive is
-`docs/tetra_field_accuracy_evaluation/tetra_field_accuracy_evaluation_examples_archive.ipynb`.
+(Magnetic Surface Charge) method. The human-facing notebook is
+`docs/tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb`.
 
 ## Summary of Results
 
