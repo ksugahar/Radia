@@ -1,18 +1,22 @@
 """radia.moment_galerkin._solve -- the production symmetric moment-Galerkin MMMM demag solve.
 
 Solves the SPD +N physical demag system  ( (1/chi) M_mass + B^T G B ) m = M_mass H_ext  by the EXISTING
-C++ charge-Gram Krylov kernel (the same kernel HDiv-VIM ships): the 3-DOF dipole path uses the mass-Riesz CG
-(`solve_linear_material_mass_riesz`, nearly mu_r-flat); the 5-DOF (dipole+quad) path uses the diagonal-Jacobi
-CG (`solve_linear_material_auto_prec`, whose C++-computed Jacobi diagonal includes the demag self-energy, so
-it stays well-defined even when the quad MASS block is near-singular on a cube).  m = per-hex moment
-amplitudes (3 or 5/hex).  For a curl-free (gradient / uniform) source the demag near-null (divergence-free
-circulating) modes are RHS-orthogonal so the +N CG is effectively loop-free (iterations plateau in mu_r);
-loop-EXCITING sources (azimuthal / transformer drive) route through HDiv-VIM (radia.vim).
+C++ charge-Gram Krylov kernel (the same kernel HDiv-VIM ships): a pure-dipole body uses the mass-Riesz CG
+(`solve_linear_material_mass_riesz`, nearly mu_r-flat); a body with ANY quad DOF (wedge/pyramid/hex quad modes)
+uses the diagonal-Jacobi CG (`solve_linear_material_auto_prec`, whose C++-computed Jacobi diagonal includes the
+demag self-energy, so it stays well-defined even when a quad MASS block is near-singular on a near-symmetric
+element).  m = the raw per-element moment amplitudes laid out at the variable per-element DOF offsets dof_off
+(3 dipole + (nFace-4) quad per element).  For a curl-free (gradient / uniform) source the demag near-null
+(divergence-free circulating) modes are RHS-orthogonal so the +N CG is effectively loop-free; loop-EXCITING
+sources (azimuthal / transformer drive) route through HDiv-VIM (radia.vim).
 
-Validated: cube self-consistency M_z = chi/(1+d chi) H0 (machine precision); cube quad amplitudes ~0
-(symmetry); a 3-hex bar 5-DOF stray field is strictly closer to a fine-mesh rad.Solve(yano) truth than
-dipole-only at every near probe under an oblique field; the field-from-sigma reconstruction matches rad.Fld
-to ~1e-13.
+MIXED ELEMENTS: tetrahedron (3 DOF) / pyramid (4) / wedge (4) / hexahedron (5) -- the old yano-type element zoo.
+The dipole magnetization M of each element is the first 3 DOF (m[dof_off[e]:dof_off[e]+3]); the quad amplitudes
+are the remaining ndof_elem[e]-3.
+
+Validated: cube self-consistency M_z = chi/(1+d chi) H0 (machine precision); demag factor 1/3 reproduced by a
+cube meshed as hex / 6 tets / 2 wedges / 6 pyramids (internal charges cancel); N = B^T G B symmetric to 1e-16
+on every element type + mixed; the field-from-sigma reconstruction matches rad.Fld to ~1e-13.
 """
 import numpy as np
 import scipy.sparse as sp
@@ -30,26 +34,28 @@ def _chi_of(mu_r, chi):
     return chi_val
 
 
-def _pad_field(H_ext, n, ndof_per):
-    """Per-DOF applied field h: [Hx,Hy,Hz] on the 3 dipole DOF, 0 on the quad DOF (a uniform/per-hex-constant
-    field does not drive the quad rows; the quad RHS INT M_q.H_ext vanishes for a within-element-uniform H)."""
+def _pad_field(H_ext, dof_off, ndof_total, n):
+    """Per-DOF applied field h: [Hx,Hy,Hz] on each element's 3 dipole DOF, 0 on the quad DOF (a uniform /
+    per-element-constant field does not drive the quad rows; the quad RHS INT M_q.H_ext vanishes for a
+    within-element-uniform H)."""
     H = np.asarray(H_ext, float)
-    per_hex = np.tile(H, (n, 1)) if H.size == 3 else H.reshape(n, 3)
-    if per_hex.shape != (n, 3):
-        raise ValueError("moment_galerkin: H_ext must be (3,) or (n_hex,3)")
-    h = np.zeros(ndof_per * n)
+    per_elem = np.tile(H, (n, 1)) if H.size == 3 else H.reshape(n, 3)
+    if per_elem.shape != (n, 3):
+        raise ValueError("moment_galerkin: H_ext must be (3,) or (n_elem,3)")
+    h = np.zeros(ndof_total)
     for e in range(n):
-        h[ndof_per * e:ndof_per * e + 3] = per_hex[e]
+        h[dof_off[e]:dof_off[e] + 3] = per_elem[e]
     return h
 
 
 def solve_raw(sys, H_ext, chi, *, tol=1e-9, maxit=2000):
-    """Solve for the raw moment amplitudes m (length ndof_per*n_hex).  Returns (m, iters)."""
-    G, B, M_mass, n, ndof_per = sys["G"], sys["B"], sys["M_mass"], sys["n_hex"], sys["ndof_per"]
+    """Solve for the raw moment amplitudes m (length ndof_total).  Returns (m, iters)."""
+    G, B, M_mass = sys["G"], sys["B"], sys["M_mass"]
+    n, ndof_total, dof_off, ndof_elem = sys["n_elem"], sys["ndof_total"], sys["dof_off"], sys["ndof_elem"]
     chi = float(chi)
     if not np.isfinite(chi) or chi <= 0.0:
         raise ValueError("moment_galerkin: chi must be positive")
-    h = _pad_field(H_ext, n, ndof_per)
+    h = _pad_field(H_ext, dof_off, ndof_total, n)
     rhs = np.asarray(M_mass @ h).ravel()
     inv_chi = 1.0 / chi
     Bc = B.tocsr()
@@ -57,30 +63,31 @@ def solve_raw(sys, H_ext, chi, *, tol=1e-9, maxit=2000):
     args = (list(map(int, Bc.indptr)), list(map(int, Bc.indices)), list(map(float, Bc.data)),
             int(B.shape[1]), list(map(int, Mc.row)), list(map(int, Mc.col)), list(map(float, Mc.data)),
             inv_chi, list(map(float, rhs)), tol, int(maxit))
-    # 3-DOF: mass-Riesz CG (mu_r-flat).  5-DOF: diagonal-Jacobi auto_prec (robust to the near-singular quad
-    # mass block; its Jacobi diagonal includes the demag self-energy N_diag).
-    res = (G.solve_linear_material_auto_prec(*args) if ndof_per == 5
+    # Pure dipole -> mass-Riesz CG (mu_r-flat).  Any quad DOF -> diagonal-Jacobi auto_prec (robust to the
+    # near-singular quad mass block; its Jacobi diagonal includes the demag self-energy N_diag).
+    has_quad = bool(np.any(np.asarray(ndof_elem) > 3))
+    res = (G.solve_linear_material_auto_prec(*args) if has_quad
            else G.solve_linear_material_mass_riesz(*args))
     iters = int(res["iters"])
     if iters >= int(maxit):                           # fail-loud (No-Fallbacks): never return a non-converged m
-        raise RuntimeError("moment_galerkin: CG did NOT converge in %d iters (n_hex=%d, ndof_per=%d). "
-                           "Tighten the ACA (leaf up / eta down) or raise maxit." % (maxit, n, ndof_per))
+        raise RuntimeError("moment_galerkin: CG did NOT converge in %d iters (n_elem=%d, ndof_total=%d). "
+                           "Tighten the ACA (leaf up / eta down) or raise maxit." % (maxit, n, ndof_total))
     return np.asarray(res["m"], float), iters
 
 
 def solve_assembled(sys, H_ext, chi, *, tol=1e-9, maxit=2000):
-    """Solve a pre-assembled `sys`; return (M_dipole (n_hex,3), iters).  M_dipole = the constant (average)
-    magnetization per hex -- the dipole amplitudes (the 2 quad amplitudes, if present, are in solve_raw's m)."""
+    """Solve a pre-assembled `sys`; return (M_dipole (n_elem,3), iters).  M_dipole = the constant (average)
+    magnetization per element -- the first 3 (dipole) DOF (the quad amplitudes, if any, stay in solve_raw's m)."""
     m, iters = solve_raw(sys, H_ext, chi, tol=tol, maxit=maxit)
-    ndof_per, n = sys["ndof_per"], sys["n_hex"]
-    M = np.array([m[ndof_per * e:ndof_per * e + 3] for e in range(n)])
+    dof_off, n = sys["dof_off"], sys["n_elem"]
+    M = np.array([m[dof_off[e]:dof_off[e] + 3] for e in range(n)])
     return M, iters
 
 
 def demag_factor(sys, kdir=2):
     """Operator demag factor d = <c, G c>/<m, M_mass m> for a uniform M = e_kdir (cube -> 1/3)."""
-    G, B, M_mass, ndof_per = sys["G"], sys["B"], sys["M_mass"], sys["ndof_per"]
-    m = np.zeros(B.shape[1]); m[kdir::ndof_per] = 1.0
+    G, B, M_mass, dof_off = sys["G"], sys["B"], sys["M_mass"], sys["dof_off"]
+    m = np.zeros(B.shape[1]); m[np.asarray(dof_off) + kdir] = 1.0
     c = np.asarray(B @ m)
     Gc = np.asarray(G.matvec(c.tolist()), float)
     return float(c @ Gc) / float(m @ (M_mass @ m))
@@ -107,26 +114,31 @@ def reconstruct_field(sys, m, probes):
     return out[0] if np.asarray(probes, float).ndim == 1 else out
 
 
-def moment_galerkin_demag_solve(hexes, *, mu_r=None, chi=None, H_ext=(0.0, 0.0, 0.0), quad=False,
+def moment_galerkin_demag_solve(elements, *, mu_r=None, chi=None, H_ext=(0.0, 0.0, 0.0), quad=False,
                                 tol=1e-9, maxit=2000, eps=1e-9, leaf=40, eta=0.5, near_factor=2.0, far_quad=4):
-    """Linear isotropic soft-iron demag on a hexahedral body via the symmetric moment-Galerkin MMMM.
+    """Linear isotropic soft-iron demag on a MIXED polyhedral body via the symmetric moment-Galerkin MMMM.
 
-    quad : False -> 3-DOF dipole (constant M/hex); True -> 5-DOF (3 dipole + 2 quad, higher per-element order
-        for skew/gradient loads).
+    elements : list of (nv,3) vertex arrays; nv = 4 (tet) / 5 (pyramid) / 6 (wedge) / 8 (hex), radia corner order.
+    quad : False -> 3-DOF dipole/element; True -> + (nFace-4) quad DOF (tet 0, wedge/pyramid 1, hex 2) for
+        higher per-element order under skew/gradient loads.
     mu_r OR chi : relative permeability (>1) or susceptibility chi (pass exactly one).
-    H_ext : (3,) uniform or (n_hex,3) per-hex applied field (A/m).
+    H_ext : (3,) uniform or (n_elem,3) per-element applied field (A/m).
     near_factor, far_quad : charge-Gram NEAR/FAR fast-build split (defaults 2 / 4 = the precision-preserving fast
         build; pass near_factor=1e30 for the all-analytic Gram).  See assemble_moment_system.
 
-    Returns dict(M=(n_hex,3) dipole magnetization (A/m), m=raw amplitudes, quad_amps=(n_hex,2) or None,
-                 iters, demag_factor, n_hex, sys).  Use reconstruct_field(result['sys'], result['m'], probes)
-                 for the external B field."""
+    Returns dict(M=(n_elem,3) dipole magnetization (A/m), m=raw amplitudes, quad_amps ((n_elem,nq) if uniform
+                 else a list of per-element quad arrays, or None), iters, demag_factor, n_elem, n_hex, sys).
+                 Use reconstruct_field(result['sys'], result['m'], probes) for the external B field."""
     chi = _chi_of(mu_r, chi)
-    sys = assemble_moment_system(hexes, quad=quad, eps=eps, leaf=leaf, eta=eta,
+    sys = assemble_moment_system(elements, quad=quad, eps=eps, leaf=leaf, eta=eta,
                                  near_factor=near_factor, far_quad=far_quad)
     m, iters = solve_raw(sys, H_ext, chi, tol=tol, maxit=maxit)
-    ndof_per, n = sys["ndof_per"], sys["n_hex"]
-    M = np.array([m[ndof_per * e:ndof_per * e + 3] for e in range(n)])
-    quad_amps = np.array([m[ndof_per * e + 3:ndof_per * e + 5] for e in range(n)]) if quad else None
+    dof_off, ndof_elem, n = sys["dof_off"], sys["ndof_elem"], sys["n_elem"]
+    M = np.array([m[dof_off[e]:dof_off[e] + 3] for e in range(n)])
+    quad_amps = None
+    if quad:
+        quad_amps = [m[dof_off[e] + 3:dof_off[e] + ndof_elem[e]] for e in range(n)]
+        if len({len(q) for q in quad_amps}) == 1:     # uniform element type -> rectangular (n_elem, nq)
+            quad_amps = np.array(quad_amps)
     return {"M": M, "m": m, "quad_amps": quad_amps, "iters": iters,
-            "demag_factor": demag_factor(sys, 2), "n_hex": n, "sys": sys}
+            "demag_factor": demag_factor(sys, 2), "n_elem": n, "n_hex": n, "sys": sys}
