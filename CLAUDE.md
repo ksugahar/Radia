@@ -335,6 +335,14 @@ or `DESIGN` note that derives equations but ships no runnable demonstration stay
 **How to apply:**
 - New method/implementation write-ups are authored as `docs/<topic>/*.ipynb`
   (executed via `jupyter nbconvert --execute` so outputs embed), NOT as `.md`.
+- Every `docs/<topic>/*.ipynb` method/showcase notebook is result-saving: it
+  must store executed code-cell outputs, and its main computed values should
+  also be saved as adjacent JSON with `generated_at_utc` plus version/runtime
+  metadata (`radia_version`, `python_version`, `platform`, `versions`, etc.).
+  The JSON is the durable debug artifact; the notebook is the rendered
+  explanation. The two are a synchronized pair: after rerunning or editing
+  notebook outputs, refresh the JSON sidecar in the same change so its recorded
+  `notebook_sha256` matches the committed result-bearing `.ipynb`.
 - `docs/<topic>/` MAY hold `.py` helper modules the ipynb (and `radia_mcp`) import
   (see "File Placement Policy").
 - Do NOT mass-convert existing `.md`: convert an existing method/implementation
@@ -442,6 +450,11 @@ the **ship/release coupling** that previously forced lockstep releases.
   AND from the relevant `radia_mcp.<domain>` knowledge so the two stay in sync.
   (A promoted showcase notebook may still embed a short demo verbatim; the helper-
   module pattern is for logic shared by the notebook and the MCP server.)
+- Panel operating surfaces are moving toward repo-root `panels/`. New/migrated
+  panel-only scripts, samples, and notebooks should target `panels/`; reusable
+  computation belongs in `src/`. Existing `src/radia/panels/` paths are legacy
+  compatibility during staged migration and must not be deleted until package-data,
+  validation paths, and panel/MCP knowledge are updated and tested.
 
 ### Sample Promotion Ladder: tests → examples → panels (2026-05-02)
 
@@ -506,7 +519,8 @@ to change.  This is a list, not code.  Pin the solver-specific variables
 **solver-switch variable** itself (e.g. `--impedance-model linear|esim`,
 `--solver pardiso|ams`).
 
-**Stage 2 — CLI Python script (`calc_*.py` under `src/radia/panels/`).**
+**Stage 2 — CLI Python script (`calc_*.py`; target layout `panels/`, legacy
+`src/radia/panels/` during staged migration).**
 Turn the Stage-1 list into an argparse-driven Python script.
 Computation only, no GUI.  JSON on stdout.  The solver switch **must**
 also be a CLI flag so the same script can drive any supported backend.
@@ -524,12 +538,14 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — PySide panel (`radia_ih.py` / `radia_em.py` / ... under
-`src/radia/`).**
-Wrap the **validated** Stage-2 script with a PySide `AnalysisWindow`
-widget.  The panel launches the CLI via `subprocess.Popen` (per the
-4-Layer Architecture) and is forbidden from re-implementing any
-computation.  Stage 3 ships only after Stage 2 passes its golden test.
+**Stage 3 — panel surface (target layout `panels/`, legacy PySide
+`radia_ih.py` / `radia_em.py` / ... under `src/radia/`).**
+Wrap the **validated** Stage-2 script with a panel surface.  New/migrated
+panel assets target repo-root `panels/`; existing PySide adapters under
+`src/radia/` remain legacy compatibility while desktop workflows still need
+them.  The panel launches the CLI via `subprocess.Popen` (per the 4-Layer
+Architecture) and is forbidden from re-implementing any computation.  Stage 3
+ships only after Stage 2 passes its golden test.
 
 Only Stage-3-ready panels go into `panel_registry.json` and the
 `radia_*.py` auto-discovery under `src/radia/`.  Stage-2-only panels
