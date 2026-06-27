@@ -5,8 +5,9 @@ to the analytical solution.
 Analytical (uniform external Hz, infinite domain, sphere of mu_r at origin):
   Hz_inside = 3 / (mu_r + 2) * H0    (uniform in interior)
 
-Formulation: Omega-Reduced Omega (cf. examples/kelvin_transformation/
-Omega_ReducedOmega/Sphere/3D_sphere_with_Kelvin.py).
+Formulation: Omega-Reduced Omega (cf. archived classic Kelvin source in
+docs/kelvin/kelvin_classic_demos_results.json and
+docs/kelvin/legacy_assets/kelvin_transformation/Omega_ReducedOmega/Sphere/).
 
   Total region (magnetic):  mu * grad(Omega_t) . grad(psi) dx
   Reduced region (air):     mu * grad(Omega_r) . grad(psi) dx
@@ -96,8 +97,7 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
     )
 
     # === Omega-Reduced Omega weak form (matches reference
-    # examples/kelvin_transformation/Omega_ReducedOmega/Sphere/
-    # 3D_sphere_with_Kelvin.py).
+    # archived Omega_ReducedOmega/Sphere/3D_sphere_with_Kelvin.py).
     #
     # The "sphere" sideset (mag-air interface) is NOT a Dirichlet BC.
     # gfOmega.Set() on sphere is used as a source LIFT only -- the

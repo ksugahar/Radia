@@ -12,8 +12,8 @@ yoke / shield / core), which the standard free-space stream-function method cann
 1. **Free-space stream-function coil design** (existing): `radia.streamfunction` / `calc_streamfunction.py`
    / `calc_streamfunction_volume.py`, knowledge `radia_mcp.streamfunction` — ACA-TSVD current-potential
    design (Koiso/Sugahara/Ida). Kernel = **free-space Biot-Savart**.
-2. **DtN / FEM-Kelvin core operator** (existing, research-stage): `examples/kelvin_transformation/
-   DtN_spectrum/`, knowledge `radia_mcp.radia_ngsolve.dtn_coarse_mesh` (call the MCP tool
+2. **DtN / FEM-Kelvin core operator** (existing, research-stage): `docs/kelvin/kelvin_dtn_spectrum_archive_results.json
+   entries from DtN_spectrum/`, knowledge `radia_mcp.radia_ngsolve.dtn_coarse_mesh` (call the MCP tool
    `dtn_coarse_mesh(topic="formulation")` to load the full design log). Generates the exterior
    Dirichlet-to-Neumann / transfer operator **sparsely, Green-function-free, for arbitrary mu(x)**.
 

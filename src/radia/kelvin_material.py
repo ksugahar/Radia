@@ -46,7 +46,8 @@ finite, bounded, and chosen to make the discrete weak form give the
 right physical answer for reduced-potential formulations.
 
 See:
-    examples/kelvin_transformation/CONVENTION.md  (material modulation)
+    docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md
+        (material modulation)
     docs/kelvin/KELVIN_TRANSFORMATION.md §2  (1-form)
     docs/kelvin/KELVIN_TRANSFORMATION.md §7  (red-pot)
 """
