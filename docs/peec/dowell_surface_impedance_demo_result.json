@@ -1,0 +1,92 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:29Z",
+  "notebook": "docs/peec/dowell_surface_impedance_demo.ipynb",
+  "notebook_sha256": "35e4bb8735b8e3d5432343eeb374eb8ce2cbd3b6680889ec476849765690235c",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/peec/dowell_surface_impedance_demo.ipynb",
+    "cells": 4,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "bf7e166a3b1f1ecde7d6bea14b4b9cc5449216ba67f04fcbaedff8878d300248",
+      "source_preview": "import numpy as np\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\nfrom radia.em_material import EMMaterial\n\n# ---- analytic Dowell factors (doc: F(xi) = Re[ga coth ga], xi = a/delta) ----\ndef F_coth(xi):                       # two-sided foil (Dowell coth)\n    return xi * (np.sinh(2*xi) + np.sin(2*xi)) / (np.cosh(2*xi) - np.cos(2*xi))\ndef F_coth_complex(xi):               # Re[ga coth ga] form\n    ga = (1 + 1j) * xi\n    return np.real(ga / np.tanh(ga))\ndef G_int(xi):                        # internal-inductance ratio L_int/L_int_dc (Dowell)\n    return (3.0 / (2*xi)) * (np.sinh(2*xi) - np.sin(2*xi)) / (np.cosh(2*xi) - np.cos(2*xi))\ndef F_tanh(xi):                       # one-sided slab (ESIM/SIBC tanh) Re[ga tanh ga]\n    ga = (1 + 1j) * xi\n    return np.real(ga * np.tanh(ga))\n\nxi = np.logspace(-1, 1.1, 60)\n# (1) the two analytic forms of the coth factor agree\nrelerr = np.max(np.abs(F_coth(xi) - F_coth_complex(xi)) / F_coth(xi))\nprint(f\"(1) F(xi): sinh/cosh form vs R",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 155,
+          "text_sha256": "fdc24fc87b8f309d43c78347f3980e9eccbfda34150b2308a64163286fdb8288",
+          "text_preview": "(1) F(xi): sinh/cosh form vs Re[ga coth ga] : max rel err = 2.66e-15\n(2) radia EMMaterial.dowell_Zs Re vs analytic Re[ga tanh ga] : max rel err = 3.07e-14\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "73b4a113c18dcbcc77a0afc0b67420c926ba6cbcbf047bad1fd1d4337be767e3",
+          "text_plain_preview": "<Figure size 1100x420 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 66728,
+              "sha256": "0b37a6fc5a63a699b4862c2e6e828fb0d3c9d1a94a7e76782d1b3cbf25107f92"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "8b0dc3de0aec11b69119b813cfe8f55929423b9a79b7786211db54fa3183fb1f",
+          "text_plain_preview": "<Figure size 600x400 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 43308,
+              "sha256": "5f635937b6d4c69976d652c8d3123a725c2705dcbe75c7a1dbc875709add4681"
+            }
+          }
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 94,
+          "text_sha256": "2e054bcf719f80965768b4e9a6665bc8ee0a949fa1cfe1f40b7c5c9f31ad63ee",
+          "text_preview": "\nCopper: rho=1.724e-08 Ohm.m, delta(1 MHz)=66.1 um; at 1 MHz xi=1.51 -> R_ac/R_dc(coth)=1.39.\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

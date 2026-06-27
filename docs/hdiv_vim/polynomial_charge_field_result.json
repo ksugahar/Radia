@@ -1,0 +1,50 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/hdiv_vim/polynomial_charge_field.ipynb",
+  "notebook_sha256": "6151500590e685cb1444d173db25e5550c9f907d67928bb816751e19284e428a",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/hdiv_vim/polynomial_charge_field.ipynb",
+    "cells": 3,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 1,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "75b2c37cc71ee3959f160b7f62e3046cacadd1a7238d5f14cb96aa090cd181c3",
+      "source_preview": "import numpy as np\nfrom numpy.polynomial.legendre import leggauss\nimport radia.vim as v\n\n# geometry: a flat triangle (z=0) and a unit tet; external (non-singular) observation point\nP     = [[0., 0, 0], [1, 0, 0], [0, 1, 0]]\nverts = [[0., 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]\nr     = [2.0, 2.0, 2.0]\nZ3    = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]\n\n# (1) constant-sigma triangle field vs an INDEPENDENT Gauss (Duffy) quadrature\nPa, ra = np.array(P), np.array(r)\narea = 0.5 * np.linalg.norm(np.cross(Pa[1] - Pa[0], Pa[2] - Pa[0]))\nxs, ws = leggauss(24); u = (xs + 1) / 2; wu = ws / 2\nacc = np.zeros(3)\nfor ui, wi in zip(u, wu):\n    for vj, wj in zip(u, wu):\n        l1, l2 = ui, vj * (1 - ui)\n        rp = (1 - l1 - l2) * Pa[0] + l1 * Pa[1] + l2 * Pa[2]\n        dd = ra - rp\n        acc += wi * wj * (1 - ui) * dd / np.linalg.norm(dd) ** 3\nacc *= 2 * area\nker = np.array(v.flat_triangle_charge_field(P, r))\nprint(f\"(1) flat_triangle_charge_field vs independent Gauss : rel err = \"\n      f\"{np.linalg.norm(",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 601,
+          "text_sha256": "02b44579252059bfe1b932dd4d52b1e1fb9d0a9b8174717d018ffc942afe9d75",
+          "text_preview": "(1) flat_triangle_charge_field vs independent Gauss : rel err = 4.10e-15\n(2) tet_volume_field_linear(const) vs -grad(PhiTet) : rel err = 1.02e-09\n(3a) linear_triangle(s=0)       == flat_triangle      : max|d| = 0.0e+00\n(3b) quadratic_triangle(S=0)    == linear(s=0)         : max|d| = 1.7e-16\n(3c) tet_volume_quadratic(Q=0)  == tet_volume_linear   : max|d| = 0.0e+00\n(4) polynomial_triangle(deg0, const) == flat_triangle  : max|d| = 1.7e-16\n\nAll kernels executed live against radia.vim: the closed forms nest exactly and match independent quadrature / the -grad(PhiTet) identity to machine precision.\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

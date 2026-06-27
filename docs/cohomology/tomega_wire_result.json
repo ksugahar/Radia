@@ -1,0 +1,50 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "notebook": "docs/cohomology/tomega_wire.ipynb",
+  "notebook_sha256": "0bf94834aed73234716e1bff9d548a31a5e70b703feb80e9d0554a48b637f1de",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/cohomology/tomega_wire.ipynb",
+    "cells": 2,
+    "code_cells": 1,
+    "executed_code_cells": 1,
+    "code_cells_with_outputs": 1,
+    "output_count": 1,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "d3e2c35fd4cbfddc2e739bc71ac243c4320f21222823a329f88128e965b70215",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"T-Omega magnetostatics with a gmsh-free cohomology CUT -- the wire field.\n\nThe PRIMARY use of cohomology in the repo is the T-Omega total-scalar-\npotential CUT (Kotiuga 1987 / Bossavit / Pellikka 2013), of which the\nClebsch current-linking demo is just one instance.  The total scalar\npotential formulation\n\n    H = -grad(phi) + sum_k NI_k h_k\n\nuses cohomology cut basis functions h_k (curl-free, UNIT circulation around\nthe k-th current loop) to make the otherwise MULTI-VALUED magnetic scalar\npotential single-valued in a current-linking (multiply-connected) region.\nThe cuts are computed by the pure-Python ``radia.cohomology`` engine -- no\ngmsh ``computeHomology``, no .msh -> .vol transfer.\n\nVerification (this script): a straight wire carrying current I along z\nthrough an annular air region (b1 = 1).  The cohomology cut carries the I\nampere-turns, and the solved T-Omega field reproduces\n\n    H_phi(r) = I / (2 pi r)      (Ampere's wire field)\n    o",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 457,
+          "text_sha256": "82be31e1e209ae858d549e85502bd628ce26a5b54ae2196f0e2f5d68c71416aa",
+          "text_preview": "T-Omega cohomology cut (gmsh-free) -- straight-wire verification\n\n  multiply-connected air (annulus): b1 = 1  (one current loop)\n  Ampere's law:  oint H.dl = 100.003  (NI = 100.0,  rel err 2.84e-05)\n  wire field  :  H_phi vs I/(2 pi r)  mean rel err = 1.16e-02\n\n  => the cohomology cut carries the NI ampere-turns and makes the\n     magnetic scalar potential single-valued in the current-linking\n     region -- the standard T-Omega use of radia.cohomology.\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
