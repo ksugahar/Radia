@@ -1,9 +1,11 @@
 # Kelvin Transformation Helper API: Design Plan
 
-A staged plan for refactoring the
-`examples/kelvin_transformation/A-formulation/` scripts into a reusable
-helper API in `src/radia/kelvin_*.py`. Now that the 1-form A and 2-form
-B pullbacks have been derived and unit-tested
+A staged plan for refactoring the archived
+`examples/kelvin_transformation/A-formulation/` validation scripts into a
+reusable helper API in `src/radia/kelvin_*.py`. The standalone scripts were
+removed from `examples`; their full source is preserved in
+`docs/kelvin/kelvin_remaining_examples_archive_results.json`. Now that the
+1-form A and 2-form B pullbacks have been derived and unit-tested
 (`pullback_derivation_3D.md`, `tests/test_kelvin_source.py`), the math
 foundation is solid enough to design a general-purpose API on top.
 
@@ -15,8 +17,8 @@ foundation is solid enough to design a general-purpose API on top.
   the A_s pullback, and the L extraction.
 - Allow **arbitrary external sources** (Radia ObjArcCur, ObjRecCur,
   ObjRaceTrk, CoilBuilder filaments, ...) via a uniform interface.
-- Make the validation harness
-  (`validate_radia_HB_kelvin.py`) an exemplar that any new source
+- Make the validation harness represented by archived
+  `validate_radia_HB_kelvin.py` an exemplar that any new source
   type can use to self-check inductance against a Radia reference.
 
 ## 1. Layered architecture
@@ -183,9 +185,9 @@ debugging detour 2026-04-15.
 
 ### 3.4 Compatibility with existing examples
 
-The new helpers MUST allow rewriting:
+The new helpers MUST allow rewriting these archived sources:
 - archived `Coil_3D_A_HCurl_with_Kelvin.py` (full-A volume-J baseline)
-- `validate_radia_HB_kelvin.py` (reduced-A external A_s)
+- archived `validate_radia_HB_kelvin.py` (reduced-A external A_s)
 - archived `Coil_3D_A_HCurl_PEEC_source.py` (filament A_s when filament dev
   matures)
 
@@ -205,7 +207,7 @@ into <50 lines each, using the layered API.
 - `src/radia/kelvin_solver.py` with the two solve functions
 - Refactor the archived `Coil_3D_A_HCurl_with_Kelvin.py` pattern to use the driver:
   call must reproduce L = 89.44 nH within 0.1%.
-- Refactor `validate_radia_HB_kelvin.py` similarly.
+- Refactor the archived `validate_radia_HB_kelvin.py` pattern similarly.
 
 ### M3 -- L4 validation harness (~ 1 day)
 - `src/radia/kelvin_validate.py` with
@@ -216,7 +218,8 @@ into <50 lines each, using the layered API.
   agreement target (e.g. <2% on the medium mesh).
 
 ### M4 -- documentation + porting (~ 1-2 days)
-- Add a tutorial `examples/kelvin_transformation/docs/quickstart.md`
+- Add a tutorial under `docs/kelvin/` rather than reintroducing standalone
+  Python under `examples/kelvin_transformation/`.
 - Port one IH example to use the new helpers end-to-end
 - Update MCP `kelvin_knowledge.py` with the new API surface
 

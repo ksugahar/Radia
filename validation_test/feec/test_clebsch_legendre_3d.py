@@ -1,6 +1,6 @@
 """Golden lock: 3D Clebsch-Legendre (Variant 2) vacuum field-geometry solver.
 
-Runs examples/clebsch_legendre/solve_clebsch_legendre_3d.py and asserts the
+Runs validation_test/clebsch_legendre/solve_clebsch_legendre_3d.py and asserts the
 manufactured-solution verification:
 
   - the polynomial vacuum solution (uniform field, z=psi, phi=B0 y) is recovered
@@ -17,7 +17,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "clebsch_legendre")
+EXDIR = os.path.join(HERE, "..", "clebsch_legendre")
 
 
 @pytest.mark.slow
