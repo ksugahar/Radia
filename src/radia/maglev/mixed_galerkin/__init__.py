@@ -28,6 +28,14 @@ from .rom_fit import (
     passive_foster_fit,
     diagonal_tensor_state_space,
 )
+from .references import (
+    K_SIBC_cylinder,
+    K_SIBC_sphere,
+    Y_DC_cylinder,
+    Y_DC_sphere,
+    Y_exact_cylinder,
+    Y_exact_sphere,
+)
 
 __all__ = [
     "bulk_foster_via_eigen",
@@ -52,4 +60,10 @@ __all__ = [
     "FosterROM",
     "passive_foster_fit",
     "diagonal_tensor_state_space",
+    "K_SIBC_cylinder",
+    "K_SIBC_sphere",
+    "Y_DC_cylinder",
+    "Y_DC_sphere",
+    "Y_exact_cylinder",
+    "Y_exact_sphere",
 ]

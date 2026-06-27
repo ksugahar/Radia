@@ -46,14 +46,11 @@ from __future__ import annotations
 
 import math
 import cmath
-import sys
-from pathlib import Path
 
 import numpy as np
 from scipy.integrate import quad
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _references.cylinder_bessel import (  # noqa: E402
+from radia.maglev.mixed_galerkin.references import (
     K_SIBC_cylinder,
     Y_DC_cylinder,
     Y_exact_cylinder,
