@@ -676,7 +676,7 @@ similar. Use the listed replacement instead.
 
 | Removed                 | Replacement / Status                                   |
 |-------------------------|--------------------------------------------------------|
-| `rad.FldEnr(dst, src, SbdPar)`     | Use `rad.FldFrc(obj, rect_shape)` (Maxwell stress tensor on rectangular surface). A new analytical pair-interaction API (`rad.AnalEn/AnalFrc/AnalTrq`) is planned as research -- see `docs/research/FORCE_COMPUTATION_DESIGN.md`. |
+| `rad.FldEnr(dst, src, SbdPar)`     | Use `rad.FldFrc(obj, rect_shape)` (Maxwell stress tensor on rectangular surface). A new analytical pair-interaction API (`rad.AnalEn/AnalFrc/AnalTrq`) is planned as research -- see `docs/research/magnet_design/FORCE_COMPUTATION_DESIGN.ipynb`. |
 | `rad.FldEnrFrc(...)`    | Same -- use `rad.FldFrc` until the new API ships.     |
 | `rad.FldEnrTrq(...)`    | Same -- no direct torque API currently; derive from force * arm or wait for `rad.AnalTrq`. |
 
@@ -1280,7 +1280,7 @@ L_total = N * L_self + sum(2*M[i][j] for i<j)  # Neumann sum
 - Rectangular frame (10mm, w=1mm): BEM~24 nH, FastHenry=21.6 nH, Grover~24 nH
 - Computation time: ~420 ms per mesh (no bonus_intorder needed)
 
-See: `examples/peec_integration/ngsbem_peec_demo/ngsbem/1_turn_coil.py`
+See: `examples/peec_integration/ngsbem_peec_demo/ngbem/1_turn_coil.py`
      `examples/peec_integration/ngsbem_peec_demo/compute_L_final.py`
 
 ### With Conductor Shield (SIBC, Standalone)
@@ -1467,7 +1467,7 @@ of 0.35-1.0 depending on Z_s. Only correct for PEC (Z_s -> 0).
 Fix requires MFIE `n x curl(SL)` (not available in ngsolve.bem).
 **Use FEM-SIBC (fem_esim_3d.py) for finite Z_s problems.**
 
-See: `examples/cubit_panels/inductance/debug_efie_sibc.py`
+See: `examples/cubit_panels/inductance/efie_sibc.py`
 
 ## Loop-Star Solver Modes (FIXED 2026-02-22)
 
@@ -2097,9 +2097,7 @@ mesh generation (GMSH is for visualization/post-processing only).
 
 ## Examples
 
-- `examples/ngsolve_integration/demo_ctype_simkin.py` - Linear Simkin + Kelvin
-- `examples/ngsolve_integration/test_elf_yoke_simkin.py` - Nonlinear + 3 geometry variants
-- `examples/ngsolve_integration/demo_hysteresis_simkin.py` - Energy hysteresis
+- `docs/ngsolve_integration/integration_basics.ipynb` - SHOWCASE: Radia+NGSolve integration (field eval, scalar/vector potential, coordinate transform)
 
 ## Reference
 
@@ -2273,10 +2271,7 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 
 ## Test Scripts
 
-- `examples/ngsolve_integration/test_ctype_A_formulation.py` - Linear/nonlinear comparison
-- `examples/ngsolve_integration/test_hysteresis_comparison.py` - Hysteresis A_r vs Simkin
-- `examples/ngsolve_integration/test_fem_to_radia_field.py` - FEM->Radia analytical pipeline
-- `examples/ngsolve_integration/demo_hysteresis_simkin.py` - Hysteresis AC loop demo
+- `examples/ngsolve_integration/mesh_magnetization_import/verified_ngsolve_to_radia.py` - FEM->Radia analytical pipeline
 - `examples/kelvin_transformation/A-formulation/` - Kelvin + A_r examples
 """
 

@@ -659,7 +659,7 @@ When you add a panel mode or a new sample:
 
 ## Golden source of truth — IH
 
-- `examples/ih_esim_benchmark/sweep_v2/sweep_results.json` is the
+- `examples/ih_esim_benchmark/sweep_data/sweep_results.json` is the
   paper-citable reference for IH PEEC+BEM at all 32 (I, f) cells.
 - For new IH scenarios, derive golden from sweep_v2 or run the
   scenario manually to capture a reference JSON before adding it.

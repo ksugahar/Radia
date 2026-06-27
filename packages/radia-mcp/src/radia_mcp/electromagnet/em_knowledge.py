@@ -184,6 +184,9 @@ coil = (CoilBuilder(current=2000)
 | `to_wire_segments()` | (segments, current) | Wire model for panels |
 | `combined_occ([other_coils])` | Fused OCC shape | Multi-coil STEP |
 
+See also: `docs/complex_coil_geometry/complex_coil.ipynb` -- 8-segment beam-steering
+coil showcase using CoilBuilder add_straight/add_arc with a Biot-Savart field map.
+
 ## Dipole Example (C-type magnet)
 
 ```python
