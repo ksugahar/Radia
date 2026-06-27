@@ -184,7 +184,7 @@ public:
 
     /// Dual Mult: apply AMG V-cycle to two RHS simultaneously with fused SpMV.
     /// Every SpMV at every level loads matrix rows once for both RHS (halves bandwidth).
-    /// Used by ComplexCompactAMS for fused Re/Im processing.
+    /// Used by ComplexHypreBasedAMS for fused Re/Im processing.
     void DualMult(const BaseVector& b1, BaseVector& x1,
                   const BaseVector& b2, BaseVector& x2) const {
         x1 = 0;

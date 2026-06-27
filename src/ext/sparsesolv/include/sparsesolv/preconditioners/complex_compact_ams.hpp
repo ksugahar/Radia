@@ -5,7 +5,7 @@
 /// @file complex_compact_ams.hpp
 /// @brief Complex AMS preconditioner with fused Re/Im SpMV operations
 ///
-/// For complex eddy current problems (A = K + jw*sigma*M), applies CompactAMS
+/// For complex eddy current problems (A = K + jw*sigma*M), applies HypreBasedAMS
 /// to real and imaginary parts with fused matrix operations.
 ///
 /// Key optimization: fine-level SpMV is memory-bandwidth-bound. Loading matrix
@@ -25,10 +25,10 @@ namespace ngla {
 /// Fine-level operations (l1-Jacobi, residual, restrict, prolongate) process
 /// Re and Im simultaneously in a single pass over matrix rows. This halves
 /// memory bandwidth for these operations. Coarse-level AMG V-cycles run
-/// sequentially (Re then Im) using the shared CompactAMS hierarchy.
-class ComplexCompactAMS : public BaseMatrix {
+/// sequentially (Re then Im) using the shared HypreBasedAMS hierarchy.
+class ComplexHypreBasedAMS : public BaseMatrix {
 public:
-    ComplexCompactAMS(
+    ComplexHypreBasedAMS(
         shared_ptr<SparseMatrix<double>> a_real_mat,
         shared_ptr<SparseMatrix<double>> grad_mat,
         shared_ptr<BitArray> freedofs,
@@ -44,7 +44,7 @@ public:
         : ndof_complex_(ndof_complex > 0 ? ndof_complex : a_real_mat->Height())
     {
         // Build the real AMS hierarchy (shared for Re and Im)
-        ams_ = make_shared<CompactAMS>(
+        ams_ = make_shared<HypreBasedAMS>(
             a_real_mat, grad_mat, freedofs,
             coord_x, coord_y, coord_z,
             cycle_type, num_smooth, 0.25, print_level, correction_weight,
@@ -84,7 +84,7 @@ public:
         gPz_im_ = std::make_unique<VVector<double>>(ndof_h1_);
 
         if (print_level > 0)
-            std::cout << "  ComplexCompactAMS: fused Re/Im SpMV "
+            std::cout << "  ComplexHypreBasedAMS: fused Re/Im SpMV "
                       << "(ndof=" << ndof_complex_ << ")" << std::endl;
     }
 
@@ -164,7 +164,7 @@ private:
     int num_smooth_;
     int cycle_type_;
 
-    shared_ptr<CompactAMS> ams_;
+    shared_ptr<HypreBasedAMS> ams_;
 
     // Work vectors (Re + Im pairs)
     mutable std::unique_ptr<VVector<double>> b_re_, b_im_;
