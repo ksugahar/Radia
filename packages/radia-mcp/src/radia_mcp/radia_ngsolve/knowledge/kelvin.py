@@ -2,10 +2,10 @@
 Kelvin transformation knowledge base for Radia MCP server.
 
 Covers the Kelvin inversion technique for open boundary FEM problems
-using NGSolve. Historical standalone demos from
-examples/kelvin_transformation/ are archived in docs/kelvin notebooks;
-the examples tree now keeps validation/API candidates that still need
-promotion.
+using NGSolve. Historical standalone demos from the former
+examples/kelvin_transformation tree are archived in docs/kelvin notebooks;
+remaining assets live under docs/kelvin/legacy_assets while runnable
+validation slices live under validation_test.
 
 Canonical convention (Nagamine, Yamaguchi, Sugahara, CEFC 2026, id 350,
 "A Pullback-Based Formulation of Kelvin Transformation in EM Field
@@ -30,7 +30,8 @@ functional. Validated numerically on a toroidal current loop
 = 3.344e-8 J, +0.33%).
 
 Reference docs (consolidated 2026-05-04):
-  examples/kelvin_transformation/CONVENTION.md (canonical declaration, 1 page)
+  docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md
+    (canonical declaration, 1 page)
   docs/kelvin/KELVIN_TRANSFORMATION.md (comprehensive theory + API + workflow)
     - §2: 1-form / 2-form pullback derivation
     - §7: Reduced potential formulations + Kelvin
@@ -2276,8 +2277,8 @@ above as-written, NOT `+specialcf.normal(3)`).  Verified by a
 sign-flip A/B test that drove the 1/4 sample from -7% to +0.71% at
 p=2.  The benchmark calc script (`calc_kelvin_benchmark.py`) hard-
 codes the Cubit-correct sign; the OCC examples in
-`examples/kelvin_transformation/` use the same expression because
-the sign convention is now unified across both mesh sources.
+the archived Kelvin examples use the same expression because the sign
+convention is now unified across both mesh sources.
 """
 
 
