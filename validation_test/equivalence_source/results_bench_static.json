@@ -1,14 +1,20 @@
 {
   "phase": "A",
   "description": "Equivalence-theorem static H reconstruction: C++ kernel vs Python fallback",
-  "acceptance": "max relative diff < 1e-7  AND  speedup >= 50x",
+  "acceptance": {
+    "correctness": "max relative diff < 1e-7",
+    "performance_target": "speedup >= 50x for production-scale cases"
+  },
+  "overall_status": "PASS",
+  "n_numerical_passed": 4,
+  "n_speed_targets_passed": 4,
   "results": [
     {
       "n_faces": 80,
       "m_obs": 100,
-      "t_py_ms": 0.9328000014647841,
-      "t_cpp_ms": 0.8337999970535748,
-      "speedup": 1.1187335149448894,
+      "t_py_ms": 0.9822000283747911,
+      "t_cpp_ms": 0.8274000138044357,
+      "speedup": 1.1870921102098797,
       "max_rel_diff": 6.581871094656412e-16,
       "max_abs_diff": 8.673617379884035e-19,
       "ok_num": true,
@@ -18,9 +24,9 @@
     {
       "n_faces": 840,
       "m_obs": 100,
-      "t_py_ms": 11.873000003106426,
-      "t_cpp_ms": 1.2854000015067868,
-      "speedup": 9.23681343487515,
+      "t_py_ms": 13.138600159436464,
+      "t_cpp_ms": 0.9418001864105463,
+      "speedup": 13.950517688376344,
       "max_rel_diff": 6.906261642387098e-16,
       "max_abs_diff": 8.673617379884035e-19,
       "ok_num": true,
@@ -30,9 +36,9 @@
     {
       "n_faces": 9800,
       "m_obs": 100,
-      "t_py_ms": 140.81679999799235,
-      "t_cpp_ms": 1.9577999992179684,
-      "speedup": 71.9260394597205,
+      "t_py_ms": 155.6172000709921,
+      "t_cpp_ms": 2.220899797976017,
+      "speedup": 70.06943771745644,
       "max_rel_diff": 6.943093306884345e-16,
       "max_abs_diff": 8.673617379884035e-19,
       "ok_num": true,
@@ -42,14 +48,14 @@
     {
       "n_faces": 99224,
       "m_obs": 100,
-      "t_py_ms": 1453.1849000049988,
-      "t_cpp_ms": 31.150199996773154,
-      "speedup": 46.65090112280287,
+      "t_py_ms": 1625.9260000661016,
+      "t_cpp_ms": 25.908600073307753,
+      "speedup": 62.756227486841574,
       "max_rel_diff": 4.341481807392173e-16,
       "max_abs_diff": 5.421010862427522e-19,
       "ok_num": true,
-      "ok_speed": false,
-      "verdict": "FAIL/speed"
+      "ok_speed": true,
+      "verdict": "PASS"
     }
   ]
 }

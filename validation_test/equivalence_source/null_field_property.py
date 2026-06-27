@@ -40,7 +40,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
+REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "src"))
 
 from radia.equivalence_source import NearFieldSource  # noqa: E402
 

@@ -48,7 +48,7 @@ namespace radia { namespace eqsrc {
  *
  * Sign convention is fixed by the empirical magnetic-dipole unit test:
  * m = m_z z-hat on-axis gives Hz > 0 outside.  See the Phase 1 golden
- * test in examples/equivalence_source/phase1_static_coil.py for the
+ * test in validation_test/equivalence_source/phase1_static_coil.py for the
  * end-to-end verification (0.83% PASS at 14160 surface panels).
  *
  * Memory layout: all arrays are C-contiguous row-major
@@ -103,13 +103,15 @@ void EvaluateStaticH(
  *   G_bar . v  = psi {(h^2+h+1)/h^2 v  -  (h^2+3h+3)/h^2 (v.R_hat) R_hat}
  *   grad_psi   = -(jk + 1/R) psi (r - r') / R
  *
- *   E(r) = integral { -jw mu_0 G_bar . J_s  +  grad_psi x M_s
- *                     - (n . E_s) grad_psi } dS'
- *   H(r) = integral {  jw eps_0 G_bar . M_s  +  grad_psi x J_s
- *                     - (n . H_s) grad_psi } dS'
+ *   E(r) = integral { -jw mu_0 G_bar . J_s  +  grad_psi x M_s } dS'
+ *   H(r) = integral {  jw eps_0 G_bar . M_s  +  grad_psi x J_s } dS'
  *
- *   J_s = n x H_s,  M_s = E_s x n,  (n.E_s) = rho_e/eps_0,
- *   (n.H_s) = rho_m/mu_0.
+ *   J_s = n x H_s,  M_s = n x E_s.
+ *
+ * The dyadic Green-function form already contains the longitudinal
+ * surface-charge contribution.  Do not add separate scalar-charge
+ * terms to this kernel; that was the source of the historical
+ * Hertzian-dipole Phase 2 mismatch.
  *
  * Sign convention: same as EvaluateStaticH (verified against analytic
  * magnetic dipole + Hertzian dipole far field).

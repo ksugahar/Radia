@@ -92,22 +92,20 @@ outward normal.  Inside Omega we have computed E, H (or just H for
 static problems).  Define on dOmega the equivalent surface sources
 
     J_s = n x H       (equivalent electric surface current)
-    M_s = E x n       (equivalent magnetic surface current; 0 if E = 0)
-    rho_e = epsilon_0 * (n . E)     (equivalent electric surface charge)
-    rho_m =     mu_0  * (n . H)     (equivalent magnetic surface charge)
+    M_s = n x E       (equivalent magnetic surface current; 0 if E = 0)
 
 Then for any observation point r OUTSIDE Omega, the time-harmonic
-Stratton-Chu integral
+dyadic Stratton-Chu integral
 
-    E(r) = -jw mu_0 ∮∮ J_s psi dS  -  ∮∮ M_s x grad psi dS
-                                    + (1/eps_0) ∮∮ rho_e grad psi dS
-    H(r) =  jw eps_0 ∮∮ M_s psi dS  +  ∮∮ J_s x grad psi dS
-                                    + (1/mu_0)  ∮∮ rho_m grad psi dS
+    E(r) = ∮∮ {-jw mu_0 G_bar . J_s + grad psi x M_s} dS
+    H(r) = ∮∮ { jw eps_0 G_bar . M_s + grad psi x J_s} dS
 
-reproduces the EXACT FEM exterior field, with psi = exp(-jkR)/(4 pi R)
-the free-space scalar Green's function, R = |r - r'|.  For the
-magnetostatic reduction (w -> 0, E = 0) the J_s and rho_m terms
-survive and recover H exactly.
+reproduces the exact exterior field, with psi = exp(-jkR)/(4 pi R),
+R = |r - r'|, and G_bar = (I + grad grad / k^2) psi.  The longitudinal
+surface-charge contribution is contained in the dyadic Green function;
+do not add separate scalar-charge terms to Radia's production C++ kernel.
+For the magnetostatic reduction (w -> 0, E = 0), Radia switches to the
+static kernel with J_s and rho_m terms.
 
 ## What we ship
 
@@ -128,13 +126,19 @@ SHOWCASE NOTEBOOK: `docs/equivalence_source/demos.ipynb` -- phase1 +
 null-field property executed live, phase2/phase3 (Cubit e2e) + the C++
 extraction-kernel benchmark shown from committed JSON.
 
-`examples/equivalence_source/` has two end-to-end demos:
+`validation_test/equivalence_source/` is the executable validation
+corpus:
 
     phase1_static_coil.py    -- coil at Z=0.6 m, 0.9 m sphere extract,
                                 reconstruct vs Biot-Savart analytic
                                 (golden test).
     phase2_wpt_harmonic.py   -- 1 MHz parallel-plate WPT, 1 m sphere
-                                extract, cross-check vs ngsolve.bem.
+                                extract; passes the 2% band after the
+                                dyadic-kernel M_s/sign fix.
+    null_field_property.py   -- closed-surface exterior reconstruction
+                                plus interior null-field property.
+    phase3_e2e_cubit_to_sol.py -- Cubit .vol -> CLI -> NFS -> .sol.
+    bench_static.py          -- C++ static kernel vs Python fallback.
 
 `src/radia/panels/calc_equivalence_source.py` is the Stage 2 CLI
 underpinning a future Cubit panel: takes a .vol + a .sol + a surface
@@ -160,14 +164,13 @@ label and writes the NFS artifact + an external probe CSV.
 
 ## Known limitations (release v1.0)
 
-- **Time-harmonic deep near-field**: the current `evaluate()` for
-  omega != 0 uses the SCALAR Stratton-Chu form, which is FAR-FIELD
-  accurate but misses the (1/k^2) grad-grad psi term of the full
-  dyadic Green's function.  In the deep near-field
-  (R_obs / lambda << 1) the reconstruction undershoots by up to a
-  factor of 3 (verified vs Hertzian-dipole closed form in
-  phase2_wpt_harmonic.py).  Roadmap: `evaluate_dyadic()` with the
-  full (I + grad grad / k^2) kernel.
+- **Time-harmonic deep near-field**: resolved for the default
+  `evaluate(..., use_cpp=True)` path.  The C++ harmonic kernel uses the
+  full dyadic Green function and the `M_s = n x E_s` sign convention;
+  phase2_wpt_harmonic.py now passes the Hertzian-dipole deep-near-field
+  band.  The Python `use_cpp=False` path is intentionally retained as a
+  legacy scalar-form regression-diff anchor and is not the production
+  kernel.
 
 - **Magnetostatic case (omega = 0) is CORRECT**: Radia's primary
   use case (DC magnets, soft iron, permanent-magnet assemblies)
@@ -201,7 +204,7 @@ The equivalent surface sources are, in the most general
 time-harmonic case (exp(+jwt) convention):
 
     J_s(r') = n(r') x H(r')          on r' in dOmega
-    M_s(r') = E(r') x n(r')          on r' in dOmega
+    M_s(r') = n(r') x E(r')          on r' in dOmega
     rho_e(r') = eps_0 * n(r') . E(r')
     rho_m(r') = mu_0  * n(r') . H(r')
 
@@ -225,17 +228,17 @@ With the free-space Green's function
 
 the radiated fields at any r OUTSIDE Omega are
 
-    E(r) = ∮∮_{dOmega} { -jw mu_0 J_s psi - M_s x grad psi
-                        + (rho_e / eps_0) grad psi } dS'
-    H(r) = ∮∮_{dOmega} {  jw eps_0 M_s psi + J_s x grad psi
-                        + (rho_m / mu_0)  grad psi } dS'
+    E(r) = ∮∮_{dOmega} { -jw mu_0 G_bar . J_s + grad psi x M_s } dS'
+    H(r) = ∮∮_{dOmega} {  jw eps_0 G_bar . M_s + grad psi x J_s } dS'
 
-with grad psi = -(jk + 1/R) psi R-hat, R-hat = (r - r') / R.
+with grad psi = -(jk + 1/R) psi R-hat, R-hat = (r - r') / R, and
+G_bar = (I + grad grad / k^2) psi.  The scalar charge terms are not
+added separately in this dyadic production form.
 
 ## Magnetostatic reduction (w -> 0)
 
 In the DC / magnetostatic limit, E -> 0 in the source-free region,
-so M_s = E x n = 0 and rho_e = 0.  ONE MIGHT NAIVELY DROP THE M_s
+so M_s = n x E = 0 and rho_e = 0.  ONE MIGHT NAIVELY DROP THE M_s
 AND rho_m TERMS.  This is the classical beginner mistake (Sugahara
 Lab 2008 slide 2 calls it out by name):
 
@@ -268,7 +271,7 @@ second term reduces to a J_s line-integral when the boundary is closed.
     | Module symbol    | Math symbol  | Definition                |
     |------------------|--------------|---------------------------|
     | `J_s`            | J_s          | n x H        (A/m)        |
-    | `M_s`            | M_s          | E x n        (V/m)        |
+    | `M_s`            | M_s          | n x E        (V/m)        |
     | `rho_e`          | rho_e        | eps_0 n . E  (C/m^2)      |
     | `rho_m`          | rho_m        | mu_0 n . H   (Wb/m^2)     |
     | `omega = 0`      | w = 0        | static reduction          |
@@ -554,7 +557,7 @@ The simplest validation: known analytical source + NFS extract on a
 sphere larger than the source, then check that the Stratton-Chu
 reconstruction matches the analytical solution at exterior points.
 
-Reference cases shipped in `examples/equivalence_source/`:
+Reference cases shipped in `validation_test/equivalence_source/`:
 
   Phase 1 -- Static coil at Z = 0.6 m, radius 0.2 m, evaluation
              sphere radius 0.9 m enclosing the coil.  Reconstruction
@@ -565,9 +568,10 @@ Reference cases shipped in `examples/equivalence_source/`:
 
   Phase 2 -- 1 MHz time-harmonic small electric dipole, 1 m sphere
              extract, reconstruction vs analytical dipole far-field
-             at 10 m on the z-axis.  Acceptance: |E_z| within 2 % of
-             closed form; phase within 1 deg.  Reproduces Sugahara
-             Lab 2015_05_06 Femtet user-group report verification 1.
+             at 10 m on the z-axis and equatorial points.  The
+             current JSON is green: E and nonzero H max relative
+             errors are about 0.12%, while zero-H analytical points
+             are checked by absolute A/m residual.
 
 ## Use-case B:  Hand off to ngsolve.bem for far-field RCS
 
@@ -612,7 +616,7 @@ when the underlying behaviour changes we notice.)
    = -1 * truth.
 
 3. **Static rho_m dropped**.  The historical Sugahara Lab 2008
-   trap:  setting `rho_m = 0` because "E = 0 so M_s = E x n = 0"
+   trap:  setting `rho_m = 0` because "E = 0 so M_s = n x E = 0"
    loses the only surviving magnetic-side source.  Test: a code
    path that ignores rho_m must give recovery error > 30 % at
    r = 2 * extraction-radius and converge to 0 only as r -> oo.
