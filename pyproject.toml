@@ -84,6 +84,9 @@ viz = [
     "pyvista>=0.40",
     "matplotlib>=3.5",
 ]
+urn = [
+    "torch>=2.0",
+]
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

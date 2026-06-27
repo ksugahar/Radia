@@ -12,7 +12,7 @@
 The manuscript proposes "Universal Relaxation Network (URN)," a physics-informed framework for impedance spectroscopy analysis. This final audit confirms that the project has successfully addressed all major concerns regarding scientific integrity, feature implementation, and experimental validation.
 
 **Key Findings (Final Audit)**:
-*   **Code Completeness**: The repository (`examples/universal_relaxation_network`) implements all 5 core "KAN-inspired" features (Adaptive Grid, Hierarchical Decomposition, Attention Gating, Learnable Exponents, Symbolic Discovery).
+*   **Code Completeness**: The repository (`docs/universal_relaxation_network`) implements all 5 core "KAN-inspired" features (Adaptive Grid, Hierarchical Decomposition, Attention Gating, Learnable Exponents, Symbolic Discovery).
 *   **Circuit Synthesis**: The critical issue of "Direct Circuit Synthesis" has been resolved with proper parameter mapping (Valsa/Charef/Dowell methods).
 *   **Experimental Validation**: The revised manuscript (`urn_paper.tex`) now includes comprehensive real-world validation results from NASA Li-ion battery and TDK Ferrite datasets, addressing the previous "Vaporware" concerns.
 
@@ -248,7 +248,7 @@ During internal review, we discovered that the manuscript **incorrectly claimed 
 - Future work section references NASA/Mendeley public datasets for real-world validation
 
 **Repository Changes**:
-- URN examples moved to `examples/universal_relaxation_network/`
+- URN examples moved to `docs/universal_relaxation_network/`
 - Data organized into `data/synthetic/` and `data/real_world/` directories
 - README.md added with clear data source documentation
 - All CSV file headers updated to explicitly state "NOT REAL MEASUREMENTS"
@@ -272,7 +272,7 @@ We have comprehensively addressed all reviewer concerns. Below is a point-by-poi
 
 **Repository Structure**:
 ```
-examples/universal_relaxation_network/
+docs/universal_relaxation_network/
   data/
     synthetic/          # Physics-based benchmark data (included)
     real_world/
@@ -513,7 +513,7 @@ We have added **real-world validation** using TDK Corporation's MnZn ferrite dat
 ### Data Files Added
 
 ```
-examples/universal_relaxation_network/data/real_world/tdk_ferrite/
+docs/universal_relaxation_network/data/real_world/tdk_ferrite/
 ├── README.md                          # Documentation with citations
 ├── ferrite_mn-zn_material_characteristics_en.pdf  # Original TDK datasheet
 ├── tdk_pc50_permeability.csv          # PC50 mu'(f), mu"(f) data
