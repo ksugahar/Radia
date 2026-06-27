@@ -2261,11 +2261,14 @@ static std::atomic<bool> g_moment_hlu_precond{false};
 void RadSetMomentHLUPrecond(bool on) { g_moment_hlu_precond.store(on); }
 bool RadGetMomentHLUPrecond() { return g_moment_hlu_precond.load(); }
 // Two-sided deflated block-Jacobi preconditioner (rad.SolverConfig(moment_deflation=...)).  A is NON-symmetric
-// so its right near-null (= the surface-charge loops, GetLoopBasis) and left near-null (= "co-loops" =
-// orthonorm(A@loops)) are DISTINCT spaces; deflating BOTH conditions the complement (cond ~chi -> ~20), so the
-// block-Jacobi smoother bounds the iters far below plain block-Jacobi on loop-heavy geometry.  Setup is O(N^3)
-// (the loop space is O(N)-dim, the coarse operator is dense) -> a medium-N (<=~15k) constant-factor speedup
-// over dense LU, NOT asymptotically scalable; exclusive with the H-LU precond.
+// so its right near-null (= the surface-charge loops, GetLoopBasis) and left near-null (= "co-loops" = the
+// range of A@loops) are DISTINCT spaces; deflating BOTH conditions the complement (cond ~chi -> ~20), so the
+// block-Jacobi smoother bounds the iters far below plain block-Jacobi on loop-heavy geometry.  QR-FREE coarse
+// op (2026-06-27): zc = L E^-1 (A@L)^T r, E = (A@L)^T(A@L) SPD, factored by Cholesky -- equivalent to the
+// orthonormalised W R^-1 Yco^T form (Petrov-Galerkin, machine-precision) but with NO LAPACK QR.  Coarse setup
+// O(nLoop^2 dof + nLoop^3) (loop space O(N)-dim) -> a medium-N (<=~15k) speedup over dense LU; the E being
+// sparse/banded (fill DECREASES with N) makes a sparse-direct factor the sub-cubic follow-on.  Exclusive with
+// the H-LU precond.
 // DEFAULT ON (Sugahara 2026-06-27): the TARGET workload is accelerator electromagnets (C-type yokes, dipole/
 // quadrupole iron) -- closed flux paths through iron = LOOP-HEAVY, where deflation is a large win (C-yoke
 // block-Jacobi 167-2917 iters -> deflated 41-114).  A non-loop-heavy solve (e.g. a benchmark cube / solid
@@ -2481,12 +2484,17 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	};
 
 	// --- Tier-A two-sided deflated block-Jacobi setup (opt-in, exclusive with the H-LU precond) ---
-	// W = orthonorm(loop basis) (right near-null); Yco = orthonorm(A@W) (left near-null = co-loops).  The coarse
-	// operator E = Yco^T A W = R (the R factor of A@W's QR, since Yco^T (A W) = R).  applyM's coarse correction
-	// zc = W R^-1 Yco^T r removes BOTH near-null spaces.  Build via LAPACK QR (dgeqrf/dorgqr) + nLoop H-matvecs;
-	// all O(N^3) total (loop space O(N)-dim).  No fallback: a QR failure drops to plain block-Jacobi (nLoop=0).
+	// QR-FREE (2026-06-27): the two-sided deflation correction  zc = W R^-1 Yco^T r  (W=orthonorm(L),
+	// Yco=orthonorm(A@L), R=Yco^T A W) is, by the Petrov-Galerkin identity (trial range(L), test range(A@L)),
+	// IDENTICAL to the basis-free form  zc = L E^-1 (A@L)^T r  with E = (A@L)^T (A@L) SPD -- orthonormalising
+	// L / A@L is only a basis change that does NOT move range(L) / range(A@L), so the oblique projector is the
+	// same (verified machine-precision, C:\temp\ams_step2_partA.py rel ~1e-13).  So drop BOTH LAPACK QRs
+	// (no dgeqrf/dorgqr): W = raw loop basis L, AL = A@L (nLoop H-matvecs), coarse op E = (AL)^T(AL) factored
+	// ONCE by Cholesky (dpotrf).  E is SPD (AL full column rank), cond(E)=cond(AL)^2 ~ O(N) and mu_r-INDEPENDENT
+	// -> dpotrf stable, no pivoting.  Coarse setup O(nLoop^2 dof) (dsyrk) + O(nLoop^3) (Cholesky); a sparse
+	// (banded) E + sparse-direct factor is the sub-cubic follow-on (E fill DECREASES with N, ams_coarse_structure.py).
 	int nLoop = 0;
-	std::vector<double> defW, defYco, defR;   // defW,defYco: dof x nLoop col-major; defR: nLoop x nLoop col-major (upper)
+	std::vector<double> defW, defAL, defEchol;   // defW(=L), defAL(=A@L): dof x nLoop col-major; defEchol: nLoop x nLoop col-major (Cholesky-U of E)
 	if(g_moment_deflate.load() && !hluGuard.root)
 	{
 		std::vector<double> Lflat; int nL = 0;
@@ -2494,33 +2502,30 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		if(nL > 0 && nL < dof)
 		{
 			nLoop = nL;
-			int mdof = dof, nl = nLoop, info = 0, lwork = -1;
+			// W = raw loop basis L (col-major), NO orthonormalisation
 			defW.assign((size_t)dof * nLoop, 0.0);
 			for(int d = 0; d < dof; d++) for(int c = 0; c < nLoop; c++) defW[(size_t)c*dof + d] = Lflat[(size_t)d*nLoop + c];
-			std::vector<double> tau((size_t)nLoop), wq(1);
-			dgeqrf_(&mdof, &nl, defW.data(), &mdof, tau.data(), wq.data(), &lwork, &info);   // workspace query
-			lwork = (info == 0) ? (int)wq[0] : (4*nLoop); if(lwork < 1) lwork = 1;
-			std::vector<double> work((size_t)lwork);
-			dgeqrf_(&mdof, &nl, defW.data(), &mdof, tau.data(), work.data(), &lwork, &info);
-			if(info == 0) dorgqr_(&mdof, &nl, &nl, defW.data(), &mdof, tau.data(), work.data(), &lwork, &info);
-			// AW = A @ W  (nLoop H-matvecs)
-			defYco.assign((size_t)dof * nLoop, 0.0);
+			// AL = A @ L  (nLoop H-matvecs)
+			defAL.assign((size_t)dof * nLoop, 0.0);
 			std::vector<double> col((size_t)dof), acol((size_t)dof);
-			for(int c = 0; info == 0 && c < nLoop; c++)
+			for(int c = 0; c < nLoop; c++)
 			{
 				for(int d = 0; d < dof; d++) col[(size_t)d] = defW[(size_t)c*dof + d];
 				matvecA(col, acol);
-				for(int d = 0; d < dof; d++) defYco[(size_t)c*dof + d] = acol[(size_t)d];
+				for(int d = 0; d < dof; d++) defAL[(size_t)c*dof + d] = acol[(size_t)d];
 			}
-			// QR(AW): defR = R (= the coarse operator E = Yco^T A W), Yco = Q.  Extract R BEFORE dorgqr overwrites.
-			std::vector<double> tau2((size_t)nLoop);
-			lwork = -1; if(info == 0) dgeqrf_(&mdof, &nl, defYco.data(), &mdof, tau2.data(), wq.data(), &lwork, &info);
-			lwork = (info == 0) ? (int)wq[0] : (4*nLoop); if(lwork < 1) lwork = 1; work.assign((size_t)lwork, 0.0);
-			if(info == 0) dgeqrf_(&mdof, &nl, defYco.data(), &mdof, tau2.data(), work.data(), &lwork, &info);
-			defR.assign((size_t)nLoop * nLoop, 0.0);
-			for(int j = 0; info == 0 && j < nLoop; j++) for(int i = 0; i <= j; i++) defR[(size_t)j*nLoop + i] = defYco[(size_t)j*dof + i];
-			if(info == 0) dorgqr_(&mdof, &nl, &nl, defYco.data(), &mdof, tau2.data(), work.data(), &lwork, &info);
-			if(info != 0) { nLoop = 0; defW.clear(); defYco.clear(); defR.clear(); }   // QR failed -> plain block-Jacobi
+			// E = (AL)^T (AL) (nLoop x nLoop SPD), upper col-major via dsyrk; Cholesky factor ONCE (dpotrf).
+			defEchol.assign((size_t)nLoop * nLoop, 0.0);
+			cblas_dsyrk(CblasColMajor, CblasUpper, CblasTrans, nLoop, dof, 1.0, defAL.data(), dof, 0.0, defEchol.data(), nLoop);
+			int nl = nLoop, info = 0; char uplo = 'U';
+			dpotrf_(&uplo, &nl, defEchol.data(), &nl, &info);
+			if(info != 0)
+			{
+				// Research code -- NO fallback (Sugahara 2026-06-27): a non-SPD / rank-deficient coarse op E
+				// FAILS LOUD instead of silently dropping to plain block-Jacobi.  Set moment_deflation=False to skip.
+				fprintf(stderr, "[moment-deflate] Error: coarse-op E=(AL)^T(AL) Cholesky failed (info=%d, nLoop=%d); no fallback.\n", info, nLoop);
+				return -17;
+			}
 		}
 	}
 
@@ -2533,13 +2538,14 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 			if((int)z.size() != dof) z.resize((size_t)dof);
 			cHACApK_hlu_apply(hluRoot, hluControl, r.data(), z.data(), dof);
 		}
-		else if(nLoop > 0)   // two-sided deflated block-Jacobi: zc = W R^-1 Yco^T r; z = blockJacobi(r - A zc) + zc
+		else if(nLoop > 0)   // two-sided deflated block-Jacobi: zc = L E^-1 (AL)^T r; z = blockJacobi(r - A zc) + zc
 		{
 			if((int)z.size() != dof) z.resize((size_t)dof);
 			std::vector<double> ycor((size_t)nLoop, 0.0), zc((size_t)dof, 0.0), Azc((size_t)dof), tmp((size_t)dof);
-			cblas_dgemv(CblasColMajor, CblasTrans, dof, nLoop, 1.0, defYco.data(), dof, r.data(), 1, 0.0, ycor.data(), 1);
-			cblas_dtrsv(CblasColMajor, CblasUpper, CblasNoTrans, CblasNonUnit, nLoop, defR.data(), nLoop, ycor.data(), 1);
-			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, nLoop, 1.0, defW.data(), dof, ycor.data(), 1, 0.0, zc.data(), 1);
+			cblas_dgemv(CblasColMajor, CblasTrans, dof, nLoop, 1.0, defAL.data(), dof, r.data(), 1, 0.0, ycor.data(), 1);   // ycor = (AL)^T r
+			int nrhs = 1, nl = nLoop, info = 0; char uplo = 'U';
+			dpotrs_(&uplo, &nl, &nrhs, defEchol.data(), &nl, ycor.data(), &nl, &info);                                       // ycor = E^-1 ycor (Cholesky solve)
+			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, nLoop, 1.0, defW.data(), dof, ycor.data(), 1, 0.0, zc.data(), 1);  // zc = L ycor
 			matvecA(zc, Azc);
 			for(int i = 0; i < dof; i++) tmp[(size_t)i] = r[(size_t)i] - Azc[(size_t)i];
 			applyBlockJacobi(tmp, z);
@@ -3533,13 +3539,9 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			// matvec then applies y = diag(chi)(K x) + L_local x as a cheap dense GEMV, and a nonlinear
 			// Picard loop reuses K, updating only chi (the block diagonal).  O(N^2) storage (= method 0);
 			// for very large N use method 2 (HACApK, O(N log N)).
+			// O(N^2) dense; research code -- NO artificial size cap.  A too-large allocation fails loud
+			// (std::bad_alloc) rather than being pre-empted; use method 2 (HACApK, O(N log N)) for very large N.
 			const size_t momentDenseElems = (size_t)totalDOF * (size_t)totalDOF;
-			if((double)momentDenseElems * 8.0 > 24.0e9)
-			{
-				fprintf(stderr, "[BiCG] Error: method-1 build-once dense needs %.1f GB (DOF=%d); use method 2 (HACApK) for this size.\n",
-				        (double)momentDenseElems * 8.0 / 1.0e9, totalDOF);
-				return -16;
-			}
 			std::vector<double> momentKdense(momentDenseElems, 0.0);
 			auto buildKdenseRow = [&](size_t hh) {
 				const int h = (int)hh;
