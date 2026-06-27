@@ -10,8 +10,8 @@ force rows for pressure loads, Maxwell pressure, or acoustic pressure examples.
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_pressure_force.py
-    python examples/cubit_mesh_export/validation_vol_boundary_pressure_force.py --vol C:\\temp\\box.vol
+    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_force.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_pressure_force.py --vol C:\\temp\\box.vol
 """
 
 from __future__ import annotations

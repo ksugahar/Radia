@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_oriented_edges.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_oriented_edges.py
 
 This example keeps the first-order boundary trace small and readable: one
 tetrahedron, four boundary triangles, six closed surface edges, and twelve

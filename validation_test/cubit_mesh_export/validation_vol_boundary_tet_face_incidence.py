@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_tet_face_incidence.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_tet_face_incidence.py
 
 The check verifies that boundary triangles exported in a tri/tet Netgen `.vol`
 mesh actually correspond to volume tetrahedron faces.  Exterior triangles

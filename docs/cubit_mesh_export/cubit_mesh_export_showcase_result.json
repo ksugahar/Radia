@@ -1,0 +1,142 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T21:40:29Z",
+  "notebook": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
+  "notebook_sha256": "89600c880f0606d443cdf3781678a83991b26d7a52f01c029f5be1f95296abaf",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
+    "cells": 11,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 7,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "5fda2d05eabdb0d8b0666f3b10216e882c52e27b26f1ec9cd63d5955b4c71793",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\ncandidates = [\n    Path('cubit_mesh_export_showcase_results.json'),\n    Path('docs/cubit_mesh_export/cubit_mesh_export_showcase_results.json'),\n]\nresult_path = next((p for p in candidates if p.exists()), None)\nassert result_path is not None, candidates\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nsummary = data['summary']\nprint('result_json:', result_path)\nfor key in ['validation_script_count', 'validation_summary_count', 'python_script_count', 'asset_count']:\n    print(f'{key}: {summary[key]}')\nprint('high_order_hex_max_abs_error_percent:', summary['hex_high_order_max_abs_error_percent'])\nprint('poisson_error_drop_order1_to_3:', summary['hex_poisson_error_drop_ratio_order1_to_3'])\nassert summary['validation_script_count'] == 18\nassert summary['validation_summary_count'] == 18\nassert summary['all_validation_summaries_present'] is True",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 244,
+          "text_sha256": "c5f8b7bc89394ff412c83ec64f569e08f2e6512b8564d79c04658a1080fad107",
+          "text_preview": "result_json: cubit_mesh_export_showcase_results.json\nvalidation_script_count: 18\nvalidation_summary_count: 18\npython_script_count: 25\nasset_count: 15\nhigh_order_hex_max_abs_error_percent: 0.211\npoisson_error_drop_order1_to_3: 20.37433155080214\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "de5416b5e8b8e4c44031d2001467bbaa505cd5035896b3dd4f38bf9ed0f9eba3",
+      "source_preview": "rows = []\nfor rec in data['validation_records']:\n    payload = rec.get('summary') or {}\n    kind = payload.get('schema') or payload.get('kind') or rec['name'].replace('.py', '')\n    checks = payload.get('checks') if isinstance(payload, dict) else None\n    if isinstance(checks, dict):\n        check_preview = ', '.join(list(checks.keys())[:4])\n    else:\n        check_preview = ', '.join(rec.get('summary_keys', [])[:4])\n    rows.append((rec['path'], kind, rec['line_count'], check_preview))\n\nheader = '| Script | Summary kind | Lines | Representative keys |\\n|---|---|---:|---|'\nbody = [f'| `{path}` | `{kind}` | {lines} | {keys} |' for path, kind, lines, keys in rows]\ndisplay(Markdown('\\n'.join([header] + body)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "5dfdd34e17297352c6f53b282c883c2d0b39cd4b1292a6e4afe186d92583ec6b",
+      "source_preview": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value i",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 737,
+          "text_sha256": "31e522a5fe763da0b0dff5450da978cbc399ccd04589127b5cdaad01f7e4b926",
+          "text_preview": "[boundary normals]\n\n[pressure resultant checks]\n  builtin_uniform_total_force_norm_N: 0.0\n  builtin_uniform_total_moment_norm_Nm: 0.0\n  builtin_uniform_force_balance_ratio: 0.0\n  builtin_uniform_moment_balance_ratio: 0.0\n  builtin_uniform_absolute_force_sum_N: 124.0\n  builtin_zmax_force_N: [0.0, 0.0, 12.0]\n  builtin_zmax_moment_Nm: [18.0, -12.0, 0.0]\n  builtin_zmax_shifted_moment_Nm: [0.0, 4.440892098500626e-16, 0.0]\n\n[traction moment checks]\n  builtin_zmax_force_N: [6.0, -12.0, 18.0]\n  builtin_zmax_moment_Nm: [87.0, 12.0, -21.0]\n  builtin_zmax_shifted_moment_Nm: [0.0, 1.3322676295501878e-15, 4.440892098500626e-16]\n  builtin_zmax_resultant_force_error_N: 0.0\n  builtin_zmax_resultant_moment_error_Nm: 0.0\n\n[mesh health statuses]\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "fa5553f9c0288ca3dc60642d6677b8f1981b007563511358ca9e41b6f4d077eb",
+      "source_preview": "volume_rows = data['hex_highorder']['volume_rows']\npoisson_rows = data['hex_highorder']['poisson_rows']\n\nheader = '| Order | HEX count | Sphere volume error | Poisson ndof | Poisson L2 error |\\n|---:|---:|---:|---:|---:|'\nbody = []\nfor v, p in zip(volume_rows, poisson_rows):\n    body.append(\n        f\"| {v['order']} | {p['hex']} | {v['error_percent']:+.3f}% | {p['ndof']} | {p['l2_error']:.3e} |\"\n    )\ndisplay(Markdown('\\n'.join([header] + body)))\n\nprint(data['hex_highorder']['volume_stdout'])\nprint(data['hex_highorder']['poisson_stdout'])\nassert max(abs(r['error_percent']) for r in volume_rows if r['order'] >= 2) < 1.0\nassert poisson_rows[2]['l2_error'] < poisson_rows[1]['l2_error'] < poisson_rows[0]['l2_error']",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 679,
+          "text_sha256": "720ae6aeb01804d5fbeb357560ac5e684d83cd664386cbfc79aee1e8bd47f8ed",
+          "text_preview": "Curved-hex sphere in NGSolve  (R=0.05 m, V_exact=5.235988e-04 m^3)\n  order 1  {'HEX': 56}  V=4.012929e-04  err=-23.359%\n  order 2  {'HEX': 56}  V=5.224933e-04  err=-0.211%\n  order 3  {'HEX': 56}  V=5.242872e-04  err=+0.131%\nPASS: curved high-order hex converges to the analytic sphere (order>=2 < 1%)\n\nPoisson on the curved hex sphere (p-refinement, fixed 56-hex mesh):\n  order 1  HEX=56  ndof=79  ||u_h - u_exact||_L2 = 8.001e-06\n  order 2  HEX=56  ndof=517  ||u_h - u_exact||_L2 = 1.267e-06\n  order 3  HEX=56  ndof=1651  ||u_h - u_exact||_L2 = 3.927e-07\nPASS: FE error falls with order on the curved hex mesh (8.00e-06 -> 3.93e-07) -- NGSolve solves on high-order Cubit hexes\n\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "aff2ea89c33eb44729137458aeac7bf2506ac179ac3acf4f0b07188f0ce3fe86",
+      "source_preview": "source_by_path = {rec['path']: rec.get('source') for rec in data['validation_records']}\n# Add source from the full archive for non-validation demo scripts when present.\narchive_candidates = [Path('cubit_mesh_export_examples_archive_results.json'), Path('docs/cubit_mesh_export/cubit_mesh_export_examples_archive_results.json')]\narchive_path = next((p for p in archive_candidates if p.exists()), None)\nif archive_path:\n    archive = json.loads(archive_path.read_text(encoding='utf-8'))\n    for rec in archive.get('records', []):\n        source_by_path.setdefault(rec['path'], rec.get('source'))\n\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n    'validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py',\n]:\n    src = source_by_path.get(path)\n    assert src, path\n    excerpt = '\\n'.join(src.splitlines()[:85])\n    display(Markdown(f'### `{path}`\\n```python\\n{excerpt}\\n```'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
