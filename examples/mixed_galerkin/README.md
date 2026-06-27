@@ -49,7 +49,7 @@ solved per-frequency. Intermediate-frequency accuracy is bounded by the
 
 | Subdir | Contents |
 |---|---|
-| `_references/` | Clean analytic Y_exact for each body (Bessel / Foster / Mellin) |
+| `_references/` | Remaining square/cube analytic references pending src/API promotion |
 | `cylinder/`    | Mixed Galerkin on infinite-z cylinder cross-section |
 | `sphere/`      | Mixed Galerkin on solid sphere |
 | `square2d/`    | Mixed Galerkin on infinite-z square cross-section |
@@ -65,7 +65,8 @@ Senior tower corrections, rank-N bulk sweep, etc.
 ## Headline results (post Phase 8b correction)
 
 After cross-checking against properly-implemented analytic references
-(see `_references/` for each body's Y_exact):
+(`radia.maglev.mixed_galerkin.references` for cylinder/sphere; `_references/`
+for remaining square/cube candidates):
 
 | Geometry | 1-DOF (planar SIBC) | + γ_1 | + γ_2 | + γ_3 |
 |---|---|---|---|---|
