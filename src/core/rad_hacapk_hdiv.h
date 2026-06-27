@@ -129,10 +129,18 @@ public:
     // constant so the inner is the EXACT analytic PhiTet and INT_T PhiTet dx is smooth, integrated to
     // ~machine precision.  (The old hardcoded equal-weight _bary_tet(3) under-integrated the volume self-
     // energy by ~6.5% -- golden-invisible because every uniform-M demag golden has div M = 0.)
+    // far_quad: the FAR-pair evaluation when near_factor < inf.  0 (default) = centroid-MONOPOLE
+    // (meas_a*meas_b/4pi r) -- cheap but O((size/r)^2), it slightly breaks geometric symmetry (the uniform
+    // sphere transverse leak).  >0 = a low-order DOUBLE-QUADRATURE of the true 1/r kernel over a degree-2
+    // rule (4-pt tet / 3-pt tri) -- ~16 cheap evals/pair (vs the full analytic's ~1e3 transcendentals), but
+    // accurate to O((size/r)^4) so it reproduces the all-analytic Gram (verified: sphere transverse 7.26e-4
+    // == exact 7.25e-4, vs monopole 1.19e-3).  This is the precision-preserving build speedup: near=analytic,
+    // far=low-quad.  Tet/tri analytic mode only (the polytope ctor keeps monopole far).
     RadHACApKChargeGram(std::vector<double> cell_verts,
                         std::vector<double> face_verts,
                         int n_el, double near_factor = 1e30,
-                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {},
+                        int far_quad = 0);
 
     // POLYTOPE analytic mode (HEX / WEDGE cells + QUAD faces): the same EXACT analytic entry as the tet/
     // triangle analytic mode above, generalized to ANY flat-faced convex cell + quad face with NO new
@@ -269,6 +277,9 @@ private:
     // IMA image term: (1/4pi) sum_p w_p PhiAt(src, R_mask(p)) -- tgt's outer points reflected on the mask
     // axes.  Uses Phi_{R(b)}(x) = Phi_b(R(x)) (reflection isometry), so only the eval point is mirrored.
     double QuadDotRefl(int tgt, int src, int mask) const;
+    // FAR low-order double-quadrature (analytic mode, far_quad>0): (1/4pi) sum_i sum_j qwf[a][i] qwf[b][j] /
+    // |qpf[a][i]-qpf[b][j]| over the degree-2 far rule -- symmetric in (a,b) by construction (1/r symmetric).
+    double QuadDotFarLow(int a, int b) const;
 
     std::vector<double> m_cent, m_meas, m_self;        // monopole mode (m_cent also = the cluster-tree points)
     int  m_n = 0;
@@ -280,6 +291,9 @@ private:
     std::vector<std::vector<double>>          m_qw;    // [n] outer-quad weights per charge
     std::vector<double> m_size;                        // [n] characteristic size: vol^(1/3) / area^(1/2)
     double m_near_factor = 1e30;                       // near/far split: NEAR if |c_a-c_b| <= nf*(size_a+size_b)
+    int    m_far_quad = 0;                             // 0=monopole far; >0=low-order double-quad far (tet/tri)
+    std::vector<std::vector<rad_hdiv::Vec3>> m_qpf;    // [n] FAR low-order quad points (built iff m_far_quad>0)
+    std::vector<std::vector<double>>          m_qwf;   // [n] FAR low-order quad weights (sum = measure)
     // IMA mirror symmetry (image method): G_IMA(a,b) = G(a,b) + sum_i sign_i*0.5*(QuadDotRefl(a,b,mask_i)
     // + QuadDotRefl(b,a,mask_i)).  The 2^P-1 non-empty subsets of the P mirror planes (image_group); each
     // reflects the eval point on its axes.  Always the full analytic image (the self-on-plane image can be
