@@ -209,3 +209,29 @@ def test_far_quad_matches_analytic_at_scale():
     # extra iters from the ~1e-5 operator perturbation are fine on a small problem -- a real failure would blow up.
     assert out_fast["iters"] < 1.6 * out_ana["iters"] + 10, \
         f"far_quad degraded CG convergence: {out_fast['iters']} iters vs analytic {out_ana['iters']}"
+
+
+def test_cpp_assembly_distorted_parallelepiped():
+    """The C++ parallel assembly (_moment_galerkin_assemble_hex) is correct on a NON-axis-aligned hex.  An affine
+    parallelepiped (linear shear A of the cube) has exact divergence-theorem volume |det A| D^3 (locks the C++
+    face geometry / Ve), N = B^T G B stays symmetric off-axis (locks the formulation), and the 5x5 quad mass
+    block is symmetric PSD (locks the residual-eigenmode + second-moment C++ path that axis-aligned goldens miss)."""
+    A = np.array([[1.0, 0.30, 0.00], [0.00, 1.0, 0.20], [0.10, 0.00, 1.0]])
+    base = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
+                     [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], float)
+    V = D * (base @ A.T)
+    vol_exact = abs(np.linalg.det(A)) * D ** 3
+    sys = mg.assemble_moment_system([V], quad=True, near_factor=1e30)   # all-analytic -> exactly symmetric
+    assert abs(sys["vols"][0] - vol_exact) <= 1e-12 * vol_exact, \
+        f"C++ divergence-theorem volume {sys['vols'][0]} != parallelepiped |det A| D^3 {vol_exact}"
+    G, B = sys["G"], sys["B"]
+    ndof = B.shape[1]
+    Bc = B.tocsr()
+    N = np.empty((ndof, ndof))
+    for j in range(ndof):
+        ej = np.zeros(ndof); ej[j] = 1.0
+        N[:, j] = Bc.T @ np.asarray(G.matvec(np.asarray(Bc @ ej).tolist()), float)
+    assert np.linalg.norm(N - N.T) / np.linalg.norm(N) < 1e-9, "off-axis N = B^T G B not symmetric"
+    W = sys["M_mass"].toarray()
+    assert np.allclose(W, W.T, atol=1e-18), "quad mass block not symmetric"
+    assert np.linalg.eigvalsh(W)[0] > -1e-15 * np.linalg.eigvalsh(W)[-1], "quad mass block not PSD"
