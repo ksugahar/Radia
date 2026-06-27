@@ -3,7 +3,7 @@
   "radius_m": 0.05,
   "mu_r": 10.0,
   "chi": 9.0,
-  "mesh_source": "examples/cubit_mesh_export/hex_sphere_highorder",
+  "mesh_source": "docs/cubit_mesh_export/hex_sphere_highorder",
   "analytics": {
     "sphere_demag_l": "D_l = l/(2*l+1)",
     "response": "M_l = chi/(1+chi*D_l) * H_ext,l"
@@ -12,7 +12,7 @@
     {
       "mesh_order": 1,
       "hdiv_order": 1,
-      "mesh_path": "examples/cubit_mesh_export/hex_sphere_highorder/hexsph_o1.vol",
+      "mesh_path": "docs/cubit_mesh_export/hex_sphere_highorder/hexsph_o1.vol",
       "n_hex": 56,
       "volume_error_rel": -0.23358696088987574,
       "cases": {
@@ -47,7 +47,7 @@
     {
       "mesh_order": 2,
       "hdiv_order": 2,
-      "mesh_path": "examples/cubit_mesh_export/hex_sphere_highorder/hexsph_o2.vol",
+      "mesh_path": "docs/cubit_mesh_export/hex_sphere_highorder/hexsph_o2.vol",
       "n_hex": 56,
       "volume_error_rel": -0.0021113734741887713,
       "cases": {
@@ -82,7 +82,7 @@
     {
       "mesh_order": 3,
       "hdiv_order": 3,
-      "mesh_path": "examples/cubit_mesh_export/hex_sphere_highorder/hexsph_o3.vol",
+      "mesh_path": "docs/cubit_mesh_export/hex_sphere_highorder/hexsph_o3.vol",
       "n_hex": 56,
       "volume_error_rel": 0.0013148835839023043,
       "cases": {

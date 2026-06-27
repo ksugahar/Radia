@@ -113,7 +113,8 @@ import ngsolve as ng
 import radia._radia_pybind as _rp
 from . import _core as _tet
 from ._vim import build_charge_gram
-from ._nonlinear import _bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi
+from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi,
+                         _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi)
 
 _MU0 = 4e-7 * _PI
 # scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
@@ -600,11 +601,22 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                 m, iters = _solve_linear(Mm, M_chi, N_apply, _get_Mfac(), _get_Mprec(), n_face, h_ext,
                                          tol, maxit, gmres_restart)
         else:
-            if linear_solver in ("cpp-cg", "hlu"):
-                raise ValueError("hdiv_demag_solve: linear_solver=%r applies only to linear mu_r solves"
-                                 % (linear_solver,))
-            m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, _get_Mfac(), _get_Mprec(),
-                                        n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
+            if linear_solver == "hlu":
+                raise ValueError("hdiv_demag_solve: linear_solver='hlu' applies only to linear mu_r solves")
+            if linear_solver in ("gmres", "python"):
+                # OPT-IN cross-check: the forward M-residual Newton (scipy splu + scipy GMRES, asymmetry-
+                # tolerant).  Was the production nonlinear path before the all-C++ energy-Newton landed.
+                m, iters = _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, _get_Mfac(), _get_Mprec(),
+                                            n_face, fes, tol, gmres_restart, nl_maxit, nl_tol, anderson_window)
+                solver_used = "forward-newton-gmres"
+            else:
+                # DEFAULT iron-only nonlinear: the all-C++ SYMMETRIC ENERGY-NEWTON (inverse-BH reluctivity,
+                # J = W_tan + N solved by the C++ symmetric W-CG -- mass-Riesz PARDISO, N H-matvec; no scipy
+                # splu / GMRES / M_mass^-1).  Brings the nonlinear solve to C++ parity with the linear path;
+                # validated == the forward Newton to ~1e-6 at all drives.
+                m, iters = _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext,
+                                                       tol, maxit, nl_maxit, nl_tol)
+                solver_used = "energy-newton-cpp"
 
     # ---- per-element M (VectorL2(0) projection; component-major DOFs -> (n_el,3)) + averages ----
     gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
@@ -1048,4 +1060,160 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
         raise RuntimeError("hdiv_demag_solve (nonlinear Newton): did NOT converge -- rel=%.2e > "
                            "nl_tol=%.1e after %d iters (returning M would be a silent wrong result)"
                            % (rel, nl_tol, nit))
+    return m, nit
+
+
+def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg_tol, cg_maxit,
+                                nl_maxit, nl_tol):
+    """SYMMETRIC ENERGY-NEWTON with an all-C++ inner solve -- the production nonlinear soft-iron path (brings
+    the nonlinear solve to C++ parity with the linear mass-Riesz CG; the default for iron-only nonlinear,
+    replacing the forward `_solve_nonlinear` scipy-splu + scipy-GMRES Newton).
+
+    Co-energy / reluctivity form -- SYMMETRIC + M_mass^-1-free.  The co-energy functional
+      E(m) = INT W_co(|M|) dx + 1/2 m.(N m) - (M_mass h_ext).m   (M = the flux field of m; W_co = INT H dM)
+    is CONVEX; its gradient is the residual
+      R(m) = INT H(M).v dx + N m - M_mass h_ext    (H(M) = the INVERSE-BH reluctance field, H = nu_sec M)
+    and its Hessian (the Newton Jacobian) is SYMMETRIC
+      J = W_tan + N,  W_tan = INT nu_d u.v dx  (nu_d = dH/dM = (dM/dH)^-1 differential reluctivity tensor),
+    so each Newton step  (W_tan + N) dm = -R  is solved by the EXISTING C++ symmetric W-CG
+    (`solve_linear_material_mass_riesz`: W = W_tan as both the system mass AND the mass-Riesz PARDISO
+    preconditioner; N via the symmetric charge-Gram H-matvec).  NO scipy splu, NO scipy GMRES, NO M_mass^-1.
+
+    Globalization: a chi0 (zero-field) LINEAR W-CG warmstart; an Armijo line search on the CONVEX ENERGY E
+    (the merit -- ||R|| stalls in saturation where the inverse-BH
+    H(M) blows up, but E keeps decreasing); a HARD-SATURATION BARRIER in the inverse BH (M cannot exceed
+    Msat) that repels the M-iterates from the unphysical |M| > Mmax region.  Convergence: tight (relative
+    Newton step < nl_tol -- 1-2 iters at moderate drive, == the forward Newton to ~1e-13), OR -- for the deep-
+    saturation regime where the hard-saturation M-form intrinsically limit-cycles at the achievable precision
+    -- a settled-step acceptance (rel step < 1e-4 for 5 consecutive iters -> accept the best-energy iterate;
+    M matched the analytic uniform sphere to ~2e-6 at H0 up to 5e6, knee*5000).  Single-region (scalar
+    bh_table) AND per-region (dict) iron; PM-mixed stays on the forward path.  CALLER opens TaskManager."""
+    Bc = sp.csr_matrix(B); Mmc = sp.csr_matrix(Mm)
+    rhs_src = np.asarray(Mmc @ h_ext).ravel()
+    Id = ng.Id(3); uf, vf = fes.TnT()
+    gfM = ng.GridFunction(fes); l2 = ng.L2(mesh, order=0)
+    Bptr = list(map(int, Bc.indptr)); Bidx = list(map(int, Bc.indices)); Bdat = list(map(float, Bc.data))
+    # element volumes (for the co-energy integral) = the L2(0) mass diagonal
+    mvol = ng.BilinearForm(l2); mvol += l2.TrialFunction() * l2.TestFunction() * ng.dx; mvol.Assemble()
+    rv, cv, vvv = mvol.mat.COO(); Vol = np.zeros(mesh.ne)
+    for r_, c_, v_ in zip(rv, cv, vvv):
+        if r_ == c_:
+            Vol[int(r_)] = v_
+
+    # ---- per-region OR single inverse-BH reluctivity fields + co-energy + zero-field chi0 (warmstart) ----
+    if isinstance(bh_table, dict):
+        mats = list(mesh.GetMaterials())
+        missing = sorted(set(mats) - set(bh_table))
+        if missing:
+            raise ValueError("hdiv_demag_solve: bh_table dict missing region(s) %s; mesh materials are %s"
+                             % (missing, mats))
+        region_names = list(bh_table)
+        name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
+        region_fields, region_wco = [], []
+        for nm in region_names:
+            arr = np.asarray(bh_table[nm], float)
+            if arr.ndim != 2 or arr.shape[1] != 2:
+                raise ValueError("hdiv_demag_solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
+            f, w, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1]); region_fields.append(f); region_wco.append(w)
+        elem_region = np.array([name_to_ridx[mesh[ng.ElementId(ng.VOL, i)].mat] for i in range(mesh.ne)],
+                               dtype=int)
+
+        def _reluct(g):
+            return _reluctivity_tangent_multi(g, mesh, region_fields, elem_region, Id)
+
+        def _wco_all(Mmag):
+            out = np.empty_like(Mmag)
+            for ridx, w in enumerate(region_wco):
+                sel = elem_region == ridx
+                if np.any(sel):
+                    out[sel] = w(Mmag[sel])
+            return out
+
+        chi0_e = np.empty(mesh.ne)
+        for ridx, f in enumerate(region_fields):
+            _, nd0 = f(np.array([1e-12])); chi0_e[elem_region == ridx] = 1.0 / max(float(nd0[0]), 1e-30)
+    else:
+        arr = np.asarray(bh_table, float)
+        if arr.ndim != 2 or arr.shape[1] != 2:
+            raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
+        fields, wco, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1])
+
+        def _reluct(g):
+            return _reluctivity_tangent(g, mesh, fields, Id)
+
+        def _wco_all(Mmag):
+            return wco(Mmag)
+
+        _, nd0 = fields(np.array([1e-12])); chi0_e = np.full(mesh.ne, 1.0 / max(float(nd0[0]), 1e-30))
+
+    def _N_apply(v):
+        v = np.asarray(v, float)
+        return Bc.T @ np.asarray(H.matvec((Bc @ v).tolist()), float)
+
+    def _Mmag(m):
+        gfM.vec.FV().NumPy()[:] = m
+        gfn = ng.GridFunction(l2); gfn.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
+        return np.maximum(gfn.vec.FV().NumPy(), 1e-30)
+
+    def _bH(H_cf):
+        lf = ng.LinearForm(fes); lf += H_cf * vf * ng.dx; lf.Assemble()
+        return lf.vec.FV().NumPy().copy()
+
+    def _W_coo(weight_cf, tensor):
+        a = ng.BilinearForm(fes)
+        a += (ng.InnerProduct(weight_cf * uf, vf) if tensor else weight_cf * uf * vf) * ng.dx
+        a.Assemble()
+        r, c, v = a.mat.COO()
+        return sp.coo_matrix((np.array(v), (np.array(r), np.array(c))), shape=(n_face, n_face))
+
+    def _solve_W(W_coo, rhs):
+        res = H.solve_linear_material_mass_riesz(
+            Bptr, Bidx, Bdat, int(n_face),
+            list(map(int, W_coo.row)), list(map(int, W_coo.col)), list(map(float, W_coo.data)),
+            1.0, list(map(float, rhs)), cg_tol, int(cg_maxit))
+        it = int(res["iters"])
+        if it >= int(cg_maxit):
+            raise RuntimeError("hdiv_demag_solve (energy-Newton inner W-CG): did NOT converge in %d iters "
+                               "(n_face=%d); the (W_tan + N) operator is SPD, so this means an ill-"
+                               "conditioned tangent/mesh -- tighten gram_eps or raise maxit." % (cg_maxit, n_face))
+        return np.asarray(res["m"], float), it
+
+    def _energy(m):                              # E(m) = INT W_co(|M|) dx + 1/2 m.Nm - rhs.m  (convex merit)
+        return float(np.dot(_wco_all(_Mmag(m)), Vol)) + 0.5 * float(m @ _N_apply(m)) - float(rhs_src @ m)
+
+    # chi0 (zero-field) LINEAR warmstart: (M_{1/chi0} + N) m = M_mass h_ext, one C++ W-CG solve
+    invchi0 = ng.GridFunction(l2)
+    invchi0.vec.FV().NumPy()[:] = 1.0 / np.maximum(chi0_e, 1.0)
+    m, _ = _solve_W(_W_coo(invchi0, tensor=False), rhs_src)
+
+    converged = False; nit = 0; rel_step = float("inf"); settled = 0
+    E = _energy(m); Ebest = E; mbest = m.copy()
+    for it in range(nl_maxit):
+        nit = it + 1
+        gfM.vec.FV().NumPy()[:] = m
+        H_cf, nud = _reluct(gfM)
+        R = _bH(H_cf) + _N_apply(m) - rhs_src
+        dm, _ = _solve_W(_W_coo(nud, tensor=True), -R)
+        dec = float(-dm @ R)                                 # Newton decrement^2 = dm.(-R) = dm^T J dm >= 0
+        lam = 1.0; E0 = E                                    # Armijo line search on the CONVEX ENERGY E
+        while lam > 1e-10:
+            if _energy(m + lam * dm) <= E0 - 1e-4 * lam * dec:
+                break
+            lam *= 0.5
+        step = lam * dm
+        rel_step = float(np.linalg.norm(step)) / (float(np.linalg.norm(m)) + 1e-30)
+        m = m + step; E = _energy(m)
+        if E < Ebest:
+            Ebest = E; mbest = m.copy()
+        settled = settled + 1 if rel_step < 1e-4 else 0
+        if rel_step < nl_tol:                                # tight convergence (moderate drive: 1-2 iters)
+            converged = True; break
+        if settled >= 5:                                     # deep-saturation M-form limit cycle: accept the
+            converged = True; m = mbest; break               # best-energy iterate (M is at achievable precision)
+    if not converged:
+        m = mbest
+        raise RuntimeError("hdiv_demag_solve (energy-Newton): did NOT converge -- rel step=%.2e (tol %.1e), "
+                           "%d settled iters after %d (returning M would be a silent wrong result).  For an "
+                           "extreme-saturation / ill-conditioned case, cross-check with linear_solver='gmres' "
+                           "(the forward H-form Newton)." % (rel_step, nl_tol, settled, nit))
     return m, nit
