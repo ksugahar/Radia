@@ -1,7 +1,8 @@
 # Kelvin Transformation Helper API: Design Plan
 
 A staged plan for refactoring the archived
-`examples/kelvin_transformation/A-formulation/` validation scripts into a
+`docs/kelvin/legacy_assets/kelvin_transformation/A-formulation/` validation
+notes into a
 reusable helper API in `src/radia/kelvin_*.py`. The standalone scripts were
 removed from `examples`; their full source is preserved in
 `docs/kelvin/kelvin_remaining_examples_archive_results.json`. Now that the
@@ -85,7 +86,7 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0, kelvin_mats=("kelvin",)):
     Canonical Nagamine CEFC 2026 / Sugahara 2022 convention:
         nu_kelvin = (rho'/R)^2 * nu_0   (3D spherical conformal)
     Derived from pullback of 1-form basis + bilinear energy functional.
-    See examples/kelvin_transformation/CONVENTION.md.
+    See docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md.
     """
 
 def make_kelvin_aware_A_s_cf(
@@ -219,7 +220,7 @@ into <50 lines each, using the layered API.
 
 ### M4 -- documentation + porting (~ 1-2 days)
 - Add a tutorial under `docs/kelvin/` rather than reintroducing standalone
-  Python under `examples/kelvin_transformation/`.
+  Python under `examples/`.
 - Port one IH example to use the new helpers end-to-end
 - Update MCP `kelvin_knowledge.py` with the new API surface
 

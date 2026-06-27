@@ -29,7 +29,7 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-DTN = os.path.join(REPO, "examples", "kelvin_transformation", "DtN_spectrum")
+DTN = os.path.join(REPO, "validation_test", "kelvin_dtn_spectrum")
 
 # import act8_03 + run ONE design at the coarsest resolution scenario_B uses
 # (maxh 0.30 -- fast, and where the free-space miss is already large).
