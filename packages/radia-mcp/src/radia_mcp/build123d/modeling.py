@@ -38,6 +38,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "box_face_traction_moment_rows",
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
+           "compare_shape_volume_rows", "shape_volume_crosscheck_summary",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
            "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
            "shape_parameter_sweep_summary",
@@ -1118,6 +1119,156 @@ def compare_shape_measurement_rows(
             "reason": reason,
         })
     return rows
+
+
+def _volume_row_name(row, index):
+    if isinstance(row, dict):
+        return str(row.get("name") or row.get("label") or f"shape_{index}")
+    return f"shape_{index}"
+
+
+def _normalize_volume_rows(rows):
+    if isinstance(rows, dict):
+        if "rows" in rows:
+            rows = rows["rows"]
+        elif "measurements" in rows:
+            rows = rows["measurements"]
+        elif "volume" in rows:
+            rows = [rows]
+        else:
+            rows = [{"name": key, "volume": value} for key, value in rows.items()]
+    normalized = []
+    for index, row in enumerate(list(rows), start=1):
+        if isinstance(row, dict):
+            if "volume" not in row:
+                raise KeyError(f"missing volume for row {index}")
+            volume = float(row["volume"])
+        else:
+            volume = float(row)
+        if not math.isfinite(volume):
+            raise ValueError(f"volume for row {index} must be finite")
+        normalized.append({
+            "index": index,
+            "name": _volume_row_name(row, index),
+            "volume": volume,
+        })
+    return normalized
+
+
+def compare_shape_volume_rows(
+    reference_rows,
+    measured_rows,
+    rtol=1.0e-5,
+    measured_label="external_cad",
+):
+    """Compare shape volumes by name against an external CAD/kernel table.
+
+    This is intentionally weaker than :func:`compare_shape_measurement_rows`:
+    it only requires ``name`` and ``volume``.  That makes it the common-denominator
+    check for build123d -> STEP round trips through Cubit or another CAD system
+    whose scripting API can report body volumes but not identical topology/area
+    rows.  Use the full measurement comparison when area and bounding boxes are
+    also available.
+    """
+
+    reference = _normalize_volume_rows(reference_rows)
+    measured = _normalize_volume_rows(measured_rows)
+    measured_by_name = {row["name"]: row for row in measured}
+    rows = []
+    for ref in reference:
+        measured_row = measured_by_name.get(ref["name"])
+        if measured_row is None:
+            rows.append({
+                "name": ref["name"],
+                "measured_label": measured_label,
+                "reference_volume": ref["volume"],
+                "measured_volume": None,
+                "volume_rel_error": None,
+                "rtol": float(rtol),
+                "passed": False,
+                "reason": "missing measured row",
+            })
+            continue
+        rel_error = _relative_measurement_error(ref["volume"], measured_row["volume"])
+        passed = rel_error <= float(rtol)
+        rows.append({
+            "name": ref["name"],
+            "measured_label": measured_label,
+            "reference_volume": ref["volume"],
+            "measured_volume": measured_row["volume"],
+            "volume_rel_error": rel_error,
+            "rtol": float(rtol),
+            "passed": passed,
+            "reason": "ok" if passed else "outside tolerance",
+        })
+    return rows
+
+
+def _normalize_volume_measurement_sets(measured_sets):
+    if isinstance(measured_sets, dict):
+        if "rows" in measured_sets or "volume" in measured_sets:
+            return [("external_cad", measured_sets)]
+        return [(str(label), rows) for label, rows in measured_sets.items()]
+    normalized = []
+    for index, item in enumerate(list(measured_sets), start=1):
+        if isinstance(item, dict) and "rows" in item:
+            label = str(item.get("source") or item.get("label") or f"external_cad_{index}")
+            rows = item["rows"]
+        else:
+            label = f"external_cad_{index}"
+            rows = item
+        normalized.append((label, rows))
+    return normalized
+
+
+def shape_volume_crosscheck_summary(reference_rows, measured_sets, rtol=1.0e-5):
+    """Return a volume-only crosscheck summary for one or more CAD sources.
+
+    ``reference_rows`` are usually build123d measurement rows. ``measured_sets``
+    can be ``{"cubit": rows, "external_cad": rows}`` or a list of
+    ``{"source": label, "rows": rows}`` dictionaries.  The summary is designed
+    for cross-validation artifacts where volume is the stable common contract
+    across CAD kernels; it does not publish or assume any private-tool
+    provenance.
+    """
+
+    reference = _normalize_volume_rows(reference_rows)
+    sets = []
+    all_rows = []
+    for label, rows in _normalize_volume_measurement_sets(measured_sets):
+        compared = compare_shape_volume_rows(
+            reference,
+            rows,
+            rtol=rtol,
+            measured_label=label,
+        )
+        passed = sum(1 for row in compared if row["passed"])
+        errors = [row["volume_rel_error"] or 0.0 for row in compared]
+        source_summary = {
+            "source": label,
+            "n_cases": len(compared),
+            "n_passed": passed,
+            "max_volume_rel_error": max(errors) if errors else 0.0,
+            "status": "ok" if passed == len(compared) else "needs_attention",
+            "rows": compared,
+        }
+        sets.append(source_summary)
+        all_rows.extend(compared)
+
+    failed = [row for row in all_rows if not row["passed"]]
+    all_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
+    return {
+        "policy": "build123d_external_cad_volume_crosscheck",
+        "status": "ok" if not failed else "needs_attention",
+        "ok_for_cad_roundtrip_volume": not failed,
+        "rtol": float(rtol),
+        "n_reference_rows": len(reference),
+        "n_sources": len(sets),
+        "n_failed_rows": len(failed),
+        "max_volume_rel_error": max(all_errors) if all_errors else 0.0,
+        "sources": [item["source"] for item in sets],
+        "comparison_sets": sets,
+    }
 
 
 def shape_measurement_comparison_summary(
