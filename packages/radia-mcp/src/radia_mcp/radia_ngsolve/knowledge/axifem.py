@@ -683,6 +683,9 @@ The Mathematica derivation lives upstream at
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
 
 Comprehensive design + theory documentation: `docs/axifem/AXIFEM.md`.
+
+`docs/axifem/README.ipynb` and `docs/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb`: executed element
+evidence notebooks (P1, Q1, P2, Q2, P2-curved, Q2-curved all run + regression-gated).
 """
 
 AXIFEM_KELVIN = """\
@@ -782,7 +785,7 @@ axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
 axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %
 ```
 
-Test: `examples/CLN/scripts/axifem/test_p2_kelvin_sphere.py`.
+Test: `examples/maglev/research_cln/axifem/test_p2_kelvin_sphere.py`.
 
 ## Critical gotchas
 

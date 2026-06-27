@@ -213,7 +213,7 @@ the tangential component, numerical errors in A_scat do not corrupt H_t.
 - Steel (R/delta 2.8 to 62.8): -2.9% to -1.0%
 - **All conditions: error < 3%**
 
-See `docs/FEM_SCATTERED_FIELD.md` for full derivation and validation table.
+See `docs/eddy_current_analytical_validation/validation_suite.ipynb (SHOWCASE NOTEBOOK)` for full derivation and validation table.
 
 **Limitation for coil problem**: When A_inc comes from a FEM solve (GridFunction,
 not exact CF), subtraction cancellation (A_scat ~ -A_inc on SIBC, 85% for Cu)

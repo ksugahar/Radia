@@ -700,7 +700,6 @@ KEY_FILES = r"""
 | `cln_type_i.pdf`, `cln_type_ii.pdf`               | Reference circuit diagrams          |
 | `docs/2021_01_22_CauerIからCauerIIの変形.docx`     | Original derivation memo            |
 | `docs/2021_04_23_CauerIからCauerIIの変形.docx`     | Updated derivation (post analytic)  |
-| `docs/Cauer1.pdf`, `docs/Cauer2.pdf`              | Schematic references                |
 | `熱伝導/E0_mode_analytical_Hiruma.m`               | Thermal CauerI on disk (Hiruma)     |
 
 ## Endo @ Hosei (2022_10_09)

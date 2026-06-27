@@ -159,7 +159,7 @@ For mesh-imported hexahedra, use `radia.netgen_mesh_to_radia()`.
 - `src/core/rad_polyhedron.cpp` — element dispatch
 - `src/core/rad_poly_analytical.cpp` — triangle/quad integration
 - `src/core/rad_interaction.cpp` — interaction matrix
-- See `docs/MSC_QUICK_START.md` and `radia_mcp.radia_ngsolve.radia_usage`
+- See `radia_mcp.radia_ngsolve.radia_usage`
 """
 
 
