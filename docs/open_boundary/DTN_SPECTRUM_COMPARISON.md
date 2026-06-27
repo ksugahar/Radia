@@ -9,10 +9,10 @@ open-boundary closure compared on **one yardstick — the per-multipole Dirichle
 ```
 
 across the three regimes, with the measured numbers reproduced in-repo by
-[`examples/kelvin_transformation/DtN_spectrum/act7_22_dtn_spectrum_consolidated.py`](../../examples/kelvin_transformation/DtN_spectrum/act7_22_dtn_spectrum_consolidated.py)
+[archived `act7_22_dtn_spectrum_consolidated.py`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)
 (data: `act7_22_dtn_spectrum_consolidated.json`; figure: `…​.pdf`). It consolidates the
-scattered per-regime measurements — static [`act7_21`](../../examples/kelvin_transformation/DtN_spectrum/act7_21_lowfreq_openbc_4way.py),
-eddy [`act6_09`](../../examples/kelvin_transformation/DtN_spectrum/act6_09_cln_vs_pml.py),
+scattered per-regime measurements — static [`act7_21`](../kelvin/kelvin_dtn_spectrum_archive.ipynb),
+eddy [`act6_09`](../kelvin/kelvin_dtn_spectrum_archive.ipynb),
 high-frequency `act7_01`/`act7_07` — into one table.
 
 ## Why the DtN-spectral defect (the lens)
@@ -122,7 +122,7 @@ The scalar infinite element (`act7_25`, the `H1` / 0-form end) extends to a **de
 (exact-sequence) infinite element** — the `H1 → H(curl) → H(div) → L2` complex on the exterior, with
 the radial decay families shifted by **+1 per form degree** (`S0 = {n+1..n+P}`, `S1 = S0+1`,
 `S2 = S0+2`, `S3 = S0+3`) chosen so that grad / curl / div **commute** (the commuting diagram).
-[`act7_26_derham_infinite_element`](../../examples/kelvin_transformation/DtN_spectrum/act7_26_derham_infinite_element.py)
+[`act7_26_derham_infinite_element`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)
 verifies the diagram **exactly with sympy** (`grad(V0) ⊂ V1`, `curl(V1) ⊂ V2`, `div(V2) ⊂ V3` with
 explicit structure constants; `curl∘grad = 0`, `div∘curl = 0`), the toroidal / div closure resting on
 the Legendre angular eigenvalue `−n(n+1)`. This is the construction of **Demkowicz & Pal**, *An
@@ -151,7 +151,7 @@ decay-basis IE (whose basis `(a/r)^k` contains the one Trefftz function `r^{−(
 trivially. The trade is **no free lunch**: sparse ⇒ approximate (Kelvin's FE floor; the IE's order-`P`
 cutoff), exact ⇒ dense (BEM / pure-Trefftz multipole).
 
-**Build decision (Gate 1, [`act7_27`](../../examples/kelvin_transformation/DtN_spectrum/act7_27_ie_vs_kelvin_vs_pml_gate1.py)).**
+**Build decision (Gate 1, [`act7_27`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)).**
 Before committing to a C++ infinite element, the honest rival is **not Kelvin but box-PML** —
 NGSolve's `pml.Cartesian` / `BrickRadial` *also* escapes the Liouville sphere-lock. Measured:
 on exterior-DOF vs aspect ratio `AR = L/d`, **Kelvin scales `AR²`** (sphere-lock — it must enclose
@@ -163,7 +163,7 @@ needs an *orthogonalized* basis, and a cheap 1-D proxy does **not** establish an
 over box-PML. **Verdict: no clean GO** — prefer box-PML (complement NGSolve, do not reimplement),
 *unless* the IE basis is orthogonalized **and** IE-vs-box-PML is settled on a real 3-D model first.
 
-**Fair re-test on the DtN yardstick ([`act7_28`](../../examples/kelvin_transformation/DtN_spectrum/act7_28_ie_vs_kelvin_fair_dtn.py)).**
+**Fair re-test on the DtN yardstick ([`act7_28`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)).**
 Gate 1 above compared the IE against box-PML but never put IE and **Kelvin** on the same per-mode
 `d_n`. Doing so reveals they are the **same method on the sphere**: the Kelvin inversion `ξ = a²/r`
 maps `r^{−(n+1)}` to the polynomial `ξ^{n+1}`, and the IE decay-matrix `A_kl = a(kl+n(n+1))/((k+l)−1)`

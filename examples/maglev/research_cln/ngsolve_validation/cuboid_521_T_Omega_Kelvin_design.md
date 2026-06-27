@@ -180,8 +180,9 @@ for n in range(N_STAGES):
 - `docs/cln/CAUER_LADDER_NETWORK.md` §6 — CLN + Kelvin 接続、T-Ω 推奨
 - `packages/radia-mcp/.../cln_notebooks/CLN_T_Omega.py` — Tanimoto T-Ω 実装
   (Kelvin なし、ベース)
-- `examples/kelvin_transformation/H-formulation/3D_dipole_with_Kelvin.py` —
-  H-formulation Kelvin 例 (Ω-style, scalar pullback の参考)
+- `docs/kelvin/kelvin_classic_demos.ipynb` /
+  `docs/kelvin/kelvin_classic_demos_results.json` —
+  archived H-formulation Kelvin 例 (Ω-style, scalar pullback の参考)
 
 ## 10. 結論
 

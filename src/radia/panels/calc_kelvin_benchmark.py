@@ -186,8 +186,8 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
     f += Mu * grad(gfOmega) * grad(v) * dx("air")
     f.Assemble()
 
-    # Remove Dirichlet components from f.vec (matches base
-    # Omega_ReducedOmega.py:104-105 pattern).
+    # Remove Dirichlet components from f.vec (matches the archived
+    # classic Omega_ReducedOmega.py pattern).
     import numpy as _np
     fcut = _np.array(f.vec.FV())[fes.FreeDofs()]
     _np.array(f.vec.FV(), copy=False)[fes.FreeDofs()] = fcut

@@ -802,7 +802,7 @@ POLYNOMIAL error and drops you onto the geometry floor; curve the geometry (high
 isoparametric order, or a little h) to go below it.**  For the 2D cross-sections this
 committee studies (static apparatus / rotating machines) the floor is deeper still --
 the closure is even MORE p-favorable in 2D than the 3D-sphere numbers suggest.
-(Scripts: examples/kelvin_transformation/DtN_spectrum/act0_02_p_vs_h_study.py is the 3D
+(Scripts: archived `act0_02_p_vs_h_study.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) is the 3D
 sweep; the 2D numbers are kelvin_dtn_eigenvalue(dim=2).)
 
 ## PROOF the floor IS geometry: hold p>=n + mesh, raise ONLY the Curve order
@@ -821,7 +821,7 @@ k=3 drops the error ~1000x to the 5-6 digit floor -- with the polynomial image a
 the FE order p UNTOUCHED.  That isolates the floor as curved-sphere geometry: a flat
 truncation is ~1% off, an isoparametric (curved) one reaches 5-6 digits.  (Past k>=3
 it plateaus ~1e-5: the residual conformal-weight quadrature / energy-quotient limit.)
-Script: examples/kelvin_transformation/DtN_spectrum/act2_03_floor_vs_curve.py.
+Script: archived `act2_03_floor_vs_curve.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).
 
 ## Connection to Cauer Ladder Network (CLN): both are spectral closures
 
@@ -857,7 +857,7 @@ refining the EXTERIOR (Kelvin-ball) VOLUME mesh does NOTHING for the open-BC acc
 
 PRACTICE: do not waste DOF refining the air-box interior.  Spend DOF on (i) order
 p>=n_src and (ii) the Gamma surface mesh/geometry; keep the exterior volume coarse.
-(Scripts: examples/kelvin_transformation/DtN_spectrum/act2_09_exterior_mesh.py and
+(Scripts: archived `act2_09_exterior_mesh.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) and
 act2_10_exterior_mesh3.py.)
 
 ## Polyhedral (flat) truncation: the faceting error SCALES WITH MULTIPOLE DEGREE
@@ -1159,7 +1159,7 @@ needs the source's TRUE c_n -- here a quartic onset gated by a 4-fold symmetry. 
 is also why the (R, p) optimum for a faceted source sits at finite R/a ~ 3 (P_METHOD
 topic) while a pure-dipole disk wants the smallest R.  (act1_02_multipole_spectrum.py
 reproduces the n == 1 mod 4 selection and the 4/15 constant; act1_04_optimal_R.py the
-radius optimum -- both in examples/kelvin_transformation/DtN_spectrum/.)
+radius optimum -- both in docs/kelvin/kelvin_dtn_spectrum_archive_results.json::.)
 
 ## Why Kelvin gives a clean, ANALYTIC, universal datasheet
 

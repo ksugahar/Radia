@@ -48,9 +48,8 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [kelvin/kelvin_examples_migration.ipynb](kelvin/kelvin_examples_migration.ipynb) - Result-bearing initial migration ledger for the 226 Kelvin example Python files, with JSON classification into docs / validation_test / src-api / memory lanes.
 - [kelvin/kelvin_classic_demos.ipynb](kelvin/kelvin_classic_demos.ipynb) - Result-bearing source map for 37 classic Kelvin formulation demos pruned from `examples/`, including representative excerpts and synchronized full-source JSON.
 - [kelvin/kelvin_adaptive_mesh_archive.ipynb](kelvin/kelvin_adaptive_mesh_archive.ipynb) - Result-bearing archive of AdaptiveMesh source snapshots before pruning/distillation.
-- [kelvin/kelvin_dtn_spectrum_archive.ipynb](kelvin/kelvin_dtn_spectrum_archive.ipynb) - Result-bearing archive of DtN-spectrum/open-boundary source snapshots before src/API or validation_test promotion.
 - [kelvin/kelvin_adaptive_mesh_archive.ipynb](kelvin/kelvin_adaptive_mesh_archive.ipynb) - Result-bearing full-source archive for 59 AdaptiveMesh scripts; the first 45 repetitive `order=*` runners were pruned after JSON/source-hash preservation.
-- [kelvin/kelvin_dtn_spectrum_archive.ipynb](kelvin/kelvin_dtn_spectrum_archive.ipynb) - Result-bearing full-source archive for 122 DtN-spectrum scripts, separating API/validation-locked scripts before any future pruning.
+- [kelvin/kelvin_dtn_spectrum_archive.ipynb](kelvin/kelvin_dtn_spectrum_archive.ipynb) - Result-bearing full-source archive for 122 DtN-spectrum scripts pruned from `examples/`; productionized behavior lives in `src/radia/open_boundary` and `validation_test/open_boundary`.
 
 ## PEEC (Partial Element Equivalent Circuit)
 

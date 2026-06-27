@@ -142,6 +142,16 @@ Full source text and source hashes are preserved in
 Validation and API-candidate scripts under this directory remain until
 their behavior is locked in `validation_test` or lifted into `src`.
 
+### DtN_spectrum
+
+The standalone DtN/open-boundary act scripts were promoted to
+[`docs/kelvin/kelvin_dtn_spectrum_archive.ipynb`](../../docs/kelvin/kelvin_dtn_spectrum_archive.ipynb)
+and pruned from `examples/`.  Full source text and SHA-256 hashes for
+all 122 scripts are preserved in
+[`docs/kelvin/kelvin_dtn_spectrum_archive_results.json`](../../docs/kelvin/kelvin_dtn_spectrum_archive_results.json).
+Productionized behavior lives in `src/radia/open_boundary` and
+`validation_test/open_boundary`.
+
 ### AdaptiveMesh
 
 Adaptive mesh refinement studies combining Kelvin transformation with ZZ error estimation, Doerfler marking, metric-based remeshing, and Laplacian smoothing.
