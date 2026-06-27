@@ -421,14 +421,32 @@ class _DemagMat(ng.BaseMatrix):
 class DemagOperator:
     """ngsolve.bem-style HDiv-type VIM demag operator.  Construct from an HDiv FESpace; `.mat` is the
     H-matrix-backed NGSolve BaseMatrix N = B^T G B.  See the module docstring for the idiom.  The CALLER
-    wraps construction + DemagFactor in `with TaskManager():`."""
+    wraps construction + DemagFactor in `with TaskManager():`.
+
+    gram_backend selects the charge-Gram H-matrix:
+      "analytic" (default) -- the exact analytic charge Gram (build_charge_gram); the per-pair entry cost is
+        O((3p)^6) at order p (the singular outer x inner subtraction quadrature), so the BUILD explodes with p.
+      "gauss" -- the Gauss POINT operator (build_charge_gauss): G ~= P^T K_point P + sparse near correction,
+        the cheap-1/r point H-matrix carrying the far field, the analytic entry used ONLY on the O(N) near
+        pairs.  Validated to match "analytic" demag to ~1e-4 at p<=2 (qpts/gauss_near_factor control the
+        accuracy).  Aimed at the high-order / curved regime where the analytic build is the bottleneck.
+    Both backends produce the SAME B / M_mass and a backend-agnostic `.mat` (N = B^T G B); DemagFactor and
+    the NGSolve-composability are identical."""
 
     def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
-                 far_quad=3, ho_far_factor=2.0, inner_quad=None):
+                 far_quad=3, ho_far_factor=2.0, inner_quad=None,
+                 gram_backend="analytic", qpts=3, gauss_near_factor=1.0):
+        if gram_backend not in ("analytic", "gauss"):
+            raise ValueError("DemagOperator: gram_backend must be 'analytic' or 'gauss' (got %r)" % (gram_backend,))
         self.space = fes
-        self._B, self._G, self._Mmass = build_charge_gram(
-            fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
-            far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad)
+        self.gram_backend = gram_backend
+        if gram_backend == "gauss":
+            self._B, self._G, self._Mmass = build_charge_gauss(
+                fes, qpts=qpts, near_factor=gauss_near_factor, eps=eps, leafsize=leafsize, eta=eta)
+        else:
+            self._B, self._G, self._Mmass = build_charge_gram(
+                fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
+                far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad)
         self.mat = _DemagMat(fes, self._B, self._G)
 
     @property
