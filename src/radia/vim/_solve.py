@@ -380,7 +380,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=None, far_quad=None, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
                      linear_solver="auto", hlu_trunc_tol=1e-8,
-                     gram_backend="analytic", gauss_near_factor=2.0, order=0):
+                     gram_backend="analytic", gauss_near_factor=2.0, order=0,
+                     curve_order=None, curve_gauss=8):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
@@ -428,10 +429,10 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     # The LINEAR (uniform-scalar OR per-region dict) mu_r case is wired through the same all-C++ symmetric
     # mass-Riesz CG as RT0; the not-yet-wired order>0 combos (image / PM-mixed / nonlinear / HLU / gauss) fail
     # loud in _solve_highorder (No-Fallbacks).  Golden: tests/feec/test_hdiv_vim_highorder_solve*.
-    if int(order) != 0:
+    if int(order) != 0 or curve_order is not None:
         return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
                                 gram_backend, gram_eps, leaf, eta, near_factor, far_quad, tol, maxit,
-                                gmres_restart)
+                                gmres_restart, curve_order, curve_gauss)
 
     # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
@@ -621,7 +622,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
 
 
 def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_solver, gram_backend,
-                     gram_eps, leaf, eta, near_factor, far_quad, tol, maxit, gmres_restart):
+                     gram_eps, leaf, eta, near_factor, far_quad, tol, maxit, gmres_restart,
+                     curve_order=None, curve_gauss=8):
     """order>0 (high-order HDiv) soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -656,9 +658,20 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     eff_eps = gram_eps if gram_eps is not None else 1e-10
     eff_far = far_quad if far_quad is not None else 3
     eff_hofar = near_factor if near_factor is not None else 2.0
-    fes = ng.HDiv(mesh, order=order)
-    B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
-                                     far_quad=eff_far, ho_far_factor=eff_hofar)
+    if curve_order is not None:
+        # CURVED (isoparametric P2) demag solve: curve the geometry, then the curved-Duffy charge Gram.  Curved
+        # helps NEAR-SURFACE FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the volume-
+        # averaged demag FACTOR (curving-insensitive ~3e-5 on a sphere; [[hdiv-vim-sauter-schwab-cg]] de-risk).
+        if int(curve_order) != 2:
+            raise NotImplementedError("hdiv_demag_solve: only curve_order=2 (isoparametric P2) is wired.")
+        mesh.Curve(int(curve_order))
+        fes = ng.HDiv(mesh, order=order)
+        B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
+                                         curve_order=int(curve_order), curve_gauss=int(curve_gauss))
+    else:
+        fes = ng.HDiv(mesh, order=order)
+        B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
+                                         far_quad=eff_far, ho_far_factor=eff_hofar)
     Mm = sp.csr_matrix(M_mass); B = sp.csr_matrix(B)
     n_face = fes.ndof; n_el = mesh.GetNE(ng.VOL); n_charge = B.shape[0]
     gfH = ng.GridFunction(fes); gfH.Set(H_ext); h_ext = gfH.vec.FV().NumPy().copy()
@@ -695,7 +708,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     M_avg = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol
     out = dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
                n_charge=n_charge, nonlinear=False, linear_solver=solver_used,
-               gram_backend=gram_backend, order=int(order))
+               gram_backend=gram_backend, order=int(order), curve_order=curve_order)
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
     return out

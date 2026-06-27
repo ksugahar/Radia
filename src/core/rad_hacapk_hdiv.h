@@ -207,6 +207,25 @@ public:
                         double ho_far_factor = 1e30,
                         std::vector<double> ref_tet_pts_in = {}, std::vector<double> ref_tet_w_in = {},
                         std::vector<double> ref_tri_pts_in = {}, std::vector<double> ref_tri_w_in = {});
+
+    // CURVED HIGH-ORDER mode (isoparametric P2, curve_order=2): the same monomial-charge Gram as the flat HO
+    // mode above, but on a CURVED (mesh.Curve(2)) geometry -- the boundary surface charge sigma=M.n and the
+    // volume charge live on the true curved element.  cell_nodes [n_cell*30] = 10 P2 nodes/tet (corners
+    // 0..3, mid-edges 4=(0-1),5=(1-2),6=(2-0),7=(0-3),8=(1-3),9=(2-3)); face_nodes [n_bf*18] = 6 P2 nodes/tri
+    // (corners 0..2, mid-edges 3=(0-1),4=(1-2),5=(2-0)).  charge_host/kind/expo: the monomial is in the
+    // NGSolve REFERENCE frame (the Python charge map B uses the SAME reference-frame change-of-basis, so B and
+    // G share the basis).  The OUTER quadrature maps the reference Gauss-Duffy points (ref_tet_pts/ref_tri_pts)
+    // through the curved P2 map X(xi) + curved measure (CurvedTet/TriMapMeasure), folding xi^expo at the
+    // REFERENCE point; the INNER potential is ALWAYS the curved Duffy (rad_hdiv::CurvedTet/TriPotential, gl/gw
+    // = an nq-point Gauss-Legendre rule on [0,1]).  No analytic moments (curved has none), no inner-subtraction
+    // table, no near/far split.  ROLE (de-risked 2026-06-28): curved helps NEAR-SURFACE FIELD / FLUX accuracy
+    // (sigma on the true curved surface), NOT the volume-averaged demag FACTOR (which is curving-insensitive on
+    // a sphere, ~3e-5).  Accuracy is the Duffy ~1e-3..1e-5 (the order>=3 conditioning caveat applies on curved).
+    RadHACApKChargeGram(std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
+                        std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                        std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                        std::vector<double> curve_gl, std::vector<double> curve_gw);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -316,6 +335,15 @@ private:
     bool m_polytope = false;
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 3>>> m_srcTris;  // [n] source triangle soup per charge
 
+    // CURVED HIGH-ORDER (isoparametric P2) mode: m_curved sets m_highorder=true too (the QuadDot/PhiInner path
+    // is shared); PhiInner -> PhiAtHO_Curved (always the curved Duffy).  m_cellNodes [n_cell*30] / m_faceNodes
+    // [n_bf*18] hold the P2 high-order nodes; m_gl/m_gw the curved Duffy Gauss rule.  No analytic moments, no
+    // inner-subtraction table, no near/far split (m_ho_far_factor stays 1e30).
+    bool m_curved = false;
+    int  m_curve_order = 0;
+    std::vector<double> m_cellNodes, m_faceNodes;      // [n_cell*30] (P2 tet), [n_bf*18] (P2 tri)
+    std::vector<double> m_gl, m_gw;                    // curved Duffy Gauss-Legendre rule on [0,1]
+
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
     std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
@@ -337,7 +365,8 @@ private:
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2
     double PhiAtHO_Analytic(int src, const double p[3]) const; // EXACT analytic poly-charge potential (moment kernels, flat order<=2; machine precision, all pair types)
     double PhiAtHO_Duffy(int src, const double p[3]) const;    // Duffy singular-quadrature poly-charge potential (order>=3 / curved; ~1e-4)
-    double PhiInner(int src, const double p[3]) const;        // dispatch: analytic moments (charge deg<=2) else Duffy
+    double PhiAtHO_Curved(int src, const double p[3]) const;   // CURVED isoparametric Duffy (rad_hdiv::CurvedTet/TriPotential at the host's P2 nodes)
+    double PhiInner(int src, const double p[3]) const;        // dispatch: curved Duffy (m_curved) else analytic moments (charge deg<=2) else flat Duffy
     double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
 };
 

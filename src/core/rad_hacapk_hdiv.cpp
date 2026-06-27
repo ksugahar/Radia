@@ -708,6 +708,111 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     }
 }
 
+// ---- CURVED HIGH-ORDER (isoparametric P2) constructor: monomial-charge Gram on a mesh.Curve(2) geometry. ----
+// Mirrors the flat HO build but uses the curved P2 map + curved measure for the OUTER quad (xi^expo folded at
+// the REFERENCE point, no affine inverse) and the curved Duffy for the INNER potential (PhiInner -> PhiAtHO_
+// Curved).  No analytic moments / inner-subtraction table / near-far split (m_ho_far_factor stays 1e30).
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
+    std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+    std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+    std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+    std::vector<double> curve_gl, std::vector<double> curve_gw)
+    : m_n_el(n_el), m_curved(true), m_curve_order(curve_order),
+      m_cellNodes(std::move(cell_nodes)), m_faceNodes(std::move(face_nodes)),
+      m_gl(std::move(curve_gl)), m_gw(std::move(curve_gw)),
+      m_highorder(true),
+      m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
+{
+    const int n_cell = n_el;
+    const int n_bf   = (int)(m_faceNodes.size() / 18);
+    m_n = (int)m_host.size();
+    { static std::atomic<long long> s_id{0}; m_build_id = s_id.fetch_add(1) + 1; }
+    m_nmono.assign(m_n, 1);
+    {
+        std::unordered_map<long long, int> cnt;
+        for (int a = 0; a < m_n; ++a) cnt[(long long)m_host[a]*2 + m_kind[a]]++;
+        for (int a = 0; a < m_n; ++a) m_nmono[a] = cnt[(long long)m_host[a]*2 + m_kind[a]];
+    }
+    const int nqt = (int)ref_tet_w.size();
+    const int nqr = (int)ref_tri_w.size();
+
+    // per-HOST curved outer quad: physical points X(xi_q) + curved measure (ref_w * dV/dA, monomial folded
+    // per-charge below); centroid + bounding radius from the P2 nodes (cluster-tree point / near-size).
+    std::vector<std::vector<rad_hdiv::Vec3>> cellQP(n_cell), faceQP(n_bf);
+    std::vector<std::vector<double>>          cellM(n_cell),  faceM(n_bf);
+    std::vector<rad_hdiv::Vec3> cellCent(n_cell), faceCent(n_bf);
+    std::vector<double>         cellSize(n_cell), faceSize(n_bf);
+    for (int c = 0; c < n_cell; ++c) {
+        const double (*nd)[3] = (const double(*)[3])&m_cellNodes[(size_t)c*30];
+        cellQP[c].resize(nqt); cellM[c].resize(nqt);
+        for (int q = 0; q < nqt; ++q) {
+            double X[3], dV;
+            rad_hdiv::CurvedTetMapMeasure(nd, ref_tet_pts[3*q], ref_tet_pts[3*q+1], ref_tet_pts[3*q+2], X, dV);
+            cellQP[c][q] = { X[0], X[1], X[2] };
+            cellM[c][q]  = ref_tet_w[q] * dV;
+        }
+        rad_hdiv::Vec3 cen = {0, 0, 0};
+        for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) cen[k] += nd[i][k] / 4.0;
+        cellCent[c] = cen;
+        double rmax = 0.0;
+        for (int i = 0; i < 10; ++i) {
+            const double dx = nd[i][0]-cen[0], dy = nd[i][1]-cen[1], dz = nd[i][2]-cen[2];
+            const double rr = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (rr > rmax) rmax = rr;
+        }
+        cellSize[c] = rmax;
+    }
+    for (int f = 0; f < n_bf; ++f) {
+        const double (*nd)[3] = (const double(*)[3])&m_faceNodes[(size_t)f*18];
+        faceQP[f].resize(nqr); faceM[f].resize(nqr);
+        for (int q = 0; q < nqr; ++q) {
+            double X[3], dA;
+            rad_hdiv::CurvedTriMapMeasure(nd, ref_tri_pts[2*q], ref_tri_pts[2*q+1], X, dA);
+            faceQP[f][q] = { X[0], X[1], X[2] };
+            faceM[f][q]  = ref_tri_w[q] * dA;
+        }
+        rad_hdiv::Vec3 cen = {0, 0, 0};
+        for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) cen[k] += nd[i][k] / 3.0;
+        faceCent[f] = cen;
+        double rmax = 0.0;
+        for (int i = 0; i < 6; ++i) {
+            const double dx = nd[i][0]-cen[0], dy = nd[i][1]-cen[1], dz = nd[i][2]-cen[2];
+            const double rr = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (rr > rmax) rmax = rr;
+        }
+        faceSize[f] = rmax;
+    }
+
+    // per-CHARGE: outer points = host's curved quad points; weight = host measure * monomial(xi_q) at the
+    // REFERENCE point (curved uses the ref pt directly -- no affine inverse / EvalMono).
+    m_cent.assign((size_t)m_n*3, 0.0);
+    m_size.assign((size_t)m_n, 0.0);
+    m_qp.resize(m_n); m_qw.resize(m_n);
+    for (int a = 0; a < m_n; ++a) {
+        const int host = m_host[a];
+        const bool isCell = (m_kind[a] == 0);
+        const std::vector<rad_hdiv::Vec3>& QP = isCell ? cellQP[host] : faceQP[host];
+        const std::vector<double>&         QM = isCell ? cellM[host]  : faceM[host];
+        const rad_hdiv::Vec3& cen = isCell ? cellCent[host] : faceCent[host];
+        m_cent[3*a] = cen[0]; m_cent[3*a+1] = cen[1]; m_cent[3*a+2] = cen[2];
+        m_size[a] = isCell ? cellSize[host] : faceSize[host];
+        const int* e = &m_expo[(size_t)3*a];
+        m_qp[a] = QP;
+        m_qw[a].resize(QP.size());
+        for (int q = 0; q < (int)QP.size(); ++q) {
+            double mono;
+            if (isCell) {
+                mono = rad_ipow(ref_tet_pts[3*q], e[0]) * rad_ipow(ref_tet_pts[3*q+1], e[1])
+                     * rad_ipow(ref_tet_pts[3*q+2], e[2]);
+            } else {
+                mono = rad_ipow(ref_tri_pts[2*q], e[0]) * rad_ipow(ref_tri_pts[2*q+1], e[1]);
+            }
+            m_qw[a][q] = QM[q] * mono;
+        }
+    }
+}
+
 // monomial m_charge at physical point p, via the host's REFERENCE barycentric coords (extrapolates for p
 // outside the host -- the subtraction needs m_src(p) at the target's outer points)
 double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
@@ -882,10 +987,28 @@ double RadHACApKChargeGram::PhiAtHO_Duffy(int src, const double p[3]) const
     return acc;
 }
 
-// Dispatch the high-order inner potential: the EXACT analytic moment kernels where they suffice (charge
-// degree<=2: a tet up to degree 1, a face up to degree 2), else the Duffy singular quadrature (order>=3).
+// CURVED (isoparametric P2) inner potential: the curved Duffy at the host's P2 nodes (the monomial is in the
+// REFERENCE frame, so CurvedTet/TriPotential -- which fold xi^e and the curved measure -- is the full potential
+// of source charge src at p).  No analytic moments exist on a curved element; this is the SOLE curved path.
+double RadHACApKChargeGram::PhiAtHO_Curved(int src, const double p[3]) const
+{
+    const int host = m_host[src];
+    const int* e = &m_expo[(size_t)3*src];
+    const int nq = (int)m_gl.size();
+    if (m_kind[src] == 0) {
+        const double (*nd)[3] = (const double(*)[3])&m_cellNodes[(size_t)host*30];
+        return rad_hdiv::CurvedTetPotential(nd, e[0], e[1], e[2], p, m_gl.data(), m_gw.data(), nq);
+    }
+    const double (*nd)[3] = (const double(*)[3])&m_faceNodes[(size_t)host*18];
+    return rad_hdiv::CurvedTriPotential(nd, e[0], e[1], p, m_gl.data(), m_gw.data(), nq);
+}
+
+// Dispatch the high-order inner potential: CURVED -> the curved Duffy; else FLAT -> the EXACT analytic moment
+// kernels where they suffice (charge degree<=2: a tet up to degree 1, a face up to degree 2), else the flat
+// Duffy singular quadrature (order>=3).
 double RadHACApKChargeGram::PhiInner(int src, const double p[3]) const
 {
+    if (m_curved) return PhiAtHO_Curved(src, p);
     const int* e = &m_expo[(size_t)3*src];
     const int deg = e[0] + e[1] + e[2];
     const bool analytic_ok = (m_kind[src] == 0) ? (deg <= 1) : (deg <= 2);
