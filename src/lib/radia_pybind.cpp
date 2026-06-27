@@ -3060,6 +3060,14 @@ double CurvedTriPotentialProbe(const std::vector<double>& nodes, int e0, int e1,
     for (int k = 0; k < 3; ++k) pp[k] = p[k];
     return rad_hdiv::CurvedTriPotential(nn, e0, e1, pp, gl.data(), gw.data(), (int)gl.size());
 }
+double CurvedTetPotentialProbe(const std::vector<double>& nodes, int e0, int e1, int e2,
+                               const std::vector<double>& p, const std::vector<double>& gl,
+                               const std::vector<double>& gw) {
+    double nn[10][3], pp[3];
+    for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) nn[i][k] = nodes[3*i+k];
+    for (int k = 0; k < 3; ++k) pp[k] = p[k];
+    return rad_hdiv::CurvedTetPotential(nn, e0, e1, e2, pp, gl.data(), gw.data(), (int)gl.size());
+}
 std::vector<double> TetVolFieldLinearProbe(const std::vector<double>& V, const std::vector<double>& r,
                                            double rho0, const std::vector<double>& g) {
     double Vv[4][3], rr[3], gg[3], out[3];
@@ -3194,6 +3202,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
           py::arg("nodes"), py::arg("e0"), py::arg("e1"), py::arg("p"), py::arg("gl"), py::arg("gw"),
           "CURVED P2 triangle surface-charge potential INT xi^e0 eta^e1 /|p-X(xi)| dA_curved via the "
           "reference Duffy (nodes=18 P2 nodes row-major, p=3, gl/gw = nq-pt Gauss-Legendre on [0,1]).");
+    m.def("_hdiv_curved_tet_potential", &radia_hdivvim::CurvedTetPotentialProbe,
+          py::arg("nodes"), py::arg("e0"), py::arg("e1"), py::arg("e2"), py::arg("p"), py::arg("gl"), py::arg("gw"),
+          "CURVED P2 tetrahedron volume-charge potential INT xi^e0 eta^e1 zeta^e2 /|p-X(xi)| dV_curved via the "
+          "reference Duffy (nodes=30 P2 nodes row-major, p=3, gl/gw = nq-pt Gauss-Legendre on [0,1]).");
     m.def("_hdiv_tet_volfield_linear", &radia_hdivvim::TetVolFieldLinearProbe,
           py::arg("V"), py::arg("r"), py::arg("rho0"), py::arg("g"),
           "Linear volume-charge field (V=12, r=3, rho0 scalar, g=3) -> 3-vector.  == tet_volume_field_linear.");
