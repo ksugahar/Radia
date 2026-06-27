@@ -19,10 +19,14 @@ Public API (validated solve primitives):
       -> (M_avg, n_iter, D): damped Newton on the C++ scalable charge-Gram operator (fail-loud).
   Gram building block: tri_potential (the exact flat-triangle potential).
 
-  ngsolve.bem-STYLE API (._vim): DemagOperator(fes, intorder=, eps=) -- construct from an HDiv FESpace
-      (the order comes from the fes); `.mat` is the H-matrix-backed NGSolve BaseMatrix N = B^T G B, which
-      composes with NGSolve's solvers / BlockMatrix exactly like ngsolve.bem's SingleLayerPotentialOperator.
-      order=0 (RT0) and order=p go through ONE call.  `.DemagFactor(M_cf)` -> the demag factor (~1/3).
+  ngsolve.bem-STYLE API (._vim): DemagOperator(fes, intorder=, eps=, gram_backend=) -- construct from an
+      HDiv FESpace (the order comes from the fes); `.mat` is the H-matrix-backed NGSolve BaseMatrix
+      N = B^T G B, which composes with NGSolve's solvers / BlockMatrix exactly like ngsolve.bem's
+      SingleLayerPotentialOperator.  order=0 (RT0) and order=p go through ONE call.  `.DemagFactor(M_cf)`
+      -> the demag factor (~1/3).  gram_backend="analytic" (default, exact analytic Gram) or "gauss"
+      (the Gauss POINT operator build_charge_gauss: P^T K_point P + sparse near correction -- the cheap-1/r
+      far field + analytic only on O(N) near pairs, for the high-order / curved regime where the analytic
+      per-pair build O((3p)^6) dominates; qpts / gauss_near_factor control accuracy, ~1e-4 at p<=2).
 
 NOTE: importing this package imports `radia` (the C++ core).  The NGSolve-side HDiv-VIM solve itself does
 not require the C++ core, but the production home is the radia package.
@@ -38,7 +42,7 @@ from ._nonlinear import (  # noqa: F401
     solve_nonlinear_newton,
     solve_nonlinear_newton_scalable,
 )
-from ._vim import DemagOperator, build_charge_gram  # noqa: F401  (ngsolve.bem-style operator + .mat)
+from ._vim import DemagOperator, build_charge_gram, build_charge_gauss  # noqa: F401  (ngsolve.bem-style operator + .mat)
 from ._solve import hdiv_demag_solve  # noqa: F401  (M1 production entry: linear soft-iron demag solve)
 from ._radsolve import soft_iron_from_mesh, soft_iron_from_vol  # noqa: F401  (.vol/mesh -> both-backend iron)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
@@ -79,7 +83,8 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
 __all__ = [
     "build_demag", "tri_potential", "build_near_correction", "C_TRI",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable",
-    "DemagOperator", "build_charge_gram", "hdiv_demag_solve", "soft_iron_from_mesh", "soft_iron_from_vol",
+    "DemagOperator", "build_charge_gram", "build_charge_gauss", "hdiv_demag_solve",
+    "soft_iron_from_mesh", "soft_iron_from_vol",
     "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
     "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",
