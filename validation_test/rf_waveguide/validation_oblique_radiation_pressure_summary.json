@@ -1,0 +1,177 @@
+{
+  "area_m2": 0.75,
+  "checks": {
+    "angle_60_absorber_normal_over_angle_0": 0.25000000000000017,
+    "angle_60_absorber_tangential_force_N": 1.2999374110438676e-08,
+    "max_force_component_abs_error_N": 1.3234889800848443e-23,
+    "normal_incidence_force_N": 3.002076856783368e-08,
+    "reflector_tangential_force_max_abs_N": 0.0
+  },
+  "generated_at_utc": "2026-06-27T09:44:13Z",
+  "intensity_W_per_m2": 12.0,
+  "kind": "oblique_radiation_pressure_validation",
+  "rows": [
+    {
+      "absorber": {
+        "absorptance": 1.0,
+        "area_m2": 0.75,
+        "force_components_N": {
+          "normal": 3.002076856783368e-08,
+          "tangent": 0.0
+        },
+        "incidence_angle_deg": 0.0,
+        "incidence_angle_rad": 0.0,
+        "incident_power_on_patch_W": 9.0,
+        "intensity_W_per_m2": 12.0,
+        "normal_force_N": 3.002076856783368e-08,
+        "normal_momentum_factor": 1.0,
+        "normal_pressure_Pa": 4.0027691423778243e-08,
+        "reflectance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "tangential_force_N": 0.0,
+        "tangential_momentum_factor": 1.0,
+        "tangential_pressure_Pa": 0.0,
+        "transmittance": 0.0
+      },
+      "angle_deg": 0.0,
+      "cos_angle": 1.0,
+      "expected_absorber_normal_force_N": 3.002076856783368e-08,
+      "expected_absorber_tangential_force_N": 0.0,
+      "expected_reflector_normal_force_N": 6.004153713566737e-08,
+      "normal_force_ratio_reflector_over_absorber": 2.0,
+      "reflector": {
+        "absorptance": 0.0,
+        "area_m2": 0.75,
+        "force_components_N": {
+          "normal": 6.004153713566737e-08,
+          "tangent": 0.0
+        },
+        "incidence_angle_deg": 0.0,
+        "incidence_angle_rad": 0.0,
+        "incident_power_on_patch_W": 9.0,
+        "intensity_W_per_m2": 12.0,
+        "normal_force_N": 6.004153713566737e-08,
+        "normal_momentum_factor": 2.0,
+        "normal_pressure_Pa": 8.005538284755649e-08,
+        "reflectance": 1.0,
+        "speed_m_per_s": 299792458.0,
+        "tangential_force_N": 0.0,
+        "tangential_momentum_factor": 0.0,
+        "tangential_pressure_Pa": 0.0,
+        "transmittance": 0.0
+      },
+      "sin_angle": 0.0
+    },
+    {
+      "absorber": {
+        "absorptance": 1.0,
+        "area_m2": 0.75,
+        "force_components_N": {
+          "normal": 2.251557642587526e-08,
+          "tangent": 1.2999374110438673e-08
+        },
+        "incidence_angle_deg": 29.999999999999996,
+        "incidence_angle_rad": 0.5235987755982988,
+        "incident_power_on_patch_W": 7.794228634059948,
+        "intensity_W_per_m2": 12.0,
+        "normal_force_N": 2.251557642587526e-08,
+        "normal_momentum_factor": 1.0,
+        "normal_pressure_Pa": 3.002076856783368e-08,
+        "reflectance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "tangential_force_N": 1.2999374110438673e-08,
+        "tangential_momentum_factor": 1.0,
+        "tangential_pressure_Pa": 1.733249881391823e-08,
+        "transmittance": 0.0
+      },
+      "angle_deg": 30.0,
+      "cos_angle": 0.8660254037844387,
+      "expected_absorber_normal_force_N": 2.2515576425875267e-08,
+      "expected_absorber_tangential_force_N": 1.2999374110438675e-08,
+      "expected_reflector_normal_force_N": 4.5031152851750534e-08,
+      "normal_force_ratio_reflector_over_absorber": 2.0,
+      "reflector": {
+        "absorptance": 0.0,
+        "area_m2": 0.75,
+        "force_components_N": {
+          "normal": 4.503115285175052e-08,
+          "tangent": 0.0
+        },
+        "incidence_angle_deg": 29.999999999999996,
+        "incidence_angle_rad": 0.5235987755982988,
+        "incident_power_on_patch_W": 7.794228634059948,
+        "intensity_W_per_m2": 12.0,
+        "normal_force_N": 4.503115285175052e-08,
+        "normal_momentum_factor": 2.0,
+        "normal_pressure_Pa": 6.004153713566737e-08,
+        "reflectance": 1.0,
+        "speed_m_per_s": 299792458.0,
+        "tangential_force_N": 0.0,
+        "tangential_momentum_factor": 0.0,
+        "tangential_pressure_Pa": 0.0,
+        "transmittance": 0.0
+      },
+      "sin_angle": 0.49999999999999994
+    },
+    {
+      "absorber": {
+        "absorptance": 1.0,
+        "area_m2": 0.75,
+        "force_components_N": {
+          "normal": 7.505192141958426e-09,
+          "tangent": 1.2999374110438676e-08
+        },
+        "incidence_angle_deg": 59.99999999999999,
+        "incidence_angle_rad": 1.0471975511965976,
+        "incident_power_on_patch_W": 4.500000000000001,
+        "intensity_W_per_m2": 12.0,
+        "normal_force_N": 7.505192141958426e-09,
+        "normal_momentum_factor": 1.0,
+        "normal_pressure_Pa": 1.0006922855944567e-08,
+        "reflectance": 0.0,
+        "speed_m_per_s": 299792458.0,
+        "tangential_force_N": 1.2999374110438676e-08,
+        "tangential_momentum_factor": 1.0,
+        "tangential_pressure_Pa": 1.7332498813918236e-08,
+        "transmittance": 0.0
+      },
+      "angle_deg": 60.0,
+      "cos_angle": 0.5000000000000001,
+      "expected_absorber_normal_force_N": 7.505192141958424e-09,
+      "expected_absorber_tangential_force_N": 1.2999374110438676e-08,
+      "expected_reflector_normal_force_N": 1.5010384283916848e-08,
+      "normal_force_ratio_reflector_over_absorber": 2.0,
+      "reflector": {
+        "absorptance": 0.0,
+        "area_m2": 0.75,
+        "force_components_N": {
+          "normal": 1.501038428391685e-08,
+          "tangent": 0.0
+        },
+        "incidence_angle_deg": 59.99999999999999,
+        "incidence_angle_rad": 1.0471975511965976,
+        "incident_power_on_patch_W": 4.500000000000001,
+        "intensity_W_per_m2": 12.0,
+        "normal_force_N": 1.501038428391685e-08,
+        "normal_momentum_factor": 2.0,
+        "normal_pressure_Pa": 2.0013845711889135e-08,
+        "reflectance": 1.0,
+        "speed_m_per_s": 299792458.0,
+        "tangential_force_N": 0.0,
+        "tangential_momentum_factor": 0.0,
+        "tangential_pressure_Pa": 0.0,
+        "transmittance": 0.0
+      },
+      "sin_angle": 0.8660254037844386
+    }
+  ],
+  "schema": "radia.validation.rf_waveguide.validation_oblique_radiation_pressure.v1",
+  "speed_m_per_s": 299792458.0,
+  "validation_class": true,
+  "versions": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python_version": "3.12.10",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}

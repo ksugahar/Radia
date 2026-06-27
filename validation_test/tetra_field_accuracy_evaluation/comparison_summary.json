@@ -1,0 +1,52 @@
+{
+  "schema": "radia.validation.tetra_field_accuracy.summary.v1",
+  "generated_at_utc": "2026-06-27T15:53:18Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2",
+    "ngsolve_version": "6.2.2604",
+    "numpy_version": "2.4.6"
+  },
+  "inputs": {
+    "analytical_reference_results": true,
+    "solver_comparison_results": true,
+    "evaluation_results": true,
+    "ngsolve_reference_results": true
+  },
+  "analytical_reference": {
+    "count": 13,
+    "avg_percent": 1.49256869499686e-12,
+    "max_percent": 8.570446191805327e-12,
+    "min_percent": 1.9914308541488913e-14,
+    "std_percent": 2.317435372193621e-12
+  },
+  "radia_solver_comparison": {
+    "count": 13,
+    "avg_percent": 0.8575420391484876,
+    "max_percent": 2.9922326073443575,
+    "min_percent": 0.21538412238002103,
+    "std_percent": 0.8681276756392258
+  },
+  "legacy_ngsolve_extraction": {
+    "count": 12,
+    "avg_percent": 295.6335340647525,
+    "max_percent": 1579.470560283084,
+    "min_percent": 22.366847717907387,
+    "std_percent": 429.172098323944,
+    "status": "known_issue"
+  },
+  "ngsolve_reference": {
+    "vectors": 15,
+    "finite_vectors": 0,
+    "status": "review"
+  },
+  "checks": {
+    "analytical_reference_pass": true,
+    "radia_solver_comparison_pass": true,
+    "legacy_ngsolve_extraction_known_issue_recorded": true,
+    "ngsolve_reference_finite_values_recorded": 0
+  },
+  "overall_status": "PASS_WITH_KNOWN_ISSUES"
+}
