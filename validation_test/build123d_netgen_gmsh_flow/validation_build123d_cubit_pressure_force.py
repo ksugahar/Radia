@@ -6,8 +6,8 @@ applied to the named Netgen `.vol` boundaries and compared by face name.
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_force.py
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_force.py --vol C:\\temp\\box.vol
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_force.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_force.py --vol C:\\temp\\box.vol
 """
 
 from __future__ import annotations

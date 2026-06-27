@@ -10,8 +10,8 @@ contract for labelled segmented permanent-magnet rings:
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_halbach_region_sweep.py --quick
-    python examples/build123d_netgen_gmsh_flow/validation_halbach_region_sweep.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_halbach_region_sweep.py --quick
+    python validation_test/build123d_netgen_gmsh_flow/validation_halbach_region_sweep.py
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ SRC = REPO / "packages" / "radia-mcp" / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from _pipeline import run_pipeline_multi, save_record  # noqa: E402
+from radia_mcp.build123d.pipeline import run_pipeline_multi, save_record  # noqa: E402
 from radia_mcp.build123d.archetypes import (  # noqa: E402
     halbach_ring,
     parse_magnetization,

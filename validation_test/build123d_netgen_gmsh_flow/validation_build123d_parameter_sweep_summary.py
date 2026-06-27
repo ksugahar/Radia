@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_parameter_sweep_summary.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_parameter_sweep_summary.py
 
 This example creates a small 2 x 3 x h box sweep and turns the measurement rows
 into a design table before meshing or solver setup.  For this geometry,

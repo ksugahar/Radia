@@ -10,7 +10,7 @@ keeps only the worst comparison rows in the health report.
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_measurement_health.py --require-cubit
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_measurement_health.py --require-cubit
 """
 
 from __future__ import annotations
