@@ -364,8 +364,9 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> face_tris, std::vector<int> face_troff,
     std::vector<double> face_cent, std::vector<double> face_meas,
     int n_el, double near_factor,
-    std::vector<int> image_masks, std::vector<double> image_signs)
-    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_polytope(true),
+    std::vector<int> image_masks, std::vector<double> image_signs,
+    int far_quad)
+    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_far_quad(far_quad), m_polytope(true),
       m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs))
 {
     const int n_cell = n_el;
@@ -375,6 +376,11 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     m_meas.assign((size_t)m_n, 0.0);
     m_size.assign((size_t)m_n, 0.0);
     m_qp.resize(m_n); m_qw.resize(m_n); m_srcTris.resize(m_n);
+    if (m_far_quad > 0) { m_qpf.resize(m_n); m_qwf.resize(m_n); }   // low-order FAR rule on the sub-tets/sub-tris
+    // degree-2 symmetric rules (same as the tet/tri ctor): 4-pt tet (barycentric), 3-pt tri.
+    const double ta = 0.5854101966249685, tb = 0.1381966011250105;
+    const double TETF[4][4] = {{ta,tb,tb,tb},{tb,ta,tb,tb},{tb,tb,ta,tb},{tb,tb,tb,ta}};
+    const double TRIF[3][3] = {{2.0/3,1.0/6,1.0/6},{1.0/6,2.0/3,1.0/6},{1.0/6,1.0/6,2.0/3}};
 
     std::vector<double> ref_tet_pts, ref_tet_w;
     rad_gl4_duffy_tet(ref_tet_pts, ref_tet_w);          // 64-node Gauss-Duffy tet rule (shared)
@@ -410,6 +416,15 @@ RadHACApKChargeGram::RadHACApKChargeGram(
                 m_qp[c].push_back(P);
                 m_qw[c].push_back(ref_tet_w[q] * det6);     // phys weight = ref_w * |J|, sum over sub-tets = vol
             }
+            if (m_far_quad > 0) {           // 4-pt degree-2 FAR rule on this sub-tet (cen,T0,T1,T2); w=tvol/4
+                const double tvol = det6 / 6.0;
+                for (int q = 0; q < 4; ++q) {
+                    rad_hdiv::Vec3 P;
+                    for (int k = 0; k < 3; ++k)
+                        P[k] = TETF[q][0]*cen[k] + TETF[q][1]*T[0][k] + TETF[q][2]*T[1][k] + TETF[q][3]*T[2][k];
+                    m_qpf[c].push_back(P); m_qwf[c].push_back(0.25 * tvol);
+                }
+            }
         }
     }
     // --- FACES: Dunavant-5 per sub-triangle + store sub-tris for PhiAt ---
@@ -433,6 +448,13 @@ RadHACApKChargeGram::RadHACApKChargeGram(
                 for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) P[k] += RAD_DUN5[q][i] * T[i][k];
                 m_qp[a].push_back(P);
                 m_qw[a].push_back(RAD_DUN5[q][3] * area);
+            }
+            if (m_far_quad > 0) {           // 3-pt degree-2 FAR rule on this sub-triangle; w=area/3
+                for (int q = 0; q < 3; ++q) {
+                    rad_hdiv::Vec3 P = {0, 0, 0};
+                    for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) P[k] += TRIF[q][i] * T[i][k];
+                    m_qpf[a].push_back(P); m_qwf[a].push_back(area / 3.0);
+                }
             }
         }
     }
