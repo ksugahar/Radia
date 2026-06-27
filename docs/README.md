@@ -31,6 +31,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
 - [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
+- [tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb](tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb) - Result-bearing tetrahedron field-accuracy validation view synchronized with `validation_test/tetra_field_accuracy_evaluation/` JSON results.
 
 ## Multipole-Moment MMM
 
@@ -45,11 +46,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 - [KELVIN_TRANSFORMATION.md](kelvin/KELVIN_TRANSFORMATION.md) - Theory, API, workflow, and references for open boundary magnetostatics
 - [DTN_SPECTRUM_COARSE_MESH.md](kelvin/DTN_SPECTRUM_COARSE_MESH.md) - **Coarse-mesh accuracy as a DtN-spectrum property** (Kameari's coarse-mesh demonstration, reframed). The exterior Dirichlet-to-Neumann operator `Λ_ext` has the closed-form eigenvalue ladder `−(n+1)/R` (3D) / `−n/R` (2D); the discrete `Λ_h` already lands the low multipoles on that ladder on the coarsest mesh (dipole 0.07%), and the **isolated** Kelvin open-boundary error (~0.1%) sits ~45× below the interior FEM error — readable off the operator before any solve, and separated from the interior discretisation a field-refinement study conflates. Includes the BEM `Λ_h` spectrum, the Kelvin polynomial-image / order-threshold mechanism (mode `n` exact iff FEM order `≥ n`), the 2D static-apparatus / rotating-machine cross-section, and the real two-sphere periodic-Kelvin validation. Runnable layer: `dtn_coarse_mesh(topic=...)`.
-- [kelvin/kelvin_examples_migration.ipynb](kelvin/kelvin_examples_migration.ipynb) - Result-bearing initial migration ledger for the 226 Kelvin example Python files, with JSON classification into docs / validation_test / src-api / memory lanes.
-- [kelvin/kelvin_classic_demos.ipynb](kelvin/kelvin_classic_demos.ipynb) - Result-bearing source map for 37 classic Kelvin formulation demos pruned from `examples/`, including representative excerpts and synchronized full-source JSON.
-- [kelvin/kelvin_adaptive_mesh_archive.ipynb](kelvin/kelvin_adaptive_mesh_archive.ipynb) - Result-bearing archive of AdaptiveMesh source snapshots before pruning/distillation.
-- [kelvin/kelvin_adaptive_mesh_archive.ipynb](kelvin/kelvin_adaptive_mesh_archive.ipynb) - Result-bearing full-source archive for 59 AdaptiveMesh scripts; the first 45 repetitive `order=*` runners were pruned after JSON/source-hash preservation.
-- [kelvin/kelvin_dtn_spectrum_archive.ipynb](kelvin/kelvin_dtn_spectrum_archive.ipynb) - Result-bearing full-source archive for 122 DtN-spectrum scripts pruned from `examples/`; productionized behavior lives in `src/radia/open_boundary` and `validation_test/open_boundary`.
+- [kelvin/CONVENTION.md](kelvin/CONVENTION.md) - Canonical Kelvin material-factor convention used by the helpers and validation fixtures.
 
 ## PEEC (Partial Element Equivalent Circuit)
 
@@ -71,7 +68,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 ## Cauer Ladder Network (CLN)
 
 - [CAUER_LADDER_NETWORK.md](cln/CAUER_LADDER_NETWORK.md) - Foundational CLN (Tanimoto-Kameari method): iterative orthogonalization, Cauer-II ladder synthesis, three formulations (A-T, T-Ω, A-Φ), 2D / 3D variants, gauge / constraint options, Kelvin transformation coupling
-- **Mixed Galerkin (CLN + HOIBC)** — bulk CLN Krylov modes + HOIBC surface envelope, coupled via the Schur complement. Single conductor admittance Y(s) with **no `d` parameter** and wall-band error 0.001–0.33% (geometry dependent). Scripts: `examples/mixed_galerkin/`. **Superseded the Warburg-Schur termination as of 2026-06-12** (see `memory/project_warburg_schur_deprecated_2026_06_12.md` for the history).
+- **Mixed Galerkin (CLN + HOIBC)** — bulk CLN Krylov modes + HOIBC surface envelope, coupled via the Schur complement. Single conductor admittance Y(s) with **no `d` parameter** and wall-band error 0.001–0.33% (geometry dependent). Result notebook: `docs/mixed_galerkin/mixed_galerkin_results.ipynb`; reusable smooth-body references: `radia.maglev.mixed_galerkin.references`; remaining research scripts: `examples/mixed_galerkin/`. **Superseded the Warburg-Schur termination as of 2026-06-12** (see `memory/project_warburg_schur_deprecated_2026_06_12.md` for the history).
 - [BEM_CLN.md](cln/BEM_CLN.md) - Multi-conductor BEM-CLN: per-element polarizability + integral-equation coupling for N-conductor clusters (Paper 2, IH workpiece + coils, paired transformer windings)
 - [CLN_3D_CUBOID.md](cln/CLN_3D_CUBOID.md) - 3D Cu cuboid benchmark: HCurl FEM + BEM Cauer 3-way validation
 
@@ -79,14 +76,24 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 - [analytical_formulas.md](analytical_formulas.md) - Closed-form formulas covering Wakao-Igarashi-Fujiwara-Kameari Part 1-9 (IEE Japan SA / RM technical meetings, 2002-2007). Group B + C: ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular magnet, thin-plate eddy current, Fabri solenoid axial field, three-phase line (triangle / planar / helical), K(k) / E(k) Hastings approximations, Gauss-Legendre. Group D (Part 6/8/9 extensions): plate Joule dissipation, AC thin-shell shielding, magnetic-shell interior fields, planar surface impedance, full Bessel cylindrical-conductor AC impedance, Gauss-Patterson nested quadrature, cuboid average B. Source: [src/radia/analytical_formulas/](../src/radia/analytical_formulas/), tests: [tests/analytical_formulas/](../tests/analytical_formulas/), notebook: [docs/analytical_formulas/analytical_formulas.ipynb](analytical_formulas/analytical_formulas.ipynb).
 
+## Background Fields
+
+- [background_fields/background_fields.ipynb](background_fields/background_fields.ipynb) - Result-bearing `ObjBckg` callback showcase with synchronized JSON results and docs-local helper scripts/assets.
+
 ## Coil Design / Inverse Source
 
 - [stream_function.md](stream_function.md) - **(ACA+)+TSVD least-norm solver** (stream function method, generalised). Kernel-agnostic field-synthesis / inverse-source solver `A phi = B` (M field points x N basis sources, M < N): TSVD-regularised pseudo-inverse accelerated by ACA+ low-rank recompression. ACA+ delegated to HACApK (`cHACApK_acaplus`); the matrix entry `A(i,j)` is a caller callback built from Radia's existing field (Biot-Savart for coils, MMM/MSC for magnets) via `radia_field_kernel`. Methods 2/3 (IEEJ SA-25-020). Source: [src/radia/stream_function.py](../src/radia/stream_function.py) + `src/core/rad_stream_function.cpp`, tests: [tests/test_stream_function.py](../tests/test_stream_function.py), examples: [examples/stream_function/](../examples/stream_function/).
+- [complex_coil_geometry/complex_coil.ipynb](complex_coil_geometry/complex_coil.ipynb) - Result-bearing CoilBuilder showcase with docs-local helper scripts and synchronized JSON results.
+- [equivalence_source/demos.ipynb](equivalence_source/demos.ipynb) - Result-bearing NearFieldSource / equivalence-theorem showcase synchronized with `validation_test/equivalence_source/` JSON results.
 
 ## Visualization
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
 - [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.1 `$NodeData` displacement-animation artifact inspection, with synchronized JSON results.
+
+## Electric Machines
+
+- [electric_machine/cogging_skew_demo.ipynb](electric_machine/cogging_skew_demo.ipynb) - Result-bearing PM rotor cogging/skew demo with synchronized JSON results; validation-class scripts live in `validation_test/electric_machine/`.
 
 ## Cubit Mesh Export
 

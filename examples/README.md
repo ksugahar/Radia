@@ -2,7 +2,7 @@
 
 Comprehensive collection of Radia examples demonstrating magnetic field computation, material properties, solver methods, PEEC conductor modeling, and integration with NGSolve FEM.
 
-**Total:** 356 Python scripts across 20 directories
+**Total:** 604 Python scripts across 12 directories
 
 ---
 
@@ -29,8 +29,6 @@ jupyter notebook docs/simple_problems/simple_problems.ipynb
 
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
-| [background_fields/](background_fields/) | 4 | External background fields with magnetizable materials |
-| [complex_coil_geometry/](complex_coil_geometry/) | 3 | Multi-segment coils using CoilBuilder API |
 | [cube_uniform_field/](cube_uniform_field/) | 8 | Cube benchmark: hex/tetra mesh, solver comparison |
 | [visualization/](visualization/) | 9 | PyVista, ParaView, Netgen GUI, GMSH workflow demos |
 
@@ -39,14 +37,13 @@ jupyter notebook docs/simple_problems/simple_problems.ipynb
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
 | [solver_benchmarks/](solver_benchmarks/) | 15 | LU vs BiCGSTAB performance, scaling studies |
-| [tetra_field_accuracy_evaluation/](tetra_field_accuracy_evaluation/) | 5 | Tetrahedron field accuracy vs analytical/NGSolve reference |
 
 ### NGSolve Integration
 
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
 | [ngsolve_integration/](ngsolve_integration/) | 14 | RadiaField CoefficientFunction, field types, mesh convergence |
-| [kelvin_transformation/](kelvin_transformation/) | 96 | Kelvin transformation for unbounded domains (H/A formulation, adaptive mesh) |
+| [Kelvin transformation](../docs/kelvin/) | moved | Kelvin transformation for unbounded domains now lives as result-saved docs notebooks plus `validation_test` fixtures |
 
 ### PEEC Conductor Modeling
 
@@ -55,7 +52,6 @@ jupyter notebook docs/simple_problems/simple_problems.ipynb
 | [peec_integration/](peec_integration/) | 98 | PEEC Loop-Star solver: coils, SPICE export, ngbem coupling, WPT |
 | [effective_surface_impedance/](effective_surface_impedance/) | 5 | ESIM conductor model (Dowell + nonlinear homogenization) |
 | [induction_heating/](induction_heating/) | 6 | ESIM induction heating, RWG-EFIE 3D, WPT coupling |
-| [ngbem_diagnostics/](ngbem_diagnostics/) | 14 | Eddy current solver validation and diagnostics |
 
 ### Coil Design / Inverse Source
 
@@ -67,7 +63,7 @@ jupyter notebook docs/simple_problems/simple_problems.ipynb
 
 | Directory | Scripts | Description |
 |-----------|---------|-------------|
-| [universal_relaxation_network/](universal_relaxation_network/) | 24 | KAN-inspired URN for BH curves, SPICE time-domain |
+| [Universal relaxation network](../docs/universal_relaxation_network/) | moved | KAN-inspired URN corpus now lives in docs; reusable runtime API is `radia.urn` |
 
 ### Eddy-current Network Identification
 
@@ -83,12 +79,12 @@ jupyter notebook docs/simple_problems/simple_problems.ipynb
 |----------|-------------|
 | Learn Radia basics | `simple_problems/` |
 | Permanent magnets | `simple_problems/`, `smco_magnet_array/` |
-| Electromagnets | `complex_coil_geometry/` |
-| External/background fields | `background_fields/` |
-| FEM coupling | `ngsolve_integration/`, `kelvin_transformation/` |
+| Electromagnets | `docs/complex_coil_geometry/` |
+| External/background fields | `docs/background_fields/` |
+| FEM coupling | `ngsolve_integration/`, `docs/kelvin/` |
 | PEEC conductors | `peec_integration/`, `induction_heating/` |
-| Eddy currents / shielding | `ngbem_diagnostics/`, `effective_surface_impedance/` |
-| Solver performance | `solver_benchmarks/` |
+| Eddy currents / shielding | `docs/solver/EDDY_CURRENT_METHODS.md`, `effective_surface_impedance/` |
+| Solver performance | `solver_benchmarks/`, `validation_test/tetra_field_accuracy_evaluation/` |
 | Visualization | `visualization/`, `vtk_export/` |
 | Analytical reference / regression baseline | `analytical_formulas/` |
 

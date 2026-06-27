@@ -863,13 +863,12 @@ The analytical SIBC gives the correct frequency scaling (sqrt(f)) and is within 
 2. Loss computation on coarse meshes
 3. Quick frequency sweeps (surface-only, no volume DOFs)
 
-### Diagnostic Archive
+### Retired Diagnostics
 
-The old one-off `examples/ngbem_diagnostics/*.py` scripts were promoted and
-pruned on 2026-06-27. Use the result-bearing notebook
-`docs/ngbem_diagnostics/ngbem_diagnostics_archive.ipynb` and its synchronized
-JSON `docs/ngbem_diagnostics/ngbem_diagnostics_archive_results.json` for the
-historical source, SHA-256 hashes, and diagnostic notes. New executable checks
+The old one-off `examples/ngbem_diagnostics/*.py` scripts were pruned on
+2026-06-27. The durable conclusion is the solver-selection guidance above:
+use the SIBC path for thin-skin shielding and reserve VectorFEMBEM for
+mesh-resolvable skin depth or magnetic-material studies. New executable checks
 should be added under `validation_test/` with explicit assertions.
 
 ---
