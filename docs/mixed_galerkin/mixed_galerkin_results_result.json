@@ -1,0 +1,114 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:28Z",
+  "notebook": "docs/mixed_galerkin/mixed_galerkin_results.ipynb",
+  "notebook_sha256": "fc2544df18dee922f10b7562fcb97fac8afa8b467bb9d9b23155e3b557fc8fb0",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/mixed_galerkin/mixed_galerkin_results.ipynb",
+    "cells": 6,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 2,
+    "output_count": 8,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "d365c4196efed0e4136b5b18febeb0b491edd94fb35754786c03fed99f8fdc04",
+      "source_preview": "\"\"\"\nCylinder mixed Galerkin, rank-1 bulk + N-DOF Senior tower surface.\n\nPhase 8b of the 2026-05-28 -> 2026-06-12 research sprint, corrected.\n\nThe surface basis adds HOIBC Senior tower corrections beyond the\nplanar SIBC envelope of ../01_no_d_baseline.py:\n\n    psi_1(r; s) = exp(-(a-r) t) - 1                   (planar SIBC)\n    psi_2(r; s) = ((a-r) / a) exp(-(a-r) t)            (gamma_1 = -1/(2a))\n    psi_3(r; s) = ((a-r) / a)^2 exp(-(a-r) t)          (gamma_2 = -1/(8 a^2))\n    psi_4(r; s) = ((a-r) / a)^3 exp(-(a-r) t)          (gamma_3 = -1/(8 a^3))\n\nThis is the Taylor expansion of the cylinder Bessel I_1/I_0 asymptotic\nfactor sqrt(a/r) = 1 + d/(2a) + 3 d^2/(8 a^2) + ... in powers of\nd = a - r.  The Galerkin coefficients automatically pick up the\ncanonical Senior tower factors 1/2, 1/8, etc.\n\n## Senior tower of the cylinder (memory)\n\nCylinder Y/K_0 ~ 1 + sum_k b_k / (gamma a)^k with the DIVERGENT\nasymptotic series\n\n    b = [0, -1/2, -1/8, -1/8, -25/128, -13/32, -1073/1024, ...]\n\nSenior ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 305,
+          "text_sha256": "790b4c4f0800724d2d3f97959fb6b16e23a550a047a1cfa9ee55697997aa8e4d",
+          "text_preview": "=== Cylinder mixed Galerkin: rank-1 bulk + N-DOF Senior tower ===\na = 5.0 mm, sigma = 5.80e+07 S/m, mu = 1.2566e-06 H/m\n\nSample points:\n    f (Hz)       1-DOF   2-DOF g_1   3-DOF g_2   4-DOF g_3\n  1.00e+03    0.0294%    0.0107%    0.0011%    0.0001%\n  1.00e+04    0.0447%    0.0005%    0.0001%    0.0000%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 220,
+          "text_sha256": "b65604c5887f530aba64b9fda13b435f21e4d114d966868aaac180e0445d8ba3",
+          "text_preview": "  5.00e+04    0.0143%    0.0000%    0.0000%    0.0000%\n  1.00e+05    0.0081%    0.0000%    0.0000%    0.0000%\n  5.00e+05    0.0019%    0.0000%    0.0000%    0.0000%\n  1.00e+06    0.0010%    0.0000%    0.0000%    0.0000%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 241,
+          "text_sha256": "c8dbc1b21b4138ed2612aa9a4a80c6e756b1483715876194b21717ef4d8951f5",
+          "text_preview": "  1.00e+07    0.0001%    0.0000%    0.0000%    0.0000%\n  1.00e+08    0.0000%    0.0000%    0.0000%    0.0000%\n\nFull sweep summary (1 Hz to 1e8 Hz, 81 points):\n N-DOF      max anywhere     wall band max\n  1          0.06386%         0.03855%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 39,
+          "text_sha256": "b8cf64eee887215ce4a04ba24e8fd401deaf1d1ffbd5bfcdb33c5579b143441c",
+          "text_preview": "  2          0.01233%         0.00024%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 39,
+          "text_sha256": "6a66e82119d12032dcc11768c7eba9b927b12e8b1591ba037e8c61d454544b75",
+          "text_preview": "  3          0.00270%         0.00002%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 39,
+          "text_sha256": "2df1bd2344886f344bd6e649e45cff33d7db24fed958f5376d3078b20464c835",
+          "text_preview": "  4          0.00063%         0.00001%\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "f0c19521140e049db64b73adff0b831f30591326bb4cbbc3f861c44f0d3d6388",
+      "source_preview": "\"\"\"\nSphere mixed Galerkin with HOIBC gamma_1 = -1/a curvature correction.\n\nPhase 7 of the 2026-05-28 -> 2026-06-12 research sprint.\n\nAdds a SECOND surface basis function reflecting the leading\ncurvature correction in the Senior tower:\n\n    psi_1(r; s) = exp(-(a-r) t) - 1        (planar SIBC, same as 01)\n    psi_2(r; s) = ((a-r) / a) exp(-(a-r) t) (curvature, gamma_1 = -1/a)\n\nThe (a-r)/a factor is the leading Taylor expansion term of the\n(a/r) geometric factor in the sphere Bessel asymptote\n    v(r) ~ -1 + (a/r) exp(-gamma (a-r)).\n\n## Sphere Senior tower terminates at gamma_1\n\nFor the sphere, the Senior tower coefficients are b = [0, -1, 0, 0, ...]\n(constructive derivation in memory\n project_senior_hoibc_tower_constructive_derivation.md).  Adding gamma_1\ncaptures the entire non-trivial Senior tower; higher-order DOFs would\nadd nothing.  This is why the 2-DOF sphere result hits machine\nprecision at deep skin (1e-8 % at f = 10^8 Hz).\n\n## Result\n\n    1-DOF                            2-DOF ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 625,
+          "text_sha256": "2499633c46b18bb555122f09abcb2d3a81d68e864840c2eb27568dc6db8644e5",
+          "text_preview": "=== Sphere mixed Galerkin: 1-DOF vs 2-DOF (HOIBC gamma_1 = -1/a) ===\na = 5.0 mm, sigma = 5.80e+07 S/m, mu = 1.2566e-06 H/m\ngamma_1 = -1/a = -2.0000e+02\n\n    f (Hz)     |Y_exact|       err_1   err_2 (gamma_1)\n  1.00e+00    3.0369e+01    0.0000%       0.000000%\n  1.00e+03    2.2176e+01    0.0056%       0.002774%\n  1.00e+04    7.9719e+00    0.1251%       0.001735%\n  5.00e+04    3.6971e+00    0.0500%       0.000095%\n  1.00e+05    2.6369e+00    0.0294%       0.000027%\n  1.00e+06    8.4586e-01    0.0039%       0.000000%\n  1.00e+07    2.6870e-01    0.0004%       0.000000%\n  1.00e+08    8.5091e-02    0.0000%       0.000000%\n\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 159,
+          "text_sha256": "e361cbc1b4c91f92e04cecf2b4c099c68597ca9ff77a0eb8201e0a93c5d3ac3d",
+          "text_preview": "Full sweep:\n  1-DOF  max anywhere = 0.1371%,  wall band = 0.1142%\n  2-DOF  max anywhere = 0.0037%,  wall band = 0.0011%\n  Wall-band improvement factor: 102.2x\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:31Z",
+  "notebook": "docs/smco_magnet_array/smco_magnet_array.ipynb",
+  "notebook_sha256": "157bacbecc1641bfe277f3ced7218bcf5b897cf682397e9809d0c0b45769192e",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/smco_magnet_array/smco_magnet_array.ipynb",
+    "cells": 11,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 3,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "e9c96950c0de2b704a325904c3c60a8edd466064f654c98ab1973954d2e441a1",
+      "source_preview": "import json\nimport time\nimport numpy as np\nimport radia as rad\n\nmm = 1e-3\nMU0 = 4e-7 * np.pi\nBR_SMCO = 1.05            # SmCo (Sm2Co17) remanence (T), typical 0.9-1.15 T\nM_SMCO = BR_SMCO / MU0    # magnetization in A/m  (Radia uses A/m: M = Br/mu_0)\nprint(f\"SmCo Br = {BR_SMCO} T  ->  M = {M_SMCO:.0f} A/m\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 37,
+          "text_sha256": "9d5d0e23f6ff75051537cb1efde6a6e000482e89ad9d469bf84f326f1dc9d3dc",
+          "text_preview": "SmCo Br = 1.05 T  ->  M = 835563 A/m\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "605263cacb4ce3fc6bd53e369ba6f6bd0c52981559094177d3c14f75bc39eda4",
+      "source_preview": "def create_meshed_disk(R, H, n_radial, n_angular, n_z=1, x0=0, y0=0, z0=0):\n    \"\"\"Meshed iron disk: wedge core ring + hexahedral annular sectors (M=0).\"\"\"\n    elems = []\n    r_vals = np.linspace(0, R, n_radial + 1)\n    theta_vals = np.linspace(0, 2 * np.pi, n_angular + 1)\n    z_vals = np.linspace(z0 - H / 2, z0 + H / 2, n_z + 1)\n    zero = [0.0, 0.0, 0.0]\n    for k in range(n_z):\n        zb, zt = float(z_vals[k]), float(z_vals[k + 1])\n        for i in range(n_radial):\n            ri, ro = float(r_vals[i]), float(r_vals[i + 1])\n            for j in range(n_angular):\n                t1, t2 = float(theta_vals[j]), float(theta_vals[j + 1])\n                if i == 0:  # core ring -> wedge (triangular cross-section)\n                    pts = [\n                        [x0, y0, zb],\n                        [ro*np.cos(t1)+x0, ro*np.sin(t1)+y0, zb],\n                        [ro*np.cos(t2)+x0, ro*np.sin(t2)+y0, zb],\n                        [x0, y0, zt],\n                        [ro*np.cos(t1)+x0, ",
+      "outputs": []
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "560c0c68fe4cf7be9655a760b063500584726ffe0abc16e3a7a9aa843147b16e",
+      "source_preview": "def build(mag_radius=5*mm, mag_height=10*mm, mag_M=(0, 0, M_SMCO),\n          spacing=10*mm, array_radius=60*mm, base_plate_height=20*mm):\n    base = create_meshed_disk(array_radius, base_plate_height, 6, 24, 2)\n    rad.MatApl(base, rad.MatLin(1000))          # soft iron, mu_r = 1000\n    objs, count = [base], 0\n    for nx in range(-20, 21):\n        for ny in range(-20, 21):\n            x = nx*spacing + (ny % 2)*spacing/2\n            y = ny*spacing*np.sqrt(3)/2\n            z = base_plate_height/2 + mag_height/2\n            if x*x + y*y < array_radius*array_radius:\n                objs.append(rad.ObjCylMag([x, y, z], mag_radius, mag_height,\n                                          16, 'z', list(mag_M)))\n                count += 1\n    return rad.ObjCnt(objs), count",
+      "outputs": []
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "1e091d3e874fc82bcec2eaae3916b7ae1d8ba820fdef2c8408a71e4c7628d8e5",
+      "source_preview": "rad.UtiDelAll()\nt0 = time.time(); geom, n = build(); t_build = time.time() - t0\nt0 = time.time(); res = rad.Solve(geom, 1e-4, 1000, 0); t_solve = time.time() - t0\niters = res[-1] if isinstance(res, (list, tuple)) else res\nprint(f\"magnets={n}  iron_elems={6*24*2}  iters={iters}  \"\n      f\"t_build={t_build:.2f}s  t_solve={t_solve:.2f}s\")\n\nprobes = [[0, 0, 0.02], [0, 0, 0.05], [0.03, 0, 0.02]]\nprobe_out = []\nprint(f\"\\n{'position (m)':<24}{'Bx(mT)':>12}{'By(mT)':>12}{'Bz(mT)':>12}{'|B|(mT)':>12}\")\nfor p in probes:\n    B = rad.Fld(geom, 'b', p)\n    bx, by, bz = (b*1e3 for b in B)\n    bmag = float(np.linalg.norm(B)*1e3)\n    probe_out.append({\"pos_m\": p, \"B_mT\": [bx, by, bz], \"Bmag_mT\": bmag})\n    print(f\"({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}){'':<6}\"\n          f\"{bx:>12.4f}{by:>12.4f}{bz:>12.4f}{bmag:>12.4f}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 371,
+          "text_sha256": "4977d2ce9bc42e41fce205b31f6ee6052e7889a6060d4eb18393b1cc62ec8dc4",
+          "text_preview": "magnets=125  iron_elems=288  iters=1.0  t_build=0.02s  t_solve=3.25s\n\nposition (m)                  Bx(mT)      By(mT)      Bz(mT)     |B|(mT)\n(0.000, 0.000, 0.020)           -0.0086     -0.0000    177.6001    177.6001\n(0.000, 0.000, 0.050)           -0.0000     -0.0000     68.4230     68.4230\n(0.030, 0.000, 0.020)           25.1828     -0.0000    201.3146    202.8836\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "b45e08aa867281d42dd6270e64a2e7b264d4776e6b437209f1f0b767f8cfe640",
+      "source_preview": "import matplotlib.pyplot as plt\n\nxs = np.linspace(-0.06, 0.06, 41)\nys = np.linspace(-0.06, 0.06, 41)\nzmap = 0.025\nBz = np.zeros((len(ys), len(xs)))\nfor iy, yv in enumerate(ys):\n    Bz[iy, :] = np.array(rad.Fld(geom, 'bz',\n                         [[float(xv), float(yv), zmap] for xv in xs]))*1e3\n\nfig, ax = plt.subplots(figsize=(5.0, 4.2))\npc = ax.pcolormesh(xs*1e3, ys*1e3, Bz, shading='auto', cmap='RdBu_r')\nax.set_aspect('equal'); ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)')\nfig.colorbar(pc, ax=ax, label='Bz (mT)')\nfig.tight_layout(); fig.savefig('smco_bz_map.png', dpi=150)\nplt.show()\nprint(f\"Bz at z={zmap*1e3:.0f} mm: {Bz.min():.1f} .. {Bz.max():.1f} mT\")\n\nresults = {\n    \"num_magnets\": n, \"Br_T\": BR_SMCO, \"M_Apm\": M_SMCO,\n    \"n_iron_elements\": 6*24*2, \"solver_iterations\": iters,\n    \"t_build_s\": round(t_build, 3), \"t_solve_s\": round(t_solve, 3),\n    \"probes\": probe_out,\n    \"map\": {\"x_m\": xs.tolist(), \"y_m\": ys.tolist(), \"z_m\": zmap,\n            \"Bz_mT\": Bz.tolist()},\n}\nwith ope",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "9e19ba7e672d38c538e0a936ca338c48bc587756b5fb2dff507b0b0c539395ff",
+          "text_plain_preview": "<Figure size 500x420 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 28636,
+              "sha256": "31c00f0e93ba3e3224a2f81558e2cc7aaf9a2d7b740712abc636e0c535ab65c0"
+            }
+          }
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 57,
+          "text_sha256": "e09bffae268b0199a13e7a198db03444aeff911980c4afb7702c6adcde2ed219",
+          "text_preview": "Bz at z=25 mm: -56.5 .. 147.5 mT\nwrote smco_results.json\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

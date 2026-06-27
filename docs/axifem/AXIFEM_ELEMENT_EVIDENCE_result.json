@@ -1,0 +1,111 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "notebook": "docs/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb",
+  "notebook_sha256": "c3382b9417f7bc703fd5e4f63e453c2cca120cbc172b560198a8cbdceedb2049",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb",
+    "cells": 10,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 5,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "0a92a9fa146b0f7393d6fa7787fb863ac157c4c4f0bbdf58eea460bc599fa9cb",
+      "source_preview": "from pathlib import Path\nimport json\n\nfor candidate in [Path(\"axifem_element_evidence.json\"), Path(\"docs/axifem/axifem_element_evidence.json\")]:\n    if candidate.exists():\n        evidence = json.loads(candidate.read_text(encoding=\"utf-8\"))\n        break\nelse:\n    raise FileNotFoundError(\"axifem_element_evidence.json\")\n\nprint(json.dumps(evidence[\"version_stamp\"], indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 218,
+          "text_sha256": "618e6d2ad19a4bed78cede2ffa6beb7816d93e267e8a0cc3723eca93573c38f8",
+          "text_preview": "{\n  \"runtime_radia_version\": \"4.94.0\",\n  \"executed_at_utc\": \"2026-06-26T02:02:08.730485+00:00\",\n  \"python\": \"3.12.10\",\n  \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n  \"git_head\": \"53303f1a\",\n  \"git_dirty\": true\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "abb2061314f59ef6ef6f049d4918a0ea80a742436a19be68fe990b272f8994c9",
+      "source_preview": "from IPython.display import Markdown, display\nrows = evidence[\"evidence_matrix\"]\nheaders = [\"Element path\", \"Production selection\", \"Evidence gate\", \"What would fail if broken\"]\nlines = [\"| \" + \" | \".join(headers) + \" |\", \"| \" + \" | \".join([\"---\"] * len(headers)) + \" |\"]\nfor row in rows:\n    lines.append(\"| \" + \" | \".join(row[h] for h in headers) + \" |\")\ndisplay(Markdown(\"\\n\".join(lines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "05bbc38f35e413f40341af2d2e7fc666db705637fe70b109c84fc7336555db18",
+      "source_preview": "print(\" \".join(evidence[\"pytest\"][\"command\"]))\nprint()\nprint(evidence[\"pytest\"][\"stdout\"])\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 3323,
+          "text_sha256": "826dadfd228bdeebf54274c98b722fc3f3ae892d95b7107a07cdcd84dbd20abb",
+          "text_preview": "python -m pytest tests\\axifem\\test_element_matrices.py tests\\axifem\\test_python_reference_consistency.py tests\\axifem\\test_q1_vdof.py tests\\axifem\\test_p2_axis_eddy.py tests\\axifem\\test_p2_curved_magsta.py tests\\axifem\\test_q2_curved.py tests\\axifem\\test_taskmanager_race.py -q -s\n\n============================= test session starts =============================\nplatform win32 -- Python 3.12.10, pytest-9.0.3, pluggy-1.6.0\nrootdir: W:\\00_CAE\\Radia\\01_GitHub\nconfigfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)\nplugins: anyio-4.13.0, rerunfailures-16.3\ncollected 20 items\n\ntests\\axifem\\test_element_matrices.py [OK] interior triangle Mr, Mz are symmetric\n.[OK] flag=2 (2 nodes on axis) executes without NaN/Inf\n.[OK] flag=1 (1 node on axis) executes without NaN/Inf\n.[OK] interpolation: B_z=0.859437 B_r=-246.690162\n.  Mr * (1/r_j) = [-7.80625564e-18  1.31838984e-16  0.00000000e+00]\n  Mz * (1/r_j) = [-7.02563008e-17 -9.62771529e-17 -1.28369537e-16]\n[OK] const phi (V-form: 1/r) annihilates Mr, Mz\n.  d_meeker = 1.200000e-08, a_hat = 1.500000e-06, check = 1.500000e-06\n[OK] a_hat = d_meeker / (4*R)\n.\ntests\\axifem\\test_python_reference_consistency.py .....\ntests\\axifem\\test_q1_vdof.py   Q1 4x4: ||V_int - B0 r/2||/||.|| = 1.99e-16\n  Q1 8x8: ||V_int - B0 r/2||/||.|| = 3.18e-16\n  Q1 12x12: ||V_int - B0 r/2||/||.|| = 3.39e-16\n[OK] Q1 axis-aligned quad stiffness is a true V-DOF operator\n.\ntests\\axifem\\test_p2_axis_eddy.py [OK] all 84 P2 trig-center slots are UNUSED and not free\n.  order=1: lambda_min = 11.8279\n  order=2: lambda_min = 11.5936\n[OK] P2 triangle is full-rank on axis; P1 vs P2 agree to 2.0%\n.\ntests\\axifem\\test_p2_curved_magsta.py   volume err: straight 3.897%   Curve(2) 0.0248%\n[OK] Curve(2) captures the circular boundary to machine precision\n.called base class apply trans, type = called base class apply trans, type = class axifem::AxiHenrotteDiffOpGradientclass axifem::AxiHenrotteDiffOpGradient\n\ncalled base class apply trans, type = class axifem::AxiHenrotteDiffOpGradient\ncalled base class apply, type = class axifem::AxiHenrotteDiffOpGradient\ncalled base class apply, type = class axifem::AxiHenrotteDiffOpGradient\ncalled base class apply, type = class axifem::AxiHenrotteDiffOpGradient\n  D(vol)  err%: straight  -3.8973  Curve(2)  -0.0248\n  N(flux) err%: straight  -5.0744  Curve(2)  -1.0740   (ratio 0.212)\n  avg     err%: straight  -1.2249  Curve(2)  -1.0495   (delta 0.1754)\n[OK] evaluating the volume/total-flux exposes curving (the average hides it)\n.\ntests\\axifem\\test_q2_curved.py   straight nx=4: axis=25.41825968 curved=25.41825968 rel=9.63e-12\n  straight nx=6: axis=25.40419304 curved=25.40419304 rel=2.34e-13\n  straight nx=8: axis=25.40176553 curved=25.40176553 rel=3.29e-14\n[OK] Q2_Curved reproduces the axis-aligned closed form on straight quads\n.  annular 3x6: curved lam_min=14.352329\n  annular 4x8: curved lam_min=14.297310\n  annular 6x12: curved lam_min=14.271475\n  annular 8x16: curved lam_min=14.265415\n[OK] Q2_Curved converges on general (skewed annular) quads\n.\ntests\\axifem\\test_taskmanager_race.py   V-DOF BFI : chk(1t)=4.006736832010e+11  chk(4t)=4.006736832010e+11  rel=0.00e+00\n.  symbolic P2: chk(1t)=2.803341029578e+11  chk(4t)=2.803341029578e+11  rel=0.00e+00\n.\n\n============================= 20 passed in 1.08s ==============================\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "fc975b171b0112d502f37fbcabb8bade7ae497ce1cca36b598b036d455ed4fc8",
+      "source_preview": "from IPython.display import Markdown, display\nlines = [\n    \"| Family | Selected mesh | Mesh DOF/free | tau_pair_us first 6 | stored reference first 6 | rel(first) |\",\n    \"| --- | --- | --- | --- | --- | --- |\",\n]\nfor row in evidence[\"cauer_validation_summary\"]:\n    mesh = row[\"mesh\"]\n    mesh_s = f\"ne={mesh.get('ne')}, ndof={mesh.get('ndof')}, free={mesh.get('free')}\"\n    lines.append(\n        f\"| {row['family']} | {row['selected_mesh']} | {mesh_s} | {row['tau_pair_us_first6']} | {row['stored_bem_reference_us_first6']} | {row['first_tau_relative_to_reference']} |\"\n    )\ndisplay(Markdown(\"\\n\".join(lines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "063e9e537d0b9ce74b45ba19712501e6234dc316c54554d229691c76c58df3c6",
+      "source_preview": "print(json.dumps(evidence[\"timing_breakdown_s\"], indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 126,
+          "text_sha256": "2d42cb6ef56ce3c735f5358917099257c8d95d2a1000484daee3395a93ef2d90",
+          "text_preview": "{\n  \"pytest_axifem_element_subset\": 1.08,\n  \"cauer_json_summary_load\": 0.000668,\n  \"notebook_artifact_generation\": 0.032237\n}\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

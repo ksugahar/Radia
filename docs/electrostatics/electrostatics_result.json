@@ -1,0 +1,114 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "notebook": "docs/electrostatics/electrostatics.ipynb",
+  "notebook_sha256": "e90c1f484cd321064a110912397aca3e9ebc51531e220945458750bed9d53479",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/electrostatics/electrostatics.ipynb",
+    "cells": 11,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 5,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "b14a80a75df580da849e2a2ee34678f06691c1d55c7b8dacfcad233c10c35a3a",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class parallel-plate electrostatic force identity.\n\nThis example connects three equivalent public textbook views of the same\nnormal electrostatic force:\n\n    C = eps A / d\n    W = 0.5 C V^2\n    p = 0.5 eps (V / d)^2\n    F = p A = W / d\n\nRun:\n\n    python examples/electrostatics/validation_parallel_plate_electrostatic_force.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.electrostatics import (  # noqa: E402\n    EPS0,\n    parallel_plate_capacitor_energy_force,\n)\nfrom radia_mcp.radia_ngsolve.force import electrostatic_traction_summary  # noqa: E402\n\n\nOUT_JSON = HERE / \"validation_parallel_plate_electrostatic_force_summary.json\"\n\nEPS_R = 2.5\nARE",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 447,
+          "text_sha256": "fed9794463a659875b5be5b13fa7cc0fc318c57d699c553c14fae132f06a05e1",
+          "text_preview": "[Parallel-plate electrostatic force]\n  capacitance: 8.8541878128e-12 F\n  field:       240000 V/m\n  pressure:    0.637501522522 Pa\n  force:       0.000127500304504 N\n[checks]\n  capacitance_error_F: 0.000e+00\n  energy_error_J: 0.000e+00\n  pressure_error_Pa: 0.000e+00\n  force_error_N: 0.000e+00\n  force_energy_gap_error_N: 2.711e-20\n  traction_pressure_error_Pa: 1.110e-16\n  traction_force_error_N: 2.711e-20\n  half_gap_force_ratio_error: 0.000e+00\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "95d2e4becd2314c533cc50efff576428ca76eb821347d9cd8f91aed8e0ab5a30",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class coaxial capacitor electrostatic force.\n\nRun:\n\n    python examples/electrostatics/validation_coaxial_capacitor_force.py\n\nThe coaxial capacitor is the cylindrical analogue of the parallel-plate force\ngate: capacitance, stored energy, Maxwell pressure, and capacitance-gradient\nforce all collapse to the same closed form.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\nROOT = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parents[2]\nSRC = ROOT / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.electrostatics import (  # noqa: E402\n    EPS0,\n    capacitance_gradient_force_summary,\n    coaxial_capacitor_energy_force,\n)\n\nOUT_JSON = Path(os.path.join(os.getcwd(), 'notebook.py')).with_name(\"validation_coaxial_capacitor_force_summary.json\")\n\nEPS_R = 2.5\nR_INNER = 0.01\nR_OUTER = 0.03\nLENGTH = 0.2\nV",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 288,
+          "text_sha256": "57f654386f35fb0d750c54a9d7e549c956de54fc0a95ebde11a2c5ab6fa98ab6",
+          "text_preview": "[Coaxial capacitor electrostatic force]\n  C_F: 2.531944314943e-11\n  inner_radius_force_N: 1.659366025269e-05\n  outer_radius_force_N: -5.531220084230e-06\n  pressure_inner_Pa: 1.320481526602e-03\n  wrote S:\\Radia\\01_GitHub\\docs\\electrostatics\\validation_coaxial_capacitor_force_summary.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "a32b6c8a0bf5adc32d79cf9905ad4e16b29d2c559f03daf63f3d09a2cd59bbf6",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class electrostatic force from a capacitance gradient.\n\nFor a displacement coordinate x and capacitance C(x),\n\n    fixed voltage: F_x = 0.5 V^2 dC/dx\n    fixed charge:  F_x = 0.5 Q^2 C^-2 dC/dx\n\nThe sign is along increasing x.  If x is a gap or height, dC/dx is usually\nnegative, so the force is negative: attraction toward the smaller gap.\n\nRun:\n\n    python examples/electrostatics/validation_capacitance_gradient_force.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.electrostatics import (  # noqa: E402\n    EPS0,\n    capacitance_gradient_force_summary,\n    parallel_plate_capacitor_energy_force,\n    sphere_above_plane_capacitance,\n)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 265,
+          "text_sha256": "39e0ff1576b11ab68f3b0c9b07a4962fcf80ef65d28da8b08343fc6a6ed08bff",
+          "text_preview": "[Capacitance-gradient electrostatic force]\n  plate_gap_force_N: -0.000127500304504\n  plate_closing_force_N: 0.000127500304504\n  plate_pressure_force_N: 0.000127500304504\n  sphere_height_force_N: -1.93339093404e-07\n  sphere_attraction_magnitude_N: 1.93339093404e-07\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "ff8d3d16a1234643355aa1d94f1cf228fbbf3ce685eb6ba6f515df274b4231d1",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class sphere-over-ground-plane capacitance example.\n\nThis example exercises the image-series capacitance helper on a sweep that is\nlarge enough to catch truncation mistakes:\n\n* near the plane, the image series converges slowly and C rises well above the\n  isolated-sphere value;\n* far from the plane, C approaches 4*pi*eps0*a with the first correction a/(2h);\n* the electrostatic attraction inferred from -dC/dh is positive.\n\nRun:\n\n    python examples/electrostatics/validation_sphere_ground_plane_capacitance.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.electrostatics import (  # noqa: E402\n    EPS0,\n    sphere_above_plane_capacita",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1006,
+          "text_sha256": "e2579256c7f558d8d7fced4da547e90bada4559bfca01a0bcb2aaa25a78aa388",
+          "text_preview": "[sphere above grounded plane capacitance]\n  h/a=  1.05  C/C_iso=2.467482913  err20=1.289e-03  err40=2.371e-06\n  h/a=  1.10  C/C_iso=2.155086117  err20=1.069e-04  err40=1.501e-08\n  h/a=  1.25  C/C_iso=1.778396200  err20=8.044e-07  err40=7.671e-13\n  h/a=  1.50  C/C_iso=1.535370509  err20=3.933e-09  err40=0.000e+00\n  h/a=  2.00  C/C_iso=1.341059813  err20=3.441e-12  err40=0.000e+00\n  h/a=  3.00  C/C_iso=1.201155285  err20=6.044e-16  err40=0.000e+00\n  h/a=  5.00  C/C_iso=1.111236084  err20=0.000e+00  err40=0.000e+00\n  h/a= 10.00  C/C_iso=1.052638523  err20=0.000e+00  err40=0.000e+00\n  h/a= 25.00  C/C_iso=1.020408330  err20=0.000e+00  err40=0.000e+00\n  h/a= 50.00  C/C_iso=1.010101020  err20=0.000e+00  err40=0.000e+00\n  h/a=100.00  C/C_iso=1.005025126  err20=0.000e+00  err40=0.000e+00\n[checks] near C/C_iso=2.467483, far C/C_iso=1.005025, F(h/a=2,V=100)=1.342633e-07 N\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\electrostatics\\validation_sphere_ground_plane_capacitance_summary.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "a482bf1ec7ba2480fa2102b1cd12a8a4c46faae8aa26ee3df80439e6ccef4dd0",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class electrostatic Maxwell stress / traction identities.\n\nFor a field normal to a conductor/dielectric interface, the electrostatic\nMaxwell stress gives the familiar pressure\n\n    p = 0.5 * eps0 * E^2.\n\nThis example mirrors the magnetic Maxwell-traction validation in a form that is\neasy to compare with electrostatic FEM post-processing.\n\nRun:\n\n    python examples/electrostatics/validation_electrostatic_maxwell_traction.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.force import (  # noqa: E402\n    EPS0,\n    electrostatic_stress_tensor,\n    electrostatic_traction_summary,\n)\n\n\nOUT_JSON = HERE / \"validation_electrostatic_maxwell_traction_summ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 514,
+          "text_sha256": "733640a6334b94a2a27896e1e8c1a6cfe1b804d9e52e942553f6b6254e675232",
+          "text_preview": "[Electrostatic Maxwell traction identities]\n  normal_1MV_per_m: normal=4.42709 Pa, tangent=0 Pa\n  tangential_1MV_per_m: normal=-4.42709 Pa, tangent=0 Pa\n  oblique_3_4MV_per_m: normal=-30.9897 Pa, tangent=106.25 Pa\n[checks]\n  pressure_1MV_per_m_Pa: 4.4270939064000006\n  normal_traction_Pa: 4.4270939064000006\n  normal_force_N: [0.0, 0.0, 1.1067734766000001]\n  tangential_normal_traction_Pa: -4.4270939064000006\n  oblique_normal_traction_Pa: -30.9896573448\n  oblique_tangential_traction_magnitude_Pa: 106.2502537536\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

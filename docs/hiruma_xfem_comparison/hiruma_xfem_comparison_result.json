@@ -1,0 +1,1323 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
+  "notebook_sha256": "efd524e891d12019a3ce2ee18ab26be4c5cf1043f58f3add2a703794073f500c",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
+    "cells": 13,
+    "code_cells": 6,
+    "executed_code_cells": 6,
+    "code_cells_with_outputs": 6,
+    "output_count": 154,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "a0a4fd73c40a771c922682410d1d7e428ce4806668108e0e47c6b49b0229052f",
+      "source_preview": "\"\"\"Phase 1 — CFEM baselines for the Hiruma 2023 cylinder benchmark.\n\nReference:  Hiruma 2023, IEEE TMag 59(5), DOI 10.1109/TMAG.2023.3246629,\n            §III.A \"Skin Effect in Cylindrical Conductor\", Figs. 2-4.\n\nGeometry / material (Hiruma's §III.A):\n    2D disk Omega, radius r = 0.01 m\n    sigma = 1e6 S/m, mu_r = 1\n    Uniform current density J0 = sigma (so E_z = 1 V/m on the boundary)\n    Governing: -div(nu*grad A_z) + j*omega*sigma*A_z = J0\n    BC: A_z = 0 on outer circle Gamma_D\n    Sweep: r/delta in [0.1, 15] (i.e. omega = 2*delta^-2/(sigma*mu))\n\nGoal of this phase:\n    Reproduce Hiruma Fig. 4 (Joule loss density and magnetic energy\n    density vs r/delta) using NGSolve CFEM on TWO meshes:\n        - coarse (target ~37 DOF: matches Hiruma's 37 in Fig. 2(b))\n        - fine reference (target ~9489 DOF: matches Hiruma)\n    Validate against the analytical Bessel solution for the disk.\n\nBessel reference (closed form for cylinder, J0 = sigma, A_z = 0 at r=R):\n    A_z(r) = (1/(j*omega)) ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "e23d9f0f3f67062a77a1b5a70cbb1dff924591056c198f046425c0a29bca7d80",
+          "text_preview": "output dir: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 45,
+          "text_sha256": "1f868dd951c54081f7403533581232c5b452c3756843eeeccfd6dae79a3a1ac3",
+          "text_preview": "R = 10.00 mm, sigma = 1.00e+06 S/m, mu_r = 1\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 25,
+          "text_sha256": "ede8fee9d0c20781cb7e48c2debb4d4a101e66a47cf3e7dc9b7e1b9b25b51811",
+          "text_preview": "\n=== mesh generation ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 23,
+          "text_sha256": "20fbfb67ad6708cdbcb738c4c1de2041e89eb72d4cc46d4ead5dffefcdcdbed9",
+          "text_preview": "  coarse: ne=66, nv=44\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 29,
+          "text_sha256": "2a67a8ad8455ba43960a157ae33f64687977c4389144b42d97fb50508da80529",
+          "text_preview": "  fine:   ne=6926,   nv=3558\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 55,
+          "text_sha256": "73c17c36d472335e172461309581e188f94fcd9e6d5ffc295b300fbe0162a8e1",
+          "text_preview": "\n=== frequency sweep (CFEM coarse + fine + Bessel) ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "2260e463a7e14cef48791172de52e9cdc92aa757e46f9a6194b896e24139e12a",
+          "text_preview": "   r/d        omega     P_bessel     P_coarse       P_fine err_coarse   err_fine\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "4f34eab29e9c71bdbc86aa047844c73b6126f2ea40f655022d7446631f896347",
+          "text_preview": "  0.10    1.592e+02   4.1666e+00   3.8519e+00   4.1632e+00     -7.55%     -0.08%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 80,
+          "text_sha256": "b6ef822c5fbc92f31726f474ed22e9ea0e1143ac4a87cdd0822583937650f2cd",
+          "text_preview": "  0.30    1.432e+03   3.3718e+02   3.1173e+02   3.3690e+02     -7.55%     -0.08%",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "5328210f0f2a1ca04185d63bc66360b4450e7a4d37b143b0fae46e79338d97da",
+          "text_preview": "  0.50    3.979e+03   2.5850e+03   2.3910e+03   2.5829e+03     -7.51%     -0.08%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "db43afb04e064c275b33fe75d1b35292c36b22273ea23e057fa9932cc38a8f94",
+          "text_preview": "  1.00    1.592e+04   3.7247e+04   3.4687e+04   3.7220e+04     -6.87%     -0.07%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "f454d8e51031fbd210dd160b9fafc548d70941c517c72fcbfbff0ad0a320d9fe",
+          "text_preview": "  1.50    3.581e+04   1.3194e+05   1.2514e+05   1.3187e+05     -5.15%     -0.05%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "6ee0d9667eb1ea06abcb47bb02481786498e32fc4e071d463ce9d37ad1c67b7f",
+          "text_preview": "  2.00    6.366e+04   2.3173e+05   2.2365e+05   2.3165e+05     -3.49%     -0.04%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "c560088f63f2878f2b945cdcc66d5fd37f7ddee5106388960d83c4a29498342c",
+          "text_preview": "  3.00    1.432e+05   3.3224e+05   3.2234e+05   3.3213e+05     -2.98%     -0.03%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "2e171fb89c56adc2fd97fb99906a7cad870b19d5fa5d29e89e95314335429356",
+          "text_preview": "  5.00    3.979e+05   3.9968e+05   3.8032e+05   3.9949e+05     -4.84%     -0.05%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "30644b21ff9741ebd11122e72ab5342dc9944618a52644dfd2d6c9fe35918775",
+          "text_preview": "  7.00    7.799e+05   4.2847e+05   4.0052e+05   4.2820e+05     -6.52%     -0.06%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "f17fadea5ee886ec5d20a154fe6db88f9f68dec1f7914915d8cfecde366aec7f",
+          "text_preview": " 10.00    1.592e+06   4.4997e+05   4.1075e+05   4.4957e+05     -8.72%     -0.09%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 80,
+          "text_sha256": "154a709bddb60e3d9168277fbf936f24e918762d941af0fa953c7660a6c2c1bd",
+          "text_preview": " 12.00    2.292e+06   4.5831e+05   4.1317e+05   4.5783e+05     -9.85%     -0.10%",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "6f63e61ade0eb2c0c8a24788439e5696f7be8648b318fe6a9d224b21ed08e30a",
+          "text_preview": " 15.00    3.581e+06   4.6666e+05   4.1468e+05   4.6605e+05    -11.14%     -0.13%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 74,
+          "text_sha256": "cc0c114db84cb4e63f645b0aa4b96717bf5a3d449b94eb0a6e4e5812f03232e9",
+          "text_preview": "\nsaved: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\results_phase1.npz\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 74,
+          "text_sha256": "1852b20ab8c18f7edbd6f616a8ffb8797c7e21da42c2b5dede5e1f45f53e1148",
+          "text_preview": "saved: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\results_phase1.json\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 25,
+          "text_sha256": "d1069a42adfbcee6c3902ac07993047332291298ae1b6062d4de25d7d9329253",
+          "text_preview": "\n=== Phase 1 summary ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 34,
+          "text_sha256": "488df7b41f14db4da340fe8a58a6c7def0fa44046620bbfad6cf2be1ca02963e",
+          "text_preview": "  CFEM coarse DOF: 44 (Hiruma 37)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 38,
+          "text_sha256": "b1fe40af9c0ef87f13e4557638bc3fed01da312ca4c6397d096cfa3a8da7d0d6",
+          "text_preview": "  CFEM fine   DOF: 3558 (Hiruma 9489)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 75,
+          "text_sha256": "8159d5b2279c514e60eb02d11d91cbfec68c1d1289d82a2f4f8be04f8f50b9fe",
+          "text_preview": "  at r/d=15: CFEM-coarse err = -11.14%, CFEM-fine err = -0.13% (vs Bessel)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "19532d14068c0868d6a83aef34b3d2143bce15291d30b6dfb6d402cc7df3873d",
+      "source_preview": "\"\"\"Phase 2 — Hiruma 2023 XFEM enrichment psi=exp(-gamma*xi) on cylinder.\n\nReference: Hiruma 2023 IEEE TMag 59(5), eq. (1)+(4):\n    u_h(x) = sum_i  u_i N_i(x)              (standard part)\n           + sum_{i in E} N_i(x) * psi(x) a_i     (enriched part)\n    psi(x) = exp(-gamma * xi(x))\n    gamma = sqrt(j*omega*sigma*mu),  xi(x) = signed distance from surface\n\nFor the cylinder of radius R: xi(x,y) = R - sqrt(x^2+y^2)  (positive inside).\n\nThis is a Partition-of-Unity FEM enrichment (NOT cut-element XFEM): the mesh\nconforms to the boundary, and we enrich nodal DOFs near the surface with the\nexponential skin-decay profile.\n\nStrategy in NGSolve:\n    - Compound FE space fes = fes_std x fes_enr\n    - Both are H1, order=1, complex=True, Dirichlet on \"outer\"\n    - The \"selection\" of enriched nodes is done by setting fes_enr DOFs in\n      the bulk to zero (Dirichlet-like) — only a band near r=R is free.\n      For simplicity, this prototype enriches ALL nodes; later refinement\n      restricts to t",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "e23d9f0f3f67062a77a1b5a70cbb1dff924591056c198f046425c0a29bca7d80",
+          "text_preview": "output dir: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 26,
+          "text_sha256": "55117d076e45f662b5dab34bceff9ca8ac42cbab66cc9c9dbfd5340954f295ab",
+          "text_preview": "coarse mesh: ne=66, nv=44\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 55,
+          "text_sha256": "e705535cc5dfc95cb96a20e3a5bcc491856edae79f5c05e06468c9169a4e5743",
+          "text_preview": "\n=== XFEM sweep (Hiruma exp(-gamma*xi) enrichment) ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 78,
+          "text_sha256": "0d4878dc01f6c418207ec64d5feaf93519c696227d09320527097ba54d136d1c",
+          "text_preview": "   r/d        omega       P_bess       P_xfem   err_xfem err_coarse (Phase 1)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "dca9516f9a918177ae121e49c7cc383423f701d4b7e733b35f24faa44540b314",
+          "text_preview": "  0.10    1.592e+02   4.1666e+00   3.8346e+00     -7.97%     -7.55%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "39c38d2bdbac733dd19b591723f5d42d4256bdb8d34c50c08c2e0f3e10c5436e",
+          "text_preview": "  0.30    1.432e+03   3.3718e+02   3.1029e+02     -7.97%     -7.55%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 67,
+          "text_sha256": "6ae52757b83661397f00e75e96cbe070b6ab8ab65b5b79a8d2116bd1c10bf8d5",
+          "text_preview": "  0.50    3.979e+03   2.5850e+03   2.3795e+03     -7.95%     -7.51%",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "278d34540ba0b2d5d8a17c501209e8aec1b5f9c66d23a94f697a1f2346578c23",
+          "text_preview": "  1.00    1.592e+04   3.7247e+04   3.4477e+04     -7.44%     -6.87%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "a67623a6da43ecbdecd558eccf20c4eead6280f8c5b5e81c0c259544cc7ce461",
+          "text_preview": "  1.50    3.581e+04   1.3194e+05   1.2416e+05     -5.90%     -5.15%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "ff60c4d5a0bbf9c08195f28e7f84ec9994f7a217878a13e0ecbf56aba3023f0c",
+          "text_preview": "  2.00    6.366e+04   2.3173e+05   2.2209e+05     -4.16%     -3.49%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 67,
+          "text_sha256": "3f69b9ee129ba154e1bda252c73b3fe9425e64f099150e3452f40b13e7ab57eb",
+          "text_preview": "  3.00    1.432e+05   3.3224e+05   3.2394e+05     -2.50%     -2.98%",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "2e3275d1d633e23a192a7768d7b1aff38acce9d835a39966aa058aed9c1312be",
+          "text_preview": "  5.00    3.979e+05   3.9968e+05   3.9074e+05     -2.24%     -4.84%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "9cc99432bc5d53b9a23786370dd75cbd25d65770c6a2cf81ff6ad9e439272ca9",
+          "text_preview": "  7.00    7.799e+05   4.2847e+05   4.1831e+05     -2.37%     -6.52%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "b0b9de756c9c01cc40663259889aeb093df98da3110efa1fa954a2f0f9e68688",
+          "text_preview": " 10.00    1.592e+06   4.4997e+05   4.3955e+05     -2.31%     -8.72%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "6f128d1966907645b75971f501c4ac71b1eeda679730d20264ae613b81a19910",
+          "text_preview": " 12.00    2.292e+06   4.5831e+05   4.4890e+05     -2.05%     -9.85%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "0071c59b5fa54c928ce667a3853160affa35d5cdaee0dcd0d53e30caf71160dc",
+          "text_preview": " 15.00    3.581e+06   4.6666e+05   4.5917e+05     -1.61%    -11.14%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 74,
+          "text_sha256": "9eb2ed41030db40e9a01f6cc7c96fb7b4883eedef3a2b5841401d3e212216cc1",
+          "text_preview": "\nsaved: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\results_phase2.npz\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 24,
+          "text_sha256": "e73a52a20fea50b8bbc6a957f74bd60113dc977eb4583c0c3c5f5693151f0ae7",
+          "text_preview": "=== Phase 2 summary ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 38,
+          "text_sha256": "5329dd7fee7c4e618e202cf87cbd3df3bf13263d99016e6731d04da50f78b34d",
+          "text_preview": "  XFEM DOF (all-node enrichment) = 88\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 64,
+          "text_sha256": "557842a5448754bd8e14d2c60bd14a71890175b738376b60c6623fdb6815fd74",
+          "text_preview": "  XFEM coarse-mesh error at r/d=15: -1.61% (Hiruma claims < 3%)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "efad8aab2f0bda85ff04697cea0e023832e5b144d90b34ebead4e8eae9cbc0c2",
+      "source_preview": "\"\"\"Phase 3 — sqrt(s) Schur block CLN vs Hiruma XFEM vs CFEM on cylinder.\n\nBuilds the 4-way numerical comparison for paper 1 §V / paper 2 §VI:\n\n    Method                                       DOF    Error r/d=15\n    -----------------------------------------    ----   -----------\n    CFEM fine                                    ~3.5k  < 0.2% (reference)\n    CFEM coarse                                    44   -11%   (Phase 1)\n    Hiruma XFEM                                    88   -2%    (Phase 2)\n    Schur-complement augmented CLN                  5   ?      (this Phase)\n\nAugmentation construction (paper 1 §III, \"Schur-Complement Augmentation:\nThe sqrt(s) Block\"):\n    Y_R(s) = Y_CLN(s) + K_SIBC sqrt(s) / (s + d)\n    where Y_CLN(s) = rational [N-1 / N] Pade at s=0\n    extracted from the coarse-mesh matrices, and\n    K_SIBC = perimeter * sqrt(sigma/mu) = 2 pi R sqrt(sigma/mu)\n    for the 2D cylinder (per-unit-length admittance).\n\nY(s) here = total current per unit boundary E_z, i.e.\n    Y",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 69,
+          "text_sha256": "f6317a5ec0e0b9c6e633386a5dd869a9b3c8f8fa0b2dc6a87d03c3d4380992b9",
+          "text_preview": "K_SIBC for cylinder = 2 pi R sqrt(sigma/mu) = 5.604991e+04 S/m^(1/2)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 29,
+          "text_sha256": "e16bb82def0fc2cba59b9e6a3e05a6d3c2bd3a54e0acae33d9b2c00dec2cfcbb",
+          "text_preview": "coarse: nv=44, fine: nv=3558\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 56,
+          "text_sha256": "ff52f479fa443ee95c17cb0d0416b7b0e566663eb11fce587f361a3d2c7a1efd",
+          "text_preview": "\n=== Augmented CLN extraction (sqrt(s) Schur block) ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 17,
+          "text_sha256": "924fadfc8ab15e5c4b71c5f588efd3711fc4bbd32d0ec5e033b90aafe39e19db",
+          "text_preview": "  basis size = 4\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 66,
+          "text_sha256": "49dfe94d1050e291c61e7716573ff32cabe9c22190032e065f2715993098b542",
+          "text_preview": "  Y_DC (a_0) = 3.1416e+02  (analytical sigma*pi*R^2 = 3.1416e+02)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 201,
+          "text_sha256": "2986b457253a0dd7df871ccbba3f38d64e97cdd182aabc7c1978b34cc5056472",
+          "text_preview": "  a_coeffs   = [314.1592653589794, -0.004676611494877553, 9.554776946100012e-08, -1.9927280313665852e-12, 4.169405569990266e-17, -8.728187265816242e-22, 1.8273013089681666e-26, -3.825622866266977e-31]\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 26,
+          "text_sha256": "0e59c875c48cbb1e26fde366efabefcbd5edaf233b5c1ce4b469cbce951e70f9",
+          "text_preview": "  d crossover= 4.6021e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 26,
+          "text_sha256": "269718c66c773dbf6106fd140a6360f2e6fea5dabadfd7824c678266c178ebbc",
+          "text_preview": "  K_SIBC     = 5.6050e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "687ca42ae1ff1e5ac71ff6e3f4490eee5e509c5f0ede190857d3fb3c92bf49a0",
+          "text_preview": "\n=== 4-way Y(jw) comparison ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "451d7c1f9521ca316af057ef938a7f90d6a8ceaf5f2bc763d21e3a4c9ad0d680",
+          "text_preview": "  r/d     |Y_bess|     |Y_fine|   |Y_coarse|     |Y_xfem|      |Y_aug|\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "3300c01e3d8a3871dc1975574855ea14bd8907f8984e364a1599411f6e945d89",
+          "text_preview": "                        errFINE    errCOARSE      errXFEM       errAUG\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "b102d5fafe4463ac88f09c3a144d5719b000faba37f4d765b4e77a0472f9d734",
+          "text_preview": " 0.10   3.1416e+02   3.1416e+02   3.1416e+02   3.1416e+02   3.2522e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "76da589d25dcb3483fcbd44188b13978c46be597f656d84f29bc74f59e5d8920",
+          "text_preview": "  err                    +0.00%       +0.00%       +0.00%       +3.52%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "f138c80199eda7cd23d962aefdaea53a59c3b35e10dd02abf1bb5099d0a95028",
+          "text_preview": " 0.30   3.1403e+02   3.1403e+02   3.1403e+02   3.1404e+02   3.4843e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "3ed365a37f6b7b78e7cb0b88869c1b9ad709c2a2976ba974352a273d09c5e124",
+          "text_preview": "  err                    +0.00%       +0.00%       +0.00%      +10.95%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 70,
+          "text_sha256": "1720188cedcb7f8f5508927322947fcf3d164a5d4be7fd15ac4cae88ac28cb6b",
+          "text_preview": " 0.50   3.1314e+02   3.1314e+02   3.1320e+02   3.1322e+02   3.7251e+02",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "526cb676f0fc7c2cf7ffe85adf192ff37a1703e997d823dae179a396fe3c9181",
+          "text_preview": "  err                    +0.00%       +0.02%       +0.02%      +18.96%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "4951620f0568dc74be3dcd6d056b1835f58389c5724978156e656e67c9cd7894",
+          "text_preview": " 1.00   2.9918e+02   2.9919e+02   2.9999e+02   3.0020e+02   4.2298e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "f4e05dec0401a2ab4246ac5bed40ad72ca69f09f788229e6a3e10d2f51c61ee3",
+          "text_preview": "  err                    +0.00%       +0.27%       +0.34%      +41.38%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 70,
+          "text_sha256": "5c9a67edbc107f976636017dc676b785b7e4ce65112f9836bab8b26eb05e7410",
+          "text_preview": " 1.50   2.5731e+02   2.5733e+02   2.5947e+02   2.6046e+02   4.2489e+02",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "010592013395cd44b15a5ede008a3fc6db9a5881e78ab66dd029d7da0d52da20",
+          "text_preview": "  err                    +0.01%       +0.84%       +1.22%      +65.13%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "423d00dd69bacf0482168ab19989f3f32ccefe62fbf5d384f9326b68e6032414",
+          "text_preview": " 2.00   2.0463e+02   2.0465e+02   2.0679e+02   2.0910e+02   3.7858e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "a2b9c6547ae4a9c81dc7bd3491e133a85407c6ea259630131f99f60fbbbab468",
+          "text_preview": "  err                    +0.01%       +1.06%       +2.19%      +85.01%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "14902abda54ced4d1113ccc92ad0ac0dd674270a8a175a11da5473b0b9371d4f",
+          "text_preview": " 3.00   1.3685e+02   1.3686e+02   1.3779e+02   1.4097e+02   2.7798e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "1d55b0ff0c609a920c2244df3dec50704fc8e9d7a81b9544d149e9d4fcd915d6",
+          "text_preview": "  err                    +0.00%       +0.68%       +3.01%     +103.13%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "54b80c41c7f70bd0814128832327a08d1dfa1411c4fc21c3723616d666bb7579",
+          "text_preview": " 5.00   8.4579e+01   8.4583e+01   8.8178e+01   8.7719e+01   1.7612e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "c7d4a8c37eb98b085db9f3f234da851b601cc4396174b330dca3f1b408e1d63a",
+          "text_preview": "  err                    +0.00%       +4.25%       +3.71%     +108.23%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "8686b10d6fbc8a21fa0940edffc79a215d819c0d6bdb3f8459aee6365bed162c",
+          "text_preview": " 7.00   6.1255e+01   6.1258e+01   6.8942e+01   6.3507e+01   1.3090e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "75537016a882de80f0976bb8fcef07dee2a4bed0303f78ba4357b0fd0cca3a0e",
+          "text_preview": "  err                    +0.00%      +12.55%       +3.68%     +113.69%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "b0cf9a86536fb1ed3c346dc28736d2f56cf89a0f5aa254cd28df721b8a57de5a",
+          "text_preview": "10.00   4.3335e+01   4.3338e+01   5.8391e+01   4.3737e+01   1.0015e+02\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "8f541167eecfac415973590fae3bb94d73813b1f7c48d48e3312c8f978bcf188",
+          "text_preview": "  err                    +0.01%      +34.74%       +0.93%     +131.11%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "8bc94fbbd13a2d616644b90fb567307f9cad4c5a6170c1e2c6783b7699cb582d",
+          "text_preview": "12.00   3.6262e+01   3.6267e+01   5.5798e+01   3.5806e+01   8.9755e+01\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "dee6c98ca2d10aba4fc7fec2f4b83eb4fa122f00ffe6d7616836fb125ab09cfd",
+          "text_preview": "  err                    +0.01%      +53.87%       -1.26%     +147.52%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "34cb43fab294245f60a7babcf92b2bd7cf567d547fd0d39d03ba4292d4484e49",
+          "text_preview": "15.00   2.9130e+01   2.9141e+01   5.4151e+01   2.9171e+01   8.0512e+01\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 71,
+          "text_sha256": "c1d8815081ca021ee5f920d48d2488d281ec2af7818f89143bd6a94258303908",
+          "text_preview": "  err                    +0.04%      +85.89%       +0.14%     +176.39%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 74,
+          "text_sha256": "985615b55e6ab25ab3b502caa1a1a28a2b6a6ddfa38a2226e0d64a7546d66d67",
+          "text_preview": "\nsaved: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\results_phase3.npz\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 56,
+          "text_sha256": "2356b2e1d900f8382c2c90da8aa988db061fa975559d35cfa42913cc2e86bca6",
+          "text_preview": "\n=== Phase 3 summary (DOF count + errors at r/d=15) ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 44,
+          "text_sha256": "5b4aee5b9812f44ee8adf4f98f87a5d5680534b8c1570c29d017fce31291320c",
+          "text_preview": "  Bessel:        DOF n/a   |Y| = 2.9130e+01\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 41,
+          "text_sha256": "da3350e81c0cd9af059bf96d769f84f8571ba64d56c0d8dd4b417fa8330ba7be",
+          "text_preview": "  CFEM fine:     DOF ~3.5k err = +0.036%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 42,
+          "text_sha256": "710018fe0c1e287954a3b06e1062f13bc747cbb10f892d3c57a5e7ea51e20c79",
+          "text_preview": "  CFEM coarse:   DOF    44 err = +85.891%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 41,
+          "text_sha256": "dd298165d6a0dfd111e7faa77a4eb539e9f2f503a2ff7c14774b269ba937954b",
+          "text_preview": "  Hiruma XFEM:   DOF    88 err = +0.139%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 61,
+          "text_sha256": "b252659dd8944b3ece9d7a7c4a5a5ed2aad3fca6167553218a9dc35cb450ff37",
+          "text_preview": "  Augmented CLN (sqrt(s) Schur block): DOF 5 err = +176.386%\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "78de218833b338527aa190d5a7f6fec641ff3b6402917c75dd1e5785df49e474",
+      "source_preview": "\"\"\"Phase 3b — Krylov-Galerkin augmented CLN, replacing the broken Pade.\n\nPaper 1 §III specifies:\n    Y_CLN(s) = sigma * b_r^T K_r(s)^{-1} b_r\nwhere K_r(s) = Q^T K(s) Q is the Galerkin-projected reduced matrix\nwith basis Q (an N x M matrix, N = FE DOFs, M = ROM size).\n\nConstruction of Q (paper 1 §II canonical CLN basis at s=0):\n    q_0 = K_0^{-1} b                  (DC solution)\n    q_k = K_0^{-1} (sigma * M * q_{k-1})  for k = 1..M-1\n    Q = [q_0, q_1, ..., q_{M-1}], orthonormalised (modified Gram-Schmidt\n        in the M-inner-product to preserve Cauer canonical form)\n\nAt runtime:\n    K_r(s) = Q^T K_0 Q + s * sigma * Q^T M Q       (M x M complex matrix)\n    b_r    = Q^T b                                  (M x 1)\n    Y_CLN(s) = computed directly as the FE side dictates:\n        Y_FE(s) = sigma*area - s*sigma^2 * b_const_r^T K_r(s)^{-1} b_const_r\n        (volume-source split, exactly the same as Phase 3 attempt)\n\nThis avoids the Pade Hankel ill-conditioning entirely — all arithmetic\nsta",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 39,
+          "text_sha256": "ef342578751200975b52e50828d75b6ac26604a6df1ee8a7642d8f5343853905",
+          "text_preview": "K_SIBC = 5.6050e+04, AREA = 3.1416e-04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 19,
+          "text_sha256": "1e6d3d48fb445486b11929ffd70128eb92d54b69c67d0f4cc801d325c912de83",
+          "text_preview": "coarse mesh: nv=44\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 19,
+          "text_sha256": "d45d3e58de23ce58eca85b1966de7547ec2d17575bbae6726108b9a473a72c1c",
+          "text_preview": "\n=== M_ROM = 3 ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "915aee72b10ad9452d1182ed27b6634282237f6a2e0827740b8fe331947a1206",
+          "text_preview": "  Krylov basis: 3 columns built\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "7d6fcd56b9ac5d5a3d2de2194d2a51fed133a8c54deaca5bef2f114b3a964f6c",
+          "text_preview": "  smallest eig of (K0_r, sigma*M_r): 4.7765e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "9dc617b4009a4b76830ed33ad1ff0506bb942e1333b4cb3acbff2a18b642183a",
+          "text_preview": "  analytical 1st pole:               4.6021e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "c00333acd7c948532e8bd8a2c23e8f8c2ebedf7732b587d10e2abe44a69bf143",
+          "text_preview": "  r/d     |Y_bess|      |Y_aug|    err_aug\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5b0ac6a6645ad61b2c80907a56330d262b230c9da019e49c24ef035082392529",
+          "text_preview": " 0.10   3.1416e+02   3.2480e+02     +3.39%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5329c866e70c4fd2abe50dabca5077633d0e171e5ed453df6f1a55efb213b334",
+          "text_preview": " 0.30   3.1403e+02   3.4709e+02    +10.53%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "bdf58371d577ddb84a7bc9d0df1397b778b8315fb5024f2915cd335ee0d63dd2",
+          "text_preview": " 1.00   2.9918e+02   4.1800e+02    +39.71%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "dd1016ed00655a8a01dc67d8e8feb9dfd8b8042b27203cfb354bc2a7963b26c5",
+          "text_preview": " 3.00   1.3685e+02   2.7736e+02   +102.67%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "30ce805ccc408c136e0acaf8d2323972bbc5b9dde3dc559e3cedf52d8d6c897e",
+          "text_preview": " 5.00   8.4579e+01   1.7610e+02   +108.21%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "01aa56f4f3a142f287b464422fa55bdb490f11c36e5ee6cea084d4174bdbabea",
+          "text_preview": "10.00   4.3335e+01   9.9968e+01   +130.69%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "bfa34fe27ccde5a0142841e8b16665dd47c9ede00023e1d3f3bcedc09f117ef7",
+          "text_preview": "15.00   2.9130e+01   8.0024e+01   +174.71%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 19,
+          "text_sha256": "30686dfb4fdd64f047e370c33c48410300064822f55a144368bdf73bb991766d",
+          "text_preview": "\n=== M_ROM = 4 ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "2f71b8921f3cd16a886433a9bb8c9bbe945f6a2570e187d503819dcca48004f7",
+          "text_preview": "  Krylov basis: 4 columns built\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "7d6fcd56b9ac5d5a3d2de2194d2a51fed133a8c54deaca5bef2f114b3a964f6c",
+          "text_preview": "  smallest eig of (K0_r, sigma*M_r): 4.7765e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "9dc617b4009a4b76830ed33ad1ff0506bb942e1333b4cb3acbff2a18b642183a",
+          "text_preview": "  analytical 1st pole:               4.6021e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "c00333acd7c948532e8bd8a2c23e8f8c2ebedf7732b587d10e2abe44a69bf143",
+          "text_preview": "  r/d     |Y_bess|      |Y_aug|    err_aug\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5b0ac6a6645ad61b2c80907a56330d262b230c9da019e49c24ef035082392529",
+          "text_preview": " 0.10   3.1416e+02   3.2480e+02     +3.39%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5329c866e70c4fd2abe50dabca5077633d0e171e5ed453df6f1a55efb213b334",
+          "text_preview": " 0.30   3.1403e+02   3.4709e+02    +10.53%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "bdf58371d577ddb84a7bc9d0df1397b778b8315fb5024f2915cd335ee0d63dd2",
+          "text_preview": " 1.00   2.9918e+02   4.1800e+02    +39.71%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "dd1016ed00655a8a01dc67d8e8feb9dfd8b8042b27203cfb354bc2a7963b26c5",
+          "text_preview": " 3.00   1.3685e+02   2.7736e+02   +102.67%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "30ce805ccc408c136e0acaf8d2323972bbc5b9dde3dc559e3cedf52d8d6c897e",
+          "text_preview": " 5.00   8.4579e+01   1.7610e+02   +108.21%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "e6a5bc7a5b4bb4abe6b408bf313d0090984c253dc92c426c743a9595bbc10e0b",
+          "text_preview": "10.00   4.3335e+01   9.9985e+01   +130.73%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "cc79086fa7136d28d5b0eaa768a84387f8414878c4ca468f3a983e7e6bfc44c5",
+          "text_preview": "15.00   2.9130e+01   8.0004e+01   +174.64%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 19,
+          "text_sha256": "5ef15120b6b2df70aad843db0800c915e3f6a5dd38705ef02d02afaa1db9d10b",
+          "text_preview": "\n=== M_ROM = 5 ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "58895e7385ec56959c6e9cf622971dd558cb00fb6e95343fc8fef7ae9fae32b5",
+          "text_preview": "  Krylov basis: 5 columns built\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "7d6fcd56b9ac5d5a3d2de2194d2a51fed133a8c54deaca5bef2f114b3a964f6c",
+          "text_preview": "  smallest eig of (K0_r, sigma*M_r): 4.7765e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "9dc617b4009a4b76830ed33ad1ff0506bb942e1333b4cb3acbff2a18b642183a",
+          "text_preview": "  analytical 1st pole:               4.6021e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "c00333acd7c948532e8bd8a2c23e8f8c2ebedf7732b587d10e2abe44a69bf143",
+          "text_preview": "  r/d     |Y_bess|      |Y_aug|    err_aug\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5b0ac6a6645ad61b2c80907a56330d262b230c9da019e49c24ef035082392529",
+          "text_preview": " 0.10   3.1416e+02   3.2480e+02     +3.39%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5329c866e70c4fd2abe50dabca5077633d0e171e5ed453df6f1a55efb213b334",
+          "text_preview": " 0.30   3.1403e+02   3.4709e+02    +10.53%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "bdf58371d577ddb84a7bc9d0df1397b778b8315fb5024f2915cd335ee0d63dd2",
+          "text_preview": " 1.00   2.9918e+02   4.1800e+02    +39.71%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "dd1016ed00655a8a01dc67d8e8feb9dfd8b8042b27203cfb354bc2a7963b26c5",
+          "text_preview": " 3.00   1.3685e+02   2.7736e+02   +102.67%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "30ce805ccc408c136e0acaf8d2323972bbc5b9dde3dc559e3cedf52d8d6c897e",
+          "text_preview": " 5.00   8.4579e+01   1.7610e+02   +108.21%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "fcadaccac93a60eecc93d31195c9e52a410499fd47acbeb6ee682d95e302154a",
+          "text_preview": "10.00   4.3335e+01   9.9986e+01   +130.73%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5ba50987686a5419208e6b84f308e3179b943405ffa69e9b85d408a75017a275",
+          "text_preview": "15.00   2.9130e+01   8.0003e+01   +174.64%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 19,
+          "text_sha256": "2e3a522c69bd976516f333afd3fadb900305147356c09ff42697a906a1bad769",
+          "text_preview": "\n=== M_ROM = 6 ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "fa0d6d7bc4eb79998ca5e5d8a09baba42584d2334e74c549ed848ebda1e52c34",
+          "text_preview": "  Krylov basis: 6 columns built\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "7d6fcd56b9ac5d5a3d2de2194d2a51fed133a8c54deaca5bef2f114b3a964f6c",
+          "text_preview": "  smallest eig of (K0_r, sigma*M_r): 4.7765e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 48,
+          "text_sha256": "9dc617b4009a4b76830ed33ad1ff0506bb942e1333b4cb3acbff2a18b642183a",
+          "text_preview": "  analytical 1st pole:               4.6021e+04\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "c00333acd7c948532e8bd8a2c23e8f8c2ebedf7732b587d10e2abe44a69bf143",
+          "text_preview": "  r/d     |Y_bess|      |Y_aug|    err_aug\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5b0ac6a6645ad61b2c80907a56330d262b230c9da019e49c24ef035082392529",
+          "text_preview": " 0.10   3.1416e+02   3.2480e+02     +3.39%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5329c866e70c4fd2abe50dabca5077633d0e171e5ed453df6f1a55efb213b334",
+          "text_preview": " 0.30   3.1403e+02   3.4709e+02    +10.53%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "bdf58371d577ddb84a7bc9d0df1397b778b8315fb5024f2915cd335ee0d63dd2",
+          "text_preview": " 1.00   2.9918e+02   4.1800e+02    +39.71%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "dd1016ed00655a8a01dc67d8e8feb9dfd8b8042b27203cfb354bc2a7963b26c5",
+          "text_preview": " 3.00   1.3685e+02   2.7736e+02   +102.67%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "30ce805ccc408c136e0acaf8d2323972bbc5b9dde3dc559e3cedf52d8d6c897e",
+          "text_preview": " 5.00   8.4579e+01   1.7610e+02   +108.21%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "ecb25959a95e166a671c3963f8173f4a5d7982c18089221493765672870a0ec5",
+          "text_preview": "10.00   4.3335e+01   9.9990e+01   +130.74%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "5ba50987686a5419208e6b84f308e3179b943405ffa69e9b85d408a75017a275",
+          "text_preview": "15.00   2.9130e+01   8.0003e+01   +174.64%\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "b6a8c31378e0cd85bedfb984122fc32306c791739ca38177664918a13c416e6f",
+      "source_preview": "\"\"\"Phase 4 — XFEM-CLN Hankel conditioning experiment.\n\nHypothesis (user 2026-05-25):\n  XFEM enrichment with psi(x) = exp(-xi/delta_ref) absorbs the high-k\n  skin modes into the enriched DOFs.  The Krylov-from-K_0 sequence at\n  s=0 then only samples the \"bulk\" subspace whose tau_k spread is\n  narrower than the full spectrum.  This SHOULD improve the Hankel\n  matrix conditioning (kappa(H_N)) and EXTEND the float64 high-N\n  reliability of canonical CLN extraction.\n\nHypothesis is FALSIFIABLE: compute Taylor moments\n  mu_n = b^T (sigma K_0^{-1} M)^n K_0^{-1} b\nfor both CFEM (no enrichment) and XFEM (one ref-skin enrichment) on\nthe Hiruma 2023 cylinder.  Form Hankel matrices H_N, compute\ncondition numbers, predict float64 breakdown stage.\n\nExpected outcomes:\n  A. kappa(H_N) XFEM << kappa(H_N) CFEM at all N\n     -> XFEM = MOR-stage stability enabler (NEW finding).\n  B. kappa(H_N) XFEM ~ kappa(H_N) CFEM at all N\n     -> Hypothesis rejected, XFEM utility limited to skin-resolution.\n  C. Mixed (",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "e23d9f0f3f67062a77a1b5a70cbb1dff924591056c198f046425c0a29bca7d80",
+          "text_preview": "output dir: S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 18,
+          "text_sha256": "e3c08191df904951762b10ea12a43a48fecd9b1e1280984c8163d55d3fc89efd",
+          "text_preview": "mesh vertices: 44\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 95,
+          "text_sha256": "544484745368144c34f340e4b275cbed855a0d04d3247c2b267650ec3aac7b10",
+          "text_preview": "  omega_wall = 4.602e+04 rad/s (f = 7.32e+03 Hz)\n  delta_ref  = 5.881e-03 m  (R/delta = 1.700)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 30,
+          "text_sha256": "20c80a9aa29dbca8f5deed3d5e38f6b9bf78c7483d2114b8d36a0caeeda7c1ca",
+          "text_preview": "\n=== CFEM (no enrichment) ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 16,
+          "text_sha256": "d352ba533097ad5f3a2f94ba02c9b0fe81f85d732b57f462422631680802803e",
+          "text_preview": "  free DOFs: 24\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 498,
+          "text_sha256": "9614e2fe8b4c4519dfd950ff0ecaa3a1f7bd64f8ee44040d2b62b418efdd6197",
+          "text_preview": "  first 10 moments magnitudes (log10):\n    mu_0 = +4.6766e-03  (|.|: 4.68e-03)\n    mu_1 = +9.5548e-08  (|.|: 9.55e-08)\n    mu_2 = +1.9927e-12  (|.|: 1.99e-12)\n    mu_3 = +4.1694e-17  (|.|: 4.17e-17)\n    mu_4 = +8.7282e-22  (|.|: 8.73e-22)\n    mu_5 = +1.8273e-26  (|.|: 1.83e-26)\n    mu_6 = +3.8256e-31  (|.|: 3.83e-31)\n    mu_7 = +8.0093e-36  (|.|: 8.01e-36)\n    mu_8 = +1.6768e-40  (|.|: 1.68e-40)\n    mu_9 = +3.5106e-45  (|.|: 3.51e-45)\n\n=== XFEM (psi=exp(-xi/delta_ref), delta_ref=5.88e-03) ===\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 43,
+          "text_sha256": "c72398c05d3f27f22113e310ddede9da382633ec3ceb49744ee976c0e487ebe7",
+          "text_preview": "  free DOFs: 48 (CFEM: 24, XFEM extra: 24)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1173,
+          "text_sha256": "ac4ef9e593beb57b1de3cd0c25924ae61f9741a520674b068762e89d5aed72b9",
+          "text_preview": "  first 10 moments magnitudes (log10):\n    mu_0 = +4.6886e-03  (|.|: 4.69e-03)\n    mu_1 = +9.5081e-08  (|.|: 9.51e-08)\n    mu_2 = +1.9890e-12  (|.|: 1.99e-12)\n    mu_3 = +4.1819e-17  (|.|: 4.18e-17)\n    mu_4 = +8.8003e-22  (|.|: 8.80e-22)\n    mu_5 = +1.8522e-26  (|.|: 1.85e-26)\n    mu_6 = +3.8985e-31  (|.|: 3.90e-31)\n    mu_7 = +8.2056e-36  (|.|: 8.21e-36)\n    mu_8 = +1.7271e-40  (|.|: 1.73e-40)\n    mu_9 = +3.6352e-45  (|.|: 3.64e-45)\n\n=== Hankel condition number kappa(H_N) ===\n  N      CFEM kappa      XFEM kappa       ratio\n  1       1.000e+00       1.000e+00        1.00\n  2       1.152e+11       7.708e+10        1.49\n  3       2.931e+23       5.490e+22        5.34\n  4       3.803e+36       2.240e+35       16.98\n  5       3.194e+48       7.898e+47        4.04\n  6       2.938e+59       7.666e+58        3.83\n  7       3.482e+71       4.365e+70        7.98\n  8       4.337e+80       1.193e+82        0.04\n  9       5.980e+90       3.284e+88      182.08\n 10      2.184e+101       1.350e+99      161.79\n\nFloat64 breakdown (kappa > 1e+15):\n  CFEM: N_break = 3\n  XFEM: N_break = 3\n\nWrote S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\phase4_xfem_hankel_results.json\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 173,
+          "text_sha256": "18f3f6853c645252504eb27ca9d325e2c0dca7a57bb43434ef642df89e55de3f",
+          "text_preview": "Wrote S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\phase4_xfem_hankel_conditioning.pdf, S:\\Radia\\01_GitHub\\docs\\hiruma_xfem_comparison\\phase4_xfem_hankel_conditioning.png\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 6,
+      "source_sha256": "6ea72559cf24d5b948b280bf13f39f1e80a89fbe8829642e8734705234f953c2",
+      "source_preview": "from IPython.display import Image\nImage(\"phase4_xfem_hankel_conditioning.png\")",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 160588,
+              "sha256": "f85d774e61125f64c7db3065cba22070847679322c42581ab7e0f737fa7fd267"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
