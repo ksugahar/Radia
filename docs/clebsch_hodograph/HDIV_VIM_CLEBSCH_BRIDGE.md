@@ -165,7 +165,7 @@ foliated fields). The concrete open questions:
   `_hdiv_tet_volfield_linear` / `_hdiv_tri_field` are ~7× faster than the numpy
   vectorised path and machine-identical, but still `O(N²)`). The concrete
   enabler is the **batched H-matrix charge-field assembler** (the field-version
-  of the charge Gram `B`, `docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md` item d) —
+  of the charge Gram `B`, `docs/hdiv_vim/polynomial_charge_field.ipynb` item d) —
   the parallel C++ work is heading there.
 - **Open (the hard prize):** the 3-D saturation linearisation — a 3-D
   Chaplygin-analogue valid where the helicity obstruction vanishes.
