@@ -5,7 +5,7 @@ the finite-difference conditioning noise; see examples/vim/multipole_moment_anal
 element it returns the demag field H and gradient gradH at the element CENTROID as linear functionals of
 every source DOF charge:
   SELF face  -> bare charged-face field (interior centroid -> finite, no center charge);
-  MUTUAL face -> yano dipole layer = bare face - area*(point @ source center)  (finite -> singularity-free).
+  MUTUAL face -> collocation MMMM dipole layer = bare face - area*(point @ source center)  (finite -> singularity-free).
 Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  Output is (nHex, 9, dof) with component order
 (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz); C[e,0:3,:] is the centroid field functional, C[e,3:9,:] the gradient.
 
@@ -31,7 +31,7 @@ def _cube(L):
 
 
 def _build_get(hexes, mu_r=1e3):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = []
     for V in hexes:
         ob = rad.ObjHexahedron([list(v) for v in V], [0, 0, 0])

@@ -57,9 +57,8 @@ RADIA_GEOMETRY = """
 
 - **MMM (3 DOF)**: Volume magnetization, 3 components. For tetrahedra / RecMag.
 - **MSC (5/6 DOF)**: Multipole-moment MMM magnetic surface charge on faces. Hexahedra have 6 DOF;
-  wedge/pyramid elements have 5 DOF. The name is intentional: this is not a Yano element label, but
-  the symbolic moment formulation that closes the face-charge DOF by monopole, dipole, and residual
-  quadrupole conditions.
+  wedge/pyramid elements have 5 DOF. This is the symbolic moment formulation that closes the
+  face-charge DOF by monopole, dipole, and residual quadrupole conditions.
 
 ## Examples
 
@@ -2273,7 +2272,7 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 ## Test Scripts
 
 - `examples/ngsolve_integration/mesh_magnetization_import/verified_ngsolve_to_radia.py` - FEM->Radia analytical pipeline
-- `examples/kelvin_transformation/A-formulation/` - Kelvin + A_r examples
+- `docs/kelvin/kelvin_classic_demos_results.json` - archived Kelvin + A_r examples
 """
 
 RADIA_PLAY_MODELS = """
@@ -3684,10 +3683,9 @@ RADIA_PEEC_CORE_PITFALLS = """
 
 5. **Current MSC solve is multipole-moment MMM**:
    Use `BuildMomentSystem` / `MomentSystemDenseRaw` / `MomentHMatrixProbe` when inspecting
-   the surface-charge system. The retired EIEM2 eval-point matrix is not the production path.
+   the surface-charge system. Do not reconstruct an ad-hoc point-collocation matrix.
 
-6. **No production Yano eval point**:
-   The old midpoint `(face_center + element_center)/2` was EIEM2-only and has been deleted.
+6. **No production face-center eval point**:
    Current multipole-moment MMM uses element-centroid applied fields and centroid field/gradient rows.
 
 7. **Center-charge correction is internal**:
@@ -3809,32 +3807,12 @@ The analytical formula returns H pointing INTO the charged surface (negative of
 the physical field from positive sigma). The result must be **negated** to match
 Radia's sign convention where positive sigma produces H pointing away from the surface.
 
-### Retired EIEM2 evaluation point
+### Current surface-charge moment kernel
 
-The old EIEM2 MSC kernel evaluated each hexahedron face at the midpoint between
-the face center and the element center:
-
-```
-eval_point = 0.5 * (face_center + element_center)
-```
-
-That point-collocation kernel was removed. Current surface-charge soft iron uses
-the multipole-moment MMM path (`BuildMomentSystemCore` / centroid field-gradient coupling)
-and samples the applied field at the element centroid. Keep the midpoint rule only
-when reading or reproducing historical EIEM2 validation notes.
-
-### Retired EIEM2 center-charge correction
-
-The retired EIEM2 kernel added a point charge correction term at the source
-element center:
-
-```
-H_point = -area_face * (obs - src_center) / |obs - src_center|^3
-```
-
-Current surface-charge soft iron uses the multipole-moment MMM path, where the corresponding
-center-charge cancellation is internal to `CentroidFieldGradFromFace` and the moment
-assembly.
+Current surface-charge soft iron uses the multipole-moment MMM path
+(`BuildMomentSystemCore` / centroid field-gradient coupling).  Applied fields are sampled
+at element centroids; mutual center-charge cancellation is internal to
+`CentroidFieldGradFromFace` and the moment assembly.
 
 ### Schur complement for PEEC-MSC coupling
 

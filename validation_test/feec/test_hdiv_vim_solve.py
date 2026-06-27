@@ -138,8 +138,8 @@ def test_minres_iters_bounded_vs_mu_r_distorted():
     field-null BY CONSTRUCTION on ANY mesh (N = B^T G B, so any ker(B) loop gives N.loop = 0 exactly,
     affine OR distorted) -- distortion does NOT create a growing near-null space.  This is the de-Rham
     HDiv advantage over the six-face surface-charge combinatorial +/-1 loops, which are field-null ONLY on affine
-    hexes and carry field on distorted ones (the de-Rham defect the hand-crafted Yano elements / the
-    shipped MSC's installCycle retrofit have to work around).  Here the iters even DECREASE with mu_r
+    hexes and carry field on distorted ones (the de-Rham defect the hand-crafted surface-charge elements /
+    the shipped MSC's installCycle retrofit have to work around).  Here the iters even DECREASE with mu_r
     (the loops, which would otherwise blow up, sit exactly at field-null)."""
     nx = ny = nz = 4
     H = _rp._HDivVimHMatrix(nx, ny, nz, 4, 0.18, 1e-6, 32, 2.0)   # nsub=4 accurate Gram, distort=0.18

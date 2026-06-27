@@ -61,7 +61,7 @@ operator is the SYMMETRIC Galerkin form
   hexes alike, so mu_r-independence SURVIVES distortion (measured: distort=0.18 grid, MINRES iters
   98/56/52/52 across mu_r 10 -> 1e4 -- bounded, even DECREASING).  The multipole-moment MMM constant-face
   loop patterns are field-null ONLY on affine hexes (the de-Rham defect: on distorted hexes they carry field);
-  the hand-crafted Yano elements / the shipped MSC's installCycle retrofit (~6e-9 local-null-vector)
+  the hand-crafted surface-charge elements / the shipped MSC's installCycle retrofit (~6e-9 local-null-vector)
   exist precisely to patch this.  HDiv-VIM needs NO hand-crafted elements and NO retrofit -- it is
   EXACT (machine, ~4e-16) on distorted meshes by construction.  This is a robustness / generality /
   maintainability win on its OWN (any mesher, any distortion, provably correct; see the README

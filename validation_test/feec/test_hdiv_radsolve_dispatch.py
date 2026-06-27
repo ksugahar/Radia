@@ -80,7 +80,7 @@ def test_radsolve_hdiv_image_passed_through():
     rad.UtiDelAll()
 
 
-def test_meshless_hex_soft_iron_not_registered_uses_yano():
+def test_meshless_hex_soft_iron_not_registered_uses_collocation_mmmm():
     """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via soft_iron_from_mesh) has
     no mesh association, so rad.Solve does NOT route it to the HDiv-VIM -- it falls through to the C++
     solver, which now solves it with the six-face surface-charge MSC (the Error203 guard was removed 2026-06-19).

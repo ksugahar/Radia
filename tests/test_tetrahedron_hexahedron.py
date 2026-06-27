@@ -169,10 +169,10 @@ class TestMaterialApplication:
         result = rad.Solve(tetra, 0.0001, 100, 0)
         assert result is not None
 
-    def test_hexahedron_soft_iron_solve_yano(self):
+    def test_hexahedron_soft_iron_solve_collocation_mmmm(self):
         """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the multipole-moment MMM
         MSC demag.  With no applied field M stays 0 --
-        this just locks that the mesh-less hex path SOLVES (no raise).  The yano physics (cube demag
+        this just locks that the mesh-less hex path SOLVES (no raise).  The collocation MMMM physics (cube demag
         ~1/3) is locked in tests/test_demag_backend.py."""
         rad.set_demag_backend("auto")
         s = 0.05

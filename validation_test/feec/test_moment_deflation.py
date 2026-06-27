@@ -56,7 +56,7 @@ def _cyoke(nxy, nz, mu_r):
 
 
 def _solve(nxy, nz, mu_r, method, deflate):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     rad.SolverConfig(hacapk_hlu_precond=False, moment_deflation=bool(deflate), bicgstab_tol=1e-8)
     objs = _cyoke(nxy, nz, mu_r)
     cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, MU0 * 1e3, 0.0])])
