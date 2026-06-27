@@ -1540,8 +1540,8 @@ between them.
 
 | Tool | Role | When to use |
 |---|---|---|
-| **build123d** (Python / OCCT) | **tet path, Python-driven** | Default CAD. VSCode-native authoring. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
-| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Shapes build123d cannot express cleanly (netgen.occ has limits). (3) Legacy `.jou` assets. |
+| **build123d** (Python / OCCT) + **Netgen/OCC** | **tet-only path, Python-driven** | Default CAD and tet-only meshing. VSCode-native authoring. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
+| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + mixed-mesh CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Hex-led meshes with tet regions and pyramid transition elements. (3) Shared-topology CAD cleanup via imprint/merge. (4) Shapes build123d cannot express cleanly. (5) Legacy `.jou` assets. |
 | (not used) | | FreeCAD (reproducibility), raw OCCT Python (verbose) |
 
 **This is a complementary split, not an either/or.** Both tools live in
@@ -1551,10 +1551,15 @@ the lab toolchain permanently. Cubit is **not** being deprecated.
 
 - **tet-only geometry** (boolean primitives, sweep, revolve, fillet):
   translate directly — see `cubit_rosetta` topic for the mapping table.
+  Mesh it with Netgen/OCC unless Cubit-specific labels, cleanup, or legacy
+  reproducibility is the actual reason for using Cubit.
 - **Cubit-only primitives** (`imprint all`, `merge all`, hex-sweep
   schemes, `block`, `sideset`, `nodeset`): do **not** invent build123d
   equivalents — these concepts don't exist here. Flag them and keep
   the `.jou` for the hex path instead.
+- **hex + tet transition meshes**: keep the `.jou` in Cubit and expect
+  pyramid transition elements. Use the Cubit MCP `cubit_vol_inventory`
+  preflight before choosing a downstream parser.
 - **Mesh directives** (`mesh volume N`, `scheme tetmesh`, size
   settings): in the build123d pipeline, meshing is **Netgen's job**.
   Drop these commands; pass `maxh` to `OCCGeometry.GenerateMesh()`.
@@ -1562,6 +1567,16 @@ the lab toolchain permanently. Cubit is **not** being deprecated.
   `part.label = "name"` + `Compound(children=[...])` + the
   `radia_mcp.build123d.pipeline.run_pipeline_multi` API
   which bridges labels to Gmsh physical groups.
+
+## Build123d slot gate: analytic mass properties first
+
+Before exporting a shape to Netgen or Cubit, compare build123d/OCCT mass
+properties with a closed form whenever possible.  For a centered box with a
+through cylindrical hole, use
+`box_through_cylinder_reference_row(x, y, z, radius, axis="z")`, then compare
+it with `shape_measurement_row(part)` via `shape_measurement_health_summary`.
+This catches boolean direction mistakes, unit mistakes, and accidental
+off-center holes before meshing.
 
 ## Related topics
 - `cubit_rosetta` — verb-by-verb mapping Cubit ↔ build123d
