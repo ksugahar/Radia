@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T22:19:05Z",
+  "generated_at_utc": "2026-06-27T22:23:45Z",
   "notebook": "docs/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb",
-  "notebook_sha256": "cd3a71fea6a6852fd2de398017a126f2f9513cddfa75deb9a42b0961cb6f82c4",
+  "notebook_sha256": "933cc53e715b66f9a7d5ba90b72f68a71602597013a11a3174bff22604fb00e4",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
