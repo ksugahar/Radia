@@ -28,7 +28,7 @@ topic kelvin_transformation(topic="material_exterior")):
     paper claim.
 
 VERIFIED (tests/open_boundary/test_kelvin_dtn.py, ported from the research demos
-examples/kelvin_transformation/DtN_spectrum/act6_01_kelvin_fem_eddy_dtn.py +
+archived `act6_01_kelvin_fem_eddy_dtn.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
 act6_07_cube_eddy_dtn_to_cln.py):
   * the radial Kelvin (R/rho')^2-weighted ball reproduces the closed-form
     `dtn_cln.eddy_dtn` per multipole (the "Kelvin BUILDS the exact DtN" check);
