@@ -491,8 +491,8 @@ import radia
 print(f'  radia.__file__ = {radia.__file__}')
 
 # Phase 2: mtime sanity
-for name in ['radia.bem_coupled_solver', 'radia.radia_gui_base',
-             'radia.radia_ih', 'radia.bem_inductance']:
+for name in ['radia.bem_coupled_solver', 'radia.notebook_workbench',
+             'radia.ih_notebook', 'radia.em_notebook', 'radia.bem_inductance']:
     m = importlib.import_module(name)
     st = os.stat(m.__file__)
     print(f'  {name:<32} mtime={int(st.st_mtime)} size={st.st_size}')
@@ -505,12 +505,15 @@ assert 'CoefficientFunction' in src and 'LinearForm' in src, \
     'BEM coupled per-DOF f_back not loaded'
 print('  OK: BEM coupled per-DOF f_back is active')
 
-# Phase 6: GUI display strings
-from radia.radia_gui_base import AnalysisWindow
-src = inspect.getsource(AnalysisWindow._on_finished)
-assert 'L (air)' in src and 'delta L' in src, \
-    'GUI display block missing latest strings'
-print('  OK: GUI display strings up to date')
+# Phase 6: notebook workbench wiring
+from radia.ih_notebook import IHWorkbench
+from radia.em_notebook import EMWorkbench
+from radia.pcb_notebook import PCBWorkbench
+from radia.motor_notebook import MotorWorkbench
+from radia.streamfunction_notebook import StreamFunctionWorkbench
+for cls in (IHWorkbench, EMWorkbench, PCBWorkbench, MotorWorkbench, StreamFunctionWorkbench):
+    assert hasattr(cls, 'build_command') or hasattr(cls, 'run_local'), cls.__name__
+print('  OK: notebook workbench modules import')
 "
 ```
 
@@ -797,67 +800,30 @@ print('OK: all 3 packages have consistent pyproject.toml / __init__.py versions'
 - 7b-g の L0/L1/L2 チェックは **コードレビューより先**に走る (static → run-time の順)
 - 個別実行は禁止。必ず 1→2→3→4→5→5b→6→7→7b→7c→7d→7e→7f→7g→8 の順序
 
-### Step 8 — Panel QA (MANDATORY when `radia_*.py` edited)
+### Step 8 — Notebook Panel QA (MANDATORY when notebook panel code changed)
 
-**POLICY**: `src/radia/radia_*.py` (パネル) または `src/radia/radia_gui_base.py`
-を編集したら、**`tests/panels/panel_qa.py` の全チェックを PASS させ、
-全パネル × 全モードの PNG を grab → 目視**するまで「動く」と言わない。
-`isVisibleTo()` だけの offscreen 検証は不足 (2026-04-20 user feedback;
-[feedback_panel_vertical_space.md](../../../memory/feedback_panel_vertical_space.md))。
+**POLICY**: `src/radia/*_notebook.py`, `src/radia/*_design.py`,
+`src/radia/notebook_workbench.py`, `src/radia/panels/notebooks/*.ipynb`, or
+`panel_notebook_manifest.json` を編集したら、**`ipynb-gui-health`** を正の
+panel gate として使う。Jupyter notebook workbench が canonical surface であり、
+normal Radia Python に PySide6 を追加して旧 desktop panel を検証対象に戻して
+はいけない。
 
-**対象画面**: 2K (2560×1440) 以上。1080p ノート PC は対象外。
-
-**自動チェック** (`tests/panels/panel_qa.py`):
-
-| チェック | 基準 |
-|---------|------|
-| height | `< 1200 px` FAIL、`< 1000 px` 理想 |
-| width | `< 1100 px` FAIL、`< 900 px` 理想 |
-| buttons_reachable | Run ボタン底 y が window.sizeHint().height() 以内 |
-| no_orphan_section_headers | セクション見出しの下に必ず可視な入力行 |
-| ascii_only_labels | `± ² ³ µ · × ÷ → ← ↑ ↓ ≤ ≥ ≠` を UI テキストに含めない |
-| method_combo_populated | Method combo は >= 1 項目、currentText が空でない |
-| visible_rows_have_labels | 可視の入力行には必ず左カラム label がある |
-
-**実行**:
+**自動チェック**:
 
 ```powershell
-# pytest 経由 (推奨、CI でも同じ)
-$env:QT_QPA_PLATFORM = "offscreen"
-pwsh -Command 'python -m pytest tests/panels/test_panel_qa.py -v'
+python -m pytest tests/panels/test_notebook_workbench.py -q
 ```
 
-または skill/開発用の直接呼出:
+このテストは次を同時に確認する:
+- active notebook が PySide6/PyQt に backslide していない
+- `DesignSpec(...)` cell が初期値の source of truth で、JSON は run artifact
+- `CommandWorkbench.run_local()` が `radia_result.v2` の `result.json` を残す
+- `calc_*.py` への argv と notebook manifest が一致している
 
-```powershell
-$env:QT_QPA_PLATFORM = "offscreen"
-python -c "
-import sys
-sys.path.insert(0, 'tests/panels'); sys.path.insert(0, 'src/radia'); sys.path.insert(0, 'src/radia/panels')
-from panel_qa import run_all_panel_checks
-run_all_panel_checks(screenshot_dir='temp', strict=True)
-"
-```
-
-**新しいパネルを追加したら**: `tests/panels/panel_qa.py` の
-`get_panel_registry()` に `(tag, WindowClass, combo_attr_or_key, value)` を
-追加。モードごとに別エントリ。
-
-**Codex 手動目視** (自動 PASS 後も必須):
-`Read` ツールで `temp/panel_*.png` を全部開いて目視確認する:
-- Run/Stop/Open GMSH ボタンが表示範囲内
-- ラベルの切れ落ち、orphan セクション見出し無し
-- ComboBox 現在値が切れずに見える
-- 文字サイズ・余白が他パネルと整合
-
-**よくある失敗** (過去の回帰):
-- `_set_row_visible("wp_sigma", False)` は Qt 6.4+ では `setRowVisible` で
-  collapse するが、対応するセクション見出し (`_add_section("Workpiece ...")`)
-  を別の key で tag しないと浮く → `_add_section(title, key="_sec_wp_*")`
-  で key を付け、`_set_row_visible(key, needs_wp)` も呼ぶ
-- `_on_method_changed` を `IHPanel.__init__` 内で呼ぶと、window binding
-  (`setVolRowVisible`) がまだ無効 → `IHWindow.__init__` で `_set_panel`
-  後にもう一度 `_on_method_changed(panel.val("method"))` を発火する
+旧 `tests/panels/test_panel_qa.py` は legacy PySide adapter を直接修正した時の
+補助チェックに限る。通常のリリース判定は notebook workbench と
+`cubit-plugin-install --verify-only` / `cubit-smoke-test` で行う。
 
 ### Panel Samples Quality Gate (Stage 1, MANDATORY)
 
