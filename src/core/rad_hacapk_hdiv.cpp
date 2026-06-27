@@ -1027,7 +1027,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
             q[a] = s;
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
-        if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG robust at all N
+        if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG-valid Gram apply
         else           MatVec(q, Gq);                  // general (asymmetric ACA) O(N log N) Gram H-matvec
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
@@ -1115,7 +1115,7 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
             q[a] = s;
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
-        if (symmetric) MatVecSym(q, Gq);                           // EXACTLY symmetric -> MINRES robust at all N
+        if (symmetric) MatVecSym(q, Gq);                           // EXACTLY symmetric -> MINRES-valid Gram apply
         else           MatVec(q, Gq);                              // general (asymmetric ACA) H-matvec
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) { // y = -B^T (G B x)
