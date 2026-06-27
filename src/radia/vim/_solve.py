@@ -639,6 +639,15 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         raise NotImplementedError("hdiv_demag_solve: linear_solver='hlu' is RT0-only (order=0)")
     if gram_backend == "gauss":
         raise NotImplementedError("hdiv_demag_solve: gram_backend='gauss' is not yet wired at order>0")
+    if int(order) > 2:
+        # The C++ analytic-moment charge potential (PhiAtHO_Analytic) is EXACT only for charge degree <= 2
+        # (order<=2): a tet volume charge of degree 2 (order 3) needs TetMoment2, and surface degree >= 3 needs
+        # higher moments -- neither exists yet, so order>=3 would be SILENTLY WRONG.  Fail loud (No-Fallbacks)
+        # until the Duffy singular quadrature (curved / order>=3 path) is ported.  [[hdiv-vim-sauter-schwab-cg]]
+        raise NotImplementedError(
+            "hdiv_demag_solve: order>2 is not yet supported -- the analytic-moment charge potential is exact "
+            "only to charge degree 2 (order<=2); order>=3 awaits the Duffy singular-quadrature port. Use order "
+            "in {0,1,2}.")
     # accuracy-preserving fast Gram build (near analytic + far low-quad), the build_charge_gram defaults; an
     # explicit gram_eps/near_factor/far_quad always wins (pass near_factor=inf to force the all-high-quad Gram).
     eff_eps = gram_eps if gram_eps is not None else 1e-10
