@@ -194,23 +194,46 @@ except ImportError:
 _demag_backend = None   # None/"auto" = API-split default; "yano" or "hdiv" = forced override
 
 
+# moment-Galerkin MMMM (radia.moment_galerkin) accepts these aliases; canonical = "moment_galerkin".
+_MG_BACKEND_NAMES = ("moment_galerkin", "mg", "galerkin")
+_BACKEND_MISSING = object()
+
+
 def set_demag_backend(name):
     """Select the soft-iron demag backend.  "yano" = multipole-moment MMM surface-charge MSC; "hdiv" = FEEC
-    HDiv-VIM; "auto"/None = API-split default (mesh-less -> yano, soft_iron_from_mesh -> HDiv).
-    The choice is consulted by rad.Solve.  Returns the effective backend string."""
+    HDiv-VIM; "moment_galerkin" (alias "mg"/"galerkin") = symmetric moment-Galerkin MMMM (radia.moment_galerkin,
+    N = B^T G B, mesh-backed soft iron only); "auto"/None = API-split default (mesh-less -> yano,
+    soft_iron_from_mesh -> HDiv).  The choice is consulted by rad.Solve.  Returns the effective backend string."""
     global _demag_backend
     if name in (None, "auto"):
         _demag_backend = None
     elif name in ("yano", "hdiv"):
         _demag_backend = name
+    elif name in _MG_BACKEND_NAMES:
+        _demag_backend = "moment_galerkin"
     else:
-        raise ValueError("demag_backend must be 'yano', 'hdiv', or 'auto'/None (got %r)" % (name,))
+        raise ValueError("demag_backend must be 'yano', 'hdiv', 'moment_galerkin', or 'auto'/None (got %r)"
+                         % (name,))
     return _demag_backend or "auto"
 
 
 def get_demag_backend():
-    """The selected soft-iron demag backend: "yano", "hdiv", or "auto" (the API-split default)."""
+    """The selected soft-iron demag backend: "yano", "hdiv", "moment_galerkin", or "auto"."""
     return _demag_backend or "auto"
+
+
+def _normalize_demag_backend(name):
+    """Normalize a per-call demag backend without mutating the global default."""
+    if name in (None, "auto"):
+        return None
+    if name in ("yano", "hdiv"):
+        return name
+    if name in _MG_BACKEND_NAMES:
+        return "moment_galerkin"
+    raise ValueError(
+        "demag_backend must be 'yano', 'hdiv', 'moment_galerkin', or 'auto'/None (got %r)"
+        % (name,)
+    )
 
 
 if "ObjCnt" in globals():
@@ -243,8 +266,11 @@ if "Solve" in globals():
             surface-charge MSC if demag_backend='yano';
           - mesh-LESS hex/wedge/pyramid soft iron -> multipole-moment MMM MSC (C++);
           - tetrahedron (MMM) and permanent magnets -> C++ solver.
-        A per-call demag_backend=('yano'|'hdiv'|'auto') overrides the global set_demag_backend choice."""
-        backend = kwargs.pop("demag_backend", None) or _demag_backend   # per-call > global > auto
+        A per-call demag_backend=('yano'|'hdiv'|'moment_galerkin'|'auto') overrides the global
+        set_demag_backend choice.  'moment_galerkin' (the symmetric MMMM, radia.moment_galerkin) needs a
+        mesh-backed soft iron (soft_iron_from_mesh) and is linear-only."""
+        backend_arg = kwargs.pop("demag_backend", _BACKEND_MISSING)
+        backend = _demag_backend if backend_arg is _BACKEND_MISSING else _normalize_demag_backend(backend_arg)
         top = args[0] if args else None
         registered = False
         if top is not None:
@@ -256,13 +282,21 @@ if "Solve" in globals():
         if registered:
             if backend == "yano":
                 return _cpp_Solve(*args, **kwargs)          # surface-charge MSC on the mesh-built elements
-            from radia.vim import _radsolve                 # auto/hdiv -> FEEC HDiv-VIM
-            return _radsolve.dispatch(*args, **kwargs)
+            from radia.vim import _radsolve
+            if backend == "moment_galerkin":               # symmetric moment-Galerkin MMMM on the SAME container
+                return _radsolve.dispatch_moment_galerkin(*args, **kwargs)
+            return _radsolve.dispatch(*args, **kwargs)      # auto/hdiv -> FEEC HDiv-VIM
         if backend == "hdiv":
             raise ValueError(
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "
                 "radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=); this body is mesh-less.  "
                 "Build it via soft_iron_from_mesh, or use the yano backend (the default for mesh-less iron).")
+        if backend == "moment_galerkin":
+            raise ValueError(
+                "demag_backend='moment_galerkin' needs a mesh-backed soft iron built via "
+                "radia.vim.soft_iron_from_mesh(mesh, mu_r=); this body is mesh-less.  Build it via "
+                "soft_iron_from_mesh, or call radia.moment_galerkin.moment_galerkin_demag_solve(elements, ...) "
+                "directly on the element vertex lists.")
         return _cpp_Solve(*args, **kwargs)                  # mesh-less -> surface-charge MSC (or MMM/PM)
 
 
