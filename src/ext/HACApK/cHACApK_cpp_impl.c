@@ -938,6 +938,99 @@ static void matvec_thread_func(int tid, int nthr, void *data) {
     }
 }
 
+/* TRANSPOSE H-matrix matvec thread func: y += A^T x.  Each leaf block(l,t) (rows l = nstrtl..,
+ * cols t = nstrtt..) contributes its TRANSPOSE -- i.e. x[l] -> y[t].  Mirror of matvec_thread_func
+ * with the l/t roles and the dgemv "N"/"T" flags swapped.  Used to (a) probe matrix symmetry and
+ * (b) form the symmetrized apply 0.5*(G x + G^T x).  Reads g_x_perm, writes g_y_thread[tid]. */
+static void matvec_transpose_thread_func(int tid, int nthr, void *data) {
+    typedef struct { st_cHACApK_leafmtx *st_lf; int nlf; } matvec_job_ctx;
+    matvec_job_ctx *ctx = (matvec_job_ctx*)data;
+    st_cHACApK_leafmtx *st_lf = ctx->st_lf;
+    int nlf = ctx->nlf;
+    const double d_one = 1.0;
+    const double d_zero = 0.0;
+    const int i_one = 1;
+    double *y_local = g_y_thread[tid];
+    double *tmp_vec = g_tmp_vec[tid];
+    int ip;
+    for (ip = tid + 1; ip <= nlf; ip += nthr) {
+        st_cHACApK_leafmtx leaf = st_lf[ip];
+        if (!leaf) continue;
+        int ndl = leaf->ndl, ndt = leaf->ndt;
+        int nstrtl = leaf->nstrtl, nstrtt = leaf->nstrtt;
+        double *a1 = leaf->a1, *a2 = leaf->a2;
+        if (leaf->ltmtx == 1) {
+            /* block(l,t) = a2 a1^T (a1: ndt x kt, a2: ndl x kt).  transpose = a1 a2^T: y[t] += a1 (a2^T x[l]) */
+            int kt = leaf->kt;
+            if (!a1 || !a2 || kt <= 0) continue;
+            dgemv_("T", &ndl, &kt, &d_one, a2, &ndl,        /* tmp(kt) = a2^T x[l] */
+                   &g_x_perm[nstrtl - 1], &i_one, &d_zero, tmp_vec, &i_one);
+            dgemv_("N", &ndt, &kt, &d_one, a1, &ndt,        /* y[t] += a1 tmp */
+                   tmp_vec, &i_one, &d_one, &y_local[nstrtt - 1], &i_one);
+        } else {
+            /* dense block(l,t) = a1^T (a1: ndt x ndl col-major).  transpose = a1: y[t] += a1 x[l] */
+            if (!a1) continue;
+            dgemv_("N", &ndt, &ndl, &d_one, a1, &ndt,
+                   &g_x_perm[nstrtl - 1], &i_one, &d_one, &y_local[nstrtt - 1], &i_one);
+        }
+    }
+}
+
+/* SYMMETRIC H-matrix matvec thread func: y = G_sym x with G_sym EXACTLY symmetric, built from the
+ * UPPER-triangular leaves only.  For a symmetric cluster tree (rows == cols, one geometry) the leaf
+ * partition is symmetric, so every above-diagonal block is covered by an upper leaf (nstrtl < nstrtt);
+ * that leaf supplies BOTH its own block (x[t]->y[l]) AND the mirror as its transpose (x[l]->y[t]),
+ * so the lower triangle is the EXACT transpose of the upper regardless of the (independently-ACA'd)
+ * lower leaves -- which is what makes the operator machine-symmetric and CG/MINRES robust at all N.
+ * Strictly-lower leaves (nstrtl > nstrtt) are SKIPPED (their pair is handled by the upper mirror);
+ * diagonal leaves (nstrtl == nstrtt, the dense self/near block filled exactly from the symmetric
+ * kernel) are applied once. */
+static void matvec_sym_thread_func(int tid, int nthr, void *data) {
+    typedef struct { st_cHACApK_leafmtx *st_lf; int nlf; } matvec_job_ctx;
+    matvec_job_ctx *ctx = (matvec_job_ctx*)data;
+    st_cHACApK_leafmtx *st_lf = ctx->st_lf;
+    int nlf = ctx->nlf;
+    const double d_one = 1.0;
+    const double d_zero = 0.0;
+    const int i_one = 1;
+    double *y_local = g_y_thread[tid];
+    double *tmp_vec = g_tmp_vec[tid];
+    int ip;
+    for (ip = tid + 1; ip <= nlf; ip += nthr) {
+        st_cHACApK_leafmtx leaf = st_lf[ip];
+        if (!leaf) continue;
+        int ndl = leaf->ndl, ndt = leaf->ndt;
+        int nstrtl = leaf->nstrtl, nstrtt = leaf->nstrtt;
+        double *a1 = leaf->a1, *a2 = leaf->a2;
+        if (nstrtl > nstrtt) continue;          /* strictly-lower: covered by the upper mirror */
+        int upper = (nstrtl < nstrtt);
+        if (leaf->ltmtx == 1) {
+            int kt = leaf->kt;
+            if (!a1 || !a2 || kt <= 0) continue;
+            /* forward x[t] -> y[l]:  tmp = a1^T x[t];  y[l] += a2 tmp */
+            dgemv_("T", &ndt, &kt, &d_one, a1, &ndt,
+                   &g_x_perm[nstrtt - 1], &i_one, &d_zero, tmp_vec, &i_one);
+            dgemv_("N", &ndl, &kt, &d_one, a2, &ndl,
+                   tmp_vec, &i_one, &d_one, &y_local[nstrtl - 1], &i_one);
+            if (upper) {                         /* mirror transpose x[l] -> y[t]:  tmp = a2^T x[l]; y[t] += a1 tmp */
+                dgemv_("T", &ndl, &kt, &d_one, a2, &ndl,
+                       &g_x_perm[nstrtl - 1], &i_one, &d_zero, tmp_vec, &i_one);
+                dgemv_("N", &ndt, &kt, &d_one, a1, &ndt,
+                       tmp_vec, &i_one, &d_one, &y_local[nstrtt - 1], &i_one);
+            }
+        } else {
+            if (!a1) continue;
+            /* forward dense block(l,t)=a1^T: x[t] -> y[l] */
+            dgemv_("T", &ndt, &ndl, &d_one, a1, &ndt,
+                   &g_x_perm[nstrtt - 1], &i_one, &d_one, &y_local[nstrtl - 1], &i_one);
+            if (upper) {                         /* mirror transpose = a1: x[l] -> y[t] */
+                dgemv_("N", &ndt, &ndl, &d_one, a1, &ndt,
+                       &g_x_perm[nstrtl - 1], &i_one, &d_one, &y_local[nstrtt - 1], &i_one);
+            }
+        }
+    }
+}
+
 /* Reduce thread-local y arrays and apply inverse permutation for one element */
 static void matvec_reduce_output(int idx, void *data) {
     typedef struct { double *y; int *lod; int nthr; } reduce_ctx;
@@ -1020,6 +1113,47 @@ void HACApK_matvec_wrapper(
         reduce_ctx rctx = { y, lod, nthr };
         hacapk_parallel_for(nd, matvec_reduce_output, &rctx);
     }
+}
+
+/* Shared driver for the transpose / symmetric matvec variants: same buffer setup, input permute,
+ * and output reduce as HACApK_matvec_wrapper, but with a caller-supplied leaf thread function. */
+static void hacapk_matvec_run(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y, int nd,
+    void (*thread_func)(int, int, void *))
+{
+    st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
+    st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
+    if (!leafmtxp || !ctl || !ctl->lod || !leafmtxp->st_lf || !x || !y) return;
+    int *lod = ctl->lod;
+    int nlf = leafmtxp->nlf;
+    st_cHACApK_leafmtx *st_lf = leafmtxp->st_lf;
+    int ktmax = leafmtxp->ktmax;
+    int nthr = hacapk_get_num_threads();
+
+    init_matvec_buffers(nd, nthr, ktmax);
+    { typedef struct { int nd; } zero_y_ctx; zero_y_ctx zc = { nd };
+      hacapk_parallel_for(nthr, matvec_zero_y, &zc); }
+    { typedef struct { const double *x; int *lod; } permute_ctx; permute_ctx pc = { x, lod };
+      hacapk_parallel_for(nd, matvec_permute_input, &pc); }
+    { typedef struct { st_cHACApK_leafmtx *st_lf; int nlf; } matvec_job_ctx;
+      matvec_job_ctx mc = { st_lf, nlf };
+      hacapk_parallel_job(thread_func, &mc); }
+    { typedef struct { double *y; int *lod; int nthr; } reduce_ctx; reduce_ctx rc = { y, lod, nthr };
+      hacapk_parallel_for(nd, matvec_reduce_output, &rc); }
+}
+
+/* y = A^T x (transpose H-matvec). */
+void HACApK_matvec_transpose_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y, int nd)
+{
+    hacapk_matvec_run(leafmtxp_void, ctl_void, x, y, nd, matvec_transpose_thread_func);
+}
+
+/* y = G_sym x with G_sym EXACTLY symmetric (upper-triangular leaves define both triangles). */
+void HACApK_matvec_sym_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y, int nd)
+{
+    hacapk_matvec_run(leafmtxp_void, ctl_void, x, y, nd, matvec_sym_thread_func);
 }
 
 /*=========================================================================

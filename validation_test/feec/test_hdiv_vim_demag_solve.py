@@ -37,7 +37,7 @@ def test_sphere_linear_matches_analytic(mu_r):
     mesh = _sphere()
     with ng.TaskManager():
         res = hdiv_demag_solve(mesh, mu_r, _HEXT)
-    assert res["linear_solver"] in {"cpp-hlu", "mass-riesz-cg", "mass-riesz-gmres"}  # default 'auto' = mass-riesz-gmres
+    assert res["linear_solver"] in {"cpp-hlu", "mass-riesz-cg", "mass-riesz-gmres"}  # default 'auto' = symmetric mass-riesz CG
     assert "hmat_stats" in res
     chi = mu_r - 1.0
     D = res["demag"]
@@ -64,18 +64,22 @@ def test_per_element_M_uniform_and_aligned():
 
 
 @pytest.mark.parametrize("mu_r", [1e2, 1e5])
-def test_default_gmres_matches_cpp_cg(mu_r):
-    """The default 'auto' is the mass-Riesz GMRES (robust at all scales); the 'cpp-cg' opt-in is the
-    all-C++ mass-Riesz CG (fast at moderate N).  At this moderate size both converge to the SAME
-    magnetization (the robust default is not paying accuracy for robustness)."""
+def test_default_symmetric_cg_matches_gmres(mu_r):
+    """The default 'auto' is the all-C++ SYMMETRIC mass-Riesz CG (the symmetric-HACApK matvec makes CG
+    robust by construction); 'cpp-cg' is an explicit alias for it, and 'gmres' is the asymmetry-tolerant
+    cross-check.  All three converge to the SAME magnetization (the symmetric Gram is a robustness +
+    speed change, not an accuracy change)."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
-        auto = hdiv_demag_solve(mesh, mu_r, _HEXT)                       # default -> mass-riesz-gmres
-        cg = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")  # fast C++ mass-riesz CG
-    assert auto["linear_solver"] == "mass-riesz-gmres"
+        auto = hdiv_demag_solve(mesh, mu_r, _HEXT)                          # default -> symmetric C++ CG
+        cg = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")    # explicit alias
+        gm = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="gmres")     # GMRES cross-check
+    assert auto["linear_solver"] == "mass-riesz-cg"
     assert cg["linear_solver"] == "mass-riesz-cg"
-    rel = abs(auto["M_avg"][2] - cg["M_avg"][2]) / abs(cg["M_avg"][2])
-    assert rel < 1e-6, f"GMRES vs CG M_avg disagree: {rel:.2e}"
+    assert gm["linear_solver"] == "mass-riesz-gmres"
+    rel = abs(auto["M_avg"][2] - gm["M_avg"][2]) / abs(gm["M_avg"][2])
+    assert rel < 1e-6, f"symmetric CG vs GMRES M_avg disagree: {rel:.2e}"
+    assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 1e-9, "auto must equal the explicit cpp-cg alias"
 
 
 def test_explicit_hlu_linear_solver():
