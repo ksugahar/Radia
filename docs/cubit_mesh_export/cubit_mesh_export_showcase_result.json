@@ -1,14 +1,15 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T21:40:29Z",
+  "generated_at_utc": "2026-06-27T23:00:06Z",
   "notebook": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
-  "notebook_sha256": "89600c880f0606d443cdf3781678a83991b26d7a52f01c029f5be1f95296abaf",
+  "notebook_sha256": "f40e2bac03cd785ef615bae0a05cb804f91a0b0c9a5fe081e9918d247d101852",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_version": "4.95.2",
+    "cubit_mesh_export_version": "0.14.0"
   },
   "summary": {
     "path": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
@@ -56,7 +57,11 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
+          "text_plain_truncated": false,
+          "text_markdown_chars": 4209,
+          "text_markdown_sha256": "1996c8db9382e32c65ecfeb711df6314bba10dcefa69809ed91b6b5e02c754cb",
+          "text_markdown_preview": "| Script | Summary kind | Lines | Representative keys |\n|---|---|---:|---|\n| `validation_test/cubit_mesh_export/validation_p1_surface_triangle_element_summary.py` | `p1_surface_triangle_element_summary_validation` | 113 | area, constant_load_integral, gradient_partition_residual, mass_integral_of_one |\n| `validation_test/cubit_mesh_export/validation_vol_boundary_condition_assignment.py` | `vol_boundary_condition_assignment_validation` | 189 | clean_boundary_count, clean_condition_counts, clean_ok, missing_boundary_count |\n| `validation_test/cubit_mesh_export/validation_vol_boundary_edge_inventory.py` | `vol_boundary_edge_inventory_validation` | 174 | boundary_count, overused_edges_total, perimeter_edges_total, shared_diagonal_edges_total |\n| `validation_test/cubit_mesh_export/validation_vol_boundary_inventory.py` | `validation_vol_boundary_inventory` | 215 | builtin_all_faces_have_four_trace_nodes, builtin_all_faces_have_two_triangles, builtin_boundary_count, builtin_boundary_names |\n|",
+          "text_markdown_truncated": true
         }
       ]
     },
@@ -64,7 +69,7 @@
       "cell_index": 5,
       "execution_count": 3,
       "source_sha256": "5dfdd34e17297352c6f53b282c883c2d0b39cd4b1292a6e4afe186d92583ec6b",
-      "source_preview": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value i",
+      "source_preview": "def find_summary(name):\n    for rec in data['validation_records']:\n        if rec['name'] == name:\n            return rec['summary']\n    raise KeyError(name)\n\nnormal = find_summary('validation_vol_boundary_normal_vectors.py')\npressure = find_summary('validation_vol_boundary_pressure_resultant.py')\ntraction = find_summary('validation_vol_boundary_traction_moment.py')\nhealth = find_summary('validation_vol_mesh_health.py')\n\nprint('[boundary normals]')\nfor row in normal.get('builtin_boundary_rows', normal.get('rows', []))[:6]:\n    name = row.get('boundary') or row.get('name')\n    area = row.get('area') or row.get('surface_area')\n    vector = row.get('vector_area') or row.get('area_vector')\n    print(f'  {name}: area={area}, vector={vector}')\n\nprint('\\n[pressure resultant checks]')\nfor key, value in (pressure.get('checks') or pressure).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[traction moment checks]')\nfor key, value in (traction.get('checks') or traction).items():\n    if 'force' in key or 'moment' in key or 'error' in key:\n        print(f'  {key}: {value}')\n\nprint('\\n[mesh health statuses]')\nfor row in health.get('rows', []):\n    print(f\"  {row.get('name')}: status={row.get('status')} ok={row.get('ok')}\")",
       "outputs": [
         {
           "output_type": "stream",
@@ -91,7 +96,11 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
+          "text_plain_truncated": false,
+          "text_markdown_chars": 222,
+          "text_markdown_sha256": "598cc9a40df8d91d7910c7a165525588bfd24ae5c2eefbfc045c43fa94d99693",
+          "text_markdown_preview": "| Order | HEX count | Sphere volume error | Poisson ndof | Poisson L2 error |\n|---:|---:|---:|---:|---:|\n| 1 | 56 | -23.359% | 79 | 8.001e-06 |\n| 2 | 56 | -0.211% | 517 | 1.267e-06 |\n| 3 | 56 | +0.131% | 1651 | 3.927e-07 |",
+          "text_markdown_truncated": false
         },
         {
           "output_type": "stream",
@@ -106,8 +115,8 @@
     {
       "cell_index": 9,
       "execution_count": 5,
-      "source_sha256": "aff2ea89c33eb44729137458aeac7bf2506ac179ac3acf4f0b07188f0ce3fe86",
-      "source_preview": "source_by_path = {rec['path']: rec.get('source') for rec in data['validation_records']}\n# Add source from the full archive for non-validation demo scripts when present.\narchive_candidates = [Path('cubit_mesh_export_examples_archive_results.json'), Path('docs/cubit_mesh_export/cubit_mesh_export_examples_archive_results.json')]\narchive_path = next((p for p in archive_candidates if p.exists()), None)\nif archive_path:\n    archive = json.loads(archive_path.read_text(encoding='utf-8'))\n    for rec in archive.get('records', []):\n        source_by_path.setdefault(rec['path'], rec.get('source'))\n\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n    'validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py',\n]:\n    src = source_by_path.get(path)\n    assert src, path\n    excerpt = '\\n'.join(src.splitlines()[:85])\n    display(Markdown(f'### `{path}`\\n```python\\n{excerpt}\\n```'))",
+      "source_sha256": "753e7a37032706a6141db792258e4156a368120dec8a2445eac505f5a5f0300c",
+      "source_preview": "source_by_path = {rec['path']: rec.get('source') for rec in data['validation_records']}\n\ndef read_repo_relative_text(path):\n    for base in [Path.cwd(), *Path.cwd().parents]:\n        candidate = base / path\n        if candidate.exists():\n            return candidate.read_text(encoding='utf-8')\n    raise FileNotFoundError(path)\n\n# Non-validation showcase helpers are maintained as live docs files, not in a source archive.\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n]:\n    source_by_path.setdefault(path, read_repo_relative_text(path))\n\nfor path in [\n    'docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py',\n    'validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py',\n]:\n    src = source_by_path.get(path)\n    assert src, path\n    excerpt = '\\n'.join(src.splitlines()[:85])\n    display(Markdown(f'### `{path}`\\n```python\\n{excerpt}\\n```'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -118,7 +127,11 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
+          "text_plain_truncated": false,
+          "text_markdown_chars": 2618,
+          "text_markdown_sha256": "41457a6c0d9b633610082c5ff64533a24fd0e828cb3108605348014022c4b55d",
+          "text_markdown_preview": "### `docs/cubit_mesh_export/hex_sphere_highorder/hex_sphere_curved_ngsolve.py`\n```python\n# -*- coding: utf-8 -*-\n\"\"\"High-order CURVED HEX mesh in NGSolve -- the cubit-mesh-export capability.\n\nCoreform Cubit meshes a sphere with HEXES ('volume scheme sphere') and exports a\nhigh-order Netgen .vol (order 1/2/3) via the plugin command\n\n    block 1 add hex all\n    export netgen \"hexsph_oN.vol\" order N overwrite\n\nNGSolve loads the .vol directly and integrates the volume; as the element order rises\nthe curved hex boundary captures the sphere and the volume converges to 4/3 pi r^3:\n\n    order 1 (straight hex) :  ~ -23 %    (a coarse 56-hex faceted sphere)\n    order 2 (curved hex)   :  ~ -0.2 %\n    order 3 (curved hex)   :  ~ +0.1 %\n\nThat is high-order *hexahedral* FEM geometry inside NGSolve -- which the Netgen mesher\nalone does not provide (it curves tetrahedra).  See packages/cubit-mesh-export.\n\nGOTCHA (important): a high-order .vol already carries its curved mid-side nodes.  Load\nit with pl",
+          "text_markdown_truncated": true
         },
         {
           "output_type": "display_data",
@@ -129,7 +142,11 @@
           "text_plain_chars": 38,
           "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
           "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
+          "text_plain_truncated": false,
+          "text_markdown_chars": 1732,
+          "text_markdown_sha256": "2b6a7083358f36086b69630859e095dab390ed45f72efa5e41bf309edb53389c",
+          "text_markdown_preview": "### `validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py`\n```python\n\"\"\"Validation-class `.vol` boundary normal/vector-area rows.\n\nElectromagnetic force extraction needs surface orientation before it needs a\nlarge solver: Maxwell stress integrates ``T n dS``.  This example checks that\nnamed Coreform/Cubit sidesets exported through Netgen `.vol` preserve enough\ntriangle orientation information to recover each boundary's vector area and\nplanar unit normal.\n\nRun:\n\n    python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py\n    python validation_test/cubit_mesh_export/validation_vol_boundary_normal_vectors.py --vol C:\\\\temp\\\\box.vol\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nROOT = Path(__file__).resolve().parents[2]\nSRC = ROOT / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radia_ngsolve.netgen_vol im",
+          "text_markdown_truncated": true
         }
       ]
     }

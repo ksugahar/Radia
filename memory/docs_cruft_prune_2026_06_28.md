@@ -27,8 +27,9 @@ should not become a warehouse for development chronology.
   result-bearing cogging/skew docs notebook.
 - Second-pass archive triples removed for
   `build123d_netgen_gmsh_flow`, `clebsch_hodograph`, `clebsch_legendre`,
-  `fem_readable`, `rf_waveguide`, and `visualization` after their maintained
-  docs/API/validation surfaces stopped referencing the source ledgers.
+  `cubit_mesh_export`, `fem_readable`, `rf_waveguide`, and `visualization`
+  after their maintained docs/API/validation surfaces stopped referencing the
+  source ledgers.
 - `docs/kelvin/legacy_assets/kelvin_transformation/`: old examples mirror and
   debug notes. The one live document, the Kelvin convention, was promoted to
   `docs/kelvin/CONVENTION.md`; old source-level history remains recoverable
