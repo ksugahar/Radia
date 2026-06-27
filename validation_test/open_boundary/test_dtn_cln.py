@@ -2,8 +2,7 @@
 """Golden tests for radia.open_boundary (the exact Zs-DtN-CLN open boundary).
 
 Locks the VERIFIED properties ported from the research demos
-archived `act6_02_cln_dtn_cauer.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
-act6_11_exact_dtn_fetd.py:
+for the Zs-DtN-CLN open boundary:
   - the eddy DtN is exactly rational in q=sqrt(s); the Cauer-in-q ladder is exact
     at n+1 stages (NRMSE ~1e-15) for n=1..6 and well-conditioned (spread <1e3);
   - the ladder reproduces the exact symbol in general (R0, mu_sigma) units;
