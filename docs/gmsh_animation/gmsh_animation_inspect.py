@@ -1,4 +1,4 @@
-"""Inspect the tracked GMSH displacement-animation example artifact."""
+"""Inspect the docs-local GMSH displacement-animation artifact."""
 
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def inspect_msh(path: str | Path) -> dict:
     }
 
 
-def inspect_example(example_dir: str | Path = "../../examples/gmsh_animation") -> dict:
+def inspect_example(example_dir: str | Path = ".") -> dict:
     example = Path(example_dir)
     if not example.is_absolute():
         example = (Path(__file__).resolve().parent / example).resolve()
