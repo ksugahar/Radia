@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "generated_at_utc": "2026-06-27T09:17:10Z",
   "notebook": "docs/force_validation/force_validation.ipynb",
-  "notebook_sha256": "0d2420fab51023637b3377095685bb4217c9fb61f01f516ec86f5cf43699aa32",
+  "notebook_sha256": "a9bffb247edae53cbaf8f7cb1d253e1c344e16cb7b59077bb6c72ef3f37584d8",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -28,15 +28,15 @@
     {
       "cell_index": 2,
       "execution_count": 1,
-      "source_sha256": "4aca6fded68ac89883c056a589171b89bbc6090783688227a5de3dca17a92c42",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class coenergy/torque angle-table consistency check.\n\nRun:\n\n    python examples/force_validation/validation_coenergy_torque_table_consistency.py\n\nThis example treats a torque-angle table and a coenergy-angle table as two\nviews of the same fixed-current virtual-work calculation.  The coenergy includes\na nonperiodic work term, ``T_mean * theta``, so a nonzero mean torque is allowed:\n\n    W'(theta) = T_mean theta + (T_ripple / n) (1 - cos(n theta))\n    T(theta) = dW'/dtheta = T_mean + T_ripple sin(n theta)\n\nThe validation summary differentiates the coenergy table, compares the selected\ncentral-difference rows against the torque table, and records the integrated\nwork consistency.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# ",
+      "source_sha256": "5cf0b853454a3fe8e29b20d2dd4d8417b11d6c1548238c4a99b586ae2e207889",
+      "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"force_validation\" / \"validation_coenergy_torque_table_consistency.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class coenergy/torque angle-table consistency check.\n\nRun:\n\n    python validation_test/force_validation/validation_coenergy_torque_table_consistency.py\n\nThis example treats a torque-angle table and a coenergy-angle table as two\nviews of the same fixed-current virtual-work calculation.  The coenergy includes\na nonperiodic work term, ``T_mean * theta``, so a nonzero mean torque is allowed:\n\n    W'(theta) = T_mean theta + (T_ripple / n) (1 - cos(n theta))\n    T(theta) = dW'/dtheta = T_mean + T_ripple sin(n theta)\n\nThe validation summary differentiates the coenergy table, compares the selected\ncentral-difference rows against the torque table, and records the integrated\nwork consist",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 302,
-          "text_sha256": "bd58d6e7268256af08a03d830aaf000e330ecba704f8b9d9b74ecc7cf179f6cc",
-          "text_preview": "[coenergy torque table consistency]\n  samples=181 checked=179 status=ok\n  max_torque_abs_error_Nm=9.134e-04\n  max_torque_rel_error=9.614e-05\n  work_error_J=0.000e+00\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\force_validation\\validation_coenergy_torque_table_consistency_summary.json\n",
+          "text_chars": 313,
+          "text_sha256": "ef945d2f37e48d7008d06365007f5fc36c6d4f5f4547cae0afc092706801c8e4",
+          "text_preview": "[coenergy torque table consistency]\n  samples=181 checked=179 status=ok\n  max_torque_abs_error_Nm=9.134e-04\n  max_torque_rel_error=9.614e-05\n  work_error_J=0.000e+00\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\validation_test\\force_validation\\validation_coenergy_torque_table_consistency_summary.json\n",
           "text_truncated": false
         }
       ]
@@ -44,15 +44,15 @@
     {
       "cell_index": 4,
       "execution_count": 2,
-      "source_sha256": "847e1f686c88800488e9597ae38d66572403786d10b28f78cc1ff44c82af59f8",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class 2D Maxwell stress contour balance example.\n\nRun:\n\n    python examples/force_validation/validation_maxwell_contour_segment_balance.py\n\nThe example integrates a uniform magnetic field around a rectangular closed\ncontour.  Each segment has a nonzero stress contribution, but the closed\ncontour's net force cancels to zero.  This is a compact sign/orientation check\nbefore using the same identity on FEM contour data.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.force import (  # noqa: E402\n    air_gap_maxwell_pressure,\n    maxwell_contour_segment_balance_summary_2d,\n)\n\n\nOUT_JSON = HERE / \"validation_maxwell_contour_segment_balance_summary.jso",
+      "source_sha256": "50d0f0e832fbd845cd79f8b4a64c2bb822f44498b910d6089d2c4fba0f40117d",
+      "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"force_validation\" / \"validation_maxwell_contour_segment_balance.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class 2D Maxwell stress contour balance example.\n\nRun:\n\n    python validation_test/force_validation/validation_maxwell_contour_segment_balance.py\n\nThe example integrates a uniform magnetic field around a rectangular closed\ncontour.  Each segment has a nonzero stress contribution, but the closed\ncontour's net force cancels to zero.  This is a compact sign/orientation check\nbefore using the same identity on FEM contour data.\n\"\"\"\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radi",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 281,
-          "text_sha256": "e10810bb517bf594a449a19e9da05aed10f309573ec8db8ceb4646acba1f8845",
-          "text_preview": "[Maxwell contour segment balance]\n  segments=4 area=2 status=ok\n  net_force=[0.0, 0.0] sum_abs_normal=2387324.14638\n  cancellation_ratio=0.000e+00\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\force_validation\\validation_maxwell_contour_segment_balance_summary.json\n",
+          "text_chars": 292,
+          "text_sha256": "c3e178f10a5ac3628415c62d040514e8340ca092861a7485466cde7ebbae1d4b",
+          "text_preview": "[Maxwell contour segment balance]\n  segments=4 area=2 status=ok\n  net_force=[0.0, 0.0] sum_abs_normal=2387324.14638\n  cancellation_ratio=0.000e+00\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\validation_test\\force_validation\\validation_maxwell_contour_segment_balance_summary.json\n",
           "text_truncated": false
         }
       ]
@@ -60,15 +60,15 @@
     {
       "cell_index": 6,
       "execution_count": 3,
-      "source_sha256": "72ef3d8d1324041696a1cf40f48bac36663469fee9a15213248e646f725bf10d",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class two-wire Lorentz/virtual-work force identity.\n\nThis example pins a common magnetostatic post-processing lesson without\ndepending on any commercial solver:\n\n    Lorentz force on a current filament == d(coenergy)/d(separation)\n\nFor two long parallel wires, the separation-dependent mutual coenergy per unit\nlength is ``-mu0 I1 I2 log(d/d_ref)/(2*pi)``.  Its derivative is the radial\nforce per unit length.  Like currents therefore have a negative force in the\nincreasing-separation coordinate, i.e. attraction.\n\nRun:\n\n    python examples/force_validation/validation_parallel_wire_virtual_work_force.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolv",
+      "source_sha256": "13944b4ede33720e964d0963e9496a2f5f201857ed1b74ddbfee590f4f285b4a",
+      "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"force_validation\" / \"validation_parallel_wire_virtual_work_force.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class two-wire Lorentz/virtual-work force identity.\n\nThis example pins a common magnetostatic post-processing lesson without\ndepending on any commercial solver:\n\n    Lorentz force on a current filament == d(coenergy)/d(separation)\n\nFor two long parallel wires, the separation-dependent mutual coenergy per unit\nlength is ``-mu0 I1 I2 log(d/d_ref)/(2*pi)``.  Its derivative is the radial\nforce per unit length.  Like currents therefore have a negative force in the\nincreasing-separation coordinate, i.e. attraction.\n\nRun:\n\n    python validation_test/force_validation/validation_parallel_wire_virtual_work_force.py\n\"\"\"\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\n\nHER",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 456,
-          "text_sha256": "ec47a68bec499c9645f7028f80015aa47c4f07c797789333195126c8850e7f99",
-          "text_preview": "[parallel wire virtual work force]\n  cases=2, max_rel_error=3.333e-09\n  like_currents_horizontal_attract: interaction=attraction, radial_virtual=-3.42857144e-05, radial_analytic=-3.42857142857e-05\n  opposite_currents_vertical_repel: interaction=repulsion, radial_virtual=3.42857144e-05, radial_analytic=3.42857142857e-05\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\force_validation\\validation_parallel_wire_virtual_work_force_summary.json\n",
+          "text_chars": 467,
+          "text_sha256": "a0a334b91d0e18b9f2136326858f22ca30cd4e4bbf1e444029ca1a66b793bcbb",
+          "text_preview": "[parallel wire virtual work force]\n  cases=2, max_rel_error=3.333e-09\n  like_currents_horizontal_attract: interaction=attraction, radial_virtual=-3.42857144e-05, radial_analytic=-3.42857142857e-05\n  opposite_currents_vertical_repel: interaction=repulsion, radial_virtual=3.42857144e-05, radial_analytic=3.42857142857e-05\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\validation_test\\force_validation\\validation_parallel_wire_virtual_work_force_summary.json\n",
           "text_truncated": false
         }
       ]
@@ -76,15 +76,15 @@
     {
       "cell_index": 8,
       "execution_count": 4,
-      "source_sha256": "9a0c31d6cd5637e53f7cc984ab20c9fac608c834bc552bace72d4c817acc5bc5",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class periodic torque waveform comparison.\n\nThis example uses an analytic before/after torque-angle table to check that\nthe comparison summary separates mean torque drift, sample-wise error, and\nharmonic ripple changes.\n\nRun:\n\n    python examples/force_validation/validation_torque_waveform_comparison.py\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.solve import torque_angle_sweep_comparison_summary  # noqa: E402\n\n\nOUT_JSON = HERE / \"validation_torque_waveform_comparison_summary.json\"\nSAMPLES = 720\n\n\ndef _waveform(mean_torque_Nm: float, ripple6_Nm: float, ripple12_Nm: float) -> list[float]:\n    values = []\n    for idx in range(SAMP",
+      "source_sha256": "19f83ca60cda126d751f64933283bec3ed1d7ea6c52872ab1abe0d0e0b2c1500",
+      "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"force_validation\" / \"validation_torque_waveform_comparison.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class periodic torque waveform comparison.\n\nThis example uses an analytic before/after torque-angle table to check that\nthe comparison summary separates mean torque drift, sample-wise error, and\nharmonic ripple changes.\n\nRun:\n\n    python validation_test/force_validation/validation_torque_waveform_comparison.py\n\"\"\"\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radia_ngsolve.solve import torque_angle_sweep_comparison_summary  # noqa: E402\nfrom result_metadata import add_r",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 363,
-          "text_sha256": "3979dd28227f985e1acbb3d384d4b57582512722205dcee63f5ab37b8a777d01",
-          "text_preview": "[torque waveform comparison]\n  samples=720, max_abs_error=1.155e-15\n  mean_delta_Nm=0.2\n  sample_delta_rms_Nm=0.212602916255\n  worst_harmonic_order=6\n  sixth_harmonic_amplitude_delta_Nm=-0.1\n  twelfth_harmonic_amplitude_delta_Nm=0.02\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\force_validation\\validation_torque_waveform_comparison_summary.json\n",
+          "text_chars": 374,
+          "text_sha256": "5a139f9859438b2c255da638dc4f0adb0b7672abc64a17ac14952f3c80762e4c",
+          "text_preview": "[torque waveform comparison]\n  samples=720, max_abs_error=1.155e-15\n  mean_delta_Nm=0.2\n  sample_delta_rms_Nm=0.212602916255\n  worst_harmonic_order=6\n  sixth_harmonic_amplitude_delta_Nm=-0.1\n  twelfth_harmonic_amplitude_delta_Nm=0.02\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\validation_test\\force_validation\\validation_torque_waveform_comparison_summary.json\n",
           "text_truncated": false
         }
       ]
@@ -92,15 +92,15 @@
     {
       "cell_index": 10,
       "execution_count": 5,
-      "source_sha256": "c33bfde72c8404c6733c1084f7deca31d4338e2a45faf18213e7214a95d1818f",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class torque waveform harmonic health example.\n\nRun:\n\n    python examples/force_validation/validation_torque_waveform_health.py\n\nThe example uses an analytic torque-angle waveform with a mean component and\ntwo ripple harmonics.  The health summary separates mean torque, RMS ripple,\ndominant harmonic order, and the variance budget of the largest harmonics.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radia_mcp.radia_ngsolve.solve import torque_angle_sweep_health_summary  # noqa: E402\n\n\nOUT_JSON = HERE / \"validation_torque_waveform_health_summary.json\"\nSAMPLES = 720\n\n\ndef _waveform(mean_torque_Nm: float, ripple6_Nm: float, ripple12_Nm: float) -> list[floa",
+      "source_sha256": "84620a9fa7f7df32e2e111a673112af92bd5d292993ff5209898d1d2d4d8a3a3",
+      "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"force_validation\" / \"validation_torque_waveform_health.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class torque waveform harmonic health example.\n\nRun:\n\n    python validation_test/force_validation/validation_torque_waveform_health.py\n\nThe example uses an analytic torque-angle waveform with a mean component and\ntwo ripple harmonics.  The health summary separates mean torque, RMS ripple,\ndominant harmonic order, and the variance budget of the largest harmonics.\n\"\"\"\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(__file__).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\nif str(SRC) not in sys.path:\n    sys.path.insert(0, str(SRC))\n\nfrom radia_mcp.radia_ngsolve.solve import torque_angle_sweep_health_summary  #",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 300,
-          "text_sha256": "25300e6a8ab2ee930729df66c29d54d28db57a99ce3d375297e4adbf688fd07c",
-          "text_preview": "[torque waveform health]\n  samples=720 status=ok mean=10 ac_rms=0.291547594742\n  dominant_harmonic=6 amplitude=0.4\n  variance fractions: h6=0.941176470588 h12=0.0588235294118\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\force_validation\\validation_torque_waveform_health_summary.json\n",
+          "text_chars": 311,
+          "text_sha256": "eaea95b180e392288b01180a7d265e4a2c9d7de2969e9835a8841aa2c8442e0b",
+          "text_preview": "[torque waveform health]\n  samples=720 status=ok mean=10 ac_rms=0.291547594742\n  dominant_harmonic=6 amplitude=0.4\n  variance fractions: h6=0.941176470588 h12=0.0588235294118\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\validation_test\\force_validation\\validation_torque_waveform_health_summary.json\n",
           "text_truncated": false
         }
       ]
@@ -108,15 +108,15 @@
     {
       "cell_index": 12,
       "execution_count": 6,
-      "source_sha256": "0e78bffe986cebaa8b41be42cc419e84fe9da7288104c56d2690940a7926d181",
-      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class virtual-work force sweep audit.\n\nRun:\n\n    python examples/force_validation/validation_virtual_work_force_sweep_audit.py\n\nThis example samples the separation-dependent coenergy per unit length of two\nlong line currents,\n\n    W'(d) = -mu0 I1 I2 log(d/d_ref)/(2*pi),\n\nand audits the finite-difference force table against the analytic radial force\n\n    F(d) = dW'/dd = -mu0 I1 I2/(2*pi*d).\n\nThe lesson is the sweep form: solver outputs usually arrive as a table of\nenergy samples, so the validation object should preserve stencils, curvature,\nand reference-force errors rather than only one pass/fail number.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib import Path\n\n\nHERE = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent\nREPO = HERE.parents[1]\nSRC = REPO / \"packages\" / \"radia-mcp\" / \"src\"\n# radia_mcp is pip-installed (editable); no sys.path shim needed\n\nfrom radi",
+      "source_sha256": "b842bef5e56a2633785f573b99ecbbd740699ae32b290f650638c2428dc27159",
+      "source_preview": "import sys, os\nfrom pathlib import Path\n__file__ = str(Path(os.getcwd()).resolve() / \"validation_test\" / \"force_validation\" / \"validation_virtual_work_force_sweep_audit.py\")\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nsys.modules.pop(\"result_metadata\", None)\nsys.argv = [\"notebook\"]\n\n\"\"\"Validation-class virtual-work force sweep audit.\n\nRun:\n\n    python validation_test/force_validation/validation_virtual_work_force_sweep_audit.py\n\nThis example samples the separation-dependent coenergy per unit length of two\nlong line currents,\n\n    W'(d) = -mu0 I1 I2 log(d/d_ref)/(2*pi),\n\nand audits the finite-difference force table against the analytic radial force\n\n    F(d) = dW'/dd = -mu0 I1 I2/(2*pi*d).\n\nThe lesson is the sweep form: solver outputs usually arrive as a table of\nenergy samples, so the validation object should preserve stencils, curvature,\nand reference-force errors rather than only one pass/fail number.\n\"\"\"\n\nimport argparse\nimport json\nimport math\nimport sys\nfrom pathlib i",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 301,
-          "text_sha256": "bd8b4d0f6dd1af6ff88536da593fb139b4faf6d2d60af0894dc9746f5d44726f",
-          "text_preview": "[virtual work force sweep audit]\n  samples=13 checked=11 status=ok\n  force range=[-5.85481970033e-05, -3.80984379775e-05] N/m\n  max_reference_force_rel_error=7.569e-04\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\docs\\force_validation\\validation_virtual_work_force_sweep_audit_summary.json\n",
+          "text_chars": 312,
+          "text_sha256": "c3939a03a79dac2e749c14ebce39aa7d50f4a5f4921a679f26d52b5f5a9f85e6",
+          "text_preview": "[virtual work force sweep audit]\n  samples=13 checked=11 status=ok\n  force range=[-5.85481970033e-05, -3.80984379775e-05] N/m\n  max_reference_force_rel_error=7.569e-04\n[OK] wrote \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\validation_test\\force_validation\\validation_virtual_work_force_sweep_audit_summary.json\n",
           "text_truncated": false
         }
       ]

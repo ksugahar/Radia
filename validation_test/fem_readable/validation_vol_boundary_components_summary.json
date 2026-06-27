@@ -1,0 +1,153 @@
+{
+  "kind": "vol_boundary_component_trace_validation",
+  "validation_class": true,
+  "mesh_summary": {
+    "points": 8,
+    "surface_triangles": 8,
+    "tetrahedra": 2,
+    "materials": 1,
+    "boundary_names": 2
+  },
+  "components": [
+    {
+      "component": 1,
+      "boundary_names": [
+        "left_outer"
+      ],
+      "surface_triangles": 4,
+      "surface_edges": 6,
+      "trace_node_count": 4,
+      "trace_node_ids": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "surface_area": 2.3660254037844384,
+      "surface_abs_volume": 0.16666666666666666,
+      "surface_vector_area_norm": 0.0,
+      "closed_edges": 6,
+      "open_edges": 0,
+      "is_closed_manifold": true,
+      "euler_characteristic": 2
+    },
+    {
+      "component": 2,
+      "boundary_names": [
+        "right_outer"
+      ],
+      "surface_triangles": 4,
+      "surface_edges": 6,
+      "trace_node_count": 4,
+      "trace_node_ids": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "surface_area": 2.3660254037844384,
+      "surface_abs_volume": 0.16666666666666663,
+      "surface_vector_area_norm": 0.0,
+      "closed_edges": 6,
+      "open_edges": 0,
+      "is_closed_manifold": true,
+      "euler_characteristic": 2
+    }
+  ],
+  "trace": {
+    "h1_to_scalar_bem_rows": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "h1_to_scalar_bem_cols": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "rwg_to_hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ]
+  },
+  "checks": {
+    "component_count": 2,
+    "component_names": [
+      [
+        "left_outer"
+      ],
+      [
+        "right_outer"
+      ]
+    ],
+    "component_trace_nodes": [
+      [
+        1,
+        2,
+        3,
+        4
+      ],
+      [
+        5,
+        6,
+        7,
+        8
+      ]
+    ],
+    "trace_blocks_are_disjoint": true,
+    "all_components_closed": true,
+    "all_euler_characteristic_two": [
+      2,
+      2
+    ],
+    "component_abs_volume_sum": 0.33333333333333326,
+    "tetrahedron_total_volume": 0.3333333333333333,
+    "component_volume_abs_error": 5.551115123125783e-17,
+    "total_surface_area": 4.732050807568877,
+    "hcurl_edge_count": 12,
+    "rwg_edge_count": 12,
+    "rwg_to_hcurl_edge_ids": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "rwg_to_hcurl_is_one_to_one": true
+  },
+  "schema": "radia.validation.fem_readable.validation_vol_boundary_components.v1",
+  "generated_at_utc": "2026-06-27T08:58:40Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  }
+}
