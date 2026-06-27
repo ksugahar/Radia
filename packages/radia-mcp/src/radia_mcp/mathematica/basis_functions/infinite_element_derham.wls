@@ -4,7 +4,8 @@
 (*
   infinite_element_derham.wls -- the de Rham (exact-sequence) INFINITE ELEMENT on the
   spherical EXTERIOR r >= a (low-frequency / static).  Mathematica twin of
-  examples/kelvin_transformation/DtN_spectrum/act7_26_derham_infinite_element.py (sympy),
+  docs/kelvin/kelvin_dtn_spectrum_archive_results.json entry
+  act7_26_derham_infinite_element.py (sympy),
   here using Mathematica's built-in ORTHONORMAL spherical Grad/Curl/Div as the authority.
 
       H1 --grad--> H(curl) --curl--> H(div) --div--> L2     (exterior, mode n)
