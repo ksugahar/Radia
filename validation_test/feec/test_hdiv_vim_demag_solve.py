@@ -66,7 +66,7 @@ def test_per_element_M_uniform_and_aligned():
 @pytest.mark.parametrize("mu_r", [1e2, 1e5])
 def test_default_symmetric_cg_matches_gmres(mu_r):
     """The default 'auto' is the all-C++ SYMMETRIC mass-Riesz CG (the symmetric-HACApK matvec makes CG
-    robust by construction); 'cpp-cg' is an explicit alias for it, and 'gmres' is the asymmetry-tolerant
+    mathematically valid); 'cpp-cg' is an explicit alias for it, and 'gmres' is the asymmetry-tolerant
     cross-check.  All three converge to the SAME magnetization (the symmetric Gram is a robustness +
     speed change, not an accuracy change)."""
     mesh = _sphere(h=0.5)
@@ -79,7 +79,8 @@ def test_default_symmetric_cg_matches_gmres(mu_r):
     assert gm["linear_solver"] == "mass-riesz-gmres"
     rel = abs(auto["M_avg"][2] - gm["M_avg"][2]) / abs(gm["M_avg"][2])
     assert rel < 1e-6, f"symmetric CG vs GMRES M_avg disagree: {rel:.2e}"
-    assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 1e-9, "auto must equal the explicit cpp-cg alias"
+    # Two independent TaskManager/PARDISO/CG runs of the same alias can differ by last-bit reduction order.
+    assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 5e-9, "auto must equal the explicit cpp-cg alias"
 
 
 def test_explicit_hlu_linear_solver():
