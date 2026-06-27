@@ -53,9 +53,9 @@ def find_repo_root(start: str | Path | None = None) -> Path:
     here = Path(start) if start else Path(__file__)
     here = here if here.is_dir() else here.parent
     for cand in (here, *here.parents):
-        if (cand / "examples" / "kelvin_transformation").is_dir():
+        if (cand / ".git").exists() and (cand / "docs" / "kelvin").is_dir():
             return cand
-    raise FileNotFoundError("Could not locate repository root with examples/kelvin_transformation")
+    raise FileNotFoundError("Could not locate Radia repository root")
 
 
 def rel(path: Path, root: Path) -> str:

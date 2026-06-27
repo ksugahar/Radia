@@ -8,7 +8,7 @@ export Netgen .vol at orders 1, 2, 3.
 This is the production-validated Kelvin Benchmark sample (verified
 2026-04-25): `kelvin_benchmark_sphere_1_4_p2.vol` matches analytical
 Hz_origin to +0.71% at p=2 and +0.54% at p=3.  See README at
-`examples/kelvin_transformation/Cubit_1_4_p_convergence/`.
+`validation_test/cubit/kelvin_1_4_p_convergence/`.
 
 Two non-obvious Cubit fixes embedded in `add_kelvin_cubit` and the
 shared core (`kelvin_benchmark_sphere_build.py`):

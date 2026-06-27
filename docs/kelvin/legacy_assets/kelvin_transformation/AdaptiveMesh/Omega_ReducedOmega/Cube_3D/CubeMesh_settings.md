@@ -1,8 +1,8 @@
-# CubeMesh.py 設定ドキュメント
+# Archived CubeMesh.py 設定ドキュメント
 
 ## 概要
 
-CubeMesh.pyは、3次元立方体モデルのメッシュ生成クラスです。Kelvin変換を用いた無限領域問題にも対応しています。
+CubeMesh.pyは、3次元立方体モデルのメッシュ生成クラスでした。Kelvin変換を用いた無限領域問題にも対応しています。スタンドアロン Python は `examples` から削除済みで、完全なソースは `docs/kelvin/kelvin_remaining_examples_archive_results.json` に保存されています。
 
 ## デフォルトパラメータ
 
