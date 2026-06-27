@@ -2697,7 +2697,7 @@ def magnetic_energy_2d(B, mesh, region=None):
 
     NOTE: for a 1/r field (e.g. a coaxial line) the |B|^2 integrand is sharply peaked at
     small r, so refine the mesh near the inner radius -- the coax energy converged
-    1.8 % -> 0.5 % under such refinement (examples/comsol_class/coax_line.py)."""
+    1.8 % -> 0.5 % under such refinement."""
     dom = dx if region is None else dx(definedon=mesh.Materials(region))
     return Integrate(InnerProduct(B, B) / (2.0 * MU0) * dom, mesh)
 
@@ -2739,8 +2739,7 @@ def eggshell_torque(B, mesh, center, r_inner, r_outer, pivot=(0.0, 0.0, 0.0),
 
     same radial weight band (g=1 at r_inner, 0 at r_outer) in the air around the
     body. Returns (Tx, Ty, Tz). Use the same band as :func:`eggshell_force`;
-    validated on a magnetised cylinder in a uniform field (tau = m x B0,
-    examples/comsol_class/motor_torque.py)."""
+    validated on a magnetised cylinder in a uniform field (tau = m x B0)."""
     cx, cy, cz = center
     px, py, pz = pivot
     rho = sqrt((x - cx)**2 + (y - cy)**2 + (z - cz)**2)
@@ -2915,7 +2914,7 @@ def lorentz_force_2d(Jz, B, mesh, region):
     Pass the TOTAL field B (the conductor's own self-field exerts ZERO net force by
     symmetry, so it drops out). The direct current-source twin of the Maxwell-stress
     :func:`eggshell_force_2d`. Returns ``(Fx, Fy)`` [N/m]. Validated on parallel
-    busbars: |F| = mu0 I1 I2/(2 pi d) (examples/comsol_class/busbar_force.py)."""
+    busbars: |F| = mu0 I1 I2/(2 pi d)."""
     dom = dx(definedon=mesh.Materials(region))
     Fx = -Integrate(Jz * B[1] * dom, mesh)
     Fy = Integrate(Jz * B[0] * dom, mesh)

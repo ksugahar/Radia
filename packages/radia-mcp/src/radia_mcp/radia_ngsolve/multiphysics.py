@@ -8,8 +8,7 @@ v1 ships the one-way magneto-thermal (induction-heating) coupling:
     eddy solve (A-Phi harmonic)  ->  joule_loss_density()  ->  solve_heat_steady()
 
 validated against the analytic cylinder-in-axial-AC eddy loss (exact I0/I1
-Bessel) and the 1-D radial heat equation (P/L 8.9 %, T_centre 9.6 %; see
-examples/comsol_class/induction_heating.py).
+Bessel) and the 1-D radial heat equation (P/L 8.9 %, T_centre 9.6 %).
 """
 import math
 
@@ -163,8 +162,7 @@ def joule_heated_cylinder_peak_dT(q, a, k):
     The cylindrical sibling of the slab electro-thermal (#19, dT_peak = sigma V^2/(8 k)); the
     classic current-carrying-wire / ampacity temperature rise. Validated LIVE 3-way (NGSolve
     :func:`solve_heat_steady` on a disk == this closed form == the reference commercial FE
-    code, all 0.00 %) -- examples/comsol_class/cylinder_joule_heating.py,
-    tests/test_cylinder_joule_heating.py."""
+    code, all 0.00 %) -- tests/test_cylinder_joule_heating.py."""
     return q * a * a / (4.0 * k)
 
 
@@ -213,7 +211,7 @@ def convective_slab_peak_dT(q, thickness, k, h):
     h -> inf the film vanishes and the fixed-T result q L^2/8k is recovered. The realistic
     Joule-heated / cooled-device temperature rise. Validated LIVE 3-way (NGSolve
     :func:`solve_heat_steady_robin` == this closed form == the reference commercial FE code)
-    -- examples/comsol_class/convective_electrothermal.py, tests/test_convective_electrothermal.py."""
+    -- tests/test_convective_electrothermal.py."""
     return q * thickness * thickness / (8.0 * k) + q * thickness / (2.0 * h)
 
 
@@ -255,7 +253,7 @@ def thermal_resistance_series(thicknesses, conductivities):
     heat-generating top layer). The electronics-cooling / multilayer-wall workhorse:
     high-k layers (Cu spreader) drop little, low-k layers (solder, TIM) dominate. Validated
     LIVE 3-way (NGSolve solve_heat_steady region-wise k == this network == the reference FE
-    code) -- examples/comsol_class/die_stack_thermal.py, tests/test_die_stack_thermal.py."""
+    code) -- tests/test_die_stack_thermal.py."""
     return sum(L / k for L, k in zip(thicknesses, conductivities))
 
 
@@ -291,7 +289,7 @@ def fin_efficiency(m, length):
     for a short/fat/conductive fin (mL -> 0) and -> 1/(mL) -> 0 for a long/thin/insulating one
     -- the classic heat-sink design trade-off. Validated LIVE 3-way (NGSolve
     :func:`solve_heat_steady_robin` with a base Dirichlet + convective faces == this closed form
-    == the reference FE code) -- examples/comsol_class/cooling_fin.py, tests/test_cooling_fin.py."""
+    == the reference FE code) -- tests/test_cooling_fin.py."""
     import math as _m
     return _m.tanh(m * length) / (m * length)
 
@@ -306,8 +304,7 @@ def solve_heat_steady_nonlinear(mesh, q_of_T, k, conductor, dirichlet, order=2,
 
     The 2-way twin of :func:`solve_heat_steady`.  Returns the converged temperature
     GridFunction (T=0 on ``dirichlet``).  Validated EXACT (0.00 %) against the closed form
-    for sigma(T)=sigma0/(1+alpha T): T_max=(1/alpha)(sec(sqrt(b) L/2)-1), b=alpha J^2/(sigma0 k)
-    (examples/comsol_class/electrothermal_sigmaT.py)."""
+    for sigma(T)=sigma0/(1+alpha T): T_max=(1/alpha)(sec(sqrt(b) L/2)-1), b=alpha J^2/(sigma0 k)."""
     from ngsolve import CoefficientFunction, Integrate, dx as _dx
     Tprev = CoefficientFunction(0.0)
     gT = None
@@ -339,8 +336,7 @@ def joule_bar_temperature_rise(sigma, voltage, length, k, x):
         dT(x) = (q/2k) x (L - x),  q = sigma (V/L)^2,  max dT = sigma V^2/(8k) at x=L/2.
 
     The peak rise is INDEPENDENT of length (q ~ 1/L^2, the L^2 cancels). ``x`` from a
-    cold end; scalar or iterable. The exact reference for the electro-thermal coupling
-    (examples/comsol_class/joule_heating.py)."""
+    cold end; scalar or iterable. The exact reference for the electro-thermal coupling."""
     q = sigma * (voltage / length) ** 2
 
     def _dt(xx):
