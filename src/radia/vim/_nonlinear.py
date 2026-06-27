@@ -175,6 +175,110 @@ def _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id):
     return gf_sec * gfH, gf_dif * par + gf_sec * (Id - par)
 
 
+# --------------------------------------------------------------------- INVERSE BH (energy / reluctivity form)
+# The SYMMETRIC energy-Newton (the all-C++ nonlinear path, _solve._solve_nonlinear_energy_cpp) linearises the
+# residual R(m) = INT H(M).v dx + N m - M_mass h_ext (M = the flux field of m, H(M) the INVERSE BH reluctance
+# field) -> Jacobian J = W_tan + N, W_tan = INT nu_d u.v dx, nu_d = dH/dM = (dM/dH)^-1 (differential
+# reluctivity tensor).  Symmetric (N + the SPD reluctivity mass) -> CG-able by the EXISTING C++ W-CG
+# (solve_linear_material_mass_riesz), unlike the forward M-residual whose J = M_mass + T M_mass^-1 N needs
+# GMRES + an M_mass^-1.  Reduces to the linear (M_{1/chi}+N)m = M_mass h_ext when chi is constant.
+_CHI_DIFF_FLOOR = 1e-3     # nu_diff = 1/max(chi_diff, floor): cap the differential reluctivity in deep saturation
+                           # (chi_diff = dM/d|H| -> 0).  Also the barrier slope Kbar = 1/floor for |M| > Mmax.
+
+
+def _bh_inverse_funcs(Harr, Barr):
+    """Inverse of `_bh_table_funcs`: from the forward monotone M(|H|) table build the vectorized per-element
+    reluctivity fields + co-energy of |M|.  Returns (fields, wco, Mmax):
+      fields(Mmag) -> (nu_sec, nu_diff):  nu_sec = |H|/|M| (secant reluctivity, H(M) = nu_sec M);
+                      nu_diff = 1/chi_diff (differential reluctivity along M, chi_diff = B'(|H|)/mu0 - 1).
+      wco(Mmag)   -> the co-energy density INT_0^|M| H(s) ds  (the line-search merit -- E is convex, R is
+                      its gradient, so an Armijo line search on E is robust where ||R|| stalls in saturation).
+    HARD-SATURATION BARRIER: the table saturates M at Mmax (M cannot exceed Msat); for |M| > Mmax the inverse
+    is undefined, so H(M) is extended with a steep but C1-smooth barrier (slope Kbar = 1/_CHI_DIFF_FLOOR = the
+    table's saturation nu_diff) -> the energy form is repelled from the unphysical |M| > Mmax region (without
+    it, the M-iterates overshoot Msat and the Newton wanders / limit-cycles)."""
+    from scipy.interpolate import PchipInterpolator
+    Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(Harr, Barr)
+    Hs = np.concatenate([[0.0], np.logspace(-2, np.log10(max(Hmax, 1.0)), 800)])
+    Ms = np.array([Mof(h) for h in Hs])                       # should be monotone 0..Mmax
+    # Saturating BH tables can produce tiny PCHIP ripples in M(H).  PCHIP for the
+    # inverse H(M) requires the whole retained sequence to be strictly increasing,
+    # not just adjacent positive differences in the unfiltered samples.
+    keep = []
+    last = -np.inf
+    for k, mval in enumerate(Ms):
+        if mval > last + 1e-12 * max(1.0, Mmax):
+            keep.append(k)
+            last = mval
+    Hgrid, Mgrid = Hs[keep], Ms[keep]
+    if len(Mgrid) < 2:
+        raise ValueError("hdiv_demag_solve: inverse BH table did not produce a monotone M(H) curve")
+    Hof = PchipInterpolator(Mgrid, Hgrid)                     # |H| given |M|
+    Wco_grid = np.concatenate([[0.0], np.cumsum(0.5 * (Hgrid[1:] + Hgrid[:-1]) * np.diff(Mgrid))])
+    Wco = PchipInterpolator(Mgrid, Wco_grid)
+    Hlast = float(Hgrid[-1])
+    Kbar = 1.0 / _CHI_DIFF_FLOOR
+    Mcap = Mmax * (1.0 - 1e-9)
+
+    def fields(Mmag):
+        Mmag = np.asarray(Mmag, float)
+        Mm = np.minimum(Mmag, Mcap)
+        h = Hof(Mm)
+        chid = np.maximum(Bder(np.minimum(h, Hmax)) / _MU0 - 1.0, _CHI_DIFF_FLOOR)
+        nu_sec = h / np.maximum(Mmag, 1e-30)
+        nu_diff = 1.0 / chid
+        over = Mmag > Mcap
+        if np.any(over):                                      # C1-smooth barrier beyond Mmax
+            nu_sec[over] = (Hlast + Kbar * (Mmag[over] - Mcap)) / Mmag[over]
+            nu_diff[over] = Kbar
+        return nu_sec, nu_diff
+
+    def wco(Mmag):
+        Mmag = np.asarray(Mmag, float)
+        Mm = np.minimum(Mmag, Mcap)
+        d = np.maximum(Mmag - Mcap, 0.0)
+        return Wco(Mm) + Hlast * d + 0.5 * Kbar * d * d
+
+    return fields, wco, Mmax
+
+
+def _reluctivity_tangent(gfM, mesh, fields, Id):
+    """Inverse analogue of `_table_tensor_tangent`: from the M field gfM, per-element nu_sec / nu_diff via the
+    inverse BH `fields`, returns (H(M) CF = nu_sec M, nu_d tensor CF = nu_diff Mhat(x)Mhat + nu_sec (I - Mhat(x)Mhat))."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
+    Mmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)
+    nu_sec, nu_diff = fields(Mmag)
+    gs = ng.GridFunction(l2); gs.vec.FV().NumPy()[:] = nu_sec
+    gd = ng.GridFunction(l2); gd.vec.FV().NumPy()[:] = nu_diff
+    M2 = ng.InnerProduct(gfM, gfM) + 1e-30
+    par = ng.OuterProduct(gfM, gfM) / M2                      # Mhat (x) Mhat
+    return gs * gfM, gd * par + gs * (Id - par)
+
+
+def _reluctivity_tangent_multi(gfM, mesh, region_fields, elem_region, Id):
+    """PER-REGION inverse analogue of `_table_tensor_tangent_multi`: each element uses ITS region's inverse BH
+    `fields`.  `region_fields` = list (by region-id) of the `fields` callables; `elem_region` = per-element
+    region-id (== L2(0) DOF order)."""
+    l2 = ng.L2(mesh, order=0)
+    gfm = ng.GridFunction(l2)
+    gfm.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
+    Mmag = np.maximum(gfm.vec.FV().NumPy(), 1e-30)
+    nu_sec = np.empty_like(Mmag); nu_diff = np.empty_like(Mmag)
+    for ridx, fields in enumerate(region_fields):
+        sel = elem_region == ridx
+        if not np.any(sel):
+            continue
+        s, d = fields(Mmag[sel])
+        nu_sec[sel] = s; nu_diff[sel] = d
+    gs = ng.GridFunction(l2); gs.vec.FV().NumPy()[:] = nu_sec
+    gd = ng.GridFunction(l2); gd.vec.FV().NumPy()[:] = nu_diff
+    M2 = ng.InnerProduct(gfM, gfM) + 1e-30
+    par = ng.OuterProduct(gfM, gfM) / M2
+    return gs * gfM, gd * par + gs * (Id - par)
+
+
 def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
                            picard_warmstart=8, maxit=200, tol=1e-10,
                            bh_table=None, require_convergence=True):
