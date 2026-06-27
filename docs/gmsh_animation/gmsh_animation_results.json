@@ -1,25 +1,25 @@
 {
   "schema": "radia.docs.gmsh_animation.inspect.v1",
-  "generated_at_utc": "2026-06-27T03:53:21Z",
+  "generated_at_utc": "2026-06-27T15:41:25Z",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_version": "4.95.2"
   },
-  "example_dir": "examples/gmsh_animation",
+  "example_dir": "docs/gmsh_animation",
   "files": {
-    "animation_geo": "examples/gmsh_animation/animation.geo",
-    "rotor_animation_msh": "examples/gmsh_animation/rotor_animation.msh",
-    "rotor_vol": "examples/gmsh_animation/rotor.vol",
-    "stator_step": "examples/gmsh_animation/stator.step"
+    "animation_geo": "docs/gmsh_animation/animation.geo",
+    "rotor_animation_msh": "docs/gmsh_animation/rotor_animation.msh",
+    "rotor_vol": "docs/gmsh_animation/rotor.vol",
+    "stator_step": "docs/gmsh_animation/stator.step"
   },
   "geo_merges": [
     "stator.step",
     "rotor_animation.msh"
   ],
   "msh": {
-    "path": "examples/gmsh_animation/rotor_animation.msh",
+    "path": "docs/gmsh_animation/rotor_animation.msh",
     "bytes": 3116107,
     "mesh_format": "4.1 0 8",
     "nodes": {

@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T03:54:51Z",
+  "generated_at_utc": "2026-06-27T15:45:01Z",
   "notebook": "docs/gmsh_animation/gmsh_animation.ipynb",
-  "notebook_sha256": "1efffd4b4c65744c240d3d16711e340da2e2ca1a40d3ece84b885f7a9e6651d7",
+  "notebook_sha256": "3c8cb76440ffaf4acba838d4d661af0d963e1e1eed89f0a82721da413b91c482",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
