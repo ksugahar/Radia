@@ -127,6 +127,19 @@ DOCS + DEMOS
 ------------
   docs/stream_function/  (README, theory, regularization, single_stroke,
     deformation, examples, api, benchmarks)
+  SHOWCASE NOTEBOOKS (executed, outputs embedded -- the method run live):
+    docs/stream_function/theory.ipynb          -- build_fem_matrix on plane /
+       cylinder / sphere + achievable RMS; Path-A residual-vs-iteration (honest
+       non-monotone with auto-levels); complexity-tier table from the 4 demos
+    docs/stream_function/regularization.ipynb  -- the {l2,h1,h1_sigma,
+       inductance_diag,linf} menu (refreshes the comparison table); H1 order
+       sweep p=1..5 (p=3 sweet spot, non-monotone); folded RegularizedTSVD
+       checks (S=I == pseudo_inverse ~1e-15; alpha>0 == dense Tikhonov)
+    docs/stream_function/deformation.ipynb     -- run_deformation_search live:
+       penalty form (--minimize-reg) + NSGA-II Pareto front (--pareto);
+       cost-vs-trial + (RMS, psi^T S psi) front; flat/accuracy/reg-min table
+    (these are the runnable companions to the .md twins; the .md keeps the
+    prose/derivations, the .ipynb embeds the produced numbers + figures)
   examples/stream_function/demo_*.py  -- incl. the Pareto + sheet-metal
     demos: demo_pareto_tikhonov_aca / demo_pareto_geometry_nsga /
     demo_pareto_cylinder / demo_pareto_deform / demo_pareto_cylinder_deform
