@@ -130,6 +130,15 @@ def test_order_gt0_unsupported_combos_fail_loud():
                 hdiv_demag_solve(mesh, H_ext=_HEXT, order=1, **kw)
 
 
+def test_order_gt2_fail_loud():
+    """order>=3 needs the Duffy singular quadrature (the analytic-moment potential is exact only to charge
+    degree 2 / order<=2) -- it must RAISE, not silently return a wrong M (No-Fallbacks)."""
+    mesh = _sphere(h=0.7)
+    with pytest.raises(NotImplementedError):
+        with ng.TaskManager():
+            hdiv_demag_solve(mesh, 100.0, _HEXT, order=3)
+
+
 def test_requires_exactly_one_material_spec():
     """Exactly one of mu_r (linear) / bh_table (nonlinear) -> else RAISE."""
     mesh = _sphere()
