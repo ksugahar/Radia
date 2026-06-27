@@ -7,20 +7,26 @@ distribution -> loop modes that ill-condition BiCGSTAB.  The moment-Galerkin cou
 mutual-energy tensor N = B^T G B, SYMMETRIC by Green-kernel reciprocity (validated 1e-16 on the loop-heavy
 C-yoke) -> the loop modes are field-null by construction -> mu_r-independent / loop-free convergence.
 
-This is the de-risk-validated dipole-level solver (3 DOF/hex, constant M per element), built on the EXISTING
-C++ charge-Gram H-matrix (`_ChargeGramHMatrix`) + mass-Riesz CG (`solve_linear_material_mass_riesz`) -- the
-same kernels HDiv-VIM (radia.vim) ships.  No new C++ kernel: the heavy compute (Gram + solve) is C++, the
-moment-basis assembly (B, M_mass) is this thin Python layer.
+Built on the EXISTING C++ charge-Gram H-matrix (`_ChargeGramHMatrix`) + Krylov solve (mass-Riesz CG for the
+dipole, diagonal-Jacobi auto_prec for the quad) -- the same kernels HDiv-VIM (radia.vim) ships.  No new C++
+kernel: the heavy compute (Gram + solve) is C++, the moment-basis assembly (B, M_mass) is this thin Python
+layer.
+
+Moment orders (`quad=`):
+  quad=False (default) -- 3 DOF/hex: constant magnetization per hex (the dipole / standard demag).
+  quad=True            -- 5 DOF/hex: + 2 quad residual-eigenmode amplitudes (higher per-element order; the
+      quad modes improve skew / gradient loads -- the iron-yoke case -- and are ~null for axial/symmetric
+      loads, never worse).
 
 Public API:
-  moment_galerkin_demag_solve(hexes, mu_r=/chi=, H_ext=..) -> dict(M, iters, demag_factor)
-      Linear isotropic soft-iron demag on a hexahedral body (the validated production entry).
-  assemble_moment_system(hexes, ...) -> dict(G, B, M_mass, vols, ...)   (the sparse pieces + C++ Gram)
-  solve_assembled(sys, H_ext, chi)   -> (M, iters)                       (solve a pre-assembled system)
-  demag_factor(sys, kdir=2)          -> float                            (operator demag factor, cube -> 1/3)
+  moment_galerkin_demag_solve(hexes, mu_r=/chi=, H_ext=.., quad=False)
+      -> dict(M (n,3) dipole magnetization, m raw amplitudes, quad_amps, iters, demag_factor, n_hex, sys).
+  reconstruct_field(sys, m, probes) -> external B (Tesla) from the solved amplitudes (field-from-sigma,
+      anchored to rad.Fld ~1e-13).
+  assemble_moment_system(hexes, quad=False, ...) -> dict(G, B, M_mass, vols, ndof_per, all_tris, ...).
+  solve_assembled(sys, H_ext, chi) -> (M_dipole (n,3), iters);  solve_raw -> (m, iters).
+  demag_factor(sys, kdir=2) -> float (operator demag factor, cube -> 1/3).
 
-Scope (this dipole-level increment): a uniform M per hex (the lowest moment order = the standard demag).
-The higher moment modes (the 2 quad residual-eigenmodes per hex, the '6-DOF' set) are a separate increment.
 Loop-EXCITING sources (azimuthal / transformer drive) route through HDiv-VIM (radia.vim) per the loop-free
 architecture decision.
 """
@@ -28,6 +34,8 @@ from ._assemble import assemble_moment_system, HEX_FACES  # noqa: F401
 from ._solve import (  # noqa: F401
     moment_galerkin_demag_solve,
     solve_assembled,
+    solve_raw,
+    reconstruct_field,
     demag_factor,
 )
 
@@ -35,6 +43,8 @@ __all__ = [
     "moment_galerkin_demag_solve",
     "assemble_moment_system",
     "solve_assembled",
+    "solve_raw",
+    "reconstruct_field",
     "demag_factor",
     "HEX_FACES",
 ]
