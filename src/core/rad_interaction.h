@@ -256,8 +256,7 @@ class radTInteraction : public radTg {
 	int m_nProcMPI;
 
 	//-------------------------------------------------------------------------
-	// Variable DOF support for hybrid MSC + standard element analysis
-	// Reference: Yano & Sugahara, "MMM with MSC", J. Magn. Soc. Jpn., 2023
+	// Variable DOF support for hybrid collocation MMMM + standard element analysis.
 	//-------------------------------------------------------------------------
 	int m_totalDOF;                           // Total degrees of freedom (sum of all element DOFs)
 	std::vector<int> m_elemDOF;               // DOF for each element (3 for standard, 6 for MSC hexahedra)
@@ -530,7 +529,7 @@ public:
 	// Per moment element demag field H and gradient gradH at the element CENTROID, as linear functionals of each
 	// source DOF charge -- the analytic self-term kernel of the parameter-free moment formulation.
 	// SELF face: bare charged-face field (centroid is interior -> finite, no center charge needed).
-	// MUTUAL face: yano dipole layer = bare face - area*(point charge @ source center) (finite distance).
+	// MUTUAL face: collocation MMMM dipole layer = bare face - area*(point charge @ source center) (finite distance).
 	// Cflat is ROW-MAJOR (nMom x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
 	// -> Cflat[(h*9+k)*m_totalDOF + g].  H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.  See .cpp.
 	void BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const;

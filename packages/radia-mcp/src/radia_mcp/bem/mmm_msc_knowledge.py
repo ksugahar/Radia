@@ -97,18 +97,16 @@ For hexahedral mesh (6 faces per element), Radia uses MSC instead of MMM.
 ## Formulation
 
 The bound surface charge σ_bound = M · n̂ on each face is the unknown.
-Use solid-angle integration (EIEM2 convention) for the integral
+Use the current collocation MMMM / multipole-moment MMM kernel for the integral
 equation:
 
 ```
 ∫_face_i G(r, r') σ(r') dS' = -H_n(r_i)
 ```
 
-with evaluation point at the **half-center** (CLAUDE.md POLICY):
-
-```
-EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
-```
+Production code builds the surface-charge system from centroid applied fields and
+centroid field/gradient moment rows; do not introduce a separate face evaluation
+point.
 
 ## DOFs per element
 

@@ -513,8 +513,8 @@ Modern problems often need >1 method:
 BUILD_MSC_MMM = """\
 ## How to build an MMM / MSC model in Radia (practical recipe)
 
-Terminology: the current production path is **multipole-moment MMM**, not the
-old Yano-centered label.  The key idea is to derive element equations from a symbolic
+Terminology: the current production path is **collocation MMMM / multipole-moment MMM**.
+The key idea is to derive element equations from a symbolic
 multipole expansion of the element field.  For the 5/6-DOF surface-charge
 elements this gives monopole, dipole, and residual-quadrupole rows; the same
 moment-formulation viewpoint also improves the classical 3-DOF MMM path.
@@ -649,9 +649,8 @@ In the digest/paper notation A_ij = delta_ij/(mu_r-1) + G_ij, that
 convention, not physics.
 
 For current surface-charge MSC, `GetInteractMatrix` is NOT the
-production solve matrix.  The retired EIEM2 dense MSC blocks are no
-longer assembled; multipole-moment MMM builds its own system from centroid
-field/gradient moment rows.  Use these probes instead:
+production solve matrix.  Multipole-moment MMM builds its own system from
+centroid field/gradient moment rows.  Use these probes instead:
 
 ```python
 handle = rad.BuildMatrix(obj)
@@ -753,7 +752,7 @@ the condition number scales like mu_r. mu_r -> infinity makes A
 singular: HIGH PERMEABILITY IS THE WORST CASE. The null eigenvectors
 are circulating magnetization patterns that radiate ~no external field.
 
-### "Beautiful -> ugly" iterative behavior (Yano observation)
+### "Beautiful -> ugly" iterative behavior (historical observation)
 
 For a high-mu_r block in a uniform field, BiCGSTAB from a zero initial
 guess passes a PHYSICAL aligned solution at few iterations ("beautiful")
@@ -886,19 +885,14 @@ condition number is NOT the lever -- block-Jacobi absorbs any per-row (and any s
 local) scaling, so the iteration count is invariant to it. (This is the orthogonal axis to the
 high-mu_r loop story in "eigenvalue_nullspace".)
 
-### Point-matching (EIEM2) vs moment-matching
+### Moment-matching is the current surface-charge path
 
-EIEM2 collocation (eval-point alpha=0.5) is point-matching: it collocates a SINGLE physical
-quantity (the field) at points, so it does NOT mix the monopole/dipole/quadrupole orders
-(L^2 / L^3 / L^4) the way moment-matching (integral functionals) does. Measured: EIEM2 is lower
-at EVERY aspect ratio and has a shallower V than moment-matching, but is not fully aspect-immune
-(a thin cell puts the normal-offset eval point too close to its face). The eval-point offset
-alpha and the gradient/quadrupole term are the SAME degree of freedom (the alpha-offset is a
-field-gradient sample, n.gradH.u with u along the normal -> it sees only the DIAGONAL part of
-the gradient tensor; the full quadrupole/shear needs the moment or a transverse sample). On a
-fair system-vs-system comparison BOTH are well-posed: the raw `GetInteractMatrix` N is
-near-singular (~1e18, the loops); the SYSTEM matrix A = -N + diag(1/chi) regularizes to ~1e4,
-and there the moment system's condition number is actually NOT worse than EIEM2's.
+Current collocation MMMM uses moment-matching integral functionals rather than ad-hoc
+face evaluation points.  The per-element modes are monopole, dipole, and residual
+quadrupole rows; the production system matrix is assembled from centroid applied fields
+and centroid field/gradient rows.  On a fair system comparison, the raw face-charge
+operator can expose loop near-null modes, while the SYSTEM matrix
+`A = -N + diag(1/chi)` regularizes the material response.
 
 ### Practical guidance
 
@@ -944,7 +938,7 @@ are the 3 principal axes of its 3x3 demag tensor (`rad.GetInteractMatrix`): isot
 an irregular tet -- principal-axis dipoles, NOT x/y/z and NOT a "moment basis".
 
 **API caveat (2026-06-26):** `rad.GetInteractMatrix` now returns ALL ZEROS for the
-face-charge MSC elements (hex/pyramid/wedge) -- the EIEM2 dense blocks were removed -- so
+face-charge MSC elements (hex/pyramid/wedge), so
 the lab `examples/vim/multipole_moment_svd_multipole.py` SVD-of-N path is STALE for them
 (it still works for the 3-DOF tet demag tensor). For hex/pyramid/wedge field eigenmodes,
 build a field-energy Gram `G_ij = <H_i, H_j>` (H_i = field of unit charge on face i, via

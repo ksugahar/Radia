@@ -1,4 +1,4 @@
-"""Test isolation for the HDiv/yano demag-backend GLOBAL.
+"""Test isolation for the HDiv/collocation demag-backend GLOBAL.
 
 ``rad.set_demag_backend(...)`` mutates a module-global (``radia._demag_backend``).
 A test that forces a backend must restore it, or it LEAKS into later tests -- which

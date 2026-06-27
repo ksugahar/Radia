@@ -6,16 +6,16 @@ GAP-CENTRE flux density B.
 C-yoke iron (thin in z, with a gap/bore) driven by a rectangular current loop ENCIRCLING the back leg.
 Both solvers use the SAME iron mesh + SAME coil + SAME MatSatIsoTab BH table, and the gap B is then
 evaluated with the SAME field kernel (radia.Fld) -- only the magnetization M differs:
-  yano:  rad.Solve(iron tets [MMM] + coil) -> solved M ; B_gap = rad.Fld(iron+coil,'b',gap)
+  Radia reference:  rad.Solve(iron tets [MMM] + coil) -> solved M ; B_gap = rad.Fld(iron+coil,'b',gap)
   HDiv:  hdiv_demag_solve -> per-element M ; Radia iron rebuilt from that M (no solve) ;
          B_gap = rad.Fld(iron_hdivM + coil,'b',gap)
 HDiv applied field = the coil's Biot-Savart H (rad.RadiaField(coil,'h')); KELVIN-LESS (iron-only mesh).
 
-Measured (2026-06-15, NI=8000 A, 2715 tets, Msat~1.27e6 A/m): gap-centre |B| HDiv 0.0982 T vs yano
+Measured (2026-06-15, NI=8000 A, 2715 tets, Msat~1.27e6 A/m): gap-centre |B| HDiv 0.0982 T vs Radia reference
 0.0979 T agree to 0.32% (bore centre), 0.18% at the gap opening.  The HDiv nonlinear solve is a damped
 matrix-free NEWTON (replaced Anderson-Hantila 2026-06-15, which STALLED on sharp silicon-steel BH).
 
-The gate locks: HDiv and yano agree within 1.5% on the gap-centre flux density (the engineering
+The gate locks: HDiv and the Radia reference agree within 1.5% on the gap-centre flux density (the engineering
 quantity), with a bounded outer-iteration count.  A second test
 (`test_ctype_coil_nonlinear_sharp_bh_newton`) is the REGRESSION LOCK for the Newton solver: a sharp
 silicon-steel-like BH (chi0=12000) at high drive -- the regime that stalled the old Anderson-Hantila
@@ -62,14 +62,14 @@ def _coil():
     return rad.ObjFlmCur(pts, NI)
 
 
-def _yano_gapB(mesh, bh=BH):
+def _radia_reference_gapB(mesh, bh=BH):
     """Gap-centre B (Tesla) via six-face surface-charge MMM rad.Solve (iron tets + coil), same field kernel."""
     rad.UtiDelAll()
     coil = _coil()
     cont = nmi.netgen_mesh_to_radia(mesh, material={'magnetization': [0, 0, 0]}, units='m', verbose=False)
     rad.MatApl(cont, rad.MatSatIsoTab(bh))
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)    # yano backend deprecated; expected here
+        warnings.simplefilter("ignore", DeprecationWarning)
         rad.Solve(rad.ObjCnt([cont, coil]), 1e-6, 3000, 0)     # LU
     B = np.array(rad.Fld(rad.ObjCnt([cont, coil]), 'b', GAP_PTS)).reshape(-1, 3)
     rad.UtiDelAll()
@@ -94,14 +94,14 @@ def test_ctype_coil_nonlinear_gap_field():
     B_hdiv = np.array(rad.Fld(rad.ObjCnt([iron_hdiv, coil2]), 'b', GAP_PTS)).reshape(-1, 3)
     rad.UtiDelAll()
 
-    B_yano = _yano_gapB(mesh)
+    B_ref = _radia_reference_gapB(mesh)
 
     assert res["nonlinear"] is True
     for k, p in enumerate(GAP_PTS):
-        rel = float(np.linalg.norm(B_hdiv[k] - B_yano[k]) / (np.linalg.norm(B_yano[k]) + 1e-30))
-        assert rel < 0.015, f"gap B at {p}: HDiv {B_hdiv[k]} vs yano {B_yano[k]} rel {rel:.2e}"
+        rel = float(np.linalg.norm(B_hdiv[k] - B_ref[k]) / (np.linalg.norm(B_ref[k]) + 1e-30))
+        assert rel < 0.015, f"gap B at {p}: HDiv {B_hdiv[k]} vs Radia reference {B_ref[k]} rel {rel:.2e}"
     # bore field is a meaningful fraction of a Tesla (genuinely driven, into the BH knee)
-    assert np.linalg.norm(B_yano[0]) > 0.05
+    assert np.linalg.norm(B_ref[0]) > 0.05
     assert res["iters"] < 200, f"HDiv nonlinear Newton outer iters not bounded: {res['iters']}"
 
 
@@ -135,11 +135,11 @@ def test_ctype_coil_nonlinear_sharp_bh_newton():
     B_hdiv = np.array(rad.Fld(rad.ObjCnt([iron, coil2]), 'b', GAP_PTS)).reshape(-1, 3)
     rad.UtiDelAll()
 
-    B_yano = _yano_gapB(mesh, SHARP_BH)
+    B_ref = _radia_reference_gapB(mesh, SHARP_BH)
 
     assert res["nonlinear"] is True
     assert res["iters"] < 200, f"Newton outer iters not bounded on sharp BH: {res['iters']}"
-    assert np.linalg.norm(B_yano[0]) > 0.05    # genuinely driven into the knee
+    assert np.linalg.norm(B_ref[0]) > 0.05    # genuinely driven into the knee
     for k, p in enumerate(GAP_PTS):
-        rel = float(np.linalg.norm(B_hdiv[k] - B_yano[k]) / (np.linalg.norm(B_yano[k]) + 1e-30))
-        assert rel < 0.03, f"sharp-BH gap B at {p}: HDiv {B_hdiv[k]} vs yano {B_yano[k]} rel {rel:.2e}"
+        rel = float(np.linalg.norm(B_hdiv[k] - B_ref[k]) / (np.linalg.norm(B_ref[k]) + 1e-30))
+        assert rel < 0.03, f"sharp-BH gap B at {p}: HDiv {B_hdiv[k]} vs Radia reference {B_ref[k]} rel {rel:.2e}"

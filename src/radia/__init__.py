@@ -178,47 +178,45 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Demag backend: BOTH the multipole-moment MMM surface-charge MSC path and the FEEC HDiv-VIM
-# (radia.vim) are kept.  They are complementary -- multipole-moment MMM is the canonical
+# Demag backend: BOTH the canonical collocation MMMM surface-charge path and the FEEC HDiv-VIM
+# (radia.vim) are kept.  They are complementary -- collocation MMMM is the canonical
 # mesh-less C++ path for hex/wedge/pyramid soft iron; HDiv-VIM is the mesh-backed
-# FEEC path with loop-free convergence.
+# FEEC path with loop-free convergence.  Retired backend names are rejected because
+# they conflate the old MSC/EIEM2 path with the live collocation MMMM path.
 #
 # DEFAULT = "auto" (API-split): the API you use selects the method.
-#   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> surface-charge MSC (C++).
+#   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> collocation MMMM (C++).
 #   - mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM.
 #   - tetrahedron (MMM) and permanent-magnet solves -> C++ solver (unchanged).
-# set_demag_backend("yano"|"hdiv") OVERRIDES the auto split (a soft_iron_from_mesh container carries both
-# representations, so either backend can solve it); set_demag_backend("auto"/None) restores the split.
+# set_demag_backend("collocation_mmmm"|"hdiv") OVERRIDES the auto split (a soft_iron_from_mesh
+# container carries both representations, so either backend can solve it);
+# set_demag_backend("auto"/None) restores the split.
 # ---------------------------------------------------------------------------
 
-_demag_backend = None   # None/"auto" = API-split default; "yano" or "hdiv" = forced override
+_demag_backend = None   # None/"auto" = API-split default; "collocation_mmmm" or "hdiv" = forced override
 
 
-# moment-Galerkin MMMM (radia.moment_galerkin) accepts these aliases; canonical = "moment_galerkin".
-_MG_BACKEND_NAMES = ("moment_galerkin", "mg", "galerkin")
 _BACKEND_MISSING = object()
 
 
 def set_demag_backend(name):
-    """Select the soft-iron demag backend.  "yano" = multipole-moment MMM surface-charge MSC; "hdiv" = FEEC
-    HDiv-VIM; "moment_galerkin" (alias "mg"/"galerkin") = symmetric moment-Galerkin MMMM (radia.moment_galerkin,
-    N = B^T G B, mesh-backed soft iron only); "auto"/None = API-split default (mesh-less -> yano,
-    soft_iron_from_mesh -> HDiv).  The choice is consulted by rad.Solve.  Returns the effective backend string."""
+    """Select the soft-iron demag backend.  "collocation_mmmm" = canonical collocation MMMM
+    surface-charge MSC; "hdiv" = FEEC HDiv-VIM; "auto"/None = API-split default (mesh-less ->
+    collocation MMMM, soft_iron_from_mesh -> HDiv).  The choice is consulted by rad.Solve.  Returns the
+    effective backend string."""
     global _demag_backend
     if name in (None, "auto"):
         _demag_backend = None
-    elif name in ("yano", "hdiv"):
+    elif name in ("collocation_mmmm", "hdiv"):
         _demag_backend = name
-    elif name in _MG_BACKEND_NAMES:
-        _demag_backend = "moment_galerkin"
     else:
-        raise ValueError("demag_backend must be 'yano', 'hdiv', 'moment_galerkin', or 'auto'/None (got %r)"
+        raise ValueError("demag_backend must be 'collocation_mmmm', 'hdiv', or 'auto'/None (got %r)"
                          % (name,))
     return _demag_backend or "auto"
 
 
 def get_demag_backend():
-    """The selected soft-iron demag backend: "yano", "hdiv", "moment_galerkin", or "auto"."""
+    """The selected soft-iron demag backend: "collocation_mmmm", "hdiv", or "auto"."""
     return _demag_backend or "auto"
 
 
@@ -226,12 +224,10 @@ def _normalize_demag_backend(name):
     """Normalize a per-call demag backend without mutating the global default."""
     if name in (None, "auto"):
         return None
-    if name in ("yano", "hdiv"):
+    if name in ("collocation_mmmm", "hdiv"):
         return name
-    if name in _MG_BACKEND_NAMES:
-        return "moment_galerkin"
     raise ValueError(
-        "demag_backend must be 'yano', 'hdiv', 'moment_galerkin', or 'auto'/None (got %r)"
+        "demag_backend must be 'collocation_mmmm', 'hdiv', or 'auto'/None (got %r)"
         % (name,)
     )
 
@@ -263,12 +259,11 @@ if "Solve" in globals():
     def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: pick the soft-iron demag backend)
         """Radia relaxation solve with the API-split demag backend (see set_demag_backend):
           - mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh) -> FEEC HDiv-VIM (default), or
-            surface-charge MSC if demag_backend='yano';
-          - mesh-LESS hex/wedge/pyramid soft iron -> multipole-moment MMM MSC (C++);
+            collocation MMMM if demag_backend='collocation_mmmm';
+          - mesh-LESS hex/wedge/pyramid soft iron -> collocation MMMM (C++);
           - tetrahedron (MMM) and permanent magnets -> C++ solver.
-        A per-call demag_backend=('yano'|'hdiv'|'moment_galerkin'|'auto') overrides the global
-        set_demag_backend choice.  'moment_galerkin' (the symmetric MMMM, radia.moment_galerkin) needs a
-        mesh-backed soft iron (soft_iron_from_mesh) and is linear-only."""
+        A per-call demag_backend=('collocation_mmmm'|'hdiv'|'auto') overrides the global
+        set_demag_backend choice."""
         backend_arg = kwargs.pop("demag_backend", _BACKEND_MISSING)
         backend = _demag_backend if backend_arg is _BACKEND_MISSING else _normalize_demag_backend(backend_arg)
         top = args[0] if args else None
@@ -280,31 +275,24 @@ if "Solve" in globals():
             except Exception:
                 registered = False
         if registered:
-            if backend == "yano":
-                return _cpp_Solve(*args, **kwargs)          # surface-charge MSC on the mesh-built elements
+            if backend == "collocation_mmmm":
+                return _cpp_Solve(*args, **kwargs)          # collocation MMMM on the mesh-built elements
             from radia.vim import _radsolve
-            if backend == "moment_galerkin":               # symmetric moment-Galerkin MMMM on the SAME container
-                return _radsolve.dispatch_moment_galerkin(*args, **kwargs)
             return _radsolve.dispatch(*args, **kwargs)      # auto/hdiv -> FEEC HDiv-VIM
         if backend == "hdiv":
             raise ValueError(
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "
                 "radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=); this body is mesh-less.  "
-                "Build it via soft_iron_from_mesh, or use the yano backend (the default for mesh-less iron).")
-        if backend == "moment_galerkin":
-            raise ValueError(
-                "demag_backend='moment_galerkin' needs a mesh-backed soft iron built via "
-                "radia.vim.soft_iron_from_mesh(mesh, mu_r=); this body is mesh-less.  Build it via "
-                "soft_iron_from_mesh, or call radia.moment_galerkin.moment_galerkin_demag_solve(elements, ...) "
-                "directly on the element vertex lists.")
-        return _cpp_Solve(*args, **kwargs)                  # mesh-less -> surface-charge MSC (or MMM/PM)
+                "Build it via soft_iron_from_mesh, or use demag_backend='collocation_mmmm' "
+                "for the mesh-less collocation MMMM path.")
+        return _cpp_Solve(*args, **kwargs)                  # mesh-less -> collocation MMMM (or MMM/PM)
 
 
 if "SolverConfig" in globals():
     _cpp_SolverConfig = globals()["SolverConfig"]
 
     def SolverConfig(**kwargs):   # noqa: F811  (adds demag_backend on top of the C++ SolverConfig)
-        """Unified solver config.  Adds the demag_backend selector ("yano" | "hdiv", see
+        """Unified solver config.  Adds the demag_backend selector ("collocation_mmmm" | "hdiv", see
         set_demag_backend); all other kwargs (hacapk_eps, bicgstab_tol, relax_param, newton_method, ...)
         pass through to the C++ SolverConfig."""
         if "demag_backend" in kwargs:

@@ -370,7 +370,7 @@ class TestMeshImportSolver(unittest.TestCase):
         # M should be positive (induced by external field)
         self.assertGreater(M_avg_z, 0, "Magnetization should be positive")
 
-    def test_hex_mesh_soft_iron_solve_yano(self):
+    def test_hex_mesh_soft_iron_solve_collocation_mmmm(self):
         """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the
         multipole-moment MMM MSC demag.  In a
         uniform applied field the cube magnetizes (M_avg_z > 0), like the tetrahedral (MMM) solve

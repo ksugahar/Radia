@@ -7,11 +7,11 @@ NON-uniform, so the ellipsoid formula chi/(1+chi/3)H is NOT exact for the volume
 parity metric is the two solvers measured head-to-head.
 
 Measured convergence (2026-06-15, H0=1000 A/m, mu_r=100):
-    yano (rad.Solve):  n=4 3348.2, n=6 3410.3, n=8 3437.7, n=10 3452.9   (hexes; rising -> ~3465)
+    collocation MMMM (rad.Solve):  n=4 3348.2, n=6 3410.3, n=8 3437.7, n=10 3452.9   (hexes; rising -> ~3465)
     hdiv (VIM):        L/4 3450.5, L/5 3462.7, L/6 3470.4, L/8 3479.2     (tets;  rising -> ~3490)
-    finest yano vs finest hdiv = 0.76%.  HDiv +N GMRES iters mesh-robust: 24, 28, 26, 37.
+    finest collocation MMMM vs finest hdiv = 0.76%.  HDiv +N GMRES iters mesh-robust: 24, 28, 26, 37.
 
-The gate locks (1) yano == HDiv within 3% at a moderate resolution, (2) HDiv demag factor ~ 1/3, and
+    The gate locks (1) collocation MMMM == HDiv within 3% at a moderate resolution, (2) HDiv demag factor ~ 1/3, and
 (3) HDiv mesh-robustness (the M_mass^-1 preconditioner keeps the +N iteration count bounded as the
 mesh refines -- a Jacobi diagonal blew past 5000 iters at 7224 faces, the bug this gate guards).
 
@@ -38,10 +38,10 @@ L = 0.02        # cube edge (m)
 MU_R = 100.0
 
 
-def _yano_cube_Mz(n):
+def _collocation_mmmm_cube_Mz(n):
     """Volume-average M_z of the soft-iron cube via the six-face surface-charge MSC (n x n x n hexes).  The cube is a
     MakeStructured3DMesh hex mesh -> soft_iron_from_mesh (the canonical .vol/mesh ingestion); demag_backend
-    ='yano' forces the MSC solve on the built ObjHexahedron elements.  Applied field via ObjBckg B = mu0 H0
+    ='collocation_mmmm' forces the MSC solve on the built ObjHexahedron elements.  Applied field via ObjBckg B = mu0 H0
     (the free-space source field whose H is H0)."""
     rad.UtiDelAll()
     with ng.TaskManager():
@@ -50,7 +50,7 @@ def _yano_cube_Mz(n):
         core = soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     cont = rad.ObjCnt([core, bkg])
-    rad.Solve(cont, 1e-6, 3000, 0, demag_backend="yano")      # force surface-charge MSC (LU) on the registered iron
+    rad.Solve(cont, 1e-6, 3000, 0, demag_backend="collocation_mmmm")      # force surface-charge MSC (LU) on the registered iron
     res = rad.ObjM(core)
     return float(np.mean([m[2] for (_c, m) in res]))
 
@@ -63,13 +63,13 @@ def _hdiv_cube(maxh):
         return hdiv_demag_solve(mesh, MU_R, ng.CoefficientFunction((0, 0, H0)))
 
 
-def test_yano_hdiv_cube_linear_parity():
+def test_collocation_mmmm_hdiv_cube_linear_parity():
     """six-face surface-charge MSC and HDiv-VIM agree within 3% on the soft-iron cube (volume-average M_z)."""
-    mz_yano = _yano_cube_Mz(8)                       # 512 hexes
+    mz_collocation = _collocation_mmmm_cube_Mz(8)     # 512 hexes
     res = _hdiv_cube(L / 6)                           # 860 tets
     mz_hdiv = res["M_avg"][2]
-    rel = abs(mz_yano - mz_hdiv) / abs(mz_hdiv)
-    assert rel < 0.03, f"yano {mz_yano:.1f} vs HDiv {mz_hdiv:.1f} parity rel {rel:.2e}"
+    rel = abs(mz_collocation - mz_hdiv) / abs(mz_hdiv)
+    assert rel < 0.03, f"collocation MMMM {mz_collocation:.1f} vs HDiv {mz_hdiv:.1f} parity rel {rel:.2e}"
     assert abs(res["demag"] - 1.0 / 3.0) < 5e-3, f"HDiv demag factor off: {res['demag']}"
     # transverse average ~ 0 (uniform +z drive)
     assert abs(res["M_avg"][0]) < 1e-2 * mz_hdiv and abs(res["M_avg"][1]) < 1e-2 * mz_hdiv

@@ -34,7 +34,7 @@ def _clean():
 
 def _solve_block(hlu, mat, n=3, L=0.01, H0z=H0):
     """Solve an n x n x n pure-hex iron block in a uniform Hz with method 2; return (linear_iters, M_probe)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     rad.SolverConfig(hacapk_hlu_precond=bool(hlu), bicgstab_tol=1e-10)
     objs = []
     for ix in range(n):

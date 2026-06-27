@@ -6,6 +6,24 @@ This file records short "do not repeat this mistake" notes for the
 multipole-moment MMM implementation.  Temporary JSON files are scratch logs;
 the durable decisions and key numbers must be written here.
 
+## Terminology: Retired Yano-MSC vs Live Collocation MMMM
+
+Decision, 2026_06_28:
+
+- "Yano-MSC" names the retired historical MSC implementation path.  Do not use
+  that name for the live solver.
+- The live surface-charge soft-iron solver is the canonical collocation MMMM
+  path: multipole-moment MMM with MSC face charges, HACApK matrix-vector
+  acceleration, and two-sided loop/co-loop deflation for loop-heavy cases.
+- `demag_backend="yano"` must not remain as a compatibility alias.  Keeping it
+  conflates the retired Yano-MSC path with live collocation MMMM and is a bug
+  source.
+- The explicit backend name for the live surface-charge path is
+  `collocation_mmmm`.
+- Galerkin MMMM is retired as a production branch because it duplicates the
+  symmetric `B^T G B` direction already covered by HDiv-VIM while lacking
+  nonlinear and image-symmetry coverage.
+
 ## Engineering Benchmark Range
 
 Decision, 2026_06_26:

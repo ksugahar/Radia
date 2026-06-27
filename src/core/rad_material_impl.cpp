@@ -1848,7 +1848,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// Mesh-less surface-charge soft iron (ObjHexahedron/ObjWedge/ObjPyramid + MatLin/MatSatIsoTab
 		// + rad.Solve) is solved by the canonical multipole-moment MMM MSC path here.  Mesh-BACKED soft iron
 		// (radia.vim.soft_iron_from_mesh) is routed to FEEC HDiv-VIM by the Python rad.Solve wrapper before
-		// reaching this C++ path, unless demag_backend='yano' forces the C++ multipole-moment MMM representation.
+		// reaching this C++ path, unless demag_backend='collocation_mmmm' forces the C++ collocation MMMM representation.
 		// Tet (MMM) and permanent magnets are unaffected.
 
 		// multipole-moment MMM dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula

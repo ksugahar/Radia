@@ -7,7 +7,7 @@ Scope + the verified boundary (productionization, docs/hdiv_vim/PRODUCTIONIZATIO
 mixed"):
   - PM-only -> M = M_pm exactly (the RT0 projection of a constant vector is exact).
   - PM + LINEAR iron SEPARATED BY AN AIR GAP (the usual magnetic-circuit / PM-motor case) matches
-    rad.Solve (yano) to ~1e-3 on the external field and CONVERGES under refinement.
+    the Radia C++ reference solve to ~1e-3 on the external field and CONVERGES under refinement.
   - PM directly TOUCHING soft iron is NOT supported and FAILS LOUD: the conforming HDiv (RT0) field
     cannot represent the magnetization discontinuity across a PM-iron boundary, so a shared-facet
     interface DIVERGES under refinement (~20% external-field error).  The touching-interface formulation
@@ -47,8 +47,8 @@ def _ext_points():
                      for a in np.linspace(0, 2 * np.pi, 24, endpoint=False)])
 
 
-def _yano_external_B(mesh, ext):
-    """rad.Solve (yano/MMM) on the SAME tets: pm -> fixed M0 z, iron -> soft MatLin(MU); external B."""
+def _radia_reference_external_B(mesh, ext):
+    """rad.Solve on the SAME tets: pm -> fixed M0 z, iron -> soft MatLin(MU); external B."""
     rad.UtiDelAll()
     els, _ = extract_elements(mesh)
     matlin = rad.MatLin(MU)
@@ -63,7 +63,7 @@ def _yano_external_B(mesh, ext):
             objs.append(oid)
     cont = rad.ObjCnt(objs)
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)   # yano backend is deprecated; expected here
+        warnings.simplefilter("ignore", DeprecationWarning)
         rad.Solve(cont, 1e-6, 3000, 0)                        # LU
     return np.array([rad.Fld(cont, "b", p.tolist()) for p in ext])
 
@@ -86,17 +86,17 @@ def test_pm_only_returns_M_pm():
     assert np.allclose(r["M_avg"], [0.0, 0.0, M0], rtol=1e-6, atol=1.0), r["M_avg"]
 
 
-def test_pm_iron_airgap_parity_vs_yano():
-    """PM + LINEAR iron separated by an air gap: external B matches rad.Solve (yano) to < 1% on the SAME
+def test_pm_iron_airgap_parity_vs_radia_reference():
+    """PM + LINEAR iron separated by an air gap: external B matches rad.Solve to < 1% on the SAME
     tet mesh (the method-isolating parity; measured ~3e-4)."""
     mesh = _pm_iron_mesh(gap=0.5 * L, maxh=L / 4)
     ext = _ext_points()
-    By = _yano_external_B(mesh, ext)
+    B_ref = _radia_reference_external_B(mesh, ext)
     with ng.TaskManager():
         r = hdiv_demag_solve(mesh, mu_r={"iron": MU}, pm_M={"pm": [0.0, 0.0, M0]}, H_ext=ZERO)
     Bh = _hdiv_external_B(mesh, r["M"], ext)
-    rel = np.linalg.norm(Bh - By) / np.linalg.norm(By)
-    assert rel < 1e-2, f"PM+iron(air gap) HDiv vs yano external-B rel {rel:.2e}"
+    rel = np.linalg.norm(Bh - B_ref) / np.linalg.norm(B_ref)
+    assert rel < 1e-2, f"PM+iron(air gap) HDiv vs Radia reference external-B rel {rel:.2e}"
 
 
 def test_pm_iron_touching_fail_loud():
@@ -137,7 +137,7 @@ def _bh(chi0, Bsat, n=40):
 BH_NL = _bh(5000.0, 2.0)
 
 
-def _yano_external_B_nonlinear(mesh, ext):
+def _radia_reference_external_B_nonlinear(mesh, ext):
     """rad.Solve on the SAME tets: pm -> fixed M0_NL z, iron -> MatSatIsoTab(BH_NL); external B."""
     rad.UtiDelAll()
     els, _ = extract_elements(mesh)
@@ -158,19 +158,19 @@ def _yano_external_B_nonlinear(mesh, ext):
     return np.array([rad.Fld(cont, "b", p.tolist()) for p in ext])
 
 
-def test_pm_nonlinear_iron_airgap_parity_vs_yano():
+def test_pm_nonlinear_iron_airgap_parity_vs_radia_reference():
     """PM + NONLINEAR iron separated by an air gap: external B matches rad.Solve (PM fixed +
     MatSatIsoTab iron) to < 1% on the SAME tet mesh (measured ~7e-4), the iron driven into mild
     saturation.  Locks the mixed PM + Newton path against the shipped solver."""
     mesh = _pm_iron_mesh(gap=0.25 * L, maxh=L / 4)
     ext = _ext_points()
-    By = _yano_external_B_nonlinear(mesh, ext)
+    B_ref = _radia_reference_external_B_nonlinear(mesh, ext)
     with ng.TaskManager():
         r = hdiv_demag_solve(mesh, bh_table=BH_NL, pm_M={"pm": [0.0, 0.0, M0_NL]}, H_ext=ZERO, nl_tol=1e-6)
     assert r["nonlinear"]
     Bh = _hdiv_external_B(mesh, r["M"], ext)
-    rel = np.linalg.norm(Bh - By) / np.linalg.norm(By)
-    assert rel < 1e-2, f"PM+nonlinear-iron(air gap) HDiv vs yano external-B rel {rel:.2e}"
+    rel = np.linalg.norm(Bh - B_ref) / np.linalg.norm(B_ref)
+    assert rel < 1e-2, f"PM+nonlinear-iron(air gap) HDiv vs Radia reference external-B rel {rel:.2e}"
 
 
 def test_pm_nonlinear_touching_fail_loud():

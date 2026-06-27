@@ -45,36 +45,28 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     """Build a soft-iron Radia container from an NGSolve ``mesh`` AND register it so
     ``rad.Solve`` can dispatch the FEEC HDiv-VIM backend.
 
-    The returned container works with BOTH demag backends: ``'yano'`` (the applied
-    ``MatLin`` / ``MatSatIsoTab`` multipole-moment MMM MSC path) and ``'hdiv'`` (the FEEC
+    The returned container works with BOTH demag backends: ``'collocation_mmmm'`` (the applied
+    ``MatLin`` / ``MatSatIsoTab`` canonical collocation MMMM path) and ``'hdiv'`` (the FEEC
     HDiv-VIM on the registered mesh).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
 
     TET, HEX, and WEDGE meshes are all supported (ObjTetrahedron / ObjHexahedron /
     ObjWedge per element for the ``ObjSetM`` write-back + ``rad.Fld``).
     """
-    import numpy as np
-    from radia.netgen_mesh_import import netgen_mesh_to_radia, extract_elements
+    from radia.netgen_mesh_import import netgen_mesh_to_radia
     if (mu_r is None) == (bh_table is None):
         raise ValueError("soft_iron_from_mesh: give exactly one of mu_r (linear) or bh_table (nonlinear)")
     handles = netgen_mesh_to_radia(mesh, material={'magnetization': [0.0, 0.0, 0.0]},
                                    combine=False, verbose=verbose, material_filter=material_filter,
                                    allow_hex=True, allow_wedge=True)
-    # apply the soft-iron material so the legacy yano backend ALSO works on this container
+    # Apply the soft-iron material so the explicit collocation_mmmm backend also works on this container.
     mat = rad.MatLin(float(mu_r)) if mu_r is not None else rad.MatSatIsoTab(bh_table)
     for h in handles:
         rad.MatApl(h, mat)
     cont = rad.ObjCnt(handles)
     register_container(cont, handles)
-    # element vertex lists (SAME mesh.Elements(VOL) order + material_filter as the handles) so the
-    # symmetric moment-Galerkin MMMM backend (radia.moment_galerkin) can solve this SAME container too.
-    extracted, _ = extract_elements(mesh, material_filter=material_filter, allow_hex=True, allow_wedge=True)
-    elements = [np.asarray(el['vertices'], float) for el in extracted]
-    if len(elements) != len(handles):
-        raise RuntimeError("soft_iron_from_mesh: extracted element count %d != handle count %d "
-                           "(material_filter mismatch)" % (len(elements), len(handles)))
     _DEMAG_REGISTRY[cont] = dict(mesh=mesh, mu_r=mu_r, bh_table=bh_table,
-                                 handles=list(handles), elements=elements)
+                                  handles=list(handles))
     return cont
 
 
@@ -86,8 +78,8 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
     ``ngmesh.Save``).  Loading via NGSolve lets netgen own the mesh topology + face orientation,
     which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
     breaks the HDiv surface charge).  Both backends then read the SAME mesh: the default/'hdiv' path
-    solves on the registered mesh (FEEC HDiv-VIM); set_demag_backend('yano') solves the built
-    ObjHexahedron/Tetrahedron/Wedge elements (multipole-moment MMM MSC).  Exactly one of ``mu_r`` (linear) or
+    solves on the registered mesh (FEEC HDiv-VIM); set_demag_backend('collocation_mmmm') solves the built
+    ObjHexahedron/Tetrahedron/Wedge elements (canonical collocation MMMM).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.  (Caller opens ``with ng.TaskManager():``.)
     """
     import ngsolve as ng
@@ -164,58 +156,6 @@ def dispatch(top, *solve_args, **solve_kwargs):
         raise RuntimeError(
             f"demag_backend='hdiv': element/M count mismatch ({len(handles)} Radia handles vs "
             f"{len(M)} HDiv elements) -- mesh and registered handles are out of sync.")
-    for h, m in zip(handles, M):
-        rad.ObjSetM(h, [float(m[0]), float(m[1]), float(m[2])])
-    return res
-
-
-def dispatch_moment_galerkin(top, *solve_args, **solve_kwargs):
-    """``rad.Solve(demag_backend='moment_galerkin')`` handler.  Solves the registered iron's demag with the
-    SYMMETRIC moment-Galerkin MMMM (:func:`radia.moment_galerkin.moment_galerkin_demag_solve`, N = B^T G B),
-    writes per-element M back via ``ObjSetM``, and returns its result dict.  Reuses the SAME mesh-backed
-    container (and element vertex lists stored by :func:`soft_iron_from_mesh`) as the 'yano'/'hdiv' backends.
-
-    LINEAR soft iron only (``mu_r``): a ``bh_table`` (nonlinear) body raises -- moment-Galerkin has no
-    nonlinear path yet (route nonlinear through 'hdiv' or 'yano').  IMA image symmetry is not supported here.
-    """
-    import numpy as np
-    import radia.moment_galerkin as mg
-
-    image = solve_kwargs.pop("image", None)
-    if image is None and len(solve_args) >= 4 and solve_args[3]:
-        image = solve_args[3]
-    if image:
-        raise NotImplementedError("demag_backend='moment_galerkin' does not support IMA image symmetry; "
-                                  "solve the full model, or use demag_backend='hdiv'/'yano'.")
-    if solve_kwargs:
-        raise TypeError(f"unsupported rad.Solve keyword(s) for moment-Galerkin dispatch: {sorted(solve_kwargs)}")
-
-    iron, sources = _find_registered_iron(top)
-    reg = _DEMAG_REGISTRY[iron]
-    if reg.get("bh_table") is not None:
-        raise NotImplementedError(
-            "demag_backend='moment_galerkin' is linear-only (mu_r); this iron was built with a bh_table "
-            "(nonlinear).  Use demag_backend='hdiv' or 'yano' for the nonlinear solve.")
-    elements = reg.get("elements")
-    if not elements:
-        raise RuntimeError(
-            "demag_backend='moment_galerkin': no element vertex lists registered for this iron -- rebuild "
-            "it via radia.vim.soft_iron_from_mesh(mesh, mu_r=).")
-
-    # per-element applied field H_ext (A/m) = the source members' H at each element centroid
-    centroids = [list(np.asarray(V, float).mean(axis=0)) for V in elements]
-    if sources:
-        H_ext = np.asarray(rad.Fld(rad.ObjCnt(list(sources)), 'h', centroids), float).reshape(len(elements), 3)
-    else:
-        H_ext = np.zeros((len(elements), 3))
-
-    res = mg.moment_galerkin_demag_solve(elements, mu_r=float(reg["mu_r"]), H_ext=H_ext)
-    M = res["M"]
-    handles = reg["handles"]
-    if len(handles) != len(M):
-        raise RuntimeError(
-            f"demag_backend='moment_galerkin': element/M count mismatch ({len(handles)} Radia handles vs "
-            f"{len(M)} moment-Galerkin elements) -- mesh and registered handles are out of sync.")
     for h, m in zip(handles, M):
         rad.ObjSetM(h, [float(m[0]), float(m[1]), float(m[2])])
     return res
