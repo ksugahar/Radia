@@ -315,11 +315,10 @@ K_phi[i,j]       = ∫ ∂m_i/∂s · ∂m_j/∂s / (π μ_Z) ds dz
 M_sigma_phi[i,j] = σ / (4 π) · ∫ m_i · m_j / s ds dz
 ```
 
-The original `derive_quad_q2_henrotte.wls` shipped with a coefficient-of-W
+The original `derive_quad_q2_henrotte.wls` used a coefficient-of-W
 convention that was 2× too small for `K` and 2π× too small for `M`; this was
-diagnosed and corrected during Phase A2 (commit
-[077e7b03](legacy_assets/axifem/research/)). Anyone re-deriving the wls
-script must keep the Hessian convention.
+diagnosed and corrected during Phase A2. Anyone re-deriving the generated
+matrices must keep the Hessian convention.
 
 ## Cross-validation references (per-element, machine precision)
 
@@ -364,16 +363,9 @@ docs/axifem/
   AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof
   axifem_element_evidence.json            # version-stamped result JSON consumed by notebook
 
-docs/axifem/legacy_assets/axifem/                         # research-tier examples
-  disk_convergence/                       # Cu disk τ_1 vs BEM-Foster ref
-  nmr_validation/                         # FEMM NMR axisymmetric reproduction
-
-docs/axifem/legacy_assets/axifem/research/                   # research workspace (no longer
-  tests/                                  # installable; pyproject removed)
-  scripts/                                #   research scripts: BEM Cauer cross-
-  demos/                                  #   validation, breakdown studies, etc.
-  README.md
-  LICENSE
+validation_test/axifem/                  # validation-class research checks
+  research/validate_q2_codegen.py         # Q2 closed-form matrix check
+  research/verification/                  # Hiruma/Cauer + element checks and JSON
 ```
 
 The standalone `pyproject.toml`, `CMakeLists.txt`, and `ngsolve_addon.cmake`
@@ -384,9 +376,9 @@ mathematical derivation behind the C++ source.
 The Mathematica derivation lives upstream at
 `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/`
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
-Re-run `docs/axifem/legacy_assets/axifem/research/codegen_q2_henrotte.py` if the
-JSON changes — the regenerated `q2_henrotte_generated.hpp` should be
-copied into `src/ext/axifem/`.
+If the upstream JSON changes, regenerate `q2_henrotte_generated.hpp`, copy it
+into `src/ext/axifem/`, and run
+`validation_test/axifem/research/validate_q2_codegen.py`.
 
 ## Why this is "an NGSolve feature NGSolve does not have"
 
