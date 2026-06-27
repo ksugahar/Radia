@@ -1,0 +1,44 @@
+{
+  "schema": "radia.docs.complex_coil_geometry.results.v1",
+  "generated_at_utc": "2026-06-27T15:49:47Z",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2",
+    "numpy_version": "2.4.6"
+  },
+  "topic_dir": "docs/complex_coil_geometry",
+  "coil_parameters": {
+    "current_A": 1265.0,
+    "cross_section_width_m": 0.122,
+    "cross_section_height_m": 0.122,
+    "num_segments": 8,
+    "description": "8-segment beam steering magnet coil"
+  },
+  "field_slice": {
+    "nx": 55,
+    "ny": 70,
+    "z_m": 0.0,
+    "Bmag_mT_min": 0.0856361692372987,
+    "Bmag_mT_max": 5.858466713392782,
+    "Bmag_mT_mean": 0.5129183093402145
+  },
+  "source_hashes": {
+    "coil_model.py": "fd64f16afb2621f32ddd3a4297d80d0762a2c1adf7cf2f36202f2d47110d9b24",
+    "visualize_coils.py": "d389fade9e36299dc12b1ded9ef852e32ed1ae691c41c95f55a283e31dbc5511",
+    "field_map.py": "5f940b96116478df4adbb21aa02009732498f66269c9651f12ba3469cfcbc820",
+    "README.md": "163a8fb34fb91ccb30f764ed35ba24a244470a0c2659a74191aa3c22a02430ae"
+  },
+  "asset_hashes": {
+    "complex_coil.pvsm": {
+      "sha256": "10bf40e6ee3bd855ab4869565564f63041b7e94e826186131a1b6aa4d931b11c",
+      "bytes": 484508
+    }
+  },
+  "checks": {
+    "num_segments_is_8": true,
+    "field_slice_positive": true,
+    "pvsm_present": true
+  }
+}

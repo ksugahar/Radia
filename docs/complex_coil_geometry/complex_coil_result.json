@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "generated_at_utc": "2026-06-27T15:49:56Z",
   "notebook": "docs/complex_coil_geometry/complex_coil.ipynb",
-  "notebook_sha256": "b81116b96415390e748aac0858f536a3d89690ec2a4054475d531e8c6a516a2a",
+  "notebook_sha256": "4fd681293c03c33b530091597d304985cb70cd281482839cea78809bcf12fcc7",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,11 +12,11 @@
   },
   "summary": {
     "path": "docs/complex_coil_geometry/complex_coil.ipynb",
-    "cells": 5,
-    "code_cells": 2,
-    "executed_code_cells": 2,
-    "code_cells_with_outputs": 1,
-    "output_count": 4,
+    "cells": 7,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 2,
+    "output_count": 5,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -77,6 +77,22 @@
           "text_chars": 41,
           "text_sha256": "bb12e5f5d23aa4cc070feed01d5e20f524cbc6269cd3b94738c1d92044e567b5",
           "text_preview": "\n|B| range on z=0 plane: [0.09, 5.86] mT\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "cd45ebcb49f4b61856e5576d065c4ce91dd9f60891c561fc6682c40ca8329d9a",
+      "source_preview": "\nfrom pathlib import Path\nimport datetime as _dt\nimport hashlib\nimport importlib.metadata as _metadata\nimport json\nimport platform\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'coil_model.py').exists():\n    NOTEBOOK_DIR = Path('docs/complex_coil_geometry').resolve()\n\n\ndef _sha256(path):\n    return hashlib.sha256(path.read_bytes()).hexdigest()\n\n\ndef _version(name):\n    try:\n        return _metadata.version(name)\n    except Exception:\n        return None\n\nsource_files = ['coil_model.py', 'visualize_coils.py', 'field_map.py', 'README.md']\nasset_files = ['complex_coil.pvsm']\nresult = {\n    'schema': 'radia.docs.complex_coil_geometry.results.v1',\n    'generated_at_utc': _dt.datetime.now(_dt.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),\n    'versions': {\n        'python_version': sys.version.split()[0],\n        'python_executable': sys.executable,\n        'platform': platform.platform(),\n        'radia_version': _version('radia'),\n        'numpy_version'",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 112,
+          "text_sha256": "751fdc54f44ae719410d7dbf88590812d528c7757c35098d6e86aecea2cc50ec",
+          "text_preview": "wrote complex_coil_results.json\n{\"field_slice_positive\": true, \"num_segments_is_8\": true, \"pvsm_present\": true}\n",
           "text_truncated": false
         }
       ]
