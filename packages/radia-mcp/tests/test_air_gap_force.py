@@ -154,6 +154,36 @@ def test_air_gap_sampled_shear_torque_sinusoidal_average():
     assert summary["torque_per_axial_length_N"] == pytest.approx(expected_torque / length, rel=1.0e-12)
 
 
+def test_motor_air_gap_harmonic_torque_phase_gate():
+    samples = 720
+    harmonic = 4
+    Br0 = 0.82
+    Bt0 = 0.18
+    radius = 0.045
+    length = 0.08
+    angles = [2.0 * math.pi * index / samples for index in range(samples)]
+
+    def torque_for_phase(phase):
+        br = [Br0 * math.cos(harmonic * angle) for angle in angles]
+        bt = [Bt0 * math.cos(harmonic * angle + phase) for angle in angles]
+        return air_gap_shear_torque_from_angle_samples(
+            angles,
+            br,
+            bt,
+            radius,
+            axial_length_m=length,
+        )["torque_Nm"]
+
+    expected = 0.5 * Br0 * Bt0 / MU0 * radius * radius * length * 2.0 * math.pi
+    positive = torque_for_phase(0.0)
+    quadrature = torque_for_phase(0.5 * math.pi)
+    negative = torque_for_phase(math.pi)
+
+    assert positive == pytest.approx(expected, rel=1.0e-12)
+    assert abs(quadrature) < 1.0e-10
+    assert negative == pytest.approx(-expected, rel=1.0e-12)
+
+
 def test_force_moment_resultant_summary_handles_2d_force_couple():
     radius = 0.05
     force = 10.0
@@ -304,6 +334,7 @@ if __name__ == "__main__":
     test_air_gap_shear_torque_scales_with_radius_length_angle_and_sign()
     test_air_gap_sampled_shear_torque_uniform_matches_closed_form()
     test_air_gap_sampled_shear_torque_sinusoidal_average()
+    test_motor_air_gap_harmonic_torque_phase_gate()
     test_force_moment_resultant_summary_handles_2d_force_couple()
     test_force_moment_resultant_summary_handles_3d_single_force()
     test_maxwell_line_segment_force_2d_matches_air_gap_pressure()
