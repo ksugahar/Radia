@@ -1,9 +1,9 @@
 """OCC sphere volume/area p-convergence helper for the docs notebook.
 
-This is the docs-local, Cubit-free subset of
-``examples/ngsolve_user_meeting/demo_volume_area_convergence.py``.  The original
-example still records the Cubit ACIS-trampoline presentation context; this
-helper keeps the notebook reproducible on a plain NGSolve install.
+This is the docs-local, Cubit-free subset used by the result-bearing notebook.
+The former examples script with the Cubit ACIS-trampoline presentation context
+now lives next to the notebook as ``acis_volume_area_convergence_demo.py``; the
+original examples-path source is also preserved in the topic archive JSON.
 """
 
 from __future__ import annotations

@@ -10,8 +10,13 @@ Requirements:
   pip install radia   (includes cubit_mesh_curver.pyd + ngsolve + cubit_mesh_export)
   Coreform Cubit 2025.8+ installed
 
+Docs companion:
+  docs/ngsolve_user_meeting/volume_area_convergence.ipynb executes the Cubit-free
+  OCC subset and stores synchronized JSON results.  This script keeps the full
+  Cubit ACIS trampoline presentation path beside that notebook.
+
 Usage:
-  python demo_volume_area_convergence.py
+  python acis_volume_area_convergence_demo.py
 """
 
 import sys

@@ -1,0 +1,34 @@
+{
+  "schema": "radia.docs.example_archive.v1",
+  "generated_at_utc": "2026-06-27T07:18:17Z",
+  "topic": "open_boundary",
+  "title": "Open-boundary example archive",
+  "example_dir": "examples/open_boundary",
+  "promotion_lane": "keep_example_docs_showcase",
+  "policy": "KEEP: small canonical demo for shipped radia.open_boundary; docs/open_boundary/open_boundary_demo.ipynb remains the richer result-bearing showcase.",
+  "counts": {
+    "python_scripts": 1,
+    "attached_json_refs": 0,
+    "topic_json_files": 0
+  },
+  "versions": {
+    "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "generator": "docs example promotion batch 2026-06-27"
+  },
+  "records": [
+    {
+      "path": "examples/open_boundary/demo_dtn_cln_usage.py",
+      "name": "demo_dtn_cln_usage.py",
+      "sha256": "047baad1ca26c02e25cce2c525567578c6a5847f4a596c383aaf5e3c0ac2d37d",
+      "bytes_utf8": 3874,
+      "line_count": 76,
+      "docstring_first_line": "demo_dtn_cln_usage.py -- using radia.open_boundary (the Zs-DtN-CLN open boundary)",
+      "promotion_lane": "keep_example_docs_showcase",
+      "policy": "KEEP: small canonical demo for shipped radia.open_boundary; docs/open_boundary/open_boundary_demo.ipynb remains the richer result-bearing showcase.",
+      "attached_json": [],
+      "source": "# -*- coding: utf-8 -*-\nr\"\"\"demo_dtn_cln_usage.py -- using radia.open_boundary (the Zs-DtN-CLN open boundary)\n================================================================================\nThe PRODUCTION-API counterpart of the research demos\narchived `act6_02_cln_dtn_cauer.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) (inline math).\nHere the verified operator ships as `radia.open_boundary`; this shows how to use it.\n\nWHAT it gives you, for a SEPARABLE (spherical) MQS truncation:\n  * the EXACT exterior eddy/diffusion DtN eigenvalue per multipole n,\n  * its Cauer Ladder Network (CLN) realisation -- EXACT at n+1 stages, well-conditioned,\n  * the companion auxiliary-ODE poles (Re<0) for a transient passive Robin boundary.\n\nSCOPE (honest): this WINS over a CFS-PML only on its island -- compact / quasi-spherical\nMQS problems wanting an exact, DC-well-conditioned boundary + a compact passive circuit\nROM.  Elongated/arbitrary geometry -> a box CFS-PML hugs better; genuine wave radiation\nis outside radia's MQS scope.  NOT novel (Grote-Keller / Hagstrom-Warburton / Warburg-Cauer\n/ Kameari CLN).  See docs/open_boundary/OPEN_BOUNDARY_MAP.md.\n\nEvery printed 'ok' is gated on an executed assertion (no overclaim).\n\"\"\"\nimport os\nos.environ.setdefault(\"PYTHONIOENCODING\", \"utf-8\")\nimport numpy as np\nimport radia.open_boundary as ob\n\nprint(\"=\" * 78)\nprint(\" radia.open_boundary : exact Zs-DtN-CLN open boundary -- usage\")\nprint(\"=\" * 78)\n\n# A copper-like spherical truncation: R0 = 30 mm, mu*sigma (mu0 * 58 MS/m).\nR0 = 0.03\nMU_SIGMA = 4.0e-7 * np.pi * 5.8e7\nomega = np.logspace(1, 5, 40)      # 10 .. 1e5 rad/s\n\nprint(f\"\\n[1] exact eddy/diffusion DtN per multipole (sphere R0={R0} m):\")\nfor n in (1, 2, 3):\n    g50 = ob.eddy_dtn(n, 1j * 5.0e4, R0=R0, mu_sigma=MU_SIGMA)\n    print(f\"    n={n}: G_n(i*5e4) = {g50:.4f}\")\n\nprint(\"\\n[2] Cauer ladder is EXACT at n+1 stages and reproduces the symbol:\")\nfor n in (1, 2, 3, 4, 5, 6):\n    stages = ob.cauer_ladder(n)\n    Zc = np.array([ob.eval_ladder(stages, 1j * w, R0, MU_SIGMA) for w in omega])\n    Zr = np.array([ob.eddy_dtn(n, 1j * w, R0, MU_SIGMA) for w in omega])\n    nrmse = float(np.sqrt(np.mean(np.abs(Zc - Zr) ** 2)) / np.sqrt(np.mean(np.abs(Zr) ** 2)))\n    print(f\"    n={n}: stages={len(stages)} (= n+1)   ladder-vs-symbol NRMSE={nrmse:.1e}\")\n    assert len(stages) == n + 1 and nrmse < 1e-9\n\nprint(\"\\n[3] transient Robin realisation: one auxiliary ODE per companion pole (Re<0):\")\nfor n in (1, 2, 3):\n    poles = ob.companion_poles(n)\n    print(f\"    n={n}: {len(poles)} poles, max Re = {poles.real.max():+.3f}  \"\n          f\"=> passive / unconditionally stable (Grote-Keller form)\")\n    assert np.all(poles.real < 0)\n\nprint(\"\\n[4] sqrt(s) diffusion-memory element as a finite passive ladder:\")\ng, p, e = ob.sqrt_s_passive_ladder(omega, 12)\nprint(f\"    K=12: NRMSE={e:.2e}, all poles -p<0 (stable), passive (g>=0): \"\n      f\"{bool(np.all(g >= 0) and np.all(p > 0))}\")\nassert e < 5e-2 and np.all(p > 0) and np.all(g >= 0)\n\nprint(\"\\n[5] Kelvin BUILDS the DtN (material-aware / non-separable companion):\")\nprint(\"    a radial Kelvin-FEM reproduces the closed-form eddy DtN with NO DC floor\")\nband = 1j * np.logspace(-4, 2, 30)\nfor n in (1, 2, 3):\n    G = np.array([ob.kelvin_fem_radial_dtn(n, s) for s in band])\n    Gx = np.array([ob.eddy_dtn(n, s) for s in band])\n    nrmse = float(np.sqrt(np.mean(np.abs(G - Gx) ** 2)) / np.sqrt(np.mean(np.abs(Gx) ** 2)))\n    print(f\"    n={n}: Kelvin-FEM build vs closed-form, band NRMSE={nrmse:.1e}\")\n    assert nrmse < 5e-2\nprint(\"    (the arbitrary-shape / iron-exterior path = ob.kelvin_dtn_matrix + ob.steklov_spectrum,\")\nprint(\"     verified O_h-split on a cube -- needs NGSolve; see tests/open_boundary/test_kelvin_dtn.py.\")\nprint(\"     NOTE: material-in-exterior Kelvin is CLASSICAL (Freeman-Lowther 1988/89).)\")\n\nprint(\"\\nALL CHECKS PASSED.\")\n"
+    }
+  ],
+  "topic_json_files": []
+}

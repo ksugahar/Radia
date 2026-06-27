@@ -620,9 +620,9 @@ GMSH is used **only** for visualization and post-processing:
 
 | File | Description |
 |---------|------|
-| `examples/visualization/demo_gmsh_cad_import.py` | CAD import and volume mesh |
+| `docs/visualization/visualization_examples_archive.ipynb` (`demo_gmsh_cad_import.py`) | CAD import and volume mesh |
 | `examples/peec_integration/demo_gmsh_surface_mesh.py` | Surface mesh (PEEC conductor) |
-| `examples/visualization/demo_gmsh_workflow.py` | Basic GMSH Python API |
+| `docs/visualization/visualization_examples_archive.ipynb` (`demo_gmsh_workflow.py`) | Basic GMSH Python API |
 
 ### Recommended Radia Workflows (Summary)
 
