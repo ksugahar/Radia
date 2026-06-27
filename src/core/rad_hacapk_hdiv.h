@@ -223,12 +223,16 @@ public:
     // PCG preconditioned by a PARDISO SPD factor of the RT0 mass M_mass (z = M_mass^{-1} r, the MASS
     // RIESZ map) built once from the COO (mI,mJ,mV) -- ~3-5x fewer iters, nearly mu_r-flat; `prec` is
     // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
+    // symmetric=true (DEFAULT): G is applied via the EXACTLY-symmetric H-matvec (MatVecSym, upper-tri
+    // leaves define both triangles), so the +N CG operator is machine-symmetric and CG is robust at ALL
+    // N (the independently-ACA'd off-diagonal asymmetry that broke CG past ~20k is gone).  symmetric=false
+    // uses the general (asymmetric) MatVec (legacy / cross-check only).
     std::vector<double> SolveLinearMaterial(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
         const std::vector<double>& B_data, int n_face,
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-        double tol, int maxit, int& iters_out, bool mass_riesz = false);
+        double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true);
 
     // The mu_r-INDEPENDENT production MATERIAL solve in C++: Jacobi-preconditioned MINRES for the
     // SYMMETRIC INDEFINITE system A m = rhs, A = inv_chi*M_mass - B^T G B (eigenvalues vs M_mass =
@@ -248,7 +252,7 @@ public:
         const std::vector<double>& B_data, int n_face,
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-        double tol, int maxit, int& iters_out, bool mass_riesz = false);
+        double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true);
 
     // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
     // Each Picard step is a SolveLinearMaterial solve of ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),

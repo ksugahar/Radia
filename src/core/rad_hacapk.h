@@ -114,6 +114,10 @@ public:
      * Matrix-vector product: y = A * x (O(N log N))
      */
     void MatVec(const std::vector<double>& x, std::vector<double>& y);
+    // y = A^T x (transpose H-matvec) and y = G_sym x (EXACTLY symmetric apply built from the
+    // upper-triangular leaves -- valid for a symmetric cluster tree like the charge Gram).
+    void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y);
+    void MatVecSym(const std::vector<double>& x, std::vector<double>& y);
 
     /**
      * Update diagonal blocks when 1/chi changes (nonlinear iteration)
