@@ -206,12 +206,16 @@ public:
     // provided: B as CSR over charges (B_indptr [n_charge+1], B_indices/B_data = face columns, so
     // (B x)[charge] = sum data*x[face]); M_mass as COO (mI,mJ,mV) on the n_face DOFs; prec = the
     // Jacobi diagonal of the system (length n_face).  Returns m (length n_face); iters_out = CG iters.
+    // mass_riesz=false: diagonal-Jacobi PCG (z = r/prec).  mass_riesz=true (the DEFAULT 'auto' path):
+    // PCG preconditioned by a PARDISO SPD factor of the RT0 mass M_mass (z = M_mass^{-1} r, the MASS
+    // RIESZ map) built once from the COO (mI,mJ,mV) -- ~3-5x fewer iters, nearly mu_r-flat; `prec` is
+    // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
     std::vector<double> SolveLinearMaterial(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
         const std::vector<double>& B_data, int n_face,
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-        double tol, int maxit, int& iters_out);
+        double tol, int maxit, int& iters_out, bool mass_riesz = false);
 
     // The mu_r-INDEPENDENT production MATERIAL solve in C++: Jacobi-preconditioned MINRES for the
     // SYMMETRIC INDEFINITE system A m = rhs, A = inv_chi*M_mass - B^T G B (eigenvalues vs M_mass =
@@ -223,12 +227,15 @@ public:
     // (multi-thread) under the caller's `with TaskManager():` (or stands up its own pool); the O(N)
     // vector ops are serial (negligible vs the O(N log N) matvec).  prec = the SPD Jacobi
     // preconditioner (length n_face, e.g. |inv_chi*M_mass_diag - N_diag|).
+    // mass_riesz=false: diagonal-Jacobi MINRES (y = r/prec).  mass_riesz=true: MINRES preconditioned by
+    // the PARDISO SPD factor of the RT0 mass M_mass (y = M_mass^{-1} r) -- the bounded -N spectrum makes
+    // the mass Riesz especially effective; `prec` is then ignored.
     std::vector<double> SolveMaterialMINRES(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
         const std::vector<double>& B_data, int n_face,
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-        double tol, int maxit, int& iters_out);
+        double tol, int maxit, int& iters_out, bool mass_riesz = false);
 
     // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
     // Each Picard step is a SolveLinearMaterial solve of ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),
@@ -369,12 +376,14 @@ public:
     int GetNCharge() const { return m_ncharge; }
     int GetNPoint() const { return m_npoint; }
 
+    // mass_riesz=false: diagonal-Jacobi PCG (z = r/prec).  mass_riesz=true: PCG preconditioned by a PARDISO
+    // SPD factor of the RT0 mass M_mass (the mass Riesz map), `prec` ignored -- same as RadHACApKChargeGram.
     std::vector<double> SolveLinearMaterial(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
         const std::vector<double>& B_data, int n_face,
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-        double tol, int maxit, int& iters_out);
+        double tol, int maxit, int& iters_out, bool mass_riesz = false);
 
 private:
     double PointDirectEntry(int a, int b) const;
