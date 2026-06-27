@@ -1,6 +1,7 @@
 """
 
 SHOWCASE NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell continued-fraction + ngbem EFIE loop L + 4 paper figures (verified).
+SHOWCASE NOTEBOOK: docs/peec/dowell_surface_impedance_demo.ipynb -- executable companion to docs/peec/PEEC_SURFACE_IMPEDANCE.md: F(xi)/G(xi) skin+proximity ratios vs normalized thickness, copper-foil Z(f) sweep, Dowell coth (H=0 BC) vs ESIM tanh (dH/dz=0 BC) boundary comparison, round-wire Bessel vs rect Dowell, and CF truncation accuracy (verified; F/G match deep_bar_resistance_factor/reactance_factor to machine precision).
 PEEC knowledge base for the mcp-server-peec MCP server.
 
 Covers: Loop-Star PEEC architecture, node-segment topology, circuit extraction,
@@ -470,14 +471,20 @@ def circular_sibc(freq, radius, sigma, mu_r=1.0):
 
 ## Dowell SIBC (Rectangular Conductor)
 
-Implemented in C++ (`rad_peec_surface_impedance.cpp`). For thin rectangular
-conductors where thickness d << width w.
+For thin rectangular conductors where thickness d << width w. The closed-form
+Dowell factors live in Python:
+`radia.em_material.EMMaterial.dowell_Zs(freq, R)` (tanh surface impedance) and
+`radia_mcp.radia_ngsolve.solve.deep_bar_resistance_factor` /
+`deep_bar_reactance_factor` (the single-conductor `F(xi)` / `G(xi)` ratios; the
+C++ PEEC assembly in `rad_peec_matrices.cpp` consumes the per-segment `Z_s`).
 
-COMPANION NOTEBOOK: `docs/peec/dowell_surface_impedance_demo.ipynb` -- runs the
-Dowell factors live: `F(xi)=Re[ga coth ga]` resistance ratio + `G(xi)` internal-
-inductance ratio, the **coth (two-sided foil) vs tanh (one-sided slab/SIBC-ESIM)**
-distinction, and a cross-check vs `EMMaterial.dowell_Zs` (machine precision). Full
-theory in `docs/peec/PEEC_SURFACE_IMPEDANCE.md`.
+SHOWCASE NOTEBOOK `docs/peec/dowell_surface_impedance_demo.ipynb` (companion to
+`docs/peec/PEEC_SURFACE_IMPEDANCE.md`) runs these live: `F(xi)`/`G(xi)` vs
+normalized thickness `xi=a/delta`, a copper-foil `Z(f)` sweep, the Dowell `coth`
+(`H(a)=0`) vs ESIM `tanh` (`dH/dz(a)=0`) boundary comparison, a round-wire Bessel
+cross-section comparison, and continued-fraction (1st/2nd-order) truncation
+accuracy. (The full continued-fraction + PRIMA-ladder derivation is in
+`docs/peec_integration/peec_showcase.ipynb`.)
 
 ## ESIM (Effective Surface Impedance Method)
 
