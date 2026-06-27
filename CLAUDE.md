@@ -1305,6 +1305,15 @@ hex elements than HDiv RT0 (yano-MSC = 6 surface-charge DOF/hex, higher per-elem
 HDiv-VIM for loop-free (mesh/mu_r-independent ~6 Newton iters) convergence.**  (yano is also preserved
 in the private MAGIC Fortran repo; Yano's academic work is cited.)
 
+**ROLE SPLIT (Sugahara 2026-06-27): MMMM is the MAIN large-scale route; HDiv-VIM is NOT.** MMMM scales via
+the QR-free + sparse-PARDISO two-sided deflation (`moment_deflation`, 3a `f9cb1dd4` / 3b `0aba78be`):
+QR-free coarse op `E=(AL)ᵀ(AL)` assembled sparse + factored by PARDISO sparse-direct -> SUB-CUBIC coarse
+setup, deflation AL-build-limited `O(N² log N)`.  **HDiv-VIM is NO LONGER the large-scale route** --
+repositioned to **(a) curved-surface high accuracy** (H(div) RT flux) and **(b) FEM coupling** (NGSolve
+interop, flux continuity at interfaces).  The earlier "large loop-heavy N -> HDiv-VIM (symmetric AMS
+scalable)" framing is RETIRED.  (Net: MMMM = large-scale + open boundary; HDiv-VIM = curved accuracy +
+FEM coupling; yano-MSC = per-element hex accuracy.  See "H-Matrix Route Policy" below.)
+
 - **Canonical geometry path for BOTH backends = `.vol` -> NGSolve `Mesh` -> `radia.vim.soft_iron_from_mesh`
   (or the one-call `soft_iron_from_vol("iron.vol", mu_r=/bh_table=)`).**  `.vol` is the SOLE
   Cubit<->NGSolve interchange (Cubit `export netgen` / Netgen / OCC `ngmesh.Save`); netgen owns the mesh
@@ -2491,6 +2500,25 @@ symmetrization questions were resolved):
    H-matrix now); it does NOT mean the HDiv H-matrix is disposable. Symmetric
    formulation = HDiv-VIM (on its charge-Gram H-matrix); fast general route =
    MMMM. The two are complementary, not competing.
+
+   **ROLE SPLIT (Sugahara 2026-06-27) — supersedes the "large-N -> HDiv-VIM
+   scalable" framing:** MMMM is the MAIN LARGE-SCALE route, scaled by the
+   QR-free + sparse-PARDISO two-sided deflation (`moment_deflation`, default ON;
+   3a `f9cb1dd4` QR-free coarse op `E=(AL)ᵀ(AL)`, 3b `0aba78be` sparse-E + MKL
+   PARDISO). Coarse setup is SUB-CUBIC; the deflation is AL-build-limited
+   `O(N² log N)` (the Θ(N) H-matvecs to form `AL=A@L` are the next bottleneck) --
+   NOT `O(N log N)` (that AMS-multilevel property was HDiv's and is given up for
+   the large-scale route; sub-cubic direct is the accepted bet, no "fall back to
+   HDiv for large N"). **AMG cannot bound this coarse op** (E is a
+   normal-equations operator; MMMM's non-symmetric/non-elliptic A makes
+   `LᵀAᵀAL` non-elliptic -> classical Compact AMG AND smoothed-aggregation both
+   grow `~√N`) -> the coarse solver is sparse-DIRECT (PARDISO), NOT AMG. (NGSolve
+   `SparseCholesky` (Joachim) is the policy-aligned alternative to PARDISO,
+   recorded for future; needs a separate TU to isolate `la.hpp` from the MKL
+   headers in the deflation file.) **HDiv-VIM is repositioned to (a)
+   curved-surface high accuracy (H(div) RT flux) and (b) FEM coupling** (NGSolve
+   interop); it is KEPT (charge-Gram H-matrix stays its production operator) but
+   is NO LONGER the large-scale route. yano-MSC = per-element hex accuracy.
 
 3. **The H-LU-vs-H-ILU question for MMMM is the open scalability follow-on.**
    H-LU (`g_hlu_accum_cap=0`, near-exact, shipped, materialize-heavy) works
