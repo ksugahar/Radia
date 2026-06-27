@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T22:19:05Z",
+  "generated_at_utc": "2026-06-27T22:23:45Z",
   "notebook": "docs/axifem/README.ipynb",
-  "notebook_sha256": "64de12a985b198d1f725451392d2ec67c60382e0f5a778de58100814f6f637dc",
+  "notebook_sha256": "4bee6fc330988b1ff44c6314ebd8c23739ead5df6a415c1218c4debd5608e767",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
