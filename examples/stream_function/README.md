@@ -24,13 +24,11 @@ C++ core: `src/core/rad_stream_function.cpp`.  See
 [`../../docs/stream_function.md`](../../docs/stream_function.md) for the method,
 API, and design notes.
 
-Docs promotion: the result-saved archive
-[`docs/stream_function/stream_function_examples_archive.ipynb`](../../docs/stream_function/stream_function_examples_archive.ipynb)
-collects all 41 Python scripts, full source, SHA-256 hashes, existing JSON
-payloads, and result media hashes. The scripts remain protected for now because
-docs, panel goldens, and validation tests reference this corpus directly; prune
-only after named examples are migrated to `docs/`, `src/`, `panels/`, or
-`validation_test/`.
+Docs promotion: the maintained narrative lives under
+[`docs/stream_function/`](../../docs/stream_function/) as theory,
+regularization, deformation, and benchmark pages/notebooks. Historical
+source-only archives were pruned from docs; use git history for deleted
+development snapshots.
 
 ## Kernel-agnostic by design
 

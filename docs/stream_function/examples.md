@@ -39,12 +39,10 @@ Under [`examples/stream_function/benchmarks/`](../../examples/stream_function/be
 
 | File | Status | Reference |
 |------|--------|-----------|
-| `bench_helmholtz_pair.py` | ✅ shipped | Analytical Maxwell pair (uniform Bz) |
-| `bench_bilac_planar_shim.py` | 🚧 stub | Bilac et al. (TBD) |
-| `bench_turner_cylinder_gz.py` | 🚧 stub | Turner J Phys D 19 L147 (1986) |
-| `bench_lemdiasov_ludwig_2005.py` | 🚧 stub | Lemdiasov & Ludwig 2005 |
-| `bench_coilgen_headtohead.py` | 🚧 stub | Schwartz et al. CoilGen |
-| `bench_shielded_iron_yoke.py` | 🚧 stub | Material-kernel demo via Radia MMM |
+| `bench_helmholtz_pair.py` | shipped | Analytical Maxwell pair (uniform Bz) |
+
+Future benchmark targets are tracked in [benchmarks.md](benchmarks.md), not
+as non-runnable `.py` stubs under `examples`.
 
 See [benchmarks.md](benchmarks.md) for the validation strategy.
 

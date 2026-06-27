@@ -1,7 +1,7 @@
 # Validation strategy + benchmark catalogue
 
 This page documents the validation strategy for the Radia SF framework
-+ the catalogue of benchmarks under
+and the shipped benchmark under
 [`examples/stream_function/benchmarks/`](../../examples/stream_function/benchmarks/).
 The framework's feature set is described in
 [README.md](README.md); this page is about VALIDATING those features
@@ -41,13 +41,13 @@ penalty, not a flaw in our framework.
 **For a fair like-for-like**: use biplanar source (top + bottom).
 We can prototype that as `bench_biplanar_uniform.py` (~1 day).
 
-## Stub benchmarks (validation strategy)
+## Future benchmark targets
 
-The following 5 benchmarks are stubbed (fail with `NotImplementedError`
-to be visible in CI) pending literature-spec extraction and
-implementation.  Each is 1–3 days of focused work.
+The following five targets used to exist as TODO-only `.py` stubs. They are
+now kept as documentation only until each target has a runnable implementation
+and a JSON result. Each is 1-3 days of focused work.
 
-### `bench_bilac_planar_shim.py` 🚧
+### Bilac Planar Shim
 
 **Reference**: Bilac et al. (Magn Reson Imaging, TBD year).  Planar
 shim coil design for MRI; published target spec includes B0 + Z
@@ -64,7 +64,7 @@ design paper.
   3. Reproduce in our pipeline + JSON output.
   4. Cross-tabulate: published numbers vs ours.
 
-### `bench_turner_cylinder_gz.py` 🚧
+### Turner Cylindrical Gz
 
 **Reference**: Turner, R., *J. Phys. D: Appl. Phys.* 19, L147 (1986);
 IEEE TMI 5 follow-up.  Cylindrical Gz gradient with analytical SFD.
@@ -82,7 +82,7 @@ analytical formula.
   3. Compare ψ(φ, z) point-wise + compare resulting Bz on axis.
   4. Report RMS deviation from analytical reference.
 
-### `bench_lemdiasov_ludwig_2005.py` 🚧
+### Lemdiasov-Ludwig 2005
 
 **Reference**: Lemdiasov & Ludwig, *Concepts in Magnetic Resonance
 Part B* 26B(1), 67-80 (2005). Target field method for MRI gradient
@@ -92,7 +92,7 @@ coils with detailed numerics.
 performance metrics for multiple coil designs.  Excellent
 "second after Turner" benchmark.
 
-### `bench_coilgen_headtohead.py` 🚧
+### CoilGen Head-To-Head
 
 **Reference**: Schwartz et al., CoilGen
 (github.com/Philipp-MR/CoilGen) — the ONLY directly-comparable OSS
@@ -109,7 +109,7 @@ side-by-side validation we can show in a paper.
   3. Reproduce same spec in our pipeline.
   4. Side-by-side table: RMS, wire length, inductance, compute time.
 
-### `bench_shielded_iron_yoke.py` 🚧 — material-kernel demo
+### Shielded Iron Yoke Material-Kernel Demo
 
 **Reference**: no direct literature equivalent in the OSS space; this
 demo extends our SF inverse-design pipeline to magnetic materials via

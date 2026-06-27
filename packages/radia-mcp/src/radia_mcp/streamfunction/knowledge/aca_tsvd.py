@@ -1377,9 +1377,9 @@ what we have, not a claim of relative ranking against other tools:
 
   Recommendation: 2-week validation campaign:
 
-    Week 1: implement Bilac + Turner + Lemdiasov-Ludwig benchmarks in
-            ``examples/stream_function/benchmarks/`` with literature
-            target specs; produce a benchmark table.
+    Week 1: implement Bilac + Turner + Lemdiasov-Ludwig benchmarks from
+            ``docs/stream_function/benchmarks.md`` into runnable benchmark
+            scripts with literature target specs and JSON outputs.
     Week 1 end: install CoilGen, run identical spec, head-to-head table.
     Week 2: shielded coil (iron back plate) via Radia MMM kernel
             through the (A) callback -- material-kernel demo not
