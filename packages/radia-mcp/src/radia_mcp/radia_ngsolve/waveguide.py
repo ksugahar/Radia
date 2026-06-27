@@ -20,7 +20,7 @@ vibrating membrane (drum) -- only the physical reading of k_c changes.
 The Neumann problem always has a trivial constant (k_c = 0) eigenmode (no field);
 :func:`helmholtz_cutoff_wavenumbers_2d` discards it and returns the lowest
 PHYSICAL cutoff wavenumbers. Validated against the exact rectangular-guide
-spectrum (examples/comsol_class/waveguide_cutoff.py).
+spectrum.
 """
 import cmath
 import math
@@ -866,7 +866,7 @@ def maxwell_cavity_modes_3d(mesh, n_modes, shift, order=2, pec="pec"):
         pec     : boundary name of the metal walls (tangential E = 0).
 
     Returns the ascending list of resonant frequencies [Hz] (the residual near-zero gradient modes
-    are dropped). Validated against the exact box spectrum (examples/comsol_class/cavity_resonance.py)."""
+    are dropped). Validated against the exact box spectrum."""
     fes = HCurl(mesh, order=order, dirichlet=pec)
     u, v = fes.TnT()
     A = BilinearForm(curl(u) * curl(v) * dx).Assemble()
@@ -904,8 +904,7 @@ def rectangular_cavity_q(a, b, d, sigma, mu_r=1.0):
     k = omega/c, eta = mu0 c the free-space impedance, R_s = :func:`surface_resistance`. Q ~
     (volume/surface)/delta ~ sqrt(sigma): a better conductor (smaller surface resistance / skin depth)
     gives a sharper resonance -- the bridge from the wave family to the skin depth (#45/#55).
-    Validated against the numerically-integrated TE101 field energy and wall loss
-    (examples/comsol_class/cavity_quality_factor.py)."""
+    Validated against the numerically-integrated TE101 field energy and wall loss."""
     f = rectangular_cavity_frequency(a, b, d, 1, 0, 1)
     k = 2.0 * math.pi * f / C0
     Rs = surface_resistance(f, sigma, mu_r)
