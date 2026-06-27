@@ -59,6 +59,13 @@ nf >~ 7000 (the GMRES form-1 / nonlinear paths tolerate the asymmetry).  So a CG
 +~26%, build +~5%); GMRES / nonlinear / H-LU keep `1e-10`.  An explicit `gram_eps` always wins.  All the
 CG paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.
 
+SCALE WALL of the +N CG (measured 2026-06-27): the symmetric CG works up to nf ~ 7-20k, but the analytic-Gram
+ACA acquires a spurious ANTISYMMETRIC part that GROWS with N -- at nf >~ 20k it breaks CG (diverges to NaN)
+and tightening gram_eps does NOT fix it.  The fail-loud guard catches this; the robust large-mesh path is the
+asymmetry-tolerant GMRES `linear_solver="python"` (slower, iters grow ~211 @ nf 21.6k).  A "real" large-N
+preconditioner (auxiliary/star-space) is still open -- but large-scale demag is the MMMM route's job now, not
+HDiv-VIM (CLAUDE.md role split 2026-06-27: HDiv = curved-surface accuracy + FEM coupling at moderate scale).
+
 The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
 ~0.3 s mass-riesz solve), so the +N CG path on the analytic Gram (TET and polytope HEX/WEDGE) defaults to
 the PRECISION-PRESERVING fast build: `near_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs
@@ -290,8 +297,12 @@ def _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit):
         list(map(float, Mm_coo.data)), inv_chi, list(map(float, rhs)), tol, int(maxit))
     iters = int(res["iters"])
     if iters >= int(maxit):                      # fail-loud (No-Fallbacks): never return a non-converged M
-        raise RuntimeError("hdiv_demag_solve (mass-riesz CG, C++): did NOT converge in %d iters (n_face=%d). "
-                           "If the analytic Gram is under-resolved at this mesh, tighten gram_eps." % (maxit, n_face))
+        raise RuntimeError(
+            "hdiv_demag_solve (mass-riesz CG, C++): did NOT converge in %d iters (n_face=%d).  The +N CG is "
+            "SYMMETRIC, and the analytic-Gram ACA acquires a spurious antisymmetric part that GROWS with N "
+            "(~nf > 20k), which breaks CG (tightening gram_eps does NOT fix it).  Use the asymmetry-tolerant "
+            "GMRES path linear_solver='python' for large meshes (slower but robust); large-scale demag is the "
+            "MMMM route's job, not HDiv-VIM (CLAUDE.md role split 2026-06-27)." % (maxit, n_face))
     return np.asarray(res["m"], float), iters
 
 
@@ -328,7 +339,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=None, far_quad=None, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
                      linear_solver="auto", hlu_trunc_tol=1e-8,
-                     gram_backend="analytic", gauss_near_factor=2.0):
+                     gram_backend="analytic", gauss_near_factor=2.0, order=0):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
@@ -367,6 +378,28 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
         if (mu_r is not None) and (bh_table is not None):
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
+
+    # ---- HIGH-ORDER (order>=1): NOT YET A CORRECT MATERIAL SOLVE -- fail loud (No-Fallbacks) ----
+    # The order-p monomial charge Gram (`_vim.build_charge_gram` / `DemagOperator`) is validated for the
+    # demag FACTOR (the Rayleigh quotient mu^T N mu / denom is order-invariant ~1/3) -- but that only
+    # exercises the SURFACE charges (a uniform M has rho = -div M = 0).  The MATERIAL solve
+    # ((1/chi)M_mass + N) m = M_mass h_ext exercises the VOLUME charges (rho != 0 for the non-uniform
+    # solution), and there the order-p operator is WRONG: measured on the mu_r=100 cube, order-1 M_avg is
+    # ~2x too high at coarse mesh and only slowly converges DOWN toward the (correct) order-0 / yano value
+    # as h->0 (6369/4620/4251 at maxh 0.5/0.35/0.25 vs order-0 3370/3419/3450) -- i.e. high order is
+    # currently WORSE than RT0, not better.  Shipping it would be a wrong number (Repository-First /
+    # fail-loud), so order>0 RAISES until the high-order VOLUME-charge material operator is fixed + golden-
+    # locked against a material-solve reference (the M4 "curved nonlinear volume charge" research item;
+    # docs/hdiv_vim/PRODUCTIONIZATION.md).  The demag FACTOR at order p is available via
+    # radia.vim.DemagOperator(HDiv(mesh, order=p)).DemagFactor(...).
+    if int(order) != 0:
+        raise NotImplementedError(
+            "hdiv_demag_solve: order>0 (high-order material solve) is NOT production-ready -- the order-p "
+            "charge Gram is validated only for the demag FACTOR (surface charges), but the material SOLVE "
+            "exercises the volume charges (rho=-div M) where the order-p operator is currently LESS accurate "
+            "than RT0 (order-1 M_avg ~2x high on coarse meshes, converging only slowly). Use order=0 (RT0); "
+            "the high-order demag factor is available via radia.vim.DemagOperator(...).DemagFactor(). "
+            "Fixing the high-order volume-charge material operator is the open M4 research item.")
 
     # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
