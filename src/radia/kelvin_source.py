@@ -74,7 +74,7 @@ Reference: H. Nagamine, T. Yamaguchi, K. Sugahara, "A Pullback-Based
 Formulation of Kelvin Transformation in Electromagnetic Field Analysis,"
 CEFC 2026 (Thessaloniki) id 350 (with Sugahara as co-author); see also
 Sugahara 2022 IEEE TransMag 58(9) [ref [3] in Nagamine]. Canonical
-declaration: examples/kelvin_transformation/CONVENTION.md.
+declaration: docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md.
 """
 
 from __future__ import annotations
@@ -752,7 +752,7 @@ def B_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
 #    Electromagnetic Field Analysis," CEFC 2026 id 350
 # (with Sugahara as co-author); see also Sugahara 2022 IEEE TransMag
 # 58(9) [ref [3] in Nagamine]. Full declaration in
-#   examples/kelvin_transformation/CONVENTION.md
+#   docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md
 # and derivation in
 #   docs/kelvin/KELVIN_TRANSFORMATION.md §2 sec 8.
 #

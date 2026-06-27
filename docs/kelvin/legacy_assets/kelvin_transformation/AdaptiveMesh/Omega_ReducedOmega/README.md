@@ -134,19 +134,19 @@ energy_air_outer = 0.5 * mu_kelvin * |grad(Ω_kelvin)|²
 Per-order runner scripts under `order=*/.../*.py` have been promoted to the
 result-bearing archive notebook `docs/kelvin/kelvin_adaptive_mesh_archive.ipynb`
 with full source text and SHA-256 hashes in
-`docs/kelvin/kelvin_adaptive_mesh_archive_results.json`.  Keep the aggregate
-`compare_convergence.py` scripts here until the convergence plots are promoted
-or replaced.
+`docs/kelvin/kelvin_adaptive_mesh_archive_results.json`.  The aggregate
+`compare_convergence.py` scripts and `CubeMesh.py` were then promoted into the
+final remaining-examples archive:
+`docs/kelvin/kelvin_remaining_examples_archive.ipynb` and
+`docs/kelvin/kelvin_remaining_examples_archive_results.json`.
 
 ```
 Omega_ReducedOmega/
 ├── README.md                    # 本ファイル
 ├── debug.md                     # デバッグ記録・実装詳細
 ├── Sphere_3D/
-│   ├── compare_convergence.py   # 収束比較プロット
 │   └── order=*/                 # archived historical runner outputs
 └── Cylinder_3D/
-    ├── compare_convergence.py   # 収束比較プロット
     └── order=*/                 # archived historical runner outputs
 ```
 
@@ -159,15 +159,11 @@ Omega_ReducedOmega/
 
 ## 実行方法
 
-```bash
-# 収束比較プロット
-cd Cylinder_3D
-python compare_convergence.py
-```
-
-For the retired per-order runner source, use
+For retired Python source, use
 `docs/kelvin/kelvin_adaptive_mesh_archive.ipynb` and
-`docs/kelvin/kelvin_adaptive_mesh_archive_results.json`.
+`docs/kelvin/kelvin_adaptive_mesh_archive_results.json` for per-order runners,
+and `docs/kelvin/kelvin_remaining_examples_archive_results.json` for the final
+aggregate scripts.
 
 ## 依存ライブラリ
 

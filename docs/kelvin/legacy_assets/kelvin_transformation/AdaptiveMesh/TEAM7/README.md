@@ -17,8 +17,15 @@ TEAM (Testing Electromagnetic Analysis Methods) Problem 7 is a benchmark problem
 
 ## Files
 
-- `team7_geometry.py`: Geometry creation and material properties
-- `team7_solver.py`: A-method solver for time-harmonic analysis
+The historical TEAM7 Python scripts (`team7_geometry.py`, `team7_solver.py`,
+`team7_coil_current.py`, `team7_A_method.py`, and
+`experiment_weighted_average.py`) were promoted out of `examples` and archived
+with full source and SHA-256 in
+`docs/kelvin/kelvin_remaining_examples_archive_results.json`.
+
+Future maintained TEAM7 behavior should be reintroduced either as a
+`validation_test/` regression or a result-bearing notebook, not as standalone
+example scripts.
 
 ## Physical Parameters
 

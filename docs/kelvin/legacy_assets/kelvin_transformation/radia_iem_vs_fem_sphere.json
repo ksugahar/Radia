@@ -1,9 +1,9 @@
 {
   "geometry": "magnetic sphere (R=50mm) in uniform field; quarter model, order-matched p-meshes",
   "meshes": [
-    "examples/kelvin_transformation/Cubit_1_4_p_convergence/sphere_1_4_p1.vol",
-    "examples/kelvin_transformation/Cubit_1_4_p_convergence/sphere_1_4_p2.vol",
-    "examples/kelvin_transformation/Cubit_1_4_p_convergence/sphere_1_4_p3.vol"
+    "validation_test/cubit/kelvin_1_4_p_convergence/sphere_1_4_p1.vol",
+    "validation_test/cubit/kelvin_1_4_p_convergence/sphere_1_4_p2.vol",
+    "validation_test/cubit/kelvin_1_4_p_convergence/sphere_1_4_p3.vol"
   ],
   "mu_r": 100.0,
   "analytic_ratio_Hin_over_H0": 0.029411764705882353,

@@ -903,13 +903,13 @@ case, but Kelvin transformation handles both cases uniformly.
 | `docs/kelvin/Supplement/ErrorEstimator.md` | Equilibrated error estimator theory (adaptive mesh) |
 | `docs/kelvin/Supplement/CG-smoother.md` | CG-smoother acceleration for error estimation |
 | `docs/kelvin/Supplement/cg_smoother_demo.ipynb` | Runnable CG-smoother showcase (executed, embedded outputs) |
-| `docs/kelvin/kelvin_examples_migration.ipynb` | Result-bearing initial migration ledger for `examples/kelvin_transformation/`: 226 Python files classified into docs / validation_test / src-api / memory lanes, synchronized with JSON |
+| `docs/kelvin/kelvin_examples_migration.ipynb` | Result-bearing initial migration ledger for the former Kelvin examples tree: 226 Python files classified into docs / validation_test / src-api / memory lanes, synchronized with JSON |
 | `docs/kelvin/kelvin_classic_demos.ipynb` | Result-bearing source map for the 37 classic A/H/Omega/Radia-IEM Kelvin demos; the standalone example scripts were pruned after full-source JSON preservation |
 | `docs/kelvin/kelvin_adaptive_mesh_archive.ipynb` | Result-bearing full-source archive for 59 AdaptiveMesh scripts; the first 45 repetitive `order=*` runners were pruned after source-hash preservation |
 | `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb` | Result-bearing full-source archive for 122 DtN-spectrum scripts; the standalone act scripts were pruned after source-hash preservation |
 | `docs/kelvin/kelvin_remaining_examples_archive.ipynb` | Result-bearing final archive for the last 22 Kelvin example scripts; Cubit p-convergence moved to `validation_test`, the rest preserved as full-source records |
 | `docs/kelvin/Supplement/experiment_cg_smoother_equilibration.py` | Test script for CG-smoother |
-| `examples/kelvin_transformation/CONVENTION.md` | Canonical convention declaration (one-page) |
+| `docs/kelvin/legacy_assets/kelvin_transformation/CONVENTION.md` | Canonical convention declaration (one-page) |
 | `docs/solver/FEM_KELVIN_PLAN.md` | Implementation plan and status |
 
 ### Tests

@@ -174,7 +174,9 @@ if kelvin_int_face is not None and kelvin_ext_face is not None:
 geo = Glue([mag_cube, air_total, air_inner, outer_sphere, vertex])
 ```
 
-**Reference**: See `CubeMesh.py` for the correct pattern:
+**Reference**: the historical `CubeMesh.py` source is preserved in
+`docs/kelvin/kelvin_remaining_examples_archive_results.json`.  Its correct
+pattern was:
 ```python
 external_domain.faces[0].Identify(Omega_domain.faces[0], "ud0", IdentificationType.PERIODIC)
 geo = Glue([iron, A_domain, Omega_domain, external_domain])  # Glue AFTER Identify
