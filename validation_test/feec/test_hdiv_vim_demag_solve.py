@@ -101,15 +101,33 @@ def test_fail_loud_on_nonmagnetic():
             hdiv_demag_solve(mesh, 1.0, _HEXT)
 
 
-def test_order_gt0_fail_loud():
-    """High-order (order>0) material solve is NOT production-ready: the order-p charge Gram is validated
-    only for the demag FACTOR (surface charges, rho=-div M=0 for uniform M); the material solve exercises
-    the VOLUME charges where order-p is LESS accurate than RT0 (order-1 M_avg ~2x high on coarse meshes).
-    hdiv_demag_solve(order>0) must RAISE, not silently return a wrong M (Repository-First / No-Fallbacks)."""
+@pytest.mark.parametrize("order", [1, 2])
+def test_highorder_linear_solve_matches_rt0(order):
+    """High-order (order>0) LINEAR material solve is now production-ready (per-element change-of-basis fix,
+    2026-06-28): the order-p demag operator is valid (eig in [0,1]) and the material solve p-converges -- it
+    agrees with the order-0 (RT0) volume-average M on the uniform-field sphere (the old ~2-4x blow-up is gone)."""
+    mesh = _sphere(h=0.5)
+    with ng.TaskManager():
+        r0 = hdiv_demag_solve(mesh, 100.0, _HEXT, order=0)
+        rp = hdiv_demag_solve(mesh, 100.0, _HEXT, order=order)
+    assert rp["order"] == order and rp["ndof"] > r0["ndof"]
+    assert abs(rp["demag"] - 1.0 / 3.0) < 1e-2, f"order={order} demag {rp['demag']:.4f} not ~1/3"
+    rel = abs(rp["M_avg"][2] - r0["M_avg"][2]) / abs(r0["M_avg"][2])
+    assert rel < 0.1, f"order={order} M_avg {rp['M_avg'][2]:.0f} vs RT0 {r0['M_avg'][2]:.0f} (rel {rel:.2f})"
+    # higher order resolves more -> M_avg >= RT0 (converges up from below toward the continuum limit)
+    assert rp["M_avg"][2] >= r0["M_avg"][2] - 1.0
+
+
+def test_order_gt0_unsupported_combos_fail_loud():
+    """order>0 wires the LINEAR (uniform / per-region) case; the not-yet-validated combos (nonlinear /
+    image / HLU) must RAISE, not silently fall back (No-Fallbacks)."""
     mesh = _sphere(h=0.7)
-    with pytest.raises(NotImplementedError):
-        with ng.TaskManager():
-            hdiv_demag_solve(mesh, 100.0, _HEXT, order=2)
+    for kw in (dict(bh_table=[[0.0, 0.0], [1e6, 2.0]]),       # nonlinear at order>0
+               dict(mu_r=100.0, image="+x"),                  # image symmetry at order>0
+               dict(mu_r=100.0, linear_solver="hlu")):        # HLU is RT0-only
+        with pytest.raises(NotImplementedError):
+            with ng.TaskManager():
+                hdiv_demag_solve(mesh, H_ext=_HEXT, order=1, **kw)
 
 
 def test_requires_exactly_one_material_spec():
