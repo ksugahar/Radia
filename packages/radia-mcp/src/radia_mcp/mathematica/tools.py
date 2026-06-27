@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -199,26 +200,45 @@ def mathematica_evaluate(code: str, timeout: int = 60) -> dict:
             "code": code,
         }
 
+    # IMPORTANT (2026-06-27 fix): redirect the child's stdout/stderr to TEMP FILES, not pipes
+    # (capture_output=True).  `wolframscript -code` launches a grandchild WolframKernel that
+    # INHERITS the stdout/stderr write handles; if that kernel lingers (it does in the
+    # console-less, job-object MCP-server launch context -- though NOT from an interactive
+    # shell, which is why a bare `subprocess.run(..., capture_output=True)` works when tested by
+    # hand but hangs inside mcp-server-mathematica), the pipe never reaches EOF and
+    # `subprocess.run`'s internal communicate() BLOCKS until `timeout` even though wolframscript
+    # itself already exited and printed the answer.  Writing to files means we wait only for the
+    # wolframscript PROCESS to exit (prompt) and then read the files; a lingering grandchild
+    # holding a file handle does not block us.  Also pin stdin=DEVNULL so the kernel can never
+    # touch the server's JSON-RPC stdin.
     timed_out = False
-    try:
-        r = subprocess.run(
-            [ws, "-code", code],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-        stdout = r.stdout.strip()
-        stderr = r.stderr.strip()
-        exit_code = r.returncode
-    except subprocess.TimeoutExpired as e:
-        timed_out = True
-        stdout = (e.stdout or b"").decode("utf-8", errors="replace").strip() \
-                 if isinstance(e.stdout, bytes) else (e.stdout or "").strip()
-        stderr = (e.stderr or b"").decode("utf-8", errors="replace").strip() \
-                 if isinstance(e.stderr, bytes) else (e.stderr or "").strip()
-        exit_code = -2
+    with tempfile.TemporaryDirectory(prefix="mma_ws_") as _td:
+        _outp = os.path.join(_td, "out.txt")
+        _errp = os.path.join(_td, "err.txt")
+
+        def _read(p: str) -> str:
+            try:
+                return Path(p).read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                return ""
+
+        try:
+            with open(_outp, "wb") as _fo, open(_errp, "wb") as _fe:
+                r = subprocess.run(
+                    [ws, "-code", code],
+                    stdin=subprocess.DEVNULL,
+                    stdout=_fo,
+                    stderr=_fe,
+                    timeout=timeout,
+                )
+            exit_code = r.returncode
+            stdout = _read(_outp)
+            stderr = _read(_errp)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            stdout = _read(_outp)
+            stderr = _read(_errp)
+            exit_code = -2
 
     return {
         "result": stdout,
