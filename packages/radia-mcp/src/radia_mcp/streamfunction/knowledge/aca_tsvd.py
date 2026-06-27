@@ -1876,6 +1876,11 @@ finds one specific point while NSGA-II explores the front.
 ## References / cross-links
 
   - ``docs/stream_function/regularization.md`` -- user-facing docs
+    (runnable companion: ``docs/stream_function/regularization.ipynb`` --
+    runs every regularisation mode live on the same planar problem)
+  - ``docs/stream_function/theory.md`` (runnable companion:
+    ``docs/stream_function/theory.ipynb`` -- executes the SF + (ACA+)+TSVD
+    method live)
   - ``docs/stream_function/deformation.md`` -- constrained reg-aware
     loop section + Pareto trade-off table
   - ``radia.stream_function.RegularizedTSVD`` -- implementation

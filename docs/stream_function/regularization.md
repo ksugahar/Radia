@@ -1,5 +1,8 @@
 # Regularisation choices for FE-direct ψ
 
+> Runnable companion: [`regularization.ipynb`](regularization.ipynb) runs every
+> regularisation mode live on the same planar problem (the math stays here).
+
 The SF problem `A ψ = B_target` with `M = 25` constraints and
 `ndof ≈ 1773` (H¹ order 2) is **massively underdetermined** — there
 are infinitely many ψ vectors that hit `B_target` exactly.  Choosing
