@@ -184,6 +184,40 @@ CRITICAL 検出時は recommendation が「全部消せ、その上で `suggest_
    (nominalisation, em-dash chain, jargon クラスタ).
 2. **概念を1つ削る** — 正解。`suggest_concept_drops` で候補を提案。
 
+#### Bilingual digest page-limit policy (EN venue-limit strict, JA synced)
+
+IGTE/CEFC/COMPUMAG などの digest / extended abstract を **英語版 + 日本語版の
+twin** として保守する場合、最初に必ず投稿先・年度・document type ごとの
+page limit を確認する。英語版は投稿物なので、確認した venue limit
+(例: 1 page / 2 pages / 4 pages) を厳守する。過去の別学会・別年度の
+「1-page digest」慣習を無確認で流用しない。
+
+一方、**日本語版は英語版と内容・数値・式・図・引用を完全同期**させるが、
+英語版の page limit は課さない。和文は共著者レビュー・思考整理用の読みやすさを
+優先し、英語版の page-limit compression を和文に機械的に移植して読みにくく
+しない。英語版を削ったら日本語版も同じ主張範囲へ同期するが、和文の文章量
+そのものを英語版に合わせて削る必要はない。
+
+編集時は EN/JA を同じ change set で更新し、英語版は page-count を検証、
+日本語版は bilingual sync と組版エラーを検証する。EN が venue limit を超える場合は
+「冗長部削除 → 小さな `\vspace{-...}` 調整 → 低優先文の削除 → 英文圧縮」の
+順で対応し、英文圧縮で不明瞭になるなら文を削る。
+
+#### Reviewer Q&A driven revision policy
+
+Digest / paper を修正するときは、まず査読者が突っ込みそうな点を
+**Q&A** として書き出す。各項目は (1) reviewer question, (2) answer,
+(3) manuscript action, (4) space が足りない場合に削る候補、の順で整理する。
+この段階では文章が一時的に増えてよい。Q&A で論点を潰してから本文へ反映し、
+page limit 超過は過剰な英文圧縮ではなく、冗長部削除または優先度の低い内容の
+削除で解決する。
+
+本文へ反映するときは、読みにくい compressed prose を作らない。関係を説明する
+ために文中で `=` を助詞代わりに使わず、等号は数式・表・明示的な定義式に限る。
+意味が明確でない括弧補足や、括弧内に文を押し込む書き方も避ける。括弧は
+短い例、単位、略語初出、図表・式参照、citation に限定し、説明が必要な内容は
+本文の通常の文として書く。
+
 #### `paper_writing_check_prose_density(text)` — 圧縮 anti-pattern 検出
 語数・ページ制限に達して **悪い圧縮** を始めた draft を検出する per-sentence
 診断。5 軸: nominalisation (`we augment` → `the augmentation`) /
@@ -480,6 +514,28 @@ The main contributions of this paper are:
 ## 📚 references.bib lab style (2023 Compumag review 由来)
 
 **経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`W:\02_学会資料\2023年度\2023_05_Compumag2023@京都\01_発表\CLN_TEAM28@谷本\`) で references.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
+
+### Rule 0: `.bib` は毎回外部検索で裏を取る
+
+`references.bib` / `reference.bib` を確認・追加・修正するときは、ローカル
+`.bib` や過去原稿を信じてそのまま流用しない。毎回、DOI / publisher page /
+Crossref / 公式リポジトリ / 著者ページなど一次情報に近い source を検索し、
+その文献が **現在の主張に対して適切な引用先か** と、metadata
+(authors, title, journal/conference, year, volume, issue, pages/article number,
+DOI) が正しいかを確認する。検索で裏を取れない repo-only citation は、
+論文・preprint・公式 documentation が存在しないかを確認し、存在するなら
+そちらを優先して引用する。
+
+外部確認後は、(1) bib entry の metadata、(2) 本文での引用位置、(3) reference
+list の初出順、(4) abstract に引用が残っていないことを同時に確認する。
+
+IEEE 系の近年論文では、通常のページ範囲ではなく article number / Early Access
+metadata が使われることがある。`pages = {1--1}` や `PP(99):1-1` は通常の
+ページ範囲として意味を持たない場合があるため、IEEE Xplore / Crossref で
+volume, issue, article number, pages, online publication status を確認する。
+article number が確定している場合は article number を優先し、まだ
+`Volume PP, Issue 99, Page(s) 1-1` 型なら `note = {early access}` と DOI を
+残し、`1--1` を実ページ範囲として見せない。
 
 ### Rule 1 (最優先): 著者の苗字は `{}` で囲んで case-mangling 保護
 

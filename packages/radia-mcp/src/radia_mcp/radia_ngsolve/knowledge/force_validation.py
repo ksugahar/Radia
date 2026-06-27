@@ -253,36 +253,40 @@ careful remeshing.
 
 - ``ngsolve_usage("lorentz_force")``: conductor force, image force, busbars.
 - ``ngsolve_usage("air_gap_force")``: magnetic-circuit holding force.
-- ``examples/fem_readable/validation_surface_maxwell_force_trace.py``:
+- ``validation_test/fem_readable/validation_surface_maxwell_force_trace.py``:
   first-order `.vol` boundary triangles to Maxwell traction and P1 nodal force loads.
-- ``examples/fem_readable/validation_surface_triangle_constant_traction_load.py``:
+- ``validation_test/fem_readable/validation_surface_triangle_constant_traction_load.py``:
   constant P1 surface-triangle traction to equivalent nodal loads, with
   force/moment preservation.
+- SHOWCASE NOTEBOOK ``docs/fem_readable/fem_readable_validation_archive.ipynb``:
+  the 12 readable FEM validation scripts, their summary JSON payloads, full
+  source, and SHA-256 hashes, executed and synchronized with
+  ``docs/fem_readable/fem_readable_validation_archive_results.json``.
 - ``examples/cubit_mesh_export/validation_vol_boundary_pressure_moment.py``:
   named `.vol` sidesets to pressure force/moment rows and generic resultant reduction.
 - ``examples/cubit_mesh_export/validation_vol_boundary_traction_moment.py``:
   named `.vol` sidesets to constant vector-traction force/moment rows and
   generic resultant reduction.
-- ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
+- ``validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_moment.py``:
   build123d analytic box pressure moments checked against named `.vol` rows.
-- ``examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py``:
+- ``validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_traction_moment.py``:
   build123d analytic box vector-traction moments checked against named `.vol`
   rows.
-- ``examples/electric_machine/validation_planar_lorentz_block_force.py``:
+- ``validation_test/electric_machine/validation_planar_lorentz_block_force.py``:
   planar ``Jz x B`` block force checked against the directional two-wire
   Lorentz summary.
-- ``examples/electric_machine/validation_machine_torque_scaling.py``:
+- ``validation_test/electric_machine/validation_machine_torque_scaling.py``:
   2D sector torque to whole-machine N m scaling with stack length, mesh unit,
   and symmetry factor visible.
-- ``examples/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
+- ``validation_test/electric_machine/validation_virtual_work_force_displacement_sweep.py``:
   displacement energy/coenergy samples to force, including the fixed-current
   versus fixed-flux sign gate.
-- ``examples/electric_machine/validation_sampled_air_gap_shear_torque.py``:
+- ``validation_test/electric_machine/validation_sampled_air_gap_shear_torque.py``:
   sampled cylindrical air-gap ``Br``/``Bt`` to torque, including uniform and
   harmonic analytic gates.
-- ``examples/electrostatics/validation_parallel_plate_electrostatic_force.py``:
+- ``validation_test/electrostatics/validation_parallel_plate_electrostatic_force.py``:
   capacitance-energy, Maxwell-pressure, and traction-equivalence gate.
-- ``examples/electrostatics/validation_capacitance_gradient_force.py``:
+- ``validation_test/electrostatics/validation_capacitance_gradient_force.py``:
   fixed-voltage / fixed-charge capacitance-gradient force with signed
   gap/closing coordinates.
 - SHOWCASE NOTEBOOK ``docs/electrostatics/electrostatics.ipynb``: the five
