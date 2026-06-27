@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "generated_at_utc": "2026-06-27T21:30:32Z",
   "notebook": "docs/ih_esim_benchmark/esim_showcase.ipynb",
-  "notebook_sha256": "a1a3b6f9a30a02498da70718d8054bbb49fc3d85f7a2dc051cb5bb60930988ef",
+  "notebook_sha256": "875572a9dfc7db247ac3017e8e3f994b12d1e4c8f5456d66ba634c5b4f72252b",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -54,8 +54,8 @@
     {
       "cell_index": 4,
       "execution_count": 2,
-      "source_sha256": "11349c0a1840d592a2d6cb3e881c08263ab325668cd0df5c4da514e9932b7a21",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image(\"../../examples/ih_esim_benchmark/sweep_heatmap_digest.png\"))\ndisplay(Image(\"../../examples/ih_esim_benchmark/sweep_heatmap.png\"))\n",
+      "source_sha256": "dce10f2a15d3fec89d7641f03fb2ad11187b6de91c0ee619a3cce73098e0393b",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image(\"sweep_heatmap_digest.png\"))\ndisplay(Image(\"sweep_heatmap.png\"))\n",
       "outputs": [
         {
           "output_type": "display_data",
@@ -69,8 +69,8 @@
           "text_plain_truncated": false,
           "rich_output_hashes": {
             "image/png": {
-              "chars": 271440,
-              "sha256": "26878373b6f5eb1174bd036477fd27b8233802b9ed648e0735a69f782402c50d"
+              "chars": 247228,
+              "sha256": "44c949fda8300b6c15a247cdc3f9c1617a127e2f68b2461da8e0a719feea2c41"
             }
           }
         },
@@ -86,8 +86,8 @@
           "text_plain_truncated": false,
           "rich_output_hashes": {
             "image/png": {
-              "chars": 270704,
-              "sha256": "f94117b5a0e37760427c3af3e93ed8bc057f509c474a4b93fef2ee926a759ece"
+              "chars": 374680,
+              "sha256": "4eab275ad1f04052d3fc8524451aa212d936e5b5b3a75bade2e0e97f20030151"
             }
           }
         }
@@ -96,8 +96,8 @@
     {
       "cell_index": 6,
       "execution_count": 3,
-      "source_sha256": "a2ea1e282ffa1e8d97c3544e37dd11be0e5a937e29921623597fe2d20657127e",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image(\"../../examples/ih_esim_benchmark/cell_envelope.png\"))\ndisplay(Image(\"../../examples/ih_esim_benchmark/Zs_per_dof_map.png\"))\ndisplay(Image(\"../../examples/ih_esim_benchmark/karl_history_per_panel.png\"))\n",
+      "source_sha256": "d8af1b2c7d842d83670cf9685bf27c8b883180ace1c90da2e003c38dbce0ccc3",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image(\"cell_envelope.png\"))\ndisplay(Image(\"Zs_per_dof_map.png\"))\ndisplay(Image(\"karl_history_per_panel.png\"))\n",
       "outputs": [
         {
           "output_type": "display_data",

@@ -18,15 +18,14 @@ lowering the local Re Z_s to 13.4-19.0 mOhm (min/mean 0.80x).  The
 local loss density ~ Re(Z_s) * |H_t|^2 is dominated by the |H_t|^2
 spread.  Uniform mesh-RMS Karl collapses this map to ONE Z_s; per-
 element Karl preserves it, giving P_wp = 18.75 W vs uniform 30.51 W
-(-38.5%).  (The earlier "94x / 2.1x" figures were a Galerkin-
-localisation artifact, corrected to the triangle-gradient |H_t|.)
+(-38.5%).
 
 Inputs:
     JSON with esim_per_panel_Z_s_real/imag and esim_per_panel_H_t
     arrays (produced by calc_inductance.py --esim-per-panel; needs
     radia >= 4.67 for the corrected triangle-gradient |H_t|).
     Default path points at the committed
-    sweep_data/I100_f50k_per_panel.json (the 100 A, 50 kHz headline
+    sweep_data_dense/I100_f50k_per_panel.json (the 100 A, 50 kHz headline
     case) -- regenerable from the repo, no C:/temp dependency.
 
     Workpiece .vol mesh used to recover the per-DOF (x, y, z)
@@ -36,7 +35,7 @@ Outputs:
     Zs_per_dof_map.png       (3-panel figure)
 
 Usage:
-    python examples/ih_esim_benchmark/plot_zs_per_dof_map.py \\
+    python docs/ih_esim_benchmark/plot_zs_per_dof_map.py \\
         [JSON_PATH] [VOL_PATH]
 
 The default paths are configured for the IGTE 2026 paper
@@ -50,13 +49,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mcp_server_document.graph.tools import (
+from radia_mcp.figure import (
     apply_lab_style, lab_savefig, check_min_font,
 )
 
-# Data Persistence Policy: default to the committed sweep_data case,
+# Data Persistence Policy: default to the committed dense-sweep case,
 # not a transient C:/temp snapshot.
-DEFAULT_JSON = Path(__file__).parent / "sweep_data" / "I100_f50k_per_panel.json"
+DEFAULT_JSON = Path(__file__).parent / "sweep_data_dense" / "I100_f50k_per_panel.json"
 DEFAULT_VOL = Path(__file__).resolve().parent.parent.parent / \
               "src" / "radia" / "panels" / "samples" / "ih_bem_sample_p1.vol"
 OUT_PNG = Path(__file__).parent / "Zs_per_dof_map.png"

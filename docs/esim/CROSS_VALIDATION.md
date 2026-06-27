@@ -135,9 +135,9 @@ This is the Wakao–Igarashi–Fujiwara–Kameari Part 5 reference for the
 linear-μ regime; `scipy.special.iv` is used for the modified Bessel
 functions.
 
-**Implementation.**  [`examples/ih_esim_benchmark/analytical_bessel_baseline.py`](../../examples/ih_esim_benchmark/analytical_bessel_baseline.py)
+**Implementation.**  [`docs/ih_esim_benchmark/analytical_bessel_baseline.py`](../ih_esim_benchmark/analytical_bessel_baseline.py)
 computes `Z_s^anal` over a frequency sweep.
-[`examples/ih_esim_benchmark/benchmark.py`](../../examples/ih_esim_benchmark/benchmark.py)
+[`docs/ih_esim_benchmark/benchmark.py`](../ih_esim_benchmark/benchmark.py)
 calls `ESIMFiniteSlabSolver(geometry='cylinder', bh_curve=None, mu_r=100, ...)`
 at each frequency and compares.
 
@@ -191,7 +191,7 @@ Mesh: `wp_mesh_nv = 73, wp_mesh_n_tris = 142` (BIE);
 `ndof = 76024 / 87503` (FEM-Kelvin / FEM-coilmesh).
 
 **Three paths driven at four frequencies** (LAB, radia 4.46.3,
-[`examples/ih_esim_benchmark/results.json`](../../examples/ih_esim_benchmark/results.json)):
+[`docs/ih_esim_benchmark/results.json`](../ih_esim_benchmark/results.json)):
 
 | f [kHz] | Path | \|Z_s\| [Ω] | L_total [nH] | P_wp [µW] | Karl iter | t_total [s] |
 |---|---|---|---|---|---|---|
@@ -244,7 +244,7 @@ Mesh: `wp_mesh_nv = 73, wp_mesh_n_tris = 142` (BIE);
   with the BH-curve explanation.
 
 **Karl iteration convergence (PEEC-BEM, 50 kHz)** — REAL data from
-[`results.json`](../../examples/ih_esim_benchmark/results.json):
+[`results.json`](../ih_esim_benchmark/results.json):
 
 | Iter | \|Z_s\| [Ω] | H_t_rms [A/m] | dZ/Z | t_solve [s] |
 |---|---|---|---|---|
@@ -409,21 +409,15 @@ done
 
 ## 6b. Per-Element vs Scalar Z_s (the headline contribution)
 
-**Status (2026-05-24)**: numbers below correspond to **sweep_v2** data
-(`C:/temp/igte_bench/sweep_v2/`), the source of the IGTE 2026 digest
-Fig. 1 heatmap.  The pre-2026-05-24 version of this section quoted
-"+48 % under-estimate by scalar" / `P_per = 45.4 W`; those values
-were the output of an **early prototype** that used a Galerkin
-localization `|H_t|_i² ∝ φ_i (Kφ)_i` for the per-DOF gradient
-extraction.  That formula samples the **surface Laplacian**, not the
-gradient norm, and mis-places the saturation hot-spot — flipping the
-sign of the per-vs-scalar disagreement.  The current production
-code (v4.67.0+, `calc_inductance.py:849-851`) uses a triangle-wise
-P1 gradient instead and gives the values below.
+**Status (2026-05-30 dense sweep)**: the current IGTE 2026 digest
+source of truth is
+`docs/ih_esim_benchmark/sweep_data_dense/`, a 9-current x
+6-frequency x 2-mode sweep.  The current production code uses a
+triangle-wise P1 surface-gradient extractor.
 
-**Test setup** (2026-05-22, LAB sweep_v2): same Cu workpiece mesh
-(`ih_bem_sample_p1.vol`, 2150 BND tris), driven as steel via the
-BH-curve ESIM path: σ = 2 × 10⁶ S/m, μ_r(linear) = 100, BH curve
+**Representative cell**: workpiece mesh
+(`ih_bem_sample_p1.vol`, 2150 BND tris, 1077 vertices), driven as steel
+via the BH-curve ESIM path: σ = 2 × 10⁶ S/m, μ_r(linear) = 100, BH curve
 [`em_sample_bh.txt`](../../src/radia/panels/samples/em_sample_bh.txt),
 half_thickness = 5 mm.  Coil: PEEC filament from
 [`ih_fem_kelvin_demo_coil.step`](../../src/radia/panels/samples/ih_fem_kelvin_demo_coil.step).
@@ -440,15 +434,16 @@ through the BH knee at ~1000 A/m).  Both modes:
 | H_t_rms [A/m] | 680 (single value) | 518 mean (per-DOF integral) | — |
 | `mean⟨|Z_s|⟩` | 2.25e−2 (scalar) | 2.97e−2 (Re part 1.78e−2, Im 2.38e−2) | per-element raises mean |Z_s| (saturation drop is local) |
 
-(From `C:/temp/igte_bench/sweep_v2/I100_f50k_{scalar,per_panel}.json`.)
+(From `docs/ih_esim_benchmark/sweep_data_dense/I100_f50k_{scalar,per_panel}.json`.)
 
 **The headline result (corrected sign)**: at I_port = 100 A,
 f = 50 kHz, the per-element Karl reports `P_wp = 18.75 W` vs
 scalar Karl's `30.51 W` — scalar **over-estimates by a factor 1.63**
 (equivalently per-element predicts 38.5 % LESS dissipation than
 scalar).  The IGTE 2026 paper's Fig. 1 heatmap shows this is the
-representative behaviour across the whole BH-knee operating region
-(I = 100-300 A, f = 10-100 kHz): per/scalar ratio 0.52-0.78.
+representative behaviour across the BH-knee operating region: the
+converged per/scalar ratio reaches 0.50 at 500 A and 10 kHz and stays
+well below unity across the lower-to-mid-frequency high-drive band.
 
 ### 6b.1 Physical interpretation
 
@@ -473,16 +468,14 @@ The per-element formulation samples `Z_s(|H_t|[i])` at every DOF and
 integrates exactly — this is the BEM analogue of the FEM
 "per-element nonlinear material" approach.
 
-### 6b.2 Convergence observation (resolved 2026-05-24)
+### 6b.2 Convergence observation (dense sweep)
 
 With **Anderson Type-II acceleration** (m=5) wrapped around the
 damped Karl iteration (`--esim-anderson-m 5 --esim-relax 0.5`),
-per-DOF Karl converges in **7-30 iterations** across the full
-32-case sweep (31 of 32 converged to `dZ_max < 1e-3`; the lone
-hold-out is I=300 A, f=500 kHz which caps at 30 iter with
-`dZ_max ≈ 0.04`).  Without Anderson (m=0), the deep-saturation
-cases stay at `dZ_max ≈ 0.1-0.4` even at 60 iterations — the prior
-observation in this section.
+49 of the 54 per-DOF dense-sweep cases converge.  Forty-seven cases
+converge in 6--13 iterations, and two high-current outliers converge
+in 25--26 iterations.  Five 500 A high-frequency cases hit the
+30-iteration cap and are not used for quantitative maxima.
 
 Root cause of the per-DOF stiffness: at DOFs where `|H_t|` straddles
 the BH knee (μ_r drops from 100 to ~5 across a small H range), the
@@ -497,21 +490,21 @@ solve cost, and the convergence gain is decisive.
 
 ### 6b.3 What this means for the IGTE paper
 
-This IS the paper's headline numerical result:
+This is the paper's headline numerical result:
 
 > **For steel induction-heating workpieces driven through the BH knee,
 > the per-element BEM ESIM formulation reports a workpiece dissipation
-> 22-48 % LOWER (per/scalar = 0.52-0.78) than the scalar mesh-RMS
-> formulation.  Hot-spot DOFs sit past the BH knee where the curve
-> gives lower local Z_s; per-element resolves this, scalar averages
-> it away.**
+> substantially lower than the scalar mesh-RMS formulation in the
+> surface-hardening band.  Hot-spot DOFs sit past the BH knee where
+> the curve gives lower local Z_s; per-element resolves this, scalar
+> averages it away.**
 
 For the digest figure: plot `Z_s(s)` along a 1-D arc on the workpiece
 surface, side-by-side for scalar vs per-element.  The scalar curve
 is flat; the per-element curve shows a clear saturation pattern with
 ~3× variation.
 
-**Reproducibility (sweep_v2 parameters)**:
+**Reproducibility (dense-sweep parameters)**:
 
 ```bash
 # Scalar
@@ -532,73 +525,42 @@ python src/radia/panels/calc_inductance.py \
   --output per_panel.json
 ```
 
-The full 32-case heatmap that ships with the IGTE 2026 paper is
-generated by `examples/ih_esim_benchmark/sweep_f_I.py` + matching
-`plot_sweep_heatmap.py`; see that example's
-[`README.md` "Phase B" section](../../examples/ih_esim_benchmark/README.md#phase-b-per-element-vs-scalar-disagreement-sweep-sweep_f_ipy)
+The full 108-case heatmap that ships with the IGTE 2026 digest is
+generated by `docs/ih_esim_benchmark/sweep_f_I.py` + matching
+`plot_digest_figure.py`; see that example's
+[`README.md` "Phase B" section](../ih_esim_benchmark/README.md#phase-b-per-element-vs-scalar-disagreement-sweep-sweep_f_ipy)
 for the per-cell numerical values and the convergence summary.
 
 ---
 
-## 6c. Robustness of headline `P_wp` to Karl-loop knobs
+## 6c. Dense-sweep convergence summary
 
-Because per-element ESIM hits `max_iter` on the strict per-DOF
-`dZ_max` criterion (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md)
-§ 3.4), a **robustness cross-check** is needed to confirm that the
-integrated `P_wp` is independent of the damping / iteration-count
-knobs.  Same geometry (`ih_bem_sample_p1.vol`, 50 kHz, 100 A, BH
-curve from `em_sample_bh.txt`), different Karl knobs:
-
-| Run | `--esim-relax` | `--esim-max-iter` | Iters used | `P_wp` [W] | Last-5-iter `<\|Z_s\|>` drift | Per-DOF `\|Z_s\|` range at exit |
-|---|---|---|---|---|---|---|
-| v4 | 0.5 | 15 | 15 (cap) | **45.143** | 4.37 % | 11.6 - 38.1 mΩ (3.3×) |
-| v5 | 0.3 | 30 | 30 (cap) | **45.196** | 0.54 % | 11.2 - 37.4 mΩ (3.3×) |
-
-`P_wp` agrees to **0.12 %** and the per-DOF `|Z_s|` endpoints
-agree to **<0.3 mΩ**.  v5 is the cleaner plateau but takes 2×
-longer; v4 is the publication-grade compromise.  See
-[`examples/ih_esim_benchmark/karl_history_per_panel_relax03.png`](../../examples/ih_esim_benchmark/karl_history_per_panel_relax03.png)
-for the v5 trajectory.
-
-Note that the per-DOF `dZ_max` noise floor (~0.06 - 0.20 across
-both runs) is **insensitive to damping** — confirming it is a
-true noise floor on the hot-spot DOFs and not a damping-knob
-artifact.  Anderson acceleration (planned) is expected to close
-this gap without changing `P_wp`.
-
-This is a **self-consistency** check, not an external validation;
-see § 1b for the structural limits.
+Current convergence summary: 49 of 54 per-DOF cases converge in the
+dense sweep.  Of these, 47 converge in 6--13 iterations and two require
+25--26 iterations.  Five 500 A high-frequency cases hit the 30-iteration
+cap and are not used for quantitative maxima.
 
 ---
 
-## 6d. Operating-regime sweep: where does per-element matter?
+## 6d. Operating-regime sweep: where does per-DOF ESIM matter?
 
-A 32-case sweep over `(I_port, f)` ∈ `{1, 10, 100, 300 A} × {10, 50,
-100, 500 kHz}` on the IH benchmark steel cylinder characterizes the
+A 108-case sweep over 9 currents and 6 frequencies on the IH benchmark
+steel cylinder characterizes the
 scalar-vs-per-element ESIM gap on `P_wp` as a function of operating
 point.  Runner:
-[`examples/ih_esim_benchmark/sweep_f_I.py`](../../examples/ih_esim_benchmark/sweep_f_I.py).
-Figure: [`sweep_heatmap.png`](../../examples/ih_esim_benchmark/sweep_heatmap.png).
+[`docs/ih_esim_benchmark/sweep_f_I.py`](../ih_esim_benchmark/sweep_f_I.py).
+Figure source: [`sweep_data_dense/`](../ih_esim_benchmark/sweep_data_dense/).
 
-**Note on history**: an earlier version of this sweep (`sweep_v1`)
-used a Galerkin-localized per-DOF `|H_t|²` extraction (`phi_i (K φ)_i`)
-that turned out to be a Laplacian sample, not a gradient norm — see
-[`fix(esim)` commit 630527d4](../../) for the bug analysis.  The
-present table is from `sweep_v2` after the fix; gap values changed
-sign and decreased in magnitude (no more +389 % outliers).
+Key dense-sweep values:
 
-**Sweep results (post-fix, all cases formally converged or plateaued):**
+| Case | Scalar `P_wp` | Per-DOF `P_wp` | Gap |
+|---|---:|---:|---:|
+| 100 A, 50 kHz | 30.51 W | 18.75 W | -38.5 % |
+| 500 A, 10 kHz | 162.85 W | 81.83 W | -49.75 % |
 
-`(P_per_element / P_scalar − 1) × 100 %`:
-
-| `I_port` [A] \\ `f` [kHz] | 10  | 50  | 100 | 500 |
-|---|---|---|---|---|
-| 1   | +18 | +18 | +21 | +26 |
-| 10  | +13 | +0  | +2  | +0  |
-| **100** | **-22** | **-39** | **-26** | -2  |
-| **300** | **-48** | **-35** | **-39** | -6  |
-
-Maximum absolute gap: `-48 %` at `(I = 300 A, f = 10 kHz)`.
+The 500 A, 10 kHz case is the maximum converged gap and is used for
+the side-wall `|Z_s|` panel.  Stalled high-frequency 500 A cases are
+not used for quantitative maxima.
 
 ### Physical interpretation
 
@@ -612,13 +574,13 @@ the local `|H_t|` distribution sits:
   local mu_r variation, yielding small **positive** gaps `~+20 %`.
   Scalar SIBC under-resolves the steep initial slope effect.
 
-- **`I = 100-300 A` (saturated regime)**: mean `|H_t|` lies above
+- **High-current surface-hardening regime**: mean `|H_t|` lies above
   the BH knee.  Hot-spot DOFs are deeper in saturation with
   **lower** local `Z_s` (the BH curve has `dZ_s/d|H_t| < 0` above
   the knee).  Per-element correctly applies the low local `Z_s` at
   hot spots; scalar uses an intermediate mean `Z_s` and **over-
-  estimates** `P_wp`.  Result: negative gap, max `-48 %` at
-  `(300 A, 10 kHz)`.
+  estimates** `P_wp`.  The maximum converged dense-grid gap is
+  at 500 A and 10 kHz.
 
 - **`f = 500 kHz` (thin-skin regime)**: `δ ≈ 0.04 mm << R = 5 mm`.
   Local saturation averages out within the thin skin layer; the
@@ -634,8 +596,8 @@ The (I, f) heatmap is the **method-uncertainty map** of ESIM: a
 designer using scalar SIBC in IH analysis can read the gap value
 at their operating point as a quantitative estimate of the spatial-
 averaging error they are accepting.  In the typical IH surface-
-hardening regime (`I = 100-300 A`, `f = 10-100 kHz`), scalar SIBC
-**over-predicts** `P_wp` by 20-48 % vs the per-element calculation;
+hardening regime, scalar SIBC can substantially **over-predict**
+`P_wp` relative to the per-element calculation;
 predictive designs without experimental trim must account for this.
 
 ### Cautionary observation
@@ -745,8 +707,8 @@ All benchmarks above are reproducible:
 
 ```bash
 # Strategy A: linear Bessel baseline
-python examples/ih_esim_benchmark/analytical_bessel_baseline.py
-python examples/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
+python docs/ih_esim_benchmark/analytical_bessel_baseline.py
+python docs/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
 
 # Strategy B: three-path consistency
 # (driven by the same benchmark.py; results.json shows all three paths)
@@ -788,7 +750,7 @@ done
 
 End-to-end walkthrough using the canonical IGTE-benchmark inputs.
 All numbers below are **real** — they are the values stored in
-[`examples/ih_esim_benchmark/results.json`](../../examples/ih_esim_benchmark/results.json)
+[`docs/ih_esim_benchmark/results.json`](../ih_esim_benchmark/results.json)
 (radia 4.46.3, LAB, 2026-05-15), reproducible via the
 `benchmark.py` script in the same directory.
 
@@ -826,7 +788,7 @@ Wall time: 5.3 s (LAB, Windows, MKL).
 
 ### 11.3 JSON output — REAL numbers
 
-Excerpted from [`results.json`](../../examples/ih_esim_benchmark/results.json)
+Excerpted from [`results.json`](../ih_esim_benchmark/results.json)
 `sweep[1].results.inductance` (50 kHz row):
 
 ```json
@@ -891,7 +853,7 @@ Excerpted from [`results.json`](../../examples/ih_esim_benchmark/results.json)
 ### 11.5 Cross-check at the same operating point
 
 Same 50-kHz case driven through `calc_fem_kelvin.py`
-([`results.json sweep[1].results.fem_kelvin`](../../examples/ih_esim_benchmark/results.json)):
+([`results.json sweep[1].results.fem_kelvin`](../ih_esim_benchmark/results.json)):
 
 | Quantity | PEEC-BEM | FEM-Kelvin | Δ |
 |---|---|---|---|
@@ -901,7 +863,7 @@ Same 50-kHz case driven through `calc_fem_kelvin.py`
 | ESIM iter | 6 | 6 | — |
 
 Same case through `calc_fem_coilmesh.py`
-([`results.json sweep[1].results.fem_coilmesh`](../../examples/ih_esim_benchmark/results.json)):
+([`results.json sweep[1].results.fem_coilmesh`](../ih_esim_benchmark/results.json)):
 
 | Quantity | PEEC-BEM | FEM-coilmesh | Δ |
 |---|---|---|---|
@@ -940,4 +902,4 @@ the IGTE digest.
 
 ---
 
-**Document version**: 2026-05-18 (radia v4.55.3+).
+**Document version**: 2026-05-30 (radia v4.67.0+ dense-sweep baseline).

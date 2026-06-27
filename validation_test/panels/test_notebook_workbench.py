@@ -295,6 +295,6 @@ def test_ih_notebook_carries_esim_and_previous_result_notes():
     assert "`Z_s`" in text
     assert "esim_converged" in text
     assert "esim_iterations" in text
-    assert "examples/ih_esim_benchmark/sweep_data/" in text
+    assert "docs/ih_esim_benchmark/sweep_data_dense/" in text
     assert "I100_f50k_scalar.json" in text
     assert "I100_f50k_per_panel.json" in text

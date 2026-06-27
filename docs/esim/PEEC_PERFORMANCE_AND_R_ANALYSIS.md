@@ -57,7 +57,7 @@ different limits:
 ### 1.3 Empirical data point: gapped-torus benchmark
 
 Production benchmark
-([`examples/ih_esim_benchmark/results.json`](../../examples/ih_esim_benchmark/results.json)),
+([`docs/ih_esim_benchmark/results.json`](../ih_esim_benchmark/results.json)),
 gapped torus 1 turn + Cu, 50 kHz:
 
 | Source | R_coil_mOhm |
@@ -117,7 +117,7 @@ The honest statement for the paper:
 
 The benchmark reports `t_coil_topology_s ≈ 3 s` consistently across
 all four test frequencies
-([`results.json`](../../examples/ih_esim_benchmark/results.json) lines
+([`results.json`](../ih_esim_benchmark/results.json) lines
 38, 255, 465, 668).  This is **constant** across frequencies — the
 topology extraction is frequency-independent (no warm/cold cache
 variance).
@@ -244,4 +244,4 @@ note.  Mention briefly in § 7 reproducibility / wall-time discussion:
 
 ---
 
-**Document version**: 2026-05-18 (radia v4.55.3+).
+**Document version**: 2026-05-30 (radia v4.67.0+ dense-sweep baseline).
