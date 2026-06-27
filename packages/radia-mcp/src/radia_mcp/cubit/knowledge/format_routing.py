@@ -160,6 +160,24 @@ Need labels (material / BND / BBBND) ?
             Then hand the .vol to the appropriate radia-* domain tool.
 ```
 
+## Mesh-type routing inside `.vol`
+
+The `.vol` extension is a container, not a promise that the mesh is tri/tet.
+Route by semantic inventory:
+
+- **tet-only generation**: use build123d/Netgen/OCC for the first-order
+  H1/HCurl/FEM-BEM education path.  The radia-ngsolve tri/tet parser rejects
+  quad/hex/wedge/pyramid instead of silently converting them.
+- **hex-led or mixed hex+pyramid+tet generation**: use Cubit/Coreform.  This is
+  where Cubit adds unique value.  Run `cubit_vol_inventory` first; it reports
+  triangle/quad surface records and tet/pyramid/wedge/hex volume records, then
+  tells the agent whether the file is a `netgen_tri_tet_path` or a
+  `cubit_hex_or_mixed_path`.
+- **pyramid transition elements** are expected at some hex/tet interfaces.
+  Inventory them explicitly and route to a solver/export contract that supports
+  them, or perform a deliberate conversion.  Do not split them implicitly in a
+  generic `.vol` reader.
+
 ## See also
 
 - `docs/cubit/Vol_vs_Step_Labels.md` -- canonical (this file is a

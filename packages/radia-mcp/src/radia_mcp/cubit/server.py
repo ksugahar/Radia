@@ -43,6 +43,7 @@ from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from .knowledge.license import get_license_documentation
 from .knowledge.format_routing import get_format_routing_documentation
 from .knowledge.coreform_webinars import get_coreform_webinar_documentation
+from .vol_inventory import summarize_netgen_vol_inventory
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -618,6 +619,45 @@ def cubit_docs(topic: str = "all") -> str:
 		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
 		f"Examples: export_overview, scripting_blocks, api_core"
 	)
+
+
+@mcp.tool()
+def cubit_vol_inventory(path: str = "", text: str = "") -> str:
+	"""
+	Return semantic element inventory for a Netgen `.vol` export.
+
+	Use this before routing a Cubit/Coreform `.vol` into a solver path.
+	It recognizes triangle/quad surface records and tet/pyramid/wedge/hex
+	volume records without modifying them.  This is the preflight for the
+	lab split where Cubit owns hex-led or mixed hex+pyramid+tet meshes, while
+	Netgen/OCC is enough for tet-only generation.
+
+	Args:
+		path: Optional path to a `.vol` file.
+		text: Optional inline `.vol` text. If supplied, this wins over path.
+
+	Returns:
+		JSON with element counts, material labels, and a routing hint.
+	"""
+	try:
+		if text:
+			result = summarize_netgen_vol_inventory(text, source="inline")
+		elif path:
+			p = Path(path)
+			result = summarize_netgen_vol_inventory(
+				p.read_text(encoding="utf-8"), source=str(p)
+			)
+		else:
+			return json.dumps({
+				"status": "error",
+				"error": "provide either path or text",
+			})
+	except Exception as exc:
+		return json.dumps({
+			"status": "error",
+			"error": f"{type(exc).__name__}: {exc}",
+		})
+	return json.dumps({"status": "ok", **result}, indent=2)
 
 
 @mcp.tool()
