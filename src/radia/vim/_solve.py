@@ -60,15 +60,16 @@ nf >~ 7000 (the GMRES form-1 / nonlinear paths tolerate the asymmetry).  So a CG
 CG paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.
 
 The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
-~0.3 s mass-riesz solve), so the +N CG path on a TET analytic Gram defaults to the PRECISION-PRESERVING
-fast build: `near_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs = a low-order
-double-quadrature of 1/r, degree-2 4-pt tet / 3-pt tri, O((size/r)^4)).  This REPRODUCES the all-analytic
-Gram (uniform sphere transverse 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x faster build
-(cube N=8: 47 -> 10 s, same 25 iters).  The cheap centroid-monopole far (`far_quad=0`) is equally fast but
-leaks ~0.12% transverse (> the 1e-3 golden) -- so it is never defaulted; the low-quad far is what makes the
-fast build lossless.  GMRES form-1 / nonlinear / H-LU, the polytope (hex/wedge) Gram (no far_quad), and the
-Gauss backend keep the exact `near_factor=1e30` / `far_quad=0`.  An explicit `near_factor` / `far_quad`
-always wins (pass `near_factor=1e30` to force the all-analytic Gram).
+~0.3 s mass-riesz solve), so the +N CG path on the analytic Gram (TET and polytope HEX/WEDGE) defaults to
+the PRECISION-PRESERVING fast build: `near_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs
+= a low-order double-quadrature of 1/r, O((size/r)^4) -- degree-2 4-pt tet / 3-pt tri, or, for hex/wedge,
+the same degree-2 rule on the centroid-fan sub-tets / sub-triangles).  This REPRODUCES the all-analytic Gram
+(uniform sphere transverse 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x faster build (cube N=8: 47 ->
+10 s, same 25 iters).  The cheap centroid-monopole far (`far_quad=0`) is equally fast but leaks ~0.12%
+transverse (> the 1e-3 golden) -- so it is never defaulted; the low-quad far is what makes the fast build
+lossless.  GMRES form-1 / nonlinear / H-LU and the Gauss backend keep the exact `near_factor=1e30` /
+`far_quad=0`.  An explicit `near_factor` / `far_quad` always wins (pass `near_factor=1e30` to force the
+all-analytic Gram).
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
@@ -107,8 +108,9 @@ _GRAM_BACKENDS = {"analytic", "gauss"}
 def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs, far_quad=0):
     """Build the C++ charge-Gram H-matrix for the fallback / nonlinear demag path.
 
-    far_quad (tet/tri only): the FAR evaluation when near_factor < inf -- 0 = centroid-monopole, >0 = the
-    precision-preserving low-order double-quad of 1/r (reproduces the all-analytic Gram at ~monopole cost)."""
+    far_quad (analytic mode): the FAR evaluation when near_factor < inf -- 0 = centroid-monopole, >0 = the
+    precision-preserving low-order double-quad of 1/r (tet/tri directly, polytope via centroid-fan
+    sub-tets/sub-tris; reproduces the all-analytic Gram at ~monopole cost)."""
     if all_tet:
         return _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
                                       n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
@@ -122,7 +124,7 @@ def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks
         face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
         face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
         n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta, near_factor=near_factor,
-        image_masks=image_masks, image_signs=image_signs)
+        image_masks=image_masks, image_signs=image_signs, far_quad=int(far_quad))
 
 
 def _tet_gauss_point_cloud(d):
@@ -399,17 +401,17 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     cg_path = uniform_linear and linear_solver in ("auto", "cpp-cg")
     eff_gram_eps = gram_eps if gram_eps is not None else (1e-12 if cg_path else 1e-10)
     # Gram-BUILD near/far split.  The build (per-pair analytic quadrature) dominates the cost (cube N=8: 47s
-    # vs a 0.3s mass-riesz solve).  For the +N CG path on a TET analytic Gram we default to the
-    # PRECISION-PRESERVING fast build: near_factor=2 (near=analytic) + far_quad=4 (far = a low-order
-    # double-quadrature of 1/r, O((size/r)^4)).  This reproduces the all-analytic Gram (sphere transverse
-    # 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x faster build (47->10s) -- UNLIKE the bare
-    # centroid-monopole far (far_quad=0), which is equally fast but leaks ~0.12% transverse (> the 1e-3
-    # golden), so monopole is never defaulted.  GMRES form-1 / nonlinear / H-LU, the polytope (hex/wedge)
-    # ctor (no far_quad), and the Gauss backend keep the exact near_factor=1e30 / far_quad=0.  An explicit
-    # near_factor or far_quad always wins.
-    cg_tet_analytic = cg_path and all_tet and gram_backend == "analytic"
-    eff_near_factor = near_factor if near_factor is not None else (2.0 if cg_tet_analytic else 1e30)
-    eff_far_quad = far_quad if far_quad is not None else (4 if cg_tet_analytic else 0)
+    # vs a 0.3s mass-riesz solve).  For the +N CG path on the analytic Gram (TET and polytope HEX/WEDGE) we
+    # default to the PRECISION-PRESERVING fast build: near_factor=2 (near=analytic) + far_quad=4 (far = a
+    # low-order double-quadrature of 1/r, O((size/r)^4), on the tet / sub-tet+sub-tri rules).  This reproduces
+    # the all-analytic Gram (sphere transverse 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x faster
+    # build (47->10s) -- UNLIKE the bare centroid-monopole far (far_quad=0), which is equally fast but leaks
+    # ~0.12% transverse (> the 1e-3 golden), so monopole is never defaulted.  GMRES form-1 / nonlinear /
+    # H-LU and the Gauss backend keep the exact near_factor=1e30 / far_quad=0.  An explicit near_factor or
+    # far_quad always wins.
+    cg_analytic = cg_path and gram_backend == "analytic"
+    eff_near_factor = near_factor if near_factor is not None else (2.0 if cg_analytic else 1e30)
+    eff_far_quad = far_quad if far_quad is not None else (4 if cg_analytic else 0)
     if gram_backend == "gauss" and not uniform_linear:
         raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
                          "uniform linear mu_r solves")
