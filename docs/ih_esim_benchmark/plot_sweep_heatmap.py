@@ -20,7 +20,7 @@ Each render self-verifies with check_min_font (no glyph below 9 pt at
 the embed scale) and, where a legend exists, check_legend_overlap.
 
 Usage:
-  python examples/ih_esim_benchmark/plot_sweep_heatmap.py [SWEEP_DIR]
+  python docs/ih_esim_benchmark/plot_sweep_heatmap.py [SWEEP_DIR]
 """
 import sys
 import json
@@ -33,14 +33,14 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.cm import ScalarMappable
-from mcp_server_document.graph.tools import (
+from radia_mcp.figure import (
     apply_lab_style, lab_savefig, check_legend_overlap, check_min_font,
 )
 
 HERE = Path(__file__).resolve().parent
 # Data Persistence Policy: read the committed sweep data next to this
 # script by default, not a transient C:/temp dir.
-DEFAULT_DIR = HERE / "sweep_data"
+DEFAULT_DIR = HERE / "sweep_data_dense"
 
 MIN_PT = 9.0
 # Binding embed scale = LaTeX \includegraphics width / figure render width.

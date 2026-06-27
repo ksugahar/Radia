@@ -15,11 +15,11 @@ of the validation hierarchy.
 NOTE: this is a *qualitative* check between two analytical limits.
 It does NOT validate the cell solver against an independent nonlinear
 reference (the Stoll 1974 / Lavers-Biringer 1985 envelopes apply
-only to 1-D geometries with uniform H_t; the IH workpiece has 3-D
-geometry and 94x spatial H_t contrast).
+only to 1-D geometries with uniform H_t; the IH workpiece has a
+three-dimensional, spatially non-uniform tangential field).
 
 Usage:
-    python examples/ih_esim_benchmark/plot_cell_envelope.py
+    python docs/ih_esim_benchmark/plot_cell_envelope.py
 
 Outputs:
     cell_envelope.png            (figure)
@@ -35,7 +35,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.special import iv as bessel_iv
 
-from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+from radia_mcp.figure import apply_lab_style, lab_savefig
 
 # Add radia src to path so this works without `pip install`
 HERE = Path(__file__).parent.resolve()

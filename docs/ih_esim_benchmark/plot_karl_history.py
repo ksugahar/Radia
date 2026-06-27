@@ -20,7 +20,7 @@ Use this to distinguish two failure modes:
        max_iter cap as the per-DOF noise floor.
 
 Usage:
-    python examples/ih_esim_benchmark/plot_karl_history.py <RESULT.json>
+    python docs/ih_esim_benchmark/plot_karl_history.py <RESULT.json>
                                                             [<OUTPUT.png>]
 
 If <OUTPUT.png> is omitted the figure is saved next to the JSON as
@@ -34,7 +34,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from mcp_server_document.graph.tools import apply_lab_style, lab_savefig
+from radia_mcp.figure import apply_lab_style, lab_savefig
 
 
 def main():

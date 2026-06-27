@@ -8,16 +8,16 @@ clean `pip install radia[cubit]` checkout.
 
 | Script | What it does | Validation tier |
 |---|---|---|
-| [`examples/ih_esim_benchmark/analytical_bessel_baseline.py`](../../examples/ih_esim_benchmark/analytical_bessel_baseline.py) | Compares the 1-D cell solver against the closed-form Bessel $I_0/I_1$ reference for a Cu cylinder with imposed $\mu_r{=}100$, $\xi\!\in\![4,140]$.  Publication-ready Table I. | **(i)** Bessel linear-$\mu$ |
-| [`examples/ih_esim_benchmark/plot_cell_envelope.py`](../../examples/ih_esim_benchmark/plot_cell_envelope.py) | Sweeps the cell solver across $|H_t|\!\in\![1,10^5]$ A/m at 50 kHz on the IH benchmark steel; overlays low-H Bessel and high-H thin-skin asymptotes; highlights the IH headline $|H_t|$ band.  Publication-ready Fig. 1. | **(ii)** Nonlinear envelope |
+| [`docs/ih_esim_benchmark/analytical_bessel_baseline.py`](../ih_esim_benchmark/analytical_bessel_baseline.py) | Compares the 1-D cell solver against the closed-form Bessel $I_0/I_1$ reference for a Cu cylinder with imposed $\mu_r{=}100$, $\xi\!\in\![4,140]$.  Publication-ready Table I. | **(i)** Bessel linear-$\mu$ |
+| [`docs/ih_esim_benchmark/plot_cell_envelope.py`](../ih_esim_benchmark/plot_cell_envelope.py) | Sweeps the cell solver across $|H_t|\!\in\![1,10^5]$ A/m at 50 kHz on the IH benchmark steel; overlays low-H Bessel and high-H thin-skin asymptotes; highlights the IH headline $|H_t|$ band.  Publication-ready Fig. 1. | **(ii)** Nonlinear envelope |
 
 ## End-to-end IH workpiece
 
 | Script | What it does | Notes |
 |---|---|---|
-| [`examples/ih_esim_benchmark/benchmark.py`](../../examples/ih_esim_benchmark/benchmark.py) | Drives the 3-path (PEEC-BEM / FEM-Kelvin / FEM-coilmesh) Karl benchmark at 10/50/100/500 kHz.  Emits `results.json` and `benchmark_plot.png`. | Validation tier **(iv)** consistency table |
-| [`examples/ih_esim_benchmark/plot_zs_per_dof_map.py`](../../examples/ih_esim_benchmark/plot_zs_per_dof_map.py) | 3-panel side-wall map of per-DOF $\mathrm{Re}\,Z_s$, $\mathrm{Im}\,Z_s$, $|H_t|$ from a `--esim-per-panel` JSON.  Publication-ready Fig. 2 (hotspot pattern). | Requires `esim_per_panel_H_t` array (radia $\geq$ 4.55.x) |
-| [`examples/ih_esim_benchmark/plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py) | Karl-iteration convergence diagnostic.  3-panel plot of $dZ$ (log), $\|Z_s\|$ with per-DOF min/max band, and $\|H_t\|$ per iteration.  Accepts both scalar- and per-panel-Karl JSONs.  Use to distinguish *convergence*, *plateau-at-max-iter* and *divergence* (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 decision table). | Diagnostic / triage |
+| [`docs/ih_esim_benchmark/benchmark.py`](../ih_esim_benchmark/benchmark.py) | Drives the 3-path (PEEC-BEM / FEM-Kelvin / FEM-coilmesh) Karl benchmark at 10/50/100/500 kHz.  Emits `results.json` and `benchmark_plot.png`. | Validation tier **(iv)** consistency table |
+| [`docs/ih_esim_benchmark/plot_zs_per_dof_map.py`](../ih_esim_benchmark/plot_zs_per_dof_map.py) | 3-panel side-wall map of per-DOF $\mathrm{Re}\,Z_s$, $\mathrm{Im}\,Z_s$, $|H_t|$ from a `--esim-per-panel` JSON.  Publication-ready Fig. 2 (hotspot pattern). | Requires `esim_per_panel_H_t` array (radia $\geq$ 4.55.x) |
+| [`docs/ih_esim_benchmark/plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py) | Karl-iteration convergence diagnostic.  3-panel plot of $dZ$ (log), $\|Z_s\|$ with per-DOF min/max band, and $\|H_t\|$ per iteration.  Accepts both scalar- and per-panel-Karl JSONs.  Use to distinguish *convergence*, *plateau-at-max-iter* and *divergence* (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 decision table). | Diagnostic / triage |
 | [`examples/induction_heating/esim_demo.py`](../../examples/induction_heating/esim_demo.py) | Minimal ESIM demo on a block workpiece; pedagogical. | Tutorial entry point |
 | [`examples/induction_heating/esim_induction_heating_demo.py`](../../examples/induction_heating/esim_induction_heating_demo.py) | Spiral-coil + ESIM workpiece coupled solver demo with end-to-end Karl iteration. | Tutorial follow-up |
 | [`examples/induction_heating/bem_reference/`](../../examples/induction_heating/bem_reference/) | Reference BEM solver modules retained for research cross-check. | Research |
@@ -36,7 +36,7 @@ is reproduced by these three commands in sequence:
 
 ```bash
 # 1) Cell-solver linear-mu Bessel validation (Table I)
-python examples/ih_esim_benchmark/analytical_bessel_baseline.py
+python docs/ih_esim_benchmark/analytical_bessel_baseline.py
 
 # 2) Per-element + scalar Karl runs at 50 kHz / 100 A
 python src/radia/panels/calc_inductance.py \
@@ -53,12 +53,12 @@ python src/radia/panels/calc_inductance.py \
 # (drop --esim-per-panel for the scalar comparator)
 
 # 3) Visualisation (Fig. 2 of the paper)
-python examples/ih_esim_benchmark/plot_zs_per_dof_map.py \
+python docs/ih_esim_benchmark/plot_zs_per_dof_map.py \
     C:/temp/I100_per_panel.json
 ```
 
 For the full numerical results JSON used in the paper see
-[`examples/ih_esim_benchmark/results.json`](../../examples/ih_esim_benchmark/results.json).
+[`docs/ih_esim_benchmark/results.json`](../ih_esim_benchmark/results.json).
 
 ## Cross-references
 

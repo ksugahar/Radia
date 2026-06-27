@@ -243,14 +243,14 @@ The IGTE 2026 digest reports:
 
 > For a steel cylinder driven at 50 kHz, `I_port = 100 A` (through
 > the BH knee), the per-element scalar BIE-SIBC reports
-> `P_wp = 45.4 W`, **48 % above** the scalar-Z_s formulation's
-> `30.6 W`, because surface `|H_t|` varies 12x across the workpiece
-> and local `|Z_s|` varies 3.3x.
+> `P_wp = 18.75 W`, **38.5 % below** the scalar-Z_s formulation's
+> `30.51 W`, because local saturation reduces `Z_s` at hot-spot DOFs
+> that the uniform scalar model averages away.
 
-This 48 % gap is **independent of the workpiece-formulation choice**:
-the same per-element vs scalar-Z_s comparison done on path C or D
-would give the same numerical ratio (within sub-1 % path-to-path
-agreement at convergence).  But:
+This gap is the dense-sweep source-of-truth value for the digest
+representative cell.  Similar per-element vs scalar-Z_s comparisons on
+path C or D are useful cross-checks, but the digest headline should cite
+the committed 108-case scalar-BIE sweep.  The formulation argument remains:
 
 - Path A (scalar BIE) makes per-element Z_s the **natural row-wise
   scaling** of an existing BIE matrix — 3-line code change in the
@@ -327,4 +327,4 @@ benchmarked against**.
 
 ---
 
-**Document version**: 2026-05-18 (radia v4.55.3+).
+**Document version**: 2026-05-30 (radia v4.67.0+ dense-sweep baseline).

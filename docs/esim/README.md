@@ -19,7 +19,7 @@ on the reader's goal:
 | ... understand the code architecture / Karl loop internals | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) |
 | ... see numerical validation tables | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) |
 | ... understand the honest limits of ESIM validation (and why) | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 1b |
-| ... diagnose a Karl loop that didn't converge | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 + [`plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py) |
+| ... diagnose a Karl loop that didn't converge | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 + [`plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py) |
 | ... understand WHY this combination of choices (the publication argument) | [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) |
 | ... diagnose the PEEC vs BEM-A coil-R discrepancy | [`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) |
 | ... see the slow STEP-to-filament path analysis | [`PEEC_PERFORMANCE_AND_R_ANALYSIS.md`](PEEC_PERFORMANCE_AND_R_ANALYSIS.md) |
@@ -52,11 +52,11 @@ on the reader's goal:
 ### Headline numerical result
 
 For steel cylinder at 50 kHz, I_port = 100 A driven through the BH
-knee: **per-element ESIM reports P_wp = 45.4 W vs scalar's 30.6 W
-(+48 %)** because |H_t| varies 12× across the surface and local
-|Z_s| varies 3.3×.
+knee: **per-DOF ESIM reports P_wp = 18.75 W vs scalar uniform ESIM's
+30.51 W (-38.5 %)** because local saturation changes the surface
+impedance at hot-spot DOFs that the uniform model averages away.
 
-Reproduces from `radia >= 4.55.3` via `calc_inductance.py
+Reproduces from `radia >= 4.67.0` via `calc_inductance.py
 --esim-per-panel`.  Full reproducer in [§6b of CROSS_VALIDATION.md](CROSS_VALIDATION.md).
 
 ### MCP access
@@ -72,11 +72,11 @@ The MCP server `mcp-server-ih` exposes this knowledge via the
 
 - [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb) — research WIP (LAB-only, gitignored).
 - [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb) — wide-band nonlocal extension roadmap (deferred).
-- [`examples/ih_esim_benchmark/`](../../examples/ih_esim_benchmark/) — benchmark scripts producing `results.json`.
+- [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/) — benchmark scripts producing `results.json`.
 - [`examples/induction_heating/`](../../examples/induction_heating/) — ESIM demo scripts.
 - [`src/radia/esim_cell_problem.py`](../../src/radia/esim_cell_problem.py) — cell-problem solver source.
 - [`src/radia/panels/calc_inductance.py`](../../src/radia/panels/calc_inductance.py) — scalar BIE-SIBC path (path A in [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md)).
 - [`src/radia/panels/calc_fem_kelvin.py`](../../src/radia/panels/calc_fem_kelvin.py) — FEM-Kelvin path (path C).
 - [`src/radia/panels/calc_fem_coilmesh.py`](../../src/radia/panels/calc_fem_coilmesh.py) — FEM-coilmesh path (path D).
 
-**Document version**: 2026-05-18 (radia v4.55.3+).
+**Document version**: 2026-05-30 (radia v4.67.0+ dense-sweep baseline).
