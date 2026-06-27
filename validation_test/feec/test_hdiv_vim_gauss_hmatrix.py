@@ -45,3 +45,20 @@ def test_gauss_point_hmatrix_linear_sphere_matches_analytic_chargegram():
     assert rel_m < 5e-3
     assert abs(got["demag"] - ref["demag"]) < 2e-3
 
+
+def test_analytic_entry_oracle_build_false_matches_built_entries():
+    """The geometry-only (build=False) analytic charge-Gram is an exact ENTRY ORACLE: .entry() agrees
+    bit-for-bit with the fully built analytic H-matrix.  This is the contract the Gauss near correction
+    relies on -- it samples exact analytic near entries WITHOUT paying the full H-matrix build."""
+    mesh = _sphere()
+    with ng.TaskManager():
+        d = build_demag(mesh)
+    kw = dict(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
+              n_el=int(d["n_el"]), near_factor=1e30)
+    built = _rp._ChargeGramHMatrix(**kw, build=True)
+    oracle = _rp._ChargeGramHMatrix(**kw, build=False)
+    n = int(d["n_charge"])
+    probe = [(0, 0), (0, 1), (1, 0), (n - 1, n - 1), (0, n - 1), (n // 2, n // 3)]
+    for a, b in probe:
+        assert oracle.entry(a, b) == built.entry(a, b)
+
