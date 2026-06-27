@@ -1,7 +1,7 @@
 """HDiv-type VIM (Volume Integral Method) demag operator -- knowledge module.
 
 SHOWCASE NOTEBOOK: docs/hdiv_vim/hdiv_curved_showcase.ipynb -- curved-geometry accuracy win: stray-field ~30-40x, nonlinear ~23x, beats shipped solver.
-METHOD NOTEBOOK: docs/hdiv_vim/polynomial_charge_field.ipynb -- the analytic polynomial charge-field kernel (degree 0/1/2 + general assembler, flat-tet/affine-hex/curved-surface) derivation, executed: closed forms nest exactly + match independent quadrature / -grad(PhiTet) to machine precision. (Converted from the former POLYNOMIAL_CHARGE_FIELD.md per the doc-format policy.)
+SHOWCASE NOTEBOOK: docs/hdiv_vim/polynomial_charge_field.ipynb -- the order>=2 charge-field kernel (H = -grad phi_M from rho=-div M + sigma=M.n), executed: degree-0/1/2 closed forms + arbitrary-degree assembler + affine-hex + curved tri/tet, each validated live vs Gauss/Duffy to machine precision (drop-rho = 90-230% error; uniform sphere -> -M/3).
 
 The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative/complement to the canonical multipole-moment MMM MSC
 kernel: a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving

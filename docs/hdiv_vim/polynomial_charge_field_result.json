@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "generated_at_utc": "2026-06-27T02:45:19Z",
   "notebook": "docs/hdiv_vim/polynomial_charge_field.ipynb",
-  "notebook_sha256": "6151500590e685cb1444d173db25e5550c9f907d67928bb816751e19284e428a",
+  "notebook_sha256": "54c0dd83382132e2479c966bf880413d1f95adbe99cd656665c5adc002a9c6cd",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,11 +12,11 @@
   },
   "summary": {
     "path": "docs/hdiv_vim/polynomial_charge_field.ipynb",
-    "cells": 3,
-    "code_cells": 1,
-    "executed_code_cells": 1,
-    "code_cells_with_outputs": 1,
-    "output_count": 1,
+    "cells": 32,
+    "code_cells": 14,
+    "executed_code_cells": 14,
+    "code_cells_with_outputs": 14,
+    "output_count": 33,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -26,17 +26,377 @@
   },
   "outputs": [
     {
-      "cell_index": 2,
+      "cell_index": 5,
       "execution_count": 1,
-      "source_sha256": "75b2c37cc71ee3959f160b7f62e3046cacadd1a7238d5f14cb96aa090cd181c3",
-      "source_preview": "import numpy as np\nfrom numpy.polynomial.legendre import leggauss\nimport radia.vim as v\n\n# geometry: a flat triangle (z=0) and a unit tet; external (non-singular) observation point\nP     = [[0., 0, 0], [1, 0, 0], [0, 1, 0]]\nverts = [[0., 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]]\nr     = [2.0, 2.0, 2.0]\nZ3    = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]\n\n# (1) constant-sigma triangle field vs an INDEPENDENT Gauss (Duffy) quadrature\nPa, ra = np.array(P), np.array(r)\narea = 0.5 * np.linalg.norm(np.cross(Pa[1] - Pa[0], Pa[2] - Pa[0]))\nxs, ws = leggauss(24); u = (xs + 1) / 2; wu = ws / 2\nacc = np.zeros(3)\nfor ui, wi in zip(u, wu):\n    for vj, wj in zip(u, wu):\n        l1, l2 = ui, vj * (1 - ui)\n        rp = (1 - l1 - l2) * Pa[0] + l1 * Pa[1] + l2 * Pa[2]\n        dd = ra - rp\n        acc += wi * wj * (1 - ui) * dd / np.linalg.norm(dd) ** 3\nacc *= 2 * area\nker = np.array(v.flat_triangle_charge_field(P, r))\nprint(f\"(1) flat_triangle_charge_field vs independent Gauss : rel err = \"\n      f\"{np.linalg.norm(",
+      "source_sha256": "b31649dc9193482a03872318f76aa95b5b96243f818058f7c93cf8917481c0b0",
+      "source_preview": "import numpy as np\nfrom math import pi\nimport radia._radia_pybind as rp\nfrom radia.vim import (\n    reconstruct_field_polynomial, flat_triangle_charge_field,\n    tet_self_volume_field, triangle_potential_const, triangle_potential_moment,\n    tet_newtonian_potential, tet_volume_field_linear, linear_triangle_charge_field,\n    tet_volume_field_quadratic, quadratic_triangle_charge_field,\n    polynomial_triangle_charge_field, tet_volume_field_polynomial,\n    hex_volume_field_linear, hex_volume_field_quadratic,\n    make_t6_surface_map, curved_triangle_charge_field,\n    make_t10_tet_map, curved_tet_volume_field, assemble_demag_field,\n)\n\n# canonical unit tet, a symmetric quadratic coefficient matrix Q/S\nTET = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float)\nQSYM = np.array([[0.3, 0.1, -0.2], [0.1, -0.4, 0.15], [-0.2, 0.15, 0.25]])\n\n\ndef rel(a, b):\n    a = np.asarray(a, float); b = np.asarray(b, float)\n    return np.linalg.norm(a - b) / np.linalg.norm(b)\n\n\ndef tri_field_gauss(P, r,",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 601,
-          "text_sha256": "02b44579252059bfe1b932dd4d52b1e1fb9d0a9b8174717d018ffc942afe9d75",
-          "text_preview": "(1) flat_triangle_charge_field vs independent Gauss : rel err = 4.10e-15\n(2) tet_volume_field_linear(const) vs -grad(PhiTet) : rel err = 1.02e-09\n(3a) linear_triangle(s=0)       == flat_triangle      : max|d| = 0.0e+00\n(3b) quadratic_triangle(S=0)    == linear(s=0)         : max|d| = 1.7e-16\n(3c) tet_volume_quadratic(Q=0)  == tet_volume_linear   : max|d| = 0.0e+00\n(4) polynomial_triangle(deg0, const) == flat_triangle  : max|d| = 1.7e-16\n\nAll kernels executed live against radia.vim: the closed forms nest exactly and match independent quadrature / the -grad(PhiTet) identity to machine precision.\n",
+          "text_chars": 58,
+          "text_sha256": "16dfc684f139a3dbfe2015c0d39a7ac60b0fe69153d391a2dd1059244f787e67",
+          "text_preview": "setup ready; radia._radia_pybind has the C++ probes: True\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 2,
+      "source_sha256": "a9eeca78911d9985c53b342988f14ba6cbb663752ad92eacf66d17c1cbe4e826",
+      "source_preview": "import ngsolve as ng\nfrom netgen.csg import CSGeometry, Sphere, Pnt\n\n\ndef sphere_mesh(h):\n    g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0))\n    with ng.TaskManager():\n        return ng.Mesh(g.GenerateMesh(maxh=h))\n\n\ndef H_dipole(r, m):\n    rn = np.linalg.norm(r); rh = r / rn; mv = np.array([0.0, 0.0, m])\n    return (1.0 / (4 * pi)) * (3.0 * np.dot(mv, rh) * rh - mv) / rn ** 3\n\n\n# --- uniform M sphere: center -M/3 and external dipole ---\nMval = 5.0e5\nmesh = sphere_mesh(0.4)\nfes = ng.HDiv(mesh, order=1); gf = ng.GridFunction(fes)\nwith ng.TaskManager():\n    gf.Set(ng.CoefficientFunction((0, 0, Mval)))\n    Hc = reconstruct_field_polynomial(mesh, gf, np.array([[0.0, 0.0, 0.0]]), quad=4)\n    obs = np.array([[0, 0, 2.0], [0, 0, 3.0], [2.0, 0, 0.0]], float)\n    Hext = reconstruct_field_polynomial(mesh, gf, obs, quad=4)\n\nprint(\"uniform-M sphere, ne =\", mesh.GetNE(ng.VOL))\nprint(f\"  center H_z = {Hc[0,2]:.5e}   -M/3 = {-Mval/3:.5e}   rel = {abs(Hc[0,2]+Mval/3)/(Mval/3):.2e}\")\nm_dip = Mval *",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 340,
+          "text_sha256": "953e1bad771d585e2b4c8d0590b3ffadfc1be73966d83b6ad219e4ab0cfdc85c",
+          "text_preview": "uniform-M sphere, ne = 260\n  center H_z = -1.66461e+05   -M/3 = -1.66667e+05   rel = 1.23e-03\n  external r=[0.0, 0.0, 2.0]  vs dipole  rel = 5.53e-02  (flat-mesh faceting ~6%)\n  external r=[0.0, 0.0, 3.0]  vs dipole  rel = 5.59e-02  (flat-mesh faceting ~6%)\n  external r=[2.0, 0.0, 0.0]  vs dipole  rel = 5.87e-02  (flat-mesh faceting ~6%)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 3,
+      "source_sha256": "31a5f07671882cd3b2a3ccaf9f0d334af026e6aef78b905a5be005c22fb9baf9",
+      "source_preview": "# --- linear M (div M = M0 != 0): the volume charge is ESSENTIAL ---\nM0 = 3.0e5\nobs2 = np.array([[0, 0, 2.5], [2.5, 0, 0.0], [1.5, 1.5, 1.0]], float)\n\n\ndef linM_field(h, drop_rho):\n    me = sphere_mesh(h); fe = ng.HDiv(me, order=1); g = ng.GridFunction(fe)\n    with ng.TaskManager():\n        g.Set(ng.CoefficientFunction((0, 0, M0 * (1 + ng.z))))\n        return reconstruct_field_polynomial(me, g, obs2, quad=4, include_volume=not drop_rho)\n\n\nHfull_c = linM_field(0.5, drop_rho=False)   # coarse, full kernel\nHdrop_c = linM_field(0.5, drop_rho=True)    # coarse, surface-only (drops rho)\nHfull_f = linM_field(0.3, drop_rho=False)   # fine, full kernel (reference)\nprint(\"linear-M sphere (div M = M0): full kernel coarse->fine vs surface-only (drop rho)\")\nfor i in range(len(obs2)):\n    rel_cf = rel(Hfull_c[i], Hfull_f[i])     # full kernel self-convergence\n    rel_drop = rel(Hdrop_c[i], Hfull_f[i])   # error from dropping the volume charge\n    print(f\"  obs {i}: full coarse->fine = {rel_cf:.2e}  ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 267,
+          "text_sha256": "2e12314cd0eb7c3e53f74c14f1e85788f5779b61a37867fd9174c2825ed98f96",
+          "text_preview": "linear-M sphere (div M = M0): full kernel coarse->fine vs surface-only (drop rho)\n  obs 0: full coarse->fine = 5.35e-02   drop-rho error = 91%\n  obs 1: full coarse->fine = 4.94e-02   drop-rho error = 233%\n  obs 2: full coarse->fine = 5.01e-02   drop-rho error = 166%\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 4,
+      "source_sha256": "2ed293f2d31de94d2a55552763dc9490a29abb1cbffb623cbb216e5b62572c9e",
+      "source_preview": "# Kernel B: analytic uniform-triangle field == fine Gauss, to machine precision\nP = TET[[0, 1, 2]]\nprint(\"Kernel B -- flat_triangle_charge_field vs fine Gauss (uniform sigma):\")\nfor r in [np.array([0.3, 0.3, 0.5]), np.array([0.3, 0.3, -0.5]), np.array([1.0, 1.0, 0.3])]:\n    print(f\"  r={r.tolist()}  rel = {rel(flat_triangle_charge_field(P, r), tri_field_gauss(P, r)):.2e}\")\n\n# Kernel A: spherical ray-trace (self volume charge) == the closed form it converges to\nprint(\"Kernel A -- tet_self_volume_field (spherical) vs the closed form (interior r):\")\ngg = np.array([0.7, -0.3, 0.5]); rho0 = 0.4\nr = np.array([0.25, 0.25, 0.25])\nFclosed = tet_volume_field_linear(TET, r, rho0, gg)\nFsph = 4 * np.pi * tet_self_volume_field(TET, r, lambda p: rho0 + float(np.dot(gg, p)),\n                                         nth=48, nph=96, ns=10)\nprint(f\"  r={r.tolist()}  rel = {rel(Fsph, Fclosed):.2e}  (spherical method's own ~1e-3 accuracy)\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 258,
+          "text_sha256": "ef5a21904d9f59ac09d6232d1d31a4ef323b478086ac4427a6780bc089cbc220",
+          "text_preview": "Kernel B -- flat_triangle_charge_field vs fine Gauss (uniform sigma):\n  r=[0.3, 0.3, 0.5]  rel = 6.34e-16\n  r=[0.3, 0.3, -0.5]  rel = 6.34e-16\n  r=[1.0, 1.0, 0.3]  rel = 2.36e-15\nKernel A -- tet_self_volume_field (spherical) vs the closed form (interior r):\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 80,
+          "text_sha256": "a04c2a6309cc40011331409d1b7604f1f5e5cf3d4b527cf5ec02c680cfb8e85c",
+          "text_preview": "  r=[0.25, 0.25, 0.25]  rel = 2.52e-03  (spherical method's own ~1e-3 accuracy)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 5,
+      "source_sha256": "7ab0d495907b0a807fd2896afae146173a8ce81affe79678dc441c71a485c0d4",
+      "source_preview": "# constant rho: closed form == -grad(PhiTet) (two independent derivations)\nprint(\"tet_volume_field_linear (constant rho) vs -grad(PhiTet) [central FD]:\")\nd = 1e-5\nfor r in [np.array([0.25, 0.25, 0.25]), np.array([0.4, 0.3, 0.1]), np.array([2.0, 0.0, 0.0])]:\n    Fc = tet_volume_field_linear(TET, r, 1.0, np.zeros(3))\n    g = np.zeros(3)\n    for k in range(3):\n        rp_, rm_ = r.copy(), r.copy(); rp_[k] += d; rm_[k] -= d\n        g[k] = (tet_newtonian_potential(TET, rp_) - tet_newtonian_potential(TET, rm_)) / (2 * d)\n    print(f\"  r={r.tolist()}  rel = {rel(Fc, -g):.2e}\")\n\n# linear rho: closed form == far-tet Gauss to machine precision\nprint(\"tet_volume_field_linear (linear rho) vs far-tet Gauss:\")\nfor r in [np.array([2.0, 0, 0]), np.array([1.5, 1.5, 1.0]), np.array([-1.0, 0.5, 0.5])]:\n    Fc = tet_volume_field_linear(TET, r, rho0, gg)\n    Fg = tet_charge_gauss(TET, r, lambda p: rho0 + np.dot(gg, p), 24)\n    print(f\"  r={r.tolist()}  rel = {rel(Fc, Fg):.2e}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 236,
+          "text_sha256": "b4c0fd6d0671d6195bb51591d8954f6b4124f52787bc764ce94f5136bbc8f80f",
+          "text_preview": "tet_volume_field_linear (constant rho) vs -grad(PhiTet) [central FD]:\n  r=[0.25, 0.25, 0.25]  rel = 1.35e-09\n  r=[0.4, 0.3, 0.1]  rel = 3.90e-10\n  r=[2.0, 0.0, 0.0]  rel = 2.80e-10\ntet_volume_field_linear (linear rho) vs far-tet Gauss:\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 35,
+          "text_sha256": "3fadc94270a18b0030793866219231a5bd9683027b07036612dab0df6d3c0fbd",
+          "text_preview": "  r=[2.0, 0.0, 0.0]  rel = 3.31e-14",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1,
+          "text_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+          "text_preview": "\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 35,
+          "text_sha256": "7ef872a66b8968306ff34d8d03e116be28a4e64051f35bc97cd8528caa886b73",
+          "text_preview": "  r=[1.5, 1.5, 1.0]  rel = 1.72e-14",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 38,
+          "text_sha256": "e919e9242df1c15f4ea6d94f626b026730223f9a3e07dd35c8cdd8323a74f0e4",
+          "text_preview": "\n  r=[-1.0, 0.5, 0.5]  rel = 8.16e-15\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 14,
+      "execution_count": 6,
+      "source_sha256": "fb8b6ab155357591d31539b23a608020a8962616527f24d58ace5334a1cdc790",
+      "source_preview": "s = np.array([0.6, -0.4, 0.3]); sig0 = 0.5\nprint(\"linear_triangle_charge_field (linear sigma) vs off-plane Gauss:\")\nfor r in [np.array([0.3, 0.3, 0.7]), np.array([1.5, 0.5, 0.4]), np.array([-0.5, 0.4, 0.6])]:\n    Fc = linear_triangle_charge_field(P, r, sig0, s)\n    Fg = tri_charge_gauss(P, r, lambda p: sig0 + np.dot(s, p), 44)\n    print(f\"  r={r.tolist()}  rel = {rel(Fc, Fg):.2e}\")\n\n# s = 0 reproduces sigma0 * flat_triangle_charge_field bit-identically\nr = np.array([0.3, 0.3, 0.7])\nabs_diff = np.linalg.norm(linear_triangle_charge_field(P, r, sig0, np.zeros(3))\n                          - sig0 * flat_triangle_charge_field(P, r))\nprint(f\"s=0 reduction: ||linear(s=0) - sigma0*flat|| = {abs_diff:.2e}  (bit-identical)\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 246,
+          "text_sha256": "b43d23a5029c5a471542b4bd75319864d6aa93a697ee75e6aa7ffec1778901a5",
+          "text_preview": "linear_triangle_charge_field (linear sigma) vs off-plane Gauss:\n  r=[0.3, 0.3, 0.7]  rel = 2.60e-15\n  r=[1.5, 0.5, 0.4]  rel = 2.68e-15\n  r=[-0.5, 0.4, 0.6]  rel = 2.77e-15\ns=0 reduction: ||linear(s=0) - sigma0*flat|| = 0.00e+00  (bit-identical)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 16,
+      "execution_count": 7,
+      "source_sha256": "e14f2192e85b0ae8674a8ef14fc674283b4d6ebe8d8ef8a6182644ef8d88bd26",
+      "source_preview": "print(\"tet_volume_field_quadratic vs far-tet Gauss:\")\nfor r in [np.array([2.0, 0, 0]), np.array([1.5, 1.5, 1.0]), np.array([-1.0, 0.5, 0.5])]:\n    Fc = tet_volume_field_quadratic(TET, r, rho0, gg, QSYM)\n    Fg = tet_charge_gauss(TET, r, lambda p: rho0 + np.dot(gg, p) + p @ QSYM @ p, 26)\n    print(f\"  r={r.tolist()}  rel = {rel(Fc, Fg):.2e}\")\n\n# Q = 0 reduces to tet_volume_field_linear bit-identically\nr = np.array([0.25, 0.25, 0.25])\nad = np.linalg.norm(tet_volume_field_quadratic(TET, r, rho0, gg, np.zeros((3, 3)))\n                    - tet_volume_field_linear(TET, r, rho0, gg))\nprint(f\"Q=0 reduction: ||quadratic(Q=0) - linear|| = {ad:.2e}  (bit-identical)\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 45,
+          "text_sha256": "ac1ab8c6e1e9e4f2b500c35d535af078f9e84d4ae2a86581f3ca9797fb880b53",
+          "text_preview": "tet_volume_field_quadratic vs far-tet Gauss:\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 36,
+          "text_sha256": "bea36b8b1569cc4765905abfd78861ba0440b1b9c3171f06bf512e941a2f8a69",
+          "text_preview": "  r=[2.0, 0.0, 0.0]  rel = 4.13e-14\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 36,
+          "text_sha256": "6ce4776f942cc7aa634102be22f7b81f371d9844338e1b01148ffba30996e980",
+          "text_preview": "  r=[1.5, 1.5, 1.0]  rel = 2.17e-14\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 108,
+          "text_sha256": "a9b3ea24ce050c56c9ab5f7336f5fdea9e60b1e23390088f7a00574f465d9d9c",
+          "text_preview": "  r=[-1.0, 0.5, 0.5]  rel = 1.19e-14\nQ=0 reduction: ||quadratic(Q=0) - linear|| = 0.00e+00  (bit-identical)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 18,
+      "execution_count": 8,
+      "source_sha256": "a8b59ee199db2a98e40744e1a0e78902310b3698578fdcb5ef745a36ad84d1fa",
+      "source_preview": "print(\"quadratic_triangle_charge_field vs off-plane Gauss:\")\nfor r in [np.array([0.3, 0.3, 0.7]), np.array([1.5, 0.5, 0.4]), np.array([-0.5, 0.4, 0.6])]:\n    Fc = quadratic_triangle_charge_field(P, r, sig0, s, QSYM)\n    Fg = tri_charge_gauss(P, r, lambda p: sig0 + np.dot(s, p) + p @ QSYM @ p, 46)\n    print(f\"  r={r.tolist()}  rel = {rel(Fc, Fg):.2e}\")\n\n# S = 0 matches linear_triangle_charge_field (two independent derivations)\nr = np.array([0.3, 0.3, 0.7])\nprint(f\"S=0 reduction: quadratic(S=0) vs linear  rel = \"\n      f\"{rel(quadratic_triangle_charge_field(P, r, sig0, s, np.zeros((3,3))), linear_triangle_charge_field(P, r, sig0, s)):.2e}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 217,
+          "text_sha256": "01c0c47b8a63e07d77eb9fe0557f32cf5f9243ea1951abda6c5cbb41a1c78d4c",
+          "text_preview": "quadratic_triangle_charge_field vs off-plane Gauss:\n  r=[0.3, 0.3, 0.7]  rel = 1.50e-15\n  r=[1.5, 0.5, 0.4]  rel = 3.91e-15\n  r=[-0.5, 0.4, 0.6]  rel = 3.72e-15\nS=0 reduction: quadratic(S=0) vs linear  rel = 1.33e-15\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 20,
+      "execution_count": 9,
+      "source_sha256": "bfda11a2f1e369cea34f98d750f66898845570205189e63d003f94ccd4c17243",
+      "source_preview": "# cubic surface charge vs Gauss\nrng = np.random.RandomState(3)\ncf = {(ax, ay, k - ax - ay): rng.randn()\n      for k in range(4) for ax in range(k + 1) for ay in range(k + 1 - ax)}\nsigc = lambda p: sum(c * p[0] ** ax * p[1] ** ay * p[2] ** az for (ax, ay, az), c in cf.items())\nprint(\"polynomial_triangle_charge_field (cubic) vs off-plane Gauss:\")\nfor r in [np.array([0.3, 0.3, 0.7]), np.array([1.5, 0.5, 0.4])]:\n    print(f\"  r={r.tolist()}  rel = {rel(polynomial_triangle_charge_field(P, r, sigc, 3), tri_charge_gauss(P, r, sigc, 52)):.2e}\")\n\n# general assembler at degree 2 == the closed form (two paths)\nsig2 = lambda p: sig0 + np.dot(s, p) + p @ QSYM @ p\nr = np.array([0.2, 0.2, 0.3])\nprint(f\"degree-2 general vs closed-form  rel = {rel(polynomial_triangle_charge_field(P, r, sig2, 2), quadratic_triangle_charge_field(P, r, sig0, s, QSYM)):.2e}\")\n\n# cubic volume charge vs Gauss\nrng2 = np.random.RandomState(4)\ncf3 = {(ax, ay, k - ax - ay): rng2.randn()\n       for k in range(4) for ax in range(k",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 97,
+          "text_sha256": "e7b92309d46a5026f9b4a36ef3d8822a1376fd309cd5a2aad0d4c4be35ed071d",
+          "text_preview": "polynomial_triangle_charge_field (cubic) vs off-plane Gauss:\n  r=[0.3, 0.3, 0.7]  rel = 2.47e-15\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 35,
+          "text_sha256": "c0bede2fabfc614719f51bbcfb31806f60516953a76686b7e989b5f153c2807c",
+          "text_preview": "  r=[1.5, 0.5, 0.4]  rel = 1.28e-14",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 103,
+          "text_sha256": "e59ea19b6a51c9b3cf5ad16f6831f266980b85a593330946470e960ed1f956bd",
+          "text_preview": "\ndegree-2 general vs closed-form  rel = 4.29e-16\ntet_volume_field_polynomial (cubic) vs far-tet Gauss:\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 36,
+          "text_sha256": "ce68ca58883641a0747004ee377b500c723a9c94b87962e5fc1a87c19d9c40bc",
+          "text_preview": "  r=[2.0, 0.0, 0.0]  rel = 2.42e-12\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 37,
+          "text_sha256": "2066b345b859a18476355f82e24586ddd5af92185f86294978badac62d62cb23",
+          "text_preview": "  r=[-1.0, 0.5, 0.5]  rel = 1.51e-13\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 22,
+      "execution_count": 10,
+      "source_sha256": "68dadbdb553ce64d47239fb5ed973b05a4871ec16d9a415f5aa6a59d29689f0c",
+      "source_preview": "Vt = P.ravel().tolist(); Vv = TET.ravel().tolist()\nQf = QSYM.ravel().tolist(); gl = gg.tolist(); sl = s.tolist()\nprint(\"C++ degree-1/2 kernels vs Python reference (machine precision):\")\nfor r in [np.array([0.3, 0.3, 0.7]), np.array([1.5, 0.5, 0.4]), np.array([0.2, 0.2, 0.05])]:\n    rl = r.tolist()\n    e_lin = rel(rp._hdiv_lin_tri_field(Vt, rl, sig0, sl), linear_triangle_charge_field(P, r, sig0, s))\n    e_quad = rel(rp._hdiv_quad_tri_field(Vt, rl, sig0, sl, Qf), quadratic_triangle_charge_field(P, r, sig0, s, QSYM))\n    print(f\"  r={rl}  LinTriField rel={e_lin:.2e}   QuadTriField rel={e_quad:.2e}\")\nfor r in [np.array([0.25, 0.25, 0.25]), np.array([2.0, 0, 0]), np.array([0.4, 0.3, 0.1])]:\n    rl = r.tolist()\n    e_vl = rel(rp._hdiv_tet_volfield_linear(Vv, rl, rho0, gl), tet_volume_field_linear(TET, r, rho0, gg))\n    e_vq = rel(rp._hdiv_tet_volfield_quadratic(Vv, rl, rho0, gl, Qf), tet_volume_field_quadratic(TET, r, rho0, gg, QSYM))\n    print(f\"  r={rl}  TetVolFieldLinear rel={e_vl:.2e}   ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 554,
+          "text_sha256": "e641078bd52248b969bcf2a833258904a34b2be0fda16b4c552fc60ac5ceda33",
+          "text_preview": "C++ degree-1/2 kernels vs Python reference (machine precision):\n  r=[0.3, 0.3, 0.7]  LinTriField rel=3.81e-16   QuadTriField rel=1.07e-15\n  r=[1.5, 0.5, 0.4]  LinTriField rel=5.41e-16   QuadTriField rel=1.04e-15\n  r=[0.2, 0.2, 0.05]  LinTriField rel=9.02e-17   QuadTriField rel=2.54e-16\n  r=[0.25, 0.25, 0.25]  TetVolFieldLinear rel=1.43e-15   TetVolFieldQuadratic rel=6.21e-16\n  r=[2.0, 0.0, 0.0]  TetVolFieldLinear rel=3.87e-14   TetVolFieldQuadratic rel=6.99e-14\n  r=[0.4, 0.3, 0.1]  TetVolFieldLinear rel=8.10e-16   TetVolFieldQuadratic rel=1.07e-15\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 24,
+      "execution_count": 11,
+      "source_sha256": "94df14a5372304a14f909bb8288a94b77e732de52ca401f99abab11dfd7e3b22",
+      "source_preview": "# NGSolve hex vertex order; 6-tet (Kuhn) decomposition sharing the v0-v6 diagonal\nHEX = np.array([[0,0,0],[0,0,1],[0,1,1],[0,1,0],[1,0,0],[1,0,1],[1,1,1],[1,1,0]], float)\npaths = [[0,4,5,6],[0,4,7,6],[0,3,7,6],[0,3,2,6],[0,1,2,6],[0,1,5,6]]\nprint(\"hex_volume_field_quadratic vs SUM of analytic tet fields (Kuhn decomposition):\")\nfor r in [np.array([2.0, 0.5, 0.5]), np.array([0.5, 0.5, 2.0]), np.array([-1.0, 0.5, 0.5])]:\n    hexQ = hex_volume_field_quadratic(HEX, r, rho0, gg, QSYM)\n    tetQ = sum(tet_volume_field_quadratic(HEX[p], r, rho0, gg, QSYM) for p in paths)\n    print(f\"  r={r.tolist()}  rel = {rel(hexQ, tetQ):.2e}\")\n\n# sheared affine parallelepiped (planar faces) vs a box-Gauss reference\nA = np.array([[1.0, 0.3, 0.1], [0.0, 1.2, 0.2], [0.0, 0.0, 0.9]])\nVp = (HEX @ A.T) + np.array([0.2, -0.1, 0.3])\n\n\ndef box_gauss(V8, r, rho_fn, nq=24):\n    xs, ws = np.polynomial.legendre.leggauss(nq); xs = 0.5 * (xs + 1); ws = 0.5 * ws\n    def hexmap(xi, eta, ze):\n        x0, x1, y0, y1, z0, z1 = ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 151,
+          "text_sha256": "b795e4b56e0bf884bd9c1d88b7c310ada91be3cfaa0feeb51215ab03b7013129",
+          "text_preview": "hex_volume_field_quadratic vs SUM of analytic tet fields (Kuhn decomposition):\n  r=[2.0, 0.5, 0.5]  rel = 1.09e-14\n  r=[0.5, 0.5, 2.0]  rel = 9.71e-15\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 124,
+          "text_sha256": "6827ea1968eb6230b9a0f19f17d3d4eaaa12d8f5099af1daefcd09d1caefd185",
+          "text_preview": "  r=[-1.0, 0.5, 0.5]  rel = 1.01e-15\nsheared affine hex vs box-Gauss (the ~1e-8 floor is the FD Jacobian in the reference):\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 36,
+          "text_sha256": "68c704cb490aa90fc5ec3eba34e1e1daedc345113605409c6249a6efb7df337d",
+          "text_preview": "  r=[3.0, 0.5, 0.5]  rel = 3.66e-11\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 36,
+          "text_sha256": "d89f6aa9db17764623ff5d4c047b2611f35341eb9876983a9e48663181317431",
+          "text_preview": "  r=[0.5, 3.0, 0.5]  rel = 3.51e-11\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 26,
+      "execution_count": 12,
+      "source_sha256": "70b66cc9d6ab133404b7744f2f8846f13a3fb66ee3e7c6e67d317563c5b45ae9",
+      "source_preview": "from radia.vim._field import _project_to_surface\n\n# zero-curvature T6 patch reproduces the analytic flat field\nP3 = TET[[0, 1, 2]]\nflat_nodes = np.array([P3[0], P3[1], P3[2], 0.5*(P3[0]+P3[1]), 0.5*(P3[1]+P3[2]), 0.5*(P3[2]+P3[0])])\nflatmap = make_t6_surface_map(flat_nodes)\nsigl = lambda p: 0.5 + 0.6 * p[0] - 0.4 * p[1]\nprint(\"curved_triangle_charge_field flat-limit vs the analytic flat field:\")\nfor r in [np.array([0.3, 0.3, 0.7]), np.array([1.5, 0.5, 0.4])]:\n    a = curved_triangle_charge_field(flatmap, r, sigl, nq=20)\n    b = linear_triangle_charge_field(P3, r, 0.5, np.array([0.6, -0.4, 0.0]))\n    print(f\"  r={r.tolist()}  rel = {rel(a, b):.2e}\")\n\n# curved patch: singularity subtraction converges to a Duffy-refined reference\nc = 0.15\nnodes = np.array([[0,0,0],[1,0,0],[0,1,0],[0.5,0,c],[0.5,0.5,c],[0,0.5,c]], float)\nsmap = make_t6_surface_map(nodes)\nsig = lambda p: 0.5 + 0.6 * p[0] - 0.4 * p[1] + 0.3 * p[2]\n\n\ndef curved_ref(surf_map, r, sigma_fn, nq=80):\n    r = np.asarray(r, float); ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 227,
+          "text_sha256": "2176773360b2812f08c2feab64c690dbcf80edc97e0f6961154119cc71ba1c0d",
+          "text_preview": "curved_triangle_charge_field flat-limit vs the analytic flat field:\n  r=[0.3, 0.3, 0.7]  rel = 7.64e-16\n  r=[1.5, 0.5, 0.4]  rel = 1.40e-15\ncurved patch (bow c=0.15): singularity subtraction (nq=20) vs Duffy reference (nq=80):\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 30,
+          "text_sha256": "9dd6734f2f234d11f1feedc941e212d977212499f018b9c389aeb9bf1746226b",
+          "text_preview": "  h=0.5 (far)  rel = 5.17e-11\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 63,
+          "text_sha256": "851a6738177df894bc02b2061b72f75974d1db1f3a0a105f4135cbb1a0011790",
+          "text_preview": "  h=0.205 (very near (surface bows to ~0.198))  rel = 2.40e-05\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 28,
+      "execution_count": 13,
+      "source_sha256": "c354947bec30e908da3968571209665aa645c72fc326ab4c0c3779604aea16f1",
+      "source_preview": "corners = np.array([[0, 0, 0], [1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], float)\nedge_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]\nmids = np.array([0.5 * (corners[i] + corners[j]) for (i, j) in edge_pairs])\n\n# flat limit: zero edge bowing reproduces the analytic flat closed form\ntmap_flat = make_t10_tet_map(np.vstack([corners, mids]))\nprint(\"curved_tet_volume_field flat-limit vs tet_volume_field_linear:\")\nfor r in [np.array([2.0, 0.3, 0.2]), np.array([0.3, 0.3, 0.25])]:\n    flat = tet_volume_field_linear(corners, r, 1.0, np.zeros(3))\n    cv = curved_tet_volume_field(tmap_flat, r, lambda x: 1.0, depth=2)\n    print(f\"  r={r.tolist()}  rel = {rel(cv, flat):.2e}\")\n\n# strongly bowed tet: depth-3 converges to a brute-force curved reference\nmids_bow = mids + 0.18 * (mids - corners.mean(0))\ntmap = make_t10_tet_map(np.vstack([corners, mids_bow]))\n\n\ndef curved_tet_ref(tet_map, r, rho_fn, ng=14):\n    xs, ws = np.polynomial.legendre.leggauss(ng); xs = 0.5 * (xs + 1); ws = 0.5 * ws\n    H =",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 99,
+          "text_sha256": "bfda954bfc954c20395d4f9225e17120ff30faa2d186515ec0f8d4c690682b75",
+          "text_preview": "curved_tet_volume_field flat-limit vs tet_volume_field_linear:\n  r=[2.0, 0.3, 0.2]  rel = 2.11e-13\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 37,
+          "text_sha256": "84ce1819bfc67ba33a1e0fa2f0089545a079d63b49bbc41b6e7f37e379f6e0e7",
+          "text_preview": "  r=[0.3, 0.3, 0.25]  rel = 2.78e-15\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 97,
+          "text_sha256": "cb35c52c3c64a0baae350c4409e52c8cca9d643142b188c85371d4845ca67044",
+          "text_preview": "strongly-bowed tet at r=[2.0, 0.3, 0.2]:  depth-0 (flat) rel = 3.83e-01   depth-3 rel = 6.50e-03\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 30,
+      "execution_count": 14,
+      "source_sha256": "3b2034d5762432ecda4d38aee5559fa2e789eb33f9ed7540d326b5bac3a57986",
+      "source_preview": "# reuse the uniform-M sphere (mesh, gf, Mval) from Step 1\nwith ng.TaskManager():\n    Ha_center = assemble_demag_field(mesh, gf, np.array([[0.0, 0.0, 0.0]]))\n    Ha_ext = assemble_demag_field(mesh, gf, obs)\n    Href = reconstruct_field_polynomial(mesh, gf, obs, quad=6)   # external Gauss reference\n\nprint(f\"assemble_demag_field center H_z = {Ha_center[0,2]:.5e}   -M/3 = {-Mval/3:.5e}   \"\n      f\"rel = {abs(Ha_center[0,2]+Mval/3)/(Mval/3):.2e}\")\nprint(\"assemble_demag_field vs external Gauss reference (machine precision):\")\nfor i, r in enumerate(obs):\n    print(f\"  obs r={r.tolist()}  rel = {rel(Ha_ext[i], Href[i]):.2e}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 276,
+          "text_sha256": "d5a9eabdf13a7d49c2973d96c7435fbe96807f7ad8576cf65d4ac2cc966e3a68",
+          "text_preview": "assemble_demag_field center H_z = -1.66461e+05   -M/3 = -1.66667e+05   rel = 1.23e-03\nassemble_demag_field vs external Gauss reference (machine precision):\n  obs r=[0.0, 0.0, 2.0]  rel = 2.15e-14\n  obs r=[0.0, 0.0, 3.0]  rel = 1.15e-14\n  obs r=[2.0, 0.0, 0.0]  rel = 2.22e-14\n",
           "text_truncated": false
         }
       ]
