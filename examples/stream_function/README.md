@@ -24,6 +24,14 @@ C++ core: `src/core/rad_stream_function.cpp`.  See
 [`../../docs/stream_function.md`](../../docs/stream_function.md) for the method,
 API, and design notes.
 
+Docs promotion: the result-saved archive
+[`docs/stream_function/stream_function_examples_archive.ipynb`](../../docs/stream_function/stream_function_examples_archive.ipynb)
+collects all 41 Python scripts, full source, SHA-256 hashes, existing JSON
+payloads, and result media hashes. The scripts remain protected for now because
+docs, panel goldens, and validation tests reference this corpus directly; prune
+only after named examples are migrated to `docs/`, `src/`, `panels/`, or
+`validation_test/`.
+
 ## Kernel-agnostic by design
 
 The solver embeds **no field kernel**.  The matrix entry `A(i,j)` is supplied by

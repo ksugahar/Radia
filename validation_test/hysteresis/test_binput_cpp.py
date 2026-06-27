@@ -14,11 +14,13 @@ Tests:
 """
 
 import sys
-import os
 import time
+from pathlib import Path
 import numpy as np
 
-# radia is an installed package (pip install -e .) -- no source-tree sys.path hack needed.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
 import radia as rad
 
 MU_0 = 4.0 * np.pi * 1e-7
@@ -34,8 +36,7 @@ def load_fixture(use_subset=True):
     chi : ndarray
     f_k_tables : list of (r, f) tuples
     """
-    fix_path = os.path.join(repo_root, 'examples', 'hysteresis',
-                            'binput_play_fixture.npz')
+    fix_path = REPO_ROOT / 'validation_test' / 'hysteresis' / 'binput_play_fixture.npz'
     fix = np.load(fix_path)
 
     if use_subset:

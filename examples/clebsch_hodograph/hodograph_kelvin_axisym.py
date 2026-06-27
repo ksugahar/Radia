@@ -8,7 +8,7 @@ axisymmetric Kelvin transformation (open boundary), so the field is exact
 and the hodograph is computed on an exact field.
 
 It reuses the verified Omega-Reduced-Omega + Kelvin solve from
-``examples/kelvin_transformation/Omega_ReducedOmega/Sphere/`` (interior
+``docs/kelvin/legacy_assets/kelvin_transformation/Omega_ReducedOmega/Sphere/`` (interior
 physical half-disk + exterior Kelvin half-disk offset in z, periodic
 kelvin_int <-> kelvin_ext, mu_ext = mu0 (R/rho')^2) and ADDS the hodograph
 post-processing on the physical region (air_inner):
