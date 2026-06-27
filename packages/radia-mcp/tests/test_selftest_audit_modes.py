@@ -106,7 +106,7 @@ def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
             "action": "Inspect representative findings and add a specific remediation note.",
         }]
         assert summary["dominant_rule"] == summary["top_rules"][0]
-        assert summary["top_files"][0]["path"] == "examples\\a.py"
+        assert summary["top_files"][0]["path"] == "examples/a.py"
 
 
 def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
@@ -137,7 +137,7 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
         "directory": "examples",
         "count": 1,
         "directory_companion": {
-            "geo_companion": "examples\\_gmsh_display.geo",
+            "geo_companion": "examples/_gmsh_display.geo",
             "geo_template": (
                 "// Shared GMSH display companion for examples\n"
                 "// Use with any high-order .msh output from this directory.\n"
@@ -147,9 +147,9 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
         },
     }]
     item = plan["affected"][0]
-    assert item["script"] == "examples\\curved.py"
+    assert item["script"] == "examples/curved.py"
     assert item["triggers"] == ["high_order_curve"]
-    assert item["geo_companion"] == "examples\\curved_display.geo"
+    assert item["geo_companion"] == "examples/curved_display.geo"
     assert "Mesh.NumSubEdges = 4;" in item["geo_template"]
 
 
@@ -232,7 +232,7 @@ def test_gmsh_mesh_generation_remediation_plan(monkeypatch, tmp_path):
     assert plan["total_findings"] == 2
     assert plan["directory_groups"] == [{"directory": "examples", "findings": 2}]
     item = plan["affected"][0]
-    assert item["script"] == "examples\\makes_mesh.py"
+    assert item["script"] == "examples/makes_mesh.py"
     assert item["findings"][0]["line"] == 2
     assert "gmsh.model.occ.addBox" in item["findings"][0]["snippet"]
     assert "Mesh('model.vol')" in item["mesh_output_hint"]
