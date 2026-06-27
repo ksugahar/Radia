@@ -27,8 +27,9 @@ import pytest
 
 REPO = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
-FIXTURE = os.path.join(REPO, "tests", "panels", "fixtures",
-                        "heat_workpiece_cylinder_R25_H25_axisym.vol")
+FIXTURE_DIR = os.path.join(REPO, "validation_test", "panels", "fixtures")
+FIXTURE = os.path.join(FIXTURE_DIR,
+                       "heat_workpiece_cylinder_R25_H25_axisym.vol")
 SCRIPT = os.path.join(REPO, "src", "radia", "panels",
                        "calc_heat_axisym.py")
 
@@ -37,8 +38,7 @@ SCRIPT = os.path.join(REPO, "src", "radia", "panels",
 def regenerate_fixture():
     """Ensure the structured-grid .vol exists (regen if missing)."""
     if not os.path.isfile(FIXTURE):
-        gen = os.path.join(REPO, "tests", "panels", "fixtures",
-                            "generate_heat_cylinder_axisym.py")
+        gen = os.path.join(FIXTURE_DIR, "generate_heat_cylinder_axisym.py")
         subprocess.run([sys.executable, gen], check=True)
     return FIXTURE
 

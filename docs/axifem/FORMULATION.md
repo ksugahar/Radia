@@ -520,7 +520,7 @@ violate this assumption and yield NaN in the closed-form element
 matrices.
 
 Use a **structured rectangular grid generator** (see
-[`tests/panels/fixtures/generate_heat_cylinder_axisym.py`](../../tests/panels/fixtures/generate_heat_cylinder_axisym.py)
+[`validation_test/panels/fixtures/generate_heat_cylinder_axisym.py`](../../validation_test/panels/fixtures/generate_heat_cylinder_axisym.py)
 for the canonical pattern: hand-build with `netgen.meshing.MeshPoint
 + Element2D + Element1D` on a regular `(NR, NZ)` lattice).  P1/P2
 triangle support exists for unstructured meshes on the magnetic side
