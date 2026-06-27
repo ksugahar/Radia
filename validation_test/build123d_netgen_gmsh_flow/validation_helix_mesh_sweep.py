@@ -6,8 +6,8 @@ CAD/mesh/post records for learning and later solver cross-validation.
 
 Run from this directory or the repository root:
 
-    python examples/build123d_netgen_gmsh_flow/validation_helix_mesh_sweep.py --quick
-    python examples/build123d_netgen_gmsh_flow/validation_helix_mesh_sweep.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_helix_mesh_sweep.py --quick
+    python validation_test/build123d_netgen_gmsh_flow/validation_helix_mesh_sweep.py
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ if str(SRC) not in sys.path:
 
 from build123d import Circle  # noqa: E402
 
-from _pipeline import run_pipeline, save_record  # noqa: E402
+from radia_mcp.build123d.pipeline import run_pipeline, save_record  # noqa: E402
 from radia_mcp.build123d.modeling import coil, round_wire_helix_metrics  # noqa: E402
 
 

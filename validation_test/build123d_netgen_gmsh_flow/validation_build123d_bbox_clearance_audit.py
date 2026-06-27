@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_bbox_clearance_audit.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_bbox_clearance_audit.py
 
 This example builds three labelled boxes before meshing.  Two pairs are
 provably separated by at least one bounding-box axis.  One pair has overlapping
