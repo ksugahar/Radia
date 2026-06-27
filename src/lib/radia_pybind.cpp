@@ -3392,6 +3392,25 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
              "Solve ((1/chi)M_mass + B^T G_gauss B)m = rhs in C++; G_gauss applies P^T K_point P "
              "plus the sparse near correction.")
+        .def("solve_linear_material_mass_riesz",
+             [](RadHACApKChargeGaussOperator& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> rhs, double tol, int maxit) {
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("ChargeGauss.solve_linear_material_mass_riesz: rhs size mismatch");
+                 int iters = 0;
+                 std::vector<double> noprec;   // mass_riesz=true ignores the diagonal prec
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, noprec, rhs,
+                                                               tol, maxit, iters, /*mass_riesz=*/true);
+                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
+             py::arg("tol") = 1e-8, py::arg("maxit") = 5000,
+             "Default linear demag solve in C++: ((1/chi)M_mass + B^T G_gauss B)m = rhs by CG with a PARDISO "
+             "SPD factor of the RT0 mass (mass Riesz). Returns {m, iters}.")
         .def("stats", [](RadHACApKChargeGaussOperator& s) {
                  const RadHACApKStats& st = s.GetStats();
                  py::dict d;
@@ -3616,6 +3635,49 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "mu_r-INDEPENDENT material solve: Jacobi-preconditioned MINRES for the SYMMETRIC INDEFINITE "
              "A m = rhs, A = inv_chi*M_mass - B^T G B (G via the analytic charge-Gram H-matvec, "
              "HACApK-parallel under ngcore::RegionTaskManager). Returns {m, iters}.")
+        .def("solve_linear_material_mass_riesz",
+             [](RadHACApKChargeGram& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> rhs,
+                double tol, int maxit) {
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("solve_linear_material_mass_riesz: rhs size mismatch");
+                 int iters = 0;
+                 std::vector<double> noprec;   // mass_riesz=true ignores the diagonal prec
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, noprec, rhs,
+                                                               tol, maxit, iters, /*mass_riesz=*/true);
+                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
+             py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000,
+             "DEFAULT linear demag solve ENTIRELY in C++: SPD +N system ((1/chi)M_mass + B^T G B) m = rhs "
+             "by CG preconditioned with a PARDISO SPD factor of the RT0 mass M_mass (the MASS RIESZ map). "
+             "~3-5x fewer iters than the diagonal Jacobi, nearly mu_r-flat. No Python per-iteration glue "
+             "or splu. Returns {m, iters}.")
+        .def("solve_material_minres_mass_riesz",
+             [](RadHACApKChargeGram& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> rhs,
+                double tol, int maxit) {
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("solve_material_minres_mass_riesz: rhs size mismatch");
+                 int iters = 0;
+                 std::vector<double> noprec;   // mass_riesz=true ignores the diagonal prec
+                 std::vector<double> m = s.SolveMaterialMINRES(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, noprec, rhs,
+                                                               tol, maxit, iters, /*mass_riesz=*/true);
+                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
+             py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000,
+             "mu_r-INDEPENDENT material solve, mass Riesz variant: MINRES for the SYMMETRIC INDEFINITE "
+             "A = inv_chi*M_mass - B^T G B, preconditioned with the PARDISO SPD factor of M_mass (vs the "
+             "diagonal Jacobi). Returns {m, iters}.")
         .def("solve_nonlinear_picard",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,

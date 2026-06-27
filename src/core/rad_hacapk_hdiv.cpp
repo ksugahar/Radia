@@ -10,7 +10,82 @@
 #include <core/taskmanager.hpp>   // ngcore::RegionTaskManager (parallel H-matvec under TaskManager)
 #include <core/utils.hpp>         // ngcore::AtomicAdd
 #include <unordered_map>
+#include <map>
+#include <memory>
+#include <stdexcept>
 #include <atomic>
+
+#ifdef HAVE_LAPACK
+#include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the RT0 mass for the MASS RIESZ precond
+namespace {
+// RAII PARDISO SPD (mtype=2 real symmetric positive definite) factor of the RT0 H(div) mass M_mass,
+// used as the MASS RIESZ preconditioner (z = M_mass^{-1} r) of the HDiv-VIM material CG / MINRES.  The
+// mass is supplied as the FULL symmetric COO (mI,mJ,mV); only the UPPER triangle (j>=i) is assembled
+// into the 0-based CSR PARDISO mtype=2 expects.  Mirrors MomentPardisoCoarse (rad_relaxation_methods.cpp)
+// -- the established sparse-direct pattern in this repo.  Replaces the prior Python splu(M_mass) glue so
+// the whole linear demag solve (H-matvec + mass solve + Krylov) runs in C++.
+struct MassRieszPardiso {
+    void* pt[64];
+    MKL_INT iparm[64];
+    MKL_INT n = 0, mtype = 2, maxfct = 1, mnum = 1, msglvl = 0;
+    std::vector<MKL_INT> ia, ja;     // upper-triangular CSR, 0-based (iparm[34]=1); columns ascending
+    std::vector<double>  a;
+    bool factored = false;
+    MassRieszPardiso() { for (int i = 0; i < 64; ++i) { pt[i] = nullptr; iparm[i] = 0; } }
+    MassRieszPardiso(const MassRieszPardiso&) = delete;
+    MassRieszPardiso& operator=(const MassRieszPardiso&) = delete;
+    ~MassRieszPardiso() {
+        if (factored) {
+            MKL_INT phase = -1, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
+            pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, &ddum, ia.data(), ja.data(),
+                    &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
+        }
+    }
+    // Assemble the upper-triangular CSR from the symmetric mass COO and factor (analyze phase 11 +
+    // numeric phase 22).  Returns false on a PARDISO error (caller raises -- No-Fallbacks: a non-SPD
+    // mass would be a setup bug, not a soft condition to paper over).
+    bool Factor(const std::vector<int>& mI, const std::vector<int>& mJ,
+                const std::vector<double>& mV, int n_face) {
+        n = n_face;
+        std::vector<std::map<int, double>> row((size_t)n_face);   // std::map keeps columns ascending
+        for (size_t k = 0; k < mV.size(); ++k) {
+            int i = mI[k], j = mJ[k];
+            if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
+            if (j < i) continue;                                 // upper triangle only (M_mass symmetric)
+            row[(size_t)i][j] += mV[k];                           // merge any duplicate COO entries
+        }
+        ia.assign((size_t)n_face + 1, 0);
+        for (int i = 0; i < n_face; ++i)
+            ia[(size_t)i + 1] = ia[(size_t)i] + (MKL_INT)row[(size_t)i].size();
+        MKL_INT nnz = ia[(size_t)n_face];
+        ja.assign((size_t)nnz, 0); a.assign((size_t)nnz, 0.0);
+        MKL_INT k = 0;
+        for (int i = 0; i < n_face; ++i)
+            for (const auto& kv : row[(size_t)i]) { ja[(size_t)k] = (MKL_INT)kv.first; a[(size_t)k] = kv.second; ++k; }
+        pardisoinit(pt, &mtype, iparm);
+        iparm[34] = 1;                                           // 0-based (C) indexing
+        MKL_INT phase = 11, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
+        pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
+                &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
+        if (error == 0) {
+            phase = 22;
+            pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
+                    &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
+        }
+        if (error != 0) return false;
+        factored = true;
+        return true;
+    }
+    void Solve(const double* rhs, double* x) {                   // M_mass x = rhs (phase 33, single rhs)
+        MKL_INT phase = 33, nrhs = 1, idum = 0, error = 0;
+        pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
+                &idum, &nrhs, iparm, &msglvl, const_cast<double*>(rhs), x, &error);
+        if (error != 0)
+            throw std::runtime_error("MassRieszPardiso: PARDISO solve phase failed");
+    }
+};
+} // namespace
+#endif // HAVE_LAPACK
 // Per-thread memo for the high-order QuadDot lives inside QuadDot (a function-local static thread_local map):
 // PhiAtHO(src, m_qp[tgt][k]) (the expensive analytic base + inner subtraction loop) depends ONLY on
 // (kind,host of tgt, src) -- IDENTICAL across the co-located monomials that share a host's outer points -- so
@@ -839,12 +914,35 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<double>& B_data, int n_face,
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out)
+    double tol, int maxit, int& iters_out, bool mass_riesz)
 {
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
     // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via a single PARDISO SPD
+    // factor of the RT0 mass (built once, applied per iteration).  ~3-5x fewer iters than the diagonal
+    // Jacobi (the diag under-resolves the RT0 mass off-diagonal coupling) and nearly mu_r-flat.  When
+    // mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
+#ifdef HAVE_LAPACK
+    std::unique_ptr<MassRieszPardiso> mr;
+    if (mass_riesz) {
+        mr = std::make_unique<MassRieszPardiso>();
+        if (!mr->Factor(mI, mJ, mV, n_face))
+            throw std::runtime_error("SolveLinearMaterial: PARDISO SPD factor of the RT0 mass "
+                                     "(mass Riesz preconditioner) failed");
+    }
+#else
+    if (mass_riesz)
+        throw std::runtime_error("SolveLinearMaterial: mass Riesz preconditioner requires MKL PARDISO "
+                                 "(HAVE_LAPACK)");
+#endif
+    auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
+#ifdef HAVE_LAPACK
+        if (mass_riesz) { mr->Solve(rr.data(), zz.data()); return; }
+#endif
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
+    };
     // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
@@ -874,9 +972,9 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         });
         return s;
     };
-    // Jacobi-preconditioned conjugate gradients (the SPD system M^{-1} = 1/prec).
+    // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
     std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
-    ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+    applyPrec(r, z);
     p = z;
     double rz = dot(r, z);
     double bnorm = dot(rhs, rhs);
@@ -889,7 +987,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         double pAp = dot(p, Ap);
         double alpha = rz / pAp;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+        applyPrec(r, z);
         double rz_new = dot(r, z);
         double beta = rz_new / rz;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
@@ -904,11 +1002,33 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
     const std::vector<double>& B_data, int n_face,
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out)
+    double tol, int maxit, int& iters_out, bool mass_riesz)
 {
     const int n_charge = (int)B_indptr.size() - 1;
     // Stand up (or reuse the caller's) TaskManager pool so the HACApK H-matvec runs multi-threaded.
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    // MASS RIESZ preconditioner: y = M_mass^{-1} r via a single PARDISO SPD factor of the RT0 mass
+    // (built once, applied per iteration); the bounded -N spectrum (eigenvalues vs M_mass = inv_chi - d,
+    // d in [0,1]) makes the mass Riesz especially effective.  mass_riesz=false -> diagonal Jacobi y=r/prec.
+#ifdef HAVE_LAPACK
+    std::unique_ptr<MassRieszPardiso> mr;
+    if (mass_riesz) {
+        mr = std::make_unique<MassRieszPardiso>();
+        if (!mr->Factor(mI, mJ, mV, n_face))
+            throw std::runtime_error("SolveMaterialMINRES: PARDISO SPD factor of the RT0 mass "
+                                     "(mass Riesz preconditioner) failed");
+    }
+#else
+    if (mass_riesz)
+        throw std::runtime_error("SolveMaterialMINRES: mass Riesz preconditioner requires MKL PARDISO "
+                                 "(HAVE_LAPACK)");
+#endif
+    auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
+#ifdef HAVE_LAPACK
+        if (mass_riesz) { mr->Solve(rr.data(), zz.data()); return; }
+#endif
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
+    };
 
     // A x = inv_chi*(M_mass x) - B^T (G (B x))  -- symmetric INDEFINITE -> MINRES.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
@@ -942,7 +1062,7 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
 
     // ---- Jacobi-preconditioned MINRES (Paige-Saunders 1975; scipy.sparse.linalg.minres recurrence) ----
     std::vector<double> x((size_t)n_face, 0.0), r1 = rhs, r2 = rhs, y((size_t)n_face);
-    ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { y[f] = r1[f] / prec[f]; }); // y = M^{-1} b
+    applyPrec(r1, y);                                               // y = M^{-1} b
     double beta1 = dot(r1, y);                                      // b . M^{-1} b
     iters_out = 0;
     if (beta1 <= 0.0) return x;                                     // b = 0 (or M not SPD) -> x = 0
@@ -965,7 +1085,7 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
             ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { Av[f] -= c * r2[f]; });
         }
         r1 = r2; r2 = Av;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { y[f] = r2[f] / prec[f]; }); // y = M^{-1} r2
+        applyPrec(r2, y);                                          // y = M^{-1} r2
         oldb = beta; beta = dot(r2, y);
         if (beta < 0.0) break;                                      // preconditioner not SPD
         beta = std::sqrt(beta);
@@ -1213,11 +1333,32 @@ std::vector<double> RadHACApKChargeGaussOperator::SolveLinearMaterial(
     const std::vector<double>& B_data, int n_face,
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out)
+    double tol, int maxit, int& iters_out, bool mass_riesz)
 {
     const int n_charge = (int)B_indptr.size() - 1;
     if (n_charge != m_ncharge) throw std::runtime_error("ChargeGauss SolveLinearMaterial: B row count mismatch");
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    // MASS RIESZ preconditioner (default 'auto'): z = M_mass^{-1} r via one PARDISO SPD factor of the RT0
+    // mass; mass_riesz=false keeps the diagonal Jacobi z = r/prec.  Same path as RadHACApKChargeGram.
+#ifdef HAVE_LAPACK
+    std::unique_ptr<MassRieszPardiso> mr;
+    if (mass_riesz) {
+        mr = std::make_unique<MassRieszPardiso>();
+        if (!mr->Factor(mI, mJ, mV, n_face))
+            throw std::runtime_error("ChargeGauss SolveLinearMaterial: PARDISO SPD factor of the RT0 mass "
+                                     "(mass Riesz preconditioner) failed");
+    }
+#else
+    if (mass_riesz)
+        throw std::runtime_error("ChargeGauss SolveLinearMaterial: mass Riesz preconditioner requires MKL "
+                                 "PARDISO (HAVE_LAPACK)");
+#endif
+    auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
+#ifdef HAVE_LAPACK
+        if (mass_riesz) { mr->Solve(rr.data(), zz.data()); return; }
+#endif
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
+    };
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
         std::fill(q.begin(), q.end(), 0.0);
@@ -1247,7 +1388,7 @@ std::vector<double> RadHACApKChargeGaussOperator::SolveLinearMaterial(
         return s;
     };
     std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
-    ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+    applyPrec(r, z);
     p = z;
     double rz = dot(r, z);
     double bnorm = std::sqrt(dot(rhs, rhs)); if (bnorm == 0.0) bnorm = 1.0;
@@ -1258,7 +1399,7 @@ std::vector<double> RadHACApKChargeGaussOperator::SolveLinearMaterial(
         const double pAp = dot(p, Ap);
         const double alpha = rz / pAp;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+        applyPrec(r, z);
         const double rz_new = dot(r, z);
         const double beta = rz_new / rz;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });

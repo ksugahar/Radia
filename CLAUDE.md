@@ -277,6 +277,57 @@ re-deriving the dead end. A clean tree where every tracked file is the canonical
 one — with the rationale for each removed branch preserved in memory — is the
 bonsai actually being tended.
 
+### Discard the PoC Once the C++ Port Is Verified (2026-06-27)
+
+**POLICY** (Sugahara): when a computation is ported to C++ and the C++ is
+**verified**, the Python (or other PoC / reference) implementation that existed
+**only to develop and validate that port** MUST be **deleted** — it is not kept
+as a "fallback" or "compatibility shim". Two implementations of the same
+computation are a future-bug source: they drift, the wrong one gets called, and a
+silent divergence produces numbers nobody can trace (the same failure class as
+"No Fallbacks" and "No Development Cruft"). The verified C++ is the single
+canonical path.
+
+**The gate is real verification — delete ONLY when the C++ is truly verified.**
+"Verified" means, at minimum: the C++ builds, its result matches the PoC
+**bit-for-bit (or to a stated tight tolerance) on a direct head-to-head probe**,
+AND the C++ path passes the golden/validation tests that exercise it. Until that
+bar is met, KEEP the PoC — a half-checked port is not a license to delete the
+reference. If the C++ is only verified for *part* of the surface (e.g. one
+operator/element class but not another), delete only the PoC for the verified
+part and keep the rest until it too is verified.
+
+**Concrete rules**:
+
+1. **No "editable-binary compatibility" / `hasattr(obj, "new_cpp_method")`
+   fallback branches.** Once the wheel is rebuilt with the C++ method, the
+   editable binary IS the current binary — the `hasattr` guard and its Python
+   branch are dead cruft. Call the C++ directly; if the method is missing that is
+   a build error to fix, not a path to silently fall back from.
+
+2. **Distill, then delete — in that order** (same as "No Development Cruft"):
+   record the verification result (the bit-match numbers, the tests that lock it)
+   in `memory/<topic>.md` + the `MEMORY.md` index line, THEN delete the PoC. The
+   *lesson* (how it was validated, what the reference produced) survives in
+   memory; the *code* is recoverable from git history.
+
+3. **A minimal reproducing TEST that locks C++==reference is NOT a PoC — keep
+   it.** Delete the production Python *implementation*, but a small golden that
+   asserts the C++ reproduces the analytic/closed-form answer (or a stored
+   reference vector) stays in `tests/`/`validation_test/` — that is the durable
+   verification, not dev scaffolding.
+
+4. **A genuinely co-valid alternate Python implementation is NOT a PoC.** If the
+   Python path is still the *only* implementation for some input class the C++
+   does not yet cover (e.g. a per-region / nonlinear path whose operator has not
+   moved to C++), it is a live canonical path, not PoC — keep it until its own
+   C++ port lands and is verified.
+
+**Why**: a verified C++ kernel plus a lingering Python twin is strictly worse
+than the C++ alone — the twin can only ever diverge. Deleting it the moment the
+C++ is trustworthy keeps a single source of truth, which is the whole point of
+porting to C++ in the first place.
+
 ### Research-Heavy Work: Run in C:\temp, Promote Knowledge to docs/ipynb or API to src/ (2026-06-27)
 
 **POLICY** (Sugahara): exploratory, research-heavy work (eigenvalue studies,
