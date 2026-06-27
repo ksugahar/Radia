@@ -36,13 +36,18 @@ de-Rham loops sit in ker(N) and are carried by M_mass (no loop-star), and the sc
 H-matvec is the only O(N log N) cost.
 
 ## Linear solve dispatch -- C++ first for uniform materials
-For the common scalar-mu_r case, `linear_solver="auto"` keeps Python as orchestration only: the sparse
-B map, charge-Gram H-matvec, HDiv mass apply, exact Jacobi diagonal, and Krylov loop run in C++
+For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the SPD +N system
+`((1/chi)M_mass + N) m = M_mass h_ext` by CG preconditioned with the FULL RT0 H(div) mass inverse
+`M_mass^{-1}` (the MASS RIESZ map, via `splu(M_mass)`) -- ~3-5x fewer iters than the diagonal Jacobi and
+nearly mu_r-flat (the diag under-resolves the RT0 mass off-diagonal coupling; measured 67-99 -> 23-24 iters
+over mu_r 1e2..1e5).  The O(N log N) charge-Gram H-matvec stays the C++ kernel; only the cheap sparse mass
+solve + CG glue are Python.  `linear_solver="cpp-cg"` keeps the all-C++ diagonal-Jacobi Krylov loop
 (`_ChargeGramHMatrix.solve_linear_material_auto_prec`).  `linear_solver="hlu"` is an opt-in tet-only
 system-A H-LU path that builds/factors `A = M_mass + chi*N` directly on face DOFs.  The legacy Python
-GMRES + full `M_mass^{-1}` sparse LU remains available as `linear_solver="python"` and is still used for
-per-region chi / PM-mixed / nonlinear Newton paths until their material-specific operators move to C++.
-The long-term target is a symmetric HDiv preconditioner (AMS/H-LU) rather than Python Krylov glue.
+GMRES + `M_mass^{-1}` sparse LU is `linear_solver="python"`, still used for per-region chi / PM-mixed /
+nonlinear Newton paths until their material-specific operators move to C++.  (The mass Riesz makes the
+operator well-conditioned by construction -- the earlier "h-explosion => need AMS" was a monopole-Gram
+artifact; the accurate analytic Gram + mass Riesz needs no auxiliary-space preconditioner.)
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
@@ -239,6 +244,27 @@ def _tet_hlu_solver_args(d, chi):
     )
 
 
+def _solve_linear_mass_riesz(N_apply, Mm, Mfac, n_face, h_ext, chi, tol, maxit):
+    """Uniform-chi linear solve with the MASS RIESZ preconditioner (the default 'auto' path).
+
+    Solves the SPD physical demag system A m = M_mass h_ext, A = (1/chi) M_mass + N (N the C++ charge-Gram
+    H-matvec via N_apply), preconditioned by the FULL RT0 H(div) mass inverse M_mass^{-1} (Mfac = splu(M_mass))
+    -- NOT its diagonal.  A's eigenvalues vs M_mass are (1/chi) + d, d (demag factor) in [0,1], so the mass
+    Riesz maps the spectrum to the bounded [1/chi, 1/chi+1]; measured ~3-5x fewer CG iters than the diagonal
+    Jacobi (C:\\temp\\hdiv_ams\\best_config.json: +N CG diag 80-262 -> mass 28-56, mu_r 1e2..1e5).  CG (not
+    GMRES) because the +N system is SPD.  The per-iteration cost is dominated by the O(N log N) H-matvec, so
+    the cheap sparse mass solve + fewer iters is a net win; the H-matvec stays the C++ kernel."""
+    inv_chi = 1.0 / float(chi)
+    rhs = np.asarray(Mm @ h_ext).ravel()
+    A = spla.LinearOperator((n_face, n_face),
+                            matvec=lambda v: inv_chi * np.asarray(Mm @ np.asarray(v, float)).ravel() + N_apply(v))
+    Mprec = spla.LinearOperator((n_face, n_face), matvec=lambda v: Mfac.solve(np.asarray(v, float)))
+    it = {"n": 0}
+    def _cb(_xk): it["n"] += 1
+    m, _info = spla.cg(A, rhs, M=Mprec, maxiter=int(maxit), callback=_cb, **{_GMRES_TOL: float(tol)})
+    return np.asarray(m, float), it["n"]
+
+
 def _solve_linear_cpp_cg(H, B, Mm, n_face, h_ext, chi, tol, maxit):
     """Uniform-chi linear solve through the C++ charge-Gram Krylov kernel."""
     inv_chi = 1.0 / float(chi)
@@ -405,9 +431,15 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                 M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
                 m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
                                          gmres_restart)
-            elif linear_solver in ("auto", "cpp-cg"):
+            elif linear_solver == "cpp-cg":
                 m, iters = _solve_linear_cpp_cg(H, B, Mm, n_face, h_ext, chi_uniform, tol, maxit)
                 solver_used = "cpp-cg"
+            elif linear_solver == "auto":
+                # DEFAULT: mass Riesz (M_mass^{-1}) preconditioned CG on the SPD +N system -- ~3-5x fewer
+                # iters than the diagonal-Jacobi cpp-cg (the diag under-resolves the RT0 mass off-diagonal
+                # coupling).  The H-matvec stays the C++ kernel; only the cheap sparse mass solve is Python.
+                m, iters = _solve_linear_mass_riesz(N_apply, Mm, Mfac, n_face, h_ext, chi_uniform, tol, maxit)
+                solver_used = "mass-riesz-cg"
             else:
                 M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
                 m, iters = _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit,
