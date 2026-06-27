@@ -1079,6 +1079,13 @@ def test_hex_volume_is_rejected_not_tetized():
         parse_netgen_tri_tet_vol(bad)
 
 
+def test_pyramid_volume_is_rejected_not_split():
+    bad = TET_VOL.replace("1 4 1 2 3 4", "1 5 1 2 3 4 1", 1)
+
+    with pytest.raises(ValueError, match="tri/tet-only policy rejected volume element"):
+        parse_netgen_tri_tet_vol(bad)
+
+
 def test_out_of_range_node_is_rejected():
     bad = TET_VOL.replace("1 4 1 2 3 4", "1 4 1 2 3 5", 1)
 

@@ -111,6 +111,17 @@ For CAD mass properties:
   similarly named volume API returns the boundary-area quantity you need.
 * Run Cubit headless and wait for process completion before reading generated
   files.
+
+Role split:
+
+* Netgen/OCC is enough for tet-only meshes, especially the readable H1/HCurl
+  and FEM/BEM teaching path.
+* Cubit/Coreform slots should spend their budget on hex-led and mixed
+  hex+pyramid+tet routes, because that is where Cubit adds unique value.
+* For a mixed Cubit `.vol`, first run a semantic inventory gate that recognizes
+  hex, pyramid, wedge, tet, quad, and triangle records.  Do not feed it to the
+  tri/tet education parser and do not silently split pyramids into tets unless
+  a downstream solver contract explicitly asks for that conversion.
 """
 
 

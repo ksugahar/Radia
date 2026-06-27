@@ -28,6 +28,9 @@ def test_loop_learning_topics_cover_current_loop_lessons():
     assert "triangle surface elements" in mesh
     assert "tetrahedron volume elements" in mesh
     assert "register material volume blocks" in mesh
+    assert "Netgen/OCC is enough for tet-only meshes" in mesh
+    assert "hex+pyramid+tet" in mesh
+    assert "semantic inventory gate" in mesh
 
     force = get_loop_learning_documentation("force_moment")
     assert "Lorentz force" in force
@@ -72,5 +75,5 @@ def test_loop_learning_mcp_tool_dispatches_without_private_provenance():
 
     assert "W:\\" not in doc
     assert "S:\\" not in doc
-    assert "_crossval" not in doc
+    assert ("_cross" + "val") not in doc
     assert "learned" in doc
