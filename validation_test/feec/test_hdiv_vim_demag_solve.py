@@ -37,7 +37,7 @@ def test_sphere_linear_matches_analytic(mu_r):
     mesh = _sphere()
     with ng.TaskManager():
         res = hdiv_demag_solve(mesh, mu_r, _HEXT)
-    assert res["linear_solver"] in {"cpp-hlu", "cpp-cg", "mass-riesz-cg"}   # default 'auto' = mass-riesz-cg
+    assert res["linear_solver"] in {"cpp-hlu", "mass-riesz-cg", "mass-riesz-gmres"}  # default 'auto' = mass-riesz-gmres
     assert "hmat_stats" in res
     chi = mu_r - 1.0
     D = res["demag"]
@@ -64,18 +64,18 @@ def test_per_element_M_uniform_and_aligned():
 
 
 @pytest.mark.parametrize("mu_r", [1e2, 1e5])
-def test_default_mass_riesz_beats_diag_cpp_cg(mu_r):
-    """The default 'auto' path is the mass-Riesz-preconditioned CG and converges in FEWER iters than the
-    diagonal-Jacobi 'cpp-cg', to the SAME magnetization.  Locks the ~3-5x preconditioner win (and its
-    mu_r-robustness: the diag Jacobi grows with mu_r, the mass Riesz stays nearly flat)."""
+def test_default_gmres_matches_cpp_cg(mu_r):
+    """The default 'auto' is the mass-Riesz GMRES (robust at all scales); the 'cpp-cg' opt-in is the
+    all-C++ mass-Riesz CG (fast at moderate N).  At this moderate size both converge to the SAME
+    magnetization (the robust default is not paying accuracy for robustness)."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
-        auto = hdiv_demag_solve(mesh, mu_r, _HEXT)                       # default -> mass-riesz-cg
-        diag = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")
-    assert auto["linear_solver"] == "mass-riesz-cg"
-    assert auto["iters"] < diag["iters"]                                 # the preconditioner win
-    rel = abs(auto["M_avg"][2] - diag["M_avg"][2]) / abs(diag["M_avg"][2])
-    assert rel < 1e-6, f"mass-Riesz vs diag M_avg disagree: {rel:.2e}"
+        auto = hdiv_demag_solve(mesh, mu_r, _HEXT)                       # default -> mass-riesz-gmres
+        cg = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")  # fast C++ mass-riesz CG
+    assert auto["linear_solver"] == "mass-riesz-gmres"
+    assert cg["linear_solver"] == "mass-riesz-cg"
+    rel = abs(auto["M_avg"][2] - cg["M_avg"][2]) / abs(cg["M_avg"][2])
+    assert rel < 1e-6, f"GMRES vs CG M_avg disagree: {rel:.2e}"
 
 
 def test_explicit_hlu_linear_solver():
