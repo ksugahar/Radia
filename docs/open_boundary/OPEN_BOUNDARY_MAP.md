@@ -378,14 +378,12 @@ had stated loosely. The headline is the conditioning correction:
   (the exact-impedance / `Zs` → DtN → CLN realisation, relocated 2026-06-20 from the
   retired `iabc` tool) and `topic="method_map"` (the IABC comparison record) —
   `kelvin_transformation(topic="mesh_control")`, `mor_cln(...)`.
-- **Demos:** `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb` — the wave/diffusion
-  open-boundary corpus: `act6_10_iabc_time_domain`, `act6_11_exact_dtn_fetd` (exact-DtN FETD), `act6_02_cln_dtn_cauer`
-  (Cauer in `√s`), `act6_04_cln_mor_radial_eddy` (CLN MOR of a radial eddy FEM), `act6_05_cln_fetd_reflection`
-  (transient CLN reflection), `act6_09_cln_vs_pml` (CLN vs PML); the **DtN→CLN arc**
-  `act6_03_dtn_to_cln_wideband` (separable band-unlimited), `act6_01_kelvin_fem_eddy_dtn` (3-D Kelvin-FEM build),
-  `act6_06_square_eddy_dtn_to_cln`/`act6_07_cube_eddy_dtn_to_cln` (non-separable square/cube, C4v/O_h-verified),
-  `act6_08_disk2d_kelvin_eddy_dtn` (2-D conformal Kelvin disk, no weight); alongside the Kelvin
-  spectral corpus (`act1_02_multipole_spectrum` … `act5_04_nonspherical_dtn_matrix`, `act2_03_floor_vs_curve`, `act0_02_p_vs_h_study`, …).
+- **Maintained implementation/validation:** `src/radia/open_boundary/{dtn_cln.py,kelvin_dtn.py}`,
+  `src/radia/infinite_element.py`, and `validation_test/open_boundary/`.
+  The former wave/diffusion research corpus is routed through
+  [`docs/kelvin/ARCHIVE_RETIREMENT.md`](../kelvin/ARCHIVE_RETIREMENT.md);
+  production docs should cite the maintained API/tests rather than the retired
+  full-source ledger.
 
 ---
 

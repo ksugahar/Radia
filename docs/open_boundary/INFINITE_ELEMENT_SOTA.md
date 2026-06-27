@@ -16,7 +16,8 @@ below); foundational works without a DOI here are named.
 | **BEM** | medium (dense; `ngsolve.bem` FMM) | any | all | exact, dense `N²` |
 
 The honest one-liner: **on the sphere the IE and Kelvin are the *same method*** (measured,
-[`act7_28`](../kelvin/kelvin_dtn_spectrum_archive.ipynb));
+the fair IE/Kelvin comparison routed in
+[`ARCHIVE_RETIREMENT.md`](../kelvin/ARCHIVE_RETIREMENT.md));
 the IE's reason to exist over Kelvin is **geometry** (no sphere-lock), and its cost is
 **implementation + a conditioning-aware basis**.
 
@@ -25,7 +26,7 @@ the IE's reason to exist over Kelvin is **geometry** (no sphere-lock), and its c
 1. **Mapped / decay-function IE** (the origin). Zienkiewicz & Bettess mapped infinite elements;
    Bettess, *Infinite Elements* (Penshaw, 1992). In EM the low-frequency "ballooning" open
    boundary (Silvester–Lowther lineage) is the same idea. Radial shape functions decay as `(a/r)^k`
-   — exactly the basis of [`act7_25`](../kelvin/kelvin_dtn_spectrum_archive.ipynb).
+   — exactly the basis of `src/radia/infinite_element.py`.
 
 2. **Acoustic conjugated IE — the production workhorse.** For exterior Helmholtz the radial basis
    must carry the outgoing phase `e^{ikr}`; the **Astley–Leis "mapped wave-envelope" / conjugated**
@@ -37,18 +38,18 @@ the IE's reason to exist over Kelvin is **geometry** (no sphere-lock), and its c
 
 3. **Conditioning is the practical crux** (and it is solved). The naive monomial/`(a/r)^k` basis is
    Hilbert/Cauchy-ill-conditioned — **measured in-repo**: `cond ≈ 10 → 4e9` for `P=2..8`
-   ([`act7_27`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)).
+   (routing in [`ARCHIVE_RETIREMENT.md`](../kelvin/ARCHIVE_RETIREMENT.md)).
    The fix is a **Jacobi-polynomial radial basis**: Dreyer & von Estorff, "Improved conditioning of
    infinite elements for exterior acoustics" (DOI [10.1002/nme.804](https://doi.org/10.1002/nme.804),
    2003; robustness [10.1016/j.cma.2005.01.019](https://doi.org/10.1016/j.cma.2005.01.019), 2006;
    "Efficient Infinite Elements based on Jacobi Polynomials"
    [10.1007/978-3-540-77448-8_9](https://doi.org/10.1007/978-3-540-77448-8_9), 2008). Our
-   [`act7_28`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)
+   `src/radia/infinite_element.py`
    reproduces the lesson: an orthogonal basis for the *same* space drops `cond` to `≈ 2 → 339`.
 
 4. **Maxwell / vector (de Rham) IE.** Demkowicz & Pal, "An infinite element for Maxwell's
    equations" (*CMAME* 164, 1998) — the exact-sequence vector IE that
-   [`act7_26`](../kelvin/kelvin_dtn_spectrum_archive.ipynb)
+   `packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/infinite_element_derham.wls`
    verifies in the static limit; Cecot–Demkowicz–Rachowicz built the 3-D hp version.
 
 ## 2. The modern state of the art — Hardy-space infinite elements
