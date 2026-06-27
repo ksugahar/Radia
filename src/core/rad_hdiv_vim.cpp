@@ -786,4 +786,61 @@ void BuildMassCOO(const Mesh& m, std::vector<int>& I, std::vector<int>& J,
     }
 }
 
+// ---- closest-point helpers for the Duffy singularity origin (x0) ----------------------------------------
+// Ericson, Real-Time Collision Detection: closest point on a triangle to p (Voronoi-region method).
+void ClosestPointTriangle(const double p[3], const double a[3], const double b[3], const double c[3],
+                          double out[3])
+{
+    auto dot = [](const double u[3], const double v[3]) { return u[0]*v[0] + u[1]*v[1] + u[2]*v[2]; };
+    double ab[3], ac[3], ap[3];
+    for (int k = 0; k < 3; ++k) { ab[k] = b[k]-a[k]; ac[k] = c[k]-a[k]; ap[k] = p[k]-a[k]; }
+    const double d1 = dot(ab, ap), d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0) { for (int k=0;k<3;++k) out[k]=a[k]; return; }
+    double bp[3]; for (int k=0;k<3;++k) bp[k]=p[k]-b[k];
+    const double d3 = dot(ab, bp), d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3) { for (int k=0;k<3;++k) out[k]=b[k]; return; }
+    const double vc = d1*d4 - d3*d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) { const double v=d1/(d1-d3); for(int k=0;k<3;++k) out[k]=a[k]+v*ab[k]; return; }
+    double cp[3]; for (int k=0;k<3;++k) cp[k]=p[k]-c[k];
+    const double d5 = dot(ab, cp), d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6) { for (int k=0;k<3;++k) out[k]=c[k]; return; }
+    const double vb = d5*d2 - d1*d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) { const double w=d2/(d2-d6); for(int k=0;k<3;++k) out[k]=a[k]+w*ac[k]; return; }
+    const double va = d3*d6 - d5*d4;
+    if (va <= 0 && (d4-d3) >= 0 && (d5-d6) >= 0) {
+        const double w=(d4-d3)/((d4-d3)+(d5-d6)); for(int k=0;k<3;++k) out[k]=b[k]+w*(c[k]-b[k]); return;
+    }
+    const double denom = 1.0/(va+vb+vc), v = vb*denom, w = vc*denom;
+    for (int k=0;k<3;++k) out[k] = a[k] + ab[k]*v + ac[k]*w;
+}
+
+// Closest point of a tetrahedron to p: p itself if inside (barycentric >= 0), else the min over the 4 faces.
+void ClosestPointTet(const double V[4][3], const double p[3], double out[3])
+{
+    // barycentric via the affine inverse of [V1-V0, V2-V0, V3-V0]
+    double E[3][3];
+    for (int k = 0; k < 3; ++k) { E[k][0]=V[1][k]-V[0][k]; E[k][1]=V[2][k]-V[0][k]; E[k][2]=V[3][k]-V[0][k]; }
+    const double det = E[0][0]*(E[1][1]*E[2][2]-E[1][2]*E[2][1])
+                     - E[0][1]*(E[1][0]*E[2][2]-E[1][2]*E[2][0])
+                     + E[0][2]*(E[1][0]*E[2][1]-E[1][1]*E[2][0]);
+    if (std::fabs(det) > 1e-300) {
+        const double d[3] = {p[0]-V[0][0], p[1]-V[0][1], p[2]-V[0][2]};
+        const double inv = 1.0/det;
+        const double l0 = inv*( (E[1][1]*E[2][2]-E[1][2]*E[2][1])*d[0] + (E[0][2]*E[2][1]-E[0][1]*E[2][2])*d[1] + (E[0][1]*E[1][2]-E[0][2]*E[1][1])*d[2] );
+        const double l1 = inv*( (E[1][2]*E[2][0]-E[1][0]*E[2][2])*d[0] + (E[0][0]*E[2][2]-E[0][2]*E[2][0])*d[1] + (E[0][2]*E[1][0]-E[0][0]*E[1][2])*d[2] );
+        const double l2 = inv*( (E[1][0]*E[2][1]-E[1][1]*E[2][0])*d[0] + (E[0][1]*E[2][0]-E[0][0]*E[2][1])*d[1] + (E[0][0]*E[1][1]-E[0][1]*E[1][0])*d[2] );
+        if (l0 >= -1e-12 && l1 >= -1e-12 && l2 >= -1e-12 && (l0+l1+l2) <= 1.0+1e-12) {
+            out[0]=p[0]; out[1]=p[1]; out[2]=p[2]; return;
+        }
+    }
+    const int F[4][3] = {{0,1,2},{0,1,3},{0,2,3},{1,2,3}};
+    double best[3]; double bd = 1e300;
+    for (int f = 0; f < 4; ++f) {
+        double q[3]; ClosestPointTriangle(p, V[F[f][0]], V[F[f][1]], V[F[f][2]], q);
+        const double dx=p[0]-q[0], dy=p[1]-q[1], dz=p[2]-q[2]; const double dd=dx*dx+dy*dy+dz*dz;
+        if (dd < bd) { bd=dd; best[0]=q[0]; best[1]=q[1]; best[2]=q[2]; }
+    }
+    out[0]=best[0]; out[1]=best[1]; out[2]=best[2];
+}
+
 } // namespace rad_hdiv

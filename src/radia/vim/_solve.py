@@ -640,14 +640,17 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     if gram_backend == "gauss":
         raise NotImplementedError("hdiv_demag_solve: gram_backend='gauss' is not yet wired at order>0")
     if int(order) > 2:
-        # The C++ analytic-moment charge potential (PhiAtHO_Analytic) is EXACT only for charge degree <= 2
-        # (order<=2): a tet volume charge of degree 2 (order 3) needs TetMoment2, and surface degree >= 3 needs
-        # higher moments -- neither exists yet, so order>=3 would be SILENTLY WRONG.  Fail loud (No-Fallbacks)
-        # until the Duffy singular quadrature (curved / order>=3 path) is ported.  [[hdiv-vim-sauter-schwab-cg]]
+        # order<=2 uses the EXACT analytic-moment charge potential (machine precision).  For order>=3 the C++
+        # Gram falls back to the Duffy singular quadrature (PhiInner -> PhiAtHO_Duffy), which is ~1e-3 accurate
+        # -- fine for curved-panel field evaluation, but NOT for the order>=3 MATERIAL solve: the ill-
+        # conditioned high-degree monomial basis (cond(B)^2 in N=B^T G B) amplifies the ~1e-3 entry error so
+        # the demag spectrum escapes [0,1].  A clean order>=3 material solve needs machine-precision entries
+        # (the analytic moments extended with TetMoment2 / degree-3 surface moments), not the Duffy.  Fail loud
+        # (No-Fallbacks) until that lands.  [[hdiv-vim-sauter-schwab-cg]]
         raise NotImplementedError(
-            "hdiv_demag_solve: order>2 is not yet supported -- the analytic-moment charge potential is exact "
-            "only to charge degree 2 (order<=2); order>=3 awaits the Duffy singular-quadrature port. Use order "
-            "in {0,1,2}.")
+            "hdiv_demag_solve: order>2 material solve is not yet production-clean -- order<=2 is exact "
+            "(analytic moments); the order>=3 Duffy quadrature is only ~1e-3 and the ill-conditioned "
+            "high-degree basis makes the demag spectrum leave [0,1]. Use order in {0,1,2}.")
     # accuracy-preserving fast Gram build (near analytic + far low-quad), the build_charge_gram defaults; an
     # explicit gram_eps/near_factor/far_quad always wins (pass near_factor=inf to force the all-high-quad Gram).
     eff_eps = gram_eps if gram_eps is not None else 1e-10

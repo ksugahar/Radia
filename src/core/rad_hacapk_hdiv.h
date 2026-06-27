@@ -336,6 +336,8 @@ private:
     double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2
     double PhiAtHO_Analytic(int src, const double p[3]) const; // EXACT analytic poly-charge potential (moment kernels, flat order<=2; machine precision, all pair types)
+    double PhiAtHO_Duffy(int src, const double p[3]) const;    // Duffy singular-quadrature poly-charge potential (order>=3 / curved; ~1e-4)
+    double PhiInner(int src, const double p[3]) const;        // dispatch: analytic moments (charge deg<=2) else Duffy
     double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
 };
 

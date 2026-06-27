@@ -807,6 +807,91 @@ double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
     return res;
 }
 
+// Duffy singular-quadrature inner potential INT_host(src) m_src(y)/|p-y| dy for the order>=3 / curved path
+// (where the analytic moment kernels run out: a tet volume charge of degree>=2 needs TetMoment2; a surface
+// charge of degree>=3 needs degree-3 moments).  6-pt Gauss-Legendre on signed radial sub-tets (cell) / signed
+// sub-triangles (face) from x0 = closest point of the host to p; the Duffy Jacobian (u^2 for tet, u for tri)
+// regularizes the 1/r, and the SIGNED sub-simplices telescope to INT_host for any x0 (inside / on / outside).
+// Validated to ~1e-4 vs brute (C:\temp\hdiv_ss\tet_duffy.py / tet_tri.py / duffy_inner.py).
+double RadHACApKChargeGram::PhiAtHO_Duffy(int src, const double p[3]) const
+{
+    static const double GL[6] = {0.03376524289842399, 0.16939530676686777, 0.38069040695840156,
+                                 0.61930959304159840, 0.83060469323313230, 0.96623475710157600};
+    static const double GW[6] = {0.08566224618958520, 0.18038078652406930, 0.23395696728634550,
+                                 0.23395696728634550, 0.18038078652406930, 0.08566224618958520};
+    const int host = m_host[src];
+    double acc = 0.0;
+    if (m_kind[src] == 0) {                                   // ---- tet cell: 4 signed radial sub-tets ----
+        double V[4][3]; const double* s = &m_cellV[(size_t)host*12];
+        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k] = s[3*i+k];
+        // The signed sub-tets give the SIGNED-volume integral; the physical charge integral uses the ABSOLUTE
+        // volume, so multiply by sign(host signed vol) (= -1 for a negatively-oriented mesh tet).
+        double E0[3], E1[3], E2[3];
+        for (int k=0;k<3;++k){ E0[k]=V[1][k]-V[0][k]; E1[k]=V[2][k]-V[0][k]; E2[k]=V[3][k]-V[0][k]; }
+        const double hv = E0[0]*(E1[1]*E2[2]-E1[2]*E2[1]) - E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])
+                        + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
+        const double sgn_host = (hv >= 0.0) ? 1.0 : -1.0;
+        double x0[3]; rad_hdiv::ClosestPointTet(V, p, x0);
+        static const int FC[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
+        for (int f = 0; f < 4; ++f) {
+            const double* b1 = V[FC[f][0]]; const double* b2 = V[FC[f][1]]; const double* b3 = V[FC[f][2]];
+            double d1[3],d2[3],d3[3],e21[3],e32[3];
+            for (int k=0;k<3;++k){ d1[k]=b1[k]-x0[k]; d2[k]=b2[k]-x0[k]; d3[k]=b3[k]-x0[k];
+                                   e21[k]=b2[k]-b1[k]; e32[k]=b3[k]-b2[k]; }
+            const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
+            const double D = d1[0]*cr[0]+d1[1]*cr[1]+d1[2]*cr[2];   // signed 6*vol(x0,b1,b2,b3)
+            if (std::fabs(D) < 1e-300) continue;
+            for (int a=0;a<6;++a){ const double u=GL[a];
+                for (int b=0;b<6;++b){ const double v=GL[b];
+                    for (int c=0;c<6;++c){ const double w=GL[c];
+                        double y[3]; for (int k=0;k<3;++k) y[k]=x0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
+                        const double dx=p[0]-y[0], dy=p[1]-y[1], dz=p[2]-y[2];
+                        const double r=std::sqrt(dx*dx+dy*dy+dz*dz);
+                        if (r<1e-300) continue;
+                        acc += GW[a]*GW[b]*GW[c]*(u*u*v*D)*EvalMono(src,y)/r;
+                    }}}
+        }
+        return acc * sgn_host;
+    }
+    // ---- tri face: 3 signed sub-triangles from x0 = projection of p onto the face plane ----
+    double V[3][3]; const double* s = &m_faceV[(size_t)host*9];
+    for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k] = s[3*i+k];
+    double e1[3], e2[3];
+    for (int k=0;k<3;++k){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
+    double nrm[3] = {e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]};
+    const double nl = std::sqrt(nrm[0]*nrm[0]+nrm[1]*nrm[1]+nrm[2]*nrm[2]);
+    if (nl < 1e-300) return 0.0;
+    nrm[0]/=nl; nrm[1]/=nl; nrm[2]/=nl;
+    const double hh = (p[0]-V[0][0])*nrm[0]+(p[1]-V[0][1])*nrm[1]+(p[2]-V[0][2])*nrm[2];
+    const double x0[3] = {p[0]-hh*nrm[0], p[1]-hh*nrm[1], p[2]-hh*nrm[2]};
+    for (int kf = 0; kf < 3; ++kf) {
+        const double* A = V[kf]; const double* B = V[(kf+1)%3];
+        double ea[3], eb[3];
+        for (int k=0;k<3;++k){ ea[k]=A[k]-x0[k]; eb[k]=B[k]-x0[k]; }
+        const double cx[3] = {ea[1]*eb[2]-ea[2]*eb[1], ea[2]*eb[0]-ea[0]*eb[2], ea[0]*eb[1]-ea[1]*eb[0]};
+        const double sgn2 = cx[0]*nrm[0]+cx[1]*nrm[1]+cx[2]*nrm[2];   // signed 2*area(x0,A,B)
+        for (int a=0;a<6;++a){ const double u=GL[a];
+            for (int b=0;b<6;++b){ const double v=GL[b];
+                double y[3]; for (int k=0;k<3;++k) y[k]=x0[k]+u*ea[k]+u*v*(eb[k]-ea[k]);
+                const double dx=p[0]-y[0], dy=p[1]-y[1], dz=p[2]-y[2];
+                const double r=std::sqrt(dx*dx+dy*dy+dz*dz);
+                if (r<1e-300) continue;
+                acc += GW[a]*GW[b]*(u*sgn2)*EvalMono(src,y)/r;
+            }}
+    }
+    return acc;
+}
+
+// Dispatch the high-order inner potential: the EXACT analytic moment kernels where they suffice (charge
+// degree<=2: a tet up to degree 1, a face up to degree 2), else the Duffy singular quadrature (order>=3).
+double RadHACApKChargeGram::PhiInner(int src, const double p[3]) const
+{
+    const int* e = &m_expo[(size_t)3*src];
+    const int deg = e[0] + e[1] + e[2];
+    const bool analytic_ok = (m_kind[src] == 0) ? (deg <= 1) : (deg <= 2);
+    return analytic_ok ? PhiAtHO_Analytic(src, p) : PhiAtHO_Duffy(src, p);
+}
+
 // polynomial-charge inner potential INT_host(src) m_src(y)/|p-y| dy by singularity SUBTRACTION reusing the
 // exact constant-charge PhiTet/TriPotential: = m_src(p) Phi_host(p) + sum_q W_q (m_src(y_q) - m_src(p))/|p-y_q|.
 double RadHACApKChargeGram::PhiAtHO(int src, const double p[3]) const
@@ -906,7 +991,7 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
             std::vector<double> v(P.size());
             for (size_t k = 0; k < P.size(); ++k) {
                 const double p[3] = {P[k][0], P[k][1], P[k][2]};
-                v[k] = PhiAtHO_Analytic(src, p);
+                v[k] = PhiInner(src, p);
             }
             phi = &cache.emplace(key, std::move(v)).first->second;
         }
@@ -917,7 +1002,7 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
     double s = 0.0;
     for (size_t k = 0; k < P.size(); ++k) {
         const double p[3] = {P[k][0], P[k][1], P[k][2]};
-        s += W[k] * (m_highorder ? PhiAtHO_Analytic(src, p) : PhiAt(src, p));
+        s += W[k] * (m_highorder ? PhiInner(src, p) : PhiAt(src, p));
     }
     return s * RAD_INV_FOUR_PI;
 }
