@@ -200,11 +200,99 @@ def _charge_basis(fes, quad):
                 mons_v=mons_v, mons_s=mons_s, n_el=len(vels))
 
 
+# ------------------------------------------------------------------ CURVED (isoparametric P2) charge basis
+# P2 reference node positions in the C++ CurvedTet/TriPotential convention (corners then mid-edges).  Extracting
+# the P2 nodes via GetTrafo AT these reference positions makes the C++ curved map X(xi) reproduce NGSolve's
+# element map, so the monomial xi^e is in NGSolve's reference frame -- the SAME frame CalcShape uses, so the
+# curved change-of-basis below is a PURE reference-frame projection (g = pt, no physical round-trip).
+_TET_REFNODES = [(0., 0, 0), (1., 0, 0), (0., 1, 0), (0., 0, 1),
+                 (.5, 0, 0), (.5, .5, 0), (0., .5, 0), (0., 0, .5), (.5, 0, .5), (0., .5, .5)]
+_TRI_REFNODES = [(0., 0), (1., 0), (0., 1), (.5, 0), (.5, .5), (0., .5)]
+_IR_TET_NODES = ng.IntegrationRule([tuple(r) for r in _TET_REFNODES], [1.0] * 10)
+_IR_TRI_NODES = ng.IntegrationRule([(r[0], r[1]) for r in _TRI_REFNODES], [1.0] * 6)
+
+
+def _change_of_basis_ref(fe, mons, refP, refW, dim):
+    """Reference-frame L2/SurfaceL2 -> monomial change-of-basis for the CURVED Gram: g = the NGSolve ref pt
+    directly (the curved C++ map is aligned to NGSolve's reference frame via GetTrafo node extraction, so no
+    physical round-trip is needed -- unlike the flat `_change_of_basis`).  Still PER ELEMENT (NGSolve orients
+    high-order shapes by global vertex order, picked up by CalcShape)."""
+    nm, nsh = len(mons), fe.ndof
+    M = np.zeros((nm, nm)); C = np.zeros((nm, nsh))
+    for pt, w in zip(refP, refW):
+        if dim == 3:
+            mv = np.array([pt[0] ** i * pt[1] ** j * pt[2] ** k for (i, j, k) in mons])
+            sh = np.array(fe.CalcShape(pt[0], pt[1], pt[2]))
+        else:
+            mv = np.array([pt[0] ** i * pt[1] ** j for (i, j) in mons])
+            sh = np.array(fe.CalcShape(pt[0], pt[1]))
+        M += w * np.outer(mv, mv); C += w * np.outer(mv, sh)
+    return np.linalg.solve(M, C)
+
+
+def _charge_basis_curved(fes, quad):
+    """CURVED (mesh.Curve(2)) analogue of `_charge_basis`: the charge map B is curved-correct (NGSolve
+    integrates -div M / M.n on the curved mesh), the change-of-basis is reference-frame (g=pt), and the
+    per-element P2 high-order nodes (10/tet, 6/tri, in the C++ convention) are extracted via GetTrafo.  CALLER
+    wraps in TaskManager.  Returns cell_nodes [n_cell*30] / face_nodes [n_bf*18] (flat) + B / M_mass / host /
+    kind / expo (same layout as `_charge_basis`)."""
+    mesh = fes.mesh
+    p = fes.globalorder
+    pv = max(p - 1, 0)
+    nn = ng.specialcf.normal(mesh.dim)
+    L2v, L2b = ng.L2(mesh, order=pv), ng.SurfaceL2(mesh, order=p)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
+    mv = ng.BilinearForm(L2v); mv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; mv.Assemble()
+    mb = ng.BilinearForm(L2b); mb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; mb.Assemble()
+    mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
+    Bv_d = spla.spsolve(sp.csc_matrix(_csr(mv)), sp.csc_matrix(_csr(bv))).tocsr()
+    Bb_d = spla.spsolve(sp.csc_matrix(_csr(mb)), sp.csc_matrix(_csr(bb))).tocsr()
+    M_mass = _csr(mh)
+
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    vdof = [list(L2v.GetDofNrs(e)) for e in vels]
+    bdof = [list(L2b.GetDofNrs(e)) for e in bels]
+    mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
+    rtp, rtw = _tet_ref(quad); rsp, rsw = _tri_ref(quad)
+
+    Brows, host, kind, expo = [], [], [], []
+    cell_nodes, face_nodes = [], []
+    for c, e in enumerate(vels):
+        tr = mesh.GetTrafo(e)
+        cell_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TET_NODES]))
+        Sv = sp.csr_matrix(_change_of_basis_ref(L2v.GetFE(e), mons_v, rtp, rtw, dim=3))
+        blk = Sv @ Bv_d[vdof[c], :]
+        for a, (i, j, k) in enumerate(mons_v):
+            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+    for f, e in enumerate(bels):
+        tr = mesh.GetTrafo(e)
+        face_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TRI_NODES]))
+        Ss = sp.csr_matrix(_change_of_basis_ref(L2b.GetFE(e), mons_s, rsp, rsw, dim=2))
+        blk = Ss @ Bb_d[bdof[f], :]
+        for a, (i, j) in enumerate(mons_s):
+            Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+    B = sp.vstack(Brows).tocsr()
+    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo,
+                cell_nodes=np.concatenate([V.ravel() for V in cell_nodes]).tolist() if cell_nodes else [],
+                face_nodes=np.concatenate([V.ravel() for V in face_nodes]).tolist() if face_nodes else [],
+                n_el=len(vels))
+
+
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
-                      inner_quad=None):
+                      inner_quad=None, curve_order=None, curve_gauss=8):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager.
+
+    curve_order (None=flat, or 2=isoparametric P2): when set, build the CURVED charge Gram on the
+    mesh.Curve(curve_order) geometry -- curved charge map B (reference-frame change-of-basis) + the C++ curved
+    Duffy Gram (curve_gauss = the inner Gauss-Legendre pts/dim, ~8 -> Duffy ~1e-4).  curve_order helps
+    near-surface FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the demag FACTOR (which is
+    curving-insensitive on a sphere, ~3e-5; see memory hdiv-vim-sauter-schwab-cg piece-3 de-risk).  Only P2
+    (curve_order=2) is wired; the mesh MUST already be mesh.Curve(2)'d by the caller.
 
     NEAR/FAR adaptive quadrature (order>0, the DEFAULT build speedup -- accuracy-preserving + golden-locked):
     far charge pairs use a cheap LOW-quad plain double-Gauss in the C++ Gram (the kernel is smooth there),
@@ -230,6 +318,23 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # NON-PSD -- use only for a fast demag-factor estimate, NEVER for an energy/eigenvalue solve).  See
     # tests/feec/test_hdiv_vim_psd.py.
     quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(3 * p, 4)
+    if curve_order is not None:
+        # CURVED (isoparametric P2) Gram: curved charge map B (reference-frame change-of-basis) + the C++
+        # curved-Duffy charge Gram.  Only P2 is wired (the C++ CurvedTet/TriPotential are P2); the mesh must
+        # already be mesh.Curve(2)'d (the caller does it, per the NGSolve convention).
+        if int(curve_order) != 2:
+            raise NotImplementedError("build_charge_gram: only curve_order=2 (isoparametric P2) is wired "
+                                      "(the C++ CurvedTet/TriPotential are P2); got %r." % (curve_order,))
+        cbk = _charge_basis_curved(fes, quad)
+        rtp, rtw = _tet_ref(quad); rsp, rsw = _tri_ref(quad)
+        gx, gw = _g01(int(curve_gauss))
+        G = _rp._ChargeGramHMatrix(
+            cell_nodes=cbk["cell_nodes"], face_nodes=cbk["face_nodes"], n_el=cbk["n_el"], curve_order=2,
+            charge_host=cbk["host"], charge_kind=cbk["kind"], charge_expo=cbk["expo"],
+            ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
+            ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
+            curve_gl=gx.tolist(), curve_gw=gw.tolist(), eps=eps, leaf=leafsize, eta=eta)
+        return cbk["B"], G, cbk["M_mass"]
     # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
     # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
     # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at

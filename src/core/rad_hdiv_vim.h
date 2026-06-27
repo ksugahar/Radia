@@ -187,5 +187,10 @@ void ClosestRefTet(const double nodes[10][3], const double p[3], double xi0[3]);
 double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, const double p[3],
                           const double* gl, const double* gw, int nq);
 
+/* OUTER-quadrature helpers for the curved charge Gram: curved physical point X(xi) + curved MEASURE (area
+ * element dA = |Xu x Xv| for a P2 face, volume element dV = |det dX/dxi| for a P2 tet) at a reference point. */
+void CurvedTriMapMeasure(const double nodes[6][3], double xi, double eta, double X[3], double& dA);
+void CurvedTetMapMeasure(const double nodes[10][3], double xi, double eta, double zeta, double X[3], double& dV);
+
 } // namespace rad_hdiv
 #endif
