@@ -235,3 +235,90 @@ def test_cpp_assembly_distorted_parallelepiped():
     W = sys["M_mass"].toarray()
     assert np.allclose(W, W.T, atol=1e-18), "quad mass block not symmetric"
     assert np.linalg.eigvalsh(W)[0] > -1e-15 * np.linalg.eigvalsh(W)[-1], "quad mass block not PSD"
+
+
+# ----------------------------------------------------------------------------------------------------
+# MIXED elements (tet / pyramid / wedge / hex -- the old yano-type element zoo).
+# ----------------------------------------------------------------------------------------------------
+
+_CUBE = [[0, 0, 0], [D, 0, 0], [D, D, 0], [0, D, 0], [0, 0, D], [D, 0, D], [D, D, D], [0, D, D]]
+_CC = [D / 2, D / 2, D / 2]
+
+
+def _cube_tets():
+    idx = [[0, 1, 2, 6], [0, 2, 3, 6], [0, 3, 7, 6], [0, 7, 4, 6], [0, 4, 5, 6], [0, 5, 1, 6]]
+    return [np.array([_CUBE[i] for i in t], float) for t in idx]
+
+
+def _cube_wedges():
+    return [np.array([_CUBE[i] for i in [0, 1, 2, 4, 5, 6]], float),
+            np.array([_CUBE[i] for i in [0, 2, 3, 4, 6, 7]], float)]
+
+
+def _cube_pyramids():
+    faces = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [3, 2, 6, 7], [0, 3, 7, 4], [1, 2, 6, 5]]
+    return [np.array([_CUBE[a], _CUBE[b], _CUBE[c2], _CUBE[d], _CC], float) for (a, b, c2, d) in faces]
+
+
+def _Nsym(sys):
+    G, B = sys["G"], sys["B"]
+    ndof = B.shape[1]; Bc = B.tocsr(); N = np.empty((ndof, ndof))
+    for j in range(ndof):
+        ej = np.zeros(ndof); ej[j] = 1.0
+        N[:, j] = Bc.T @ np.asarray(G.matvec(np.asarray(Bc @ ej).tolist()), float)
+    return np.linalg.norm(N - N.T) / np.linalg.norm(N)
+
+
+@pytest.mark.parametrize("name,maker", [("tet", _cube_tets), ("wedge", _cube_wedges), ("pyramid", _cube_pyramids)])
+def test_mixed_element_cube_demag(name, maker):
+    """A cube meshed as 6 tets / 2 wedges / 6 pyramids reproduces the hex operator demag factor (~1/3) -- the
+    moment-Galerkin formulation is consistent across the element zoo (the shared internal-face charges cancel).
+    Exact total volume (locks the per-type face geometry + divergence-theorem Ve), N = B^T G B symmetric."""
+    elems = maker()
+    sys = mg.assemble_moment_system(elems, quad=True, near_factor=1e30)
+    assert abs(sys["vols"].sum() - D ** 3) <= 1e-12 * D ** 3, f"{name} cube total volume wrong"
+    d = mg.demag_factor(sys, 2)
+    assert 0.330 < d < 0.340, f"{name} cube demag factor {d} out of [0.330, 0.340]"
+    assert _Nsym(sys) < 1e-9, f"{name} cube N = B^T G B not symmetric"
+
+
+def test_wedge_cube_field_equals_hex():
+    """A cube solved as 2 WEDGES gives the SAME external stray field as the cube solved as 1 HEX -- the
+    moment-Galerkin assembly is exactly consistent across the wedge/hex split (the coincident internal-face
+    charges cancel), a strong cross-element-type correctness lock."""
+    hexcube = [np.array(_CUBE, float)]
+    wedges = _cube_wedges()
+    probe = [3 * D, 1.3 * D, 1.7 * D]
+    mu_r = 500.0
+
+    def field(elems):
+        out = mg.moment_galerkin_demag_solve(elems, mu_r=mu_r, H_ext=(0.0, 0.0, H0), quad=True)
+        M = out["M"]; rad.UtiDelAll()
+        objs = [rad.ObjHexahedron([list(v) for v in V], list(M[e])) if len(V) == 8
+                else rad.ObjWedge([list(v) for v in V], list(M[e])) for e, V in enumerate(elems)]
+        B = np.array(rad.Fld(rad.ObjCnt(objs), "b", probe)); rad.UtiDelAll()
+        return B
+
+    Bh = field(hexcube); Bw = field(wedges)
+    rel = np.linalg.norm(Bw - Bh) / np.linalg.norm(Bh)
+    assert rel < 1e-9, f"2-wedge cube external field != 1-hex: rel {rel:.2e}"
+
+
+def test_mixed_mesh_solve():
+    """A genuinely MIXED hex + tet + wedge + pyramid body (4 disjoint elements) assembles with variable
+    per-element DOF (5/3/4/4 = 3+max(0,nFace-4)), N is symmetric, and the +N CG converges -- the old yano-type
+    element zoo, now in the symmetric moment-Galerkin."""
+    def shift(idx, dx):
+        return np.array([[_CUBE[i][0] + dx, _CUBE[i][1], _CUBE[i][2]] for i in idx], float)
+    elems = [shift([0, 1, 2, 3, 4, 5, 6, 7], 0.0),                      # hex
+             shift([0, 1, 2, 6], 3 * D),                                # tet
+             shift([0, 1, 2, 4, 5, 6], 6 * D),                          # wedge
+             np.array([[_CUBE[i][0] + 9 * D, _CUBE[i][1], _CUBE[i][2]] for i in [0, 1, 2, 3]] + [
+                 [_CC[0] + 9 * D, _CC[1], _CC[2]]], float)]             # pyramid
+    sys = mg.assemble_moment_system(elems, quad=True, near_factor=1e30)
+    assert list(sys["ndof_elem"]) == [5, 3, 4, 4], f"mixed ndof_elem {list(sys['ndof_elem'])} != [5,3,4,4]"
+    assert sys["ndof_per"] is None, "mixed mesh must report ndof_per=None (variable DOF)"
+    assert _Nsym(sys) < 1e-9, "mixed N = B^T G B not symmetric"
+    out = mg.moment_galerkin_demag_solve(elems, mu_r=200.0, H_ext=(1000.0, 0.0, 1500.0), quad=True)
+    assert out["iters"] < 2000, f"mixed solve did not converge ({out['iters']} iters)"
+    assert np.all(np.isfinite(out["M"])), "mixed solve M not finite"
