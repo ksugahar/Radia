@@ -937,4 +937,102 @@ double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double
     return acc;
 }
 
+// ---- CURVED P2 (10-node) tetrahedron geometry + curved-panel Duffy (VOLUME charge) ---------------------
+// node order: 0,1,2,3 corners ; 4=mid(0-1),5=mid(1-2),6=mid(2-0),7=mid(0-3),8=mid(1-3),9=mid(2-3).
+static void P2TetShape(double xi, double eta, double zeta, double N[10], double dN[10][3])
+{
+    const double L1=1-xi-eta-zeta, L2=xi, L3=eta, L4=zeta;
+    N[0]=L1*(2*L1-1); N[1]=L2*(2*L2-1); N[2]=L3*(2*L3-1); N[3]=L4*(2*L4-1);
+    N[4]=4*L1*L2; N[5]=4*L2*L3; N[6]=4*L3*L1; N[7]=4*L1*L4; N[8]=4*L2*L4; N[9]=4*L3*L4;
+    const double dL1[3]={-1,-1,-1}, dL2[3]={1,0,0}, dL3[3]={0,1,0}, dL4[3]={0,0,1};
+    for (int k = 0; k < 3; ++k) {
+        dN[0][k]=(4*L1-1)*dL1[k]; dN[1][k]=(4*L2-1)*dL2[k]; dN[2][k]=(4*L3-1)*dL3[k]; dN[3][k]=(4*L4-1)*dL4[k];
+        dN[4][k]=4*(dL1[k]*L2+L1*dL2[k]); dN[5][k]=4*(dL2[k]*L3+L2*dL3[k]); dN[6][k]=4*(dL3[k]*L1+L3*dL1[k]);
+        dN[7][k]=4*(dL1[k]*L4+L1*dL4[k]); dN[8][k]=4*(dL2[k]*L4+L2*dL4[k]); dN[9][k]=4*(dL3[k]*L4+L3*dL4[k]);
+    }
+}
+
+static void CurvedTetEval(const double nodes[10][3], double xi, double eta, double zeta,
+                          double X[3], double Jac[3][3])     // Jac[k][c] = dX_k/dxi_c
+{
+    double N[10], dN[10][3]; P2TetShape(xi, eta, zeta, N, dN);
+    for (int k = 0; k < 3; ++k) { X[k]=0; for (int c=0;c<3;++c) Jac[k][c]=0; }
+    for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) {
+        X[k] += N[i]*nodes[i][k];
+        for (int c = 0; c < 3; ++c) Jac[k][c] += dN[i][c]*nodes[i][k];
+    }
+}
+
+static double det3(const double M[3][3])
+{
+    return M[0][0]*(M[1][1]*M[2][2]-M[1][2]*M[2][1])
+         - M[0][1]*(M[1][0]*M[2][2]-M[1][2]*M[2][0])
+         + M[0][2]*(M[1][0]*M[2][1]-M[1][1]*M[2][0]);
+}
+
+// xi0 = argmin |X(xi)-p|^2 over the reference tet {xi,eta,zeta>=0, xi+eta+zeta<=1} (Gauss-Newton + clamp).
+void ClosestRefTet(const double nodes[10][3], const double p[3], double xi0[3])
+{
+    auto clamp = [](double z[3]) {
+        for (int k=0;k<3;++k) if (z[k] < 0) z[k] = 0;
+        const double s = z[0]+z[1]+z[2]; if (s > 1.0) { z[0]/=s; z[1]/=s; z[2]/=s; }
+    };
+    double best[3] = {0.25,0.25,0.25}, bd = 1e300;
+    for (int i=0;i<=4;++i) for (int j=0;j<=4-i;++j) for (int k=0;k<=4-i-j;++k) {
+        double z[3]={i/4.0,j/4.0,k/4.0}, X[3], Jac[3][3]; CurvedTetEval(nodes,z[0],z[1],z[2],X,Jac);
+        const double dd=(X[0]-p[0])*(X[0]-p[0])+(X[1]-p[1])*(X[1]-p[1])+(X[2]-p[2])*(X[2]-p[2]);
+        if (dd<bd){bd=dd;best[0]=z[0];best[1]=z[1];best[2]=z[2];}
+    }
+    double z[3]={best[0],best[1],best[2]};
+    for (int it=0; it<30; ++it) {
+        double X[3], Jac[3][3]; CurvedTetEval(nodes,z[0],z[1],z[2],X,Jac);
+        const double g[3]={X[0]-p[0],X[1]-p[1],X[2]-p[2]};
+        double H[3][3], rhs[3];
+        for (int a=0;a<3;++a){ rhs[a]=0; for (int k=0;k<3;++k) rhs[a]+=Jac[k][a]*g[k];
+            for (int b=0;b<3;++b){ H[a][b]=0; for (int k=0;k<3;++k) H[a][b]+=Jac[k][a]*Jac[k][b]; } }
+        const double dH = det3(H); if (std::fabs(dH) < 1e-300) break;
+        double d[3];
+        for (int c=0;c<3;++c){ double Hc[3][3]; for(int a=0;a<3;++a)for(int b=0;b<3;++b)Hc[a][b]=(b==c)?rhs[a]:H[a][b]; d[c]=det3(Hc)/dH; }
+        double nz[3]={z[0]-d[0],z[1]-d[1],z[2]-d[2]}; clamp(nz);
+        const double mv=std::fabs(nz[0]-z[0])+std::fabs(nz[1]-z[1])+std::fabs(nz[2]-z[2]);
+        z[0]=nz[0]; z[1]=nz[1]; z[2]=nz[2];
+        if (mv < 1e-13) break;
+    }
+    xi0[0]=z[0]; xi0[1]=z[1]; xi0[2]=z[2];
+}
+
+// CURVED-panel VOLUME-charge inner potential  INT_curvedtet xi^e0 eta^e1 zeta^e2 / |p - X(xi)|  dV_curved
+// via the reference Duffy from xi0 (4 SIGNED 3D reference sub-tets), evaluating X(xi) + the curved volume
+// element Jv=|det dX/dxi| per point.  The REFERENCE tet is always +oriented and Jv=|det| -> NO host-sign
+// correction (unlike the flat physical tet Duffy).  gl/gw = an nq-pt Gauss-Legendre rule on [0,1].
+double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, const double p[3],
+                          const double* gl, const double* gw, int nq)
+{
+    double xi0[3]; ClosestRefTet(nodes, p, xi0);
+    static const double C[4][3] = {{0,0,0},{1,0,0},{0,1,0},{0,0,1}};
+    static const int FC[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
+    double acc = 0.0;
+    for (int f = 0; f < 4; ++f) {
+        const double* b1=C[FC[f][0]]; const double* b2=C[FC[f][1]]; const double* b3=C[FC[f][2]];
+        double d1[3],d2[3],d3[3],e21[3],e32[3];
+        for (int k=0;k<3;++k){ d1[k]=b1[k]-xi0[k]; d2[k]=b2[k]-xi0[k]; d3[k]=b3[k]-xi0[k];
+                               e21[k]=b2[k]-b1[k]; e32[k]=b3[k]-b2[k]; }
+        const double cr[3]={d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
+        const double D=d1[0]*cr[0]+d1[1]*cr[1]+d1[2]*cr[2];
+        if (std::fabs(D) < 1e-300) continue;
+        for (int a=0;a<nq;++a){ const double u=gl[a];
+            for (int b=0;b<nq;++b){ const double v=gl[b];
+                for (int c=0;c<nq;++c){ const double w=gl[c];
+                    double z[3]; for (int k=0;k<3;++k) z[k]=xi0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
+                    double X[3], Jac[3][3]; CurvedTetEval(nodes, z[0], z[1], z[2], X, Jac);
+                    const double Jv = std::fabs(det3(Jac));
+                    const double dx=p[0]-X[0], dy=p[1]-X[1], dz=p[2]-X[2];
+                    const double r=std::sqrt(dx*dx+dy*dy+dz*dz);
+                    if (r<1e-300) continue;
+                    acc += gw[a]*gw[b]*gw[c]*(u*u*v*D)*Jv*_ipow(z[0],e0)*_ipow(z[1],e1)*_ipow(z[2],e2)/r;
+                }}}
+    }
+    return acc;
+}
+
 } // namespace rad_hdiv

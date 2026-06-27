@@ -180,5 +180,12 @@ void ClosestRefTri(const double nodes[6][3], const double p[3], double xi0[2]);
 double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double p[3],
                           const double* gl, const double* gw, int nq);
 
+/* CURVED (isoparametric P2) tetrahedron VOLUME-charge support.  nodes = 10x3 P2 nodes (corners 0,1,2,3 ;
+ * mid-edges 4=(0-1),5=(1-2),6=(2-0),7=(0-3),8=(1-3),9=(2-3)).  CurvedTetPotential: INT_curvedtet
+ * xi^e0 eta^e1 zeta^e2 / |p-X(xi)| dV_curved via the reference Duffy from xi0=ClosestRefTet. */
+void ClosestRefTet(const double nodes[10][3], const double p[3], double xi0[3]);
+double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, const double p[3],
+                          const double* gl, const double* gw, int nq);
+
 } // namespace rad_hdiv
 #endif
