@@ -8,10 +8,14 @@
 """
 
 import sys
-import os
+from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "tests", "axifem", "_reference_python"))
+REPO = next(
+    parent for parent in Path(__file__).resolve().parents
+    if (parent / "tests" / "axifem" / "_reference_python").is_dir()
+)
+sys.path.insert(0, str(REPO / "tests" / "axifem" / "_reference_python"))
 from axifem_quad import (
     _element_matrices_quad_closed_form,
     element_sigma_mass_quad,

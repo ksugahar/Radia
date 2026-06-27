@@ -22,7 +22,6 @@ from pathlib import Path
 import numpy as np
 from scipy.linalg import eigh
 
-ROOT = Path(__file__).resolve().parent.parent
 PROTO = Path("W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem")
 sys.path.insert(0, str(PROTO))
 
@@ -36,7 +35,7 @@ from axifem_quad_q2 import (  # type: ignore
 
 
 def load_reference():
-    p = ROOT / "scripts" / "q2_henrotte_test_values.json"
+    p = Path(__file__).with_name("q2_henrotte_test_values.json")
     return json.loads(p.read_text(encoding="utf-8"))
 
 

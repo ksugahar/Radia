@@ -16,11 +16,15 @@ scripts/validate_q2_codegen.py at the per-entry level — this test exercises
 the BFI assembly end-to-end).
 """
 import sys
-import os
+from pathlib import Path
 import numpy as np
 from scipy.linalg import eigh
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "tests", "axifem", "_reference_python"))
+REPO = next(
+    parent for parent in Path(__file__).resolve().parents
+    if (parent / "tests" / "axifem" / "_reference_python").is_dir()
+)
+sys.path.insert(0, str(REPO / "tests" / "axifem" / "_reference_python"))
 from axifem_quad_q2 import (  # type: ignore
     element_matrices_q2_numerical,
     element_sigma_mass_q2_numerical,

@@ -5,10 +5,14 @@ manual reference.
 Goal: find the source of the factor-~8 error in test_hiruma_disk_q2.py.
 """
 import sys
-import os
+from pathlib import Path
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "tests", "axifem", "_reference_python"))
+REPO = next(
+    parent for parent in Path(__file__).resolve().parents
+    if (parent / "tests" / "axifem" / "_reference_python").is_dir()
+)
+sys.path.insert(0, str(REPO / "tests" / "axifem" / "_reference_python"))
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (

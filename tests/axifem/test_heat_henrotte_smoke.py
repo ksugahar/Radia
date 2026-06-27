@@ -11,8 +11,8 @@ with the structural properties required by the heat equation:
 
 These are not full convergence tests -- they verify the assembly path
 end-to-end on a tiny mesh that fits in this file.  Convergence /
-parity-vs-H1 comparison lives in the ``docs/axifem/legacy_assets/axifem/`` research
-scripts.
+parity-vs-H1 comparison lives in the ``docs/axifem/`` result notebooks and
+``validation_test/axifem/`` research checks.
 
 Skips cleanly when ``radia.axifem`` is unavailable
 (e.g. running on a machine without NGSolve).
