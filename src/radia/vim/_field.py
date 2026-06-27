@@ -122,7 +122,7 @@ def reconstruct_field_polynomial(mesh, gfM, points, quad=4, quantity="h", includ
 # ---------------------------------------------------------------------------------------------------
 # Step 2 building blocks -- the SINGULAR / near-singular field at INTERNAL points.  Each is an EXACT
 # (or singularity-removed) kernel, validated standalone; assembling them into a near-surface-accurate
-# internal-field call (and the curved-face case) is the next step.  See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.
+# internal-field call (and the curved-face case) is the next step.  See docs/hdiv_vim/polynomial_charge_field.ipynb.
 # ---------------------------------------------------------------------------------------------------
 def flat_triangle_charge_field(P, r):
     """EXACT field of a UNIFORM (sigma=1) charge on a flat triangle: INT_T (r-r')/|r-r'|^3 dS'
@@ -304,7 +304,7 @@ def tet_self_volume_field(verts, r, rho_fn, nth=40, nph=80, ns=8):
 # needing only the degree-1 TRIANGLE potential (const I0 + first moment M1) and the tet Newtonian
 # potential PhiTet -- all closed form, EXACT everywhere (interior AND exterior), no quadrature.  This
 # is the exact replacement for the ~1e-3 spherical tet_self_volume_field when rho is at most linear.
-# See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.
+# See docs/hdiv_vim/polynomial_charge_field.ipynb.
 # ---------------------------------------------------------------------------------------------------
 def triangle_potential_const(P, r):
     """I0 = INT_T 1/R dS' on a flat triangle (Wilton 1984 closed form), pure-Python companion of
@@ -485,7 +485,7 @@ def linear_triangle_charge_field(P, r, sigma0, s):
 # ---------------------------------------------------------------------------------------------------
 # Degree-2 (quadratic) charge moments + the quadratic VOLUME field.  Both new moments follow from the
 # SAME identities one degree up:  V1 from 1/R = (1/2) lap'(R) weighted by r'_k;  M2 from the Hessian
-# identity grad'_s grad'_s(R^3) = 3 (xi(x)xi/R + R P).  See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.
+# identity grad'_s grad'_s(R^3) = 3 (xi(x)xi/R + R P).  See docs/hdiv_vim/polynomial_charge_field.ipynb.
 # ---------------------------------------------------------------------------------------------------
 def _edge_R_xi_integral(A, B, r, r_p):
     """INT_{edge A->B} R (r' - r_p) dl  (3-vector) = (A - r_p) INT R dl + t_hat INT R l dl,
@@ -678,7 +678,7 @@ def quadratic_triangle_charge_field(P, r, sigma0, s, S):
 #   volume field  = SUM_f n_f INT_face rho/R - INT_V (grad rho)/R   (the divergence-theorem recursion).
 #
 # Validated vs Gauss to machine precision for cubic + quartic charge; reduces to the closed forms above.
-# See docs/hdiv_vim/POLYNOMIAL_CHARGE_FIELD.md.  Pure-Python reference; cost ~ per (point, element).
+# See docs/hdiv_vim/polynomial_charge_field.ipynb.  Pure-Python reference; cost ~ per (point, element).
 # ---------------------------------------------------------------------------------------------------
 from math import comb as _comb
 
