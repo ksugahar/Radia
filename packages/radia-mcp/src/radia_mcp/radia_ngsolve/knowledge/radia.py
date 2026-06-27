@@ -2879,7 +2879,7 @@ Both models provide analytical Jacobians for Newton convergence.
 
 ### Play Model (13 tests)
 
-Script: `examples/hysteresis/verify_cpp_play_model.py`
+Script: `validation_test/hysteresis/verify_cpp_play_model.py`
 
 Tests: Forward M(H) sanity (4 tests), C++ vs Python comparison, B-H loop generation,
 state Save/Restore, monotone limit enforcement, Jacobian numerical verification,
@@ -2890,7 +2890,7 @@ solver integration, monotone limits)
 
 ### Energy Model
 
-Script: `examples/hysteresis/verify_cpp_hysteresis.py`
+Script: `validation_test/hysteresis/verify_cpp_hysteresis.py`
 
 Tests: Forward operator, B-H loop, solver integration, performance.
 

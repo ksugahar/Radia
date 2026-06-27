@@ -475,7 +475,7 @@ Independent validation using 2D axisymmetric FEM with z-offset Kelvin
 open boundary.  Full-resolution (eddy currents resolved at delta/5)
 compared with SIBC (hole + Robin BC).
 
-Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
+Script: `validation_test/eddy_current_analytical_validation/reference_2d_axisym.py`
 
 **Formulation**: phi = r * A_phi (H1 space).
 SIBC = Robin BC on hole boundary: `(jw/Z_s) / r * u * v * ds("wp_bnd")`.
@@ -863,11 +863,14 @@ The analytical SIBC gives the correct frequency scaling (sqrt(f)) and is within 
 2. Loss computation on coarse meshes
 3. Quick frequency sweeps (surface-only, no volume DOFs)
 
-### Diagnostic Scripts
+### Diagnostic Archive
 
-- `examples/ngbem_diagnostics/diagnose_vector_fembem.py` -- Root cause diagnostic
-- `examples/ngbem_diagnostics/validate_shield_vs_vector.py` -- Cross-validation
-- `examples/ngbem_diagnostics/test_sibc_loss.py` -- SIBC loss method comparison
+The old one-off `examples/ngbem_diagnostics/*.py` scripts were promoted and
+pruned on 2026-06-27. Use the result-bearing notebook
+`docs/ngbem_diagnostics/ngbem_diagnostics_archive.ipynb` and its synchronized
+JSON `docs/ngbem_diagnostics/ngbem_diagnostics_archive_results.json` for the
+historical source, SHA-256 hashes, and diagnostic notes. New executable checks
+should be added under `validation_test/` with explicit assertions.
 
 ---
 

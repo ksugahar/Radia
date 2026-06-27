@@ -12,7 +12,7 @@ readable FEM/BEM acoustic coupling example.
 
 Run:
 
-    python examples/acoustic_bem/validation_low_frequency_helmholtz_kernel.py
+    python validation_test/acoustic_bem/validation_low_frequency_helmholtz_kernel.py
 """
 
 from __future__ import annotations

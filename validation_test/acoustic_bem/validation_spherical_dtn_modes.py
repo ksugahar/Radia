@@ -13,7 +13,7 @@ pulsating sphere formula.
 
 Run:
 
-    python examples/acoustic_bem/validation_spherical_dtn_modes.py
+    python validation_test/acoustic_bem/validation_spherical_dtn_modes.py
 """
 
 from __future__ import annotations
