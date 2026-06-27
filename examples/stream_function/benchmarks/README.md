@@ -7,21 +7,17 @@ full pipeline (SF solve → contour → single-stroke → field), and reports
 the key metrics in a single JSON file (so the table can be regenerated
 unattended).
 
-## What's here vs what's TODO
+## What's here
 
 | Status | File | Reference |
 |--------|------|-----------|
-| ✅ shipped | `bench_helmholtz_pair.py` | Analytical Helmholtz pair (uniform Bz, Maxwell) |
-| 🚧 stub | `bench_bilac_planar_shim.py` | Bilac et al., MRI shim coil design |
-| 🚧 stub | `bench_turner_cylinder_gz.py` | Turner, IEEE TMI 5 (1986), cylindrical Gz |
-| 🚧 stub | `bench_lemdiasov_ludwig_2005.py` | Lemdiasov & Ludwig 2005, target-field method |
-| 🚧 stub | `bench_coilgen_headtohead.py` | Schwartz et al. CoilGen (OSS comparison) |
-| 🚧 stub | `bench_shielded_iron_yoke.py` | Material kernel via Radia MMM (material-kernel demo) |
+| shipped | `bench_helmholtz_pair.py` | Analytical Helmholtz pair (uniform Bz, Maxwell) |
 
-The TODO stubs document the literature target spec + expected output and
-fail explicitly with `NotImplementedError` so they're visible in the test
-suite. Each is ~1-2 days of careful work to bring up; see the validation
-strategy in MCP topic `aca_tsvd(session_2026_05_30)` section 11.
+Previously this directory also held TODO-only benchmark stubs. Those were
+removed from `examples` because they were not runnable examples. The target
+list is kept in `docs/stream_function/benchmarks.md` and
+`memory/stream_function_benchmark_stubs_prune.md` until a target is
+implemented with JSON output.
 
 ## How to run
 
@@ -29,7 +25,7 @@ strategy in MCP topic `aca_tsvd(session_2026_05_30)` section 11.
 # Single benchmark
 python bench_helmholtz_pair.py --json out_helmholtz.json
 
-# All benchmarks (skips stubs)
+# All benchmarks
 python -m pytest benchmarks/ -v
 ```
 
