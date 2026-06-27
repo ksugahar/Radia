@@ -5,12 +5,10 @@ suite. They are intended as readable gates for scalar Helmholtz FEM/BEM teaching
 code: closed-form first, then mesh or boundary-integral implementations can be
 checked against the same numbers.
 
-Docs promotion: the theory map, full source SHA records, and verified summary
-JSON payloads are mirrored in
-[`docs/acoustic_bem/acoustic_bem_validation.ipynb`](../../docs/acoustic_bem/acoustic_bem_validation.ipynb)
-with synchronized JSON results. The cross-validation registry now advertises
+The cross-validation registry advertises
 `validation_test/acoustic_bem/validation_*_summary.json` as the reusable
-machine-readable artifact family.
+machine-readable artifact family. Keep runnable validation here; promote only a
+polished user-facing explanation to `docs/` when there is one.
 
 ## Pulsating sphere
 

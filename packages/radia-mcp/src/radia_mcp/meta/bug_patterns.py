@@ -900,7 +900,10 @@ PATTERNS: list[dict] = [
                       "committed figures instead of re-running. Verify with "
                       "`jupyter nbconvert --execute` + an error-cell + "
                       "non-ASCII scan.",
-        "related": ["docs/examples_consolidation/PLAN_2026-06-26.md"],
+        "related": [
+            "AGENTS.md: No Development Cruft in SOURCE",
+            "memory/docs_cruft_prune_2026_06_28.md",
+        ],
     },
 ]
 

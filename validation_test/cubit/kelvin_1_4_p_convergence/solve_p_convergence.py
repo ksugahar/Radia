@@ -5,9 +5,8 @@ to the analytical solution.
 Analytical (uniform external Hz, infinite domain, sphere of mu_r at origin):
   Hz_inside = 3 / (mu_r + 2) * H0    (uniform in interior)
 
-Formulation: Omega-Reduced Omega (cf. archived classic Kelvin source in
-docs/kelvin/kelvin_classic_demos_results.json and
-docs/kelvin/legacy_assets/kelvin_transformation/Omega_ReducedOmega/Sphere/).
+Formulation: Omega-Reduced Omega, using the canonical convention in
+docs/kelvin/CONVENTION.md.
 
   Total region (magnetic):  mu * grad(Omega_t) . grad(psi) dx
   Reduced region (air):     mu * grad(Omega_r) . grad(psi) dx

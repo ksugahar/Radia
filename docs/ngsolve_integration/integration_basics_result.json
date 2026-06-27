@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:28Z",
+  "generated_at_utc": "2026-06-27T22:31:17Z",
   "notebook": "docs/ngsolve_integration/integration_basics.ipynb",
-  "notebook_sha256": "8e657d30d101b2d1138dcb1fb322028dcd7d50367b5537590b3bc847bef7b5ec",
+  "notebook_sha256": "941c5c1772a5f30f2bd10440494c9b62e1a5eb4d109e9fa66d0d720be99c7f2f",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -132,8 +132,8 @@
     {
       "cell_index": 8,
       "execution_count": 4,
-      "source_sha256": "47fbef055f1cca64fd1ab9ca29d0b8f3add1ee39b0a04af00cbd572c8332ea2b",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/ngsolve_integration/demo_hysteresis_simkin.png'))",
+      "source_sha256": "ba5ce59f74db01dac5b8a8a988b7b5b565c2b9ee849a5ccfd2ddfea1e390c1e1",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('demo_hysteresis_simkin.png'))",
       "outputs": [
         {
           "output_type": "display_data",
