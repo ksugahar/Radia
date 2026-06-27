@@ -847,6 +847,26 @@ for level in range(max_refinements):
 | 3     | 5,000    | ~0.05%                |
 | 4     | 5,000    | ~0.005%               |
 | 3     | 20,000   | ~0.01%                |
+
+## Equilibrated (Prager-Synge) Estimator + CG-Smoother Acceleration
+
+For an A-formulation solve, a reliable equilibrated estimator is
+eta = ||H_A - grad(Omega)||, obtained from a CHEAP scalar H1 (Omega) problem
+that minimizes ||grad(Omega) - H_A||^2. Key fact: grad(Omega) is curl-free for
+ANY Omega (curl(grad) = 0 identically), so by Prager-Synge the Omega solve can
+be a CG iteration TRUNCATED after ~10-20 steps and still give a valid AMR
+indicator -- only the bound tightness (effectivity) degrades, not validity.
+
+Verified on the mu_r=100 magnetic sphere (axisymmetric, order 2, ~2660 elems):
+CG(20) reaches the direct estimator within ~1.3% (0.00% by CG 50), element-wise
+correlation 0.976 vs direct, top-10% refine-set overlap 97.7%. The dual
+direction (Omega-primal -> A-method/HCurl equilibration) is NOT accelerated this
+way: the equilibration space would be heavier than the primal problem.
+
+Theory: docs/kelvin/Supplement/ErrorEstimator.md (sec 8.6-8.7) +
+docs/kelvin/Supplement/CG-smoother.md. Runnable showcase (executed notebook,
+embedded convergence table / residual curve / element-wise scatter):
+docs/kelvin/Supplement/cg_smoother_demo.ipynb.
 """
 
 KELVIN_IDENTIFY = """

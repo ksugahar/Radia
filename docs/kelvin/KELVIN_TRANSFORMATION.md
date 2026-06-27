@@ -901,6 +901,7 @@ case, but Kelvin transformation handles both cases uniformly.
 | `docs/kelvin/api_plan.md` | API design plan and milestones |
 | `docs/kelvin/Supplement/ErrorEstimator.md` | Equilibrated error estimator theory (adaptive mesh) |
 | `docs/kelvin/Supplement/CG-smoother.md` | CG-smoother acceleration for error estimation |
+| `docs/kelvin/Supplement/cg_smoother_demo.ipynb` | Runnable CG-smoother showcase (executed, embedded outputs) |
 | `docs/kelvin/Supplement/experiment_cg_smoother_equilibration.py` | Test script for CG-smoother |
 | `examples/kelvin_transformation/CONVENTION.md` | Canonical convention declaration (one-page) |
 | `docs/solver/FEM_KELVIN_PLAN.md` | Implementation plan and status |
