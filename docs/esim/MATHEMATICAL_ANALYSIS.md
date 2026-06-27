@@ -134,7 +134,7 @@ The `finite_slab` mode is implemented by
 heated face — the canonical 2-sided plate problem of
 Lavers–Biringer 1985, restricted to 1-sided drive.  The
 `ESIMCellProblemSolver` class ([`esim_cell_problem.py:816`](../../src/radia/esim_cell_problem.py#L816))
-is the legacy infinite-slab/cylinder solver and is the one called
+is the original infinite-slab/cylinder solver and is the one called
 by the production Karl loops.
 
 The unknown is the complex H-field profile inside the conductor.  The
@@ -1129,7 +1129,7 @@ is:
   `--esim-relax 0.5`.
 
 Cross-validation suite:
-[`examples/ih_esim_benchmark/`](../../examples/ih_esim_benchmark/) ships
+[`docs/ih_esim_benchmark/`](../ih_esim_benchmark/) ships
 `benchmark.py` + `analytical_bessel_baseline.py` + `results.json` +
 `benchmark_plot.pdf`.  This is the runnable counterpart to § 5.1 (linear
 Bessel parity).  Extending it to Stoll-envelope and Lavers–Biringer
@@ -1141,7 +1141,7 @@ Closed-form references for the SIBC + ESIM combination:
 
 | Geometry | Reference | Status |
 |---|---|---|
-| Cylinder + linear μ | Wakao–Igarashi–Fujiwara Part 5 (Bessel) | **VERIFIED** (matches to ~10⁻⁴; benchmark at [`examples/ih_esim_benchmark/`](../../examples/ih_esim_benchmark/)) |
+| Cylinder + linear μ | Wakao–Igarashi–Fujiwara Part 5 (Bessel) | **VERIFIED** (matches to ~10⁻⁴; benchmark at [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/)) |
 | Slab + linear μ | Dowell (tanh) | **VERIFIED** (Dowell closed-form baked into `mat.dowell_Zs`) |
 | Cylinder + nonlinear μ (BH) | Stoll 1974 (analytical envelope) | **open** (roadmap § 7) |
 | Plate + 2-sided heating | Lavers–Biringer 1985 | **open** (roadmap § 7; implementation exists at `ESIMFiniteSlabSolver`, no cross-check harness) |
@@ -1253,19 +1253,10 @@ this can be `2`–`3` in our IH benchmarks.
 **Consequence**: the damped-Picard update with a SINGLE `alpha` cannot
 simultaneously satisfy `alpha · L_i < 1` at every DOF.  Picking
 `alpha = 0.3` puts most DOFs deep in contraction but lets the
-hot-spot DOFs sit at `alpha · L_i ≈ 0.6–0.9` — still convergent in
-theory but the iteration "ringing" on those DOFs gives a `dZ_max` noise
-floor of `~5e-2 – 2e-1` that does not fall to `tol = 1e-3` in any
-reasonable number of iterations.  Empirical:
-
-| Damping `alpha` | `--esim-max-iter` | iters used | `dZ_max` last 5 iter | Integrated `P_wp` |
-|---|---|---|---|---|
-| 0.5 | 15 | 15 (cap) | 0.14 – 0.41 | 45.143 W |
-| 0.3 | 30 | 30 (cap) | 0.06 – 0.20 | 45.196 W |
-
-`P_wp` agrees to 0.12 % between the two runs (see
-[`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 6c), but the strict
-per-DOF criterion is missed in both cases.
+hot-spot DOFs sit at `alpha · L_i ≈ 0.6–0.9`.  In the current dense
+IGTE sweep, Anderson acceleration with memory 5 and relaxation 0.5
+converges 49 of 54 per-DOF cases.  Five high-current cases reach the
+30-iteration cap and are excluded from quantitative headline maxima.
 
 ### 6.5 Anderson acceleration
 
@@ -1355,16 +1346,12 @@ restart on every iteration after the first deep valley, killing the
 Anderson history and effectively disabling acceleration (verified
 empirically: 18/30 iter restarts with min-ever vs 2/30 with prev-iter).
 
-**Validation on IH per-element benchmark** (steel cylinder, 50 kHz,
-`I_port = 100 A`, `--esim-anderson-m 5 --esim-relax 0.5`):
-
-| Variant | iter cap | restarts | final `dZ_max` | min `dZ_max` | `P_wp` [W] |
-|---|---|---|---|---|---|
-| Plain damped Picard (alpha=0.5) | 15 | n/a | 0.412 | 0.118 | 45.143 |
-| Plain damped Picard (alpha=0.3) | 30 | n/a | 0.131 | 0.063 | 45.196 |
-| Anderson m=5, no safeguard | 30 | n/a | 0.084 | 0.008 | 45.421 |
-| Anderson m=5 + safeguard (vs min-ever) | 30 | 18 | 0.469 | 0.008 | 46.097 |
-| **Anderson m=5 + safeguard (vs prev-iter)** | **30** | **2** | **0.0052** | **0.0052** | **45.438** |
+**Validation on IH per-element benchmark** (steel cylinder, dense
+108-case sweep): the production setting is `--esim-anderson-m 5
+--esim-relax 0.5 --esim-max-iter 30`.  At `I_port = 100 A` and
+`f = 50 kHz`, the per-DOF model converges in 7 iterations and gives
+`P_wp = 18.75 W`; the corresponding scalar uniform model gives
+`P_wp = 30.51 W`.
 
 Safeguarded Anderson with prev-iter restart criterion brings the
 per-DOF `dZ_max` from the ~0.1 noise floor down to **5e-3**, within
@@ -1434,9 +1421,9 @@ scalar-vs-per-element ESIM gap reported in
   - which side of the gap is closer to the FEM truth, AND
   - what the absolute error of EACH method is.
 
-This is the only way to determine whether scalar SIBC's
-over-prediction of P_wp by 22-48 % (in our sweep) is the "real"
-error or whether per-element under-shoots equally.
+This is the only way to determine whether scalar SIBC's over-prediction
+relative to the per-DOF sweep is the dominant absolute error, or whether
+both reduced models deviate comparably from the volumetric solution.
 
 ---
 

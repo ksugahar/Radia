@@ -63,7 +63,7 @@ Two classes ship in [`src/radia/esim_cell_problem.py`](../../src/radia/esim_cell
 
 | Class | File line | Role |
 |---|---|---|
-| `ESIMCellProblemSolver` | 816 | Legacy infinite-domain solver |
+| `ESIMCellProblemSolver` | 816 | Original infinite-domain solver |
 | `ESIMFiniteSlabSolver` | 339 | Finite-thickness / curvature-aware solver (used by all four production scripts) |
 
 ### 2.1 ESIMFiniteSlabSolver — discretisation
@@ -288,14 +288,11 @@ Z_s = anderson.step(Z_s_old, Z_s_new)            # ndarray update
 
 > **DO NOT** use the Galerkin localization
 > `|H_t|_i² ∝ φ_i (Kφ)_i` (which we shipped in v4.47.2 - v4.66.x).
-> It samples the **surface Laplacian**, not the gradient norm.  On
-> the steel cylinder benchmark (I=100 A, f=50 kHz) it mis-places
-> the saturation hot-spot and gave `P_per = 45.4 W` vs the correct
-> `P_per = 18.75 W` — i.e. it **flipped the sign of the per-vs-scalar
-> disagreement** (we initially reported +48 % "scalar
-> under-estimates"; the correct sign is −38.5 %, scalar
-> over-estimates).  The inline comment at
-> `calc_inductance.py:842-848` warns about this in the source.
+> It samples the **surface Laplacian**, not the gradient norm, and can
+> place the saturation hot-spot incorrectly.  The current dense-sweep
+> source of truth uses the triangle-wise P1 surface gradient; at
+> I=100 A and f=50 kHz it gives `P_per = 18.75 W` versus scalar
+> `P_scalar = 30.51 W`.
 
 `Z_s` becomes an `ndarray[ndof]`; the BIE solver accepts this via row-
 scaling: `A[i, :] = 0.5 M - DL + γ[i] · SL · M⁻¹ · K[i, :]` where
@@ -329,7 +326,7 @@ of divergence — but it is **not by itself** evidence of a usable
 result, either.  You must inspect the trajectory.
 
 **Decision rule.**  Plot `esim_history` with
-[`examples/ih_esim_benchmark/plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py),
+[`docs/ih_esim_benchmark/plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py),
 which overlays `dZ` (or `dZ_max`), `Z_s_abs` (with min/max band for
 per-panel), and `|H_t|` per iteration.  Read it as:
 
@@ -340,38 +337,12 @@ per-panel), and `|H_t|` per iteration.  Read it as:
 | `dZ` non-monotone AND `Z_s_abs`, `H_t_rms` still drifting at iter N | Karl genuinely under-relaxed or BH knee straddled | lower `--esim-relax` to 0.3, raise `--esim-max-iter`; do NOT publish the iter-N number |
 | `dZ` oscillates / grows | true divergence (`α L > 1` somewhere) | drop `--esim-relax` to 0.2, check BH curve monotonicity |
 
-**P_wp robustness vs damping / iteration count (pre-2026-05-24, with
-Galerkin localization).**  Two v4.47.2-era runs at the headline
-benchmark (steel cylinder, 50 kHz, I_port = 100 A) gave:
-
-| Run | `--esim-relax` | `--esim-max-iter` | Iters used | `P_wp` [W] | Last-5-iter drift, `<\|Z_s\|>` | Last-5-iter drift, `<\|H_t\|>` |
-|---|---|---|---|---|---|---|
-| v4 | 0.5 | 15 | 15 (capped) | 45.143 | 4.37 % | 8.44 % |
-| v5 | 0.3 | 30 | 30 (capped) | 45.196 | 0.54 % | 0.88 % |
-
-> **Note (2026-05-24)**: the `P_wp ≈ 45 W` values in this table are
-> from the Galerkin localization `|H_t|² ∝ φ_i(Kφ)_i` (which we
-> shipped until v4.66.x).  After switching the per-DOF extractor to
-> the triangle-wise P1 gradient in v4.67.0 (§ 3.3 above), the same
-> benchmark gives **P_per = 18.75 W** (sweep_v2; see
-> [`CROSS_VALIDATION.md` § 6b](CROSS_VALIDATION.md#6b-per-element-vs-scalar-z_s-the-headline-contribution)).
-> The convergence behaviour also changes: with
-> `--esim-anderson-m 5` (production default, v4.68+) per-DOF Karl
-> reaches `dZ_max < 1e-3` in **7-30 iter** across the IGTE 32-case
-> sweep, no longer hitting the `~5e-2` per-DOF noise floor that was
-> typical with plain damped Picard.
-
-The two-run `P_wp` agreement to 0.12 % across damping settings is
-still informative — it shows the **integrated quantity is robust
-even when per-DOF `dZ` has not converged** — but the absolute value
-has shifted with the gradient-extraction fix.
-
-The per-DOF `dZ_max` remained in the 0.06-0.20 range across both
-runs under damped Picard alone — this is the per-element ESIM noise
-floor on the hot-spot DOFs and **cannot** be driven below `~5e-2` by
-damping alone.  Anderson Type-II acceleration (m=5, v4.68+) is what
-breaks past it; see § 6b.2 in `CROSS_VALIDATION.md` for the
-production convergence numbers.
+**Current dense-sweep convergence.**  With `--esim-anderson-m 5`,
+`--esim-relax 0.5`, and `--esim-max-iter 30`, the IGTE dense sweep has
+54 per-DOF cases.  Forty-seven converge in 6--13 iterations, two
+converged outliers need 25--26 iterations, and five high-current cases
+at 500 A and 20--500 kHz hit the cap.  The converged representative
+cell at 100 A and 50 kHz gives `P_per = 18.75 W` in 7 iterations.
 
 ---
 
@@ -537,7 +508,7 @@ target: `calc_inductance.py` scalar path, ~3 days effort.
 | Karl plateaus at `dZ ≈ 0.5` | non-monotone BH curve | print `μ(H)` from the loaded BH file at sample H values |
 | Karl converges to wrong `Z_s` | wrong sign on Robin BC | compare to scalar SIBC at low-H regime; `Z_s_esim ≈ Z_s_dowell` should hold |
 | Karl 50+ iter without convergence | `α` too small OR BH knee straddled | try `α = 0.7` with `max_iter = 30`; check `H_t_rms` vs the BH knee |
-| Karl hits `max_iter` but `Z_s_abs` / `H_t_rms` look plateaued | per-DOF noise floor on worst DOF, not divergence (see § 3.4) | plot `esim_history` with [`plot_karl_history.py`](../../examples/ih_esim_benchmark/plot_karl_history.py); if integrated quantities are monotone, accept the cap or raise `--esim-tol` to 5e-3 |
+| Karl hits `max_iter` but `Z_s_abs` / `H_t_rms` look plateaued | per-DOF noise floor on worst DOF, not divergence (see § 3.4) | plot `esim_history` with [`plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py); if integrated quantities are monotone, accept the cap or raise `--esim-tol` to 5e-3 |
 | Cell Picard inner-loop diverges | `tol` too tight for the BH curve smoothness | raise cell `tol` to 1e-4 (currently hard-coded — see [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) § 2.3) |
 | Per-DOF Karl gives wildly different result from scalar | mass-lumping `M_lump` close to zero on some DOFs | check `min(M_lump)` — should be `>10⁻⁶ × max(M_lump)`; coarsen mesh if not |
 
@@ -561,8 +532,9 @@ in any post-mortem.
 | Per-DOF Karl (166 DOFs × 5 iter) | +7 s | cell-solve `N_DOF × iter` overhead |
 | Per-DOF Karl (5k DOFs × 5 iter) | +200 s | dominates total time |
 
-All numbers are LAB (Windows, MKL, NGSolve 6.2.2603, radia 4.55.3).
-Production deploys (100号機, mdx) match within 10%.
+Dense-sweep headline numbers are locked to radia >= 4.67.0.
+Performance timings are LAB-order estimates (Windows, MKL, NGSolve)
+and production deploys (100号機, mdx) match within 10%.
 
 ---
 
@@ -604,4 +576,4 @@ publication path.
 
 ---
 
-**Document version**: 2026-05-18 (radia v4.55.3+).
+**Document version**: 2026-05-30 (radia v4.67.0+ dense-sweep baseline).

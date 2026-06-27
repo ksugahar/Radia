@@ -1,13 +1,13 @@
 """Persist the per-DOF |H_t| and Z_s of an ESIM per-panel run as
 NGSolve `.sol` files alongside the per-DOF JSON.
 
-The per-panel JSONs (sweep_data/I*_f*_per_panel.json) carry the raw
+The per-panel JSONs (sweep_data_dense/I*_f*_per_panel.json) carry the raw
 arrays `esim_per_panel_H_t`, `esim_per_panel_Z_s_real`, and
 `esim_per_panel_Z_s_imag`.  This script wraps them as NGSolve
 GridFunctions on the workpiece mesh and writes:
 
-    sweep_data/<case>_Ht.sol    # H1 order 1, real
-    sweep_data/<case>_Zs.sol    # H1 order 1, complex
+    sweep_data_dense/<case>_Ht.sol    # H1 order 1, real
+    sweep_data_dense/<case>_Zs.sol    # H1 order 1, complex
 
 so the field is reloadable as a true NGSolve GridFunction --
 feeds the NGSolve → GMSH (`vol2msh`/`GmshPostExport`) post pipeline
@@ -16,7 +16,7 @@ and is the persistence form the lab visualization policy expects.
 Run once per case:
 
     python save_per_panel_sols.py I100_f50k    # 100 A / 50 kHz
-    python save_per_panel_sols.py I300_f10k    # 300 A / 10 kHz (max gap)
+    python save_per_panel_sols.py I500_f10k    # 500 A / 10 kHz (max gap)
 
 Or omit the argument to write both committed cases.
 """
@@ -26,13 +26,13 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-SWEEP = HERE / "sweep_data"
+SWEEP = HERE / "sweep_data_dense"
 VOL = (HERE.parent.parent / "src" / "radia" / "panels" / "samples"
        / "ih_bem_sample_p1.vol")
 
 
 def save_sols_for_case(case: str) -> None:
-    """case is the JSON stem, e.g. 'I100_f50k' or 'I300_f10k'."""
+    """case is the JSON stem, e.g. 'I100_f50k' or 'I500_f10k'."""
     from ngsolve import Mesh, H1, GridFunction, TaskManager, BND
 
     perp = SWEEP / f"{case}_per_panel.json"
@@ -74,7 +74,7 @@ def save_sols_for_case(case: str) -> None:
 
 
 def main():
-    cases = sys.argv[1:] or ["I100_f50k", "I300_f10k"]
+    cases = sys.argv[1:] or ["I100_f50k", "I500_f10k"]
     for c in cases:
         save_sols_for_case(c)
 
