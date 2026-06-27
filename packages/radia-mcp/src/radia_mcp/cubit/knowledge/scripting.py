@@ -2754,7 +2754,23 @@ CUBIT_PYRAMID_HANDLING = """\
 # Pyramid Element Handling
 
 Pyramid elements appear at the interface between hex and tet regions.
-Many FEM solvers do not support pyramids, so they need special handling.
+That is not automatically a Cubit failure: in the lab split, Cubit is the
+hex-led and mixed hex+pyramid+tet lane, while Netgen/OCC is enough for
+tet-only meshes.  Many FEM solvers still do not support pyramids, so they need
+explicit routing and inventory.
+
+Before choosing a downstream parser, run:
+
+```
+cubit_vol_inventory(path="model.vol")
+```
+
+This reports triangle/quad surface records and tet/pyramid/wedge/hex volume
+records without modifying the mesh.  Use it to distinguish:
+
+- tri/tet-only `.vol` -> first-order FEM/BEM education parser is allowed.
+- hex or pyramid present -> keep it in the Cubit/NGSolve mixed-mesh lane, or
+  use a solver/export contract that explicitly supports the conversion.
 
 ## Detecting Pyramids
 
@@ -2789,6 +2805,8 @@ for vol_id in volume_ids:
 ```
 
 **Note**: `set dev on` (developer mode) is required for the `create tet` command.
+Do this only when the receiving solver contract asks for a tet-only mesh.  Do
+not use it as an implicit default in MCP helpers; inventory first, then route.
 
 ## Method 2: Collapse Pyramid to Degenerate Hex
 
@@ -3122,8 +3140,8 @@ translations that shouldn't happen.
 
 | Tool | Role | When to use |
 |---|---|---|
-| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) `imprint + merge` for shared-topology multi-body CAD. (3) Complex CAD that netgen.occ can't handle cleanly. (4) Legacy `.jou` assets. |
-| **build123d** (Python / OCCT) | **tet path, Python-driven** | Default CAD authoring. VSCode-native. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
+| **Cubit** (`.jou`, `cubit.cmd(...)`) | **hex path + mixed-mesh CAD fallback** | (1) Radia/ELF requires hex — **only Cubit can supply**. (2) Hex-led meshes with tet regions and pyramid transition elements. (3) `imprint + merge` for shared-topology multi-body CAD. (4) Complex CAD that netgen.occ can't handle cleanly. (5) Legacy `.jou` assets. |
+| **build123d** (Python / OCCT) + **Netgen/OCC** | **tet-only path, Python-driven** | Default CAD authoring and tet meshing. VSCode-native. build123d → Netgen (tet) → Radia / Gmsh pipeline. AI-writable. |
 | (not used) | | FreeCAD (reproducibility), raw OCCT Python (verbose) |
 
 **Cubit is permanent in the toolchain**, not being deprecated.
@@ -3134,10 +3152,15 @@ satisfies.
 
 - **CAD-only .jou** (primitives + boolean + sweep/revolve/fillet,
   target = tet mesh): yes, port it. See `build123d_crossref` topic.
+- **tet-only mesh request**: prefer build123d/Netgen/OCC unless Cubit-specific
+  CAD cleanup, labeling, or legacy reproducibility is the real point.
 - **.jou that uses `imprint all` / `merge all`**: **keep in Cubit**.
   build123d has no shared-topology concept.
 - **.jou producing hex mesh** (for Radia/ELF): **keep in Cubit**.
   Nothing else supplies hex.
+- **.jou producing hex + tet transition mesh**: **keep in Cubit** and expect
+  pyramid transition elements.  Run `cubit_vol_inventory` on the exported
+  `.vol` before choosing the downstream solver/parser path.
 - **.jou with `block` / `sideset` / `nodeset` tagging**: these have
   no direct build123d equivalent. In the build123d pipeline, use
   `part.label` + `Compound(children=[...])` +
