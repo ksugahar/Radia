@@ -166,5 +166,11 @@ void LinTriField(const double V[3][3], const double r[3], double sigma0,
 void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
 
+/* Closest point on a flat triangle / in a tetrahedron to p -- the Duffy singularity origin x0 for the
+ * order>=3 / curved singular-quadrature charge-potential path (PhiAtHO_Duffy).  out[3]. */
+void ClosestPointTriangle(const double p[3], const double a[3], const double b[3], const double c[3],
+                          double out[3]);
+void ClosestPointTet(const double V[4][3], const double p[3], double out[3]);
+
 } // namespace rad_hdiv
 #endif
