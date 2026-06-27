@@ -578,7 +578,7 @@ def urn(topic: str = "all") -> str:
 
     Use to turn a frequency-domain absorbing-BC / dispersive-layer response into
     a stable broadband time-domain model.  Run the fit with the urn_fit tool.
-    Ref: Sugahara & Sato, IEEE Access 2026; impl examples/universal_relaxation_network.
+    Ref: Sugahara & Sato, IEEE Access 2026; impl docs/universal_relaxation_network.
 
     Args:
         topic: all | overview | method | api | timedomain | application

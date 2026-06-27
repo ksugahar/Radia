@@ -2596,7 +2596,7 @@ passive constant shells (act7_16_wideband_iabc) -- the act7_19_highfreq_iabc_rev
 exact-null route, NOT to the WLS-wideband route, which is clean.
 
 URN (UNIVERSAL RELAXATION NETWORK) as the time-domain REALIZATION layer -- integration assessment
-(VERIFIED 2026-06-15; user pointed to the existing impl examples/universal_relaxation_network, IEEE
+(VERIFIED 2026-06-15; user pointed to the existing impl docs/universal_relaxation_network, IEEE
 Access paper). WHAT URN IS: a KAN-inspired fitter that represents a complex frequency response Z(omega)
 as a SPARSE sum of CIRCUIT-COMPATIBLE PASSIVE basis functions (Debye, Cole-Cole/Davidson, Havriliak-
 Negami, CPE, Warburg=1/sqrt(jw), skin-effect~sqrt(jw), RLC resonance, viscoelastic), each with a direct
