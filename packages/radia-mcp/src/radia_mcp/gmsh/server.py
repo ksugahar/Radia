@@ -21,7 +21,7 @@ from collections import Counter
 import os
 import errno
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
@@ -111,7 +111,7 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
             continue
         total_findings += len(findings)
         try:
-            rel_path = str(py_file.relative_to(PROJECT_ROOT))
+            rel_path = py_file.relative_to(PROJECT_ROOT).as_posix()
         except ValueError:
             rel_path = str(py_file)
         top_files.append({"path": rel_path, "findings": len(findings)})
@@ -147,9 +147,9 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
 
 def _relative_to_project(path: Path) -> str:
     try:
-        return str(path.relative_to(PROJECT_ROOT))
+        return path.relative_to(PROJECT_ROOT).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _numsubedges_triggers(lines: list[str]) -> list[str]:
@@ -162,7 +162,7 @@ def _numsubedges_triggers(lines: list[str]) -> list[str]:
 
 
 def _directory_numsubedges_companion(directory: str) -> dict:
-    companion = str(Path(directory) / "_gmsh_display.geo")
+    companion = str(PurePosixPath(directory) / "_gmsh_display.geo")
     return {
         "geo_companion": companion,
         "geo_template": (
@@ -298,7 +298,7 @@ def gmsh_numsubedges_remediation_plan(directory: str = "examples",
             continue
         total += 1
         rel_for_group = _relative_to_project(py_file)
-        by_directory[str(Path(rel_for_group).parent)] += 1
+        by_directory[str(PurePosixPath(rel_for_group).parent)] += 1
         if len(affected) >= max_items:
             continue
         try:
@@ -311,7 +311,7 @@ def gmsh_numsubedges_remediation_plan(directory: str = "examples",
             "script": rel,
             "triggers": _numsubedges_triggers(lines),
             "cli_hint": "gmsh <result>.msh -numsubedges 4",
-            "geo_companion": str(Path(rel).with_name(geo_name)),
+            "geo_companion": str(PurePosixPath(rel).with_name(geo_name)),
             "geo_template": (
                 f"// Display companion for outputs from {rel}\n"
                 "Mesh.NumSubEdges = 4;\n"
@@ -380,7 +380,7 @@ def gmsh_mesh_generation_remediation_plan(directory: str = "examples",
         total += 1
         total_findings += len(findings)
         rel = _relative_to_project(py_file)
-        by_directory[str(Path(rel).parent)] += len(findings)
+        by_directory[str(PurePosixPath(rel).parent)] += len(findings)
         if len(affected) >= max_items:
             continue
         try:
