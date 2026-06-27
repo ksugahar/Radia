@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **564 tools** across 43 MCP servers.
+Total: **565 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 30 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -128,6 +128,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
 | `build123d_try_race` | Race N build123d script variants in parallel subprocesses, |
 | `build123d_usage` | Get build123d CAD modeling documentation for CAE workflows. |
+| `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
 | `build123d_web_docs` | Fetch live build123d documentation (readthedocs) and grep for `query`. |
 | `cadquery_to_cubit_hex` | End-to-end: cadquery script → STEP → Cubit `cubit_mesh_auto` |
 | `execute_build123d` | Execute a build123d Python script and return geometry information. |

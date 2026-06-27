@@ -8,6 +8,7 @@ build123d -> Netgen -> Radia/NGSolve tet pipeline).
 import math
 import os
 import sys
+import json
 
 import pytest
 
@@ -27,6 +28,8 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           box_face_traction_moment_rows,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
+                                          compare_shape_volume_rows,
+                                          shape_volume_crosscheck_summary,
                                           shape_measurement_comparison_summary,
                                           shape_measurement_inventory_summary,
                                           worst_shape_measurement_comparison_rows,
@@ -54,6 +57,8 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "pyramid transition elements" in doc
     assert "cubit_vol_inventory" in doc
     assert "box_through_cylinder_reference_row" in doc
+    assert "volume as the common currency" in doc
+    assert "build123d_volume_crosscheck" in doc
 
 
 def test_annular_segment_volume_and_validity():
@@ -494,6 +499,52 @@ def test_compare_shape_measurement_rows_marks_pass_fail_and_missing():
     assert by_name["bad"]["reason"] == "outside tolerance"
     assert not by_name["missing"]["passed"]
     assert by_name["missing"]["reason"] == "missing measured row"
+
+
+def test_shape_volume_crosscheck_summary_accepts_cubit_and_external_cad_rows():
+    reference = [
+        {"name": "iron", "volume": 100.0, "area": 220.0},
+        {"name": "coil", "volume": 25.0, "area": 60.0},
+    ]
+    measured = {
+        "cubit": [
+            {"name": "iron", "volume": 100.0000001},
+            {"name": "coil", "volume": 24.9999999},
+        ],
+        "external_cad": {
+            "rows": [
+                {"name": "iron", "volume": 100.0},
+                {"name": "coil", "volume": 25.0},
+            ],
+        },
+    }
+
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-8)
+
+    assert summary["policy"] == "build123d_external_cad_volume_crosscheck"
+    assert summary["status"] == "ok"
+    assert summary["ok_for_cad_roundtrip_volume"] is True
+    assert summary["sources"] == ["cubit", "external_cad"]
+    assert summary["max_volume_rel_error"] < 1.0e-8
+
+    rows = compare_shape_volume_rows(reference, [{"name": "iron", "volume": 100.0}], measured_label="cubit")
+    by_name = {row["name"]: row for row in rows}
+    assert by_name["iron"]["passed"]
+    assert not by_name["coil"]["passed"]
+    assert by_name["coil"]["reason"] == "missing measured row"
+
+
+def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
+    from radia_mcp.build123d.server import build123d_volume_crosscheck
+
+    reference = [{"name": "box", "volume": 24.0}]
+    measured = {"cubit": [{"name": "box", "volume": 24.0}]}
+    payload = json.loads(build123d_volume_crosscheck(json.dumps(reference), json.dumps(measured)))
+
+    assert payload["status"] == "ok"
+    assert payload["n_sources"] == 1
+    assert payload["comparison_sets"][0]["source"] == "cubit"
+    assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
 
 
 def test_compare_shape_measurement_rows_compares_bbox_when_present():
