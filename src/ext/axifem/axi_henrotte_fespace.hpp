@@ -18,6 +18,7 @@ using namespace ngcomp;
 class AxiHenrotteFESpace : public FESpace {
 public:
     int axi_order = 1;   // 1 = P1/Q1, 2 = P2/Q2
+    bool curved_quad = false;  // order=2 quad: opt into AxiHenrotteFE_Q2_Curved
 
     AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & flags);
 
@@ -31,7 +32,8 @@ public:
             "                     vertex DOFs only\n"
             "  order=2          : P2 triangle (6 DOFs; curved-mesh aware) or\n"
             "                     Q2 axis-aligned quad (9 DOFs: vertex + edge\n"
-            "                     midnode + face center).";
+            "                     midnode + face center).  Pass curvedquad=True\n"
+            "                     to use the opt-in curved Q2 quad element.";
         return doc;
     }
 
