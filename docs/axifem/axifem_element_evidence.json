@@ -73,7 +73,7 @@
   "cauer_validation_summary": [
     {
       "family": "Q1 quad",
-      "source": "examples/axifem/research/verification/test_hiruma_disk_q1_results.json",
+      "source": "validation_test/axifem/research/verification/test_hiruma_disk_q1_results.json",
       "selected_mesh": "very fine",
       "mesh": {
         "ne": 15170,
@@ -101,7 +101,7 @@
     },
     {
       "family": "Q2 quad",
-      "source": "examples/axifem/research/verification/test_hiruma_disk_q2_results.json",
+      "source": "validation_test/axifem/research/verification/test_hiruma_disk_q2_results.json",
       "selected_mesh": "fine",
       "mesh": {
         "ne": 2530,

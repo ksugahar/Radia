@@ -36,7 +36,7 @@ import mpmath as mp
 mp.mp.dps = 80
 
 sys.path.insert(0,
-    str(Path("S:/Radia/01_GitHub/examples/axifem/research/tests")))
+    str(Path("S:/Radia/01_GitHub/validation_test/axifem/research/verification")))
 
 from ngsolve import (
     Mesh, BilinearForm, LinearForm, CoefficientFunction, TaskManager,

@@ -202,7 +202,7 @@ normalisation-invariant and is the comparison endpoint:
 `axihenrotte p=2` beats `axihenrotte p=1` at every k (closer to the BEM
 Cauer reference). This is **Phase 3-(3) cross-validation**, executed
 2026-05-06; the test lives at
-[`tests/test_3way_cauer_cross_validation.py`](../../examples/axifem/research/verification/test_3way_cauer_cross_validation.py).
+[`tests/test_3way_cauer_cross_validation.py`](../../validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py).
 
 The high-mode (k ≥ 4) divergence is the expected combined effect of FE
 discretisation error at higher modes and the numerical conditioning of the
@@ -216,8 +216,8 @@ arithmetic, which we have not implemented here).
 Within the FE side, `R_{2k}` and `L_{2k+1}` are directly comparable
 between order=1 and order=2 because both use the same Foster-amplitude
 normalisation (the same RHS vector `b`). The values are recorded in the
-JSON results files [`tests/test_hiruma_disk_q1_results.json`](../../examples/axifem/research/verification/test_hiruma_disk_q1_results.json)
-and [`tests/test_hiruma_disk_q2_results.json`](../../examples/axifem/research/verification/test_hiruma_disk_q2_results.json)
+JSON results files [`tests/test_hiruma_disk_q1_results.json`](../../validation_test/axifem/research/verification/test_hiruma_disk_q1_results.json)
+and [`tests/test_hiruma_disk_q2_results.json`](../../validation_test/axifem/research/verification/test_hiruma_disk_q2_results.json)
 under the keys `"R_2k"` and `"L_2k_plus_1"` for each stage.
 
 [^Nagamine2026]: H. Nagamine, T. Yamaguchi, K. Sugahara, S. Hiruma, T.
@@ -318,7 +318,7 @@ M_sigma_phi[i,j] = σ / (4 π) · ∫ m_i · m_j / s ds dz
 The original `derive_quad_q2_henrotte.wls` shipped with a coefficient-of-W
 convention that was 2× too small for `K` and 2π× too small for `M`; this was
 diagnosed and corrected during Phase A2 (commit
-[077e7b03](../../examples/axifem/research/)). Anyone re-deriving the wls
+[077e7b03](legacy_assets/axifem/research/)). Anyone re-deriving the wls
 script must keep the Hessian convention.
 
 ## Cross-validation references (per-element, machine precision)
@@ -327,7 +327,7 @@ script must keep the Hessian convention.
   τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
 * `axifem/axifem_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
-* `examples/axifem/research/validate_q2_codegen.py` — runs both at the
+* `validation_test/axifem/research/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
 
 ## File layout (post-2026-05-10 Path A integration)
@@ -364,11 +364,11 @@ docs/axifem/
   AXIFEM_ELEMENT_EVIDENCE.ipynb           # executed P1/Q1/P2/Q2/P2-curved/Q2-curved proof
   axifem_element_evidence.json            # version-stamped result JSON consumed by notebook
 
-examples/axifem/                         # research-tier examples
+docs/axifem/legacy_assets/axifem/                         # research-tier examples
   disk_convergence/                       # Cu disk τ_1 vs BEM-Foster ref
   nmr_validation/                         # FEMM NMR axisymmetric reproduction
 
-examples/axifem/research/                   # research workspace (no longer
+docs/axifem/legacy_assets/axifem/research/                   # research workspace (no longer
   tests/                                  # installable; pyproject removed)
   scripts/                                #   research scripts: BEM Cauer cross-
   demos/                                  #   validation, breakdown studies, etc.
@@ -384,7 +384,7 @@ mathematical derivation behind the C++ source.
 The Mathematica derivation lives upstream at
 `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/`
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
-Re-run `examples/axifem/research/codegen_q2_henrotte.py` if the
+Re-run `docs/axifem/legacy_assets/axifem/research/codegen_q2_henrotte.py` if the
 JSON changes — the regenerated `q2_henrotte_generated.hpp` should be
 copied into `src/ext/axifem/`.
 
