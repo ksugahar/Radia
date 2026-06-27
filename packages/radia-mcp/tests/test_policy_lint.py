@@ -139,10 +139,10 @@ def test_tracked_only_provenance_scan_for_repo_root(tmp_path):
                    check=True, stdout=subprocess.DEVNULL)
 
     tracked_findings = policy_lint.scan_text_tree(tmp_path, tracked_only=True)
-    assert [item[0] for item in tracked_findings] == ["examples\\public_leak.py"]
+    assert [item[0] for item in tracked_findings] == ["examples/public_leak.py"]
 
     all_findings = policy_lint.scan_text_tree(tmp_path)
     assert {item[0] for item in all_findings} == {
-        "examples\\public_leak.py",
-        "examples\\private_scratch.py",
+        "examples/public_leak.py",
+        "examples/private_scratch.py",
     }

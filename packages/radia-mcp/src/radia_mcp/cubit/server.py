@@ -147,7 +147,7 @@ def _lint_directory_summary(directory: str = "examples", top_n: int = 10) -> dic
 			continue
 		total_findings += len(findings)
 		try:
-			rel_path = str(py_file.relative_to(PROJECT_ROOT))
+			rel_path = py_file.relative_to(PROJECT_ROOT).as_posix()
 		except ValueError:
 			rel_path = str(py_file)
 		top_files.append({"path": rel_path, "findings": len(findings)})
