@@ -23,7 +23,7 @@ for open boundary induction heating problems.
 
 **Validated (2026-04-14, 2D axisymmetric Kelvin)**:
 Full-resolution vs SIBC (hole + Robin): L < 1%, P < 2% for Cu/Steel/Al,
-R/delta = 3 to 160.  Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
+R/delta = 3 to 160.  Script: `validation_test/eddy_current_analytical_validation/reference_2d_axisym.py`
 
 **Key fixes applied**:
 - Robin sign: `+jw/Z_s` (positive)

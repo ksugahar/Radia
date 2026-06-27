@@ -185,7 +185,7 @@ workpiece as a meshed volume.
 
 **Files**:
 - `src/radia/panels/calc_fem_kelvin.py --formulation scattered`
-- `examples/eddy_current_analytical_validation/sphere_uniform_field.py`
+- `validation_test/eddy_current_analytical_validation/sphere_uniform_field.py`
 - SHOWCASE NOTEBOOK `docs/eddy_current_analytical_validation/validation_suite.ipynb`
   (live Dodd-Deeds rod impedance + frequency sweep, plus the documented Smythe
   sphere FEM-scattered<3% / FEM-total~34% / BEM cross-validation table).
@@ -261,7 +261,7 @@ Robin BC on the hole boundary.  Validated in 2D axisymmetric Kelvin FEM:
 For H1/phi formulation: Robin term = `(jw/Z_s)/r * u * v * ds("wp_bnd")`
 For 3D HCurl formulation: Robin term = `(jw/Z_s) * A_t . v_t * ds("sibc")`
 
-Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
+Script: `validation_test/eddy_current_analytical_validation/reference_2d_axisym.py`
 
 ### Scattered-Field + H1 Interpolation of A_inc: Cancellation Error
 

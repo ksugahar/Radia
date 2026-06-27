@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/acoustic_bem/validation_acoustic_impedance_sweep.py
+    python validation_test/acoustic_bem/validation_acoustic_impedance_sweep.py
 
 For a local acoustic impedance load under normal incidence,
 
