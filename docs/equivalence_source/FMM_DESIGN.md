@@ -109,10 +109,11 @@ Both pieces are CoefficientFunctions, so the result is itself a CF
 suitable for `gf_H.Set(...)` into a volumetric mesh — automatic
 integration with NGSolve post-processing.
 
-The Phase B kernel:
+The Phase B production kernel:
 
-    E(r) = ∮ [-jωμ_0 Ḡ_e · J_s + ∇ψ × M_s - (n·E) ∇ψ] dS'
-    H(r) = ∮ [+jωε_0 Ḡ_e · M_s + ∇ψ × J_s - (n·H) ∇ψ] dS'
+    J_s = n × H,     M_s = n × E
+    E(r) = ∮ [-jωμ_0 Ḡ_e · J_s + ∇ψ × M_s] dS'
+    H(r) = ∮ [+jωε_0 Ḡ_e · M_s + ∇ψ × J_s] dS'
 
 decomposes into:
 
@@ -122,9 +123,8 @@ decomposes into:
 - `∇ψ × M_s`, `∇ψ × J_s`: curl of Helmholtz SL.
   → `MaxwellSingleLayerPotentialOperatorCurl` (provides curl of the
   Helmholtz SL).
-- `(n·E) ∇ψ`, `(n·H) ∇ψ`: gradient of Helmholtz SL with scalar
-  density.
-  → `HelmholtzSingleLayerPotentialOperator` + `Grad(...)`.
+The scalar-charge terms are not added separately in this dyadic form;
+the longitudinal contribution is contained in the Maxwell SL operator.
 
 The dyadic `(1/k²) ∇∇` correction is handled internally by Maxwell SL
 — no special low-k cancellation handling needed at the *operator*

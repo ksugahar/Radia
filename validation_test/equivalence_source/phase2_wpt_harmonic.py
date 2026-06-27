@@ -28,7 +28,7 @@ Run:
     python phase2_wpt_harmonic.py
 
 Output:
-    results_phase2.json   (includes "status": "KNOWN_LIMITATION")
+    results_phase2.json
 """
 
 from __future__ import annotations
@@ -42,7 +42,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
+REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "src"))
 
 from radia.equivalence_source import NearFieldSource, MU_0, EPS_0, C0
 
@@ -161,9 +162,17 @@ def main():
     results = []
     max_E_err = 0.0
     max_H_err = 0.0
+    max_H_abs_err_when_zero = 0.0
+    h_zero_abs_threshold = 1e-12
     for p, er, hr, ea, ha in zip(obs, E_rec, H_rec, E_ana, H_ana):
         eE = float(np.linalg.norm(er - ea) / np.linalg.norm(ea))
-        eH = float(np.linalg.norm(hr - ha) / np.linalg.norm(ha))
+        h_norm = float(np.linalg.norm(ha))
+        h_abs = float(np.linalg.norm(hr - ha))
+        if h_norm > h_zero_abs_threshold:
+            eH = h_abs / h_norm
+        else:
+            eH = 0.0 if h_abs <= h_zero_abs_threshold else float("inf")
+            max_H_abs_err_when_zero = max(max_H_abs_err_when_zero, h_abs)
         max_E_err = max(max_E_err, eE)
         max_H_err = max(max_H_err, eH)
         print(f"  ({p[0]:+6.1f},{p[1]:+6.1f},{p[2]:+6.1f})  "
@@ -176,19 +185,20 @@ def main():
             "H_rec_re": hr.real.tolist(), "H_rec_im": hr.imag.tolist(),
             "E_ana_re": ea.real.tolist(), "E_ana_im": ea.imag.tolist(),
             "H_ana_re": ha.real.tolist(), "H_ana_im": ha.imag.tolist(),
-            "E_rel_err": eE, "H_rel_err": eH,
+            "E_rel_err": eE,
+            "H_rel_err": eH,
+            "H_abs_err": h_abs,
+            "H_ana_norm": h_norm,
+            "H_zero_abs_threshold": h_zero_abs_threshold,
         })
 
     print("-" * 96)
-    # KNOWN LIMITATION: scalar Green's-function form undershoots in
-    # deep near-field; this test is expected to FAIL the 2% threshold
-    # until the full dyadic Green's function is implemented.  See
-    # docstring for full explanation.
     accept = (max_E_err <= 0.02) and (max_H_err <= 0.02)
-    status = "KNOWN_LIMITATION" if not accept else "PASS"
+    status = "PASS" if accept else "FAIL"
     print(f"Max relative E error: {max_E_err*100:.2f}%, "
           f"H error: {max_H_err*100:.2f}%  --  {status}")
-    print("(See docstring -- harmonic near-field requires dyadic GF correction.)")
+    print(f"Zero-H absolute-error max: {max_H_abs_err_when_zero:.3e} A/m "
+          f"(threshold {h_zero_abs_threshold:.1e})")
 
     out = HERE / "results_phase2.json"
     out.write_text(json.dumps({
@@ -212,6 +222,8 @@ def main():
             "n_obs": len(obs),
             "max_E_rel_err": max_E_err,
             "max_H_rel_err": max_H_err,
+            "max_H_abs_err_when_zero": max_H_abs_err_when_zero,
+            "H_zero_abs_threshold": h_zero_abs_threshold,
             "t_recon_ms": dt * 1000,
             "accept_threshold": 0.02,
             "status": status,
@@ -219,10 +231,7 @@ def main():
         "obs_results": results,
     }, indent=2))
     print(f"Wrote: {out}")
-    # Exit 0 even on the known-limitation case (this is a documentation
-    # script, not a hard regression gate).  When dyadic GF is
-    # implemented, flip this back to `return 0 if accept else 1`.
-    return 0
+    return 0 if accept else 1
 
 
 if __name__ == "__main__":
