@@ -39,7 +39,7 @@ def test_gauss_point_hmatrix_linear_sphere_matches_analytic_chargegram():
         got = hdiv_demag_solve(mesh, 100.0, Hext, gram_eps=1e-6,
                                near_factor=2.0, gram_backend="gauss", gauss_near_factor=2.0)
     assert got["gram_backend"] == "gauss"
-    assert got["linear_solver"] == "mass-riesz-gmres"   # default 'auto' = mass-riesz-preconditioned GMRES
+    assert got["linear_solver"] == "mass-riesz-cg"   # default 'auto' = mass-riesz CG (gauss op's own C++ CG)
     assert got["hmat_stats"]["n_dof"] > got["n_charge"]   # point H-matrix, not charge-entry H-matrix
     rel_m = abs(got["M_avg"][2] - ref["M_avg"][2]) / abs(ref["M_avg"][2])
     assert rel_m < 5e-3

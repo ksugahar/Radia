@@ -706,6 +706,45 @@ void RadHACApKBase::MatVec(const std::vector<double>& x, std::vector<double>& y)
     }
 }
 
+void RadHACApKBase::MatVecTranspose(const std::vector<double>& x, std::vector<double>& y) {
+    if (!m_valid || !m_leafmtxp || !m_control) {
+        std::fill(y.begin(), y.end(), 0.0);
+        return;
+    }
+    int nd = HACApK_leafmtxp_get_nd(m_leafmtxp);
+    HACApK_matvec_transpose_wrapper(m_leafmtxp, m_control, x.data(), y.data(), nd);
+    // (loop-mode deflation L L^T is symmetric, so its transpose contribution is identical)
+    if (m_defl_nplaq > 0 && m_defl_alpha != 0.0) {
+        for (int p = 0; p < m_defl_nplaq; p++) {
+            double c = 0.0;
+            for (int k = m_defl_offsets[p]; k < m_defl_offsets[p + 1]; k++)
+                c += m_defl_signs[k] * x[m_defl_dofs[k]];
+            c *= m_defl_alpha;
+            for (int k = m_defl_offsets[p]; k < m_defl_offsets[p + 1]; k++)
+                y[m_defl_dofs[k]] += m_defl_signs[k] * c;
+        }
+    }
+}
+
+void RadHACApKBase::MatVecSym(const std::vector<double>& x, std::vector<double>& y) {
+    if (!m_valid || !m_leafmtxp || !m_control) {
+        std::fill(y.begin(), y.end(), 0.0);
+        return;
+    }
+    int nd = HACApK_leafmtxp_get_nd(m_leafmtxp);
+    HACApK_matvec_sym_wrapper(m_leafmtxp, m_control, x.data(), y.data(), nd);
+    if (m_defl_nplaq > 0 && m_defl_alpha != 0.0) {   // L L^T is already symmetric
+        for (int p = 0; p < m_defl_nplaq; p++) {
+            double c = 0.0;
+            for (int k = m_defl_offsets[p]; k < m_defl_offsets[p + 1]; k++)
+                c += m_defl_signs[k] * x[m_defl_dofs[k]];
+            c *= m_defl_alpha;
+            for (int k = m_defl_offsets[p]; k < m_defl_offsets[p + 1]; k++)
+                y[m_defl_dofs[k]] += m_defl_signs[k] * c;
+        }
+    }
+}
+
 void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
     if (!m_valid || !m_leafmtxp || !m_control) return;
 

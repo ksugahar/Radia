@@ -185,6 +185,24 @@ void HACApK_matvec_wrapper(
     double *y,
     int nd);
 
+/* Transpose matvec: y = A^T x (mirror of HACApK_matvec_wrapper with l/t roles swapped). */
+void HACApK_matvec_transpose_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd);
+
+/* Symmetric matvec: y = G_sym x, G_sym EXACTLY symmetric (built from the upper-triangular leaves;
+ * the lower triangle is the exact transpose of the upper).  Valid only for a symmetric cluster tree
+ * (rows == cols, one geometry -- e.g. the charge Gram), where the leaf partition is symmetric. */
+void HACApK_matvec_sym_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd);
+
 /* Free all H-matrix resources (call before HACApK_free_leafmtxp/lcontrol) */
 void HACApK_free_hmatrix_wrapper(
     void *leafmtxp,
