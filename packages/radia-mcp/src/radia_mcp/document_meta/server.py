@@ -11,11 +11,9 @@ Cross-cutting document helpers that do not belong to one document type:
   * document_meta_examples_notebook_audit -- examples -> docs or validation_test audit
   * document_meta_panel_layout_audit -- root-level panels migration impact audit
 
-Promoted + REDESIGNED 2026-06-02 from mcp-server-document.document_meta
-(LAB-private) to radia-mcp (public PyPI).  The redesign replaced the old
-hard dependency on the (private) grant_writing tools with a declarative
-lint registry over radia-mcp's own subpackages (presentation / paper_writing
-/ poster), so document_meta no longer imports grant_writing.
+Promoted + REDESIGNED 2026-06-02 into radia-mcp's public PyPI package.
+The lint registry now covers radia-mcp's public document subpackages
+(grant_writing / presentation / paper_writing / poster).
 
 Usage:
     mcp-server-document-meta              # stdio
@@ -40,12 +38,12 @@ register_status_tool(
     description=(
         "Cross-cutting document helpers: deadline countdown, manuscript "
         "version diff, LaTeX template scaffolding, and an all-domain lint "
-        "orchestrator (registry over radia-mcp presentation / paper_writing "
-        "/ poster lints; grant lint stays LAB-private), plus Radia repo "
+        "orchestrator (registry over radia-mcp grant_writing / presentation "
+        "/ paper_writing / poster lints), plus Radia repo "
         "notebook-result and panel-layout audits."
     ),
     subpackage="radia_mcp.document_meta",
-    related_servers=["presentation", "paper-writing", "poster", "bibliography"],
+    related_servers=["grant-writing", "presentation", "paper-writing", "poster", "bibliography"],
     optional_deps=["pymupdf"],
 )
 
