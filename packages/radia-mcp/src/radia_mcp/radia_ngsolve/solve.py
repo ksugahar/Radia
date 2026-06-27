@@ -319,7 +319,7 @@ def saturated_secant_inductance(mesh, nu_of_B, Jz, pos_region, neg_region, n_tur
     below its unsaturated (linear) value -- the Ld(i) saturation knee that underlies
     saturated dq / MTPA maps. ``nu_of_B`` is the callable reluctivity (smooth bounded so
     Picard converges); ``**solve_kw`` -> relax/max_iter/tol/order of the nonlinear solve.
-    Validated examples/comsol_class/saturating_inductance.py."""
+    Validated."""
     A = solve_planar_magnetostatic_nonlinear(mesh, nu_of_B, Jz=Jz, **solve_kw)
     return coil_flux_linkage_2d(A, mesh, pos_region, neg_region, n_turns, depth) / current
 
@@ -350,7 +350,7 @@ def incremental_inductance_matrix(flux_linkages, currents, di):
     permeability APPARENT/secant inductance (:func:`saturated_secant_inductance`, the freeze of
     nu at the operating |B|) is LARGER than this incremental value in saturation -- use THIS
     tangent matrix for small-signal / control / dq-current-loop design. Validated
-    examples/comsol_class/cross_saturation_tensor.py (reciprocity + secant-vs-incremental)."""
+    (reciprocity + secant-vs-incremental)."""
     n = len(currents)
     L = [[0.0] * n for _ in range(n)]
     for k in range(n):
@@ -387,7 +387,7 @@ def pm_machine_constant(lam_plus, lam_minus, dtheta):
     because a current I in a winding with PM flux linkage lambda_m(theta) feels the co-energy
     torque T = I dlambda_m/dtheta. Compute Ke here from the no-load back-EMF (PM-only coil
     flux linkage at theta +/- dtheta); the FE torque-per-amp Kt = (T(I) - T(0))/I (eggshell
-    torque, current minus cogging) matches it. Validated examples/comsol_class/kt_ke.py."""
+    torque, current minus cogging) matches it. Validated."""
     return (lam_plus - lam_minus) / (2.0 * dtheta)
 
 
@@ -408,8 +408,7 @@ def frozen_reluctivity(A, nu_of_B):
     and the freeze stops reproducing the operating point); and the freeze only reproduces a
     CONVERGED nonlinear solve, so a smooth bounded nu(B) (Picard converges) is required --
     re-solving one linear step with the frozen nu and comparing flux linkage is the
-    built-in convergence + correctness check. Validated to 0.5 %
-    (examples/comsol_class/frozen_permeability.py)."""
+    built-in convergence + correctness check. Validated to 0.5 %."""
     B = CoefficientFunction((grad(A)[1], -grad(A)[0]))
     return nu_of_B(B)
 
@@ -1632,8 +1631,7 @@ def slot_leakage_permeance(conductor_height, slot_width, opening_height=0.0, ope
     current-free series air permeance h_o/w_o (defaults to the slot width if not given).
 
     Use ``slot_leakage_inductance`` for the inductance. The 1/3 conductor term and the
-    same-width opening term are EXACT (validated to 0.000 %, examples/comsol_class/
-    slot_leakage.py); a NARROWED opening (w_o < w_s) adds a few % of tooth-shoulder fringing the
+    same-width opening term are EXACT (validated to 0.000 %); a NARROWED opening (w_o < w_s) adds a few % of tooth-shoulder fringing the
     simple series form omits, so the closed form is then a slight LOWER bound."""
     lam = conductor_height / (3.0 * slot_width)
     if opening_height > 0.0:
@@ -1710,8 +1708,7 @@ def dowell_resistance_factor(skin_ratio, layers):
     m=1); the second is the PROXIMITY loss, which grows as ~m^2 -- the field from the other layers
     builds up across the stack, so the outer layers see a large field and dissipate heavily. The
     reason multi-layer (and litz vs solid) winding design is dominated by AC loss: halving the foil
-    thickness or splitting layers cuts F_R fast. Validated against the m-foil eddy FE to 0.00 %
-    (examples/comsol_class/dowell_winding.py)."""
+    thickness or splitting layers cuts F_R fast. Validated against the m-foil eddy FE to 0.00 %."""
     if skin_ratio < 1e-2:
         return 1.0
     D = skin_ratio
@@ -1745,8 +1742,7 @@ def lamination_eddy_skin_factor(thickness, skin_depth):
     law) and F -> 3/xi as xi -> inf (heavy skin effect: the flux cannot penetrate, so the loss grows
     only as d, not d^2, and the classical formula over-predicts). The field-driven counterpart of the
     current-driven deep-bar k_R (:func:`deep_bar_resistance_factor`) -- same diffusion, different
-    drive. Validated against the numerically-integrated exact slab loss to 1e-6
-    (examples/comsol_class/lamination_eddy_loss.py)."""
+    drive. Validated against the numerically-integrated exact slab loss to 1e-6."""
     xi = thickness / skin_depth
     if xi < 0.1:
         return 1.0 - xi ** 4 / 630.0              # series (the direct form loses precision near 0)
@@ -1782,7 +1778,7 @@ def carter_coefficient(slot_pitch, gap, slot_opening):
     the gap were k_C*g (:func:`effective_air_gap`). The standard machine-design correction that
     feeds the magnetising inductance, the no-load flux, and the slot-ripple permeance. Carter's
     1901 conformal-mapping result; the (b_o/g)^2/(5+b_o/g) form is the textbook fit (validated
-    against the scalar-potential gap permeance to < 0.3 %, examples/comsol_class/carter_coefficient.py)."""
+    against the scalar-potential gap permeance to < 0.3 %)."""
     gamma = (slot_opening / gap) ** 2 / (5.0 + slot_opening / gap)
     return slot_pitch / (slot_pitch - gamma * gap)
 
@@ -1820,7 +1816,7 @@ def magnetizing_inductance_per_phase(gap_diameter, stack_length, effective_gap, 
     from the fundamental MMF -> air-gap B -> flux/pole -> flux-linkage chain. SYNTHESISES the
     campaign -- kw1 from :func:`winding_factor`, g_eff from :func:`effective_air_gap` -- and scales
     as 1/g_eff (Carter slotting lowers it), 1/p^2, and (kw1 N_ph)^2. Validated against the explicit
-    derivation chain (examples/comsol_class/magnetizing_inductance.py)."""
+    derivation chain."""
     return (2.0 * MU0 / math.pi) * (kw1 * turns_per_phase) ** 2 * gap_diameter * stack_length \
         / (pole_pairs ** 2 * effective_gap)
 
@@ -1869,7 +1865,7 @@ def magnetized_body_internal_field(remanence, demag_factor):
     (N = 1/3) holds 2 Br/3, a transverse-magnetized infinite cylinder (N = 1/2) holds Br/2, a thin
     slab magnetized through-thickness (N = 1) holds ~0. The accompanying internal field is the
     self-demagnetizing :func:`demagnetizing_field`. Validated against an NGSolve transverse-cylinder
-    solve to ~0.2 % (open-domain truncation; examples/comsol_class/demagnetizing_factor.py)."""
+    solve to ~0.2 % (open-domain truncation)."""
     return remanence * (1.0 - demag_factor)
 
 
@@ -2017,7 +2013,7 @@ def magnetic_circuit_gap_force(N, current, gap, iron_path, mu_r, area):
     high mu). ``area`` = pole-face area [m^2] (= face height * stack depth in 2D). The
     FE force (B_gap_FE^2 * area / 2mu0 from the solved gap field) tracks this to a few %
     (fringing/leakage), and F*(gap+iron_path/mu_r)^2 is constant across gaps -- the
-    1/g^2 reluctance force law. Validated examples/comsol_class/reluctance_actuator.py."""
+    1/g^2 reluctance force law. Validated."""
     B_gap = magnetic_circuit_gap_field(N, current, gap, iron_path, mu_r)
     return B_gap * B_gap * area / (2.0 * MU0)
 
@@ -2040,7 +2036,7 @@ def magnetic_circuit_inductance(N, area, gap, iron_path, mu_r):
     opens (more flux short-cuts the window). On the #27 window frame the FE L is
     ~1.27x (g=4 mm) -> ~1.52x (g=9 mm) this model: the gap that leakage adds is
     exactly the physical content the lumped model misses. Validated
-    examples/comsol_class/gapped_core_inductor.py (radia FE vs an independent 2D FE
+    (radia FE vs an independent 2D FE
     reference to ~0.4 %; vs this leakage-free model as the documented lower bound)."""
     return N * N * MU0 * area / (gap + iron_path / mu_r)
 
@@ -2059,7 +2055,7 @@ def magnetic_circuit_bh_operating_point(mmf, iron_path, h_of_b, gap=0.0):
     gap adds the large linear term B*gap/mu0 that quickly de-saturates the iron (the leakage-free
     #27/#39/#42 story, now with a real saturating BH). Validated self-consistently (residual -> 0,
     the constant-mu limit reproduces NI/(l_fe/mu0/mu_r + gap/mu0) exactly) and against a live
-    nonlinear FE of a closed iron-frame electromagnet (examples/comsol_class/nonlinear_magnetic_circuit.py)."""
+    nonlinear FE of a closed iron-frame electromagnet."""
     def rhs(B):
         return h_of_b(B) * iron_path + (B / MU0) * gap
     lo, hi = 0.0, 10.0                                   # B bracket [T]; rhs(0)=0 <= mmf <= rhs(10)
@@ -2201,7 +2197,7 @@ def pm_circuit_loadline_gap_field(Br, magnet_len, gap, iron_path, mu_r, mu_rec=1
     across the window instead of reaching the gap, so a 2D FE solve gives B_gap BELOW this,
     and the deficit GROWS as the gap opens (the gap reluctance rises, flux prefers the leak
     path). On the #27 window frame the FE B_gap is ~0.86x (g=2 mm) -> ~0.68x (g=8 mm) this
-    model. Validated examples/comsol_class/pm_loadline.py (radia FE vs an independent 2D FE
+    model. Validated (radia FE vs an independent 2D FE
     reference to ~0.3 %; vs this leakage-free load line as the documented upper bound)."""
     return Br * magnet_len / (magnet_len + mu_rec * gap + iron_path / mu_r)
 
@@ -2268,7 +2264,7 @@ def two_wire_external_inductance(separation, radius):
     Z0 = sqrt(L/C) = (1/pi) sqrt(mu0/eps0) acosh(D/2a) = 120 acosh(D/2a) [ohm]. radia gets L
     from the FE field energy 2W/I^2 (``force.magnetic_energy_2d`` over the air -- the +-I
     pair's line-dipole field energy CONVERGES, no outer-boundary dependence, unlike a single
-    wire). Validated examples/comsol_class/two_wire_inductance.py."""
+    wire). Validated."""
     return MU0 / math.pi * math.acosh(separation / (2.0 * radius))
 
 
@@ -2283,7 +2279,7 @@ def wire_over_ground_inductance(height, radius):
     above the plane, so L is exactly HALF the two-wire value at separation 2h:
     ``wire_over_ground_inductance(h, a) = 0.5 * two_wire_external_inductance(2 h, a)``. radia reads
     it from the FE energy ABOVE the ground (Dirichlet A=0 plane); with Z0 = c L_ext it is the
-    single-conductor transmission line. Validated examples/comsol_class/wire_over_ground.py (FE vs
+    single-conductor transmission line. Validated (FE vs
     closed form to a few %, the open-domain energy truncation, FE below the h->inf-domain value)."""
     return MU0 / (2.0 * math.pi) * math.acosh(height / radius)
 
@@ -2299,7 +2295,7 @@ def two_wire_loop_inductance(separation, radius):
     2*:func:`internal_inductance_round_wire` is radius-independent (mu0/4pi) and is the
     LOW-frequency value -- it rolls off via the skin effect (see
     :func:`skin_effect_internal_inductance_ratio`). radia gets it from the FE field energy
-    2(W_air + W_wire1 + W_wire2)/I^2. Validated examples/comsol_class/two_wire_loop_inductance.py."""
+    2(W_air + W_wire1 + W_wire2)/I^2. Validated."""
     return two_wire_external_inductance(separation, radius) + 2.0 * internal_inductance_round_wire()
 
 
@@ -2331,7 +2327,7 @@ def image_force_wire_iron(current, height):
     magnitude.) radia gets F as the Lorentz body force int J x B over the wire (its symmetric
     self-field nets to zero; the iron's image field provides F). With a large-but-FINITE iron
     block F is ~4 % below this (finite block != infinite half-plane); -> exact as the block
-    grows. Validated examples/comsol_class/image_force.py."""
+    grows. Validated."""
     return MU0 * current * current / (4.0 * math.pi * height)
 
 
@@ -2346,8 +2342,7 @@ def internal_inductance_round_wire():
     :func:`two_wire_external_inductance`); it sets the DC/low-frequency inductance and rolls
     OFF as the skin effect expels current at high frequency. radia gets it from the wire-interior
     field energy ``2*force.magnetic_energy_2d(B, mesh, 'wire')/I^2`` (boundary-independent --
-    Ampere fixes the interior B from the enclosed current). Validated
-    examples/comsol_class/internal_inductance.py."""
+    Ampere fixes the interior B from the enclosed current). Validated."""
     return MU0 / (8.0 * math.pi)
 
 
@@ -2379,8 +2374,7 @@ def skin_effect_internal_inductance_ratio(q):
     less magnetic energy). The imaginary
     part /omega of the round-wire INTERNAL impedance -- the inductive twin of
     :func:`skin_effect_resistance_ratio`; together Z_internal(omega) = Rdc*Rac_ratio +
-    j*omega*(mu0/8pi)*Lint_ratio. Needs scipy. Validated vs the radia eddy solve
-    (examples/comsol_class/ac_internal_inductance.py)."""
+    j*omega*(mu0/8pi)*Lint_ratio. Needs scipy. Validated vs the radia eddy solve."""
     from scipy.special import kelvin
     be, ke, bep, kep = kelvin(q)
     ber, bei, berp, beip = be.real, be.imag, bep.real, bep.imag

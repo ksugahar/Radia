@@ -8,7 +8,6 @@ frozen-nu problem superposes exactly:
 
 (exact in the continuum; FE residual ~0.5 %).  NO external data -- the recombination is the
 ground truth.  This is the engine behind saturated-machine Ld(id,iq)/Lq maps.
-See examples/comsol_class/frozen_permeability.py.
 """
 import math
 import os
