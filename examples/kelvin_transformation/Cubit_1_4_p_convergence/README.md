@@ -80,16 +80,21 @@ sign convention.
 
 | File | Role |
 |------|------|
-| `mesh_and_export.py` | Cubit Python: build geometry, mesh, sideset/block, copy-mesh Kelvin (1/4 reduction), export `.vol` at p=1, 2, 3 |
-| `solve_p_convergence.py` | NGSolve Python: Omega-Reduced Omega + Kelvin solver, probe Hz at origin, compare to analytical |
+| `validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py` | Promoted Cubit Python fixture: build geometry, mesh, sideset/block, copy-mesh Kelvin (1/4 reduction), export `.vol` at p=1, 2, 3 |
+| `validation_test/cubit/kelvin_1_4_p_convergence/solve_p_convergence.py` | Promoted NGSolve Python fixture: Omega-Reduced Omega + Kelvin solver, probe Hz at origin, compare to analytical |
 | `p_convergence.json` | JSON results (last run) |
 
 ## Run
 
 ```bash
-python mesh_and_export.py --orders "1,2,3"
-python solve_p_convergence.py --orders "1,2,3"
+cd ../../..
+python validation_test/cubit/kelvin_1_4_p_convergence/mesh_and_export.py --orders "1,2,3"
+python validation_test/cubit/kelvin_1_4_p_convergence/solve_p_convergence.py --orders "1,2,3"
 ```
+
+The original example-layer scripts were archived with full source and SHA-256
+in `docs/kelvin/kelvin_remaining_examples_archive_results.json` before being
+removed from `examples/`.
 
 ## Why 1/4 and not 1/8
 

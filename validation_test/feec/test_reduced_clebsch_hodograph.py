@@ -1,6 +1,6 @@
 """Golden lock: reduced-potential Clebsch hodograph (path A) on the exact sphere.
 
-Runs examples/clebsch_legendre/reduced_clebsch_hodograph.py and asserts:
+Runs validation_test/clebsch_legendre/reduced_clebsch_hodograph.py and asserts:
 
   - the hodograph recovers the flux psi and potential Phi of the real
     reduced-potential field (sphere = uniform source + induced-dipole reaction);
@@ -16,7 +16,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "clebsch_legendre")
+EXDIR = os.path.join(HERE, "..", "clebsch_legendre")
 
 
 @pytest.mark.slow

@@ -1,0 +1,80 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T05:26:54Z",
+  "notebook": "docs/kelvin/kelvin_remaining_examples_archive.ipynb",
+  "notebook_sha256": "07b02bde40c18f963b59f61e32490294b6342c1d6b98c391e4826ffcf22cde9d",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/kelvin/kelvin_remaining_examples_archive.ipynb",
+    "cells": 5,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 2,
+    "output_count": 3,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "f1901d39c68c91a030b5e6d3ccf1bc8fdd2cbc36acb28a12f2702c31282cb061",
+      "source_preview": "from pathlib import Path\nimport json\n\ncandidates = [\n    Path('kelvin_remaining_examples_archive_results.json'),\n    Path('docs/kelvin/kelvin_remaining_examples_archive_results.json'),\n]\narchive = next((p for p in candidates if p.exists()), None)\nassert archive is not None, f'archive JSON not found in {candidates}'\ndata = json.loads(archive.read_text(encoding='utf-8'))\nsummary = data['summary']\nprint('archive:', archive)\nprint('record_count:', summary['record_count'])\nprint('validation_test_relocated_count:', summary['validation_test_relocated_count'])\nprint('archived_only_count:', summary['archived_only_count'])\nprint('total_source_lines:', summary['total_source_lines'])\nprint('total_source_bytes_utf8:', summary['total_source_bytes_utf8'])\nassert summary['record_count'] == 22\nassert all(r['source'] and len(r['sha256']) == 64 for r in data['records'])\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 189,
+          "text_sha256": "249dd990cfeff0229f9191dbad8e99e119628e6dfc86101b569f2a3b461ea9f9",
+          "text_preview": "archive: kelvin_remaining_examples_archive_results.json\nrecord_count: 22\nvalidation_test_relocated_count: 2\narchived_only_count: 20\ntotal_source_lines: 6062\ntotal_source_bytes_utf8: 217417\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "c0d30d9107cb541789de114306acb3ca5db7b631301504c05a5a7c011b71c915",
+      "source_preview": "from collections import Counter\nfrom IPython.display import Markdown, display\n\nlane_counts = Counter(r['promotion_lane'] for r in data['records'])\nrows = ['| Promotion lane | Count |', '|---|---:|']\nfor lane, count in sorted(lane_counts.items()):\n    rows.append(f'| `{lane}` | {count} |')\ndisplay(Markdown('\\n'.join(rows)))\n\nsample_rows = ['| Path | Lane | Lines | SHA-256 prefix | Promoted to |', '|---|---|---:|---|---|']\nfor r in data['records']:\n    promoted = r.get('promoted_to') or ''\n    sample_rows.append(f\"| `{r['path']}` | `{r['promotion_lane']}` | {r['line_count']} | `{r['sha256'][:12]}` | `{promoted}` |\")\ndisplay(Markdown('\\n'.join(sample_rows)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

@@ -1,7 +1,9 @@
 """Regression test for Cubit + Kelvin + Omega-Reduced Omega + p>=2.
 
-Covers `examples/kelvin_transformation/Cubit_1_4_p_convergence/` as a
-ladder gate (per `tests/ -> examples/ -> panels/` governance).  Runs:
+Covers the promoted validation fixture in
+`validation_test/cubit/kelvin_1_4_p_convergence/`.  The original
+research example is archived in the docs Kelvin notebooks per the
+examples -> docs/validation_test promotion policy.  Runs:
 
   1. `mesh_and_export.py` -- builds a 1/4 sector magnetic-sphere mesh
      (mu_r = 100, R = 0.20 m, Kelvin offset 0.60 m) and exports
@@ -32,15 +34,24 @@ import unittest
 
 SAMPLE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "..", "..", "examples", "kelvin_transformation",
-    "Cubit_1_4_p_convergence",
+    "kelvin_1_4_p_convergence",
 )
 SAMPLE_DIR = os.path.normpath(SAMPLE_DIR)
 
 
 def _run(script, args):
     cmd = [sys.executable, os.path.join(SAMPLE_DIR, script)] + list(args)
-    out = subprocess.run(cmd, capture_output=True, text=True, cwd=SAMPLE_DIR)
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    out = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=SAMPLE_DIR,
+        env=env,
+    )
     if out.returncode != 0:
         raise RuntimeError(
             f"{script} failed (exit {out.returncode}):\n"
