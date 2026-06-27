@@ -26,8 +26,9 @@ URN provides the causal broadband surrogate.
 
 Reference: K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network
 for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit
-Synthesis," IEEE Access, 2026.  Canonical implementation + paper + benchmarks:
-examples/universal_relaxation_network/.
+Synthesis," IEEE Access, 2026.  Canonical runtime implementation:
+src/radia/urn; paper assets and benchmarks:
+docs/universal_relaxation_network/.
 
 API (this module):
   get_urn_documentation(topic) -- knowledge text (this module)
@@ -36,7 +37,6 @@ API (this module):
 """
 
 import os
-import sys
 
 URN_OVERVIEW = r"""
 # Universal Relaxation Network (URN)
@@ -92,9 +92,9 @@ threshold), returning tau (in seconds), alpha/beta, weight_magnitude, branch.
 """
 
 URN_API = r"""
-# URN API (canonical impl: examples/universal_relaxation_network/)
+# URN API (canonical impl: radia.urn)
 
-from universal_relaxation_network import (
+from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist)
 
 config = URNConfig(n_debye=3, n_cole_cole=2, n_warburg=1,
@@ -183,26 +183,6 @@ def get_urn_documentation(topic: str = "all") -> str:
             + ", ".join(_TOPICS) + ".")
 
 
-def _resolve_urn_core() -> str:
-    """Locate the canonical URN implementation (examples/universal_relaxation_network)
-    by walking up from this file, and put it on sys.path.  Returns the path."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    cur = here
-    for _ in range(12):
-        cand = os.path.join(cur, "examples", "universal_relaxation_network")
-        if os.path.isfile(os.path.join(cand, "universal_relaxation_network.py")):
-            if cand not in sys.path:
-                sys.path.insert(0, cand)
-            return cand
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            break
-        cur = parent
-    raise ImportError(
-        "URN core not found: expected examples/universal_relaxation_network/"
-        "universal_relaxation_network.py above " + here)
-
-
 def run_urn_fit(freqs, Z, n_debye=3, n_cole_cole=2, n_warburg=1,
                 n_cole_davidson=0, sparsity_weight=0.01,
                 n_epochs=2000, n_restarts=3, spice=True):
@@ -211,10 +191,9 @@ def run_urn_fit(freqs, Z, n_debye=3, n_cole_cole=2, n_warburg=1,
 
     freqs : array of frequencies in Hz.   Z : complex array (same length).
     Lower n_epochs / n_restarts for a faster (rougher) fit."""
-    _resolve_urn_core()
     import numpy as np
     import torch
-    from universal_relaxation_network import (
+    from radia.urn import (
         URNConfig, train_urn, generate_spice_netlist)
 
     freqs = np.asarray(freqs, dtype=float).ravel()
