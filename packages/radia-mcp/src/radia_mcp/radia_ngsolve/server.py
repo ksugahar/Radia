@@ -45,6 +45,7 @@ from .knowledge.force_validation import get_force_validation_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
 from .knowledge.standalone_panels import get_standalone_panels_documentation
+from .knowledge.loop_learning import get_loop_learning_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
 from .knowledge.taskmanager import get_taskmanager_knowledge
 from .knowledge.cln_sibc_orthogonal import (
@@ -1910,6 +1911,29 @@ def standalone_panels(topic: str = "") -> str:
         topic: Empty for the full document, or one of the topics above.
     """
     return get_standalone_panels_documentation(topic)
+
+
+@mcp.tool()
+def loop_learning(topic: str = "overview") -> str:
+    """
+    Public-safe CAE loop learning rules distilled from repeated validation
+    rotations. Use this after a multi-tool loop has produced artifacts and the
+    user asks whether the MCP server has actually learned from them.
+
+    Topics:
+      overview                -- artifact -> MCP learning workflow
+      dual_lane               -- split one artifact into public/source-tool lanes
+      mesh_geometry_vol       -- .vol, tri/tet, block registration, geometry checks
+      force_moment            -- Lorentz, Maxwell traction, coenergy, moments
+      motor_airgap_torque     -- Br/Bt harmonic torque phase and sign gates
+      rf_acoustic_passivity   -- acoustic impedance and two-port passivity gates
+      mcp_closure             -- collected/distilled/encoded/verified/learned labels
+      all                     -- complete document
+
+    Args:
+        topic: Topic name, or "all".
+    """
+    return get_loop_learning_documentation(topic)
 
 
 @mcp.tool()
