@@ -8,8 +8,7 @@ COMSOL uses for the capacitance matrix):
 
     -div(eps grad V) = rho ,  E = -grad V ,  W = 1/2 integral eps |grad V|^2 ,  C = 2W/V^2
 
-Validated against the spherical-capacitor closed form C = 4 pi eps0 a b / (b - a)
-(examples/comsol_class/capacitance_3d.py).
+Validated against the spherical-capacitor closed form C = 4 pi eps0 a b / (b - a).
 """
 import math
 import numpy as np

@@ -131,7 +131,7 @@ def constrained_bar_thermal_stress(E, alpha, mean_dT):
 
     where <dT> is the LENGTH-AVERAGE rise (for a parabolic Joule profile, <dT> =
     (2/3) dT_max). Compressive (negative) for heating. The structural end of the
-    electro-thermo-mechanical chain (examples/comsol_class/electro_thermo_mech.py)."""
+    electro-thermo-mechanical chain."""
     return -E * alpha * mean_dT
 
 
@@ -144,7 +144,7 @@ def thermal_bending_tip_deflection(alpha, dT_thickness, thickness, length):
 
     The thermal-bimorph / bimetallic-strip actuator principle (homogeneous beam, linear
     gradient). Distinct from :func:`constrained_bar_thermal_stress` (AXIAL blocked expansion
-    -> stress, no bending). Validated examples/comsol_class/thermal_bending.py to 0.24 %."""
+    -> stress, no bending). Validated to 0.24 %."""
     return alpha * dT_thickness * length ** 2 / (2.0 * thickness)
 
 
@@ -160,7 +160,7 @@ def bimetal_tip_deflection(alpha1, alpha2, dT, thickness, length):
     :func:`thermal_bending_tip_deflection` (ONE material, through-thickness GRADIENT):
     here a uniform dT + a material Delta-alpha drives the bending. Pass alpha as a
     region-wise CF to solve_linear_elasticity(thermal=(alpha, dT)). Validated
-    examples/comsol_class/bimetallic_strip.py to 1.5 %."""
+    to 1.5 %."""
     kappa = 3.0 * (alpha2 - alpha1) * dT / (2.0 * thickness)
     return kappa * length ** 2 / 2.0
 
@@ -204,5 +204,5 @@ def laminate_residual_stress(E_i, alpha_i, alpha_eff, dT):
     laminate / die-attach / coating residual-stress and bimetal-internal-stress workhorse;
     the FREE-bar counterpart of the externally blocked :func:`constrained_bar_thermal_stress`.
     Pass region-wise E and alpha CFs to solve_linear_elasticity(thermal=(alpha, dT)) and read
-    sigma_xx per layer. Validated examples/comsol_class/laminate_thermal_stress.py to 0.00 %."""
+    sigma_xx per layer. Validated to 0.00 %."""
     return E_i * (alpha_eff - alpha_i) * dT
