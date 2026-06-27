@@ -1,6 +1,6 @@
-# Complex Coil Geometry Examples
+# Complex Coil Geometry Docs Showcase
 
-Examples demonstrating complex multi-segment coil geometry construction using the modern CoilBuilder API.
+Result-bearing docs showcase demonstrating complex multi-segment coil geometry construction using the modern CoilBuilder API.
 
 ## Overview
 
@@ -26,7 +26,7 @@ coil, params = create_beam_steering_coil()
 
 **Test:**
 ```bash
-cd examples/complex_coil_geometry
+cd docs/complex_coil_geometry
 python coil_model.py
 ```
 
@@ -43,7 +43,7 @@ Loads the coil model and visualizes it to verify the geometry is correct:
 
 **Usage:**
 ```bash
-cd examples/complex_coil_geometry
+cd docs/complex_coil_geometry
 python visualize_coils.py
 ```
 
@@ -83,7 +83,7 @@ Loads the coil model and calculates magnetic field distribution on a 3D grid:
 
 **Usage:**
 ```bash
-cd examples/complex_coil_geometry
+cd docs/complex_coil_geometry
 python field_map.py
 ```
 
@@ -256,7 +256,7 @@ Tilt is applied **only once** in the subclass constructors (`StraightSegment`, `
 ## Quick Start
 
 ```bash
-cd examples/complex_coil_geometry
+cd docs/complex_coil_geometry
 python visualize_coils.py
 ```
 
