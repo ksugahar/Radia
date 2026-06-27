@@ -733,6 +733,80 @@ double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
     return rad_ipow(l0, e[0]) * rad_ipow(l1, e[1]);
 }
 
+// EXACT analytic high-order inner potential INT_host(src) m_src(y)/|p-y| dy for FLAT panels, charge degree
+// <= 2 (the hybrid's machine-precision branch -- replaces the point-subtraction PhiAtHO for order<=2, and is
+// EXACT for self/adjacent/far alike, faster than the subtraction since there is NO inner quadrature loop).
+// The affine-coord monomial m(y) = prod_i l_i(y)^e_i  (l_i = alpha_i + beta_i . y, beta_i the host
+// barycentric gradient) is expanded as a PHYSICAL-coord polynomial A + B.y + y^T C y and contracted with the
+// exact moment potentials  INT 1/R, INT y'/R, INT y'(x)y'/R  (rad_hdiv PhiTet/TetMoment1 for cells,
+// TriPotential/TriMoment1/TriMoment2 for faces).  Validated to ~1e-14 vs brute (C:\temp\hdiv_ss\analytic_moment.py).
+// NOTE: a CELL (volume charge) only ever reaches degree p-1 <= 1 for order<=2, so TetMoment2 is not needed;
+// CURVED panels OR tet degree>=2 (order>=3 volume) use the Duffy singular-quadrature path instead (validated
+// in C:\temp\hdiv_ss\tet_duffy.py + tet_tri.py; Python fail-loud guards order>2 until that path is ported).
+double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
+{
+    const int host = m_host[src];
+    const int* e = &m_expo[(size_t)3*src];
+    const int deg = e[0] + e[1] + e[2];
+    // (1) the host barycentric gradients beta_i (l_i = beta_i . (y - V0)) and V0
+    double beta[3][3] = {{0,0,0},{0,0,0},{0,0,0}}, V0[3];
+    int ncoord;
+    if (m_kind[src] == 0) {                                  // tet cell: l_i = Inv_i . (y - V0)
+        const double* V = &m_cellV[(size_t)host*12];
+        const double* Inv = &m_cellInv[(size_t)host*9];
+        for (int i = 0; i < 3; ++i) { beta[i][0]=Inv[3*i]; beta[i][1]=Inv[3*i+1]; beta[i][2]=Inv[3*i+2]; }
+        V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 3;
+    } else {                                                 // tri face: l_i = Gi-combination of a_k . (y - V0)
+        const double* V = &m_faceV[(size_t)host*9];
+        const double* Gi = &m_faceGinv[(size_t)host*4];
+        double a1[3], a2[3];
+        for (int k=0;k<3;++k){ a1[k]=V[3+k]-V[k]; a2[k]=V[6+k]-V[k]; }
+        for (int k=0;k<3;++k){ beta[0][k]=Gi[0]*a1[k]+Gi[1]*a2[k]; beta[1][k]=Gi[2]*a1[k]+Gi[3]*a2[k]; }
+        V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 2;
+    }
+    // (2) collect the (at most 2 for deg<=2) affine factors l_i = alpha_i + beta_i . y
+    double facA[2], facB[2][3]; int nf = 0;
+    for (int i = 0; i < ncoord; ++i) {
+        for (int c = 0; c < e[i]; ++c) {
+            if (nf < 2) {
+                facB[nf][0]=beta[i][0]; facB[nf][1]=beta[i][1]; facB[nf][2]=beta[i][2];
+                facA[nf] = -(beta[i][0]*V0[0]+beta[i][1]*V0[1]+beta[i][2]*V0[2]);
+            }
+            ++nf;
+        }
+    }
+    // (3) multiply the affine factors -> physical polynomial A + B.y + y^T C y  (nf <= 2)
+    double A = 1.0, B[3] = {0,0,0}, C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+    for (int f = 0; f < nf; ++f) {
+        const double al = facA[f]; const double* be = facB[f];
+        const double nA = A*al; double nB[3], nC[3][3];
+        for (int k=0;k<3;++k) nB[k] = A*be[k] + al*B[k];
+        for (int k=0;k<3;++k) for (int l=0;l<3;++l) nC[k][l] = al*C[k][l] + 0.5*(B[k]*be[l] + be[k]*B[l]);
+        A = nA;
+        for (int k=0;k<3;++k) { B[k]=nB[k]; for (int l=0;l<3;++l) C[k][l]=nC[k][l]; }
+    }
+    // (4) contract with the exact moment potentials
+    if (m_kind[src] == 0) {                                  // cell: degree <= 1 for order<=2 (no TetMoment2 needed)
+        double V[4][3]; const double* s=&m_cellV[(size_t)host*12];
+        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k];
+        const double I0 = rad_hdiv::PhiTet(V, p);
+        if (deg == 0) return A * I0;
+        double M1[3]; rad_hdiv::TetMoment1(V, p, M1);
+        return A*I0 + B[0]*M1[0] + B[1]*M1[1] + B[2]*M1[2];
+    }
+    double V[3][3]; const double* s=&m_faceV[(size_t)host*9];
+    for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k];
+    const double I0 = rad_hdiv::TriPotential(V, p);
+    if (deg == 0) return A * I0;
+    double M1[3]; rad_hdiv::TriMoment1(V, p, M1);
+    double res = A*I0 + B[0]*M1[0] + B[1]*M1[1] + B[2]*M1[2];
+    if (deg >= 2) {
+        double M2[3][3]; rad_hdiv::TriMoment2(V, p, M2);
+        for (int k=0;k<3;++k) for (int l=0;l<3;++l) res += C[k][l]*M2[k][l];
+    }
+    return res;
+}
+
 // polynomial-charge inner potential INT_host(src) m_src(y)/|p-y| dy by singularity SUBTRACTION reusing the
 // exact constant-charge PhiTet/TriPotential: = m_src(p) Phi_host(p) + sum_q W_q (m_src(y_q) - m_src(p))/|p-y_q|.
 double RadHACApKChargeGram::PhiAtHO(int src, const double p[3]) const
@@ -832,7 +906,7 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
             std::vector<double> v(P.size());
             for (size_t k = 0; k < P.size(); ++k) {
                 const double p[3] = {P[k][0], P[k][1], P[k][2]};
-                v[k] = PhiAtHO(src, p);
+                v[k] = PhiAtHO_Analytic(src, p);
             }
             phi = &cache.emplace(key, std::move(v)).first->second;
         }
@@ -843,7 +917,7 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
     double s = 0.0;
     for (size_t k = 0; k < P.size(); ++k) {
         const double p[3] = {P[k][0], P[k][1], P[k][2]};
-        s += W[k] * (m_highorder ? PhiAtHO(src, p) : PhiAt(src, p));
+        s += W[k] * (m_highorder ? PhiAtHO_Analytic(src, p) : PhiAt(src, p));
     }
     return s * RAD_INV_FOUR_PI;
 }
