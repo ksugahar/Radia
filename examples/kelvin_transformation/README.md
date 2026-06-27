@@ -154,45 +154,22 @@ Productionized behavior lives in `src/radia/open_boundary` and
 
 ### AdaptiveMesh
 
-Adaptive mesh refinement studies combining Kelvin transformation with ZZ error estimation, Doerfler marking, metric-based remeshing, and Laplacian smoothing.
+Adaptive mesh refinement studies combining Kelvin transformation with ZZ
+error estimation, Doerfler marking, metric-based remeshing, and Laplacian
+smoothing have been promoted out of standalone example scripts.
 
-#### AdaptiveMesh/Omega_ReducedOmega
+The repetitive per-order runners are preserved in
+[`docs/kelvin/kelvin_adaptive_mesh_archive.ipynb`](../../docs/kelvin/kelvin_adaptive_mesh_archive.ipynb)
+and
+[`docs/kelvin/kelvin_adaptive_mesh_archive_results.json`](../../docs/kelvin/kelvin_adaptive_mesh_archive_results.json).
+The final high-level AdaptiveMesh, TEAM7, A-formulation, and plot scripts are
+preserved in
+[`docs/kelvin/kelvin_remaining_examples_archive.ipynb`](../../docs/kelvin/kelvin_remaining_examples_archive.ipynb)
+and
+[`docs/kelvin/kelvin_remaining_examples_archive_results.json`](../../docs/kelvin/kelvin_remaining_examples_archive_results.json).
 
-Convergence studies for the Omega method on sphere, cylinder, cube, and axisymmetric sphere geometries. Each geometry contains subdirectories for polynomial orders (p=2,3,4) and refinement strategies (uniform, ZZ-adaptive, metric-based, maxh). See [AdaptiveMesh/Omega_ReducedOmega/README.md](AdaptiveMesh/Omega_ReducedOmega/README.md) for full results.
-
-| File | Description |
-|------|-------------|
-| `Sphere_3D/compare_convergence.py` | Convergence comparison plot for 3D sphere across orders and methods |
-| `Cylinder_3D/compare_convergence.py` | Convergence comparison plot for 3D cylinder |
-| `Cube_3D/compare_convergence.py` | Convergence comparison plot for 3D cube |
-| `Cube_3D/CubeMesh.py` | Cube mesh generator class for the cube benchmark |
-| `Sphere_Axisymmetric/compare_convergence.py` | Convergence comparison plot for axisymmetric sphere |
-
-#### AdaptiveMesh/TEAM7
-
-TEAM Problem 7 benchmark: 3D eddy current analysis of an asymmetric aluminum plate with a hole, excited by a racetrack coil. See [AdaptiveMesh/TEAM7/README.md](AdaptiveMesh/TEAM7/README.md).
-
-| File | Description |
-|------|-------------|
-| `team7_geometry.py` | Geometry creation and material properties for TEAM 7 |
-| `team7_solver.py` | A-method solver for time-harmonic eddy current analysis |
-| `team7_coil_current.py` | Racetrack coil current density definition as CoefficientFunction |
-| `team7_A_method.py` | Main driver: 3D eddy current analysis using A-phi formulation |
-| `test_weighted_average.py` | Weighted-average convergence study for A-method and Omega-method |
-
-#### AdaptiveMesh/A-formulation
-
-| File | Description |
-|------|-------------|
-| `CircularCoil_A_formulation_with_Kelvin.py` | 3D A-formulation for a circular coil with Kelvin transformation (1/8 model) |
-
-#### Other AdaptiveMesh examples
-
-| Directory / File | Description |
-|------------------|-------------|
-| `adaptive_mesh_with_smoothing.py` | 2D adaptive mesh refinement with ZZ estimator and Laplacian smoothing on an L-shaped domain |
-| `Coil_A_formulation_adaptive.py` | Axisymmetric coil A-formulation with adaptive refinement and z-offset Kelvin transformation |
-| `compare_convergence.py` (parallel wires) | Convergence comparison for 2D parallel-wire adaptive refinement across orders and methods |
+Reusable adaptive-mesh behavior should now be promoted to `src/radia` APIs or
+result-bearing docs notebooks rather than reintroduced as `examples/**/*.py`.
 
 ### docs
 
