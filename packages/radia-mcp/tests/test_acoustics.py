@@ -355,6 +355,43 @@ def test_acoustic_impedance_reflection_reactive_and_oblique_limits():
         acoustic_impedance_reflection_summary(z0, amplitude="complex")
 
 
+def test_acoustic_impedance_slot_power_identity_for_passive_loads():
+    z0 = 1.0
+    cases = [
+        0.0 + 0.25j,
+        0.0 + 1.0j,
+        0.1 + 0.0j,
+        0.1 + 0.5j,
+        1.0 + 0.0j,
+        2.0 + 0.5j,
+        10.0 + 0.0j,
+    ]
+    max_abs_residual = 0.0
+    max_rel_residual = 0.0
+    reactive_absorption = []
+
+    for z_norm in cases:
+        out = acoustic_impedance_reflection_summary(z_norm, rho=1.0, c=1.0)
+        reflection = complex(out["pressure_reflection_coefficient"])
+        p_total = 1.0 + reflection
+        v_total = 1.0 - reflection
+        boundary_power = 0.5 * (p_total * v_total.conjugate()).real
+        expected_power = 0.5 * (1.0 - abs(reflection) ** 2)
+        abs_residual = abs(boundary_power - expected_power)
+        max_abs_residual = max(max_abs_residual, abs_residual)
+        if abs(expected_power) > 1.0e-14:
+            max_rel_residual = max(max_rel_residual, abs_residual / abs(expected_power))
+        if abs(z_norm.real) < 1.0e-14:
+            reactive_absorption.append(abs(out["absorption_coefficient"]))
+
+        assert out["absorption_coefficient"] >= -1.0e-14
+        assert out["boundary_active_intensity_into_load"] == pytest.approx(expected_power)
+
+    assert max_abs_residual < 1.0e-12
+    assert max_rel_residual < 1.0e-12
+    assert max(reactive_absorption) < 1.0e-12
+
+
 def test_acoustic_impedance_radiation_pressure_absorber_reflector_limits():
     rho, c = 1.2041, 343.0
     z0 = rho * c
