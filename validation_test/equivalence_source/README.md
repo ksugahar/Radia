@@ -1,4 +1,4 @@
-# Equivalence-theorem near-field source -- examples
+# Equivalence-theorem near-field source -- validation corpus
 
 Schelkunoff / Love equivalence theorem (Stratton-Chu surface integral)
 for the Radia + NGSolve stack.  Record EM field on a closed surface
@@ -11,6 +11,7 @@ class).  See:
 - [`../../docs/equivalence_source/USER_GUIDE.md`](../../docs/equivalence_source/USER_GUIDE.md) — API usage, workflows
 - [`../../docs/equivalence_source/CPP_DESIGN.md`](../../docs/equivalence_source/CPP_DESIGN.md) — C++ kernel design
 - [`../../docs/equivalence_source/FMM_DESIGN.md`](../../docs/equivalence_source/FMM_DESIGN.md) — Phase D acceleration plan
+- [`../../docs/equivalence_source/demos.ipynb`](../../docs/equivalence_source/demos.ipynb) — result-saved rendered showcase
 - MCP tool `fem_equivalence_source` — knowledge base
 
 ## Phases
@@ -77,12 +78,11 @@ Setup:
 - Workflow: analytic (E, H) on sphere -> NearFieldSource ->
   `evaluate()` at exterior obs points.
 
-Since 2026-05-26 (Phase B C++ kernel), `evaluate()` defaults to the
-**full dyadic Green's function** `(I + grad-grad / k^2) psi`, which
-correctly reproduces the deep-near-field — the historical
-~3× undershoot of the scalar-form Stratton-Chu in this regime is
-gone.  The static path (`evaluate_static_H`) and the harmonic path
-(`evaluate`) agree to machine precision at omega -> 0.
+The harmonic path uses the **full dyadic Green's function**
+`(I + grad-grad / k^2) psi`.  The 1 MHz deep-near-field Hertzian
+dipole case now passes the 2% band; zero-analytical-H observation
+points are checked with an absolute A/m threshold instead of a
+singular relative error.
 
 ### `null_field_property.py` — equivalence-theorem physics check
 
@@ -106,7 +106,7 @@ null is the WHOLE POINT of the equivalence theorem.
 ## Running
 
 ```bash
-cd S:/Radia/01_GitHub/examples/equivalence_source
+cd S:/Radia/01_GitHub/validation_test/equivalence_source
 python phase1_static_coil.py      # ~5 s   (static, analytical coil)
 python phase2_wpt_harmonic.py     # ~3 s   (harmonic, Hertzian dipole)
 python null_field_property.py     # ~2 s   (interior null / exterior real)
