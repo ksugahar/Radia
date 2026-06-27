@@ -96,7 +96,7 @@ you need CLN temporal reduction on top?):
     truncation**, ECT-validated (IEEE Magnetics 2022 — the basis for this module's
     `(a/r)⁴ σ` / `(a/r)² μ` weights); (ii) the Kelvin material-aware DtN as an
     inverse-design kernel (SF-with-iron, conf ~0.83). Full record: MCP
-    `kelvin_transformation(topic="material_exterior")`. Goldens `tests/open_boundary/`, usage `examples/open_boundary/`.
+    `kelvin_transformation(topic="material_exterior")`. Goldens `tests/open_boundary/`, usage `docs/open_boundary/demo_dtn_cln_usage.py`.
 
 ### Is it "better than PML"? — three senses of *superior* (be precise)
 
@@ -368,7 +368,7 @@ had stated loosely. The headline is the conditioning correction:
     non-separable): `kelvin_fem_radial_dtn` (pure numpy), `kelvin_dtn_matrix` + `steklov_spectrum`
     (NGSolve), `band_cln_fit`.
   - Goldens [`tests/open_boundary/`](../../tests/open_boundary/) (`test_dtn_cln.py`, `test_kelvin_dtn.py`);
-    usage [`examples/open_boundary/`](../../examples/open_boundary/).
+    usage [`docs/open_boundary/demo_dtn_cln_usage.py`](demo_dtn_cln_usage.py).
 - **Docs:** [`DTN_SPECTRUM_COMPARISON.md`](DTN_SPECTRUM_COMPARISON.md) (**the measured
   method × regime × multipole comparison** — reproduced by `act7_22_dtn_spectrum_consolidated`),
   [`docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`](../kelvin/DTN_SPECTRUM_COARSE_MESH.md)
