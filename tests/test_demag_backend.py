@@ -2,9 +2,9 @@
 
 Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
 solved by the multipole-moment MMM MSC demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
-is solved by the FEEC HDiv-VIM.  set_demag_backend("yano"|"hdiv") overrides; "auto"/None restores the
-split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed HDiv routing is locked
-by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
+is solved by the FEEC HDiv-VIM.  set_demag_backend("yano"|"hdiv"|"moment_galerkin") overrides;
+"auto"/None restores the split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed
+HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math
 
 import pytest
@@ -18,11 +18,15 @@ def test_backend_default_is_auto():
     assert rad.get_demag_backend() == "auto"
 
 
-def test_set_yano_and_hdiv_accepted():
+def test_set_yano_hdiv_and_moment_galerkin_accepted():
     assert rad.set_demag_backend("yano") == "yano"
     assert rad.get_demag_backend() == "yano"
     assert rad.set_demag_backend("hdiv") == "hdiv"
     assert rad.get_demag_backend() == "hdiv"
+    assert rad.set_demag_backend("moment_galerkin") == "moment_galerkin"
+    assert rad.get_demag_backend() == "moment_galerkin"
+    assert rad.set_demag_backend("mg") == "moment_galerkin"
+    assert rad.set_demag_backend("galerkin") == "moment_galerkin"
     assert rad.set_demag_backend("auto") == "auto"
     rad.set_demag_backend("auto")
 
@@ -33,9 +37,16 @@ def test_invalid_backend_raises():
     rad.set_demag_backend("auto")
 
 
+def test_invalid_per_call_backend_raises_before_cpp_dispatch():
+    with pytest.raises(ValueError):
+        rad.Solve(0, demag_backend="bogus")
+    rad.set_demag_backend("auto")
+
+
 def test_solverconfig_both_ok():
     rad.SolverConfig(demag_backend="hdiv")
     rad.SolverConfig(demag_backend="yano")
+    rad.SolverConfig(demag_backend="moment_galerkin")
     rad.SolverConfig(demag_backend="auto")
     rad.set_demag_backend("auto")
 
