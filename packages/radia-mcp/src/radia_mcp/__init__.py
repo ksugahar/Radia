@@ -53,6 +53,9 @@ Layout:
                             and 3D field reconstruction.
   radia_mcp.presentation  — Research-talk slide lint + PPTX tools (promoted
                             2026-06-02 from LAB-private mcp-server-document).
+  radia_mcp.grant_writing — Grant proposal lint, recommendation-letter
+                            templates, and KDDI social-implementation checks
+                            (promoted 2026-06-27 from the document stack).
   radia_mcp.poster        — Conference poster generation + lint (promoted
                             2026-06-02 from mcp-server-document).
   radia_mcp.pdf           — PDF manipulation: merge/split/metadata/watermark/
@@ -66,12 +69,12 @@ Layout:
   radia_mcp.document_meta — Cross-cutting helpers: deadline countdown, version
                             diff, LaTeX templates, all-domain lint orchestration
                             (promoted + REDESIGNED 2026-06-02 from
-                            mcp-server-document -- lint_all is now a registry
-                            over radia-mcp's own lints, no grant_writing dep).
+                            the document stack -- lint_all is now a registry
+                            over radia-mcp's own document lints).
   radia_mcp.research_project — Project dashboard / scan: consistency, deadline
                             gantt, cross-document-type health (promoted
-                            2026-06-02 from mcp-server-document; grant health is
-                            opportunistic via the private package, no hard dep).
+                            2026-06-02 from the document stack; grant health
+                            now uses radia_mcp.grant_writing).
 
 The radia_ngsolve / ih / peec / electromagnet servers reference radia
 from inside example snippets in their knowledge modules, but importing

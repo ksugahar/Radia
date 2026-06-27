@@ -7,13 +7,9 @@ document types in a project tree:
   * research_project_health_dashboard
   * research_project_scan
 
-Promoted 2026-06-02 from mcp-server-document.research_project (LAB-private)
-to radia-mcp (public PyPI).  Its per-domain health handlers import the
-radia-mcp document subpackages (paper_writing / poster / doc_convert /
-bibliography / pdf).  The grant_writing health handler is graceful: it uses
-the LAB-private mcp-server-document.grant_writing opportunistically if that
-package is installed, otherwise reports grant health as unavailable -- so
-radia-mcp has no hard dependency on the private package.
+Promoted 2026-06-02 into radia-mcp's public PyPI package.  Its per-domain
+health handlers import the radia-mcp document subpackages (grant_writing /
+paper_writing / poster / doc_convert / bibliography / pdf).
 
 Usage:
     mcp-server-research-project              # stdio
@@ -38,11 +34,11 @@ register_status_tool(
     description=(
         "Research-project dashboard: consistency check, deadline gantt, and a "
         "health-dashboard / scan that aggregates per-document-type health "
-        "reports (paper / poster / pptx / bibliography / pdf via radia-mcp; "
-        "grant health is opportunistic via the LAB-private mcp-server-document)."
+        "reports (grant / paper / poster / pptx / bibliography / pdf via "
+        "radia-mcp)."
     ),
     subpackage="radia_mcp.research_project",
-    related_servers=["document-meta", "paper-writing", "poster", "bibliography"],
+    related_servers=["document-meta", "grant-writing", "paper-writing", "poster", "bibliography"],
     optional_deps=["pymupdf", "python-pptx"],
 )
 
