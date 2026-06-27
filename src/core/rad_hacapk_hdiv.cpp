@@ -988,7 +988,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<double>& B_data, int n_face,
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out, bool mass_riesz)
+    double tol, int maxit, int& iters_out, bool mass_riesz, bool symmetric)
 {
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
@@ -1027,7 +1027,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
             q[a] = s;
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
-        MatVec(q, Gq);                                 // O(N log N) Gram H-matvec
+        if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG robust at all N
+        else           MatVec(q, Gq);                  // general (asymmetric ACA) O(N log N) Gram H-matvec
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double ga = Gq[a];
@@ -1076,7 +1077,7 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
     const std::vector<double>& B_data, int n_face,
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out, bool mass_riesz)
+    double tol, int maxit, int& iters_out, bool mass_riesz, bool symmetric)
 {
     const int n_charge = (int)B_indptr.size() - 1;
     // Stand up (or reuse the caller's) TaskManager pool so the HACApK H-matvec runs multi-threaded.
@@ -1114,7 +1115,8 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
             q[a] = s;
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
-        MatVec(q, Gq);                                              // O(N log N) HACApK H-matvec (parallel)
+        if (symmetric) MatVecSym(q, Gq);                           // EXACTLY symmetric -> MINRES robust at all N
+        else           MatVec(q, Gq);                              // general (asymmetric ACA) H-matvec
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) { // y = -B^T (G B x)
             double ga = Gq[a];

@@ -35,39 +35,41 @@ Si-steel C-type at 3000 AT converges relF 0.55 -> 8e-7 in ~24 iters, gap B withi
 de-Rham loops sit in ker(N) and are carried by M_mass (no loop-star), and the scalable C++ charge-Gram
 H-matvec is the only O(N log N) cost.
 
-## Linear solve dispatch -- robust GMRES default, fast C++ CG opt-in
-For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the +N system
-`((1/chi)M_mass + N) m = M_mass h_ext` by GMRES preconditioned with the FULL RT0 H(div) mass inverse
-`M_mass^{-1}` (the MASS RIESZ map).  GMRES (not CG) because the analytic-Gram ACA acquires a spurious
-ANTISYMMETRIC part that GROWS with N and DIVERGES the symmetric CG past nf ~ 20k; GMRES is asymmetry-tolerant
-so it is ROBUST at all scales, while the mass-Riesz preconditioner keeps iters low (measured: 36 iters @
-nf 398 == CG's 33; 152 iters @ nf 21600 where CG diverges to NaN).  The O(N log N) charge-Gram H-matvec is
-the C++ kernel; the GMRES recurrence + the sparse mass solve are cheap Python.  We do not advertise raw
-speed, so a robust default beats a fast-but-fragile one.
-`linear_solver="cpp-cg"` is the FAST moderate-N opt-in: the all-C++ mass-riesz CG
-(`solve_linear_material_mass_riesz`, PARDISO mass factor + C++ Krylov, no Python glue) -- ~same iters as the
-GMRES at moderate N but FAIL-LOUD past nf ~ 20k (the CG scale wall).  `linear_solver="hlu"` is an opt-in
-tet-only system-A H-LU path that builds/factors `A = M_mass + chi*N` directly on face DOFs.
-`linear_solver="python"` is the form-1 GMRES + `M_mass^{-1}` sparse LU (also robust), still used for
-per-region chi / PM-mixed / nonlinear Newton paths until their material-specific operators move to C++.  (The mass Riesz makes the
+## Linear solve dispatch -- SYMMETRIC C++ CG default (symmetric HACApK), GMRES cross-check opt-in
+For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the SPD +N system
+`((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL RT0 H(div) mass inverse
+`M_mass^{-1}` (the MASS RIESZ map), ENTIRELY in C++ (PARDISO mass factor + C++ Krylov, no Python glue).
+CG (not GMRES) because the charge-Gram is applied via the EXACTLY-SYMMETRIC H-matvec (`matvec_sym`): the
+HACApK H-matrix stores both (I,J) and (J,I) leaf blocks but ACA-truncates them INDEPENDENTLY, so the
+GENERAL matvec is only approximately symmetric; `matvec_sym` instead applies the UPPER-triangular leaves
+only -- each upper leaf supplies its own block AND the mirror as its exact transpose -- so the operator is
+machine-symmetric (||G - G^T|| == 0) regardless of the per-block truncation.  This makes CG robust BY
+CONSTRUCTION at all N (it removes the asymmetry failure mode entirely), and the symmetric matvec is ~1.4x
+FASTER than the general one (it touches half the leaves).  So CG is the default again (Sugahara 2026-06-27,
+"対称HACApKを実装しよう。CGがいいね").  `linear_solver="cpp-cg"` is an explicit alias for this symmetric C++ CG.
+`linear_solver="gmres"` is the asymmetry-tolerant cross-check/opt-in (mass-Riesz GMRES on the GENERAL matvec,
+Python recurrence) -- it was the default 2026-06-27 morning before the symmetric matvec landed.
+`linear_solver="hlu"` is an opt-in tet-only system-A H-LU path (`A = M_mass + chi*N` on face DOFs).
+`linear_solver="python"` is the form-1 GMRES + `M_mass^{-1}` sparse LU, used for per-region chi / PM-mixed /
+nonlinear Newton paths until their material-specific operators move to C++.  (The mass Riesz makes the
 operator well-conditioned by construction -- the earlier "h-explosion => need AMS" was a monopole-Gram
 artifact; the accurate analytic Gram + mass Riesz needs no auxiliary-space preconditioner.)
 
-The +N C++ CG opt-in (`cpp-cg`) is a SYMMETRIC solver and requires a symmetric Gram MATVEC: at the loose
-`gram_eps=1e-10` the analytic-Gram ACA approximation becomes too asymmetric for CG and it DIVERGES once
-nf >~ 7000 (the GMRES paths tolerate the asymmetry).  The uniform-linear fast Gram paths (`auto` GMRES and
-`cpp-cg`) still default to the tighter `1e-12` for consistency with the validated CG/far-quad goldens
-(Gram memory +~26%, build +~5%).  GMRES form-1 / nonlinear / H-LU keep `1e-10`.  An explicit `gram_eps`
-always wins.  All material solve paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather
-than returning a wrong M.
+The uniform-linear Krylov paths (default CG = auto/cpp-cg, and the gmres cross-check) build the analytic Gram
+at the tight `gram_eps=1e-12`; per-region / nonlinear / H-LU keep `1e-10`.  (With the symmetric matvec the CG
+no longer NEEDS 1e-12 for symmetry -- symmetry is now STRUCTURAL, independent of the ACA accuracy -- 1e-12 is
+kept only for solution ACCURACY + golden stability.)  An explicit `gram_eps` always wins.  All material solve
+paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.
 
-SCALE WALL of the +N CG (measured 2026-06-27): the symmetric CG works up to nf ~ 7-20k, but the analytic-Gram
-ACA acquires a spurious ANTISYMMETRIC part that GROWS with N -- at nf >~ 20k it breaks CG (diverges to NaN)
-and tightening gram_eps does NOT fix it.  The fail-loud guard catches this; the robust large-mesh path is now
-the default asymmetry-tolerant mass-Riesz GMRES `linear_solver="auto"` (152 iters @ nf 21.6k).  A "real"
-large-N preconditioner (auxiliary/star-space) is still open -- but large-scale demag is the MMMM route's job
-now, not HDiv-VIM (CLAUDE.md role split 2026-06-27: HDiv = curved-surface accuracy + FEM coupling at moderate
-scale).
+ON THE EARLIER "+N CG SCALE WALL" (recorded honestly): the 2026-06-27-morning GMRES retreat was motivated by a
+report that the GENERAL-matvec CG diverges past nf ~ 20k (the spurious ACA antisymmetry growing with N).  When
+the symmetric matvec was added, a re-measurement could NOT reproduce that divergence at HDiv scales: even with
+the lossy monopole far (max asymmetry) + a distorted hex + mu_r up to 1e6, the GENERAL-matvec CG converges
+fine through nf ~ 51k (the measured operator asymmetry stays ~1e-9, far below a CG-breaking level).  So the
+symmetric CG default is a BY-CONSTRUCTION robustness guarantee + a speedup, not a fix for an actively-
+reproducing failure at these scales; the original retreat was conservative.  Large-scale demag is the MMMM
+route's job anyway (CLAUDE.md role split 2026-06-27: HDiv = curved-surface accuracy + FEM coupling at moderate
+scale), so the >50k regime is out of HDiv's lane.
 
 The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
 ~0.3 s mass-riesz solve; nonlinear sphere nf=9403 = 200 s exact build vs ~1 s/Newton-step solve).  Because
@@ -115,7 +117,7 @@ from ._nonlinear import _bh_table_funcs, _table_tensor_tangent, _table_tensor_ta
 _MU0 = 4e-7 * _PI
 # scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
 _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
-_LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "hlu"}
+_LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "gmres", "hlu"}
 _GRAM_BACKENDS = {"analytic", "gauss"}
 
 
@@ -285,15 +287,19 @@ def _tet_hlu_solver_args(d, chi):
 
 
 def _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit):
-    """Uniform-chi linear solve with the MASS RIESZ preconditioner ENTIRELY in C++ (the `cpp-cg` opt-in;
-    H is the analytic charge Gram OR the Gauss point operator -- both expose the C++ method).  Solves the SPD
-    +N system ((1/chi)M_mass + B^T G B) m = M_mass h_ext by CG preconditioned with a PARDISO SPD factor of the
-    RT0 mass M_mass (the mass Riesz map; eigenvalues vs M_mass are (1/chi)+d, d in [0,1], so the spectrum is
-    bounded -> ~3-5x fewer iters than the diagonal Jacobi).  The whole Krylov loop -- the O(N log N)
-    charge-Gram H-matvec, the per-iteration PARDISO mass solve, and the vector ops -- runs in C++, so there
-    is NO Python per-iteration glue and NO splu(M_mass).  (The earlier Python splu+scipy.cg reference that
-    validated this C++ path was deleted once the C++ matched it bit-for-bit, per CLAUDE.md 'Discard the PoC
-    Once the C++ Port Is Verified'.)"""
+    """DEFAULT uniform-chi linear solve: mass-Riesz-preconditioned CG ENTIRELY in C++ on the SPD +N system
+    ((1/chi)M_mass + B^T G B) m = M_mass h_ext, with G applied via the EXACTLY-SYMMETRIC charge-Gram
+    H-matvec (`matvec_sym`: the upper-triangular leaves define both triangles, so the operator is
+    machine-symmetric -- ||G - G^T|| == 0 -- regardless of the per-block ACA truncation).  This is why CG
+    is the default again (Sugahara 2026-06-27, "対称HACApKを実装しよう。CGがいいね"): the symmetric Gram
+    makes CG robust BY CONSTRUCTION at all N -- it removes the asymmetry failure mode that motivated the
+    earlier GMRES retreat (the spurious antisymmetric part of the GENERAL ACA matvec).  Mass-Riesz precond
+    via a PARDISO SPD factor of the RT0 mass (eigenvalues vs M_mass are (1/chi)+d, d in [0,1], bounded ->
+    ~3-5x fewer iters than diagonal Jacobi).  The whole Krylov loop (O(N log N) symmetric H-matvec +
+    per-iteration PARDISO mass solve + vector ops) runs in C++ -- no Python per-iteration glue, no splu.
+    The symmetric matvec is also ~1.4x FASTER than the general one (it skips the lower-triangle leaves).
+    `H.solve_linear_material_mass_riesz(..., symmetric=True)` is the default; pass symmetric=False only to
+    cross-check against the general (asymmetric) matvec."""
     inv_chi = 1.0 / float(chi)
     rhs = np.asarray(Mm @ h_ext).ravel()
     B = B.tocsr()
@@ -305,23 +311,23 @@ def _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit):
     iters = int(res["iters"])
     if iters >= int(maxit):                      # fail-loud (No-Fallbacks): never return a non-converged M
         raise RuntimeError(
-            "hdiv_demag_solve (mass-riesz CG): did NOT converge in %d iters (n_face=%d).  The +N CG is "
-            "SYMMETRIC, and the analytic-Gram ACA acquires a spurious antisymmetric part that GROWS with N "
-            "(~nf > 20k), which breaks CG (tightening gram_eps does NOT fix it).  Use the DEFAULT "
-            "linear_solver='auto' (mass-riesz GMRES, asymmetry-tolerant + robust) for large meshes -- "
-            "'cpp-cg' is the fast moderate-N opt-in only.  (Large-scale demag is the MMMM route's job, not "
-            "HDiv-VIM; CLAUDE.md role split 2026-06-27.)" % (maxit, n_face))
+            "hdiv_demag_solve (symmetric mass-riesz CG): did NOT converge in %d iters (n_face=%d).  The "
+            "operator is the EXACTLY-symmetric SPD +N system, so CG should converge -- a non-convergence "
+            "here means an ill-conditioned material/mesh.  Tighten gram_eps or raise maxit; cross-check "
+            "with linear_solver='gmres' (mass-Riesz GMRES) to isolate.  (Large-scale demag is the MMMM "
+            "route's job, not HDiv-VIM; CLAUDE.md role split 2026-06-27.)" % (maxit, n_face))
     return np.asarray(res["m"], float), iters
 
 
 def _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmres_restart):
-    """DEFAULT uniform-chi linear solve: mass-Riesz-preconditioned GMRES on the SPD-ish +N system
-    ((1/chi)M_mass + B^T G B) m = M_mass h_ext.  GMRES (not CG) because the analytic-Gram ACA acquires a
-    spurious ANTISYMMETRIC part that GROWS with N and DIVERGES the symmetric CG past nf ~ 20k; GMRES is
-    asymmetry-tolerant so it stays ROBUST at all scales, while the mass-Riesz preconditioner M_mass^{-1}
-    keeps the iteration count low (measured: 36 iters @ nf 398 == CG's 33; 152 iters @ nf 21600 where CG
-    diverges).  The O(N log N) charge-Gram H-matvec stays the C++ kernel; the GMRES recurrence + the sparse
-    mass solve are Python (cheap vs the matvec).  Fail-loud on non-convergence (No-Fallbacks)."""
+    """OPT-IN (`linear_solver="gmres"`) uniform-chi linear solve: mass-Riesz-preconditioned GMRES on the +N
+    system ((1/chi)M_mass + B^T G B) m = M_mass h_ext, using the GENERAL (possibly slightly asymmetric)
+    charge-Gram H-matvec.  GMRES is asymmetry-tolerant, so this is the cross-check / fallback for the
+    (default) symmetric C++ CG -- kept because GMRES does not require the operator to be symmetric.  Was the
+    default 2026-06-27 morning when the asymmetric ACA matvec was the only option; superseded the same day by
+    the symmetric matvec (`matvec_sym`), which makes CG robust by construction and is faster, so CG is the
+    default again.  The O(N log N) H-matvec stays the C++ kernel; the GMRES recurrence + sparse mass solve
+    are Python.  Fail-loud on non-convergence (No-Fallbacks)."""
     inv_chi = 1.0 / float(chi)
     rhs = np.asarray(Mm @ h_ext).ravel()
     B = B.tocsr()
@@ -432,11 +438,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     D = None
     uniform_linear = pm_M is None and bh_table is None and mu_r is not None and not isinstance(mu_r, dict)
     chi_uniform = None
-    # Effective ACA Gram tolerance.  The all-C++ `cpp-cg` opt-in is a SYMMETRIC solver and diverges if the
-    # analytic-Gram ACA matvec is not symmetric enough; the default `auto` GMRES is asymmetry-tolerant but
-    # uses the same validated fast-Gram settings as cpp-cg.  Thus uniform-linear auto/cpp-cg get 1e-12 unless
-    # explicit; per-region / nonlinear / H-LU keep 1e-10.  An explicit gram_eps always wins.
-    fast_uniform_path = uniform_linear and linear_solver in ("auto", "cpp-cg")
+    # Effective ACA Gram tolerance.  The uniform-linear Krylov paths (default symmetric CG = auto/cpp-cg,
+    # and the gmres cross-check) use the validated tight fast-Gram eps 1e-12; per-region / nonlinear / H-LU
+    # keep 1e-10.  (With the SYMMETRIC matvec the CG no longer NEEDS 1e-12 for symmetry -- symmetry is now
+    # structural, not ACA-accuracy-dependent -- but 1e-12 is kept for solution ACCURACY + golden stability.)
+    # An explicit gram_eps always wins.
+    fast_uniform_path = uniform_linear and linear_solver in ("auto", "cpp-cg", "gmres")
     eff_gram_eps = gram_eps if gram_eps is not None else (1e-12 if fast_uniform_path else 1e-10)
     # Gram-BUILD near/far split.  The build (per-pair analytic quadrature) dominates the cost (cube N=8: 47s
     # vs a 0.3s mass-riesz solve; nonlinear sphere nf=9403: 200s exact build vs ~1s/Newton-step solve).
@@ -543,19 +550,19 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                 M_chi = _build_chi_mass(mesh, fes, mu_r, Mm, n_face)
                 m, iters = _solve_linear(Mm, M_chi, N_apply, _get_Mfac(), _get_Mprec(), n_face, h_ext,
                                          tol, maxit, gmres_restart)
-            elif linear_solver == "cpp-cg":
-                # FAST moderate-N opt-in: the all-C++ mass-riesz CG (PARDISO mass factor + C++ Krylov, no
-                # Python glue).  ~3-5x fewer iters than a diagonal Jacobi; but the +N CG is SYMMETRIC and the
-                # ACA-Gram antisymmetry breaks it past nf ~ 20k (fail-loud -> use the default 'auto' GMRES).
+            elif linear_solver in ("auto", "cpp-cg"):
+                # DEFAULT: all-C++ mass-Riesz CG on the +N system, with G applied via the EXACTLY-SYMMETRIC
+                # charge-Gram H-matvec (matvec_sym -- upper-triangular leaves define both triangles, so the
+                # operator is machine-symmetric regardless of the per-block ACA truncation).  The symmetric
+                # Gram makes CG robust BY CONSTRUCTION at all N (it removes the asymmetry failure mode of the
+                # general matvec), and the symmetric matvec is ~1.4x faster (skips the lower-triangle leaves)
+                # -> CG is the default again (Sugahara 2026-06-27).  PARDISO mass-Riesz precond, no Python
+                # per-iteration glue.  linear_solver='gmres' is the asymmetry-tolerant cross-check/opt-in.
                 m, iters = _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi_uniform, tol, maxit)
                 solver_used = "mass-riesz-cg"
-            elif linear_solver == "auto":
-                # DEFAULT: mass-Riesz-preconditioned GMRES on the +N system.  ROBUST at all scales (GMRES is
-                # asymmetry-tolerant, unlike CG which the ACA-Gram antisymmetry diverges past nf ~ 20k) while
-                # the M_mass^{-1} preconditioner keeps iters low (== CG at moderate N, converges where CG
-                # cannot).  The O(N log N) charge-Gram H-matvec is the C++ kernel; the GMRES recurrence + the
-                # sparse mass solve are cheap Python.  (We do not sell raw speed, so robust GMRES > fast-but-
-                # fragile CG as the default; cpp-cg is the fast moderate-N opt-in.)
+            elif linear_solver == "gmres":
+                # OPT-IN cross-check: mass-Riesz GMRES on the GENERAL (asymmetry-tolerant) matvec.  Was the
+                # default 2026-06-27 morning before the symmetric matvec landed; kept for cross-validation.
                 m, iters = _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi_uniform, tol, maxit,
                                                           gmres_restart)
                 solver_used = "mass-riesz-gmres"
