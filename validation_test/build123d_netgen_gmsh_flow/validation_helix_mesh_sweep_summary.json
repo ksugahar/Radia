@@ -1,0 +1,46 @@
+{
+  "kind": "build123d_helix_mesh_validation",
+  "validation_class": true,
+  "quick": false,
+  "elapsed_seconds": 35.503,
+  "cases": [
+    {
+      "label": "helix_4turn_baseline",
+      "status": "ok",
+      "passed": true,
+      "volume_rel_error": 3.0260738000474736e-07,
+      "mesh_elements": 31875,
+      "mesh_vertices": 9694,
+      "post_nodes": 9694
+    },
+    {
+      "label": "helix_8turn_tight_pitch",
+      "status": "ok",
+      "passed": true,
+      "volume_rel_error": 2.109604155079315e-06,
+      "mesh_elements": 72052,
+      "mesh_vertices": 26431,
+      "post_nodes": 26431
+    },
+    {
+      "label": "helix_thick_wire_large_radius",
+      "status": "ok",
+      "passed": true,
+      "volume_rel_error": 6.00939678022683e-09,
+      "mesh_elements": 20202,
+      "mesh_vertices": 6958,
+      "post_nodes": 6958
+    },
+    {
+      "label": "helix_slender_long",
+      "status": "ok",
+      "passed": true,
+      "volume_rel_error": 1.782543946451325e-06,
+      "mesh_elements": 64839,
+      "mesh_vertices": 23961,
+      "post_nodes": 23961
+    }
+  ],
+  "n_ok": 4,
+  "n_total": 4
+}

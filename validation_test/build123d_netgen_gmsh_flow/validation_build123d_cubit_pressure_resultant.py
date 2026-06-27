@@ -8,8 +8,8 @@ vocabulary.
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py --vol C:\\temp\\box.vol
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_pressure_resultant.py --vol C:\\temp\\box.vol
 """
 
 from __future__ import annotations
@@ -26,8 +26,8 @@ from build123d import Box, Pos
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 SRC = REPO / "packages" / "radia-mcp" / "src"
-CUBIT_EXAMPLES = REPO / "examples" / "cubit_mesh_export"
-for path in (SRC, CUBIT_EXAMPLES):
+CUBIT_VALIDATION = REPO / "validation_test" / "cubit_mesh_export"
+for path in (SRC, CUBIT_VALIDATION):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 

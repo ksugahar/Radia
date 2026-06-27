@@ -10,8 +10,8 @@ CAE geometry contract:
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_coaxial_region_stack.py --quick
-    python examples/build123d_netgen_gmsh_flow/validation_coaxial_region_stack.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_coaxial_region_stack.py --quick
+    python validation_test/build123d_netgen_gmsh_flow/validation_coaxial_region_stack.py
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ if str(SRC) not in sys.path:
 
 from build123d import Cylinder  # noqa: E402
 
-from _pipeline import run_pipeline_multi, save_record  # noqa: E402
+from radia_mcp.build123d.pipeline import run_pipeline_multi, save_record  # noqa: E402
 from radia_mcp.build123d.modeling import tube  # noqa: E402
 
 
