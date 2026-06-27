@@ -19,7 +19,8 @@ import numpy as np
 import radia as rad
 
 
-# Set units to meters for NGSolve compatibility
+# Radia always uses meters (SI), compatible with NGSolve. No unit setup needed.
+rad.UtiDelAll()
 
 print("="*70)
 print("NGSolve Integration Demo: Basic Field Evaluation")
@@ -40,11 +41,16 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2e6])
+# Radia magnetization is in A/m (NOT Tesla): M = Br / mu_0.
+# Br = 1.2 T  ->  M = 1.2 / (4*pi*1e-7) = 954930 A/m
+MU_0 = 4 * np.pi * 1e-7
+Mr = 1.2 / MU_0  # 954930 A/m
+magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
 
-# Solve the magnetization problem (for soft magnetic materials)
-# For permanent magnets this is optional but doesn't hurt
-rad.Solve(magnet, 0.0001, 1000)
+# A permanent magnet has FIXED magnetization -- no rad.Solve() is needed.
+# (rad.Solve builds the demagnetization interaction matrix for soft-magnetic
+#  materials; a bare PM has no such material, so Solve would raise
+#  "Failed to create Interaction Matrix".)
 
 print("\nRadia magnet created:")
 print(f"  Size: 40mm x 40mm x 60mm")
@@ -95,3 +101,5 @@ except ImportError as e:
 print("\n" + "="*70)
 print("Demo complete")
 print("="*70)
+
+rad.UtiDelAll()
