@@ -1035,4 +1035,19 @@ double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, con
     return acc;
 }
 
+// ---- OUTER-quadrature helpers for the curved charge Gram: curved physical point X(xi) + curved MEASURE at a
+//      reference point (area element for a face, volume element for a cell).  Reuse CurvedTri/TetEval. --------
+void CurvedTriMapMeasure(const double nodes[6][3], double xi, double eta, double X[3], double& dA)
+{
+    double Xu[3], Xv[3]; CurvedTriEval(nodes, xi, eta, X, Xu, Xv);
+    const double cr[3] = {Xu[1]*Xv[2]-Xu[2]*Xv[1], Xu[2]*Xv[0]-Xu[0]*Xv[2], Xu[0]*Xv[1]-Xu[1]*Xv[0]};
+    dA = std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);
+}
+
+void CurvedTetMapMeasure(const double nodes[10][3], double xi, double eta, double zeta, double X[3], double& dV)
+{
+    double Jac[3][3]; CurvedTetEval(nodes, xi, eta, zeta, X, Jac);
+    dV = std::fabs(det3(Jac));
+}
+
 } // namespace rad_hdiv
