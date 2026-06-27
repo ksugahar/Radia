@@ -292,26 +292,26 @@ Properties (set after construction):
 // Compact AMG/AMS factory (TaskManager-based)
 // ============================================================================
 
-inline void ExportCompactAMS(py::module& m) {
+inline void ExportHypreBasedAMS(py::module& m) {
 
   // Type registration for CompactAMG (needed for correct virtual dispatch in Python)
   py::class_<CompactAMG, shared_ptr<CompactAMG>, BaseMatrix>
       (m, "CompactAMGPreconditionerImpl");
 
-  // Type registrations for CompactAMS / ComplexCompactAMS (enables Update() from Python)
-  py::class_<CompactAMS, shared_ptr<CompactAMS>, BaseMatrix>
-      (m, "CompactAMSPreconditionerImpl")
-      .def("Update", py::overload_cast<>(&CompactAMS::Update),
+  // Type registrations for HypreBasedAMS / ComplexHypreBasedAMS (enables Update() from Python)
+  py::class_<HypreBasedAMS, shared_ptr<HypreBasedAMS>, BaseMatrix>
+      (m, "HypreBasedAMSPreconditionerImpl")
+      .def("Update", py::overload_cast<>(&HypreBasedAMS::Update),
            "Rebuild preconditioner with current matrix values (geometry preserved).")
-      .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&CompactAMS::Update),
+      .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&HypreBasedAMS::Update),
            py::arg("new_mat"),
            "Update with a new system matrix, then rebuild.");
 
-  py::class_<ComplexCompactAMS, shared_ptr<ComplexCompactAMS>, BaseMatrix>
-      (m, "ComplexCompactAMSPreconditionerImpl")
-      .def("Update", py::overload_cast<>(&ComplexCompactAMS::Update),
+  py::class_<ComplexHypreBasedAMS, shared_ptr<ComplexHypreBasedAMS>, BaseMatrix>
+      (m, "ComplexHypreBasedAMSPreconditionerImpl")
+      .def("Update", py::overload_cast<>(&ComplexHypreBasedAMS::Update),
            "Rebuild preconditioner with current matrix values (geometry preserved).")
-      .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&ComplexCompactAMS::Update),
+      .def("Update", py::overload_cast<shared_ptr<SparseMatrix<double>>>(&ComplexHypreBasedAMS::Update),
            py::arg("new_a_real"),
            "Update with a new real auxiliary matrix, then rebuild.");
 
@@ -366,7 +366,7 @@ print_level : int
   Verbosity (0=silent, default=0).
 )raw_string");
 
-  m.def("CompactAMSPreconditioner",
+  m.def("HypreBasedAMSPreconditioner",
     [](shared_ptr<BaseMatrix> mat,
        shared_ptr<BaseMatrix> grad_mat,
        py::object freedofs_obj,
@@ -376,15 +376,15 @@ print_level : int
        int cycle_type,
        int print_level,
        int subspace_solver,
-       int num_smooth) -> shared_ptr<CompactAMS>
+       int num_smooth) -> shared_ptr<HypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(mat);
       if (!sp_mat)
-        throw py::type_error("CompactAMSPreconditioner: expected real SparseMatrix<double>");
+        throw py::type_error("HypreBasedAMSPreconditioner: expected real SparseMatrix<double>");
 
       auto sp_grad = dynamic_pointer_cast<SparseMatrix<double>>(grad_mat);
       if (!sp_grad)
-        throw py::type_error("CompactAMSPreconditioner: grad_mat must be real SparseMatrix<double>");
+        throw py::type_error("HypreBasedAMSPreconditioner: grad_mat must be real SparseMatrix<double>");
 
       auto sp_freedofs = ExtractFreeDofs(freedofs_obj);
 
@@ -395,7 +395,7 @@ print_level : int
         return v;
       };
 
-      return make_shared<CompactAMS>(
+      return make_shared<HypreBasedAMS>(
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           cycle_type, num_smooth, 0.25, print_level, 1.0, subspace_solver);
@@ -432,7 +432,7 @@ print_level : int
   Verbosity (0=silent, default=0).
 )raw_string");
 
-  m.def("ComplexCompactAMSPreconditioner",
+  m.def("ComplexHypreBasedAMSPreconditioner",
     [](shared_ptr<BaseMatrix> a_real_mat,
        shared_ptr<BaseMatrix> grad_mat,
        py::object freedofs_obj,
@@ -444,15 +444,15 @@ print_level : int
        int print_level,
        double correction_weight,
        int subspace_solver,
-       int num_smooth) -> shared_ptr<ComplexCompactAMS>
+       int num_smooth) -> shared_ptr<ComplexHypreBasedAMS>
     {
       auto sp_mat = dynamic_pointer_cast<SparseMatrix<double>>(a_real_mat);
       if (!sp_mat)
-        throw py::type_error("ComplexCompactAMSPreconditioner: a_real_mat must be real SparseMatrix<double>");
+        throw py::type_error("ComplexHypreBasedAMSPreconditioner: a_real_mat must be real SparseMatrix<double>");
 
       auto sp_grad = dynamic_pointer_cast<SparseMatrix<double>>(grad_mat);
       if (!sp_grad)
-        throw py::type_error("ComplexCompactAMSPreconditioner: grad_mat must be real SparseMatrix<double>");
+        throw py::type_error("ComplexHypreBasedAMSPreconditioner: grad_mat must be real SparseMatrix<double>");
 
       auto sp_freedofs = ExtractFreeDofs(freedofs_obj);
 
@@ -469,7 +469,7 @@ print_level : int
         ndof = static_cast<int>(sp_mat->VHeight());
       }
 
-      return make_shared<ComplexCompactAMS>(
+      return make_shared<ComplexHypreBasedAMS>(
           sp_mat, sp_grad, sp_freedofs,
           to_vec(coord_x_list), to_vec(coord_y_list), to_vec(coord_z_list),
           ndof, cycle_type, print_level, correction_weight,
@@ -491,7 +491,7 @@ print_level : int
 Complex Compact AMS preconditioner with TaskManager Re/Im parallelism.
 
 For complex eddy current problems (A = K + jw*sigma*M). Creates TWO
-independent CompactAMS solver instances and applies them to the real
+independent HypreBasedAMS solver instances and applies them to the real
 and imaginary parts in parallel via NGSolve TaskManager.
 
 No external dependency (pure C++ header-only).
@@ -517,6 +517,12 @@ print_level : int
 
   m.def("has_compact_ams", []() { return true; },
     "Returns True if Compact AMG/AMS support is available.");
+
+  // Back-compat aliases (renamed 2026-06-27: CompactAMS -> HypreBasedAMS, since the algorithm IS HYPRE's
+  // AMS / Kolev-Vassilevski, just HYPRE-free; "Compact" misleadingly implied a distinct reduced variant).
+  // Old names keep working so panels / MCP recipes / external code do not break.
+  m.attr("CompactAMSPreconditioner") = m.attr("HypreBasedAMSPreconditioner");
+  m.attr("ComplexCompactAMSPreconditioner") = m.attr("ComplexHypreBasedAMSPreconditioner");
 }
 
 // ============================================================================
@@ -664,7 +670,7 @@ inline void ExportSparseSolvBindings(py::module& m) {
   ExportSparseSolvTyped<double>(m, "D");
   ExportSparseSolvTyped<Complex>(m, "C");
   ExportSparseSolvFactories(m);
-  ExportCompactAMS(m);
+  ExportHypreBasedAMS(m);
   ExportCOCRSolver(m);
   ExportGMRESSolver(m);
 }

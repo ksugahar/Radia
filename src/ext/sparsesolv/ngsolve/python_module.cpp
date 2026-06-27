@@ -26,7 +26,7 @@ PYBIND11_MODULE(sparsesolv_ngsolve, m) {
     py::module_::import("ngsolve.comp");
 
     m.doc() = "SparseSolv iterative solvers and preconditioners for NGSolve\n\n"
-              "Provides IC preconditioner, CompactAMS/ComplexCompactAMS (HCurl),\n"
+              "Provides IC preconditioner, HypreBasedAMS/ComplexHypreBasedAMS (HCurl AMS, HYPRE-free),\n"
               "CompactAMG, and ICCG/CG/COCR/GMRES iterative solvers\n"
               "for use with NGSolve's sparse linear algebra.\n\n"
               "Based on JP-MARs/SparseSolv (https://github.com/JP-MARs/SparseSolv)";
