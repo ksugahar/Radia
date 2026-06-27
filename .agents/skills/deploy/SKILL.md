@@ -15,7 +15,7 @@ remain **forbidden** -- they hide bugs that only surface under a real
 ```
 Stage 1  LAB                : pip install -e .                  editable, fastest feedback
                               ↓ the DEVELOPER workflow
-Stage 2  100号機 / mdx      : pip install 'radia[cubit,gui]'    PyPI, multi-user distribution
+Stage 2  100号機 / mdx      : pip install 'radia[cubit]'        PyPI, multi-user distribution
                               ↓ the PUBLIC PyPI test (real-world install)
 ```
 
@@ -24,7 +24,7 @@ Stage 2  100号機 / mdx      : pip install 'radia[cubit,gui]'    PyPI, multi-us
 editable / 100号機 PyPI) を 2-tier (LAB editable / 100号機 + mdx PyPI)
 へ簡素化。
 - **LAB**: `pip install -e .` (NAS source).  developer iteration.
-- **100号機**: `pip install 'radia[cubit,gui]==X.Y.Z'` + `cubit-plugin-install
+- **100号機**: `pip install 'radia[cubit]==X.Y.Z'` + `cubit-plugin-install
   --all-users`.  21 ラボメンバの本番。
 - **mdx**: 100号機 と完全に同じ recipe.  PyPI cross-machine consistency
   probe (release-qud Phase 9).  C++ 変更を mdx に届けるには `v*
@@ -33,9 +33,11 @@ editable / 100号機 PyPI) を 2-tier (LAB editable / 100号機 + mdx PyPI)
 **Cubit plugin (100号機 + mdx)**: 両方とも PyPI wheel から regular-file
 deploy (`cubit-plugin-install --all-users`).  symlink 体制は使わない.
 
-**`[cubit,gui]` extras MUST be specified** -- `radia[cubit]` 単独では
-PySide6 が pull されず、standalone panel (radia_ih, radia_em, radia_pcb,
-radia_heat) が起動できない。production deploy は必ず `radia[cubit,gui]`.
+**Notebook policy (2026-06-28)**: production deploy uses `radia[cubit]`, not
+`radia[cubit,gui]`.  The canonical panel surface is the Jupyter notebook
+workbench (`ipynb-gui-health`), and normal Radia Python should not acquire
+PySide6.  Coreform Cubit's bundled PySide6 remains protected because Cubit owns
+that embedded runtime.
 
 **Retired** (2026-05-02): mdx editable + `tools/push_pyds_to_mdx.py`
 base64-over-ssh push は通常運用から除外.  `push_pyds_to_mdx.py` は
@@ -67,21 +69,21 @@ become mysterious.  All three stages run the full L0-L4 ladder.
 | **L0** | Wheel manifest | `pyproject.toml` package-data lists every `*.jou/*.step/*.png/*.sol/*.vol/*.msh` in src tree | Samples/assets missing from wheel (2026-04-12 calc_mesh_eval.py incident) |
 | **L1** | File layout | `import radia; os.path.isfile(...sample.jou)` | Samples / panel_registry.json missing after install |
 | **L1** | Hash integrity | SHA-256 (CRLF normalised) src vs installed | Content drift (NOT size — LF↔CRLF false-alarms) |
-| **L2** | Import smoke | `python -c "import radia.radia_ih"` for each radia_*.py | ImportError / circular import in new module |
+| **L2** | Import smoke | import each `radia.<app>_notebook` workbench | ImportError / circular import in notebook workbench modules |
 | **L2** | Subprocess smoke | `python panels/calc_*.py --help` for each | argparse rejects flags, missing helper imports |
 | **L2** | Signature probe | `inspect.getsource(f)` contains expected token | Edit silently reverted by linter / merge |
-| **L3** | Panel QA | `pytest tests/panels/test_panel_qa.py` | UI broken (height / width / orphan headers / ASCII) |
+| **L3** | Notebook QA | `pytest tests/panels/test_notebook_workbench.py` | Notebook contract drift (DesignSpec, result artifact, no-PySide rule) |
 | **L3** | Cubit launcher | .ccl binary contains new regex strings (`grep -a`) | Old .ccl deployed; new TITLE/NEEDS_VOL not parsed |
 | **L3** | Launcher widget matrix | Static source check: every mode-specific launcher widget has `setVisible(ms.needsVol)` | "Mesh order: 2" shown for STEP-only mode (2026-04-21 orderRow miss) |
 | **L4** | End-to-end | Cubit -batch .jou → radia_export netgen → .vol | Full pipeline regresses (plugin missing, solver crash) |
-| **L4** | Panel smoke | Launch a panel subprocess with real inputs → JSON | GUI panel + calc script actually solve |
-| **L4** | Panel mode matrix | For EACH `radia_*.py` mode, run its canonical sample E2E on 100号機 | New mode shipped without validation (2026-04-21 PEEC-inductance 4.78 nH regression) |
+| **L4** | Notebook smoke | Run the notebook workbench/headless calc path with real inputs → JSON | notebook workbench + calc script actually solve |
+| **L4** | Panel mode matrix | For EACH active notebook mode, run its canonical sample E2E on 100号機 | New mode shipped without validation (2026-04-21 PEEC-inductance 4.78 nH regression) |
 | **L4** | Golden-range numeric | Assert `L_coil_nH` / `P_total_W` / ... falls in a known range (NOT just exit 0) | Silently-wrong fallback path (e.g. wrong cross-section area → L 100× off) |
 | **L4** | Multi-user ACL sanity | On 100号機 scan `C:\Users\*\AppData\Local\Coreform\Cubit\Coreform\licenses\renewals` and any `C:\temp\radia_*` file; owner MUST match the enclosing user.  Admin-owned files under a user AppData are the 2026-04-21 false-path (`debug-remote-user` SKILL) and block that user's Cubit entirely. | Broken-owner user-cache files from past Admin deploys that shipped but only affect non-admin users |
 
 **Stage 1 (LAB)** runs L0-L3 on LAB only.
 **Stage 2 (100号機 / mdx)** runs L0-L4 on each machine after `pip install
-'radia[cubit,gui]==X.Y.Z' radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z` from
+'radia[cubit]==X.Y.Z' radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z` from
 PyPI + `cubit-plugin-install --all-users`. Both machines run the IDENTICAL
 recipe.
 
@@ -245,7 +247,7 @@ silently corrupted a large fraction of users twice in 4 days.
 
 **The rule** (2026-05-02 updated):
 - **Stage 1 (LAB)**: `pip install -e .` のみ
-- **Stage 2 (100号機 / mdx)**: `pip install 'radia[cubit,gui]==X.Y.Z'
+- **Stage 2 (100号機 / mdx)**: `pip install 'radia[cubit]==X.Y.Z'
   radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z` (PyPI) + `cubit-plugin-install
   --all-users` のみ.  両機 完全に同じ recipe.
 
@@ -274,7 +276,7 @@ Radia の配布 wheel には bridge.py, cubit_netgen_bridge.py, cub5_to_vol.py �
 
 | Component | LAB (ローカル) | 100号機 / mdx (PyPI 配布試験) |
 |-----------|--------------|--------------------------|
-| **radia** | `pip install -e .` | `pip install 'radia[cubit,gui]==X.Y.Z'` |
+| **radia** | `pip install -e .` | `pip install 'radia[cubit]==X.Y.Z'` |
 | **cubit-mesh-export** | `pip install -e packages/cubit-mesh-export` | (`radia[cubit]` 経由で auto-install) |
 | **radia-mcp** | `pip install -e packages/radia-mcp` | `pip install radia-mcp==X.Y.Z` |
 | **PySide6** | 通常 Radia Python には入れない | Cubit 同梱の PySide6 は保護対象 (削除禁止) |
@@ -296,14 +298,14 @@ environment on LAB / 100号機 / mdx / hibino, not to Cubit's private Python.
 
 100号機:
 ```
-ssh 100 "pip install --upgrade --no-cache-dir 'radia[cubit,gui]==X.Y.Z' radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z"
+ssh 100 "pip install --upgrade --no-cache-dir 'radia[cubit]==X.Y.Z' radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z"
 ssh 100 'cubit-plugin-install --all-users'
 ssh 100 'cubit-plugin-install --verify-only'
 ```
 
 mdx (identical recipe):
 ```
-ssh mdx "pip install --upgrade --no-cache-dir 'radia[cubit,gui]==X.Y.Z' radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z"
+ssh mdx "pip install --upgrade --no-cache-dir 'radia[cubit]==X.Y.Z' radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z"
 ssh mdx 'cubit-plugin-install --all-users'
 ssh mdx 'cubit-plugin-install --verify-only'
 ```
@@ -313,7 +315,7 @@ ssh mdx 'cubit-plugin-install --verify-only'
 2. `pyproject.toml` の version 上げ → git tag `vX.Y.Z`
 3. `git push --tags` → CD が PyPI publish
 4. PyPI 反映を `pip index versions radia` で確認 (~5 分)
-5. 100号機 で `pip install --upgrade 'radia[cubit,gui]==X.Y.Z' ...`
+5. 100号機 で `pip install --upgrade 'radia[cubit]==X.Y.Z' ...`
 6. mdx も同じ recipe (cross-machine consistency probe)
 7. kubota 等が 100号機 GUI から動作確認 (Step 8 panel QA)
 

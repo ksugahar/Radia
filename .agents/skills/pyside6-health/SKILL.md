@@ -14,21 +14,18 @@ description: Retired/guard skill for the old PySide6 desktop-panel era. Do NOT u
 > Cubit's embedded Python.  Use `ipynb-gui-health` for notebook panels and
 > `cubit-plugin-install --verify-only` + `cubit-smoke-test` for Cubit deploy.
 
-> **Scope narrowed (2026-06-25).** The panel GUIs (radia-ih / em / pcb / motor /
-> streamfunction) were **promoted to Jupyter notebook workbenches**
-> (`radia.panel_notebook_promotion.v1`); their *paradigm* health now lives in
-> the **`ipynb-gui-health`** skill. This skill remains the checker for the parts
-> NOT migrated: the **in-Cubit export toolbar** (`radia-export-menu`, manifest
-> state `migration-shell` -- `panels/radia_export_menu.py` +
-> `register_toolbar.py`, still PySide6 Layer-2) and the **C++ Cubit plugin
-> deploy** (`.ccm`/`.pyd`/netgen DLLs, cross-machine). For a notebook panel that
-> "does not run / shows no result", use `ipynb-gui-health` instead.
+> **Scope narrowed (2026-06-28).** The panel GUIs (radia-ih / em / pcb /
+> motor / streamfunction) were **promoted to Jupyter notebook workbenches**
+> (`radia.panel_notebook_promotion.v1`).  Their health now lives in
+> **`ipynb-gui-health`**.  This file only preserves the boundary rule for old
+> PySide6-era notes: normal Radia Python should not depend on PySide6, while
+> Coreform Cubit's private embedded PySide6 must remain intact.
 
-Since radia 4.80.0 the Cubit GUI is **PySide6 (Qt6) only** -- the Qt5 `.ccl`
-(RadiaComp.cpp) was deleted; the GUI is the PySide6 toolbar
-(`panels/register_toolbar.py` + `panels/radia_export_menu.py`).  Target is
-**Coreform Cubit 2025.12**, which bundles PySide6 and cannot load a Qt5 `.ccl`.
-See AGENTS.md "Cubit GUI: PySide6-Only -- No Qt5 / PyQt5".
+Since radia 4.80.0 the old Qt5 `.ccl` path (RadiaComp.cpp) was removed.  Cubit
+2025.12 itself bundles PySide6 for its embedded Python, and the in-Cubit export
+toolbar (`panels/register_toolbar.py` + `panels/radia_export_menu.py`) may use
+that Cubit-owned runtime.  That does **not** make PySide6 a production
+dependency of the normal Radia Python environment.
 
 This file is now a historical checklist plus a boundary guard:
 1. Normal Radia Python should not require PySide6.
@@ -43,30 +40,23 @@ This file is now a historical checklist plus a boundary guard:
 - Use it only when reading old PySide6-era notes or confirming that normal
   Python and Cubit's embedded Python are being treated as separate runtimes.
 
-## Layer A -- static + headless (any dev machine with the repo)
+## Layer A -- normal Radia Python boundary
 
-```bash
-python tools/audit_pyside6_only.py
+Run this in the normal user Python, not Cubit's embedded Python:
+
+```powershell
+python -c "import importlib.util; print('PySide6', 'FOUND' if importlib.util.find_spec('PySide6') else 'MISS'); print('shiboken6', 'FOUND' if importlib.util.find_spec('shiboken6') else 'MISS')"
 ```
 
-Checks (exit 0 = clean):
-1. ZERO real PyQt5/PySide2/PyQt6 import statements in tracked `*.py`.
-2. core GUI modules import PySide6.
-3. radia pyproject declares PySide6, no PyQt5 dependency.
-4. `cubit_mesh_export.ccm` has no Qt5 DLL dependency (pefile import scan).
-5. headless panel smoke: IHPanel/EMPanel/PCBPanel construct + ExportDialog
-   builds all 6 formats, run in an **isolated offscreen subprocess**.
+Healthy result: both are `MISS` on LAB / 100号機 / mdx / hibino.  If either is
+`FOUND`, remove it from the normal user environment only.  Do not inspect or
+modify Coreform Cubit's embedded site-packages in this step.
 
-NOTE: do NOT try to verify panels via `pytest tests/panels/*_qt.py` on LAB --
-`tests/conftest.py` does `os.add_dll_directory(mkl_bin)` and a later in-process
-PySide6 import crashes with `0xc0000139` (Qt6/MKL DLL clash).  The audit
-script's subprocess smoke is the working substitute.  (The pytest suite still
-runs on CI where the MKL dir is not injected the same way.)
+## Layer B -- Cubit-owned PySide protection + deploy health
 
-## Layer B -- LAB Cubit deploy health + end-to-end
-
-The panel plugin (`.ccm` + `.pyd` + netgen DLLs) must match the package source
-and the `export` APREPRO command must actually run in Cubit 2025.12.
+The Cubit plugin (`.ccm` + `.pyd` + netgen DLLs) must match the package source
+and the `export` APREPRO command must actually run in Cubit 2025.12.  Cubit's
+embedded PySide6 is protected and should be present.
 
 ```bash
 # 1. Cubit MUST be closed (it locks .ccm/.pyd). Kill leftovers first:
@@ -94,19 +84,19 @@ pwsh -Command "Get-ChildItem 'C:/Program Files/Coreform Cubit*/bin/python3/lib/s
 # expect: PySide6 present, PyQt5 absent
 ```
 
-## Layer C -- cross-machine (100号機 + mdx via SSH)
+## Layer C -- cross-machine boundary check
 
-100号機 runs the **W: editable + Cubit symlink** install, while mdx runs
-the **PyPI** install.  Layer-A static audit runs on source checkouts; the
-machine checks below verify deploy state + end-to-end + PySide6 bundle
-per host (192.168.11.100 = 100号機; mdx via its ssh alias):
+Run the same normal-Python MISS check plus Cubit deploy/protection check per
+host (192.168.11.100 = 100号機; mdx / hibino via their ssh aliases):
 
 ```bash
 cat << 'PS' | ssh 192.168.11.100 'pwsh -ExecutionPolicy Bypass -Command -'
 # stop any Cubit (shared lab machine -- coordinate with users first)
 Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'coreform_cubit' } | Stop-Process -Force
 Start-Sleep 2
-# Cubit ships PySide6, not PyQt5
+# normal Python should not see PySide6/shiboken6
+python -c "import importlib.util; print('PySide6', 'FOUND' if importlib.util.find_spec('PySide6') else 'MISS'); print('shiboken6', 'FOUND' if importlib.util.find_spec('shiboken6') else 'MISS')"
+# Cubit ships PySide6, not PyQt5. Do not delete this PySide6.
 Get-ChildItem 'C:/Program Files/Coreform Cubit*/bin/python3/lib/site-packages' -Directory -Include PySide6,PyQt5 | Select-Object Name
 # plugin deploy sha match + end-to-end
 cubit-plugin-install --verify-only
@@ -115,26 +105,23 @@ PS
 ```
 
 Per AGENTS.md "Distribution Test Policy", a release is not "deploy verified"
-until 100号機, mdx, and hibino pass Layer C.  This dovetails with
-`python tools/release_qud.py phase9` (cross-machine consistency) and
-`done` (definition of done).
+until 100号機, mdx, and hibino pass the Cubit deploy checks.  Notebook panel
+health is handled by `ipynb-gui-health`.
 
 ## Definition of healthy
 
-- Layer A: `audit_pyside6_only.py` exits 0 (CLEAN).
+- Layer A: normal Python reports `PySide6 MISS` and `shiboken6 MISS`.
 - Layer B (LAB): `cubit-plugin-install --verify-only` all `[OK]`;
   `cubit-smoke-test` `[OK]`; Cubit has PySide6 / no PyQt5.
-- Layer C: same on 100号機 + mdx + hibino.
+- Layer C: same boundary/deploy state on 100号機 + mdx + hibino.
 
 If any Layer B/C fails on `verify-only` -> the deploy is stale; redeploy with
 `cubit-plugin-install --all-users` (Cubit closed) and re-verify.  If Layer A
-fails -> a Qt5/PyQt5 reference crept back in; fix it (see AGENTS.md policy) and
-do NOT add a `try PySide6 except PyQt5` fallback.
+finds PySide6 in normal Python, clean that user Python environment only.  Do
+NOT uninstall or delete Cubit's embedded PySide6.
 
 ## Related skills / tools
 
-- `tools/audit_pyside6_only.py` -- the Layer-A checker (committed, CI-able).
-- `radia-plugin-check` -- broader plugin-freshness triage + 4-layer chain.
-- `verify-deploy` -- "are my src/radia edits actually loaded?".
-- `panel-cli-diff` / `panel-qt-test` -- panel flag/widget wiring (CI / dev).
+- `ipynb-gui-health` -- current notebook panel health gate.
+- `radia-plugin-check` -- broader plugin-freshness triage + deploy chain.
 - `deploy` / `release-qud` -- the deploy + cross-machine consistency flow.
