@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_boundary_condition_assignment.py
+    python validation_test/cubit_mesh_export/validation_vol_boundary_condition_assignment.py
 
 The audit maps plain boundary-condition labels onto Netgen boundary numbers or
 names and reports missing/unknown assignments before a solver script turns those

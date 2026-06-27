@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/cubit_mesh_export/validation_p1_surface_triangle_element_summary.py
+    python validation_test/cubit_mesh_export/validation_p1_surface_triangle_element_summary.py
 
 This example records the local geometry, surface gradients, P1 stiffness,
 consistent mass, constant-load vector, and one-based sparse triplets for one

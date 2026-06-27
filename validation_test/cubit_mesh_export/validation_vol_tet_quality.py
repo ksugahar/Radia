@@ -11,8 +11,8 @@ mesh-quality checks public-safe and solver-independent:
 
 Run:
 
-    python examples/cubit_mesh_export/validation_vol_tet_quality.py
-    python examples/cubit_mesh_export/validation_vol_tet_quality.py --vol C:\temp\mesh.vol --out C:\temp\quality.json
+    python validation_test/cubit_mesh_export/validation_vol_tet_quality.py
+    python validation_test/cubit_mesh_export/validation_vol_tet_quality.py --vol C:\temp\mesh.vol --out C:\temp\quality.json
 """
 
 from __future__ import annotations

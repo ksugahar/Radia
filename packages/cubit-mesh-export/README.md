@@ -207,7 +207,7 @@ from ngsolve import Mesh
 mesh = Mesh("model.vol")
 ```
 
-See `examples/cubit_mesh_export/hex_sphere_highorder/` for a runnable demo (a curved
+See `docs/cubit_mesh_export/hex_sphere_highorder/` for a runnable demo (a curved
 hex sphere whose NGSolve volume converges to 4/3 pi r^3 as the order rises: order 1
 -23 % -> order 2 -0.2 % -> order 3 +0.1 %).
 

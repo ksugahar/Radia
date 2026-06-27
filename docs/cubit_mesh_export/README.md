@@ -2,6 +2,11 @@
 
 Example scripts for the radia Cubit C++ plugin (`cubit_mesh_export.ccm`), organized by export format.
 
+Presentation notebook:
+[`docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb`](../../docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb)
+is the result-saved talk layer. It combines the validation summary JSONs,
+high-order curved-hex NGSolve results, and source excerpts for Q&A.
+
 ## Folder Structure
 
 | Folder | Format | Description |
