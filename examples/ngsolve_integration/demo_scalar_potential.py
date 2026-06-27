@@ -45,6 +45,7 @@ def build_radia_magnet():
 def build_mesh_with_iron():
     """Create NGSolve mesh with an iron block near the magnet."""
     from netgen.occ import Box, Pnt, OCCGeometry, Glue
+    from ngsolve import Mesh, TaskManager
 
     # Air box: 100mm x 100mm x 100mm centered at origin
     air_box = Box(Pnt(-0.05, -0.05, -0.05), Pnt(0.05, 0.05, 0.05))
@@ -69,8 +70,6 @@ def build_mesh_with_iron():
     geo = OCCGeometry(shape)
     with TaskManager():
         mesh = geo.GenerateMesh(maxh=0.01)
-
-        from ngsolve import Mesh
         return Mesh(mesh)
 
 

@@ -19,7 +19,8 @@ import numpy as np
 import radia as rad
 
 
-# Set units to meters for NGSolve compatibility
+# Radia always uses meters (SI), compatible with NGSolve. No unit setup needed.
+rad.UtiDelAll()
 
 print("="*70)
 print("NGSolve Integration Demo: Coordinate Transformation")
@@ -40,8 +41,15 @@ vertices = [
     [cx - dx, cy + dy, cz + dz],  # vertex 8
 ]
 
-magnet = rad.ObjHexahedron(vertices, [0, 0, 1.2e6])
-rad.Solve(magnet, 0.0001, 1000)
+# Radia magnetization is in A/m (NOT Tesla): M = Br / mu_0.
+# Br = 1.2 T  ->  M = 1.2 / (4*pi*1e-7) = 954930 A/m
+MU_0 = 4 * np.pi * 1e-7
+Mr = 1.2 / MU_0  # 954930 A/m
+magnet = rad.ObjHexahedron(vertices, [0, 0, Mr])
+
+# A permanent magnet has FIXED magnetization -- no rad.Solve() is needed
+# (a bare PM has no soft-magnetic material, so there is no demagnetization
+#  interaction matrix to build).
 
 print("\nRadia magnet created at origin")
 print("  Size: 40mm x 40mm x 60mm")
@@ -144,3 +152,5 @@ except ImportError as e:
 print("\n" + "="*70)
 print("Coordinate transformation demo complete")
 print("="*70)
+
+rad.UtiDelAll()
