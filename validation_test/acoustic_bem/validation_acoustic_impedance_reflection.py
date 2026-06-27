@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/acoustic_bem/validation_acoustic_impedance_reflection.py
+    python validation_test/acoustic_bem/validation_acoustic_impedance_reflection.py
 
 A locally reacting acoustic boundary can be read as a one-port load.  For a
 propagating plane wave, the pressure reflection coefficient is

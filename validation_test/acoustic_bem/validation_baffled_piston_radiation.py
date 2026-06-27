@@ -12,7 +12,7 @@ transducers, and duct openings:
 
 Run:
 
-    python examples/acoustic_bem/validation_baffled_piston_radiation.py
+    python validation_test/acoustic_bem/validation_baffled_piston_radiation.py
 """
 
 from __future__ import annotations

@@ -20,7 +20,7 @@ MU_0 = 4e-7 * np.pi
 def play_fixture():
     """Load real B-input Play shape functions from fixture."""
     fix_path = os.path.join(os.path.dirname(__file__),
-                            '../examples/hysteresis/binput_play_fixture.npz')
+                            '../validation_test/hysteresis/binput_play_fixture.npz')
     if not os.path.exists(fix_path):
         pytest.skip("Fixture file not found")
     fix = np.load(fix_path)
@@ -38,7 +38,7 @@ def play_fixture():
 def full_fixture():
     """Load full (non-subset) Play shape functions."""
     fix_path = os.path.join(os.path.dirname(__file__),
-                            '../examples/hysteresis/binput_play_fixture.npz')
+                            '../validation_test/hysteresis/binput_play_fixture.npz')
     if not os.path.exists(fix_path):
         pytest.skip("Fixture file not found")
     fix = np.load(fix_path)

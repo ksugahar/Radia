@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/acoustic_bem/validation_acoustic_impedance_radiation_pressure.py
+    python validation_test/acoustic_bem/validation_acoustic_impedance_radiation_pressure.py
 
 For a local acoustic impedance load, the pressure reflection coefficient gives
 both energy absorption and normal momentum transfer:

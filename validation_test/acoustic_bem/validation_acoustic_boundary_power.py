@@ -2,7 +2,7 @@
 
 Run:
 
-    python examples/acoustic_bem/validation_acoustic_boundary_power.py
+    python validation_test/acoustic_bem/validation_acoustic_boundary_power.py
 
 Given boundary pressure ``p`` and outward normal velocity ``v_n`` phasors, the
 normal complex intensity is

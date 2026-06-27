@@ -482,7 +482,7 @@ PLAY_MODEL = r"""
 SHOWCASE NOTEBOOK: `docs/hysteresis/hysteresis_validation.ipynb` — the committed
 validation gallery (BQM circular/ellipsoid/B-input, Play<->Energy agreement,
 Egger inverse, C++ kernel vs Play, coenergy feasibility). Corpus + npz fixture
-kept at `examples/hysteresis/`.
+kept at `validation_test/hysteresis/`.
 
 ## Formulation (Bobbio et al. 1997 / Bertotti 1998 / Henrotte 2014)
 

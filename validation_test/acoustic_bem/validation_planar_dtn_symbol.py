@@ -7,7 +7,7 @@ side supplies ``partial_n p = lambda p``.
 
 Run:
 
-    python examples/acoustic_bem/validation_planar_dtn_symbol.py
+    python validation_test/acoustic_bem/validation_planar_dtn_symbol.py
 """
 
 from __future__ import annotations

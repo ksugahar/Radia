@@ -1437,7 +1437,7 @@ Full-resolution (eddy currents resolved at delta/5) vs SIBC (hole + Robin):
 Z_s for solid cylinder: `rho * gamma * I1(ga)/I0(ga)`,
 `gamma = sqrt(jw * mu_r * mu_0 * sigma)` (cylindrical Bessel, not Dowell).
 
-Script: `examples/eddy_current_analytical_validation/reference_2d_axisym.py`
+Script: `validation_test/eddy_current_analytical_validation/reference_2d_axisym.py`
 
 ### Karl Iteration (for nonlinear BH)
 
