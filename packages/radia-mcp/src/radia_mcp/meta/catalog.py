@@ -486,6 +486,22 @@ CATALOG: dict[str, dict[str, Any]] = {
         "related": ["meta", "figure", "md2html"],
         "tags": ["meta"],
     },
+    "document-meta": {
+        "subpackage": "radia_mcp.document_meta",
+        "entry_point": "mcp-server-document-meta",
+        "description": "Cross-cutting document/repo helpers: deadline, "
+                       "version diff, templates, lint-all, result-saving "
+                       "notebook audits, examples->docs promotion audits, "
+                       "and root-level panels migration impact checks.",
+        "primary_tools": [
+            "document_meta_notebook_result_audit",
+            "document_meta_examples_notebook_audit",
+            "document_meta_panel_layout_audit",
+            "document_meta_lint_all",
+        ],
+        "related": ["meta"],
+        "tags": ["meta"],
+    },
 
     # ============================================================
     # Meta (the catalog itself — recommended first call)
@@ -499,7 +515,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["radia_mcp_overview", "radia_mcp_get",
                             "radia_mcp_by_tag", "radia_mcp_related",
                             "radia_mcp_health"],
-        "related": ["literature-index"],
+        "related": ["literature-index", "document-meta"],
         "tags": ["meta"],
     },
 

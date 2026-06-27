@@ -203,6 +203,24 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 - Do NOT place generated files at the repository root
 - `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
 - Build output goes to `build*/` or `dist/` (both gitignored)
+- `docs/<topic>/` MAY contain `.py` helper modules that a result-bearing
+  `*.ipynb` imports, especially when the same helper is also useful to
+  `radia_mcp`. Notebook-coupled Python should live beside the notebook; reusable
+  behavior should be promoted to a `src/` API instead of staying as a loose
+  example script.
+- Every `docs/<topic>/*.ipynb` method/showcase notebook must be result-saving:
+  execute it before committing so code-cell outputs, figures, and tables are
+  embedded. Main computed values should also be written to adjacent JSON with
+  `generated_at_utc` and version/runtime keys such as `radia_version`,
+  `python_version`, `platform`, or `versions`. This JSON is the durable debug
+  record; the notebook is the human-facing rendered view. The JSON and notebook
+  must be synchronized in the same change: after rerunning or editing notebook
+  outputs, refresh the JSON sidecar so its recorded `notebook_sha256` matches
+  the committed result-bearing `.ipynb`.
+- Panel operating surfaces are moving toward repo-root `panels/`. New or
+  migrated panel-only assets should target `panels/`; reusable computation
+  belongs in `src/`. Existing `src/radia/panels/` paths remain legacy during the
+  staged migration and need compatibility shims/tests before deletion.
 
 ### Sample Promotion Ladder: tests → examples → panels (2026-05-02)
 
@@ -267,7 +285,8 @@ to change.  This is a list, not code.  Pin the solver-specific variables
 **solver-switch variable** itself (e.g. `--impedance-model linear|esim`,
 `--solver pardiso|ams`).
 
-**Stage 2 — CLI Python script (`calc_*.py` under `src/radia/panels/`).**
+**Stage 2 — CLI Python script (`calc_*.py`; target layout `panels/`, legacy
+`src/radia/panels/` during staged migration).**
 Turn the Stage-1 list into an argparse-driven Python script.
 Computation only, no GUI.  JSON on stdout.  The solver switch **must**
 also be a CLI flag so the same script can drive any supported backend.
@@ -288,7 +307,8 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — notebook panel (`src/radia/panels/notebooks/*.ipynb`).**
+**Stage 3 — notebook panel (target layout `panels/notebooks/*.ipynb`, legacy
+`src/radia/panels/notebooks/*.ipynb` during staged migration).**
 Wrap the **validated** Stage-2 script with a lightweight notebook
 workbench (`radia.<mode>_design` + `radia.<mode>_notebook`).  In this
 repo, a "panel" means the integrated `.ipynb` surface: CLI arguments
