@@ -374,7 +374,7 @@ def scan_file(path: Path, root: Path | None = None) -> list[tuple[str, int, str]
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         return []
-    label = str(path.relative_to(root)) if root else str(path)
+    label = path.relative_to(root).as_posix() if root else path.as_posix()
     return scan_text(text, label)
 
 
