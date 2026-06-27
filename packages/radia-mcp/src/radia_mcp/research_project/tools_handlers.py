@@ -39,21 +39,12 @@ def _pdf_health(path: str) -> str:
 
 
 def _grant_health(path: str) -> str:
-    # grant_writing lint is LAB-private (mcp-server-document) and is NOT part of
-    # radia-mcp.  Use it opportunistically if that private package happens to be
-    # installed (e.g. on the lab machine); otherwise report it unavailable.
-    try:
-        from mcp_server_document.grant_writing import tools as t  # LAB-private, optional
-    except ImportError:
-        return ("(grant health is LAB-private to mcp-server-document; "
-                "not available in this radia-mcp install)")
+    from radia_mcp.grant_writing import tools as t
     if hasattr(t, "grant_writing_health_report"):
-        # Many grant-writing health tools accept a string of text;
-        # we pass the file contents to be safe.
         try:
             with open(path, encoding="utf-8", errors="replace") as f:
                 text = f.read()
-            return t.grant_writing_health_report(text)
+            return t.grant_writing_health_report(text, program="generic")
         except OSError:
             return f"(could not read {path})"
     return f"(no grant_writing_health_report for {path})"

@@ -67,9 +67,10 @@ rag = [
 md2html = [
     "markdown>=3.0",
 ]
-# document: presentation / poster / pdf / doc_convert / bibliography --
+# document: paper_writing / grant_writing / presentation / poster / pdf /
+# doc_convert / bibliography --
 # promoted 2026-06-02 from the LAB-private mcp-server-document.  PDF +
-# PPTX manipulation, poster rendering, bibliography fetch.
+# PPTX manipulation, proposal/paper lint, poster rendering, bibliography fetch.
 #   pip install radia-mcp[document]
 document = [
     "pymupdf>=1.24",
@@ -137,6 +138,10 @@ mcp-server-md2html = "radia_mcp.md2html.server:main"
 # friendly) + 1 LaTeX figure-placement knowledge tool.
 # Promoted from s:/mcp-server/src/mcp_server_document/paper_writing/.
 mcp-server-paper-writing = "radia_mcp.paper_writing.server:main"
+# 2026-06-27: grant_writing -- proposal and recommendation-letter lint,
+# restored as a first-class public document server so the writing quartet is
+# registered in parallel: paper-writing / figure / grant-writing / presentation.
+mcp-server-grant-writing = "radia_mcp.grant_writing.server:main"
 # 2026-05-26 v0.81.0: chart2d -- 22 paper-quality 2D charts as MCP
 # tools (line / loglog / semilog / step / errorbar / fill_between /
 # bode / histogram / bar / box / violin / ecdf / contour / contourf /
@@ -169,12 +174,11 @@ mcp-server-doc-convert = "radia_mcp.doc_convert.server:main"
 mcp-server-bibliography = "radia_mcp.bibliography.server:main"
 # document_meta -- cross-cutting helpers (deadline / diff / template / lint-all).
 # REDESIGNED on promotion: lint_all is now a declarative registry over
-# radia-mcp's own lints (presentation/paper_writing/poster) -- no grant_writing
-# dependency (grant lint stays in the LAB-private mcp-server-document).
+# radia-mcp's own lints (grant_writing/presentation/paper_writing/poster).
 mcp-server-document-meta = "radia_mcp.document_meta.server:main"
 # research_project -- project dashboard / scan across document types.  Its
-# grant-health handler uses the LAB-private mcp-server-document opportunistically
-# (no hard dependency); all other domains come from radia-mcp.
+# grant-health handler now uses radia_mcp.grant_writing directly; all domains
+# come from radia-mcp.
 mcp-server-research-project = "radia_mcp.research_project.server:main"
 
 [tool.setuptools.packages.find]
