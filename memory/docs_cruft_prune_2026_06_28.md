@@ -15,6 +15,13 @@ should not become a warehouse for development chronology.
 - `docs/stream_function/stream_function_examples_archive.*`: source-only topic
   archive that preserved deleted TODO benchmark stubs. The maintained docs now
   live in `docs/stream_function/{theory,regularization,deformation,benchmarks}`.
+- `docs/hdiv_vim/vim_examples_archive.*`: full-source inventory of the
+  `examples/vim` corpus. The public docs keep `README.md`, productionization
+  notes, and result-bearing showcase notebooks; the validation corpus remains
+  in `examples/vim` + `validation_test/feec`.
+- Topic `*_examples_archive.*` triples for topics that already have maintained
+  result-bearing notebooks or validation surfaces. Public docs should point at
+  those maintained artifacts, not source-only archive ledgers.
 - `docs/kelvin/legacy_assets/kelvin_transformation/`: old examples mirror and
   debug notes. The one live document, the Kelvin convention, was promoted to
   `docs/kelvin/CONVENTION.md`; old source-level history remains recoverable

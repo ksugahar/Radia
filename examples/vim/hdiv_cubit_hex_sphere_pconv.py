@@ -1,7 +1,7 @@
 """HDiv p-convergence on a Cubit curved-hex sphere.
 
 This example uses the committed Cubit-generated sphere meshes from
-``examples/cubit_mesh_export/hex_sphere_highorder``:
+``docs/cubit_mesh_export/hex_sphere_highorder``:
 
     volume 1 scheme sphere
     block 1 add hex all
