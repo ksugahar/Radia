@@ -1,6 +1,6 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T05:16:36Z",
+  "generated_at_utc": "2026-06-27T05:16:41Z",
   "notebook": "docs/kelvin/kelvin_dtn_spectrum_archive.ipynb",
   "notebook_sha256": "b14a723d1fca7f8b8bde509c5897cbf78f17524513af7128e44503b997c45c31",
   "versions": {
