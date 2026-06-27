@@ -50,11 +50,15 @@ def test_per_region_equal_mu_matches_scalar():
     (~3e-4 abs / 1e-5 rel), NOT to atol=1e-5.  Solve tightly (tol=1e-11) so both reach the true solution
     and the build-correctness comparison is meaningful (then they agree to ~1e-8).  Pin gram_eps=1e-12 on
     BOTH so the dict (GMRES form-1, default 1e-10) and scalar (CG mass-riesz, whose default tightens to
-    1e-12) build the IDENTICAL Gram -- comparing the SAME operator, not two ACA tolerances."""
+    1e-12) build the IDENTICAL Gram -- comparing the SAME operator, not two ACA tolerances.  Pin
+    near_factor=1e30 on BOTH too: the scalar CG-tet path defaults to the fast near/far build (near_factor=2
+    + far_quad=4) while the dict GMRES path stays all-analytic, so force both to the exact all-analytic Gram."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
-        rd = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT, tol=1e-11, gram_eps=1e-12)
-        rs = hdiv_demag_solve(mesh, mu_r=200.0, H_ext=HEXT, tol=1e-11, gram_eps=1e-12)
+        rd = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
+                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
+        rs = hdiv_demag_solve(mesh, mu_r=200.0, H_ext=HEXT,
+                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
     assert np.allclose(rd["M"], rs["M"], rtol=1e-8, atol=1e-5)
     assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-5)
 

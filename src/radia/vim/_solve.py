@@ -59,13 +59,16 @@ nf >~ 7000 (the GMRES form-1 / nonlinear paths tolerate the asymmetry).  So a CG
 +~26%, build +~5%); GMRES / nonlinear / H-LU keep `1e-10`.  An explicit `gram_eps` always wins.  All the
 CG paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.
 
-The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 52 s all-analytic vs a
-~0.3 s mass-riesz solve).  `near_factor` is the OPT-IN build-shortening lever (default `1e30` = ALL pairs
-analytic = the exact, golden-locked Gram): `near_factor=2` (near=analytic, far=centroid-monopole) cuts the
-build ~4.6x (cube N=8: 52 -> 11 s, same 25 iters), but the monopole-far slightly breaks geometric symmetry
--- on the uniform sphere the transverse M leaks to ~1.2e-3 (just over the 1e-3 transverse golden), so it is
-NOT made the default.  Pass `near_factor=2` to accept ~0.12% transverse error for the faster build, or
-`near_factor=3` for ~1.7x at golden-passing accuracy.
+The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
+~0.3 s mass-riesz solve), so the +N CG path on a TET analytic Gram defaults to the PRECISION-PRESERVING
+fast build: `near_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs = a low-order
+double-quadrature of 1/r, degree-2 4-pt tet / 3-pt tri, O((size/r)^4)).  This REPRODUCES the all-analytic
+Gram (uniform sphere transverse 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x faster build
+(cube N=8: 47 -> 10 s, same 25 iters).  The cheap centroid-monopole far (`far_quad=0`) is equally fast but
+leaks ~0.12% transverse (> the 1e-3 golden) -- so it is never defaulted; the low-quad far is what makes the
+fast build lossless.  GMRES form-1 / nonlinear / H-LU, the polytope (hex/wedge) Gram (no far_quad), and the
+Gauss backend keep the exact `near_factor=1e30` / `far_quad=0`.  An explicit `near_factor` / `far_quad`
+always wins (pass `near_factor=1e30` to force the all-analytic Gram).
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
@@ -101,13 +104,16 @@ _LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "hlu"}
 _GRAM_BACKENDS = {"analytic", "gauss"}
 
 
-def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs):
-    """Build the C++ charge-Gram H-matrix for the fallback / nonlinear demag path."""
+def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs, far_quad=0):
+    """Build the C++ charge-Gram H-matrix for the fallback / nonlinear demag path.
+
+    far_quad (tet/tri only): the FAR evaluation when near_factor < inf -- 0 = centroid-monopole, >0 = the
+    precision-preserving low-order double-quad of 1/r (reproduces the all-analytic Gram at ~monopole cost)."""
     if all_tet:
         return _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
                                       n_el=int(d["n_el"]), eps=gram_eps, leaf=leaf, eta=eta,
                                       near_factor=near_factor, image_masks=image_masks,
-                                      image_signs=image_signs)
+                                      image_signs=image_signs, far_quad=int(far_quad))
     # HEX/WEDGE: the polytope triangle-soup charge Gram (build_demag emits d["poly"] for non-tet).
     p = d["poly"]
     return _rp._ChargeGramHMatrix(
@@ -317,7 +323,7 @@ def _solve_linear_cpp_cg(H, B, Mm, n_face, h_ext, chi, tol, maxit):
 
 
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
-                     image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=1e30, tol=1e-8,
+                     image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=None, far_quad=None, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
                      linear_solver="auto", hlu_trunc_tol=1e-8,
                      gram_backend="analytic", gauss_near_factor=2.0):
@@ -392,13 +398,18 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     # gram_eps always wins.
     cg_path = uniform_linear and linear_solver in ("auto", "cpp-cg")
     eff_gram_eps = gram_eps if gram_eps is not None else (1e-12 if cg_path else 1e-10)
-    # near_factor is the OPT-IN Gram-build-shortening lever, NOT defaulted (kept = the caller's value, default
-    # 1e30 = ALL pairs analytic = the exact, golden-locked Gram).  near_factor=2 (near=analytic, far=centroid-
-    # monopole) cuts the build ~4.6x (cube N=8: 52->11s; the build dominates, the mass-riesz solve is ~0.3s)
-    # but the monopole-far slightly breaks geometric symmetry: on the uniform sphere the transverse M leaks to
-    # ~1.2e-3 (> the 1e-3 transverse golden), so it is deliberately NOT the default (measured 2026-06-27; do
-    # not re-default it).  Pass near_factor=2 to trade ~0.12% transverse accuracy for the build, or =3 for
-    # ~1.7x at golden-passing accuracy.
+    # Gram-BUILD near/far split.  The build (per-pair analytic quadrature) dominates the cost (cube N=8: 47s
+    # vs a 0.3s mass-riesz solve).  For the +N CG path on a TET analytic Gram we default to the
+    # PRECISION-PRESERVING fast build: near_factor=2 (near=analytic) + far_quad=4 (far = a low-order
+    # double-quadrature of 1/r, O((size/r)^4)).  This reproduces the all-analytic Gram (sphere transverse
+    # 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x faster build (47->10s) -- UNLIKE the bare
+    # centroid-monopole far (far_quad=0), which is equally fast but leaks ~0.12% transverse (> the 1e-3
+    # golden), so monopole is never defaulted.  GMRES form-1 / nonlinear / H-LU, the polytope (hex/wedge)
+    # ctor (no far_quad), and the Gauss backend keep the exact near_factor=1e30 / far_quad=0.  An explicit
+    # near_factor or far_quad always wins.
+    cg_tet_analytic = cg_path and all_tet and gram_backend == "analytic"
+    eff_near_factor = near_factor if near_factor is not None else (2.0 if cg_tet_analytic else 1e30)
+    eff_far_quad = far_quad if far_quad is not None else (4 if cg_tet_analytic else 0)
     if gram_backend == "gauss" and not uniform_linear:
         raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
                          "uniform linear mu_r solves")
@@ -416,12 +427,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
         if linear_solver == "hlu" and can_hlu:
             args = _tet_hlu_solver_args(d, chi_uniform)
             solver = _rp._HDivVimTetSolver(eps=eff_gram_eps, leaf=leaf, eta=eta,
-                                           trunc_tol=hlu_trunc_tol, gram_near_factor=near_factor,
+                                           trunc_tol=hlu_trunc_tol, gram_near_factor=eff_near_factor,
                                            **args)
             rhs = chi_uniform * np.asarray(Mm @ h_ext).ravel()
             m = np.asarray(solver.solve(list(map(float, rhs))), float)
-            H_for_d = _build_charge_gram(d, all_tet, eff_gram_eps, leaf, eta, near_factor,
-                                         image_masks, image_signs)
+            H_for_d = _build_charge_gram(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
+                                         image_masks, image_signs, far_quad=eff_far_quad)
             Nmu = B.T @ np.asarray(H_for_d.matvec((B @ mu).tolist()), float)
             D = float((mu @ Nmu) / denom)
             iters = 1
@@ -435,10 +446,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
         # and folds IMA mirror symmetry as image charges.  The fallback path keeps Python only as
         # orchestration; uniform linear solves use H.solve_linear_material* so the Krylov loop is C++.
         if gram_backend == "gauss":
-            H = _build_charge_gauss_gram(d, all_tet, eff_gram_eps, leaf, eta, near_factor,
+            H = _build_charge_gauss_gram(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
                                          image_masks, image_signs, gauss_near_factor)
         else:
-            H = _build_charge_gram(d, all_tet, eff_gram_eps, leaf, eta, near_factor, image_masks, image_signs)
+            H = _build_charge_gram(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
+                                   image_masks, image_signs, far_quad=eff_far_quad)
 
         def N_apply(v):
             v = np.asarray(v, float)

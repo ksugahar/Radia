@@ -3442,10 +3442,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "centroids (G[a!=b] = meas_a meas_b/(4pi r), G[a][a] = self_energy[a]).")
         .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts,
                          int n_el, double eps, int leaf, double eta, double near_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs, bool build) {
+                         std::vector<int> image_masks, std::vector<double> image_signs, bool build,
+                         int far_quad) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el, near_factor,
-                                             std::move(image_masks), std::move(image_signs)));
+                                             std::move(image_masks), std::move(image_signs), far_quad));
                  if (build) {
                      RadHACApKParams p;
                      p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
@@ -3460,13 +3461,15 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("near_factor") = 1e30,
              py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
-             py::arg("build") = true,
+             py::arg("build") = true, py::arg("far_quad") = 0,
              "ANALYTIC mode (M2b): build the EXACT charge Gram as a HACApK H-matrix from per-charge "
              "geometry (cell_verts [n_el*12] tets, face_verts [n_bf*9] triangles). Entry = analytic "
              "PhiTet/TriPotential inner x outer quadrature (matches dense build_demag(analytic_gram=True)). "
-             "near_factor (default 1e30 = all-analytic) gives the NEAR/FAR build speedup: pass ~2 to use "
-             "the cheap centroid-monopole for far pairs, analytic only for near (non-uniform-M) pairs. "
-             "build=False skips BuildHMatrix -> a geometry-only ENTRY ORACLE (.entry() only, no .matvec()).")
+             "near_factor (default 1e30 = all-analytic) gives the NEAR/FAR build speedup. far_quad selects the "
+             "FAR evaluation: 0 = centroid-monopole (O((size/r)^2), slightly breaks symmetry); >0 = a low-order "
+             "double-quadrature of 1/r (degree-2 4-pt tet / 3-pt tri, O((size/r)^4)) that reproduces the "
+             "all-analytic Gram at ~monopole cost -- the precision-preserving build speedup (use near_factor~2 "
+             "+ far_quad=4). build=False skips BuildHMatrix -> a geometry-only ENTRY ORACLE (.entry() only).")
         .def(py::init([](std::vector<double> cell_tris, std::vector<int> cell_troff,
                          std::vector<double> cell_cent, std::vector<double> cell_meas,
                          std::vector<double> face_tris, std::vector<int> face_troff,

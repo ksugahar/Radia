@@ -259,8 +259,9 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
                                          std::vector<double> face_verts,
                                          int n_el, double near_factor,
-                                         std::vector<int> image_masks, std::vector<double> image_signs)
-    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor),
+                                         std::vector<int> image_masks, std::vector<double> image_signs,
+                                         int far_quad)
+    : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_far_quad(far_quad),
       m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts)),
       m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs))
 {
@@ -271,6 +272,12 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
     m_size.assign((size_t)m_n, 0.0);    // characteristic size (vol^1/3 / area^1/2) -- for the near criterion
     m_qp.resize(m_n);
     m_qw.resize(m_n);
+    if (m_far_quad > 0) { m_qpf.resize(m_n); m_qwf.resize(m_n); }   // low-order FAR double-quad rule
+    // degree-2 symmetric rules (weights sum to 1; scaled by measure below) -- the same rules the Python
+    // Gauss point cloud / the validated prototype use: 4-pt tet (a,b barycentric), 3-pt tri (2/3,1/6).
+    const double ta = 0.5854101966249685, tb = 0.1381966011250105;
+    const double TETF[4][4] = {{ta,tb,tb,tb},{tb,ta,tb,tb},{tb,tb,ta,tb},{tb,tb,tb,ta}};
+    const double TRIF[3][3] = {{2.0/3,1.0/6,1.0/6},{1.0/6,2.0/3,1.0/6},{1.0/6,1.0/6,2.0/3}};
 
     // Outer-quad rule on a CELL: a built-in 4-pt Gauss-Duffy collapsed-cube tet rule (4^3 = 64 nodes; ref-tet
     // barycentric (lam1,lam2,lam3) flat in ref_tet_pts, weights summing to 1/6 in ref_tet_w).  The order-0
@@ -305,6 +312,14 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
             m_qp[a][q] = P;
             m_qw[a][q] = ref_tet_w[q] * absJ;
         }
+        if (m_far_quad > 0) {              // 4-pt degree-2 FAR rule (barycentric TETF; weights = vol/4)
+            m_qpf[a].resize(4); m_qwf[a].resize(4);
+            for (int q = 0; q < 4; ++q) {
+                rad_hdiv::Vec3 P = {0, 0, 0};
+                for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) P[k] += TETF[q][i] * V[3*i+k];
+                m_qpf[a][q] = P; m_qwf[a][q] = 0.25 * vol;
+            }
+        }
     }
     for (int b = 0; b < n_bf; ++b) {
         int a = n_el + b;
@@ -324,6 +339,14 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
             for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) P[k] += DUN[q][i] * V[3*i+k];
             m_qp[a][q] = P;
             m_qw[a][q] = DUN[q][3] * area;
+        }
+        if (m_far_quad > 0) {              // 3-pt degree-2 FAR rule (barycentric TRIF; weights = area/3)
+            m_qpf[a].resize(3); m_qwf[a].resize(3);
+            for (int q = 0; q < 3; ++q) {
+                rad_hdiv::Vec3 P = {0, 0, 0};
+                for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) P[k] += TRIF[q][i] * V[3*i+k];
+                m_qpf[a][q] = P; m_qwf[a][q] = area / 3.0;
+            }
         }
     }
 }
@@ -848,6 +871,31 @@ double RadHACApKChargeGram::QuadDotFar(int tgt, int src) const
     return s * RAD_INV_FOUR_PI;
 }
 
+double RadHACApKChargeGram::QuadDotFarLow(int a, int b) const
+{
+    // Precision-preserving FAR evaluation (analytic mode, far_quad>0): a plain LOW-order double-quadrature of
+    //   (1/4pi) INT_a INT_b 1/|x-y|
+    // over the degree-2 rules (4-pt tet / 3-pt tri).  Far pairs are well-separated, so 1/|x-y| is smooth and
+    // the degree-2 rule (exact through quadrupole moments) reproduces the all-analytic entry to O((size/r)^4)
+    // -- vs the monopole's O((size/r)^2).  ~16 cheap evals/pair vs the NEAR QuadDot's ~1e3 transcendentals
+    // (PhiTet/TriPotential).  Symmetric in (a,b) (1/r symmetric), so no 0.5*(.+.) needed.
+    const std::vector<rad_hdiv::Vec3>& Pa = m_qpf[a];
+    const std::vector<double>&         Wa = m_qwf[a];
+    const std::vector<rad_hdiv::Vec3>& Pb = m_qpf[b];
+    const std::vector<double>&         Wb = m_qwf[b];
+    double s = 0.0;
+    for (size_t i = 0; i < Pa.size(); ++i) {
+        const double x0 = Pa[i][0], x1 = Pa[i][1], x2 = Pa[i][2];
+        double inner = 0.0;
+        for (size_t j = 0; j < Pb.size(); ++j) {
+            const double dx = x0 - Pb[j][0], dy = x1 - Pb[j][1], dz = x2 - Pb[j][2];
+            inner += Wb[j] / std::sqrt(dx*dx + dy*dy + dz*dz);
+        }
+        s += Wa[i] * inner;
+    }
+    return s * RAD_INV_FOUR_PI;
+}
+
 void RadHACApKChargeGram::ExtractCoordinates()
 {
     m_n_elem = m_n;
@@ -883,7 +931,9 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         } else {
             // NEAR/FAR split (build speedup): the analytic entry 0.5*(outer-quad_a . Phi_b + outer-quad_b .
             // Phi_a) is EXPENSIVE (PhiTet/TriPotential per outer point) and only matters for NEAR pairs
-            // (the non-uniform-M / div M != 0 interaction); FAR pairs use the cheap centroid-monopole.
+            // (the non-uniform-M / div M != 0 interaction).  FAR pairs use either a cheap centroid-MONOPOLE
+            // (far_quad=0, O((size/r)^2) -- breaks symmetry slightly) or a low-order DOUBLE-QUADRATURE of 1/r
+            // (far_quad>0, O((size/r)^4) -- reproduces the all-analytic Gram, the precision-preserving speedup).
             // near_factor = 1e30 (default) => all pairs NEAR => all-analytic (matches the dense
             // build_demag(analytic_gram=True) golden); near_factor ~ 2 gives the fast split.
             const double dx = m_cent[3*a]     - m_cent[3*b];
@@ -892,6 +942,8 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
             const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
             if (r <= m_near_factor * (m_size[a] + m_size[b]))
                 base = 0.5 * (QuadDot(a, b) + QuadDot(b, a));    // NEAR: exact analytic
+            else if (m_far_quad > 0)
+                base = QuadDotFarLow(a, b);                      // FAR: precision-preserving low-order double-quad
             else
                 base = m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / r;  // FAR: cheap centroid-monopole
         }
