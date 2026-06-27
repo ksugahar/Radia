@@ -22,7 +22,8 @@ SCOPE -- read this; it is the boundary of where this is the RIGHT tool.
       / NGSolve);
     * for a NON-separable body the per-mode exactness becomes a convergent BAND
       approximation (build the DtN via Kelvin-FEM / Schur first;
-      archived act6_06.. sources in docs/kelvin/kelvin_dtn_spectrum_archive_results.json).
+      see `radia.open_boundary.kelvin_dtn` and
+      `validation_test/open_boundary/test_kelvin_dtn.py`).
   See docs/open_boundary/OPEN_BOUNDARY_MAP.md for the full selector.
 
 NOT NOVEL (cite, do not claim).  The exact rational radiation DtN + local
@@ -33,9 +34,8 @@ synthesis (e.g. Phys. Chem. Chem. Phys. 18 (2016) 9498); the Cauer Ladder Networ
 MOR is Kameari-Ebrahimi-Sugahara-Shindo-Matsuo, IEEE T-Magn 54(3):7201804 (2018).
 This module is the VERIFIED, reusable operator -- not a novelty claim.
 
-VERIFIED (tests/open_boundary/test_dtn_cln.py, ported from the research demos
-archived `act6_02_cln_dtn_cauer.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
-act6_11_exact_dtn_fetd.py):
+VERIFIED (`validation_test/open_boundary/test_dtn_cln.py`, ported from the
+Zs-DtN-CLN research demos and maintained as executable validation):
   - the eddy DtN is EXACTLY rational in q=sqrt(s); the Cauer-in-q ladder is exact
     at n+1 stages (NRMSE ~1e-15) for n=1..6, well-conditioned (coeff spread <1e3),
     whereas a Foster fit in s floors ~1e-3 and ill-conditions (~1e5);
@@ -162,8 +162,8 @@ def companion_poles(n):
     => passive, unconditionally stable.  For the wave exterior (R0 = c = 1):
         g(t)      = -du/dt - u + sum_j psi_j ,   u = field trace at the truncation,
         dpsi_j/dt =  lambda_j ( psi_j + u ) ,    one first-order ODE per pole.
-    (Verified reflectionless in a 1-D radial FETD solve in
-    archived `act6_11_exact_dtn_fetd.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).)"""
+    (Verified by the companion-pole and exact-ladder gates in
+    `validation_test/open_boundary/test_dtn_cln.py`.)"""
     return reverse_bessel_roots(n)
 
 
