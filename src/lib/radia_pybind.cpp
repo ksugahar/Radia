@@ -2993,6 +2993,15 @@ struct PyHDivVimTetSolver {
         if (rc != 0) throw std::runtime_error("HDivVimTetSolver.solve: H-LU apply failed");
         return z;
     }
+    py::dict stats() const {
+        const RadHACApKStats& st = mgr->GetStats();
+        py::dict d;
+        d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
+        d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
+        d["compression"] = st.compression; d["build_time"] = st.build_time;
+        d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+        return d;
+    }
     int ndof() const { return nd; }
 };
 #endif
@@ -3300,8 +3309,95 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "Build + H-LU-factor A = M_mass + chi*N on the RT0 face DOFs (factor once).")
         .def("solve", &radia_hdivvim::PyHDivVimTetSolver::solve, py::arg("rhs"),
              "Apply A^-1 to rhs (per-GMRES-iteration preconditioner application).")
+        .def("stats", &radia_hdivvim::PyHDivVimTetSolver::stats,
+             "H-matrix stats for the system-A matrix.")
         .def("ndof", &radia_hdivvim::PyHDivVimTetSolver::ndof);
 #endif
+
+    py::class_<RadHACApKChargeGaussOperator>(m, "_ChargeGaussHMatrix")
+        .def(py::init([](std::vector<double> point_coords, std::vector<int> point_charge,
+                         std::vector<double> point_weight, int n_charge,
+                         std::vector<int> corr_i, std::vector<int> corr_j, std::vector<double> corr_v,
+                         double eps, int leaf, double eta) {
+                 auto op = std::unique_ptr<RadHACApKChargeGaussOperator>(
+                     new RadHACApKChargeGaussOperator(std::move(point_coords), std::move(point_charge),
+                         std::move(point_weight), n_charge, std::move(corr_i), std::move(corr_j),
+                         std::move(corr_v)));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!op->BuildHMatrix(p)) throw std::runtime_error("charge Gauss-point H-matrix build failed");
+                 return op;
+             }),
+             py::arg("point_coords"), py::arg("point_charge"), py::arg("point_weight"), py::arg("n_charge"),
+             py::arg("corr_i"), py::arg("corr_j"), py::arg("corr_v"),
+             py::arg("eps") = 1e-5, py::arg("leaf") = 64, py::arg("eta") = 2.0,
+             "Build K_point as a HACApK H-matrix over quadrature/Gauss points and expose the charge-Gram "
+             "apply G ~= P^T K_point P + sparse near correction.")
+        .def("ncharge", &RadHACApKChargeGaussOperator::GetNCharge)
+        .def("npoint", &RadHACApKChargeGaussOperator::GetNPoint)
+        .def("matvec", [](RadHACApKChargeGaussOperator& s, const std::vector<double>& x) {
+                 std::vector<double> y;
+                 s.MatVec(x, y);
+                 return y;
+             }, py::arg("x"), "Charge-space matvec y = (P^T K_point P + correction) x.")
+        .def("entry", &RadHACApKChargeGaussOperator::GetChargeEntry, py::arg("i"), py::arg("j"),
+             "Charge-space entry, evaluated as direct point quadrature plus sparse correction.")
+        .def("solve_linear_material_auto_prec",
+             [](RadHACApKChargeGaussOperator& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> rhs,
+                double tol, int maxit) {
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("ChargeGauss.solve_linear_material_auto_prec: rhs size mismatch");
+                 std::vector<double> mass_diag((size_t)n_face, 0.0);
+                 for (size_t k = 0; k < mV.size(); ++k) {
+                     if (mI[k] == mJ[k] && mI[k] >= 0 && mI[k] < n_face) mass_diag[(size_t)mI[k]] += mV[k];
+                 }
+                 std::vector<std::vector<int>> supp_id((size_t)n_face);
+                 std::vector<std::vector<double>> supp_val((size_t)n_face);
+                 const int n_charge = (int)B_indptr.size() - 1;
+                 for (int a = 0; a < n_charge; ++a) {
+                     for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k) {
+                         int f = B_indices[(size_t)k];
+                         if (f < 0 || f >= n_face)
+                             throw std::runtime_error("ChargeGauss.solve_linear_material_auto_prec: B face index out of range");
+                         supp_id[(size_t)f].push_back(a);
+                         supp_val[(size_t)f].push_back(B_data[(size_t)k]);
+                     }
+                 }
+                 std::vector<double> prec((size_t)n_face, 0.0);
+                 for (int f = 0; f < n_face; ++f) {
+                     double ndiag = 0.0;
+                     const auto& ids = supp_id[(size_t)f];
+                     const auto& vals = supp_val[(size_t)f];
+                     for (size_t p = 0; p < ids.size(); ++p)
+                         for (size_t q = 0; q < ids.size(); ++q)
+                             ndiag += vals[p] * vals[q] * s.GetChargeEntry(ids[p], ids[q]);
+                     double v = inv_chi * mass_diag[(size_t)f] + ndiag;
+                     if (!(v > 0.0) || !std::isfinite(v)) v = 1.0;
+                     prec[(size_t)f] = v;
+                 }
+                 int iters = 0;
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, prec, rhs,
+                                                               tol, maxit, iters);
+                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
+             py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
+             "Solve ((1/chi)M_mass + B^T G_gauss B)m = rhs in C++; G_gauss applies P^T K_point P "
+             "plus the sparse near correction.")
+        .def("stats", [](RadHACApKChargeGaussOperator& s) {
+                 const RadHACApKStats& st = s.GetStats();
+                 py::dict d;
+                 d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
+                 d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
+                 d["compression"] = st.compression; d["build_time"] = st.build_time;
+                 d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+                 return d;
+             }, "Point H-matrix stats dict.");
 
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
     // Charges (cell rho + boundary-face sigma) extracted from ANY RT0 mesh (e.g. NGSolve tet
@@ -3324,23 +3420,31 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "centroids (G[a!=b] = meas_a meas_b/(4pi r), G[a][a] = self_energy[a]).")
         .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts,
                          int n_el, double eps, int leaf, double eta, double near_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs) {
+                         std::vector<int> image_masks, std::vector<double> image_signs, bool build) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el, near_factor,
                                              std::move(image_masks), std::move(image_signs)));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("analytic charge Gram H-matrix build failed");
+                 if (build) {
+                     RadHACApKParams p;
+                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("analytic charge Gram H-matrix build failed");
+                 }
+                 // build=False leaves the H-matrix UNBUILT: only the geometry (outer quadrature, centroids,
+                 // sizes) is set up in the ctor, so .entry() works as a cheap analytic ENTRY ORACLE while
+                 // .matvec() is unavailable (would raise).  The Gauss near-correction uses this to sample
+                 // exact analytic near entries WITHOUT paying the full O(N log N) analytic H-matrix build.
                  return mgr;
              }),
              py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("near_factor") = 1e30,
              py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("build") = true,
              "ANALYTIC mode (M2b): build the EXACT charge Gram as a HACApK H-matrix from per-charge "
              "geometry (cell_verts [n_el*12] tets, face_verts [n_bf*9] triangles). Entry = analytic "
              "PhiTet/TriPotential inner x outer quadrature (matches dense build_demag(analytic_gram=True)). "
              "near_factor (default 1e30 = all-analytic) gives the NEAR/FAR build speedup: pass ~2 to use "
-             "the cheap centroid-monopole for far pairs, analytic only for near (non-uniform-M) pairs.")
+             "the cheap centroid-monopole for far pairs, analytic only for near (non-uniform-M) pairs. "
+             "build=False skips BuildHMatrix -> a geometry-only ENTRY ORACLE (.entry() only, no .matvec()).")
         .def(py::init([](std::vector<double> cell_tris, std::vector<int> cell_troff,
                          std::vector<double> cell_cent, std::vector<double> cell_meas,
                          std::vector<double> face_tris, std::vector<int> face_troff,
@@ -3416,6 +3520,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  s.MatVec(x, y);
                  return y;
              }, py::arg("x"), "G q (the O(N log N) Gram H-matvec).")
+        .def("entry", &RadHACApKChargeGram::GetInteractionMatrixElement, py::arg("i"), py::arg("j"),
+             "Charge-Gram entry G[i,j] from the analytic / polytope / high-order kernel.")
         .def("solve_linear_material",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
@@ -3433,6 +3539,58 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("rhs"), py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
              "M3: solve the SPD HDiv-VIM linear material system ((1/chi)M_mass + B^T G B) m = rhs by "
              "Jacobi-preconditioned CG (G applied as the charge-Gram H-matvec). Returns {m, iters}.")
+        .def("solve_linear_material_auto_prec",
+             [](RadHACApKChargeGram& s,
+                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
+                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
+                double inv_chi, std::vector<double> rhs,
+                double tol, int maxit) {
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("solve_linear_material_auto_prec: rhs size mismatch");
+                 if ((int)B_indptr.size() < 1)
+                     throw std::runtime_error("solve_linear_material_auto_prec: empty B_indptr");
+                 std::vector<double> mass_diag((size_t)n_face, 0.0);
+                 for (size_t k = 0; k < mV.size(); ++k) {
+                     if (mI[k] == mJ[k] && mI[k] >= 0 && mI[k] < n_face) mass_diag[(size_t)mI[k]] += mV[k];
+                 }
+                 std::vector<std::vector<int>> supp_id((size_t)n_face);
+                 std::vector<std::vector<double>> supp_val((size_t)n_face);
+                 const int n_charge = (int)B_indptr.size() - 1;
+                 for (int a = 0; a < n_charge; ++a) {
+                     for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k) {
+                         int f = B_indices[(size_t)k];
+                         if (f < 0 || f >= n_face) throw std::runtime_error("solve_linear_material_auto_prec: B face index out of range");
+                         supp_id[(size_t)f].push_back(a);
+                         supp_val[(size_t)f].push_back(B_data[(size_t)k]);
+                     }
+                 }
+                 std::vector<double> prec((size_t)n_face, 0.0);
+                 for (int f = 0; f < n_face; ++f) {
+                     double ndiag = 0.0;
+                     const auto& ids = supp_id[(size_t)f];
+                     const auto& vals = supp_val[(size_t)f];
+                     for (size_t p = 0; p < ids.size(); ++p)
+                         for (size_t q = 0; q < ids.size(); ++q)
+                             ndiag += vals[p] * vals[q] * s.GetInteractionMatrixElement(ids[p], ids[q]);
+                     double v = inv_chi * mass_diag[(size_t)f] + ndiag;
+                     if (!(v > 0.0) || !std::isfinite(v)) v = 1.0;
+                     prec[(size_t)f] = v;
+                 }
+                 int iters = 0;
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, prec, rhs,
+                                                               tol, maxit, iters);
+                 double pmin = n_face ? prec[0] : 0.0, pmax = pmin;
+                 for (double v : prec) { if (v < pmin) pmin = v; if (v > pmax) pmax = v; }
+                 py::dict d;
+                 d["m"] = m; d["iters"] = iters; d["prec_min"] = pmin; d["prec_max"] = pmax;
+                 return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
+             py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
+             "M3 production helper: build the exact Jacobi diagonal of ((1/chi)M_mass + B^T G B) in C++ "
+             "from sparse B + mass COO, then run SolveLinearMaterial. Returns {m, iters, prec_min, prec_max}.")
         .def("solve_material_minres",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
