@@ -3290,7 +3290,7 @@ def cubit_curate_learned_recipes(out_module_path: str = "",
 		"next_step": ("commit the new curated_recipes_bundle.py + bump "
 		              "radia-mcp version + `python -m build` to ship it "
 		              "to PyPI. Stage 3: write up methodology in "
-		              "docs/design/lab_curated_recipes.md."),
+		              "packages/radia-mcp/docs/design/lab_curated_recipes.md."),
 	}, indent=2, ensure_ascii=False)
 
 

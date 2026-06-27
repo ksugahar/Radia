@@ -564,7 +564,6 @@ Mesh refinement (more DOFs) is more effective for L accuracy.
 `export netgen "mesh.vol" order 2` provides quadratic-accurate surfaces
 via ACIS CallbackGeometry. order=2 is the recommended default for BEM.
 
-See: `examples/cubit_panels/inductance/demo_curving_effect.py`
 
 ## Tri and Quad Surface Meshes
 
@@ -664,7 +663,7 @@ V = 2 * pi^2 * R * a^2
 
 ## Full Example Script
 
-See: `Radia/examples/cubit/netgen_torus_bem_inductance.py`
+See: `examples/cubit_panels/inductance/inductance_torus.py`
 
 This script:
 1. Creates a torus in Cubit
@@ -806,7 +805,7 @@ print(f"BEM L = {L_total*1e9:.2f} nH (ref: {L_ref*1e9:.2f} nH, error: {error:.1f
 
 ## Example 2: Cubit Torus with Source/Sink Port Detection
 
-See `Radia/examples/cubit_panels/inductance/test_bem_inductance.py`
+See `examples/induction_heating/bem_reference/bem_inductance.py`
 
 Key workflow:
 ```python
@@ -1359,7 +1358,7 @@ effective denominator of `(3*Z_s + jw*mu0*R)` instead of `(Z_s + jw*mu0*R)`.
 with both SL and DL operators. Until MFIE is available, use **FEM-SIBC** instead
 for finite Z_s problems.
 
-**Diagnostic script**: `examples/cubit_panels/inductance/debug_efie_sibc.py`
+**Diagnostic script**: `examples/cubit_panels/inductance/efie_sibc.py`
 **Verification script**: `examples/cubit_panels/inductance/verify_sphere_sibc.py`
 
 ## FIX: Scalar Potential BIE + SIBC (2026-03-29)
@@ -1824,7 +1823,7 @@ Workpiece eddy current problem:
 
 - `examples/cubit_panels/inductance/scalar_bie_sibc.py` -- Scalar BIE verification (RECOMMENDED)
 - `examples/cubit_panels/inductance/verify_sphere_sibc.py` -- Analytical vs BEM vs FEM on sphere
-- `examples/cubit_panels/inductance/debug_efie_sibc.py` -- EFIE eigenvalue analysis
+- `examples/cubit_panels/inductance/efie_sibc.py` -- EFIE eigenvalue analysis
 - `examples/cubit_panels/inductance/fem_esim_3d.py` -- FEM-SIBC reference implementation
 """
 
