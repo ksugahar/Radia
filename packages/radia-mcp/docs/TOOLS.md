@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **562 tools** across 43 MCP servers.
+Total: **563 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 45 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 29 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 40 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
@@ -191,6 +191,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
+| `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
 | `mmm_core` | MMM/MSC (Magnetic Moment Method / Magnetic Surface Charge) -- how |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
