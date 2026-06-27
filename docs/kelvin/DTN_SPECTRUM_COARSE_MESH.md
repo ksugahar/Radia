@@ -249,7 +249,8 @@ Raising only the geometry order from `k=1` (flat polyhedron, ~1 % faceting) to
 the FE order untouched. A flat truncation is ~1 % off; an isoparametric (curved)
 one reaches 5–6 digits. (Past `k ≥ 3` it plateaus ~1e-5: the residual
 conformal-weight quadrature / energy-quotient limit.) Script:
-archived `act2_03_floor_vs_curve.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).
+the retired `act2_03_floor_vs_curve.py` source; maintained routing is recorded
+in [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md).
 
 **The floor in closed form — `floor ~ (h/R)^{2k}`.** Sweeping the *surface mesh* `h`
 at each geometry order `k` (rather than `k` at fixed `h`) pins the floor's law:
@@ -264,7 +265,8 @@ isoparametric boundary order** (Strang–Fix / Ciarlet–Raviart domain approxim
 
 mode-independent (`n=2` and `n=3` agree). So `k=2` already suffices and the practical
 knob is the `Γ` surface `h`, not `k>2`. Script:
-archived `act2_05_geometry_floor_law.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).
+the retired `act2_05_geometry_floor_law.py` source; maintained routing is
+recorded in [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md).
 
 **Review-hardening (2026-06-22) — two refinements of this floor law.**
 - **The floor is GEOMETRY, not centre-quadrature** (`act2_14_center_conditioning_floor`): at fixed
@@ -555,7 +557,8 @@ ladder, order-0 current basis). So "C and L are both DtN-certified" is only **ha
 true — keep the two operators distinct. (Scope: `L_ext` is the *external* energy share;
 a thin loop's full self-inductance is near-field/log-dominated = interior FEM accuracy,
 not a DtN question. Verified by
-[`act1_07_inductance_dtn.py`](kelvin_dtn_spectrum_archive.ipynb).)
+the retired `act1_07_inductance_dtn.py`; maintained routing is in
+[`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md).)
 
 ---
 
@@ -588,7 +591,7 @@ MCP knowledge tool for the live recipe.
   [`examples/dtn_spectrum_coarse_mesh_demo.py`](../../packages/radia-mcp/examples/dtn_spectrum_coarse_mesh_demo.py)
   — Part A (BEM spectrum), Part B (Kelvin effective DtN), Part C (exterior-mesh
   sweep). Runs end-to-end.
-- **Demos** ([`kelvin_dtn_spectrum_archive.ipynb`](kelvin_dtn_spectrum_archive.ipynb), full source in `kelvin_dtn_spectrum_archive_results.json`):
+- **Retired demos** (routing in [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md)):
   the six `mesh_control` pillars (`act2_03_floor_vs_curve`, `act0_02_p_vs_h_study`, `act1_04_optimal_R`,
   `act0_04_hp_lshape_corner`, `act2_08_budget_dofcost`, …); the **mesh-adequacy criterion**
   `act2_04_adequacy_eccentric_multibody` (source `p*`), `act2_05_geometry_floor_law` (geometry `(h/R)^{2k}`), `act2_06_eccentric_fem_endtoend`
@@ -601,7 +604,7 @@ MCP knowledge tool for the live recipe.
   head-to-head `act7_20_impedance_vs_kelvin_dtn_cln` (Kelvin-DtN-CLN beats the
   impedance route on all four axes in the MQS scope) — full temporal treatment in
   [`OPEN_BOUNDARY_MAP.md` §5](../open_boundary/OPEN_BOUNDARY_MAP.md). See the directory
-  [`kelvin_dtn_spectrum_archive.ipynb`](kelvin_dtn_spectrum_archive.ipynb).
+  [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md).
 - **Tests:**
   [`tests/test_dtn_spectrum_coarse.py`](../../packages/radia-mcp/tests/test_dtn_spectrum_coarse.py)
   (BEM spectrum + Kelvin + 2-D Kelvin),

@@ -1,9 +1,18 @@
 ---
 name: pyside6-health
-description: Thoroughly verify the Cubit panel GUI is PySide6-only (no Qt5/PyQt5) AND the panel plugin is correctly deployed + working, across LAB / 100号機 / mdx / hibino. Runs the static PySide6 audit + headless panel smoke (tools/audit_pyside6_only.py), then cubit-plugin-install --verify-only + cubit-smoke-test per machine, and confirms each Cubit bundles PySide6. Use after any PySide6/panel/plugin change, after a release deploy, or when a panel "does not appear / does not work" on a machine (the #1 cause is a stale plugin deploy, NOT panel code).
+description: Retired/guard skill for the old PySide6 desktop-panel era. Do NOT uninstall or delete Coreform Cubit's bundled PySide6; Cubit owns that private runtime. For current notebook panels use ipynb-gui-health, and for Cubit deploy use cubit-plugin-install --verify-only plus cubit-smoke-test. Use this only to interpret old PySide6 audit logs or to confirm the Cubit-vs-Radia Python boundary.
 ---
 
 # pyside6-health
+
+> **Retired / guard-only (2026-06-28).** The Radia operating panels have moved
+> to notebook workbenches, and the lab target is now **no PySide6 in the normal
+> Radia Python environments** (LAB / 100号機 / mdx / hibino).  The exception is
+> **Coreform Cubit's bundled PySide6**, under
+> `C:/Program Files/Coreform Cubit*/bin/python3/lib/site-packages`: that belongs
+> to Cubit itself and MUST NOT be removed.  Do not run uninstall commands against
+> Cubit's embedded Python.  Use `ipynb-gui-health` for notebook panels and
+> `cubit-plugin-install --verify-only` + `cubit-smoke-test` for Cubit deploy.
 
 > **Scope narrowed (2026-06-25).** The panel GUIs (radia-ih / em / pcb / motor /
 > streamfunction) were **promoted to Jupyter notebook workbenches**
@@ -21,22 +30,18 @@ Since radia 4.80.0 the Cubit GUI is **PySide6 (Qt6) only** -- the Qt5 `.ccl`
 **Coreform Cubit 2025.12**, which bundles PySide6 and cannot load a Qt5 `.ccl`.
 See AGENTS.md "Cubit GUI: PySide6-Only -- No Qt5 / PyQt5".
 
-This skill answers two questions end to end:
-1. **Is the code PySide6-unified?** (no PyQt5/Qt5 anywhere; panels construct.)
-2. **Is the plugin correctly deployed and actually working on each machine?**
-   (the GUI "appeared" on LAB only after a stale pre-4.80.0 `.ccm`/`.pyd` was
-   redeployed -- a stale deploy is the #1 reason a panel looks broken.)
+This file is now a historical checklist plus a boundary guard:
+1. Normal Radia Python should not require PySide6.
+2. Cubit's private bundled PySide6 is protected and is not a cleanup target.
+3. Cubit plugin freshness is checked with deploy/smoke commands, not by removing
+   Qt packages.
 
 ## When to use
 
-- After editing any `radia_*.py` panel, `radia_export_menu.py`,
-  `register_toolbar.py`, `bootstrap.py`, or the C++ plugin.
-- After a release + deploy (release-qud Phase 8), to confirm the panel
-  works on 100号機 + mdx + hibino, not just LAB.
-- When a user reports "the Radia menu does not appear / clicking does nothing"
-  on any machine.  **Check deploy freshness FIRST** (Layer B/C) before reading
-  panel code -- a stale `.ccm` (panel calls `export`, the command is
-  missing/old) presents exactly as "panel broken".
+- Do not use this as a new release gate.
+- Do not use it to justify uninstalling Cubit's embedded PySide6.
+- Use it only when reading old PySide6-era notes or confirming that normal
+  Python and Cubit's embedded Python are being treated as separate runtimes.
 
 ## Layer A -- static + headless (any dev machine with the repo)
 
