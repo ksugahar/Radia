@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:29Z",
+  "generated_at_utc": "2026-06-27T02:45:18Z",
   "notebook": "docs/peec/dowell_surface_impedance_demo.ipynb",
-  "notebook_sha256": "35e4bb8735b8e3d5432343eeb374eb8ce2cbd3b6680889ec476849765690235c",
+  "notebook_sha256": "8960610f5ff82d65bd5f1839b5f767b6046cb0b0ba8def550071d94b98267e60",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,11 +12,11 @@
   },
   "summary": {
     "path": "docs/peec/dowell_surface_impedance_demo.ipynb",
-    "cells": 4,
-    "code_cells": 1,
-    "executed_code_cells": 1,
-    "code_cells_with_outputs": 1,
-    "output_count": 4,
+    "cells": 20,
+    "code_cells": 9,
+    "executed_code_cells": 9,
+    "code_cells_with_outputs": 9,
+    "output_count": 13,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -28,17 +28,41 @@
     {
       "cell_index": 2,
       "execution_count": 1,
-      "source_sha256": "bf7e166a3b1f1ecde7d6bea14b4b9cc5449216ba67f04fcbaedff8878d300248",
-      "source_preview": "import numpy as np\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\nfrom radia.em_material import EMMaterial\n\n# ---- analytic Dowell factors (doc: F(xi) = Re[ga coth ga], xi = a/delta) ----\ndef F_coth(xi):                       # two-sided foil (Dowell coth)\n    return xi * (np.sinh(2*xi) + np.sin(2*xi)) / (np.cosh(2*xi) - np.cos(2*xi))\ndef F_coth_complex(xi):               # Re[ga coth ga] form\n    ga = (1 + 1j) * xi\n    return np.real(ga / np.tanh(ga))\ndef G_int(xi):                        # internal-inductance ratio L_int/L_int_dc (Dowell)\n    return (3.0 / (2*xi)) * (np.sinh(2*xi) - np.sin(2*xi)) / (np.cosh(2*xi) - np.cos(2*xi))\ndef F_tanh(xi):                       # one-sided slab (ESIM/SIBC tanh) Re[ga tanh ga]\n    ga = (1 + 1j) * xi\n    return np.real(ga * np.tanh(ga))\n\nxi = np.logspace(-1, 1.1, 60)\n# (1) the two analytic forms of the coth factor agree\nrelerr = np.max(np.abs(F_coth(xi) - F_coth_complex(xi)) / F_coth(xi))\nprint(f\"(1) F(xi): sinh/cosh form vs R",
+      "source_sha256": "a6d9b426dd63aef87de7eda56486a5212cf18329b52b2de300cb0336a8245cc4",
+      "source_preview": "import numpy as np\nimport matplotlib.pyplot as plt\n\nimport radia\nprint(\"radia version:\", getattr(radia, \"__version__\", \"unknown\"))\n\nMU_0 = 4.0 * np.pi * 1e-7  # H/m\n\n\ndef skin_depth(freq, sigma, mu_r=1.0):\n    \"delta = sqrt(2 / (omega mu sigma)) [m]; inf at DC.\"\n    omega = 2.0 * np.pi * np.asarray(freq, dtype=float)\n    out = np.full(np.shape(omega), np.inf, dtype=float)\n    pos = omega > 0\n    out[pos] = np.sqrt(2.0 / (omega[pos] * MU_0 * mu_r * sigma))\n    return out if out.shape else float(out)\n\n\ndef dowell_F(xi):\n    \"Dowell R_ac/R_dc = xi (sinh2xi + sin2xi)/(cosh2xi - cos2xi).\"\n    xi = np.asarray(xi, dtype=float)\n    scalar = xi.ndim == 0\n    xi = np.atleast_1d(xi)\n    out = np.ones_like(xi)\n    m = xi >= 0.01\n    x = xi[m]\n    out[m] = x * (np.sinh(2 * x) + np.sin(2 * x)) / (np.cosh(2 * x) - np.cos(2 * x))\n    return float(out[0]) if scalar else out\n\n\ndef dowell_G(xi):\n    \"Dowell L_int/L_int_dc = (3/2xi)(sinh2xi - sin2xi)/(cosh2xi - cos2xi).\"\n    xi = np.asarray(xi, dtype=floa",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 155,
-          "text_sha256": "fdc24fc87b8f309d43c78347f3980e9eccbfda34150b2308a64163286fdb8288",
-          "text_preview": "(1) F(xi): sinh/cosh form vs Re[ga coth ga] : max rel err = 2.66e-15\n(2) radia EMMaterial.dowell_Zs Re vs analytic Re[ga tanh ga] : max rel err = 3.07e-14\n",
+          "text_chars": 92,
+          "text_sha256": "2ddd1e699f5c8b49b490fb7879dbe3910d262c927d203b1b38825b20cf03174e",
+          "text_preview": "radia version: 4.95.2\ndowell_F(1.0) = 1.0856357047503276\ndowell_G(1.0) = 0.9755888715622834\n",
           "text_truncated": false
-        },
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "c726a04acf64e2bd087dcc40490c18c0a5b6fab337ff63d6e61193f51362214a",
+      "source_preview": "from radia_mcp.radia_ngsolve.solve import (\n    deep_bar_resistance_factor, deep_bar_reactance_factor)\n\nxi_tab = np.array([0.1, 0.5, 1.0, 2.0, 3.0, 5.0, 10.0])\nprint(f\"{'xi':>5} | {'F=Rac/Rdc':>10} {'kernel F':>10} | \"\n      f\"{'G=Lint/Ldc':>11} {'kernel G':>10}\")\nprint(\"-\" * 56)\nmaxdF = maxdG = 0.0\nfor xi in xi_tab:\n    Fd, Gd = dowell_F(xi), dowell_G(xi)\n    Fk = deep_bar_resistance_factor(float(xi))\n    Gk = deep_bar_reactance_factor(float(xi))\n    maxdF = max(maxdF, abs(Fd - Fk))\n    maxdG = max(maxdG, abs(Gd - Gk))\n    print(f\"{xi:5.1f} | {Fd:10.4f} {Fk:10.4f} | {Gd:11.4f} {Gk:10.4f}\")\nprint(\"-\" * 56)\nprint(f\"max |F_doc - F_kernel| = {maxdF:.2e}\")\nprint(f\"max |G_doc - G_kernel| = {maxdG:.2e}\")\nprint(\"-> the notebook formula matches the shipped kernel to machine precision.\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 695,
+          "text_sha256": "b78039766c3768099ae80d816e04ef91ea26ccea4b5d10fffadedbebeb5e626f",
+          "text_preview": "   xi |  F=Rac/Rdc   kernel F |  G=Lint/Ldc   kernel G\n--------------------------------------------------------\n  0.1 |     1.0000     1.0000 |      1.0000     1.0000\n  0.5 |     1.0055     1.0055 |      0.9984     0.9984\n  1.0 |     1.0856     1.0856 |      0.9756     0.9756\n  2.0 |     1.8978     1.8978 |      0.7523     0.7523\n  3.0 |     3.0101     3.0101 |      0.5031     0.5031\n  5.0 |     4.9994     4.9994 |      0.3000     0.3000\n 10.0 |    10.0000    10.0000 |      0.1500     0.1500\n--------------------------------------------------------\nmax |F_doc - F_kernel| = 0.00e+00\nmax |G_doc - G_kernel| = 0.00e+00\n-> the notebook formula matches the shipped kernel to machine precision.\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "fa2ef424ebdeabadf00b7bc36579373343c23f46f776f880f907360c9adf787f",
+      "source_preview": "xi = np.logspace(-1, 1.3, 400)\nF = dowell_F(xi)\nG = dowell_G(xi)\n\nfig, ax = plt.subplots(1, 2, figsize=(10, 4))\nax[0].loglog(xi, F, lw=2, label=r\"$F(\\xi)=R_{ac}/R_{dc}$\")\nax[0].loglog(xi, xi, \"--\", color=\"0.5\", label=r\"asymptote $F\\to\\xi$\")\nax[0].axhline(1.0, color=\"0.7\", ls=\":\", lw=1)\nax[0].set_xlabel(r\"normalized thickness  $\\xi = a/\\delta$\")\nax[0].set_ylabel(r\"$R_{ac}/R_{dc}$\")\nax[0].legend(loc=\"upper left\", fontsize=9)\nax[0].grid(True, which=\"both\", alpha=0.3)\n\nax[1].loglog(xi, G, lw=2, color=\"C1\", label=r\"$G(\\xi)=L_{int}/L_{int,dc}$\")\nax[1].loglog(xi, 1.5 / xi, \"--\", color=\"0.5\", label=r\"asymptote $G\\to 3/(2\\xi)$\")\nax[1].axhline(1.0, color=\"0.7\", ls=\":\", lw=1)\nax[1].set_xlabel(r\"normalized thickness  $\\xi = a/\\delta$\")\nax[1].set_ylabel(r\"$L_{int}/L_{int,dc}$\")\nax[1].legend(loc=\"lower left\", fontsize=9)\nax[1].grid(True, which=\"both\", alpha=0.3)\n\nfig.tight_layout()\nfrom IPython.display import display\ndisplay(fig)\nplt.close(fig)",
+      "outputs": [
         {
           "output_type": "display_data",
           "data_keys": [
@@ -46,15 +70,113 @@
             "text/plain"
           ],
           "text_plain_chars": 34,
-          "text_plain_sha256": "73b4a113c18dcbcc77a0afc0b67420c926ba6cbcbf047bad1fd1d4337be767e3",
-          "text_plain_preview": "<Figure size 1100x420 with 2 Axes>",
+          "text_plain_sha256": "8bcc051ffd45a56444b52e4a60f2e18fb302acdfc798fd4d0da5a5b02d7c14c3",
+          "text_plain_preview": "<Figure size 1000x400 with 2 Axes>",
           "text_plain_truncated": false,
           "rich_output_hashes": {
             "image/png": {
-              "chars": 66728,
-              "sha256": "0b37a6fc5a63a699b4862c2e6e828fb0d3c9d1a94a7e76782d1b3cbf25107f92"
+              "chars": 62808,
+              "sha256": "3bd28d1d478c8c2be807d3da4cb391d0de7a842d4a7143efe50cfbb7ac856a2d"
             }
           }
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "bfe65b82773c2f7ce36c28af1769ec8b88547d3720c69f23bc2e7ca64621b55b",
+      "source_preview": "sigma = 5.8e7            # copper [S/m]\nt     = 0.1e-3           # thickness [m]\nw     = 10e-3            # width [m]\nlength = 100e-3          # length [m]\na = t / 2.0              # half-thickness [m]\n\nR_dc     = length / (sigma * w * t)\nL_int_dc = MU_0 * length * t / (3.0 * w)\nrho = 1.0 / sigma\nf_trans = rho / (np.pi * MU_0 * a**2)\n\nprint(f\"R_dc       = {R_dc*1e3:.4f} mOhm\")\nprint(f\"L_int_dc   = {L_int_dc*1e9:.4f} nH\")\nprint(f\"f_transition (xi=1) = {f_trans/1e3:.1f} kHz\")\nprint()\n\nfreqs = np.array([1e3, 1e4, 1e5, 1e6, 1e7])\nprint(f\"{'f [Hz]':>10} {'delta [um]':>11} {'xi':>7} {'Rac/Rdc':>8} \"\n      f\"{'Re Z [mOhm]':>12} {'Im Z [mOhm]':>12}\")\nprint(\"-\" * 66)\nfor f in freqs:\n    d = skin_depth(f, sigma)\n    xi = a / d\n    Z = R_dc * dowell_F(xi) + 1j * (2 * np.pi * f) * L_int_dc * dowell_G(xi)\n    print(f\"{f:10.0f} {d*1e6:11.2f} {xi:7.3f} {dowell_F(xi):8.3f} \"\n          f\"{Z.real*1e3:12.4f} {Z.imag*1e3:12.4f}\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 545,
+          "text_sha256": "c4ebcd74acdbf085b611daf0b63b85a19865039cd8da0022899043fe8b391d65",
+          "text_preview": "R_dc       = 1.7241 mOhm\nL_int_dc   = 0.4189 nH\nf_transition (xi=1) = 1746.9 kHz\n\n    f [Hz]  delta [um]      xi  Rac/Rdc  Re Z [mOhm]  Im Z [mOhm]\n------------------------------------------------------------------\n      1000     2089.81   0.024    1.000       1.7241       0.0026\n     10000      660.85   0.076    1.000       1.7241       0.0263\n    100000      208.98   0.239    1.000       1.7246       0.2632\n   1000000       66.09   0.757    1.029       1.7737       2.6103\n  10000000       20.90   2.393    2.355       4.0607      16.7934\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "0c1dfa5ae1d11aa4a8806862e3e3e0fa254c2e691110a40b07eb210fc384efbc",
+      "source_preview": "fsw = np.logspace(2, 7.3, 500)\ndsw = skin_depth(fsw, sigma)\nxisw = a / dsw\nFsw = dowell_F(xisw)\nGsw = dowell_G(xisw)\n\nfig, ax = plt.subplots(1, 2, figsize=(10, 4))\nax[0].loglog(fsw, Fsw, lw=2, label=r\"$R_{ac}/R_{dc}=F(\\xi)$\")\nax[0].loglog(fsw, Gsw, lw=2, color=\"C1\", label=r\"$L_{int}/L_{int,dc}=G(\\xi)$\")\nax[0].axvline(f_trans, color=\"0.5\", ls=\"--\", lw=1)\nax[0].annotate(r\"$f_t$ ($\\xi=1$)\", xy=(f_trans, 1.0),\n               xytext=(f_trans * 1.3, 0.35), fontsize=9, color=\"0.3\")\nax[0].set_xlabel(\"frequency [Hz]\")\nax[0].set_ylabel(\"ratio\")\nax[0].legend(fontsize=9)\nax[0].grid(True, which=\"both\", alpha=0.3)\n\nomega_sw = 2 * np.pi * fsw\nReZ = R_dc * Fsw\nImZ = omega_sw * L_int_dc * Gsw\nax[1].loglog(fsw, ReZ * 1e3, lw=2, label=r\"$\\mathrm{Re}\\,Z = R_{ac}$\")\nax[1].loglog(fsw, ImZ * 1e3, lw=2, color=\"C3\",\n             label=r\"$\\mathrm{Im}\\,Z = \\omega L_{int}$\")\nax[1].axhline(R_dc * 1e3, color=\"0.6\", ls=\":\", lw=1)\nax[1].annotate(r\"$R_{dc}$\", xy=(2e2, R_dc * 1e3),\n               xytext=(2e2, R_dc * 1e",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "8bcc051ffd45a56444b52e4a60f2e18fb302acdfc798fd4d0da5a5b02d7c14c3",
+          "text_plain_preview": "<Figure size 1000x400 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 68356,
+              "sha256": "88dd04c4eae1263b65a6a2fb798eb40668d4eae20041362bdbf38d97002155bb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 6,
+      "source_sha256": "24a4cdae87b4e2958e2a21fc1f2806cd29480ab5fea35bf803377cc8617a26ee",
+      "source_preview": "from radia.em_material import EMMaterial\n\ncu = EMMaterial.from_name(\"copper\")\nprint(f\"EMMaterial: name={cu.name} sigma={cu.sigma:.3e} S/m  mu_r={cu.mu_r}  \"\n      f\"rho={cu.rho:.3e} Ohm*m\")\nprint()\nprint(f\"{'xi':>5} | {'Re[z*coth z]':>13} {'Re[z*tanh z]':>13} | \"\n      f\"{'tanh via kernel':>15} {'err':>9}\")\nprint(\"-\" * 64)\nfor xi in [0.3, 1.0, 3.0, 10.0]:\n    z = (1 + 1j) * xi\n    coth = z * np.cosh(z) / np.sinh(z)\n    tanh = z * np.tanh(z)\n    # choose f so that a/delta = xi (a = half-thickness of the foil above)\n    d = a / xi\n    f = (2.0 / (d**2 * MU_0 * cu.sigma)) / (2 * np.pi)\n    Zs = cu.dowell_Zs(f, a)              # = (rho/a) * z * tanh(z)\n    tanh_kernel = Zs * a / cu.rho\n    print(f\"{xi:5.1f} | {coth.real:13.4f} {tanh.real:13.4f} | \"\n          f\"{tanh_kernel.real:15.4f} {abs(tanh_kernel - tanh):9.1e}\")\nprint(\"-\" * 64)\nprint(\"coth -> 1 at DC (resistance ratio);  tanh -> 0 at DC (surface impedance).\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 600,
+          "text_sha256": "da647631919469cb71bda096332b9c41b567527333c3d1cebfc221a0b5ff5aca",
+          "text_preview": "EMMaterial: name=copper sigma=5.800e+07 S/m  mu_r=1.0  rho=1.724e-08 Ohm*m\n\n   xi |  Re[z*coth z]  Re[z*tanh z] | tanh via kernel       err\n----------------------------------------------------------------\n  0.3 |        1.0007        0.0107 |          0.0107   1.1e-16\n  1.0 |        1.0856        0.8122 |          0.8122   2.5e-16\n  3.0 |        3.0101        2.9899 |          2.9899   0.0e+00\n 10.0 |       10.0000       10.0000 |         10.0000   2.5e-15\n----------------------------------------------------------------\ncoth -> 1 at DC (resistance ratio);  tanh -> 0 at DC (surface impedance).\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 14,
+      "execution_count": 7,
+      "source_sha256": "7445a17bb21cf43d99f565a7a5fbcfef3f6462024be59c1f251c0593407871c0",
+      "source_preview": "xi = np.logspace(-1.3, 1.0, 400)\nz = (1 + 1j) * xi\ncoth = z * (np.cosh(z) / np.sinh(z))\ntanh = z * np.tanh(z)\n\nfig, ax = plt.subplots(1, 2, figsize=(10, 4))\nax[0].semilogx(xi, coth.real, lw=2, label=r\"Dowell  $\\mathrm{Re}[z\\coth z]=F(\\xi)$\")\nax[0].semilogx(xi, tanh.real, lw=2, color=\"C1\",\n               label=r\"ESIM  $\\mathrm{Re}[z\\tanh z]$\")\nax[0].axhline(1.0, color=\"0.7\", ls=\":\", lw=1)\nax[0].set_xlabel(r\"$\\xi = a/\\delta$\")\nax[0].set_ylabel(\"real part\")\nax[0].legend(fontsize=9, loc=\"upper left\")\nax[0].grid(True, which=\"both\", alpha=0.3)\n\nax[1].semilogx(xi, coth.imag, lw=2, label=r\"Dowell  $\\mathrm{Im}[z\\coth z]$\")\nax[1].semilogx(xi, tanh.imag, lw=2, color=\"C1\",\n               label=r\"ESIM  $\\mathrm{Im}[z\\tanh z]$\")\nax[1].set_xlabel(r\"$\\xi = a/\\delta$\")\nax[1].set_ylabel(\"imaginary part\")\nax[1].legend(fontsize=9, loc=\"upper left\")\nax[1].grid(True, which=\"both\", alpha=0.3)\n\nfig.tight_layout()\ndisplay(fig)\nplt.close(fig)",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "8bcc051ffd45a56444b52e4a60f2e18fb302acdfc798fd4d0da5a5b02d7c14c3",
+          "text_plain_preview": "<Figure size 1000x400 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 49112,
+              "sha256": "79b95023f4839ee5fe28d1e621a87c0b4324a73066567724e9881dec5cdd5ffc"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 16,
+      "execution_count": 8,
+      "source_sha256": "01fc7aebeb417c99ef0091533873d0841bcde73785786c431af386929c35d833",
+      "source_preview": "from radia.analytical_formulas.conductor_impedance import (\n    cylinder_ac_impedance, cylinder_dc_resistance)\n\na_wire = 1e-3   # 1 mm radius\nfr = np.logspace(3, 6.3, 200)\nrac_round = np.empty_like(fr)\nfor i, f in enumerate(fr):\n    omega = 2 * np.pi * f\n    Z = cylinder_ac_impedance(a_wire, sigma, omega)\n    rac_round[i] = Z.real / cylinder_dc_resistance(a_wire, sigma)\nd_r = skin_depth(fr, sigma)\nxi_round = np.sqrt(2.0) * a_wire / d_r        # doc round-wire convention\nxi_rect = a_wire / d_r                         # planar half-thickness = radius\n\nprint(f\"{'f [Hz]':>10} {'delta [um]':>11} {'xi_round':>9} \"\n      f\"{'Rac/Rdc round':>14} {'F(xi_round)':>12}\")\nprint(\"-\" * 60)\nfor f in [1e3, 1e4, 1e5, 1e6]:\n    omega = 2 * np.pi * f\n    Z = cylinder_ac_impedance(a_wire, sigma, omega)\n    rr = Z.real / cylinder_dc_resistance(a_wire, sigma)\n    d = skin_depth(f, sigma)\n    xir = np.sqrt(2.0) * a_wire / d\n    print(f\"{f:10.0f} {d*1e6:11.2f} {xir:9.3f} {rr:14.3f} {dowell_F(xir):12.3f}\")\n\nfig",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 366,
+          "text_sha256": "8f03847ceefea758c4bcbb30bb50b1345a6c10f6b41a6af44bf6b11538625f6f",
+          "text_preview": "    f [Hz]  delta [um]  xi_round  Rac/Rdc round  F(xi_round)\n------------------------------------------------------------\n      1000     2089.81     0.677          1.001        1.018\n     10000      660.85     2.140          1.101        2.061\n    100000      208.98     6.767          2.662        6.767\n   1000000       66.09    21.400          7.822       21.400\n",
+          "text_truncated": false
         },
         {
           "output_type": "display_data",
@@ -68,17 +190,58 @@
           "text_plain_truncated": false,
           "rich_output_hashes": {
             "image/png": {
-              "chars": 43308,
-              "sha256": "5f635937b6d4c69976d652c8d3123a725c2705dcbe75c7a1dbc875709add4681"
+              "chars": 36756,
+              "sha256": "3611f80cc91c850a07be85744f2f887365b3c50195a03e19b0d8cbe1eeb12222"
             }
           }
         },
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 94,
-          "text_sha256": "2e054bcf719f80965768b4e9a6665bc8ee0a949fa1cfe1f40b7c5c9f31ad63ee",
-          "text_preview": "\nCopper: rho=1.724e-08 Ohm.m, delta(1 MHz)=66.1 um; at 1 MHz xi=1.51 -> R_ac/R_dc(coth)=1.39.\n",
+          "text_chars": 144,
+          "text_sha256": "1543ab736051855f61255d5131107a90f575f0212f2f7ad7b3a1d8298d86f612",
+          "text_preview": "\nBoth share the high-frequency Rac/Rdc ~ xi/2 surface-layer slope; they differ at intermediate xi because of the round vs planar cross-section.\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 18,
+      "execution_count": 9,
+      "source_sha256": "f70e45b6f526dc896c58de8280bcb5734c904d67d0f074dd75ae52a26a683388",
+      "source_preview": "xi = np.linspace(0.05, 2.5, 300)\nz = (1 + 1j) * xi\nF_exact = (z * np.cosh(z) / np.sinh(z)).real\ntau_s = 1j * 2 * xi**2\nF1 = (1 + tau_s / 3).real\nF2 = ((15 + 8 * tau_s) / (15 + 3 * tau_s)).real\n\nprint(f\"{'xi':>5} {'F_exact':>9} {'F1':>9} {'err1 %':>8} {'F2':>9} {'err2 %':>8}\")\nprint(\"-\" * 52)\nfor x in [0.3, 0.7, 1.0, 1.5, 2.0]:\n    zz = (1 + 1j) * x\n    Fe = (zz * np.cosh(zz) / np.sinh(zz)).real\n    ts = 1j * 2 * x**2\n    f1 = (1 + ts / 3).real\n    f2 = ((15 + 8 * ts) / (15 + 3 * ts)).real\n    print(f\"{x:5.2f} {Fe:9.4f} {f1:9.4f} {abs(f1-Fe)/Fe*100:8.1f} \"\n          f\"{f2:9.4f} {abs(f2-Fe)/Fe*100:8.1f}\")\n\nfig, ax = plt.subplots(1, 2, figsize=(10, 4))\nax[0].plot(xi, F_exact, lw=2, label=\"exact $F(\\\\xi)$\")\nax[0].plot(xi, F1, \"--\", lw=2, label=\"1st order $1+\\\\tau s/3$\")\nax[0].plot(xi, F2, \"-.\", lw=2, label=\"2nd order $(15+8\\\\tau s)/(15+3\\\\tau s)$\")\nax[0].set_xlabel(r\"$\\xi = a/\\delta$\")\nax[0].set_ylabel(r\"$R_{ac}/R_{dc}$\")\nax[0].legend(fontsize=9)\nax[0].grid(True, alpha=0.3)\n\nax[1].semilogy",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 377,
+          "text_sha256": "2e8ad57579792b139882f4a1bd59ac82dab53860e7f147d823c0f1fc75b61222",
+          "text_preview": "   xi   F_exact        F1   err1 %        F2   err2 %\n----------------------------------------------------\n 0.30    1.0007    1.0000      0.1    1.0022      0.1\n 0.70    1.0211    1.0000      2.1    1.0617      4.0\n 1.00    1.0856    1.0000      7.9    1.2299     13.3\n 1.50    1.3781    1.0000     27.4    1.7459     26.7\n 2.00    1.8978    1.0000     47.3    2.1985     15.8\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "8bcc051ffd45a56444b52e4a60f2e18fb302acdfc798fd4d0da5a5b02d7c14c3",
+          "text_plain_preview": "<Figure size 1000x400 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 75372,
+              "sha256": "d4ab255ed715388a7d3bd9fb4126bef8b1694839e56968c0ff8edb0a64a80ba6"
+            }
+          }
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 148,
+          "text_sha256": "93ee04932e52893648d862b5fe4f68b57b1ca5f81e45cc265a91b2cb30d37852",
+          "text_preview": "\n1st order is accurate to ~1% for xi <~ 0.5; 2nd order extends usable range to xi <~ 1. Beyond that, use the full CF / PRIMA ladder (see showcase).\n",
           "text_truncated": false
         }
       ]
