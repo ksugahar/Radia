@@ -59,6 +59,14 @@ nf >~ 7000 (the GMRES form-1 / nonlinear paths tolerate the asymmetry).  So a CG
 +~26%, build +~5%); GMRES / nonlinear / H-LU keep `1e-10`.  An explicit `gram_eps` always wins.  All the
 CG paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.
 
+The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 52 s all-analytic vs a
+~0.3 s mass-riesz solve).  `near_factor` is the OPT-IN build-shortening lever (default `1e30` = ALL pairs
+analytic = the exact, golden-locked Gram): `near_factor=2` (near=analytic, far=centroid-monopole) cuts the
+build ~4.6x (cube N=8: 52 -> 11 s, same 25 iters), but the monopole-far slightly breaks geometric symmetry
+-- on the uniform sphere the transverse M leaks to ~1.2e-3 (just over the 1e-3 transverse golden), so it is
+NOT made the default.  Pass `near_factor=2` to accept ~0.12% transverse error for the faster build, or
+`near_factor=3` for ~1.7x at golden-passing accuracy.
+
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
 (scalable `_ChargeGramHMatrix` at tight gram_eps), REQUIRED for div M != 0 (non-uniform M) bodies.
@@ -384,6 +392,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     # gram_eps always wins.
     cg_path = uniform_linear and linear_solver in ("auto", "cpp-cg")
     eff_gram_eps = gram_eps if gram_eps is not None else (1e-12 if cg_path else 1e-10)
+    # near_factor is the OPT-IN Gram-build-shortening lever, NOT defaulted (kept = the caller's value, default
+    # 1e30 = ALL pairs analytic = the exact, golden-locked Gram).  near_factor=2 (near=analytic, far=centroid-
+    # monopole) cuts the build ~4.6x (cube N=8: 52->11s; the build dominates, the mass-riesz solve is ~0.3s)
+    # but the monopole-far slightly breaks geometric symmetry: on the uniform sphere the transverse M leaks to
+    # ~1.2e-3 (> the 1e-3 transverse golden), so it is deliberately NOT the default (measured 2026-06-27; do
+    # not re-default it).  Pass near_factor=2 to trade ~0.12% transverse accuracy for the build, or =3 for
+    # ~1.7x at golden-passing accuracy.
     if gram_backend == "gauss" and not uniform_linear:
         raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
                          "uniform linear mu_r solves")
