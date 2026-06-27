@@ -70,16 +70,20 @@ now, not HDiv-VIM (CLAUDE.md role split 2026-06-27: HDiv = curved-surface accura
 scale).
 
 The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
-~0.3 s mass-riesz solve), so the uniform-linear fast paths on the analytic Gram (`auto` GMRES and `cpp-cg`,
-TET and polytope HEX/WEDGE) default to the PRECISION-PRESERVING fast build: `near_factor=2` (near pairs =
-exact analytic) + `far_quad=4` (far pairs = a low-order double-quadrature of 1/r, O((size/r)^4) -- degree-2
-4-pt tet / 3-pt tri, or, for hex/wedge, the same degree-2 rule on the centroid-fan sub-tets /
-sub-triangles).  This REPRODUCES the all-analytic Gram (uniform sphere transverse 7.26e-4 == exact 7.25e-4,
-demag identical) at ~4.5x faster build (cube N=8: 47 -> 10 s, same 25 iters).  The cheap centroid-monopole
-far (`far_quad=0`) is equally fast but leaks ~0.12% transverse (> the 1e-3 golden) -- so it is never
-defaulted; the low-quad far is what makes the fast build lossless.  Form-1 / nonlinear / H-LU and the Gauss
-backend keep the exact `near_factor=1e30` / `far_quad=0`.  An explicit `near_factor` / `far_quad` always wins
-(pass `near_factor=1e30` to force the all-analytic Gram).
+~0.3 s mass-riesz solve; nonlinear sphere nf=9403 = 200 s exact build vs ~1 s/Newton-step solve).  Because
+N = B^T G B is GEOMETRY-ONLY (material-independent), the PRECISION-PRESERVING fast build is the default for
+the analytic-Gram material paths: uniform-linear `auto` GMRES and `cpp-cg` (the already-validated tight-Gram
+fast path), plus per-region linear, PM-mixed, AND the nonlinear Newton (all GMRES/Newton,
+asymmetry-tolerant; TET and polytope HEX/WEDGE).
+`near_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs = a low-order double-quadrature of
+1/r, O((size/r)^4) -- degree-2 4-pt tet / 3-pt tri, or, for hex/wedge, the same degree-2 rule on the
+centroid-fan sub-tets / sub-triangles).  This REPRODUCES the all-analytic Gram (uniform-linear sphere
+transverse 7.26e-4 == exact 7.25e-4, demag identical; NONLINEAR sphere nf=9403 Mz agrees to 3e-7 with the
+SAME 8 Newton iters) at ~4.5-9.4x faster build (linear cube N=8: 47 -> 10 s; nonlinear nf=9403: 200 -> 21 s).
+The cheap centroid-monopole far (`far_quad=0`) is equally fast but leaks ~0.12% transverse (> the 1e-3
+golden) -- so it is never defaulted; the low-quad far is what makes the fast build lossless.  Only H-LU
+(factors its own system-A operator) and the Gauss backend keep the exact `near_factor=1e30` / `far_quad=0`.
+An explicit `near_factor` / `far_quad` always wins (pass `near_factor=1e30` to force the all-analytic Gram).
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
@@ -435,17 +439,21 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     fast_uniform_path = uniform_linear and linear_solver in ("auto", "cpp-cg")
     eff_gram_eps = gram_eps if gram_eps is not None else (1e-12 if fast_uniform_path else 1e-10)
     # Gram-BUILD near/far split.  The build (per-pair analytic quadrature) dominates the cost (cube N=8: 47s
-    # vs a 0.3s mass-riesz solve).  Uniform-linear auto/cpp-cg on the analytic Gram (TET and polytope
-    # HEX/WEDGE) default to the PRECISION-PRESERVING fast build: near_factor=2 (near=analytic) + far_quad=4
-    # (far = a low-order double-quadrature of 1/r, O((size/r)^4), on the tet / sub-tet+sub-tri rules).  This
-    # reproduces the all-analytic Gram (sphere transverse 7.26e-4 == exact 7.25e-4, demag identical) at ~4.5x
-    # faster build (47->10s) -- UNLIKE the bare centroid-monopole far (far_quad=0), which is equally fast but
-    # leaks ~0.12% transverse (> the 1e-3 golden), so monopole is never defaulted.  Form-1 / nonlinear / H-LU
-    # and the Gauss backend keep the exact near_factor=1e30 / far_quad=0.  An explicit near_factor or far_quad
-    # always wins.
-    cg_analytic = fast_uniform_path and gram_backend == "analytic"
-    eff_near_factor = near_factor if near_factor is not None else (2.0 if cg_analytic else 1e30)
-    eff_far_quad = far_quad if far_quad is not None else (4 if cg_analytic else 0)
+    # vs a 0.3s mass-riesz solve; nonlinear sphere nf=9403: 200s exact build vs ~1s/Newton-step solve).
+    # N = B^T G B is GEOMETRY-ONLY (material-independent), so the PRECISION-PRESERVING fast build --
+    # near_factor=2 (near pairs = exact analytic) + far_quad=4 (far pairs = a low-order double-quadrature of
+    # 1/r, O((size/r)^4), on the tet / sub-tet+sub-tri rules) -- reproduces the all-analytic Gram for the
+    # analytic-Gram material paths: uniform-linear auto/cpp-cg (already validated at tight Gram eps), plus
+    # per-region linear, PM-mixed, AND the nonlinear Newton (GMRES/Newton, asymmetry-tolerant).  Measured:
+    # sphere transverse 7.26e-4 == exact
+    # 7.25e-4 (linear), nonlinear nf=9403 Mz agrees to 3e-7 with the same 8 Newton iters at ~9.4x faster build
+    # (200->21s).  UNLIKE the bare centroid-monopole far (far_quad=0), which is equally fast but leaks ~0.12%
+    # transverse (> the 1e-3 golden), so monopole is never defaulted.  H-LU factors its own system-A operator
+    # (keep exact near_factor=1e30) and the Gauss backend is a separate point-cloud path.  An explicit
+    # near_factor or far_quad always wins (pass near_factor=1e30 to force the all-analytic Gram).
+    fast_build = gram_backend == "analytic" and linear_solver != "hlu"
+    eff_near_factor = near_factor if near_factor is not None else (2.0 if fast_build else 1e30)
+    eff_far_quad = far_quad if far_quad is not None else (4 if fast_build else 0)
     if gram_backend == "gauss" and not uniform_linear:
         raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
                          "uniform linear mu_r solves")
