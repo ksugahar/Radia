@@ -843,4 +843,98 @@ void ClosestPointTet(const double V[4][3], const double p[3], double out[3])
     out[0]=best[0]; out[1]=best[1]; out[2]=best[2];
 }
 
+// ---- CURVED (isoparametric) panel support: P2 (6-node) triangle geometry + curved-panel Duffy ----------
+static inline double _ipow(double b, int e) { double r = 1.0; for (int i = 0; i < e; ++i) r *= b; return r; }
+// P2 triangle shape functions + derivatives on the reference triangle {L1=1-xi-eta, L2=xi, L3=eta}; node
+// order: 0,1,2 corners, 3=mid(0-1), 4=mid(1-2), 5=mid(2-0).  (Matches the validated curved_duffy.py.)
+static void P2TriShape(double xi, double eta, double N[6], double dNxi[6], double dNeta[6])
+{
+    const double L1 = 1.0 - xi - eta, L2 = xi, L3 = eta;
+    N[0]=L1*(2*L1-1); N[1]=L2*(2*L2-1); N[2]=L3*(2*L3-1); N[3]=4*L1*L2; N[4]=4*L2*L3; N[5]=4*L3*L1;
+    dNxi[0]=1-4*L1; dNxi[1]=4*L2-1; dNxi[2]=0.0;      dNxi[3]=4*(L1-L2); dNxi[4]=4*L3;  dNxi[5]=-4*L3;
+    dNeta[0]=1-4*L1; dNeta[1]=0.0;  dNeta[2]=4*L3-1;  dNeta[3]=-4*L2;    dNeta[4]=4*L2; dNeta[5]=4*(L1-L3);
+}
+
+// X(xi,eta) and the two tangents dX/dxi, dX/deta for a P2 curved triangle (nodes = 6 x 3).
+static void CurvedTriEval(const double nodes[6][3], double xi, double eta,
+                          double X[3], double Xu[3], double Xv[3])
+{
+    double N[6], dNxi[6], dNeta[6]; P2TriShape(xi, eta, N, dNxi, dNeta);
+    for (int k = 0; k < 3; ++k) { X[k]=0; Xu[k]=0; Xv[k]=0; }
+    for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k) {
+        X[k]  += N[i]    * nodes[i][k];
+        Xu[k] += dNxi[i] * nodes[i][k];
+        Xv[k] += dNeta[i]* nodes[i][k];
+    }
+}
+
+// xi0 = argmin |X(xi)-p|^2 over the reference triangle (Gauss-Newton from a coarse scan, clamped to the tri).
+void ClosestRefTri(const double nodes[6][3], const double p[3], double xi0[2])
+{
+    auto clamp = [](double& a, double& b) {
+        if (a < 0) a = 0; if (b < 0) b = 0;
+        if (a + b > 1.0) { const double s = a + b; a /= s; b /= s; }
+    };
+    // coarse scan over a grid for a robust starting point
+    double bx = 1.0/3, by = 1.0/3, bd = 1e300;
+    for (int i = 0; i <= 6; ++i) for (int j = 0; j <= 6 - i; ++j) {
+        double a = i/6.0, b = j/6.0, X[3], Xu[3], Xv[3]; CurvedTriEval(nodes, a, b, X, Xu, Xv);
+        const double dd = (X[0]-p[0])*(X[0]-p[0])+(X[1]-p[1])*(X[1]-p[1])+(X[2]-p[2])*(X[2]-p[2]);
+        if (dd < bd) { bd = dd; bx = a; by = b; }
+    }
+    double a = bx, b = by;
+    for (int it = 0; it < 30; ++it) {
+        double X[3], Xu[3], Xv[3]; CurvedTriEval(nodes, a, b, X, Xu, Xv);
+        const double g[3] = {X[0]-p[0], X[1]-p[1], X[2]-p[2]};
+        // Gauss-Newton: H = J^T J (2x2), rhs = J^T g (2), J = [Xu, Xv]
+        const double h00 = Xu[0]*Xu[0]+Xu[1]*Xu[1]+Xu[2]*Xu[2];
+        const double h01 = Xu[0]*Xv[0]+Xu[1]*Xv[1]+Xu[2]*Xv[2];
+        const double h11 = Xv[0]*Xv[0]+Xv[1]*Xv[1]+Xv[2]*Xv[2];
+        const double r0 = Xu[0]*g[0]+Xu[1]*g[1]+Xu[2]*g[2];
+        const double r1 = Xv[0]*g[0]+Xv[1]*g[1]+Xv[2]*g[2];
+        const double det = h00*h11 - h01*h01;
+        if (std::fabs(det) < 1e-300) break;
+        const double da = -( h11*r0 - h01*r1) / det;
+        const double db = -(-h01*r0 + h00*r1) / det;
+        double na = a + da, nb = b + db; clamp(na, nb);
+        if (std::fabs(na-a) + std::fabs(nb-b) < 1e-13) { a = na; b = nb; break; }
+        a = na; b = nb;
+    }
+    xi0[0] = a; xi0[1] = b;
+}
+
+// CURVED-panel surface-charge inner potential  INT_curvedtri  xi^e0 eta^e1 / |p - X(xi,eta)|  dA_curved
+// via the reference Duffy from xi0 = closest reference point (3 SIGNED 2D reference sub-triangles), evaluating
+// the curved map X(xi) and curved area element J=|Xu x Xv| at each reference Duffy point.  gl/gw = an nq-point
+// Gauss-Legendre rule on [0,1].  Validated vs the Python prototype (curved_duffy.py) to ~1e-5..1e-7.
+double CurvedTriPotential(const double nodes[6][3], int e0, int e1, const double p[3],
+                          const double* gl, const double* gw, int nq)
+{
+    double xi0[2]; ClosestRefTri(nodes, p, xi0);
+    static const double C[3][2] = {{0,0},{1,0},{0,1}};        // reference-triangle corners
+    double acc = 0.0;
+    for (int k = 0; k < 3; ++k) {
+        const double* A = C[k]; const double* B = C[(k+1)%3];
+        const double e1x = A[0]-xi0[0], e1y = A[1]-xi0[1];
+        const double e2x = B[0]-xi0[0], e2y = B[1]-xi0[1];
+        const double sgn2 = e1x*e2y - e1y*e2x;                // signed 2*area of the 2D reference sub-triangle
+        for (int a = 0; a < nq; ++a) {
+            const double u = gl[a];
+            for (int b = 0; b < nq; ++b) {
+                const double v = gl[b];
+                const double xi  = xi0[0] + u*e1x + u*v*(e2x - e1x);
+                const double eta = xi0[1] + u*e1y + u*v*(e2y - e1y);
+                double X[3], Xu[3], Xv[3]; CurvedTriEval(nodes, xi, eta, X, Xu, Xv);
+                const double cr[3] = {Xu[1]*Xv[2]-Xu[2]*Xv[1], Xu[2]*Xv[0]-Xu[0]*Xv[2], Xu[0]*Xv[1]-Xu[1]*Xv[0]};
+                const double J = std::sqrt(cr[0]*cr[0]+cr[1]*cr[1]+cr[2]*cr[2]);   // curved area element
+                const double dx=p[0]-X[0], dy=p[1]-X[1], dz=p[2]-X[2];
+                const double r = std::sqrt(dx*dx+dy*dy+dz*dz);
+                if (r < 1e-300) continue;
+                acc += gw[a]*gw[b]*(u*sgn2)*J*_ipow(xi, e0)*_ipow(eta, e1)/r;
+            }
+        }
+    }
+    return acc;
+}
+
 } // namespace rad_hdiv
