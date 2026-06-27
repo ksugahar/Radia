@@ -43,12 +43,10 @@ Reference docs (consolidated 2026-05-04):
     classic A/H/Omega/Radia-IEM demos pruned from examples/, with
     representative excerpts plus full source text and SHA-256 hashes in the
     synchronized JSON)
-  docs/kelvin/kelvin_adaptive_mesh_archive.ipynb (executed full-source archive
-    for 59 AdaptiveMesh scripts; 45 repetitive order=* runners pruned after
-    source-hash preservation)
-  docs/kelvin/kelvin_dtn_spectrum_archive.ipynb (executed full-source archive
-    for 122 DtN-spectrum scripts pruned from examples/; production behavior
-    lives in src/radia/open_boundary and validation_test/open_boundary)
+  docs/kelvin/ARCHIVE_RETIREMENT.md (routing table from former full-source
+    archives to maintained docs, src/radia APIs, and validation_test lanes)
+  src/radia/open_boundary + validation_test/open_boundary (production DtN/CLN
+    behavior and executable validation)
 """
 
 KELVIN_OVERVIEW = """
@@ -1900,10 +1898,9 @@ dirichlet = "GND"     # GND vertex at kelvin_center (image of infinity)
 ```
 
 The historical `Omega_ReducedOmega/test_solver_integration.py` source is no
-longer kept as a standalone example; it is preserved with full source and
-SHA-256 in `docs/kelvin/kelvin_remaining_examples_archive_results.json`.
-Maintained behavior should be exercised through `src/radia` APIs or a
-dedicated `validation_test/` regression.
+longer kept as a standalone example. Maintained behavior should be exercised
+through `src/radia` APIs or a dedicated `validation_test/` regression; the
+retired-source routing is tracked in `docs/kelvin/ARCHIVE_RETIREMENT.md`.
 
 ## Method Details
 
@@ -1945,9 +1942,10 @@ the terminals and Omega_s is uncontrolled near the cut surface.  The
 12% x-axis error at gap=5 deg is a formulation limitation, not
 a discretization issue.
 
-Archived scripts:
-  `validate_omega_coil_source_v2.py` (3D Omega + Kelvin) is preserved in
-  `docs/kelvin/kelvin_remaining_examples_archive_results.json`.
+Retired scripts:
+  `validate_omega_coil_source_v2.py` (3D Omega + Kelvin) is not the public
+  reference path; promote a maintained `validation_test/` regression when this
+  lane resumes.
   `reference_2d_axisym.py` remains the intended 2D axisym A_phi reference
   pattern when a maintained regression is promoted.
 
@@ -2048,9 +2046,8 @@ Workarounds for a current-driven coil source:
 1. **Line-integration of rad.Fld('h')**: compute Omega_s(p) =
    integral_ref^p H_s . dl on a voxel grid. Choose reference point
    below iron; straight path must not cross coil cut surface. Build
-   VoxelCoefficient. See the archived `validate_omega_coil_source_v2.py`
-   record in `docs/kelvin/kelvin_remaining_examples_archive_results.json` for the
-   working implementation.
+   VoxelCoefficient. This is a promotion candidate for a maintained
+   `validation_test/` regression; see `docs/kelvin/ARCHIVE_RETIREMENT.md`.
 
 2. **Path-integration helper**:
    `radia.bem_sibc_solver.compute_phi_inc_from_filaments(obs_points,
@@ -2805,8 +2802,9 @@ Reading: a COMPACT, CENTRED source (d/R -> 0) is a pure dipole -> p=1 suffices; 
 ECCENTRIC source (d/R -> 1) blows p up -> RE-CENTRE the Kelvin sphere on the source (or
 pay the order).  This is the QUANTITATIVE form of the "center on the device, minimal
 enclosing R" knob (section 3) and the SOURCE half of the abstract's "required resolution
-AND element order in closed form".  Measured to machine precision in
-archived `act2_04_adequacy_eccentric_multibody.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).
+AND element order in closed form".  Measured to machine precision in the retired
+DtN-spectrum corpus; use `docs/kelvin/ARCHIVE_RETIREMENT.md` for the maintained
+API/validation route.
 
 The GEOMETRY-FLOOR half (at p>=n, the residual is the curved-sphere error, not the
 source) has its own measured closed form (act2_05_geometry_floor_law.py, sweeping h at

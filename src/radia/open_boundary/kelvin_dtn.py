@@ -27,9 +27,8 @@ topic kelvin_transformation(topic="material_exterior")):
     ~0.83, self-check pending).  This module is the verified reusable operator, not a
     paper claim.
 
-VERIFIED (tests/open_boundary/test_kelvin_dtn.py, ported from the research demos
-archived `act6_01_kelvin_fem_eddy_dtn.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
-act6_07_cube_eddy_dtn_to_cln.py):
+VERIFIED (`validation_test/open_boundary/test_kelvin_dtn.py`, ported from the
+Kelvin DtN research demos and maintained as executable validation):
   * the radial Kelvin (R/rho')^2-weighted ball reproduces the closed-form
     `dtn_cln.eddy_dtn` per multipole (the "Kelvin BUILDS the exact DtN" check);
   * the generalised Steklov ladder of a NON-separable cube is O_h-split (the l=2
