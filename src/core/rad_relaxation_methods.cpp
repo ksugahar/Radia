@@ -32,6 +32,7 @@
 #include <atomic>   // For std::atomic in parallel early-exit patterns
 #include <algorithm> // For std::min/std::max
 #include <cmath>    // For std::isfinite
+#include <map>      // For the sparse coarse-op (E) CSR assembly, Step 3b
 
 // Uncomment to enable chi value debugging
 // #define RADIA_DEBUG_CHI
@@ -49,6 +50,7 @@ extern radTApplication rad;
 #include "mkl_lapack.h"
 #include "mkl_trans.h"   // For mkl_domatcopy (matrix transpose)
 #include "mkl_service.h" // For mkl_set_num_threads, mkl_get_max_threads
+#include "mkl_pardiso.h" // PARDISO sparse-direct factor of the QR-free deflation coarse op (Step 3b)
 #endif
 
 extern radTYield radYield;
@@ -2264,11 +2266,10 @@ bool RadGetMomentHLUPrecond() { return g_moment_hlu_precond.load(); }
 // so its right near-null (= the surface-charge loops, GetLoopBasis) and left near-null (= "co-loops" = the
 // range of A@loops) are DISTINCT spaces; deflating BOTH conditions the complement (cond ~chi -> ~20), so the
 // block-Jacobi smoother bounds the iters far below plain block-Jacobi on loop-heavy geometry.  QR-FREE coarse
-// op (2026-06-27): zc = L E^-1 (A@L)^T r, E = (A@L)^T(A@L) SPD, factored by Cholesky -- equivalent to the
-// orthonormalised W R^-1 Yco^T form (Petrov-Galerkin, machine-precision) but with NO LAPACK QR.  Coarse setup
-// O(nLoop^2 dof + nLoop^3) (loop space O(N)-dim) -> a medium-N (<=~15k) speedup over dense LU; the E being
-// sparse/banded (fill DECREASES with N) makes a sparse-direct factor the sub-cubic follow-on.  Exclusive with
-// the H-LU precond.
+// op (2026-06-27): zc = L E^-1 (A@L)^T r, E = (A@L)^T(A@L) SPD -- equivalent to the orthonormalised
+// W R^-1 Yco^T form (Petrov-Galerkin, machine-precision) but with NO LAPACK QR.  E is SPARSE/banded (AL columns
+// local) -> assembled sparse + factored ONCE by PARDISO (sparse-direct, mtype=2 SPD): SUB-CUBIC coarse setup
+// (Step 3b, O(N^3)->O(N^2 log N), AL-build-limited).  Exclusive with the H-LU precond.
 // DEFAULT ON (Sugahara 2026-06-27): the TARGET workload is accelerator electromagnets (C-type yokes, dipole/
 // quadrupole iron) -- closed flux paths through iron = LOOP-HEAVY, where deflation is a large win (C-yoke
 // block-Jacobi 167-2917 iters -> deflated 41-114).  A non-loop-heavy solve (e.g. a benchmark cube / solid
@@ -2283,6 +2284,39 @@ extern "C" {
 	void  cHACApK_hlu_set_accum_cap(int c);
 	int   cHACApK_hlu_get_accum_cap(void);
 }
+
+// Sparse-direct (PARDISO) factor of the QR-free deflation coarse op E=(AL)^T(AL), Step 3b (2026-06-27).
+// E is SPD and SPARSE/banded: the AL=A@L columns are LOCAL (AL_i ~= L@L_i since D@L_i~0), so thresholding AL
+// by column-norm gives a sparse AL, and E = AL_sp^T AL_sp is banded (fill DECREASES with N, far/diag ~1e-5;
+// C:\temp\ams_coarse_structure.py / ams_step3b_proto.py: correction matches dense E to ~1e-12).  PARDISO
+// (mtype=2 real SPD) replaces the dense Cholesky -> coarse setup O(N^3) (dsyrk+dpotrf) -> sub-cubic.  RAII frees
+// the factor on every return path.
+struct MomentPardisoCoarse
+{
+	void* pt[64];
+	MKL_INT iparm[64];
+	MKL_INT n = 0, mtype = 2, maxfct = 1, mnum = 1, msglvl = 0;
+	std::vector<MKL_INT> ia, ja;   // upper-triangular CSR, 0-based (iparm[34]=1); columns sorted ascending
+	std::vector<double> a;
+	bool factored = false;
+	MomentPardisoCoarse() { for(int i = 0; i < 64; i++) { pt[i] = nullptr; iparm[i] = 0; } }
+	MomentPardisoCoarse(const MomentPardisoCoarse&) = delete;
+	MomentPardisoCoarse& operator=(const MomentPardisoCoarse&) = delete;
+	~MomentPardisoCoarse()
+	{
+		if(factored)
+		{
+			MKL_INT phase = -1, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
+			pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, &ddum, ia.data(), ja.data(), &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
+		}
+	}
+	void solve(const double* rhs, double* x)   // E x = rhs (single rhs, PARDISO phase 33)
+	{
+		MKL_INT phase = 33, nrhs = 1, idum = 0, error = 0;
+		pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(), &idum, &nrhs, iparm, &msglvl,
+		        const_cast<double*>(rhs), x, &error);
+	}
+};
 
 //-------------------------------------------------------------------------
 // SolveMomentHACApK: the SCALABLE-storage moment linear step (Phase 2 Increments 3-4,
@@ -2489,12 +2523,15 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 	// IDENTICAL to the basis-free form  zc = L E^-1 (A@L)^T r  with E = (A@L)^T (A@L) SPD -- orthonormalising
 	// L / A@L is only a basis change that does NOT move range(L) / range(A@L), so the oblique projector is the
 	// same (verified machine-precision, C:\temp\ams_step2_partA.py rel ~1e-13).  So drop BOTH LAPACK QRs
-	// (no dgeqrf/dorgqr): W = raw loop basis L, AL = A@L (nLoop H-matvecs), coarse op E = (AL)^T(AL) factored
-	// ONCE by Cholesky (dpotrf).  E is SPD (AL full column rank), cond(E)=cond(AL)^2 ~ O(N) and mu_r-INDEPENDENT
-	// -> dpotrf stable, no pivoting.  Coarse setup O(nLoop^2 dof) (dsyrk) + O(nLoop^3) (Cholesky); a sparse
-	// (banded) E + sparse-direct factor is the sub-cubic follow-on (E fill DECREASES with N, ams_coarse_structure.py).
+	// (no dgeqrf/dorgqr): W = raw loop basis L, AL = A@L (nLoop H-matvecs), coarse op E = (AL)^T(AL).  E is SPD
+	// (AL full column rank), cond(E)=cond(AL)^2 ~ O(N) and mu_r-INDEPENDENT, and SPARSE/banded (AL columns are
+	// local -> threshold AL to sparse -> E banded, fill DECREASES with N).  Step 3b: assemble E sparse + factor
+	// ONCE with PARDISO (mtype=2 real SPD) -> SUB-CUBIC coarse setup (vs the O(nLoop^3) dense Cholesky), the
+	// O(N^3)->O(N^2 log N) win (AL-build-limited).  AMG was ruled out (E normal-equations -> AMG-hostile,
+	// ams_step2_partB/C.py: classical + SA both grow ~sqrt(N)); sparse-DIRECT is the scalable coarse solve.
 	int nLoop = 0;
-	std::vector<double> defW, defAL, defEchol;   // defW(=L), defAL(=A@L): dof x nLoop col-major; defEchol: nLoop x nLoop col-major (Cholesky-U of E)
+	std::vector<double> defW, defAL;   // defW(=L), defAL(=A@L): dof x nLoop col-major
+	MomentPardisoCoarse pcoarse;       // sparse-direct PARDISO factor of E=(AL)^T(AL) (Step 3b); RAII-freed on every return
 	if(g_moment_deflate.load() && !hluGuard.root)
 	{
 		std::vector<double> Lflat; int nL = 0;
@@ -2514,17 +2551,69 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 				matvecA(col, acol);
 				for(int d = 0; d < dof; d++) defAL[(size_t)c*dof + d] = acol[(size_t)d];
 			}
-			// E = (AL)^T (AL) (nLoop x nLoop SPD), upper col-major via dsyrk; Cholesky factor ONCE (dpotrf).
-			defEchol.assign((size_t)nLoop * nLoop, 0.0);
-			cblas_dsyrk(CblasColMajor, CblasUpper, CblasTrans, nLoop, dof, 1.0, defAL.data(), dof, 0.0, defEchol.data(), nLoop);
-			int nl = nLoop, info = 0; char uplo = 'U';
-			dpotrf_(&uplo, &nl, defEchol.data(), &nl, &info);
-			if(info != 0)
+			// E = (AL)^T (AL) (nLoop x nLoop SPD) assembled SPARSE: the AL=A@L columns are LOCAL (AL_i ~= L@L_i
+			// since D@L_i~0), so threshold AL by column-norm -> sparse AL; E = sum_d outer(AL_sp[d,:]) is banded
+			// (fill DECREASES with N).  Factor ONCE with PARDISO (mtype=2 real SPD) -> sub-cubic coarse setup vs the
+			// O(nLoop^3) dense Cholesky.  Correction matches dense E to ~1e-12 (C:\temp\ams_step3b_proto.py).
+			const double tauAL = 1e-8;
+			std::vector<double> coln((size_t)nLoop, 0.0);
+			for(int c = 0; c < nLoop; c++)
 			{
-				// Research code -- NO fallback (Sugahara 2026-06-27): a non-SPD / rank-deficient coarse op E
-				// FAILS LOUD instead of silently dropping to plain block-Jacobi.  Set moment_deflation=False to skip.
-				fprintf(stderr, "[moment-deflate] Error: coarse-op E=(AL)^T(AL) Cholesky failed (info=%d, nLoop=%d); no fallback.\n", info, nLoop);
-				return -17;
+				double s = 0.0; const double* col0 = &defAL[(size_t)c*dof];
+				for(int d = 0; d < dof; d++) s += col0[d]*col0[d];
+				coln[c] = std::sqrt(s);
+			}
+			// per-DOF kept (loop, value) pairs (thresholded AL); AL_i local -> O(1) loops per DOF
+			std::vector<std::vector<std::pair<int,double>>> rowEntries((size_t)dof);
+			for(int c = 0; c < nLoop; c++)
+			{
+				double thr = tauAL * coln[c]; const double* col0 = &defAL[(size_t)c*dof];
+				for(int d = 0; d < dof; d++) if(std::fabs(col0[d]) >= thr) rowEntries[(size_t)d].push_back(std::make_pair(c, col0[d]));
+			}
+			// accumulate upper-triangular E (std::map keeps columns sorted ascending, required by PARDISO CSR)
+			std::vector<std::map<int,double>> Erow((size_t)nLoop);
+			for(int d = 0; d < dof; d++)
+			{
+				const auto& re = rowEntries[(size_t)d];
+				for(size_t p = 0; p < re.size(); p++)
+					for(size_t q = p; q < re.size(); q++)
+					{
+						int ci = re[p].first, cj = re[q].first;
+						int lo = ci < cj ? ci : cj, hi = ci < cj ? cj : ci;
+						Erow[(size_t)lo][hi] += re[p].second * re[q].second;
+					}
+			}
+			// pack to upper-CSR (0-based)
+			pcoarse.n = nLoop;
+			pcoarse.ia.assign((size_t)nLoop + 1, 0);
+			for(int i = 0; i < nLoop; i++) pcoarse.ia[(size_t)i+1] = pcoarse.ia[(size_t)i] + (MKL_INT)Erow[(size_t)i].size();
+			MKL_INT nnzE = pcoarse.ia[(size_t)nLoop];
+			pcoarse.ja.assign((size_t)nnzE, 0); pcoarse.a.assign((size_t)nnzE, 0.0);
+			{
+				MKL_INT k = 0;
+				for(int i = 0; i < nLoop; i++) for(const auto& kv : Erow[(size_t)i]) { pcoarse.ja[(size_t)k] = (MKL_INT)kv.first; pcoarse.a[(size_t)k] = kv.second; k++; }
+			}
+			// PARDISO analyze (phase 11) + factor (phase 22), mtype=2 real SPD, 0-based indexing
+			pardisoinit(pcoarse.pt, &pcoarse.mtype, pcoarse.iparm);
+			pcoarse.iparm[34] = 1;   // zero-based (C) indexing
+			{
+				MKL_INT phase = 11, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
+				pardiso(pcoarse.pt, &pcoarse.maxfct, &pcoarse.mnum, &pcoarse.mtype, &phase, &pcoarse.n,
+				        pcoarse.a.data(), pcoarse.ia.data(), pcoarse.ja.data(), &idum, &nrhs, pcoarse.iparm, &pcoarse.msglvl, &ddum, &ddum, &error);
+				if(error == 0)
+				{
+					phase = 22;
+					pardiso(pcoarse.pt, &pcoarse.maxfct, &pcoarse.mnum, &pcoarse.mtype, &phase, &pcoarse.n,
+					        pcoarse.a.data(), pcoarse.ia.data(), pcoarse.ja.data(), &idum, &nrhs, pcoarse.iparm, &pcoarse.msglvl, &ddum, &ddum, &error);
+				}
+				if(error != 0)
+				{
+					// Research code -- NO fallback (Sugahara 2026-06-27): a non-SPD / rank-deficient coarse op E
+					// FAILS LOUD instead of silently dropping to plain block-Jacobi.  Set moment_deflation=False to skip.
+					fprintf(stderr, "[moment-deflate] Error: coarse-op E=(AL)^T(AL) PARDISO factor failed (error=%d, nLoop=%d, nnz=%d); no fallback.\n", (int)error, nLoop, (int)nnzE);
+					return -17;
+				}
+				pcoarse.factored = true;
 			}
 		}
 	}
@@ -2541,11 +2630,10 @@ static int SolveMomentHACApK(radTInteraction* IntrctPtr, const std::vector<doubl
 		else if(nLoop > 0)   // two-sided deflated block-Jacobi: zc = L E^-1 (AL)^T r; z = blockJacobi(r - A zc) + zc
 		{
 			if((int)z.size() != dof) z.resize((size_t)dof);
-			std::vector<double> ycor((size_t)nLoop, 0.0), zc((size_t)dof, 0.0), Azc((size_t)dof), tmp((size_t)dof);
-			cblas_dgemv(CblasColMajor, CblasTrans, dof, nLoop, 1.0, defAL.data(), dof, r.data(), 1, 0.0, ycor.data(), 1);   // ycor = (AL)^T r
-			int nrhs = 1, nl = nLoop, info = 0; char uplo = 'U';
-			dpotrs_(&uplo, &nl, &nrhs, defEchol.data(), &nl, ycor.data(), &nl, &info);                                       // ycor = E^-1 ycor (Cholesky solve)
-			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, nLoop, 1.0, defW.data(), dof, ycor.data(), 1, 0.0, zc.data(), 1);  // zc = L ycor
+			std::vector<double> ycor((size_t)nLoop, 0.0), ysol((size_t)nLoop, 0.0), zc((size_t)dof, 0.0), Azc((size_t)dof), tmp((size_t)dof);
+			cblas_dgemv(CblasColMajor, CblasTrans, dof, nLoop, 1.0, defAL.data(), dof, r.data(), 1, 0.0, ycor.data(), 1);    // ycor = (AL)^T r
+			pcoarse.solve(ycor.data(), ysol.data());                                                                         // ysol = E^-1 ycor (PARDISO sparse-direct solve)
+			cblas_dgemv(CblasColMajor, CblasNoTrans, dof, nLoop, 1.0, defW.data(), dof, ysol.data(), 1, 0.0, zc.data(), 1);  // zc = L ysol
 			matvecA(zc, Azc);
 			for(int i = 0; i < dof; i++) tmp[(size_t)i] = r[(size_t)i] - Azc[(size_t)i];
 			applyBlockJacobi(tmp, z);
