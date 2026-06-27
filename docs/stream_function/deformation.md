@@ -1,5 +1,8 @@
 # Surface deformation outer loop (bilevel optimisation)
 
+> Runnable companion: [`deformation.ipynb`](deformation.ipynb) runs
+> `run_deformation_search` live (penalty CMA-ES + NSGA-II Pareto front).
+
 The inner SF design (ACA+TSVD or FE-direct + regularisation) finds the
 best ψ on a *fixed* source surface.  Letting the source surface SHAPE
 also vary is **bilevel optimisation**:
