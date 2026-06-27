@@ -63,8 +63,7 @@ For M observation points: O(M · N). At M = N = 10^4, that's 10^8 ops — fine i
 Add the time-harmonic surface sources:
 
 ```
-M_s(r')   = E(r') × n̂(r')                  [V/m]
-ρ_e(r')   = ε_0 (n̂(r') · E(r'))            [C/m²]
+M_s(r')   = n̂(r') × E(r')                  [V/m]
 ```
 
 Reconstruction via the dyadic Green's function `Ḡ_e(r,r') = (I + ∇∇/k²) ψ(r,r')`:
@@ -72,9 +71,13 @@ Reconstruction via the dyadic Green's function `Ḡ_e(r,r') = (I + ∇∇/k²) �
 ```
 ψ(r,r')  = exp(-jkR) / (4πR),   k = ω √(μ_0 ε_0)
 
-E(r) = ∮ [ -jωμ_0 Ḡ_e · J_s  +  ∇ψ × M_s  -  (n̂·E) ∇ψ ] dS'
-H(r) = ∮ [  jωε_0 Ḡ_e · M_s  +  ∇ψ × J_s  -  (n̂·H) ∇ψ ] dS'
+E(r) = ∮ [ -jωμ_0 Ḡ_e · J_s  +  ∇ψ × M_s ] dS'
+H(r) = ∮ [  jωε_0 Ḡ_e · M_s  +  ∇ψ × J_s ] dS'
 ```
+
+The dyadic Green-function term already contains the longitudinal
+surface-charge contribution; Radia's production C++ kernel does not add
+separate `(n̂·E)∇ψ` or `(n̂·H)∇ψ` terms.
 
 The `Ḡ_e · J_s` term expands to:
 
@@ -294,16 +297,16 @@ dependency).  No HACApK link, no FMM library vendor.
 
 ### 8.1 Regression suite (every phase must keep all green)
 
-- `examples/equivalence_source/phase1_static_coil.py` — 0.83% PASS (set in commit `aab185e4`).
-- `examples/equivalence_source/phase2_wpt_harmonic.py` — currently KNOWN_LIMITATION at 66%; Phase B must bring this below 2%.
-- `examples/equivalence_source/phase3_e2e_cubit_to_sol.py` — 8.34% PASS; Phase C should tighten to ~1%.
+- `validation_test/equivalence_source/phase1_static_coil.py` — 0.83% PASS.
+- `validation_test/equivalence_source/phase2_wpt_harmonic.py` — 0.12% PASS for E and nonzero H; zero-H observations pass the absolute threshold.
+- `validation_test/equivalence_source/phase3_e2e_cubit_to_sol.py` — 18.26% PASS on the 2026-06-28 Cubit `.vol` path (20% band); Phase C should tighten to ~1%.
 
 ### 8.2 New benchmarks (introduced with each phase)
 
-- **Phase A**: `examples/equivalence_source/bench_static.py` — measure ms/eval for N ∈ {10², 10³, 10⁴, 10⁵} faces, M = 100 obs. Acceptance: ≥ 50× faster than Python at every N.
-- **Phase B**: `examples/equivalence_source/bench_harmonic.py` — same shape, complex arithmetic.
+- **Phase A**: `validation_test/equivalence_source/bench_static.py` — measure ms/eval for N ∈ {10², 10³, 10⁴, 10⁵} faces, M = 100 obs. Numerical equality and production-scale speed are hard gates.
+- **Phase B**: planned `validation_test/equivalence_source/bench_harmonic.py` — same shape, complex arithmetic.
 - **Phase C**: `tests/equivalence_source/test_cf_projection.py` — pytest that compares `gfu.Set(nfs.as_coefficient_function())` against the v1 nodal projection on a known dipole; native CF must be within 1% of analytic at obs points.
-- **Phase D**: `examples/equivalence_source/bench_hacapk.py` — scaling study, M=N up to 10⁵. Acceptance: < 10× slower than direct C++ at N = 10³, ≥ 100× faster than direct C++ at N = 10⁵.
+- **Phase D**: planned `validation_test/equivalence_source/bench_hacapk.py` — scaling study, M=N up to 10⁵. Acceptance: < 10× slower than direct C++ at N = 10³, ≥ 100× faster than direct C++ at N = 10⁵.
 
 ### 8.3 Numerical fixtures
 

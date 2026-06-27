@@ -539,11 +539,11 @@ class NearFieldSource:
 
         Phase B (2026-05-26): when ``use_cpp=True`` (default) and
         ``omega > 0``, delegates to the C++ kernel
-        ``_EquivalenceSourceHarmonic`` which uses the FULL dyadic
-        Green's function (I + grad-grad/k^2) psi.  Correctly reproduces
+        ``_EquivalenceSourceHarmonic`` which uses equivalent currents
+        J_s = n x H_s and M_s = n x E_s with the FULL dyadic Green's
+        function (I + grad-grad/k^2) psi.  Correctly reproduces
         deep-near-field behaviour (the Python fallback's scalar form
-        underestimated by up to a factor of 3 at R_obs/lambda << 1 --
-        the former KNOWN_LIMITATION).
+        underestimated by up to a factor of 3 at R_obs/lambda << 1).
 
         Args:
             obs_points: (M, 3) array of observation points (m).
@@ -623,6 +623,10 @@ class NearFieldSource:
         E_s = self.E[None, :, :]                                # (1, N, 3)
         H_s = self.H[None, :, :]                                # (1, N, 3)
         J_s = np.cross(n_arr, H_s)                              # (1, N, 3)
+        # Legacy scalar form is kept only as a regression-diff anchor.
+        # It is written in the historical E_s x n convention together
+        # with explicit scalar-charge terms; the production C++ dyadic
+        # path above uses M_s = n x E_s and no separate charge terms.
         M_s = np.cross(E_s, n_arr)                              # (1, N, 3)
         rho_e_over_eps = np.sum(n_arr * E_s, axis=2)            # (1, N)
         rho_m_over_mu  = np.sum(n_arr * H_s, axis=2)            # (1, N)

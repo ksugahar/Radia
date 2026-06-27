@@ -1,0 +1,40 @@
+{
+  "schema": "radia.docs.equivalence_source.validation.v1",
+  "generated_at_utc": "2026-06-27T20:43:15.309155+00:00",
+  "versions": {
+    "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2"
+  },
+  "validation_dir": "validation_test\\equivalence_source",
+  "result_hashes": {
+    "results_phase1.json": "f879f79028aff854ac46fb37c92a0ca18da01c4798c73dde50dea9c1888e47f4",
+    "results_phase2.json": "302b6ffc276feee4ba358b0f4e1cb471f36d8c960f9a456aaaf14a49ff078321",
+    "results_phase3.json": "018438f869b83369adb5a80649e5f8379eb4920583fea9076f0cbc574e56eb63",
+    "results_null_field.json": "2a797352f5f9e25918b482c8d22ea5fd26687158abc17b7344eb45489a33d866",
+    "results_bench_static.json": "9ae58ddb8c9fac6c0aafb2beebc0ea306cabc0c2ca08744d2a68f33dc63a2790"
+  },
+  "source_hashes": {
+    "phase1_static_coil.py": "c57d5d240c00cff26ca984fbb99bd95682e40d3b9f8706b87be15e02e900841c",
+    "phase2_wpt_harmonic.py": "1bfdc6a1888e7ab42172cb8dd7ab71dbdf259e5107eb0b169633d276374d7fb9",
+    "phase3_e2e_cubit_to_sol.py": "1ae70c958812d12c7a228437857c901508260231930356106516da20f3f9b0c5",
+    "null_field_property.py": "f5be9406a4c7fae9174d514dccd8a3bfd210c01398cd10bd01521465f61c924c",
+    "bench_static.py": "3c462479ce11e372ed2120e715fd1f7e56c44e284952a5a1a1c473e48658b5b1",
+    "README.md": "1bbac2a049a8799b19274cf9fe273fef2d16a5276eda07d5dd46ee3816cdbb6f"
+  },
+  "checks": {
+    "phase1_static_status": "PASS",
+    "phase1_static_max_rel_err": 0.008284726908117579,
+    "phase2_harmonic_status": "PASS",
+    "phase3_e2e_status": "PASS",
+    "phase3_e2e_max_rel_err": 0.18257005088248968,
+    "null_field_overall_passed": true,
+    "bench_overall_status": "PASS",
+    "bench_numerical_passed": 4,
+    "bench_speed_targets_passed": 4
+  },
+  "policy_notes": [
+    "Phase 2 harmonic is a green dyadic-kernel validation.",
+    "Bench numerical equality and production-scale speed targets both pass."
+  ]
+}

@@ -24,7 +24,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
+REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "src"))
 
 from radia.equivalence_source import NearFieldSource
 
@@ -98,9 +99,10 @@ def main():
         max_rel = float(np.max(np.abs(H_py - H_cpp) /
                                   (np.abs(H_py).max() + 1e-30)))
         ok_num = max_rel < 1e-7
-        # Speed criterion ONLY meaningful at production scale (N >= 1e3).
-        # At small N both paths are sub-millisecond; overhead dominates
-        # and speedup may be < 1x (NOT a regression -- just irrelevant).
+        # Speed criterion is meaningful at production scale.  At small
+        # N both paths are sub-millisecond; overhead dominates and
+        # speedup may be < 1x, so sub-1000-face cases are correctness
+        # checks only.
         if n_actual < 1000:
             ok_speed = True
             verdict_speed = "n/a"
@@ -130,18 +132,32 @@ def main():
         })
 
     print("-" * 78)
-    n_pass = sum(1 for r in results if r["verdict"] == "PASS")
-    print(f"{n_pass}/{len(results)} cases passed (numerical match + >=50x speedup).")
+    n_num_pass = sum(1 for r in results if r["ok_num"])
+    n_speed_pass = sum(1 for r in results if r["ok_speed"])
+    overall_status = "PASS" if (
+        n_num_pass == len(results) and n_speed_pass == len(results)
+    ) else "FAIL"
+    print(
+        f"{n_num_pass}/{len(results)} numerical cases passed; "
+        f"{n_speed_pass}/{len(results)} speed targets passed."
+    )
+    print(f"Overall: {overall_status}")
     out = HERE / "results_bench_static.json"
     out.write_text(json.dumps({
         "phase": "A",
         "description": "Equivalence-theorem static H reconstruction: "
                        "C++ kernel vs Python fallback",
-        "acceptance": "max relative diff < 1e-7  AND  speedup >= 50x",
+        "acceptance": {
+            "correctness": "max relative diff < 1e-7",
+            "performance_target": "speedup >= 50x for production-scale cases",
+        },
+        "overall_status": overall_status,
+        "n_numerical_passed": n_num_pass,
+        "n_speed_targets_passed": n_speed_pass,
         "results": results,
     }, indent=2))
     print(f"Wrote: {out}")
-    return 0 if n_pass == len(results) else 1
+    return 0 if overall_status == "PASS" else 1
 
 
 if __name__ == "__main__":

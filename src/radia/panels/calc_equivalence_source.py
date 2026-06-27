@@ -48,7 +48,7 @@ Stage promotion:
     Stage 2 (this CLI):
         argparse + JSON-on-stdout.  Validated by phase1_static_coil.py
         + phase2_wpt_harmonic.py golden tests in
-        examples/equivalence_source/.
+        validation_test/equivalence_source/.
 
     Stage 3 (PySide panel -- planned):
         Wrap as a tab in radia_em.py or new radia_nfs.py.  Cubit

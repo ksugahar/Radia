@@ -19,7 +19,7 @@ theorem).  Use it when you want to:
   ray-tracing tool via the Nastran NFS format.
 - Verify the **equivalence-theorem null-field property**: evaluation
   inside the surface returns ≈ 0, exterior returns the true field
-  (see `examples/equivalence_source/null_field_property.py`).
+  (see `validation_test/equivalence_source/null_field_property.py`).
 
 The implementation lives at
 [`src/radia/equivalence_source.py`](../../src/radia/equivalence_source.py)
@@ -35,9 +35,11 @@ with a C++ accelerator at
 | **Time-harmonic full-wave** (MHz–GHz): WPT, EMC, antennas | dyadic full-wave | same `evaluate(obs, omega)` |
 | **Full radiation** (far field) | classical Stratton-Chu | same `evaluate(obs, omega)` |
 
-The C++ kernels are both correct (no scalar-form undershoot — Phase B
-verified to agree with Phase A at ω = 1 Hz to **5e-15 relative
-diff** = machine precision).
+The static and harmonic C++ kernels are both verified production paths.
+The harmonic dyadic path is tracked by
+`validation_test/equivalence_source/phase2_wpt_harmonic.py`; the
+2026-06-28 LAB run reconstructs the 1 MHz Hertzian-dipole case within
+0.12% for both E and nonzero H observations.
 
 ## 3. Quickstart
 
@@ -138,7 +140,7 @@ typically <1 MB for 10⁴ panels), and version-tagged.
 ## 5. Workflow: Cubit → .vol → NGSolve → NearFieldSource → external eval
 
 This is the canonical production pipeline; see
-[`examples/equivalence_source/phase3_e2e_cubit_to_sol.py`](../../examples/equivalence_source/phase3_e2e_cubit_to_sol.py)
+[`validation_test/equivalence_source/phase3_e2e_cubit_to_sol.py`](../../validation_test/equivalence_source/phase3_e2e_cubit_to_sol.py)
 for a verified end-to-end test.
 
 ```
@@ -175,14 +177,14 @@ for a verified end-to-end test.
 
 | Path | Speed | Use when |
 |---|---|---|
-| Phase A C++ `evaluate_static_H(use_cpp=True)` | 50–120× faster than Python at N=10³–10⁵ | **Default** |
+| Phase A C++ `evaluate_static_H(use_cpp=True)` | typically tens of times faster than Python at N=10³–10⁵ | **Default** |
 | Phase B C++ `evaluate(use_cpp=True)` | similar (40–80× harmonic) | ω > 0 default |
 | Python fallback (`use_cpp=False`) | slow (10⁵-panel × 100-obs ≈ 30 s) | Regression cross-check ONLY |
 
-Benchmarks (see `examples/equivalence_source/bench_static.py`):
-- N_face = 9 800, N_obs = 100 → 71.9× speedup over Python
-- N_face = 99 000, N_obs = 100 → 119× speedup over Python
-- Bit-identical results: `‖H_C++ − H_python‖∞ ≈ 6e-16` (rounding noise)
+Benchmarks (see `validation_test/equivalence_source/bench_static.py`):
+- 2026-06-28 LAB run: 4/4 numerical cases passed.
+- Speed target result: 4/4 cases met the production-scale 50× target.
+- Bit-identical results: `‖H_C++ − H_python‖∞ ≈ 1e-15` (rounding noise).
 
 **Above N_face × N_obs > 10⁹**: direct C++ becomes the bottleneck.
 See [`FMM_DESIGN.md`](FMM_DESIGN.md) for the NGSolve.bem-based
@@ -235,7 +237,8 @@ Threshold (informal): if `ω · R_obs / c < 1e-6`, use static — it's
   use `evaluate(...)`.
 - **Surface must be closed and enclose the source**.  The
   equivalence-theorem null-field property fails on open / partial
-  surfaces.  See `null_field_property.py` for a verification.
+  surfaces.  See `validation_test/equivalence_source/null_field_property.py`
+  for a verification.
 - **Obs points must be outside the enclosing surface** for physical
   results.  Inside, you get ≈ 0 (the null-field property), NOT the
   interior field of the original source.  This is BY DESIGN; the
@@ -245,9 +248,9 @@ Threshold (informal): if `ω · R_obs / c < 1e-6`, use static — it's
 
 - [`CPP_DESIGN.md`](CPP_DESIGN.md) — C++ kernel architecture
 - [`FMM_DESIGN.md`](FMM_DESIGN.md) — Phase D acceleration via NGSolve.bem
-- `examples/equivalence_source/` — verified examples
+- `validation_test/equivalence_source/` — executable validation corpus
   - `phase1_static_coil.py` — golden test: analytical coil
-  - `phase2_wpt_harmonic.py` — 13.56 MHz WPT with Hertzian dipole
+  - `phase2_wpt_harmonic.py` — harmonic Hertzian dipole, 1 MHz deep-near-field PASS
   - `phase3_e2e_cubit_to_sol.py` — Cubit → NGSolve → NFS full e2e
   - `null_field_property.py` — interior null + exterior reconstruction
   - `bench_static.py` — Phase A C++ benchmark

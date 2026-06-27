@@ -51,8 +51,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "src"))
-sys.path.insert(0, str(HERE.parents[1] / "src" / "radia"))
+REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "src" / "radia"))
 
 from radia.equivalence_source import NearFieldSource, MU_0
 
@@ -95,7 +96,7 @@ def step1_cubit_mesh():
     """Run Cubit headless: create sphere R=0.5, export inner_mesh.vol."""
     print("\n--- Step 1: Cubit headless mesh ---")
     # Locate Cubit
-    install_helper = HERE.parents[1] / "src" / "radia" / "install_panels.py"
+    install_helper = REPO / "src" / "radia" / "install_panels.py"
     sys.path.insert(0, str(install_helper.parent))
     from install_panels import find_cubit_bin
     cubit_bin = find_cubit_bin()
@@ -164,7 +165,7 @@ def step1b_occ_fallback():
     """OCC-based fallback when Cubit is unavailable."""
     print("\n--- Step 1b: OCC fallback (no Cubit) ---")
     from netgen.occ import OCCGeometry, Sphere, Pnt
-    from ngsolve import Mesh
+    from ngsolve import Mesh, TaskManager
 
     sphere = Sphere(Pnt(0, 0, 0), 0.5)
     sphere.bc("nfs_surface")
@@ -226,7 +227,7 @@ def step2_sample_inner_field():
 def step3_run_cli():
     """Run the calc_equivalence_source.py CLI."""
     print("\n--- Step 3: run calc_equivalence_source.py CLI ---")
-    cli = HERE.parents[1] / "src" / "radia" / "panels" / "calc_equivalence_source.py"
+    cli = REPO / "src" / "radia" / "panels" / "calc_equivalence_source.py"
     if NFS_JSON.exists():
         NFS_JSON.unlink()
     cmd = [
@@ -382,45 +383,57 @@ def main():
     # CLI to isolate where the error comes from).
     print("\n--- Diagnostic: direct in-process NFS vs CLI NFS ---")
     from ngsolve import BND
-    from ngsolve import TaskManager
     cd, nd, ad = [], [], []
     for el in mesh_inner.Elements(BND):
         verts = [(mesh_inner[v].point[0], mesh_inner[v].point[1],
                    mesh_inner[v].point[2]) for v in el.vertices]
-        if len(verts) != 3:
+        if len(verts) < 3:
             continue
         c = np.mean(verts, axis=0)
-        e1 = np.array(verts[1]) - np.array(verts[0])
-        e2 = np.array(verts[2]) - np.array(verts[0])
-        cross = np.cross(e1, e2)
-        a = 0.5 * np.linalg.norm(cross)
+        v0 = np.asarray(verts[0], dtype=np.float64)
+        area_vec = np.zeros(3, dtype=np.float64)
+        for i in range(1, len(verts) - 1):
+            e1 = np.asarray(verts[i], dtype=np.float64) - v0
+            e2 = np.asarray(verts[i + 1], dtype=np.float64) - v0
+            area_vec += np.cross(e1, e2)
+        a = 0.5 * np.linalg.norm(area_vec)
         if a < 1e-15:
             continue
-        cd.append(c); nd.append(cross / (2 * a)); ad.append(a)
+        cd.append(c); nd.append(area_vec / (2 * a)); ad.append(a)
     cd = np.asarray(cd); nd = np.asarray(nd); ad = np.asarray(ad)
-    # Check normal orientation against radial-from-origin
-    radial = cd / np.linalg.norm(cd, axis=1, keepdims=True)
-    dot_outward = np.sum(nd * radial, axis=1)
-    n_out = int(np.sum(dot_outward > 0))
-    n_in = int(np.sum(dot_outward < 0))
-    print(f"  direct extract: {len(cd)} faces, total_area={ad.sum():.6f}")
-    print(f"  normal orientation: {n_out} outward, {n_in} inward (of {len(cd)})")
-    # Direct NFS with analytic H at centroids
-    H_analytic = dipole_H(cd).astype(np.complex128)
-    nfs_direct = NearFieldSource.from_surface_mesh(cd, nd, ad,
-                                                     H=H_analytic, omega=0.0)
-    p_test = np.array([[0, 0, 1.0]])
-    H_dir = nfs_direct.evaluate_static_H(p_test).real
-    H_ana_t = dipole_H(p_test)
-    rel_dir = float(np.linalg.norm(H_dir[0] - H_ana_t[0]) /
-                     np.linalg.norm(H_ana_t[0]))
-    print(f"  direct NFS at (0,0,1):  recon={H_dir[0]}  ana={H_ana_t[0]}  rel={rel_dir*100:.2f}%")
-    # CLI NFS at same point
-    nfs_cli = NearFieldSource.load(NFS_JSON)
-    H_cli = nfs_cli.evaluate_static_H(p_test).real
-    rel_cli = float(np.linalg.norm(H_cli[0] - H_ana_t[0]) /
-                     np.linalg.norm(H_ana_t[0]))
-    print(f"  CLI    NFS at (0,0,1):  recon={H_cli[0]}  ana={H_ana_t[0]}  rel={rel_cli*100:.2f}%")
+    if cd.size == 0:
+        print("  direct diagnostic skipped: no usable boundary faces")
+        nfs_cli = NearFieldSource.load(NFS_JSON)
+        p_test = np.array([[0, 0, 1.0]])
+        H_cli = nfs_cli.evaluate_static_H(p_test).real
+        H_ana_t = dipole_H(p_test)
+        rel_cli = float(np.linalg.norm(H_cli[0] - H_ana_t[0]) /
+                         np.linalg.norm(H_ana_t[0]))
+        print(f"  CLI    NFS at (0,0,1):  recon={H_cli[0]}  ana={H_ana_t[0]}  rel={rel_cli*100:.2f}%")
+    else:
+        # Check normal orientation against radial-from-origin
+        radial = cd / np.linalg.norm(cd, axis=1, keepdims=True)
+        dot_outward = np.sum(nd * radial, axis=1)
+        n_out = int(np.sum(dot_outward > 0))
+        n_in = int(np.sum(dot_outward < 0))
+        print(f"  direct extract: {len(cd)} faces, total_area={ad.sum():.6f}")
+        print(f"  normal orientation: {n_out} outward, {n_in} inward (of {len(cd)})")
+        # Direct NFS with analytic H at centroids
+        H_analytic = dipole_H(cd).astype(np.complex128)
+        nfs_direct = NearFieldSource.from_surface_mesh(cd, nd, ad,
+                                                         H=H_analytic, omega=0.0)
+        p_test = np.array([[0, 0, 1.0]])
+        H_dir = nfs_direct.evaluate_static_H(p_test).real
+        H_ana_t = dipole_H(p_test)
+        rel_dir = float(np.linalg.norm(H_dir[0] - H_ana_t[0]) /
+                         np.linalg.norm(H_ana_t[0]))
+        print(f"  direct NFS at (0,0,1):  recon={H_dir[0]}  ana={H_ana_t[0]}  rel={rel_dir*100:.2f}%")
+        # CLI NFS at same point
+        nfs_cli = NearFieldSource.load(NFS_JSON)
+        H_cli = nfs_cli.evaluate_static_H(p_test).real
+        rel_cli = float(np.linalg.norm(H_cli[0] - H_ana_t[0]) /
+                         np.linalg.norm(H_ana_t[0]))
+        print(f"  CLI    NFS at (0,0,1):  recon={H_cli[0]}  ana={H_ana_t[0]}  rel={rel_cli*100:.2f}%")
     mesh_outer, gfu_outer = step4to6_project_outer()
     obs_rows, max_err, accept = step7_verify(mesh_outer, gfu_outer)
 
