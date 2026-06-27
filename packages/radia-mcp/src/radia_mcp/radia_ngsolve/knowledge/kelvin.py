@@ -46,8 +46,8 @@ Reference docs (consolidated 2026-05-04):
     for 59 AdaptiveMesh scripts; 45 repetitive order=* runners pruned after
     source-hash preservation)
   docs/kelvin/kelvin_dtn_spectrum_archive.ipynb (executed full-source archive
-    for 122 DtN-spectrum scripts; use before moving scripts into src API or
-    validation_test)
+    for 122 DtN-spectrum scripts pruned from examples/; production behavior
+    lives in src/radia/open_boundary and validation_test/open_boundary)
 """
 
 KELVIN_OVERVIEW = """
@@ -2652,7 +2652,7 @@ INTERIOR / corners, never the exterior air.
 
 ## Measured evidence (reproducible)
 
-Two demos in examples/kelvin_transformation/DtN_spectrum/ reproduce the two
+Two archived DtN-spectrum demos reproduce the two
 headline claims on a unit sphere (mode n=2, p=3 >= n, R=1):
 
 `act2_09_exterior_mesh.py` -- refining the exterior VOLUME does not help; only
@@ -2799,7 +2799,7 @@ ECCENTRIC source (d/R -> 1) blows p up -> RE-CENTRE the Kelvin sphere on the sou
 pay the order).  This is the QUANTITATIVE form of the "center on the device, minimal
 enclosing R" knob (section 3) and the SOURCE half of the abstract's "required resolution
 AND element order in closed form".  Measured to machine precision in
-examples/kelvin_transformation/DtN_spectrum/act2_04_adequacy_eccentric_multibody.py.
+archived `act2_04_adequacy_eccentric_multibody.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`).
 
 The GEOMETRY-FLOOR half (at p>=n, the residual is the curved-sphere error, not the
 source) has its own measured closed form (act2_05_geometry_floor_law.py, sweeping h at

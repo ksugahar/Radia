@@ -1,6 +1,6 @@
 {
   "schema": "radia.docs.kelvin_source_archive.v1",
-  "generated_at_utc": "2026-06-27T04:02:06Z",
+  "generated_at_utc": "2026-06-27T05:07:48Z",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "<LOCAL_PATH> Files\\Python312\\python.exe",
@@ -24,9 +24,9 @@
     "archived_lines": 18927,
     "archived_bytes": 1050293,
     "by_lane": {
-      "open_boundary_src_api_or_validation": 104,
-      "validation_test_or_src_api_locked": 16,
-      "validation_test_candidate": 2
+      "open_boundary_src_api_or_validation": 119,
+      "validation_test_candidate": 2,
+      "validation_test_or_src_api_locked": 1
     },
     "by_group": {
       "DtN_spectrum": 122
@@ -64,9 +64,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act0_02_p_vs_h_study.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act0_02_p_vs_h_study.py",
@@ -240,9 +240,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act1_07_inductance_dtn.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act1_07_inductance_dtn.py",
@@ -288,9 +288,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act2_03_floor_vs_curve.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 2,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act2_03_floor_vs_curve.py",
@@ -304,9 +304,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act2_04_adequacy_eccentric_multibody.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act2_04_adequacy_eccentric_multibody.py",
@@ -320,9 +320,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act2_05_geometry_floor_law.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act2_05_geometry_floor_law.py",
@@ -384,9 +384,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act2_09_exterior_mesh.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act2_09_exterior_mesh.py",
@@ -872,9 +872,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act6_01_kelvin_fem_eddy_dtn.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 2,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act6_01_kelvin_fem_eddy_dtn.py",
@@ -890,7 +890,7 @@
       "top_group": "DtN_spectrum",
       "migration_lane": "validation_test_or_src_api_locked",
       "validation_named": false,
-      "reference_hit_count_reported": 3,
+      "reference_hit_count_reported": 1,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act6_02_cln_dtn_cauer.py",
@@ -1000,9 +1000,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act6_09_cln_vs_pml.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act6_09_cln_vs_pml.py",
@@ -1032,9 +1032,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act6_11_exact_dtn_fetd.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act6_11_exact_dtn_fetd.py",
@@ -1400,9 +1400,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act7_21_lowfreq_openbc_4way.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [],
       "source": {
         "path": "examples/kelvin_transformation/DtN_spectrum/act7_21_lowfreq_openbc_4way.py",
@@ -1416,9 +1416,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act7_22_dtn_spectrum_consolidated.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [
         "act7_22_dtn_spectrum_consolidated.json",
         "act7_22_dtn_spectrum_consolidated.png",
@@ -1472,9 +1472,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act7_25_infinite_element_dtn.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 1,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [
         "act7_25_infinite_element_dtn.json"
       ],
@@ -1490,9 +1490,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act7_26_derham_infinite_element.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 2,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [
         "act7_26_derham_infinite_element.json"
       ],
@@ -1508,9 +1508,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act7_27_ie_vs_kelvin_vs_pml_gate1.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 2,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [
         "act7_27_ie_vs_kelvin_vs_pml_gate1.json"
       ],
@@ -1526,9 +1526,9 @@
     {
       "path": "examples/kelvin_transformation/DtN_spectrum/act7_28_ie_vs_kelvin_fair_dtn.py",
       "top_group": "DtN_spectrum",
-      "migration_lane": "validation_test_or_src_api_locked",
+      "migration_lane": "open_boundary_src_api_or_validation",
       "validation_named": false,
-      "reference_hit_count_reported": 4,
+      "reference_hit_count_reported": 0,
       "sibling_artifacts": [
         "act7_28_ie_vs_kelvin_fair_dtn.json"
       ],

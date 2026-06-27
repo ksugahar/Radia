@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Golden tests for radia.open_boundary.kelvin_dtn (the Kelvin-built material-aware /
 non-separable DtN -> CLN), ported from the verified research demos
-examples/kelvin_transformation/DtN_spectrum/act6_01_kelvin_fem_eddy_dtn.py +
+archived `act6_01_kelvin_fem_eddy_dtn.py` (full source: `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`) +
 act6_07_cube_eddy_dtn_to_cln.py.
 
 Two tiers:

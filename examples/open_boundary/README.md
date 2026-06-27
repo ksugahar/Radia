@@ -62,5 +62,5 @@ See the selector + the three-sense "superior?" discussion in
 [`docs/open_boundary/OPEN_BOUNDARY_MAP.md`](../../docs/open_boundary/OPEN_BOUNDARY_MAP.md),
 and the research-stage corpus (non-separable Kelvin-built DtN, reflection FETD,
 CLN-vs-PML benchmark) in
-[`examples/kelvin_transformation/DtN_spectrum/`](../kelvin_transformation/DtN_spectrum/)
+[`docs/kelvin/kelvin_dtn_spectrum_archive.ipynb`](../../docs/kelvin/kelvin_dtn_spectrum_archive.ipynb)
 (`act6_02`, `act6_09`, `act6_11`, …).

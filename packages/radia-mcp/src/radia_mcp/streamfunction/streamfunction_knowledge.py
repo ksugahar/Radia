@@ -828,7 +828,7 @@ No-Fallback: --iron-vol and --shield-vol together RAISE (an active shield coil
 is not iron); free-space is the default when neither is given.
 
 See also: 'shielding' (active shield COIL, a different lever), the Kelvin DtN
-demos examples/kelvin_transformation/DtN_spectrum/act8_08..act8_10, and
+demos docs/kelvin/kelvin_dtn_spectrum_archive_results.json::act8_08..act8_10, and
 [[sf-coil-model-current-sheet-vs-dirichlet]].
 """
 
