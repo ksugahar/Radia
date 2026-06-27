@@ -1,0 +1,196 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T20:29:23Z",
+  "notebook": "docs/moment_galerkin/moment_galerkin.ipynb",
+  "notebook_sha256": "3a92a5b8c0e297ca2865caed2f9eeae721ea6196521b081f48dadb2c60270a5f",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/moment_galerkin/moment_galerkin.ipynb",
+    "cells": 13,
+    "code_cells": 8,
+    "executed_code_cells": 8,
+    "code_cells_with_outputs": 7,
+    "output_count": 13,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "0e31d479bfe986cc5350e4376354966d38196402f973b9b47f2f3f881b9a71ea",
+      "source_preview": "import json, time, platform, datetime\nfrom pathlib import Path\nimport numpy as np\nimport radia as rad\nimport radia.moment_galerkin as mg\nfrom IPython.display import display\n\ntry:\n    import matplotlib.pyplot as plt\n    HAVE_MPL = True\nexcept Exception:\n    HAVE_MPL = False\n\n# nbconvert runs the kernel in the notebook's directory; fall back to the repo-relative path.\nDOCDIR = Path.cwd()\nif not (DOCDIR / \"crossover_results.json\").exists() and Path(\"docs/moment_galerkin/crossover_results.json\").exists():\n    DOCDIR = Path(\"docs/moment_galerkin\")\n\nD = 0.02            # cube edge (m)\nH0 = 1000.0         # applied field magnitude (A/m)\nMU0 = 4e-7 * np.pi\nRESULT = {}         # scalars collected for the committed summary JSON\n\ntry:\n    RADIA_VERSION = rad.__version__\nexcept Exception:\n    from importlib.metadata import version as _pkgver\n    RADIA_VERSION = _pkgver(\"radia\")\n\nprint(\"radia      \", RADIA_VERSION)\nprint(\"python     \", platform.python_version())\nprint(\"platform   \", platform.platfo",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 137,
+          "text_sha256": "9865ffdef507d610b4d25865738746f80727e5a0581fa952da73a9eb411fb95d",
+          "text_preview": "radia       4.95.2\npython      3.12.10\nplatform    Windows-2022Server-10.0.20348-SP0\ndoc dir     S:\\Radia\\01_GitHub\\docs\\moment_galerkin\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "84a5de828a7877b35cd87cd07a2f9624df70847a84b9988c2cabfa3372344c32",
+      "source_preview": "# (1a) cube operator demag factor -> 1/3\nsys_cube = mg.assemble_moment_system([hexv(0,D,0,D,0,D)])\nd_cube = mg.demag_factor(sys_cube, 2)\n\n# (1b) N = B^T G B symmetric to machine precision (2x2x1 block)\nblock = [hexv(i*D,(i+1)*D, j*D,(j+1)*D, 0,D) for i in range(2) for j in range(2)]\nsysb = mg.assemble_moment_system(block)\nBc = sysb[\"B\"].tocsr(); ndof = Bc.shape[1]\nN = np.empty((ndof, ndof))\nfor j in range(ndof):\n    ej = np.zeros(ndof); ej[j] = 1.0\n    N[:, j] = Bc.T @ np.asarray(sysb[\"G\"].matvec(np.asarray(Bc @ ej).tolist()), float)\nasym = float(np.linalg.norm(N - N.T) / np.linalg.norm(N))\n\n# (1c) same operator across the mixed element zoo\nzoo = {}\nfor name, elems in [(\"hex\", [np.array(_CUBE, float)]), (\"6 tet\", cube_tets()),\n                    (\"2 wedge\", cube_wedges()), (\"6 pyramid\", cube_pyramids())]:\n    s = mg.assemble_moment_system(elems, quad=True, near_factor=1e30)\n    zoo[name] = {\"d\": float(mg.demag_factor(s, 2)),\n                 \"vol_err\": float(abs(s[\"vols\"].sum() - D**3",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 406,
+          "text_sha256": "a88594a55eba163673af7f957537d2ed9f840a2c4182cd093341e11675184848",
+          "text_preview": "(1a) cube demag factor d = 0.33467   (analytic 1/3 = 0.33333)\n(1b) ||N - N^T|| / ||N|| = 6.70e-17   (symmetric)\n(1c) cube as each element type -> same operator demag factor:\n     hex        d = 0.33467   vol err 0.0e+00   ndof/el 5\n     6 tet      d = 0.33467   vol err 2.1e-16   ndof/el 3\n     2 wedge    d = 0.33467   vol err 2.1e-16   ndof/el 4\n     6 pyramid  d = 0.33467   vol err 2.1e-16   ndof/el 4\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 4,
+      "source_sha256": "86652f0e38bf77b1f613a7a2648ce42fe40ed236fd9f023d2660383263c8fb0c",
+      "source_preview": "cross = json.loads((DOCDIR / \"crossover_results.json\").read_text())\nrows = cross[\"results\"]\nprint(f\"Crossover dataset (mdx, {cross['threads']} threads, mu_r = {cross['mu_r']}):\")\nprint(\" N      gal_s   colloc_s   speedup   gal_iters   gal_MB   colloc_MB\")\nfor r in rows:\n    print(f\" {r['N']:5d}  {r['gal_s']:7.2f}  {r['colloc_s']:8.2f}   {r['colloc_s']/r['gal_s']:5.1f}x\"\n          f\"   {r['gal_iters']:5d}   {r['gal_mb']:7.0f}  {r['colloc_mb']:8.0f}\")\nprint(\" finding:\", cross[\"finding\"])\n\n# live sanity point on THIS machine (Galerkin only, small) -- demonstrates the route + correct demag here\nplate256 = [hexv(i*D,(i+1)*D, j*D,(j+1)*D, 0,D) for i in range(16) for j in range(16)]  # 256 hexes\nt0 = time.perf_counter()\nout256 = mg.moment_galerkin_demag_solve(plate256, mu_r=cross[\"mu_r\"], H_ext=(0,0,H0))\nt256 = time.perf_counter() - t0\nprint(f\"\\n[live here] N=256 Galerkin: {t256:.2f}s, {out256['iters']} iters, \"\n      f\"plate demag d = {out256['demag_factor']:.4f} (flat plate -> near 1)\")\nrad",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 564,
+          "text_sha256": "cbfe83ad3d8f6c90962bfba29147ddd49fbcfe2fc83525a7dd94fb97146fac54",
+          "text_preview": "Crossover dataset (mdx, 8 threads, mu_r = 1000.0):\n N      gal_s   colloc_s   speedup   gal_iters   gal_MB   colloc_MB\n  1024     3.08      2.63     0.9x     132       444       492\n  2304     7.35     15.79     2.1x     152       990      1010\n  4096    12.49     26.49     2.1x     170      1695      2155\n  6400    19.50     77.73     4.0x     178      3152      3457\n  9216    34.20    221.97     6.5x     181      4341      5072\n finding: crossover at N~1500; galerkin ~N^1.08 (iters plateau ~180), colloc_hlu ~N^2.0; gal 6.5x faster + 14% less mem at N=9216\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 92,
+          "text_sha256": "85b258033ab8aafa202018e62ef54bd672d1bed55580382c52d34083e8165f9c",
+          "text_preview": "\n[live here] N=256 Galerkin: 0.70s, 82 iters, plate demag d = 0.8565 (flat plate -> near 1)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 5,
+      "source_sha256": "78691193c83bfa8d05765ea8b53ed0ad9ef87643ba3cab04f40fc4ca35d40d3f",
+      "source_preview": "if HAVE_MPL:\n    Ns   = [r[\"N\"] for r in rows]\n    fig, ax = plt.subplots(1, 2, figsize=(9.2, 3.4))\n    ax[0].loglog(Ns, [r[\"gal_s\"] for r in rows], \"o-\", label=\"moment-Galerkin (sym, mass-Riesz CG)\")\n    ax[0].loglog(Ns, [r[\"colloc_s\"] for r in rows], \"s-\", label=\"collocation MMMM + H-LU\")\n    ax[0].set_xlabel(\"N (hex elements)\"); ax[0].set_ylabel(\"solve time [s]\")\n    ax[0].set_title(\"Gradient demag: solve time\"); ax[0].legend(fontsize=8)\n    ax[0].grid(True, which=\"both\", alpha=.3)\n    ax[1].loglog(Ns, [r[\"gal_mb\"] for r in rows], \"o-\", label=\"moment-Galerkin\")\n    ax[1].loglog(Ns, [r[\"colloc_mb\"] for r in rows], \"s-\", label=\"collocation MMMM\")\n    ax[1].set_xlabel(\"N (hex elements)\"); ax[1].set_ylabel(\"peak memory [MB]\")\n    ax[1].set_title(\"Peak memory\"); ax[1].legend(fontsize=8)\n    ax[1].grid(True, which=\"both\", alpha=.3)\n    fig.tight_layout()\n    fig.savefig(DOCDIR / \"crossover.png\", dpi=130)\n    display(fig); plt.close(fig)\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "text_chars": 33,
+          "text_sha256": "b03766dc24f9b7b5b88bd805efce5c25288fe465d8fe3492c4156e9223842a9e",
+          "text_preview": "<Figure size 920x340 with 2 Axes>",
+          "text_truncated": false,
+          "image/png_sha256": "02e9883d14306f91e7a8243dd7449e0d681442d6a494e7012c4cc63df421b367",
+          "image/png_chars": 60248
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 6,
+      "source_sha256": "a6a4271181bbd09c3dd08c957da584e4f3bef3617d78174c0ef4fda104464c8e",
+      "source_preview": "Icoil = 1.0e4\n\ndef washer(k, t):\n    els = []\n    for i in range(k):\n        for j in range(k):\n            if (t <= i < k - t) and (t <= j < k - t):\n                continue                      # the central hole -> closed frame\n            els.append(hexv(i*D,(i+1)*D, j*D,(j+1)*D, 0,D))\n    return els, k*D*0.5                        # elements + hole-centre coord\n\ndef galerkin_iters(els, H):\n    return mg.moment_galerkin_demag_solve(els, mu_r=1000.0, H_ext=H, quad=False,\n                                          tol=1e-9, maxit=8000)[\"iters\"]\n\ndef collocation_time(els, c):\n    rad.UtiDelAll(); rad.set_demag_backend(\"yano\")\n    rad.SolverConfig(bicgstab_tol=1e-9, hacapk_hlu_precond=True)   # matched tol + H-LU\n    objs = [rad.ObjHexahedron([list(v) for v in V], [0,0,0]) for V in els]\n    for o in objs:\n        rad.MatApl(o, rad.MatLin(1000.0))\n    def bkg(p):\n        cx, cy = p[0]-c, p[1]-c; r2 = cx*cx + cy*cy\n        return [MU0*Icoil/(2*np.pi)*(-cy)/r2, MU0*Icoil/(2*np.pi)*cx/r2, 0",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 264,
+          "text_sha256": "c726e9900d26d131ad8f74de6c468150d5d3e4fdf45df4b2917a8a826efc5fe5",
+          "text_preview": "Closed (gapless) square iron washer threaded by a central z-current filament\n k  n_el | galerkin grad it | galerkin loop it | colloc loop t(H-LU)\n  8   48  |      26          |      25          |    0.01s\n 10   64  |      26          |      33          |    0.01s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "aef7ec594380f40a7ac89a3464e16ec6dbdfcb504e0f996fb3af97a63dfd0d31",
+          "text_preview": " 12  108  |      51          |      59          |    0.03s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "9a0b59349abf11b58f56fb22ca7e62ef2bf50598b0b4cd6cb5b81c5ab505220f",
+          "text_preview": " 14  132  |      52          |      66          |    0.04s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "5d134bea8692524d59bb2272727cbc9af9ef7b6f0ea2c9f919c1541978febeb1",
+          "text_preview": " 16  192  |      67          |      90          |    0.10s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "4f34288eddb7bd2f3e833d8de13f98e301c52985ad4c253221371ca6d704244e",
+          "text_preview": " 18  224  |      70          |      97          |    0.17s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 59,
+          "text_sha256": "d78033dc787d2db065b85b6905342aeb511d3e87d9c19f803fb40b52f529104f",
+          "text_preview": " 20  300  |      78          |     110          |    0.28s\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 7,
+      "source_sha256": "0574eeb359cc7c42a86343b7b336f604c856a629ba1520aaf63ccbe5fc5f10db",
+      "source_preview": "if HAVE_MPL:\n    nn = [r[\"n\"] for r in washer_rows]\n    fig2, ax2 = plt.subplots(figsize=(5.2, 3.4))\n    ax2.plot(nn, [r[\"gal_grad_iters\"] for r in washer_rows], \"o-\",\n             label=\"Galerkin, gradient source (loop-free)\")\n    ax2.plot(nn, [r[\"gal_loop_iters\"] for r in washer_rows], \"s-\",\n             label=\"Galerkin, loop-exciting source\")\n    ax2.set_xlabel(\"N (hex elements in the frame)\"); ax2.set_ylabel(\"bare +N CG iterations (tol 1e-9)\")\n    ax2.set_title(\"Loop-exciting source: bare +N CG is no longer loop-free\")\n    ax2.legend(fontsize=8); ax2.grid(True, alpha=.3)\n    fig2.tight_layout()\n    fig2.savefig(DOCDIR / \"loop_exciting.png\", dpi=130)\n    display(fig2); plt.close(fig2)\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "text_chars": 33,
+          "text_sha256": "0346c3a6c2de10d246ed5a94392827c03cb2a649a83ff71a616c86d217151cd9",
+          "text_preview": "<Figure size 520x340 with 1 Axes>",
+          "text_truncated": false,
+          "image/png_sha256": "17a3b1a1850f592115024ef72d7d58c1b12aa068762000cbf549db5612f3197b",
+          "image/png_chars": 41564
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 8,
+      "source_sha256": "db0d84310a894a47acf559794faa9321f4d8bac9f30d268443d98bf3cb5aa039",
+      "source_preview": "def _json_default(o):\n    if isinstance(o, np.floating): return float(o)\n    if isinstance(o, np.integer):  return int(o)\n    if isinstance(o, np.ndarray):  return o.tolist()\n    return str(o)\n\nsummary = {\n    \"schema\": \"radia.moment_galerkin_showcase.v1\",\n    \"generated_at_utc\": datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\"),\n    \"versions\": {\"radia_version\": RADIA_VERSION,\n                 \"python_version\": platform.python_version(),\n                 \"platform\": platform.platform()},\n    \"operator\": RESULT[\"operator\"],\n    \"crossover\": RESULT[\"crossover\"],\n    \"loop_exciting\": RESULT[\"loop_exciting\"],\n    \"verdict\": (\"KEEP BOTH: moment-Galerkin (symmetric, ~half operator storage, loop-free for \"\n                \"gradient demag, crosses below collocation+H-LU at N~1500 and ~6x faster at N~9k) is \"\n                \"the gradient-demag route; collocation MMMM stays canonical for loop-exciting sources \"\n                \"(closed multiply-connected core threaded",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 84,
+          "text_sha256": "88ca6786e45ef4340893a6213f3e1d837ebe2257ccd1edd075b470b799138b84",
+          "text_preview": "wrote S:\\Radia\\01_GitHub\\docs\\moment_galerkin\\moment_galerkin_showcase_summary.json\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
