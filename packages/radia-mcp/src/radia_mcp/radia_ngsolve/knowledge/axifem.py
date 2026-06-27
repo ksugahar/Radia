@@ -663,8 +663,7 @@ src/ext/axifem/                          # C++ source (built into the radia whee
   axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
   q2_henrotte_generated.hpp               # auto-generated, do not edit
   axifem.cpp                       # pybind11 entry -> radia.axifem
-docs/axifem/legacy_assets/axifem/research/                # derivation + codegen scripts
-  codegen_q2_henrotte.py                  # JSON → C++ codegen
+validation_test/axifem/research/          # runnable research verification assets
   validate_q2_codegen.py                  # closed-form vs Gauss prototype
   q2_henrotte_test_values.json            # numerical reference values
 validation_test/axifem/research/verification/   # standalone __main__ verification scripts

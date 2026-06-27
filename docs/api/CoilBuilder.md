@@ -244,7 +244,8 @@ The `tilt` parameter rotates the cross-section around the current direction, ena
 This 8-segment coil is built, assembled, and field-mapped end-to-end in the
 runnable showcase notebook
 [`docs/complex_coil_geometry/complex_coil.ipynb`](../complex_coil_geometry/complex_coil.ipynb)
-(reproducible source kept at `examples/complex_coil_geometry/`).
+(reproducible helper scripts kept beside the notebook in
+`docs/complex_coil_geometry/`).
 
 ## Architecture
 
