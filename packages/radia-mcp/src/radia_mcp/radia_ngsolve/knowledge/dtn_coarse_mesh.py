@@ -2975,7 +2975,7 @@ DTN_COARSE_MESH_DTN_TO_CLN = r"""
 #                                          #   arbitrary-shape / iron-exterior DtN ladder
 #                                          #   (point-group split: cube O_h, square C4v)
 #   ob.band_cln_fit(s_band, dtn, stages)   # convergent band-CLN for the non-separable case
-# Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example examples/open_boundary/.
+# Goldens tests/open_boundary/{test_dtn_cln,test_kelvin_dtn}.py; example docs/open_boundary/demo_dtn_cln_usage.py.
 # SHOWCASE NOTEBOOK docs/open_boundary/open_boundary_demo.ipynb (DtN symbol, CLN ladder,
 #   companion poles, sqrt(s) ladder, Kelvin-FEM DtN build -- executed + rendered).
 # PROVENANCE (3 layers -- see kelvin_transformation(topic="material_exterior")):

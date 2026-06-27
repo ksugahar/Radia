@@ -4,11 +4,13 @@ from radia_mcp.meta.catalog import CATALOG
 
 
 KDDI_SAMPLE = (
-    "社会的課題は地域製造業のパワーエレクトロニクス設計である。"
-    "本提案は生成AIとMCPを用いてLTspice、SPICE、Radia、NGSolve、CAEを接続し、"
-    "回路・EMC・熱を協調して評価する。"
+    "本研究の主題はパワーエレクトロニクス基板CAE-AI環境の社会実装である。"
+    "社会的課題は1000人以下の地域製造業のパワーエレクトロニクス設計である。"
+    "本提案は生成AIとMCPを用いてLTspice、SPICE、Radia、NGSolve、PEEC、CAEを接続し、"
+    "回路・寄生・EMC・熱・インダクタンスを協調して評価する。"
+    "商用CAEを直ちに置換するものではなく、Python-nativeで現代的なAPIを持つ入口を作る。"
     "三菱電機でのEMC経験とIH熱解析、RadiaとLTspiceの実績を基盤に、"
-    "厚銅基板のPoC試作、計測評価、OSSレポジトリ公開、技術プレゼンを行う。"
+    "厚銅基板のPoC試作、計測評価、OSSレポジトリ公開、MotorAIを含む導入候補への技術プレゼンを行う。"
     "1年目、2年目、3年目の年度スケジュールを定め、"
     "Claude、Codex、Fable、MDXの計算資源と基板評価費を予算化する。"
 )
@@ -20,7 +22,26 @@ def test_grant_writing_kddi_health_report_runs():
     assert report["program"] == "kddi_digital"
     assert report["overall_score"] > 0
     assert "kddi_digital" in report["detailed_results"]
+    assert "power_electronics_focus" in report["detailed_results"]
     assert "budget" in report["detailed_results"]
+
+
+def test_grant_writing_kddi_power_electronics_focus_check():
+    result = gw.grant_writing_kddi_power_electronics_focus_check(KDDI_SAMPLE)
+
+    assert result["score"] >= 8
+    assert result["axis_results"]["main_theme_specificity"]["ok"]
+    assert result["axis_results"]["commercial_positioning"]["ok"]
+
+
+def test_grant_writing_kddi_power_electronics_focus_warns_on_generic_cae():
+    result = gw.grant_writing_kddi_power_electronics_focus_check(
+        "本研究の主題は1000人以下の会社に一般的なCAE導入を行うことである。"
+        "商用CAEの代替を作る。"
+    )
+
+    assert result["score"] < 8
+    assert result["comments"]
 
 
 def test_grant_writing_reexports_ja_lint_helpers():

@@ -143,8 +143,9 @@ def ih_esim(topic: str = "all") -> str:
                                      cost comparison, reviewer Q&A.
                                      (IGTE 2026 paper marketing line.)
             "headline_numbers"     - Locked-in numerical results for paper
-                                     citation: 48 % per-element vs scalar
-                                     headline, three-path consistency table,
+                                     citation: dense 108-case sweep,
+                                     per-DOF vs uniform headline,
+                                     three-path consistency table,
                                      Bessel cell validation table.
     """
     return get_ih_esim_documentation(topic)

@@ -148,6 +148,41 @@ _KDDI_DIGITAL_AXES = {
     "applicant_fit": ["三菱電機", "EMC", "IH", "Radia", "NGSolve", "LTspice", "実績"],
 }
 
+_POWER_ELECTRONICS_FOCUS_TRIGGERS = [
+    "パワーエレクトロニクス",
+    "パワエレ",
+    "厚銅",
+    "LTspice",
+    "Radia",
+    "NGSolve",
+    "CAE-AI",
+]
+
+_POWER_ELECTRONICS_FOCUS_AXES = {
+    "main_theme_specificity": [
+        "パワーエレクトロニクス基板",
+        "パワエレ基板",
+        "電源基板",
+        "厚銅基板",
+        "CAE-AI",
+    ],
+    "board_physics": [
+        "寄生",
+        "EMC",
+        "熱",
+        "電流集中",
+        "放熱",
+        "浮遊容量",
+        "インダクタンス",
+    ],
+    "ai_mcp_loop": ["MCP", "AI", "LLM", "生成AI", "自律駆動", "自然言語"],
+    "tool_chain": ["LTspice", "SPICE", "Radia", "NGSolve", "PEEC"],
+    "social_target": ["1000人以下", "中小企業", "地域製造業", "製造業"],
+    "poc_handoff": ["PoC", "試作", "技術プレゼン", "試験導入", "導入候補", "MotorAI"],
+    "commercial_positioning": ["商用CAE", "置換", "入口", "届かない", "習得コスト"],
+    "llm_native_advantage": ["Python-native", "現代的", "API", "ツール呼び出し"],
+}
+
 
 def grant_writing_section_presence(text: str, program: str = "generic") -> dict:
     """Check whether a proposal draft contains the expected review axes."""
@@ -199,6 +234,84 @@ def grant_writing_kddi_digital_check(text: str) -> dict:
         "comments": comments,
         "axis_results": presence["axis_results"],
         "source": "KDDI Digital Innovation social-implementation proposal axes",
+    }
+
+
+def grant_writing_kddi_power_electronics_focus_check(text: str) -> dict:
+    """Check the current KDDI power-electronics-board CAE-AI framing.
+
+    This is intentionally domain-specific.  Use it when the KDDI Digital
+    Innovation proposal is about LTspice/Radia/NGSolve/MCP for power
+    electronics boards.  It checks that "companies below 1000 employees" is
+    kept as the implementation target, not as the main theme.
+    """
+    text = _read_text_if_path(text)
+    low = text.lower()
+    axis_results = {}
+    missing = []
+    for axis, keywords in _POWER_ELECTRONICS_FOCUS_AXES.items():
+        matches = _contains_any(low, keywords)
+        axis_results[axis] = {
+            "ok": bool(matches),
+            "matches": matches[:8],
+            "keywords": keywords,
+        }
+        if not matches:
+            missing.append(axis)
+
+    score = round(
+        10.0 * (len(_POWER_ELECTRONICS_FOCUS_AXES) - len(missing))
+        / len(_POWER_ELECTRONICS_FOCUS_AXES),
+        1,
+    )
+    comments = [f"Power-electronics focus axis missing or thin: {axis}" for axis in missing]
+
+    sentences = [s.strip() for s in re.split(r"[。．!?！？]", text) if s.strip()]
+    theme_sentences = [
+        s for s in sentences
+        if any(token in s for token in ("主題", "目的", "テーマ案", "テーマ", "本研究"))
+    ][:5]
+    if theme_sentences:
+        theme_blob = "。".join(theme_sentences)
+        if (
+            "パワーエレクトロニクス基板" not in theme_blob
+            and "パワエレ基板" not in theme_blob
+            and "CAE-AI" not in theme_blob
+        ):
+            comments.append(
+                "The opening theme sentences do not clearly state the power-electronics-board CAE-AI subject."
+            )
+            score = max(0.0, score - 1.0)
+
+    risky_phrases = []
+    for phrase in ("一般的なCAE導入", "すべての製造業CAE", "商用CAEの代替"):
+        if phrase in text:
+            risky_phrases.append(phrase)
+    if "商用CAE" in text and "置換する" in text and "直ちに置換するものではない" not in text:
+        risky_phrases.append("商用CAEを置換する")
+    if risky_phrases:
+        comments.append(
+            "Avoid broad or adversarial positioning; keep commercial CAE as powerful but hard to access: "
+            + ", ".join(risky_phrases)
+        )
+        score = max(0.0, score - 1.0)
+
+    recommendations = [
+        "Make the subject: power-electronics-board circuit/EM/thermal CAE-AI environment.",
+        "Keep companies below 1000 employees as the first user and implementation field.",
+        "Frame commercial CAE as powerful but expensive/difficult; the proposal creates an AI/MCP entry point.",
+        "Tie the PoC to a board-level outcome: parasitics, EMC risk, heat, measurement, and handoff.",
+    ]
+    return {
+        "score": round(score, 1),
+        "missing_count": len(missing),
+        "missing_axes": missing,
+        "axis_results": axis_results,
+        "comments": comments,
+        "theme_sentence_examples": theme_sentences,
+        "recommendations": recommendations,
+        "target": "specific power-electronics-board CAE-AI theme; 1000-person firms as implementation target",
+        "source": "KDDI power-electronics-board CAE-AI framing check",
     }
 
 
@@ -304,6 +417,23 @@ def grant_writing_health_report(
                 "severity": _severity_from_score(kddi["score"]),
                 "score": kddi["score"],
                 "comments": kddi["comments"][:5],
+            })
+
+    if (
+        program == "kddi_digital"
+        and "focus" not in skip_set
+        and _contains_any(text.lower(), _POWER_ELECTRONICS_FOCUS_TRIGGERS)
+    ):
+        focus = grant_writing_kddi_power_electronics_focus_check(text)
+        detailed_results["power_electronics_focus"] = focus
+        detailed_scores["power_electronics_focus"] = focus["score"]
+        if focus["comments"]:
+            priority_issues.append({
+                "tool": "focus",
+                "name": "kddi_power_electronics_focus_check",
+                "severity": _severity_from_score(focus["score"]),
+                "score": focus["score"],
+                "comments": focus["comments"][:5],
             })
 
     if "sentence" not in skip_set:

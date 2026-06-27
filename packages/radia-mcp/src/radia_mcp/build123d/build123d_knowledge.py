@@ -1560,7 +1560,7 @@ the lab toolchain permanently. Cubit is **not** being deprecated.
   Drop these commands; pass `maxh` to `OCCGeometry.GenerateMesh()`.
 - **Block/sideset labels**: in the build123d pipeline, use
   `part.label = "name"` + `Compound(children=[...])` + the
-  `run_pipeline_multi` helper in `examples/build123d_netgen_gmsh_flow/`
+  `radia_mcp.build123d.pipeline.run_pipeline_multi` API
   which bridges labels to Gmsh physical groups.
 
 ## Related topics
@@ -1858,7 +1858,7 @@ Key idea: each segment's **label encodes the magnetization (easy-axis) angle** v
 ``_M<deg>`` suffix, set by the Mallinson law ``alpha_k = (pole_pairs+1)*theta_k`` (so the dipole
 array's easy axis advances at TWICE the mechanical angle, a quadrupole at 3x).  The solver (Radia)
 recovers it with ``archetypes.parse_magnetization`` and sets the magnetization direction;
-``run_pipeline_multi`` (`examples/build123d_netgen_gmsh_flow/`) carries the labels to Gmsh physical
+``radia_mcp.build123d.pipeline.run_pipeline_multi`` carries the labels to Gmsh physical
 groups, preserving the mapping.  The underlying wedge is
 ``radia_mcp.build123d.modeling.annular_segment`` (full annulus intersected with a pie slice -- robust
 for any span); ``polar_array`` tiles it.  See the `parametric_library` topic for the full op +
@@ -2428,9 +2428,10 @@ mags = {seg.label: parse_magnetization(seg.label) for seg in hb.children}
 ```
 
 Validated: tests/test_build123d_modeling.py, tests/test_build123d_archetypes.py (analytic volumes,
-OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).  Heavier examples under
-`examples/build123d_netgen_gmsh_flow/` cross-check STEP round trips by comparing volume, area, and
-bounding boxes against an external CAD kernel before meshing.
+OCCT-valid, region labels, Netgen-meshable, Mallinson easy axes).  The reusable Netgen/GMSH bridge
+lives in `radia_mcp.build123d.pipeline`; the executable validation corpus lives in
+`validation_test/build123d_netgen_gmsh_flow/`, with result-saved notebooks and JSON archives under
+`docs/build123d_netgen_gmsh_flow/`.
 """
 
 

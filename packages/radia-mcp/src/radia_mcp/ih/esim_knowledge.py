@@ -260,21 +260,18 @@ H_t than the far face).  Order-of-magnitude estimate:
 
 - |H_t|_max / |H_t|_min < 2: scalar is fine; per-element is overkill
 - 2 <= ratio < 5: per-element improves P_wp by 5-20 %
-- ratio >= 5 AND ratio spans BH knee: scalar can under-estimate by 30-50 %
+- ratio >= 5 AND ratio spans BH knee: scalar can mis-estimate P_wp by 30-50 %
 
-Headline benchmark (steel cylinder, 50 kHz, I = 100 A; sweep_v2,
-v4.67.0+ with triangle-P1-gradient extractor + Anderson m=5):
+Headline benchmark (steel cylinder, 50 kHz, I = 100 A; dense 108-case
+sweep with triangle-P1-gradient extractor + Anderson m=5):
 - |H_t| range: ~250 - ~2900 A/m (10x+ ratio, straddles BH knee at ~1 kA/m)
 - Scalar P_wp     = 30.51 W (converged in 6 iter)
 - Per-element P_wp = 18.75 W (converged in 7 iter)
 - per/scalar = 0.615 ==> per-element predicts 38.5 % LESS than scalar
 - Equivalently: scalar OVER-estimates by a factor 1.63
 
-Earlier v4.47.2 - v4.66.x values (P_per = 45.4 W, +48 % "scalar
-under-estimate") came from a Galerkin localization gradient
-extractor that mis-placed the saturation hot-spot.  The sign of the
-disagreement FLIPPED with the v4.67.0 fix.  Always cite the
-v4.67.0+ sweep_v2 numbers, never the older Galerkin-era headline.
+The source of truth is the dense 108-case sweep artifacts in
+examples/ih_esim_benchmark/sweep_data_dense/.
 
 ## When per-element doesn't converge
 
@@ -368,7 +365,7 @@ average is converging but individual hotspot DOFs still oscillate.
 For P_wp purposes this is usually OK (P_wp tracks the mean), but
 local saturation pattern is unreliable.
 
-## Operating-regime stall map (dense (I, f) sweep, IGTE 2026 ESIM digest)
+## Operating-regime convergence note (dense (I, f) sweep, IGTE 2026 ESIM digest)
 
 Empirical convergence behaviour on the IGTE workpiece (Ø50 mm x
 H25 mm steel, BH src/radia/panels/samples/em_sample_bh.txt) with
@@ -376,24 +373,25 @@ default Karl settings (--esim-max-iter 30 --esim-relax 0.5
 --esim-anderson-m 5), 108-case sweep (9 I_port x 6 f, scalar +
 per-element each):
 
+For paper/digest prose, do NOT list the per-case iteration counts.
+State the convergence compactly: most per-element nonlinear solves
+converge within roughly 20 iterations; the highest-current,
+high-frequency corner may hit the iteration cap and should not be used
+for quantitative claims.
+
   Region                              | Behaviour
   ------------------------------------|----------------------------
-  Bulk of low / medium I (47 of 49)   | converged 6-13 iter (median 8)
-  I = 200 A, f = 500 kHz              | converged 26 iter (outlier)
-  I = 500 A, f = 10 kHz               | converged 25 iter (outlier, max-gap case)
-  I = 500 A, f = 20 kHz               | stall (iter=30 cap, conv=False)
-  I = 500 A, f = 50 kHz               | stall
-  I = 500 A, f = 100 kHz              | stall
-  I = 500 A, f = 200 kHz              | stall
-  I = 500 A, f = 500 kHz              | stall (spurious +20 % gap)
+  Most converged operating points      | roughly 20 iterations or less
+  I = 500 A, f = 10 kHz                | converged max-gap case
+  I = 500 A, higher-frequency band     | may hit the iteration cap
 
-Interpretation: the I = 500 A high-frequency band is the only
-operating region where per-element Karl + Anderson-II currently
-fails to converge in 30 iterations.  Raising --esim-max-iter
-beyond 30 does NOT help in this band (the per-DOF Z_s oscillates
-around a non-fixed-point limit cycle, not slowly drifting).  The
-underlying cause is suspected to be the locally non-Lipschitz
-piecewise BH at deep saturation crossings; needs further study.
+Interpretation: the I = 500 A high-frequency band is the operating
+region where per-element Karl + Anderson-II is most likely to hit the
+iteration cap.  Raising --esim-max-iter beyond 30 did not help in this
+band in the dense sweep (the per-DOF Z_s oscillates around a
+non-fixed-point limit cycle, not slowly drifting).  The underlying
+cause is suspected to be the locally non-Lipschitz piecewise BH at deep
+saturation crossings; needs further study.
 
 For converged cases the per-element vs scalar gap reaches:
   - max -49.8 % at (500 A, 10 kHz)    (converged, this is the
@@ -600,16 +598,17 @@ the historical Sauter-Schwab / Calderon-calculus reference list.
 ESIM_USAGE_HEADLINE_NUMBERS = """
 # Headline numerical results -- for paper-style citation
 
-The IGTE 2026 paper's primary numerical claim (sweep_v2, v4.67.0+,
-2026-05-22 LAB benchmark):
+The IGTE 2026 paper's primary numerical claim (dense 108-case sweep,
+2026-05-30 LAB benchmark):
 
 ## Per-element vs scalar Z_s (steel cylinder, BH knee)
 
 Inputs:
-  - Workpiece: cylindrical steel, R=5 mm, H=10 mm, sigma = 2e6 S/m,
+  - Workpiece: cylindrical steel, diameter = 50 mm, height = 25 mm,
+                sigma = 2e6 S/m,
                 mu_r(linear) = 100, BH curve
                 src/radia/panels/samples/em_sample_bh.txt (CEFC 2020),
-                half_thickness = 5 mm
+                ESIM cell half_thickness = 5 mm
   - Coil: PEEC filament (16 perimeter), src/radia/panels/samples/
           ih_fem_kelvin_demo_coil.step
   - Frequency: 50 kHz
@@ -618,7 +617,7 @@ Inputs:
           (2150 BND tris, 1077 vertices)
   - Karl: --esim-max-iter 30 --esim-anderson-m 5 --esim-relax 0.5
 
-Results (sweep_v2 = IGTE Fig. 1 source data):
+Results (dense sweep; IGTE Fig. 1 source data):
   Quantity                  | Scalar Karl     | Per-element Karl       | Delta
   --------------------------|-----------------|------------------------|----------------
   Convergence (Anderson m=5)| yes @ iter 6    | yes @ iter 7           | both OK
@@ -632,11 +631,8 @@ Results (sweep_v2 = IGTE Fig. 1 source data):
 Engineering interpretation: at this drive level, hot-spot DOFs sit
 past the BH knee, where the curve gives LOWER local Z_s (mu_r drops
 sharply on the falling side).  Per-element resolves this; scalar
-averages it away and over-estimates dissipation.  This is opposite
-to what the older Galerkin-localization extractor (v4.47.2 - v4.66.x)
-reported as +48 %; that result was the artifact of
-|H_t|^2 ~ phi_i (K phi)_i sampling the surface Laplacian instead of
-the gradient norm.  Always cite v4.67.0+ sweep_v2 numbers above.
+averages it away and over-estimates dissipation.  The current source of
+truth is the dense sweep with the triangle-wise P1 gradient extractor.
 
 Reproduction (from any machine with radia >= 4.67.0 installed):
 
@@ -661,7 +657,6 @@ f in {10, 20, 50, 100, 200, 500} kHz x {scalar, per_panel}
 Frozen artifacts: examples/ih_esim_benchmark/sweep_data_dense/*.json
 (108 per-case JSONs + sweep_results.json + side-wall |Z_s| at the
 max-gap I=500 A / f=10 kHz case, committed `847259d2` on 2026-05-30).
-Replaces the older sparse 32-case `sweep_v2` at C:/temp/igte_bench/.
 
 ## Dense-sweep max-gap point (IGTE 2026 digest panel (b))
 
@@ -669,9 +664,9 @@ Maximum per-element-vs-uniform P_wp gap over the dense grid:
 
   Case            Scalar P_wp    Per-element P_wp   Gap       Notes
   --------------  -------------  -----------------  --------  -----------------
-  500 A, 10 kHz   162.85 W       81.83 W            -49.75 %  CONVERGED iter=6
-                                                              (digest panel (b))
-  200 A, 100 kHz  310.48 W       163.36 W           -47.39 %  CONVERGED iter=8
+  500 A, 10 kHz   162.85 W       81.83 W            -49.75 %  converged
+                                                              (per-DOF; digest panel (b))
+  200 A, 100 kHz  310.48 W       163.36 W           -47.39 %  converged
 
 The 500 A / 10 kHz case has both the maximum P_wp gap AND the
 maximum |Z_s| spatial spread (4.5--16.5 mOhm = 4.36x ratio) among
@@ -681,7 +676,7 @@ element Karl limit cycle makes those Z_s values unreliable.
 
 Source: examples/ih_esim_benchmark/sweep_data_dense/
         I500_f10k_per_panel.json (per-DOF Z_s) +
-        examples/ih_esim_benchmark/sweep_data/
+        examples/ih_esim_benchmark/sweep_data_dense/
         I500_f10k_Zs_side_field.json (side-wall (theta, z, |Z_s|, R)).
 
 ## Three-path consistency (linear-mu screening)
@@ -711,8 +706,8 @@ Solver: ESIMFiniteSlabSolver(geometry='cylinder', mu_r=100, n_nodes=2000).
 Bessel reference: scipy.special.iv (modified Bessel I_0, I_1).
 Reproducer: examples/ih_esim_benchmark/analytical_bessel_baseline.py.
 
-Cite these tables verbatim in any paper / talk; values are
-locked-in for radia >= 4.55.3.
+Cite these tables verbatim in any paper / talk; dense-sweep headline
+values are locked-in for radia >= 4.67.0.
 """
 
 

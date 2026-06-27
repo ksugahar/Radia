@@ -12,8 +12,8 @@ def test_ngsolve_cross_validation_registry_topic_records_reusable_artifacts():
     assert "validation_*_summary.json" in doc
     assert "examples/acoustic_bem/validation_*_summary.json" in doc
     assert "examples/cubit_mesh_export/validation_vol_*_summary.json" in doc
-    assert "examples/build123d_netgen_gmsh_flow/validation_*_summary.json" in doc
-    assert "examples/electric_machine/validation_*_summary.json" in doc
+    assert "validation_test/build123d_netgen_gmsh_flow/validation_*_summary.json" in doc
+    assert "validation_test/electric_machine/validation_*_summary.json" in doc
     assert "examples/rf_waveguide/validation_*_summary.json" in doc
     assert "validation/mcp_quality/golden_gate_*.json" in doc
     assert 'force_validation("cross_validation")' in doc

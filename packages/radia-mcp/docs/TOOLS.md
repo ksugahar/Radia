@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **561 tools** across 43 MCP servers.
+Total: **562 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -42,7 +42,7 @@ Total: **561 tools** across 43 MCP servers.
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 95 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 17 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 18 |
 | [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 71 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -803,6 +803,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
 | `grant_writing_health_report` | Integrated grant-writing health report. |
 | `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
+| `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
 | `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
