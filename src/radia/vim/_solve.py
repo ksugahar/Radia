@@ -112,6 +112,7 @@ import ngsolve as ng
 
 import radia._radia_pybind as _rp
 from . import _core as _tet
+from ._vim import build_charge_gram
 from ._nonlinear import _bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi
 
 _MU0 = 4e-7 * _PI
@@ -419,27 +420,18 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
 
-    # ---- HIGH-ORDER (order>=1): NOT YET A CORRECT MATERIAL SOLVE -- fail loud (No-Fallbacks) ----
-    # The order-p monomial charge Gram (`_vim.build_charge_gram` / `DemagOperator`) is validated for the
-    # demag FACTOR (the Rayleigh quotient mu^T N mu / denom is order-invariant ~1/3) -- but that only
-    # exercises the SURFACE charges (a uniform M has rho = -div M = 0).  The MATERIAL solve
-    # ((1/chi)M_mass + N) m = M_mass h_ext exercises the VOLUME charges (rho != 0 for the non-uniform
-    # solution), and there the order-p operator is WRONG: measured on the mu_r=100 cube, order-1 M_avg is
-    # ~2x too high at coarse mesh and only slowly converges DOWN toward the (correct) order-0 / yano value
-    # as h->0 (6369/4620/4251 at maxh 0.5/0.35/0.25 vs order-0 3370/3419/3450) -- i.e. high order is
-    # currently WORSE than RT0, not better.  Shipping it would be a wrong number (Repository-First /
-    # fail-loud), so order>0 RAISES until the high-order VOLUME-charge material operator is fixed + golden-
-    # locked against a material-solve reference (the M4 "curved nonlinear volume charge" research item;
-    # docs/hdiv_vim/PRODUCTIONIZATION.md).  The demag FACTOR at order p is available via
-    # radia.vim.DemagOperator(HDiv(mesh, order=p)).DemagFactor(...).
+    # ---- HIGH-ORDER (order>=1): the order-p charge-Gram material solve ----
+    # FIXED 2026-06-28 ([[hdiv-highorder-material-solve-wrong]]): the per-element change-of-basis in
+    # `_vim._charge_basis` made the order-p demag operator N = B^T G B VALID (eig(M_mass^-1 N) in [0,1]; the
+    # material solve p-converges instead of the old ~2-4x blow-up -- which was a SPURIOUS NET CHARGE from a
+    # single element-0 change-of-basis reused for all elements, invisible to the uniform-M demag-FACTOR test).
+    # The LINEAR (uniform-scalar OR per-region dict) mu_r case is wired through the same all-C++ symmetric
+    # mass-Riesz CG as RT0; the not-yet-wired order>0 combos (image / PM-mixed / nonlinear / HLU / gauss) fail
+    # loud in _solve_highorder (No-Fallbacks).  Golden: tests/feec/test_hdiv_vim_highorder_solve*.
     if int(order) != 0:
-        raise NotImplementedError(
-            "hdiv_demag_solve: order>0 (high-order material solve) is NOT production-ready -- the order-p "
-            "charge Gram is validated only for the demag FACTOR (surface charges), but the material SOLVE "
-            "exercises the volume charges (rho=-div M) where the order-p operator is currently LESS accurate "
-            "than RT0 (order-1 M_avg ~2x high on coarse meshes, converging only slowly). Use order=0 (RT0); "
-            "the high-order demag factor is available via radia.vim.DemagOperator(...).DemagFactor(). "
-            "Fixing the high-order volume-charge material operator is the open M4 research item.")
+        return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
+                                gram_backend, gram_eps, leaf, eta, near_factor, far_quad, tol, maxit,
+                                gmres_restart)
 
     # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
@@ -623,6 +615,75 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     out = dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
                n_charge=int(d["n_charge"]), nonlinear=(bh_table is not None),
                linear_solver=solver_used, gram_backend=gram_backend)
+    if hmat_stats is not None:
+        out["hmat_stats"] = hmat_stats
+    return out
+
+
+def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_solver, gram_backend,
+                     gram_eps, leaf, eta, near_factor, far_quad, tol, maxit, gmres_restart):
+    """order>0 (high-order HDiv) soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
+    a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
+    [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
+    (no 2x/4x blow-up).  Supports the LINEAR (uniform-scalar OR per-region dict) mu_r case via the SAME
+    all-C++ symmetric mass-Riesz CG as the RT0 path; the not-yet-wired order>0 combos fail loud (No-Fallbacks).
+    The CALLER opens `with ng.TaskManager():` (same contract as hdiv_demag_solve)."""
+    if image is not None:
+        raise NotImplementedError("hdiv_demag_solve: image symmetry is not yet wired at order>0 (use order=0)")
+    if pm_M is not None:
+        raise NotImplementedError("hdiv_demag_solve: PM-mixed (pm_M) is not yet wired at order>0 (use order=0)")
+    if bh_table is not None:
+        raise NotImplementedError("hdiv_demag_solve: NONLINEAR (bh_table) is not yet validated at order>0 -- "
+                                  "use order=0, or the order-p demag FACTOR via DemagOperator(...).DemagFactor()")
+    if linear_solver == "hlu":
+        raise NotImplementedError("hdiv_demag_solve: linear_solver='hlu' is RT0-only (order=0)")
+    if gram_backend == "gauss":
+        raise NotImplementedError("hdiv_demag_solve: gram_backend='gauss' is not yet wired at order>0")
+    # accuracy-preserving fast Gram build (near analytic + far low-quad), the build_charge_gram defaults; an
+    # explicit gram_eps/near_factor/far_quad always wins (pass near_factor=inf to force the all-high-quad Gram).
+    eff_eps = gram_eps if gram_eps is not None else 1e-10
+    eff_far = far_quad if far_quad is not None else 3
+    eff_hofar = near_factor if near_factor is not None else 2.0
+    fes = ng.HDiv(mesh, order=order)
+    B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
+                                     far_quad=eff_far, ho_far_factor=eff_hofar)
+    Mm = sp.csr_matrix(M_mass); B = sp.csr_matrix(B)
+    n_face = fes.ndof; n_el = mesh.GetNE(ng.VOL); n_charge = B.shape[0]
+    gfH = ng.GridFunction(fes); gfH.Set(H_ext); h_ext = gfH.vec.FV().NumPy().copy()
+    gfMu = ng.GridFunction(fes); gfMu.Set(ng.CoefficientFunction((0, 0, 1)))
+    mu = gfMu.vec.FV().NumPy().copy()
+    denom = float(mu @ np.asarray(Mm @ mu).ravel())
+
+    def N_apply(v):
+        v = np.asarray(v, float)
+        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+
+    D = float((mu @ N_apply(mu)) / denom)
+    hmat_stats = dict(H.stats()) if hasattr(H, "stats") else None
+
+    if isinstance(mu_r, dict):                                  # per-region linear: W = 1/chi-weighted HDiv mass
+        W = _build_invchi_mass(mesh, fes, mu_r, n_face)
+        m, iters = _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit)
+        solver_used = "mass-riesz-cg"
+    else:                                                       # uniform-scalar linear
+        chi = float(mu_r) - 1.0
+        if chi <= 0.0:
+            raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
+        if linear_solver == "gmres":
+            m, iters = _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmres_restart)
+            solver_used = "mass-riesz-gmres"
+        else:
+            m, iters = _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit)
+            solver_used = "mass-riesz-cg"
+
+    gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
+    fesM = ng.VectorL2(mesh, order=0); gfMc = ng.GridFunction(fesM); gfMc.Set(gfM)
+    M_el = gfMc.vec.FV().NumPy().reshape(3, n_el).T.copy()
+    vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
+    M_avg = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol
+    out = dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
+               n_charge=n_charge, nonlinear=False, linear_solver=solver_used,
+               gram_backend=gram_backend, order=int(order))
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
     return out
