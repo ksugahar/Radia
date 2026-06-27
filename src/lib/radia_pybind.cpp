@@ -3728,29 +3728,44 @@ PYBIND11_MODULE(_radia_pybind, m) {
              }, "H-matrix stats dict.");
 
     // Parallel C++ assembly of the moment-Galerkin MMMM moment basis (defined in rad_interaction.cpp).
-    extern void RadMomentGalerkinAssembleHex(
-        const double*, int, bool, std::vector<int>&, std::vector<int>&, std::vector<double>&,
-        std::vector<double>&, std::vector<double>&, std::vector<double>&, int&, int&);
-    m.def("_moment_galerkin_assemble_hex",
-          [](const std::vector<double>& hexverts, int n_hex, bool quad) {
-              if ((int)hexverts.size() != n_hex * 24)
-                  throw std::runtime_error("_moment_galerkin_assemble_hex: hexverts must be n_hex*24 doubles");
-              std::vector<int> Br, Bc; std::vector<double> Bd, vols, ft, Wb;
-              int n_charge = 0, ndof_per = 0;
-              RadMomentGalerkinAssembleHex(hexverts.data(), n_hex, quad, Br, Bc, Bd, vols, ft, Wb,
-                                           n_charge, ndof_per);
+    extern void RadMomentGalerkinAssemble(
+        const double*, const int*, int, bool,
+        std::vector<int>&, std::vector<int>&, std::vector<double>&,
+        std::vector<int>&, std::vector<int>&, std::vector<double>&,
+        std::vector<double>&, std::vector<double>&,
+        std::vector<int>&, std::vector<int>&, int&, int&);
+    m.def("_moment_galerkin_assemble",
+          [](const std::vector<double>& verts, const std::vector<int>& vcounts, bool quad) {
+              int n_elem = (int)vcounts.size();
+              size_t need = 0;
+              for (int v : vcounts) {
+                  if (v != 4 && v != 5 && v != 6 && v != 8)
+                      throw std::runtime_error("_moment_galerkin_assemble: vcounts must be 4/5/6/8 (tet/pyr/wedge/hex)");
+                  need += (size_t)v * 3;
+              }
+              if (verts.size() != need)
+                  throw std::runtime_error("_moment_galerkin_assemble: verts size != sum(vcounts)*3");
+              std::vector<int> Br, Bc, Mr, Mc, ndof_elem, dof_off;
+              std::vector<double> Bd, Md, vols, ft;
+              int n_charge = 0, ndof_total = 0;
+              RadMomentGalerkinAssemble(verts.data(), vcounts.data(), n_elem, quad,
+                                        Br, Bc, Bd, Mr, Mc, Md, vols, ft, ndof_elem, dof_off,
+                                        n_charge, ndof_total);
               py::dict d;
               d["B_rows"] = Br; d["B_cols"] = Bc; d["B_data"] = Bd;
-              d["vols"] = vols; d["face_tris"] = ft; d["Wblocks"] = Wb;
-              d["n_charge"] = n_charge; d["ndof_per"] = ndof_per;
+              d["M_rows"] = Mr; d["M_cols"] = Mc; d["M_data"] = Md;
+              d["vols"] = vols; d["face_tris"] = ft;
+              d["ndof_elem"] = ndof_elem; d["dof_off"] = dof_off;
+              d["n_charge"] = n_charge; d["ndof_total"] = ndof_total;
               return d;
           },
-          py::arg("hexverts"), py::arg("n_hex"), py::arg("quad"),
-          "Parallel C++ assembly of the moment-Galerkin MMMM moment basis: returns dict(B COO triplets "
-          "B_rows/B_cols/B_data [n_hex*12*ndof_per, zeros included], vols [n_hex], face_tris [n_hex*12*9 "
-          "boundary sub-triangles], Wblocks [n_hex*25 quad mass blocks, empty for dipole], n_charge, ndof_per). "
-          "hexverts = n_hex*24 flat (8 verts xyz, standard hex corner order); quad=False -> 3-DOF dipole, "
-          "quad=True -> 5-DOF (+2 quad residual eigenmodes).");
+          py::arg("verts"), py::arg("vcounts"), py::arg("quad"),
+          "Parallel C++ assembly of the moment-Galerkin MMMM moment basis for a MIXED element list "
+          "(tet=4, pyramid=5, wedge=6, hex=8 verts). Returns dict(B COO B_rows/B_cols/B_data, M_mass COO "
+          "M_rows/M_cols/M_data [both zeros included; filter in Python], vols [n_elem], face_tris [n_charge*9], "
+          "ndof_elem [per-element DOF = 3+max(0,nFace-4)], dof_off [per-element global DOF start], n_charge, "
+          "ndof_total). verts = flat sum(vcounts)*3 (each element's vertices in radia corner order); quad=False "
+          "-> 3-DOF dipole/element, quad=True -> +(nFace-4) residual-eigenmode quad DOF.");
 
     // ========================================================================
     // Object Creation
