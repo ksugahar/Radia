@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "generated_at_utc": "2026-06-27T20:12:18Z",
   "notebook": "docs/eddy_current_analytical_validation/validation_suite.ipynb",
-  "notebook_sha256": "e4dbf6c066453d34a9f30b7a469d331de38d6f9621e440916375e85ea6e9973d",
+  "notebook_sha256": "2e002bfaef2c815216c55400acba8f9555f314bdf410aaecebf56a2f4c891249",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
