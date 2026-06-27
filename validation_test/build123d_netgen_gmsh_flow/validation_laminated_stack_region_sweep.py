@@ -10,8 +10,8 @@ magnetic and electric teaching models:
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_laminated_stack_region_sweep.py --quick
-    python examples/build123d_netgen_gmsh_flow/validation_laminated_stack_region_sweep.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_laminated_stack_region_sweep.py --quick
+    python validation_test/build123d_netgen_gmsh_flow/validation_laminated_stack_region_sweep.py
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ if str(SRC) not in sys.path:
 
 from build123d import Box, Pos  # noqa: E402
 
-from _pipeline import run_pipeline_multi, save_record  # noqa: E402
+from radia_mcp.build123d.pipeline import run_pipeline_multi, save_record  # noqa: E402
 
 
 OUT = HERE / "runs" / "validation_laminated_stack_region_sweep"

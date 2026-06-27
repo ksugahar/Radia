@@ -8,7 +8,7 @@ with Cubit's headless Python API:
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_build123d_cubit_measurement.py --require-cubit
+    python validation_test/build123d_netgen_gmsh_flow/validation_build123d_cubit_measurement.py --require-cubit
 
 Without ``--require-cubit`` the script still writes the build123d measurement
 summary and marks the Cubit stage as skipped when Cubit is not installed.  The

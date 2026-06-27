@@ -10,8 +10,8 @@ geometry contract for induction-heating and magnetostatic teaching models:
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_racetrack_plate_air_region.py --quick
-    python examples/build123d_netgen_gmsh_flow/validation_racetrack_plate_air_region.py
+    python validation_test/build123d_netgen_gmsh_flow/validation_racetrack_plate_air_region.py --quick
+    python validation_test/build123d_netgen_gmsh_flow/validation_racetrack_plate_air_region.py
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ if str(SRC) not in sys.path:
 
 from build123d import Box, Pos  # noqa: E402
 
-from _pipeline import run_pipeline_multi, save_record  # noqa: E402
+from radia_mcp.build123d.pipeline import run_pipeline_multi, save_record  # noqa: E402
 from radia_mcp.build123d.modeling import racetrack_coil  # noqa: E402
 
 

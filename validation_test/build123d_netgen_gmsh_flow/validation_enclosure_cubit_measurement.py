@@ -10,7 +10,7 @@ CAD kernel.
 
 Run:
 
-    python examples/build123d_netgen_gmsh_flow/validation_enclosure_cubit_measurement.py --require-cubit
+    python validation_test/build123d_netgen_gmsh_flow/validation_enclosure_cubit_measurement.py --require-cubit
 """
 
 from __future__ import annotations
