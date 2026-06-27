@@ -1,0 +1,110 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T04:02:21Z",
+  "notebook": "docs/kelvin/kelvin_adaptive_mesh_archive.ipynb",
+  "notebook_sha256": "868e53bf3ce6fcd40f02e3d305d7c4d5ae1111a28d0da4d5ddf168f241693e03",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/kelvin/kelvin_adaptive_mesh_archive.ipynb",
+    "cells": 4,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 2,
+    "output_count": 6,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "16f332ff7a1d0459f4453ecbbd324c5d357fc6716aed38a2ad7c057c0b3240bf",
+      "source_preview": "from pathlib import Path\nimport json\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'kelvin_examples_migration.py').exists():\n    NOTEBOOK_DIR = Path('docs/kelvin').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom kelvin_examples_migration import build_git_source_archive, markdown_table, write_report_json\n\narchive_path = NOTEBOOK_DIR / 'kelvin_adaptive_mesh_archive_results.json'\nfresh_archive = build_git_source_archive(\n    prefix='examples/kelvin_transformation/AdaptiveMesh',\n    lane='collapse_to_notebook_or_memory',\n    include_source=True,\n)\narchive = fresh_archive\nif archive_path.exists():\n    existing = json.loads(archive_path.read_text(encoding='utf-8'))\n    if existing.get('summary', {}).get('archived_files', 0) > fresh_archive['summary']['archived_files']:\n        archive = existing\n        print('loaded existing archive to preserve deleted source snapshots')\nwrite_report_json(archive, archive_path)\nprint(json.dumps(archive['summary'], ensure_ascii=False, in",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 329,
+          "text_sha256": "e09993d4594afccb5442c1639af969615ac59a63aefa4da9e4f6e580ce1e7c84",
+          "text_preview": "loaded existing archive to preserve deleted source snapshots\n{\n  \"archived_files\": 59,\n  \"archived_lines\": 47591,\n  \"archived_bytes\": 1799196,\n  \"by_lane\": {\n    \"collapse_to_notebook_or_memory\": 59\n  },\n  \"by_group\": {\n    \"AdaptiveMesh\": 59\n  },\n  \"missing_from_worktree\": 45\n}\n\nwrote kelvin_adaptive_mesh_archive_results.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "dda305a3c308d8dcf38d1953a68807705d8b4bd378a2d8ddc3da995134042981",
+      "source_preview": "from IPython.display import Markdown, display\n\ndisplay(Markdown('## Archived source groups'))\ndisplay(Markdown(markdown_table([\n    {'group': k, 'files': v} for k, v in archive['summary']['by_group'].items()\n], ['group', 'files'], max_rows=20)))\n\ndisplay(Markdown('## First safe deletion batch'))\ndelete_batch = [\n    row for row in archive['files']\n    if '/order=' in row['path'].replace('\\\\\\\\', '/')\n]\ndisplay(Markdown(markdown_table([\n    {\n        'path': row['path'],\n        'lines': row['source']['line_count'],\n        'sha256': row['source']['sha256'][:12],\n    }\n    for row in delete_batch\n], ['path', 'lines', 'sha256'], max_rows=80)))\nprint(f'first deletion batch size: {len(delete_batch)}')",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 30,
+          "text_sha256": "78eaa4992a63ed2e7b533441d649f035fed044ca0f392ebcd95c5257fa9cb259",
+          "text_preview": "first deletion batch size: 45\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

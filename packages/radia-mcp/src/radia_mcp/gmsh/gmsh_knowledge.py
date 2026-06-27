@@ -1084,6 +1084,13 @@ GMSH can animate mesh displacement using $NodeData with VectorType=5
 (displacement mode). Each time step specifies a displacement vector per node.
 Combined with STEP geometry (static), this creates stator + moving body animations.
 
+Runnable artifact-inspection notebook:
+`docs/gmsh_animation/gmsh_animation.ipynb`.  Its synchronized JSON sidecars are
+`docs/gmsh_animation/gmsh_animation_results.json` (domain values) and
+`docs/gmsh_animation/gmsh_animation_result.json` (notebook-output sync).  The
+tracked example artifact inspected there is `examples/gmsh_animation/`: MSH v4.1,
+2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
+
 ## .msh File Structure (v4.1 with time-stepped displacement)
 
 ```
