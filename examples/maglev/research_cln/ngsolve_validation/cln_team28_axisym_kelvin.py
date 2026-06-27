@@ -1,7 +1,9 @@
 """cln_team28_axisym_kelvin.py — COMSOL TEAM 28 CLN with Kelvin two-half-disc
 in axisymmetric NGSolve (standard A-formulation u = r·A_θ).
 
-Geometry (Z-offset Kelvin two-half-disc, after Coil_A_formulation_adaptive.py):
+Geometry (Z-offset Kelvin two-half-disc, after the archived
+Coil_A_formulation_adaptive.py source in
+docs/kelvin/kelvin_remaining_examples_archive_results.json):
   Interior half-disc at (0, 0): radius R_K, contains conductor + air
   Exterior Kelvin half-disc at (0, z_offset): radius R_K, represents ∞
   z_offset = 5 × R_K (well-separated)

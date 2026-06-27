@@ -444,12 +444,12 @@ AXIFEM_VALIDATION = """\
   τ₁ = 223.06 µs on the Cu disk (matches BEM v3 to 0.55 %).
 * `axifem/axifem_quad_q2.py` — Python `p=2` Gauss-8×8 prototype; agrees
   with the Mathematica closed form to ~ 3.4 × 10⁻⁸ relative.
-* `examples/axifem/research/validate_q2_codegen.py` — runs both at the
+* `validation_test/axifem/research/validate_q2_codegen.py` — runs both at the
   per-entry level after every `derive_quad_q2_henrotte.wls` re-run.
-* `examples/axifem/research/verification/test_q2_single_element.py` — end-to-end
+* `validation_test/axifem/research/verification/test_q2_single_element.py` — end-to-end
   per-element BFI eigenvalue match (closed-form vs Gauss prototype, 1e-7
   tolerance).
-* `examples/axifem/research/verification/test_hiruma_disk_q2.py` — full disk Cu disk
+* `validation_test/axifem/research/verification/test_hiruma_disk_q2.py` — full disk Cu disk
   eddy-current Hiruma 3-term, expects τ₁ ≈ 223.7 µs.
 
 ## Cauer-ladder cross-validation against BEM (Phase 3-(3), Nagamine pipeline)
@@ -513,7 +513,7 @@ Reference:
   Prism Conductor", manuscript 2026-05-04 (Japan J. Industrial Appl.
   Math. submission).
 
-Test: `examples/axifem/research/verification/test_3way_cauer_cross_validation.py`
+Test: `validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py`
 Reference data (separate working tree, not in this repo):
   W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
     bem_disk_axisym_cauer.wls     (Mathematica BEM + Foster amplitudes)
@@ -663,11 +663,11 @@ src/ext/axifem/                          # C++ source (built into the radia whee
   axi_henrotte_integrators.{hpp,cpp}      # closed-form K and σ-mass BFI
   q2_henrotte_generated.hpp               # auto-generated, do not edit
   axifem.cpp                       # pybind11 entry -> radia.axifem
-examples/axifem/research/                # derivation + codegen scripts
+docs/axifem/legacy_assets/axifem/research/                # derivation + codegen scripts
   codegen_q2_henrotte.py                  # JSON → C++ codegen
   validate_q2_codegen.py                  # closed-form vs Gauss prototype
   q2_henrotte_test_values.json            # numerical reference values
-examples/axifem/research/verification/   # standalone __main__ verification scripts
+validation_test/axifem/research/verification/   # standalone __main__ verification scripts
   test_q2_single_element.py               # per-element BFI sanity check
   test_hiruma_disk_q1.py                  # disk Hiruma 3-term, p=1
   test_hiruma_disk_q2.py                  # disk Hiruma 3-term, p=2
@@ -859,7 +859,7 @@ src/axifem.cpp
     + pybind exports of the new overloads
 ```
 
-Test: `examples/axifem/research/verification/test_magnetized_sphere.py`
+Test: `validation_test/axifem/research/verification/test_magnetized_sphere.py`
 (the sphere verification; passes against Stoll to -0.001 %, replaces the
 prior expected-failure xfail in Phase B2).
 """
