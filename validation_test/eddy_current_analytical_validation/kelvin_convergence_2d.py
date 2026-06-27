@@ -19,7 +19,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                '../cubit_panels/inductance'))
+                                '../../examples/cubit_panels/inductance'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 # Air-only: use fem_esim_kelvin with sigma=0 (no WP)

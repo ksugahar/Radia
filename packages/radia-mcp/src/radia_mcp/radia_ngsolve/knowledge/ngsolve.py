@@ -6697,8 +6697,8 @@ The loop output is useful only when it lands in reusable artifacts.  For
 radia-ngsolve, a completed validation item should leave three public-safe
 breadcrumbs:
 
-1. a runnable `examples/.../validation_*.py` script,
-2. a machine-readable `examples/.../validation_*_summary.json`, and
+1. a runnable `validation_test/.../validation_*.py` or `examples/.../validation_*.py` script,
+2. a machine-readable `validation_test/.../validation_*_summary.json` or `examples/.../validation_*_summary.json`, and
 3. a knowledge/API hook that explains how the number guards future FEM/BEM,
    force, mesh, CAD, wave, or readable-MATLAB work.
 
@@ -6712,7 +6712,7 @@ repo.
 
 | Family | Reusable artifacts | MCP topic/API that learned from it |
 |---|---|---|
-| Acoustic FEM/BEM | `examples/acoustic_bem/validation_*_summary.json` | `ngsolve_usage("acoustic")`, `radia_ngsolve.acoustics` |
+| Acoustic FEM/BEM | `validation_test/acoustic_bem/validation_*_summary.json` | `ngsolve_usage("acoustic")`, `radia_ngsolve.acoustics` |
 | Low-frequency Helmholtz kernel | `validation_low_frequency_helmholtz_kernel_summary.json` | stable singular-plus-regular BEM kernel split |
 | Spherical/planar DtN | `validation_spherical_dtn_modes_summary.json`, `validation_planar_dtn_symbol_summary.json` | exact radiation Robin/DtN sign gates |
 | Baffled piston and boundary power | `validation_baffled_piston_radiation_summary.json`, `validation_acoustic_boundary_power_summary.json` | acoustic power and impedance conventions |
