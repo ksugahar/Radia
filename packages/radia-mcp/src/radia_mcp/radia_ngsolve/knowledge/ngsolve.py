@@ -7080,6 +7080,12 @@ to 1e-3 and the exact null at n theta_sk = 2 pi (tests/test_skew_factor.py). Com
 harmonic-mitigation set: distribution + pitch (#51, slot plane), Carter slotting (#57, gap),
 skew (#58, stack). Skew is a 1-D axial AVERAGING, so it has no 2-D FE -- the phasor integral is
 the ground truth (as for the winding factor #51).
+
+Result-saved electric-machine demo: docs/electric_machine/cogging_skew_demo.ipynb runs the
+finite-element reluctance-torque curve, applies MachineScaling, and writes
+docs/electric_machine/cogging_skew_demo_results.json with the order-2 ripple and skew_factor
+checks. The executable validation corpus for machine force/torque identities lives in
+validation_test/electric_machine/.
 """
 
 

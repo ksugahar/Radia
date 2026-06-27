@@ -118,7 +118,8 @@ ext = rad.ObjBckg(gradient_field)
 
 SHOWCASE NOTEBOOK: `docs/background_fields/background_fields.ipynb` -- a
 spatially-varying quadrupole `ObjBckg` callback driving a nonlinear soft-iron
-cube / sphere, plus a permeability sweep (executed + rendered).
+cube / sphere, plus a permeability sweep (executed + rendered). Durable run
+metadata and script/source hashes are in `docs/background_fields/background_fields_results.json`.
 
 ## Containers
 
@@ -2421,7 +2422,7 @@ rad.SolverConfig(relax_param=0.0)  # reset
 rad.UtiDelAll()
 ```
 
-**Example**: `examples/background_fields/sphere_in_quadrupole.py`
+**Example**: `docs/background_fields/sphere_in_quadrupole.py`
 
 ---
 

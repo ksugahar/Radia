@@ -1,0 +1,69 @@
+{
+  "schema": "radia.docs.electric_machine.cogging_skew_demo.v1",
+  "generated_at_utc": "2026-06-27T15:50:14.905846+00:00",
+  "versions": {
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "numpy": "2.4.6",
+    "ngsolve": "6.2.2604",
+    "netgen": "unknown",
+    "radia_mcp": "1.4.3"
+  },
+  "checks": {
+    "dominant_order_is_2": true,
+    "mean_fraction_lt_0p15": true,
+    "skew_matches_analytic": true
+  },
+  "theta_deg": [
+    0,
+    30,
+    60,
+    90,
+    120,
+    150,
+    180,
+    210,
+    240,
+    270,
+    300,
+    330
+  ],
+  "torque_2d_per_depth": [
+    55041.36774078458,
+    10535787.788881214,
+    10503458.578561492,
+    -9617.0528983271,
+    -10490363.474039169,
+    -10458034.263719317,
+    55041.367740580055,
+    10535787.788881173,
+    10503458.578561509,
+    -9617.052898479249,
+    -10490363.474039087,
+    -10458034.263719555
+  ],
+  "dominant_order": 2,
+  "mean_fraction": 0.002155715156396504,
+  "peak_torque_Nm": 0.5267893894440607,
+  "peak_torque_mNm": 526.7893894440607,
+  "skew_rows": [
+    {
+      "skew_deg": 30.0,
+      "amplitude_ratio": 0.9549296585513719,
+      "predicted_ratio": 0.954929658551372,
+      "amplitude_per_depth": 11574541.894748436
+    },
+    {
+      "skew_deg": 90.0,
+      "amplitude_ratio": 0.6366197723675814,
+      "predicted_ratio": 0.6366197723675814,
+      "amplitude_per_depth": 7716361.263165625
+    },
+    {
+      "skew_deg": 180.0,
+      "amplitude_ratio": 2.2030273959357187e-15,
+      "predicted_ratio": 3.8981718325193755e-17,
+      "amplitude_per_depth": 2.670252479980416e-08
+    }
+  ]
+}
