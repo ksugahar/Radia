@@ -108,19 +108,22 @@ def reconstruct_field(sys, m, probes):
 
 
 def moment_galerkin_demag_solve(hexes, *, mu_r=None, chi=None, H_ext=(0.0, 0.0, 0.0), quad=False,
-                                tol=1e-9, maxit=2000, eps=1e-9, leaf=40, eta=0.5):
+                                tol=1e-9, maxit=2000, eps=1e-9, leaf=40, eta=0.5, near_factor=2.0, far_quad=4):
     """Linear isotropic soft-iron demag on a hexahedral body via the symmetric moment-Galerkin MMMM.
 
     quad : False -> 3-DOF dipole (constant M/hex); True -> 5-DOF (3 dipole + 2 quad, higher per-element order
         for skew/gradient loads).
     mu_r OR chi : relative permeability (>1) or susceptibility chi (pass exactly one).
     H_ext : (3,) uniform or (n_hex,3) per-hex applied field (A/m).
+    near_factor, far_quad : charge-Gram NEAR/FAR fast-build split (defaults 2 / 4 = the precision-preserving fast
+        build; pass near_factor=1e30 for the all-analytic Gram).  See assemble_moment_system.
 
     Returns dict(M=(n_hex,3) dipole magnetization (A/m), m=raw amplitudes, quad_amps=(n_hex,2) or None,
                  iters, demag_factor, n_hex, sys).  Use reconstruct_field(result['sys'], result['m'], probes)
                  for the external B field."""
     chi = _chi_of(mu_r, chi)
-    sys = assemble_moment_system(hexes, quad=quad, eps=eps, leaf=leaf, eta=eta)
+    sys = assemble_moment_system(hexes, quad=quad, eps=eps, leaf=leaf, eta=eta,
+                                 near_factor=near_factor, far_quad=far_quad)
     m, iters = solve_raw(sys, H_ext, chi, tol=tol, maxit=maxit)
     ndof_per, n = sys["ndof_per"], sys["n_hex"]
     M = np.array([m[ndof_per * e:ndof_per * e + 3] for e in range(n)])
