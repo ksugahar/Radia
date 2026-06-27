@@ -1,0 +1,485 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:25Z",
+  "notebook": "docs/analytical_formulas/analytical_formulas.ipynb",
+  "notebook_sha256": "57bd2d4bd702ae021f29b4bf841ab77cf16c9ea755b071677201d3cfe14f874f",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/analytical_formulas/analytical_formulas.ipynb",
+    "cells": 25,
+    "code_cells": 12,
+    "executed_code_cells": 12,
+    "code_cells_with_outputs": 12,
+    "output_count": 32,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "8bc104f1a021a8c0f4ae8b499cf2c6a048cce3d365f5cd4ac558176876c6ce28",
+      "source_preview": "\"\"\"Rotational ellipsoid: demagnetization factor and torque.\n\nReference: Part 5 (SA-04-44 / RM-04-68, 2004), eq 39-44.\n\nTwo scans:\n  1. N_z(c/a) over the prolate (c > a) and oblate (c < a) ranges.\n     Reproduces Fig. 7 of the PDF.\n  2. Torque T_z(alpha) for a fixed prolate (c/a = 5) at chi_r = 999;\n     should be sinusoidal with sign convention \"alpha -> 0 is\n     restoring\" (T_z < 0 for alpha in (0, pi/2)).\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    demag_factor_rotational,\n    ellipsoid_torque,\n)\n\n\ndef main() -> None:\n    # ----- N_z scan over c/a -----\n    ratios = np.concatenate([\n        np.linspace(0.05, 1.0, 30),\n        np.linspace(1.0, 20.0, 40),\n    ])\n    Nz_arr = np.array([demag_factor_rotational(r, 1.0)[2] for r in ratios])\n\n    print(\"c/a       N_x = N_y     N_z         sum\")\n    print(\"-\" * 50)\n    for r in (0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0):\n        Nx, _, Nz = demag_factor",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 671,
+          "text_sha256": "f4fa50a8ecb6a19b2b6139c07b514e04d5e807652ab2edf77f7306e711b80f4e",
+          "text_preview": "c/a       N_x = N_y     N_z         sum\n--------------------------------------------------\n 0.100    0.069598     0.860804    1.000000\n 0.200    0.124758     0.750484    1.000000\n 0.500    0.236400     0.527200    1.000000\n 1.000    0.333333     0.333333    1.000000\n 2.000    0.413218     0.173564    1.000000\n 5.000    0.472090     0.055821    1.000000\n10.000    0.489857     0.020286    1.000000\n\nTorque scan (c/a = 5 prolate, chi_r = 999, H_0 = 1000 A/m):\n  T_z(alpha=0)        = -0.0000e+00 N m  (expect 0)\n  T_z(alpha=pi/4)     = -2.0365e-04 N m  (expect < 0)\n  T_z(alpha=pi/2)     = -2.4955e-20 N m  (expect 0)\n  T_z(alpha=3 pi / 4) = 2.0365e-04 N m  (expect > 0)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 35,
+          "text_sha256": "057e0fc2b054aed3512ff9614d2e13abefa7c5f5f7f399b3f502a647142d010b",
+          "text_preview": "\nSaved: ellipsoid_demag_torque.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "9de5b84e39f20b0f61f85a0ee962c3d295203efd4a71e84558d7774ba8ecdb04",
+          "text_plain_preview": "<Figure size 1100x400 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 91640,
+              "sha256": "2515e58e9b2143ae589806196752e7e1e09d910aa38f1ce722282b29bccadfb7"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "2affa313e55ac309af1e3af080ee119244af054f1acac89f72cbafaadcaed902",
+      "source_preview": "\"\"\"Major / minor axis of an AC vector quantity's time-locus ellipse.\n\nReference: Part 5 (SA-04-44 / RM-04-68, 2004), eq 29-37.\n\nThe closed form is verified against a brute-force time sweep for a\nrandomly-chosen 3-component complex phasor. Cross-section: a noisy\n\"flux-density\" sample point in an AC eddy-current run might give\nB_x = 0.6 + 0.1j, B_y = -0.4 + 0.3j, B_z = 0.1 - 0.05j (in T).\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import ac_locus_axes\n\n\ndef brute_force_axes(B: np.ndarray, n_t: int = 20000):\n    \"\"\"Sample |b(t)| on a fine time grid and return its (max, min).\"\"\"\n    omega_t = np.linspace(0.0, 2.0 * np.pi, n_t, endpoint=False)\n    bt = np.real(B[None, :] * np.exp(1j * omega_t)[:, None])  # (n_t, 3)\n    mag = np.linalg.norm(bt, axis=1)\n    return float(mag.max()), float(mag.min())\n\n\ndef main() -> None:\n    rng = np.random.default_rng(seed=2025)\n\n    cases = {\n        \"linear (along x)\": np.array([1.0, 0.0",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 754,
+          "text_sha256": "9a782c77602d8b4ce2d001f4c65bee5e04fbb1911bdb02f9963ca7a9345a4998",
+          "text_preview": "case                     |B|_max (analytic)    |B|_max (sweep)    |B|_min (analytic)    |B|_min (sweep)\n-------------------------------------------------------------------------------------------------------\nlinear (along x)                   1.000000           1.000000              0.000000           0.000000\ncircular (xy)                      1.000000           1.000000              1.000000           1.000000\nelliptical 2:1                     2.000000           2.000000              1.000000           1.000000\ntilted 3D ellipse                  0.734619           0.734619              0.304689           0.304689\nrandom sample                      2.989383           2.989383              2.027890           2.027890\n\nSaved: ac_locus_demo.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "11011a18db2ea0b7b17df7e9c158e3c2a705f8839f79a5c488a620439c5b0cac",
+          "text_plain_preview": "<Figure size 600x500 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 84536,
+              "sha256": "a79c0fd01755bbc42df5e2024041d696487dbfa20c62276adb15880cecdea983"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "895672473529ee59022ebfde72359b689ff211bb830c2dd6c4b70f42298afe27",
+      "source_preview": "\"\"\"Magnetic shielding factor of cylindrical and spherical shells.\n\nReference: Part 1 (SA-02-28 / RM-02-64, 2002), eq 23-24.\n\nSweeps over relative permeability mu_r at fixed wall thickness, and\nover wall thickness at fixed mu_r. Both shapes are compared on the\nsame axes.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    shielding_factor_cylinder,\n    shielding_factor_sphere,\n)\n\n\ndef main() -> None:\n    # -----------------------------------------------------------------\n    # 1) Sweep mu_r at fixed thickness ratio t/b = 0.05.\n    # -----------------------------------------------------------------\n    b = 1.0\n    t_over_b = 0.05\n    a = b * (1.0 - t_over_b)\n    mu_rs = np.geomspace(1.0, 1.0e5, 60)\n    S_cyl = np.array([shielding_factor_cylinder(a, b, mu) for mu in mu_rs])\n    S_sph = np.array([shielding_factor_sphere(a, b, mu) for mu in mu_rs])\n\n    print(\"S vs mu_r (t/b = 0.05)\")\n    print(f\"{'mu_r':>10} {'S_cyl",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 588,
+          "text_sha256": "2c39690dc903c197dd9e4907ec6f114694707e8070a407b94c81fae4bd952de4",
+          "text_preview": "S vs mu_r (t/b = 0.05)\n      mu_r        S_cyl        S_sph\n      1.00   1.0000e+00   1.0000e+00\n      7.04   8.8789e-01   8.5897e-01\n     49.54   4.6314e-01   3.9884e-01\n    348.64   1.0583e-01   8.3427e-02\n   2453.75   1.6458e-02   1.2705e-02\n  17269.83   2.3702e-03   1.8238e-03\n 100000.00   4.1010e-04   3.1542e-04\n\nS vs t/b (mu_r = 1000)\n     t/b        S_cyl        S_sph\n  0.0010   6.6722e-01   6.0072e-01\n  0.1028   2.0130e-02   1.5968e-02\n  0.2047   1.0790e-02   8.9923e-03\n  0.3065   7.6623e-03   6.7199e-03\n  0.4083   6.1289e-03   5.6547e-03\n  0.5000   5.3156e-03   5.1267e-03\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 38,
+          "text_sha256": "7a176a3dc68e5a44ec3c8d77e8861db776c1d2fa09709af89f01121db86ea666",
+          "text_preview": "\nSaved: cylinder_sphere_shielding.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "9de5b84e39f20b0f61f85a0ee962c3d295203efd4a71e84558d7774ba8ecdb04",
+          "text_plain_preview": "<Figure size 1100x400 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 127380,
+              "sha256": "31dcd8074d7c8e8b949b1e848a0ac894d8091b569273dc816c702f81362905ea"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "55104a682c693b9eca4cfbec1fc9c28d409ed88544e6ece07eacb8e39466547b",
+      "source_preview": "\"\"\"2D field of a uniformly magnetised rectangular bar.\n\nReference: Part 2 (SA-03-08 / RM-03-08, 2003), eq 2-3.\n\nPlots vector potential contours and B-field streamlines around a 2 a x 2 b\nbar magnetised along x. Far-field 2D dipole law is verified along the\nhorizontal axis.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import rect_magnet_2d_A, rect_magnet_2d_B\nfrom radia.analytical_formulas.rect_magnet_2d import MU_0\n\n\ndef main() -> None:\n    # 4 cm x 2 cm bar, M_x = 1.2 / mu_0 ~ 9.55e5 A/m (typical NdFeB).\n    a, b = 0.02, 0.01\n    M = (1.2 / MU_0, 0.0)\n    print(f\"Bar: 2a x 2b = {2*a*1000:.1f} mm x {2*b*1000:.1f} mm, \"\n          f\"M = ({M[0]:.3e}, {M[1]:.3e}) A/m\")\n    print(f\"mu_0 * M_x = {MU_0 * M[0]:.4f} T\")\n\n    # Demag-factor check at center.\n    B_c = rect_magnet_2d_B([0.0, 0.0], a, b, M=M)\n    print(f\"B at center: ({B_c[0]:.4f}, {B_c[1]:.4e}) T\")\n    print(f\"  Cross-section demag along x:  N_x = \"\n ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 516,
+          "text_sha256": "1365d587032da4f5dfa50cc1b81dfe096fc573c318d45236be7660fdd61b2ea9",
+          "text_preview": "Bar: 2a x 2b = 40.0 mm x 20.0 mm, M = (9.549e+05, 0.000e+00) A/m\nmu_0 * M_x = 1.2000 T\nB at center: (0.8458, -0.0000e+00) T\n  Cross-section demag along x:  N_x = 0.2952\n\n  r [m]    |B|_analytic [T]    |B|_dipole-law [T]    rel err\n   0.050   6.8699e-02        6.1115e-02        1.241e-01\n   0.100   1.5742e-02        1.5279e-02        3.034e-02\n   0.300   1.7033e-03        1.6977e-03        3.338e-03\n   1.000   1.5283e-04        1.5279e-04        3.000e-04\n   5.000   6.1116e-06        6.1115e-06        1.200e-05\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 33,
+          "text_sha256": "5972735804b59bfe4835b48edab00c837834cd15465407d37e06621e8321d426",
+          "text_preview": "\nSaved: rect_magnet_2d_field.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "a9a23680d14759fced5ff8118dc931ad9e0350ab23363e378993c01b8386839f",
+          "text_plain_preview": "<Figure size 700x600 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 559688,
+              "sha256": "bab0d5f3073b360edca5738fd57af3360ec3bcfd70aa3d4fb668a160856cefd4"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "7a3f577d95540b87dd32c906a2ff2fb230c4974e297ba90b047e820e0caa7c40",
+      "source_preview": "\"\"\"Eddy current in a thin rectangular plate.\n\nReference: Part 1 (SA-02-28 / RM-02-64, 2002), eq 26-27.\nSource: Weissenburger and Christensen (PPPL-1517, 1979).\n\nReproduces Figs. 7-8 of the PDF: T_z contours = streamlines, plus J_x\nalong x = 0.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import plate_eddy_J, plate_eddy_T\n\n\ndef main() -> None:\n    # Square plate as in PDF Fig. 7: 2 a = 2 b = 0.2 m, copper, dB/dt = 1 T/s.\n    a = b = 0.1\n    sigma = 5.0e7\n    Bdot = 1.0\n    n_terms = 80\n    print(f\"Plate: 2 a x 2 b = {2*a:.3f} m x {2*b:.3f} m\")\n    print(f\"sigma = {sigma:.2e} S/m, dB_z/dt = {Bdot} T/s\")\n    print(f\"Series truncation n_terms = {n_terms}\")\n\n    # Boundary integrity.\n    print()\n    print(\"Boundary check (T_z and J . n should both be small):\")\n    print(f\"  T_z(a, 0)            = \"\n          f\"{plate_eddy_T([a, 0.0], a, b, sigma, Bdot, n_terms=n_terms):.3e}\")\n    print(f\"  T_z(0, b)            = \"\n        ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 528,
+          "text_sha256": "fabb728bcf5f78de1909ee9dd8b49a918bf772a1c579423e50c76e37e37b911d",
+          "text_preview": "Plate: 2 a x 2 b = 0.200 m x 0.200 m\nsigma = 5.00e+07 S/m, dB_z/dt = 1.0 T/s\nSeries truncation n_terms = 80\n\nBoundary check (T_z and J . n should both be small):\n  T_z(a, 0)            = 1.582e-12\n  T_z(0, b)            = -7.872e-03\n  J_x(a, 0.05)         = 2.440e-11\n  J_y(0.05, b)         = -3.495e-01\n\nJ_x(0, y) along the symmetry axis x = 0:\n   y [m]      J_x [A/m^2]\n   0.000       0.0000e+00\n   0.020       1.2682e+05\n   0.040       2.6457e+05\n   0.060       4.2397e+05\n   0.080       6.1477e+05\n   0.100       8.4412e+05\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 35,
+          "text_sha256": "0d1117fbf2fdd7d5aed2e76fa834d0c1ee73026ba33c4e7b587881e9a7df2628",
+          "text_preview": "\nSaved: rectangular_plate_eddy.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "7bbe573ad0416cf14c92c39e5e20b6d5db8ac59b4d1c091dee3b5e31fa29624b",
+          "text_plain_preview": "<Figure size 1100x500 with 3 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 325836,
+              "sha256": "bbf842247276f56604c88909028dac044607b3f2da42676fd63183eae787da87"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 6,
+      "source_sha256": "5fab80aea56d50d30a9ab774540600e4dc0e799546e953a222c04637f2363765",
+      "source_preview": "\"\"\"Solenoid axial-field profile and Fabri form factor.\n\nReference: Part 4 (SA-04-1 / RM-04-1, 2004), eq 25-29.\n            Montgomery, \"Solenoid Magnet Design\" (Wiley, 1969).\n\nPlots ``B_z(z)`` along the symmetry axis of a finite rectangular-\nsection solenoid and reports the central-field Fabri factor\n``F(alpha, beta)``. Verifies the long-coil limit\n``B_0 -> mu_0 J (a_2 - a_1)``.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    fabri_F,\n    solenoid_axial_field,\n    solenoid_central_field,\n)\nfrom radia.analytical_formulas.solenoid_central import MU_0\n\n\ndef main() -> None:\n    a1, a2 = 0.05, 0.10        # 50 mm inner, 100 mm outer\n    J = 1.0e7                  # 10 MA / m**2\n    print(f\"Geometry: a_1 = {a1*1000:.0f} mm, a_2 = {a2*1000:.0f} mm, \"\n          f\"J = {J:.2e} A/m**2\")\n    print(f\"Long-coil limit B_inf = mu_0 J (a_2 - a_1) = \"\n          f\"{MU_0 * J * (a2 - a1):.4f} T\")\n    print()\n    print(\"b [m]   a",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 557,
+          "text_sha256": "7014412aae4d151aeb799f4803a626cf93214fe2fec7248e0f651fa44616020a",
+          "text_preview": "Geometry: a_1 = 50 mm, a_2 = 100 mm, J = 1.00e+07 A/m**2\nLong-coil limit B_inf = mu_0 J (a_2 - a_1) = 0.6283 T\n\nb [m]   alpha   beta    F(alpha, beta)   B_0 [T]   B_0 / B_inf\n  0.001   2.000    0.020   0.01386        0.0087   0.0139\n  0.010   2.000    0.200   0.13716        0.0862   0.1372\n  0.050   2.000    1.000   0.56226        0.3533   0.5623\n  0.100   2.000    2.000   0.80032        0.5029   0.8003\n  0.500   2.000   10.000   0.98856        0.6211   0.9886\n  5.000   2.000   100.000   0.99988        0.6282   0.9999\n\nSaved: solenoid_axial_field.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "a92e55fecd0919659491ccc6b61c021285a1d9b662894017e47673f53715583c",
+          "text_plain_preview": "<Figure size 700x450 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 76128,
+              "sha256": "de9f654e734abc7414684d710981bae5c39466645dc543dfa95d2b65e8bf4aaf"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 14,
+      "execution_count": 7,
+      "source_sha256": "d7b44644d5df14409d428daee9a9fa88592c10ceefdbe314e24d7dfd26e99f5f",
+      "source_preview": "\"\"\"Three-phase line magnetic field: triangle, planar, helical.\n\nReference: Part 4 §5 (SA-04-1 / RM-04-1, 2004) eq 30-44, and\n           Part 5 §3 (SA-04-44 / RM-04-68, 2004) eq 11-28.\n\nCompares the triangle and coplanar arrangement far-field formulas\nagainst direct Biot-Savart sums and shows the exponential decay of a\nhelical three-phase line.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    ac_locus_axes,\n    balanced_three_phase_currents,\n    field_xy,\n    helical_far_field_amplitude,\n    planar_far_field_amplitude,\n    planar_positions,\n    triangle_far_field_amplitude,\n    triangle_positions,\n)\n\n\ndef main() -> None:\n    a = 0.05            # 50 mm radius (triangle / spacing for planar = 50 mm)\n    I_rms = 1000.0      # 1 kA RMS\n    I_peak = math.sqrt(2.0) * I_rms\n    rs = np.geomspace(0.1, 50.0, 30)\n\n    # ----- Triangle vs planar ---------------------------------------\n    print(f\"Three-phase",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 847,
+          "text_sha256": "18ae9f3d72cf301c74e9bd9f0d795ff7e606695e08c48499ab20f4d106c706ca",
+          "text_preview": "Three-phase line: a = d = 50 mm, I_rms = 1000 A, I_peak = 1414.2 A\n\n   r [m]   |B|_tri rigorous    tri formula  |B|_plan rigorous   plan formula\n    0.10    3.6365e-03      2.1213e-03        3.3993e-03     2.4495e-03\n    0.29    2.9293e-04      2.4884e-04        2.9746e-04     2.8734e-04\n    0.85    3.0909e-05      2.9191e-05        3.3843e-05     3.3707e-05\n    2.49    3.4931e-06      3.4243e-06        3.9559e-06     3.9540e-06\n    7.27    4.0445e-07      4.0169e-07        4.6386e-07     4.6383e-07\n   21.22    4.7232e-08      4.7120e-08        5.4410e-08     5.4410e-08\n   50.00    8.4938e-09      8.4853e-09        9.7980e-09     9.7980e-09\n\nHelical three-phase, p = 0.5 m  (a << p << r regime):\n   r [m]  |B|_far (helical)\n    0.10    2.6648e-04\n    0.50    7.8196e-07\n    1.00    1.0326e-09\n    2.00    2.5462e-15\n    4.00    2.1896e-26\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 35,
+          "text_sha256": "1959363f585efa17a5b05dafb0da18ab6cb4a695095f208341b54aeaf6474a48",
+          "text_preview": "\nSaved: three_phase_line_field.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "b3a712c8b6b210ba2d26e9e311751e3223c9d510afe6f496903609d7c1b6f251",
+          "text_plain_preview": "<Figure size 800x500 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 86720,
+              "sha256": "676c9fc59639cec4dbb85238273f593e963afb096af97e3c34cb0f4b92696969"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 16,
+      "execution_count": 8,
+      "source_sha256": "96446f54b513547e03ba837f48c48c36856edf2c57af5f47f782e400123fa187",
+      "source_preview": "\"\"\"Hastings polynomial approximations for K(k), E(k): accuracy table.\n\nReference: Part 3 §3 (SA-03-52 / RM-03-54, 2003), eq 13 + Tables 1-2.\n\nCompares the degree-2 and degree-4 Hastings polynomial approximations\nagainst ``scipy.special.ellipk`` / ``ellipe`` (machine-precision\nreference) and reproduces Fig. 2 of the PDF.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    E_hastings_2,\n    E_hastings_4,\n    K_hastings_2,\n    K_hastings_4,\n)\n\n\ndef main() -> None:\n    from scipy.special import ellipe as scipy_E, ellipk as scipy_K\n\n    ks = np.linspace(0.0, 0.99, 200)\n    K_ref = scipy_K(ks * ks)\n    E_ref = scipy_E(ks * ks)\n    K2 = K_hastings_2(ks)\n    K4 = K_hastings_4(ks)\n    E2 = E_hastings_2(ks)\n    E4 = E_hastings_4(ks)\n\n    print(f'{\"k\":>6}  {\"K err deg2\":>12}  {\"K err deg4\":>12}  '\n          f'{\"E err deg2\":>12}  {\"E err deg4\":>12}')\n    for k in (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99):\n        Kr = floa",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 567,
+          "text_sha256": "b0891332fa35aec6446d103377e3f05fb250653c167c53728612cd7faaccb21e",
+          "text_preview": "     k    K err deg2    K err deg4    E err deg2    E err deg4\n  0.00      2.68e-08      4.90e-12      2.68e-08      5.10e-12\n  0.10      4.64e-06      6.02e-09      6.11e-06      7.04e-09\n  0.30      2.70e-05      5.96e-09      3.54e-05      6.95e-09\n  0.50      1.66e-05      9.85e-09      2.15e-05      1.15e-08\n  0.70      2.83e-05      6.93e-09      3.72e-05      8.09e-09\n  0.90      2.49e-05      1.34e-08      3.28e-05      1.57e-08\n  0.95      2.27e-05      9.63e-09      2.94e-05      1.13e-08\n  0.99      2.77e-05      1.34e-08      3.64e-05      1.57e-08\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 40,
+          "text_sha256": "fc37b10dfa03c1edd16adc8670dedeff4e86675080984ac201a43aa4ccd77014",
+          "text_preview": "\nSaved: elliptic_integrals_accuracy.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "df54236a38ebe7d9f03aedd6eb4662510ff8d17455265531816b9612dbb819d4",
+          "text_plain_preview": "<Figure size 800x600 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 139892,
+              "sha256": "2132dae257c867c0964e1414b823f7284f772c35eede77e7835f22b466a01274"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 18,
+      "execution_count": 9,
+      "source_sha256": "a400ab214d6325bd67112b52fab8b77e405bedf43b1bff6e408dbc9db3adc8fd",
+      "source_preview": "\"\"\"Gauss-Legendre quadrature: nodes / weights table + convergence.\n\nReference: Part 3 §4 (SA-03-52 / RM-03-54, 2003), Table 3.\n\nPrints the ``n = 1, ..., 24`` Gauss-Legendre nodes and weights and\nshows convergence of a smooth-function integral as ``n`` increases.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    gauss_legendre_integrate,\n    gauss_legendre_nodes_weights,\n)\nfrom radia.analytical_formulas.gauss_legendre import N_MAX\n\n\ndef main() -> None:\n    print(\"Gauss-Legendre nodes and weights (positive half, n = 1..6):\")\n    for n in (1, 2, 3, 4, 5, 6):\n        x, w = gauss_legendre_nodes_weights(n)\n        # Print only the non-negative half (the table is symmetric).\n        half = x[x >= -1e-15]\n        wh = w[x >= -1e-15]\n        print(f\"  n = {n}:\")\n        for xi, wi in zip(half, wh):\n            print(f\"    x = {xi:+.15f}    w = {wi:.15f}\")\n    print(f\"  ...   table extends to n = {N_MAX}.\")",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1286,
+          "text_sha256": "c1cb8e7bad7bc9e08f50ffc11803b4c6f18856a20c8dc1504cdaafc80306864f",
+          "text_preview": "Gauss-Legendre nodes and weights (positive half, n = 1..6):\n  n = 1:\n    x = +0.000000000000000    w = 2.000000000000000\n  n = 2:\n    x = +0.577350269189626    w = 1.000000000000000\n  n = 3:\n    x = +0.000000000000000    w = 0.888888888888889\n    x = +0.774596669241483    w = 0.555555555555556\n  n = 4:\n    x = +0.339981043584856    w = 0.652145154862546\n    x = +0.861136311594053    w = 0.347854845137454\n  n = 5:\n    x = +0.000000000000000    w = 0.568888888888889\n    x = +0.538469310105683    w = 0.478628670499366\n    x = +0.906179845938664    w = 0.236926885056189\n  n = 6:\n    x = +0.238619186083197    w = 0.467913934572691\n    x = +0.661209386466264    w = 0.360761573048139\n    x = +0.932469514203152    w = 0.171324492379170\n  ...   table extends to n = 24.\n\nConvergence of int_0^pi sin(x) dx  (truth = 2.0):\n    n                estimate     abs error\n    1        3.141592653589793   1.14e+00\n    2        1.935819574651137   6.42e-02\n    3        2.001388913607744   1.39e-03\n    4        1.999984228457723   1.58e-05\n    5        2.000000110284471   1.10e-07\n    6        1.999999999477271   5.23e-10\n    8        1.999999999999993   6.66e-15\n   10        2.000000000000000   0.00e+00\n   12        1.999999999999999   6.66e-16\n   16        2.000000000000001   8.88e-16\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "c6a242fd524e240f27193ada1c33c6080cde1b071c6632735e54f84aedf89db8",
+          "text_preview": "\nSaved: gauss_legendre_demo.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "a92e55fecd0919659491ccc6b61c021285a1d9b662894017e47673f53715583c",
+          "text_plain_preview": "<Figure size 700x450 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 66032,
+              "sha256": "251765b1533ebce79d013a1be10e1d8d1da83b3ebd3205f628fa0d6f5e2d7a22"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 20,
+      "execution_count": 10,
+      "source_sha256": "a875ccb719f70b8ba5c68080c994a637e0bb845556ac2047959d7a6ea9c46b58",
+      "source_preview": "\"\"\"Cross-validate the 2D rectangular bar against the 3D cuboid in the\nlong-bar limit.\n\nThe 2D bar formula (Part 2, eq 2-3) is the ``L_z -> infty`` limit of\nthe 3D ``CuboidMagnet`` field in :mod:`radia.analytical_magnet`. Both\nroutines accept ``M`` in A/m and return ``B`` in Tesla, so a direct\ncomponent-wise compare is meaningful.\n\nThe script sweeps the z-extent ``L_z`` of the 3D cuboid and shows the\ncomponent-wise convergence rate of ``B_3d(z = 0) - B_2d``. Convergence\nshould look like ``(max(a, b) / L_z)**2``.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import rect_magnet_2d_B\nfrom radia.analytical_formulas.rect_magnet_2d import MU_0\nfrom radia.analytical_magnet import CuboidMagnet\n\n\ndef main() -> None:\n    a, b = 0.02, 0.01\n    Mx = 1.0e6\n    M_3d = [Mx, 0.0, 0.0]\n\n    # Pick observation points along z = 0 outside the cross-section.\n    obs_2d = np.array([[0.05, 0.005], [0.10, 0.0], [0.05, -0.02]])\n\n    print(f\"2D ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 386,
+          "text_sha256": "f71b1ffe51cdd430684dd926807bda749ee198b52ce98cac4b33cd944e16191c",
+          "text_preview": "2D bar: 2 a x 2 b = 0.040 x 0.020 m, M = (1.0e+06, 0) A/m\nmu_0 * M_x = 1.2566 T\n\nL_z / max(a,b)   |dB|@P0   |dB|@P1   |dB|@P2\n         3.0     5.9725e-03  1.5487e-03  6.8486e-03\n        10.0     1.7314e-03  1.1738e-03  1.7226e-03\n        30.0     2.1858e-04  2.0869e-04  2.1842e-04\n       100.0     1.9970e-05  1.9886e-05  1.9969e-05\n       300.0     2.2219e-06  2.2208e-06  2.2218e-06\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 38,
+          "text_sha256": "b892b339ba155bc6c92c6bbf498d8ab2e0df7ccfa462fcdff4142d2f69e553a3",
+          "text_preview": "\nSaved: cross_validation_3d_vs_2d.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "a92e55fecd0919659491ccc6b61c021285a1d9b662894017e47673f53715583c",
+          "text_plain_preview": "<Figure size 700x450 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 102860,
+              "sha256": "b3a552a1956db2b2f0612d93cee65b172ef3daff4e97c3af87914c6b71fbfc84"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 22,
+      "execution_count": 11,
+      "source_sha256": "ce4eb7004c3337d3268583150909e5e4fd58ac75bc2d2ee0841eef2d6dce5eb3",
+      "source_preview": "\"\"\"Cross-validate the closed-form solenoid axial field against a stacked\nset of analytical current loops.\n\nThe closed-form `solenoid_axial_field` (Part 4 §4) is the integral of\nBiot-Savart over the rectangular cross-section. Numerically the same\nquantity is obtained by summing many circular current loops -- here\nusing `radia.analytical_magnet.CurrentLoop` (Ortner 2022 formulation,\nelliptic integrals). Convergence is `O(dr**2 + dz**2)` (midpoint rule).\n\nBoth routines accept SI units (m, A, A/m**2, T) so component-wise\ncompare is meaningful. This is the second cross-validation script,\nafter `cross_validation_3d_vs_2d.py`.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport os\nimport sys\nimport time\n\nimport numpy as np\n\nfrom radia.analytical_formulas import solenoid_axial_field\nfrom radia.analytical_formulas.solenoid_central import MU_0\nfrom radia.analytical_magnet import CurrentLoop\n\n\ndef stacked_loops_axial_Bz(z_obs, a1, a2, b, J, n_r, n_z):\n    dr = (a2 - a1) / n_r\n    dz = (2.0 * b) / n_z",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 939,
+          "text_sha256": "ded4a2cc7ef27762a9b1946bf5f237136ea5eddf1cc104e2766d0695df0d2fcf",
+          "text_preview": "Solenoid: a1 = 50 mm, a2 = 100 mm, b = 100 mm, J = 1.00e+07 A/m**2\nLong-coil limit B_inf = 0.6283 T\n\nClosed form B_z(z=0) = 0.502858 T\n\n    (n_r, n_z)    B_z stacked      rel err   time [s]\n  (  5,  20)    0.502994    2.703e-04      0.001\n  ( 10,  40)    0.502892    6.763e-05      0.003\n  ( 20,  80)    0.502867    1.691e-05      0.011\n  ( 40, 160)    0.502860    4.228e-06      0.044\n\nLast grid refinement halving error ratio: 4.00 (O(h**2) ideal: 4)\n\nAxial profile comparison (n_r=20, n_z=80):\n   z [m]     closed      stacked      rel err\n  -0.200   0.05308    0.05307     6.451e-05\n  -0.150   0.12392    0.12392     4.021e-05\n  -0.100   0.29373    0.29373     5.701e-06\n  -0.050   0.45721    0.45722     1.910e-05\n  +0.000   0.50286    0.50287     1.691e-05\n  +0.050   0.45721    0.45722     1.910e-05\n  +0.100   0.29373    0.29373     5.701e-06\n  +0.150   0.12392    0.12392     4.021e-05\n  +0.200   0.05308    0.05307     6.451e-05\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 50,
+          "text_sha256": "736bed45ba50d8a73d94223a1fc9071410e3069731bbe296ab29860b7b9dd418",
+          "text_preview": "\nSaved: cross_validation_solenoid_currentloop.png\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "27bf6668919ae3b493ebf32997365aefc457301e1433c6999eca50c745093241",
+          "text_plain_preview": "<Figure size 1100x450 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 94652,
+              "sha256": "b8bb487aa55e42cce2a8c2b23251974e401e5171f53e416ca55eac95276ed5b0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 24,
+      "execution_count": 12,
+      "source_sha256": "fa3137c34e651b902aecfceb253c9d415f5dd4340f975a741aa2b4a86709d38f",
+      "source_preview": "\"\"\"Eddy-current and AC-shielding showcase.\n\nCombines the Part 6 / 8 / 9 extensions in a single end-to-end story:\n\n1. **Skin depth + planar surface impedance** for a copper plate at 1 kHz.\n2. **Cylindrical-conductor AC impedance** sweep (Bessel solution): the\n   resistance grows from R_dc as the skin depth shrinks below the\n   conductor radius.\n3. **Thin-shell AC shielding** of a non-magnetic Cu sphere as a\n   function of frequency.\n4. **Total Joule dissipation in a thin square plate** via Gauss-Legendre\n   integration of the analytic eddy-current field.\n5. **Magnetic spherical shell** internal-field decomposition.\n6. **Average B over a target box** from a magnetised source box, using\n   the numerical-integration path.\n\nEvery numerical reference is tagged to the source equation in the\nWakao-Igarashi-Fujiwara-Kameari series (Part 6 / 8 / 9).\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport os\nimport sys\n\nimport numpy as np\n\nfrom radia.analytical_formulas import (\n    average_B",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 2657,
+          "text_sha256": "ff185dfb8cafd1fcbba01a5649fb1551b3a093c20be7007febb9dec6580c4668",
+          "text_preview": "========================================================================\n(1) Copper @ 1 kHz: skin depth + planar surface impedance\n========================================================================\n  skin depth  delta   = 2.062 mm\n  surface impedance Z_s = 8.1387e-06+8.1387e-06j Ohm  (|Z_s|=1.1510e-05, arg=45.00 deg)\n\n========================================================================\n(2) Cylinder Cu, a = 1 mm, AC impedance frequency sweep\n========================================================================\n  R_dc   = 5.3408e-03 Ohm/m\n  L_int  = 50.0000 nH/m  (low-freq internal inductance)\n      f [Hz]     R [Ohm/m]     X [Ohm/m]    R / R_dc\n     1.0e+00    5.3408e-03    3.1416e-07        1.00\n     1.0e+02    5.3408e-03    3.1416e-05        1.00\n     1.0e+03    5.3469e-03    3.1398e-04        1.00\n     1.0e+04    5.9052e-03    2.9768e-03        1.11\n     1.0e+05    1.4389e-02    1.2824e-02        2.69\n     1.0e+06    4.2329e-02    4.0927e-02        7.93\n     1.0e+08    4.1095e-01    4.0961e-01       76.95\n\n========================================================================\n(3) Cu spherical shell AC shielding (a = 5 cm, t = 1 mm)\n========================================================================\n      f [Hz]         |S|    arg(S) [deg]\n     1.0e+00      1.0000           -0.45\n     1.0e+01      0.9969           -4.48\n     6.0e+01      0.9048          -25.20\n     1.0e+03      0.1265          -82.73\n     1.0e+04      0.0127          -89.27\n\n========================================================================\n(4) Square Cu plate (200 mm side, 1 mm thick), dB/dt = 1 T/s\n========================================================================\n  total instantaneous Joule loss P = 0.2095 W\n  at dB/dt = 10 T/s              = 20.95 W (10 x faster ramp -> 100 x dissipation, OK)\n\n========================================================================\n(5) Magnetic spherical shell (a = 5 cm, b = 6 cm, mu_r = 1000)\n========================================================================\n  H_applied   = 1.0 A/m (unit drive)\n  H_hollow    = 1.0589e-02 A/m\n  H_shell     = 1.0611e-02 A/m\n  M_shell     = 1.0600e+01 A/m\n  M_image     = -3.1969e-03 A m^2\n  S = H_hollow / H_applied = 1.0589e-02\n\n========================================================================\n(6) <B> over a 2 mm cube target offset 5 cm in x from a\n    20 x 20 x 10 mm magnetised cube (NdFeB-like, M_x = 9.55e5 A/m)\n========================================================================\n  <B>_target = [ 6.27792335e-03 -8.08916465e-14  2.52786395e-14]  T\n  dipole far-field B_x at d = 5 cm = 6.1120e-03 T\n  near-field ratio = 1.0271\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

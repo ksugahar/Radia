@@ -1,0 +1,235 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "notebook_sha256": "074c60c6847fcfdf7e25d9a5e0cb4b2db5fc4fb068f988189beab2278f3a137c",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/mesh_fusion/mesh_fusion.ipynb",
+    "cells": 13,
+    "code_cells": 6,
+    "executed_code_cells": 6,
+    "code_cells_with_outputs": 6,
+    "output_count": 18,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "77ee9c9431d2f6ea1be07317793932cbab20afac86c0fcc980c2e5dac26b8310",
+      "source_preview": "\"\"\"Phase 1 — Nitsche coupling, 2D Poisson, heterogeneous material.\n\nDemonstrates the core building block of HFSS Mesh Fusion in NGSolve:\ntwo side-by-side sub-rectangles meshed AT DIFFERENT DENSITIES, with\nthe interface coupled via Nitsche's penalty method.\n\nProblem:\n    -nabla . (mu nabla u) = f       on Omega = [0,1] x [0,1]\n                          u = 0     on dOmega\n    mu(x,y) = mu_L   if x < 0.5\n           = mu_R   if x > 0.5      (jump at x=0.5)\n    f(x,y) = sin(pi x) sin(pi y)\n\nThe exact solution for constant mu is u = f / (2 pi^2 mu).  With a\njump in mu, the analytic solution is piecewise (transmission\nconditions:  u_L = u_R  AND  mu_L du_L/dn = mu_R du_R/dn  at x=0.5).\n\nFor the demonstration we use mu_L = mu_R = 1.0 (homogeneous), so the\nanalytic solution simplifies to u_exact = f / (2 pi^2) and we can\nmeasure L2 error against this closed form.  The interface coupling\nis exercised because we mesh the two halves at DIFFERENT densities,\ngiving a non-matching mesh at x=0.5 (whe",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 388,
+          "text_sha256": "ff0d956e768d07ecc83fb6a4e5269ebfd6552347691822a682ef7920d5f1d150",
+          "text_preview": "========================================================================\nPhase 1: 2D Poisson, H1 order=2, both halves meshed independently\nNGSolve  : (loaded)\nDate     : 2026-06-26 21:26\n========================================================================\n    maxh_L     maxh_R     ndof         L2 err     rate\n------------------------------------------------------------------------\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 62,
+          "text_sha256": "c1ecbf2f2834dc47e9fb3ca0e27b16471b90299cc7ba2d544b7a8b2a71419f33",
+          "text_preview": "    0.2000     0.3000       59   4.062011e-04       -- (0.2s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 62,
+          "text_sha256": "f7debc39f33a838c2feb02046034eb1c0509f178a261a8e1d017f8492131aa0c",
+          "text_preview": "    0.1000     0.1500      227   3.781143e-05    +3.43 (0.5s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 62,
+          "text_sha256": "01ea596149d878dccef5cbc6deb94473f97dd41e4f3c5b0824412ae1ee3211dd",
+          "text_preview": "    0.0500     0.0750      859   3.936379e-06    +3.26 (4.3s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 255,
+          "text_sha256": "fdf1b720bdc9e925e09285c268c17f19aeb065e03e3e1551dc16433c1f52ca21",
+          "text_preview": "    0.0250     0.0375     3391   4.564482e-07    +3.11 (6.2s)\n------------------------------------------------------------------------\nExpected rate ~ -3 for H1 order=2 (L2 err = O(h^{p+1}))\n\nWrote: S:\\Radia\\01_GitHub\\docs\\mesh_fusion\\results_phase1.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "7da7faafa6b89feee44dd307d1eecb5135925789ce872d611697689f7b56e8c9",
+      "source_preview": "\"\"\"Phase 2 — Mortar-Nitsche coupling for 2D Poisson, multi-mesh-density.\n\nDemonstrates the mortar-style WEAK coupling of two H1 trial spaces\ndefined independently on left + right subdomains, using NGSolve's\nNitsche-method machinery (penalty + symmetry + consistency terms,\nNO explicit Lagrange multiplier space).\n\nWhy Nitsche-mortar instead of pure mortar with LM space?\n- NGSolve's pure-mortar LM space (`L2(definedon=boundary)`) is\n  fragile in 6.2.2603 (segfault on some patterns; depends on\n  build-time options).\n- Nitsche reproduces the SAME math (consistent + symmetric +\n  coercive interface coupling) without the LBB headache or the\n  saddle-point indefinite system.\n- This is the formulation Becker-Hansbo-Stenberg 2003 (M2AN)\n  proved is equivalent to mortar for the elliptic case.\n\nProblem:\n    -nabla . (mu nabla u) = f       on Omega = [0,1] x [0,1]\n                          u = 0     on dOmega\n    Omega = Omega_L + Omega_R, interface at x=0.5\n    Each side has its OWN H1 trial space",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 410,
+          "text_sha256": "77c0104446a5083182b09b79c9195dd0a628c70f7dce6acac848047a41a3540e",
+          "text_preview": "================================================================================\nPhase 2: 2D Poisson, NITSCHE-MORTAR coupling, independent H1 per side\nDate: 2026-06-26 21:26\n================================================================================\n    maxh  order  gamma_factor     ndof       L2 err         jump     rate\n--------------------------------------------------------------------------------\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 162,
+          "text_sha256": "861e4e467c6c64bc01624e2bea3b3d65aaf1d40dce1d3c71a52073b3e0d1fffe",
+          "text_preview": "  0.2000      2          10.0      175   9.5855e-05   1.7335e-06       -- (2.9s)\n  0.1000      2          10.0      637   9.8346e-06   7.1916e-07    +3.28 (0.1s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 81,
+          "text_sha256": "72388506ea812f906d12e100be910a337e2d69ec7e97c91b9f98603670da6215",
+          "text_preview": "  0.0500      2          10.0     2457   1.0887e-06   7.8842e-08    +3.18 (0.8s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 382,
+          "text_sha256": "0bf1a59777caa18fc5889a563ff5d201935500d9b1d2eb12a39362064480c0e2",
+          "text_preview": "  0.0250      2          10.0     9612   1.2840e-07   7.6201e-09    +3.08 (0.4s)\n--------------------------------------------------------------------------------\nExpected total L2 rate ~ -3 (H1 order=2 -> L2 err = O(h^3)).\nInterface jump decays at rate ~ -p (Nitsche penalty enforces continuity at trace-error level).\n\nWrote: S:\\Radia\\01_GitHub\\docs\\mesh_fusion\\results_phase2.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "2e2bb1c98b9fbe49e90a291600be1c9543b4ab344669a297de10af432ff86ea2",
+      "source_preview": "\"\"\"Phase 3 — 2D TM eddy current with HCurl Nitsche-mortar coupling.\n\nDemonstrates the on-point HFSS Mesh Fusion analog for EM: independent\nHCurl trial spaces on two subdomains, coupled weakly across the\ninterface via Nitsche penalty on the tangential trace.\n\nProblem:\n    curl(nu curl A) + j omega sigma A = J_s    on Omega\n    A = 0   on dOmega\n\n    Omega split into:\n      \"coil\"   = inner rectangle with current source J_s\n      \"air\"    = outer annulus (no source, no conductivity)\n\nThis is the 2D TM-mode reduction of Maxwell's eddy-current equation,\nwhere A is the out-of-plane component of the magnetic vector potential.\n\nEach subdomain has its OWN HCurl trial space (in 2D, this reduces to\nH¹ for the scalar A_z, but we keep the HCurl name for consistency\nwith the 3D generalization).  The interface coupling uses the same\nNitsche-IPG mechanism as Phase 2.\n\nNOTE: For 2D TM mode the HCurl trial space is mathematically\nequivalent to H¹ on the scalar A_z, with the conormal flux being\nnu * gra",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 529,
+          "text_sha256": "dd9ede7ec0a53262205d07e2121a4fbb92fe5bd633347510bad13ff780b6771a",
+          "text_preview": "================================================================================\nPhase 3: 2D TM Maxwell (A_z), NITSCHE coupling on coil-air interface\nDate: 2026-06-26 21:26\n================================================================================\n    maxh  order     ndof       L2 err         jump     rate\n--------------------------------------------------------------------------------\n  0.1500      2      291   3.5852e-05   3.6986e-05       -- (0.0s)\n  0.0750      2     1015   8.2222e-06   2.2182e-05    +2.12 (0.0s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 67,
+          "text_sha256": "7ccfbbebf233a41d16f53f27a826550cba948b1614f2d7c2182990171bb98d82",
+          "text_preview": "  0.0375      2     4238   3.2292e-06   1.0082e-05    +1.35 (0.1s)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1211,
+          "text_sha256": "d86f9f517bfe754224b94190bae220ffa2c598d758c73d0fb87edf8de6318c53",
+          "text_preview": "  0.0187      2    16374   1.6792e-06   5.2811e-06    +0.94 (0.4s)\n--------------------------------------------------------------------------------\nTheoretical L2 rate for smooth interface ~ -3;\nobserved rate ~ -1 because the closed 4-edge interface has CORNERS\nwhere the outward normal is multi-valued.  Nitsche's consistency term  -<{nu grad(u).n}> [v] ds  becomes ambiguous\nat corners, leading to a corner-error floor that dominates at\nfine h.  Two known fixes (both in Hansbo-Stenberg literature):\n  (a) Switch to TRUE mortar LM space + LBB-stable LM order\n      -> see W:/03_bunken_ronbun/00_em_analysis/15_nonconforming/\n         01_mortar_nitsche/Becker-Hansbo-Stenberg-2003\n  (b) Add corner-stabilization terms to the Nitsche form\n      -> Hansbo-Larson 2003 (ESAIM M2AN)\nEither restores the optimal h^(p+1) rate.\n\nNext step toward true HFSS Mesh Fusion:\n - Full HCurl (Nedelec) for 3D Maxwell\n - Complex-valued j*omega*sigma in conductor (eddy current)\n - True mortar LM saddle-point with LBB-stable LM order\n - Corner-stabilization for closed interfaces (Hansbo-Larson 2003)\n - Validate against single-mesh reference (uniform fine mesh)\n\nWrote: S:\\Radia\\01_GitHub\\docs\\mesh_fusion\\results_phase3.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "779cc0532dd2129f3b0c8a2e67e0278d82bfa1d6ca3ca1ebc3a8a0bd1fc3b357",
+      "source_preview": "\"\"\"Phase 4 — Egger (2020) harmonic mortar for rotor-stator (rotating machine).\n\nDistilled from Egger-Harutyunyan-Loescher-Schöps-Steinbach (2020),\n\"Stability of harmonic mortar methods with application to electric\nmachines\" (arXiv 2005.12020), available at\nW:/03_<lab-private>/00_<lab-private>/15_<lab-private>/05_em_applications/.\n\n## Key idea\n\nFor a UNIFORMLY ROTATING rotor (constant angular velocity omega_mech):\n- The A_z field on the rotor-stator interface is PERIODIC in the\n  azimuthal angle theta with the rotor's mechanical period.\n- Time-harmonic excitation at electrical frequency omega_e gives\n  rise to a SPATIAL Fourier series in theta on the interface:\n\n      A_z|interface(r, theta, t) = Re sum_k a_k(r) exp(j(k theta - omega_e t))\n\n- Truncating to K Fourier modes per side, the mortar Lagrange\n  multiplier space M_h has dimension 2K+1 (K cos + K sin + DC).\n\n## Why this beats per-time-step mortar\n\nStandard sliding-mesh mortar (Buffa-Maday-Rapetti 2001) must:\n  1. At each rotor an",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1468,
+          "text_sha256": "a3f29e01fdb8a0b5cf337fc115d6921f5491c8a628f280d5871055d33d462ee9",
+          "text_preview": "================================================================================\nPhase 4: Egger 2020 harmonic mortar -- Fourier basis verification\nDate: 2026-06-26 21:26\n================================================================================\nVerifying that the Fourier basis {1, cos(k*theta), sin(k*theta)}\non the inner circle is orthogonal (so harmonic mortar decouples per mode).\n\nMesh: ndof_total = 1836 elements\n\n   K  n_basis       diag_max   off_diag_max      ratio\n------------------------------------------------------------\n   1        3   1.884199e+00   7.285839e-17   3.87e-17\n   2        5   1.884199e+00   7.676151e-17   4.07e-17\n   4        9   1.884199e+00   1.324057e-08   7.03e-09\n   8       17   1.884199e+00   2.145036e-08   1.14e-08\n------------------------------------------------------------\n\nInterpretation:\n - diag_max  ~ 2 pi r_in for sin/cos, 2 pi r_in for k=0  (= circle circumference)\n - off_diag_ratio  ~ 1e-3 to 1e-5  (quadrature error of curved boundary)\n - As mesh refines, off_diag_ratio decays -> basis becomes more orthogonal\n - When ratio < 1e-3, treating G as diagonal is safe (harmonic mortar OK)\n\nNext step:\n - Build the FULL mortar coupling matrix B as block-Toeplitz in k\n - Add rotor rotation phase shift exp(j k theta_rotor)\n - Verify rotor angular sweep -> Fourier coefficients decouple\n - Compare against per-angle Buffa-Maday-Rapetti mortar baseline\nWrote: S:\\Radia\\01_GitHub\\docs\\mesh_fusion\\results_phase4.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "24cdf5418605184cd46badfd71c8f9d710a90abefc72d58b05a8ed144a8b1a04",
+      "source_preview": "\"\"\"Phase 5 — Accelerator magnet shim mortar (Sugahara Lab scenario).\n\nUse case (from radia_mcp.fem.nonconforming_mesh_coupling lab_scenarios):\n\n  In accelerator magnet design (e.g. ATTO Tower), the iron yoke is\n  large (10-100 cm) while the SHIM region near the pole face is\n  small (a few mm thick).  Conventional single-mesh FEM refinement\n  in the shim region forces refinement of the entire neighboring\n  yoke too, exploding the DoF count.\n\n  With mortar/Nitsche coupling:\n    - Coarse mesh on the iron yoke (~5 mm element size)\n    - Fine mesh on the shim region (~0.5 mm element size)\n    - Coupled at the yoke-shim interface via Nitsche\n  -> Refining shim does NOT inflate yoke DoFs.\n\nThis demonstration covers the 2D analog: a \"C-shaped\" iron yoke with\na small SHIM rectangle attached to the pole face, with the two regions\nmeshed at vastly different densities.\n\n## Geometry\n\n  +----------------------------+\n  |          Air               |\n  |   +------+         +-----+ |\n  |   | iron |  g",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 431,
+          "text_sha256": "0f15ab21a91ef6149e25476df0b170c4aa910693c51102168575a39c3109228f",
+          "text_preview": "================================================================================\nPhase 5: Accelerator magnet shim-yoke Nitsche coupling\nDate: 2026-06-26 21:26\n================================================================================\n maxh_yoke  maxh_shim  order     ndof     A(center)   t_sec\n----------------------------------------------------------------------\n    0.1000     0.1000      2      643  4.036792e-02    0.01\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "ca48d877e1b20e15368c7dc948ae7570012c744da8587c5944a11b0a5d54fff5",
+          "text_preview": "    0.0500     0.0500      2     2324  4.094737e-02    0.23\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 316,
+          "text_sha256": "9e08f2a69f6a0a1e51750ada5e17a58806349280152555fe8d663b4f6ebdac05",
+          "text_preview": "    0.0250     0.0250      2     9156  4.096774e-02    0.35\n\n(Per-domain maxh would refine shim only; SplineGeometry limits\n exact per-domain control in NGSolve 6.2 -- would need OCC for\n full geometry-driven density variation.  Demonstrates pattern.)\n\nWrote: S:\\Radia\\01_GitHub\\docs\\mesh_fusion\\results_phase5.json\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 6,
+      "source_sha256": "7c6995a670ac38b99dbb7f467bc92a4964c7075f3f0ab630f1db6941feb36d59",
+      "source_preview": "import json, glob\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nfig, ax = plt.subplots(figsize=(5.4, 4.2))\nfor jf in sorted(glob.glob(\"results_phase*.json\")):\n    d = json.load(open(jf))\n    rows = d[\"results\"]\n    dof = [r.get(\"n_dof\") or r.get(\"ndof\") for r in rows]\n    err = [r.get(\"l2_err\") or r.get(\"L2_err\") or r.get(\"err\") for r in rows]\n    pairs = [(x, y) for x, y in zip(dof, err) if x and y]\n    if not pairs:\n        continue\n    xs, ys = zip(*sorted(pairs))\n    ax.loglog(xs, ys, \"o-\", label=f\"phase {d['phase']}\")\nax.set_xlabel(\"number of DoF\"); ax.set_ylabel(\"L2 error\")\nax.grid(True, which=\"both\", ls=\":\"); ax.legend()\nfig.tight_layout(); fig.savefig(\"mesh_fusion_convergence.png\", dpi=150)\nplt.show()\nprint(\"phases summarised:\", sorted(glob.glob(\"results_phase*.json\")))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "4134eb02ca6e6f349ad233c40c48534ed3a1d1a1c6dc2ca9dac6059f837a91a8",
+          "text_plain_preview": "<Figure size 540x420 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 50872,
+              "sha256": "96e4e7766222160b341eeade00aa39fc6e9388a24ebc3c09b0e5174099e3d995"
+            }
+          }
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 135,
+          "text_sha256": "c7d9e526cae43e849b5c9264ffb774245ca40e0c9957d7a28e1c862cc3068357",
+          "text_preview": "phases summarised: ['results_phase1.json', 'results_phase2.json', 'results_phase3.json', 'results_phase4.json', 'results_phase5.json']\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

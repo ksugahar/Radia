@@ -1,0 +1,359 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/hysteresis/hysteresis_validation.ipynb",
+  "notebook_sha256": "e4374b207a3276e18e53efc583e965d55677f17c8648e04bfa3c5813911cac86",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/hysteresis/hysteresis_validation.ipynb",
+    "cells": 27,
+    "code_cells": 13,
+    "executed_code_cells": 13,
+    "code_cells_with_outputs": 13,
+    "output_count": 13,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "f6b1f47dd2f66fe41290be07b9d2c09e58e72251b802707110331de222880a4f",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_circular.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 459556,
+              "sha256": "9994cf65bb110ea7c826094d249a6c262715307eeec1107c7c40dbbb7e5b23ae"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "06dc891ccbf7521c7b64d70566433f38e19c138fce372ff1f3ceef9e4bf6c521",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_ellipsoid.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 339028,
+              "sha256": "02499b8d92d821824a9a7f78df3ef4c97a41dda1029c7a390140a7e218e59e16"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 3,
+      "source_sha256": "86e541997c2d09e1b2dbed70e867e9fb73ef254f274c3e3867485141b5492218",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_binput.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 133628,
+              "sha256": "b1573ac09a0e32830808a025d53ea2e52f12ff25faa30c74029af1f636c7272c"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 4,
+      "source_sha256": "e77c1903a160f471a0f04d1fa0793a968325dfc2bb4aa40127697ecfbb150bad",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_hinput_vs_binput.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 105904,
+              "sha256": "ec6113eeb189e73bbdd3578493fb1b306d7b7dce29466adda92d2f4f6c0456be"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 5,
+      "source_sha256": "6861803da808ea91f7efa9825319217c1da449095b36f46a04e91597c150aede",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_bqm_inverse_fsolve.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 175508,
+              "sha256": "9256e396e69a014a30ab4617932a1905353777cc2d526c0e9a32e373a1784f38"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 12,
+      "execution_count": 6,
+      "source_sha256": "b53953ffc2ad337693ca898546bf53d7036230f1f179e5b80ce00f59fea2a1c3",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_play_to_energy.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 392464,
+              "sha256": "61c376379651fb55b614c7e935c72bffb6795a270c166760b215e786e0bd8f8b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 14,
+      "execution_count": 7,
+      "source_sha256": "7166df8ae2cf40e54b569d0c9791182fbe39495dd9ecc3085787e782b910f3c4",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/play_vs_energy/figures/compare_play_vs_energy.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 174504,
+              "sha256": "6fbbee7d5d6fb9a7e9d88babef762e47fe83ae9750362941f36883ccc7d0a950"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 16,
+      "execution_count": 8,
+      "source_sha256": "5769ff3031675ff2a81ff3447073a40541579b3ed83b27bf5f3e4681e4e92dd6",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_cpp_hysteresis.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 42888,
+              "sha256": "404dddf2acf4270c8a792289c98197d4acac2fb9fdecf1afe358cd7d159ca5b0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 18,
+      "execution_count": 9,
+      "source_sha256": "7c0ad7fd7079ff1ea0d1b1826e59a315dc350adde43f14b729d18f2ff882a190",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_cpp_vs_play.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 76332,
+              "sha256": "95aabaa523a5e114797b9a2ed3fa0ccb81a0b31be9c52c9d538c57fd83cb8cf4"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 20,
+      "execution_count": 10,
+      "source_sha256": "711f7a5dce0c831ed754a3896bb19e38da25d6c2b7148ff9ca6eac8a43bab700",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_egger_inverse.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 97616,
+              "sha256": "4b77ae2576b6e087faac9b881cb8d620ffe74bfbbc1fec06f1ff83c976cd1ef1"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 22,
+      "execution_count": 11,
+      "source_sha256": "1e7edda6daff048e633c0f1b5a5705e53f18c143657a70802ad7c348d1de6dd9",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_egger_vs_bqm.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 175792,
+              "sha256": "1e3f5e7ad7d76ed163ce12f90bd83bece030f3dd5d8978d26577495d4c6f02d2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 24,
+      "execution_count": 12,
+      "source_sha256": "2a80595f96e7a28093192c8c38cb8a522988ac1a4c4abb10c19825f1ffa9f166",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_coenergy.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 177540,
+              "sha256": "030584b65850defb3a93e66d822d4fa1789ccac0e2ffae919315669155b2ea73"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 26,
+      "execution_count": 13,
+      "source_sha256": "98d009e32e1263d8fbb84356f1cf5c70db46694fbde35dd690f58b3decb9ffc9",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/hysteresis/verify_coenergy_feasibility.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 303280,
+              "sha256": "8627d1824680660c4911602b1ba89a5c6edabaaaaa22bc19ef6ec67936353aba"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

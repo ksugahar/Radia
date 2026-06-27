@@ -1,0 +1,250 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "notebook": "docs/maglev/maglev_showcase.ipynb",
+  "notebook_sha256": "bdc438eb20e6c1498e67ded564acda68f85238ed3fe1d62a2b40ced770fe8299",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/maglev/maglev_showcase.ipynb",
+    "cells": 20,
+    "code_cells": 9,
+    "executed_code_cells": 9,
+    "code_cells_with_outputs": 9,
+    "output_count": 9,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 3,
+      "execution_count": 1,
+      "source_sha256": "2e9b0eebbaf48cf35809f72bfb4212d1d8f8de52de24c35982d89a7a083c4f53",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/cube_alpha_sweep.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 86300,
+              "sha256": "691da583b56cbcbe651822dbd931a4b6ffc0e789a14594db0f7e6ee389054d5f"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 2,
+      "source_sha256": "981335fb4c04cca290c58ed4a78e55fc73623807027f267858a13121ee01135d",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/sphere/maglev_sphere_force_vs_freq.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 70660,
+              "sha256": "575b519ac8fcd33a6ddd8c7d9846eec1f814a5576d3ac51aed4f51e46f9ce25b"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 3,
+      "source_sha256": "caede213ed117f5b08b6950eb160e17fb12524a76bfa482cfb6570bb13405812",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/sphere/coil_sphere_eddy_force.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 55820,
+              "sha256": "df78e3ff41db3fc80e4ab7aba7dcea4a85e273b5967781135af82a483ee602f2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 4,
+      "source_sha256": "150a6427b512e115ea09e0cb5c62bd98863eedb7b81c02f51bf9d440e20b45f9",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/sphere/coil_maglev_equilibrium.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 81964,
+              "sha256": "2e25b395cc9195a3f972af8931d916f5a52a878ed4f1642331cb8fee45f6b98f"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 5,
+      "source_sha256": "bdb16b1373022983555e3d88a32a2ab2864b4e19406adf1d98f92f13be68b8f6",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/ellipsoid/ellipsoid_alpha_omega_axisym.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 89172,
+              "sha256": "6983325629f7718cd5d37934eb8d58aef02848e8ae45c7ead76b0530bcd1a875"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 13,
+      "execution_count": 6,
+      "source_sha256": "8d6d2532850142d5eae2576a43ab04c889cb2f99f4c48850dbedaacdb247f28a",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/ellipsoid/ellipsoid_alpha_tensor_lift.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 69048,
+              "sha256": "985aa91c369810cacf742d188f34d8602b77773676ad29fb9fe80c5e5c39413d"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 15,
+      "execution_count": 7,
+      "source_sha256": "7e35994b432aa473fcf20d089d850e047ac7586360efe4c51e7ca3b99ceaf07b",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/rotating_magnet_eddy.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 109816,
+              "sha256": "c2be3f5acf0d559220a2abbd7c0f174e45c94ac731f3f8f65f33bd3d106e1dcd"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 17,
+      "execution_count": 8,
+      "source_sha256": "d17665d8106d76f483123d77d8edf507ab936ed82ef54d582e305c84afff8dc5",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/maglev/team28/team28_cln_force_vs_height.png'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 104152,
+              "sha256": "9e04eeded79953849c304ad812c662b7e127fb9e95f3c1812c481d58488c18e3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 19,
+      "execution_count": 9,
+      "source_sha256": "a6344bc1ac655c01dba189beafacfdb3488ed23f3600e26109ca93e0553a456f",
+      "source_preview": "\nimport json, os\nREL = \"../../examples/maglev\"\n\ndef head(fn, keys):\n    p = os.path.join(REL, fn)\n    if not os.path.isfile(p):\n        print(f\"(missing {fn})\"); return\n    d = json.load(open(p))\n    print(f\"--- {fn} ---\")\n    for k in keys:\n        if isinstance(d, dict) and k in d:\n            print(f\"  {k}: {d[k]}\")\n    print()\n\n# Headline numbers from the committed result JSON (no re-solve).\nhead(\"cube_alpha_sweep_results.json\", [\"geometry\", \"sigma_S_per_m\", \"n_freq\", \"freqs_Hz\"])\nhead(\"rotating_magnet_eddy_results.json\",\n     [\"Rm\", \"source_only_error\", \"cln_vs_fem_error\", \"J_rms_A_per_m2\", \"F_N\"])\nhead(\"team28/team28_cln_sweep_results.json\", [\"n_height\", \"equilibrium_height_mm\", \"speedup\"])\nhead(\"sphere/maglev_sphere_force_results.json\", [\"radius_m\", \"sigma_S_per_m\", \"n_freq\"])\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 177,
+          "text_sha256": "6973b0f1e1b9ff74799ca7dc522aa3d22fa714e9a81840983699935154a4486e",
+          "text_preview": "--- cube_alpha_sweep_results.json ---\n\n--- rotating_magnet_eddy_results.json ---\n\n--- team28/team28_cln_sweep_results.json ---\n\n--- sphere/maglev_sphere_force_results.json ---\n\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

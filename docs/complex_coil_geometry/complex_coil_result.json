@@ -1,0 +1,90 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "notebook": "docs/complex_coil_geometry/complex_coil.ipynb",
+  "notebook_sha256": "b81116b96415390e748aac0858f536a3d89690ec2a4054475d531e8c6a516a2a",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/complex_coil_geometry/complex_coil.ipynb",
+    "cells": 5,
+    "code_cells": 2,
+    "executed_code_cells": 2,
+    "code_cells_with_outputs": 1,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 2,
+      "execution_count": 1,
+      "source_sha256": "602469b27767e82b831d901c165a19abe48f941d17cd9924167697bf474c5eee",
+      "source_preview": "import sys, os\nsys.argv = [\"notebook\"]\n\n#!/usr/bin/env python\n# -*- coding: utf-8 -*-\n\"\"\"\nComplex coil model definition\n\nThis module defines the 8-segment beam steering coil geometry.\nThe model can be imported by other scripts for visualization or field calculation.\n\nUnits: All geometry in meters (Radia always uses meters), current in Amperes.\n\"\"\"\n\nimport sys\nfrom pathlib import Path\n\n# Add paths\nproject_root = Path(os.path.join(os.getcwd(), 'notebook.py')).resolve().parent.parent.parent\n\nimport numpy as np\nimport radia as rad\nfrom radia.coil_builder import CoilBuilder\n\n# Set unit system to meters\n\n# Unit conversion factor: original design values are in mm\nmm = 1e-3  # 1 mm in meters\n\n\ndef create_beam_steering_coil():\n\t\"\"\"\n\tCreate the 8-segment beam steering magnet coil.\n\n\tReturns:\n\t\ttuple: (coil_object, coil_parameters)\n\t\t\t- coil_object: Radia object ID\n\t\t\t- coil_parameters: Dictionary with coil specifications\n\t\"\"\"\n\t# Coil parameters\n\tI = 1265.0       # Current (A)\n\tW = 122 * mm     #",
+      "outputs": []
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 2,
+      "source_sha256": "3369c9f9ecf7f3336ab2b1d6a1d99c1ff55a39c043e1d7663a64aa403f515b43",
+      "source_preview": "\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\nimport radia as rad\n\ncoil, params = create_beam_steering_coil()\nprint(\"8-segment beam-steering coil:\")\nfor k, v in params.items():\n    print(f\"  {k}: {v}\")\n\n# |B| on the z=0 plane above the conductor pack (the beam region).\nnx, ny = 55, 70\nxs = np.linspace(-0.40, 0.80, nx)\nys = np.linspace(-0.80, 0.80, ny)\nBmag = np.empty((ny, nx))\nfor j, y in enumerate(ys):\n    for i, x in enumerate(xs):\n        Bmag[j, i] = 1e3 * np.linalg.norm(rad.Fld(coil, \"b\", [x, y, 0.0]))  # mT\n\nfig, (ax0, ax1) = plt.subplots(1, 2, figsize=(11, 4.2))\nvmax = np.percentile(Bmag, 99)\npc = ax0.contourf(xs * 1e3, ys * 1e3, Bmag, levels=30, cmap=\"viridis\", vmax=vmax)\nfig.colorbar(pc, ax=ax0, label=\"|B| (mT)\")\nax0.set_xlabel(\"x (mm)\"); ax0.set_ylabel(\"y (mm)\")\nax0.set_title(\"|B| on z=0 plane\")\nax0.set_aspect(\"equal\")\n\n# Bz along the central x-axis (y=0, z=0).\nxline = np.linspace(-0.40, 0.80, 200)\nBz = [1e3 * rad.Fld(coil, \"b\", [x, 0",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text_chars": 260,
+          "text_sha256": "05e167b4f536088a7227f940b8c9139932e31c86dae1f17b5a2633937389b979",
+          "text_preview": "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\src\\radia\\coil_builder.py:79: UserWarning: Gimbal lock detected. Setting third angle to zero since it is not possible to uniquely determine all angles.\n  self.euler_angles = rot.as_euler('ZXZ', degrees=True) * (-1)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 168,
+          "text_sha256": "fc5e7954c4ead04c493c4fa6a9f5bed9c437a900177e34ef16ac6dce768b7f48",
+          "text_preview": "8-segment beam-steering coil:\n  current: 1265.0\n  cross_section: {'width': 0.122, 'height': 0.122}\n  num_segments: 8\n  description: 8-segment beam steering magnet coil\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 34,
+          "text_plain_sha256": "063062692321c05a4ab5fc3d56a6d9cfa0c32d89967f1215c3c8e73e8f8572e9",
+          "text_plain_preview": "<Figure size 1100x420 with 3 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 56784,
+              "sha256": "82dcb9ec497caac954fd028799ae82328c8e25b8077b3d8a5dd8aecf1d1b3e9e"
+            }
+          }
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 41,
+          "text_sha256": "bb12e5f5d23aa4cc070feed01d5e20f524cbc6269cd3b94738c1d92044e567b5",
+          "text_preview": "\n|B| range on z=0 plane: [0.09, 5.86] mT\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
