@@ -21,8 +21,8 @@ by the Galerkin system; no d is needed.
   Bulk (rank-1):   phi_0(r) = (a^2 - r^2) / 4    (-Laplacian phi_0 = 1)
   Surface (1-DOF): psi(r;s) = exp(-(a-r) t) - 1   (t = sqrt(s mu sigma))
 
-ZERO free parameters.  Compare against Y_exact_cylinder from the
-_references/cylinder_bessel module.
+ZERO free parameters.  Compare against the canonical
+radia.maglev.mixed_galerkin.references cylinder helper.
 
 ## Phase 8b corrected result (2026-06-12)
 
@@ -41,15 +41,11 @@ from __future__ import annotations
 
 import math
 import cmath
-import sys
-from pathlib import Path
 
 import numpy as np
 from scipy.integrate import quad
 
-# Allow `from _references.cylinder_bessel import ...` when run as a script.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _references.cylinder_bessel import (  # noqa: E402
+from radia.maglev.mixed_galerkin.references import (
     K_SIBC_cylinder,
     Y_DC_cylinder,
     Y_exact_cylinder,
@@ -136,7 +132,7 @@ def main():
     print(f"Y_DC   = {Y_DC:.4e} S*m")
     print(f"K_SIBC = {K_SIBC:.4e}")
     print()
-    print("(reference: cylinder_bessel.Y_exact_cylinder, post Phase-8b artifact fix)")
+    print("(reference: radia.maglev.mixed_galerkin.references.Y_exact_cylinder)")
     print()
 
     f_tests = [1.0, 1e2, 1e3, 1e4, 5e4, 1e5, 1.58e5, 2.51e5, 5e5, 1e6, 1e7, 1e8]

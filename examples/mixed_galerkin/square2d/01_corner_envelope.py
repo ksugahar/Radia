@@ -5,11 +5,11 @@ Phase 5 v2 of the 2026-05-28 -> 2026-06-12 research sprint, with Phase
 8c corrected reference (Aitken-extrapolated Foster).
 
 The 2-D square is the natural corner-bearing extension of the
-cylinder (cylindrical cross-section is corner-free).  The "v2"
-designation distinguishes this from the failed v1 attempt
-(`_broken_simple_envelope.py`), in which the surface envelope was
-psi = f(x) sin(pi y/L) + sin(pi x/L) f(y) — a smooth y-factor that
-lacks the y-direction skin layer.  The v2 corner-aware envelope
+cylinder (cylindrical cross-section is corner-free).  An earlier failed
+v1 attempt used psi = f(x) sin(pi y/L) + sin(pi x/L) f(y), a smooth
+y-factor that lacks the y-direction skin layer.  That dead source was
+deleted; the lesson is recorded in memory/mixed_galerkin_examples_prune.md.
+The corrected corner-aware envelope is
 
     psi(x, y; s) = f(x) f(y)
 
