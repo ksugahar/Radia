@@ -3,10 +3,16 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /// @file compact_ams.hpp
-/// @brief Compact HX (Compact Hiptmair-Xu) preconditioner using NGSolve TaskManager
+/// @brief HypreBasedAMS -- a HYPRE-free reimplementation of the HYPRE AMS algorithm, on NGSolve TaskManager
 ///
-/// Compact AMS implementation (~400 lines) built on CompactAMG.
-/// Uses Hiptmair-Xu (2007) auxiliary space preconditioning:
+/// This is NOT a new "compact" method: it is the SAME Auxiliary-space Maxwell Solver (AMS) algorithm that
+/// HYPRE's AMS implements -- Hiptmair-Xu (2007) auxiliary-space preconditioning in the Kolev-Vassilevski
+/// (2009) parallel form (Kolev & Vassilevski are the HYPRE AMS authors) -- reimplemented INDEPENDENTLY
+/// (MPL-2.0, no HYPRE source, ~400 lines on CompactAMG) so it carries NO HYPRE dependency and runs natively
+/// on the NGSolve TaskManager.  The name "HypreBasedAMS" states the lineage honestly: the algorithm is
+/// HYPRE's AMS; only the implementation is ours/HYPRE-free.  (Renamed 2026-06-27 from the misleading
+/// "HypreBasedAMS", which read like a distinct reduced variant; HypreBasedAMSPreconditioner remains a back-compat
+/// alias.)  Components (identical to HYPRE AMS):
 ///   - Gradient subspace: G^T * A_bc * G solved by CompactAMG
 ///   - Nodal subspace: Pi^T * A_bc * Pi solved by CompactAMG (component-wise)
 ///   - Fine-grid smoother: l1-Jacobi (fully TaskManager parallel)
@@ -14,7 +20,7 @@
 /// All parallelism via NGSolve TaskManager (no OpenMP).
 ///
 /// Reference: Hiptmair & Xu, SIAM J. Numer. Anal. 45(6), 2007.
-///            Kolev & Vassilevski, J. Comput. Math. 27(5), 2009.
+///            Kolev & Vassilevski, J. Comput. Math. 27(5), 2009 (the HYPRE AMS algorithm).
 
 #ifndef SPARSESOLV_COMPACT_AMS_HPP
 #define SPARSESOLV_COMPACT_AMS_HPP
@@ -36,10 +42,10 @@ namespace ngla {
 /// (H1) and Nedelec (H1^3) auxiliary spaces.
 ///
 /// Usage:
-///   auto ams = make_shared<CompactAMS>(mat, grad, freedofs,
+///   auto ams = make_shared<HypreBasedAMS>(mat, grad, freedofs,
 ///                                      coord_x, coord_y, coord_z);
 ///   // Use as preconditioner with COCR or CG
-class CompactAMS : public BaseMatrix {
+class HypreBasedAMS : public BaseMatrix {
 public:
     /// @param mat       HCurl system matrix (SparseMatrix<double>)
     /// @param grad      Discrete gradient G (H1 -> HCurl)
@@ -50,7 +56,7 @@ public:
     /// @param amg_theta    AMG strength threshold (default=0.25)
     /// @param print_level  Verbosity (0=silent)
     /// @param subspace_solver  0=CompactAMG (default), 1=SparseCholesky (diagnostic)
-    CompactAMS(shared_ptr<SparseMatrix<double>> mat,
+    HypreBasedAMS(shared_ptr<SparseMatrix<double>> mat,
                shared_ptr<SparseMatrix<double>> grad,
                shared_ptr<BitArray> freedofs,
                const std::vector<double>& coord_x,
@@ -71,7 +77,7 @@ public:
         if ((int)coord_x.size() != ndof_h1_ ||
             (int)coord_y.size() != ndof_h1_ ||
             (int)coord_z.size() != ndof_h1_)
-            throw std::runtime_error("CompactAMS: coordinate size mismatch with H1 DOFs");
+            throw std::runtime_error("HypreBasedAMS: coordinate size mismatch with H1 DOFs");
 
         Setup(coord_x, coord_y, coord_z);
     }
@@ -88,7 +94,7 @@ public:
     /// Update with a new system matrix, then rebuild.
     void Update(shared_ptr<SparseMatrix<double>> new_mat) {
         if (new_mat->Height() != mat_->Height() || new_mat->Width() != mat_->Width())
-            throw std::invalid_argument("CompactAMS::Update: new matrix dimension ("
+            throw std::invalid_argument("HypreBasedAMS::Update: new matrix dimension ("
                 + std::to_string(new_mat->Height()) + "x" + std::to_string(new_mat->Width())
                 + ") does not match original ("
                 + std::to_string(mat_->Height()) + "x" + std::to_string(mat_->Width()) + ")");
@@ -104,7 +110,7 @@ public:
     AutoVector CreateRowVector() const override { return mat_->CreateRowVector(); }
     AutoVector CreateColVector() const override { return mat_->CreateColVector(); }
 
-    // Const accessors for fused Re/Im preconditioner (ComplexCompactAMS)
+    // Const accessors for fused Re/Im preconditioner (ComplexHypreBasedAMS)
     const SparseMatrix<double>& GetAbc() const { return *A_bc_; }
     const SparseMatrix<double>& GetGrad() const { return *grad_; }
     const SparseMatrix<double>& GetGradT() const { return *grad_t_; }
@@ -245,7 +251,7 @@ private:
                const std::vector<double>& cz) {
         auto t_total = std::chrono::high_resolution_clock::now();
         if (print_level_ > 0)
-            std::cout << "CompactAMS setup: HC=" << ndof_hc_
+            std::cout << "HypreBasedAMS setup: HC=" << ndof_hc_
                       << " H1=" << ndof_h1_ << std::flush;
 
         // Phase 1: Geometry-dependent setup (one-time)
@@ -265,7 +271,7 @@ private:
 
         auto t_end = std::chrono::high_resolution_clock::now();
         if (print_level_ > 0)
-            std::cout << "\n  CompactAMS setup complete: "
+            std::cout << "\n  HypreBasedAMS setup complete: "
                       << std::chrono::duration<double>(t_end - t_total).count()
                       << "s total" << std::endl;
     }
