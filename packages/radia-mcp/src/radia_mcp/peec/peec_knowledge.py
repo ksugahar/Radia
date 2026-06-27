@@ -473,6 +473,12 @@ def circular_sibc(freq, radius, sigma, mu_r=1.0):
 Implemented in C++ (`rad_peec_surface_impedance.cpp`). For thin rectangular
 conductors where thickness d << width w.
 
+COMPANION NOTEBOOK: `docs/peec/dowell_surface_impedance_demo.ipynb` -- runs the
+Dowell factors live: `F(xi)=Re[ga coth ga]` resistance ratio + `G(xi)` internal-
+inductance ratio, the **coth (two-sided foil) vs tanh (one-sided slab/SIBC-ESIM)**
+distinction, and a cross-check vs `EMMaterial.dowell_Zs` (machine precision). Full
+theory in `docs/peec/PEEC_SURFACE_IMPEDANCE.md`.
+
 ## ESIM (Effective Surface Impedance Method)
 
 For H-dependent (nonlinear) surface impedance on magnetic conductors:
