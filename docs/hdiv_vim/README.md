@@ -40,13 +40,14 @@ commuting diagram), so distortion cannot break it. This is the strong (everywher
 versus the constant-M basis's fragile (collocation-only) field-null that breaks under distortion and
 forces the cohomology-aware `installCycle` loop-star construction in multipole-moment MMM MSC.
 
-## 2. The Gram — three layers, pick by problem
+## 2. The Gram — operator choices, pick by problem
 
 | Gram | Used for | Accuracy |
 |---|---|---|
 | centroid-monopole + sub-point self | quick probes, near-field correction | crude (~2–3% on the demag factor) |
 | **Wilton analytic surface** (`wilton_surface=True`) | **uniform-M linear demag** (div M = 0 → surface charge only) | sphere/cube → 1/3 to `<0.15%` |
 | **full analytic volume** (`analytic_gram=True`, `phi_tet`) | **NON-uniform / nonlinear** (div M ≠ 0 → volume charge) | required — see §4 |
+| **Gauss-point H-matrix** (`hdiv_demag_solve(..., gram_backend="gauss")`) | opt-in productionization path for tet/tri uniform linear solves | `G ~= P^T K_point P + near correction`; validated vs analytic backend, not yet a small-mesh speed win |
 | **`ngsolve.bem` Laplace single-layer** | **curved + high-order + scalable** surface Gram | exact (curved + order-2), FMM |
 
 The surface single-layer is the key architectural unlock: the uniform-M surface demag Gram **is** the
@@ -120,9 +121,9 @@ accuracy-per-DOF win over the shipped flat solver on curved problems, and parity
 remaining lift to make it a **production backend alongside multipole-moment MMM MSC**:
 
 1. **C++ productionization** — the charge Gram (Wilton surface / `phi_tet` volume / `ngsolve.bem`
-   single-layer) + the Newton loop in C++ behind a Radia API. This also enables a fair **wall-clock**
-   comparison (the present numbers are accuracy-per-DOF, geometry-driven; the prototype is not
-   time-optimized).
+   single-layer / Gauss-point H-matrix) + the Newton loop in C++ behind a Radia API. The scalar uniform
+   linear path already has C++ CG and explicit tet/no-image H-LU; nonlinear and mixed-material
+   orchestration still need the next production lift before a fair **wall-clock** comparison.
 2. **Curved nonlinear volume charge** — `ngsolve.bem` is boundary-only, so non-uniform nonlinear on
    curved cells still needs the Newtonian volume potential (`phi_tet`) on curved geometry.
 
@@ -138,8 +139,9 @@ remaining lift to make it a **production backend alongside multipole-moment MMM 
 | Head-to-head vs shipped Radia | `compare_curved_vs_radia_field.py` | `test_curved_vs_radia_field.py` |
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
 | Symmetry models (loops + image demag) | `hdiv_demag_symmetry_image.py` | `test_hdiv_vim_symmetry_{loops,image}.py` |
+| Gauss-point charge H-matrix | `hdiv_demag_solve(..., gram_backend="gauss")` | `test_hdiv_vim_gauss_hmatrix.py` |
 
-All under `examples/vim/` and `tests/feec/` (full feec suite: 85 passing).
+All under `examples/vim/` and `validation_test/feec/` (the FEEC suite is split out of lightweight CI).
 
 ## 9. Research plan — the eddy-current VIM (future directions)
 

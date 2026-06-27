@@ -27,6 +27,7 @@
 #include "rad_hacapk.h"     // RadHACApKBase
 #include "rad_hdiv_vim.h"   // rad_hdiv::Mesh / ChargeMapCSC / ChargeQuad
 #include <unordered_map>
+#include <memory>
 
 //-------------------------------------------------------------------------
 // RadHACApKHDivManager: builds N = B^T G B (HDiv-type VIM) as a HACApK H-matrix.
@@ -305,6 +306,77 @@ private:
     double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR)
     double QuadDotFar(int tgt, int src) const;              // cheap LOW-quad plain double-Gauss (FAR, no subtraction)
+};
+
+//-------------------------------------------------------------------------
+// RadHACApKPointKernel / RadHACApKChargeGaussOperator
+//
+// Experimental productionization path for fast ChargeGram applies:
+//
+//   G_charge ~= P^T K_point P + G_near_correction
+//
+// K_point is a HACApK H-matrix over quadrature / Gauss points with the cheap
+// Laplace kernel 1/(4*pi*r).  P scatters one charge coefficient onto weighted
+// quadrature point sources and gathers target-point potentials back to charge
+// DOFs.  Near/self pairs are corrected by a sparse charge-charge COO carrying
+// exact - point-quadrature entries, so the expensive analytic Gram is used only
+// where the singularity or element shape needs it.
+//-------------------------------------------------------------------------
+
+class RadHACApKPointKernel : public RadHACApKBase {
+public:
+    explicit RadHACApKPointKernel(std::vector<double> points);
+    ~RadHACApKPointKernel() override {}
+
+    double GetInteractionMatrixElement(int i, int j) const override;
+
+protected:
+    void ExtractCoordinates() override;
+    void OnBeforeBuild() override {}
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
+    bool IsVariableDOF() const override { return false; }
+    int  GetUniformNFFC() const override { return 1; }
+
+private:
+    std::vector<double> m_points;  // [n_point*3]
+};
+
+class RadHACApKChargeGaussOperator {
+public:
+    RadHACApKChargeGaussOperator(std::vector<double> point_coords,
+                                 std::vector<int> point_charge,
+                                 std::vector<double> point_weight,
+                                 int n_charge,
+                                 std::vector<int> corr_i,
+                                 std::vector<int> corr_j,
+                                 std::vector<double> corr_v);
+
+    bool BuildHMatrix(const RadHACApKParams& params = RadHACApKParams());
+    void MatVec(const std::vector<double>& q, std::vector<double>& y);
+    double GetChargeEntry(int a, int b) const;
+    const RadHACApKStats& GetStats() const { return m_kernel->GetStats(); }
+    int GetNCharge() const { return m_ncharge; }
+    int GetNPoint() const { return (int)m_point_weight.size(); }
+
+    std::vector<double> SolveLinearMaterial(
+        const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+        const std::vector<double>& B_data, int n_face,
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+        double tol, int maxit, int& iters_out);
+
+private:
+    double PointDirectEntry(int a, int b) const;
+
+    int m_ncharge = 0;
+    std::vector<double> m_point_coords;   // [n_point*3]
+    std::vector<int>    m_point_charge;   // [n_point] owner charge
+    std::vector<double> m_point_weight;   // [n_point] quadrature measure weight
+    std::vector<std::vector<int>> m_charge_points;
+    std::vector<int>    m_corr_i, m_corr_j;
+    std::vector<double> m_corr_v;
+    std::unordered_map<long long, double> m_corr_map;
+    std::unique_ptr<RadHACApKPointKernel> m_kernel;
 };
 
 //-------------------------------------------------------------------------

@@ -1066,6 +1066,186 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
 }
 
 //=========================================================================
+// RadHACApKPointKernel / RadHACApKChargeGaussOperator
+//=========================================================================
+
+RadHACApKPointKernel::RadHACApKPointKernel(std::vector<double> points)
+    : m_points(std::move(points))
+{
+}
+
+void RadHACApKPointKernel::ExtractCoordinates()
+{
+    m_n_elem = (int)(m_points.size() / 3);
+    m_ndof = m_n_elem;
+    m_coordinates = m_points;
+}
+
+double RadHACApKPointKernel::GetInteractionMatrixElement(int i, int j) const
+{
+    if (i == j) return 0.0;  // self singularity is carried by the charge-level near correction.
+    const double dx = m_points[(size_t)3*i]     - m_points[(size_t)3*j];
+    const double dy = m_points[(size_t)3*i + 1] - m_points[(size_t)3*j + 1];
+    const double dz = m_points[(size_t)3*i + 2] - m_points[(size_t)3*j + 2];
+    const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+    return (r > 1e-300) ? (RAD_INV_FOUR_PI / r) : 0.0;
+}
+
+RadHACApKChargeGaussOperator::RadHACApKChargeGaussOperator(
+    std::vector<double> point_coords,
+    std::vector<int> point_charge,
+    std::vector<double> point_weight,
+    int n_charge,
+    std::vector<int> corr_i,
+    std::vector<int> corr_j,
+    std::vector<double> corr_v)
+    : m_ncharge(n_charge),
+      m_point_coords(std::move(point_coords)),
+      m_point_charge(std::move(point_charge)),
+      m_point_weight(std::move(point_weight)),
+      m_corr_i(std::move(corr_i)),
+      m_corr_j(std::move(corr_j)),
+      m_corr_v(std::move(corr_v))
+{
+    const int npt = (int)m_point_weight.size();
+    if ((int)m_point_coords.size() != 3*npt || (int)m_point_charge.size() != npt)
+        throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent point array sizes");
+    if ((int)m_corr_i.size() != (int)m_corr_j.size() || (int)m_corr_i.size() != (int)m_corr_v.size())
+        throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent correction array sizes");
+    m_charge_points.assign((size_t)m_ncharge, {});
+    for (int p = 0; p < npt; ++p) {
+        const int a = m_point_charge[(size_t)p];
+        if (a < 0 || a >= m_ncharge)
+            throw std::runtime_error("RadHACApKChargeGaussOperator: point_charge out of range");
+        m_charge_points[(size_t)a].push_back(p);
+    }
+    m_corr_map.reserve(m_corr_v.size() * 2 + 1);
+    for (size_t k = 0; k < m_corr_v.size(); ++k) {
+        const int i = m_corr_i[k], j = m_corr_j[k];
+        if (i < 0 || i >= m_ncharge || j < 0 || j >= m_ncharge)
+            throw std::runtime_error("RadHACApKChargeGaussOperator: correction index out of range");
+        m_corr_map[(long long)i * (long long)m_ncharge + (long long)j] += m_corr_v[k];
+    }
+}
+
+bool RadHACApKChargeGaussOperator::BuildHMatrix(const RadHACApKParams& params)
+{
+    m_kernel.reset(new RadHACApKPointKernel(m_point_coords));
+    return m_kernel->BuildHMatrix(params);
+}
+
+double RadHACApKChargeGaussOperator::PointDirectEntry(int a, int b) const
+{
+    double s = 0.0;
+    const std::vector<int>& Pa = m_charge_points[(size_t)a];
+    const std::vector<int>& Pb = m_charge_points[(size_t)b];
+    for (int p : Pa) {
+        const double x0 = m_point_coords[(size_t)3*p];
+        const double x1 = m_point_coords[(size_t)3*p + 1];
+        const double x2 = m_point_coords[(size_t)3*p + 2];
+        const double wp = m_point_weight[(size_t)p];
+        for (int q : Pb) {
+            if (p == q) continue;
+            const double dx = x0 - m_point_coords[(size_t)3*q];
+            const double dy = x1 - m_point_coords[(size_t)3*q + 1];
+            const double dz = x2 - m_point_coords[(size_t)3*q + 2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r > 1e-300) s += wp * m_point_weight[(size_t)q] * RAD_INV_FOUR_PI / r;
+        }
+    }
+    return s;
+}
+
+double RadHACApKChargeGaussOperator::GetChargeEntry(int a, int b) const
+{
+    double v = PointDirectEntry(a, b);
+    auto it = m_corr_map.find((long long)a * (long long)m_ncharge + (long long)b);
+    if (it != m_corr_map.end()) v += it->second;
+    return v;
+}
+
+void RadHACApKChargeGaussOperator::MatVec(const std::vector<double>& q, std::vector<double>& y)
+{
+    if (!m_kernel || !m_kernel->IsValid())
+        throw std::runtime_error("RadHACApKChargeGaussOperator.MatVec: H-matrix is not built");
+    if ((int)q.size() != m_ncharge)
+        throw std::runtime_error("RadHACApKChargeGaussOperator.MatVec: q size mismatch");
+    const int npt = (int)m_point_weight.size();
+    std::vector<double> point_rhs((size_t)npt, 0.0), point_phi((size_t)npt, 0.0);
+    ngcore::ParallelFor(ngcore::IntRange(npt), [&](size_t p) {
+        point_rhs[p] = m_point_weight[p] * q[(size_t)m_point_charge[p]];
+    });
+    m_kernel->MatVec(point_rhs, point_phi);
+    y.assign((size_t)m_ncharge, 0.0);
+    ngcore::ParallelFor(ngcore::IntRange(npt), [&](size_t p) {
+        ngcore::AtomicAdd(y[(size_t)m_point_charge[p]], m_point_weight[p] * point_phi[p]);
+    });
+    ngcore::ParallelFor(ngcore::IntRange((int)m_corr_v.size()), [&](size_t k) {
+        ngcore::AtomicAdd(y[(size_t)m_corr_i[k]], m_corr_v[k] * q[(size_t)m_corr_j[k]]);
+    });
+}
+
+std::vector<double> RadHACApKChargeGaussOperator::SolveLinearMaterial(
+    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+    const std::vector<double>& B_data, int n_face,
+    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+    double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
+    double tol, int maxit, int& iters_out)
+{
+    const int n_charge = (int)B_indptr.size() - 1;
+    if (n_charge != m_ncharge) throw std::runtime_error("ChargeGauss SolveLinearMaterial: B row count mismatch");
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
+    auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
+        std::fill(q.begin(), q.end(), 0.0);
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
+            double s = 0.0;
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
+            q[a] = s;
+        });
+        MatVec(q, Gq);
+        y.assign((size_t)n_face, 0.0);
+        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
+            const double ga = Gq[a];
+            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
+                ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
+        });
+        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
+            ngcore::AtomicAdd(y[mI[k]], inv_chi * mV[k] * x[mJ[k]]);
+        });
+    };
+    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
+        double s = 0.0;
+        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
+            double local = 0.0;
+            for (auto f : r) local += a[f] * b[f];
+            ngcore::AtomicAdd(s, local);
+        });
+        return s;
+    };
+    std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
+    ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+    p = z;
+    double rz = dot(r, z);
+    double bnorm = std::sqrt(dot(rhs, rhs)); if (bnorm == 0.0) bnorm = 1.0;
+    int it = 0;
+    for (; it < maxit; ++it) {
+        if (std::sqrt(dot(r, r)) <= tol * bnorm) break;
+        applyA(p, Ap);
+        const double pAp = dot(p, Ap);
+        const double alpha = rz / pAp;
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { z[f] = r[f] / prec[f]; });
+        const double rz_new = dot(r, z);
+        const double beta = rz_new / rz;
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
+        rz = rz_new;
+    }
+    iters_out = it;
+    return x;
+}
+
+//=========================================================================
 // RadHACApKHDivSystemTet -- unstructured face-DOF system A = M_mass + chi*N (Phase 2)
 //=========================================================================
 
