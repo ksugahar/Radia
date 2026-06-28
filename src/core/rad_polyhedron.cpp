@@ -108,13 +108,14 @@ int radTPolyhedron::CheckIfFacePolygonsArePlanar(TVector3d* ArrayOfPoints, int**
 	DefineRelAndAbsTol(RelAbsTol);
 	const double RelLengthTol = RelAbsTol[0];
 
-	// Warped-hex support: size the non-planar-face bookkeeping (hexahedra only -- tets are
-	// always planar, wedge quads keep the original behavior).  Empty for every other element
-	// so the accessor returns false everywhere and the planar path is bit-identical.
+	// Warped-hex support: allocate storage for the REAL face vertices (hexahedra only -- tets
+	// are always planar, wedge quads keep the original behavior).  FillInTransAndFacesInLocFrames
+	// populates these; the collocation field + interaction paths then use them for EVERY hex face
+	// (planar and non-planar alike).  Left empty for every other element so GetRealFaceVerts
+	// returns false there and the flattened-polygon path runs unchanged.
 	const bool isHex = (AmOfFaces == 6);
 	if(isHex)
 	{
-		mFaceNonPlanar.assign(AmOfFaces, 0);
 		mRealFaceVerts.assign((size_t)AmOfFaces*4, TVector3d(0.0, 0.0, 0.0));
 		mRealFaceNV.assign(AmOfFaces, 0);
 	}
@@ -164,12 +165,12 @@ int radTPolyhedron::CheckIfFacePolygonsArePlanar(TVector3d* ArrayOfPoints, int**
 			if(AbsBufVal > CompareValue)
 			{
 				// Face f is NON-PLANAR.  For a hexahedron (the trilinear Cubit/C-type case)
-				// flag it and keep going: the collocation field + interaction paths use the
+				// tolerate it and keep going: the collocation field + interaction paths use the
 				// REAL vertices stored in FillInTransAndFacesInLocFrames (the planar polygon
 				// built below is only a local frame).  The first-3-point Normal is a valid
 				// frame normal; DetermineActualFacesNormals orients it.  For any other element
 				// keep the original strict behavior (Error047) -- unchanged.
-				if(isHex) { mFaceNonPlanar[i] = 1; break; }
+				if(isHex) break;
 				SomethingIsWrong=1; Send.ErrorMessage("Radia::Error047"); return 0;
 			}
 		}
@@ -429,8 +430,8 @@ int radTPolyhedron::FillInTransAndFacesInLocFrames(TVector3d* ArrayOfPoints, int
 		if(RotationPtr == 0) { SomethingIsWrong=1; Send.ErrorMessage("Radia::Error900"); return 0;}
 
 		// Capture the REAL global vertices of this face (warped-hex support).  Stored only
-		// for hexahedra (mRealFaceNV sized == 6 by CheckIfFacePolygonsArePlanar); used by the
-		// collocation field/interaction paths when the face was flagged non-planar.
+		// for hexahedra (mRealFaceNV sized == 6 by CheckIfFacePolygonsArePlanar); the collocation
+		// field/interaction paths then use them for EVERY hex face (planar and non-planar alike).
 		const bool storeReal = (i < (int)mRealFaceNV.size());
 
 		radTVect2dVect Vect2dVect;
@@ -1186,10 +1187,11 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 		radTPolygon* pgn = hpt.PgnHndl.rep;
 		radTrans* tr = hpt.TransHndl.rep;
 
-		// Warped (non-planar) quad face: use the REAL vertices (exact 2-triangle geometry).
-		// Planar faces fall through to the unchanged flattened-polygon reconstruction.
+		// Hexahedron faces: use the stored REAL vertices (exact 2-triangle geometry for both
+		// planar and non-planar quads).  Tets/wedges/subdivision-created polyhedra have no
+		// stored verts, so they fall through to the flattened-polygon reconstruction.
 		TVector3d RV[4]; int rnv = 0;
-		if(GetRealFaceVertsIfNonPlanar(i, RV, rnv) && rnv >= 4)
+		if(GetRealFaceVerts(i, RV, rnv) && rnv >= 4)
 		{
 			faceVertices[i][0] = RV[0]; faceVertices[i][1] = RV[1];
 			faceVertices[i][2] = RV[2]; faceVertices[i][3] = RV[3];
@@ -2430,11 +2432,12 @@ TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, d
 	// - Apply sign_factor to ensure outward-pointing normal
 	// - Returns field WITHOUT 4pi divisor (applied in matrix assembly)
 
-	// Get face vertices.  Warped (non-planar) quad face -> use the REAL vertices so the
-	// 2-triangle split below is exact; planar faces use the unchanged polygon reconstruction.
+	// Get face vertices.  Hexahedron faces use the stored REAL vertices so the 2-triangle
+	// split below is exact for both planar and non-planar quads; faces without stored verts
+	// (wedge quads, subdivision-created polyhedra) use the flattened-polygon reconstruction.
 	TVector3d V0, V1, V2, V3;
 	TVector3d RV[4]; int rnv = 0;
-	if(GetRealFaceVertsIfNonPlanar(faceIdx, RV, rnv) && rnv >= 4)
+	if(GetRealFaceVerts(faceIdx, RV, rnv) && rnv >= 4)
 	{
 		V0 = RV[0]; V1 = RV[1]; V2 = RV[2]; V3 = RV[3];
 	}

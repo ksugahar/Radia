@@ -2054,12 +2054,12 @@ void radTInteraction::PrecomputeHexaGeometry()
 			// Store face area
 			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
 
-			// Get face vertices and split into 2 triangles.  Warped (non-planar) quad face ->
-			// use the REAL vertices (exact 2-triangle geometry); planar faces use the
-			// unchanged flattened-polygon reconstruction (=> bit-identical for planar meshes).
+			// Get face vertices and split into 2 triangles.  Hexahedron faces use the stored
+			// REAL vertices (exact 2-triangle geometry for planar and non-planar quads alike);
+			// faces without stored verts fall back to the flattened-polygon reconstruction.
 			TVector3d V[4];
 			TVector3d RV[4]; int rnv = 0;
-			if(poly->GetRealFaceVertsIfNonPlanar(f, RV, rnv) && rnv >= 4)
+			if(poly->GetRealFaceVerts(f, RV, rnv) && rnv >= 4)
 			{
 				V[0] = RV[0]; V[1] = RV[1]; V[2] = RV[2]; V[3] = RV[3];
 			}
