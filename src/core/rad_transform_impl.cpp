@@ -299,7 +299,7 @@ void radTApplication::ComputeFieldForce(int SourceElemKey, int ShapeElemKey)
 			radTg3dRelax* g3dRelaxPtr = Cast.g3dRelaxCast(ShapePtr);
 			if(g3dRelaxPtr!=0)
 			{
-				radTRecMag* RecMagPtr = Cast.RecMagCast(g3dRelaxPtr);
+				radTRecCur* RecMagPtr = Cast.RecCurCast(g3dRelaxPtr);
 				if(RecMagPtr==0) { Send.ErrorMessage("Radia::Error036"); return;}
 			}
 			else { Send.ErrorMessage("Radia::Error036"); return;}

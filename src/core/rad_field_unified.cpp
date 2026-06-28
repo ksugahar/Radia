@@ -58,7 +58,7 @@ static bool ExtractElementVertices(
     if (elem == nullptr) return false;
 
     // Try rectangular block first
-    radTRecMag* recMag = dynamic_cast<radTRecMag*>(elem);
+    radTRecCur* recMag = dynamic_cast<radTRecCur*>(elem);
     if (recMag) {
         // Rectangular block: get 8 corner vertices
         TVector3d center = recMag->CentrPoint;

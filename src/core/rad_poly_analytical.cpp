@@ -687,7 +687,7 @@ TVector3d RadFieldFromTriangleFaceWithBasis(
  * This function computes the vector potential from a uniformly magnetized
  * volume element using face integration (NOT dipole approximation).
  *
- * Formula (matching radTRecMag::B_comp):
+ * Formula (matching radTRecCur::B_comp):
  *   A(r) = (1/4pi) * M x BufVect
  *
  * where BufVect = integral_S n/|r-r'| dS is the surface integral vector.
@@ -879,7 +879,7 @@ TVector3d RadVectorPotentialFromTriangleFaceGlobal(
 	BufVect.y = CC.y * I_scalar;
 	BufVect.z = CC.z * I_scalar;
 
-	// A = (1/4pi) * (M x BufVect) - matching radTRecMag::B_comp formula
+	// A = (1/4pi) * (M x BufVect) - matching radTRecCur::B_comp formula
 	TVector3d MxBuf;
 	MxBuf.x = M.y * BufVect.z - M.z * BufVect.y;
 	MxBuf.y = M.z * BufVect.x - M.x * BufVect.z;
@@ -911,7 +911,7 @@ double RadScalarPotentialFromTriangleFaceGlobal(
 	const TVector3d& elemCentroid)
 {
 	const double EPS = 1.0e-15;
-	const double dConst2 = RadConst::INV_FOUR_PI;  // 1/(4*pi) - matching radTRecMag
+	const double dConst2 = RadConst::INV_FOUR_PI;  // 1/(4*pi) - matching radTRecCur
 
 	// Compute face edges
 	TVector3d e1 = V1 - V0;
@@ -1073,7 +1073,7 @@ double RadScalarPotentialFromTriangleFaceGlobal(
 	BufVect.y = CC.y * I_scalar;
 	BufVect.z = CC.z * I_scalar;
 
-	// Phi = (1/4pi) * (M dot BufVect) - same formula as radTRecMag but with dot product
+	// Phi = (1/4pi) * (M dot BufVect) - same formula as radTRecCur but with dot product
 	double M_dot_BufVect = M.x * BufVect.x + M.y * BufVect.y + M.z * BufVect.z;
 
 	return dConst2 * M_dot_BufVect;
