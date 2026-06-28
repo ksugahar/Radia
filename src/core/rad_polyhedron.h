@@ -22,6 +22,7 @@
 #include "rad_planar_2d.h"
 #include "rad_transform_def.h"
 #include "rad_convergence.h"
+#include <vector>
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -127,6 +128,37 @@ public:
 	bool Use6DOF_MSC;          // Historical name; true if element uses per-face MSC (4-6 faces)
 	double CurrentChi;         // Chi used for current solve (for H = M/chi update)
 
+	// --- Warped (non-planar quad) hexahedron support ---------------------------------
+	// A general (Cubit/C-type) hexahedron is a TRILINEAR element whose quad faces are
+	// bilinear (non-planar): the 4 corners of a quad face are not coplanar.  The planar
+	// radTPolygon face representation (2D points + a single CoordZ) cannot hold such a
+	// face, so the original code REJECTED it (Error047) which left a half-built object and
+	// downstream heap corruption.  Instead, for a non-planar quad we KEEP the REAL global
+	// vertices here and route the (already triangle-based) collocation field + interaction
+	// paths through them -- the quad's 4 real vertices are represented EXACTLY by the two
+	// triangles (V0V1V2)+(V0V2V3) the code already forms.  PLANAR faces leave these empty,
+	// so every existing planar mesh keeps the unchanged polygon path (bit-identical).
+	// Populated only for hexahedra (AmOfFaces==6) -- tets are always planar; wedge quads
+	// keep the original behavior for now.
+	std::vector<char> mFaceNonPlanar;      // per-face: 1 if face f is non-planar (warped quad)
+	std::vector<TVector3d> mRealFaceVerts;  // flat: real global vertex k of face f at [f*4 + k]
+	std::vector<int> mRealFaceNV;           // per-face real vertex count (4 for a hex quad)
+
+	// Real global vertices of a NON-PLANAR face.  Returns true (and fills out[0..n-1])
+	// ONLY when face f was flagged non-planar AND real verts were stored; otherwise returns
+	// false so the caller uses the flattened-polygon reconstruction -- the unchanged path
+	// for every planar face (=> bit-identical for all existing meshes).
+	bool GetRealFaceVertsIfNonPlanar(int f, TVector3d* out, int& n) const
+	{
+		if(f < 0 || f >= (int)mFaceNonPlanar.size() || !mFaceNonPlanar[f]) return false;
+		if(f >= (int)mRealFaceNV.size()) return false;
+		n = mRealFaceNV[f];
+		if(n <= 0 || (size_t)((size_t)f*4 + n) > mRealFaceVerts.size()) return false;
+		for(int k = 0; k < n; k++) out[k] = mRealFaceVerts[(size_t)f*4 + k];
+		return true;
+	}
+	bool FaceIsNonPlanar(int f) const { return (f >= 0 && f < (int)mFaceNonPlanar.size() && mFaceNonPlanar[f] != 0); }
+
 	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
 		: radTg3dRelax(InMagn)
 	{
@@ -159,6 +191,12 @@ public:
 		: radTg3dRelax(InMagn, InM_LinCoef)
 	{
 		AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
+		// Initialize pJ_LinCoef (and the other J/Lin members) BEFORE FillInVectHandlePgnAndTrans:
+		// that call can set SomethingIsWrong (non-planar/non-convex/degenerate face) and trigger
+		// the "if(SomethingIsWrong) return;" early-out below.  Without this, pJ_LinCoef would be an
+		// uninitialized pointer and the destructor's "delete pJ_LinCoef" would corrupt the heap
+		// (non-deterministic crash on invalid geometry).
+		pJ_LinCoef = 0; mLinTreat = 0; J_IsNotZero = false;
 
 		// Initialize face-charge MSC data for 4-6 face polyhedra
 		Use6DOF_MSC = (AmOfFaces >= 4);  // Tetrahedra (4), wedges/pyramids (5), hexahedra (6): unified face-charge MSC
@@ -409,6 +447,37 @@ public:
 
 		for(int i = 0; i < AmOfFaces; i++)
 		{
+			// Non-planar (warped) quad face: the flattened polygon does not represent it,
+			// so derive center / normal / area from the REAL vertices, treating the face as
+			// the two triangles (V0V1V2)+(V0V2V3) used everywhere else.  Winding (hence the
+			// normal sign) follows the same vertex order as the polygon, so the Netgen
+			// outward convention is preserved.
+			if(FaceIsNonPlanar(i))
+			{
+				int nv = mRealFaceNV[i];
+				const TVector3d* RV = &mRealFaceVerts[(size_t)i*4];
+				TVector3d c(0.0, 0.0, 0.0);
+				for(int k = 0; k < nv; k++) { c.x += RV[k].x; c.y += RV[k].y; c.z += RV[k].z; }
+				double invn = (nv > 0) ? 1.0/nv : 0.0;
+				FaceCenter[i] = TVector3d(c.x*invn, c.y*invn, c.z*invn);
+
+				TVector3d nAcc(0.0, 0.0, 0.0); double area = 0.0;
+				for(int t = 1; t + 1 < nv; t++) // fan triangulation V0,Vt,Vt+1
+				{
+					TVector3d e1(RV[t].x - RV[0].x, RV[t].y - RV[0].y, RV[t].z - RV[0].z);
+					TVector3d e2(RV[t+1].x - RV[0].x, RV[t+1].y - RV[0].y, RV[t+1].z - RV[0].z);
+					TVector3d cr(e1.y*e2.z - e1.z*e2.y, e1.z*e2.x - e1.x*e2.z, e1.x*e2.y - e1.y*e2.x);
+					double crlen = sqrt(cr.x*cr.x + cr.y*cr.y + cr.z*cr.z);
+					area += 0.5*crlen;
+					nAcc.x += cr.x; nAcc.y += cr.y; nAcc.z += cr.z;
+				}
+				FaceArea[i] = area;
+				double nlen = sqrt(nAcc.x*nAcc.x + nAcc.y*nAcc.y + nAcc.z*nAcc.z);
+				if(nlen > 1e-15) FaceNormal[i] = TVector3d(nAcc.x/nlen, nAcc.y/nlen, nAcc.z/nlen);
+				else FaceNormal[i] = TVector3d(0.0, 0.0, 0.0);
+				continue;
+			}
+
 			radTHandlePgnAndTrans& hPgnTrans = VectHandlePgnAndTrans[i];
 			radTPolygon* pPgn = hPgnTrans.PgnHndl.rep;
 			radTrans* pTrans = hPgnTrans.TransHndl.rep;
