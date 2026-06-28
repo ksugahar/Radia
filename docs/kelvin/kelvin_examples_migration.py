@@ -27,10 +27,6 @@ SKIP_TEXT_NAMES = {
     "kelvin_examples_migration_result.json",
     "kelvin_classic_demos_results.json",
     "kelvin_classic_demos_result.json",
-    "kelvin_adaptive_mesh_archive_results.json",
-    "kelvin_adaptive_mesh_archive_result.json",
-    "kelvin_dtn_spectrum_archive_results.json",
-    "kelvin_dtn_spectrum_archive_result.json",
 }
 
 _LOCAL_PATH_PATTERNS = (

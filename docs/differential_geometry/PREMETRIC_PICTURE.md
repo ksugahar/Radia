@@ -139,4 +139,5 @@ windows, the yoke loops) — they only move the metric.
   [`../clebsch_hodograph/HODOGRAPH_BACKBONE.md`](../clebsch_hodograph/HODOGRAPH_BACKBONE.md);
   Robert (IEEE TMag 1991), Moffatt (JFM 1969).
 - **DtN spectrum / IE-vs-Kelvin:** `docs/open_boundary/`,
-  `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb` (act7_* incl. act7_30 two ladders).
+  `src/radia/open_boundary/`, and `validation_test/open_boundary/`
+  (Kelvin-built DtN and CLN validation; the old act7 archive is retired).
