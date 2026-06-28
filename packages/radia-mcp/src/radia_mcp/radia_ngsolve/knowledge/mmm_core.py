@@ -786,9 +786,8 @@ curl(T) = solenoidal "loop" magnetization, invisible to the field (N L = 0);
 the cotree faces of the element-adjacency graph form the loop basis. A lifts it
 only to 1/(mu_r-1), so high-mu_r is a low-frequency (loop-star) breakdown.
 
-An earlier C++ effort added RUNTIME loop handling to the MSC/MMM solver:
-matrix-free deflation (SetHACApKDeflation / SetDeflateNullspace via the
-BuildLoopBasis cycle basis), an alpha-free loop-star gauge (SolveLoopStar:
+An earlier C++ effort added runtime loop handling to the MSC/MMM solver:
+matrix-free deflation via the BuildLoopBasis cycle basis, an alpha-free loop-star gauge (SolveLoopStar:
 the reduced A_SS = S^T A S star block with an H-LU preconditioner), and a
 post-solve Helmholtz-Hodge loop projection (SetLoopProjection). ALL of these
 were REMOVED on 2026-06-09.

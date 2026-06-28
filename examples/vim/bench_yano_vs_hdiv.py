@@ -11,9 +11,9 @@ members differ only in the M discretization + projection:
   NOT "MSC vs VIM" (that mixes a member with the class).
 
 WHAT THIS EXERCISES
-  * MSC (yano)  : rad.Solve(.., demag_backend="yano", solver=2) -> the C++ HACApK MSC method-2 BiCGSTAB
-                  (HEX-only, 6 sigma/hex).  Self-wrapped in a RegionTaskManager (CLAUDE.md "C++ HACApK
-                  Self-Wrap Policy", 2026-06-23) -> parallel build + solve.
+  * MSC/MMMM    : rad.Solve(.., demag_backend="collocation_mmmm", solver=2) -> the live
+                  collocation MMMM face-charge path (HEX-only, 6 sigma/hex).  The old
+                  HACApK moment route is retired; method-2 requests are rerouted by Radia.
   * HDiv (FEEC) : rad.Solve(.., demag_backend="hdiv") -> radia.vim.hdiv_demag_solve (RT0) on the SAME hex
                   iron, C++ _ChargeGramHMatrix demag.  The Python dense O(N^2) charge-Gram was REMOVED
                   2026-06-23 -- the C++ H-matrix kernel IS the demag operator, so THIS bench times C++, not
@@ -86,7 +86,7 @@ def part1_hex_hsweep(n_list):
         model = rad.ObjCnt([iron, _bkg()])
         with ng.TaskManager():
             t0 = time.perf_counter()
-            rad.Solve(model, 1e-5, 2000, 2, demag_backend="yano")
+            rad.Solve(model, 1e-5, 2000, 2, demag_backend="collocation_mmmm")
             t_msc = time.perf_counter() - t0
             Bz_msc = float(rad.Fld(model, "b", PROBE)[2])
         ndof_msc = 6 * nhex

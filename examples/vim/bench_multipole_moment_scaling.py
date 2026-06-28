@@ -81,7 +81,7 @@ def _peak_mb():
 def moment_setup(hexes):
     """SETUP phase: objs + C++ accessors (rad.GetFaceGeom / rad.GetCentroidFieldGrad) + per-element local
     geometry (dipole/quadrupole functionals).  Returns the assembled-once per-element data the SOLVE reuses."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R0))
