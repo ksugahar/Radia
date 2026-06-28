@@ -47,6 +47,7 @@ namespace RadSolverMethod {
 // Forward declaration
 class radTg3dRelax;
 class radTPolyhedron;
+class radTHysteresisMaterial;
 
 /**
  * Shared context for nonlinear magnetostatic iteration.
@@ -112,6 +113,18 @@ struct NonlinearContext {
 	bool use_b_input;                          // True for B-input Newton solver
 	std::vector<std::vector<TVector3d>> saved_hys_states;  // Per-element saved Jk states
 
+	// B-input PLAY-model hysteresis driven through the moment Picard loop
+	// (DOF >= 4 face-charge elements: tet/wedge/pyramid/hex).  When set, the
+	// dof>=4 branch of UpdateChiAndCheckConvergence computes B = mu0*(H_new + M)
+	// from the current solved state and updates chi via ComputeChiFromB(B)
+	// instead of ComputeChiFromH(H).  Per-element play state is saved at the
+	// start of the solve and restored before each material evaluation so each
+	// element keeps its own play trajectory across Picard iterations; states are
+	// committed once at the end of the converged solve.
+	bool b_input_play;                                  // True for moment B-input Picard
+	std::vector<radTHysteresisMaterial*> hys_mat_cache; // Per-element hysteresis material (nullptr if none)
+	std::vector<std::vector<double>> hys_play_state;    // Per-element start-of-step state array [GetStateSize()]
+
 	// Multipole-moment outer acceleration history (safeguarded Anderson depth 1).
 	bool moment_anderson_have_prev;
 	std::vector<double> MomentAndersonPrevResidual;
@@ -140,6 +153,7 @@ struct NonlinearContext {
 		, newton_ls_min_omega(0.01)
 		, total_ls_backtracks(0)
 		, use_b_input(false)
+		, b_input_play(false)
 		, moment_anderson_have_prev(false)
 		, moment_anderson_accepted(0)
 		, moment_anderson_rejected(0)

@@ -1441,23 +1441,56 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			//   (2) B-input hysteresis (b_input_newton / b_input_hantila) on MSC elements -- the B-input
 			//       Newton/Hantila Jacobian is block-3x3 (MMM, 3 DOF) only; a 4/5/6-DOF MSC element cannot
 			//       be driven by it.  Hysteresis stays on the 3-DOF MMM dipole element (RecMag).
+			// Reset the per-solve B-input moment flag; it is (re)set below only when
+			// the routing selects the moment B-input Picard path.
+			m_b_input_moment = false;
+			bool b_input_moment_route = false;   // route through normal moment LU/Picard with the B-input chi update
 			{
 				int nElemChk = InteractPtr->GetAmOfMainElem();
 				bool anyMSC = false, anyMMM3 = false;
+				bool allMoment = (nElemChk > 0), allMomentHys = (nElemChk > 0);
 				for(int i = 0; i < nElemChk; i++)
 				{
 					int dd = InteractPtr->GetElementDOF(i);
 					if(dd >= 4) anyMSC = true;        // tet(4) / wedge,pyramid(5) / hex(6): unified face-charge moment
 					else if(dd == 3) anyMMM3 = true;  // RecMag: 3-DOF MMM dipole (the other formulation)
+					if(dd < 4) allMoment = false;     // a genuine 3-DOF dipole present
+					radTg3dRelax* g3d = InteractPtr->GetElement(i);
+					radTMaterial* mat = (radTMaterial*)(g3d->MaterHandle.rep);
+					if(dynamic_cast<radTHysteresisMaterial*>(mat) == nullptr) allMomentHys = false;
 				}
 				if(anyMSC && anyMMM3) { Send.ErrorMessage("Radia::Error204"); return 0; }
-				if(anyMSC && (m_b_input_newton || m_b_input_hantila)) { Send.ErrorMessage("Radia::Error205"); return 0; }
+
+				if(m_b_input_newton || m_b_input_hantila)
+				{
+					// B-input PLAY-model hysteresis through the MMMM moment Picard:
+					// allowed when every element is a moment/MSC face-charge element
+					// (DOF in {4,5,6}) AND every material is a hysteresis material.
+					// Set the per-solve flag and DO NOT raise Error205 -- fall through
+					// to the normal moment LU/BiCGSTAB driver (switch(MethNo)).
+					if(allMoment && allMomentHys && nElemChk > 0)
+					{
+						m_b_input_moment = true;
+						b_input_moment_route = true;
+					}
+					else if(anyMSC)
+					{
+						// A moment/MSC element is present but NOT all-moment-hysteresis:
+						// the dense 3-DOF B-input Newton Jacobian cannot drive it.
+						// Fail loud (No Fallbacks) rather than silently treat as linear.
+						Send.ErrorMessage("Radia::Error205"); return 0;
+					}
+					// else: pure 3-DOF (no MSC) -> handled by AutoRelax_BInput_Newton below.
+				}
 			}
 
 			// B-input solvers for hysteresis (energy or play)
 			// Auto-activates when b_input_newton=True or b_input_hantila=True
-			// and all materials are radTHysteresisMaterial
-			if(m_b_input_newton || m_b_input_hantila)
+			// and all materials are radTHysteresisMaterial.
+			// NOTE: the all-moment (DOF>=4) B-input case is routed through the normal
+			// moment Picard driver below (b_input_moment_route), NOT through the dense
+			// 3-DOF AutoRelax_BInput_Newton -- only genuine 3-DOF dipoles take this branch.
+			if((m_b_input_newton || m_b_input_hantila) && !b_input_moment_route)
 			{
 				// Check if all elements have hysteresis materials
 				bool all_hysteresis = true;

@@ -1036,6 +1036,36 @@ public:
 	virtual double ComputeChiFromH(const TVector3d& H) = 0;
 	virtual double ComputeDifferentialChi(double H_mag) = 0;
 
+	// B-input chi: chi = |M|/|H| where H = Forward(B), M = B/mu0 - H.
+	// Implemented once on the base via the virtual Forward(B) so it works for
+	// BOTH the Play model (Type 6, O(K) direct Forward) and the Energy model
+	// (Type 5, which is a Forward-equivalent subclass).  NOTE: Forward(B)
+	// advances the material's m_pk_current/m_last_* state -- the moment B-input
+	// Picard saves/restores per-element state around each call so each element
+	// keeps its own play trajectory (see UpdateChiAndCheckConvergence).
+	//
+	// Mirrors the clamping/return conventions of ComputeChiFromH (which the
+	// Play/Energy override as B = Inverse(H); chi = |B|/(mu0*|H|) - 1).  Here
+	// we keep chi >= 0 and clamp to a large finite ceiling so the moment system
+	// matrix diagonal (1/chi) never blows up.
+	virtual double ComputeChiFromB(const TVector3d& B)
+	{
+		const double MU_0_local = 4.0 * 3.14159265358979323846 * 1.0e-7;
+		const double INV_MU_0_local = 1.0 / MU_0_local;
+		TVector3d H = Forward(B);                 // B -> H (advances play state)
+		double Hn = sqrt(H.x*H.x + H.y*H.y + H.z*H.z);
+		// M = B/mu0 - H
+		TVector3d M(B.x*INV_MU_0_local - H.x,
+		            B.y*INV_MU_0_local - H.y,
+		            B.z*INV_MU_0_local - H.z);
+		double Mn = sqrt(M.x*M.x + M.y*M.y + M.z*M.z);
+		if(Hn < 1.0e-30) return GetInitialChi_ELF_Style();
+		double chi = Mn / Hn;
+		if(chi < 0.0) chi = 0.0;
+		if(chi > 1.0e10) chi = 1.0e10;
+		return chi;
+	}
+
 	// Initialization helpers
 	virtual double GetInitialChi_ELF_Style() const = 0;
 	virtual double GetBsaturation() const = 0;
