@@ -287,7 +287,7 @@ by cross-cancelling the +/- groups' rungs, a freedom per-group chaining removes.
 
 END-TO-END VALIDATION vs an INDEPENDENT codebase
 ------------------------------------------------
-examples/stream_function/verify_coil_field_independent.py designs a coil
+validation_test/stream_function/verify_coil_field_independent.py designs a coil
 (MRI-gradient scale: cylinder r=0.15 m, L=0.5 m, DSV r=0.05 m) and checks the
 field TWO ways: the numpy straight-segment Biot-Savart used in the designer AND
 Radia's C++ rad.ObjFlmCur + rad.Fld (a separate codebase).  They agree to

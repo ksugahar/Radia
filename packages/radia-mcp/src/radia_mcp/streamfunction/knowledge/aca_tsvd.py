@@ -160,7 +160,7 @@ no-duplication principle.
 ACA_TSVD_PERFORMANCE = r"""
 # Performance (measured)
 
-examples/stream_function/bench_aca_vs_dense.py: (ACA+)+TSVD vs naive dense TSVD
+validation_test/stream_function/bench_aca_vs_dense.py: (ACA+)+TSVD vs naive dense TSVD
 (build full A via the SAME per-call kernel, then numpy.linalg.svd).  Smooth
 1/(1+alpha r^2) kernel, M = N/4, LAB 2026-05-29.  The kernel is numerically low
 rank so k_aca stays ~30 while N grows; the eval-count reduction

@@ -1,0 +1,63 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-28T00:52:54Z",
+  "notebook": "docs/stream_function/examples_catalog.ipynb",
+  "notebook_sha256": "6b30016dcc1c76fe168f010b45417595f145ccac4f816912cffdb77026d59c0c",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2",
+    "radia_mcp_version": "1.4.3",
+    "numpy_version": "2.4.6"
+  },
+  "summary": {
+    "path": "docs/stream_function/examples_catalog.ipynb",
+    "cells": 7,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 6,
+    "error_output_count": 0,
+    "result_saved": true,
+    "topic_script_count": 26,
+    "topic_artifact_count": 45
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "69b17f97dff3d923a5b9f1d4295497de07f8027509c9325a8c8142d11a7628d6",
+      "output_count": 1
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "bbbb20aa3334dda17e291e9c9aa5bd01969819a16c2d0b088667bc444fadb6ac",
+      "output_count": 2
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "79dc4504c30870e0f0212bdcfdcc03daf1fc6ada1b62f52b6117967304de5830",
+      "output_count": 1
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 4,
+      "source_sha256": "a697b859599523411b02df9bccb8d41794831dede3ff6800c5a6e66644b81f39",
+      "output_count": 1
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 5,
+      "source_sha256": "6217402a3c3d78f6f54ef6bca6c386d1b02f3f7619618aab9e8f0c995e7bf39f",
+      "output_count": 1
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

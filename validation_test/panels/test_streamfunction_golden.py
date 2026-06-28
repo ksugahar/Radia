@@ -294,7 +294,7 @@ def test_streamfunction_field_cross_codebase(tmp_path):
     a uniform-Bz cylindrical coil (MRI scale) and cross-checks the two
     engines."""
     import json as _json
-    script = os.path.join(REPO, "examples", "stream_function",
+    script = os.path.join(REPO, "validation_test", "stream_function",
                           "verify_coil_field_independent.py")
     if not os.path.exists(script):
         pytest.skip("verify example not present")

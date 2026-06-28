@@ -13,11 +13,12 @@ unattended).
 |--------|------|-----------|
 | shipped | `bench_helmholtz_pair.py` | Analytical Helmholtz pair (uniform Bz, Maxwell) |
 
-Previously this directory also held TODO-only benchmark stubs. Those were
-removed from `examples` because they were not runnable examples. The target
-list is kept in `docs/stream_function/benchmarks.md` and
-`memory/stream_function_benchmark_stubs_prune.md` until a target is
-implemented with JSON output.
+This directory was promoted from `examples/stream_function/benchmarks`.
+Previously the example directory also held TODO-only benchmark stubs. Those
+were removed because they were not runnable examples. The target list is kept
+in `docs/stream_function/benchmarks.md` and
+`memory/stream_function_benchmark_stubs_prune.md` until a target is implemented
+with JSON output.
 
 ## How to run
 
@@ -26,7 +27,7 @@ implemented with JSON output.
 python bench_helmholtz_pair.py --json out_helmholtz.json
 
 # All benchmarks
-python -m pytest benchmarks/ -v
+python -m pytest validation_test/stream_function/benchmarks -v
 ```
 
 ## How to add a new benchmark

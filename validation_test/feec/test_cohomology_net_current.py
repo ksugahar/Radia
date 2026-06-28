@@ -1,6 +1,6 @@
 """Golden lock for the SF coil-designer cohomology net-current 'finish'.
 
-Runs examples/stream_function/cohomology_net_current.py (torus b1=2) and asserts:
+Runs validation_test/stream_function/cohomology_net_current.py (torus b1=2) and asserts:
 
   - the analytic secular generators h_k = n x grad(angle) are div-free
     (a valid surface current) and NON-EXACT (genuine cohomology, not any psi);
@@ -19,7 +19,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "stream_function")
+EXDIR = os.path.join(HERE, "..", "stream_function")
 
 
 @pytest.mark.slow

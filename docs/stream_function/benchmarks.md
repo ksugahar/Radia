@@ -2,7 +2,7 @@
 
 This page documents the validation strategy for the Radia SF framework
 and the shipped benchmark under
-[`examples/stream_function/benchmarks/`](../../examples/stream_function/benchmarks/).
+[`validation_test/stream_function/benchmarks/`](../../validation_test/stream_function/benchmarks/).
 The framework's feature set is described in
 [README.md](README.md); this page is about VALIDATING those features
 against published references and other tools.
@@ -19,7 +19,7 @@ sided) solution.
 
 Sample run:
 ```bash
-cd examples/stream_function/benchmarks
+cd validation_test/stream_function/benchmarks
 python bench_helmholtz_pair.py --a 0.10 --dsv-r 0.025 --B0 0.001 \
     --json result_helmholtz.json
 ```
