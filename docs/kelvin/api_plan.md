@@ -17,9 +17,10 @@ foundation is solid enough to design a general-purpose API on top.
   the A_s pullback, and the L extraction.
 - Allow **arbitrary external sources** (Radia ObjArcCur, ObjRecCur,
   ObjRaceTrk, CoilBuilder filaments, ...) via a uniform interface.
-- Make the validation harness represented by archived
-  `validate_radia_HB_kelvin.py` an exemplar that any new source
-  type can use to self-check inductance against a Radia reference.
+- Make the validation harness represented by the retired
+  `validate_radia_HB_kelvin.py` pattern reproducible through maintained
+  `radia.kelvin_source` APIs and `validation_test/kelvin_source/`, so any
+  new source type can self-check without restoring old example scripts.
 
 ## 1. Layered architecture
 
@@ -184,9 +185,10 @@ debugging detour 2026-04-15.
 
 ### 3.4 Compatibility with existing examples
 
-The new helpers MUST allow rewriting these archived sources:
+The new helpers MUST preserve the capability formerly demonstrated by these
+retired sources:
 - archived `Coil_3D_A_HCurl_with_Kelvin.py` (full-A volume-J baseline)
-- archived `validate_radia_HB_kelvin.py` (reduced-A external A_s)
+- retired `validate_radia_HB_kelvin.py` pattern (reduced-A external A_s)
 - archived `Coil_3D_A_HCurl_PEEC_source.py` (filament A_s when filament dev
   matures)
 
@@ -206,7 +208,8 @@ into <50 lines each, using the layered API.
 - `src/radia/kelvin_solver.py` with the two solve functions
 - Refactor the archived `Coil_3D_A_HCurl_with_Kelvin.py` pattern to use the driver:
   call must reproduce L = 89.44 nH within 0.1%.
-- Refactor the archived `validate_radia_HB_kelvin.py` pattern similarly.
+- Refactor the retired `validate_radia_HB_kelvin.py` pattern similarly,
+  backed by `validation_test/kelvin_source/` rather than an example copy.
 
 ### M3 -- L4 validation harness (~ 1 day)
 - `src/radia/kelvin_validate.py` with

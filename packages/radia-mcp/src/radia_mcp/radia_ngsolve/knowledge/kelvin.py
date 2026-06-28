@@ -1609,6 +1609,14 @@ the factor inline and guarantees Nagamine CEFC 2026 consistency.
 Most Radia-NGSolve problems are **3D**, so the 3D helpers below are the
 primary case. Axisymmetric is a dimensional reduction; 2D is special.
 
+Each CF helper has a lightweight numeric counterpart in `radia.kelvin_source`
+(`kelvin_nu_factor_3d`, `kelvin_mu_factor_3d`,
+`kelvin_nu_factor_axisym`, `kelvin_mu_factor_axisym`,
+`kelvin_nu_factor_2d_axial`, `kelvin_mu_factor_2d_axial`, and
+`kelvin_factor_2d_inplane`).  The numeric API is locked by
+`validation_test/kelvin_source/test_kelvin_material_factors.py`, so MCP answers
+should point to that validation lane rather than historical archive JSON.
+
 ### 3D spherical Kelvin (primary case, isotropic)
 
 | Formulation | Helper                       | Factor     | At rho'=0 |
@@ -1898,9 +1906,10 @@ dirichlet = "GND"     # GND vertex at kelvin_center (image of infinity)
 ```
 
 The historical `Omega_ReducedOmega/test_solver_integration.py` source is no
-longer kept as a standalone example. Maintained behavior should be exercised
-through `src/radia` APIs or a dedicated `validation_test/` regression; the
-retired-source routing is tracked in `docs/kelvin/ARCHIVE_RETIREMENT.md`.
+longer kept as a standalone example. Maintained behavior is exercised through
+`src/radia` APIs, `validation_test/kelvin_source/`, and
+`validation_test/cubit/kelvin_1_4_p_convergence/`; the retired-source routing
+is tracked in `docs/kelvin/ARCHIVE_RETIREMENT.md`.
 
 ## Method Details
 
@@ -1944,8 +1953,10 @@ a discretization issue.
 
 Retired scripts:
   `validate_omega_coil_source_v2.py` (3D Omega + Kelvin) is not the public
-  reference path; promote a maintained `validation_test/` regression when this
-  lane resumes.
+  reference path. Use the result-saved `docs/kelvin/kelvin_classic_demos.*`
+  notebook for the teaching layer and
+  `validation_test/cubit/kelvin_1_4_p_convergence/` for the executable
+  Omega-Reduced Omega + Kelvin regression.
   `reference_2d_axisym.py` remains the intended 2D axisym A_phi reference
   pattern when a maintained regression is promoted.
 

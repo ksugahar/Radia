@@ -767,6 +767,83 @@ def B_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
 # kelvin_pullback_B_pseudovector above.
 
 
+def _safe_kelvin_radius(rho, rho_min=None):
+    """Return rho with the Kelvin center regularized for factor evaluation."""
+    rho = np.asarray(rho, dtype=float)
+    floor = 1e-10 if rho_min is None else float(rho_min)
+    return np.where(rho > floor, rho, floor)
+
+
+def kelvin_nu_factor_3d(points, center, R, rho_min=None):
+    """Numeric 3D spherical Kelvin reluctivity factor ``(rho'/R)^2``.
+
+    This is the NumPy counterpart of :func:`kelvin_nu_factor_3d_cf` and is
+    intended for validation, preprocessing, and code paths that do not need an
+    NGSolve ``CoefficientFunction``.
+    """
+    p = np.asarray(points, dtype=float)
+    c = np.asarray(center, dtype=float)
+    rho = np.sqrt(np.sum((p - c) ** 2, axis=-1))
+    rho_safe = _safe_kelvin_radius(rho, rho_min)
+    return (rho_safe / float(R)) ** 2
+
+
+def kelvin_mu_factor_3d(points, center, R, rho_min=None):
+    """Numeric 3D spherical Kelvin permeability factor ``(R/rho')^2``."""
+    p = np.asarray(points, dtype=float)
+    c = np.asarray(center, dtype=float)
+    rho = np.sqrt(np.sum((p - c) ** 2, axis=-1))
+    rho_safe = _safe_kelvin_radius(rho, rho_min)
+    return (float(R) / rho_safe) ** 2
+
+
+def kelvin_nu_factor_axisym(r_coord, z_coord, z_offset, R, rho_min=None):
+    """Numeric axisymmetric Kelvin reluctivity factor ``(rho'/R)^2``.
+
+    ``rho' = sqrt(r^2 + (z-z_offset)^2)`` is the 3D spherical distance viewed
+    in the meridional plane.  This helper does not include the mandatory
+    axisymmetric integration weight ``r``; callers must keep that weight in the
+    weak form.
+    """
+    r = np.asarray(r_coord, dtype=float)
+    z = np.asarray(z_coord, dtype=float)
+    rho = np.sqrt(r ** 2 + (z - float(z_offset)) ** 2)
+    rho_safe = _safe_kelvin_radius(rho, rho_min)
+    return (rho_safe / float(R)) ** 2
+
+
+def kelvin_mu_factor_axisym(r_coord, z_coord, z_offset, R, rho_min=None):
+    """Numeric axisymmetric Kelvin permeability factor ``(R/rho')^2``."""
+    r = np.asarray(r_coord, dtype=float)
+    z = np.asarray(z_coord, dtype=float)
+    rho = np.sqrt(r ** 2 + (z - float(z_offset)) ** 2)
+    rho_safe = _safe_kelvin_radius(rho, rho_min)
+    return (float(R) / rho_safe) ** 2
+
+
+def kelvin_factor_2d_inplane():
+    """Numeric 2D cylindrical Kelvin factor for in-plane B/H problems: ``1``."""
+    return 1.0
+
+
+def kelvin_nu_factor_2d_axial(points, offset, R, rho_min=None):
+    """Numeric 2D axial Kelvin reluctivity factor ``(rho'/R)^4``."""
+    p = np.asarray(points, dtype=float)
+    o = np.asarray(offset, dtype=float)
+    rho = np.sqrt(np.sum((p[..., :2] - o[:2]) ** 2, axis=-1))
+    rho_safe = _safe_kelvin_radius(rho, rho_min)
+    return (rho_safe / float(R)) ** 4
+
+
+def kelvin_mu_factor_2d_axial(points, offset, R, rho_min=None):
+    """Numeric 2D axial Kelvin permeability factor ``(R/rho')^4``."""
+    p = np.asarray(points, dtype=float)
+    o = np.asarray(offset, dtype=float)
+    rho = np.sqrt(np.sum((p[..., :2] - o[:2]) ** 2, axis=-1))
+    rho_safe = _safe_kelvin_radius(rho, rho_min)
+    return (float(R) / rho_safe) ** 4
+
+
 def kelvin_nu_factor_3d_cf(center, R, coords=None, rho_min=None):
     """3D spherical Kelvin nu factor (rho'/R)^2 as NGSolve CF.
 
