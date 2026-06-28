@@ -128,36 +128,37 @@ public:
 	bool Use6DOF_MSC;          // Historical name; true if element uses per-face MSC (4-6 faces)
 	double CurrentChi;         // Chi used for current solve (for H = M/chi update)
 
-	// --- Warped (non-planar quad) hexahedron support ---------------------------------
+	// --- Real face-vertex geometry (warped-hex support) ------------------------------
 	// A general (Cubit/C-type) hexahedron is a TRILINEAR element whose quad faces are
 	// bilinear (non-planar): the 4 corners of a quad face are not coplanar.  The planar
 	// radTPolygon face representation (2D points + a single CoordZ) cannot hold such a
 	// face, so the original code REJECTED it (Error047) which left a half-built object and
-	// downstream heap corruption.  Instead, for a non-planar quad we KEEP the REAL global
-	// vertices here and route the (already triangle-based) collocation field + interaction
-	// paths through them -- the quad's 4 real vertices are represented EXACTLY by the two
-	// triangles (V0V1V2)+(V0V2V3) the code already forms.  PLANAR faces leave these empty,
-	// so every existing planar mesh keeps the unchanged polygon path (bit-identical).
-	// Populated only for hexahedra (AmOfFaces==6) -- tets are always planar; wedge quads
-	// keep the original behavior for now.
-	std::vector<char> mFaceNonPlanar;      // per-face: 1 if face f is non-planar (warped quad)
+	// downstream heap corruption.  Instead we KEEP the REAL global vertices of every
+	// hexahedron face here and route the (already triangle-based) collocation field +
+	// interaction paths through them -- the quad's 4 real vertices are represented EXACTLY
+	// by the two triangles (V0V1V2)+(V0V2V3) the code already forms.  This is a SINGLE
+	// path: planar AND non-planar hex faces both use the real vertices (the real vertices
+	// are the exact input, so this is at least as accurate as the flattened polygon, which
+	// round-trips the input through a rotation).  Populated only for hexahedra built via
+	// FillInTransAndFacesInLocFrames (AmOfFaces==6); tets are always planar and wedge quads
+	// keep the original behavior for now, so for those (and for subdivision-created hexes
+	// that never run FillIn) GetRealFaceVerts returns false and the caller falls back to
+	// the flattened-polygon reconstruction.
 	std::vector<TVector3d> mRealFaceVerts;  // flat: real global vertex k of face f at [f*4 + k]
-	std::vector<int> mRealFaceNV;           // per-face real vertex count (4 for a hex quad)
+	std::vector<int> mRealFaceNV;           // per-face real vertex count (4 for a hex quad); 0/absent => not stored
 
-	// Real global vertices of a NON-PLANAR face.  Returns true (and fills out[0..n-1])
-	// ONLY when face f was flagged non-planar AND real verts were stored; otherwise returns
-	// false so the caller uses the flattened-polygon reconstruction -- the unchanged path
-	// for every planar face (=> bit-identical for all existing meshes).
-	bool GetRealFaceVertsIfNonPlanar(int f, TVector3d* out, int& n) const
+	// Real global vertices of face f.  Returns true (and fills out[0..n-1]) whenever the
+	// real vertices were stored for f (hexahedra built through FillInTransAndFacesInLocFrames);
+	// returns false otherwise so the caller uses the flattened-polygon reconstruction
+	// (tets, wedges, and subdivision-created polyhedra).
+	bool GetRealFaceVerts(int f, TVector3d* out, int& n) const
 	{
-		if(f < 0 || f >= (int)mFaceNonPlanar.size() || !mFaceNonPlanar[f]) return false;
-		if(f >= (int)mRealFaceNV.size()) return false;
+		if(f < 0 || f >= (int)mRealFaceNV.size()) return false;
 		n = mRealFaceNV[f];
 		if(n <= 0 || (size_t)((size_t)f*4 + n) > mRealFaceVerts.size()) return false;
 		for(int k = 0; k < n; k++) out[k] = mRealFaceVerts[(size_t)f*4 + k];
 		return true;
 	}
-	bool FaceIsNonPlanar(int f) const { return (f >= 0 && f < (int)mFaceNonPlanar.size() && mFaceNonPlanar[f] != 0); }
 
 	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
 		: radTg3dRelax(InMagn)
@@ -445,17 +446,19 @@ public:
 		// Supports tetrahedra (4 faces), wedges/pyramids (5 faces) and hexahedra (6 faces)
 		if(AmOfFaces < 4 || AmOfFaces > 6) return;
 
+		TVector3d RVf[4]; int rnf = 0;
 		for(int i = 0; i < AmOfFaces; i++)
 		{
-			// Non-planar (warped) quad face: the flattened polygon does not represent it,
-			// so derive center / normal / area from the REAL vertices, treating the face as
-			// the two triangles (V0V1V2)+(V0V2V3) used everywhere else.  Winding (hence the
-			// normal sign) follows the same vertex order as the polygon, so the Netgen
-			// outward convention is preserved.
-			if(FaceIsNonPlanar(i))
+			// If the real face vertices were stored (hexahedron faces), derive
+			// center / normal / area from them -- treating the face as the two triangles
+			// (V0V1V2)+(V0V2V3) used everywhere else.  This is the SINGLE path for hex faces
+			// (planar and non-planar alike): the real vertices are the exact input, and their
+			// winding (hence the normal sign) matches the polygon, so the Netgen outward
+			// convention is preserved.  Tets/wedges (no stored verts) use the polygon path.
+			if(GetRealFaceVerts(i, RVf, rnf))
 			{
-				int nv = mRealFaceNV[i];
-				const TVector3d* RV = &mRealFaceVerts[(size_t)i*4];
+				int nv = rnf;
+				const TVector3d* RV = RVf;
 				TVector3d c(0.0, 0.0, 0.0);
 				for(int k = 0; k < nv; k++) { c.x += RV[k].x; c.y += RV[k].y; c.z += RV[k].z; }
 				double invn = (nv > 0) ? 1.0/nv : 0.0;
