@@ -701,9 +701,12 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             "(analytic moments); the order>=3 Duffy quadrature is only ~1e-3 and the ill-conditioned "
             "high-degree basis makes the demag spectrum leave [0,1]. Use order in {0,1,2}.")
     # Gram-build defaults resolved in ONE place (_resolve_gram_params; rationale in its docstring).
-    # High-order reads ho_far_factor; near_factor remains RT0-only.
-    _gp = _resolve_gram_params(order=order, gram_backend=gram_backend, linear_solver=linear_solver,
-                               uniform_linear=False, gram_eps=gram_eps,
+    # _solve_highorder serves order>0 AND the order=0 curved (curve_order) path; BOTH resolve via the
+    # HIGH-ORDER branch (which returns ho_far_factor).  max(order,1) routes order=0+curve_order there too
+    # (eps 1e-10, far_quad 3, ho_far_factor 2.0 -- matching the pre-consolidation inline defaults; a plain
+    # order=0 would wrongly hit the RT0 branch -> KeyError 'ho_far_factor' + the RT0 eps 1e-12).
+    _gp = _resolve_gram_params(order=max(int(order), 1), gram_backend=gram_backend,
+                               linear_solver=linear_solver, uniform_linear=False, gram_eps=gram_eps,
                                near_factor=near_factor, far_quad=far_quad, ho_far_factor=ho_far_factor)
     eff_eps = _gp["eps"]; eff_far = _gp["far_quad"]; eff_hofar = _gp["ho_far_factor"]
     if curve_order is not None:
