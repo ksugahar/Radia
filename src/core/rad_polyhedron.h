@@ -454,7 +454,8 @@ public:
 	// REMOVED (Phase C, 2026-04-16)
 	void DefineRelAndAbsTol(double*);
 
-	int CheckForSpecialShapes(radTVectHandlePgnAndTrans&, radThg&, double*);
+	// CheckForSpecialShapes (polyhedron->RecMag box optimization) REMOVED 2026-06-28 -- magnetization
+	// rectangular blocks stay MMMM surface-charge polyhedra; radTRecMag kept only as the current kernel.
 
 	double Volume();
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);
@@ -651,8 +652,9 @@ public:
 	int CreateNewEntity(radTVectHandlePgnAndTrans& vHandlePgnAndTrans, radThg& hg, short RecognizeRecMagsInPolyhedrons, double* RelAbsTol)
 	{
 		short CreateA_Polyhedron = 1;
-		if(RecognizeRecMagsInPolyhedrons)
-			if(CheckForSpecialShapes(vHandlePgnAndTrans, hg, RelAbsTol)) CreateA_Polyhedron = 0;
+		// CheckForSpecialShapes (polyhedron->RecMag box optimization) REMOVED 2026-06-28:
+		// magnetization blocks stay MMMM surface-charge polyhedra; param now unused.
+		(void)RecognizeRecMagsInPolyhedrons;
 		if(CreateA_Polyhedron)
 		{
 			radTSend Send;
