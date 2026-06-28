@@ -3,7 +3,13 @@
 This directory is the docs promotion layer for the remaining
 `examples/induction_heating` scripts.
 
-Start with the result-saved catalog notebook:
+Start with the public result-saved notebook:
+
+- `public_demo.ipynb`
+- `public_demo_results.json`
+- `public_demo_result.json`
+
+The full source/hash catalog is:
 
 - `induction_heating_examples_catalog.ipynb`
 - `induction_heating_examples_catalog_results.json`
