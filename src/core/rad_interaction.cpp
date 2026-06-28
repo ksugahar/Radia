@@ -2054,18 +2054,26 @@ void radTInteraction::PrecomputeHexaGeometry()
 			// Store face area
 			m_hexaFaceAreas[h * 6 + f] = poly->FaceArea[f];
 
-			// Get face vertices and split into 2 triangles
-			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-			radTPolygon* pgn = hpt.PgnHndl.rep;
-			radTrans* tr = hpt.TransHndl.rep;
-
-			const radTVect2dVect& verts2d = pgn->EdgePointsVector;
-			if(verts2d.size() < 4) continue;
-
+			// Get face vertices and split into 2 triangles.  Warped (non-planar) quad face ->
+			// use the REAL vertices (exact 2-triangle geometry); planar faces use the
+			// unchanged flattened-polygon reconstruction (=> bit-identical for planar meshes).
 			TVector3d V[4];
-			for(int v = 0; v < 4; v++)
+			TVector3d RV[4]; int rnv = 0;
+			if(poly->GetRealFaceVertsIfNonPlanar(f, RV, rnv) && rnv >= 4)
 			{
-				V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+				V[0] = RV[0]; V[1] = RV[1]; V[2] = RV[2]; V[3] = RV[3];
+			}
+			else
+			{
+				const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
+				radTPolygon* pgn = hpt.PgnHndl.rep;
+				radTrans* tr = hpt.TransHndl.rep;
+
+				const radTVect2dVect& verts2d = pgn->EdgePointsVector;
+				if(verts2d.size() < 4) continue;
+
+				for(int v = 0; v < 4; v++)
+					V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
 			}
 
 			// Triangle 1: V0, V1, V2
