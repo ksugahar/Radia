@@ -3,7 +3,7 @@
 **Version:** 4.55.0
 
 For installation, see the top-level [README.md](../README.md) Quick Start (covers
-the pinned production install of `radia[cubit,gui]` + `radia-mcp` + `cubit-mesh-export`,
+the pinned production install of `radia[cubit]` + `radia-mcp` + `cubit-mesh-export`,
 multi-user lab deploy, verify, and troubleshooting).
 
 For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).

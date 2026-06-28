@@ -292,7 +292,7 @@ After you add the 3 files above, the following gates auto-cover them
 | `panel-cli-diff` skill | Panel widget vs CLI flag mismatch -- bug class A |
 | `tests/panels/test_taskmanager_scoping.py` | Late-import TaskManager UnboundLocalError -- bug class B (keiko 100号機 2026-05-30) |
 | `tests/panels/test_panel_output_health.py` | Persistence Policy + 10pt + scroll-area + result-summary keys -- bug classes C/D |
-| `panel-qt-test` skill | Widget visibility / Run-button enable -- bug class E |
+| `validation_test/panels/test_notebook_workbench.py` | DesignSpec / Workbench / result artifact / no-PySide notebook contract |
 | `Result Output Policy` (CLAUDE.md) | Missing `t_*_s` / `ne` / `ndof` / integral keys -- bug class F |
 | `Result Output Persistence Policy` (CLAUDE.md) | `.log` not written / IH-style super-override skip -- bug class G |
 

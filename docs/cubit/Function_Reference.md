@@ -48,7 +48,7 @@ cmake --build . --target cubit_mesh_export_ccm   # APREPRO commands (plugins/)
 # src/radia/panels/radia_export_menu.py replaces it.
 ```
 
-Installation: `pip install "radia[cubit,gui]" && cubit-plugin-install`
+Installation: `pip install "radia[cubit]" && cubit-plugin-install`
 
 ---
 

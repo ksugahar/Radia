@@ -602,16 +602,15 @@ CATALOG: dict[str, dict[str, Any]] = {
     },
 
     # ============================================================
-    # Panel review (Radia GUI panel skill chain)
+    # Panel review (Radia notebook panel contract)
     # ============================================================
     "panel-review": {
         "subpackage": "radia_mcp.panel_review",
         "entry_point": "mcp-server-panel-review",
-        "description": "Radia GUI panel review skill chain "
-                       "(panel-cli-diff / panel-review / panel-qt-test / "
-                       "panel-preview / panel-smoke) + bug catalogue. "
-                       "Surfaces the 13-check list and known panel bug "
-                       "patterns through one queryable tool.",
+        "description": "Radia notebook panel review contract "
+                       "(DesignSpec / Workbench / result artifacts / "
+                       "validation_test / no-PySide gate). Historical "
+                       "PySide topic names are compatibility aliases.",
         "primary_tools": ["panel_review"],
         "related": ["electromagnet", "ih", "motor"],
         "tags": ["meta"],

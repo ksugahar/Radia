@@ -292,11 +292,10 @@ cost is the Biot-Savart design-matrix assembly, itself linear in N).  Locked by
 [`bench_sf_scaling.py`](../../examples/stream_function/bench_sf_scaling.py)
 (+ committed `bench_sf_scaling.json` / `.png`).
 
-## Tests
+## Validation
 
-- `tests/panels/test_streamfunction_golden.py` — the calc golden band (design /
+- `validation_test/panels/test_notebook_workbench.py` — the current notebook
+  workbench contract (DesignSpec, Workbench, result artifact, no-PySide gate).
+- The stream-function golden validation lane locks the calc behavior (design /
   pareto levers / manufacture / field-aware chain / confine / order-p contour +
   bubble flux / cross-codebase), run via subprocess.
-- `tests/panels/test_streamfunction_panel_qt.py` — headless PySide6 behaviour
-  (mode combo, per-mode widget isolation, choice combos incl. `--confine abe`,
-  `build_command` roundtrip, save/restore).

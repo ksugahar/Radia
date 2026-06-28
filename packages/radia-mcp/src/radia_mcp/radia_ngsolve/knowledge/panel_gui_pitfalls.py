@@ -669,77 +669,26 @@ editing).
 cast), this commit (restored ``.nr`` access + added rule).
 
 ============================================================
-## panel_qt_testing — Headless Qt tests catch behaviour bugs
+## panel_qt_testing — retired; notebook tests are the active gate
 ============================================================
 
-**Symptom**: Multiple GUI bugs slipped past pre-deployment string-
-grep "tests" because ``inspect.getsource(IHPanel)`` only proves a
-literal substring is present in the code, not that the widget
-actually does what the user sees:
-
-  - empty Method combo on first launch (combo_state)
-  - Open GMSH grey out after FEM (silent_except)
-  - hidden widgets feeding build_command (mode_switch)
-
-**Rule**: Use **headless PySide6 widget tests** for any user-visible
-panel behaviour. The test infrastructure lives in:
+This topic is historical.  The PySide6 desktop panel route has been retired in
+favor of Jupyter notebook workbenches.  Current panel behavior is checked by:
 
 ```
-tests/panels/conftest.py             # session QApplication fixture
-tests/panels/test_ih_panel_qt.py     # Method combo, mode switch,
-                                     # workpiece group, command
-                                     # roundtrip
-tests/panels/test_panel_state_restore.py
-                                     # save/restore by text + legacy
-                                     # int migration
-tests/panels/test_open_gmsh_button.py
-                                     # button enable/disable rules
-                                     # against mock result dicts
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
 ```
 
-The conftest fixture sets ``QT_QPA_PLATFORM=offscreen`` BEFORE
-importing PySide6, so the tests run on a CI runner without an
-X server. The session-scoped ``QApplication`` is shared across all
-test files; per-test ``ih_panel`` and ``ih_window`` fixtures
-instantiate fresh widgets and call ``deleteLater()`` on teardown.
+The active invariants are:
 
-**Patterns to copy when adding a new pitfall test**:
+- notebooks do not import PySide6 / PyQt
+- `DesignSpec(...)` cells are the canonical initial-value store
+- JSON files are run artifacts, not presets
+- `CommandWorkbench.run_local()` writes `radia_result.v2`
+- `Workbench.build_command()` stays aligned with the target `calc_*.py`
 
-```python
-def test_default_method_is_BEM(self, ih_panel):
-    # Pin the panel-level default — no blank widget on first launch
-    assert ih_panel._method_combo.currentText() == "BEM"
-
-def test_FEM_workpiece_widgets_visible(self, ih_panel):
-    # Pin layout_unification: shared widget set across modes
-    ih_panel._method_combo.setCurrentText("FEM")
-    ih_panel._widgets["workpiece_mode"].setCurrentText("SIBC")
-    assert ih_panel._widgets["wp_sigma"].isVisibleTo(ih_panel)
-    assert ih_panel._widgets["mu_r"].isVisibleTo(ih_panel)
-
-def test_FEM_command_parses(self, ih_panel):
-    # Pin subprocess_args: GUI -> calc_*.py argparse roundtrip
-    ih_panel._method_combo.setCurrentText("FEM")
-    cmd = ih_panel.build_command("model.vol")
-    parser = _calc_fem_kelvin_argparse()
-    ns = parser.parse_args(cmd[2:])
-    assert ns.material == "custom"
-```
-
-When you add a new pitfall to this knowledge file, add a matching
-test to the panel_qt suite in the SAME commit. The test stays
-green forever as a regression guard, and the next contributor sees
-both "the pitfall" and "the test that proves you fixed it".
-
-Run::
-
-    QT_QPA_PLATFORM=offscreen pytest tests/panels/test_ih_panel_qt.py
-                                     tests/panels/test_panel_state_restore.py
-                                     tests/panels/test_open_gmsh_button.py
-
-30 tests, ~1.2 s on a laptop. Cheap enough to run on every commit.
-
-**Reference**: this commit (test infrastructure bootstrap, 2026-04-12).
+Normal Radia Python should not install PySide6.  Coreform Cubit's embedded
+PySide6 is protected and must not be removed.
 
 ============================================================
 ## learn_edition_cap — Cubit Learn Edition 50k limit is harmless

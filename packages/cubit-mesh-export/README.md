@@ -5,16 +5,13 @@ Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/c
 `cubit-mesh-export` is the **shared infrastructure layer** in the Radia
 toolchain. It ships mesh export, the Kelvin open-boundary
 transformation, symmetry helpers, and the Dirichlet label conventions
-that every domain-specific Radia tool consumes. The domain panels
-(`radia-ih` for induction heating, `radia-electromagnet` for
-accelerator magnets, `radia-pcb`, `radia-heat`, ...) are launched by
-the user, NOT by this plugin.
+that every domain-specific Radia notebook or headless workflow consumes.
 
 ## Features
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg}` + `export jmag_nastran` APREPRO commands
-  - **Export Mesh** GUI menu
+  - **Export Mesh** GUI menu / toolbar inside Cubit's embedded Python
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
   (auto-add an exterior sphere with copy-mesh + periodic identification)
@@ -29,14 +26,16 @@ the user, NOT by this plugin.
 ## Install
 
 ```bash
-pip install "radia[cubit,gui]"
+pip install "radia[cubit]"
 cubit-plugin-install
 ```
 
 The second command deploys the Cubit plugin binaries, the Netgen DLLs,
 the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
-`cubit_helpers/auto_kelvin_entry.py`), and the Radia PySide6 toolbar
-startup registration into your Coreform Cubit 2025.12 installation.
+`cubit_helpers/auto_kelvin_entry.py`), and the Radia Export Mesh toolbar
+startup registration into your Coreform Cubit 2025.12 profiles.  The toolbar
+runs only inside Cubit's embedded Python; normal Radia Python uses notebooks
+and headless scripts and does not need PySide6.
 Use `cubit-plugin-install --all-users` for a shared lab machine.
 
 ### Upgrade
@@ -48,7 +47,7 @@ cubit-plugin-install
 
 Always re-run `cubit-plugin-install` after upgrading.
 `cubit-plugin-install --verify-only` checks both the deployed binary
-hashes and, when `radia` is installed, the Cubit panel startup
+hashes and, when `radia` is installed, the Cubit toolbar startup
 registration.
 
 ## Cubit commands
@@ -72,9 +71,9 @@ options (see below). The other formats do not consume Kelvin.
    └────────────┘                                └──────────┘
                                                       │
                                                       ▼
-                       user launches the domain tool of their choice:
-                            radia-ih   /  radia-electromagnet  /
-                            radia-pcb  /  radia-heat   /  ...
+                       user opens the domain notebook/headless workflow:
+                            radia_ih.ipynb / radia_em.ipynb /
+                            radia_pcb.ipynb / ...
 ```
 
 `cubit-mesh-export` produces the `.vol` and the label conventions; the

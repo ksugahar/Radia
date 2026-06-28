@@ -112,13 +112,14 @@ python tests/panels/check_panel_cli.py --panel radia_ih.py  # just IH
 python tests/panels/check_panel_cli.py --strict  # fail on any silent-default too
 ```
 
-## Integration with deploy / panel-qt-test
+## Integration with deploy / notebook workbench tests
 
 - `deploy` skill L3 "Launcher widget matrix" gets an extra line:
   `tests/panels/check_panel_cli.py --strict` must pass before ship.
-- `panel-qt-test` runs first (catches widget-wiring bugs), then
-  `panel-cli-diff` (catches CLI-wiring bugs).  Together they cover
-  the entire panel→calc surface statically.
+- `validation_test/panels/test_notebook_workbench.py` checks DesignSpec /
+  Workbench wiring and the no-PySide notebook contract; `panel-cli-diff`
+  remains useful only where a generated panel/CLI compatibility check still
+  exists.
 
 ## Waiving a silent-default
 

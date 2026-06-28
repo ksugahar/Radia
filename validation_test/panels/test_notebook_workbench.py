@@ -205,7 +205,7 @@ def test_panel_notebooks_are_marked_as_local_runner():
         "radia-streamfunction",
     ):
         assert states[panel_id] == "active-local-runner"
-    assert states["radia-export-menu"] == "migration-shell"
+    assert states["radia-export-menu"] == "active-cubit-toolbar"
     assert "calc_*.py CLI arguments" in manifest["policy"]
     assert "DesignSpec settings" in manifest["policy"]
     assert "previous in-repo result artifacts" in manifest["policy"]

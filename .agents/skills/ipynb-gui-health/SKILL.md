@@ -7,8 +7,8 @@ description: Thoroughly verify the Radia panel GUI -- promoted (2026-06-25) from
 
 Since 2026-06-25 (`radia.panel_notebook_promotion.v1`) the Radia panel GUIs are
 **promoted to Jupyter notebook workbenches**.  Desktop PySide6 panels
-(`radia_ih.py`, `radia_em.py`, ...) are now **legacy adapters**; the canonical,
-browser-native interface is:
+(`radia_ih.py`, `radia_em.py`, ...) are retired; the canonical,
+browser-native analysis interface is:
 
 ```
 src/radia/panels/notebooks/radia_<app>.ipynb     # the panel = a light notebook
@@ -25,9 +25,9 @@ runs/radia_<app>/<UTC>/  ->  run.log + command.txt + result.json (radia_result.v
 
 The migration state lives in
 `src/radia/panels/notebooks/panel_notebook_manifest.json`:
-**5 panels are `active-local-runner`** (radia-ih, radia-em, radia-pcb,
-radia-motor, radia-streamfunction); **radia-export-menu is `migration-shell`**
-(its in-Cubit export toolbar is a Cubit plugin surface, checked by
+**5 analysis panels are `active-local-runner`** (radia-ih, radia-em, radia-pcb,
+radia-motor, radia-streamfunction); **radia-export-menu is `active-cubit-toolbar`**
+(its in-Cubit export toolbar is the active Cubit plugin surface, checked by
 `cubit-plugin-install --verify-only` and `cubit-smoke-test`; it is not a reason
 to install PySide6 into normal Radia Python).
 
@@ -67,7 +67,7 @@ offscreen-subprocess workaround is needed (unlike `audit_pyside6_only.py`).
 All notebook-GUI contracts are encoded in one pytest module; run it first:
 
 ```bash
-python -m pytest tests/panels/test_notebook_workbench.py -q
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
 ```
 
 Exit 0 = every contract below holds. The module locks:
@@ -81,7 +81,7 @@ Exit 0 = every contract below holds. The module locks:
 | each workbench has an app-specific `run_root` ending `radia_<app>` | `test_promoted_workbenches_have_app_specific_run_roots` |
 | each workbench `build_command()` emits the correct `calc_*.py` | `test_promoted_workbenches_build_headless_commands` |
 | `spec_cell_source()` is canonical (`<App>DesignSpec(**...)`, **no JSON**) | `test_spec_cell_source_makes_notebook_initial_values_canonical` |
-| manifest states correct (5 `active-local-runner` + 1 `migration-shell`) | `test_panel_notebooks_are_marked_as_local_runner` |
+| manifest states correct (5 `active-local-runner` + 1 `active-cubit-toolbar`) | `test_panel_notebooks_are_marked_as_local_runner` |
 | notebooks do NOT import PySide6/PyQt and carry no `active-ipywidgets` stub | `test_panel_notebooks_do_not_import_pyside` |
 | active notebooks use `<App>DesignSpec()` cells + "JSON files are run artifacts, not preset storage" | `test_active_panel_notebooks_use_designspec_cells_for_initial_values` |
 | active notebooks include the panel notes (Run local, `netgen.webgui`, GMSH `.msh v4.1`) | `test_active_panel_notebooks_include_panel_notes` |
@@ -147,7 +147,7 @@ The notebook is a thin wrapper over `calc_*.py` CLI args mapped through
 panels use -- reuse it:
 
 ```bash
-python -m pytest tests/panels/ -q -k "golden or notebook"
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
 ```
 
 - `DesignSpec.build_command()` must emit only flags the target `calc_<app>.py`
@@ -161,7 +161,7 @@ python -m pytest tests/panels/ -q -k "golden or notebook"
 
 ## Definition of healthy
 
-- Layer A: `pytest tests/panels/test_notebook_workbench.py` exits 0.
+- Layer A: `pytest validation_test/panels/test_notebook_workbench.py` exits 0.
 - Layer B: `CommandWorkbench.run_local()` smoke passes; all 5 workbenches import
   and report an app-specific `run_root`; no PySide6 import is triggered.
 - Layer C: panel golden + notebook tests pass; each DesignSpec builds a runnable
@@ -177,7 +177,7 @@ deleted.  Cubit deploy health is checked separately with
 
 ## Related skills / tools
 
-- `tests/panels/test_notebook_workbench.py` -- the committed Layer-A contract.
+- `validation_test/panels/test_notebook_workbench.py` -- the committed Layer-A contract.
 - `pyside6-health` -- retired/guard-only notes for the old PySide6 panel era.
 - `panel-cli-diff` -- calc_*.py CLI <-> caller flag matching (the calc side of Layer C).
 - `panel-review` -- deeper review of remaining desktop panels / adapters.
