@@ -77,8 +77,8 @@ One hard constraint: **HACApK is under active development by another agent -- do
 | Coil-source primitives | ObjRecCur, ObjArcCur, ObjRaceTrk, ObjFlmCur | 4 | mesh-free Biot-Savart current sources | leaves under CoilBuilder |
 | Background field | ObjBckg (callable) | 1 | external H_ext into the demag solve | callable form only |
 | Hysteresis materials | MatPlayHysteresis, MatEnergyHysteresis, MatHys* | 7 | B-input Play/Energy hysteresis + state stepping | Egger/Hane lineage |
-| Interaction-matrix probes | GetInteractMatrix, BuildMomentSystem, MomentHMatrixProbe | ~8 | MMM/yano matrix introspection (active kernel research) | DEMOTE to internal |
-| H-LU debug + self-test | HLUSelfTest*, HLUTestOnHACApK, HLUSetParallel | ~30 | H-LU on HACApK H-matrix | **do-not-touch (active dev)** |
+| Interaction-matrix probes | GetInteractMatrix, BuildMomentSystem, MomentSystemDenseRaw | ~7 | collocation MMMM / classic MMM matrix introspection | DEMOTE to internal |
+| H-LU debug + self-test | HLUSelfTest*, HLUSetParallel | ~25 | H-LU diagnostics for maintained HACApK routes | keep internal-only |
 | HDiv-VIM kernels | _hdiv_vim_assemble, _HDivVimHMatrix, solve_nonlinear_picard | ~25 | FEEC H(div) RT demag (the sole VIM) | underscore-internal; via radia.vim |
 | BEM / equivalence-source | _AssembleSLDL_Galerkin, _EquivalenceSource*, HACApKBEMManager | ~12 | HACApK Laplace Galerkin BEM | manager build/matvec **do-not-touch** |
 | Cuboid analytic helpers | _average_B_in_box, _average_demag_tensor | 2 | closed-form cuboid avg-B / demag tensor | analytical reference |

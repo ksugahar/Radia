@@ -59,7 +59,7 @@ def _norm(row, rhs):
 
 def multipole_moment_mmm(hexes, Happ):
     """moment formulation, assembled from the C++ rad.GetCentroidFieldGrad accessor."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R))
@@ -106,7 +106,7 @@ def _moment_vec_solve(objs, cents, vols, Happ):
 
 
 def eiem2_yano(hexes, Happ):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R))
