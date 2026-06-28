@@ -369,30 +369,6 @@ def test_moment_entry_reproduces_system():
     rad.UtiDelAll()
 
 
-def test_moment_hmatrix_matvec_equals_dense():
-    """Phase-2 Increment-2: the moment system A_raw built as a HACApK H-matrix (RadHACApKMomentSystem)
-    reproduces the dense A_raw matvec.  MomentHMatrixProbe builds the H-matrix + compares H-matvec(x) to
-    dense A_raw @ x.  (Compression-at-scale -- n_lowrank/compression growing with N -- is exercised in
-    C:/temp/verify_moment_hmatrix.py on the larger C-yoke; here we lock matvec correctness.)"""
-    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
-    mu_r = 200.0; chi = mu_r - 1.0; L = 0.01
-    objs = []                                          # 3x3x2 grid of hexes (some off-diagonal structure)
-    for iz in range(2):
-        for ix in range(3):
-            for iy in range(3):
-                x0, y0, z0 = ix * L, iy * L, iz * L
-                v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
-                     [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
-                h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatLin(mu_r)); objs.append(h)
-    handle = rad.BuildMatrix(rad.ObjCnt(objs))
-    d = rad.MomentHMatrixProbe(handle, chi, 1e-6, 32, 2.0)
-    rad.UtiDelAll()
-    if not d["ok"]:
-        pytest.skip("HACApK not available in this build")
-    assert d["ndof"] == 6 * len(objs)
-    assert d["matvec_relerr"] < 1e-6, f"moment H-matvec != dense A_raw (relerr {d['matvec_relerr']:.2e})"
-
-
 def test_moment_nonlinear_picard_matches_linear_in_linear_regime():
     """The moment LU path drives a NONLINEAR material (MatSatIsoTab) through the Picard loop, reading chi(H)
     from ctx.CurrentChiArray each step.  Locked robustly WITHOUT saturation-extrapolation tuning: at a field

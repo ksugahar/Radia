@@ -92,8 +92,6 @@ int GetFaceGeom(int, double*, int*);
 int GetCentroidFieldGrad(int, double*, int*, int*);
 int BuildMomentSystem(int, double, const double*, double*, double*, int*);
 int MomentSystemDenseRaw(int, double, double*, int*);
-int MomentHMatrixProbe(int, double, double, int, double, double*);
-double HLUTestOnHACApK(int);
 int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
@@ -1388,15 +1386,6 @@ int CALL RadMomentSystemDenseRaw(double chi, double* pA, int* pDOF, int Interact
 	return 0;
 }
 
-int CALL RadMomentHMatrixProbe(double chi, double eps, int leaf, double eta, double* out, int InteractElemKey)
-{
-	int result = MomentHMatrixProbe(InteractElemKey, chi, eps, leaf, eta, out);
-	if(result == 0) return ioBuffer.OutErrorStatus();
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
 int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey)
 {
 #ifdef HAVE_LAPACK
@@ -1409,15 +1398,6 @@ int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey)
 }
 
 //-------------------------------------------------------------------------
-
-double CALL RadHLUTestOnHACApK(int InteractElemKey)
-{
-#ifdef HAVE_LAPACK
-	mkl_set_num_threads(1);
-#endif
-	ngcore::RegionTaskManager rtm;
-	return HLUTestOnHACApK(InteractElemKey);
-}
 
 int CALL RadHLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out)
 {

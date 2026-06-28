@@ -2568,14 +2568,13 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 }
 
 //-------------------------------------------------------------------------
-// multipole-moment MMM method-2 routing flag (set by SolveGen).
-//-------------------------------------------------------------------------
-
-bool g_multipole_moment_hacapk = false;   // moment linear step via the HACApK H-matrix + BiCGSTAB (method 2 / scalable storage); set by SolveGen for moment-eligible + method 2 (else dense LU)
 // NOTE: the surface-charge demag is UNCONDITIONALLY multipole-moment MMM
-// (tet 4-DOF + wedge/pyramid 5-DOF + hex 6-DOF, method 0/1/2).
+// (tet 4-DOF + wedge/pyramid 5-DOF + hex 6-DOF, method 0/1/2).  MMMM does NOT
+// connect to HACApK: the moment linear step is the dense LU (method 0) or the
+// matrix-free path (method 1) -- the H-matrix moment route was removed.
 // The EIEM2 collocation kernel + its old moment / eval-point / pyramid-cloud opt-outs were fully
 // removed in Phase 3b; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.
+//-------------------------------------------------------------------------
 
 
 

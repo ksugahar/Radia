@@ -1159,79 +1159,6 @@ int radTApplication::MomentSystemDenseRaw(int InteractElemKey, double chi, doubl
 	}
 }
 
-#ifdef RADIA_USE_HACAPK
-extern "C" double cHACApK_hlu_run_on_hacapk(void* leafmtxp_void, void* control_void,
-                                            const double* x_orig, const double* y_orig, int nffc);
-#endif
-
-int radTApplication::MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out)
-{
-	// Phase-2 Increment-2 gate: build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem)
-	// and probe the H-matvec against the dense A_raw (entry-by-entry).  out[8] = {ok, matvec_relerr, ndof,
-	// n_lowrank, n_dense, max_rank, compression, build_time}.  See ACA_MOMENT_DESIGN.ipynb.
-	if(out) for(int k = 0; k < 9; k++) out[k] = 0.0;
-#ifdef RADIA_USE_HACAPK
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
-		int dof = InteractPtr->GetTotalDOF();
-		if(dof <= 0) return 0;
-
-		RadHACApKMomentSystem mgr(InteractPtr, chi);
-		RadHACApKParams prm; prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
-		if(!mgr.BuildHMatrix(prm)) return 0;
-		const RadHACApKStats& st = mgr.GetStats();
-
-		int nHex = InteractPtr->GetNumHexElements();
-		std::vector<double> chiv((size_t)(nHex > 0 ? nHex : 1), chi);
-		std::vector<double> Ad((size_t)dof*dof);
-		for(int i = 0; i < dof; i++)
-			for(int j = 0; j < dof; j++)
-				Ad[(size_t)i*dof + j] = InteractPtr->MomentSystemEntry(i, j, chiv.data());
-
-		double max_rel = 0.0;
-		std::vector<double> x0(dof), y0(dof, 0.0);
-		for(int k = 0; k < 4; k++)
-		{
-			std::vector<double> x(dof), yd(dof, 0.0), yh(dof, 0.0);
-			for(int f = 0; f < dof; f++) x[f] = std::sin(0.7*(f+1)+1.3*k) + 0.3*std::cos(0.21*(f+1)*(k+1));
-			for(int i = 0; i < dof; i++) { double s = 0.0; const double* Ar = &Ad[(size_t)i*dof]; for(int j = 0; j < dof; j++) s += Ar[j]*x[j]; yd[i] = s; }
-			mgr.MatVec(x, yh);
-			double num = 0.0, den = 0.0;
-			for(int f = 0; f < dof; f++) { num = std::max(num, std::fabs(yh[f]-yd[f])); den = std::max(den, std::fabs(yd[f])); }
-			if(den > 1e-300) max_rel = std::max(max_rel, num/den);
-			if(k == 0) { x0 = x; y0 = yh; }
-		}
-
-		// CRITICAL de-risk for Increment 3: the moment A_raw is NON-symmetric (the HDiv H-LU template
-		// assumed SPD).  Smoke-test the no-pivot HACApK H-LU round trip: factor A_raw, solve A_raw z = y0
-		// (y0 = A_raw x0), and measure ||z - x0|| / ||x0||.  Small -> H-LU is stable on A_raw -> Increment 3
-		// is just RHS + dispatch wiring; large -> a pivoted / different factor is needed first.
-		double hlu_rt = cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(), x0.data(), y0.data(), 6);
-
-		if(out)
-		{
-			out[0] = 1.0; out[1] = max_rel; out[2] = (double)dof; out[3] = (double)st.n_lowrank;
-			out[4] = (double)st.n_dense; out[5] = (double)st.max_rank; out[6] = st.compression; out[7] = st.build_time;
-			out[8] = hlu_rt;
-		}
-		return 1;
-	}
-	catch (...)
-	{
-		Initialize(); return 0;
-	}
-#else
-	(void)InteractElemKey; (void)chi; (void)eps; (void)leaf; (void)eta;
-	return 0;
-#endif
-}
-
-//-------------------------------------------------------------------------
-
 int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
 {
 #ifdef RADIA_USE_HACAPK
@@ -1341,62 +1268,6 @@ int radTApplication::HLUDebugMaterialize(int InteractElemKey,
     return 0;
 #endif
 }
-
-double radTApplication::HLUTestOnHACApK(int InteractElemKey)
-{
-#ifdef RADIA_USE_HACAPK
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return -1.0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return -1.0; }
-
-		int totalDOF = InteractPtr->GetTotalDOF();
-		if (totalDOF <= 0) return -1.0;
-
-		// Build a fresh HACApK MSC manager. The cluster-tree root will be
-		// preserved at m_leafmtxp->st_clt_root (Phase 4 ground work).
-		RadHACApKMMMManager mgr(InteractPtr);
-		RadHACApKParams params;
-		params.aca_eps = m_hacapk_eps;
-		params.leaf_size = m_hacapk_leaf_size;
-		params.eta = m_hacapk_eta;
-		params.print_level = 0;
-		if(!mgr.BuildHMatrix(params)) return -1.0;
-
-		// Generate a deterministic test vector x_orig in user (original) ordering.
-		std::vector<double> x_orig((size_t)totalDOF), y_orig((size_t)totalDOF);
-		unsigned long seed = 13579UL;
-		for (int i = 0; i < totalDOF; i++) {
-			seed = seed * 6364136223846793005UL + 1442695040888963407UL;
-			x_orig[i] = (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
-		}
-
-		// Compute y_orig = A * x_orig via HACApK MatVec (BEFORE convert/LU).
-		mgr.MatVec(x_orig, y_orig);
-
-		// Run H-LU + solve, get max rel err vs x_orig.
-		// nffc = uniform DOF per element. For MSC: tet=4, wedge/pyramid=5, hex=6.
-		// For a mixed mesh, this single-nffc API is incorrect; for now we
-		// assume uniform hex (6) -- the typical Phase 4 smoke test.
-		int nffc_uniform = 6;
-		return cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(),
-		                                  x_orig.data(), y_orig.data(),
-		                                  nffc_uniform);
-	}
-	catch (...)
-	{
-		Initialize();
-		return -1.0;
-	}
-#else
-	(void)InteractElemKey;
-	return -1.0;
-#endif
-}
-
-//-------------------------------------------------------------------------
 
 void radTApplication::ShowInteractVector(int InteractElemKey, char* FieldVectID)
 {
@@ -1742,13 +1613,12 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		// For HACApK (method 2), skip the dense interaction matrix N: method 2 builds its own H-matrix --
-		// either the EIEM2 HACApK kernel (radTRelaxationMethNo_2) OR, for multipole-moment MMM on pure 6-DOF hex, the
-		// scalable moment H-BiCGSTAB (SolveMomentHACApK).  In both cases the dense N is never read, and the
+		// For HACApK (method 2), skip the dense interaction matrix N: the MMM/MSC method-2 path
+		// (radTRelaxationMethNo_2) builds its own H-matrix and never reads the dense N.  (MMMM moment requests
+		// for method 2 are rerouted to the dense LU moment driver -- MMMM does not connect to HACApK.)  The
 		// moment Picard scaffold (ComputeActualHFieldFromSigma etc.) uses the constitutive H=M/chi -- so we
-		// skip the O(N^2) dense build (Phase 2 Increment 4 storage decoupling).  EXCEPTION: the B-input
-		// Newton/Hantila hysteresis path builds its NpI from the dense BaseMatrix (needs N), so keep the dense
-		// build when those flags are set.
+		// skip the O(N^2) dense build (storage decoupling).  EXCEPTION: the B-input Newton/Hantila hysteresis
+		// path builds its NpI from the dense BaseMatrix (needs N), so keep the dense build when those flags are set.
 		char skipDenseMatrix = 0;
 #ifdef RADIA_USE_HACAPK
 		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && !m_b_input_newton && !m_b_input_hantila)
@@ -1865,36 +1735,27 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// 3-DOF RecMag dipole + 4-6 DOF MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
 		// EIEM2 surface-charge collocation kernel was fully removed in Phase 3b.
 		{
-			extern bool g_multipole_moment_hacapk;
-			g_multipole_moment_hacapk = false;
 			// multipole-moment MMM is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
-			// tet/hex/wedge/pyramid to the LU/Picard moment driver.  Method 2 is deliberately rerouted to
-			// dense LU; mixed 3-DOF dipole + MSC is rejected fail-loud (Error204), since no production case
-			// mixes surface-charge + dipole soft iron.
+			// tet/hex/wedge/pyramid to the LU/Picard moment driver.  MMMM does NOT connect to HACApK, so a
+			// method-2 (HACApK) request on an all-moment object is rerouted to the dense LU moment driver;
+			// mixed 3-DOF dipole + MSC is rejected fail-loud (Error204), since no production case mixes
+			// surface-charge + dipole soft iron.
+			radThg hgMom;
+			if(ValidateElemKey(InteractElemKey, hgMom))
 			{
-				radThg hgMom;
-				if(ValidateElemKey(InteractElemKey, hgMom))
+				radTInteraction* pIntrMom = dynamic_cast<radTInteraction*>(hgMom.rep);
+				if(pIntrMom != 0)
 				{
-					radTInteraction* pIntrMom = dynamic_cast<radTInteraction*>(hgMom.rep);
-					if(pIntrMom != 0)
+					int neMom = pIntrMom->GetAmOfMainElem();
+					bool allMoment = (neMom > 0);
+					for(int iEl = 0; iEl < neMom; iEl++)
 					{
-						int neMom = pIntrMom->GetAmOfMainElem();
-						bool allMoment = (neMom > 0);
-						for(int iEl = 0; iEl < neMom; iEl++)
-						{
-							int dd = pIntrMom->GetElementDOF(iEl);
-							if(dd != 6 && dd != 5 && dd != 4) allMoment = false;   // moment = tet(4) + wedge/pyramid(5) + hex(6)
-						}
-						if(allMoment)
-						{
-							// MMMM does NOT connect to HACApK (Sugahara 2026-06-28): method-2 moment -> dense LU.
-							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
-							{
-								g_multipole_moment_hacapk = false;
-								MethNo = RadSolverMethod::LU;
-							}
-						}
+						int dd = pIntrMom->GetElementDOF(iEl);
+						if(dd != 6 && dd != 5 && dd != 4) allMoment = false;   // moment = tet(4) + wedge/pyramid(5) + hex(6)
 					}
+					// MMMM does NOT connect to HACApK (Sugahara 2026-06-28): method-2 moment -> dense LU.
+					if(allMoment && MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
+						MethNo = RadSolverMethod::LU;
 				}
 			}
 		}
@@ -1904,12 +1765,10 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 			ActualIterNum = MakeAutoRelax(InteractElemKey, PrecOnMagnetiz, MaxIterNumber, MethNo);
 			// Store matrix build time (MakeAutoRelax resets m_solve_t_matrix_build to 0)
 			m_solve_t_matrix_build = t_matrix_build;
-			{ extern bool g_multipole_moment_hacapk; g_multipole_moment_hacapk = false; }   // reset the per-solve moment H-matrix flag
 		}
 		catch(...)
 		{
 			SendingIsRequired = 0;
-			{ extern bool g_multipole_moment_hacapk; g_multipole_moment_hacapk = false; }
 			// Don't delete cached interaction on error - keep for potential retry
 			throw 0;
 		}
@@ -2659,8 +2518,8 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 #ifdef RADIA_USE_HACAPK
 	// H-matrix timing (Method 2 only) - ELF-compatible
 	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
-	dOut[8] = (double)m_solve_defl_nplaq;  // loop-deflation cycles installed
-	dOut[9] = m_solve_defl_alpha;          // loop-deflation shift alpha (auto-scaled)
+	dOut[8] = 0.0;  // (was moment loop-deflation cycles; MMMM no longer connects to HACApK)
+	dOut[9] = 0.0;  // (was moment loop-deflation shift alpha; removed)
 #else
 	dOut[7] = 0.0;
 	dOut[8] = 0.0;
