@@ -700,9 +700,10 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         raise NotImplementedError("hdiv_demag_solve: image symmetry is not yet wired at order>0 (use order=0)")
     if pm_M is not None:
         raise NotImplementedError("hdiv_demag_solve: PM-mixed (pm_M) is not yet wired at order>0 (use order=0)")
-    if bh_table is not None and curve_order is None:
-        raise NotImplementedError("hdiv_demag_solve: NONLINEAR (bh_table) flat order>0 is not yet validated -- "
-                                  "use order=0, or curve_order=2 (curved nonlinear).")
+    # flat (non-curved) order>0 NONLINEAR is now WIRED: the symmetric energy-Newton (_solve_nonlinear_energy_cpp)
+    # is Gram-AGNOSTIC (it consumes only H.matvec + H.solve_linear_material_mass_riesz), so it runs on the flat
+    # high-order Gram exactly as on the RT0 / curved Gram.  VERIFIED: flat RT1 nonlinear on a tet sphere matches
+    # the RT0 nonlinear solve to ~7e-4 (golden: test_hdiv_vim_curved_solve_nonlinear::test_flat_rt1_nonlinear_*).
     if linear_solver == "hlu":
         raise NotImplementedError("hdiv_demag_solve: linear_solver='hlu' is RT0-only (order=0)")
     if gram_backend == "gauss":

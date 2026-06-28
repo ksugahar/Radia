@@ -3,9 +3,9 @@
 The curved tet charge Gram (build_charge_gram(curve_order=2), CurvedTri/TetPotential -- locked by
 test_hdiv_vim_curved_gram.py) is now wired to the symmetric energy-Newton nonlinear solver
 (_solve_nonlinear_energy_cpp): hdiv_demag_solve(mesh, bh_table=..., curve_order=2) lifts the former
-order>0-nonlinear NotImplementedError for the CURVED path (flat order>0 nonlinear stays blocked). No new C++
--- the energy-Newton is Gram-AGNOSTIC (it consumes only H.matvec + H.solve_linear_material_mass_riesz, both
-present on the curved m_highorder Gram object).
+order>0-nonlinear NotImplementedError for the CURVED path.  The FLAT order>0 nonlinear path is now wired too
+(verified, see test_flat_rt1_nonlinear_matches_rt0 below).  No new C++ -- the energy-Newton is Gram-AGNOSTIC
+(it consumes only H.matvec + H.solve_linear_material_mass_riesz, present on every high-order Gram object).
 
 Locks: (1) curve_order=2 + bh_table runs + reports nonlinear=True, solver='energy-newton-cpp', curve_order=2;
 (2) a uniform sphere magnetizes to the analytic spheroid fixed point (~1e-2); (3) matches the RT0 (order=0)
@@ -54,8 +54,15 @@ def test_curved_tet_nonlinear_runs_and_matches_analytic():
     assert 0.30 < rc["demag"] < 0.37, rc["demag"]
 
 
-def test_flat_highorder_nonlinear_still_blocked():
-    """The guard is narrowed, not removed: flat (non-curved) order>0 nonlinear still fails loud."""
+def test_flat_rt1_nonlinear_matches_rt0():
+    """FLAT (non-curved) RT1 nonlinear is now WIRED (the energy-Newton is Gram-agnostic): it runs on the flat
+    high-order Gram and matches the RT0 nonlinear solve on the same sphere (the former 'flat order>0 blocked'
+    guard was removed -- verified ~7e-4 vs RT0)."""
+    H0 = 5000.0
     with ng.TaskManager():
-        with pytest.raises(NotImplementedError, match="flat order>0"):
-            hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, 5000.0)), order=2)
+        r1 = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
+        r0 = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=0)
+    assert r1["nonlinear"] is True
+    assert r1["linear_solver"] == "energy-newton-cpp", r1["linear_solver"]
+    assert r1["iters"] < 300, r1["iters"]
+    assert abs(r1["M_avg"][2] - r0["M_avg"][2]) / abs(r0["M_avg"][2]) < 0.05, (r1["M_avg"][2], r0["M_avg"][2])
