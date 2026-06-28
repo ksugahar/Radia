@@ -474,6 +474,20 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
 
+    # Stage-1 AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved
+    # geometry as B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with
+    # geometry order (tet sphere: straight-Gram 0.336/0.308/0.279 at curve 1/2/3; matched curved Gram restores
+    # ~1/3 -- 0.338 at curve 2).  Only the TET/TRI curved charge Gram is wired (curve_order<=2 via
+    # _solve_highorder); HEX/WEDGE curved Gram is pending (the polytope curved kernel -- Stage 3), so a curved
+    # hex/wedge mesh is NOT auto-routed here (it would hit the tet-only high-order path).  curve_order=0 forces
+    # the straight Gram (a deliberate flat-Gram probe); an explicit int overrides the auto-match.
+    if curve_order is None and int(order) == 0:
+        _k = mesh.GetCurveOrder()
+        if _k >= 2 and all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
+            curve_order = _k
+    elif curve_order == 0:
+        curve_order = None
+
     # ---- HIGH-ORDER (order>=1): the order-p charge-Gram material solve ----
     # FIXED 2026-06-28 ([[hdiv-highorder-material-solve-wrong]]): the per-element change-of-basis in
     # `_vim._charge_basis` made the order-p demag operator N = B^T G B VALID (eig(M_mass^-1 N) in [0,1]; the
