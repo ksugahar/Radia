@@ -208,7 +208,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
-| `standalone_panels` | Cubit-bypass standalone launch of the four Radia-NGSolve panels — |
+| `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
@@ -992,12 +992,12 @@ Module: `radia_mcp.meta.server`
 
 ## `mcp-server-panel-review`
 
-_Radia GUI panel review skill chain (panel-cli-diff / panel-review / panel-qt-test / panel-preview / panel-smoke) + bug catalogue. Surfaces the 13-check list and known panel bug patterns through one queryable tool._
+_Radia notebook panel review contract (DesignSpec / Workbench / result artifacts / validation_test / no-PySide gate). Historical PySide topic names are compatibility aliases._
 
 Module: `radia_mcp.panel_review.server`
 
 | Tool | Description |
 |---|---|
-| `panel_review` | Get Radia GUI panel review skill-chain documentation and bug catalogue. |
+| `panel_review` | Get Radia notebook panel review documentation. |
 | `panel_review_status` | (no description) |
 | `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
