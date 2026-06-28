@@ -1,6 +1,6 @@
 """Golden lock: cohomology generators computed FROM SCRATCH (matched Whitney complex).
 
-Runs examples/stream_function/cohomology_generators_whitney.py (torus) and asserts
+Runs validation_test/stream_function/cohomology_generators_whitney.py (torus) and asserts
 the harmonic 1-form generators come out of the EXACT discrete de Rham complex
 (H1 order 1 -> HCurl order 0) cleanly:
 
@@ -20,7 +20,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "stream_function")
+EXDIR = os.path.join(HERE, "..", "stream_function")
 
 
 @pytest.mark.slow

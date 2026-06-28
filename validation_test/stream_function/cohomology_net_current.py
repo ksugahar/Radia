@@ -29,7 +29,7 @@ Builds on demo_regcoil_fusion.py (analytic torus generators) + the surface-FE
 stream function in calc_streamfunction.py.  Reuses radia.stream_function only
 through the design solve.  Caller wraps NGSolve work in TaskManager.
 
-Run:  python examples/stream_function/cohomology_net_current.py
+Run:  python validation_test/stream_function/cohomology_net_current.py
 """
 from __future__ import annotations
 
@@ -40,9 +40,12 @@ import sys
 import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.abspath(os.path.join(_HERE, "..", ".."))
+_EXAMPLES = os.path.join(_REPO, "examples", "stream_function")
 sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src", "radia"))
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src", "radia", "panels"))
+sys.path.insert(0, _EXAMPLES)
+sys.path.insert(0, os.path.join(_REPO, "src", "radia"))
+sys.path.insert(0, os.path.join(_REPO, "src", "radia", "panels"))
 
 MU0 = 4.0e-7 * math.pi
 

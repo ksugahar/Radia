@@ -66,7 +66,7 @@ kernels `A` is numerically **low rank**, so we instead:
 
 Net cost is roughly `(M/k_aca)^2` lower than the dense route.
 
-**Measured** (`examples/stream_function/bench_aca_vs_dense.py`, smooth
+**Measured** (`validation_test/stream_function/bench_aca_vs_dense.py`, smooth
 `1/(1+alpha r^2)` kernel, `M = N/4`, same per-call kernel for both methods, LAB
 2026-05-29).  The kernel is numerically low rank so `k_aca` stays ~constant
 (~30) while `N` grows; the eval-count reduction `M*N -> ~k_aca(M+N)` therefore
