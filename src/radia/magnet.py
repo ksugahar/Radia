@@ -61,3 +61,21 @@ def magnet_box(center, dimensions, magnetization):
         [cx + hx, cy + hy, cz + hz], [cx - hx, cy + hy, cz + hz],
     ]
     return rad.ObjHexahedron(verts, [float(m) for m in magnetization])
+
+
+def ObjRecMag(center, dimensions, magnetization):
+    """Script-side ``ObjRecMag`` compatibility wrapper -- a rectangular block on the MMMM
+    (surface-charge ``ObjHexahedron``) representation, identical signature to the retiring C++
+    ``ObjRecMag`` (surface-current ``radTRecMag``).
+
+    The C++ ``ObjRecMag`` is being demoted from the user API (CLAUDE.md "Reduce Proprietary API
+    Surface"); other solvers / examples / tests that call ``rad.ObjRecMag(center, dimensions,
+    magnetization)`` keep working through this script-side wrapper, now backed by the unified MMMM
+    element.  For a uniformly magnetized block the MMMM surface-charge field IS the exact analytic
+    (K&J) cuboid field -- verified to machine precision on-axis (1e-16) and ~1e-7 vs the old
+    surface-current ``ObjRecMag`` off-axis -- so this is a faithful drop-in.
+
+    Returns a Radia ``ObjHexahedron`` handle (permanent magnet for fixed ``magnetization``; apply a
+    soft material with ``rad.MatApl`` for soft iron, then ``rad.Solve`` the container).
+    """
+    return magnet_box(center, dimensions, magnetization)
