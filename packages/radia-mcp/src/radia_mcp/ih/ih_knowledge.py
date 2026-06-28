@@ -6,6 +6,14 @@ including Gmsh mesh loading, A-Phi eddy current formulation, Joule heat
 computation, transient thermal analysis, rotating workpiece, VTK output,
 and post-processing patterns.
 
+Public docs/notebooks:
+  - docs/induction_heating/public_demo.ipynb -- human-facing ESIM/BEM/WPT
+    induction-heating entry point with saved outputs and JSON sidecar.
+  - docs/induction_heating/induction_heating_examples_catalog.ipynb -- full
+    source/hash catalog for examples/induction_heating with migration lanes.
+  - docs/ih_esim_benchmark/esim_showcase.ipynb -- nonlinear ESIM benchmark
+    figures/results.
+
 Sources:
   - W:\\31_Go-Tech\\10_誘導加熱の解析\\2025_09_20_toymodel_Gmsh\\NGSolve
     (K. Sugahara's production induction heating simulations)
