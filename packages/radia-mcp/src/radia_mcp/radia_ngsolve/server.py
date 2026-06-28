@@ -845,7 +845,7 @@ def mmm_core(topic: str = "chubar_1998") -> str:
             "matrix_structure"   - Matrix probes: GetInteractMatrix is
                                    MMM/dense legacy; multipole-moment MMM MSC uses
                                    BuildMomentSystem / MomentSystemDenseRaw /
-                                   MomentHMatrixProbe
+                                   dense-only diagnostics
             "eigenvalue_nullspace" - Near-null loop modes, cond ~ mu_r,
                                    beautiful->ugly BiCGSTAB (CEFC 2026)
             "multipole_modes"    - What field the 6-DoF MSC creates:

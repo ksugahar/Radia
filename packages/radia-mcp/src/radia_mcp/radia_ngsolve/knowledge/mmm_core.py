@@ -656,13 +656,13 @@ centroid field/gradient moment rows.  Use these probes instead:
 handle = rad.BuildMatrix(obj)
 A, rhs, dof = rad.BuildMomentSystem(handle, chi, hx, hy, hz)
 A_raw, dof = rad.MomentSystemDenseRaw(handle, chi)
-probe = rad.MomentHMatrixProbe(handle, chi)
 ```
 
 `BuildMomentSystem` returns the normalized dense multipole-moment MMM system
 for a uniform field.  `MomentSystemDenseRaw` is the unnormalized
-entry-by-entry matrix used by the H-matrix entry.  `MomentHMatrixProbe`
-checks the HACApK moment matvec against `A_raw`.
+entry-by-entry matrix kept for diagnostics/regression.  The former HACApK
+moment-probe route is retired: collocation MMMM is dense or matrix-free and
+does not connect to HACApK.
 
 ### Properties (verified)
 
@@ -689,9 +689,9 @@ the real ACA+ shifts the near-zero eigenvalues (it does not materially --
 see "eigenvalue_nullspace"). C++ path: `RadHACApKMMMManager::MatVec`
 exposed via `radTApplication::HMatrixDensify`.
 
-For multipole-moment MMM MSC method 2, use `MomentHMatrixProbe`; the moment
-H-matrix stores `A_raw` directly and is not an `A = -N + diag(1/chi)`
-operator.
+The former multipole-moment HACApK probe was intentionally removed.  Use the
+dense probes above for MMMM diagnostics, and `HMatrixDensify` only for the
+classic MMM H-matrix path.
 
 See "eigenvalue_nullspace" for why the spectrum of A matters, and
 `docs/solver/MSC_NULLSPACE_DEFLATION.md` for the full treatment.
