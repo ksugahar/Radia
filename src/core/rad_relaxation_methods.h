@@ -96,14 +96,6 @@ struct NonlinearContext {
 	// Base matrix for linear system (geometric part without chi)
 	std::vector<double> BaseMatrix;
 
-#ifdef RADIA_USE_HACAPK
-	// Multipole-moment method-2 reusable chi-free geometry H-matrix.  The nonlinear Picard loop updates
-	// row scaling / RHS / preconditioner, not this geometry kernel.
-	std::shared_ptr<RadHACApKMomentSystem> MomentKernelHMatrix;
-	std::vector<double> MomentLocalLBlock;  // chi-independent 6x6 local moment blocks, one per moment element
-	std::vector<double> MomentDiagKBlock;   // chi-free diagonal K_geometry blocks, one per moment element
-#endif
-
 	// Newton-Raphson fields
 	bool use_newton;                           // True to use differential chi
 	std::vector<double> DifferentialChiArray;  // chi_d per element [AmOfMainElem]
@@ -337,10 +329,9 @@ protected:
 	// Override: LU direct solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
-	// Override: when the moment H-matrix path (g_multipole_moment_hacapk) drives this LU/Picard driver, the
-	// linear step solves via the scalable H-BiCGSTAB and the convergence scaffold uses H=M/chi -- so no
-	// dense interaction/base matrix is needed (Phase 2 Increment 4 storage decoupling).  Returns true for
-	// the genuine dense LU / B-input Newton-Hantila paths (which DO read the dense BaseMatrix).
+	// Override: the all-moment MMM/MSC Picard path assembles its own per-element moment system and never
+	// reads the dense interaction/base matrix, so no dense BaseMatrix is needed (storage decoupling).
+	// Returns true for the genuine dense LU / B-input Newton-Hantila paths (which DO read the dense BaseMatrix).
 	bool NeedsDenseMatrix() const override;
 
 	// Override: Dense Jacobian assembly + LAPACK dgesv_ for B-input Newton

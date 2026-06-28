@@ -1,10 +1,9 @@
 """Golden lock: the system-A H-LU on the HDiv-VIM operator A = M_mass + chi*N.
 
-test_hlu_materialize_free.py locks the materialize-free H-LU on the *collocation*
-system matrix (HLUTestOnHACApK).  This file locks the same property on the HDiv-VIM
-*system operator* A = M_mass + chi*N -- the form-1 uniform-chi soft-iron material
-system on the RT0 face DOFs, i.e. the operator the production demag path actually
-forms -- through the C++ probes:
+This file locks the materialize-free H-LU on the HDiv-VIM *system operator*
+A = M_mass + chi*N -- the form-1 uniform-chi soft-iron material system on the
+RT0 face DOFs, i.e. the operator the production demag path actually forms --
+through the C++ probes:
 
   - _hdiv_vim_hlu_probe        : structured hex grid, self-contained
   - _hdiv_vim_tet_hlu_probe    : unstructured tet mesh (the production / C-type path)

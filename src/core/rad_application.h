@@ -119,8 +119,6 @@ public:
 	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
 	int m_solve_nonl_iterations;     // Total nonlinear iterations
 	int m_solve_num_threads;         // Number of threads used during solve
-	int m_solve_defl_nplaq;          // Loop-deflation cycles installed (HACApK)
-	double m_solve_defl_alpha;       // Loop-deflation shift alpha actually used (auto-scaled)
 	bool m_solve_stats_valid;        // Whether stats are available
 
 	// Interaction matrix cache for avoiding rebuild on repeated Solve() calls
@@ -201,8 +199,6 @@ public:
 		m_solve_linear_iterations = 0;
 		m_solve_nonl_iterations = 0;
 		m_solve_num_threads = 1;
-		m_solve_defl_nplaq = 0;
-		m_solve_defl_alpha = 0.0;
 		m_solve_stats_valid = false;
 
 		// Interaction matrix cache init
@@ -363,8 +359,6 @@ public:
 	int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF);  // per moment-element centroid demag field+gradient functionals
 	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // multipole-moment MMM system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)
 	int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF);  // dense UN-normalized A_raw built ENTRY-BY-ENTRY via MomentSystemEntry (ACA H-matrix entry validation, Phase 2)
-	int MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out);  // build A_raw as a HACApK H-matrix + probe H-matvec vs dense; out[8] (Phase 2 Increment 2)
-	double HLUTestOnHACApK(int InteractElemKey);  // Phase 4: H-LU smoke test on real HACApK tree (returns max rel err vs MatVec round-trip)
 	int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug: materialize post-convert tree
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
 	int MakeManualRelax(int InteractElemKey, int MethNo, int IterNumber, double RelaxParam);

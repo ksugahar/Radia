@@ -424,7 +424,6 @@ ROW-MAJOR (nMom x 9 x DOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source D
 EXP int CALL RadGetCentroidFieldGrad(double* pC, int* pNHex, int* pDOF, int InteractElemKey);
 EXP int CALL RadBuildMomentSystem(double chi, const double* Happ, double* pA, double* pRhs, int* pDOF, int InteractElemKey);
 EXP int CALL RadMomentSystemDenseRaw(double chi, double* pA, int* pDOF, int InteractElemKey);
-EXP int CALL RadMomentHMatrixProbe(double chi, double eps, int leaf, double eta, double* out, int InteractElemKey);
 
 /** Densify the actual HACApK (ACA+) system operator into a dense matrix.
 Builds the MSC H-matrix for the interaction handle and applies it to unit
@@ -437,7 +436,6 @@ H-matrix against the exact dense matrix (eigenvalues / deflation).
 */
 EXP int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey);
 
-EXP double CALL RadHLUTestOnHACApK(int InteractElemKey);  // Phase 4 H-LU smoke test
 EXP int CALL RadHLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug
 
 // RadPreRelax REMOVED (2026-01-31) - Use RadBuildMatrix instead
