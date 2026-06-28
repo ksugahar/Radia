@@ -41,7 +41,7 @@ public:
 	inline static radTg3d* g3dCast(radTg* gPtr);
 	inline static radTGroup* GroupCast(radTg3d* g3dPtr);
 	inline static radTg3dRelax* g3dRelaxCast(radTg3d* g3dPtr);
-	inline static radTRecMag* RecMagCast(radTg3dRelax* g3dRelaxPtr);
+	inline static radTRecCur* RecCurCast(radTg3dRelax* g3dRelaxPtr);
 	// Subdivided*Cast* REMOVED (Phase C, 2026-04-16)
 	inline static radTExtrPolygon* ExtrPolygonCast(radTg3dRelax* g3dRelaxPtr);
 	inline static radTPolyhedron* PolyhedronCast(radTg3dRelax* g3dRelaxPtr);
@@ -86,10 +86,10 @@ inline radTg3dRelax* radTCast::g3dRelaxCast(radTg3d* g3dPtr)
 
 //-------------------------------------------------------------------------
 
-inline radTRecMag* radTCast::RecMagCast(radTg3dRelax* g3dRelaxPtr)
+inline radTRecCur* radTCast::RecCurCast(radTg3dRelax* g3dRelaxPtr)
 {
-	radTRecMag RecMag;
-	if(g3dRelaxPtr->Type_g3dRelax()==RecMag.Type_g3dRelax()) return (radTRecMag*)g3dRelaxPtr;
+	radTRecCur RecMag;
+	if(g3dRelaxPtr->Type_g3dRelax()==RecMag.Type_g3dRelax()) return (radTRecCur*)g3dRelaxPtr;
 	else return 0;
 }
 

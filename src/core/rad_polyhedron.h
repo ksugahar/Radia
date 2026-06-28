@@ -341,7 +341,7 @@ public:
 	int Type_g3dRelax() { return 5;}
 	// DOF: AmOfFaces for MSC surface-charge elements (sigma per face).
 	// Tetrahedra: 4 DOF, Wedges/Pyramids: 5 DOF, Hexahedra: 6 DOF (all face-charge moment elements).
-	// Returns 0 if no material is applied (same behavior as radTRecMag)
+	// Returns 0 if no material is applied (same behavior as radTRecCur)
 	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0) ? 0 : (Use6DOF_MSC ? AmOfFaces : 3); }
 
 	void FillInVectHandlePgnAndTrans(TVector3d*, int, int**, int*);
@@ -455,7 +455,7 @@ public:
 	void DefineRelAndAbsTol(double*);
 
 	// CheckForSpecialShapes (polyhedron->RecMag box optimization) REMOVED 2026-06-28 -- magnetization
-	// rectangular blocks stay MMMM surface-charge polyhedra; radTRecMag kept only as the current kernel.
+	// rectangular blocks stay MMMM surface-charge polyhedra; radTRecCur kept only as the current kernel.
 
 	double Volume();
 	void VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique);

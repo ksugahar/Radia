@@ -17,7 +17,7 @@
 -------------------------------------------------------------------------*/
 
 //-------------------------------------------------------------------------
-// Implementation of class radTRecMag - a class of objects of rectangular
+// Implementation of class radTRecCur - a class of objects of rectangular
 // parallelipipedic shape capable to generate magnetic field.
 // RecMag is derived from radTg3d.
 //-------------------------------------------------------------------------
@@ -44,7 +44,7 @@ extern radTYield radYield;
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-void radTRecMag::B_comp(radTField* FieldPtr)
+void radTRecCur::B_comp(radTField* FieldPtr)
 {
 	const double ZeroToler = 1.E-20;
 
@@ -378,7 +378,7 @@ void radTRecMag::B_comp(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::B_compMultipole(radTField* FieldPtr, double* AlreadyComputedStuff)
+void radTRecCur::B_compMultipole(radTField* FieldPtr, double* AlreadyComputedStuff)
 {
 	double* MltThr = FieldPtr->CompCriterium.MltplThresh;
 	double SquaredMltpolCritRatio = AlreadyComputedStuff[9];
@@ -527,7 +527,7 @@ FinalFieldDefinition:
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::B_intComp(radTField* FieldPtr)
+void radTRecCur::B_intComp(radTField* FieldPtr)
 {
 	if(FieldPtr->FieldKey.FinInt_) { B_intCompFinNum(FieldPtr); return;}
 
@@ -831,7 +831,7 @@ FinalDefinitionOfFieldIntegrals:
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::B_intUtilSpecCaseZeroVxVy(const TVector3d& P1, const TVector3d& P2, short J_is_Zero, TMatrix3d& F, TVector3d& G)
+void radTRecCur::B_intUtilSpecCaseZeroVxVy(const TVector3d& P1, const TVector3d& P2, short J_is_Zero, TMatrix3d& F, TVector3d& G)
 {
 	double z2_m_z1 = P2.z - P1.z;
 
@@ -869,7 +869,7 @@ void radTRecMag::B_intUtilSpecCaseZeroVxVy(const TVector3d& P1, const TVector3d&
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::FunForOuterIntAtSurfInt(double Arg, TVector3d* VectArray)
+void radTRecCur::FunForOuterIntAtSurfInt(double Arg, TVector3d* VectArray)
 {
 	const double PrecEnhFact = 1.; // Don't make it >1 : it's dangerous for convergence of outer itegral !
 	double* OuterIntPrecArray = SurfIntDataPtr->Field.ShapeIntDataPtr->AbsPrecArray;
@@ -900,7 +900,7 @@ void radTRecMag::FunForOuterIntAtSurfInt(double Arg, TVector3d* VectArray)
 		(SurfIntDataPtr->InnerAbsPrecAndLimitsArray)[SurfIntDataPtr->IntegrandLen + 1] = CentrPoint.y + 0.5*Dimensions.y;
 		SurfIntDataPtr->PointOnSurface.z = Arg;
 	}
-	FormalOneFoldInteg(this, &radTRecMag::FunForInnerIntAtSurfInt, SurfIntDataPtr->IntegrandLen, 
+	FormalOneFoldInteg(this, &radTRecCur::FunForInnerIntAtSurfInt, SurfIntDataPtr->IntegrandLen, 
 					   SurfIntDataPtr->InnerAbsPrecAndLimitsArray, 
 					   SurfIntDataPtr->InnerElemCompNotFinished, SurfIntDataPtr->InnerIntegVal);
 
@@ -909,7 +909,7 @@ void radTRecMag::FunForOuterIntAtSurfInt(double Arg, TVector3d* VectArray)
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::IntOverSurf(radTField* FieldPtr)
+void radTRecCur::IntOverSurf(radTField* FieldPtr)
 {
 	int LenVal = FieldPtr->ShapeIntDataPtr->IntegrandLength;
 	int LenValp2 = LenVal+2;
@@ -973,13 +973,13 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 	SurfIntDataPtr->SurfBoundInd = 1;
 	SurfIntDataPtr->PointOnSurface.z = CentrPoint.z - HalfDim.z + SmallPositive;
 	SurfIntDataPtr->Field.ShapeIntDataPtr->Normal = TVector3d(0.,0.,-1.);
-	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
+	FormalOneFoldInteg(this, &radTRecCur::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 //Integration over upper bound
 	SurfIntDataPtr->SurfBoundInd = 2;
 	SurfIntDataPtr->PointOnSurface.z = CentrPoint.z + HalfDim.z + SmallPositive;
 	SurfIntDataPtr->Field.ShapeIntDataPtr->Normal = TVector3d(0.,0.,1.);
-	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
+	FormalOneFoldInteg(this, &radTRecCur::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 
 //For left, right, back and front bounds
@@ -989,25 +989,25 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 	SurfIntDataPtr->SurfBoundInd = 3;
 	SurfIntDataPtr->PointOnSurface.y = CentrPoint.y - HalfDim.y + SmallPositive;
 	SurfIntDataPtr->Field.ShapeIntDataPtr->Normal = TVector3d(0.,-1.,0.);
-	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
+	FormalOneFoldInteg(this, &radTRecCur::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 //Integration over right bound
 	SurfIntDataPtr->SurfBoundInd = 4;
 	SurfIntDataPtr->PointOnSurface.y = CentrPoint.y + HalfDim.y + SmallPositive;
 	SurfIntDataPtr->Field.ShapeIntDataPtr->Normal = TVector3d(0.,1.,0.);
-	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
+	FormalOneFoldInteg(this, &radTRecCur::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 //Integration over back bound
 	SurfIntDataPtr->SurfBoundInd = 5;
 	SurfIntDataPtr->PointOnSurface.x = CentrPoint.x - HalfDim.x + SmallPositive;
 	SurfIntDataPtr->Field.ShapeIntDataPtr->Normal = TVector3d(-1.,0.,0.);
-	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
+	FormalOneFoldInteg(this, &radTRecCur::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 //Integration over right bound
 	SurfIntDataPtr->SurfBoundInd = 6;
 	SurfIntDataPtr->PointOnSurface.x = CentrPoint.x + HalfDim.x + SmallPositive;
 	SurfIntDataPtr->Field.ShapeIntDataPtr->Normal = TVector3d(1.,0.,0.);
-	FormalOneFoldInteg(this, &radTRecMag::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
+	FormalOneFoldInteg(this, &radTRecCur::FunForOuterIntAtSurfInt, LenVal, OuterAbsPrecAndLimitsArray, OuterElemCompNotFinished, OuterIntegVal);
 	for(i=0; i<LenVal; i++) OutVectArray[i] += (OuterIntegVal[0])[i];
 
 // Automatic cleanup via RAII
@@ -1019,11 +1019,11 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::SubdivideItself REMOVED (Phase C, 2026-04-16)
+// radTRecCur::SubdivideItself REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
+// radTRecCur::Dump / DumpPureObjInfo REMOVED (Phase B2b, 2026-04-15)
 
 //-------------------------------------------------------------------------
 
@@ -1031,7 +1031,7 @@ void radTRecMag::IntOverSurf(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-int radTRecMag::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char PutNewStuffIntoGenCont)
+int radTRecCur::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char PutNewStuffIntoGenCont)
 {
 	if(J.x!=0. || J.y!=0. || J.z!=0. || J_IsNotZero) return 1;
 
@@ -1098,27 +1098,27 @@ int radTRecMag::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::SubdivideItselfByOneSetOfParPlanes REMOVED (Phase C, 2026-04-16)
+// radTRecCur::SubdivideItselfByOneSetOfParPlanes REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::SubdivideItselfByPlanesParToFace REMOVED (Phase C, 2026-04-16)
+// radTRecCur::SubdivideItselfByPlanesParToFace REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::CutItself REMOVED (Phase C, 2026-04-16)
+// radTRecCur::CutItself REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
+// radTRecCur::FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-// radTRecMag::CheckVertexPtsPositionsWithRespectToPlane REMOVED (Phase C, 2026-04-16)
+// radTRecCur::CheckVertexPtsPositionsWithRespectToPlane REMOVED (Phase C, 2026-04-16)
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::Push_backCenterPointAndField(radTFieldKey* pFieldKey, radTVectPairOfVect3d* pVectPairOfVect3d, radTrans* pBaseTrans, radTg3d* g3dSrcPtr, radTApplication* pAppl)
+void radTRecCur::Push_backCenterPointAndField(radTFieldKey* pFieldKey, radTVectPairOfVect3d* pVectPairOfVect3d, radTrans* pBaseTrans, radTg3d* g3dSrcPtr, radTApplication* pAppl)
 {// Attention: this assumes no more than one transformation with mult. no more than 1 !!!
 	TVector3d CP = CentrPoint;
 	radTrans* pTrans = (g3dListOfTransform.empty())? 0 : (radTrans*)((*(g3dListOfTransform.begin())).Handler_g.rep);
@@ -1163,7 +1163,7 @@ void radTRecMag::Push_backCenterPointAndField(radTFieldKey* pFieldKey, radTVectP
 
 //-------------------------------------------------------------------------
 
-void radTRecMag::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique)
+void radTRecCur::VerticesInLocFrame(radTVectorOfVector3d& OutVect, bool EnsureUnique)
 {
 	TVector3d HalfDim = 0.5*Dimensions;
 	double xMin = CentrPoint.x - HalfDim.x, xMax = CentrPoint.x + HalfDim.x;

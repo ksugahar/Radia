@@ -48,7 +48,7 @@ struct radTParallelepSurfIntData {
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-class radTRecMag : public radTg3dRelax {
+class radTRecCur : public radTg3dRelax {
 	radTParallelepSurfIntData* SurfIntDataPtr;
 public:
 	TVector3d Dimensions;
@@ -56,7 +56,7 @@ public:
 	short J_IsNotZero;
 	short InternalFacesAfterCut;
 
-	radTRecMag(const TVector3d& InCPoiVect, const TVector3d& InDimsVect, 
+	radTRecCur(const TVector3d& InCPoiVect, const TVector3d& InDimsVect, 
 			   const TVector3d& InMagnVect, const TVector3d& InJ_vect, const radThg& InMaterHandle, short InJ_IsNotZero =0) 
 			   : radTg3dRelax(InCPoiVect, InMagnVect, InMaterHandle)
 	{
@@ -66,7 +66,7 @@ public:
 
 		J_IsNotZero = InJ_IsNotZero;
 	}
-	radTRecMag(const TVector3d& InCPoiVect, const TVector3d& InDimsVect, 
+	radTRecCur(const TVector3d& InCPoiVect, const TVector3d& InDimsVect, 
 			   const TVector3d& InMagnVect, 
 			   const TVector3d& InJ_vect, short InJ_IsNotZero)
 			   : radTg3dRelax(InMagnVect)
@@ -75,14 +75,14 @@ public:
 		J=InJ_vect; J_IsNotZero = InJ_IsNotZero;
 		InternalFacesAfterCut = 0;
 	}
-	// radTRecMag(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
-	radTRecMag() : radTg3dRelax()
+	// radTRecCur(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
+	radTRecCur() : radTg3dRelax()
 	{ 
 		InternalFacesAfterCut = 0;
 	}
 
 	int Type_g3dRelax() { return 1;}
-	virtual int Type_RecMag() { return 0;}
+	virtual int Type_RecCur() { return 0;}
 
 	void B_comp(radTField*);
 	void B_compMultipole(radTField*, double*);
@@ -117,7 +117,7 @@ public:
 
 	int DuplicateItself(radThg& hg, radTApplication*, char) 
 	{
-		return FinishDuplication(new radTRecMag(*this), hg);
+		return FinishDuplication(new radTRecCur(*this), hg);
 	}
 
 	// SubdivideItself* / CutItself / FindLowestAndUppestVertices REMOVED (Phase C, 2026-04-16)
@@ -138,7 +138,7 @@ public:
 	}
 
 	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0)? 0 : 3;}
-	int SizeOfThis() { return sizeof(radTRecMag);}
+	int SizeOfThis() { return sizeof(radTRecCur);}
 
 	int ConvertToPolyhedron(radThg&, radTApplication*, char);
 	// CheckVertexPtsPositionsWithRespectToPlane REMOVED (Phase C, 2026-04-16)
@@ -225,7 +225,7 @@ public:
 
 //-------------------------------------------------------------------------
 
-inline void radTRecMag::FunForInnerIntAtSurfInt(double Arg, TVector3d* VectArray)
+inline void radTRecCur::FunForInnerIntAtSurfInt(double Arg, TVector3d* VectArray)
 {
 	if(SurfIntDataPtr->SurfBoundInd==1 || SurfIntDataPtr->SurfBoundInd==2 || 
 	   SurfIntDataPtr->SurfBoundInd==3 || SurfIntDataPtr->SurfBoundInd==4)

@@ -3591,9 +3591,9 @@ void radTPolyhedron::DefineRelAndAbsTol(double* RelAbsTol)
 //-------------------------------------------------------------------------
 
 // radTPolyhedron::CheckForSpecialShapes (polyhedron->RecMag box-detection optimization)
-// REMOVED 2026-06-28: it rebuilt a magnetization radTRecMag from a box polyhedron, defeating
+// REMOVED 2026-06-28: it rebuilt a magnetization radTRecCur from a box polyhedron, defeating
 // the MMMM surface-charge representation; it was gated by RecognizeRecMagsInPolyhedrons (default
-// off) so never ran. radTRecMag is retained only as the ObjRecCur/ObjArcCur current-source kernel.
+// off) so never ran. radTRecCur is retained only as the ObjRecCur/ObjArcCur current-source kernel.
 
 //-------------------------------------------------------------------------
 
