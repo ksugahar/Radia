@@ -3684,8 +3684,8 @@ RADIA_PEEC_CORE_PITFALLS = """
    For 1mm wire: `maxh=0.5e-3`. Larger creates elongated triangles → bad SL entries.
 
 5. **Current MSC solve is multipole-moment MMM**:
-   Use `BuildMomentSystem` / `MomentSystemDenseRaw` / `MomentHMatrixProbe` when inspecting
-   the surface-charge system. Do not reconstruct an ad-hoc point-collocation matrix.
+   Use `BuildMomentSystem` / `MomentSystemDenseRaw` when inspecting the dense
+   surface-charge system. Do not reconstruct an ad-hoc point-collocation matrix.
 
 6. **No production face-center eval point**:
    Current multipole-moment MMM uses element-centroid applied fields and centroid field/gradient rows.
