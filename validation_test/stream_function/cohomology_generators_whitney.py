@@ -25,7 +25,7 @@ curl-free (harmonic); (4) they reproduce the analytic generators' NET-CURRENT
 (TF Ampere) field -- the SAME cohomology class; (5) the surface Euler
 characteristic (gmsh-free) confirms b1.
 
-Run:  python examples/stream_function/cohomology_generators_whitney.py
+Run:  python validation_test/stream_function/cohomology_generators_whitney.py
 """
 from __future__ import annotations
 
@@ -38,9 +38,12 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.abspath(os.path.join(_HERE, "..", ".."))
+_EXAMPLES = os.path.join(_REPO, "examples", "stream_function")
 sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src", "radia"))
-sys.path.insert(0, os.path.join(_HERE, "..", "..", "src", "radia", "panels"))
+sys.path.insert(0, _EXAMPLES)
+sys.path.insert(0, os.path.join(_REPO, "src", "radia"))
+sys.path.insert(0, os.path.join(_REPO, "src", "radia", "panels"))
 
 
 def _to_scipy(mat):

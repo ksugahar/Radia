@@ -1,0 +1,63 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-28T00:42:24Z",
+  "notebook": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
+  "notebook_sha256": "16683a4d3faf3577e025e8d3f35b1c73d693f6712d963ab38811669988c21734",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2",
+    "radia_mcp_version": "1.4.3",
+    "numpy_version": "2.4.6"
+  },
+  "summary": {
+    "path": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
+    "cells": 7,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 6,
+    "error_output_count": 0,
+    "result_saved": true,
+    "topic_script_count": 20,
+    "topic_artifact_count": 8
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "7f73cc3fc4385184e339a6763c13ebd58ecf24ada22ab0e9ba12274ac49a8b87",
+      "output_count": 1
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "04c66815aaf8cf65aad3c7ff0d48e77f2d5b7d70126ad5ac27c4805a180508f8",
+      "output_count": 2
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "f04af3455ea7b2aedbee1d6fdaedf1bf7f729ff71bf77b58b2b28d3f95597a76",
+      "output_count": 1
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 4,
+      "source_sha256": "0fb4cbf2179b73c439f4b66132daee2894a7f85cdecc780ce23a5c93e4a00831",
+      "output_count": 1
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 5,
+      "source_sha256": "8115a383aa80f62d57cbaa0fd2e3a004fa0917f87d47dc3eccf1994e57de43ca",
+      "output_count": 1
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

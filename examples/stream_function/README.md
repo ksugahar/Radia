@@ -54,7 +54,7 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 |------|---------------|
 | `demo_coil_field_synthesis.py` | Coil design: N filament loops, solve loop currents for a target axial-region field; ACA+ compression + TSVD L-curve. |
 | `demo_magnet_array.py` | Same solver on a permanent-magnet array (MMM/MSC field) -- proves kernel-agnosticism. |
-| `bench_aca_vs_dense.py` | `(ACA+)+TSVD` vs naive dense `numpy.linalg.svd`: time / memory / rank, written to `results_aca_vs_dense.json`. |
+| `../../validation_test/stream_function/bench_aca_vs_dense.py` | `(ACA+)+TSVD` vs naive dense `numpy.linalg.svd`: time / memory / rank, written to `results_aca_vs_dense.json`. |
 | `demo_cmaes_magnet_design.py` | The **nonlinear counterpart**: CMA-ES (Optuna `CmaEsSampler`) optimises the magnetization *directions* (angles) of a magnet array for a uniform transverse field. Linear amplitude design -> (ACA+)+TSVD; nonlinear direction design -> CMA-ES (the "+ CMA-ES" half of SA-25-020). Needs `optuna` (optional). |
 | `demo_coil_design_gz.py` | **End-to-end coil design**: cylindrical z-gradient (Gz) coil via the stream function method. Target `Bz=Gz*z` -> azimuthal ring currents (ACA+TSVD) -> stream function `psi(z)` -> equal-current wire rings -> verified on-axis gradient linearity. The axisymmetric Gz problem reduces to a full-ring (1D `psi(z)`) basis. |
 | `demo_sf_to_peec_gz.py` | **Full workflow, loop closed**: SF design -> **single-stroke** (one continuous wire) smooth helix with blended crossovers -> CAD STEP (build123d Spline + Frenet swept solid) -> PEEC (`L`, `R`) -> exact Biot-Savart field -> verify `Bz` vs the design `Gz*z`. `--with-peec` adds the STEP + PEEC stages (needs build123d, in `radia`). |
@@ -76,7 +76,7 @@ ACA+ itself is delegated to the in-repo **HACApK** C library
 ```bash
 python demo_coil_field_synthesis.py
 python demo_magnet_array.py
-python bench_aca_vs_dense.py
+python ../../validation_test/stream_function/bench_aca_vs_dense.py
 python demo_cmaes_magnet_design.py        # needs optuna (pip install optuna)
 python demo_coil_design_gz.py             # end-to-end Gz gradient coil design
 python demo_sf_to_peec_gz.py --with-peec  # full SF -> CAD(STEP) -> PEEC -> field
@@ -109,7 +109,7 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
 - **`demo_magnet_array.py`** (N permanent magnets): the `(ACA+)+TSVD`
   factorization reconstructs the Radia MMM/MSC coupling matrix to `< 1e-5`
   relative, identical machinery, zero coil-specific code.
-- **`bench_aca_vs_dense.py`**: for a smooth (low-rank) kernel, `(ACA+)+TSVD`
+- **`validation_test/stream_function/bench_aca_vs_dense.py`**: for a smooth (low-rank) kernel, `(ACA+)+TSVD`
   matches the dense singular values to ~1e-12 while running markedly faster as
   `N` grows and `k_aca` stays small.
 - **`demo_cmaes_magnet_design.py`**: a 16-dimensional continuous optimisation
@@ -224,7 +224,8 @@ ASCII summary only.  `demo_cmaes_magnet_design.py` additionally needs `optuna`
 
 ## End-to-end validation vs an independent codebase
 
-`verify_coil_field_independent.py` closes the design loop on a **real
+`../../validation_test/stream_function/verify_coil_field_independent.py`
+closes the design loop on a **real
 engineering geometry** (MRI-gradient-coil scale: cylinder r = 0.15 m,
 L = 0.5 m, DSV sphere r = 0.05 m) and checks the result against an
 **independent field codebase**, not against itself:
@@ -239,10 +240,11 @@ L = 0.5 m, DSV sphere r = 0.05 m) and checks the result against an
    codebase).
 
 ```
-python verify_coil_field_independent.py --order 2 --nlevels 10
+python ../../validation_test/stream_function/verify_coil_field_independent.py --order 2 --nlevels 10
 ```
 
-VERIFIED (order 2, results in `verify_coil_field_independent.json`):
+VERIFIED (order 2, results in
+`../../validation_test/stream_function/verify_coil_field_independent.json`):
 
 | case | target | turns | design vs **Radia C++** | field over DSV |
 |------|--------|-------|-------------------------|----------------|

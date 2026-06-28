@@ -1,6 +1,16 @@
 # Demo ledger — what each example does
 
-All under [`examples/stream_function/`](../../examples/stream_function/).
+The result-saved promotion catalog is
+[`examples_catalog.ipynb`](examples_catalog.ipynb), synchronized with
+[`examples_catalog_results.json`](examples_catalog_results.json) and
+[`examples_catalog_result.json`](examples_catalog_result.json).  It records
+the full source text, SHA-256 hashes, existing result/media artifacts,
+protected references, and migration lane captured before promotion. Validation
+and benchmark runners promoted from examples now live under
+[`validation_test/stream_function/`](../../validation_test/stream_function/).
+
+Human-facing demos remain under
+[`examples/stream_function/`](../../examples/stream_function/).
 
 ## Core demos (axisymmetric / fingerprint / planar)
 
@@ -31,11 +41,11 @@ All under [`examples/stream_function/`](../../examples/stream_function/).
 | File | Purpose |
 |------|---------|
 | `view_sf_coil_gx_gmsh.py` | Open Gx coil in GMSH (3 modes: `contours`, `chain`, `step`).  Has off-screen window prevention via explicit `General.GraphicsPositionX/Y` + `Width/Height`. |
-| `bench_aca_vs_dense.py` | (ACA+)+TSVD timing benchmark vs full SVD |
+| `validation_test/stream_function/bench_aca_vs_dense.py` | (ACA+)+TSVD timing benchmark vs full SVD |
 
 ## Benchmarks
 
-Under [`examples/stream_function/benchmarks/`](../../examples/stream_function/benchmarks/):
+Under [`validation_test/stream_function/benchmarks/`](../../validation_test/stream_function/benchmarks/):
 
 | File | Status | Reference |
 |------|--------|-----------|
@@ -72,7 +82,7 @@ See [benchmarks.md](benchmarks.md) for the validation strategy.
    doesn't help here (tier-bounded).
 8. **`view_sf_coil_gx_gmsh.py --mode contours`** vs `--mode chain` —
    visualise the SF design vs the manufactured single-stroke chain.
-9. **`benchmarks/bench_helmholtz_pair.py`** — see how our planar SF
+9. **`validation_test/stream_function/benchmarks/bench_helmholtz_pair.py`** — see how our planar SF
    compares to the analytical Maxwell pair baseline.
 
 ## Cross-reference

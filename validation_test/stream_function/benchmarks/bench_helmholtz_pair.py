@@ -18,7 +18,8 @@ well known (~1% over a sphere of radius a/4).  Our planar SF design
 should reach the SAME OR BETTER uniformity at the same target spec.
 
 This is the FIRST shipped benchmark.  Other industry benchmarks are
-stubbed pending their literature spec extraction (see ../README.md).
+documented in docs/stream_function/benchmarks.md until they have runnable
+validation_test implementations.
 """
 import argparse
 import sys
@@ -28,8 +29,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))           # for demo_planar_uniform_*
-sys.path.insert(0, str(HERE.parents[2] / "src"))  # for radia
+REPO = HERE.parents[2]
+sys.path.insert(0, str(REPO / "examples" / "stream_function"))
+sys.path.insert(0, str(REPO / "src"))  # for radia
 from benchmark_framework import (
     Benchmark, BenchmarkSpec, add_common_args,
 )
