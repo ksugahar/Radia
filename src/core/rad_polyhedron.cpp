@@ -1542,16 +1542,16 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 }
 
 //-------------------------------------------------------------------------
-// B_comp_wedge_MSC: 5-DOF MSC method for wedge elements (2 tri + 3 quad faces)
-// Each face has one surface charge sigma as DOF (total 5 DOF)
+// B_comp_wedge_MSC: generic face-charge MSC field evaluation for 4-6 face polyhedra.
+// Each face has one surface charge sigma as DOF (tet=4, wedge/pyramid=5, hex=6).
 //-------------------------------------------------------------------------
 void radTPolyhedron::B_comp_wedge_MSC(radTField* FieldPtr)
 {
 	radTFieldKey& FldKey = FieldPtr->FieldKey;
 	TVector3d& obsPoint = FieldPtr->P;
 
-	// Get face vertices in GLOBAL coordinates
-	// Wedges have 5 faces with variable vertex count (3 or 4)
+	// Get face vertices in GLOBAL coordinates.
+	// Supported MSC polyhedra have 4-6 faces with variable vertex count (3 or 4).
 	std::array<int, 8> faceNumVerts;
 	std::array<std::array<TVector3d, 4>, 8> faceVertices;
 	int nFaces = (AmOfFaces <= 8) ? AmOfFaces : 8;
@@ -2056,7 +2056,7 @@ TVector3d radTPolyhedron::FieldFromFaceMirrored(const TVector3d& obs,
 }
 
 //-------------------------------------------------------------------------
-// 6 DOF MSC field computation methods for hexahedra
+// Face-charge MSC field computation methods for triangular/quadrilateral faces.
 // Note: 1/(4*pi) factor is applied in matrix assembly (rad_interaction.cpp),
 // not in these field computation functions. Use RadConst::INV_FOUR_PI.
 //-------------------------------------------------------------------------
@@ -2572,7 +2572,8 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 //-------------------------------------------------------------------------
 
 bool g_multipole_moment_hacapk = false;   // moment linear step via the HACApK H-matrix + BiCGSTAB (method 2 / scalable storage); set by SolveGen for moment-eligible + method 2 (else dense LU)
-// NOTE: the surface-charge demag is UNCONDITIONALLY multipole-moment MMM (hex 6-DOF + wedge/pyramid 5-DOF, method 0/1/2).
+// NOTE: the surface-charge demag is UNCONDITIONALLY multipole-moment MMM
+// (tet 4-DOF + wedge/pyramid 5-DOF + hex 6-DOF, method 0/1/2).
 // The EIEM2 collocation kernel + its old moment / eval-point / pyramid-cloud opt-outs were fully
 // removed in Phase 3b; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.
 
@@ -2620,7 +2621,17 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 	// verified to produce identical results to the original Gauss integration method.
 	if(IsTetrahedron())
 	{
-		B_comp_tetrahedron_analytical(FieldPtr);
+		// Unified MMMM face-charge tetrahedron (Use6DOF_MSC, 4 DOF): a SOLVED soft-iron tet carries one
+		// surface charge per face (Sigma[0..3], written by the moment solve), so its field is evaluated from
+		// the 4 face charges via the face-count-generic MSC field eval (the same sigma path as wedge/hex).
+		// A permanent-magnet / unsolved tet has Sigma == 0 and keeps the analytical magnetization-based field
+		// (M supplied in ObjTetrahedron).
+		bool tetSigmaIsZero = true;
+		for(int i = 0; i < AmOfFaces; i++) { if(Sigma[i] != 0.0) { tetSigmaIsZero = false; break; } }
+		if(Use6DOF_MSC && !tetSigmaIsZero)
+			B_comp_wedge_MSC(FieldPtr);              // generic face-charge (sigma) field eval; handles the 4 tri faces
+		else
+			B_comp_tetrahedron_analytical(FieldPtr); // PM / unsolved tet: analytic M-based field
 		return;
 	}
 

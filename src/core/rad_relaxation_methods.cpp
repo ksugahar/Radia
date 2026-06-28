@@ -121,7 +121,7 @@ void radTIterativeRelaxMeth::MakeN_iter(int IterNum)
 //-------------------------------------------------------------------------
 // Note: Legacy relaxation methods (Methods 1-8) have been removed
 // Newton-style M(H) update is now integrated into unified VariableDOF solvers
-// that handle both 3DOF (tetra) and 6DOF (hex) elements
+// that handle both 3-DOF dipole and 4-6 DOF face-charge MSC elements
 //-------------------------------------------------------------------------
 
 //=========================================================================
@@ -203,7 +203,7 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 				for(int k = 0; k < 3; k++) H_ext_mag += ctx.FlatExtern[offset + k] * ctx.FlatExtern[offset + k];
 				H_ext_mag = std::sqrt(H_ext_mag);
 			}
-			else if(dof >= 5)
+			else if(dof >= 4)
 			{
 				const TVector3d& Hext = IntrctPtr->ExternFieldArray[elem];
 				H_ext_mag = std::sqrt(Hext.x*Hext.x + Hext.y*Hext.y + Hext.z*Hext.z);
@@ -229,8 +229,8 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 		}
 		ctx.CurrentChiArray[elem] = chi_init;
 
-		// Store in poly->CurrentChi for 6DOF elements
-		if(dof >= 5)
+		// Store in poly->CurrentChi for face-charge MSC elements
+		if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -254,7 +254,7 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 				ctx.FlatField[offset + k] = ctx.FlatExtern[offset + k] * scale;
 			}
 		}
-		else if(dof >= 5)
+		else if(dof >= 4)
 		{
 			for(int k = 0; k < dof; k++)
 			{
@@ -343,7 +343,7 @@ void StoreOldValuesAndComputeBnorm(NonlinearContext& ctx, radTInteraction* Intrc
 			TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
 			ctx.OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 		}
-		else if(dof >= 5)
+		else if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -379,13 +379,13 @@ void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* Intrct
 
 		if(dof == 3)
 		{
-			// 3DOF elements (tetrahedra, wedges): FlatMagn contains M directly
+			// 3DOF MMM dipole elements (RecMag): FlatMagn contains M directly
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
 			g3dRelaxPtr->Magn.x = ctx.FlatMagn[offset + 0];
 			g3dRelaxPtr->Magn.y = ctx.FlatMagn[offset + 1];
 			g3dRelaxPtr->Magn.z = ctx.FlatMagn[offset + 2];
 		}
-		else if(dof >= 5)
+		else if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -461,7 +461,7 @@ void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* Intrct
 			ctx.FlatField[offset_j + 1] = g3dRelaxPtr->Magn.y / chi;
 			ctx.FlatField[offset_j + 2] = g3dRelaxPtr->Magn.z / chi;
 		}
-		else if(dof_j >= 5)
+		else if(dof_j >= 4)
 		{
 			radTPolyhedron* poly_j = ctx.polyCache[elem_j];
 			if(poly_j && poly_j->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
@@ -514,7 +514,7 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 				ctx.FlatField[offset + k] = ctx.FlatMagn[offset + k] / chi;
 			}
 		}
-		else if(dof >= 5)
+		else if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -556,7 +556,7 @@ void UpdateMagnAndComputeH(NonlinearContext& ctx, radTInteraction* IntrctPtr)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
 
-		if(dof >= 5)
+		if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
@@ -645,7 +645,7 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 			if(B_rel_change > max_B_rel_change)
 				max_B_rel_change = B_rel_change;
 		}
-		else if(dof >= 5)
+		else if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)
@@ -730,7 +730,7 @@ static void RestoreChiArray(NonlinearContext& ctx, radTInteraction* IntrctPtr, c
 	for(int elem = 0; elem < ctx.AmOfMainElem && elem < (int)chi.size(); elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
-		if(dof >= 5)
+		if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC) poly->CurrentChi = chi[(size_t)elem];
@@ -909,7 +909,7 @@ double ApplyLineSearchDamping(NonlinearContext& ctx, radTInteraction* IntrctPtr,
 				if(B_rel_change > residual)
 					residual = B_rel_change;
 			}
-			else if(dof >= 5)
+			else if(dof >= 4)
 			{
 				// 6DOF: compute B from poly->Magn (already updated by ComputeActualHFieldFromSigma)
 				radTPolyhedron* poly = ctx.polyCache[elem];
@@ -1803,6 +1803,26 @@ bool radTRelaxationMethNo_0::NeedsDenseMatrix() const
 	extern bool g_multipole_moment_hacapk;
 	if(g_multipole_moment_hacapk && !rad.m_b_input_newton && !rad.m_b_input_hantila)
 		return false;
+	// The multipole-moment MMM path (BuildMomentSystemCore) assembles its own per-element moment system and
+	// NEVER reads the dense interaction/base matrix.  When EVERY element is a surface-charge moment element
+	// (tet 4 / wedge,pyramid 5 / hex 6 DOF) and we are not on the B-input hysteresis path (which builds NpI
+	// from the dense BaseMatrix), the dense base matrix is not needed.  This lets the method-2 non-hex moment
+	// reroute-to-LU (built with skipDenseMatrix) run -- without it BuildBaseMatrix returns false (no dense
+	// InteractMatrix) and AutoRelax silently returns 0 iterations.  Mirrors radTRelaxationMethNo_1.
+	if(!rad.m_b_input_newton && !rad.m_b_input_hantila && IntrctPtr != nullptr)
+	{
+		int nElem = IntrctPtr->AmOfMainElem;
+		if(nElem > 0)
+		{
+			bool allMoment = true;
+			for(int elem = 0; elem < nElem; elem++)
+			{
+				int dof = IntrctPtr->GetElementDOF(elem);
+				if(dof != 6 && dof != 5 && dof != 4) { allMoment = false; break; }
+			}
+			if(allMoment) return false;
+		}
+	}
 	return true;
 }
 
@@ -2135,7 +2155,7 @@ bool radTRelaxationMethNo_1::NeedsDenseMatrix() const
 	for(int elem = 0; elem < nElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
-		if(dof != 6 && dof != 5) return true;
+		if(dof != 6 && dof != 5 && dof != 4) return true;
 	}
 	return false;
 }
@@ -2879,12 +2899,12 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	std::vector<double> RHS(totalDOF);
 
 	// multipole-moment MMM: assemble the parameter-free MOMENT system (BuildMomentSystemCore) for surface-charge
-	// polyhedra (hex 6-DOF + wedge/pyramid 5-DOF, Phase 3a).  A's COLUMNS are the face DOF, so dgesv's solution is
+	// polyhedra (tet 4-DOF + wedge/pyramid 5-DOF + hex 6-DOF).  A's COLUMNS are the face DOF, so dgesv's solution is
 	// sigma in DOF order -- a drop-in for the retired EIEM2 transpose + dgesv + write-back.  moment is now
 	// UNCONDITIONAL (the old EIEM2/moment opt-out was removed in Phase 3b-1).  Pure tet (3 DOF = MMM)
 	// uses the dense MMM path below; mixed tet+MSC is rejected fail-loud in MakeAutoRelax.
 	bool useMoment = true;
-	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) { int dd = IntrctPtr->GetElementDOF(e); if(dd != 6 && dd != 5) { useMoment = false; break; } } }
+	if(useMoment) { for(int e = 0; e < AmOfMainElem; e++) { int dd = IntrctPtr->GetElementDOF(e); if(dd != 6 && dd != 5 && dd != 4) { useMoment = false; break; } } }
 
 	if(useMoment)
 	{
@@ -3000,8 +3020,8 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			}
 		}
 
-		// Update poly->CurrentChi for 6DOF elements
-		if(dof >= 5)
+		// Update poly->CurrentChi for face-charge MSC elements
+		if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -3488,7 +3508,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
-		if(dof != 6 && dof != 5)
+		if(dof != 6 && dof != 5 && dof != 4)
 		{
 			useMoment = false;
 			break;
@@ -3890,7 +3910,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
-		if(dof >= 5)
+		if(dof >= 4)
 		{
 			radTPolyhedron* poly = ctx.polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -3976,13 +3996,13 @@ void radTRelaxationMethNo_2::Scale(double alpha, std::vector<double>& x, int n)
 
 int radTRelaxationMethNo_2::AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded)
 {
-	// HACApK supports both 3DOF tetrahedra and 6DOF hexahedra
+	// HACApK supports 3-DOF dipole and 4-6 DOF face-charge MSC elements.
 	return AutoRelax_VariableDOF(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 }
 
 //-------------------------------------------------------------------------
 // SolveBiCGSTAB_HMatrix_VariableDOF
-// BiCGSTAB with H-matrix for both 3DOF tetrahedra and 6DOF hexahedra
+// BiCGSTAB with H-matrix for 3-DOF dipole and 4-6 DOF face-charge MSC elements
 //-------------------------------------------------------------------------
 
 int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& ctx,
@@ -4022,10 +4042,10 @@ int radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& 
 		int dof = IntrctPtr->GetElementDOF(elem);
 		int offset = IntrctPtr->GetElementDOFOffset(elem);
 
-		if(dof != 3 && dof < 5)
+		if(dof != 3 && dof != 4 && dof != 5 && dof != 6)
 		{
 			std::cerr << "[HACApK] Error: Element " << elem << " has " << dof
-			          << " DOF, expected 3 (tetrahedra), 5 (wedges), or 6 (hexahedra)" << std::endl;
+			          << " DOF, expected 3 (dipole) or 4-6 (face-charge MSC)" << std::endl;
 			return 0;
 		}
 
@@ -4340,7 +4360,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	int AmOfMainElem = IntrctPtr->AmOfMainElem;
 	if(AmOfMainElem <= 0) return 0;
 
-	// HACApK supports both 3DOF tetrahedra and 6DOF hexahedra
+	// HACApK supports 3-DOF dipole and 4-6 DOF face-charge MSC elements.
 	// HasVariableDOF() returns true only if DOF != 3, but HACApK works with uniform 3DOF too
 	// For uniform 3DOF case, we need to set up the DOF tracking arrays
 	if(!IntrctPtr->HasVariableDOF())
@@ -4468,14 +4488,14 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 			IntrctPtr->NewFieldArray[elem].y = FlatExtern[offset + 1] * scale;
 			IntrctPtr->NewFieldArray[elem].z = FlatExtern[offset + 2] * scale;
 		}
-		else if(dof >= 5)
+		else if(dof >= 4)
 		{
-			// 6DOF MSC hexahedra: initialize FlatField and estimate H from external field
+			// Face-charge MSC elements: initialize FlatField and estimate H from external field
 			for(int k = 0; k < dof; k++)
 			{
 				FlatField[offset + k] = FlatExtern[offset + k];
 			}
-			// For 6DOF, estimate H from external field
+			// For face-charge MSC, estimate H from external field
 			// The external field in RHS is H_ext (uniform applied field)
 			// Estimate H direction from face normals weighted by sigma
 			radTg3dRelax* g3dRelaxPtr = IntrctPtr->g3dRelaxPtrVect[elem];
@@ -4530,7 +4550,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 	}
 
 	// Initialize CurrentChi with ELF-style initial value (same as LU/BiCGSTAB)
-	// FIX (2025-12-26): Initialize for BOTH 3DOF and 6DOF elements
+	// FIX (2025-12-26): Initialize for BOTH 3-DOF dipole and face-charge MSC elements
 	for(int elem = 0; elem < AmOfMainElem; elem++)
 	{
 		int dof = IntrctPtr->GetElementDOF(elem);
@@ -4558,8 +4578,8 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 		}
 		CurrentChiArray_hacapk[elem] = chi_init;
 
-		// For 6DOF elements, also store in poly->CurrentChi
-		if(dof >= 5)
+		// For face-charge MSC elements, also store in poly->CurrentChi
+		if(dof >= 4)
 		{
 			radTPolyhedron* poly = polyCache[elem];
 			if(poly && poly->Use6DOF_MSC)
@@ -4602,7 +4622,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				TVector3d B(MU_0 * (H.x + M.x), MU_0 * (H.y + M.y), MU_0 * (H.z + M.z));
 				OldBnorm[elem] = std::sqrt(B.x*B.x + B.y*B.y + B.z*B.z);
 			}
-			else if(dof >= 5)
+			else if(dof >= 4)
 			{
 				radTPolyhedron* poly = polyCache[elem];
 				if(poly && poly->Use6DOF_MSC)
@@ -4707,7 +4727,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 					IntrctPtr->NewFieldArray[elem].z = FlatField[offset + 2];
 				}
 			}
-			else if(dof >= 5)
+			else if(dof >= 4)
 			{
 				radTPolyhedron* poly = polyCache[elem];
 				if(poly && poly->Use6DOF_MSC)
@@ -4823,7 +4843,7 @@ int radTRelaxationMethNo_2::AutoRelax_VariableDOF(double PrecOnMagnetiz, int Max
 				if(B_rel_change > max_B_rel_change)
 					max_B_rel_change = B_rel_change;
 			}
-			else if(dof >= 5)
+			else if(dof >= 4)
 			{
 				has_6dof_elements = true;
 				radTPolyhedron* poly = polyCache[elem];
