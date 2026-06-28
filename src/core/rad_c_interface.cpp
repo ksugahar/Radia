@@ -139,8 +139,6 @@ int GetFaceGeom(int, double*, int*);
 int GetCentroidFieldGrad(int, double*, int*, int*);
 int BuildMomentSystem(int, double, const double*, double*, double*, int*);
 int MomentSystemDenseRaw(int, double, double*, int*);
-int MomentHMatrixProbe(int, double, double, int, double, double*);
-double HLUTestOnHACApK(int);
 int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
@@ -1455,18 +1453,6 @@ int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, doubl
 int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF)
 {
 	return rad.MomentSystemDenseRaw(InteractElemKey, chi, pA, pDOF);
-}
-
-int MomentHMatrixProbe(int InteractElemKey, double chi, double eps, int leaf, double eta, double* out)
-{
-	return rad.MomentHMatrixProbe(InteractElemKey, chi, eps, leaf, eta, out);
-}
-
-//-------------------------------------------------------------------------
-
-double HLUTestOnHACApK(int InteractElemKey)
-{
-	return rad.HLUTestOnHACApK(InteractElemKey);
 }
 
 int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out)

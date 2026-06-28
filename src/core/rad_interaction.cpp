@@ -4172,8 +4172,8 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
 	// For HACApK: skip dense matrix. Pure tet MMM computes entries on demand through
-	// Compute3x3BlockFast; surface-charge multipole-moment MMM uses RadHACApKMomentSystem instead.
-	// Reset geometry so it gets recomputed for the reduced IMA element set.
+	// Compute3x3BlockFast; surface-charge multipole-moment (MMMM) uses the dense LU / matrix-free moment
+	// path (no HACApK).  Reset geometry so it gets recomputed for the reduced IMA element set.
 	if(skipDenseMatrix)
 	{
 		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
