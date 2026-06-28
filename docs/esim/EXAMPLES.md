@@ -15,13 +15,12 @@ clean `pip install radia[cubit]` checkout.
 
 | Script | What it does | Notes |
 |---|---|---|
-| [`docs/induction_heating/induction_heating_examples_catalog.ipynb`](../induction_heating/induction_heating_examples_catalog.ipynb) | Result-saved catalog of the remaining induction-heating example scripts, with source SHA, artifact hashes, protected references, and migration lane. | Promotion ledger |
+| [`docs/induction_heating/induction_heating_demo_showcase.ipynb`](../induction_heating/induction_heating_demo_showcase.ipynb) | Result-saved ESIM/WPT/RWG public demo showcase with synchronized source/hash JSON. | Tutorial entry point |
+| [`docs/induction_heating/induction_heating_examples_catalog.ipynb`](../induction_heating/induction_heating_examples_catalog.ipynb) | Result-saved catalog of the IH docs/API/validation migration lanes, with source SHA, artifact hashes, and protected references. | Promotion ledger |
 | [`docs/ih_esim_benchmark/benchmark.py`](../ih_esim_benchmark/benchmark.py) | Drives the 3-path (PEEC-BEM / FEM-Kelvin / FEM-coilmesh) Karl benchmark at 10/50/100/500 kHz.  Emits `results.json` and `benchmark_plot.png`. | Validation tier **(iv)** consistency table |
 | [`docs/ih_esim_benchmark/plot_zs_per_dof_map.py`](../ih_esim_benchmark/plot_zs_per_dof_map.py) | 3-panel side-wall map of per-DOF $\mathrm{Re}\,Z_s$, $\mathrm{Im}\,Z_s$, $|H_t|$ from a `--esim-per-panel` JSON.  Publication-ready Fig. 2 (hotspot pattern). | Requires `esim_per_panel_H_t` array (radia $\geq$ 4.55.x) |
 | [`docs/ih_esim_benchmark/plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py) | Karl-iteration convergence diagnostic.  3-panel plot of $dZ$ (log), $\|Z_s\|$ with per-DOF min/max band, and $\|H_t\|$ per iteration.  Accepts both scalar- and per-panel-Karl JSONs.  Use to distinguish *convergence*, *plateau-at-max-iter* and *divergence* (see [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 decision table). | Diagnostic / triage |
-| [`examples/induction_heating/esim_demo.py`](../../examples/induction_heating/esim_demo.py) | Minimal ESIM demo on a block workpiece; pedagogical. | Tutorial entry point |
-| [`examples/induction_heating/esim_induction_heating_demo.py`](../../examples/induction_heating/esim_induction_heating_demo.py) | Spiral-coil + ESIM workpiece coupled solver demo with end-to-end Karl iteration. | Tutorial follow-up |
-| [`examples/induction_heating/bem_reference/`](../../examples/induction_heating/bem_reference/) | Reference BEM solver modules retained for research cross-check. | Research |
+| [`validation_test/induction_heating/bem_reference/`](../../validation_test/induction_heating/bem_reference/) + `radia.bem_inductance` / `radia.ngsbem_*` | Reference BEM scripts and reusable BEM APIs retained for research cross-check. | Research / validation |
 
 ## Tests
 

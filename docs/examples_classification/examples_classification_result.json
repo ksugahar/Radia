@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T09:11:13Z",
+  "generated_at_utc": "2026-06-28T16:52:50Z",
   "notebook": "docs/examples_classification/examples_classification.ipynb",
-  "notebook_sha256": "8d03fff6abf02306a11e07a435618cf34ba6e1a186ee9aeece8c55b4dbda0e0a",
+  "notebook_sha256": "93c4aa7b6078e8208c9ee4f4d7ab9dd52783225ae1800260087fe25aa1cb100a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,11 +12,11 @@
   },
   "summary": {
     "path": "docs/examples_classification/examples_classification.ipynb",
-    "cells": 15,
-    "code_cells": 8,
-    "executed_code_cells": 8,
-    "code_cells_with_outputs": 8,
-    "output_count": 9,
+    "cells": 5,
+    "code_cells": 4,
+    "executed_code_cells": 4,
+    "code_cells_with_outputs": 4,
+    "output_count": 5,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -28,24 +28,45 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "4e8b710418f0496bf0252b10c51defedb58223c413c694b4a68fd410db3f96ac",
-      "source_preview": "from pathlib import Path\nimport json\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'examples_classification_results.json').exists():\n    NOTEBOOK_DIR = Path('docs/examples_classification').resolve()\ndata = json.loads((NOTEBOOK_DIR / 'examples_classification_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(data['summary'], ensure_ascii=False, indent=2))\n",
+      "source_sha256": "cea1eb7a5193fd6f7dba3eb8be4201af3fe139f270e61ed74e0a606d81c38268",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\ndata = json.loads(Path('examples_classification_results.json').read_text(encoding='utf-8'))\ndata['summary']",
       "outputs": [
         {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 1627,
-          "text_sha256": "868fccef7ba44445f6a3890bd79769822f0aa0f9f62faa5b97eb43db41a9dd58",
-          "text_preview": "{\n  \"total_examples_files\": 1210,\n  \"tracked_examples_files\": 1210,\n  \"total_python_files\": 543,\n  \"topics\": 11,\n  \"empty_topics\": [],\n  \"route_counts\": {\n    \"asset_or_fixture_review\": 3,\n    \"distill_delete_review\": 2,\n    \"docs_notebook_candidate\": 167,\n    \"non_python_docs_or_asset_review\": 99,\n    \"protected_mesh_or_cad_asset_review\": 53,\n    \"protected_validation_reference\": 28,\n    \"research_docs_or_distill_review\": 86,\n    \"result_artifact_review\": 419,\n    \"src_api_candidate\": 22,\n    \"src_api_or_comment_reference_review\": 7,\n    \"symbolic_derivation_review\": 78,\n    \"unclassified_existing_review\": 27,\n    \"validation_benchmark_candidate\": 40,\n    \"validation_test_candidate\": 179\n  },\n  \"topic_recommendation_counts\": {\n    \"new_topic_review\": 1,\n    \"split_validation_test_first_then_docs_prune\": 6,\n    \"protected_until_validation_references_are_migrated\": 4\n  },\n  \"protected_validation_reference_files\": 28,\n  \"validation_test_candidates\": 179,\n  \"validation_benchmark_candidates\": 40,\n  \"src_api_candidates\": 22,\n  \"docs_notebook_candidates\": 167,\n  \"distill_delete_reviews\": 2,\n  \"agentic_review_count\": 4,\n  \"topics_with_examples_reference_debt\": 8,\n  \"examples_reference_pol",
-          "text_truncated": true
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 1515,
+          "text_plain_sha256": "ecee231673da373e37272c59870dbd20701a007972a9d8c032a5913d21f96abd",
+          "text_plain_preview": "{'total_examples_files': 1156,\n 'tracked_examples_files': 1156,\n 'total_python_files': 512,\n 'topics': 10,\n 'empty_topics': [],\n 'route_counts': {'non_python_docs_or_asset_review': 95,\n  'result_artifact_review': 418,\n  'docs_notebook_candidate': 154,\n  'validation_benchmark_candidate': 39,\n  'protected_mesh_or_cad_asset_review': 48,\n  'research_docs_or_distill_review': 86,\n  'validation_test_candidate': 179,\n  'src_api_or_comment_reference_review': 6,\n  'protected_validation_reference': 27,\n  'asset_or_fixture_review': 3,\n  'src_api_candidate': 19,\n  'symbolic_derivation_review': 78,\n  'distill_delete_review': 2,\n  'unclassified_existing_review': 2},\n 'topic_recommendation_counts': {'new_topic_review': 1,\n  'protected_until_validation_references_are_migrated': 4,\n  'split_validation_test_first_then_docs_prune': 6},\n 'protected_validation_reference_files': 27,\n 'validation_test_candidates': 179,\n 'validation_benchmark_candidates': 39,\n 'src_api_candidates': 19,\n 'docs_notebook_candidates': 154,\n 'distill_delete_reviews': 2,\n 'agentic_review_count': 4,\n 'topics_with_examples_reference_debt': 6,\n 'examples_reference_policy': 'blocked_by_examples_reference is not a final lane; migrate refs to docs/src/validation_test/panels before deleting examples.',\n 'docs_quality_next_topics': ['clebsch_hodograph',\n  'stream_function',\n  'peec_integration',\n  'cubit_panels',\n  'maglev'],\n 'latest_worktree_tracked_existing_files': 1156,\n 'latest_worktree_tracked_python_files': 512,\n 'migration_log_count': 6}",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "63077cf4f4fcba0889637866dd67ec3fbfd5a619bef087705e34fd378773a498",
+      "source_preview": "def table(headers, rows):\n    lines = ['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|']\n    lines += ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows]\n    return '\\n'.join(lines)\nrows = [[t['topic'], t['files'], t.get('python_files', 0), t.get('recommendation', ''), t.get('blocked_by_examples_reference', False)] for t in data['topics']]\ndisplay(Markdown(table(['topic', 'files', 'py', 'recommendation', 'ref debt'], rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
         }
       ]
     },
     {
       "cell_index": 3,
-      "execution_count": 2,
-      "source_sha256": "12be1cef1c468c063148b304c2895611d4785a91f69b7c96152d4243b3f502dd",
-      "source_preview": "from IPython.display import Markdown, display\n\nsnapshot = data['current_worktree_examples_snapshot']\nlines = [\n    '| metric | value |',\n    '| --- | ---: |',\n    f\"| tracked existing examples files | {snapshot['tracked_existing_files']} |\",\n    f\"| tracked Python files | {snapshot['tracked_python_files']} |\",\n    f\"| tracked JSON files | {snapshot['tracked_json_files']} |\",\n    f\"| tracked notebooks | {snapshot['tracked_ipynb_files']} |\",\n    f\"| tracked topic directories | {snapshot['tracked_topics']} |\",\n    f\"| migration batches recorded | {len(data.get('migration_log', []))} |\",\n]\ndisplay(Markdown('\\n'.join(lines)))\n\nlines = ['| batch | removed from examples | moved topics |', '| --- | ---: | --- |']\nfor row in data.get('migration_log', []):\n    topics = ', '.join(row.get('moved_topics', {}).keys())\n    lines.append(f\"| {row['batch_id']} | {row['examples_files_removed_from_examples']} | {topics} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
+      "execution_count": 3,
+      "source_sha256": "18dff8ce157746a6296e0d63750fdb3193f9141a267f30ff1e68b489795a36f3",
+      "source_preview": "latest = data['migration_log'][-1]\ndisplay(Markdown(table(['field', 'value'], [[k, v] for k, v in latest.items() if k not in {'moved_topics'}])))\nlatest['moved_topics']",
       "outputs": [
         {
           "output_type": "display_data",
@@ -59,125 +80,29 @@
           "text_plain_truncated": false
         },
         {
-          "output_type": "display_data",
+          "output_type": "execute_result",
           "data_keys": [
-            "text/markdown",
             "text/plain"
           ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_chars": 444,
+          "text_plain_sha256": "e6736ab1e6721168c005ed00eae0a2a3eeade7aac1e2fb7282f9699986d02632",
+          "text_plain_preview": "{'induction_heating remaining public demos': {'to': {'docs_results': ['docs/induction_heating/induction_heating_demo_showcase.ipynb',\n    'docs/induction_heating/induction_heating_demo_showcase_results.json',\n    'docs/induction_heating/induction_heating_demo_showcase_result.json'],\n   'validation_test': ['validation_test/induction_heating/demoted_samples_legacy/']},\n  'files_removed_from_examples': 14,\n  'python_removed_from_examples': 8}}",
           "text_plain_truncated": false
         }
       ]
     },
     {
-      "cell_index": 5,
-      "execution_count": 3,
-      "source_sha256": "89d29f45139e7f58c83ffe09cb76b195a53fe219e9a085685cdeebfcb2b9de2a",
-      "source_preview": "from IPython.display import Markdown, display\nrows = sorted(data['topics'], key=lambda r: (-r['python_files'], r['topic']))\nlines = ['| topic | files | py | saved ipynb | refs block? | target after unblock | recommendation |', '| --- | --- | --- | --- | --- | --- | --- |']\nfor r in rows:\n    targets = ', '.join(r.get('target_after_unblock', []))\n    blocked = 'yes' if r.get('blocked_by_examples_reference') else 'no'\n    lines.append(f\"| {r['topic']} | {r['files']} | {r['python_files']} | {r['result_saved_docs_notebook_count']} | {blocked} | {targets} | {r['recommendation']} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 7,
+      "cell_index": 4,
       "execution_count": 4,
-      "source_sha256": "28654a7b4775439c913c58591a5c55653ca8b6576fa6af8e4209f47fe79564cf",
-      "source_preview": "lines = ['| agent | scope | target after unblock | first moves |', '| --- | --- | --- | --- |']\nfor r in data['agentic_reviews']:\n    scope = ', '.join(r['scope'])\n    targets = ', '.join(r['target_after_unblock'])\n    first = '<br>'.join(r['first_actions'][:3])\n    lines.append(f\"| {r['agent']} | {scope} | {targets} | {first} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 9,
-      "execution_count": 5,
-      "source_sha256": "239de1e1c448d1be7caec5832f88e331de66072737f47abf0b97db087078fc33",
-      "source_preview": "rows = [r for r in data['topics'] if r.get('blocked_by_examples_reference')]\nrows = sorted(rows, key=lambda r: (-sum((r.get('reference_root_counts') or {}).values()), r['topic']))\nlines = ['| topic | reference roots | references | target after unblock | agentic note |', '| --- | --- | --- | --- | --- |']\nfor r in rows:\n    roots = ', '.join(f\"{k}:{v}\" for k, v in sorted((r.get('reference_root_counts') or {}).items()))\n    refs = sum((r.get('reference_root_counts') or {}).values())\n    targets = ', '.join(r.get('target_after_unblock', []))\n    note = r.get('agentic_note', '').replace('|', '/')\n    lines.append(f\"| {r['topic']} | {roots} | {refs} | {targets} | {note} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 11,
-      "execution_count": 6,
-      "source_sha256": "cccee1a4ced82ef3010e3e901de800db23a22e4008549fc404b071d611fbd1ba",
-      "source_preview": "lines = ['| route | files | interpretation |', '| --- | --- | --- |']\nfor route, count in sorted(data['summary']['route_counts'].items(), key=lambda kv: (-kv[1], kv[0])):\n    interpretation = 'temporary blocker' if route.startswith('protected_') else 'candidate lane/review'\n    lines.append(f'| {route} | {count} | {interpretation} |')\ndisplay(Markdown('\\n'.join(lines)))\n",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 13,
-      "execution_count": 7,
-      "source_sha256": "6444b6a5b7801aab9388210d857eaa35e5b9ebbb11e4386ecbda60f727aded86",
-      "source_preview": "lines = ['| topic | validation/blocker | bench | src api | docs | delete review |', '| --- | --- | --- | --- | --- | --- |']\nkeys = ('protected_validation_reference', 'validation_test_candidate', 'validation_benchmark_candidate', 'src_api_candidate', 'src_api_or_comment_reference_review', 'docs_notebook_candidate', 'distill_delete_review')\nfor r in sorted(data['topics'], key=lambda row: -(sum(row['route_counts'].get(k, 0) for k in keys))):\n    rc = r['route_counts']\n    lines.append(f\"| {r['topic']} | {rc.get('protected_validation_reference', 0) + rc.get('validation_test_candidate', 0)} | {rc.get('validation_benchmark_candidate', 0)} | {rc.get('src_api_candidate', 0) + rc.get('src_api_or_comment_reference_review', 0)} | {rc.get('docs_notebook_candidate', 0)} | {rc.get('distill_delete_review', 0)} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 14,
-      "execution_count": 8,
-      "source_sha256": "cd702f47d83f3157de0ce30e78bfeea54f736ba5ea964052455355181b1454ad",
-      "source_preview": "assert data['schema'] == 'radia.docs.examples_classification.v1'\nassert data['summary']['total_examples_files'] == len(data['files'])\nassert data['summary']['topics'] == len(data['topics'])\nassert data['summary']['total_python_files'] == sum(1 for row in data['files'] if row['suffix'] == '.py')\nassert data['policy']['examples_references_are_temporary_blockers'] is True\nassert len(data['agentic_reviews']) == data['summary']['agentic_review_count'] == 4\nassert all('target_after_unblock' in row for row in data['topics'])\nprint('classification ledger OK: agentic reviews integrated; examples references are blockers, not destinations')\n",
+      "source_sha256": "d3dd95209b8553715b29eab88c93476fb097ced8f68515c84065cfe6641e5e94",
+      "source_preview": "paths = [f['path'] for f in data['files']]\nassert 'induction_heating' not in data['current_worktree_examples_snapshot']['topic_counts']\nassert data['current_worktree_examples_snapshot']['tracked_existing_files'] == len(paths)\nassert data['summary']['latest_worktree_tracked_python_files'] == sum(p.endswith('.py') for p in paths)\nprint('examples classification ledger checks: PASS')",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 105,
-          "text_sha256": "81c145f80d73c5532fd7fe3e1141c356a7c47e8e338935e4c646498d2ac1edd7",
-          "text_preview": "classification ledger OK: agentic reviews integrated; examples references are blockers, not destinations\n",
+          "text_chars": 44,
+          "text_sha256": "764b54d2af11fde5c1a40dcf39c3d7b92341215bee53fc06dc8180d7cc395065",
+          "text_preview": "examples classification ledger checks: PASS\n",
           "text_truncated": false
         }
       ]

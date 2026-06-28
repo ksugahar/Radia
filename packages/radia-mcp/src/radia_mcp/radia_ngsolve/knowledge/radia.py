@@ -1132,7 +1132,7 @@ Surface Mesh (Netgen OCC)
 ## Quick Start: Plate Impedance
 
 ```python
-from ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
+from radia.ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
 import numpy as np
 
 # Create conductor surface mesh
@@ -1288,7 +1288,7 @@ See: `examples/peec_integration/ngsbem_peec_demo/ngbem/1_turn_coil.py`
 For a coil above a conducting shield plate, use ShieldBEMSIBC:
 
 ```python
-from ngsbem_eddy import ShieldBEMSIBC
+from radia.ngsbem_eddy import ShieldBEMSIBC
 from 1_turn_coil import (compute_loop_inductance, create_circular_ring_mesh,
                           discretize_ring_coil, create_shield_plate_mesh)
 
@@ -1345,8 +1345,8 @@ Shield eddy currents are computed using the EFIE with surface impedance:
                    Re(Delta_Z) > 0 (added resistance)
 
 ```python
-from ngsbem_eddy import ShieldBEMSIBC
-from ngsbem_interface import extract_edge_geometry
+from radia.ngsbem_eddy import ShieldBEMSIBC
+from radia.ngsbem_interface import extract_edge_geometry
 
 # Create shield mesh (aluminum plate)
 shield_mesh = ...  # Netgen OCC Box mesh
@@ -1371,7 +1371,7 @@ Z_shielded = Z_air + Delta_Z  # Add to PEEC branch impedance
 For planar ferrite cores, the analytical image method scales L_air directly:
 
 ```python
-from ngsbem_coupled import CoupledPEECMMM, compute_delta_L
+from radia.ngsbem_coupled import CoupledPEECMMM, compute_delta_L
 
 mu_r = 1000
 Delta_L = compute_delta_L(solver.L, mu_r)  # = L_air / (mu_r + 1)
@@ -3628,7 +3628,7 @@ result = FastHenryParser().parse_string(inp).solve()  # L, R, Z(f)
 ## Level 2: NGSBEM (detailed)
 
 ```python
-from ngsbem_peec import NGBEMPEECSolver
+from radia.ngsbem_peec import NGBEMPEECSolver
 solver = NGBEMPEECSolver(mesh, order=0, sigma=5.8e7)
 solver.assemble(intorder=6)
 Z = solver.solve_frequency(1e6)
@@ -3756,7 +3756,7 @@ material properties and frequency range.
 
 ```python
 # Option 1: ngsbem_coupled.py (NGSBEM PEEC + core)
-from ngsbem_coupled import CoupledPEECMMM
+from radia.ngsbem_coupled import CoupledPEECMMM
 coupled = CoupledPEECMMM(peec_solver, core_model='radia', radia_core=core)
 coupled.compute_coupling_radia()
 

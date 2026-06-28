@@ -61,10 +61,12 @@ radia_em.py   ->  samples/em_sample.jou
 radia_pcb.py  ->  samples/pcb_sample.jou
 ```
 
-Non-canonical / research-stage samples live under `examples/induction_heating/demoted_samples/`
-(see that directory's README for the demotion history — e.g., the old
-`ih_fem_sample.jou` no-Kelvin baseline and the small-mesh `ih_fem_kelvin_sample.jou`
-with its misleading "auto-Kelvin" comment).
+Non-canonical / research-stage IH samples that are still useful for
+archaeology live under
+`validation_test/induction_heating/demoted_samples_legacy/` (see that
+directory's README for the demotion history — e.g., the old
+`ih_fem_sample.jou` no-Kelvin baseline and the small-mesh
+`ih_fem_kelvin_sample.jou` with its misleading "auto-Kelvin" comment).
 
 Naming convention: `{stem}_sample.jou` where `{stem}` is the part after `radia_` (e.g., `radia_em.py` -> `em`). Multiple samples per stem are allowed when distinct solver methods need different mesh strategies — radia_ih ships four shipped samples (one per panel mode).
 

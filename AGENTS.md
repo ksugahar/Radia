@@ -2367,8 +2367,11 @@ IH uses Biot-Savart from filaments (PEEC path) or volume mesh coil (FEM path).
 
 No sidesets needed. No source/sink labels.
 
-**BEM (legacy)**: BEM solver modules are in `examples/induction_heating/bem_reference/`
-for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_inductance topic).
+**BEM (legacy)**: reusable BEM solver modules live in `src/radia` as
+`radia.bem_inductance`, `radia.bem_coupled_solver`, and `radia.ngsbem_*`.
+Executable reference scripts and sweep results live under
+`validation_test/induction_heating/bem_reference/`. BEM knowledge is in
+`mcp-server-radia-ngsolve` (ngsbem_inductance topic).
 
 **References**:
 - Djordjevic & Notaros, "Double higher order MoM", IEEE TAP 2004 (geometry/basis independence)

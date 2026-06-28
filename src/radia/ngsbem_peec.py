@@ -23,7 +23,7 @@ Modes:
 
 Usage:
     from ngsolve import Mesh
-    from ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
+    from radia.ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
 
     mesh = create_plate_mesh(0.01, 0.01, 0.003, label="conductor")
     solver = NGBEMPEECSolver(mesh, conductor_label="conductor",

@@ -73,8 +73,9 @@ Optional: (none) -- uses FastHenry .inp, not .vol labels
 
 Each radia_*.py MUST have a corresponding sample in `panels/samples/`.
 Only samples that are locked by a golden test under `tests/panels/` are
-shipped in the wheel — others live under `examples/` (see
-CLAUDE.md § "Panel Samples Quality Policy").
+shipped in the wheel. Non-canonical IH history that is still useful for
+debugging lives under `validation_test/induction_heating/demoted_samples_legacy/`
+(see AGENTS.md § "Sample Promotion Ladder").
 
 Current layout (post-2026-04-23 demotion):
 
@@ -86,7 +87,7 @@ radia_ih.py  -> panels/samples/ih_bem_sample.jou            (BEM: cubit-mesh-exp
 radia_em.py  -> panels/samples/em_sample.jou
 radia_pcb.py -> panels/samples/pcb_sample.jou
 
-Demoted (examples/induction_heating/demoted_samples/):
+Legacy validation fixtures:
   ih_fem_sample.jou              (no-Kelvin FEM baseline, truncation demo)
   ih_fem_kelvin_sample.jou/.py   (small-mesh FEM+Kelvin, misleading auto-Kelvin comment)
   ih_fem_kelvin_skin.jou/.py     (coarse variant of skin_fine)

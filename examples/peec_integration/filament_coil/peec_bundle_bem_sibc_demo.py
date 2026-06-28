@@ -15,8 +15,9 @@ Refactored 2026-04-15 to reuse existing helpers:
   - ScalarBIESIBCSolver             (bem_sibc_solver)
   - extract_surface_J_from_phi      (bem_sibc_solver, new)
   - flux_linkage_in_filaments       (bem_sibc_solver, new)
-  - _extract_surface_mesh_filtered  (calc_heating_bem, to strip an
-                                     OCC volume mesh to surface-only)
+  - _extract_surface_mesh_filtered  (radia.panels.surface_mesh_extract,
+                                     to strip an OCC volume mesh to
+                                     surface-only)
   - peec_bundle.build_bundle_solver
 
 Usage:
@@ -44,9 +45,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, '..', '..', '..', 'src'))
 SRC_RADIA = os.path.join(SRC, 'radia')
 PANELS = os.path.join(SRC_RADIA, 'panels')
-BEM_REF = os.path.abspath(os.path.join(
-    HERE, '..', '..', 'induction_heating', 'bem_reference'))
-for p in (SRC, SRC_RADIA, PANELS, BEM_REF):
+for p in (SRC, SRC_RADIA, PANELS):
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -78,7 +77,7 @@ def build_wp_surface_mesh(R_wp, H_wp, maxh):
     """
     from netgen.occ import Cylinder, OCCGeometry, Pnt, Dir
     from ngsolve import Mesh
-    from calc_heating_bem import _extract_surface_mesh_filtered
+    from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
     cyl = Cylinder(Pnt(0, 0, -H_wp / 2), Dir(0, 0, 1), R_wp, H_wp)
     cyl.name = "wp"

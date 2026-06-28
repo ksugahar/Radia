@@ -12,17 +12,19 @@ import os
 import subprocess
 import sys
 import tempfile
+import importlib.util
 
 import pytest
 
 ngsolve = pytest.importorskip("ngsolve")
 
 _repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_src_dir = os.path.join(_repo, "src")
 _panels_dir = os.path.join(_repo, "src", "radia", "panels")
 _radia_src = os.path.join(_repo, "src", "radia")
 
 # Add to path for direct imports
-for p in [_panels_dir, _radia_src]:
+for p in [_src_dir, _panels_dir, _radia_src]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -32,19 +34,8 @@ try:
 except ImportError:
     _HAS_BEM = False
 
-# bem_inductance was retired from the IH panel 2026-04-19 and moved
-# to examples/induction_heating/bem_reference/.  Tests that import
-# it must add that directory to sys.path; if the module is missing
-# (or the directory was deleted in a slim checkout), the tests skip.
-_BEM_INDUCTANCE_DIR = os.path.join(
-    _repo, "examples", "induction_heating", "bem_reference")
-if os.path.isdir(_BEM_INDUCTANCE_DIR):
-    if _BEM_INDUCTANCE_DIR not in sys.path:
-        sys.path.insert(0, _BEM_INDUCTANCE_DIR)
-    _HAS_BEM_INDUCTANCE = os.path.isfile(
-        os.path.join(_BEM_INDUCTANCE_DIR, "bem_inductance.py"))
-else:
-    _HAS_BEM_INDUCTANCE = False
+_HAS_BEM_INDUCTANCE = (
+    importlib.util.find_spec("radia.bem_inductance") is not None)
 
 
 def _run_script(script_name, args, timeout=120):
@@ -128,20 +119,16 @@ class TestIHBEM:
         }
 
     @pytest.mark.skipif(not (_HAS_BEM and _HAS_BEM_INDUCTANCE),
-                        reason="ngsolve.bem or bem_inductance.py "
-                               "(examples/induction_heating/bem_reference/) "
+                        reason="ngsolve.bem or radia.bem_inductance "
                                "not available")
     def test_inductance_direct_call(self, occ_surface_mesh):
         """Test BEM solver called directly (not as subprocess).
 
-        Tests retired-but-archived BEM inductance path
-        (`examples/induction_heating/bem_reference/bem_inductance.py`).
-        Skipped when the bem_reference directory is missing.  Per the
-        2026-04-19 IH panel restructure, the production IH workflow
-        does NOT use BEM inductance -- this test is a research safety
-        net only.
+        Tests the source/sink BEM inductance API.  Per the 2026-04-19
+        IH panel restructure, the production IH workflow does NOT use
+        BEM inductance -- this test is a research safety net only.
         """
-        from bem_inductance import compute_inductance_source_sink
+        from radia.bem_inductance import compute_inductance_source_sink
         from netgen.meshing import Mesh as NetgenMesh
 
         vol_path = occ_surface_mesh["vol_path"]

@@ -805,7 +805,7 @@ print(f"BEM L = {L_total*1e9:.2f} nH (ref: {L_ref*1e9:.2f} nH, error: {error:.1f
 
 ## Example 2: Cubit Torus with Source/Sink Port Detection
 
-See `examples/induction_heating/bem_reference/bem_inductance.py`
+See `src/radia/bem_inductance.py` (`radia.bem_inductance`).
 
 Key workflow:
 ```python

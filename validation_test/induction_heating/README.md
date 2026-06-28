@@ -8,4 +8,20 @@ This directory holds induction-heating checks promoted out of `examples/`.
 scattered-field Robin RHS investigation. It keeps the script, the generated
 Netgen `.vol` mesh fixture, and the measured `results.json` together.
 
+## BEM Reference
+
+`bem_reference/` contains the executable reference scripts and sweep result
+that used to live under the induction-heating examples tree.  The
+reusable solver code was promoted to `src/radia` as `radia.bem_inductance`,
+`radia.bem_coupled_solver`, `radia.cubit_bem_extractor`, and
+`radia.ngsbem_*`; validation scripts should import those APIs instead of
+reaching back into `examples/`.
+
 The public docs catalog is `docs/induction_heating/`.
+
+## Demoted Sample Legacy Fixtures
+
+`demoted_samples_legacy/` contains the old IH Cubit journals and Cubit-side
+Python generators that are no longer shipped as panel samples and no longer
+belong in `examples/`. They are kept here for reproducible archaeology of
+Kelvin open-boundary setup, SIBC hole tagging, and closed-torus edge cases.
