@@ -1,58 +1,129 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T00:42:24Z",
+  "generated_at_utc": "2026-06-28T09:13:30Z",
   "notebook": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
-  "notebook_sha256": "16683a4d3faf3577e025e8d3f35b1c73d693f6712d963ab38811669988c21734",
+  "notebook_sha256": "52ccb945a3ad0fe577f35f0c24c504b8dfc66f1b6cdc93368719284d6ef83d75",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_version": "4.95.2",
     "radia_mcp_version": "1.4.3",
-    "numpy_version": "2.4.6"
+    "radia_version": "4.95.2"
   },
   "summary": {
     "path": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
-    "cells": 7,
+    "cells": 9,
     "code_cells": 5,
     "executed_code_cells": 5,
     "code_cells_with_outputs": 5,
     "output_count": 6,
     "error_output_count": 0,
     "result_saved": true,
-    "topic_script_count": 20,
-    "topic_artifact_count": 8
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
   },
   "outputs": [
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "7f73cc3fc4385184e339a6763c13ebd58ecf24ada22ab0e9ba12274ac49a8b87",
-      "output_count": 1
+      "source_sha256": "dbbe851386deebc8bfa84f15fe23842f4f4d3e6d230940c1c449191cf42f22bf",
+      "source_preview": "from pathlib import Path\nimport json\nfrom collections import Counter\nfrom IPython.display import Markdown, display\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'induction_heating_examples_catalog_results.json').exists():\n    NOTEBOOK_DIR = Path('docs/induction_heating').resolve()\narchive = json.loads((NOTEBOOK_DIR / 'induction_heating_examples_catalog_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(archive['summary'], ensure_ascii=False, indent=2))",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 648,
+          "text_sha256": "f0b0ba7dd4141e463d4713ad50631edae05747ae586b5d44270e0789a8e85caf",
+          "text_preview": "{\n  \"script_count\": 20,\n  \"artifact_count\": 8,\n  \"lane_counts\": {\n    \"docs_showcase_candidate\": 1,\n    \"docs_tutorial_notebook_candidate\": 3,\n    \"protected_panel_sample_rework\": 3,\n    \"research_docs_or_validation_review\": 1,\n    \"src_api_or_validation_locked\": 11,\n    \"validation_test_candidate\": 1\n  },\n  \"subdir_counts\": {\n    \".\": 5,\n    \"bem_reference\": 11,\n    \"demoted_samples\": 3,\n    \"validation_test/induction_heating/scattered_rhs_clean_test\": 1\n  },\n  \"protected_script_count\": 20,\n  \"migrated_records\": {\n    \"validation_test/induction_heating/scattered_rhs_clean_test\": \"moved from examples to validation_test on 2026-06-28\"\n  }\n}\n",
+          "text_truncated": false
+        }
+      ]
     },
     {
       "cell_index": 3,
       "execution_count": 2,
-      "source_sha256": "04c66815aaf8cf65aad3c7ff0d48e77f2d5b7d70126ad5ac27c4805a180508f8",
-      "output_count": 2
-    },
-    {
-      "cell_index": 4,
-      "execution_count": 3,
-      "source_sha256": "f04af3455ea7b2aedbee1d6fdaedf1bf7f729ff71bf77b58b2b28d3f95597a76",
-      "output_count": 1
+      "source_sha256": "3e15fea502568055db101e920a33418b2f92e8a0f159a41d52ba9d6004b0b58e",
+      "source_preview": "records = archive['records']\nlane_counts = Counter(r['lane'] for r in records)\nsubdir_counts = Counter(r.get('subdir', '.') for r in records)\nassert sum(lane_counts.values()) == archive['summary']['script_count']\n\ndef table(headers, rows):\n    return '\\n'.join(['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|'] + ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows])\n\ndisplay(Markdown(table(['lane', 'count'], sorted(lane_counts.items()))))\ndisplay(Markdown(table(['subdir', 'python_files'], sorted(subdir_counts.items()))))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
     },
     {
       "cell_index": 5,
-      "execution_count": 4,
-      "source_sha256": "0fb4cbf2179b73c439f4b66132daee2894a7f85cdecc780ce23a5c93e4a00831",
-      "output_count": 1
+      "execution_count": 3,
+      "source_sha256": "be3629e07e911f809fb3bd6e9f1f306e0e21fecd2c5f91800c607d214d35f7e4",
+      "source_preview": "rows = []\nfor r in records:\n    src = r.get('source', {})\n    artifacts = r.get('sibling_artifacts', r.get('artifacts', []))\n    summary = src.get('summary', '').replace('|', '/')[:120]\n    rows.append([r['path'], r['lane'], r.get('protected_reference_count', 0), len(artifacts), src.get('line_count', ''), src.get('sha256', '')[:12], summary])\ndisplay(Markdown(table(['path', 'lane', 'refs', 'artifacts', 'lines', 'sha256', 'summary'], rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
     },
     {
-      "cell_index": 6,
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "7d26ddfb2b95148212da2fa47fef72ea46f6339eef7f49d9f5525263c482ed27",
+      "source_preview": "rows = []\nfor r in records:\n    if not r.get('protected_reference_count'):\n        continue\n    first = r.get('protected_references', [{}])[0]\n    where = f\"{first.get('path', '')}:{first.get('line', '')}\" if first else '-'\n    rows.append([r['path'], r['protected_reference_count'], where, r['lane']])\ndisplay(Markdown(table(['script', 'refs', 'first_ref', 'lane'], rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
       "execution_count": 5,
-      "source_sha256": "8115a383aa80f62d57cbaa0fd2e3a004fa0917f87d47dc3eccf1994e57de43ca",
-      "output_count": 1
+      "source_sha256": "82bac2be4cb92ccccaccaadee1b5a73bf224a184db993e4b71da522877498f41",
+      "source_preview": "current_paths = {r['path'] for r in records}\nassert archive['summary']['script_count'] == len(current_paths)\nassert all(r['source']['text'] for r in records)\nassert archive['generated_at_utc']\nprint(f\"catalog records: {len(records)} scripts; source lines: {sum(r.get('line_count', 0) for r in records)}; artifacts: {archive['summary'].get('artifact_count')}\")\nprint('deletion gate: keep examples paths until each protected reference is migrated to docs/src/validation_test/panels')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 172,
+          "text_sha256": "9ae069d2600dd84f1e9036b5a0c812a9bf960ddf9f06666ec57d4141ac54b09f",
+          "text_preview": "catalog records: 20 scripts; source lines: 0; artifacts: 8\ndeletion gate: keep examples paths until each protected reference is migrated to docs/src/validation_test/panels\n",
+          "text_truncated": false
+        }
+      ]
     }
   ],
   "policy": {

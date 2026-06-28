@@ -39,9 +39,9 @@ def _demag(fes, builder, Mcf, **kw):
 
 
 @pytest.mark.parametrize("curve", [0, 2])
-@pytest.mark.parametrize("p", [1, 2])
+@pytest.mark.parametrize("p", [1])
 def test_build_charge_gauss_matches_analytic_demag(curve, p):
-    """High-order Gauss demag == analytic high-order Gram demag to <1e-3, straight + curved, p=1,2."""
+    """High-order Gauss demag == analytic high-order Gram demag to <1e-3, straight + curved, p=1 (RT2+ abolished)."""
     mesh = _sphere(curve=curve)
     Mcf = ng.CoefficientFunction((0, 0, ng.z))   # non-uniform -> exercises the volume charge (div M != 0)
     fes = ng.HDiv(mesh, order=p)
@@ -54,6 +54,6 @@ def test_build_charge_gauss_matches_analytic_demag(curve, p):
 def test_build_charge_gauss_uniform_demag_third():
     """Uniform M_z on a straight-tet sphere -> demag ~ 1/3 through the Gauss point operator (physical anchor)."""
     mesh = _sphere()
-    D, _ = _demag(ng.HDiv(mesh, order=2), build_charge_gauss,
+    D, _ = _demag(ng.HDiv(mesh, order=1), build_charge_gauss,
                   ng.CoefficientFunction((0, 0, 1.0)), qpts=3, near_factor=1.0)
     assert 0.30 < D < 0.36

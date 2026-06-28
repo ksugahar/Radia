@@ -37,7 +37,7 @@ def build_radia_magnet():
     center = [0, 0, 0]
     size = [0.01, 0.01, 0.01]
     magnetization = [0, 0, 954930]  # A/m, z-directed
-    mag = rad.ObjRecMag(center, size, magnetization)
+    mag = rad.magnet_box(center, size, magnetization)
 
     return mag
 

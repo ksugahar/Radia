@@ -1,5 +1,10 @@
 # H-Matrix Benchmark Results
 
+Legacy migration note: this historical benchmark record is kept with the
+runnable validation drivers in `validation_test/solver_benchmarks/`. It is not
+the current public example layer; use `docs/solver_benchmarks/` for the
+result-bearing PEEC solver benchmark notebook.
+
 **Date**: 2025-11-13
 **Version**: v1.1.0
 **Status**: ✅ All benchmarks verified
@@ -23,13 +28,9 @@ All H-matrix benchmarks have been successfully executed with **measured** perfor
 
 ## Comprehensive Documentation
 
-**For detailed results, methodology, and analysis, see:**
-- **[docs/HMATRIX_BENCHMARKS_RESULTS.md](../../docs/HMATRIX_BENCHMARKS_RESULTS.md)** - Complete benchmark report with detailed methodology and analysis
-
-**Additional Documentation:**
-- [docs/HMATRIX_IMPLEMENTATION_HISTORY.md](../../docs/HMATRIX_IMPLEMENTATION_HISTORY.md) - Complete implementation history from Phase 1 to 3B
-- [docs/HMATRIX_SERIALIZATION.md](../../docs/HMATRIX_SERIALIZATION.md) - User guide for Phase 3B disk caching features
-- [docs/API_REFERENCE.md](../../docs/api/API_REFERENCE.md) - Complete Radia API reference
+This file is the retained historical result note for the legacy H-matrix
+benchmark drivers. The current public benchmark notebook is
+`docs/solver_benchmarks/peec_solver_benchmarks.ipynb`.
 
 ---
 
@@ -38,7 +39,7 @@ All H-matrix benchmarks have been successfully executed with **measured** perfor
 All benchmarks can be run individually:
 
 ```bash
-cd examples/solver_benchmarks
+cd validation_test/solver_benchmarks
 
 # Individual benchmarks
 python benchmark_solver.py                # Solver performance
@@ -47,7 +48,7 @@ python benchmark_parallel_construction.py # Parallel construction
 python verify_field_accuracy.py          # Field accuracy verification
 
 # Run all at once
-python run_all_hmatrix_benchmarks.py
+python run_all_benchmarks.py
 ```
 
 ---
@@ -202,7 +203,8 @@ rad.Solve(geometry, 0.0001, 1000, 2)
 ---
 
 **Last Updated**: 2025-11-13
-**Verified By**: Claude Code
+**Verified By**: legacy validation corpus
 **Version**: v1.1.0
 
-**For comprehensive results and analysis**, see [docs/HMATRIX_BENCHMARKS_RESULTS.md](../../docs/HMATRIX_BENCHMARKS_RESULTS.md)
+**For current public benchmark presentation**, see
+`docs/solver_benchmarks/peec_solver_benchmarks.ipynb`.

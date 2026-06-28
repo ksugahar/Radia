@@ -13,9 +13,9 @@ Measures, per case:
   - converged : True if Z is finite
   - peak_memory_mb : psutil peak_wset (captures C++ heap)
 
-Per CLAUDE.md benchmark policy:
+Per repository benchmark policy:
   - One process per case (fresh Python interpreter)
-  - JSON output: results_bench_peec_dense.json next to this script
+  - JSON output: docs/solver_benchmarks/results_bench_peec_dense.json
 
 Baseline for Phase 1 HACApK-PEEC paper (see docs/research/HACAPK_PEEC_PRIMA_PAPER.md).
 Run this once to establish the dense-PEEC operating point, then compare
@@ -58,8 +58,10 @@ FREQ_HZ = 10.0e3                       # typical IH frequency
 SUBDIVISIONS = [1, 2, 3, 4, 5]
 
 BENCH_NAME = "bench_peec_dense"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+RESULT_DIR = os.path.join(REPO_ROOT, "docs", "solver_benchmarks")
 OUTFILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
+    RESULT_DIR,
     f"results_{BENCH_NAME}.json",
 )
 
@@ -210,6 +212,7 @@ def run_all() -> None:
         },
         "results": results,
     }
+    os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
     with open(OUTFILE, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     print()

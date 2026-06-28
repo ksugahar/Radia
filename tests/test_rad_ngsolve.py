@@ -60,7 +60,7 @@ class TestRadNGSolve:
 		import radia as rad
 
 		rad.UtiDelAll()
-		magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		magnet = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 
 		# Create RadiaField
 		bf = RadiaField(magnet, 'b')
@@ -98,7 +98,7 @@ class TestRadNGSolve:
 		rad.UtiDelAll()
 
 		# Create a simple permanent magnet (M in A/m, Br=1.2T -> M=954930 A/m)
-		magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		magnet = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 		print(f"  [OK] Radia magnet created: ID={magnet}")
 
 		# Create RadiaField
@@ -127,7 +127,7 @@ class TestRadNGSolve:
 
 		rad.UtiDelAll()
 
-		magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		magnet = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 
 		# Test all field types
 		for ftype in ['b', 'h', 'a', 'm', 'phi']:

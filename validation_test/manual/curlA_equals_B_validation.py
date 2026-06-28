@@ -45,7 +45,7 @@ print("-" * 80)
 rad.UtiDelAll()
 
 # Rectangular magnet with significant field
-magnet = rad.ObjRecMag(
+magnet = rad.magnet_box(
 	[0, 0, 0],           # Center (m)
 	[0.04, 0.04, 0.06],  # Dimensions (m)
 	[0, 0, 1.2]          # Magnetization (T)

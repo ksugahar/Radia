@@ -188,24 +188,41 @@ class CommandWorkbench:
         for field in self.field_specs:
             value = getattr(self.spec, field.key)
             widgets[field.key] = self._make_widget(W, field, value)
-        widgets["build"] = W.Button(description="Build command", button_style="info")
-        widgets["spec_cell"] = W.Button(description="Show spec cell")
-        widgets["run"] = W.Button(description="Run local", button_style="warning")
-        widgets["cancel"] = W.Button(description="Cancel", button_style="danger", disabled=True)
+        btn_layout = W.Layout(width="150px", height="34px")
+        widgets["build"] = W.Button(
+            description="Build command", button_style="info",
+            icon="wrench", layout=btn_layout,
+        )
+        widgets["run"] = W.Button(
+            description="Run", button_style="success",
+            icon="play", layout=btn_layout,
+        )
+        widgets["cancel"] = W.Button(
+            description="Cancel", button_style="danger",
+            icon="stop", disabled=True, layout=btn_layout,
+        )
+        widgets["spec_cell"] = W.Button(
+            description="Show spec cell", icon="code", layout=btn_layout,
+        )
+        cfg_style = {"description_width": "80px"}
         widgets["timeout_s"] = W.IntText(
             description="timeout [s]",
             value=self.timeout_s,
-            layout=W.Layout(width="180px"),
+            layout=W.Layout(width="200px"),
+            style=cfg_style,
         )
         widgets["run_root"] = W.Text(
             description="run root",
             value=str(self.run_root),
-            layout=W.Layout(width="420px"),
+            layout=W.Layout(width="460px"),
+            style=cfg_style,
         )
         return widgets
 
     def _make_widget(self, W, field: NotebookFieldSpec, value):
         layout = W.Layout(width=field.width)
+        # Wide description so field labels are not truncated to "Met...".
+        style = {"description_width": "150px"}
         if field.kind == "dropdown":
             options = list(field.options)
             option_values = [
@@ -219,14 +236,23 @@ class CommandWorkbench:
                 options=options,
                 value=value,
                 layout=layout,
+                style=style,
             )
         if field.kind == "checkbox":
-            return W.Checkbox(description=field.label, value=bool(value), layout=layout)
+            return W.Checkbox(
+                description=field.label, value=bool(value), layout=layout, style=style
+            )
         if field.kind == "int":
-            return W.IntText(description=field.label, value=int(value), layout=layout)
+            return W.IntText(
+                description=field.label, value=int(value), layout=layout, style=style
+            )
         if field.kind == "float":
-            return W.FloatText(description=field.label, value=float(value), layout=layout)
-        return W.Text(description=field.label, value=str(value), layout=layout)
+            return W.FloatText(
+                description=field.label, value=float(value), layout=layout, style=style
+            )
+        return W.Text(
+            description=field.label, value=str(value), layout=layout, style=style
+        )
 
     def _build_layout(self, W):
         by_section: dict[str, list[Any]] = {}
@@ -241,18 +267,36 @@ class CommandWorkbench:
             for name in sections
             if name in by_section
         ]
-        accordion = W.Accordion(children=children)
+        accordion = W.Accordion(children=children, selected_index=0)
         for i, name in enumerate([name for name in sections if name in by_section]):
             accordion.set_title(i, name)
-        buttons = W.HBox([
-            self._widgets["build"],
-            self._widgets["spec_cell"],
-            self._widgets["run"],
-            self._widgets["cancel"],
-            self._widgets["timeout_s"],
-            self._widgets["run_root"],
-        ])
-        return W.VBox([accordion, buttons, self._output])
+        header = W.HTML(
+            "<div style='font-size:17px;font-weight:600;color:#202124;"
+            "padding:2px 2px 8px;border-bottom:2px solid #1a73e8;"
+            "margin-bottom:10px;'>"
+            f"{self.title}</div>"
+        )
+        action_row = W.HBox(
+            [self._widgets["build"], self._widgets["run"],
+             self._widgets["cancel"], self._widgets["spec_cell"]],
+            layout=W.Layout(gap="8px", padding="8px 0 4px"),
+        )
+        config_row = W.HBox(
+            [self._widgets["timeout_s"], self._widgets["run_root"]],
+            layout=W.Layout(gap="12px", padding="2px 0 6px"),
+        )
+        if self._output is not None:
+            self._output.layout = W.Layout(
+                border="1px solid #e0e0e0", padding="8px",
+                margin="8px 0 0", max_height="340px", overflow="auto",
+            )
+        return W.VBox(
+            [header, accordion, action_row, config_row, self._output],
+            layout=W.Layout(
+                border="1px solid #d0d0d0", padding="16px",
+                width="840px", gap="2px",
+            ),
+        )
 
     def _wire_widgets(self) -> None:
         for field in self.field_specs:

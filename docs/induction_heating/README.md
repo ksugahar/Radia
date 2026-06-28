@@ -25,7 +25,8 @@ example script.
   `demo_esim_impedance.py`) should become human-facing docs notebooks.
 - `bem_reference/` is protected by panel tests and should be split into
   reusable `src` API plus runnable `validation_test` checks before deletion.
-- `scattered_rhs_clean_test/` is a validation-test candidate because it already
-  carries a `.vol` fixture and `results.json`.
+- `scattered_rhs_clean_test/` has been promoted to
+  `validation_test/induction_heating/scattered_rhs_clean_test/` because it
+  already carries a `.vol` fixture and `results.json`.
 - `demoted_samples/` is panel/sample history. Do not delete it until the
   corresponding notebook-panel or validation fixture replaces each sample.

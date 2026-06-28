@@ -51,7 +51,7 @@ class TestLinearMaterials:
 		rad.UtiDelAll()
 
 		# Create magnet
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Create and apply material (anisotropic, easy axis [1,1,1])
 		mat = rad.MatLin([1000, 1], [1, 1, 1])
@@ -81,7 +81,7 @@ class TestNonlinearMaterials:
 		rad.UtiDelAll()
 
 		# Create magnet
-		mag = rad.ObjRecMag([0, 0, 0], [20, 20, 20], [1, 0, 0])
+		mag = rad.magnet_box([0, 0, 0], [20, 20, 20], [1, 0, 0])
 
 		# Create nonlinear material
 		HM_data = [[0, 0], [100, 800], [500, 1200], [1000, 1400], [5000, 1500]]
@@ -103,8 +103,8 @@ class TestMaterialOnGroups:
 		rad.UtiDelAll()
 
 		# Create multiple objects
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mag2 = rad.ObjRecMag([15, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag2 = rad.magnet_box([15, 0, 0], [10, 10, 10], [0, 0, 1])
 		group = rad.ObjCnt([mag1, mag2])
 
 		# Apply material to group (anisotropic, easy axis [1,1,1])
@@ -120,11 +120,11 @@ class TestMaterialOnGroups:
 		rad.UtiDelAll()
 
 		# Create two magnets with different materials
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		mat1 = rad.MatLin([1000, 1], [1, 1, 1])  # Easy axis [1,1,1]
 		rad.MatApl(mag1, mat1)
 
-		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag2 = rad.magnet_box([20, 0, 0], [10, 10, 10], [0, 0, 1])
 		mat2 = rad.MatLin([2000, 1], [1, 0, 0])  # Easy axis [1,0,0] (x-direction)
 		rad.MatApl(mag2, mat2)
 
@@ -144,7 +144,7 @@ class TestMaterialWithRelaxation:
 		rad.UtiDelAll()
 
 		# Create iron core with nonlinear material
-		core = rad.ObjRecMag([0, 0, 0], [20, 20, 20], [1, 0, 0])
+		core = rad.magnet_box([0, 0, 0], [20, 20, 20], [1, 0, 0])
 
 		# Nonlinear material
 		HM_data = [[0, 0], [100, 800], [500, 1200], [1000, 1400], [5000, 1500], [10000, 1500]]

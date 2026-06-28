@@ -1966,8 +1966,10 @@ def basis_functions(topic: str = "") -> str:
       verification_recipes          -- partition of unity, div=σ/A, etc.
 
     Companion files:
-      examples/mathematica/RadiaBasis.m  -- canonical Mathematica package
-      tests/basis/test_basis_functions.py -- CI-verified NumPy ports
+      packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m
+        -- canonical Mathematica package
+      tests/basis/test_basis_functions.py
+        -- CI-verified NumPy ports
 
     Args:
         topic: Empty for the full document, or one of the topics above.

@@ -53,7 +53,7 @@ for i in range(n_magnets):
 	size = [20, 20, 20]  # mm
 	magnetization = [0, 0, 1.0]  # T
 
-	mag = rad.ObjRecMag(center, size, magnetization)
+	mag = rad.magnet_box(center, size, magnetization)
 	magnets.append(mag)
 
 # Create group

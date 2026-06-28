@@ -1,10 +1,11 @@
 """
 Mesh evaluation: format quality assurance + p-convergence.
 
-Called as subprocess from the Cubit Export Mesh PySide6 menu:
+Called from docs notebooks or directly from the command line:
     python calc_mesh_eval.py --vol-base /path/to/model --max-order 5
 
-The Cubit-side export command has ALREADY exported:
+The Cubit Export menu is intentionally export-only.  Before running this
+script, Cubit or a batch script has ALREADY exported:
   - {base}_p1.vol ... {base}_p5.vol  (Netgen .vol at each order)
   - {base}_p1.vol.json               (CAD reference values)
   - {base}_qa_gmsh_o1.msh ...        (format QA files)

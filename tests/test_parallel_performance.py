@@ -35,7 +35,7 @@ import radia as rad
 def create_test_magnet():
 	"""Create a test magnet configuration"""
 	# Create a rectangular block magnet (10x10x10 mm in meters)
-	magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
+	magnet = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1000])  # 1000 A/m magnetization in Z
 	return magnet
 
@@ -90,7 +90,7 @@ def test_relaxation_performance():
 			for j in range(10):
 				x = -0.050 + i * 0.010
 				y = -0.050 + j * 0.010
-				mag = rad.ObjRecMag([x, y, 0], [0.008, 0.008, 0.010], [0, 0, 0])
+				mag = rad.magnet_box([x, y, 0], [0.008, 0.008, 0.010], [0, 0, 0])
 				rad.MatApl(mag, mat)  # Apply material for relaxation
 				elements.append(mag)
 

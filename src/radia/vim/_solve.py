@@ -460,6 +460,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     """
     if H_ext is None:
         raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
+    if int(order) > 1:
+        raise ValueError(
+            "hdiv_demag_solve: RT2+ (HDiv solution order >= 2) is abolished -- HDiv-VIM supports order=0 "
+            "(RT0) or order=1 (RT1).  RT2 gave no per-element magnetization gain over RT1 and was markedly "
+            "slower; the geometry curve_order is a SEPARATE knob and is unaffected.")
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))

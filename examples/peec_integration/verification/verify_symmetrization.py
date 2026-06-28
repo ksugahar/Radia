@@ -62,7 +62,7 @@ def verify_reciprocity_single_element():
                        2e-3, 2e-3, 5.8e7, 8, n_segments)
 
     # Create magnetic element at center
-    core = rad.ObjRecMag([0, 0, 0], core_size, [0, 0, 0])
+    core = rad.magnet_box([0, 0, 0], core_size, [0, 0, 0])
     mat = rad.MatLin(mu_r)
     rad.MatApl(core, mat)
 
@@ -96,7 +96,7 @@ def verify_reciprocity_single_element():
 
     # Set unit magnetization in z-direction
     rad.UtiDelAll()
-    magnet = rad.ObjRecMag([0, 0, 0], core_size, [0, 0, 1.0])  # M = 1 A/m in z
+    magnet = rad.magnet_box([0, 0, 0], core_size, [0, 0, 1.0])  # M = 1 A/m in z
 
     # Compute B field at loop center (as approximation for flux)
     # More accurate: integrate over loop surface
@@ -174,7 +174,7 @@ def verify_symmetrization_equivalence():
 
     coil = rad.CndLoop([0, 0, 0], loop_radius, [0, 0, 1], 'r',
                        2e-3, 2e-3, 5.8e7, 8, 36)
-    core = rad.ObjRecMag([0, 0, 0], core_size, [0, 0, 0])
+    core = rad.magnet_box([0, 0, 0], core_size, [0, 0, 0])
     mat = rad.MatLin(mu_r)
     rad.MatApl(core, mat)
 

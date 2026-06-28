@@ -131,10 +131,10 @@ class TestCurlAEqualsB:
                 f"curl(A)/B ratios should be consistent: mean={ratio_mean:.2e}, std={ratio_std:.2e}, rel_std={rel_std:.2%}"
 
     def test_curl_a_proportional_to_b_recmag(self):
-        """Test curl(A) / B ratio is consistent for ObjRecMag."""
+        """Test curl(A) / B ratio is consistent for a rectangular PM (magnet_box)."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
 
         def A_func(pt):
             return rad.Fld(rec_mag, 'a', pt)
@@ -252,10 +252,10 @@ class TestGradPhiEqualsMinusH:
                 f"-grad(Phi)/H ratios should be consistent: mean={ratio_mean:.2e}, rel_std={rel_std:.2%}"
 
     def test_grad_phi_proportional_to_h_recmag(self):
-        """Test -grad(Phi) / H ratio is consistent for ObjRecMag."""
+        """Test -grad(Phi) / H ratio is consistent for a rectangular PM (magnet_box)."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
 
         def Phi_func(pt):
             return rad.Fld(rec_mag, 'p', pt)
@@ -405,10 +405,10 @@ class TestFieldRelationsConsistency:
         rad.UtiDelAll()
 
     def test_recmag_hexahedron_ratio_consistency(self):
-        """Test that curl(A)/B ratios are same for ObjRecMag and ObjHexahedron."""
+        """Test that curl(A)/B ratios are same for magnet_box and a hand-built ObjHexahedron."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
         vertices = [
             [-dx, -dy, -dz], [dx, -dy, -dz], [dx, dy, -dz], [-dx, dy, -dz],
             [-dx, -dy, dz], [dx, -dy, dz], [dx, dy, dz], [-dx, dy, dz],

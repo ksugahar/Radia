@@ -1,6 +1,6 @@
 {
   "schema": "radia.examples_catalog.v1",
-  "generated_at_utc": "2026-06-28T00:42:24Z",
+  "generated_at_utc": "2026-06-28T09:13:30Z",
   "topic": "induction_heating",
   "notebook": "docs/induction_heating/induction_heating_examples_catalog.ipynb",
   "versions": {
@@ -31,9 +31,12 @@
       ".": 5,
       "bem_reference": 11,
       "demoted_samples": 3,
-      "scattered_rhs_clean_test": 1
+      "validation_test/induction_heating/scattered_rhs_clean_test": 1
     },
-    "protected_script_count": 20
+    "protected_script_count": 20,
+    "migrated_records": {
+      "validation_test/induction_heating/scattered_rhs_clean_test": "moved from examples to validation_test on 2026-06-28"
+    }
   },
   "records": [
     {
@@ -749,7 +752,7 @@
       ]
     },
     {
-      "path": "examples/induction_heating/scattered_rhs_clean_test/clean_filament_test.py",
+      "path": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py",
       "name": "clean_filament_test.py",
       "subdir": "scattered_rhs_clean_test",
       "lane": "validation_test_candidate",
@@ -777,7 +780,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/induction_heating/scattered_rhs_clean_test/clean_filament.vol",
+          "path": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament.vol",
           "bytes": 23073039,
           "sha256": "ab3600eee2db3cee2dad899fb4170f435282ba624f313eb3c48711d680f9e991"
         }
@@ -787,7 +790,7 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 386,
-          "text": "examples/induction_heating/scattered_rhs_clean_test/clean_filament_test.py"
+          "text": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py"
         }
       ]
     }
@@ -825,12 +828,12 @@
       "sha256": "0d3599ac3b3a9d7aa2ccf8f26f199700464d0dc3a75d7b3dd47b1df2e2bbaf65"
     },
     {
-      "path": "examples/induction_heating/scattered_rhs_clean_test/clean_filament.vol",
+      "path": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament.vol",
       "bytes": 23073039,
       "sha256": "ab3600eee2db3cee2dad899fb4170f435282ba624f313eb3c48711d680f9e991"
     },
     {
-      "path": "examples/induction_heating/scattered_rhs_clean_test/results.json",
+      "path": "validation_test/induction_heating/scattered_rhs_clean_test/results.json",
       "bytes": 2241,
       "sha256": "d6efb1a1e0b3afe60e28e74847bbe11fcce326d25b5f9180a497cb2b239fa3f5",
       "json_keys": [
@@ -840,5 +843,5 @@
       ]
     }
   ],
-  "notebook_sha256": "16683a4d3faf3577e025e8d3f35b1c73d693f6712d963ab38811669988c21734"
+  "notebook_sha256": "52ccb945a3ad0fe577f35f0c24c504b8dfc66f1b6cdc93368719284d6ef83d75"
 }

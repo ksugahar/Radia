@@ -183,3 +183,13 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"radia_mcp.mathematica" = [
+    "*.md",
+    "basis_functions/*.md",
+    "basis_functions/*.m",
+    "basis_functions/*.wls",
+    "differential_geometry/*.md",
+    "differential_geometry/*.wls",
+]

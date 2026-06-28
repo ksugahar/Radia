@@ -74,16 +74,16 @@ def build_radia_coil(N=100, I=1.0, h=0.020,
 
     # Decompose hollow rectangular prism into 4 wall blocks
     # Left wall: x in [-a_out, -a_in], y in [-a_out, a_out]
-    left = rad.ObjRecMag([-(a_in + a_out) / 2, 0, 0],
+    left = rad.magnet_box([-(a_in + a_out) / 2, 0, 0],
                          [a_out - a_in, outer_xy, h], mag)
     # Right wall: x in [a_in, a_out], y in [-a_out, a_out]
-    right = rad.ObjRecMag([(a_in + a_out) / 2, 0, 0],
+    right = rad.magnet_box([(a_in + a_out) / 2, 0, 0],
                           [a_out - a_in, outer_xy, h], mag)
     # Front wall: x in [-a_in, a_in], y in [a_in, a_out]
-    front = rad.ObjRecMag([0, (a_in + a_out) / 2, 0],
+    front = rad.magnet_box([0, (a_in + a_out) / 2, 0],
                           [bore_xy, a_out - a_in, h], mag)
     # Back wall: x in [-a_in, a_in], y in [-a_out, -a_in]
-    back = rad.ObjRecMag([0, -(a_in + a_out) / 2, 0],
+    back = rad.magnet_box([0, -(a_in + a_out) / 2, 0],
                          [bore_xy, a_out - a_in, h], mag)
 
     coil = rad.ObjCnt([left, right, front, back])

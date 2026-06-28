@@ -7,6 +7,13 @@ Presentation notebook:
 is the result-saved talk layer. It combines the validation summary JSONs,
 high-order curved-hex NGSolve results, and source excerpts for Q&A.
 
+Mesh-evaluation demo:
+[`docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`](netgen/p_convergence_demo.ipynb)
+is the result-saved p-convergence demonstration. It records a Cubit batch run
+that calls APREPRO export commands through `cubit.cmd(...)` and evaluates the
+exported `.vol` files with `src/radia/panels/calc_mesh_eval.py`. This is a
+documentation demo, not a Cubit menu action or engineering design panel.
+
 ## Folder Structure
 
 | Folder | Format | Description |

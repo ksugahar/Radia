@@ -39,7 +39,7 @@ def main():
                 x = (i - n / 2 + 0.5) * 0.02
                 y = (j - n / 2 + 0.5) * 0.02
                 z = (k - n / 2 + 0.5) * 0.02
-                elem = rad.ObjRecMag([x, y, z], [0.02, 0.02, 0.02], [0, 0, 1.2])
+                elem = rad.magnet_box([x, y, z], [0.02, 0.02, 0.02], [0, 0, 1.2])
                 elements.append(elem)
 
     magnet = rad.ObjCnt(elements)

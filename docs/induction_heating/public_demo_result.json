@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T01:27:23Z",
+  "generated_at_utc": "2026-06-28T09:13:31Z",
   "notebook": "docs/induction_heating/public_demo.ipynb",
-  "notebook_sha256": "6292d96fe0511a941ac09237300c0709d14e4f4948739a5229e400dbadf477d0",
+  "notebook_sha256": "1f0ce39ff3c825542c997f369a10425fe8f2b083b2f1d6df51e0826c30ba710a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -28,15 +28,15 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "a5c21dd6a94eafd9a223e015923f032a8b377cfbf7b0506b186bc0661502e2a5",
-      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, Image, display\nCWD = Path.cwd()\nif (CWD / 'public_demo_results.json').exists():\n    NOTEBOOK_DIR = CWD\n    REPO = NOTEBOOK_DIR.parents[1]\nelse:\n    REPO = CWD\n    NOTEBOOK_DIR = REPO / 'docs' / 'induction_heating'\ndemo = json.loads((NOTEBOOK_DIR / 'public_demo_results.json').read_text(encoding='utf-8'))\ncatalog = json.loads((NOTEBOOK_DIR / 'induction_heating_examples_catalog_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(demo['summary'], indent=2, ensure_ascii=False))",
+      "source_sha256": "e531b68e4b0ad38fc38a5cbbb690c4f1aca14ea214c7699c6c921d4bd4b27582",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, Image, display\n\nCWD = Path.cwd()\nif (CWD / 'public_demo_results.json').exists():\n    NOTEBOOK_DIR = CWD\n    REPO = NOTEBOOK_DIR.parents[1]\nelse:\n    REPO = CWD\n    NOTEBOOK_DIR = REPO / 'docs' / 'induction_heating'\ndemo = json.loads((NOTEBOOK_DIR / 'public_demo_results.json').read_text(encoding='utf-8'))\ncatalog = json.loads((NOTEBOOK_DIR / 'induction_heating_examples_catalog_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(demo['summary'], ensure_ascii=False, indent=2))",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 154,
-          "text_sha256": "55375a0a5b3e076314ab528af476b5586eba645b481beee01d0c124dbdbff59e",
-          "text_preview": "{\n  \"selected_demo_count\": 9,\n  \"selected_figure_count\": 4,\n  \"catalog_script_count\": 20,\n  \"catalog_artifact_count\": 8,\n  \"protected_script_count\": 20\n}\n",
+          "text_chars": 378,
+          "text_sha256": "308d2adc49cb878f52436f3c20057bcbd356df0cf65ee5e1c40d4346234eec83",
+          "text_preview": "{\n  \"selected_demo_count\": 9,\n  \"selected_figure_count\": 4,\n  \"catalog_script_count\": 20,\n  \"catalog_artifact_count\": 8,\n  \"protected_script_count\": 20,\n  \"companion_status\": \"scattered_rhs_clean_test moved to validation_test; bem_reference still must split into src API + validation_test before examples rerouting; demoted_samples remain protected until replacements exist.\"\n}\n",
           "text_truncated": false
         }
       ]
@@ -63,8 +63,8 @@
     {
       "cell_index": 3,
       "execution_count": 3,
-      "source_sha256": "d2a5fe3741eaaa3844ccc48bb941c7710d8ebdb7cdfec0e8a546e22c0b1a8516",
-      "source_preview": "rows=[]\ncommands={\n 'examples/induction_heating/esim_demo.py':'python examples/induction_heating/esim_demo.py',\n 'examples/induction_heating/demo_esim_impedance.py':'python examples/induction_heating/demo_esim_impedance.py',\n 'examples/induction_heating/demo_wpt_coupling.py':'python examples/induction_heating/demo_wpt_coupling.py',\n 'examples/induction_heating/bem_reference/bem_inductance.py':'python examples/induction_heating/bem_reference/bem_inductance.py',\n}\nfor r in demo['selected_records']:\n    arts=', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['lane'], f'`{commands.get(r[\"path\"], \"python \" + r[\"path\"])}`', arts, r['source']['summary']])\nmd='## Representative runnable companions\\n\\n'+'\\n'.join(['| script | lane | command | artifacts | summary |','| --- | --- | --- | --- | --- |']+[f'| {a} | {b} | {c} | {d} | {e} |' for a,b,c,d,e in rows])\ndisplay(Markdown(md))",
+      "source_sha256": "636d22c357db52b18da6e1ae3fd9e51f4b0ace6e6d590772dd24a8ecad0dc9b7",
+      "source_preview": "def table(headers, rows):\n    return '\\n'.join(['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|'] + ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows])\n\ncommands = {\n    'examples/induction_heating/esim_demo.py': 'python examples/induction_heating/esim_demo.py',\n    'examples/induction_heating/demo_esim_impedance.py': 'python examples/induction_heating/demo_esim_impedance.py',\n    'examples/induction_heating/demo_wpt_coupling.py': 'python examples/induction_heating/demo_wpt_coupling.py',\n    'examples/induction_heating/bem_reference/bem_inductance.py': 'python examples/induction_heating/bem_reference/bem_inductance.py',\n    'validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py': 'python validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py',\n}\nrows = []\nfor r in demo['selected_records']:\n    path = r['path']\n    link = f'[`{path}`](../../{path})'\n    art = r.get('sibling_artifacts', r.g",
       "outputs": [
         {
           "output_type": "display_data",
@@ -82,8 +82,8 @@
     {
       "cell_index": 4,
       "execution_count": 4,
-      "source_sha256": "388e69d4ded24b4ec7525e2336e28065165c88d6659f834aabb5531c5d652666",
-      "source_preview": "if demo['selected_figures']:\n    display(Markdown('## Saved ESIM benchmark figures'))\nfor item in demo['selected_figures']:\n    p=REPO/item['path']\n    display(Markdown(f'### `{item[\"path\"]}`  \\nsha256 `{item[\"sha256\"][:16]}`'))\n    display(Image(filename=str(p), width=620))",
+      "source_sha256": "bf3ee0bf8b43f020bbe990a4a0d1b5ab1a1c531297e2af371c7b6ebccc73f3f8",
+      "source_preview": "if demo['selected_figures']:\n    display(Markdown('## Saved ESIM benchmark figures'))\nfor item in demo['selected_figures']:\n    p = REPO / item['path']\n    display(Markdown(f'### `{item[\"path\"]}`  \\nsha256 `{item[\"sha256\"][:16]}`'))\n    if p.exists():\n        display(Image(filename=str(p), width=620))\n    else:\n        display(Markdown('Figure file is not present in this checkout.'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -213,8 +213,8 @@
     {
       "cell_index": 5,
       "execution_count": 5,
-      "source_sha256": "43091e861209e54bd1d3d97a4c5c71d3e3938d4d3d969cc0f35211a8d81e821d",
-      "source_preview": "protected=[r for r in catalog['records'] if r['protected_reference_count']]\nrows=[]\nfor r in protected[:18]:\n    first=r['protected_references'][0] if r['protected_references'] else {}\n    where=f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where, r['lane']])\nmd='## Protected validation references\\n\\n'+'\\n'.join(['| script | refs | first protected reference | lane |','| --- | ---: | --- | --- |']+[f'| {a} | {b} | {c} | {d} |' for a,b,c,d in rows])\ndisplay(Markdown(md))",
+      "source_sha256": "cd35675dbc978c056d7827a4bdcd3a1fc757a6ce511d4be4db60285a8b462390",
+      "source_preview": "protected = [r for r in catalog['records'] if r.get('protected_reference_count')]\nrows = []\nfor r in protected[:18]:\n    first = r['protected_references'][0] if r.get('protected_references') else {}\n    where = f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where, r['lane']])\ndisplay(Markdown('## Protected validation references\\n\\n' + table(['script', 'refs', 'first protected reference', 'lane'], rows)))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -232,8 +232,8 @@
     {
       "cell_index": 6,
       "execution_count": 6,
-      "source_sha256": "04c8ecfb76168faefcaf781b77c29636919a5eb965d5252b75feaf86d3be1a7c",
-      "source_preview": "for r in demo['selected_records'][:3]:\n    excerpt=r['source']['text'][:1100].replace('```','` ` `')\n    display(Markdown(f'## Source excerpt: `{r[\"path\"]}`\\n\\n```python\\n{excerpt}\\n```'))",
+      "source_sha256": "d0fd0bb859b3f32d75b9d0c5d35e5618190e87d5349ae2ff144990c98301e37d",
+      "source_preview": "for r in demo['selected_records'][:3]:\n    excerpt = r['source']['text'][:1100].replace('```', '` ` `')\n    display(Markdown(f'## Source excerpt: `{r[\"path\"]}`\\n\\n```python\\n{excerpt}\\n```'))",
       "outputs": [
         {
           "output_type": "display_data",
