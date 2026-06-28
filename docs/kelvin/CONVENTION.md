@@ -98,6 +98,10 @@ The Kelvin helpers handle the **sphere-inversion pullback only**; they
 do **not** absorb the r-weight. Dropping `* r_coord` is one of the
 most common bugs in axisymmetric Kelvin setups.
 
+Validation lock: `validation_test/kelvin_source/test_kelvin_material_factors.py`
+checks the numeric counterparts of these helpers, including the reciprocal
+axisymmetric `(rho'/R)^2` / `(R/rho')^2` pair and the 2D in-plane identity case.
+
 ### Cylindrical (2D) Kelvin — anisotropic tensor, factor depends on component
 
 For cylindrical inversion `k(ρ,φ,z) = (R²/ρ, φ, z)` (Nagamine §II.B),

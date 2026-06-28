@@ -2,8 +2,8 @@
 
 Covers the promoted validation fixture in
 `validation_test/cubit/kelvin_1_4_p_convergence/`.  The original
-research example is archived in the docs Kelvin notebooks per the
-examples -> docs/validation_test promotion policy.  Runs:
+research example copy has been retired; this fixture is the maintained
+examples -> validation_test promotion target.  Runs:
 
   1. `mesh_and_export.py` -- builds a 1/4 sector magnetic-sphere mesh
      (mu_r = 100, R = 0.20 m, Kelvin offset 0.60 m) and exports

@@ -1,9 +1,9 @@
 """cln_team28_axisym_kelvin.py — COMSOL TEAM 28 CLN with Kelvin two-half-disc
 in axisymmetric NGSolve (standard A-formulation u = r·A_θ).
 
-Geometry (Z-offset Kelvin two-half-disc, after the archived
-Coil_A_formulation_adaptive.py source in
-docs/kelvin/kelvin_remaining_examples_archive_results.json):
+Geometry (Z-offset Kelvin two-half-disc, following the maintained
+axisymmetric Kelvin convention in docs/kelvin/CONVENTION.md and the
+validated material-factor API in radia.kelvin_source):
   Interior half-disc at (0, 0): radius R_K, contains conductor + air
   Exterior Kelvin half-disc at (0, z_offset): radius R_K, represents ∞
   z_offset = 5 × R_K (well-separated)
@@ -34,7 +34,8 @@ from math import pi, sqrt
 from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
-sys.path.insert(0, r"S:/Radia/01_GitHub/src/radia")
+REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO / "src" / "radia"))
 
 import numpy as np
 import scipy.sparse as sp
