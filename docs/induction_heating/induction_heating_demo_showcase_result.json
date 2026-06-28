@@ -1,0 +1,125 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-28T16:50:01Z",
+  "notebook": "docs/induction_heating/induction_heating_demo_showcase.ipynb",
+  "notebook_sha256": "cc85f1d0d1888c3262ba669d3717995ca013aa8b8b6b98c7c03859e9e8940f4d",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/induction_heating/induction_heating_demo_showcase.ipynb",
+    "cells": 10,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 5,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "93860c085d7f445d797bffe5d48416091786e4cc9a3fdd3323bf5fd12a858dad",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\nRESULTS = Path('induction_heating_demo_showcase_results.json')\ndata = json.loads(RESULTS.read_text(encoding='utf-8'))\ndata['summary']",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 172,
+          "text_plain_sha256": "d1ceacb01414138ae3a7968130d8883fd8eab560207857c13e6b7fb25c156f5c",
+          "text_plain_preview": "{'closed_tracked_files': 14,\n 'public_demo_scripts_promoted': 5,\n 'legacy_validation_assets_moved': 7,\n 'markdown_sources_distilled': 2,\n 'examples_topic_status': 'closed'}",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "ad47def9a355b3801588bdf07a6b08d805d5c445d06106c868a336f95826f2d3",
+      "source_preview": "def table(headers, rows):\n    lines = ['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|']\n    lines += ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows]\n    return '\\n'.join(lines)\n\nrows = []\nfor rec in data['records']:\n    funcs = ', '.join(rec.get('symbols', [])[:5])\n    if len(rec.get('symbols', [])) > 5:\n        funcs += ', ...'\n    rows.append([rec['file_name'], rec['purpose'], rec['target'], funcs, rec['sha256'][:12]])\ndisplay(Markdown(table(['source', 'purpose', 'promotion target', 'top-level symbols', 'sha256'], rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "cc1034381e8ba1c7f175d3cda5250cf1e9d441f616f828f902b701469a479832",
+      "source_preview": "rows = []\nfor rec in data['legacy_validation_records']:\n    rows.append([rec['file_name'], rec['purpose'], rec['target'], rec['sha256'][:12]])\ndisplay(Markdown(table(['asset', 'why kept', 'new location', 'sha256'], rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "6e4c8924eb3387a2576bd02664f710eeed29232b2a460ad52d07e9dab2bf9334",
+      "source_preview": "assert data['summary']['closed_tracked_files'] == 14\nassert len(data['records']) == 5\nassert len(data['legacy_validation_records']) == 7\nassert len(data['readme_records']) == 2\nassert data['checks']['has_public_demo_source_text']\nassert data['checks']['has_legacy_source_text']\nassert data['checks']['target_paths_are_non_examples']\nprint('promotion ledger checks: PASS')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 30,
+          "text_sha256": "58cf8f6afb3395d8bf1e78037ed7194fdd782cca0f61dd5db3e70d9be6509bce",
+          "text_preview": "promotion ledger checks: PASS\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "8b21c101c57cd41c716eee16efebaae2f6e4a65c63c31b88d237eb343b9f247e",
+      "source_preview": "display(Markdown(table(['reader need', 'canonical surface'], [\n    ['ESIM theory and paper-grade validation', '../esim/README.md and ../ih_esim_benchmark/results.json'],\n    ['Public induction-heating demonstrations', 'this notebook plus induction_heating_demo_showcase_results.json'],\n    ['Legacy Cubit/Kelvin sample archaeology', '../../validation_test/induction_heating/demoted_samples_legacy/'],\n    ['Reusable implementation', '../../src/radia/ and panel calc_*.py entry points'],\n])))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

@@ -53,7 +53,7 @@ from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                     compute_phi_inc_from_filaments)
 from radia.bem_inductance import compute_inductance_source_sink
 
-from calc_heating_bem import _extract_surface_mesh_filtered
+from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 from peec_bundle import build_bundle_solver
 

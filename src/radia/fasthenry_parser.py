@@ -782,7 +782,10 @@ class FastHenryParser:
                 "Shield blocks require NGSolve/Netgen. "
                 "Install with: pip install ngsolve")
 
-        from ngsbem_eddy import ShieldBEMSIBC
+        try:
+            from .ngsbem_eddy import ShieldBEMSIBC
+        except ImportError:
+            from ngsbem_eddy import ShieldBEMSIBC
 
         solvers = []
 
@@ -1189,8 +1192,12 @@ class FastHenryParser:
             dict with same format as solve()
         """
         try:
-            from ngsbem_peec import NGBEMPEECSolver
-            from ngsbem_interface import NGBEMBridge
+            try:
+                from .ngsbem_peec import NGBEMPEECSolver
+                from .ngsbem_interface import NGBEMBridge
+            except ImportError:
+                from ngsbem_peec import NGBEMPEECSolver
+                from ngsbem_interface import NGBEMBridge
         except ImportError:
             raise ImportError(
                 "ngsbem backend requires NGSolve and ngsbem. "

@@ -271,7 +271,10 @@ class CoupledPEECMMM:
         Returns:
             list of dicts: {'center', 'direction', 'length', 'p1', 'p2'}
         """
-        from ngsbem_interface import extract_edge_geometry
+        try:
+            from .ngsbem_interface import extract_edge_geometry
+        except ImportError:
+            from ngsbem_interface import extract_edge_geometry
 
         geom = extract_edge_geometry(mesh)
         n_edges = len(geom['centers'])
@@ -306,7 +309,10 @@ class CoupledPEECMMM:
         Returns:
             mu_eff: Complex effective relative permeability
         """
-        from ngsbem_eddy import EddyCurrentFEMBEM
+        try:
+            from .ngsbem_eddy import EddyCurrentFEMBEM
+        except ImportError:
+            from ngsbem_eddy import EddyCurrentFEMBEM
         from ngsolve import Integrate, CF
 
         freq = omega / (2.0 * np.pi)
@@ -385,7 +391,10 @@ class CoupledPEECMMM:
         Returns:
             mu_eff: Complex effective relative permeability
         """
-        from ngsbem_eddy import VectorEddyCurrentFEMBEM
+        try:
+            from .ngsbem_eddy import VectorEddyCurrentFEMBEM
+        except ImportError:
+            from ngsbem_eddy import VectorEddyCurrentFEMBEM
         from ngsolve import Integrate, CF
         from ngsolve import TaskManager
 

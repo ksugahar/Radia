@@ -26,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 sys.path.insert(0, os.path.join(REPO, "src", "radia"))
 sys.path.insert(0, os.path.join(REPO, "src", "radia", "panels"))
+sys.path.insert(0, os.path.join(REPO, "src"))
 # Sibling directory for experiment_coupled_bem imports (impedance_esim etc.)
 sys.path.insert(0, os.path.join(REPO, "examples", "cubit_panels", "inductance"))
 sys.path.insert(0, HERE)
@@ -43,7 +44,7 @@ def run_one(maxh_wp):
     from ngsolve import TaskManager
     from netgen.occ import Cylinder, Pnt, Dir, OCCGeometry, Glue
     from impedance_esim import make_gapped_torus_mesh
-    from bem_coupled_solver import CoupledBEMSolver
+    from radia.bem_coupled_solver import CoupledBEMSolver
 
     omega = 2 * math.pi * FREQ
     delta = math.sqrt(2.0 / (omega * MU_0 * SIGMA))

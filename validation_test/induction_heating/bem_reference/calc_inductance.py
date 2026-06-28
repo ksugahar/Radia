@@ -31,8 +31,12 @@ import numpy as np
 
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
-if _this_dir not in sys.path:
-    sys.path.insert(0, _this_dir)
+_repo = os.path.abspath(os.path.join(_this_dir, "..", "..", ".."))
+_src = os.path.join(_repo, "src")
+_panels = os.path.join(_src, "radia", "panels")
+for _p in (_this_dir, _src, _panels):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from calc_common import (setup_paths, MU_0, progress, calc_main,
                           write_surface_only_vol,
@@ -93,7 +97,7 @@ def extract_inductance_vol(vol_file, source_label="source",
     from ngsolve import Mesh, Integrate, CF, BND
 
     setup_paths()
-    from bem_inductance import compute_inductance_source_sink
+    from radia.bem_inductance import compute_inductance_source_sink
 
     t_total_start = _time.perf_counter()
 
@@ -582,7 +586,7 @@ def _run_coupled_bem(mesh_full, workpiece_label, source_label, sink_label,
     Returns dict of coupled_* keys ready to merge into the main result.
     """
     setup_paths()
-    from bem_coupled_solver import CoupledBEMSolver
+    from radia.bem_coupled_solver import CoupledBEMSolver
     from calc_heating_bem import _extract_surface_mesh_filtered
     import numpy as np
 
@@ -1731,7 +1735,7 @@ def main():
     parser.add_argument("--current", type=float, default=1.0,
                         help="Coil terminal current [A] (1 A reference; "
                              "BEM solves a unit-current problem and the "
-                             "user can rescale post hoc — accepted here "
+                             "user can rescale post hoc - accepted here "
                              "for symmetry with the FEM driver)")
     parser.add_argument("--half-thickness", type=float, default=0.005,
                         help="Slab half-thickness [m]")
@@ -1754,7 +1758,7 @@ def main():
                              "for the SIBC. Each workpiece panel gets its "
                              "own local radius from a discrete normal-angle "
                              "fit. Replaces the global half_thickness "
-                             "assumption — required for correct sphere or "
+                             "assumption - required for correct sphere or "
                              "doubly-curved workpiece SIBC.")
     # Post mode args
     parser.add_argument("--j-npy", default="", help="J_coeffs.npy path (post mode)")

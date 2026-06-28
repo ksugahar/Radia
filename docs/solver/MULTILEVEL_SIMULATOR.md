@@ -59,7 +59,8 @@ result = parser.solve()            # L, R, Z(f) in one call
 - Unbounded domain (no air mesh, no PML)
 - Natural open boundary conditions
 
-**Modules**: `ngsbem_peec.py`, `bem_inductance.py`, `ngsbem_coupled.py`
+**Modules**: `radia.ngsbem_peec`, `radia.bem_inductance`,
+`radia.ngsbem_coupled`
 
 **Eddy current options**:
 - Scalar FEM-BEM (`EddyCurrentFEMBEM`): mu_r=1 conductors (Al, Cu shields)
@@ -67,7 +68,7 @@ result = parser.solve()            # L, R, Z(f) in one call
 
 **Typical workflow**:
 ```python
-from ngsbem_peec import NGBEMPEECSolver
+from radia.ngsbem_peec import NGBEMPEECSolver
 solver = NGBEMPEECSolver(mesh, order=0, sigma=5.8e7)
 solver.assemble(intorder=6)
 Z = solver.solve_frequency(1e6)

@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T09:13:31Z",
+  "generated_at_utc": "2026-06-28T16:50:06Z",
   "notebook": "docs/induction_heating/public_demo.ipynb",
-  "notebook_sha256": "1f0ce39ff3c825542c997f369a10425fe8f2b083b2f1d6df51e0826c30ba710a",
+  "notebook_sha256": "b657286df8a58f01f4ba8233440b5f8915e5d4e44c7a451cc70829240d98a3bc",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -12,11 +12,11 @@
   },
   "summary": {
     "path": "docs/induction_heating/public_demo.ipynb",
-    "cells": 8,
-    "code_cells": 7,
-    "executed_code_cells": 7,
-    "code_cells_with_outputs": 7,
-    "output_count": 17,
+    "cells": 4,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 3,
+    "output_count": 3,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -28,24 +28,26 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "e531b68e4b0ad38fc38a5cbbb690c4f1aca14ea214c7699c6c921d4bd4b27582",
-      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, Image, display\n\nCWD = Path.cwd()\nif (CWD / 'public_demo_results.json').exists():\n    NOTEBOOK_DIR = CWD\n    REPO = NOTEBOOK_DIR.parents[1]\nelse:\n    REPO = CWD\n    NOTEBOOK_DIR = REPO / 'docs' / 'induction_heating'\ndemo = json.loads((NOTEBOOK_DIR / 'public_demo_results.json').read_text(encoding='utf-8'))\ncatalog = json.loads((NOTEBOOK_DIR / 'induction_heating_examples_catalog_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(demo['summary'], ensure_ascii=False, indent=2))",
+      "source_sha256": "d9cf334bec84b242e6f4099743b9bf9d727b90a015473d2d87337d4adea21789",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\n\ndata = json.loads(Path('public_demo_results.json').read_text(encoding='utf-8'))\ndata['closed_counts']",
       "outputs": [
         {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 378,
-          "text_sha256": "308d2adc49cb878f52436f3c20057bcbd356df0cf65ee5e1c40d4346234eec83",
-          "text_preview": "{\n  \"selected_demo_count\": 9,\n  \"selected_figure_count\": 4,\n  \"catalog_script_count\": 20,\n  \"catalog_artifact_count\": 8,\n  \"protected_script_count\": 20,\n  \"companion_status\": \"scattered_rhs_clean_test moved to validation_test; bem_reference still must split into src API + validation_test before examples rerouting; demoted_samples remain protected until replacements exist.\"\n}\n",
-          "text_truncated": false
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 151,
+          "text_plain_sha256": "b27cfdcc5547cc42550cf29913d897f46441325b799e47b746663394ffd1d6f6",
+          "text_plain_preview": "{'closed_files_in_final_batch': 14,\n 'public_demo_scripts_absorbed': 5,\n 'legacy_validation_assets_moved': 8,\n 'loose_examples_remaining_for_topic': 0}",
+          "text_plain_truncated": false
         }
       ]
     },
     {
       "cell_index": 2,
       "execution_count": 2,
-      "source_sha256": "3e22dc719315236af1f2f748d537cae61f9b26946db2793934bab666fff116b3",
-      "source_preview": "display(Markdown('## Public route\\n\\nInduction-heating examples are shown here as runnable companions while BEM/NGSBEM behavior is split into src API and validation_test. The full source ledger is [induction_heating_examples_catalog.ipynb](induction_heating_examples_catalog.ipynb), and the nonlinear ESIM benchmark notebook is [../ih_esim_benchmark/esim_showcase.ipynb](../ih_esim_benchmark/esim_showcase.ipynb).'))",
+      "source_sha256": "a117f0b8f4193a7f0a38122b42ef92a42d0001fde693975474972869a1498346",
+      "source_preview": "def table(headers, rows):\n    lines = ['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|']\n    lines += ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows]\n    return '\\n'.join(lines)\nrows = [[e['label'], e['path'], e['json'], e['sha256'][:12]] for e in data['entry_points']]\ndisplay(Markdown(table(['entry point', 'path', 'JSON/result', 'sha256'], rows)))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -63,225 +65,15 @@
     {
       "cell_index": 3,
       "execution_count": 3,
-      "source_sha256": "636d22c357db52b18da6e1ae3fd9e51f4b0ace6e6d590772dd24a8ecad0dc9b7",
-      "source_preview": "def table(headers, rows):\n    return '\\n'.join(['| ' + ' | '.join(headers) + ' |', '|' + '|'.join(['---'] * len(headers)) + '|'] + ['| ' + ' | '.join(str(c) for c in row) + ' |' for row in rows])\n\ncommands = {\n    'examples/induction_heating/esim_demo.py': 'python examples/induction_heating/esim_demo.py',\n    'examples/induction_heating/demo_esim_impedance.py': 'python examples/induction_heating/demo_esim_impedance.py',\n    'examples/induction_heating/demo_wpt_coupling.py': 'python examples/induction_heating/demo_wpt_coupling.py',\n    'examples/induction_heating/bem_reference/bem_inductance.py': 'python examples/induction_heating/bem_reference/bem_inductance.py',\n    'validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py': 'python validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py',\n}\nrows = []\nfor r in demo['selected_records']:\n    path = r['path']\n    link = f'[`{path}`](../../{path})'\n    art = r.get('sibling_artifacts', r.g",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 4,
-      "execution_count": 4,
-      "source_sha256": "bf3ee0bf8b43f020bbe990a4a0d1b5ab1a1c531297e2af371c7b6ebccc73f3f8",
-      "source_preview": "if demo['selected_figures']:\n    display(Markdown('## Saved ESIM benchmark figures'))\nfor item in demo['selected_figures']:\n    p = REPO / item['path']\n    display(Markdown(f'### `{item[\"path\"]}`  \\nsha256 `{item[\"sha256\"][:16]}`'))\n    if p.exists():\n        display(Image(filename=str(p), width=620))\n    else:\n        display(Markdown('Figure file is not present in this checkout.'))",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "image/png",
-            "text/plain"
-          ],
-          "text_plain_chars": 35,
-          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
-          "text_plain_preview": "<IPython.core.display.Image object>",
-          "text_plain_truncated": false,
-          "rich_output_hashes": {
-            "image/png": {
-              "chars": 235228,
-              "sha256": "52afdb0b4c2e98a71f4962190200f6521ab12c1cbe817e5041c0ea66908f3bd1"
-            }
-          }
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "image/png",
-            "text/plain"
-          ],
-          "text_plain_chars": 35,
-          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
-          "text_plain_preview": "<IPython.core.display.Image object>",
-          "text_plain_truncated": false,
-          "rich_output_hashes": {
-            "image/png": {
-              "chars": 247228,
-              "sha256": "44c949fda8300b6c15a247cdc3f9c1617a127e2f68b2461da8e0a719feea2c41"
-            }
-          }
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "image/png",
-            "text/plain"
-          ],
-          "text_plain_chars": 35,
-          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
-          "text_plain_preview": "<IPython.core.display.Image object>",
-          "text_plain_truncated": false,
-          "rich_output_hashes": {
-            "image/png": {
-              "chars": 281620,
-              "sha256": "ed5750cd3a58aa2f384f4045b4c3ec6c7e71e4e459471946a58f7f7cbe06b4f8"
-            }
-          }
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "image/png",
-            "text/plain"
-          ],
-          "text_plain_chars": 35,
-          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
-          "text_plain_preview": "<IPython.core.display.Image object>",
-          "text_plain_truncated": false,
-          "rich_output_hashes": {
-            "image/png": {
-              "chars": 199452,
-              "sha256": "c7c22bc14eae279f41ec981df32d58d8a8627c248f500169a19d46152b95ad66"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "cell_index": 5,
-      "execution_count": 5,
-      "source_sha256": "cd35675dbc978c056d7827a4bdcd3a1fc757a6ce511d4be4db60285a8b462390",
-      "source_preview": "protected = [r for r in catalog['records'] if r.get('protected_reference_count')]\nrows = []\nfor r in protected[:18]:\n    first = r['protected_references'][0] if r.get('protected_references') else {}\n    where = f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where, r['lane']])\ndisplay(Markdown('## Protected validation references\\n\\n' + table(['script', 'refs', 'first protected reference', 'lane'], rows)))",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 6,
-      "execution_count": 6,
-      "source_sha256": "d0fd0bb859b3f32d75b9d0c5d35e5618190e87d5349ae2ff144990c98301e37d",
-      "source_preview": "for r in demo['selected_records'][:3]:\n    excerpt = r['source']['text'][:1100].replace('```', '` ` `')\n    display(Markdown(f'## Source excerpt: `{r[\"path\"]}`\\n\\n```python\\n{excerpt}\\n```'))",
-      "outputs": [
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        },
-        {
-          "output_type": "display_data",
-          "data_keys": [
-            "text/markdown",
-            "text/plain"
-          ],
-          "text_plain_chars": 38,
-          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
-          "text_plain_preview": "<IPython.core.display.Markdown object>",
-          "text_plain_truncated": false
-        }
-      ]
-    },
-    {
-      "cell_index": 7,
-      "execution_count": 7,
-      "source_sha256": "258884104527733cd88e95465996e46ce0a3c2bbc35224469a5ba0d5e3e2ce50",
-      "source_preview": "assert demo['summary']['selected_demo_count'] == len(demo['selected_records'])\nassert catalog['summary']['script_count'] == demo['summary']['catalog_script_count']\nprint('induction_heating public demo synchronized')",
+      "source_sha256": "a8e3cbb22d8b0a8bfcbcc3f601e2ef85bde8db49413c01b44b2c328003f0e3f8",
+      "source_preview": "assert data['status'] == 'examples_topic_closed'\nassert data['closed_counts']['loose_examples_remaining_for_topic'] == 0\nassert data['checks']['no_examples_destination']\nassert data['checks']['showcase_json_exists']\nassert data['checks']['validation_legacy_dir_exists']\nprint('public demo routing checks: PASS')",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 43,
-          "text_sha256": "c2bca4b695403ae2954ef7a7ff0919032804ab35c50d0d5476ed6671fd09d9fc",
-          "text_preview": "induction_heating public demo synchronized\n",
+          "text_chars": 33,
+          "text_sha256": "a7a98e16503cee8c7f1d21ed129aa2f96138f44d84932c39b1ca2c7a97edaee2",
+          "text_preview": "public demo routing checks: PASS\n",
           "text_truncated": false
         }
       ]

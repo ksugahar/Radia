@@ -19,27 +19,21 @@ import numpy as np
 
 # Setup path
 _repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(_repo, "src", "radia"))
-
-# bem_inductance was retired from the IH panel 2026-04-19 and moved to
-# examples/induction_heating/bem_reference/ (research-only).  Add that
-# dir to sys.path so the importorskip below can find it; if the dir is
-# missing entirely (e.g. slim checkout), the whole module skips.
-_BEM_REF = os.path.join(_repo, "examples", "induction_heating", "bem_reference")
-if os.path.isdir(_BEM_REF) and _BEM_REF not in sys.path:
-    sys.path.insert(0, _BEM_REF)
+for _p in (os.path.join(_repo, "src"),
+           os.path.join(_repo, "src", "radia")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 ngsolve = pytest.importorskip("ngsolve")
 pytest.importorskip("ngsolve.bem")
 pytest.importorskip(
-    "bem_inductance",
-    reason="bem_inductance.py not on sys.path; expected at "
-           "examples/induction_heating/bem_reference/")
+    "radia.bem_inductance",
+    reason="radia.bem_inductance API not importable from src/")
 
 from ngsolve import *
 from ngsolve import TaskManager
-from bem_inductance import compute_inductance_source_sink, MU_0
-from esim_cell_problem import ESIMFiniteSlabSolver
+from radia.bem_inductance import compute_inductance_source_sink, MU_0
+from radia.esim_cell_problem import ESIMFiniteSlabSolver
 
 
 # ============================================================
