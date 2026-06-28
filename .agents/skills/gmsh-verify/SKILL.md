@@ -58,7 +58,7 @@ Expected output:
 PASS: 6/6 checks
 ```
 
-## Integration with panel-qt-test
+## Integration with notebook validation
 
 The `verify_gmsh_output.py` script can be called from pytest:
 

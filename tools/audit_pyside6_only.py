@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
-"""Audit: Cubit GUI has no legacy Qt and optional PySide6 panels stay healthy.
+"""Audit: Cubit toolbar has no legacy Qt and normal Radia stays no-PySide.
 
-Enforces the Radia policy "no Qt5 / PyQt5 fallbacks" while allowing release
-targets that intentionally do not install PySide6.  When PySide6 is installed,
-the legacy desktop panels must still construct headlessly.  When PySide6 is not
-installed, the smoke is skipped and the release remains valid because notebook
-panels and the Cubit export plugin do not require PySide6.
+Enforces the Radia policy "no Qt5 / PyQt5 fallbacks" while keeping the Cubit
+mesh-export toolbar as the only PySide surface.  Normal Radia Python must not
+depend on PySide6; the toolbar runs inside Coreform Cubit's embedded Python.
+When PySide6 is installed in the current interpreter, we smoke-test the toolbar
+headlessly.  When it is not installed, the smoke is skipped because the target
+runtime is Cubit's embedded Python, not this interpreter.
 
 Static checks:
   1. ZERO real PyQt5 / PySide2 / PyQt6 import statements in tracked *.py
      (lint-rule regexes and "no PyQt5 fallback" comments do NOT count --
      only actual ``import``/``from ... import`` lines).
-  2. Core GUI modules import PySide6.
-  3. radia pyproject.toml declares PySide6 and lists no PyQt5 dependency.
+  2. Cubit toolbar modules import PySide6.
+  3. radia pyproject.toml does not declare a PySide6 dependency or retired
+     standalone panel scripts.
   4. cubit_mesh_export.ccm (if present in the package source) has NO Qt5 DLL
      dependency (pefile import-table scan).
 
 Headless check (isolated subprocess, offscreen Qt):
-  5. If PySide6 is installed, IHPanel / EMPanel / PCBPanel construct under
-     PySide6 offscreen, and ExportDialog builds all 6 formats emitting valid
-     ``export ... overwrite`` commands.  If PySide6 is absent, this is a
-     release-policy skip, not a failure.
+  5. If PySide6 is installed, ExportDialog builds all 6 formats emitting valid
+     ``export ... overwrite`` commands.  If PySide6 is absent, this is a skip,
+     not a failure.
 
 Run:  python tools/audit_pyside6_only.py
-Exit 0 = no legacy Qt and optional panel surface healthy/skipped; non-zero =
+Exit 0 = no legacy Qt and Cubit toolbar smoke healthy/skipped; non-zero =
 issues (listed).
 
 The machine/Cubit half (cubit-plugin-install --verify-only, cubit-smoke-test,
-cross-machine SSH to 100号機 / mdx) lives in the `pyside6-health` skill, which
-calls this script for the static/headless portion.
+cross-machine SSH to 100号機 / mdx / hibino) lives in the release/deploy gates.
 """
 from __future__ import annotations
 
@@ -41,11 +41,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-GUI_MODULES = [
-    "src/radia/radia_gui_base.py",
-    "src/radia/radia_ih.py",
-    "src/radia/radia_em.py",
-    "src/radia/radia_motor.py",
+CUBIT_TOOLBAR_MODULES = [
     "src/radia/panels/radia_export_menu.py",
     "src/radia/panels/register_toolbar.py",
 ]
@@ -74,41 +70,38 @@ def check_no_legacy_qt_imports() -> list[str]:
     return hits
 
 
-def check_gui_imports_pyside6() -> list[str]:
-    """Each core GUI module must import PySide6 (directly or be a base user)."""
+def check_cubit_toolbar_imports_pyside6() -> list[str]:
+    """Each Cubit toolbar module must import PySide6."""
     missing = []
-    # radia_pcb inherits Qt from radia_gui_base, so only the base + the
-    # in-Cubit toolbars + windows need a direct PySide6 import.
-    must_import = {
-        "src/radia/radia_gui_base.py",
-        "src/radia/panels/radia_export_menu.py",
-        "src/radia/panels/register_toolbar.py",
-    }
-    for rel in GUI_MODULES:
+    for rel in CUBIT_TOOLBAR_MODULES:
         p = ROOT / rel
         if not p.is_file():
+            missing.append(f"{rel}: missing file")
             continue
         txt = p.read_text(encoding="utf-8", errors="replace")
         has = "from PySide6" in txt or "import PySide6" in txt
-        if rel in must_import and not has:
+        if not has:
             missing.append(rel)
     return missing
 
 
 def check_pyproject() -> list[str]:
-    """radia pyproject must declare PySide6 and not depend on PyQt5."""
+    """radia pyproject must not depend on PySide6/PyQt or expose old scripts."""
     issues = []
     p = ROOT / "pyproject.toml"
     txt = p.read_text(encoding="utf-8", errors="replace")
-    # Crude but robust: PySide6 must appear as a quoted dependency token.
-    if "PySide6" not in txt:
-        issues.append("pyproject.toml: PySide6 not declared")
-    # PyQt5 as a dependency token (quoted) is forbidden.  A bare mention in
-    # a comment is allowed, so look for a quoted requirement form.
-    for tok in ('"PyQt5', "'PyQt5"):
+    for tok in ('"PySide6', "'PySide6", '"PyQt5', "'PyQt5",
+                '"PySide2', "'PySide2", '"PyQt6', "'PyQt6"):
         if tok in txt:
-            issues.append("pyproject.toml: PyQt5 appears as a dependency")
-            break
+            issues.append(f"pyproject.toml: Qt dependency token appears: {tok}")
+    for tok in (
+        'radia-ih = "radia.radia_ih:main"',
+        'radia-em = "radia.radia_em:main"',
+        'radia-pcb = "radia.radia_pcb:main"',
+        'radia-streamfunction = "radia.radia_streamfunction:main"',
+    ):
+        if tok in txt:
+            issues.append(f"pyproject.toml: retired script still appears: {tok}")
     return issues
 
 
@@ -144,23 +137,13 @@ class _StubCubit:
 
 
 def _run_smoke() -> int:
-    """--smoke mode: construct panels + ExportDialog under offscreen Qt."""
+    """--smoke mode: construct ExportDialog under offscreen Qt."""
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    sys.path.insert(0, str(ROOT / "src" / "radia"))
     sys.path.insert(0, str(ROOT / "src" / "radia" / "panels"))
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
 
     fails: list[str] = []
-
-    for modname, clsname in (("radia_ih", "IHPanel"),
-                             ("radia_em", "EMPanel"),
-                             ("radia_pcb", "PCBPanel")):
-        try:
-            mod = __import__(modname)
-            getattr(mod, clsname)()  # construct
-        except Exception as e:  # noqa: BLE001
-            fails.append(f"{clsname} construct: {type(e).__name__}: {e}")
 
     try:
         import radia_export_menu as rem
@@ -179,14 +162,14 @@ def _run_smoke() -> int:
 
 
 def check_panel_smoke() -> list[str]:
-    """Spawn the smoke in an isolated offscreen subprocess (no conftest DLL pollution)."""
+    """Spawn the toolbar smoke in an isolated offscreen subprocess."""
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
     r = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--smoke"],
                        capture_output=True, text=True, env=env, timeout=120)
     line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.strip().startswith("{")), "")
     if not line:
-        return [f"panel smoke produced no JSON (rc={r.returncode}); stderr tail:\n{r.stderr[-800:]}"]
+        return [f"toolbar smoke produced no JSON (rc={r.returncode}); stderr tail:\n{r.stderr[-800:]}"]
     data = json.loads(line)
     return list(data.get("fails", [])) if not data.get("ok") else []
 
@@ -197,7 +180,7 @@ def main(argv: list[str]) -> int:
         return _run_smoke()
 
     print("=" * 64)
-    print("  Optional PySide6 / legacy Qt audit")
+    print("  Cubit toolbar PySide6 / legacy Qt audit")
     print("=" * 64)
     all_issues: list[str] = []
 
@@ -208,12 +191,12 @@ def main(argv: list[str]) -> int:
         print("       " + h)
     all_issues += [f"legacy Qt import: {h}" for h in legacy]
 
-    gui_missing = check_gui_imports_pyside6()
-    print(f"[{'FAIL' if gui_missing else 'OK'}] core GUI modules import PySide6")
-    all_issues += [f"GUI module missing PySide6 import: {m}" for m in gui_missing]
+    gui_missing = check_cubit_toolbar_imports_pyside6()
+    print(f"[{'FAIL' if gui_missing else 'OK'}] Cubit toolbar modules import PySide6")
+    all_issues += [f"Cubit toolbar module missing PySide6 import: {m}" for m in gui_missing]
 
     pyproj = check_pyproject()
-    print(f"[{'FAIL' if pyproj else 'OK'}] radia pyproject (PySide6 declared, no PyQt5 dep)")
+    print(f"[{'FAIL' if pyproj else 'OK'}] radia pyproject (no Qt dependency / retired scripts)")
     all_issues += pyproj
 
     ccm_status, ccm_issues = check_ccm_qt_free()
@@ -222,21 +205,21 @@ def main(argv: list[str]) -> int:
 
     if importlib.util.find_spec("PySide6") is None:
         smoke = []
-        print("[OK] headless panel smoke skipped "
-              "(PySide6 not installed; release policy permits no-PySide6 targets)")
+        print("[OK] headless Cubit toolbar smoke skipped "
+              "(PySide6 not installed in this interpreter; Cubit owns the target runtime)")
     else:
         smoke = check_panel_smoke()
-        print(f"[{'FAIL' if smoke else 'OK'}] headless panel smoke "
-              f"(IHPanel/EMPanel/PCBPanel construct; ExportDialog x6)")
+        print(f"[{'FAIL' if smoke else 'OK'}] headless Cubit toolbar smoke "
+              f"(ExportDialog x6)")
         for s in smoke:
             print("       " + s)
         all_issues += [f"panel smoke: {s}" for s in smoke]
 
     print("-" * 64)
     if all_issues:
-        print(f"RESULT: {len(all_issues)} ISSUE(S) -- optional PySide6 audit NOT clean")
+        print(f"RESULT: {len(all_issues)} ISSUE(S) -- Cubit toolbar audit NOT clean")
         return 1
-    print("RESULT: CLEAN -- no legacy Qt; optional PySide6 panel smoke is healthy/skipped")
+    print("RESULT: CLEAN -- no legacy Qt; Cubit toolbar smoke is healthy/skipped")
     return 0
 
 

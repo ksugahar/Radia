@@ -252,7 +252,7 @@ The flagship server for this repository turns the Radia ↔ NGSolve hybrid (FEM 
 | **Force & cross-validation** | `force_validation` | EM force extraction (Maxwell stress / virtual work) with closed-form cross-checks |
 | **Parallelism** | `taskmanager` | The caller-wraps TaskManager policy + repo audit |
 | **Live linting** | `lint_radia_script`, `lint_radia_directory` | Flags NGSolve/Radia convention violations before they ship |
-| **Panel development** | `panel_schema`, `panel_add_param`, `panel_widget_locations` | Introspect and extend the PySide6 analysis panels |
+| **Panel development** | `panel_schema`, `panel_add_param`, `panel_widget_locations` | Introspect and extend notebook panel workbenches |
 
 ### Self-describing — start at `radia-meta`
 
@@ -379,7 +379,7 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 ### Production install (recommended)
 
 ```bash
-pip install --no-cache-dir 'radia[cubit,gui]==4.90.2' \
+pip install --no-cache-dir 'radia[cubit]==4.90.2' \
     'radia-mcp==1.0.1' 'cubit-mesh-export==0.11.0'
 cubit-plugin-install --all-users      # Deploy Cubit plugin (skip if no Cubit)
 cubit-plugin-install --verify-only    # Confirm SHA-256 of every deployed binary
@@ -389,45 +389,39 @@ The 3 PyPI packages above are the **full lab-standard install**:
 
 | Package | What it ships | Required? |
 |---------|--------------|-----------|
-| `radia[cubit,gui]` | C++ core + NGSolve integration + PySide6 panels + Cubit plugin binaries | Yes |
+| `radia[cubit]` | C++ core + NGSolve integration + notebook workbenches + Cubit plugin binaries | Yes |
 | `radia-mcp` | 40+ MCP knowledge servers (340+ tools) led by `radia-ngsolve` (NGSolve FEM/BEM) for Claude / IDE integration | Optional (only for AI-assisted workflows) |
 | `cubit-mesh-export` | High-order curved mesh export Cubit -> NGSolve `.vol` | Bundled by `radia[cubit]`; pin separately for explicit version control |
 
-**`[cubit,gui]` extras are MANDATORY for production**:
+**Production deploy uses `[cubit]`, not `[gui]`**:
 - `[cubit]` brings in `cubit-mesh-export` (curved mesh export + `cubit-plugin-install` CLI)
-- `[gui]` brings in PySide6 (without this, `radia-em` / `radia-ih` / `radia-pcb` / `radia-streamfunction` standalone panels die with `ModuleNotFoundError: No module named 'PySide6'`)
+- notebook workbenches are the canonical panel surface and do not require PySide6 in normal Radia Python
+- Radia's old standalone desktop adapters are retired; the Cubit mesh-export toolbar remains a Cubit-embedded surface using Coreform's private runtime
 
 **Pinning versions** (e.g. `==4.90.2`) is recommended for production / lab deploys so all team machines run an identical, audited combination.  Drop the `==` to track latest.
 
 ### Minimal install (Python API only, no panels)
 
-If you only need the Python API + headless solvers (no GUI panels, no Cubit):
+If you only need the Python API + headless solvers (no Cubit plugin):
 
 ```bash
 pip install radia                # C++ core + NGSolve + MKL only
 ```
 
-This is the smallest footprint, but you lose the panel windows and the Cubit launcher.  Useful for headless servers, CI, or scripted batch runs.
+This is the smallest footprint, but you lose the Cubit launcher.  Useful for headless servers, CI, or scripted batch runs.
 
-### Standalone GUI Panels (no Cubit required)
+### Notebook Panels
 
-`radia[gui]` registers four console entry points that open the analysis panels as standalone PySide6 applications.  **Cubit is not needed** — bring your own `.vol` mesh (from Cubit, from Netgen standalone via NGSolve OCC, or any other source that can write the Netgen `.vol` text format):
+The canonical user-facing panels are Jupyter notebook workbenches.  They use the same headless `calc_*.py` scripts as the Cubit workflow and save durable `run.log` / `result.json` artifacts:
 
 ```bash
-radia-em   [model.vol]    # Electromagnet: Omega / A-Phi / MSC /
-                          #                Kelvin Benchmark / Clebsch hodograph
-radia-ih   [model.vol]    # Induction Heating: PEEC inductance / BEM-A inductance /
-                          #                    PEEC+BEM weak / BEM-A+BEM weak /
-                          #                    PEEC+FEM-Kelvin / FEM-FULL
-radia-pcb                 # PCB / FastHenry .inp (no .vol needed)
-radia-streamfunction [coil.vol]
-                          # Stream-function coil design: Design / Pareto /
-                          # Manufacture / Volume 3D
+python -m jupyter lab src/radia/panels/notebooks/radia_ih.ipynb
+python -m jupyter lab src/radia/panels/notebooks/radia_em.ipynb
+python -m jupyter lab src/radia/panels/notebooks/radia_pcb.ipynb
+python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
 ```
 
-Pass the `.vol` path on the command line to open the panel pre-pointed at it, or omit the argument and use the in-panel `Model (.vol): [Browse...]` field.
-
-The Cubit launcher (`Solve -> Radia-NGSolve`) surfaces the same panels inside Cubit's GUI with `.jou`-aware mesh export on top.  Use either launcher; the standalone entry points cover every analysis mode.
+The old PySide desktop adapters have been removed.  Use notebooks plus the headless `calc_*.py` scripts for analysis.  Cubit remains the mesh/export producer through the APREPRO plugin and the Cubit-embedded Export Mesh toolbar.
 
 ### MCP servers (`radia-mcp`)
 
@@ -438,17 +432,17 @@ If you use Claude Code or another MCP-aware IDE, `pip install radia-mcp` registe
 To upgrade an existing install, repeat the production-install command with the new version pin (or drop the pin to track latest):
 
 ```bash
-# Stop any panel subprocesses holding the .pyd / radia-ih.exe locks:
-# (Windows) Get-Process radia-ih,python,coreform_cubit -EA SilentlyContinue |
+# Stop any Python / Cubit subprocesses holding .pyd locks:
+# (Windows) Get-Process python,coreform_cubit -EA SilentlyContinue |
 #           Stop-Process -Force
 
-pip install --upgrade --no-cache-dir 'radia[cubit,gui]==<new>' \
+pip install --upgrade --no-cache-dir 'radia[cubit]==<new>' \
     'radia-mcp==<new>' 'cubit-mesh-export==<new>'
 cubit-plugin-install --all-users
 cubit-plugin-install --verify-only
 ```
 
-The `Stop-Process` step is required if Cubit / standalone panels / MCP server subprocesses are running — otherwise pip refuses to replace the locked files (`ERROR: Could not install packages due to an OSError: [WinError 32] ... radia-ih.exe`).  See **Troubleshooting** below.
+The `Stop-Process` step is required if Cubit / Python / MCP server subprocesses are running — otherwise pip may refuse to replace locked files.  See **Troubleshooting** below.
 
 ### Multi-user lab deploy (`--all-users`)
 
@@ -456,7 +450,7 @@ For shared Windows boxes (lab seats, multi-user workstations), install once as A
 
 ```powershell
 # As Administrator
-pip install --upgrade --no-cache-dir 'radia[cubit,gui]==4.90.2' \
+pip install --upgrade --no-cache-dir 'radia[cubit]==4.90.2' \
     'radia-mcp==1.0.1' 'cubit-mesh-export==0.11.0'
 cubit-plugin-install --all-users      # Updates every C:\Users\*\.cubit profile
 cubit-plugin-install --verify-only    # Confirms SHA-256 across all destinations
@@ -485,8 +479,8 @@ cubit-plugin-install --verify-only
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `ERROR: Could not install packages due to an OSError: [WinError 32] ... radia-ih.exe` | Standalone panel subprocess still holds the executable locked | `Stop-Process -Name radia-ih,python,coreform_cubit -Force` then retry pip install |
-| `ModuleNotFoundError: No module named 'PySide6'` when launching panel | installed `radia[cubit]` without `[gui]` extra | `pip install --upgrade 'radia[cubit,gui]'` |
+| `ERROR: Could not install packages due to an OSError: [WinError 32] ... .pyd` | Python / Cubit subprocess still holds the binary locked | `Stop-Process -Name python,coreform_cubit -Force` then retry pip install |
+| Old `radia-ih` / `radia-em` executable is missing | PySide desktop adapters were retired | use the canonical notebook workbench; do not add PySide6 to production normal Python |
 | `ERROR: No matching distribution found for radia==X.Y.Z` immediately after release | PyPI index mirror lag (usually < 5 min) | wait 5 min, retry; or check [pypi.org/project/radia](https://pypi.org/project/radia/) for actual availability |
 | Cubit panel shows old behaviour after upgrade | Cubit was running during install; plugin DLL was replaced but Cubit is still loading the previous version | restart Cubit |
 | `cubit-plugin-install` reports "Preflight refused to proceed" | locked `.pyd` / `.ccm` in Cubit/bin | release locks (Stop-Process above), retry |

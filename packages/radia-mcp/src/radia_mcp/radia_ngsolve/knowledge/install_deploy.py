@@ -153,7 +153,7 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 Start-Sleep -Seconds 2
 
 pip install --upgrade --no-cache-dir \\
-    'radia[cubit,gui]==<X.Y.Z>' \\
+    'radia[cubit]==<X.Y.Z>' \\
     'cubit-mesh-export==<X.Y.Z>'
 
 cubit-plugin-install --all-users
@@ -198,7 +198,7 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 Start-Sleep -Seconds 2
 
 py -3.12 -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir `
-    'radia[cubit,gui]==<X.Y.Z>' `
+    'radia[cubit]==<X.Y.Z>' `
     'radia-mcp==<X.Y.Z>' `
     'cubit-mesh-export==<X.Y.Z>'
 
@@ -213,39 +213,38 @@ the common PyPI deploy helper. `tools/release_qud.py phase9` includes
 hibino in the version/hash drift table.
 
 ============================================================
-## gui_extra — `radia[cubit,gui]` MANDATORY for production
+## gui_extra — retired after notebook panel migration
 ============================================================
 
-The standalone PySide6 panels (`radia_ih`, `radia_em`, `radia_pcb`,
-`radia_motor`) are launched by the Cubit Solve menu via
-`subprocess.Popen([python3.12, ...])`.  Layer 3 of the panel
-architecture runs PySide6 in a SEPARATE Python 3.12 process from
-Cubit's embedded Python 3.10.
+The old `gui` extra was used by standalone PySide6 desktop panels.  It is no
+longer part of the production deploy recipe.  The canonical panel surface is
+now the Jupyter notebook workbench (`radia.<app>_notebook` +
+`src/radia/panels/notebooks/radia_<app>.ipynb`), and normal Radia Python on
+LAB / 100号機 / mdx / hibino should not install PySide6.
 
-PySide6 is only declared in the `[gui]` extra of `radia`'s pyproject:
+Production install:
 
-```toml
-[project.optional-dependencies]
-cubit = ["cubit-mesh-export"]
-gui   = ["PySide6>=6.5"]
+```powershell
+pip install --upgrade 'radia[cubit]==<X.Y.Z>' 'radia-mcp==<X.Y.Z>' 'cubit-mesh-export==<X.Y.Z>'
+cubit-plugin-install --all-users
+cubit-plugin-install --verify-only --all-users
 ```
 
-`pip install radia[cubit]` ALONE does NOT pull PySide6.  Without it,
-launching the panel from Cubit results in a silent
-`ModuleNotFoundError: No module named 'PySide6'` in the subprocess —
-the panel never appears.  This gap was found 2026-05-02 on mdx
-during the editable→PyPI migration.
+Notebook health gate:
 
-Always use `pip install radia[cubit,gui]` for production deploy.
-Smoke test:
-
-```python
-import os; os.environ["QT_QPA_PLATFORM"] = "offscreen"
-from PySide6.QtWidgets import QApplication
-QApplication([])
-from radia.radia_ih import IHWindow
-print(IHWindow().sizeHint())   # should print a (W, H) Qt size
+```powershell
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
 ```
+
+Boundary check:
+
+```powershell
+python -c "import importlib.util; print('PySide6', 'FOUND' if importlib.util.find_spec('PySide6') else 'MISS')"
+```
+
+`MISS` is the expected result in normal Radia Python.  Do not uninstall or
+delete Coreform Cubit's bundled PySide6 under its own installation directory;
+Cubit owns that embedded runtime.
 
 ============================================================
 ## editable_to_pypi_migration — switch a machine from editable to PyPI
@@ -273,9 +272,10 @@ $shadowPyc = "C:\\Program Files\\Python312\\Lib\\site-packages\\__pycache__\\cub
 if (Test-Path $shadow) { Remove-Item $shadow -Force }
 if (Test-Path $shadowPyc) { Remove-Item $shadowPyc -Force }
 
-# Install from PyPI with [cubit,gui] extras (MANDATORY, see gui_extra topic)
+# Install from PyPI.  The notebook panel route intentionally avoids PySide6 in
+# normal Radia Python; see the gui_extra topic.
 pip install --no-cache-dir \\
-    'radia[cubit,gui]==<X.Y.Z>' \\
+    'radia[cubit]==<X.Y.Z>' \\
     'radia-mcp==<X.Y.Z>' \\
     'cubit-mesh-export==<X.Y.Z>'
 
@@ -457,7 +457,7 @@ until this passes.
 
 | Symptom                                    | Root cause                                                                | Fix |
 |-------------------------------------------|---------------------------------------------------------------------------|-----|
-| Cubit Solve menu "Open Panel" silently fails (subprocess dies) | `radia[cubit]` installed without `[gui]` → PySide6 missing | `pip install --upgrade 'radia[cubit,gui]==X.Y.Z'` (see gui_extra topic) |
+| Notebook panel does not produce `result.json` | notebook workbench / DesignSpec / calc argv drift | Run `ipynb-gui-health` / `pytest validation_test/panels/test_notebook_workbench.py -q`; fix the notebook workbench, not a PySide install |
 | `radia.__version__` says X.Y.Z but `pip list` says A.B.C | metadata_sync skipped on LAB (editable)                                | `pip install -e <path> --no-deps --no-cache-dir` |
 | `ImportError: cannot import name 'check' from 'cubit_mesh_export'` | legacy `cubit_mesh_export.py` shadow at site-packages                | Delete `Lib/site-packages/cubit_mesh_export.py` and `__pycache__/cubit_mesh_export.cpython-312.pyc`, then re-install |
 | `AttributeError: module 'cubit_mesh_export' has no attribute '__version__'` | same legacy shadow                                                     | same |

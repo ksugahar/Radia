@@ -1,10 +1,9 @@
-"""radia_mcp.panel_review -- MCP knowledge for Radia GUI panel review.
+"""radia_mcp.panel_review -- MCP knowledge for Radia notebook panel review.
 
-Surfaces the 5-skill chain (panel-cli-diff / panel-review / panel-qt-test /
-panel-preview / panel-smoke) and the catalogue of known panel bug classes
-through a single MCP tool, so future AI sessions (or other AI agents
-working on Radia panels) can query the right check / fix without
-re-discovering today's lessons from scratch.
+The old PySide6 desktop panel review chain is retired.  This server keeps the
+historical topic names as compatibility aliases, but returns the current
+Jupyter notebook workbench contract: DesignSpec, Workbench, result artifacts,
+validation_test, and no-PySide regression checks.
 
 Run server: ``mcp-server-panel-review``
 """
