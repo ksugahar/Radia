@@ -85,7 +85,7 @@ public:
 	virtual int Type_RecCur() { return 0;}
 
 	void B_comp(radTField*);
-	void B_compMultipole(radTField*, double*);
+	// B_compMultipole (magnetization multipole expansion) REMOVED 2026-06-28: radTRecCur is current-only.
 	void B_intComp(radTField*);
 	void B_intUtilSpecCaseZeroVxVy(const TVector3d&, const TVector3d&, short, TMatrix3d&, TVector3d&);
 
