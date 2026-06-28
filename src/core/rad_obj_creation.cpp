@@ -217,13 +217,13 @@ int radTApplication::SetRecMag(double* CPoi, long lenCPoi, double* Dims, long le
 		int ElemKey;
 		const double ZeroTolCurrDens = 1.E-10;
 
-		radTRecMag* RecMagPtr = 0;
+		radTRecCur* RecMagPtr = 0;
 		radTExtrPolygon* ExtrPolygonPtr = 0;
 		radThg hg;
 
 		if((!TreatRecMagsAsExtrPolygons) || ((fabs(J_vect.x)>ZeroTolCurrDens) || (fabs(J_vect.y)>ZeroTolCurrDens) || (fabs(J_vect.z)>ZeroTolCurrDens)))
 		{
-			RecMagPtr = new radTRecMag(CPoiVect, DimsVect, MagnVect, J_vect, J_IsNotZero);
+			RecMagPtr = new radTRecCur(CPoiVect, DimsVect, MagnVect, J_vect, J_IsNotZero);
 			if(RecMagPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 			hg = radThg(RecMagPtr);
 		}
@@ -525,7 +525,7 @@ int radTApplication::SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoin
 			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
 			// RecognizeRecMagsInPolyhedrons / CheckForSpecialShapes (polyhedron->RecMag box
 			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay MMMM
-			// surface-charge polyhedra (radTRecMag kept only as the ObjRecCur/ObjArcCur current kernel).
+			// surface-charge polyhedra (radTRecCur kept only as the ObjRecCur/ObjArcCur current kernel).
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
 			return ElemKey;
@@ -558,7 +558,7 @@ int radTApplication::SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfP
 			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
 			// RecognizeRecMagsInPolyhedrons / CheckForSpecialShapes (polyhedron->RecMag box
 			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay MMMM
-			// surface-charge polyhedra (radTRecMag kept only as the ObjRecCur/ObjArcCur current kernel).
+			// surface-charge polyhedra (radTRecCur kept only as the ObjRecCur/ObjArcCur current kernel).
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
 			return ElemKey;
