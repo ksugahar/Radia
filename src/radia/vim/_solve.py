@@ -485,7 +485,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     if int(order) != 0 or curve_order is not None:
         return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
                                 gram_backend, gram_eps, leaf, eta, near_factor, far_quad, tol, maxit,
-                                gmres_restart, curve_order, curve_gauss, ho_far_factor)
+                                gmres_restart, curve_order, curve_gauss, ho_far_factor, nl_maxit, nl_tol)
 
     # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
@@ -670,7 +670,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
 
 def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_solver, gram_backend,
                      gram_eps, leaf, eta, near_factor, far_quad, tol, maxit, gmres_restart,
-                     curve_order=None, curve_gauss=8, ho_far_factor=None):
+                     curve_order=None, curve_gauss=8, ho_far_factor=None, nl_maxit=300, nl_tol=1e-6):
     """order>0 (high-order HDiv) soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -681,9 +681,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         raise NotImplementedError("hdiv_demag_solve: image symmetry is not yet wired at order>0 (use order=0)")
     if pm_M is not None:
         raise NotImplementedError("hdiv_demag_solve: PM-mixed (pm_M) is not yet wired at order>0 (use order=0)")
-    if bh_table is not None:
-        raise NotImplementedError("hdiv_demag_solve: NONLINEAR (bh_table) is not yet validated at order>0 -- "
-                                  "use order=0, or the order-p demag FACTOR via DemagOperator(...).DemagFactor()")
+    if bh_table is not None and curve_order is None:
+        raise NotImplementedError("hdiv_demag_solve: NONLINEAR (bh_table) flat order>0 is not yet validated -- "
+                                  "use order=0, or curve_order=2 (curved nonlinear).")
     if linear_solver == "hlu":
         raise NotImplementedError("hdiv_demag_solve: linear_solver='hlu' is RT0-only (order=0)")
     if gram_backend == "gauss":
@@ -737,7 +737,11 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     D = float((mu @ N_apply(mu)) / denom)
     hmat_stats = dict(H.stats()) if hasattr(H, "stats") else None
 
-    if isinstance(mu_r, dict):                                  # per-region linear: W = 1/chi-weighted HDiv mass
+    if bh_table is not None:                                    # CURVED nonlinear: energy-Newton on the curved Gram
+        m, iters = _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext,
+                                               tol, maxit, nl_maxit, nl_tol)
+        solver_used = "energy-newton-cpp"
+    elif isinstance(mu_r, dict):                                # per-region linear: W = 1/chi-weighted HDiv mass
         W = _build_invchi_mass(mesh, fes, mu_r, n_face)
         m, iters = _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit)
         solver_used = "mass-riesz-cg"
@@ -758,7 +762,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
     M_avg = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol
     out = dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
-               n_charge=n_charge, nonlinear=False, linear_solver=solver_used,
+               n_charge=n_charge, nonlinear=bh_table is not None, linear_solver=solver_used,
                gram_backend=gram_backend, order=int(order), curve_order=curve_order)
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
