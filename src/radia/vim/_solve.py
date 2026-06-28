@@ -164,7 +164,7 @@ def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, 
     }
 
 
-def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs, far_quad=0):
+def _build_charge_gram_rt0(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs, far_quad=0):
     """Build the C++ charge-Gram H-matrix for the fallback / nonlinear demag path.
 
     far_quad (analytic mode): the FAR evaluation when near_factor < inf -- 0 = centroid-monopole, >0 = the
@@ -527,7 +527,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                                            **args)
             rhs = chi_uniform * np.asarray(Mm @ h_ext).ravel()
             m = np.asarray(solver.solve(list(map(float, rhs))), float)
-            H_for_d = _build_charge_gram(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
+            H_for_d = _build_charge_gram_rt0(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
                                          image_masks, image_signs, far_quad=eff_far_quad)
             Nmu = B.T @ np.asarray(H_for_d.matvec((B @ mu).tolist()), float)
             D = float((mu @ Nmu) / denom)
@@ -545,7 +545,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             H = _build_charge_gauss_gram(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
                                          image_masks, image_signs, gauss_near_factor)
         else:
-            H = _build_charge_gram(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
+            H = _build_charge_gram_rt0(d, all_tet, eff_gram_eps, leaf, eta, eff_near_factor,
                                    image_masks, image_signs, far_quad=eff_far_quad)
 
         def N_apply(v):
