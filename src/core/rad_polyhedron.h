@@ -121,15 +121,15 @@ public:
 	short SomethingIsWrong;
 	radTPairOfDouble AuxPairOfDouble; // Used for cylindrical subdivision
 
-	// MSC (Magnetic Surface Charge) support for hexahedra and wedges
-	// For 5+ face elements, we use surface charge density (sigma) on each face
+	// MSC (Magnetic Surface Charge) support for face-charge polyhedra.
+	// For 4-6 face elements, we use surface charge density (sigma) on each face
 	// instead of magnetization vector (Mx, My, Mz)
-	// Hexahedra: 6 faces -> 6 DOF, Wedges: 5 faces -> 5 DOF
+	// Tetrahedra: 4 faces -> 4 DOF, Wedges/Pyramids: 5 faces -> 5 DOF, Hexahedra: 6 faces -> 6 DOF
 	double Sigma[6];           // Surface charge densities for each face (max 6 DOF)
 	double FaceArea[6];        // Face areas (max 6)
 	TVector3d FaceNormal[6];   // Face normals (outward, max 6)
 	TVector3d FaceCenter[6];   // Face centers (max 6)
-	bool Use6DOF_MSC;          // Flag: true if element uses per-face MSC (5+ faces)
+	bool Use6DOF_MSC;          // Historical name; true if element uses per-face MSC (4-6 faces)
 	double CurrentChi;         // Chi used for current solve (for H = M/chi update)
 
 	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces, const TVector3d& InMagn)
@@ -140,8 +140,8 @@ public:
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
 
-		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
+		// Initialize face-charge MSC data for 4-6 face polyhedra
+		Use6DOF_MSC = (AmOfFaces >= 4);  // Tetrahedra (4), wedges/pyramids (5), hexahedra (6): unified face-charge MSC
 		CurrentChi = 1.0;  // Default chi
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -156,7 +156,7 @@ public:
 		if(SomethingIsWrong) return;
 		DefineCentrPoint(ArrayOfPoints, lenArrayOfPoints);
 
-		// Setup face geometry for 6 DOF MSC
+		// Setup face geometry for face-charge MSC
 		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
 	radTPolyhedron(TVector3d* ArrayOfPoints, int lenArrayOfPoints, int** ArrayOfFaces, int* ArrayOfLengths, int lenArrayOfFaces,
@@ -165,8 +165,8 @@ public:
 	{
 		AmOfFaces = lenArrayOfFaces; SomethingIsWrong = 0;
 
-		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
+		// Initialize face-charge MSC data for 4-6 face polyhedra
+		Use6DOF_MSC = (AmOfFaces >= 4);  // Tetrahedra (4), wedges/pyramids (5), hexahedra (6): unified face-charge MSC
 		CurrentChi = 1.0;  // Default chi
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -181,7 +181,7 @@ public:
 		if(SomethingIsWrong) return;
 		DefineCentrPoint(ArrayOfPoints, lenArrayOfPoints);
 
-		// Setup face geometry for 6 DOF MSC
+		// Setup face geometry for face-charge MSC
 		if(Use6DOF_MSC) SetupFaceGeometry();
 
 		J = InJ;
@@ -200,8 +200,8 @@ public:
 		pJ_LinCoef = 0; mLinTreat = 0;
 		J_IsNotZero = false;
 
-		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
+		// Initialize face-charge MSC data for 4-6 face polyhedra
+		Use6DOF_MSC = (AmOfFaces >= 4);  // Tetrahedra (4), wedges/pyramids (5), hexahedra (6): unified face-charge MSC
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
 			FaceArea[i] = 0.0;
@@ -221,7 +221,7 @@ public:
 		DefineCentrPoint(OutArrayOfPoints, lenArrayOfPoints);
 		DeleteInputArrays(OutArrayOfPoints, OutArrayOfFaces);
 
-		// Setup face geometry for 6 DOF MSC
+		// Setup face geometry for face-charge MSC
 		if(Use6DOF_MSC) SetupFaceGeometry();
 	}
 	radTPolyhedron(const radTVectHandlePgnAndTrans& InVectHandlePgnAndTrans,
@@ -239,8 +239,8 @@ public:
 		SomethingIsWrong = 0;
 		DefineCentrPoint();
 
-		// Initialize 6 DOF MSC data for hexahedra
-		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
+		// Initialize face-charge MSC data for 4-6 face polyhedra
+		Use6DOF_MSC = (AmOfFaces >= 4);  // Tetrahedra (4), wedges/pyramids (5), hexahedra (6): unified face-charge MSC
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
 			FaceArea[i] = 0.0;
@@ -248,7 +248,7 @@ public:
 			FaceCenter[i].x = FaceCenter[i].y = FaceCenter[i].z = 0.0;
 		}
 
-		// Setup face geometry for 6 DOF MSC
+		// Setup face geometry for face-charge MSC
 		if(Use6DOF_MSC) SetupFaceGeometry();
 
 		J_IsNotZero = false;
@@ -289,7 +289,7 @@ public:
 		J.x = J.y = J.z = 0.; pJ_LinCoef = 0;
 		Magn.x = Magn.y = Magn.z = 0.; pM_LinCoef = 0;
 
-		// Initialize 6 DOF MSC data (will be updated after AmOfFaces is known)
+		// Initialize face-charge MSC data (will be updated after AmOfFaces is known)
 		Use6DOF_MSC = false;
 		for(int i = 0; i < 6; i++) {
 			Sigma[i] = 0.0;
@@ -301,8 +301,8 @@ public:
 		AttemptToCreateConvexPolyhedronFromTwoBaseFaces(inHandleBasePgnAndTrf1, inHandleBasePgnAndTrf2);
 		if(SomethingIsWrong) return;
 
-		// Now that AmOfFaces is set, update 6 DOF flag for hexahedra
-		Use6DOF_MSC = (AmOfFaces >= 5);  // Wedges (5) and hexahedra (6)
+		// Now that AmOfFaces is set, update the face-charge MSC flag
+		Use6DOF_MSC = (AmOfFaces >= 4);  // Tetrahedra (4), wedges/pyramids (5), hexahedra (6): unified face-charge MSC
 		if(Use6DOF_MSC) SetupFaceGeometry();
 
 		if(avgCur != 0)
@@ -328,7 +328,7 @@ public:
 		J_IsNotZero = false;
 		SomethingIsWrong = 0;
 
-		// Initialize 6 DOF MSC data
+		// Initialize face-charge MSC data
 		Use6DOF_MSC = false;
 		AmOfFaces = 0;
 		for(int i = 0; i < 6; i++) {
@@ -344,8 +344,8 @@ public:
 	}
 
 	int Type_g3dRelax() { return 5;}
-	// DOF: AmOfFaces for MSC elements (sigma per face), 3 for tetrahedra (Mx, My, Mz)
-	// Hexahedra: 6 DOF, Wedges: 5 DOF, Tetrahedra: 3 DOF
+	// DOF: AmOfFaces for MSC surface-charge elements (sigma per face).
+	// Tetrahedra: 4 DOF, Wedges/Pyramids: 5 DOF, Hexahedra: 6 DOF (all face-charge moment elements).
 	// Returns 0 if no material is applied (same behavior as radTRecMag)
 	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0) ? 0 : (Use6DOF_MSC ? AmOfFaces : 3); }
 
@@ -367,15 +367,15 @@ public:
 	bool IsTetrahedron() const { return AmOfFaces == 4; }
 	bool IsWedge() const { return AmOfFaces == 5; }
 	bool IsHexahedron() const { return AmOfFaces == 6; }
-	bool IsMSCElement() const { return AmOfFaces >= 5; }
+	bool IsMSCElement() const { return AmOfFaces >= 4; }
 
 	// MSC (Magnetic Surface Charge) methods for supported element types
 	void B_comp_tetrahedron_analytical(radTField*);
 	void B_comp_wedge_analytical(radTField*);  // 3DOF wedge/prism (5 faces: 2 tri + 3 quad)
-	void B_comp_wedge_MSC(radTField*);         // 5DOF wedge MSC (sigma per face)
+	void B_comp_wedge_MSC(radTField*);         // Generic face-charge MSC (sigma per face, 4-6 faces)
 	void B_comp_hexahedron_MSC(radTField*);
 
-	// 6 DOF MSC field computation for hexahedra
+	// Face-charge MSC field computation for triangular/quadrilateral faces
 	TVector3d FieldFromChargedTriangle(const TVector3d& obs, const TVector3d& v0,
 	                                    const TVector3d& v1, const TVector3d& v2, double sigma) const;
 	// Version with explicit normal (for IMA boundary faces where computed normal is wrong)
@@ -401,7 +401,7 @@ public:
 	                                 double sigma, bool flipNormal,
 	                                 const TVector3d& mirrorCenter) const;
 
-	// 6 DOF MSC setup for hexahedra
+	// Face-charge MSC setup for 4-6 face polyhedra
 	// IMPORTANT: This relies on Netgen face winding convention for correct normal direction.
 	// No inside/outside check is performed - the normal is computed mechanically from
 	// the polygon's local coordinate system which was set up from vertex winding order.
@@ -409,8 +409,8 @@ public:
 	void SetupFaceGeometry()
 	{
 		// Compute face normals, areas, and centers for MSC elements
-		// Supports wedges (5 faces) and hexahedra (6 faces)
-		if(AmOfFaces < 5 || AmOfFaces > 6) return;
+		// Supports tetrahedra (4 faces), wedges/pyramids (5 faces) and hexahedra (6 faces)
+		if(AmOfFaces < 4 || AmOfFaces > 6) return;
 
 		for(int i = 0; i < AmOfFaces; i++)
 		{

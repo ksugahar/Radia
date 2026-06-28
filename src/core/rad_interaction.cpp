@@ -31,12 +31,12 @@
 
 #include "rad_parallel.h"
 
-// MSC (Magnetic Surface Charge) support for 6 DOF hexahedra
-// radTPolyhedron hexahedra use 6 DOF MSC (surface charge on each face)
+// MSC (Magnetic Surface Charge) support for 4-6 DOF face-charge polyhedra.
+// radTPolyhedron tetra/wedge/pyramid/hexahedra use one surface charge per face.
 // MSC is always enabled (unconditional)
 
-// Note: Dipole-dipole method for tetrahedra was tested but found numerically unstable.
-// Radia production solver uses the surface charge (MSC) method.
+// Note: the old tetra dipole-dipole path was tested but found numerically unstable.
+// Radia production polyhedron soft-iron solve uses the surface-charge (MSC) method.
 
 namespace {
 constexpr int MOM_NG = 8;
@@ -265,7 +265,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	}
 	FillInMainTransPtrArray();
 
-	// Check if any element has variable DOF (e.g., 6 DOF MSC hexahedra)
+	// Check if any element has variable DOF (e.g., 4-6 DOF face-charge MSC polyhedra)
 	// If so, use the variable DOF interaction matrix setup
 	ComputeDOFOffsets();
 
@@ -906,18 +906,19 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// If no symmetries, we can use simplified global coordinate computation with OpenMP
 	bool hasSymmetry = (AmOfElemWithSym > AmOfMainElem);
 
-	// Check if we have any MSC elements (5 DOF wedges or 6 DOF hexahedra)
-	// Surface-charge collocation elements require midpoint evaluation, which is more complex.
+	// Check if we have any MSC face-charge elements (4 DOF tetrahedra, 5 DOF wedges/pyramids, 6 DOF hexahedra)
+	// Surface-charge moment elements assemble their own system (BuildMomentSystemCore); only 3-DOF MMM
+	// dipole elements (RecMag) use this dense interaction matrix.
 	bool hasMSCElements = false;
 	for(int i = 0; i < AmOfMainElem && !hasMSCElements; i++)
 	{
-		if(m_elemDOF[i] >= 5) hasMSCElements = true;
+		if(m_elemDOF[i] >= 4) hasMSCElements = true;
 	}
 
 	// Build interaction matrix with variable-size blocks
 	// For each pair (row_elem, col_elem), compute the interaction block
 
-	// FAST PATH: Only for pure tetrahedra meshes (no MSC hexahedra) without symmetry
+	// FAST PATH: Only for pure 3-DOF MMM dipole meshes (RecMag; no face-charge MSC element) without symmetry
 	if(!hasSymmetry && !hasMSCElements)
 	{
 		// Pre-compute tetrahedron geometry for fast block computation
@@ -1123,9 +1124,9 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
-				// EIEM2 retirement (Phase 3b): the dof>=5 MSC branches were deleted.  In this MMM-only path
-				// dof is always 3, so the 3x3 branch above always matches; the defensive else zeroes any
-				// unexpected block.
+			// EIEM2 retirement (Phase 3b): the dof>=4 MSC branches were deleted.  In this MMM-only path
+			// dof is always 3, so the 3x3 branch above always matches; the defensive else zeroes any
+			// unexpected block.
 			else
 			{
 				// Unknown DOF combination - zero out the block (ROW-MAJOR)
@@ -2535,8 +2536,8 @@ static int momentResidualEigenmodes(const double Ae[], const double d[][3], int 
 }
 
 //=========================================================================
-// CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: hex with 6 DOF +
-// wedge with 5 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
+// CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: tet 4 DOF +
+// wedge/pyramid 5 DOF + hex 6 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
 // layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
 // dense path (BuildCentroidFieldGrad + BuildMomentSystemCore) and the SolveLinearStep moment branch.
 //=========================================================================
@@ -2544,7 +2545,7 @@ void radTInteraction::CollectMomentElems(std::vector<int>& out) const
 {
 	out.clear();
 	for(int e = 0; e < AmOfMainElem; e++)
-		if(m_elemDOF[e] == 6 || m_elemDOF[e] == 5) out.push_back(e);
+		if(m_elemDOF[e] == 6 || m_elemDOF[e] == 5 || m_elemDOF[e] == 4) out.push_back(e);
 }
 
 //=========================================================================
@@ -2583,7 +2584,7 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 		int elemIdx = melem[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
 		if(!poly) continue;
-		int nF = poly->AmOfFaces; if(nF != 6 && nF != 5) continue;
+		int nF = poly->AmOfFaces; if(nF != 6 && nF != 5 && nF != 4) continue;
 		int off = m_elemDOFOffset[elemIdx];
 		const TVector3d ec = poly->CentrPoint;
 		for(int f = 0; f < nF; f++)
@@ -2693,7 +2694,7 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 // BuildMomentSystemCore: the parameter-free multipole-moment MMM system matrix A and RHS for PER-ELEMENT linear
 // susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the element centroid) -- the
 // C++ port of examples/vim/multipole_moment_iter_scaling.py::build, generalized for the solve (coil/source fields
-// are not uniform).  Per moment element (hex 6 DOF, wedge/pyramid 5 DOF):
+// are not uniform).  Per moment element (tet 4 DOF, wedge/pyramid 5 DOF, hex 6 DOF):
 //   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Hext_k
 //   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
 //   2 quad rows   : (local diagonal-quadrupole moment of sigma) - chi*(Dvec . gradH(centroid)) . sigma = 0
@@ -2755,7 +2756,7 @@ void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const doubl
 		int elemIdx = melem[h];
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
 		int nF = poly ? poly->AmOfFaces : 0;
-		if(nF != 6 && nF != 5) nF = 0;     // hex 6 / wedge 5
+		if(nF != 6 && nF != 5 && nF != 4) nF = 0;     // hex 6 / wedge/pyramid 5 / tet 4
 		rowBase[h] = totalRows;
 		nFaceByMom[h] = nF;
 		totalRows += nF;
@@ -3227,7 +3228,7 @@ void radTInteraction::PrecomputeMomentAnyGeometry() const
 		MomentGeomElemCache& ge = (*elems)[h];
 		ge.elemIdx = elemIdx;
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || (poly->AmOfFaces != 6 && poly->AmOfFaces != 5)) continue;
+		if(!poly || (poly->AmOfFaces != 6 && poly->AmOfFaces != 5 && poly->AmOfFaces != 4)) continue;  // tet(4)/wedge,pyramid(5)/hex(6)
 		const int nF = poly->AmOfFaces;
 		ge.nFace = nF;
 		const TVector3d ce = poly->CentrPoint;
@@ -3327,7 +3328,7 @@ void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const d
 
 	const MomentGeomElemCache& row = (*elems)[rowMomPos];
 	const MomentGeomElemCache& col = (*elems)[colMomPos];
-	if(!row.valid || !col.valid || row.nFace < 5 || col.nFace < 5) return;
+	if(!row.valid || !col.valid || row.nFace < 4 || col.nFace < 4) return;
 
 	const int rdof = row.nFace;
 	const int cdof = col.nFace;
@@ -4059,7 +4060,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 	}
 
 
-	// Check all elements have valid DOF (3=tet MMM, 5=wedge MSC, 6=hex MSC)
+	// Check all elements have valid DOF (3=dipole MMM, 4-6=face-charge MSC)
 	bool allHex = true;
 	bool allTet = true;
 	bool allWedge = true;
@@ -4074,7 +4075,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		if(m_elemDOF[i] != 5) allWedge = false;
 		if(m_elemDOF[i] != 3) allTet = false;
 	}
-	// EIEM2 retirement (Phase 3b): any MSC surface-charge element (DOF 5/6) present?  (DOF is in {3,5,6}
+	// EIEM2 retirement (Phase 3b): any MSC surface-charge element (DOF 4/5/6) present?  (DOF is in {3,4,5,6}
 	// here; the loop above errors on < 3.)  Used below to skip the dense MSC IMA build.
 	bool hasMSC = !allTet;
 

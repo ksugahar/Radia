@@ -153,8 +153,8 @@ string radTIOBuffer::err_ar[] = {
 	"Radia::Error201::::Maximum number of steps exceeded in automatic Runge-Kutta integration routine.\0",
 	"Radia::Error202::::Failed to instantiate object(s).\0",
 	"Radia::Error203::::The retired EIEM2 collocation surface-charge path is not available. Current hexahedron / wedge / pyramid soft iron uses the parameter-free multipole-moment MMM solver; FEEC HDiv-VIM remains available through radia.vim.soft_iron_from_mesh(...) and radia.vim.hdiv_demag_solve(...).\0",
-	"Radia::Error204::::Incorrect input: a single demag Solve mixes MMM elements (tetrahedron / RecMag, 3 DOF) with MSC surface-charge elements (hexahedron / wedge, 5-6 DOF). These use different formulations and must be solved as separate containers. Permanent magnets and pure-tet / pure-hex / pure-wedge solves are unaffected.\0",
-	"Radia::Error205::::Incorrect input: B-input hysteresis (MatPlayHysteresis / MatEnergyHysteresis with b_input_newton / b_input_hantila) is supported only for MMM elements (tetrahedron / RecMag, 3 DOF), not for MSC surface-charge hexahedron / wedge (5-6 DOF) soft iron.\0",
+	"Radia::Error204::::Incorrect input: a single demag Solve mixes the 3-DOF MMM dipole element (RecMag) with MSC face-charge elements (tetrahedron / wedge / pyramid / hexahedron, 4-6 DOF). These use different formulations and must be solved as separate containers. Permanent magnets and pure-RecMag / pure-tet / pure-wedge / pure-hex solves are unaffected.\0",
+	"Radia::Error205::::Incorrect input: B-input hysteresis (MatPlayHysteresis / MatEnergyHysteresis with b_input_newton / b_input_hantila) is supported only for the 3-DOF MMM dipole element (RecMag), not for MSC face-charge tetrahedron / wedge / pyramid / hexahedron (4-6 DOF) soft iron.\0",
 	"Radia::Error500::::Incorrect input: Byte string is expected.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error501::::Incorrect input: Wrong / unsupported magnetic kick units.\0", //keep on adding new "Incorrect inputs" after this
 	"Radia::Error502::::Incorrect input: Wrong / unsupported kick-map string/file format specification.\0", //keep on adding new "Incorrect inputs" after this
