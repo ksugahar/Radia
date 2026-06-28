@@ -123,6 +123,47 @@ _LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "gmres", "hlu"}
 _GRAM_BACKENDS = {"analytic", "gauss"}
 
 
+def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, gram_eps,
+                         near_factor, far_quad):
+    """Resolve the charge-Gram BUILD defaults (ACA eps + near/far split) in ONE place.
+
+    Single source of truth -- was inline + duplicated in hdiv_demag_solve (order=0) and _solve_highorder
+    (order>0).  BEHAVIOUR-PRESERVING: returns exactly what the prior inline logic produced.  An explicit
+    gram_eps / near_factor / far_quad always wins (pass near_factor=1e30 / inf to force the all-analytic /
+    all-high-quad Gram).
+
+    RT0 (order=0):
+      eps      -- the uniform-linear symmetric-CG + gmres cross-check paths use the validated tight 1e-12
+                  (kept for solution ACCURACY + golden stability even though the SYMMETRIC matvec no longer
+                  NEEDS it for symmetry); per-region / nonlinear / H-LU keep 1e-10.
+      near/far -- the Gram BUILD (per-pair analytic quadrature) dominates the cost (cube N=8: 47s build vs a
+                  0.3s mass-riesz solve; nonlinear sphere nf=9403: 200s exact build vs ~1s/Newton-step solve).
+                  N=B^T G B is GEOMETRY-ONLY, so the precision-preserving fast build near_factor=2 (near =
+                  exact analytic) + far_quad=4 (far = a low-order double-quad of 1/r, O((size/r)^4))
+                  REPRODUCES the all-analytic Gram (sphere transverse 7.26e-4 == exact 7.25e-4; nonlinear Mz
+                  3e-7, same Newton iters) at ~monopole cost.  The bare centroid-monopole far (far_quad=0) is
+                  equally fast but leaks ~0.12% transverse, so it is NEVER defaulted.  H-LU factors its own
+                  system-A operator -> keep exact (near=1e30, far=0).  Gauss backend is a separate path.
+
+    High-order (order>0): far_quad=3 (the low far-quad) + ho_far_factor=2.0 (the separation threshold).  NOTE:
+      ho_far_factor is currently fed from near_factor (the documented overload) -- to be split into its own
+      argument in step C of the Gram-path consolidation.
+    """
+    if int(order) == 0:
+        fast_uniform = uniform_linear and linear_solver in ("auto", "cpp-cg", "gmres")
+        fast_build = gram_backend == "analytic" and linear_solver != "hlu"
+        return {
+            "eps": gram_eps if gram_eps is not None else (1e-12 if fast_uniform else 1e-10),
+            "near_factor": near_factor if near_factor is not None else (2.0 if fast_build else 1e30),
+            "far_quad": far_quad if far_quad is not None else (4 if fast_build else 0),
+        }
+    return {
+        "eps": gram_eps if gram_eps is not None else 1e-10,
+        "far_quad": far_quad if far_quad is not None else 3,
+        "ho_far_factor": near_factor if near_factor is not None else 2.0,
+    }
+
+
 def _build_charge_gram(d, all_tet, gram_eps, leaf, eta, near_factor, image_masks, image_signs, far_quad=0):
     """Build the C++ charge-Gram H-matrix for the fallback / nonlinear demag path.
 
@@ -459,29 +500,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     D = None
     uniform_linear = pm_M is None and bh_table is None and mu_r is not None and not isinstance(mu_r, dict)
     chi_uniform = None
-    # Effective ACA Gram tolerance.  The uniform-linear Krylov paths (default symmetric CG = auto/cpp-cg,
-    # and the gmres cross-check) use the validated tight fast-Gram eps 1e-12; per-region / nonlinear / H-LU
-    # keep 1e-10.  (With the SYMMETRIC matvec the CG no longer NEEDS 1e-12 for symmetry -- symmetry is now
-    # structural, not ACA-accuracy-dependent -- but 1e-12 is kept for solution ACCURACY + golden stability.)
-    # An explicit gram_eps always wins.
-    fast_uniform_path = uniform_linear and linear_solver in ("auto", "cpp-cg", "gmres")
-    eff_gram_eps = gram_eps if gram_eps is not None else (1e-12 if fast_uniform_path else 1e-10)
-    # Gram-BUILD near/far split.  The build (per-pair analytic quadrature) dominates the cost (cube N=8: 47s
-    # vs a 0.3s mass-riesz solve; nonlinear sphere nf=9403: 200s exact build vs ~1s/Newton-step solve).
-    # N = B^T G B is GEOMETRY-ONLY (material-independent), so the PRECISION-PRESERVING fast build --
-    # near_factor=2 (near pairs = exact analytic) + far_quad=4 (far pairs = a low-order double-quadrature of
-    # 1/r, O((size/r)^4), on the tet / sub-tet+sub-tri rules) -- reproduces the all-analytic Gram for the
-    # analytic-Gram material paths: uniform-linear auto/cpp-cg (already validated at tight Gram eps), plus
-    # per-region linear, PM-mixed, AND the nonlinear Newton (GMRES/Newton, asymmetry-tolerant).  Measured:
-    # sphere transverse 7.26e-4 == exact
-    # 7.25e-4 (linear), nonlinear nf=9403 Mz agrees to 3e-7 with the same 8 Newton iters at ~9.4x faster build
-    # (200->21s).  UNLIKE the bare centroid-monopole far (far_quad=0), which is equally fast but leaks ~0.12%
-    # transverse (> the 1e-3 golden), so monopole is never defaulted.  H-LU factors its own system-A operator
-    # (keep exact near_factor=1e30) and the Gauss backend is a separate point-cloud path.  An explicit
-    # near_factor or far_quad always wins (pass near_factor=1e30 to force the all-analytic Gram).
-    fast_build = gram_backend == "analytic" and linear_solver != "hlu"
-    eff_near_factor = near_factor if near_factor is not None else (2.0 if fast_build else 1e30)
-    eff_far_quad = far_quad if far_quad is not None else (4 if fast_build else 0)
+    # Gram-build defaults (ACA eps + near/far split) -- resolved in ONE place (_resolve_gram_params; the
+    # full rationale lives in its docstring).  order=0 here (order>0 was dispatched to _solve_highorder).
+    _gp = _resolve_gram_params(order=0, gram_backend=gram_backend, linear_solver=linear_solver,
+                               uniform_linear=uniform_linear, gram_eps=gram_eps,
+                               near_factor=near_factor, far_quad=far_quad)
+    eff_gram_eps = _gp["eps"]; eff_near_factor = _gp["near_factor"]; eff_far_quad = _gp["far_quad"]
     if gram_backend == "gauss" and not uniform_linear:
         raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
                          "uniform linear mu_r solves")
@@ -665,11 +689,12 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             "hdiv_demag_solve: order>2 material solve is not yet production-clean -- order<=2 is exact "
             "(analytic moments); the order>=3 Duffy quadrature is only ~1e-3 and the ill-conditioned "
             "high-degree basis makes the demag spectrum leave [0,1]. Use order in {0,1,2}.")
-    # accuracy-preserving fast Gram build (near analytic + far low-quad), the build_charge_gram defaults; an
-    # explicit gram_eps/near_factor/far_quad always wins (pass near_factor=inf to force the all-high-quad Gram).
-    eff_eps = gram_eps if gram_eps is not None else 1e-10
-    eff_far = far_quad if far_quad is not None else 3
-    eff_hofar = near_factor if near_factor is not None else 2.0
+    # Gram-build defaults resolved in ONE place (_resolve_gram_params; rationale in its docstring).  High-order
+    # reads ho_far_factor (currently fed from near_factor -- the documented overload, to be split in step C).
+    _gp = _resolve_gram_params(order=order, gram_backend=gram_backend, linear_solver=linear_solver,
+                               uniform_linear=False, gram_eps=gram_eps,
+                               near_factor=near_factor, far_quad=far_quad)
+    eff_eps = _gp["eps"]; eff_far = _gp["far_quad"]; eff_hofar = _gp["ho_far_factor"]
     if curve_order is not None:
         # CURVED (isoparametric P2) demag solve: curve the geometry, then the curved-Duffy charge Gram.  Curved
         # helps NEAR-SURFACE FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the volume-
