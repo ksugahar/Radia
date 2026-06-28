@@ -85,7 +85,8 @@ SAME 8 Newton iters) at ~4.5-9.4x faster build (linear cube N=8: 47 -> 10 s; non
 The cheap centroid-monopole far (`far_quad=0`) is equally fast but leaks ~0.12% transverse (> the 1e-3
 golden) -- so it is never defaulted; the low-quad far is what makes the fast build lossless.  Only H-LU
 (factors its own system-A operator) and the Gauss backend keep the exact `near_factor=1e30` / `far_quad=0`.
-An explicit `near_factor` / `far_quad` always wins (pass `near_factor=1e30` to force the all-analytic Gram).
+For RT0, an explicit `near_factor` / `far_quad` always wins (pass `near_factor=1e30` to force the
+all-analytic Gram).  For high-order, use `ho_far_factor` for the separation threshold.
 
 KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
@@ -124,13 +125,12 @@ _GRAM_BACKENDS = {"analytic", "gauss"}
 
 
 def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, gram_eps,
-                         near_factor, far_quad):
+                         near_factor, far_quad, ho_far_factor):
     """Resolve the charge-Gram BUILD defaults (ACA eps + near/far split) in ONE place.
 
     Single source of truth -- was inline + duplicated in hdiv_demag_solve (order=0) and _solve_highorder
-    (order>0).  BEHAVIOUR-PRESERVING: returns exactly what the prior inline logic produced.  An explicit
-    gram_eps / near_factor / far_quad always wins (pass near_factor=1e30 / inf to force the all-analytic /
-    all-high-quad Gram).
+    (order>0).  `gram_eps` / `far_quad` apply to both paths; `near_factor` is RT0-only and
+    `ho_far_factor` is high-order-only.  Wrong-order knobs fail loud instead of being silently remapped.
 
     RT0 (order=0):
       eps      -- the uniform-linear symmetric-CG + gmres cross-check paths use the validated tight 1e-12
@@ -145,11 +145,14 @@ def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, 
                   equally fast but leaks ~0.12% transverse, so it is NEVER defaulted.  H-LU factors its own
                   system-A operator -> keep exact (near=1e30, far=0).  Gauss backend is a separate path.
 
-    High-order (order>0): far_quad=3 (the low far-quad) + ho_far_factor=2.0 (the separation threshold).  NOTE:
-      ho_far_factor is currently fed from near_factor (the documented overload) -- to be split into its own
-      argument in step C of the Gram-path consolidation.
+    High-order (order>0): far_quad=3 (the low far-quad) + ho_far_factor=2.0 (the separation threshold).
+      near_factor (RT0) and ho_far_factor (high-order) are ORDER-SPECIFIC and NOT interchangeable -- a
+      wrong-order knob fails loud (No-Fallbacks), it is not silently remapped.
     """
     if int(order) == 0:
+        if ho_far_factor is not None:
+            raise ValueError("hdiv_demag_solve: ho_far_factor is an order>0 (high-order) parameter; "
+                             "at order=0 (RT0) use near_factor for the near/far split")
         fast_uniform = uniform_linear and linear_solver in ("auto", "cpp-cg", "gmres")
         fast_build = gram_backend == "analytic" and linear_solver != "hlu"
         return {
@@ -157,10 +160,13 @@ def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, 
             "near_factor": near_factor if near_factor is not None else (2.0 if fast_build else 1e30),
             "far_quad": far_quad if far_quad is not None else (4 if fast_build else 0),
         }
+    if near_factor is not None:
+        raise ValueError("hdiv_demag_solve: near_factor is an order=0 (RT0) parameter; at order>0 "
+                         "(high-order) use ho_far_factor for the near/far separation threshold")
     return {
         "eps": gram_eps if gram_eps is not None else 1e-10,
         "far_quad": far_quad if far_quad is not None else 3,
-        "ho_far_factor": near_factor if near_factor is not None else 2.0,
+        "ho_far_factor": ho_far_factor if ho_far_factor is not None else 2.0,
     }
 
 
@@ -423,7 +429,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
                      linear_solver="auto", hlu_trunc_tol=1e-8,
                      gram_backend="analytic", gauss_near_factor=2.0, order=0,
-                     curve_order=None, curve_gauss=8):
+                     curve_order=None, curve_gauss=8, ho_far_factor=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
@@ -444,6 +450,11 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                  PM-iron magnetization discontinuity) -- separate them with an air gap.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
+    near/far Gram-build tuning (ORDER-SPECIFIC, NOT interchangeable -- a wrong-order knob fails loud):
+      near_factor   -- order=0 (RT0) ONLY: the near(=exact analytic)/far(=far_quad) distance boundary
+                       (pass 1e30 to force the all-analytic Gram).
+      ho_far_factor -- order>0 (high-order) ONLY: the near/far separation threshold (pass inf to force the
+                       all-high-quad Gram).
     Returns dict: M (n_el,3) per-element magnetization, M_avg (3,), iters, demag (Rayleigh factor),
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
     """
@@ -474,7 +485,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     if int(order) != 0 or curve_order is not None:
         return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
                                 gram_backend, gram_eps, leaf, eta, near_factor, far_quad, tol, maxit,
-                                gmres_restart, curve_order, curve_gauss)
+                                gmres_restart, curve_order, curve_gauss, ho_far_factor)
 
     # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
@@ -504,7 +515,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     # full rationale lives in its docstring).  order=0 here (order>0 was dispatched to _solve_highorder).
     _gp = _resolve_gram_params(order=0, gram_backend=gram_backend, linear_solver=linear_solver,
                                uniform_linear=uniform_linear, gram_eps=gram_eps,
-                               near_factor=near_factor, far_quad=far_quad)
+                               near_factor=near_factor, far_quad=far_quad, ho_far_factor=ho_far_factor)
     eff_gram_eps = _gp["eps"]; eff_near_factor = _gp["near_factor"]; eff_far_quad = _gp["far_quad"]
     if gram_backend == "gauss" and not uniform_linear:
         raise ValueError("hdiv_demag_solve: gram_backend='gauss' is currently enabled only for "
@@ -659,7 +670,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
 
 def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_solver, gram_backend,
                      gram_eps, leaf, eta, near_factor, far_quad, tol, maxit, gmres_restart,
-                     curve_order=None, curve_gauss=8):
+                     curve_order=None, curve_gauss=8, ho_far_factor=None):
     """order>0 (high-order HDiv) soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -689,11 +700,11 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             "hdiv_demag_solve: order>2 material solve is not yet production-clean -- order<=2 is exact "
             "(analytic moments); the order>=3 Duffy quadrature is only ~1e-3 and the ill-conditioned "
             "high-degree basis makes the demag spectrum leave [0,1]. Use order in {0,1,2}.")
-    # Gram-build defaults resolved in ONE place (_resolve_gram_params; rationale in its docstring).  High-order
-    # reads ho_far_factor (currently fed from near_factor -- the documented overload, to be split in step C).
+    # Gram-build defaults resolved in ONE place (_resolve_gram_params; rationale in its docstring).
+    # High-order reads ho_far_factor; near_factor remains RT0-only.
     _gp = _resolve_gram_params(order=order, gram_backend=gram_backend, linear_solver=linear_solver,
                                uniform_linear=False, gram_eps=gram_eps,
-                               near_factor=near_factor, far_quad=far_quad)
+                               near_factor=near_factor, far_quad=far_quad, ho_far_factor=ho_far_factor)
     eff_eps = _gp["eps"]; eff_far = _gp["far_quad"]; eff_hofar = _gp["ho_far_factor"]
     if curve_order is not None:
         # CURVED (isoparametric P2) demag solve: curve the geometry, then the curved-Duffy charge Gram.  Curved
