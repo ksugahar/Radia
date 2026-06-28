@@ -5,8 +5,10 @@
 * Project:        RADIA
 *
 * Description:    Magnetic field source:
-*                 rectangular parallelepiped with constant magnetization 
-*                 or currect density
+*                 rectangular parallelepiped with constant (Ampere) current
+*                 density -- the current block behind ObjRecCur / ObjArcCur.
+*                 (Magnetized rectangular blocks are MMMM surface-charge
+*                 polyhedra now; see radTApplication::SetRecMag.)
 *
 * Author(s):      Oleg Chubar
 *
