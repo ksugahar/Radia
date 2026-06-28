@@ -1377,7 +1377,7 @@ double radTApplication::HLUTestOnHACApK(int InteractElemKey)
 		mgr.MatVec(x_orig, y_orig);
 
 		// Run H-LU + solve, get max rel err vs x_orig.
-		// nffc = uniform DOF per element. For MSC: tet=3, hex=6, wedge=5.
+		// nffc = uniform DOF per element. For MSC: tet=4, wedge/pyramid=5, hex=6.
 		// For a mixed mesh, this single-nffc API is incorrect; for now we
 		// assume uniform hex (6) -- the typical Phase 4 smoke test.
 		int nffc_uniform = 6;
@@ -1564,21 +1564,22 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			// collocation kernel used to cover two element-composition cases that moment does NOT
 			// represent; both are now rejected fail-loud (No Fallbacks -- a silent wrong number is worse
 			// than an error):
-			//   (1) a single Solve that MIXES MMM elements (tetrahedron / RecMag, DOF < 5) with MSC
-			//       surface-charge elements (hexahedron / wedge, DOF >= 5).  The two use different
-			//       formulations (dipole vs surface charge); solve them as separate containers.
+			//   (1) a single Solve that MIXES the 3-DOF MMM dipole element (RecMag, DOF == 3) with MSC
+			//       face-charge elements (tetrahedron / wedge / pyramid / hexahedron, DOF >= 4).  The two
+			//       use different formulations (dipole vs surface charge); solve them as separate containers.
 			//   (2) B-input hysteresis (b_input_newton / b_input_hantila) on MSC elements -- the B-input
-			//       Newton/Hantila Jacobian is block-3x3 (MMM, 3 DOF) only; a 5/6-DOF MSC element cannot
-			//       be driven by it.  Hysteresis stays on tetrahedron / RecMag.
+			//       Newton/Hantila Jacobian is block-3x3 (MMM, 3 DOF) only; a 4/5/6-DOF MSC element cannot
+			//       be driven by it.  Hysteresis stays on the 3-DOF MMM dipole element (RecMag).
 			{
 				int nElemChk = InteractPtr->GetAmOfMainElem();
-				bool anyMSC = false, anyLowDOF = false;
+				bool anyMSC = false, anyMMM3 = false;
 				for(int i = 0; i < nElemChk; i++)
 				{
 					int dd = InteractPtr->GetElementDOF(i);
-					if(dd >= 5) anyMSC = true; else anyLowDOF = true;
+					if(dd >= 4) anyMSC = true;        // tet(4) / wedge,pyramid(5) / hex(6): unified face-charge moment
+					else if(dd == 3) anyMMM3 = true;  // RecMag: 3-DOF MMM dipole (the other formulation)
 				}
-				if(anyMSC && anyLowDOF) { Send.ErrorMessage("Radia::Error204"); return 0; }
+				if(anyMSC && anyMMM3) { Send.ErrorMessage("Radia::Error204"); return 0; }
 				if(anyMSC && (m_b_input_newton || m_b_input_hantila)) { Send.ErrorMessage("Radia::Error205"); return 0; }
 			}
 
@@ -1845,32 +1846,32 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 		SendingIsRequired = PrevSendingIsRequired;
 
-		// Mesh-less surface-charge soft iron (ObjHexahedron/ObjWedge/ObjPyramid + MatLin/MatSatIsoTab
+		// Mesh-less surface-charge soft iron (ObjTetrahedron/ObjHexahedron/ObjWedge/ObjPyramid + MatLin/MatSatIsoTab
 		// + rad.Solve) is solved by the canonical multipole-moment MMM MSC path here.  Mesh-BACKED soft iron
 		// (radia.vim.soft_iron_from_mesh) is routed to FEEC HDiv-VIM by the Python rad.Solve wrapper before
 		// reaching this C++ path, unless demag_backend='collocation_mmmm' forces the C++ collocation MMMM representation.
-		// Tet (MMM) and permanent magnets are unaffected.
+		// Permanent magnets are unaffected; 3-DOF RecMag keeps the dipole MMM path.
 
 		// multipole-moment MMM dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula
-		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- hex (6 DOF) AND wedge/pyramid (5 DOF,
-		// Phase 3a: 3 dipole + 1 monopole + 1 axial quad).  Solver method:
-		//   - method 0 (LU)       -> dense direct moment solve (hex / wedge / mixed).
-		//   - method 1 (BiCGSTAB) -> matrix-free moment BiCGSTAB + element-block Jacobi (hex/wedge/mixed 5/6 DOF).
+		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- tet (4 DOF),
+		// wedge/pyramid (5 DOF), and hex (6 DOF).  Solver method:
+		//   - method 0 (LU)       -> dense direct moment solve.
+		//   - method 1 (BiCGSTAB) -> matrix-free moment BiCGSTAB + element-block Jacobi (4/5/6 DOF).
 		//   - method 2 (HACApK)   -> the moment H-matrix + block-Jacobi BiCGSTAB (scalable storage; no dense
 		//     interaction/base matrix, Increment 4), set g_multipole_moment_hacapk and route to the LU/Picard driver
 		//     whose linear step picks the H-BiCGSTAB.  HEX-ONLY for now (the H-matrix assumes uniform 6 DOF);
-		//     wedge/mixed method-2 routes to the dense moment LU until the variable-DOF H-matrix (Phase 3a-2).
+		//     tet/wedge/mixed method-2 routes to the dense moment LU until the variable-DOF H-matrix.
 		//     PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
-		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Tet (3 DOF =
-		// MMM) keeps the dipole MMM path; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
+		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed
+		// 3-DOF RecMag dipole + 4-6 DOF MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
 		// EIEM2 surface-charge collocation kernel was fully removed in Phase 3b.
 		{
 			extern bool g_multipole_moment_hacapk;
 			g_multipole_moment_hacapk = false;
 			// multipole-moment MMM is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
-			// hex/wedge/pyramid to the LU/Picard moment driver (method 2 + pure-hex also sets g_multipole_moment_hacapk); a
-			// tet present -> not allMoment -> tet keeps the MMM dipole path, and mixed tet+MSC is rejected
-			// fail-loud (Error204), since no production case mixes surface-charge + dipole soft iron.
+			// tet/hex/wedge/pyramid to the LU/Picard moment driver (method 2 + pure-hex also sets
+			// g_multipole_moment_hacapk); mixed 3-DOF dipole + MSC is rejected fail-loud (Error204), since
+			// no production case mixes surface-charge + dipole soft iron.
 			{
 				radThg hgMom;
 				if(ValidateElemKey(InteractElemKey, hgMom))
@@ -1883,14 +1884,14 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 						for(int iEl = 0; iEl < neMom; iEl++)
 						{
 							int dd = pIntrMom->GetElementDOF(iEl);
-							if(dd != 6 && dd != 5) allMoment = false;   // moment = hex(6) + wedge(5); tet(3)=MMM is not
+							if(dd != 6 && dd != 5 && dd != 4) allMoment = false;   // moment = tet(4) + wedge/pyramid(5) + hex(6)
 							if(dd != 6) allHex6 = false;
 						}
 						if(allMoment)
 						{
 							// The moment H-matrix (method 2) is currently HEX-ONLY (RadHACApKMomentSystem assumes
-							// uniform 6 DOF); wedge/mixed moment uses the dense LU/Picard moment path (Phase 3a-1).
-							// The variable-DOF moment H-matrix for wedge/mixed method-2 is Phase 3a-2.
+							// uniform 6 DOF); tet/wedge/mixed moment uses the dense LU/Picard moment path.
+							// The variable-DOF moment H-matrix for 4/5/6 DOF method-2 is the next step.
 							if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && allHex6)
 							{
 								g_multipole_moment_hacapk = true;    // moment linear step via H-matrix + BiCGSTAB (hex-only)
@@ -1898,7 +1899,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 							}
 							else if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
 							{
-								MethNo = RadSolverMethod::LU;   // method-2 wedge/mixed explicit dense-LU route until variable-DOF H-matrix
+								MethNo = RadSolverMethod::LU;   // method-2 4/5/mixed explicit dense-LU route until variable-DOF H-matrix
 							}
 						}
 					}
