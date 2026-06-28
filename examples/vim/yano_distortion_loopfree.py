@@ -82,7 +82,7 @@ def mmm_moment(cells, mu_r):
 
 
 def matrix_geom_loops(cells):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in cells]
     for h in objs:
         rad.MatApl(h, rad.MatLin(1000.0))                 # N is geometry-only (mu_r-independent)

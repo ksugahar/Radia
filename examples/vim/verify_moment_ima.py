@@ -27,7 +27,7 @@ def _half_boxes():
 
 
 def _solve(boxes, Happ, image):
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron(b, [0, 0, 0]) for b in boxes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MUR))

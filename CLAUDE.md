@@ -1390,13 +1390,13 @@ HDiv-VIM for loop-free (mesh/mu_r-independent ~6 Newton iters) convergence.**  (
 in the private MAGIC Fortran repo; Yano's academic work is cited.)
 
 **SUPERSEDED 2026-06-28 (Sugahara): "MMMM does NOT connect to HACApK" — the 2026-06-27 role split below is REVERSED.**
-MMMM is now DENSE-ONLY (no HACApK: `RadHACApKMomentSystem` + `SolveMomentHACApK` + deflation + H-LU removed,
+MMMM is now DENSE-ONLY (the moment-HACApK manager/solver, runtime deflation, and H-LU route were removed,
 commits 3534d31b / 494d8374). **HDiv-VIM is AGAIN the large-scale / loop-heavy / high-`mu_r` route** (HACApK-backed,
 loop-free); MMMM is the dense, distorted-element-robust route for low/medium `mu_r`, small/medium N. PEEC stays
 HACApK-backed. The paragraph below is HISTORICAL.
 
 **ROLE SPLIT (Sugahara 2026-06-27): MMMM is the MAIN large-scale route; HDiv-VIM is NOT.** MMMM scales via
-the QR-free + sparse-PARDISO two-sided deflation (`moment_deflation`, 3a `f9cb1dd4` / 3b `0aba78be`):
+the retired QR-free + sparse-PARDISO two-sided deflation experiment (3a `f9cb1dd4` / 3b `0aba78be`):
 QR-free coarse op `E=(AL)ᵀ(AL)` assembled sparse + factored by PARDISO sparse-direct -> SUB-CUBIC coarse
 setup, deflation AL-build-limited `O(N² log N)`.  **HDiv-VIM is NO LONGER the large-scale route** --
 repositioned to **(a) curved-surface high accuracy** (H(div) RT flux) and **(b) FEM coupling** (NGSolve
@@ -1409,21 +1409,21 @@ FEM coupling; yano-MSC = per-element hex accuracy.  See "H-Matrix Route Policy" 
   Cubit<->NGSolve interchange (Cubit `export netgen` / Netgen / OCC `ngmesh.Save`); netgen owns the mesh
   orientation, which avoids hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding silently
   breaking the HDiv surface charge -- a real bug seen 2026-06-19).  The returned container carries BOTH
-  representations (Radia `ObjHexahedron/Tetrahedron/Wedge` for yano + field eval; the registered NGSolve
+  representations (Radia `ObjHexahedron/Tetrahedron/Wedge` for collocation MMMM + field eval; the registered NGSolve
   mesh for HDiv), so either backend can solve it.  Do NOT hand-build netgen meshes for this.
 - **Backend selection** (`radia.set_demag_backend(...)`, default `"auto"`):
   - `"auto"` (API-split, default): a mesh-backed soft iron (`soft_iron_from_mesh`) -> HDiv-VIM; a
-    mesh-LESS soft iron (`ObjHexahedron`/`ObjWedge` + `MatLin`/`MatSatIsoTab` built directly) -> yano-MSC;
+    mesh-LESS soft iron (`ObjHexahedron`/`ObjWedge` + `MatLin`/`MatSatIsoTab` built directly) -> collocation MMMM;
     tet (MMM) and permanent magnets -> C++ solver.
-  - `"yano"` -> force the yano-type MSC (solves the container's `ObjHexahedron`/`Wedge` elements, incl. a
+  - `"collocation_mmmm"` -> force the collocation MMMM face-charge path (solves the container's `ObjHexahedron`/`Wedge` elements, incl. a
     `soft_iron_from_mesh` body); `"hdiv"` -> force the HDiv-VIM (needs a mesh-backed body).
-  - Per-call override: `rad.Solve(cont, ..., demag_backend="yano"|"hdiv"|"auto")`.
+  - Per-call override: `rad.Solve(cont, ..., demag_backend="collocation_mmmm"|"hdiv"|"auto")`.
   - Wrapper in `src/radia/__init__.py`; goldens `tests/test_demag_backend.py`,
     `tests/feec/test_hdiv_radsolve_dispatch.py`, `tests/feec/test_vol_both_backends.py`.
-- **MMM (tetrahedron)** soft-iron demag and **permanent magnets** are UNAFFECTED (not the yano path).
-- The yano-MSC C++ kernel (`Use6DOF_MSC` branches in `rad_relaxation_methods.cpp` / `rad_interaction.cpp`,
+- **MMM (tetrahedron)** soft-iron demag and **permanent magnets** are UNAFFECTED (not the collocation MMMM path).
+- The collocation MMMM C++ kernel (`Use6DOF_MSC` legacy flag-name branches in `rad_relaxation_methods.cpp` / `rad_interaction.cpp`,
   hex-MSC assembly in `BuildMatrix`) is LIVE again (the `SolveGen` Error203 guard was removed
-  2026-06-19).  HACApK stays.
+  2026-06-19).  It is dense/matrix-free, not a moment-HACApK route.
 
 **When to use which**:
 - Permanent magnets, soft iron → **MMM/MSC** (Radia)
@@ -2013,8 +2013,7 @@ is the established C++ pattern -- already used by
 bridge `chacapk_par_region` (`cHACApK_harith_par.cpp`).
 
 **Self-wrapped surface (2026-06-23 sweep)** -- BUILD: `RadHACApKBase::BuildHMatrix`;
-SOLVE LOOPS: `SolveMomentHACApK` (moment-yano, `rad_relaxation_methods.cpp`),
-`radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF` (MMM/MSC method 2),
+SOLVE LOOPS: `radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF` (classic MMM/MSC method 2),
 `RadHACApKChargeGram::SolveLinearMaterial` / `SolveNonlinearPicard` (HDiv;
 `SolveMaterialMINRES` already had it), and the `HMatrixDensify` densify loop.
 **Any NEW HACApK solver loop or build path MUST add the self-wrap.**  (The stale
@@ -2549,124 +2548,43 @@ From `src/radia/netgen_mesh_import.py`:
 - **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率)
 
-### H-Matrix Route Policy: MMMM Canonical; HDiv Symmetric Reference; PEEC Maintained (2026-06-26)
+### H-Matrix Route Policy: HDiv/BEM/PEEC Use HACApK; MMMM Is Dense/Matrix-Free (2026-06-28)
 
-> **SUPERSEDED 2026-06-28 (Sugahara): "MMMM does NOT connect to HACApK."** The MMMM↔HACApK
-> H-matrix route described below was REMOVED (3534d31b unwire + 494d8374 delete): `RadHACApKMomentSystem`,
-> `SolveMomentHACApK`, the H-LU preconditioner (`hacapk_hlu_precond`), and the two-sided deflation
-> (`moment_deflation`) are GONE. **MMMM is now DENSE-ONLY** — method 0 (dense LU) + method 1 (matrix-free
-> `MomentSystemBlockAny`); a method-2 (BICGSTAB_HMATRIX) request on a moment mesh reroutes to dense LU.
-> MMMM's value is **distorted-element robustness** (geometry-adaptive residual-eigenmode moment), for
-> low/medium `mu_r`, small/medium N. **HACApK now serves ONLY HDiv-VIM (charge-Gram H-matrix) + PEEC** —
-> those are the large-scale / loop-heavy routes (HDiv is loop-free by construction). Rationale: deflation
-> cannot fully remove the null/loop modes (not guaranteed loop-free); large loop modes only appear at large
-> `mu_r` → route those to HDiv. KEPT: `RadHACApKMMMManager` (classic tet/wedge/mixed MMM 3-DOF) + the
-> BEM/HDiv/PEEC HACApK managers. The numbered points below are HISTORICAL (pre-removal); see
-> `memory/tet-msc-unification-inprogress.md`.
+**Current policy**: collocation MMMM does **not** connect to HACApK.  Its live
+routes are dense LU for small/medium problems and matrix-free BiCGSTAB for the
+nonlinear / larger dense path.  If a moment-mesh solve asks for method 2, it is
+rerouted away from the removed moment-HACApK path.  Do not reintroduce a
+moment-specific HACApK manager, H-LU flag, or runtime loop-deflation API.
 
-**POLICY** (architecture decision, Sugahara, after the moment-yano H-LU
-preconditioner shipped — commit bb4b2f5d — and the H-LU-vs-H-ILU /
-symmetrization questions were resolved):
+HACApK remains canonical for the routes where the operator is still designed as
+an H-matrix problem:
 
-1. **MMMM (= moment-yano, `RadHACApKMomentSystem`) is the CANONICAL HACApK
-   H-matrix route.** It is the FAST version. **Do NOT pursue symmetrizing
-   MMMM** — its non-symmetry (collocation / EIEM2 eval point
-   `0.5*(FaceCenter+ElementCenter)`, ‖A−Aᵀ‖/‖A‖ ~ 0.07–1.3) is ACCEPTED as
-   the cost of the fast per-element formulation. The shipped H-LU
-   preconditioner (`rad.SolverConfig(hacapk_hlu_precond=True)`, accum_cap=0,
-   factor-once full `A(χ)`) bounds method-2 BiCGSTAB to tens of iters (vs
-   block-Jacobi's 1641–5710 from field-null/solenoidal-mode pollution) at
-   identical field (~1e-10). **This is the route to invest in.** The
-   **loop-deflation R&D direction is CLOSED**: the matrix-free deflation runtime
-   API (`SetHACApKDeflation` / `SetDeflateNullspace`) was removed 2026-06-09, and
-   the `examples/mmm_eigenvalue_study/` corpus + its docs showcase notebook were
-   removed 2026-06-27 (no forward value to ship now that MMMM is the official MMM
-   H-matrix route and HDiv-VIM is the loop-free symmetric route). The nullspace
-   THEORY (why the MSC operator has loop modes — the justification for MMMM /
-   HDiv-VIM) is retained as the historical record in
-   `docs/solver/MSC_NULLSPACE_DEFLATION.md`; do not re-add the example.
+1. **HDiv-VIM**: charge-Gram H-matrix and HDiv system managers are the production
+   large-scale / loop-free path.  This is the route for high-mu, loop-heavy, and
+   FEEC-coupled demag problems.
+2. **Classic MMM method 2**: the legacy tet/wedge/mixed MMM manager remains the
+   method-2 route for those element classes.  It is not the collocation MMMM
+   moment path.
+3. **BEM and PEEC**: the scalar Galerkin BEM and PEEC managers remain maintained
+   HACApK adapters.
+4. **Point-kernel / Gauss tools**: point-kernel HACApK support is kept as a
+   building block for the Gauss-point charge-Gram direction.
 
-2. **HDiv-VIM (`RadHACApKChargeGram` / `RadHACApKHDivManager` /
-   `RadHACApKHDivSystemTet`) is the official SYMMETRIC version** (Galerkin
-   N=BᵀGB, ‖N−Nᵀ‖~3e-16 → MINRES + Compact-AMS), and **its HACApK H-matrix
-   IS the canonical path — do NOT delete it.** The C++ charge-Gram H-matrix
-   (`RadHACApKChargeGram` / `_ChargeGramHMatrix`) is the **SOLE demag
-   operator** for production HDiv-VIM: the dense O(N²) Python Gram (G, the
-   SVD loop basis, dense N=BᵀGB, analytic/image/Wilton builders) was
-   **deliberately removed 2026-06-23 (commit 21e4d910) because the
-   charge-Gram H-matrix is FASTER at matrix generation than dense.** So
-   HDiv-VIM has NO non-HACApK operator — cutting HACApK from HDiv would leave
-   it unable to solve. (Decision 2026-06-26, Sugahara: "消さない。むしろそれを
-   正のパスにする" — keep it, make it the canonical HDiv path.) "Off H-matrix
-   **development** priority" means only that **MMMM is the H-matrix
-   SCALABILITY-dev focus** (do not invest in further *scaling* the HDiv
-   H-matrix now); it does NOT mean the HDiv H-matrix is disposable. Symmetric
-   formulation = HDiv-VIM (on its charge-Gram H-matrix); fast general route =
-   MMMM. The two are complementary, not competing.
+**HACApK-connected surface currently kept**:
 
-   **ROLE SPLIT (Sugahara 2026-06-27) — supersedes the "large-N -> HDiv-VIM
-   scalable" framing:** MMMM is the MAIN LARGE-SCALE route, scaled by the
-   QR-free + sparse-PARDISO two-sided deflation (`moment_deflation`, default ON;
-   3a `f9cb1dd4` QR-free coarse op `E=(AL)ᵀ(AL)`, 3b `0aba78be` sparse-E + MKL
-   PARDISO). Coarse setup is SUB-CUBIC; the deflation is AL-build-limited
-   `O(N² log N)` (the Θ(N) H-matvecs to form `AL=A@L` are the next bottleneck) --
-   NOT `O(N log N)` (that AMS-multilevel property was HDiv's and is given up for
-   the large-scale route; sub-cubic direct is the accepted bet, no "fall back to
-   HDiv for large N"). **AMG cannot bound this coarse op** (E is a
-   normal-equations operator; MMMM's non-symmetric/non-elliptic A makes
-   `LᵀAᵀAL` non-elliptic -> classical Compact AMG AND smoothed-aggregation both
-   grow `~√N`) -> the coarse solver is sparse-DIRECT (PARDISO), NOT AMG. (NGSolve
-   `SparseCholesky` (Joachim) is the policy-aligned alternative to PARDISO,
-   recorded for future; needs a separate TU to isolate `la.hpp` from the MKL
-   headers in the deflation file.) **HDiv-VIM is repositioned to (a)
-   curved-surface high accuracy (H(div) RT flux) and (b) FEM coupling** (NGSolve
-   interop); it is KEPT (charge-Gram H-matrix stays its production operator) but
-   is NO LONGER the large-scale route. yano-MSC = per-element hex accuracy.
+| Subclass / adapter | Role | Python entry / test surface |
+|---|---|---|
+| `RadHACApKMMMManager` | classic MMM method-2 for tet, wedge, and mixed variable-DOF meshes | `rad.Solve(..., 2)` on classic MMM meshes; retired-guard validation |
+| `RadHACApKBEMManager` | BEM / SIBC Laplace Galerkin | `radia.bem_sibc_solver` and BEM HACApK matvec validation |
+| `RadHACApKHDivManager` | HDiv-VIM structured-hex RT0 probe/demo path | `_hdiv_vim_hmatrix_probe` validation |
+| `RadHACApKChargeGram` | production HDiv-VIM charge-Gram H-matrix | HDiv linear/nonlinear charge-Gram validation |
+| `RadHACApKPointKernel` | Gauss-point Laplace kernel building block | charge-Gauss operator path |
+| `RadHACApKHDivSystemTet` | HDiv-VIM tetrahedral system | HDiv tet/system validation |
+| `RadHACApKPEECManager` | PEEC circuit extraction | `radia.peec_hacapk_solver` smoke/solver validation |
 
-3. **The H-LU-vs-H-ILU question for MMMM is the open scalability follow-on.**
-   H-LU (`g_hlu_accum_cap=0`, near-exact, shipped, materialize-heavy) works
-   NOW; H-ILU (`accum_cap>0`, compressed, the scalable target) currently has
-   a NON-SYMMETRIC deferred-recompression bug (round-trip 5.38, cap-insensitive)
-   — that is the thing to fix for scalable MMMM, not ordering/pivoting/compression.
-
-4. **PEEC is connected to HACApK and is MAINTAINED, not dropped.**
-   `RadHACApKPEECManager` (`src/core/rad_hacapk_peec.{h,cpp}`) →
-   `HACApKPEECManager` pybind → `radia.peec_hacapk_solver.PEECHACApKSolver`
-   (complex BiCGSTAB on the real symmetric Ruehli L). Verified working
-   end-to-end against the built wheel (HACApK vs dense L ~1e-16; solver
-   converges); golden-locked by `tests/test_peec_hacapk_smoke.py`.
-
-**HACApK-connected surface (7 `RadHACApKBase` subclasses, declared
-`src/core/rad_hacapk.h:103`).** After the 2026-06-26 audit, **all 7 are LIVE
-(none dormant) and ALL 7 have a specific test**:
-
-| Subclass | Role / element class | Python entry | Specific test |
-|---|---|---|---|
-| `RadHACApKMomentSystem` ★ | MMMM moment-yano — **hex-6DOF ONLY** (`ndof=6*nHex`) | `set_demag_backend("yano")` + method=2 (allHex6); `hacapk_hlu_precond` | `tests/feec/test_multipole_moment_mmm.py`, `tests/feec/test_hacapk_hlu_precond.py` |
-| `RadHACApKMMMManager` | **classic MMM/MSC method-2 — tet MMM (3-DOF) + wedge (5-DOF) + mixed variable-DOF.** The SOLE H-matrix path for tetrahedra (MMMM is hex-only). | `rad.Solve(...,2)` on tet/wedge/mixed | `tests/feec/test_eiem2_retired_guards.py::test_method2_hacapk_mmm_tet_matches_lu` |
-| `RadHACApKBEMManager` | BEM / SIBC Laplace Galerkin | `radia.bem_sibc_solver` (`use_intree_hacapk=True`) | `tests/bem/test_sibc_hacapk_match_ngsbem.py` |
-| `RadHACApKHDivManager` | HDiv-VIM structured-hex RT0 (DEMO-only; production HDiv uses `ChargeGram`) | `_hdiv_vim_hmatrix_probe` pybind | `tests/feec/test_hdiv_vim_hmatrix.py` |
-| `RadHACApKChargeGram` | HDiv-VIM C++ charge-Gram (PRODUCTION HDiv) | dedicated pybind | `tests/feec/test_hdiv_vim_cpp_{linear_solve,minres,nonlinear}.py` |
-| `RadHACApKHDivSystemTet` | HDiv-VIM tet | `PyHDivVimTetSolver` pybind | `tests/feec/test_hdiv_vim_system_hlu.py` (+ `_newton_vs_radia`, `_poly_field`) |
-| `RadHACApKPEECManager` | PEEC circuit extraction | `radia.peec_hacapk_solver` | `tests/test_peec_hacapk_smoke.py` (added 2026-06-26) |
-
-**Dispatch (do not confuse the two MMM managers):** `rad.Solve(...,method=2)`
-routes to `RadHACApKMomentSystem` ONLY when `(allMoment && allHex6)` (pure
-hexahedra, surface-charge moment-yano); **tetrahedra and mixed meshes go to
-`RadHACApKMMMManager`** ([rad_relaxation_methods.cpp:4123](src/core/rad_relaxation_methods.cpp:4123)).
-`RadHACApKMomentSystem` is `ndof=6*nHex`, hex-only ([rad_hacapk.h:369-373](src/core/rad_hacapk.h:369)).
-
-**DO NOT DELETE `RadHACApKMMMManager`.** It is NOT a superseded duplicate of
-MMMM — it is the *only* method-2 (large-scale H-matrix) path for **tet MMM
-(3-DOF dipole)**, wedge (5-DOF), and mixed-element meshes, an element class
-MMMM (hex-6DOF) cannot solve. Per "No Development Cruft" §4, the two are
-**co-valid alternatives** (different element classes), not iteration
-snapshots. Deleting it would drop large-tet MMM to LU/BiCGSTAB (O(N²)) only.
-
-The 7-way subclass surface is a maintenance burden; MMMM is the development
-focus, but the other 6 stay. See [[hmatrix-route-policy-mmmm-canonical]] +
-[[mmmm-preconditioner-loop-vs-factorization]] in `memory/`.
-
+**Naming guard**: `demag_backend="collocation_mmmm"` is the explicit override for
+collocation MMMM.  Do not add or preserve a `"yano"` backend alias; it hides the
+retired MSC/EIEM2 naming and causes broken examples.
 ### Solver Configuration (Unified API)
 
 ```python

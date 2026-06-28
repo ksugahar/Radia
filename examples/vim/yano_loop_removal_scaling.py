@@ -94,7 +94,7 @@ def cycle_count(elems):
 def yano_matrix(hex_verts, mu_r=1000.0, scale=1e-2):
     """build the C++ EIEM2 surface-charge MSC interaction matrix N (+N convention; loops at eigenvalue 0)."""
     rad.UtiDelAll()
-    rad.set_demag_backend("yano")
+    rad.set_demag_backend("collocation_mmmm")
     objs = []
     for V in hex_verts:
         h = rad.ObjHexahedron([(V[i] * scale).tolist() for i in range(8)], [0, 0, 0])

@@ -30,7 +30,7 @@ def _solve(objs, method, probes):
 
 
 def _build(kind, moment):
-    rad.UtiDelAll(); rad.set_demag_backend("yano"); rad.SolverConfig(bicgstab_tol=1e-9)
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm"); rad.SolverConfig(bicgstab_tol=1e-9)
     if kind == "wedge_z":
         objs = [rad.ObjWedge([[0, 0, 0], [L, 0, 0], [0, L, 0], [0, 0, L], [L, 0, L], [0, L, L]], [0, 0, 0])]
     elif kind == "wedge_x":
