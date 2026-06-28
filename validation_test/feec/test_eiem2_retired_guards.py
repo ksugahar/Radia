@@ -9,8 +9,11 @@ silent wrong number is worse than an error), raised from radTApplication::MakeAu
       elements.  After the tet->4-DOF unification ALL soft-iron volume elements (tetrahedron 4 / wedge 5 /
       hexahedron 6 DOF, and RecMag soft iron) are MSC face-charge moment, so this mix is effectively
       unreachable -- tet+hex now SOLVE together (the guard stays as a defensive net).
-  (2) Radia::Error205 -- B-input hysteresis (b_input_newton / b_input_hantila) on MSC elements; the
-      B-input Newton/Hantila Jacobian is block-3x3 (MMM) only.  Hysteresis stays on tetrahedron / RecMag.
+  (2) Radia::Error205 -- B-input hysteresis (b_input_newton / b_input_hantila) on a moment/MSC body where
+      NOT every material is a hysteresis material.  B-input PLAY hysteresis on an ALL-moment ALL-hysteresis
+      body now SOLVES through the MMMM moment Picard (B-input chi update); Error205 only guards the mixed
+      moment-element + non-hysteresis-material case (a moment element cannot be driven by a linear material
+      under b_input).  The dense 3-DOF AutoRelax_BInput_Newton path is retained for genuine 3-DOF dipoles.
 
 This test also locks that the KEPT paths are unaffected: a pure-hex (moment) and a pure-tet (MMM)
 soft-iron solve still magnetize in an applied field, and permanent-magnet field evaluation of a mixed
@@ -53,16 +56,45 @@ def test_mixed_tet_hex_msc_solves():
     assert Mt > 0 and Mh > 0, f"mixed tet+hex MSC moment should magnetize: Mz_tet={Mt:.1f}, Mz_hex={Mh:.1f}"
 
 
-def test_binput_hysteresis_on_msc_raises():
-    """B-input hysteresis (b_input_newton) on a hex (MSC) soft iron -> Error205 (3-DOF MMM only)."""
+def _play_mat(K=3, mu_r=200.0):
+    MU0_loc = 4e-7 * np.pi
+    eta = np.array([0.0, 0.3, 0.7])[:K]
+    r = np.linspace(0, 2.0, 41)
+    a0 = 1.0 / (MU0_loc * mu_r)
+    f_k = [(r.tolist(), (a0 * r).tolist())]                  # f_0 reversible
+    f_k += [(r.tolist(), (-0.2 * a0 * r).tolist()) for _ in range(K - 1)]  # irrev
+    return rad.MatPlayHysteresis(K, eta, f_k)
+
+
+def test_binput_hysteresis_on_msc_now_solves():
+    """B-input PLAY hysteresis (b_input_newton) on an ALL-moment hysteresis hex
+    (MSC) soft iron now SOLVES through the MMMM moment Picard (B-input chi
+    update) -- no Error205.  Previously this raised Error205; after the
+    tet/RecMag->MSC unification there are no 3-DOF soft-iron elements left, so
+    B-input must run through the moment loop and the support was added."""
     rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
-    K = 3
-    eta = np.array([0.0, 0.5, 1.0])
-    r = np.linspace(0, 2.0, 20)
-    f_k = [(r.tolist(), (1000.0 * (k + 1) * r).tolist()) for k in range(K)]
-    mat = rad.MatPlayHysteresis(K, eta, f_k)
-    h = rad.ObjHexahedron(_hex(0.0), [0, 0, 0]); rad.MatApl(h, mat)
+    h = rad.ObjHexahedron(_hex(0.0), [0, 0, 0]); rad.MatApl(h, _play_mat())
     cont = rad.ObjCnt([h, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])])
+    rad.SolverConfig(b_input_newton=True)
+    try:
+        res = rad.Solve(cont, 1e-5, 200, 0)
+        n_iter = int(res[3])
+        Mz = rad.ObjM(h)["magnetization"][2]
+        assert 0 < n_iter < 200, f"b_input hex did not converge: niter={n_iter}"
+        assert np.isfinite(Mz) and Mz > 0, f"b_input hex M_z={Mz} (should magnetize)"
+    finally:
+        rad.SolverConfig(b_input_newton=False)
+        rad.UtiDelAll()
+
+
+def test_binput_on_moment_with_nonhysteresis_material_raises():
+    """B-input on a moment/MSC body where NOT every material is a hysteresis
+    material still fails loud (Error205): a moment element under b_input cannot
+    be driven by a non-hysteresis (linear) material -- No Fallbacks."""
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
+    h1 = rad.ObjHexahedron(_hex(0.0), [0, 0, 0]); rad.MatApl(h1, _play_mat())
+    h2 = rad.ObjHexahedron(_hex(0.1), [0, 0, 0]); rad.MatApl(h2, rad.MatLin(1000.0))  # NOT hysteresis
+    cont = rad.ObjCnt([h1, h2, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])])
     rad.SolverConfig(b_input_newton=True)
     try:
         with pytest.raises(RuntimeError, match="B-input hysteresis"):

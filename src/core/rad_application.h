@@ -110,6 +110,15 @@ public:
 	double m_hantila_alpha;   // Polarization parameter (0 = auto-compute from initial susceptibility)
 	double m_hantila_relax;   // Under-relaxation (0 = full step)
 
+	// B-input PLAY-model hysteresis driven through the MMMM moment Picard loop.
+	// Set by MakeAutoRelax (NOT a SolverConfig knob) when (b_input_newton ||
+	// b_input_hantila) is requested AND every element is a moment/MSC face-charge
+	// element (DOF in {4,5,6}: tet/wedge/pyramid/hex).  When true, the moment
+	// Picard updates per-element chi via material->ComputeChiFromB(B) (B-input)
+	// instead of ComputeChiFromH(H), and threads per-element play state.  The
+	// genuine 3-DOF dipole (RecMag) B-input path stays on AutoRelax_BInput_Newton.
+	bool m_b_input_moment;
+
 	// Solve statistics (always available)
 	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
 	double m_solve_t_moment_fieldgrad;      // Dense moment centroid field/gradient build time [s]
@@ -189,6 +198,9 @@ public:
 		m_b_input_hantila = false;
 		m_hantila_alpha = 0.0;   // 0 = auto-compute
 		m_hantila_relax = 0.0;   // 0 = full step
+
+		// B-input moment-Picard init (set per-solve by MakeAutoRelax)
+		m_b_input_moment = false;
 
 		// Solve statistics init
 		m_solve_t_matrix_build = 0.0;

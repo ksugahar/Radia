@@ -165,10 +165,34 @@ bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPt
 	ctx.all_materials_linear = true;
 	ctx.relax_param = rad.m_relax;
 
+	// B-input PLAY-model moment Picard: cache hysteresis material pointers and
+	// snapshot per-element start-of-step play state.  When set, the dof>=4
+	// branch of UpdateChiAndCheckConvergence uses ComputeChiFromB(B) (B-input)
+	// and restores the snapshot before each material evaluation so each element
+	// keeps its own play trajectory; states are committed at end of the solve.
+	ctx.b_input_play = rad.m_b_input_moment;
+	if(ctx.b_input_play)
+	{
+		ctx.hys_mat_cache.assign(ctx.AmOfMainElem, nullptr);
+		ctx.hys_play_state.assign(ctx.AmOfMainElem, std::vector<double>());
+	}
+
 	// Cache polyhedron pointers
 	for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
 	{
 		ctx.polyCache[elem] = dynamic_cast<radTPolyhedron*>(IntrctPtr->g3dRelaxPtrVect[elem]);
+		if(ctx.b_input_play)
+		{
+			radTMaterial* MaterPtr0 = (radTMaterial*)(IntrctPtr->g3dRelaxPtrVect[elem]->MaterHandle.rep);
+			radTHysteresisMaterial* HystMater0 = dynamic_cast<radTHysteresisMaterial*>(MaterPtr0);
+			ctx.hys_mat_cache[elem] = HystMater0;
+			if(HystMater0 != nullptr)
+			{
+				int ssz = HystMater0->GetStateSize();
+				ctx.hys_play_state[elem].assign((size_t)(ssz > 0 ? ssz : 0), 0.0);
+				if(ssz > 0) HystMater0->SaveStateToArray(ctx.hys_play_state[elem].data());
+			}
+		}
 	}
 
 	// Initialize chi and H field (ELF mucal0 style)
@@ -473,12 +497,6 @@ void ComputeActualHFieldFromSigma(NonlinearContext& ctx, radTInteraction* Intrct
 				IntrctPtr->NewFieldArray[elem_j].y = poly_j->Magn.y / chi;
 				IntrctPtr->NewFieldArray[elem_j].z = poly_j->Magn.z / chi;
 
-#ifdef RADIA_DEBUG_CHI
-				TVector3d H_new = IntrctPtr->NewFieldArray[elem_j];
-				double H_mag = std::sqrt(H_new.x*H_new.x + H_new.y*H_new.y + H_new.z*H_new.z);
-				fprintf(stderr, "ComputeActualH elem %d (6DOF): H = M/chi = [%.1f, %.1f, %.1f], |H|=%.1f, chi=%.2f\n",
-				        elem_j, H_new.x, H_new.y, H_new.z, H_mag, chi);
-#endif
 			}
 		}
 	}
@@ -654,14 +672,29 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 				TVector3d M_poly = poly->Magn;
 				double M_mag = std::sqrt(M_poly.x*M_poly.x + M_poly.y*M_poly.y + M_poly.z*M_poly.z);
 
-#ifdef RADIA_DEBUG_CHI
-				fprintf(stderr, "  Element %d (6DOF): H_mag = %.2f, M_mag = %.2f, M/H = %.2f, chi_old = %.2f\n",
-				        elem, H_mag, M_mag, H_mag > 1e-6 ? M_mag/H_mag : 0.0, mu_old - 1.0);
-#endif
 
 				if(HystMater != nullptr)
 				{
-					chi_new = HystMater->ComputeChiFromH(H_new);
+					if(ctx.b_input_play)
+					{
+						// B-INPUT play update: build the element flux density from the
+						// current solved state, B = mu0*(H + M), then chi = |M|/|H| with
+						// H = Forward(B).  Restore the start-of-step play state before the
+						// evaluation (Forward advances state) and save it back afterwards
+						// so each element keeps its own play trajectory across iterations.
+						TVector3d B_elem(MU_0 * (H_new.x + M_poly.x),
+						                 MU_0 * (H_new.y + M_poly.y),
+						                 MU_0 * (H_new.z + M_poly.z));
+						if(elem < (int)ctx.hys_play_state.size() && !ctx.hys_play_state[elem].empty())
+							HystMater->RestoreStateFromArray(ctx.hys_play_state[elem].data());
+						chi_new = HystMater->ComputeChiFromB(B_elem);
+						if(elem < (int)ctx.hys_play_state.size() && !ctx.hys_play_state[elem].empty())
+							HystMater->SaveStateToArray(ctx.hys_play_state[elem].data());
+					}
+					else
+					{
+						chi_new = HystMater->ComputeChiFromH(H_new);
+					}
 					if(ctx.use_newton && !ctx.DifferentialChiArray.empty())
 					{
 						ctx.DifferentialChiArray[elem] = HystMater->ComputeDifferentialChi(H_mag);
@@ -674,9 +707,6 @@ double UpdateChiAndCheckConvergence(NonlinearContext& ctx, radTInteraction* Intr
 					{
 						ctx.DifferentialChiArray[elem] = NonlinMater->ComputeDifferentialChi(H_mag);
 					}
-#ifdef RADIA_DEBUG_CHI
-					fprintf(stderr, "    -> chi_new from B-H = %.2f\n", chi_new);
-#endif
 				}
 				else
 				{
@@ -1077,6 +1107,24 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 		}
 	}
 
+	// B-input PLAY moment solve: commit each element's converged play state so the
+	// next quasi-static step starts from the correct reference.  The per-element
+	// hys_play_state holds (start-of-step pinning, converged m_pk_current) from the
+	// final UpdateChiAndCheckConvergence evaluation; RestoreStateFromArray then
+	// CommitState sets m_pk_prev = m_pk_pinning = converged m_pk_current.
+	if(ctx.b_input_play)
+	{
+		for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
+		{
+			radTHysteresisMaterial* HystMater = (elem < (int)ctx.hys_mat_cache.size()) ? ctx.hys_mat_cache[elem] : nullptr;
+			if(HystMater != nullptr && elem < (int)ctx.hys_play_state.size() && !ctx.hys_play_state[elem].empty())
+			{
+				HystMater->RestoreStateFromArray(ctx.hys_play_state[elem].data());
+				HystMater->CommitState();
+			}
+		}
+	}
+
 	IntrctPtr->RelaxStatusParam.MisfitM = std::sqrt(MisfitE2);
 
 
@@ -1203,14 +1251,6 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 	for(int i = 0; i < dof; i++)
 		M_vec[i] = ctx.FlatMagn[i];
 
-#ifdef DEBUG_BINPUT_NEWTON
-	fprintf(stderr, "[B-input Newton] n_elem=%d dof=%d tol=%.2e maxiter=%d\n", n_elem, dof, PrecOnMagnetiz, MaxIterNumber);
-	fprintf(stderr, "[B-input Newton] H_ext[0..2] = %.6f %.6f %.6f\n", ctx.FlatExtern[0], ctx.FlatExtern[1], ctx.FlatExtern[2]);
-	fprintf(stderr, "[B-input Newton] M_init[0..2] = %.6f %.6f %.6f\n", M_vec[0], M_vec[1], M_vec[2]);
-	// Print N matrix diagonal (first element 3x3 block)
-	fprintf(stderr, "[B-input Newton] N[0,0]=%.6e N[1,1]=%.6e N[2,2]=%.6e\n",
-		-ctx.BaseMatrix[0], -ctx.BaseMatrix[(size_t)1*dof+1], -ctx.BaseMatrix[(size_t)2*dof+2]);
-#endif
 
 	int iterCount = 0;
 	double final_residual = 1.0;
@@ -1313,19 +1353,6 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 		double rel_residual = F_norm / M_norm;
 		final_residual = rel_residual;
 
-#ifdef DEBUG_BINPUT_NEWTON
-		fprintf(stderr, "[B-input Newton] iter=%d |F|/|M|=%.6e |F|=%.6e |M|=%.6e\n",
-			iterCount, rel_residual, F_norm, M_norm);
-		// Print per-element: M, H, B, M_model, dJdB diag for first element
-		if(n_elem > 0) {
-			fprintf(stderr, "  elem0: M=[%.2f, %.2f, %.2f] H=[%.2f, %.2f, %.2f]\n",
-				M_vec[0], M_vec[1], M_vec[2], H_vec[0], H_vec[1], H_vec[2]);
-			fprintf(stderr, "  elem0: B=[%.6e, %.6e, %.6e]\n", B_vec[0], B_vec[1], B_vec[2]);
-			fprintf(stderr, "  elem0: M_model=[%.2f, %.2f, %.2f]\n", M_model[0], M_model[1], M_model[2]);
-			fprintf(stderr, "  elem0: dJdB diag=[%.6f, %.6f, %.6f]\n",
-				dJdB_blocks[0], dJdB_blocks[4], dJdB_blocks[8]);
-		}
-#endif
 
 		// Check convergence
 		if(rel_residual < PrecOnMagnetiz)
@@ -1397,10 +1424,6 @@ int radTIterativeRelaxMeth::AutoRelax_BInput_Newton(double PrecOnMagnetiz, int M
 			step *= 0.5;
 		}
 
-#ifdef DEBUG_BINPUT_NEWTON
-		fprintf(stderr, "  line_search: step=%.4f ls_success=%d\n", step, ls_success ? 1 : 0);
-		fprintf(stderr, "  dM[0..2] = [%.2f, %.2f, %.2f]\n", dM[0], dM[1], dM[2]);
-#endif
 
 		// Update M
 		for(int i = 0; i < dof; i++)
@@ -1803,7 +1826,12 @@ bool radTRelaxationMethNo_0::NeedsDenseMatrix() const
 	// from the dense BaseMatrix), the dense base matrix is not needed.  This lets the method-2 non-hex moment
 	// reroute-to-LU (built with skipDenseMatrix) run -- without it BuildBaseMatrix returns false (no dense
 	// InteractMatrix) and AutoRelax silently returns 0 iterations.  Mirrors radTRelaxationMethNo_1.
-	if(!rad.m_b_input_newton && !rad.m_b_input_hantila && IntrctPtr != nullptr)
+	// The dense BaseMatrix is needed ONLY by the dense 3-DOF B-input Newton/Hantila
+	// path (which builds NpI from it).  The all-moment B-input PLAY route
+	// (m_b_input_moment) uses BuildMomentSystemCore and does NOT read the dense
+	// matrix, so treat it like the ordinary moment path (no dense build).
+	bool b_input_dense = (rad.m_b_input_newton || rad.m_b_input_hantila) && !rad.m_b_input_moment;
+	if(!b_input_dense && IntrctPtr != nullptr)
 	{
 		int nElem = IntrctPtr->AmOfMainElem;
 		if(nElem > 0)
@@ -2323,9 +2351,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	// Update diagonal and RHS based on current chi
 	// Matrix is ROW-MAJOR: A(i,j) at [i * totalDOF + j]
 	// Diagonal element A(k,k) is at [k * totalDOF + k] = [k * (totalDOF + 1)]
-#ifdef RADIA_DEBUG_CHI
-	fprintf(stderr, "=== LU Solver Debug: chi and matrix values ===\n");
-#endif
 	// Newton: use chi_d for system matrix (start after 10 Picard iterations)
 	const int newton_start_iter = 10;
 	bool newton_active = ctx.use_newton && iterCount >= newton_start_iter && !ctx.DifferentialChiArray.empty();
@@ -2354,9 +2379,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			newton_correction = inv_chi - 1.0 / chi_abs;
 		}
 
-#ifdef RADIA_DEBUG_CHI
-		fprintf(stderr, "Element %d: chi = %.6f, inv_chi = %.6e, dof = %d\n", elem, chi_matrix, inv_chi, dof);
-#endif
 
 		// Add 1/chi to diagonal and set RHS
 		// Newton: RHS = H_ext + (1/chi_d - 1/chi_abs) * sigma_old
@@ -2449,20 +2471,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	}
 	// else: ApplyLineSearchDamping already updated FlatMagn with damped solution
 
-#ifdef RADIA_DEBUG_CHI
-	fprintf(stderr, "=== LU Solver Debug: Solution (sigma/M) values ===\n");
-	for(int elem = 0; elem < AmOfMainElem; elem++)
-	{
-		int dof = IntrctPtr->GetElementDOF(elem);
-		int offset = IntrctPtr->GetElementDOFOffset(elem);
-		fprintf(stderr, "Element %d (dof=%d): ", elem, dof);
-		for(int k = 0; k < dof; k++)
-		{
-			fprintf(stderr, "%.3e ", RHS[offset + k]);
-		}
-		fprintf(stderr, "\n");
-	}
-#endif
 
 	return 0;  // LU is direct solver, no iterations
 }
