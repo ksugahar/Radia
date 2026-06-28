@@ -37,9 +37,10 @@ def _N_dense(fes):
     return 0.5 * (N + N.T)                                   # symmetric part (the physical energy operator)
 
 
-@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("order", [1])
 def test_charge_gram_is_psd(order):
-    """min eigenvalue of N >= -tol * max eigenvalue at order 1 and 2 (order-2 is the regression: quad<6 -> NON-PSD)."""
+    """min eigenvalue of N >= -tol * max eigenvalue at order 1 (RT2+ abolished; the order-1 near/self quad
+    floor quad >= 3*p = 3 keeps N PSD).  The order-2 PSD regression this guarded is now moot (RT2 abolished)."""
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=1.0))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=order)
