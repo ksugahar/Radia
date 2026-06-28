@@ -915,12 +915,8 @@ py::dict GetSolveStats() {
     if (n >= 8) {
         result["t_hmatrix_build"] = stats[7];
     }
-    if (n >= 9) {
-        result["deflation_cycles"] = static_cast<int>(stats[8]);
-    }
-    if (n >= 10) {
-        result["deflation_alpha"] = stats[9];
-    }
+    // stats[8]/stats[9] were the moment loop-deflation cycles/alpha; MMMM no longer connects to HACApK,
+    // so they are always 0 and no longer surfaced.
     if (n >= 11) {
         result["t_moment_fieldgrad"] = stats[10];
     }
@@ -1092,25 +1088,6 @@ py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
     return py::make_tuple(Aout, dof);
 }
 
-// Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the H-matvec
-// against the dense A_raw (entry-by-entry).  Phase-2 Increment-2 gate (ACA_MOMENT_DESIGN.ipynb).
-py::dict MomentHMatrixProbe(int intrc_handle, double chi, double eps, int leaf, double eta) {
-    double out[9] = {0,0,0,0,0,0,0,0,0};
-    int err = RadMomentHMatrixProbe(chi, eps, leaf, eta, out, intrc_handle);
-    check_error(err);
-    py::dict d;
-    d["ok"]          = (out[0] != 0.0);
-    d["matvec_relerr"] = out[1];
-    d["ndof"]        = (int)out[2];
-    d["n_lowrank"]   = (int)out[3];
-    d["n_dense"]     = (int)out[4];
-    d["max_rank"]    = (int)out[5];
-    d["compression"] = out[6];
-    d["build_time"]  = out[7];
-    d["hlu_roundtrip_relerr"] = out[8];   // H-LU stability on the NON-symmetric A_raw (Increment 3 de-risk)
-    return d;
-}
-
 /**
  * @brief Densify the actual HACApK (ACA+) operator as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
@@ -1138,25 +1115,6 @@ py::tuple HMatrixDensify(int intrc_handle) {
     }
 
     return py::make_tuple(result, dof);
-}
-
-/**
- * @brief Phase 4: H-LU smoke test on a real Radia HACApK tree.
- *
- * Builds a fresh HACApK manager from the interaction handle, computes
- * y = A * x via MatVec (in HACApK format), converts the leafmtxp to our
- * internal column-major layout, factors via cHACApK_hlu_decomp, solves
- * x_solved = A^-1 y, and returns max relative error |x_solved - x| / max|x|.
- *
- * Returns:
- *   < 0    : driver failed (see negative sentinels in cHACApK_hlu_run_on_hacapk)
- *   ~ 1e-10..1e-15 : success at near-machine precision
- *   >  1e-3  : the H-matrix had rk leaves whose recompression lost accuracy
- *              (Phase 3.5 tolerance is 1e-14 default; ACA-truncated leaves
- *              add to that floor proportional to aca_eps)
- */
-double HLUTestOnHACApK(int intrc_handle) {
-    return RadHLUTestOnHACApK(intrc_handle);
 }
 
 /**
@@ -1849,10 +1807,6 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // Opt-in analytic moment kernel toggle (defined in src/core/rad_interaction.cpp)
 void RadSetMomentAnalyticKernel(bool on);
 bool RadGetMomentAnalyticKernel();
-void RadSetMomentHLUPrecond(bool on);   // multipole-moment method-2 H-LU preconditioner toggle (rad_relaxation_methods.cpp)
-bool RadGetMomentHLUPrecond();
-void RadSetMomentDeflate(bool on);      // multipole-moment method-2 two-sided deflated block-Jacobi toggle
-bool RadGetMomentDeflate();
 
 namespace radia_solver_ext {
 
@@ -2132,13 +2086,6 @@ void SolverConfig(py::kwargs kwargs) {
         ::RadSetMomentAnalyticKernel(kwargs["moment_analytic_kernel"].cast<bool>());
     }
 
-    if (kwargs.contains("hacapk_hlu_precond")) {
-        ::RadSetMomentHLUPrecond(kwargs["hacapk_hlu_precond"].cast<bool>());
-    }
-    if (kwargs.contains("moment_deflation")) {
-        ::RadSetMomentDeflate(kwargs["moment_deflation"].cast<bool>());
-    }
-
     if (kwargs.contains("relax_param")) {
         SetRelaxParam(kwargs["relax_param"].cast<double>());
     }
@@ -2189,8 +2136,6 @@ py::dict GetSolverConfig() {
     config["moment_gmres_restart"] = GetMomentGMRESRestart();
     config["moment_anderson_depth"] = GetMomentAndersonDepth();
     config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
-    config["hacapk_hlu_precond"] = ::RadGetMomentHLUPrecond();
-    config["moment_deflation"] = ::RadGetMomentDeflate();
 
     // Relaxation parameter
     { double relax = 0.0;
@@ -2882,9 +2827,8 @@ py::dict HDivVimHMatrixProbe(int nx, int ny, int nz, int nsub, double distort,
 
 // SYSTEM-A H-LU on the HDiv-VIM operator: build A = M_mass + chi*N as a HACApK H-matrix on the FACE
 // DOFs (SetSystemMode), then factor via cHACApK_hlu_decomp and round-trip A^-1(A x_orig)=x_orig.
-// This is the HDiv analogue of HLUTestOnHACApK (which runs on the COLLOCATION matrix): it proves the
-// materialize-free H-LU is a scalable DIRECT solve / strong preconditioner for the soft-iron material
-// system, ON the actual HDiv-VIM operator.  Returns round-trip rel err + the materialize split
+// This proves the materialize-free H-LU is a scalable DIRECT solve / strong preconditioner for the
+// soft-iron material system, ON the actual HDiv-VIM operator.  Returns round-trip rel err + the materialize split
 // (n_internal must be 0 = no cubic-driving densification) + decomp time + stats.
 #ifdef RADIA_USE_HACAPK
 py::dict HDivVimHLUProbe(int nx, int ny, int nz, int nsub, double distort,
@@ -4149,15 +4093,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Returns: (A_raw, dof).
           )pbdoc");
 
-    m.def("MomentHMatrixProbe", &radia_solver::MomentHMatrixProbe,
-          py::arg("intrc_handle"), py::arg("chi"), py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-          R"pbdoc(
-              Build the moment system A_raw as a HACApK H-matrix (RadHACApKMomentSystem) and probe the
-              O(N log N) H-matvec against the dense A_raw built entry-by-entry (ACA_MOMENT_DESIGN.ipynb
-              Phase 2 Increment 2).  Returns a dict: ok, matvec_relerr (vs dense), ndof, n_lowrank,
-              n_dense, max_rank, compression, build_time.
-          )pbdoc");
-
     m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
           py::arg("intrc_handle"),
           R"pbdoc(
@@ -4165,8 +4100,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Builds the MMM H-matrix for the interaction handle and applies it
               to unit vectors, returning the dense A = -N + diag(1/chi) in the
-              original DOF ordering. Current multipole-moment MMM MSC H-matrix validation uses
-              MomentHMatrixProbe instead.
+              original DOF ordering.
 
               Args:
                   intrc_handle: Interaction handle from BuildMatrix()
@@ -4205,8 +4139,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
     },
     R"pbdoc(
         Return timing + op counts from the most recent H-LU decomp/solve
-        (cHACApK_hlu_decomp + cHACApK_hlu_solve_vec). Call right after
-        rad.HLUTestOnHACApK() to get the factorization and solve wall times.
+        (cHACApK_hlu_decomp + cHACApK_hlu_solve_vec). Call right after an
+        H-LU probe (e.g. an HDiv-VIM H-LU round-trip) to get the
+        factorization and solve wall times.
     )pbdoc");
 
     m.def("HLUMaterializeStats", []() -> py::dict {
@@ -4272,25 +4207,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
         mixed-multiply optimization (rk operand) or sub-view split (dense
         operand) is the dominant case to optimize.
     )pbdoc");
-
-    m.def("HLUTestOnHACApK", &radia_solver::HLUTestOnHACApK,
-          py::arg("intrc_handle"),
-          R"pbdoc(
-              Phase 4 smoke test: run H-LU on a real Radia HACApK tree.
-
-              Builds a fresh HACApK MSC manager for the given interaction
-              handle, computes y = A * x via MatVec on a deterministic test
-              vector, converts the leafmtxp leaves to internal column-major
-              layout, factors via cHACApK_hlu_decomp, solves x_solved = A^-1 y,
-              and returns the max relative error
-              max|x_solved - x| / max|x| in the original DOF ordering.
-
-              Returns:
-                  float  -- < 0 if internal failure (negative sentinel from
-                            cHACApK_hlu_run_on_hacapk), otherwise the
-                            max-elementwise relative error vs the test vector.
-                            Expected ~ aca_eps + machine-precision rounding.
-          )pbdoc");
 
     m.def("GetClusterStrategy", []() -> int {
         return cHACApK_get_cluster_strategy();

@@ -29,11 +29,6 @@
 extern radTConvergRepair& radCR;
 
 //-------------------------------------------------------------------------
-// multipole-moment MMM method-2 routing flag (set by SolveGen): the moment linear step uses the HACApK
-// H-matrix + BiCGSTAB (scalable storage) instead of the dense LU.
-extern bool g_multipole_moment_hacapk;
-
-//-------------------------------------------------------------------------
 
 struct radTHandlePgnAndTrans {
 	radTHandle<radTPolygon> PgnHndl;

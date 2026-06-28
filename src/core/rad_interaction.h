@@ -576,8 +576,8 @@ public:
 	double LastMomentSystemBuildTime() const { return m_lastMomentSystemBuildTime; }
 	// EIEM2 surface-charge block kernels (Compute6x6BlockFast / Compute5x5BlockFast /
 	// ComputeMixedBlockFast) retired Phase 3b -- multipole-moment MMM (BuildMomentSystemCore) is the sole
-	// surface-charge demag. Method-2 surface-charge solves use RadHACApKMomentSystem; the legacy HACApK
-	// manager is now MMM-only (3x3 tet).
+	// surface-charge demag. Surface-charge (MMMM) solves use the dense LU / matrix-free moment path -- MMMM
+	// does NOT connect to HACApK; the HACApK manager is MMM-only (3x3 tet).
 	void FieldFromTrianglePrecomputed(int hex_idx, int tri_idx, const double* obs, double sigma, double* H_out) const;
 
 	//-------------------------------------------------------------------------

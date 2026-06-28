@@ -21,8 +21,8 @@ namespace {
 // RAII PARDISO SPD (mtype=2 real symmetric positive definite) factor of the RT0 H(div) mass M_mass,
 // used as the MASS RIESZ preconditioner (z = M_mass^{-1} r) of the HDiv-VIM material CG / MINRES.  The
 // mass is supplied as the FULL symmetric COO (mI,mJ,mV); only the UPPER triangle (j>=i) is assembled
-// into the 0-based CSR PARDISO mtype=2 expects.  Mirrors MomentPardisoCoarse (rad_relaxation_methods.cpp)
-// -- the established sparse-direct pattern in this repo.  Replaces the prior Python splu(M_mass) glue so
+// into the 0-based CSR PARDISO mtype=2 expects.  Follows the established sparse-direct PARDISO pattern in
+// this repo.  Replaces the prior Python splu(M_mass) glue so
 // the whole linear demag solve (H-matvec + mass solve + Krylov) runs in C++.
 struct MassRieszPardiso {
     void* pt[64];
