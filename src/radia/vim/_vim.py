@@ -554,18 +554,31 @@ class DemagOperator:
 
     def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
-                 gram_backend="analytic", qpts=3, gauss_near_factor=1.0):
+                 gram_backend="analytic", qpts=3, gauss_near_factor=1.0,
+                 curve_order=None, curve_gauss=8):
         if gram_backend not in ("analytic", "gauss"):
             raise ValueError("DemagOperator: gram_backend must be 'analytic' or 'gauss' (got %r)" % (gram_backend,))
         self.space = fes
         self.gram_backend = gram_backend
+        # AUTO-MATCH the Gram curve order to the MESH geometry order (mesh.GetCurveOrder()).  A STRAIGHT Gram on
+        # a CURVED mesh (where B/M_mass are NGSolve curved integrals) is geometry-inconsistent and the demag
+        # factor DRIFTS with geometry order (sphere: straight-Gram 0.336/0.308/0.279 at curve 1/2/3; the matched
+        # curved Gram restores ~1/3 -- 0.338 at curve 2).  curve_order=None => auto from GetCurveOrder(); pass an
+        # explicit int to override (curve_order=0 forces the STRAIGHT Gram, e.g. a deliberate flat-Gram probe).
+        if curve_order is None and gram_backend == "analytic":
+            _k = fes.mesh.GetCurveOrder()
+            curve_order = _k if _k >= 2 else None
+        elif curve_order == 0:
+            curve_order = None
+        self.curve_order = curve_order
         if gram_backend == "gauss":
             self._B, self._G, self._Mmass = build_charge_gauss(
                 fes, qpts=qpts, near_factor=gauss_near_factor, eps=eps, leafsize=leafsize, eta=eta)
         else:
             self._B, self._G, self._Mmass = build_charge_gram(
                 fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
-                far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad)
+                far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
+                curve_order=curve_order, curve_gauss=curve_gauss)
         self.mat = _DemagMat(fes, self._B, self._G)
 
     @property
