@@ -95,8 +95,8 @@ def solve_at_order(vol_path, order, mu_r=100.0, H0=1.0, R_kelvin=0.20):
         overrides={"magnetic": mu_r * mu0},
     )
 
-    # === Omega-Reduced Omega weak form (matches reference
-    # archived Omega_ReducedOmega/Sphere/3D_sphere_with_Kelvin.py).
+    # === Omega-Reduced Omega weak form (matches the result-saved classic
+    # Kelvin docs route for Omega_ReducedOmega/Sphere/3D_sphere_with_Kelvin.py).
     #
     # The "sphere" sideset (mag-air interface) is NOT a Dirichlet BC.
     # gfOmega.Set() on sphere is used as a source LIFT only -- the
