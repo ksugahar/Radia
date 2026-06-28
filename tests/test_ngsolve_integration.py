@@ -79,7 +79,7 @@ class TestNGSolveIntegration:
         # Create test magnet (permanent magnet)
         self.magnet_center = [0, 0, 0]  # meters
         self.magnet_size = [0.020, 0.020, 0.030]  # 20mm x 20mm x 30mm
-        self.magnet = rad.ObjRecMag(
+        self.magnet = rad.magnet_box(
             self.magnet_center,
             self.magnet_size,
             [0, 0, 1.2]  # Magnetization 1.2 T in z-direction
@@ -285,7 +285,7 @@ class TestNGSolveFunctionSpaces:
 
         rad.UtiDelAll()
 
-        self.magnet = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1.2])
+        self.magnet = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1.2])
         rad.MatApl(self.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
         rad.Solve(self.magnet, 0.0001, 10000)
 
@@ -375,7 +375,7 @@ def run_standalone_test():
         test.Pnt = Pnt
         test.magnet_center = [0, 0, 0]
         test.magnet_size = [0.020, 0.020, 0.030]
-        test.magnet = rad.ObjRecMag(test.magnet_center, test.magnet_size, [0, 0, 1.2])
+        test.magnet = rad.magnet_box(test.magnet_center, test.magnet_size, [0, 0, 1.2])
         rad.MatApl(test.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
         rad.Solve(test.magnet, 0.0001, 10000)
 
@@ -402,7 +402,7 @@ def run_standalone_test():
         test2.CSGeometry = CSGeometry
         test2.OrthoBrick = OrthoBrick
         test2.Pnt = Pnt
-        test2.magnet = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1.2])
+        test2.magnet = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1.2])
         rad.MatApl(test2.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
         rad.Solve(test2.magnet, 0.0001, 10000)
 

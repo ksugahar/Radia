@@ -139,7 +139,7 @@ export netgen "model.vol" order 3   # exports with curved nodes
 ## Lab practice
 
 - Default p=1 for prototyping
-- p=2-3 for production accuracy (Mesh Evaluation panel sweeps these)
+- p=2-3 for production accuracy (docs mesh-evaluation demo sweeps these)
 - p=4-5 for academic validation (slower convergence due to setup cost)
 """
 

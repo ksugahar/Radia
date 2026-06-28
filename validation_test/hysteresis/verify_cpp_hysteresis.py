@@ -269,7 +269,7 @@ def test_solver_integration():
     K, chi, f_k_tables = load_fixture(use_subset=True)
     tables = _to_tables_arg(f_k_tables)
 
-    iron = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
+    iron = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
     mat = rad.MatEnergyHysteresis(K, chi.tolist(), tables, 1e-8)
     rad.MatApl(iron, mat)
 

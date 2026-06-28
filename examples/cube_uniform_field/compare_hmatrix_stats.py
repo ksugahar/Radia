@@ -75,7 +75,7 @@ def run_radia_hacapk(eps):
     rad.MatApl(container, mat)
 
     # Apply external field
-    rad.ObjRecMag(container, [0, 0, H_EXT])
+    rad.ObjAddToCnt(container, [rad.ObjBckg(lambda p: [0, 0, H_EXT])])
 
     # Set HACApK parameters
     rad.SolverConfig(hacapk_eps=eps, hacapk_leaf=10, hacapk_eta=2.0)

@@ -71,7 +71,7 @@ def _pose(step):
 
 def project_source(fesS, steps):
     """Project the analytic Radia A_s and B_ext onto VectorH1 once per config."""
-    mag = rad.ObjRecMag([0, 0, 0], [MAG_MM * 1e-3] * 3, [0, BR / MU0, 0])
+    mag = rad.magnet_box([0, 0, 0], [MAG_MM * 1e-3] * 3, [0, BR / MU0, 0])
     As = np.zeros((fesS.ndof, len(steps)))
     Be = np.zeros((fesS.ndof, len(steps)))
     gA = GridFunction(fesS)

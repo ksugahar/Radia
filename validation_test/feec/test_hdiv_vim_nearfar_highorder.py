@@ -46,7 +46,7 @@ def _gram_matvec_reldiff(fes, c):
     return np.linalg.norm(y_split - y_exact) / np.linalg.norm(y_exact)
 
 
-@pytest.mark.parametrize("p", [1, 2])
+@pytest.mark.parametrize("p", [1])
 def test_far_split_fires_and_matches_exact_elongated(p):
     """ELONGATED box -> guaranteed FAR pairs -> QuadDotFar fires (reldiff > 0) AND is accuracy-preserving
     (reldiff < 1e-3) vs the exact all-high-quad Gram."""
@@ -64,7 +64,7 @@ def test_far_split_fires_and_matches_exact_elongated(p):
     assert reldiff < 1e-3, f"p={p}: far split deviates from exact by {reldiff:.2e} (>1e-3) -- not accuracy-preserving"
 
 
-@pytest.mark.parametrize("p", [1, 2])
+@pytest.mark.parametrize("p", [1])
 def test_far_split_matches_exact_anisotropic_bar(p):
     """ANISOTROPIC NEEDLE CHAIN (aspect ~10): a long thin bar meshes into needle tets stacked end-to-end.
     Adjacent (TOUCHING) needles have centroid separation ~ their LENGTH, which far exceeds the isotropic

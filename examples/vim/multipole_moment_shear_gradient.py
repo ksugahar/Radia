@@ -83,8 +83,8 @@ def radia_gradH_reality_check():
     """A real two-magnet config has a field-gradient tensor with NONZERO off-diagonal (shear) at a generic
     probe point: shear is the rule, not a corner case.  FD of rad.Fld('h')."""
     rad.UtiDelAll()
-    m1 = rad.ObjRecMag([0.030, 0.010, 0.000], [0.02, 0.02, 0.02], [0, 0, 1.0e6])
-    m2 = rad.ObjRecMag([-0.020, 0.030, 0.012], [0.02, 0.02, 0.02], [1.0e6, 0, 0])   # tilted -> shears the field
+    m1 = rad.magnet_box([0.030, 0.010, 0.000], [0.02, 0.02, 0.02], [0, 0, 1.0e6])
+    m2 = rad.magnet_box([-0.020, 0.030, 0.012], [0.02, 0.02, 0.02], [1.0e6, 0, 0])   # tilted -> shears the field
     cont = rad.ObjCnt([m1, m2])
     p = np.array([0.0, 0.0, 0.050]); d = 1.0e-4
 

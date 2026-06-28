@@ -165,7 +165,7 @@ dominates anyway.
 
 ## How to reproduce
 
-    python examples/solver_benchmarks/bench_peec_mna_crossover.py
+    python validation_test/solver_benchmarks/bench_peec_mna_crossover.py
 
 Default uses OUTER_METHOD="lgmres"; change the module-level constant
 at the top of the script to "bicgstab" or "gcrotmk" to sweep.  Wall

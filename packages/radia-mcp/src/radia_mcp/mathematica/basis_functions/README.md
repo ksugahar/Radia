@@ -104,6 +104,7 @@ self-tested.
 
 | file | element(s) / content | status |
 |------|----------------------|--------|
+| `RadiaBasis.m`      | Phase-1 Mathematica package for triangle/tetrahedron H1 Lagrange, RT0/RWG, L2; canonical source mirrored by `tests/basis/test_basis_functions.py` | done, promoted from the old examples tree so MCP knowledge owns the symbolic reference |
 | `recursive_pol.wls` | Legendre / integrated-Legendre / scaled | done, self-test PASS |
 | `h1.wls`            | H1 Trig, Tet, Quad, Hex, Prism          | done, self-test PASS (dim, PoU, edge-vanish, independence) |
 | `h1.wls`            | H1 **Pyramid** (rational, p=1 vertices) | done, self-test PASS (PoU, rationality, independence); p>=2 edge/face bubbles TODO |

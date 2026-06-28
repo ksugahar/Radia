@@ -29,7 +29,7 @@ class TestGroupCreation:
 	def test_single_object_group(self):
 		"""Test group with single object"""
 		rad.UtiDelAll()
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		group = rad.ObjCnt([mag])
 		assert group > 0
 
@@ -39,7 +39,7 @@ class TestGroupCreation:
 
 		mags = []
 		for i in range(5):
-			mag = rad.ObjRecMag([i*20, 0, 0], [10, 10, 10], [0, 0, 1])
+			mag = rad.magnet_box([i*20, 0, 0], [10, 10, 10], [0, 0, 1])
 			mags.append(mag)
 
 		group = rad.ObjCnt(mags)
@@ -55,14 +55,14 @@ class TestGroupCreation:
 
 		# Create two sub-groups
 		group1_mags = [
-			rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1]),
-			rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
+			rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1]),
+			rad.magnet_box([20, 0, 0], [10, 10, 10], [0, 0, 1])
 		]
 		group1 = rad.ObjCnt(group1_mags)
 
 		group2_mags = [
-			rad.ObjRecMag([0, 20, 0], [10, 10, 10], [0, 0, 1]),
-			rad.ObjRecMag([20, 20, 0], [10, 10, 10], [0, 0, 1])
+			rad.magnet_box([0, 20, 0], [10, 10, 10], [0, 0, 1]),
+			rad.magnet_box([20, 20, 0], [10, 10, 10], [0, 0, 1])
 		]
 		group2 = rad.ObjCnt(group2_mags)
 
@@ -83,13 +83,13 @@ class TestGroupTransformations:
 		rad.UtiDelAll()
 
 		# Magnet at origin
-		mag1 = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		mag1 = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 		H1 = rad.Fld(mag1, 'h', [0.05, 0, 0])
 
 		rad.UtiDelAll()
 
 		# Same magnet at translated position
-		mag2 = rad.ObjRecMag([0, 1.0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		mag2 = rad.magnet_box([0, 1.0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 		H2 = rad.Fld(mag2, 'h', [0.05, 1.0, 0])
 
 		# Fields should be identical (same relative geometry)
@@ -100,8 +100,8 @@ class TestGroupTransformations:
 		rad.UtiDelAll()
 
 		# Create asymmetric group
-		mag1 = rad.ObjRecMag([10, 0, 0], [5, 5, 5], [1, 0, 0])
-		mag2 = rad.ObjRecMag([20, 0, 0], [5, 5, 5], [1, 0, 0])
+		mag1 = rad.magnet_box([10, 0, 0], [5, 5, 5], [1, 0, 0])
+		mag2 = rad.magnet_box([20, 0, 0], [5, 5, 5], [1, 0, 0])
 		group = rad.ObjCnt([mag1, mag2])
 
 		# Rotate 90 degrees around z-axis
@@ -116,7 +116,7 @@ class TestGroupTransformations:
 		"""Test combining multiple transformations"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		group = rad.ObjCnt([mag])
 
 		# Translate
@@ -140,7 +140,7 @@ class TestGroupMaterialApplication:
 		# Create group without material
 		mags = []
 		for i in range(3):
-			mag = rad.ObjRecMag([i*15, 0, 0], [10, 10, 10], [0, 0, 1])
+			mag = rad.magnet_box([i*15, 0, 0], [10, 10, 10], [0, 0, 1])
 			mags.append(mag)
 		group = rad.ObjCnt(mags)
 
@@ -162,10 +162,10 @@ class TestGroupFieldEvaluation:
 		rad.UtiDelAll()
 
 		# Create individual magnets
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		rad.MatApl(mag1, rad.MatLin([1000, 1], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
 
-		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag2 = rad.magnet_box([20, 0, 0], [10, 10, 10], [0, 0, 1])
 		rad.MatApl(mag2, rad.MatLin([1000, 1], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
 
 		# Field from individual objects
@@ -186,7 +186,7 @@ class TestGroupFieldEvaluation:
 
 		mags = []
 		for i in range(5):
-			mag = rad.ObjRecMag([i*15, 0, 0], [10, 10, 10], [0, 0, 1])
+			mag = rad.magnet_box([i*15, 0, 0], [10, 10, 10], [0, 0, 1])
 			rad.MatApl(mag, rad.MatLin([1000, 1], [1, 1, 1]))  # Anisotropic, easy axis [1,1,1]
 			mags.append(mag)
 
@@ -206,7 +206,7 @@ class TestGroupEdgeCases:
 		"""Test group containing same object multiple times"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Create group with duplicates (should handle gracefully)
 		group = rad.ObjCnt([mag, mag, mag])
@@ -217,7 +217,7 @@ class TestGroupEdgeCases:
 		rad.UtiDelAll()
 
 		# Create deep nesting: group -> group -> group -> magnet
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		level1 = rad.ObjCnt([mag])
 		level2 = rad.ObjCnt([level1])
 		level3 = rad.ObjCnt([level2])

@@ -1,12 +1,22 @@
 import json
 
 from radia_mcp.document_meta.tools import (
+    document_meta_examples_migration_policy,
     document_meta_examples_notebook_audit,
     document_meta_notebook_result_audit,
     document_meta_panel_layout_audit,
     document_meta_write_docs_notebook_result_jsons,
     document_meta_write_notebook_result_json,
 )
+
+
+def test_examples_migration_policy_marks_protected_refs_as_blockers():
+    policy = document_meta_examples_migration_policy()
+
+    assert policy["schema"] == "radia.document_meta.examples_migration_policy.v1"
+    assert "not a final destination" in policy["core_policy"]["protected_reference"]
+    assert "validation_test/" in policy["migration_order"][2]
+    assert "docs/examples_classification/examples_classification.ipynb" in policy["source_of_truth"]
 
 
 def _write_notebook(path, *, executed=True, outputs=True):

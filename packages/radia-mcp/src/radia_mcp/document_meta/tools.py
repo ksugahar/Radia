@@ -1199,6 +1199,115 @@ def _promotion_lane(validation_class: bool,
     return "review_readme_or_data_only"
 
 
+def document_meta_examples_migration_policy() -> dict:
+    """Return the current Radia examples/ migration policy.
+
+    This is the MCP-facing memory for the examples cleanup campaign.  It keeps
+    the classification vocabulary aligned with AGENTS.md and the
+    result-bearing docs/examples_classification notebook.
+    """
+    return {
+        "schema": "radia.document_meta.examples_migration_policy.v1",
+        "updated": "2026-06-28",
+        "source_of_truth": [
+            "AGENTS.md / Examples Triage",
+            "docs/examples_classification/examples_classification.ipynb",
+            "docs/examples_classification/examples_classification_results.json",
+        ],
+        "core_policy": {
+            "examples_role": (
+                "examples/ is a temporary teaching/research tier, not a "
+                "permanent archive for intermediate attempts."
+            ),
+            "protected_reference": (
+                "protected_* / ho-go-sansho-ari is a blocker, not a final "
+                "destination. Record target_after_unblock and migrate the "
+                "reference away from examples/ before deleting."
+            ),
+            "long_lived_references": (
+                "Public docs may point to docs artifacts; executable code "
+                "should point to src APIs or validation_test surfaces. Do not "
+                "introduce new long-lived references to examples/."
+            ),
+            "docs_quality": (
+                "User-facing docs notebooks must combine Markdown theory, "
+                "executable cells, saved outputs, and synchronized JSON "
+                "sidecars with notebook_sha256."
+            ),
+        },
+        "destination_rules": [
+            {
+                "class": "development_or_superseded_iteration",
+                "destination": "memory/docs note, then delete",
+                "rule": "Distill the lesson first; git history is the archive.",
+            },
+            {
+                "class": "reusable_computation_or_parser_or_solver_helper",
+                "destination": "src/",
+                "rule": "Promote to a named public or internal API with tests.",
+            },
+            {
+                "class": "verification_benchmark_golden_convergence",
+                "destination": "validation_test/ plus optional docs notebook",
+                "rule": (
+                    "Executable verification lives in validation_test; docs may "
+                    "render theory, tables, plots, and JSON summaries."
+                ),
+            },
+            {
+                "class": "user_facing_tutorial_or_method_showcase",
+                "destination": "docs/<topic>/*.ipynb",
+                "rule": (
+                    "Notebook must be result-saving and synchronized with "
+                    "adjacent JSON."
+                ),
+            },
+            {
+                "class": "notebook_only_helper",
+                "destination": "docs/<topic>/*.py",
+                "rule": (
+                    "Allowed only when tightly coupled to one notebook; promote "
+                    "to src if reused by validation, MCP, panels, or another topic."
+                ),
+            },
+            {
+                "class": "mesh_cad_journal_result_asset",
+                "destination": "owning docs/panels/validation surface",
+                "rule": (
+                    "Preserve until the owning script or notebook is migrated; "
+                    "do not delete reproducibility assets as cruft."
+                ),
+            },
+        ],
+        "migration_order": [
+            "inventory examples/<topic> and search references in docs/tests/validation_test/src/packages",
+            "create or refresh result-saved docs notebooks and JSON sidecars for user-facing material",
+            "move reusable behavior to src/ and executable validation to validation_test/",
+            "rewrite docs/MCP/panel/test references away from examples/",
+            "distill lessons for dead iterations, then delete from examples/",
+            "run document_meta_notebook_result_audit and focused tests",
+        ],
+        "current_agentic_batch": {
+            "ledger": "docs/examples_classification/examples_classification_results.json",
+            "review_count": 4,
+            "priority_topics": [
+                "maglev",
+                "peec_integration",
+                "vim",
+                "clebsch_hodograph",
+                "stream_function",
+                "induction_heating",
+                "cubit_panels",
+            ],
+            "first_moves": [
+                "Resolve validation_test direct imports before deleting examples.",
+                "Improve docs notebooks for public demos with saved outputs and JSON sidecars.",
+                "Promote shared PEEC/IH/VIM/stream-function helpers to src APIs.",
+            ],
+        },
+    }
+
+
 def document_meta_examples_notebook_audit(repo_root: str = "",
                                             topic: str = "",
                                             max_items: int = 30) -> dict:

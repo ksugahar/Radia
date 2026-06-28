@@ -189,13 +189,12 @@ Export Mesh (PySide6):         Solve (PySide6):
   VTK...                         Reload Panels
   MEG...
   FEMEEM...
-  --------
-  Mesh Evaluation...
 ```
 
 - **Export Mesh**: PySide6 dialogs with settings persistence (`AppData/Roaming/Radia/export_settings.json`)
 - **Solve**: Python subprocess to external Python 3.12 (Cubit embeds Python 3.10)
 - **Generate Coil**: Calls `coil` APREPRO command via file dialog
+- **Mesh p-convergence demo**: documented under `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`; it is not an engineering design panel or Cubit menu action.
 
 ---
 

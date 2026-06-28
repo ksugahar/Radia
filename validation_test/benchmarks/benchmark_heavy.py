@@ -41,7 +41,7 @@ def create_complex_magnet():
 	magnets = []
 
 	# Central magnet
-	mag1 = rad.ObjRecMag([0, 0, 0], [30, 30, 30])
+	mag1 = rad.magnet_box([0, 0, 0], [30, 30, 30], [0, 0, 0])
 	rad.ObjSetM(mag1, [0, 0, 1500])
 	magnets.append(mag1)
 
@@ -51,7 +51,7 @@ def create_complex_magnet():
 		x = 40 * (1 if i % 2 == 0 else 0) * (1 if i < 2 else -1)
 		y = 40 * (1 if i % 2 == 1 else 0) * (1 if (i==1 or i==2) else -1)
 
-		mag = rad.ObjRecMag([x, y, 0], [15, 15, 30])
+		mag = rad.magnet_box([x, y, 0], [15, 15, 30], [0, 0, 0])
 		rad.ObjSetM(mag, [0, 0, 1200])
 		magnets.append(mag)
 

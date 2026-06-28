@@ -55,7 +55,7 @@ def field_at_target(angles):
     for k in range(N):
         th = float(angles[k])
         mag = [M0 * np.cos(th), M0 * np.sin(th), 0.0]
-        handles.append(rad.ObjRecMag(POS[k].tolist(), [CUBE, CUBE, CUBE], mag))
+        handles.append(rad.magnet_box(POS[k].tolist(), [CUBE, CUBE, CUBE], mag))
     cont = rad.ObjCnt(handles)
     B = np.asarray(rad.Fld(cont, "b", TARGET_PTS.tolist()),
                    dtype=float).reshape(-1, 3)

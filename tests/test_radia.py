@@ -72,7 +72,7 @@ def test_basic_geometry():
 	print("=" * 60)
 	# Create a simple rectangular block with magnetization
 	magnetization = [0, 0, 1000]  # 1000 A/m in z-direction
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], magnetization)
+	block = rad.magnet_box([0, 0, 0], [10, 10, 10], magnetization)
 	print(f"[OK] SUCCESS: Created rectangular block")
 	print(f"  Block ID: {block}")
 	assert block > 0
@@ -92,7 +92,7 @@ def test_material():
 	assert mat > 0
 
 	# Create object and apply material
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+	block = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 0])
 	rad.MatApl(block, mat)
 	print(f"[OK] SUCCESS: Applied material to object")
 
@@ -104,7 +104,7 @@ def test_field_calculation():
 	print("Test 5: Magnetic Field Calculation")
 	print("=" * 60)
 	# Create a simple magnet
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1000])
+	block = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1000])
 
 	# Calculate field at a point
 	point = [0, 0, 20]  # 20mm above the magnet
@@ -126,7 +126,7 @@ def test_solve():
 	print("=" * 60)
 	# Create a simple magnetic system
 	try:
-		block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+		block = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 0])
 		mat = rad.MatSatIsoFrm([[1596.3, 1.1488], [133.11, 0.4268], [18.713, 0.4759]])
 		rad.MatApl(block, mat)
 
@@ -149,7 +149,7 @@ def test_transformation():
 	print("Test 7: Geometric Transformation")
 	print("=" * 60)
 	# Create object
-	block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+	block = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 0])
 
 	# Create translation transformation
 	trans = rad.TrfTrsl([10, 0, 0])

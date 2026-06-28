@@ -1,6 +1,6 @@
 {
   "schema": "radia.docs.induction_heating.public_demo.v1",
-  "generated_at_utc": "2026-06-28T01:26:17Z",
+  "generated_at_utc": "2026-06-28T09:13:31Z",
   "topic": "induction_heating",
   "notebook": "docs/induction_heating/public_demo.ipynb",
   "versions": {
@@ -47,7 +47,8 @@
     "selected_figure_count": 4,
     "catalog_script_count": 20,
     "catalog_artifact_count": 8,
-    "protected_script_count": 20
+    "protected_script_count": 20,
+    "companion_status": "scattered_rhs_clean_test moved to validation_test; bem_reference still must split into src API + validation_test before examples rerouting; demoted_samples remain protected until replacements exist."
   },
   "selected_records": [
     {
@@ -286,7 +287,7 @@
       ]
     },
     {
-      "path": "examples/induction_heating/scattered_rhs_clean_test/clean_filament_test.py",
+      "path": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py",
       "name": "clean_filament_test.py",
       "subdir": "scattered_rhs_clean_test",
       "lane": "validation_test_candidate",
@@ -314,7 +315,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/induction_heating/scattered_rhs_clean_test/clean_filament.vol",
+          "path": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament.vol",
           "bytes": 23073039,
           "sha256": "ab3600eee2db3cee2dad899fb4170f435282ba624f313eb3c48711d680f9e991"
         }
@@ -324,7 +325,7 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 386,
-          "text": "examples/induction_heating/scattered_rhs_clean_test/clean_filament_test.py"
+          "text": "validation_test/induction_heating/scattered_rhs_clean_test/clean_filament_test.py"
         }
       ]
     },
@@ -404,5 +405,5 @@
       "bytes": 149589
     }
   ],
-  "notebook_sha256": "6292d96fe0511a941ac09237300c0709d14e4f4948739a5229e400dbadf477d0"
+  "notebook_sha256": "1f0ce39ff3c825542c997f369a10425fe8f2b083b2f1d6df51e0826c30ba710a"
 }

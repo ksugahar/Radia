@@ -14,6 +14,11 @@ The full examples source/hash catalog is
 [`examples_catalog_results.json`](examples_catalog_results.json) and
 [`examples_catalog_result.json`](examples_catalog_result.json).
 
+The cleanup route for the 63 non-public-demo scripts is
+[`cleanup_routing.ipynb`](cleanup_routing.ipynb), synchronized with
+[`cleanup_routing_results.json`](cleanup_routing_results.json) and
+[`cleanup_routing_result.json`](cleanup_routing_result.json).
+
 `examples/peec_integration/` currently contains a mixture of maintained public
 demos, validation candidates, source-API candidates, benchmark scripts,
 experiments, smoke checks, and analysis helpers. Do not treat all 130 scripts as

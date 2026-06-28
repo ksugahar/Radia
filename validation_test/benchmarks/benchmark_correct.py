@@ -57,7 +57,7 @@ import radia as rad
 def benchmark_batch_calculation(grid_size, test_name):
 	"""Benchmark using batch point calculation (leverages OpenMP)"""
 	# Create magnet
-	magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 20])
+	magnet = rad.magnet_box([0, 0, 0], [20, 20, 20], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1200])
 
 	# Create grid of points
@@ -83,7 +83,7 @@ def benchmark_batch_calculation(grid_size, test_name):
 def benchmark_3d_volume(nx, ny, nz, test_name):
 	"""Benchmark 3D volume calculation"""
 	# Create magnet
-	magnet = rad.ObjRecMag([0, 0, 0], [15, 15, 15])
+	magnet = rad.magnet_box([0, 0, 0], [15, 15, 15], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1500])
 
 	# Create 3D grid

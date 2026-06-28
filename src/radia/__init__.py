@@ -322,6 +322,8 @@ from .soft_iron import SoftIron  # noqa: E402,F401
 # radia.magnet_box(center, dimensions, magnetization) -- the ObjRecMag substitute on MMMM
 # (surface-charge ObjHexahedron); a fixed-M permanent magnet, no Solve. See CLAUDE.md PM-on-MMMM.
 from .magnet import magnet_box  # noqa: E402,F401
-# Script-side ObjRecMag: shadows the retiring C++ surface-current ObjRecMag with the MMMM
-# (surface-charge ObjHexahedron) wrapper so other solvers / examples / tests keep working.
-from .magnet import ObjRecMag  # noqa: E402,F811
+# Script-side ObjRecMag: the SOLE definition now that the C++ surface-current ObjRecMag
+# constructor is retired (un-exposed from the extension). It forwards to the MMMM
+# (surface-charge ObjHexahedron) magnet_box so production / other solvers / examples / tests
+# keep working unchanged.
+from .magnet import ObjRecMag  # noqa: E402,F401

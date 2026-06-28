@@ -90,6 +90,36 @@ surface.  If the example already has `validation_*.py`, `validate_*.py`,
 `validation_test` / protected-validation-corpus material; add a docs notebook
 only as the synchronized showcase layer.
 
+### Examples Triage: Delete / src API / validation_test / docs (2026-06-28)
+
+**POLICY**: `examples/` is a temporary teaching/research tier, not an archive
+for every intermediate attempt.  When cleaning it, classify each script before
+moving or deleting:
+
+| Class | Destination | Rule |
+|-------|-------------|------|
+| Development-in-progress / superseded / failed iteration | delete after distilling | Preserve the lesson in `memory/<topic>.md` or a short docs note, then remove the dead source. Git history is the archive. |
+| Reusable computation, parser, mesh reader, solver helper, formula, or API surface | `src/` | Promote to a named public or internal API and add focused tests. Do not keep it as a loose example helper. |
+| Important numerical verification, benchmark, golden lock, convergence sweep, or regression corpus | `validation_test/<topic>/` plus optional docs notebook | The executable check lives in `validation_test/`; docs may render theory, tables, plots, and summary JSON for humans. |
+| User-facing explanation, tutorial, or method showcase | `docs/<topic>/*.ipynb` | Notebook must be result-saving and synchronized with adjacent JSON. Integrate Markdown explanation, executable cells, and results. |
+| Notebook-only subroutine / local renderer / catalog helper | `docs/<topic>/*.py` | Allowed only when tightly coupled to the notebook. If another topic, panel, MCP server, or validation uses it, promote to `src/` instead. |
+| Mesh/CAD/journal/result assets | keep until owning script/notebook is migrated | Mesh definitions, Cubit `.jou`, tracked `.msh`, figures, and JSON results are protected by preservation/reproducibility policy. |
+
+The migration order is strict: inventory and reference search first; create or
+refresh the docs/JSON layer if the result is user-facing; move reusable or
+validation code to `src/` or `validation_test/`; update docs/MCP/panel
+references; then delete from `examples/`.  Never leave two live copies of the
+same implementation in `examples/` and `src/` after the API promotion is
+complete.
+
+`protected_*` / "保護参照あり" is a temporary blocker, not a destination.
+If a docs notebook, validation test, panel sample, MCP knowledge file, or
+README still references `examples/<topic>`, record the blocker and the
+`target_after_unblock` (`docs`, `src`, `validation_test`, or distill-delete),
+then migrate the reference.  Public docs may refer to other `docs/` artifacts,
+and code may refer to `src/` APIs, but new long-lived references to
+`examples/` should not be introduced.
+
 ### Publish Boundary: No Validation Provenance in Public Artifacts (2026-06-24)
 
 Public artifacts (this repo, PyPI packages, public docs) **lead with analytic

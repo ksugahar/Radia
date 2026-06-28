@@ -1,0 +1,110 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-28T08:45:39Z",
+  "notebook": "docs/peec_bema_convergence/peec_bema_convergence.ipynb",
+  "notebook_sha256": "fbcf0b53e06df7597a448c01122803719dac4fb742d6f22ac0174b0d1b694018",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/peec_bema_convergence/peec_bema_convergence.ipynb",
+    "cells": 8,
+    "code_cells": 4,
+    "executed_code_cells": 4,
+    "code_cells_with_outputs": 4,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "2bd879ded75959e5ed805f4e9be750c1744d67f394870e89bb9fd310f28a632b",
+      "source_preview": "from pathlib import Path\nimport json\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'peec_bema_convergence_results.json').exists():\n    NOTEBOOK_DIR = Path('docs/peec_bema_convergence').resolve()\nDATA = json.loads((NOTEBOOK_DIR / 'peec_bema_convergence_results.json').read_text(encoding='utf-8'))\nRAW = DATA['raw_payload']\nprint(json.dumps(DATA['summary'], ensure_ascii=False, indent=2))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 542,
+          "text_sha256": "8862893b18471f1e30613cbff6cdfca8fa43b5545c5b7584037f2bce2f71511d",
+          "text_preview": "{\n  \"geometry\": \"3-turn pancake helix R_avg~35mm + r_wire=3.15mm, 2 lead bars 60-61mm at y=+/-12.5mm\",\n  \"frequency_Hz\": 150000,\n  \"current_A\": 1.0,\n  \"peec_points\": 6,\n  \"peec_n_peri_min\": 8,\n  \"peec_n_peri_max\": 64,\n  \"peec_L_nH_min\": 423.895,\n  \"peec_L_nH_max\": 431.551,\n  \"peec_L_inf_est_nH\": 434.0,\n  \"production_n_peri\": 16,\n  \"production_L_nH\": 426.3,\n  \"production_deviation_from_inf_pct\": -1.78,\n  \"bema_points\": 3,\n  \"bema_L_nH_min\": 412.18,\n  \"bema_L_nH_max\": 432.57,\n  \"bema_unreachable_cases\": 1,\n  \"potential_gap_pct\": \"5-8%\"\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "ed31fa3963a002f74722270a345cf587786e8b9a6c7bb99efd1e09b6cb30f306",
+      "source_preview": "from IPython.display import Markdown, display\n\npeec_rows = RAW['peec_convergence']['data']\nbema_rows = RAW['bema_convergence']['data']\nlines = ['| method | resolution | L [nH] | R [mOhm] | time [s] |', '| --- | ---: | ---: | ---: | ---: |']\nfor row in peec_rows:\n    lines.append(f\"| PEEC | n_peri={row['n_peri']} | {row['L_nH']:.3f} | {row['R_mOhm']:.5f} | {row['time_s']:.2f} |\")\nfor row in bema_rows:\n    lines.append(f\"| BEM-A | tris={row['n_tris']} | {row['L_nH']:.3f} | {row['R_mOhm_SIBC']:.3f} | {row['time_s']:.1f} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "8316d8fa6f8d702c366081c5248eaeb4b10d2ab85f3c5e7f8bcdb47dbf3992b4",
+      "source_preview": "import matplotlib.pyplot as plt\n\npeec_x = [row['n_peri'] for row in peec_rows]\npeec_y = [row['L_nH'] for row in peec_rows]\nbema_x = [row['n_tris'] for row in bema_rows]\nbema_y = [row['L_nH'] for row in bema_rows]\n\nfig, ax1 = plt.subplots(figsize=(6.4, 3.8), dpi=120)\nax1.plot(peec_x, peec_y, marker='o', label='PEEC n_peri sweep')\nax1.axhline(DATA['summary']['peec_L_inf_est_nH'], color='C0', linestyle='--', linewidth=1.0, label='PEEC extrapolated')\nax1.set_xlabel('PEEC perimeter filaments / BEM-A triangles')\nax1.set_ylabel('L_coil [nH]')\nax1.grid(True, alpha=0.3)\nax2 = ax1.twiny()\nax2.plot(bema_x, bema_y, marker='s', color='C1', label='BEM-A triangle sweep')\nax2.set_xlabel('BEM-A surface triangles')\nlines1, labels1 = ax1.get_legend_handles_labels()\nlines2, labels2 = ax2.get_legend_handles_labels()\nax1.legend(lines1 + lines2, labels1 + labels2, loc='best')\nfig.tight_layout()\nplt.show()\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "a4e74d394641d357dd25371ce48c86585d5378058af03595716445402da433f9",
+          "text_plain_preview": "<Figure size 768x456 with 2 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 57664,
+              "sha256": "3d1631e19c3a30941191f4841500a0ef5c6073a3e30e3e5b64a9a741e596b5ef"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "567484c595fdd2eeebb58aa6bac5a9cbdc1a538e1da6caae95fae0e75172fe54",
+      "source_preview": "assert DATA['schema'] == 'radia.docs.peec_bema_convergence.v1'\nassert DATA['summary']['peec_points'] == 6\nassert DATA['summary']['bema_points'] == 3\nassert DATA['summary']['bema_unreachable_cases'] == 1\nassert DATA['source_raw_json_sha256']\nprint('peec_bema_convergence notebook OK')\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 34,
+          "text_sha256": "c8b1243408170647ca50a1dc7562b07a640e1b9b4c76685d46b6e395d2ce811f",
+          "text_preview": "peec_bema_convergence notebook OK\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

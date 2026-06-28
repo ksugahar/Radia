@@ -18,7 +18,7 @@ import radia as rad
 magnet_size = 1.0
 magnetization = 1.0
 
-magnet_base = rad.ObjRecMag( [0, 2, 0], [magnet_size, magnet_size, magnet_size], [0, magnetization, 0])
+magnet_base = rad.magnet_box( [0, 2, 0], [magnet_size, magnet_size, magnet_size], [0, magnetization, 0])
 
 test_points = [
     ([0, 0, 0], "origin"),

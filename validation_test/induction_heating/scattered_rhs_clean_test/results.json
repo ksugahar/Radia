@@ -1,6 +1,6 @@
 {
   "args": {
-    "vol": "S:\\Radia\\01_GitHub\\examples\\induction_heating\\scattered_rhs_clean_test\\clean_filament.vol",
+    "vol": "S:\\Radia\\01_GitHub\\validation_test\\induction_heating\\scattered_rhs_clean_test\\clean_filament.vol",
     "rebuild_mesh": true,
     "L_wire": 2.0,
     "I": 1.0,
@@ -12,7 +12,7 @@
     "frequency": 7000,
     "fes_order": 1,
     "alphas": "0.0,1.0",
-    "output": "S:\\Radia\\01_GitHub\\examples\\induction_heating\\scattered_rhs_clean_test\\results.json"
+    "output": "S:\\Radia\\01_GitHub\\validation_test\\induction_heating\\scattered_rhs_clean_test\\results.json"
   },
   "analytical": {
     "H_t_rms_free": 0.8918749845412233,

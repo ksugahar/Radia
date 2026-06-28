@@ -1,7 +1,7 @@
 """SymPy + NumPy verification of the Phase 1 basis functions.
 
 Cross-references:
-  * Mathematica canonical: ``examples/mathematica/RadiaBasis.m``
+  * Mathematica canonical: ``packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m``
   * MCP knowledge:         ``radia_mcp.radia_ngsolve.knowledge.basis_functions``
   * Production NumPy (RWG): ngsolve.bem (HDivSurface RT0 internal C++).
     The intree ``radia.bem.efie_rwg`` Python assembler was retired

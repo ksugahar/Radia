@@ -33,6 +33,11 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
 - [tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb](tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb) - Result-bearing tetrahedron field-accuracy validation view synchronized with `validation_test/tetra_field_accuracy_evaluation/` JSON results.
 
+## Examples Migration
+
+- [examples_classification/examples_classification.ipynb](examples_classification/examples_classification.ipynb) - Result-bearing, agent-reviewed classification ledger for the remaining `examples/` tree, synchronized with `examples_classification_results.json`; use it before moving scripts to `docs/`, `src/`, `validation_test/`, or distill-delete. `examples/` references are treated as migration blockers, not long-lived public links.
+- [jou_translation_bench/README.md](jou_translation_bench/README.md) - Docs-owned `.jou` to build123d translation benchmark record for MCP knowledge quality; fixtures and report were promoted from the old examples tree.
+
 ## Multipole-Moment MMM
 
 - [multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb](multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb) - The production moment formulation for MMM/MSC. It should not be described with the old Yano-centered label: the contribution is the symbolic multipole-moment derivation that closes 3-DOF MMM and 5/6-DOF surface-charge elements by monopole, dipole, and residual-quadrupole conditions. This keeps matrix entries local and cheap compared with the HDiv Galerkin charge-Gram route, while retaining the open-boundary MMM workflow.
@@ -57,6 +62,8 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
 - [PEEC_VALIDATION_PLAN.md](peec/PEEC_VALIDATION_PLAN.md) - Systematic validation plan for PEEC solver and PEEC-MSC coupling
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
+- [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence record with synchronized JSON.
+- [solver_benchmarks/peec_solver_benchmarks.ipynb](solver_benchmarks/peec_solver_benchmarks.ipynb) - Result-bearing dense Ruehli vs HACApK PEEC benchmark notebook synchronized with committed JSON and `validation_test/solver_benchmarks/` drivers.
 
 > **For "how do I author a STEP that PEEC can solve?"**: query
 > `radia-mcp` `peec_inductance(topic="step_authoring")` for Cubit + build123d
@@ -90,6 +97,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
 - [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.1 `$NodeData` displacement-animation artifact inspection, with synchronized JSON results.
+- [figures/lab_diagrams/README.md](figures/lab_diagrams/README.md) - Docs-owned TikZ source templates for lab flowcharts and concept diagrams.
 
 ## Electric Machines
 

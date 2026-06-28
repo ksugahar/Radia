@@ -31,10 +31,10 @@ def _cube(h):
 
 
 def test_demagoperator_factor_order_invariant():
-    """DemagOperator(HDiv(mesh,order=p)).DemagFactor -> ~1/3, IDENTICAL across p=0,1,2 (unified API)."""
+    """DemagOperator(HDiv(mesh,order=p)).DemagFactor -> ~1/3, IDENTICAL across p=0,1 (RT2+ abolished)."""
     mesh = _cube(0.8)
     D = {}
-    for p in (0, 1, 2):
+    for p in (0, 1):
         with ng.TaskManager():
             fes = ng.HDiv(mesh, order=p)
             N = DemagOperator(fes, eps=1e-7)
@@ -74,10 +74,10 @@ def test_demagoperator_mat_composes_with_ngsolve():
         assert np.linalg.norm(res.FV().NumPy()) < 1e-5 * np.linalg.norm(rhs.FV().NumPy()), "GMRes did not converge"
 
 
-@pytest.mark.parametrize("p", [0, 1, 2])
+@pytest.mark.parametrize("p", [0, 1])
 def test_demagoperator_gauss_backend_matches_analytic(p):
     """DemagOperator(gram_backend='gauss') -- the Gauss POINT operator (P^T K_point P + near correction)
-    plugged into the SAME .mat path -- matches the analytic Gram DemagFactor to <1e-3 at p=0,1,2, and its
+    plugged into the SAME .mat path -- matches the analytic Gram DemagFactor to <1e-3 at p=0,1 (RT2+ abolished), and its
     .mat is a real NGSolve BaseMatrix that composes into (M + N) for a GMRes solve."""
     mesh = _cube(0.8)
     Mcf = ng.CF((0, 0, ng.z))   # non-uniform -> exercises the volume charge (div M != 0)

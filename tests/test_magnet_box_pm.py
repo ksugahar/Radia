@@ -5,10 +5,14 @@ surface-current ObjRecMag or as a surface-charge MMMM ObjHexahedron (sigma = M.n
 the ObjHexahedron from (center, dimensions, magnetization) -- same call shape as ObjRecMag -- so
 permanent magnets survive the ObjRecMag retirement (CLAUDE.md "Reduce Proprietary API Surface").
 
-Locks (a) magnet_box reproduces stored reference fields (ObjRecMag-INDEPENDENT, so this golden survives
-the ObjRecMag deletion), (b) it matches ObjRecMag while that primitive still exists (cross-check -- drop
-this when ObjRecMag is removed), (c) a PM needs no Solve, (d) the on-axis transverse field vanishes by
-symmetry.
+The Python-facing surface-current ObjRecMag constructor has now been RETIRED (un-exposed from the
+extension); rad.ObjRecMag is a thin shim in radia.magnet that forwards to magnet_box.  So the historical
+"surface-charge magnet == surface-current ObjRecMag" cross-check is now a TAUTOLOGY -- it is kept only as
+a shim-identity smoke (rad.ObjRecMag is the magnet_box shim and gives bit-identical fields).
+
+Locks (a) magnet_box reproduces stored reference fields (ObjRecMag-INDEPENDENT, so this golden is the real
+permanent-magnet correctness lock), (b) the rad.ObjRecMag shim IS magnet_box (identity smoke), (c) a PM
+needs no Solve, (d) the on-axis transverse field vanishes by symmetry.
 """
 from pathlib import Path
 import sys
@@ -45,22 +49,29 @@ def test_magnet_box_reproduces_reference_field():
     rad.UtiDelAll()
 
 
-def test_magnet_box_matches_objrecmag():
-    """Cross-check (while ObjRecMag exists): the MMMM surface-charge magnet == the surface-current one.
-    DELETE this test together with ObjRecMag; test_magnet_box_reproduces_reference_field keeps the lock."""
-    if not hasattr(rad, "ObjRecMag"):
-        pytest.skip("ObjRecMag removed -- reference-field golden covers magnet_box")
+def test_objrecmag_shim_is_magnet_box():
+    """Identity smoke: with the C++ ObjRecMag constructor retired, rad.ObjRecMag is the radia.magnet
+    shim forwarding to magnet_box -- so it must give a BIT-IDENTICAL field.  (This replaces the old
+    surface-charge-vs-surface-current cross-check, which is now a tautology.)"""
+    assert hasattr(rad, "ObjRecMag"), "rad.ObjRecMag shim should remain for production/other-solver scripts"
+    assert rad.ObjRecMag.__module__ == "radia.magnet", (
+        f"rad.ObjRecMag should be the radia.magnet shim, not the C++ ObjRecMag "
+        f"(got {rad.ObjRecMag.__module__})"
+    )
+    # C++ ObjRecMag constructor must be un-exposed from the extension (retirement is real, not shadowed).
+    import radia._radia_pybind as _p
+    assert not hasattr(_p, "ObjRecMag"), "C++ ObjRecMag is still exposed in _radia_pybind"
+
     rad.UtiDelAll()
     pm = rad.magnet_box(CENTER, DIMS, MAGN)
     pts = list(REF.keys()) + [(0.03, -0.02, 0.04)]
-    b_mmmm = [np.array(rad.Fld(pm, "b", list(p))) for p in pts]
+    b_box = [np.array(rad.Fld(pm, "b", list(p))) for p in pts]
     rad.UtiDelAll()
-    rm = rad.ObjRecMag(CENTER, DIMS, MAGN)
-    b_recmag = [np.array(rad.Fld(rm, "b", list(p))) for p in pts]
+    rm = rad.ObjRecMag(CENTER, DIMS, MAGN)   # shim -> magnet_box
+    b_shim = [np.array(rad.Fld(rm, "b", list(p))) for p in pts]
     rad.UtiDelAll()
-    for p, a, b in zip(pts, b_mmmm, b_recmag):
-        nb = np.linalg.norm(b)
-        assert np.linalg.norm(a - b) <= 1e-6 * nb + 1e-9, f"magnet_box != ObjRecMag at {p}: {a} vs {b}"
+    for p, a, b in zip(pts, b_box, b_shim):
+        assert np.array_equal(a, b), f"rad.ObjRecMag shim != magnet_box at {p}: {a} vs {b}"
 
 
 def test_magnet_box_no_solve_needed():

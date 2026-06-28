@@ -11,6 +11,8 @@ n_peri-mesh sweep against the BEM-A surface-mesh sweep.  Recorded in
 | File | Contents |
 |---|---|
 | `3turnCoil_peec_bema_convergence_2026_05_13.json` | Per-step L_coil values: PEEC at n_peri=8/16/32/64 vs BEM-A at 4028/5938/9848/14972 tris.  `frequency=50000`, Cu wire.  L converges monotonically for PEEC (423.89 → 431.55 nH, L_∞ ≈ 434 nH); BEM-A is non-monotonic (432.57 → 417.56 → 412.18 nH) and 14,972 tris is unreachable on this machine (dense memory + MINRES stall).  Production retains n_peri=16 / L = 426.30 nH, ~1 s runtime. |
+| `peec_bema_convergence.ipynb` | Result-bearing public view with the comparison table and convergence plot. |
+| `peec_bema_convergence_results.json` | Versioned durable result JSON synchronized with the notebook. |
 
 ## Key finding
 

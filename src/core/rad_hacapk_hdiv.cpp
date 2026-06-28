@@ -460,6 +460,83 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     }
 }
 
+// CURVED POLYTOPE constructor (FULLY curved): curved CELL volume charge (sub-tets, CurvedTetMapMeasure outer
+// quad + CurvedTetPotential in PhiAt) + curved FACE surface charge (sub-tris, CurvedTriMapMeasure +
+// CurvedTriPotential).  The cell volume charge is DOMINANT (curved RT0 cannot represent uniform M exactly,
+// div M != 0), so the cell MUST be curved.  cell_curved_nodes [n_cell_subtet*30] = 10 P2 nodes/sub-tet,
+// cell_subtet_off [n_cell+1] CSR; ditto face_curved_nodes [n_bf_subtri*18] + face_subtri_off [n_bf+1].
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> cell_curved_nodes, std::vector<int> cell_subtet_off,
+    std::vector<double> cell_cent, std::vector<double> cell_meas,
+    std::vector<double> face_curved_nodes, std::vector<int> face_subtri_off,
+    std::vector<double> face_cent, std::vector<double> face_meas,
+    std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+    std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+    std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el)
+    : m_n_el(n_el), m_analytic(true), m_near_factor(1e30), m_far_quad(0), m_polytope(true),
+      m_gl(std::move(curve_gl)), m_gw(std::move(curve_gw))
+{
+    m_curved_face = true;
+    const int n_cell = n_el;
+    const int n_bf   = (int)face_meas.size();
+    m_n = n_cell + n_bf;
+    m_cent.assign((size_t)m_n * 3, 0.0);
+    m_meas.assign((size_t)m_n, 0.0);
+    m_size.assign((size_t)m_n, 0.0);
+    m_qp.resize(m_n); m_qw.resize(m_n);
+    m_srcCurvedTets.resize(m_n); m_srcCurvedTris.resize(m_n);
+    const int nqt = (int)ref_tet_w.size();              // cell outer quad points per curved sub-tet
+    const int nqr = (int)ref_tri_w.size();              // face outer quad points per curved sub-tri
+
+    // --- CELLS: curved sub-tets (CurvedTetMapMeasure outer quad + CurvedTetPotential in PhiAt) ---
+    for (int c = 0; c < n_cell; ++c) {
+        m_cent[3*c] = cell_cent[3*c]; m_cent[3*c+1] = cell_cent[3*c+1]; m_cent[3*c+2] = cell_cent[3*c+2];
+        m_meas[c] = cell_meas[c]; m_size[c] = std::cbrt(cell_meas[c]);
+        const int t0 = cell_subtet_off[c], t1 = cell_subtet_off[c + 1];
+        m_srcCurvedTets[c].reserve(t1 - t0);
+        m_qp[c].reserve((size_t)(t1 - t0) * nqt);
+        m_qw[c].reserve((size_t)(t1 - t0) * nqt);
+        for (int t = t0; t < t1; ++t) {
+            std::array<rad_hdiv::Vec3, 10> nd10;             // curved P2 sub-tet nodes [t*30] = 10 Vec3
+            for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k)
+                nd10[i][k] = cell_curved_nodes[(size_t)t * 30 + 3*i + k];
+            m_srcCurvedTets[c].push_back(nd10);
+            double nd[10][3];
+            for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) nd[i][k] = nd10[i][k];
+            for (int q = 0; q < nqt; ++q) {                  // curved outer quad: CurvedTetMapMeasure at ref pts
+                double X[3], dV;
+                rad_hdiv::CurvedTetMapMeasure(nd, ref_tet_pts[3*q], ref_tet_pts[3*q+1], ref_tet_pts[3*q+2], X, dV);
+                m_qp[c].push_back({ X[0], X[1], X[2] });
+                m_qw[c].push_back(ref_tet_w[q] * dV);
+            }
+        }
+    }
+    // --- FACES: curved sub-tris (CurvedTriMapMeasure outer quad + CurvedTriPotential in PhiAt) ---
+    for (int b = 0; b < n_bf; ++b) {
+        const int a = n_cell + b;
+        m_cent[3*a] = face_cent[3*b]; m_cent[3*a+1] = face_cent[3*b+1]; m_cent[3*a+2] = face_cent[3*b+2];
+        m_meas[a] = face_meas[b]; m_size[a] = std::sqrt(face_meas[b]);
+        const int t0 = face_subtri_off[b], t1 = face_subtri_off[b + 1];
+        m_srcCurvedTris[a].reserve(t1 - t0);
+        m_qp[a].reserve((size_t)(t1 - t0) * nqr);
+        m_qw[a].reserve((size_t)(t1 - t0) * nqr);
+        for (int t = t0; t < t1; ++t) {
+            std::array<rad_hdiv::Vec3, 6> nd6;               // curved P2 sub-tri nodes [t*18] = 6 Vec3
+            for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k)
+                nd6[i][k] = face_curved_nodes[(size_t)t * 18 + 3*i + k];
+            m_srcCurvedTris[a].push_back(nd6);
+            double nd[6][3];
+            for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k) nd[i][k] = nd6[i][k];
+            for (int q = 0; q < nqr; ++q) {                  // curved outer quad: CurvedTriMapMeasure at ref pts
+                double X[3], dA;
+                rad_hdiv::CurvedTriMapMeasure(nd, ref_tri_pts[2*q], ref_tri_pts[2*q+1], X, dA);
+                m_qp[a].push_back({ X[0], X[1], X[2] });
+                m_qw[a].push_back(ref_tri_w[q] * dA);
+            }
+        }
+    }
+}
+
 // HIGH-ORDER constructor: polynomial charges (monomial basis per host).  See the header for the contract.
 RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
@@ -1046,6 +1123,24 @@ double RadHACApKChargeGram::PhiAtHO(int src, const double p[3]) const
 double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
 {
     if (m_polytope) {
+        if (m_curved_face) {     // FULLY CURVED polytope: curved sub-tet (cell) / sub-tri (face) potentials
+            const int nq = (int)m_gl.size();
+            double tot = 0.0;
+            if (src < m_n_el) {  // CELL volume charge: sum CurvedTetPotential over the cell's curved sub-tets
+                for (const auto& nd10 : m_srcCurvedTets[src]) {
+                    double nd[10][3];
+                    for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) nd[i][k] = nd10[i][k];
+                    tot += rad_hdiv::CurvedTetPotential(nd, 0, 0, 0, p, m_gl.data(), m_gw.data(), nq);
+                }
+            } else {             // FACE surface charge: sum CurvedTriPotential over the face's curved sub-tris
+                for (const auto& nd6 : m_srcCurvedTris[src]) {
+                    double nd[6][3];
+                    for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k) nd[i][k] = nd6[i][k];
+                    tot += rad_hdiv::CurvedTriPotential(nd, 0, 0, p, m_gl.data(), m_gw.data(), nq);
+                }
+            }
+            return tot;          // constant RT0 charge -> monomial exponent 0
+        }
         const std::vector<std::array<rad_hdiv::Vec3, 3>>& tris = m_srcTris[src];
         if (src < m_n_el) {
             // CELL: divergence-theorem polytope potential = (1/2) sum_tri d_tri * TriPotential(tri,p),
@@ -1069,7 +1164,7 @@ double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
             }
             return 0.5 * tot;
         }
-        double tot = 0.0;                          // FACE: sum of sub-triangle Wilton potentials
+        double tot = 0.0;        // FACE: sum of flat sub-triangle Wilton potentials
         for (const auto& T : tris) {
             double V[3][3] = {{T[0][0],T[0][1],T[0][2]}, {T[1][0],T[1][1],T[1][2]}, {T[2][0],T[2][1],T[2][2]}};
             tot += rad_hdiv::TriPotential(V, p);

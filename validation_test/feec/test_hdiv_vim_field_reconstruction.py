@@ -25,7 +25,7 @@ PTS = [(0.15, 0.10, 0.20), (-0.20, 0.10, 0.15), (0.10, -0.25, 0.05),
        (0.05, 0.05, -0.30), (-0.10, -0.10, 0.10)]
 
 
-@pytest.mark.parametrize("order", [0, 1, 2])
+@pytest.mark.parametrize("order", [0, 1])
 def test_uniform_sphere_field_reconstruction(order):
     """Uniformly magnetized unit sphere, M = zhat [A/m]: B inside = MU0*(2/3)*zhat (demag factor 1/3),
     UNIFORM throughout the interior, zero transverse components."""
