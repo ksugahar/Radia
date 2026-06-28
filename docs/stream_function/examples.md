@@ -11,6 +11,10 @@ and benchmark runners promoted from examples now live under
 
 Human-facing demos remain under
 [`examples/stream_function/`](../../examples/stream_function/).
+The public result-saved demo entry point is
+[`demo_gallery.ipynb`](demo_gallery.ipynb), synchronized with
+[`demo_gallery_results.json`](demo_gallery_results.json) and
+[`demo_gallery_result.json`](demo_gallery_result.json).
 
 ## Core demos (axisymmetric / fingerprint / planar)
 
