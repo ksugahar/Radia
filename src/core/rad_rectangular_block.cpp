@@ -52,26 +52,7 @@ void radTRecCur::B_comp(radTField* FieldPtr)
 	if(J.x!=0. || J.y!=0. || J.z!=0.) J_is_Zero = 0;
 	TVector3d P_min_CenPo = FieldPtr->P - CentrPoint;
 
-	double AlreadyComputedStuff[10];
-	AlreadyComputedStuff[0] = P_min_CenPo.x; 
-	AlreadyComputedStuff[1] = P_min_CenPo.y; 
-	AlreadyComputedStuff[2] = P_min_CenPo.z;
-	AlreadyComputedStuff[3] = P_min_CenPo.x*P_min_CenPo.x; 
-	AlreadyComputedStuff[4] = P_min_CenPo.y*P_min_CenPo.y; 
-	AlreadyComputedStuff[5] = P_min_CenPo.z*P_min_CenPo.z;
-	AlreadyComputedStuff[6] = Dimensions.x*Dimensions.x; 
-	AlreadyComputedStuff[7] = Dimensions.y*Dimensions.y; 
-	AlreadyComputedStuff[8] = Dimensions.z*Dimensions.z;
-	AlreadyComputedStuff[9] = (AlreadyComputedStuff[6] + AlreadyComputedStuff[7] + AlreadyComputedStuff[8])/
-							  (AlreadyComputedStuff[3] + AlreadyComputedStuff[4] + AlreadyComputedStuff[5]);
-	double SquaredMltpolCritRatio = AlreadyComputedStuff[9];
-	double* MltThr = FieldPtr->CompCriterium.MltplThresh;
-	if(J_is_Zero && !FieldPtr->FieldKey.A_ && !FieldPtr->FieldKey.Phi_ && 
-	   (SquaredMltpolCritRatio<MltThr[0] || SquaredMltpolCritRatio<MltThr[1] || SquaredMltpolCritRatio<MltThr[2] || SquaredMltpolCritRatio<MltThr[3]))
-	{
-		if(SquaredMltpolCritRatio<MltThr[0]) return;
-		else B_compMultipole(FieldPtr, AlreadyComputedStuff); return;
-	}
+// [far-field magnetization multipole shortcut + its precompute REMOVED 2026-06-28: radTRecCur is current-only]
 
 	if(radYield.Check()==0) return; // To allow multitasking on Mac: consider better places for this
 
@@ -98,11 +79,7 @@ void radTRecCur::B_comp(radTField* FieldPtr)
 	double y0 = BfSt.y[0], y1 = BfSt.y[1];
 	double z0 = BfSt.z[0], z1 = BfSt.z[1];
 
-	if(FieldPtr->FieldKey.M_)
-	{
-		if((x0*x1<0) && (y0*y1<0) && (z0*z1<0)) FieldPtr->M += Magn;
-		//if(!FieldPtr->FieldKey.B_ && !FieldPtr->FieldKey.H_ && !FieldPtr->FieldKey.A_ && !FieldPtr->FieldKey.Phi_) return;
-	}
+// [FieldKey.M_ query REMOVED 2026-06-28: a current block has no magnetization]
 	if(FieldPtr->FieldKey.J_) //OC061008
 	{
 		if(!J_is_Zero) //to drop this test?
@@ -234,18 +211,6 @@ void radTRecCur::B_comp(radTField* FieldPtr)
 						 +y1*(ln_x0plD010_di_x1plD110+ln_x1plD111_di_x0plD011)
 						 +x0*(ln_y0plD001_di_y1plD011+ln_y1plD010_di_y0plD000)
 						 +x1*(ln_y0plD100_di_y1plD110+ln_y1plD111_di_y0plD101));
-		if(J_is_Zero)
-		{
-			if(FieldPtr->FieldKey.A_)
-			{
-				TVector3d BufForA(Magn.y*BufVect.z-Magn.z*BufVect.y,
-								  Magn.z*BufVect.x-Magn.x*BufVect.z,
-								  Magn.x*BufVect.y-Magn.y*BufVect.x);
-				FieldPtr->A += dConstA*BufForA;  // A uses mu_0/(4*pi) for curl(A) = B
-			}
-			if(FieldPtr->FieldKey.Phi_)	FieldPtr->Phi += dConst2*(Magn*BufVect);
-		}
-		else
 		{
 			if(FieldPtr->FieldKey.A_)
 			{
@@ -335,195 +300,12 @@ void radTRecCur::B_comp(radTField* FieldPtr)
 		}
 	}
 	
-	if(((FieldPtr->FieldKey.B_ || FieldPtr->FieldKey.H_) && J_is_Zero) || FieldPtr->FieldKey.PreRelax_)
-	{
-		T = T0 + T1;
-		if(!(FieldPtr->FieldKey.A_ || FieldPtr->FieldKey.Phi_))
-		{
-			S.x = -log(x0plD010_di_x1plD110*x1plD100_di_x0plD000*x0plD001_di_x1plD101*x1plD111_di_x0plD011);
-			S.y = -log(y0plD100_di_y1plD110*y1plD010_di_y0plD000*y0plD001_di_y1plD011*y1plD111_di_y0plD101);
-			S.z = -log(z0plD100_di_z1plD101*z1plD001_di_z0plD000*z0plD010_di_z1plD011*z1plD111_di_z0plD110);
-		}
-		else
-		{
-			S.x = -(ln_x0plD010_di_x1plD110+ln_x1plD100_di_x0plD000+ln_x0plD001_di_x1plD101+ln_x1plD111_di_x0plD011);
-			S.y = -(ln_y0plD100_di_y1plD110+ln_y1plD010_di_y0plD000+ln_y0plD001_di_y1plD011+ln_y1plD111_di_y0plD101);
-			S.z = -(ln_z0plD100_di_z1plD101+ln_z1plD001_di_z0plD000+ln_z0plD010_di_z1plD011+ln_z1plD111_di_z0plD110);
-		}
-		T=dConst2*T; S=dConst2*S;
-		
-		if(FieldPtr->FieldKey.PreRelax_)
-		{
-			TVector3d& RefB = FieldPtr->B;
-			TVector3d& RefH = FieldPtr->H;
-			TVector3d& RefA = FieldPtr->A;
-			RefB.x = T.x; RefB.y = -S.z; RefB.z = -S.y;
-			RefH.x = -S.z; RefH.y = T.y; RefH.z = -S.x;
-			RefA.x = -S.y; RefA.y = -S.x; RefA.z = T.z;
-			return;
-		}
-
-		TVector3d Str0(T.x,-S.z,-S.y), Str1(-S.z,T.y,-S.x), Str2(-S.y,-S.x,T.z);
-		TMatrix3d MatrF(Str0, Str1, Str2);
-		TVector3d BufH=MatrF*Magn;
-		if(FieldPtr->FieldKey.B_)
-		{
-			TVector3d BufB=BufH;
-			if((x0*x1<0) && (y0*y1<0) && (z0*z1<0)) BufB+=Magn;
-			FieldPtr->B += BufB;
-		}
-		FieldPtr->H += BufH;
-	}
+// [magnetization demag-tensor B/H + PreRelax block REMOVED 2026-06-28: current-only]
 }
 
 //-------------------------------------------------------------------------
 
-void radTRecCur::B_compMultipole(radTField* FieldPtr, double* AlreadyComputedStuff)
-{
-	double* MltThr = FieldPtr->CompCriterium.MltplThresh;
-	double SquaredMltpolCritRatio = AlreadyComputedStuff[9];
-	TVector3d T(0.,0.,0.), S(0.,0.,0.);
-	double t1, t2, t3, t4, t5, t6, t7, t9, t10, t12, 
-		   t13, t29, t32, t35, t36, t37, t39, t40, t42, t43, 
-		   t44, t45, t46, t47, t50, t51, t53, t54, t58, t60, 
-		   t64, t66, t68, t69, t70, t71, t72, t74, t75, t86, 
-		   t88, t90, t91, t92, t93, t95, t110, t111, t112, t114, 
-		   t116, t117, t118, t119, t120, t121, t122, t123, t124, t125, 
-		   t128, t129, t131, t142, t144, t145, t146, t147, t148, t152, 
-		   t153, t166, t168, t169, t170, t171, t175, t190, t191, t195, 
-		   t196, t208, t212, t216, t230, t231, t233,
-		   t9t13, t10t13, t10t13mumi3, t54t40, t66t72, t88t93, t120mu180, t120mu90, t122mu6, t119mu101, 
-		   t121mu101, t117mu101, t124mu101, t118mu101, t123mu101, t117mu116, t118mu116, t119mu116, 
-		   t123mu116, t121mu116, t124mu116,
-		   t116mu8, t122mu8, t125mu8, t42mu8, t46mu8, t47mu8, t125mu6, t116mu6, t43mu23, t44mu23, t45mu23, 
-		   t44mu7, t45mu7, t43mu7, t46mu2, t42mu2, t47mu2,
-		   t1pt2, t1pt3, t2pt3, t42pt46, t44pt45, t42pt47, t43pt45, t46pt47, t43pt44,
-		   t121pt123, t118pt124, t119pt124, t117pt123, t117pt121, t118pt119,
-		   t121pt123mu11, t121pt123mu4, t118pt124mu11, t118pt124mu4, t119pt124mu11, t119pt124mu4, t117pt123mu11, t117pt123mu4,
-		   t117pt121mu11, t117pt121mu4, t118pt119mu11, t118pt119mu4;
-	const double c21d128 = 21.0/128.0;
-	const double c3d128 = 3.0/128.0;
-	const double c35d64 = 35.0/64.0;
-	const double c5d64 = 5.0/64.0;
-	const double c105d64 = 105.0/64.0;
-	double c21d128t131t114, c21d128t142t148, c21d128t166t171, c35d64t191, c5d64t208, 
-		   c35d64t212, c35d64t231, c3d128t110, c5d64t110;
-	double x, y, z, Lx, Ly, Lz;
-
-	x = AlreadyComputedStuff[0]; y = AlreadyComputedStuff[1]; z = AlreadyComputedStuff[2];
-	Lx = Dimensions.x; Ly = Dimensions.y; Lz = Dimensions.z;
-
-	t1 = AlreadyComputedStuff[3]; t2 = AlreadyComputedStuff[4]; t3 = AlreadyComputedStuff[5];
-	t1pt2 = t1+t2; t1pt3 = t1+t3; t2pt3 = t2+t3;
-	t4 = t1pt2+t3; t5 = sqrt(t4); t6 = t4*t4; t7 = t6*t4; t9 = t5/t7; t10 = t9*y; t12 = Lx*Ly; t13 = t12*Lz;
-	t9t13 = t9*t13; t10t13 = t10*t13; t10t13mumi3 = -3.*t10t13;
-	t53 = x*z;
-	S.x = t10t13mumi3*z;
-	T.x = (2.0*t1-t2pt3)*t9t13;
-	S.y = -3.0*t9t13*t53;
-	T.y = (2.0*t2-t1pt3)*t9t13;
-	S.z = t10t13mumi3*x;
-	T.z = (2.0*t3-t1pt2)*t9t13;
-	if(SquaredMltpolCritRatio<MltThr[1]) goto FinalFieldDefinition;
-
-	t29 = y*z; t32 = t6*t6;
-	t35 = t5/t32/t4;
-	t36 = AlreadyComputedStuff[6];
-	t37 = t36*Lx; t39 = Ly*Lz;
-	t40 = t35*t37*t39; t42 = t1*t1; t43 = t1*t2; t44 = t1*t3; t45 = t2*t3; t46 = t2*t2; t47 = t3*t3;
-	t50 = t37*Ly; t51 = t50*Lz; 
-	t54 = 3.0*t2pt3-4.0*t1;
-	t42pt46 = t42+t46; t44pt45 = t44+t45; t42pt47 = t42+t47; t43pt45 = t43+t45; 
-	t46pt47 = t46+t47; t43pt44 = t43+t44;
-	t42mu8 = 8.0*t42; t46mu8 = 8.0*t46; t47mu8 = 8.0*t47; 
-	t58 = (4.0*t42pt46-27.0*t43+3.0*t44pt45-t47)*t35; t60 = y*x;
-	t64 = (4.0*t42pt47-27.0*t44+3.0*t43pt45-t46)*t35;
-	t66 = 3.0*t1-4.0*t2+3.0*t3; t68 = t35*Lx; t69 = AlreadyComputedStuff[7];
-	t70 = t69*Ly; t71 = t70*Lz; t72 = t68*t71; t74 = Lx*t70; t75 = t74*Lz;
-	t86 = (4.0*t46pt47-27.0*t45+3.0*t43pt44-t42)*t35;
-	t88 = -4.0*t3+3.0*t1pt2;
-	t90 = AlreadyComputedStuff[8]; t91 = t90*Lz; t92 = Ly*t91; t93 = t68*t92; t95 = t12*t91;
-	t54t40 = t54*t40; t66t72 = t66*t72; t88t93 = t88*t93;
-	S.x += (t66t72+t88t93-(6.0*t1-t2pt3)*t40)*0.625*t29;
-	S.y += (t54t40+t88t93-(6.0*t2-t1pt3)*t72)*0.625*t53;
-	S.z += (t54t40+t66t72-(6.0*t3-t1pt2)*t93)*0.625*t60;
-	T.x += ((t42mu8-24.0*t43pt44+6.0*t45+3.0*t46pt47)*t35*t51-t58*t75-t64*t95)*0.125;
-	T.y += ((t46mu8-24.0*t43pt45+6.0*t44+3.0*t42pt47)*t35*t75-t58*t51-t86*t95)*0.125;
-	T.z += ((t47mu8-24.0*t44pt45+6.0*t43+3.0*t42pt46)*t35*t95-t64*t51-t86*t75)*0.125;
-	if(SquaredMltpolCritRatio<MltThr[2]) goto FinalFieldDefinition;
-
-	t110 = t5/t32/t7; t111 = t36*t36; t112 = t111*Lx; t114 = t110*t112*t39; t116 = t42*t1; t117 = t42*t2;
-	t118 = t42*t3; t119 = t1*t46; t120 = t43*t3; t121 = t1*t47; t122 = t46*t2; t123 = t46*t3; t124 = t2*t47;
-	t125 = t47*t3; t128 = t112*Ly; t129 = t128*Lz;
-	t131 = 5.0*t46pt47-20.0*t43pt44+10.0*t45+t42mu8;
-	t142 = 5.0*t42pt47-20.0*t43pt45+10.0*t44+t46mu8;
-	t144 = t110*Lx; t145 = t69*t69; t146 = t145*Ly; t147 = t146*Lz; t148 = t144*t147; t152 = Lx*t146; t153 = t152*Lz;
-	t166 = t47mu8-20.0*t44pt45+5.0*t42pt46+10.0*t43;
-	t168 = t90*t90; t169 = t168*Lz; t170 = Ly*t169; t171 = t144*t170; t175 = t12*t169; t190 = t110*t37;
-	t191 = t190*t71; t195 = t37*t70; t196 = t195*Lz;
-	t121pt123 = t121+t123; t118pt124 = t118+t124; t119pt124 = t124+t119; t117pt123 = t117+t123; t117pt121 = t117+t121; t118pt119 = t118+t119;
-	t120mu180 = 180.0*t120;
-	t208 = (2.0*(t116+t125+t122)-15.0*(t118pt124+t117pt123+t119+t121)+t120mu180)*t110;
-	t212 = t190*t92; t216 = t50*t91; t230 = t70*t91; t231 = t144*t230; t233 = t74*t91;
-	c3d128t110 = c3d128*t110; c5d64t110 = c5d64*t110;
-	c21d128t131t114 = c21d128*t131*t114; c21d128t142t148 = c21d128*t142*t148; c21d128t166t171 = c21d128*t166*t171;
-	c35d64t191 = c35d64*t191; c5d64t208 = c5d64*t208; c35d64t212 = c35d64*t212; c35d64t231 = c35d64*t231;
-	t120mu90 = 90.0*t120; t122mu6 = 6.0*t122; t119mu101 = 101.0*t119; t121mu101 = 101.0*t121;
-	t117mu101 = 101.0*t117; t124mu101 = 101.0*t124; t123mu101 = 101.0*t123; t118mu101 = 101.0*t118; t117mu116 = 116.0*t117; 
-	t118mu116 = 116.0*t118; t119mu116 = 116.0*t119; t123mu116 = 116.0*t123; t121mu116 = 116.0*t121; t124mu116 = 116.0*t124; 
-	t116mu8 = 8.0*t116; t122mu8 = 8.0*t122; t125mu8 = 8.0*t125; 
-	t125mu6 = 6.0*t125; t116mu6 = 6.0*t116; t43mu23 = 23.0*t43; t44mu23 = 23.0*t44; t45mu23 = 23.0*t45;
-	t44mu7 = 7.0*t44; t45mu7 = 7.0*t45; t43mu7 = 7.0*t43; t46mu2 = 2.0*t46; t42mu2 = 2.0*t42; t47mu2 = 2.0*t47;
-	t121pt123mu11 = 11.0*t121pt123; t121pt123mu4 = 4.0*t121pt123; t118pt124mu11 = 11.0*t118pt124; t118pt124mu4 = 4.0*t118pt124;
-	t119pt124mu11 = 11.0*t119pt124; t119pt124mu4 = 4.0*t119pt124; t117pt123mu11 = 11.0*t117pt123; t117pt123mu4 = 4.0*t117pt123;
-	t117pt121mu11 = 11.0*t117pt121; t117pt121mu4 = 4.0*t117pt121; t118pt119mu11 = 11.0*t118pt119; t118pt119mu4 = 4.0*t118pt119;
-	S.x += t29*(c35d64t191*(-t43mu23+t46mu2+t45+t42mu8+t44mu7-t47)
-				+c35d64t212*(t42mu8+t43mu7-t44mu23-t46+t45+t47mu2)
-				-c21d128*(-16.0*(t43pt44-t42)+t46+2.0*t45+t47)*t114
-				-c105d64*(t42-t43pt44-2.0*t46pt47+t45mu7)*t231-c21d128t142t148-c21d128t166t171);
-	S.y += t53*(c35d64t191*(-t43mu23+t42mu2+t44+t46mu8+t45mu7-t47)
-				+c35d64t231*(t46mu8+t43mu7-t45mu23-t42+t44+t47mu2)
-				-c21d128*(-16.0*(t43pt45-t46)+t42+2.0*t44+t47)*t148
-				-c105d64*(t46-t43pt45-2.0*t42pt47+t44mu7)*t212-c21d128t131t114-c21d128t166t171);
-	S.z += t60*(c35d64t212*(t47mu8+t45mu7-t44mu23-t46+t43+t42mu2)
-				+c35d64t231*(-t45mu23+t46mu2+t43+t47mu8+t44mu7-t42)
-				-c21d128*(-16.0*(t44pt45-t47)+t46+2.0*t43+t42)*t171
-				-c105d64*(t47-t44pt45-2.0*t42pt46+t43mu7)*t191-c21d128t131t114-c21d128t142t148);
-	T.x += c3d128t110*(t129*(16.0*t116-120.0*(t117+t118)+90.0*(t119+t121)+t120mu180-5.0*(t122+t125)-15.0*(t123+t124))
-					   +t153*(t116mu6+t118pt124mu11-t117mu101+t121pt123mu4+t119mu116-t120mu90-t122mu8-t125)
-					   +t175*(t116mu6+t117pt123mu11-t118mu101+t119pt124mu4-t120mu90+t121mu116-t122-t125mu8))
-		   -c5d64t110*(t196*(t116mu8-t117mu116-t118pt124mu4+t120mu90-t121pt123mu11+t119mu101+t125-t122mu6)
-					   +t216*(t116mu8-t118mu116-t117pt123mu4-t119pt124mu11+t121mu101+t120mu90-t125mu6+t122))+c5d64t208*t233;
-	T.y += c3d128t110*(t129*(t122mu6+t121pt123mu11-t119mu101+t118pt124mu4+t117mu116-t120mu90-t116mu8-t125)
-					   +t153*(16.0*t122-120.0*(t119+t123)+90.0*(t117+t124)+t120mu180-5.0*(t116+t125)-15.0*(t118+t121))
-					   +t175*(t122mu6+t118pt119mu11-t123mu101+t117pt121mu4-t120mu90+t124mu116-t116-t125mu8))
-		   -c5d64t110*(t196*(t122mu8-t119mu116-t121pt123mu4+t120mu90-t118pt124mu11+t117mu101+t125-t116mu6)
-					   +t233*(t122mu8-t123mu116-t118pt119mu4-t117pt121mu11+t124mu101+t120mu90-t125mu6+t116))+c5d64t208*t216;
-	T.z += c3d128t110*(t129*(t125mu6+t119pt124mu11-t121mu101+t117pt123mu4-t120mu90+t118mu116-t122-t116mu8)
-					   +t153*(t125mu6+t117pt121mu11-t124mu101+t118pt119mu4+t123mu116-t120mu90-t122mu8-t116)
-					   +t175*(16.0*t125-120.0*(t124+t121)+90.0*(t123+t118)+t120mu180-5.0*(t122+t116)-15.0*(t119+t117)))
-		   -c5d64t110*(t216*(t125mu8-t121mu116-t119pt124mu4-t117pt123mu11+t118mu101+t120mu90-t116mu6+t122)
-					   +t233*(t125mu8-t124mu116-t117pt121mu4+t120mu90-t118pt119mu11+t123mu101+t116-t122mu6))+c5d64t208*t196;
-
-FinalFieldDefinition:
-	const double Pi = 3.141592653589793238;
-	const double dConst2 = 1./4./Pi;
-	T=dConst2*T; S=dConst2*S;
-	if(FieldPtr->FieldKey.PreRelax_)
-	{
-		FieldPtr->B = T; FieldPtr->H = S; return;
-	}
-	TVector3d Str0(T.x,-S.z,-S.y), Str1(-S.z,T.y,-S.x), Str2(-S.y,-S.x,T.z);
-	TMatrix3d MatrF(Str0, Str1, Str2);
-	TVector3d BufH=MatrF*Magn;
-	if(FieldPtr->FieldKey.B_)
-	{
-		TVector3d BufB=BufH;
-		if((Abs(x)<0.5*Lx) && (Abs(y)<0.5*Ly) && (Abs(z)<0.5*Lz)) BufB+=Magn;
-		FieldPtr->B += BufB;
-	}
-	FieldPtr->H += BufH;
-}
+// radTRecCur::B_compMultipole (magnetization multipole expansion) REMOVED 2026-06-28 (current-only)
 
 //-------------------------------------------------------------------------
 
