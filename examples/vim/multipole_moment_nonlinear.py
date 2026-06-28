@@ -46,7 +46,7 @@ def M_BH_vec(H):
 
 def moment_nonlinear(hexes, Happ, maxit=80, tol=1e-10, m_depth=6):
     """Anderson-accelerated secant fixed-point, NO loop deflation (solve A directly -- A is non-singular)."""
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(MU_R0))

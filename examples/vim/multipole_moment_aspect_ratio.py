@@ -48,7 +48,7 @@ XW, ZW = 0.12, 0.04                       # C-yoke extents (x,y span 0.12; z spa
 def eiem2_system(hexes, mu_r):
     """EIEM2 point-matching system matrix A = -N + (1/chi) I and the per-element face-DOF groups."""
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))

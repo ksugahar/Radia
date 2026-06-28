@@ -72,7 +72,7 @@ def _norm(row, rhs):
 def assemble(hexes, Happ, mu_r):
     """Dense linear moment system A,b + per-element row blocks + loop basis Lb + the nonlocal operator D."""
     chi = mu_r - 1.0
-    rad.UtiDelAll(); rad.set_demag_backend("yano")
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]
     for h in objs:
         rad.MatApl(h, rad.MatLin(mu_r))
