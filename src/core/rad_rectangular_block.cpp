@@ -684,8 +684,8 @@ void radTRecCur::FunForOuterIntAtSurfInt(double Arg, TVector3d* VectArray)
 		(SurfIntDataPtr->InnerAbsPrecAndLimitsArray)[SurfIntDataPtr->IntegrandLen + 1] = CentrPoint.y + 0.5*Dimensions.y;
 		SurfIntDataPtr->PointOnSurface.z = Arg;
 	}
-	FormalOneFoldInteg(this, &radTRecCur::FunForInnerIntAtSurfInt, SurfIntDataPtr->IntegrandLen, 
-					   SurfIntDataPtr->InnerAbsPrecAndLimitsArray, 
+	FormalOneFoldInteg(this, &radTRecCur::FunForInnerIntAtSurfInt, SurfIntDataPtr->IntegrandLen,
+					   SurfIntDataPtr->InnerAbsPrecAndLimitsArray,
 					   SurfIntDataPtr->InnerElemCompNotFinished, SurfIntDataPtr->InnerIntegVal);
 
 	for(int i=0; i<SurfIntDataPtr->IntegrandLen; i++) VectArray[i] = ((SurfIntDataPtr->InnerIntegVal)[0])[i];
