@@ -41,14 +41,11 @@ def test_demagoperator_factor_order_invariant():
             D[p] = N.DemagFactor(ng.CF((0, 0, 1)))
     for p, v in D.items():
         assert 0.31 < v < 0.345, f"order={p} DemagFactor {v:.5f} not ~1/3"
-    # order-0 uses the EXACT ANALYTIC Gram (Wilton/PhiTet, fast); order>0 uses the Sauter-Schwab QUADRATURE
-    # Gram (no analytic high-order Gram exists).  The near/self quad floor is now ORDER-DEPENDENT (quad >= 3*p,
-    # the PSD requirement -- see test_hdiv_vim_psd): p=1 uses quad=4, p=2 uses quad=6, so the demag factors
-    # differ by the (order-dependent) QUADRATURE accuracy (~4e-4 here, with quad=6 the MORE accurate / closer
-    # to 1/3), NOT a tight same-quad invariance.  All three still agree to within the quad error (~1e-3 on this
-    # coarse cube).  (The order-0 analytic Gram == the validated solve_nonlinear_newton_scalable Gram, ~5e-10.)
-    assert abs(D[1] - D[2]) < 1.5e-3, f"orders 1,2 demag factor disagree beyond quad error: {D}"
-    assert abs(D[0] - D[1]) < 3e-3, f"analytic order-0 vs quadrature high-order beyond quad error: {D}"
+    # order-0 uses the EXACT ANALYTIC Gram (Wilton/PhiTet, fast); order-1 uses the Sauter-Schwab QUADRATURE
+    # Gram (no analytic high-order Gram exists), so RT0 and RT1 differ ONLY by the (order-dependent) quadrature
+    # accuracy (~1e-3 on this coarse cube).  RT2+ is abolished, so the former 3-order invariance is now the
+    # 0-vs-1 check.  (The order-0 analytic Gram == the validated solve_nonlinear_newton_scalable Gram, ~5e-10.)
+    assert abs(D[0] - D[1]) < 3e-3, f"analytic order-0 vs quadrature order-1 beyond quad error: {D}"
 
 
 def test_demagoperator_mat_composes_with_ngsolve():

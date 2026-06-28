@@ -101,7 +101,7 @@ def test_fail_loud_on_nonmagnetic():
             hdiv_demag_solve(mesh, 1.0, _HEXT)
 
 
-@pytest.mark.parametrize("order", [1, 2])
+@pytest.mark.parametrize("order", [1])
 def test_highorder_linear_solve_matches_rt0(order):
     """High-order (order>0) LINEAR material solve is now production-ready (per-element change-of-basis fix,
     2026-06-28): the order-p demag operator is valid (eig in [0,1]) and the material solve p-converges -- it
@@ -119,24 +119,23 @@ def test_highorder_linear_solve_matches_rt0(order):
 
 
 def test_order_gt0_unsupported_combos_fail_loud():
-    """order>0 wires the LINEAR (uniform / per-region) case; the not-yet-validated combos (nonlinear /
-    image / HLU) must RAISE, not silently fall back (No-Fallbacks)."""
+    """order>0 wires the LINEAR (uniform / per-region) AND the flat nonlinear (energy-Newton) cases; the
+    not-yet-wired combos (image symmetry / HLU) must RAISE, not silently fall back (No-Fallbacks)."""
     mesh = _sphere(h=0.7)
-    for kw in (dict(bh_table=[[0.0, 0.0], [1e6, 2.0]]),       # nonlinear at order>0
-               dict(mu_r=100.0, image="+x"),                  # image symmetry at order>0
+    for kw in (dict(mu_r=100.0, image="+x"),                  # image symmetry at order>0
                dict(mu_r=100.0, linear_solver="hlu")):        # HLU is RT0-only
         with pytest.raises(NotImplementedError):
             with ng.TaskManager():
                 hdiv_demag_solve(mesh, H_ext=_HEXT, order=1, **kw)
 
 
-def test_order_gt2_fail_loud():
-    """order>=3 needs the Duffy singular quadrature (the analytic-moment potential is exact only to charge
-    degree 2 / order<=2) -- it must RAISE, not silently return a wrong M (No-Fallbacks)."""
+def test_order_gt1_rt2_abolished():
+    """RT2+ (HDiv solution order >= 2) is abolished -- order>1 must RAISE ValueError (RT2 gave no per-element
+    magnetization gain over RT1 and was slower; No-Fallbacks)."""
     mesh = _sphere(h=0.7)
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="RT2"):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, 100.0, _HEXT, order=3)
+            hdiv_demag_solve(mesh, 100.0, _HEXT, order=2)
 
 
 def test_requires_exactly_one_material_spec():
