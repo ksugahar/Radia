@@ -862,10 +862,12 @@ accelerator("sector_saturation")
 
 Repository anchors:
 
+- `docs/clebsch_hodograph/public_demo.ipynb` (result-saved public demo entry point)
+- `docs/clebsch_hodograph/examples_catalog.ipynb` (full source/result catalog)
 - `docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`
 - `docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`
 - `docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md`
-- `examples/clebsch_hodograph/`
+- `examples/clebsch_hodograph/` (runnable companion set)
 - `tests/feec/test_clebsch_hodograph_research.py`
 """
 
