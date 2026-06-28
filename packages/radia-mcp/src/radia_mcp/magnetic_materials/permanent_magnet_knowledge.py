@@ -124,6 +124,12 @@ uniformly magnetized block has the IDENTICAL external field in both models -- ve
 relative vs `ObjRecMag` off-axis, far field, and on the magnetization axis (golden
 `tests/test_magnet_box_pm.py`).  Same call shape + units as `ObjRecMag`, so it is a direct swap.
 
+**`rad.ObjRecMag` itself is now a SCRIPT-SIDE wrapper over `magnet_box`** (`radia.magnet`, shadows the
+demoted C++ surface-current primitive): existing `rad.ObjRecMag(center, dims, M)` calls in other solvers
+/ examples / tests keep working on the MMMM element with no code change (198 ObjRecMag tests pass
+unchanged, incl. the on-axis machine-precision golden -- the MMMM surface-charge hex reproduces the K&J
+analytic cuboid field to ~1e-16 on-axis, even tighter than the old surface-current ObjRecMag's ~1e-10).
+
 **General shape (non-box) -> build the element directly with M in the constructor:**
 ```python
 # Br = 1.2 T (NdFeB N42); M = Br / mu_0 in A/m = 954930
