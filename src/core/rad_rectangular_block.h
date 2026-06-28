@@ -58,8 +58,8 @@ public:
 	short J_IsNotZero;
 	short InternalFacesAfterCut;
 
-	radTRecCur(const TVector3d& InCPoiVect, const TVector3d& InDimsVect, 
-			   const TVector3d& InMagnVect, const TVector3d& InJ_vect, const radThg& InMaterHandle, short InJ_IsNotZero =0) 
+	radTRecCur(const TVector3d& InCPoiVect, const TVector3d& InDimsVect,
+			   const TVector3d& InMagnVect, const TVector3d& InJ_vect, const radThg& InMaterHandle, short InJ_IsNotZero =0)
 			   : radTg3dRelax(InCPoiVect, InMagnVect, InMaterHandle)
 	{
 		Dimensions=InDimsVect; J=InJ_vect;
@@ -68,8 +68,8 @@ public:
 
 		J_IsNotZero = InJ_IsNotZero;
 	}
-	radTRecCur(const TVector3d& InCPoiVect, const TVector3d& InDimsVect, 
-			   const TVector3d& InMagnVect, 
+	radTRecCur(const TVector3d& InCPoiVect, const TVector3d& InDimsVect,
+			   const TVector3d& InMagnVect,
 			   const TVector3d& InJ_vect, short InJ_IsNotZero)
 			   : radTg3dRelax(InMagnVect)
 	{
