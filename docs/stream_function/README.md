@@ -33,6 +33,7 @@ short *entry point*; this folder is the detailed reference.
 | Optimise the coil SURFACE geometry (bilevel) | [deformation.md](deformation.md) |
 | Look up the Python API | [api.md](api.md) |
 | Reproduce a published benchmark | [benchmarks.md](benchmarks.md) |
+| Run the public demo gallery | [demo_gallery.ipynb](demo_gallery.ipynb) |
 | Audit / migrate the remaining example scripts | [examples_catalog.ipynb](examples_catalog.ipynb) |
 | Hook ngsolve.bem H-matrix (2604+) | [ngsbem_integration.md](ngsbem_integration.md) |
 | **Design a stellarator coil** (REGCOIL / NESCOIL / FOCUS: winding-surface current potential, net current, coil force/stress, VMEC boundary, winding-shape) | [**fusion.md**](fusion.md) |
@@ -65,7 +66,8 @@ res = aca_tsvd(len(obs), len(sources), entry, modes=20)
 phi = pseudo_inverse_solve(res, B_target, k_mode=10)
 ```
 
-Or jump straight to one of the demos in
+Or jump through the result-saved public gallery
+[`demo_gallery.ipynb`](demo_gallery.ipynb), then run one of the companion demos in
 [`examples/stream_function/`](../../examples/stream_function/):
 
 ```bash

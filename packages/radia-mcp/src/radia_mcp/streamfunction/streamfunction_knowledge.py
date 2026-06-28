@@ -128,6 +128,10 @@ DOCS + DEMOS
   docs/stream_function/  (README, theory, regularization, single_stroke,
     deformation, examples, api, benchmarks)
   SHOWCASE NOTEBOOKS (executed, outputs embedded -- the method run live):
+    docs/stream_function/demo_gallery.ipynb    -- public demo gallery for the
+       remaining human-facing examples; validation/benchmark runners are split
+       to validation_test/stream_function, while examples/stream_function stays
+       the runnable companion set for now
     docs/stream_function/theory.ipynb          -- build_fem_matrix on plane /
        cylinder / sphere + achievable RMS; Path-A residual-vs-iteration (honest
        non-monotone with auto-levels); complexity-tier table from the 4 demos

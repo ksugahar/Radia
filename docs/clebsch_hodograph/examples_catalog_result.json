@@ -1,0 +1,183 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-28T01:04:27Z",
+  "notebook": "docs/clebsch_hodograph/examples_catalog.ipynb",
+  "notebook_sha256": "ac5a5ba1578d7b403721b3286de6442541d6f587c9cf0f759640947d1e0234f7",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/clebsch_hodograph/examples_catalog.ipynb",
+    "cells": 8,
+    "code_cells": 7,
+    "executed_code_cells": 7,
+    "code_cells_with_outputs": 7,
+    "output_count": 9,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "434777e504df89fa5a262aae9a15a080758c0a89e3cc0d2278ce9e437afb9c61",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, display\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'examples_catalog_results.json').exists():\n    NOTEBOOK_DIR = Path('docs/clebsch_hodograph').resolve()\narchive = json.loads((NOTEBOOK_DIR / 'examples_catalog_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(archive['summary'], indent=2, ensure_ascii=False))",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 415,
+          "text_sha256": "aa871d75e58ba3b806ee29985deddac9166e71f5ebba9988a3d92710e4a98624",
+          "text_preview": "{\n  \"script_count\": 46,\n  \"source_line_count\": 12664,\n  \"artifact_count\": 65,\n  \"lane_counts\": {\n    \"docs_differential_forms_demo\": 18,\n    \"docs_accelerator_design_demo\": 16,\n    \"docs_hodograph_transform_demo\": 11,\n    \"docs_design_bridge_demo\": 1\n  },\n  \"protected_script_count\": 46,\n  \"validation_lane\": \"validation_test/feec/test_clebsch_hodograph_research.py currently golden-locks the research examples.\"\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "32a3cdfe2ec8e356836e7dcc0dad68714de351c5cc43691f17101585f3456ddf",
+      "source_preview": "rows = sorted(archive['summary']['lane_counts'].items())\nmd = '## Hodograph demo lanes\\n\\n' + '\\n'.join(['| lane | count |', '| --- | ---: |'] + [f'| {k} | {v} |' for k, v in rows])\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 3,
+      "source_sha256": "e1b874ab9b53d45f87b15b2f766b1b495fe836163f09f4a657043ca12e95b8ef",
+      "source_preview": "records = archive['records']\nfeatured_names = [\n    'HODOGRAPH_BACKBONE.md',\n    'hodograph_kelvin_2d.py',\n    'hodograph_kelvin_axisym.py',\n    'clebsch_kelvin_3d.py',\n    'chaplygin_hodograph_2d.py',\n    'a_method_clebsch_2d.py',\n    'accel_pole_design.py',\n    'endpack_cobake_loft.py',\n]\nrows = []\nfor name in featured_names[1:]:\n    r = next((x for x in records if x['name'] == name), None)\n    if not r:\n        continue\n    arts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([f'[`{r[\"name\"]}`](../../{r[\"path\"]})', r['lane'], arts, r['source']['summary']])\nmd = '## Public demo spine\\n\\nStart from [`HODOGRAPH_BACKBONE.md`](HODOGRAPH_BACKBONE.md), then inspect these runnable companions.\\n\\n' + '\\n'.join(['| demo | lane | saved results | source summary |', '| --- | --- | --- | --- |'] + [f'| {a} | {b} | {c} | {d} |' for a,b,c,d in rows])\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 4,
+      "source_sha256": "48e55d23b16cd796eb483e93c932e84f4900ed3fb29ea9c62193ec25fe6b334d",
+      "source_preview": "artifact_rows = []\nfor r in records:\n    for a in r.get('sibling_artifacts', []):\n        artifact_rows.append([f'[`{r[\"name\"]}`](../../{r[\"path\"]})', f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})', a['bytes'], a['sha256'][:12]])\nartifact_rows = artifact_rows[:30]\nmd = '## Saved result/media artifacts (sample)\\n\\n' + '\\n'.join(['| script | artifact | bytes | sha256 |', '| --- | --- | ---: | --- |'] + [f'| {a} | {b} | {c} | `{d}` |' for a,b,c,d in artifact_rows])\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 5,
+      "source_sha256": "3f57fb8c7dc049d78cefed2fbbe442a78de97c34ecf78eb79f4d70e7b757a275",
+      "source_preview": "protected = [r for r in records if r['protected_reference_count']]\nrows = []\nfor r in protected[:20]:\n    first = r['protected_references'][0] if r['protected_references'] else {}\n    where = f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"name\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where, r['lane']])\nmd = '## Protected validation references\\n\\n' + '\\n'.join(['| script | refs | first ref | lane |', '| --- | ---: | --- | --- |'] + [f'| {a} | {b} | {c} | {d} |' for a,b,c,d in rows])\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 6,
+      "source_sha256": "5295ab6d985419b7be4bbfe914c42e78cd25009e4951bfd78cd722a13d716f1e",
+      "source_preview": "for name in ['hodograph_kelvin_2d.py', 'chaplygin_hodograph_2d.py', 'accel_pole_design.py']:\n    r = next(x for x in records if x['name'] == name)\n    excerpt = r['source']['text'][:1200].replace('```', '` ` `')\n    display(Markdown(f'## Source excerpt: `{r[\"path\"]}`\\n\\n```python\\n{excerpt}\\n```'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 7,
+      "source_sha256": "8ce0067eb09eca79c992cdcf7b2d8750d367749ce1e16301fd48d2229d507bb6",
+      "source_preview": "current_paths = {r['path'] for r in archive['records']}\nassert archive['summary']['script_count'] == len(current_paths)\nassert all(r['source']['text'] for r in archive['records'])\nassert archive['generated_at_utc']\nprint('clebsch_hodograph public demo catalog synchronized')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 51,
+          "text_sha256": "3c7eea930a0433ce8235ceed809625b26b8a51f44ed0038828313ca5edaa8ad3",
+          "text_preview": "clebsch_hodograph public demo catalog synchronized\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

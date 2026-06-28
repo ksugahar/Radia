@@ -1,0 +1,407 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-28T01:11:23Z",
+  "notebook": "docs/clebsch_hodograph/public_demo.ipynb",
+  "notebook_sha256": "cace1267ec07f7fc0b3049e9f8263dc98e1f629465c3fb39e4ffc6845fdb7b54",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/clebsch_hodograph/public_demo.ipynb",
+    "cells": 9,
+    "code_cells": 7,
+    "executed_code_cells": 7,
+    "code_cells_with_outputs": 7,
+    "output_count": 25,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "9ee7574db1240b088dfae6c87819a081e38d78957d8ceb9252adbcbe1e36c8b1",
+      "source_preview": "from pathlib import Path\nimport json\nfrom IPython.display import Markdown, Image, display\n\nCWD = Path.cwd()\nif (CWD / 'public_demo_results.json').exists():\n    NOTEBOOK_DIR = CWD\n    REPO = NOTEBOOK_DIR.parents[1]\nelse:\n    REPO = CWD\n    NOTEBOOK_DIR = REPO / 'docs' / 'clebsch_hodograph'\n\ndemo = json.loads((NOTEBOOK_DIR / 'public_demo_results.json').read_text(encoding='utf-8'))\ncatalog = json.loads((NOTEBOOK_DIR / 'examples_catalog_results.json').read_text(encoding='utf-8'))\nprint(json.dumps(demo['summary'], indent=2, ensure_ascii=False))",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 155,
+          "text_sha256": "7b401536cf6ee1876e06053c97002d838d3870e12d11cf67102714f4b4346249",
+          "text_preview": "{\n  \"selected_demo_count\": 10,\n  \"selected_image_count\": 8,\n  \"catalog_script_count\": 46,\n  \"catalog_artifact_count\": 65,\n  \"protected_script_count\": 46\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "bc5922718a458ad6dbd5da664faf6e3475b78d14314747af0b6503911052fe95",
+      "source_preview": "axis_rows = [\n    ['map', 'geometric Kelvin', 'compactifies the open boundary; 2-D conformal is weight-free, 3-D/axisym carries a weight'],\n    ['dimension', '2-D / axisym / 3-D', 'decides whether the Hodge star is conformally invariant and whether a global Clebsch pair is obstructed'],\n    ['material', 'linear / saturable', 'moves the Hodge star; magnetic saturation keeps the tangent SPD, so it does not create a hodograph fold'],\n]\nmd = '### Reading map\\n\\n' + '\\n'.join(['| axis | cell | consequence |', '| --- | --- | --- |'] + [f'| {a} | {b} | {c} |' for a,b,c in axis_rows])\nmd += '\\n\\nTheory spine: [HODOGRAPH_BACKBONE.md](HODOGRAPH_BACKBONE.md), [DESIGN_METHODOLOGY.md](DESIGN_METHODOLOGY.md), [HDIV_VIM_CLEBSCH_BRIDGE.md](HDIV_VIM_CLEBSCH_BRIDGE.md).'\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "8229f6c489fe11167a652f9863bc9df2c92e87c80a1eb9c7868de76d501d490e",
+      "source_preview": "rows = []\nfor r in demo['selected_records']:\n    artifacts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([\n        f'[`{r[\"name\"]}`](../../{r[\"path\"]})',\n        r['lane'],\n        artifacts,\n        r['source']['summary'],\n    ])\nmd = '## Representative runnable demos\\n\\n' + '\\n'.join(['| demo | lane | saved artifacts | what it demonstrates |', '| --- | --- | --- | --- |'] + [f'| {a} | {b} | {c} | {d} |' for a,b,c,d in rows])\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 4,
+      "source_sha256": "da1528eb265ac3e83d91b38ddf0de543f26b1cd27e77febf3180ecd8512f7f85",
+      "source_preview": "display(Markdown('## Saved figures from the runnable companions'))\nfor item in demo['selected_images']:\n    path = REPO / item['path']\n    display(Markdown(f'### `{item[\"script\"]}`  \\n`{item[\"path\"]}`  \\nsha256 `{item[\"sha256\"][:16]}`'))\n    display(Image(filename=str(path), width=560))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 141520,
+              "sha256": "0e6b5ea007078206451d86fabe3c38977b81721278dd5e841ea2fe445be37f5e"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 244036,
+              "sha256": "1e807db96dee036d8debdf1a389b939d7343a6f9a74c35fa1c128a6a9e684d4b"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 130532,
+              "sha256": "648841b6e03b1d783ed235b1a11f3bfc69f4d0d683cba898b3a26020e4f5c777"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 210512,
+              "sha256": "3bdacfb21a8046cb1daac49f4f7ad34c7c741e5b4bc29507aa348b7ce1fa086e"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 115432,
+              "sha256": "6e9dc4b237a14495ae9830505949dc54243e48660143982a8e6130b35991383d"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 278348,
+              "sha256": "6331c8dc8f3843348aca92e25bb8ced6f533e291093636e5bb3758002b7cbd7a"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 354276,
+              "sha256": "41578c2cab1abec9ab48500a75edcefa0252b98609979d3eeaacc6cbb686f6c9"
+            }
+          }
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 91976,
+              "sha256": "979944788588fde0739de13de78e75a8af983f6d8b28f881f9e276adb79a54d8"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 5,
+      "source_sha256": "831b2f728aa6373d491eb93195c193af10a77b4ec1eff95ccd5429d01a6aa887",
+      "source_preview": "protected = [r for r in catalog['records'] if r['protected_reference_count']]\nrows = []\nfor r in protected[:12]:\n    first = r['protected_references'][0] if r['protected_references'] else {}\n    where = f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"name\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where])\nmd = '## Protected validation references\\n\\n' + '\\n'.join(['| script | refs | first protected reference |', '| --- | ---: | --- |'] + [f'| {a} | {b} | {c} |' for a,b,c in rows])\ndisplay(Markdown(md))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 6,
+      "source_sha256": "61866c3c1ffbc9350eba4c57ebfe920e5ae1e2eb6c1b06c5fdd382cc02141257",
+      "source_preview": "for name in ['hodograph_kelvin_2d.py', 'chaplygin_hodograph_2d.py', 'accel_pole_design.py']:\n    r = next(x for x in demo['selected_records'] if x['name'] == name)\n    excerpt = r['source']['text'][:1100].replace('```', '` ` `')\n    display(Markdown(f'## Source excerpt: `{r[\"path\"]}`\\n\\n```python\\n{excerpt}\\n```'))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 8,
+      "execution_count": 7,
+      "source_sha256": "63b18e7a7eb16eae2f3eff1b4d46b577b607e5b57f7055e9d75fff5357efc36b",
+      "source_preview": "assert demo['summary']['selected_demo_count'] == len(demo['selected_records'])\nassert demo['summary']['selected_image_count'] == len(demo['selected_images'])\nassert catalog['summary']['script_count'] == 46\nassert catalog['summary']['protected_script_count'] == 46\nassert all(r['source']['text'] for r in demo['selected_records'])\nprint('clebsch_hodograph public notebook layer is synchronized; examples remain protected runnable companions')",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 103,
+          "text_sha256": "93d07817e74f541bc405bd326ffee4730842d7c9aa05eb6ca8201ecc4e169b36",
+          "text_preview": "clebsch_hodograph public notebook layer is synchronized; examples remain protected runnable companions\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
