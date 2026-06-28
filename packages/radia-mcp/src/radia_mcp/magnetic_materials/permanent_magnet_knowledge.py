@@ -105,12 +105,32 @@ hot operation.
 
 ## Radia implementation
 
-For fixed-M permanent magnet (no Solve needed):
+Permanent magnets are MMMM (surface-charge moment) elements carrying a FIXED magnetization given in
+the constructor -- **no Solve needed**: an unsolved element has `sigma == 0`, so `rad.Fld` takes the
+analytic magnetization-based open-boundary branch (`B_comp_frM`).  Call `Solve` only when soft iron is
+present alongside the magnet (then put both in an `ObjCnt` and Solve the container).
+
+**Rectangular magnet -> use `rad.magnet_box` (the ObjRecMag substitute):**
 ```python
-# Br = 1.2 T (NdFeB N42)
-M_x = 1.2 / (4 * math.pi * 1e-7)   # M = Br / mu_0 in A/m = 954930
-pm_obj = rad.ObjHexahedron(verts, [M_x, 0, 0])
+import radia as rad, math
+M = 1.2 / (4 * math.pi * 1e-7)                                  # M = Br / mu_0, A/m (Br=1.2 T -> 954930)
+pm = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.01], [0, 0, M])  # (center, dims=FULL edges, M); meters
+B  = rad.Fld(pm, 'b', [0, 0, 0.03])                            # no Solve
 ```
+`magnet_box(center, dimensions, magnetization)` builds an `ObjHexahedron` from the box corners and is
+the **drop-in replacement for the retiring `ObjRecMag`** (CLAUDE.md "Reduce Proprietary API Surface":
+the surface-current `ObjRecMag` primitive demotes; the surface-charge MMMM block is the user path).  A
+uniformly magnetized block has the IDENTICAL external field in both models -- verified to ~5e-8..1e-7
+relative vs `ObjRecMag` off-axis, far field, and on the magnetization axis (golden
+`tests/test_magnet_box_pm.py`).  Same call shape + units as `ObjRecMag`, so it is a direct swap.
+
+**General shape (non-box) -> build the element directly with M in the constructor:**
+```python
+# Br = 1.2 T (NdFeB N42); M = Br / mu_0 in A/m = 954930
+M_x = 1.2 / (4 * math.pi * 1e-7)
+pm_obj = rad.ObjHexahedron(verts, [M_x, 0, 0])   # or ObjTetrahedron / ObjWedge (verts, M)
+```
+All are MMMM surface-charge moment elements; all evaluate the exact open boundary with no Solve.
 
 UNITS PITFALL (recurring): Radia magnetization is **A/m, NOT Tesla**.  Passing
 `[0, 0, 1]` thinking "1 T" gives M = 1 A/m -> field ~0.0002 mT (essentially zero),
