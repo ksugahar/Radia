@@ -5,8 +5,10 @@ demag solver; the EIEM2 collocation kernel has been retired.  Two element-compos
 kernel used to cover are NOT representable by moment and are now rejected fail-loud (No Fallbacks -- a
 silent wrong number is worse than an error), raised from radTApplication::MakeAutoRelax:
 
-  (1) Radia::Error204 -- a single demag Solve that MIXES MMM elements (tetrahedron / RecMag, 3 DOF) with
-      MSC surface-charge elements (hexahedron / wedge, 5/6 DOF).  Solve them as separate containers.
+  (1) Radia::Error204 -- a single demag Solve that MIXES a 3-DOF MMM dipole element with MSC surface-charge
+      elements.  After the tet->4-DOF unification ALL soft-iron volume elements (tetrahedron 4 / wedge 5 /
+      hexahedron 6 DOF, and RecMag soft iron) are MSC face-charge moment, so this mix is effectively
+      unreachable -- tet+hex now SOLVE together (the guard stays as a defensive net).
   (2) Radia::Error205 -- B-input hysteresis (b_input_newton / b_input_hantila) on MSC elements; the
       B-input Newton/Hantila Jacobian is block-3x3 (MMM) only.  Hysteresis stays on tetrahedron / RecMag.
 
@@ -36,15 +38,19 @@ def _tet(cx, L=0.01):
     return [[cx, 0, 0], [cx + L, 0, 0], [cx + L * 0.5, L * 0.87, 0], [cx + L * 0.5, L * 0.29, L * 0.82]]
 
 
-def test_mixed_mmm_msc_solve_raises():
-    """A single demag Solve mixing a tet (MMM, 3 DOF) and a hex (MSC, 6 DOF) soft iron -> Error204."""
+def test_mixed_tet_hex_msc_solves():
+    """tet (4 DOF) + hex (6 DOF) are BOTH MSC face-charge moment elements now (unified MMMM), so a single
+    demag Solve mixing them SOLVES -- no Error204.  (Error204 only guards a 3-DOF MMM dipole element mixed
+    with MSC; after the tet->4-DOF unification no soft-iron volume element produces 3 DOF, so that mix is
+    effectively unreachable.)"""
     rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     t = rad.ObjTetrahedron(_tet(0.0), [0, 0, 0]); rad.MatApl(t, rad.MatLin(1000.0))
     h = rad.ObjHexahedron(_hex(0.1), [0, 0, 0]); rad.MatApl(h, rad.MatLin(1000.0))
     cont = rad.ObjCnt([t, h, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])])
-    with pytest.raises(RuntimeError, match="mixes MMM"):
-        rad.Solve(cont, 1e-6, 100, 0)
+    rad.Solve(cont, 1e-6, 1000, 0)
+    Mt = rad.ObjM(t)["magnetization"][2]; Mh = rad.ObjM(h)["magnetization"][2]
     rad.UtiDelAll()
+    assert Mt > 0 and Mh > 0, f"mixed tet+hex MSC moment should magnetize: Mz_tet={Mt:.1f}, Mz_hex={Mh:.1f}"
 
 
 def test_binput_hysteresis_on_msc_raises():
@@ -77,7 +83,8 @@ def test_pure_hex_moment_still_solves():
 
 
 def test_pure_tet_mmm_still_solves():
-    """KEPT: a pure-tet soft iron magnetizes in an applied field via the MMM solver (unaffected)."""
+    """KEPT: a pure-tet soft iron magnetizes in an applied field via the unified MMMM moment solver
+    (tet is now a 4-DOF MSC face-charge moment element)."""
     rad.UtiDelAll(); rad.set_demag_backend("auto")
     t = rad.ObjTetrahedron(_tet(0.0), [0, 0, 0]); rad.MatApl(t, rad.MatLin(1000.0))
     rad.Solve(rad.ObjCnt([t, rad.ObjBckg(lambda p: [0, 0, MU0 * H0])]), 1e-6, 1000, 0)
@@ -87,8 +94,9 @@ def test_pure_tet_mmm_still_solves():
 
 
 def test_method2_hacapk_mmm_tet_matches_lu():
-    """KEPT: method 2 (HACApK) on a tetrahedron (MMM) soft iron matches the LU/BiCGSTAB result -- the
-    rad_hacapk MMM 3x3 path is unaffected by the EIEM2 (MSC 5/6 DOF) kernel deletion."""
+    """KEPT: every solver method agrees on a tetrahedron (now a 4-DOF MSC moment element).  A pure-tet
+    method-2 request reroutes to the dense moment LU (allMoment && !allHex6), so methods 0/1/2 give the
+    same magnetization."""
     rad.UtiDelAll(); rad.set_demag_backend("auto")
     Mz = []
     for meth in (0, 1, 2):
@@ -102,8 +110,8 @@ def test_method2_hacapk_mmm_tet_matches_lu():
 
 
 def test_tet_mmm_ima_solves():
-    """KEPT: a tetrahedron (MMM) soft iron solved with image symmetry (IMA) magnetizes -- the tet 3x3
-    branch of the IMA dense build is unaffected by the EIEM2 MSC-branch deletion."""
+    """KEPT: a tetrahedron (now a 4-DOF MSC moment element) soft iron solved with image symmetry (IMA)
+    magnetizes -- IMA is moment-eligible (BuildCentroidFieldGrad adds the mirror images)."""
     rad.UtiDelAll(); rad.set_demag_backend("auto")
     t = rad.ObjTetrahedron([[0, 0, 0.01], [0.02, 0, 0.01], [0.01, 0.017, 0.01], [0.01, 0.006, 0.026]], [0, 0, 0])
     rad.MatApl(t, rad.MatLin(1000.0))
