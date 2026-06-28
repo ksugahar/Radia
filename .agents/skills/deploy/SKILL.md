@@ -33,11 +33,11 @@ editable / 100号機 PyPI) を 2-tier (LAB editable / 100号機 + mdx PyPI)
 **Cubit plugin (100号機 + mdx)**: 両方とも PyPI wheel から regular-file
 deploy (`cubit-plugin-install --all-users`).  symlink 体制は使わない.
 
-**Notebook policy (2026-06-28)**: production deploy uses `radia[cubit]`, not
-`radia[cubit,gui]`.  The canonical panel surface is the Jupyter notebook
-workbench (`ipynb-gui-health`), and normal Radia Python should not acquire
-PySide6.  Coreform Cubit's bundled PySide6 remains protected because Cubit owns
-that embedded runtime.
+**Notebook policy (2026-06-28)**: production deploy uses `radia[cubit]` and
+does not add the old GUI extra.  The canonical panel surface is the Jupyter
+notebook workbench (`ipynb-gui-health`), and normal Radia Python should not
+acquire PySide6.  Coreform Cubit's bundled PySide6 remains protected because
+Cubit owns that embedded runtime.
 
 **Retired** (2026-05-02): mdx editable + `tools/push_pyds_to_mdx.py`
 base64-over-ssh push は通常運用から除外.  `push_pyds_to_mdx.py` は
@@ -72,7 +72,7 @@ become mysterious.  All three stages run the full L0-L4 ladder.
 | **L2** | Import smoke | import each `radia.<app>_notebook` workbench | ImportError / circular import in notebook workbench modules |
 | **L2** | Subprocess smoke | `python panels/calc_*.py --help` for each | argparse rejects flags, missing helper imports |
 | **L2** | Signature probe | `inspect.getsource(f)` contains expected token | Edit silently reverted by linter / merge |
-| **L3** | Notebook QA | `pytest tests/panels/test_notebook_workbench.py` | Notebook contract drift (DesignSpec, result artifact, no-PySide rule) |
+| **L3** | Notebook QA | `pytest validation_test/panels/test_notebook_workbench.py` | Notebook contract drift (DesignSpec, result artifact, no-PySide rule) |
 | **L3** | Cubit launcher | .ccl binary contains new regex strings (`grep -a`) | Old .ccl deployed; new TITLE/NEEDS_VOL not parsed |
 | **L3** | Launcher widget matrix | Static source check: every mode-specific launcher widget has `setVisible(ms.needsVol)` | "Mesh order: 2" shown for STEP-only mode (2026-04-21 orderRow miss) |
 | **L4** | End-to-end | Cubit -batch .jou → radia_export netgen → .vol | Full pipeline regresses (plugin missing, solver crash) |
@@ -285,9 +285,9 @@ Radia の配布 wheel には bridge.py, cubit_netgen_bridge.py, cub5_to_vol.py �
 ### Notebook migration: `[gui]` is NOT part of production deploy
 
 Since the panel operating surfaces moved to Jupyter notebook workbenches,
-production installs should not add `radia[gui]` just to get PySide6.  Use
-`pip install radia[cubit]` for the Cubit/plugin path and verify notebooks via
-`ipynb-gui-health`.
+production installs should not add the old GUI extra just to get PySide6.
+Use `pip install radia[cubit]` for the Cubit/plugin path and verify notebooks
+via `ipynb-gui-health`.
 
 Do **not** uninstall or delete Coreform Cubit's bundled PySide6 under
 `C:/Program Files/Coreform Cubit*/bin/python3/lib/site-packages`; Cubit owns
@@ -679,8 +679,9 @@ for grp in cfg.get('project', {}).get('optional-dependencies', {}).values():
     for dep in grp:
         deps.append(dep.split()[0].split('>')[0].split('=')[0].split('<')[0].strip())
 deps_top = {d.replace('-', '_').lower() for d in deps if d}
-# Common indirect imports we know are present
-deps_top |= {'PySide6', 'mcp', 'cubit_mesh_export', 'pyvista', 'matplotlib',
+# Common indirect imports we know are present. PySide6 is intentionally absent
+# from normal Radia Python after notebook panel migration.
+deps_top |= {'mcp', 'cubit_mesh_export', 'pyvista', 'matplotlib',
              'scipy', 'pytest'}
 deps_top_lower = {x.lower() for x in deps_top}
 
@@ -812,7 +813,7 @@ normal Radia Python に PySide6 を追加して旧 desktop panel を検証対象
 **自動チェック**:
 
 ```powershell
-python -m pytest tests/panels/test_notebook_workbench.py -q
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
 ```
 
 このテストは次を同時に確認する:
@@ -821,8 +822,8 @@ python -m pytest tests/panels/test_notebook_workbench.py -q
 - `CommandWorkbench.run_local()` が `radia_result.v2` の `result.json` を残す
 - `calc_*.py` への argv と notebook manifest が一致している
 
-旧 `tests/panels/test_panel_qa.py` は legacy PySide adapter を直接修正した時の
-補助チェックに限る。通常のリリース判定は notebook workbench と
+旧PySide panel QA は legacy adapter を直接修正した時の補助チェックに限る。
+通常のリリース判定は notebook workbench と
 `cubit-plugin-install --verify-only` / `cubit-smoke-test` で行う。
 
 ### Panel Samples Quality Gate (Stage 1, MANDATORY)
@@ -895,9 +896,8 @@ C-heavy fixture L_coil = 138.159 nH.
 
 Run AFTER `pip index versions radia` confirms the new wheel is live.
 Both 100号機 and mdx use exactly this recipe.  Substitute the SSH
-target (`192.168.11.100` for 100号機, `mdx` for mdx).  No `[gui]`
-extra ⇒ standalone PySide6 panels die at launch (verified gap
-2026-05-02).
+target (`192.168.11.100` for 100号機, `mdx` for mdx).  Do not add the old
+GUI extra for PySide6; notebook workbenches are the canonical panel surface.
 
 ```bash
 TARGET=192.168.11.100   # or 'mdx'
@@ -917,9 +917,9 @@ Start-Sleep -Seconds 2
 # PyPI wheel.
 pip uninstall -y radia radia-mcp cubit-mesh-export 2>&1 | Select-String "Successfully|already|not installed"
 
-# Step 3: PyPI install with [cubit,gui] extras (mandatory: gui pulls
-# PySide6 for the standalone panels; cubit pulls cubit-mesh-export).
-pip install --no-cache-dir 'radia[cubit,gui]==$VERSION' 'radia-mcp==$VERSION' 'cubit-mesh-export==$VERSION'
+# Step 3: PyPI install.  The cubit extra pulls cubit-mesh-export.
+# Notebook panel QA is handled without installing PySide6 into normal Python.
+pip install --no-cache-dir 'radia[cubit]==$VERSION' 'radia-mcp==$VERSION' 'cubit-mesh-export==$VERSION'
 
 # Step 4: deploy Cubit plugin as regular files (NOT symlinks).
 cubit-plugin-install --all-users
@@ -943,20 +943,19 @@ End-to-end smoke (run on the same SSH target after install):
 ```bash
 ssh "$TARGET" 'cubit-smoke-test'      # Cubit batch + radia_export netgen + .vol parse
 ssh "$TARGET" 'python -c "
-import os; os.environ[\"QT_QPA_PLATFORM\"]=\"offscreen\"
-from PySide6.QtWidgets import QApplication
-QApplication([])
-from radia.radia_ih import IHWindow
-from radia.radia_em import EMWindow
-from radia.radia_pcb import PCBWindow
-from radia.radia_heat import HeatWindow
-for cls in (IHWindow, EMWindow, PCBWindow, HeatWindow):
-    w = cls()
-    print(cls.__name__, \"sizeHint\", w.sizeHint().width(), \"x\", w.sizeHint().height())
+from radia.ih_notebook import IHWorkbench
+from radia.em_notebook import EMWorkbench
+from radia.pcb_notebook import PCBWorkbench
+from radia.motor_notebook import MotorWorkbench
+from radia.streamfunction_notebook import StreamFunctionWorkbench
+for cls in (IHWorkbench, EMWorkbench, PCBWorkbench, MotorWorkbench, StreamFunctionWorkbench):
+    print(cls.__name__, \"ok\")
 "'
 ```
 
-Both probes are mandatory before declaring the deploy complete.  See
+Both probes are mandatory before declaring the deploy complete.  On a source
+checkout, also run `python -m pytest validation_test/panels/test_notebook_workbench.py -q`.
+See
 also `release-qud` Phase 8c (verify) and Phase 8d (smoke).
 
 ### Stage 2 — LEGACY (mdx editable, 2026-05-01 only) -- RETIRED 2026-05-02
@@ -1408,17 +1407,17 @@ PY
 Any DRIFT line means `pip install -e` was silently overwritten or
 shadowed.  Do NOT proceed — fix per the table in Step (b).
 
-#### (d) End-to-end verify (same as before, check panel QA works)
+#### (d) End-to-end verify (same as before, check notebook QA works)
 
 ```bash
 cat << 'PS' | ssh 100 'pwsh -Command -'
 $env:QT_QPA_PLATFORM = "offscreen"
 Set-Location 'W:\00_CAE\Radia\01_GitHub'
-python -m pytest tests/panels/test_panel_qa.py -v 2>&1 | Select-Object -Last 12
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
 PS
 ```
 
-Expected: 7 panels × 7 checks PASS on 100号機 in <2 s.
+Expected: notebook workbench contract PASS on 100号機.
 
 #### (e) Post-deploy verification: "really deployed" HARD GATE
 
@@ -1571,9 +1570,10 @@ unhandleable native crash on his first STEP.
 | `radia_em` | `calc_em.py` | `em_sample.jou` → .vol | (add range here when first run) |
 | `radia_pcb` | `calc_pcb.py` | `pcb_sample.jou` → .vol | (add range here when first run) |
 
-**When a new panel mode is added**, the deploy skill MUST be updated
+**When a new notebook panel mode is added**, the deploy skill MUST be updated
 to add a new matrix row BEFORE declaring the feature shipped.
-`publish-panel` skill enforces this.
+`ipynb-gui-health` and the relevant `validation_test/` golden lane enforce
+this.
 
 Every row must run on 100号機 (Stage 2) AND on mdx (Stage 3).
 Stage 1 (LAB) runs at least the rows for modes edited in this diff.

@@ -714,8 +714,8 @@ python docs/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
 # (driven by the same benchmark.py; results.json shows all three paths)
 
 # Strategy C: 2-D axisymmetric reference
-pytest tests/panels/test_peec_bem_golden.py -v
-pytest tests/panels/test_fem_coilmesh_golden.py -v
+pytest validation_test/panels/test_inductance_golden.py -v
+pytest validation_test/panels/test_fem_coilmesh_golden.py -v
 
 # Mesh-convergence study (Strategy 6)
 # regenerate samples/3turnCoil_work.jou with varying wp_n_h, run calc_inductance.py

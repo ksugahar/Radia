@@ -16,10 +16,8 @@ __version__ = "0.14.0"
 
 # Compatibility window with the main radia package. The Cubit plugin
 # binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)
-# are rebuilt alongside radia's
-# register_toolbar.py and calc_*.py at each release; the Python side
-# expects a matching minor series on the plugin. A mismatch triggers a
-# loud warning from radia's _check_plugin_freshness at Cubit startup.
+# are rebuilt alongside radia's Cubit toolbar, calc_*.py scripts, and notebook
+# workbench layer. A mismatch is reported by cubit-plugin-install verification.
 COMPAT_RADIA_MIN = "4.5.0"
 COMPAT_RADIA_MAX = "4.999.999"  # bumped when we cut the next radia minor
 

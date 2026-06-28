@@ -1,16 +1,16 @@
 {
   "schema": "radia.panel_notebook_promotion.v1",
   "generated_at_utc": "2026-06-25T10:51:07Z",
-  "policy": "Desktop panels are legacy adapters; promoted interfaces live as notebooks under src/radia/panels/notebooks. A panel is a light notebook wrapper around app-specific calc_*.py CLI arguments mapped into DesignSpec settings. Persistent initial values live in DesignSpec(...) notebook cells, while JSON files are run artifacts with radia_result metadata. Concise domain notes and pointers to previous in-repo result artifacts are part of the notebook panel contract.",
+  "policy": "The old standalone desktop PySide panels are retired. Promoted analysis interfaces live as notebooks under src/radia/panels/notebooks. The Cubit Export Mesh toolbar remains active as a Cubit-embedded mesh export surface. A panel is a light notebook wrapper around app-specific calc_*.py CLI arguments mapped into DesignSpec settings. Persistent initial values live in DesignSpec(...) notebook cells, while JSON files are run artifacts with radia_result metadata. Concise domain notes and pointers to previous in-repo result artifacts are part of the notebook panel contract.",
   "panels": [
     {
       "id": "radia-ih",
       "title": "Radia IH Notebook Interface",
-      "source": "src/radia/radia_ih.py",
+      "source": "src/radia/ih_design.py",
       "notebook": "src/radia/panels/notebooks/radia_ih.ipynb",
       "state": "active-local-runner",
       "adapter": "radia.ih_notebook.IHWorkbench",
-      "status": "The IH panel is still an active desktop workflow, but this notebook is the canonical browser-native promotion target.",
+      "status": "The IH notebook workbench is the canonical browser-native panel surface.",
       "headless": [
         "src/radia/ih_design.py",
         "src/radia/ih_notebook.py",
@@ -21,7 +21,7 @@
       "cells": [
         [
           "markdown",
-          "# Radia IH Notebook Interface\n\nSource panel: `src/radia/radia_ih.py`\n\nThis notebook is the promoted browser-native interface for induction-heating workflows. The desktop panel remains available while IH users rely on it, but new workflow logic should move into `radia.ih_design` and `radia.ih_notebook`."
+          "# Radia IH Notebook Interface\n\nSource modules: `src/radia/ih_design.py` and `src/radia/ih_notebook.py`.\n\nThis notebook is the browser-native interface for induction-heating workflows."
         ],
         [
           "code",
@@ -36,7 +36,7 @@
     {
       "id": "radia-em",
       "title": "Radia EM Notebook Interface",
-      "source": "src/radia/radia_em.py",
+      "source": "src/radia/em_design.py",
       "notebook": "src/radia/panels/notebooks/radia_em.ipynb",
       "state": "active-local-runner",
       "adapter": "radia.em_notebook.EMWorkbench",
@@ -52,7 +52,7 @@
     {
       "id": "radia-pcb",
       "title": "Radia PCB Notebook Interface",
-      "source": "src/radia/radia_pcb.py",
+      "source": "src/radia/pcb_design.py",
       "notebook": "src/radia/panels/notebooks/radia_pcb.ipynb",
       "state": "active-local-runner",
       "adapter": "radia.pcb_notebook.PCBWorkbench",
@@ -66,7 +66,7 @@
     {
       "id": "radia-motor",
       "title": "Radia Motor Notebook Interface",
-      "source": "src/radia/radia_motor.py",
+      "source": "src/radia/motor_design.py",
       "notebook": "src/radia/panels/notebooks/radia_motor.ipynb",
       "state": "active-local-runner",
       "adapter": "radia.motor_notebook.MotorWorkbench",
@@ -81,7 +81,7 @@
     {
       "id": "radia-streamfunction",
       "title": "Radia Stream-Function Notebook Interface",
-      "source": "src/radia/radia_streamfunction.py",
+      "source": "src/radia/streamfunction_design.py",
       "notebook": "src/radia/panels/notebooks/radia_streamfunction.ipynb",
       "state": "active-local-runner",
       "adapter": "radia.streamfunction_notebook.StreamFunctionWorkbench",
@@ -98,9 +98,9 @@
       "title": "Radia Cubit Export Notebook Interface",
       "source": "src/radia/panels/radia_export_menu.py",
       "notebook": "src/radia/panels/notebooks/radia_export_menu.ipynb",
-      "state": "migration-shell",
+      "state": "active-cubit-toolbar",
       "adapter": null,
-      "status": "Promoted as a notebook migration shell for export settings and headless Cubit export preparation. In-Cubit toolbar behavior remains desktop-only until replaced.",
+      "status": "Active Cubit-embedded Export Mesh toolbar. It may use Cubit's PySide6 runtime, but normal Radia Python analysis panels remain notebook/headless.",
       "headless": [
         "src/radia/panels/calc_mesh_eval.py",
         "src/radia/panels/check_vol_consistency.py"

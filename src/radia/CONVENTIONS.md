@@ -6,11 +6,11 @@ headless `calc_*.py` script: argparse options become `DesignSpec`
 settings, the notebook workbench launches the script, and run artifacts
 are saved as `run.log` plus `result.json`.
 
-Legacy standalone PySide6 windows remain under `src/radia/radia_*.py`
-while existing Cubit desktop workflows still depend on them.  The Cubit
-plugin launcher (`register_toolbar.py`) discovers those files for
-backward compatibility, but new user-facing panel work should prefer the
-notebook route.
+Legacy standalone PySide6 windows under `src/radia/radia_*.py` are removed.
+The Cubit mesh-export toolbar remains active as a Cubit-embedded surface and is
+not a normal Radia Python dependency. New user-facing analysis panel work,
+release QA, and deploy documents must treat the notebook workbench as
+canonical. Normal Radia Python environments should not install PySide6.
 
 ## Notebook Panel Policy
 
@@ -26,9 +26,10 @@ notebook route.
 - Use `netgen.webgui` for human-facing notebook visualization and
   durable GMSH `.msh v4.1` artifacts for LLM/headless validation.
 
-## Legacy PySide Module-Level Metadata (required while PySide remains)
+## Retired PySide Module-Level Metadata
 
-Every `radia_*.py` must define these module-level variables:
+The old `radia_*.py` modules no longer exist.  If an archived branch must be
+read, those modules used to define these module-level variables:
 
 ```python
 TITLE = "Induction Heating"                    # Display name in launcher combo
@@ -141,8 +142,10 @@ the Windows association pointed at `netgen.exe "%1"`. The
 `radia-vol-viewer` association is a legacy/helper path for custom `.sol`
 companion-mesh inference, not the default notebook IO route.
 
-## Qt Compatibility
+## Qt / Notebook Compatibility
 
-Analysis windows use PySide6 (system Python 3.12).
-They do NOT run inside Cubit's process.
-The launcher (`register_toolbar.py`) runs inside Cubit and uses PySide6 (Cubit 2025.12 ships PySide6; the Qt5/PyQt5 path was removed in radia 4.80.0).
+Notebook panels do not use PySide6 and are the canonical analysis surface.
+Normal Radia Python on LAB / 100号機 / mdx / hibino should not depend on
+PySide6.  The Cubit Export Mesh toolbar may use Coreform CUBIT's embedded
+PySide6, but that runtime is Cubit-owned and is not a Radia package
+dependency.

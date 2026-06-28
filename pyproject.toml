@@ -77,9 +77,6 @@ build123d = [
     # when the user wants labeled STEP ports.
     "build123d>=0.9",
 ]
-gui = [
-    "PySide6>=6.5",
-]
 viz = [
     "pyvista>=0.40",
     "matplotlib>=3.5",
@@ -110,18 +107,14 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-radia-ih = "radia.radia_ih:main"
-radia-em = "radia.radia_em:main"
-radia-pcb = "radia.radia_pcb:main"
-radia-streamfunction = "radia.radia_streamfunction:main"
 # CLI for .vol/.sol viewer (also exposed as a gui-script below).
 # Use the CLI form when you want stdout (e.g. --register / probing);
 # use the gui-script (radia-vol-viewer-gui.exe) for the Windows file
 # association so no console window flashes on double-click.
 radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
-# radia-heat: removed in v4.62.0; heat analysis is now Method =
-# "Thermal" in radia-ih (v4.59.0).  The HeatPanel sub-widget lives
-# in src/radia/_heat_panel.py.
+# radia-ih / radia-em / radia-pcb / radia-streamfunction desktop PySide
+# entry points were retired in 2026-06.  Use the notebook workbenches under
+# src/radia/panels/notebooks/ and the headless calc_*.py scripts.
 # Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
 # MCP servers: radia-mcp package (pip install radia-mcp)
 
@@ -133,8 +126,9 @@ radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
 radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 
 [tool.setuptools.package-data]
-# Note (radia 4.80.0): Qt5 GUI ".ccl" removed (RadiaComp.cpp gone; PySide6
-# toolbar at radia/panels/radia_export_menu.py replaces it).
+# Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit
+# embedded Export Mesh toolbar remains package data; normal Radia Python uses
+# notebook/headless workflows and does not depend on PySide6.
 # Note (Tier-2, 2026-06-01): the Cubit plugin binaries (cubit_mesh_export.ccm,
 # cubit_mesh_curver.pyd) are NO LONGER bundled in the radia wheel.  They are
 # shipped + deployed SOLELY by the cubit-mesh-export package, so radia and
