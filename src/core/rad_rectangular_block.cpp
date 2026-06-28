@@ -1031,70 +1031,9 @@ void radTRecCur::IntOverSurf(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-int radTRecCur::ConvertToPolyhedron(radThg& In_hg, radTApplication* radPtr, char PutNewStuffIntoGenCont)
-{
-	if(J.x!=0. || J.y!=0. || J.z!=0. || J_IsNotZero) return 1;
-
-	TVector3d hDims = 0.5*Dimensions;
-	double xMin = CentrPoint.x - hDims.x, xMax = CentrPoint.x + hDims.x;
-	double yMin = CentrPoint.y - hDims.y, yMax = CentrPoint.y + hDims.y;
-	double zMin = CentrPoint.z - hDims.z, zMax = CentrPoint.z + hDims.z;
-
-	TVector3d ArrayOfPoints[8];
-	ArrayOfPoints[0] = TVector3d(xMin, yMin, zMin);
-	ArrayOfPoints[1] = TVector3d(xMax, yMin, zMin);
-	ArrayOfPoints[2] = TVector3d(xMax, yMax, zMin);
-	ArrayOfPoints[3] = TVector3d(xMin, yMax, zMin);
-	ArrayOfPoints[4] = TVector3d(xMin, yMin, zMax);
-	ArrayOfPoints[5] = TVector3d(xMax, yMin, zMax);
-	ArrayOfPoints[6] = TVector3d(xMax, yMax, zMax);
-	ArrayOfPoints[7] = TVector3d(xMin, yMax, zMax);
-	int* ArrayOfFaces[6];
-
-	int Face0[] = { 1,5,8,4 }; ArrayOfFaces[0] = Face0;
-	int Face1[] = { 2,3,7,6 }; ArrayOfFaces[1] = Face1;
-	int Face2[] = { 1,2,6,5 }; ArrayOfFaces[2] = Face2;
-	int Face3[] = { 3,4,8,7 }; ArrayOfFaces[3] = Face3;
-	int Face4[] = { 4,3,2,1 }; ArrayOfFaces[4] = Face4;
-	int Face5[] = { 5,6,7,8 }; ArrayOfFaces[5] = Face5;
-
-	int ArrayOfLengths[] = { 4,4,4,4,4,4 };
-
-	if(ConsiderOnlyWithTrans)
-	{
-		radTrans ResTransf;
-		short SomethingFound = 0;
-		FindInnerTransfWithMultOne(ResTransf, SomethingFound);
-		if(SomethingFound) 
-		{
-			for(int i=0; i<8; i++)
-			{
-				ArrayOfPoints[i] = ResTransf.TrPoint(ArrayOfPoints[i]);
-			}
-		}
-	}
-
-	radTSend Send;
-	radTPolyhedron* PolyhedronPtr = new radTPolyhedron(ArrayOfPoints, 8, ArrayOfFaces, ArrayOfLengths, 6, Magn);
-	if(PolyhedronPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-	PolyhedronPtr->MaterHandle = MaterHandle;
-	PolyhedronPtr->IsGroupMember = IsGroupMember;
-
-	PolyhedronPtr->g3dListOfTransform = g3dListOfTransform;
-	if(ConsiderOnlyWithTrans) PolyhedronPtr->EraseInnerTransform();
-	PolyhedronPtr->ConsiderOnlyWithTrans = 0;
-
-	// HandleAuxCompData / MessageChar copy REMOVED (Phase C, 2026-04-16)
-
-	short InternalFacesState[6];
-	ListFacesInternalAfterCut(InternalFacesState);
-	for(int k=0; k<6; k++)
-		PolyhedronPtr->VectHandlePgnAndTrans[k].FaceIsInternalAfterCut = InternalFacesState[k]? true : false;
-
-	radThg NewHandle(PolyhedronPtr);
-	In_hg = NewHandle;
-	return 1;
-}
+// radTRecCur::ConvertToPolyhedron body REMOVED 2026-06-28: a current block is never converted
+// (the magnet path now builds the MMMM polyhedron directly in SetRecMag). The override is now an
+// inline { return 1; } in rad_rectangular_block.h (1 = "handled", so radTGroup conversion succeeds).
 
 //-------------------------------------------------------------------------
 
