@@ -220,7 +220,7 @@ test('Restore recovers original M', M1_err < 1.0, f'err={M1_err:.6f} A/m')
 print('\n=== Test 5: Solver integration (MatApl + Solve) ===')
 rad.UtiDelAll()
 
-iron = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
+iron = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 0])
 mat = rad.MatPlayHysteresis(K, eta_arr.tolist(), tables)
 rad.MatApl(iron, mat)
 

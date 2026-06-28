@@ -1,133 +1,46 @@
-# Radia Examples
+# Radia Examples Migration Area
 
-Comprehensive collection of Radia examples demonstrating magnetic field computation, material properties, solver methods, PEEC conductor modeling, and integration with NGSolve FEM.
+`examples/` is no longer the long-term home for public demos, reusable APIs, or
+validation corpora. It is a temporary research/teaching tier being drained into
+the canonical destinations:
 
-**Total:** 604 Python scripts across 12 directories
+| Final destination | Use |
+|---|---|
+| `docs/<topic>/*.ipynb` | Public method showcase with Markdown, saved outputs, and synchronized JSON. |
+| `src/` | Reusable computation, parsers, mesh readers, formulas, and solver helpers. |
+| `validation_test/` | Golden locks, convergence sweeps, benchmarks, and heavier validation surfaces. |
+| `panels/` or `src/radia/panels/` | Panel-owned operating assets and samples during the staged panel migration. |
+| `memory/` or docs note, then delete | Superseded experiments and failed development iterations. |
 
----
+Do not add new long-lived references to `examples/`. If a test, notebook, MCP
+knowledge file, or panel still points here, treat that as migration debt and
+record the intended `target_after_unblock`.
 
-## Quick Start
+## Current Large Topics
 
-```bash
-jupyter notebook docs/simple_problems/simple_problems.ipynb
-```
+The current worktree snapshot is tracked in
+[`docs/examples_classification/examples_classification.ipynb`](../docs/examples_classification/examples_classification.ipynb).
+As of the latest migration batch, the largest remaining topics are:
 
----
+| Topic | Current lane |
+|---|---|
+| `maglev` | Split into `validation_test`, `docs`, `src`, and distill-delete. |
+| `peec_integration` | Move validation corpus first, then promote reusable readers/generators to `src`. |
+| `vim` | Move `validation_test/feec` direct imports first; promote reusable HDiv/VIM helpers to `src`. |
+| `clebsch_hodograph` | Use the validation-test research harness as migration driver; keep docs notebooks as showcase. |
+| `cube_uniform_field` | Move benchmark drivers and result corpus under validation/docs ownership. |
+| `cubit_panels` | Move `verify_*.py` to `validation_test`; keep Cubit assets under docs/panels owners. |
+| `stream_function` | Extract reusable code to `src`, keep result-saved docs notebooks as the public layer. |
+| `induction_heating` | Promote BEM helpers to `src`; move checks to `validation_test`; keep ESIM demos in docs. |
 
-## Directory Overview
+## Policy
 
-### Magnetostatics (Beginner)
+Run the `promote-examples-to-docs` workflow before deleting anything:
 
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [simple_problems/](simple_problems/) | 5 | Basic Radia API: magnets, coils, materials, field computation |
-| [smco_magnet_array/](smco_magnet_array/) | 1 | SmCo permanent magnet array design |
-| [vtk_export/](vtk_export/) | 1 | VTS field export for ParaView visualization |
-| [analytical_formulas/](analytical_formulas/) | 11 | Closed-form reference formulas from Wakao-Igarashi-Fujiwara-Kameari Part 1-9. Group B+C: ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular magnet, thin-plate eddy, Fabri solenoid, three-phase line, K(k)/E(k), Gauss-Legendre. Group D (v4.21.0): plate Joule dissipation, AC thin-shell shielding, magnetic-shell internal fields, conductor AC impedance (Bessel), Gauss-Patterson nested quadrature, cuboid-average B. See [docs/analytical_formulas.md](../docs/analytical_formulas.md). |
-
-### Magnetostatics (Intermediate)
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [cube_uniform_field/](cube_uniform_field/) | 8 | Cube benchmark: hex/tetra mesh, solver comparison |
-| [visualization/](visualization/) | 9 | PyVista, ParaView, Netgen GUI, GMSH workflow demos |
-
-### Solver & Performance
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [solver_benchmarks/](solver_benchmarks/) | 15 | LU vs BiCGSTAB performance, scaling studies |
-
-### NGSolve Integration
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [ngsolve_integration/](ngsolve_integration/) | 14 | RadiaField CoefficientFunction, field types, mesh convergence |
-| [Kelvin transformation](../docs/kelvin/) | moved | Kelvin transformation for unbounded domains now lives as result-saved docs notebooks plus `validation_test` fixtures |
-
-### PEEC Conductor Modeling
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [peec_integration/](peec_integration/) | 98 | PEEC Loop-Star solver: coils, SPICE export, ngbem coupling, WPT |
-| [effective_surface_impedance/](effective_surface_impedance/) | 5 | ESIM conductor model (Dowell + nonlinear homogenization) |
-| [induction_heating/](induction_heating/) | 6 | ESIM induction heating, RWG-EFIE 3D, WPT coupling |
-
-### Coil Design / Inverse Source
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [stream_function/](stream_function/) | 7 | (ACA+)+TSVD least-norm solver (stream function method, generalised): coil field synthesis + permanent-magnet array (MMM/MSC) + ACA-vs-naive-TSVD benchmark + CMA-ES (Optuna) magnetization-angle design + cylindrical Gz gradient coil design + full SF->single-stroke CAD(STEP)->PEEC->field workflow + transverse Gx (2D surface stream function). Kernel-agnostic; ACA+ from HACApK. See [docs/stream_function.md](../docs/stream_function.md). |
-
-### Machine Learning
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [Universal relaxation network](../docs/universal_relaxation_network/) | moved | KAN-inspired URN corpus now lives in docs; reusable runtime API is `radia.urn` |
-
-### Eddy-current Network Identification
-
-| Directory | Scripts | Description |
-|-----------|---------|-------------|
-| [CLN/](CLN/) | — | Cauer Ladder Network research line: IGTE 2026 sphere digest (DD GPU pipeline pushes Cauer-extraction precision wall from FP64 stage 4-5 to DD stage 12+); cross-linked with the `cln_sphere_dd_pipeline` MCP tool. |
-
----
-
-## Example Selection Guide
-
-| Use Case | Recommended |
-|----------|-------------|
-| Learn Radia basics | `simple_problems/` |
-| Permanent magnets | `simple_problems/`, `smco_magnet_array/` |
-| Electromagnets | `docs/complex_coil_geometry/` |
-| External/background fields | `docs/background_fields/` |
-| FEM coupling | `ngsolve_integration/`, `docs/kelvin/` |
-| PEEC conductors | `peec_integration/`, `induction_heating/` |
-| Eddy currents / shielding | `docs/solver/EDDY_CURRENT_METHODS.md`, `effective_surface_impedance/` |
-| Solver performance | `solver_benchmarks/`, `validation_test/tetra_field_accuracy_evaluation/` |
-| Visualization | `visualization/`, `vtk_export/` |
-| Analytical reference / regression baseline | `analytical_formulas/` |
-
----
-
-## Common Patterns
-
-### Unit Convention
-
-- **Radia**: meters (m) — Radia always uses meters
-- **NGSolve**: meters (m) — automatic conversion via `rad.RadiaField()`
-
-### VTS Export
-
-```python
-```
-
-### Material API
-
-```python
-rad.MatLin(1000)                                    # Linear (mu_r)
-rad.MatPM(1.2, 900000, [0, 0, 1])                  # Permanent magnet (Br, Hc, dir)
-rad.MatSatIsoTab([[0, 0], [100, 0.1], [1000, 1.2]])  # Nonlinear BH curve
-```
-
----
-
-## Prerequisites
-
-**Required:** Python 3.12, Radia (`Build.ps1`), NumPy
-
-**Optional:** NGSolve (Kelvin, ngbem, ESIM examples), ParaView (VTS viewing), SciPy, Matplotlib
-
----
-
-## Troubleshooting
-
-| Error | Solution |
-|-------|----------|
-| `ModuleNotFoundError: radia` | Build Radia: `powershell Build.ps1` |
-| `ImportError: DLL load failed` | Install Visual C++ 2022 Redistributable |
-| `ModuleNotFoundError: radia` (RadiaField) | Build Radia: `powershell Build.ps1` (RadiaField is now part of the main radia module since v2.5.0) |
-
----
-
-**Last Updated:** 2026-02-22
+1. Inventory with `rg --files`.
+2. Search references in `docs`, `tests`, `validation_test`, `src`, and
+   `packages`.
+3. Create or refresh result-saved docs notebooks plus JSON sidecars.
+4. Move reusable or validation code to its canonical home.
+5. Update docs/MCP/panel references away from `examples/`.
+6. Delete from `examples/` only after the owning artifact exists elsewhere.

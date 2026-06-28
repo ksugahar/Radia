@@ -55,7 +55,7 @@ Usage:
     python bench_peec_mna_crossover.py --case 0 --mode hacapk
     python bench_peec_mna_crossover.py --ncases
 
-Output: results_bench_peec_mna_crossover.json (this directory).
+Output: docs/solver_benchmarks/results_bench_peec_mna_crossover.json.
 """
 
 from __future__ import annotations
@@ -122,8 +122,10 @@ BICG_INNER_RTOL = 1.0e-8
 BICG_MAXITER = 5000
 
 BENCH_NAME = "bench_peec_mna_crossover"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+RESULT_DIR = os.path.join(REPO_ROOT, "docs", "solver_benchmarks")
 OUTFILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
+    RESULT_DIR,
     f"results_{BENCH_NAME}.json",
 )
 
@@ -365,6 +367,7 @@ def run_all() -> None:
         },
         "results": results,
     }
+    os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
     with open(OUTFILE, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     print()

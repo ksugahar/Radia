@@ -167,36 +167,10 @@ void check_error(int errCode) {
 
 namespace radia_objects {
 
-/**
- * @brief Create rectangular permanent magnet
- *
- * @param center Center point [x, y, z]
- * @param dimensions Block dimensions [Lx, Ly, Lz]
- * @param magnetization Magnetization vector [Mx, My, Mz] in A/m
- * @return Object handle
- */
-int ObjRecMag(py::array_t<double> center,
-              py::array_t<double> dimensions,
-              py::array_t<double> magnetization) {
-
-    auto c = center.unchecked<1>();
-    auto d = dimensions.unchecked<1>();
-    auto m = magnetization.unchecked<1>();
-
-    if (c.size() != 3 || d.size() != 3 || m.size() != 3) {
-        throw std::runtime_error("center, dimensions, and magnetization must have 3 elements");
-    }
-
-    double P[3] = {c(0), c(1), c(2)};
-    double L[3] = {d(0), d(1), d(2)};
-    double M[3] = {m(0), m(1), m(2)};
-
-    int handle = 0;
-    int err = RadObjRecMag(&handle, P, L, M);
-    check_error(err);
-
-    return handle;
-}
+// NOTE: The Python-facing ObjRecMag wrapper (radia_objects::ObjRecMag) was
+// removed when the Python ObjRecMag constructor was retired in favour of the
+// MMMM magnet_box path. The internal C++ surface-current rectangular block
+// kernel (radTRecMag) and the C API RadObjRecMag remain in use elsewhere.
 
 /**
  * @brief Compute cross product of two 3D vectors
@@ -3101,7 +3075,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
             import radia as rad
 
             # Create rectangular magnet (all coordinates in meters)
-            magnet = rad.ObjRecMag([0,0,0], [0.04, 0.04, 0.02], [0, 0, 954930])
+            magnet = rad.magnet_box([0,0,0], [0.04, 0.04, 0.02], [0, 0, 954930])
 
             # Compute field
             B = rad.Fld(magnet, 'b', [0.05, 0, 0])
@@ -3471,6 +3445,38 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "centroid-fan / Dunavant outer quadrature (matches dense analytic_charge_gram polytope path). "
              "near_factor (default 1e30 = all-analytic); pass ~2 for the NEAR/FAR build speedup. far_quad>0 "
              "uses the precision-preserving low-order double-quad far (degree-2 on the sub-tets/sub-tris).")
+        .def(py::init([](std::vector<double> cell_curved_nodes, std::vector<int> cell_subtet_off,
+                         std::vector<double> cell_cent, std::vector<double> cell_meas,
+                         std::vector<double> face_curved_nodes, std::vector<int> face_subtri_off,
+                         std::vector<double> face_cent, std::vector<double> face_meas,
+                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                         std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el,
+                         double eps, int leaf, double eta) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(cell_curved_nodes), std::move(cell_subtet_off),
+                                             std::move(cell_cent), std::move(cell_meas),
+                                             std::move(face_curved_nodes), std::move(face_subtri_off),
+                                             std::move(face_cent), std::move(face_meas),
+                                             std::move(ref_tet_pts), std::move(ref_tet_w),
+                                             std::move(ref_tri_pts), std::move(ref_tri_w),
+                                             std::move(curve_gl), std::move(curve_gw), n_el));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("curved polytope charge Gram H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("cell_curved_nodes"), py::arg("cell_subtet_off"), py::arg("cell_cent"), py::arg("cell_meas"),
+             py::arg("face_curved_nodes"), py::arg("face_subtri_off"), py::arg("face_cent"), py::arg("face_meas"),
+             py::arg("ref_tet_pts"), py::arg("ref_tet_w"), py::arg("ref_tri_pts"), py::arg("ref_tri_w"),
+             py::arg("curve_gl"), py::arg("curve_gw"), py::arg("n_el"),
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             "CURVED POLYTOPE mode (curved hex/wedge): FULLY curved -- curved CELL volume charge (sub-tets, "
+             "CurvedTetPotential) + curved FACE surface charge (sub-tris, CurvedTriPotential). The cell volume "
+             "charge is DOMINANT for the demag (curved RT0 cannot represent uniform M exactly -> div M != 0). "
+             "cell_curved_nodes [n_cell_subtet*30] + cell_subtet_off [n_cell+1]; face_curved_nodes "
+             "[n_bf_subtri*18] + face_subtri_off [n_bf+1]; ref_tet_pts/w + ref_tri_pts/w the outer quads; "
+             "curve_gl/gw the inner Duffy rule. Both reuse the golden curved-tet/tri kernels.")
         .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
                          std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
                          std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
@@ -3728,22 +3734,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Object Creation
     // ========================================================================
 
-    m.def("ObjRecMag", &radia_objects::ObjRecMag,
-          py::arg("center"), py::arg("dimensions"), py::arg("magnetization"),
-          R"pbdoc(
-              Create rectangular permanent magnet.
-
-              Args:
-                  center: Center point [x, y, z]
-                  dimensions: Block dimensions [Lx, Ly, Lz]
-                  magnetization: Magnetization vector [Mx, My, Mz] in A/m
-
-              Returns:
-                  Object handle
-
-              Example:
-                  magnet = rad.ObjRecMag([0,0,0], [0.04, 0.04, 0.02], [0, 0, 954930])
-          )pbdoc");
+    // NOTE: The Python-facing ObjRecMag constructor has been RETIRED. The
+    // canonical rectangular permanent magnet is now the MMMM surface-charge
+    // hex via radia.magnet_box(...) (Python shim radia.magnet.ObjRecMag also
+    // forwards to magnet_box). The internal C++ surface-current rectangular
+    // block kernel (radTRecMag) and the C API RadObjRecMag are KEPT.
 
     m.def("ObjHexahedron", &radia_objects::ObjHexahedron,
           py::arg("vertices"), py::arg("magnetization"),

@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T01:26:17Z",
+  "generated_at_utc": "2026-06-28T01:47:00Z",
   "notebook": "docs/peec_integration/examples_catalog.ipynb",
-  "notebook_sha256": "26a06ce4c823a500f1a6662d3a49dbd5afc22e273238078a04d7c0e5920dd632",
+  "notebook_sha256": "169d57f1e27093cbdb8b3de080e1d70df492b6ab709fade70b912cfcf7d754e4",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -34,9 +34,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 1060,
-          "text_sha256": "33cca7d986ed049643ebfe5f1e1a67bd3e8f2b67981d2b7a64d4ecdf77155146",
-          "text_preview": "{\n  \"script_count\": 130,\n  \"source_line_count\": 44192,\n  \"artifact_count\": 58,\n  \"lane_counts\": {\n    \"docs_mor_spice_demo\": 7,\n    \"docs_analysis_helper_or_retired_review\": 6,\n    \"docs_application_demo\": 9,\n    \"docs_basic_peec_demo\": 8,\n    \"validation_benchmark_candidate\": 3,\n    \"docs_cad_filament_demo\": 21,\n    \"src_api_plus_validation_review\": 19,\n    \"validation_test_candidate\": 39,\n    \"docs_mesh_pipeline_demo\": 8,\n    \"docs_showcase_candidate\": 10\n  },\n  \"subdir_counts\": {\n    \"analysis\": 7,\n    \"applications\": 6,\n    \"basic_peec\": 8,\n    \"benchmarks\": 2,\n    \"coil\": 4,\n    \"coupled\": 8,\n    \"filament_coil\": 17,\n    \"gmsh_models\": 8,\n    \"ngbem\": 3,\n    \"ngsbem_peec_demo\": 8,\n    \"ngsbem_peec_demo/fasthenry-like\": 4,\n    \"ngsbem_peec_demo/ngbem\": 3,\n    \"spice\": 6,\n    \"spiral_inductor\": 10,\n    \"verification\": 31,\n    \"verification/cubit_mesh_generation\": 2,\n    \"wpt\": 3\n  },\n  \"protected_script_count\": 130,\n  \"cleanup_review_count\": 63,\n  \"public_demo_candidate_count\": 49,\n  \"validation_candidate_count\": 42,\n  \"src_api_review_count\": 19\n}\n",
+          "text_chars": 1169,
+          "text_sha256": "40af363613274e52971f2c90793f274c867abe4fae4db915341b37775f48391c",
+          "text_preview": "{\n  \"script_count\": 130,\n  \"source_line_count\": 44192,\n  \"artifact_count\": 58,\n  \"lane_counts\": {\n    \"docs_mor_spice_demo\": 7,\n    \"docs_analysis_helper_or_retired_review\": 6,\n    \"docs_application_demo\": 9,\n    \"docs_basic_peec_demo\": 8,\n    \"validation_benchmark_candidate\": 3,\n    \"docs_cad_filament_demo\": 21,\n    \"src_api_plus_validation_review\": 19,\n    \"validation_test_candidate\": 39,\n    \"docs_mesh_pipeline_demo\": 8,\n    \"docs_showcase_candidate\": 10\n  },\n  \"subdir_counts\": {\n    \"analysis\": 7,\n    \"applications\": 6,\n    \"basic_peec\": 8,\n    \"benchmarks\": 2,\n    \"coil\": 4,\n    \"coupled\": 8,\n    \"filament_coil\": 17,\n    \"gmsh_models\": 8,\n    \"ngbem\": 3,\n    \"ngsbem_peec_demo\": 8,\n    \"ngsbem_peec_demo/fasthenry-like\": 4,\n    \"ngsbem_peec_demo/ngbem\": 3,\n    \"spice\": 6,\n    \"spiral_inductor\": 10,\n    \"verification\": 31,\n    \"verification/cubit_mesh_generation\": 2,\n    \"wpt\": 3\n  },\n  \"protected_script_count\": 130,\n  \"cleanup_review_count\": 63,\n  \"public_demo_candidate_count\": 49,\n  \"validation_candidate_count\": 42,\n  \"src_api_review_count\": 19,\n  \"cleanup_route_counts\": {\n    \"distill-delete\": 8,\n    \"src API\": 5,\n    \"validation_test\": 50\n  }\n}\n",
           "text_truncated": false
         }
       ]
@@ -101,7 +101,7 @@
     {
       "cell_index": 5,
       "execution_count": 5,
-      "source_sha256": "13654acba654e99a14881f38b8a00c55f70013f364c9ff0ca3c7a5c6566cc550",
+      "source_sha256": "8174274b9feb01bc391891883dabd6ec5819f129835ed866aec47b8537f892e7",
       "source_preview": "protected = [r for r in records if r['protected_reference_count']]\nrows = []\nfor r in protected[:30]:\n    first = r['protected_references'][0] if r['protected_references'] else {}\n    where = f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where, r['lane']])\nmd = '## Protected validation references\\n\\n' + '\\n'.join(['| script | refs | first ref | lane |', '| --- | ---: | --- | --- |'] + [f'| {a} | {b} | {c} | {d} |' for a,b,c,d in rows])\ndisplay(Markdown(md))",
       "outputs": [
         {
@@ -120,14 +120,14 @@
     {
       "cell_index": 6,
       "execution_count": 6,
-      "source_sha256": "8067f48e0c4e8a2fe7689e0452321659451e67ce89bf8bd5f48852e7b9d38724",
+      "source_sha256": "c818df736050aa619dee0752128a509c2458a49f97cd8643bb3dc690c9bcf447",
       "source_preview": "assert archive['summary']['script_count'] == len(archive['records'])\nassert all(r['source']['text'] for r in archive['records'])\nassert archive['generated_at_utc']\nprint('peec_integration examples catalog synchronized')",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 47,
-          "text_sha256": "cdb405167121c11a2a95febe17979b084db8de803a2e9b44ec85ade1ee4a51ef",
+          "text_sha256": "5fb50d427f40f0d7485a1982a7d63e90c26f98255682ad24bcbf0f39801d6b28",
           "text_preview": "peec_integration examples catalog synchronized\n",
           "text_truncated": false
         }

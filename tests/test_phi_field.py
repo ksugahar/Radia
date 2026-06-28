@@ -3,7 +3,7 @@
 Tests for scalar potential (Phi) field computation.
 
 Tests verify that:
-1. ObjRecMag and ObjHexahedron give consistent Phi values
+1. magnet_box (MMMM rectangular PM) and a hand-built ObjHexahedron give consistent Phi values
 2. Phi is computed using face-based integration (not dipole approximation)
 3. Phi symmetry properties are correct
 
@@ -37,11 +37,11 @@ class TestPhiFieldBasic:
         rad.UtiDelAll()
 
     def test_phi_on_z_axis_recmag_vs_hexahedron(self):
-        """Test that Phi matches between ObjRecMag and ObjHexahedron on z-axis."""
+        """Test that Phi matches between magnet_box and a hand-built ObjHexahedron on z-axis."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        # Create ObjRecMag
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        # Create magnet_box (MMMM rectangular PM = surface-charge ObjHexahedron)
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
 
         # Create ObjHexahedron
         vertices = [
@@ -70,7 +70,7 @@ class TestPhiFieldBasic:
         """Test Phi at diagonal points (not on symmetry axes)."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
         vertices = [
             [-dx, -dy, -dz], [dx, -dy, -dz], [dx, dy, -dz], [-dx, dy, -dz],
             [-dx, -dy, dz], [dx, -dy, dz], [dx, dy, dz], [-dx, dy, dz],
@@ -203,10 +203,10 @@ class TestPhiFieldConsistency:
         assert abs(Phi) > 1.0, f"|Phi| should be non-zero at diagonal point, got {Phi}"
 
     def test_b_field_consistency(self):
-        """Test that B field is consistent between ObjRecMag and ObjHexahedron."""
+        """Test that B field is consistent between magnet_box and a hand-built ObjHexahedron."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
         vertices = [
             [-dx, -dy, -dz], [dx, -dy, -dz], [dx, dy, -dz], [-dx, dy, -dz],
             [-dx, -dy, dz], [dx, -dy, dz], [dx, dy, dz], [-dx, dy, dz],

@@ -19,7 +19,7 @@ def test_isotropic_linear_material(radia_clean):
     assert mat_iso > 0
 
     # Apply to a block
-    block = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 0])
+    block = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 0])
     rad.MatApl(block, mat_iso)
 
 
@@ -36,7 +36,7 @@ def test_anisotropic_linear_material(radia_clean):
     assert mat_aniso > 0
 
     # Apply to a block
-    block = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 0])
+    block = rad.magnet_box([20, 0, 0], [10, 10, 10], [0, 0, 0])
     rad.MatApl(block, mat_aniso)
 
 
@@ -53,5 +53,5 @@ def test_permanent_magnet_material(radia_clean):
     assert mat_pm > 0
 
     # Apply to a block and verify material assignment succeeds
-    block = rad.ObjRecMag([0, 0, 0], [20, 20, 10], [0, 0, 0])
+    block = rad.magnet_box([0, 0, 0], [20, 20, 10], [0, 0, 0])
     rad.MatApl(block, mat_pm)

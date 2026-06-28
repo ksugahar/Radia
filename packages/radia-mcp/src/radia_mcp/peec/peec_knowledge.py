@@ -7,6 +7,10 @@ src-API, benchmark, experiment, smoke, and cleanup-review scripts in the
 SHOWCASE NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell continued-fraction + ngbem EFIE loop L + 4 paper figures (verified).
 CATALOG NOTEBOOK: docs/peec_integration/examples_catalog.ipynb -- full source
 text/hash/result-media ledger for examples/peec_integration with migration lanes.
+CLEANUP ROUTING: docs/peec_integration/cleanup_routing.ipynb -- routes the
+63 cleanup-review scripts into validation_test (50), src API (5), and
+distill-delete (8); deletion candidates are summarized in
+memory/peec_integration_cleanup_routing.md.
 SHOWCASE NOTEBOOK: docs/peec/dowell_surface_impedance_demo.ipynb -- executable companion to docs/peec/PEEC_SURFACE_IMPEDANCE.md: F(xi)/G(xi) skin+proximity ratios vs normalized thickness, copper-foil Z(f) sweep, Dowell coth (H=0 BC) vs ESIM tanh (dH/dz=0 BC) boundary comparison, round-wire Bessel vs rect Dowell, and CF truncation accuracy (verified; F/G match deep_bar_resistance_factor/reactance_factor to machine precision).
 PEEC knowledge base for the mcp-server-peec MCP server.
 
@@ -90,7 +94,8 @@ dense Ruehli L vs HACApK H-matrix (ACA+ compression + scaling) and the MNA
 dense-vs-HACApK crossover, read live from the committed benchmark JSON; the
 extracted |Z11| matches the dense reference. Corpus + JSON +
 `findings_peec_mna_crossover.md` / `comparison_peec_dense_vs_hacapk.md` at
-`examples/solver_benchmarks/`.
+`docs/solver_benchmarks/`; executable benchmark drivers live under
+`validation_test/solver_benchmarks/`.
 
 ### References
 

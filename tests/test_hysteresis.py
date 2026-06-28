@@ -170,7 +170,7 @@ class TestPlaySolverIntegration:
         mat = rad.MatPlayHysteresis(K, eta, tables)
 
         # Simple iron block
-        mag = rad.ObjRecMag([0, 0, 0], [0.02, 0.02, 0.02], [0, 0, 0])
+        mag = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.02], [0, 0, 0])
         rad.MatApl(mag, mat)
 
         bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])

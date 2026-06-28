@@ -42,13 +42,13 @@ class TestTranslation:
 		rad.UtiDelAll()
 
 		# Magnet at origin
-		mag1 = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		mag1 = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 		H1 = rad.Fld(mag1, 'h', [0.05, 0, 0])
 
 		rad.UtiDelAll()
 
 		# Magnet at translated position (same relative geometry)
-		mag2 = rad.ObjRecMag([0, 0, 0.05], [0.01, 0.01, 0.01], [0, 0, 954930])
+		mag2 = rad.magnet_box([0, 0, 0.05], [0.01, 0.01, 0.01], [0, 0, 954930])
 		H2 = rad.Fld(mag2, 'h', [0.05, 0, 0.05])
 
 		# Same relative geometry -> same field
@@ -58,7 +58,7 @@ class TestTranslation:
 		"""Test applying multiple translations produces valid field"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		mag = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
 
 		# Translate in x (adds symmetry copy)
 		rad.TrfOrnt(mag, rad.TrfTrsl([0.010, 0, 0]))
@@ -92,14 +92,14 @@ class TestRotation:
 		rad.UtiDelAll()
 
 		# Magnet along x-axis with x-magnetization
-		mag1 = rad.ObjRecMag([0.01, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		mag1 = rad.magnet_box([0.01, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 		H_x = rad.Fld(mag1, 'h', [0.015, 0, 0])
 		H_x_mag = np.linalg.norm(H_x)
 
 		rad.UtiDelAll()
 
 		# Same magnet rotated 90deg around z: along y-axis with y-magnetization
-		mag2 = rad.ObjRecMag([0, 0.01, 0], [0.005, 0.005, 0.005], [0, 1, 0])
+		mag2 = rad.magnet_box([0, 0.01, 0], [0.005, 0.005, 0.005], [0, 1, 0])
 		H_y = rad.Fld(mag2, 'h', [0, 0.015, 0])
 		H_y_mag = np.linalg.norm(H_y)
 
@@ -110,7 +110,7 @@ class TestRotation:
 		"""Test 180-degree rotation produces valid field"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		mag = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 
 		# Rotate 180 degrees around z-axis (adds symmetry copy)
 		tr = rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi)
@@ -124,7 +124,7 @@ class TestRotation:
 		"""Test rotation around non-origin point"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		mag = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 
 		# Rotate around point [0.010, 0, 0] (magnet center)
 		tr = rad.TrfRot([0.010, 0, 0], [0, 0, 1], np.pi/2)
@@ -156,7 +156,7 @@ class TestCombinedTransformations:
 		assert tr_combined > 0
 
 		# Apply to magnet (adds symmetry copy)
-		mag = rad.ObjRecMag([0, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
+		mag = rad.magnet_box([0, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
 		rad.TrfOrnt(mag, tr_combined)
 
 		# Verify field computation succeeds
@@ -180,7 +180,7 @@ class TestCombinedTransformations:
 		tr_combined = rad.TrfCmbL(tr_rot, tr_trsl)
 
 		# Apply to magnet (adds symmetry copy)
-		mag = rad.ObjRecMag([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		mag = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 		rad.TrfOrnt(mag, tr_combined)
 
 		# Verify field computation succeeds
@@ -211,8 +211,8 @@ class TestTransformationOnGroups:
 		rad.UtiDelAll()
 
 		# Create group of magnets (in meters)
-		mag1 = rad.ObjRecMag([0, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
-		mag2 = rad.ObjRecMag([0.010, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
+		mag1 = rad.magnet_box([0, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
+		mag2 = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
 		group = rad.ObjCnt([mag1, mag2])
 
 		# Translate entire group (adds symmetry copies)
@@ -227,8 +227,8 @@ class TestTransformationOnGroups:
 		"""Test rotating entire container"""
 		rad.UtiDelAll()
 
-		mag1 = rad.ObjRecMag([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
-		mag2 = rad.ObjRecMag([0.020, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		mag1 = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		mag2 = rad.magnet_box([0.020, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 		group = rad.ObjCnt([mag1, mag2])
 
 		# Rotate 90 degrees (adds symmetry copies)

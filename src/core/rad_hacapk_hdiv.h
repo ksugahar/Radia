@@ -226,6 +226,24 @@ public:
                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
                         std::vector<double> curve_gl, std::vector<double> curve_gw);
+
+    // CURVED POLYTOPE mode (curved hex/wedge): FULLY curved -- both the CELL volume charge AND the boundary
+    // FACE surface charge live on the true mesh.Curve(2) geometry (the cell volume charge is DOMINANT for the
+    // demag, NOT zero -- curved RT0 cannot represent uniform M exactly, so div M != 0).  Each curved hex CELL
+    // is split (Python, Kuhn 6-tet) into curved P2 sub-TETS, each fed through CurvedTetPotential; each curved
+    // quad FACE into curved P2 sub-TRIS through CurvedTriPotential -- reusing the golden curved-tet/tri kernels.
+    // cell_curved_nodes [n_cell_subtet*30] = 10 P2 nodes/sub-tet; cell_subtet_off [n_cell+1] CSR; ditto
+    // face_curved_nodes [n_bf_subtri*18] + face_subtri_off [n_bf+1].  The CELL outer quad maps ref_tet_pts
+    // through CurvedTetMapMeasure; the FACE outer quad maps ref_tri_pts through CurvedTriMapMeasure.
+    // PhiAt(cell,.) = sum CurvedTetPotential, PhiAt(face,.) = sum CurvedTriPotential (constant RT0 charge ->
+    // monomial exponent 0; curve_gl/gw the inner Duffy rule).  14 vectors + int n_el (distinct overload).
+    RadHACApKChargeGram(std::vector<double> cell_curved_nodes, std::vector<int> cell_subtet_off,
+                        std::vector<double> cell_cent, std::vector<double> cell_meas,
+                        std::vector<double> face_curved_nodes, std::vector<int> face_subtri_off,
+                        std::vector<double> face_cent, std::vector<double> face_meas,
+                        std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
+                        std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
+                        std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -343,6 +361,15 @@ private:
     int  m_curve_order = 0;
     std::vector<double> m_cellNodes, m_faceNodes;      // [n_cell*30] (P2 tet), [n_bf*18] (P2 tri)
     std::vector<double> m_gl, m_gw;                    // curved Duffy Gauss-Legendre rule on [0,1]
+
+    // CURVED POLYTOPE mode (curved hex/wedge): both cell volume charges and boundary face charges follow
+    // the curved P2 geometry.  m_srcCurvedTets[c] holds the 10-node P2 sub-tets for a cell charge;
+    // m_srcCurvedTris[a] holds the 6-node P2 sub-tris for a face charge.  When m_curved_face is true,
+    // PhiAt dispatches to CurvedTetPotential / CurvedTriPotential and m_qp/m_qw are mapped by the matching
+    // curved outer quadrature rules.
+    bool m_curved_face = false;
+    std::vector<std::vector<std::array<rad_hdiv::Vec3, 6>>> m_srcCurvedTris;  // [n] curved-face P2 sub-tri nodes
+    std::vector<std::vector<std::array<rad_hdiv::Vec3, 10>>> m_srcCurvedTets; // [n] curved-cell P2 sub-tet nodes
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;

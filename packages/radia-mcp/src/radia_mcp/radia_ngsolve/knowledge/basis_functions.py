@@ -101,7 +101,7 @@ to be rule-driven, no separate library needed):
 
 **Pattern**: Mathematica functions are written in `Module[...]` with
 local variables, take reference coords as arguments, return values or
-arrays.  The `examples/mathematica/RadiaBasis.m` package has the full
+arrays.  The `packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m` package has the full
 Phase 1 canonical implementation; SymPy translations live in
 ``tests/basis/test_basis_functions.py`` (used as the verification
 oracle); NumPy translations live alongside the radia code that
@@ -202,7 +202,7 @@ TriH1P3[xi_, eta_] := Module[{lam0, lam1, lam2},
 P4 (15 dofs) and P5 (21 dofs) follow the same hierarchical-Lagrange
 pattern with k+1 nodes per edge and (k-1)(k-2)/2 interior nodes.
 The closed-form expressions are too long to inline here; see
-``examples/mathematica/RadiaBasis.m`` for the full definitions and
+``packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m`` for the full definitions and
 ``tests/basis/test_basis_functions.py`` for the SymPy-verified
 NumPy ports.
 
@@ -428,7 +428,7 @@ TetH1P2[xi_, eta_, zeta_] := Module[{lam0, lam1, lam2, lam3},
 
 ### P3 (20 dofs: 4 vertex + 12 edge (1/3, 2/3) + 4 face centroid)
 
-Closed form is long; see `examples/mathematica/RadiaBasis.m`.
+Closed form is long; see `packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m`.
 
 **Verification**: same as triangle (partition of unity, dof count
 (k+1)(k+2)(k+3)/6 = 4 / 10 / 20 / 35 / ...).

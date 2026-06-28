@@ -3,7 +3,7 @@
 Tests for vector potential (A) field computation.
 
 Tests verify that:
-1. ObjRecMag and ObjHexahedron give consistent A values at off-axis points
+1. magnet_box (MMMM rectangular PM) and a hand-built ObjHexahedron give consistent A values off-axis
 2. A is computed using face-based integration
 3. A field symmetry properties are correct
 4. A = 0 on symmetry axes is physically correct for face-based method
@@ -38,10 +38,14 @@ class TestAFieldBasic:
         rad.UtiDelAll()
 
     def test_a_off_axis_recmag_vs_hexahedron(self):
-        """Test that A matches between ObjRecMag and ObjHexahedron at off-axis points."""
+        """Test that A matches between magnet_box and a hand-built ObjHexahedron off-axis.
+
+        magnet_box is now the rectangular permanent magnet (MMMM surface-charge ObjHexahedron),
+        so this cross-checks the box-helper's vertex winding against a hand-built hexahedron.
+        """
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        rec_mag = rad.ObjRecMag([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
+        rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
         vertices = [
             [-dx, -dy, -dz], [dx, -dy, -dz], [dx, dy, -dz], [-dx, dy, -dz],
             [-dx, -dy, dz], [dx, -dy, dz], [dx, dy, dz], [-dx, dy, dz],

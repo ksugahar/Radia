@@ -1,4 +1,6 @@
-// Shared GMSH display companion for visualization examples.
-// Use with any high-order .msh output from this directory.
+// Shared GMSH display companion for docs visualization assets.
+// Use with high-order .msh outputs when a script does not write a local
+// companion file. It improves curved-element display quality only; it does
+// not change the solver mesh.
 Mesh.NumSubEdges = 4;
 // Merge "<result>.msh";

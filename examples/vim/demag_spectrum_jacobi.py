@@ -44,7 +44,7 @@ def build_grid_demag(n, a=0.01, distort=0.0, seed=1):
         for b in range(3):                       # source block jb, M = e_b (A/m units = 1)
             rad.UtiDelAll()
             M = [0.0, 0.0, 0.0]; M[b] = 1.0
-            src = rad.ObjRecMag(centers[jb].tolist(), dims, M)
+            src = rad.magnet_box(centers[jb].tolist(), dims, M)
             # H field of this single magnetized block at every block center (exact)
             H = np.array(rad.Fld(src, 'h', centers.tolist())).reshape(nb, 3)
             N[:, 3 * jb + b] = H.reshape(-1)     # column: response at all i from (jb,b)

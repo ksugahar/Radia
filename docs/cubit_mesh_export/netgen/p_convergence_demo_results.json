@@ -1,0 +1,181 @@
+{
+  "generated_by": "docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb",
+  "demo_kind": "mesh_evaluation_p_convergence",
+  "radius_m": 0.05,
+  "mesh_size_m": 0.025,
+  "max_order": 5,
+  "cubit_version": "2025.12",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "result": {
+    "cad_vol_total": 0.0005235988,
+    "cad_area_total": 0.03141593,
+    "cad_length_total": 0,
+    "format_qa": [
+      {
+        "format": "gmsh",
+        "order": 1,
+        "volume": 0.0004725542969564548,
+        "vol_error_pct": -9.74878151812899,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      },
+      {
+        "format": "gmsh",
+        "order": 2,
+        "volume": 0.000522537332026996,
+        "vol_error_pct": -0.2027254403570059,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      },
+      {
+        "format": "gmsh",
+        "order": 3,
+        "volume": 0.0005236941909737664,
+        "vol_error_pct": 0.018218333152495624,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      },
+      {
+        "format": "nastran",
+        "order": 1,
+        "volume": 0.0004725542586215791,
+        "vol_error_pct": -9.748788839550599,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      },
+      {
+        "format": "nastran",
+        "order": 2,
+        "volume": 0.0005225372666212672,
+        "vol_error_pct": -0.20273793193047646,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      },
+      {
+        "format": "vtk",
+        "order": 1,
+        "volume": 0.0004725542969564548,
+        "vol_error_pct": -9.74878151812899,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      },
+      {
+        "format": "vtk",
+        "order": 2,
+        "volume": 0.000522537332026996,
+        "vol_error_pct": -0.2027254403570059,
+        "area": 0.0,
+        "area_error_pct": -100.0,
+        "neg_det": 0
+      }
+    ],
+    "orders": [
+      {
+        "order": 1,
+        "ng_volume": 0.0004725542586228989,
+        "ng_area": 0.029724748416722423,
+        "ng_length": 0.0,
+        "vol_error_pct": -9.748788839298536,
+        "area_error_pct": -5.383197579309538,
+        "len_error_pct": 0,
+        "time": 0.01084690005518496
+      },
+      {
+        "order": 2,
+        "ng_volume": 0.0005225372713176774,
+        "ng_area": 0.03137424733685034,
+        "ng_length": 0.0,
+        "vol_error_pct": -0.20273703498223045,
+        "area_error_pct": -0.13268002299999204,
+        "len_error_pct": 0,
+        "time": 0.01163049996830523
+      },
+      {
+        "order": 3,
+        "ng_volume": 0.0005236941421118361,
+        "ng_area": 0.03142004795620921,
+        "ng_length": 0.0,
+        "vol_error_pct": 0.01820900121163865,
+        "area_error_pct": 0.013107860277276409,
+        "len_error_pct": 0,
+        "time": 0.012419900158420205
+      },
+      {
+        "order": 4,
+        "ng_volume": 0.0005236034919210082,
+        "ng_area": 0.03141611859596077,
+        "ng_length": 0.0,
+        "vol_error_pct": 0.0008960908635181575,
+        "area_error_pct": 0.0006003195218637064,
+        "len_error_pct": 0,
+        "time": 0.01278950017876923
+      },
+      {
+        "order": 5,
+        "ng_volume": 0.0005235986998877059,
+        "ng_area": 0.03141590158598943,
+        "ng_length": 0.0,
+        "vol_error_pct": -1.9120038874365532e-05,
+        "area_error_pct": -9.044459474846664e-05,
+        "len_error_pct": 0,
+        "time": 0.013092099921777844
+      }
+    ],
+    "max_order": 5
+  },
+  "cubit_commands_template": [
+    "reset",
+    "create sphere radius 0.05",
+    "volume 1 size 0.025",
+    "volume 1 scheme tetmesh",
+    "mesh volume 1",
+    "block 1 add volume 1",
+    "block 1 name \"sphere\"",
+    "export netgen \"{base}_p1.vol\" order 1 overwrite",
+    "export netgen \"{base}_p2.vol\" order 2 overwrite",
+    "export netgen \"{base}_p3.vol\" order 3 overwrite",
+    "export netgen \"{base}_p4.vol\" order 4 overwrite",
+    "export netgen \"{base}_p5.vol\" order 5 overwrite",
+    "export gmsh \"{base}_qa_gmsh_o1.msh\" overwrite",
+    "export gmsh \"{base}_qa_gmsh_o2.msh\" order 2 overwrite",
+    "export gmsh \"{base}_qa_gmsh_o3.msh\" order 3 overwrite",
+    "export jmag_nastran \"{base}_qa_nastran_o1.bdf\" overwrite",
+    "export jmag_nastran \"{base}_qa_nastran_o2.bdf\" order 2 overwrite",
+    "export vtk \"{base}_qa_vtk_o1.vtk\" overwrite",
+    "export vtk \"{base}_qa_vtk_o2.vtk\" order 2 overwrite"
+  ],
+  "generated_at_utc": "2026-06-28T02:04:49Z",
+  "source_sha256": "9f2f9eb915c5e8aa92d86e71e27086adaa604981c14311408bead099d7757ede",
+  "calc_mesh_eval": {
+    "path": "src/radia/panels/calc_mesh_eval.py",
+    "sha256": "232d75d36cc72b64f7f0bb3c3f8026df06e0d9a79da0f695b124ee8924fe7cd6"
+  },
+  "generated_artifacts": [
+    "sphere_mesh_eval_p1.vol",
+    "sphere_mesh_eval_p1.vol.json",
+    "sphere_mesh_eval_p2.vol",
+    "sphere_mesh_eval_p2.vol.json",
+    "sphere_mesh_eval_p3.vol",
+    "sphere_mesh_eval_p3.vol.json",
+    "sphere_mesh_eval_p4.vol",
+    "sphere_mesh_eval_p4.vol.json",
+    "sphere_mesh_eval_p5.vol",
+    "sphere_mesh_eval_p5.vol.json",
+    "sphere_mesh_eval_qa_gmsh_o1.msh",
+    "sphere_mesh_eval_qa_gmsh_o2.geo",
+    "sphere_mesh_eval_qa_gmsh_o2.msh",
+    "sphere_mesh_eval_qa_gmsh_o3.geo",
+    "sphere_mesh_eval_qa_gmsh_o3.msh",
+    "sphere_mesh_eval_qa_nastran_o1.bdf",
+    "sphere_mesh_eval_qa_nastran_o2.bdf",
+    "sphere_mesh_eval_qa_vtk_o1.vtk",
+    "sphere_mesh_eval_qa_vtk_o2.vtk"
+  ]
+}

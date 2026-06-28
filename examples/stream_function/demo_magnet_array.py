@@ -33,7 +33,7 @@ def main():
         for cx in xs:
             for cy in ys:
                 # 10 mm cube, Br ~ 1.2 T  (M = Br/mu0 ~ 954930 A/m), +z.
-                sources.append(rad.ObjRecMag([float(cx), float(cy), 0.0],
+                sources.append(rad.magnet_box([float(cx), float(cy), 0.0],
                                              [0.01, 0.01, 0.01],
                                              [0.0, 0.0, 954930.0]))
         N = len(sources)

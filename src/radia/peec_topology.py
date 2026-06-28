@@ -119,7 +119,7 @@ class PEECCircuitSolver:
                 ``A diag(Z)^{-1} A^T``).  No nested Krylov; machine-
                 precision accuracy and crossover with dense LU at
                 N ~ 3000 (see
-                examples/solver_benchmarks/findings_peec_mna_crossover.md).
+                docs/solver_benchmarks/findings_peec_mna_crossover.md).
                 ``"lgmres"`` and ``"gcrotmk"`` use the older nested
                 (outer Krylov + inner HACApK BiCGSTAB) path; ``"lgmres"``
                 is robust but 100x slower at small N, ``"gcrotmk"``

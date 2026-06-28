@@ -386,7 +386,7 @@ for step in range(0, time_steps + 1):  # 0から180まで
 	rad.UtiDelAll()
 
 	# 磁石を原点で作成（初期磁化方向: Y方向）
-	magnet = rad.ObjRecMag([0, 0, 0], [magnet_size, magnet_size, magnet_size], [0, M, 0])
+	magnet = rad.magnet_box([0, 0, 0], [magnet_size, magnet_size, magnet_size], [0, M, 0])
 
 	print(f"    初期磁化ベクトル: [0, {M:.0f}, 0] A/m (Br相当: [0, {Br:.6f}, 0] T)")
 	print(f"    最終位置: ({x_pos*1000:.2f}, {y_fixed*1000:.2f}, {z_fixed*1000:.2f}) mm")

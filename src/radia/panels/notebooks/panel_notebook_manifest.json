@@ -100,9 +100,8 @@
       "notebook": "src/radia/panels/notebooks/radia_export_menu.ipynb",
       "state": "active-cubit-toolbar",
       "adapter": null,
-      "status": "Active Cubit-embedded Export Mesh toolbar. It may use Cubit's PySide6 runtime, but normal Radia Python analysis panels remain notebook/headless.",
+      "status": "Active Cubit-embedded Export Mesh toolbar for export commands only. Mesh p-convergence evaluation is a docs demonstration, not a panel surface.",
       "headless": [
-        "src/radia/panels/calc_mesh_eval.py",
         "src/radia/panels/check_vol_consistency.py"
       ]
     }
