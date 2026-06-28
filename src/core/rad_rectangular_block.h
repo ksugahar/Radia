@@ -140,7 +140,10 @@ public:
 	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0)? 0 : 3;}
 	int SizeOfThis() { return sizeof(radTRecCur);}
 
-	int ConvertToPolyhedron(radThg&, radTApplication*, char);
+	// Current block is never converted to a polyhedron (the magnet path builds the MMMM polyhedron
+	// directly in SetRecMag). Return 1 ("handled", like radTPolyhedron) so radTGroup::ConvertToPolyhedron
+	// does not treat a current block as a conversion failure (base radTg3dRelax returns 0).
+	int ConvertToPolyhedron(radThg&, radTApplication*, char) { return 1;}
 	// CheckVertexPtsPositionsWithRespectToPlane REMOVED (Phase C, 2026-04-16)
 
 	void DefineRelAndAbsTol(double* RelAbsTol)
