@@ -3,7 +3,7 @@
 The PEEC HACApK path (RadHACApKPEECManager -> HACApKPEECManager pybind ->
 peec_hacapk_solver.PEECHACApKSolver) is a LIVE but otherwise UNTESTED route
 (2026-06-26 inventory: no tests/ file exercised it; only
-examples/solver_benchmarks/bench_peec_hacapk.py did).  This file gives the
+validation_test/solver_benchmarks/bench_peec_hacapk.py does).  This file gives the
 maintenance-thin path a foothold so a regression in the H-matrix PEEC
 adapter cannot land silently.
 

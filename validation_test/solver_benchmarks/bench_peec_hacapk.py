@@ -12,9 +12,9 @@ with complex BiCGSTAB (Option A: split real/imag, two real HACApK matvecs
 per complex matvec).  No Zs term here -- DC resistance only, so that the
 comparison vs bench_peec_dense.py isolates the linear-algebra cost.
 
-Per CLAUDE.md benchmark policy:
+Per repository benchmark policy:
   - one subprocess per case (fresh python, clean peak-memory measurement)
-  - JSON output: results_bench_peec_hacapk.json next to this script
+  - JSON output: docs/solver_benchmarks/results_bench_peec_hacapk.json
 
 Subdivisions include values beyond the dense-LU feasibility window
 (nwinc in [1..7] -> N_fil = 500, 2000, 4500, 8000, 12500, 18000, 24500)
@@ -64,8 +64,10 @@ BICG_RTOL = 1.0e-6
 BICG_MAXITER = 2000
 
 BENCH_NAME = "bench_peec_hacapk"
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+RESULT_DIR = os.path.join(REPO_ROOT, "docs", "solver_benchmarks")
 OUTFILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
+    RESULT_DIR,
     f"results_{BENCH_NAME}.json",
 )
 
@@ -371,6 +373,7 @@ def run_all() -> None:
         },
         "results": results,
     }
+    os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
     with open(OUTFILE, "w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
     print()

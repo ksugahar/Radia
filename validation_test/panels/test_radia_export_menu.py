@@ -17,10 +17,8 @@ Coverage:
     H. install_menu() idempotency on a stub QMainWindow
     I. ensure_jou_path() session-stickiness (_last_jou_path)
     J. Settings persistence round-trip
-    K. Mesh Evaluation runner orchestration (mocked Cubit + subprocess)
-    L. End-to-end p-convergence on a sphere (Cubit batch + NGSolve +
-       GMSH).  Skipped if Cubit batch cannot launch (e.g. license busy
-       because the LAB GUI session is still open).
+    K. Mesh Evaluation is not part of the Cubit menu; the
+       p-convergence demonstration lives under docs/cubit_mesh_export.
 
 Run::
 
@@ -38,12 +36,10 @@ Run::
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tempfile
 import unittest
-import unittest.mock
 from unittest.mock import MagicMock
 
 # Force offscreen Qt platform BEFORE PySide6 is imported.
@@ -54,17 +50,27 @@ _REPO_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src", "radia", "panels"))
 
+try:
+    from PySide6.QtCore import Qt  # noqa: E402
+    from PySide6.QtGui import QAction  # noqa: E402
+    from PySide6.QtWidgets import (  # noqa: E402
+        QApplication, QMainWindow,
+    )
+except ImportError as exc:
+    message = (
+        "PySide6 is required only in the Cubit panel runtime; "
+        "skip radia_export_menu validation on normal Radia Python."
+    )
+    if __name__ == "__main__":
+        print(f"SKIP: {message}")
+        raise SystemExit(0) from exc
+    raise unittest.SkipTest(message) from exc
+
 
 # Module under test.  Top-level `import cubit` is forbidden in the
 # module (per layer 2 isolation rules) -- this import must succeed
-# without Cubit on PATH.
+# without Cubit on PATH when PySide6 is available.
 import radia_export_menu as rem  # noqa: E402
-
-from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtGui import QAction  # noqa: E402
-from PySide6.QtWidgets import (  # noqa: E402
-    QApplication, QMainWindow,
-)
 
 
 _QAPP = None
@@ -362,22 +368,24 @@ class TestInstallMenu(unittest.TestCase):
                 return sub
         return None
 
-    def test_install_creates_menu_with_7_actions(self):
+    def test_install_creates_menu_with_6_export_actions(self):
         menu = rem.install_menu()
         self.assertIsNotNone(menu, "install_menu returned None")
-        # 7 = 6 export formats + 1 Mesh Evaluation (separator is not
-        # itself an action accessible via actions(), but it IS an
-        # action via menu.actions()).  Count visible/triggerable.
+        # Radia Export is intentionally export-only.  Mesh evaluation is
+        # documented as a docs notebook demo, not a Cubit menu action.
         actions = [a for a in menu.actions() if not a.isSeparator()]
-        self.assertEqual(len(actions), 7,
-                         f"expected 7 non-separator actions, got "
+        self.assertEqual(len(actions), 6,
+                         f"expected 6 non-separator actions, got "
                          f"{len(actions)}: {[a.text() for a in actions]}")
         labels = [a.text() for a in actions]
         for expected in ("Netgen Vol", "GMSH", "Nastran", "VTK",
-                         "FEMEEM", "MEG", "Mesh Evaluation"):
+                         "FEMEEM", "MEG"):
             self.assertTrue(
                 any(expected in lbl for lbl in labels),
                 f"missing action containing {expected!r} in {labels}")
+        self.assertFalse(
+            any("Mesh Evaluation" in lbl for lbl in labels),
+            f"Mesh Evaluation must not be exposed in the menu: {labels}")
 
     def test_install_is_idempotent(self):
         rem.install_menu()
@@ -472,356 +480,25 @@ class TestSettingsRoundTrip(unittest.TestCase):
 
 
 # ----------------------------------------------------------------------
-# K. Mesh Evaluation runner orchestration (mocked Cubit + subprocess)
+# K. Mesh evaluation routing
 # ----------------------------------------------------------------------
-class TestMeshEvaluationRunner(unittest.TestCase):
-    """Verify _run_mesh_evaluation issues the right exports and parses
-    calc_mesh_eval.py output correctly, WITHOUT launching Cubit."""
+class TestMeshEvaluationDocsRouting(unittest.TestCase):
 
-    def setUp(self):
-        _ensure_qapp()
-        self._tmpdir = tempfile.mkdtemp(prefix="rem_mesheval_")
-        self._jou = os.path.join(self._tmpdir, "spheretest.jou")
-        with open(self._jou, "w") as f:
-            f.write("# fake journal\n")
+    def test_mesh_evaluation_runner_removed_from_menu_module(self):
+        self.assertFalse(hasattr(rem, "_run_mesh_evaluation"))
+        self.assertFalse(hasattr(rem, "_show_mesh_eval_result"))
 
-        # Mock cubit module: get_volume_count > 0 so the runner
-        # skips the empty-model branch; get_current_journal_file
-        # returns our jou path (ensure_jou_path path 1).
-        self._cubit = MagicMock()
-        self._cubit.get_volume_count = MagicMock(return_value=1)
-        self._cubit.get_current_journal_file = MagicMock(
-            return_value=self._jou)
-        self._cmds_issued = []
-        self._cubit.cmd = MagicMock(
-            side_effect=lambda c: self._cmds_issued.append(c))
-
-    def tearDown(self):
-        import shutil
-        shutil.rmtree(self._tmpdir, ignore_errors=True)
-        sys.modules.pop("cubit", None)
-
-    def _stub_run_subprocess_utf8(self, json_payload):
-        """Return a stub that mimics _run_subprocess_utf8(argv, timeout)
-        emitting (rc=0, stdout_str, "")."""
-        stdout = json.dumps(json_payload) + "\n"
-        return MagicMock(return_value=(0, stdout, ""))
-
-    def test_issues_5_vol_exports_at_orders_1_to_5(self):
-        """Phase 1 of the runner must emit `_p1.vol` ... `_p5.vol`."""
-        with unittest.mock.patch.object(
-                rem, "_find_external_python", return_value="python"), \
-            unittest.mock.patch.object(
-                rem, "_find_calc_script", return_value="/dev/null"), \
-            unittest.mock.patch.object(
-                rem, "_run_subprocess_utf8",
-                self._stub_run_subprocess_utf8(
-                    {"orders": [], "format_qa": []})), \
-            unittest.mock.patch.object(rem, "_show_mesh_eval_result"):
-            rem._run_mesh_evaluation(self._cubit, parent=None)
-
-        netgen_cmds = [c for c in self._cmds_issued
-                       if c.startswith("export netgen ")]
-        self.assertEqual(
-            len(netgen_cmds), 5,
-            f"expected 5 netgen exports, got {len(netgen_cmds)}: "
-            f"{netgen_cmds}")
-        for p in range(1, 6):
-            self.assertTrue(
-                any(f"_p{p}.vol" in c and f"order {p}" in c
-                    for c in netgen_cmds),
-                f"missing order {p} export in {netgen_cmds}")
-
-    def test_issues_format_qa_exports(self):
-        """Phase 1 also emits gmsh(1-3) + nastran(1-2) + vtk(1-2) = 7
-        QA exports.  GMSH order is capped at 3 per CLAUDE.md
-        ("GMSH order limit": 4-5 unreliable)."""
-        with unittest.mock.patch.object(
-                rem, "_find_external_python", return_value="python"), \
-            unittest.mock.patch.object(
-                rem, "_find_calc_script", return_value="/dev/null"), \
-            unittest.mock.patch.object(
-                rem, "_run_subprocess_utf8",
-                self._stub_run_subprocess_utf8(
-                    {"orders": [], "format_qa": []})), \
-            unittest.mock.patch.object(rem, "_show_mesh_eval_result"):
-            rem._run_mesh_evaluation(self._cubit, parent=None)
-
-        gmsh_qa = [c for c in self._cmds_issued
-                   if c.startswith("export gmsh ")
-                   and "_qa_" in c]
-        nast_qa = [c for c in self._cmds_issued
-                   if c.startswith("export jmag_nastran ")
-                   and "_qa_" in c]
-        vtk_qa = [c for c in self._cmds_issued
-                  if c.startswith("export vtk ")
-                  and "_qa_" in c]
-        self.assertEqual(len(gmsh_qa), 3,
-                         f"GMSH QA: expected 3, got {gmsh_qa}")
-        self.assertEqual(len(nast_qa), 2,
-                         f"Nastran QA: expected 2, got {nast_qa}")
-        self.assertEqual(len(vtk_qa), 2,
-                         f"VTK QA: expected 2, got {vtk_qa}")
-
-    def test_calls_calc_mesh_eval_with_vol_base_and_max_order(self):
-        """Phase 2 must subprocess `calc_mesh_eval.py --vol-base <base>
-        --max-order 5` (verified through the _run_subprocess_utf8
-        helper)."""
-        captured = {}
-
-        def fake_run(argv, timeout=None):
-            captured["argv"] = argv
-            return (0,
-                    json.dumps({"orders": [], "format_qa": []}) + "\n",
-                    "")
-
-        with unittest.mock.patch.object(
-                rem, "_find_external_python", return_value="python"), \
-            unittest.mock.patch.object(
-                rem, "_find_calc_script",
-                return_value="C:/fake/calc_mesh_eval.py"), \
-            unittest.mock.patch.object(
-                rem, "_run_subprocess_utf8", side_effect=fake_run), \
-            unittest.mock.patch.object(rem, "_show_mesh_eval_result"):
-            rem._run_mesh_evaluation(self._cubit, parent=None)
-
-        argv = captured.get("argv", [])
-        joined = " ".join(str(a) for a in argv)
-        self.assertIn("calc_mesh_eval.py", joined)
-        self.assertIn("--vol-base", argv)
-        self.assertIn("--max-order", argv)
-        self.assertIn("5", argv)
-
-    def test_passes_json_to_show_result(self):
-        """The parsed JSON from calc_mesh_eval must reach
-        _show_mesh_eval_result intact."""
-        payload = {
-            "orders": [
-                {"order": 1, "vol_error_pct": -2.5},
-                {"order": 2, "vol_error_pct": -0.1},
-                {"order": 3, "vol_error_pct": -0.005},
-            ],
-            "format_qa": [],
-            "cad_vol_total": 5.235988e-4,
-            "max_order": 3,
-        }
-
-        with unittest.mock.patch.object(
-                rem, "_find_external_python", return_value="python"), \
-            unittest.mock.patch.object(
-                rem, "_find_calc_script", return_value="/dev/null"), \
-            unittest.mock.patch.object(
-                rem, "_run_subprocess_utf8",
-                self._stub_run_subprocess_utf8(payload)), \
-            unittest.mock.patch.object(
-                rem, "_show_mesh_eval_result") as show:
-            rem._run_mesh_evaluation(self._cubit, parent=None)
-
-        show.assert_called_once()
-        passed = show.call_args[0][0]   # first positional arg
-        self.assertEqual(passed["max_order"], 3)
-        self.assertEqual(len(passed["orders"]), 3)
-        # Convergence in the payload: err decreases with p
-        errs = [abs(o["vol_error_pct"]) for o in passed["orders"]]
-        self.assertGreater(errs[0], errs[1])
-        self.assertGreater(errs[1], errs[2])
-
-
-# ----------------------------------------------------------------------
-# L. End-to-end p-convergence (Cubit batch -> _p1..._p3.vol -> NGSolve)
-# ----------------------------------------------------------------------
-# All 3 DLL / encoding lessons are encapsulated in
-# tests/_subprocess_utils.py::run_cubit_python_script; this test just
-# supplies the body that builds the sphere + calls evaluate_mesh.
-sys.path.insert(0, os.path.join(_REPO_ROOT, "tests"))
-from _subprocess_utils import (   # noqa: E402
-    run_cubit_python_script, extract_json_from_output,
-)
-
-_PCONV_SCRIPT_BODY = r"""
-import json, sys, traceback
-
-base, max_order, radius, msize = sys.argv[1:5]
-max_order = int(max_order); radius = float(radius); msize = float(msize)
-
-# numpy / NGSolve / Cubit-bin / CUBIT_PLUGIN_DIR were pre-bound by
-# the AUTO-INJECTED prelude (_subprocess_utils._CUBIT_BATCH_PRELUDE).
-try:
-    import calc_mesh_eval
-    import cubit
-    cubit.init(["cubit", "-nojournal", "-batch", "-nographics",
-                "-commandplugindir", os.environ["CUBIT_PLUGIN_DIR"]])
-
-    cubit.cmd("reset")
-    cubit.cmd("create sphere radius %g" % radius)
-    cubit.cmd("volume 1 size %g" % msize)
-    cubit.cmd("volume 1 scheme tetmesh")
-    cubit.cmd("mesh volume 1")
-    cubit.cmd('block 1 add volume 1')
-    cubit.cmd('block 1 name "sphere"')
-    for p in range(1, max_order + 1):
-        vp = "%s_p%d.vol" % (base, p)
-        cubit.cmd('export netgen "%s" order %d overwrite' % (vp, p))
-
-    # Format QA (mimics _run_mesh_evaluation Phase 1b)
-    fmt_specs = [
-        ("gmsh", "msh", "export gmsh", min(max_order, 3)),
-        ("nastran", "bdf", "export jmag_nastran", min(max_order, 2)),
-        ("vtk", "vtk", "export vtk", min(max_order, 2)),
-    ]
-    for name, ext, cmd_prefix, max_ord in fmt_specs:
-        for p in range(1, max_ord + 1):
-            fp = "%s_qa_%s_o%d.%s" % (base, name, p, ext)
-            cmd = '%s "%s"' % (cmd_prefix, fp)
-            if p >= 2:
-                cmd += " order %d" % p
-            cmd += " overwrite"
-            cubit.cmd(cmd)
-
-    result = calc_mesh_eval.evaluate_mesh(base, max_order=max_order)
-    print("__BEGIN_JSON__"); print(json.dumps(result, default=float))
-    print("__END_JSON__")
-except Exception:
-    traceback.print_exc(file=sys.stderr); sys.exit(2)
-"""
-
-
-def _run_pconv_subprocess(base, max_order, radius, msize, timeout=240):
-    """Spawn the canonical Cubit batch + evaluate_mesh helper.
-    Returns (parsed_json_dict, None) on success, or (None, error_str).
-
-    Detects RLM license failures (Cubit 2025.12 token-based auth)
-    so the test can SkipTest cleanly rather than report a confusing
-    "Parse Error" -- the actual cause is Cubit refusing to load
-    APREPRO commands when its license is unhealthy.
-    """
-    rc, stdout, stderr = run_cubit_python_script(
-        _PCONV_SCRIPT_BODY,
-        args=(base, max_order, radius, msize),
-        timeout=timeout)
-    # Cubit's "no export" failure is symptomatic of a deeper
-    # license failure; surface the real cause to the test runner.
-    if "RLM ERROR code: -102" in stdout or \
-       "Couldn't initialize RLM" in stdout:
-        return None, ("Cubit RLM license unhealthy (-102 \"Can't "
-                      "read license data\") -- the login_tokens.json "
-                      "needs refresh.  Launch CoreformCubit.ps1 once "
-                      "to refresh, then re-run this test.")
-    if rc != 0:
-        return None, (f"subprocess exit {rc}\n"
-                      f"STDOUT tail:\n{stdout[-1000:]}\n"
-                      f"STDERR tail:\n{stderr[-1500:]}")
-    try:
-        return extract_json_from_output(stdout), None
-    except ValueError as e:
-        return None, str(e)
-
-
-def _has_ngsolve_and_gmsh():
-    try:
-        import ngsolve  # noqa
-        import gmsh     # noqa
-        return True
-    except ImportError:
-        return False
-
-
-class TestPConvergenceEndToEnd(unittest.TestCase):
-    """Real Cubit batch + NGSolve check: a sphere's volume error must
-    converge as polynomial order p increases (the central physics
-    contract of the Mesh Evaluation feature).
-
-    Runs the whole Cubit init + export + evaluate_mesh in a CLEAN
-    subprocess to avoid Qt6 DLL conflicts with PySide6 (already loaded
-    in this test process).  Skips cleanly if Cubit batch cannot launch
-    (license busy because the LAB Cubit GUI is open, or Cubit not
-    installed).
-    """
-
-    # Tunables -- small sphere + coarse mesh keeps the subprocess
-    # under ~30 s while still exercising curved-boundary p-convergence.
-    SPHERE_RADIUS = 0.05      # [m]
-    MESH_SIZE     = 0.025     # [m] -> roughly 6-10 tets
-    MAX_ORDER     = 3         # Skip p=4-5 for speed; trend already proven
-
-    @classmethod
-    def setUpClass(cls):
-        if not _has_ngsolve_and_gmsh():
-            raise unittest.SkipTest("NGSolve or gmsh not importable")
-        cls._tmp = tempfile.mkdtemp(prefix="pconv_sphere_")
-        cls._base = os.path.join(cls._tmp, "sphere")
-        cls._result, err = _run_pconv_subprocess(
-            cls._base, cls.MAX_ORDER,
-            cls.SPHERE_RADIUS, cls.MESH_SIZE,
-            timeout=240)
-        if cls._result is None:
-            raise unittest.SkipTest(
-                f"Cubit batch / evaluate_mesh subprocess failed:\n"
-                f"{err}")
-
-    @classmethod
-    def tearDownClass(cls):
-        import shutil
-        if hasattr(cls, "_tmp"):
-            shutil.rmtree(cls._tmp, ignore_errors=True)
-
-    def test_all_vol_files_produced(self):
-        for p in range(1, self.MAX_ORDER + 1):
-            vp = f"{self._base}_p{p}.vol"
-            self.assertTrue(os.path.isfile(vp),
-                            f"missing {vp} -- Cubit export failed")
-            json_path = f"{self._base}_p{p}.vol.json"
-            self.assertTrue(os.path.isfile(json_path),
-                            f"missing companion JSON {json_path}")
-
-    def test_volume_error_decreases_with_p(self):
-        r = self._result
-        self.assertNotIn("error", r, f"evaluate_mesh failed: {r}")
-        orders = r["orders"]
-        self.assertEqual(len(orders), self.MAX_ORDER)
-        ok = [o for o in orders if "vol_error_pct" in o]
-        self.assertEqual(len(ok), self.MAX_ORDER,
-                         f"some orders failed: {orders}")
-
-        errs = [abs(o["vol_error_pct"]) for o in ok]
-        print(f"\nSphere R={self.SPHERE_RADIUS} m, h={self.MESH_SIZE} m: "
-              f"vol_error_pct(p=1..{self.MAX_ORDER}) = "
-              f"{', '.join(f'{e:.3e}%' for e in errs)}")
-
-        # p=2 must improve over p=1 (curved boundary -> higher
-        # interpolation order captures it better).
-        self.assertLess(
-            errs[1], errs[0],
-            f"p=2 error ({errs[1]:.3e}%) not better than p=1 "
-            f"({errs[0]:.3e}%) -- convergence broken")
-        # p=3 must improve over p=1 (relaxed: p=3 vs p=2 may already
-        # hit the floor on a coarse mesh).
-        self.assertLess(
-            errs[2], errs[0],
-            f"p=3 error ({errs[2]:.3e}%) not better than p=1 "
-            f"({errs[0]:.3e}%)")
-        # Hard upper bound: p=2 must already be <1% (sanity check
-        # against geometry mishap).
-        self.assertLess(
-            errs[1], 1.0,
-            f"p=2 sphere vol error >= 1% -- implausible "
-            f"({errs[1]:.3e}%)")
-
-    def test_no_negative_jacobians_in_qa_exports(self):
-        """GMSH format-QA exports must have no inverted curved
-        elements (negative Jacobian determinants)."""
-        for q in self._result.get("format_qa", []):
-            if "error" in q:
-                continue
-            neg = q.get("neg_det", 0)
-            self.assertEqual(
-                neg, 0,
-                f"{q['format']} order {q['order']}: {neg} negative "
-                f"Jacobian determinants -- inverted elements")
+    def test_docs_demo_is_the_p_convergence_surface(self):
+        demo = os.path.join(
+            _REPO_ROOT, "docs", "cubit_mesh_export", "netgen",
+            "p_convergence_demo.ipynb")
+        self.assertTrue(os.path.isfile(demo), demo)
+        with open(demo, "r", encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("calc_mesh_eval.py", text)
+        self.assertIn("p-convergence", text)
+        self.assertIn("docs/cubit_mesh_export", text)
 
 
 if __name__ == "__main__":
-    # Import unittest.mock lazily so the module's top-level remains
-    # cheap when tests are merely collected.
-    import unittest.mock  # noqa
     unittest.main(verbosity=2)

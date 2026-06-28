@@ -39,12 +39,12 @@ def test_dipole_magnet():
 	block_size = [0.050, 0.050, 0.020]  # 50x50x20 mm in meters
 
 	# Upper pole (magnetized downward)
-	upper = rad.ObjRecMag([0, 0, gap/2 + block_size[2]/2], block_size, [0, 0, 0])
+	upper = rad.magnet_box([0, 0, gap/2 + block_size[2]/2], block_size, [0, 0, 0])
 	rad.ObjSetM(upper, [0, 0, -1000])
 	print(f"   Upper pole created: ID={upper}")
 
 	# Lower pole (magnetized upward)
-	lower = rad.ObjRecMag([0, 0, -(gap/2 + block_size[2]/2)], block_size, [0, 0, 0])
+	lower = rad.magnet_box([0, 0, -(gap/2 + block_size[2]/2)], block_size, [0, 0, 0])
 	rad.ObjSetM(lower, [0, 0, 1000])
 	print(f"   Lower pole created: ID={lower}")
 
@@ -87,22 +87,22 @@ def test_quadrupole():
 	poles = []
 
 	# Pole 1: +X position, magnetized in +Y
-	p1 = rad.ObjRecMag([offset, 0, 0], size, [0, 0, 0])
+	p1 = rad.magnet_box([offset, 0, 0], size, [0, 0, 0])
 	rad.ObjSetM(p1, [0, 1000, 0])
 	poles.append(p1)
 
 	# Pole 2: +Y position, magnetized in -X
-	p2 = rad.ObjRecMag([0, offset, 0], size, [0, 0, 0])
+	p2 = rad.magnet_box([0, offset, 0], size, [0, 0, 0])
 	rad.ObjSetM(p2, [-1000, 0, 0])
 	poles.append(p2)
 
 	# Pole 3: -X position, magnetized in -Y
-	p3 = rad.ObjRecMag([-offset, 0, 0], size, [0, 0, 0])
+	p3 = rad.magnet_box([-offset, 0, 0], size, [0, 0, 0])
 	rad.ObjSetM(p3, [0, -1000, 0])
 	poles.append(p3)
 
 	# Pole 4: -Y position, magnetized in +X
-	p4 = rad.ObjRecMag([0, -offset, 0], size, [0, 0, 0])
+	p4 = rad.magnet_box([0, -offset, 0], size, [0, 0, 0])
 	rad.ObjSetM(p4, [1000, 0, 0])
 	poles.append(p4)
 
@@ -140,7 +140,7 @@ def test_iron_core():
 	print("\n1. Creating iron core with coil...")
 
 	# Create iron core (40x40x100 mm in meters)
-	core = rad.ObjRecMag([0, 0, 0], [0.040, 0.040, 0.100], [0, 0, 0])
+	core = rad.magnet_box([0, 0, 0], [0.040, 0.040, 0.100], [0, 0, 0])
 	print(f"   Core created: ID={core}")
 
 	# Create iron material (Steel37 equivalent)
@@ -178,7 +178,7 @@ def test_field_integral():
 
 	print("\n1. Creating simple magnet...")
 	# 20x20x50 mm in meters
-	magnet = rad.ObjRecMag([0, 0, 0], [0.020, 0.020, 0.050], [0, 0, 0])
+	magnet = rad.magnet_box([0, 0, 0], [0.020, 0.020, 0.050], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1000])
 
 	print("\n2. Calculating field integrals...")

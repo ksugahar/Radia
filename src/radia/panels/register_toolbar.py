@@ -277,9 +277,10 @@ def _cleanup_legacy_menus():
 def _install_radia_export_menu():
     """Install the PySide6 'Radia Export' menu.
 
-    Delegates to radia_export_menu.install_menu() which provides all
-    7 actions: Netgen / GMSH / Nastran / VTK / FEMEEM / MEG +
-    Mesh Evaluation.  See src/radia/panels/radia_export_menu.py.
+    Delegates to radia_export_menu.install_menu() which provides the
+    6 export actions: Netgen / GMSH / Nastran / VTK / FEMEEM / MEG.
+    Mesh p-convergence evaluation is a docs demonstration, not a
+    Cubit menu action.  See src/radia/panels/radia_export_menu.py.
 
     No import fallback: Cubit's startup hook puts `panels/` on sys.path
     (see lines 24-27 above), so `import radia_export_menu` is the

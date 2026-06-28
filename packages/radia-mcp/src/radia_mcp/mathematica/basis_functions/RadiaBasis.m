@@ -12,7 +12,7 @@
 (*  - NGSolve internal                      (production C++ for hierarchical H1)*)
 (**)
 (*Loading:*)
-(*  Get["S:/Radia/01_GitHub/examples/mathematica/RadiaBasis.m"]*)
+(*  Get["S:/Radia/01_GitHub/packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m"]*)
 (**)
 (*Reference triangle:  vertices (0,0), (1,0), (0,1).*)
 (*Reference tet:       vertices (0,0,0), (1,0,0), (0,1,0), (0,0,1).*)
@@ -215,7 +215,7 @@ EndPackage[];
 
 
 (* ::Input:: *)
-(* Get["S:/Radia/01_GitHub/examples/mathematica/RadiaBasis.m"];                     *)
+(* Get["S:/Radia/01_GitHub/packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/RadiaBasis.m"];                     *)
 (*                                                                                     *)
 (* (* Partition of unity for H1 Lagrange P_k *)                                       *)
 (* Table[Simplify[Total[TriH1Pk[k][xi, eta]] - 1], {k, 1, 5}]                          *)

@@ -112,8 +112,8 @@ def test_mesh_audit_summary_tools_are_machine_readable(monkeypatch, tmp_path):
 def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
     from radia_mcp.gmsh import server
 
-    examples = tmp_path / "examples"
-    examples.mkdir()
+    examples = tmp_path / "docs" / "visualization"
+    examples.mkdir(parents=True)
     target = examples / "curved.py"
     target.write_text("mesh.Curve(3)\n", encoding="utf-8")
     clean = examples / "flat.py"
@@ -128,18 +128,18 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(server, "_lint_file", fake_lint)
 
-    plan = server.gmsh_numsubedges_remediation_plan("examples", limit=1)
+    plan = server.gmsh_numsubedges_remediation_plan("docs/visualization", limit=1)
     assert plan["ok"] is True
     assert plan["total_affected"] == 1
     assert plan["returned"] == 1
     assert plan["truncated"] is False
     assert plan["directory_groups"] == [{
-        "directory": "examples",
+        "directory": "docs/visualization",
         "count": 1,
         "directory_companion": {
-            "geo_companion": "examples/_gmsh_display.geo",
+            "geo_companion": "docs/visualization/_gmsh_display.geo",
             "geo_template": (
-                "// Shared GMSH display companion for examples\n"
+                "// Shared GMSH display companion for docs/visualization\n"
                 "// Use with any high-order .msh output from this directory.\n"
                 "Mesh.NumSubEdges = 4;\n"
                 "// Merge \"<result>.msh\";\n"
@@ -147,9 +147,9 @@ def test_gmsh_numsubedges_remediation_plan(monkeypatch, tmp_path):
         },
     }]
     item = plan["affected"][0]
-    assert item["script"] == "examples/curved.py"
+    assert item["script"] == "docs/visualization/curved.py"
     assert item["triggers"] == ["high_order_curve"]
-    assert item["geo_companion"] == "examples/curved_display.geo"
+    assert item["geo_companion"] == "docs/visualization/curved_display.geo"
     assert "Mesh.NumSubEdges = 4;" in item["geo_template"]
 
 

@@ -16,7 +16,7 @@
   },
   "source_catalog": {
     "path": "docs/peec_integration/examples_catalog_results.json",
-    "sha256": "9cda0ca5513c29284cda3ad88d338e27d703f61ae337a66abc8f4481f27459c6",
+    "sha256": "8cf268f21a8e072e0972da9a601d31bd2d1f0f51e0fc18f4d83f8b6fead1c1dc",
     "generated_at_utc": "2026-06-28T01:22:57Z",
     "summary": {
       "script_count": 130,
@@ -672,5 +672,5 @@
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     }
   ],
-  "notebook_sha256": "b216965908455a35bdf43c9a1393fc6fe2bc7157b8fa5d07fa4e5c37458356c0"
+  "notebook_sha256": "41b3d5d8f0eef0a3e5cb68dcf4847a8eae321f7088c0a8938eb9da7579fbfc16"
 }

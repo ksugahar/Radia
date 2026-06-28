@@ -1,5 +1,10 @@
 # Magnetostatic Solver Benchmarks with H-Matrix Acceleration
 
+Legacy migration note: this file was moved out of
+`examples/solver_benchmarks/` because these scripts are validation drivers, not
+public examples. Current public PEEC benchmark presentation lives in
+`docs/solver_benchmarks/peec_solver_benchmarks.ipynb`.
+
 This directory contains comprehensive benchmarks for magnetostatic solver methods in Radia, with focus on H-matrix acceleration.
 
 ## Overview
@@ -81,7 +86,8 @@ Extended H-matrix scaling analysis up to N=5000:
   - N=2197: 55.2x speedup
   - N=4913: 117.1x speedup (6.2s vs 12 minutes extrapolated)
 - **Demonstrates**: Speedup increases exponentially with problem size
-- **See**: [SCALING_RESULTS.md](SCALING_RESULTS.md) for detailed analysis
+- Detailed scaling analysis is retained in this legacy note and the runnable
+  validation drivers in this directory.
 
 ### 8. `benchmark_matrix_construction.py`
 Analyzes matrix construction performance:
@@ -155,7 +161,7 @@ rad.Solve(container, 0.0001, 1000, 2)  # HACApK
 ## Quick Start
 
 ```bash
-cd examples/solver_benchmarks
+cd validation_test/solver_benchmarks
 
 # New: Large-scale comprehensive benchmark (N=27 to N=10648)
 python benchmark_large_scale_comparison.py
@@ -191,7 +197,7 @@ python plot_benchmark_results.py
 
 ## Benchmark Results Summary
 
-**Detailed results**: See [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) or `../../docs/HMATRIX_BENCHMARKS_RESULTS.md`
+**Detailed results**: See `legacy_hmatrix_BENCHMARK_RESULTS.md`.
 
 ### Solver Performance (N=343 elements)
 
@@ -261,17 +267,15 @@ python plot_benchmark_results.py
 
 ## References
 
-- [H-Matrix Implementation History](../../docs/HMATRIX_IMPLEMENTATION_HISTORY.md)
 - [Phase 3 Performance Issue](../../docs/PHASE3_PERFORMANCE_ISSUE.md)
-- [Comprehensive Benchmark Results](../../docs/HMATRIX_BENCHMARKS_RESULTS.md)
 - [API Reference](../../docs/api/API_REFERENCE.md)
 
 ---
 
-**Author**: Claude Code
+**Maintainer note**: legacy validation corpus
 **Date**: 2025-11-13
 **Version**: 1.1.2 (Phase 2-B)
-**Folder**: `examples/solver_benchmarks/` (formerly `examples/H-matrix/`)
+**Folder**: `validation_test/solver_benchmarks/` (formerly `examples/solver_benchmarks/`)
 
 ## Maintenance Status (2025-11-13)
 
@@ -310,9 +314,8 @@ See [PHASE3_PERFORMANCE_ISSUE.md](../../docs/PHASE3_PERFORMANCE_ISSUE.md) for de
 - All Phase 2-B tests passing ✅
 
 **Documentation:**
-- Complete implementation history in `docs/HMATRIX_IMPLEMENTATION_HISTORY.md`
 - Phase 3 performance issue analysis in `docs/PHASE3_PERFORMANCE_ISSUE.md`
-- Benchmark results in `docs/HMATRIX_BENCHMARKS_RESULTS.md`
+- Benchmark results in `legacy_hmatrix_BENCHMARK_RESULTS.md`
 
 **Future Work:**
 - Investigate Phase 3 serialization bottleneck (optional feature)

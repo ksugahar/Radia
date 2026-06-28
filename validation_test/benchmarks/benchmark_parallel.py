@@ -58,7 +58,7 @@ import radia as rad
 def benchmark_large_grid(grid_points=100):
 	"""Benchmark field computation on a large 2D grid"""
 	# Create magnet
-	magnet = rad.ObjRecMag([0, 0, 0], [20, 20, 20])
+	magnet = rad.magnet_box([0, 0, 0], [20, 20, 20], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1000])
 
 	# Create grid
@@ -84,7 +84,7 @@ def benchmark_large_grid(grid_points=100):
 def benchmark_3d_volume(nx=30, ny=30, nz=30):
 	"""Benchmark field computation in a 3D volume"""
 	# Create magnet
-	magnet = rad.ObjRecMag([0, 0, 0], [15, 15, 15])
+	magnet = rad.magnet_box([0, 0, 0], [15, 15, 15], [0, 0, 0])
 	rad.ObjSetM(magnet, [0, 0, 1200])
 
 	# Create 3D grid

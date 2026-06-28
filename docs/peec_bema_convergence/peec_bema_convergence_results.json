@@ -1,0 +1,187 @@
+{
+  "schema": "radia.docs.peec_bema_convergence.v1",
+  "generated_at_utc": "2026-06-28T08:42:55Z",
+  "notebook": "docs/peec_bema_convergence/peec_bema_convergence.ipynb",
+  "source_raw_json": "docs/peec_bema_convergence/3turnCoil_peec_bema_convergence_2026_05_13.json",
+  "source_raw_json_sha256": "d74edcd380de8e78e31042513caa5afe8592e59a87367dcb6151864b199643d8",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_version": "4.95.2",
+    "radia_mcp_version": "1.4.3"
+  },
+  "summary": {
+    "geometry": "3-turn pancake helix R_avg~35mm + r_wire=3.15mm, 2 lead bars 60-61mm at y=+/-12.5mm",
+    "frequency_Hz": 150000,
+    "current_A": 1.0,
+    "peec_points": 6,
+    "peec_n_peri_min": 8,
+    "peec_n_peri_max": 64,
+    "peec_L_nH_min": 423.895,
+    "peec_L_nH_max": 431.551,
+    "peec_L_inf_est_nH": 434.0,
+    "production_n_peri": 16,
+    "production_L_nH": 426.3,
+    "production_deviation_from_inf_pct": -1.78,
+    "bema_points": 3,
+    "bema_L_nH_min": 412.18,
+    "bema_L_nH_max": 432.57,
+    "bema_unreachable_cases": 1,
+    "potential_gap_pct": "5-8%"
+  },
+  "raw_payload": {
+    "description": "Raw convergence data: PEEC n_peri sweep + BEM-A mesh sweep on 3turnCoil_work_coil.step (2026-05-13).",
+    "geometry": {
+      "step_file": "src/radia/panels/samples/3turnCoil_work_coil.step",
+      "description": "3-turn pancake helix R_avg~35mm + r_wire=3.15mm, 2 lead bars 60-61mm at y=+/-12.5mm",
+      "n_turns": 3,
+      "wire_radius_mm": 3.15,
+      "A_wire_analytical_mm2": 31.172
+    },
+    "physics": {
+      "frequency_Hz": 150000,
+      "current_A": 1.0,
+      "sigma_S_per_m": 58000000.0,
+      "skin_depth_mm": 0.171,
+      "delta_over_r": 0.054
+    },
+    "peec_convergence": {
+      "description": "PEEC perimeter filament count sweep (n_peri). Same STEP geometry, same lead-aware chain.",
+      "data": [
+        {
+          "n_peri": 8,
+          "L_nH": 423.895,
+          "R_mOhm": 0.39742,
+          "time_s": 12.16,
+          "one_over_n_peri": 0.125
+        },
+        {
+          "n_peri": 16,
+          "L_nH": 426.296,
+          "R_mOhm": 0.39452,
+          "time_s": 15.1,
+          "one_over_n_peri": 0.0625
+        },
+        {
+          "n_peri": 24,
+          "L_nH": 428.083,
+          "R_mOhm": 0.39123,
+          "time_s": 20.15,
+          "one_over_n_peri": 0.0417
+        },
+        {
+          "n_peri": 32,
+          "L_nH": 429.262,
+          "R_mOhm": 0.38931,
+          "time_s": 29.76,
+          "one_over_n_peri": 0.0313
+        },
+        {
+          "n_peri": 48,
+          "L_nH": 430.716,
+          "R_mOhm": 0.38706,
+          "time_s": 53.13,
+          "one_over_n_peri": 0.0208
+        },
+        {
+          "n_peri": 64,
+          "L_nH": 431.551,
+          "R_mOhm": 0.38591,
+          "time_s": 88.02,
+          "one_over_n_peri": 0.0156
+        }
+      ],
+      "richardson_extrapolation_1_over_n_peri_linear": {
+        "L_inf_nH_est": 434.0,
+        "method": "Linear fit of L vs 1/n_peri using last 2-3 points",
+        "uncertainty_nH": "~1 nH",
+        "convergence_rate": "1/n_peri (single-power)"
+      },
+      "production_value": {
+        "n_peri": 16,
+        "L_nH": 426.3,
+        "R_mOhm": 0.3945,
+        "deviation_from_inf_pct": -1.78,
+        "rationale": "Panel default. ~1 s solve time vs ~88 s at n_peri=64; 1.78% under-prediction acceptable for engineering use."
+      }
+    },
+    "bema_convergence": {
+      "description": "BEM-A (Weggler stabilized EFIE on HDivSurface RT0 + SIBC) mesh sweep via ngsolve.bem.LaplaceSL with use_fmm=False (dense LU).",
+      "data": [
+        {
+          "n_tris": 4028,
+          "n_src_tris": 6,
+          "A_src_mm2": 25.78,
+          "A_src_error_pct": -17.3,
+          "L_nH": 432.57,
+          "R_mOhm_SIBC": 5.084,
+          "time_s": 170.0,
+          "mesh_file": "C:/temp/3turnCoil_bema_4k.vol"
+        },
+        {
+          "n_tris": 5938,
+          "n_src_tris": 6,
+          "A_src_mm2": 25.78,
+          "A_src_error_pct": -17.3,
+          "L_nH": 417.56,
+          "R_mOhm_SIBC": 4.762,
+          "time_s": 460.4,
+          "mesh_file": "C:/temp/3turnCoil_bema_e.vol"
+        },
+        {
+          "n_tris": 9848,
+          "n_src_tris": 14,
+          "A_src_mm2": 29.16,
+          "A_src_error_pct": -6.4,
+          "L_nH": 412.18,
+          "R_mOhm_SIBC": 4.717,
+          "time_s": 1591,
+          "mesh_file": "C:/temp/3turnCoil_bema_d.vol"
+        }
+      ],
+      "unreachable": [
+        {
+          "n_tris": 14972,
+          "n_src_tris": 24,
+          "A_src_mm2": null,
+          "L_nH": null,
+          "reason": "Dense saddle LU (scipy.linalg.solve) OOM at K = 37429^2 = 22 GB; MINRES (scipy.sparse.linalg.minres, rtol=1e-8, no preconditioner) ran 107 min CPU and grew memory to 61 GB without converging.  Production-grade BEM-A above 10k tris requires HACApK/FMM acceleration."
+        }
+      ],
+      "convergence_assessment": "NON-MONOTONIC. 4028-tri value 432.57 nH coincidentally matches PEEC continuum (~434) but is not part of a monotonic refinement sequence. Of the 3 valid data points, 5938 -> 9848 shows monotonic drop from 417.56 to 412.18 (cap discretization improved 6/6 -> 14/14, refining the Lagrange multiplier space).",
+      "richardson_extrapolation_estimate": {
+        "L_inf_nH_est_range": "400-410",
+        "method": "Crude 1/sqrt(N) and 1/N fits on 5938 + 9848 only -- 2 data points, large uncertainty",
+        "uncertainty_nH": "10-20 nH",
+        "note": "4028-tri excluded as off-trend.  14972-tri needed to confirm.  Cannot make a confident statement of BEM-A continuum from current data."
+      }
+    },
+    "method_comparison": {
+      "L_coil_continuum_estimates": {
+        "PEEC_extrapolated": 434.0,
+        "BEM_A_extrapolated_lower_bound": 400.0,
+        "BEM_A_extrapolated_upper_bound": 410.0
+      },
+      "potential_gap_pct": "5-8%",
+      "R_coil_disparity": {
+        "PEEC_mOhm": 0.39,
+        "BEM_A_mOhm": 4.72,
+        "ratio": 12.1,
+        "note": "Mesh-independent. Points to formulation-level disagreement: PEEC uses Dowell analytical thin-skin formula for circular wire, BEM-A applies SIBC Robin BC on the surface with Z_s = 1/(sigma*delta). The two should agree in the thin-skin limit but diverge here."
+      },
+      "candidates_for_inductive_disagreement": [
+        "(i) PEEC parallel-transport frame + finite n_peri perimeter discretization of round wire",
+        "(ii) BEM-A SIBC accuracy at finite delta_skin/r = 0.054 (classical SIBC assumes infinitely thin skin)",
+        "(iii) Lead-bar / helix junction treatment differs across formulations",
+        "(iv) BEM-A non-monotonicity at 4028/5938 suggests under-resolved surface mesh"
+      ]
+    },
+    "todo": [
+      "Implement HACApK / FMM-accelerated path in coil_inductance_ngsolve.py::compute_inductance_source_sink to enable BEM-A above 10k tris.",
+      "Add block-diagonal preconditioner for MINRES (SL approx + Schur complement) to make iterative saddle-point solve viable on dense large matrices.",
+      "Investigate Dowell vs SIBC R-coil disparity: trace through the analytical derivations on a canonical straight round wire of length L, radius r, at 150 kHz; both methods should give identical R = L/(2*pi*r*sigma*delta) in the thin-skin limit.  If they disagree on this trivial geometry, the issue is a unit/normalization bug; if they agree, the 3turnCoil disagreement is due to curvature/junction effects."
+    ]
+  },
+  "notebook_sha256": "fbcf0b53e06df7597a448c01122803719dac4fb742d6f22ac0174b0d1b694018"
+}

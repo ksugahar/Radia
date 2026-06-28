@@ -487,7 +487,7 @@ def test_radia_field_kernel_magnets():
         gx, gy = np.meshgrid(xs, ys, indexing="ij")
         centers = np.column_stack([gx.ravel(), gy.ravel(), np.zeros(gx.size)])
         N = centers.shape[0]
-        sources = [rad.ObjRecMag(c.tolist(), [0.01, 0.01, 0.01], [0.0, 0.0, 954930.0])
+        sources = [rad.magnet_box(c.tolist(), [0.01, 0.01, 0.01], [0.0, 0.0, 954930.0])
                    for c in centers]
 
         oxs = np.linspace(-0.03, 0.03, 4)

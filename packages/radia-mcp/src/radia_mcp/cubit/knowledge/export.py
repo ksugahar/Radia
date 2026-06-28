@@ -536,12 +536,12 @@ Export Mesh:                           Solve:
   VTK...                                 Reload Panels
   MEG...
   FEMEEM...
-  --------
-  Mesh Evaluation...
 ```
 
 - **Export Mesh**: PySide6 menu/dialogs calling C++ APREPRO export commands
 - **Solve**: Python register_toolbar.py (subprocess to external Python 3.12)
+- **Mesh p-convergence demo**: `docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb`
+  uses explicit `cubit.cmd(...)` export commands and is not a Cubit menu action
 - Settings saved to `AppData/Roaming/Radia/export_settings.json`
 """
 
@@ -631,7 +631,7 @@ Do NOT compare `Integrate(CF(1), mesh, BND)` (total) against
 ## Known Limitation: VTK Quadratic Pyramid (GMSH read)
 
 GMSH API cannot read VTK cell type 27 (VTK_QUADRATIC_PYRAMID, 13 nodes).
-This causes "Unknown type of cell 27" error in Mesh Evaluation round-trip
+This causes "Unknown type of cell 27" error in docs mesh-evaluation round-trip
 when the model contains pyramids and VTK order 2 is tested.
 
 This is a GMSH limitation, not a VTK export bug. The VTK file itself is

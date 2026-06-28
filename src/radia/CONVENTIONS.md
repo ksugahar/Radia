@@ -101,6 +101,12 @@ if __name__ == "__main__":
 
 ## Mesh Evaluation Policy
 
+Mesh p-convergence evaluation is a documentation / validation surface, not a
+Cubit Export Mesh menu action and not an engineering design panel.  The Cubit
+toolbar stays export-only; docs demos should call Cubit APREPRO export commands
+through explicit `cubit.cmd(...)` in a clean Cubit batch subprocess, then run
+`src/radia/panels/calc_mesh_eval.py` on the exported files.
+
 **Format QA (our quality guarantee)**:
 - .msh, .bdf, .vtk at order 1-2 verified via GMSH API `getJacobians()`
 - Volume and area compared against ACIS CAD values

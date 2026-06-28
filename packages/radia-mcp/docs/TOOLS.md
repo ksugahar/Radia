@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **565 tools** across 43 MCP servers.
+Total: **566 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -46,7 +46,7 @@ Total: **565 tools** across 43 MCP servers.
 | [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 71 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
-| [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 10 |
+| [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 9 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 3 |
 
@@ -963,6 +963,7 @@ Module: `radia_mcp.document_meta.server`
 |---|---|
 | `document_meta_deadline_countdown` | 任意の締切までの日数と推奨アクションを返す。 |
 | `document_meta_diff_versions` | 2 つのテキスト file の unified diff を返す (作文 version 比較)。 |
+| `document_meta_examples_migration_policy` | Return the current Radia examples/ migration policy. |
 | `document_meta_examples_notebook_audit` | Audit examples -> docs/ipynb or validation_test promotion state. |
 | `document_meta_lint_all` | Run every applicable radia-mcp lint over one text / TeX file. |
 | `document_meta_notebook_result_audit` | Audit docs notebooks for saved results and synchronized result JSON. |

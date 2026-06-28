@@ -33,10 +33,10 @@ def _dense_N(B, G):
     return 0.5 * (N + N.T)
 
 
-@pytest.mark.parametrize("p", [1, 2])
+@pytest.mark.parametrize("p", [1])
 def test_highorder_demag_spectrum_in_unit_interval(p):
-    """eig(M_mass^{-1} N) in [0, 1] for the order-p charge-Gram demag operator (was max ~1.2 (p1) / ~8 (p2)
-    with the single-element-0 change-of-basis bug)."""
+    """eig(M_mass^{-1} N) in [0, 1] for the order-p charge-Gram demag operator (was max ~1.2 (p1) with the
+    single-element-0 change-of-basis bug).  RT2+ abolished, so only p=1 (RT1) is exercised."""
     mesh = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.8))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=p)
@@ -51,14 +51,14 @@ def test_highorder_demag_spectrum_in_unit_interval(p):
 
 
 def test_highorder_material_solve_matches_rt0():
-    """The order-1/2 uniform-field cube material solve agrees with order-0 (RT0) -- no ~2x blow-up.  This is
-    the end-to-end M4 check the per-element fix restores (was p1 ~1.8x, p2 ~4x too high)."""
+    """The order-1 uniform-field cube material solve agrees with order-0 (RT0) -- no ~2x blow-up.  This is
+    the end-to-end M4 check the per-element fix restores (was p1 ~1.8x too high).  RT2+ abolished."""
     mesh = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.7))
     H0, mu_r = 1000.0, 100.0
     chi = mu_r - 1.0
     mavg = {}
     with ng.TaskManager():
-        for p in (0, 1, 2):
+        for p in (0, 1):
             fes = ng.HDiv(mesh, order=p)
             B, G, M_mass = build_charge_gram(fes, ho_far_factor=float("inf"))
             N = _dense_N(B, G)
@@ -70,6 +70,6 @@ def test_highorder_material_solve_matches_rt0():
             vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
             mavg[p] = ng.Integrate(gfM[2], mesh) / vol
     # order-p within 25% of order-0 (coarse-mesh p-spread is real but NOT the old ~2-4x bug)
-    for p in (1, 2):
+    for p in (1,):
         rel = abs(mavg[p] - mavg[0]) / abs(mavg[0])
         assert rel < 0.25, f"order-{p} M_avg {mavg[p]:.0f} vs order-0 {mavg[0]:.0f} (rel {rel:.2f}) -- M4 regressed"

@@ -29,7 +29,7 @@ snapshot1 = tracemalloc.take_snapshot()
 
 # Create magnet
 rad.UtiDelAll()
-magnet = rad.ObjRecMag([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 1.0])
+magnet = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 1.0])
 
 # Compute fields for multiple points
 print("Computing fields for 10 points...")

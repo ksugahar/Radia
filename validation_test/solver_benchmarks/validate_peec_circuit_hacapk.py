@@ -6,7 +6,7 @@ port).  Both paths must agree on the scalar port impedance Z_11 within
 the combined nested BiCGSTAB tolerance.
 
 Run:
-    python examples/solver_benchmarks/validate_peec_circuit_hacapk.py
+    python validation_test/solver_benchmarks/validate_peec_circuit_hacapk.py
 """
 
 from __future__ import annotations

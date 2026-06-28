@@ -1,8 +1,9 @@
 """Shared subprocess + Cubit batch helpers for the Radia test suite.
 
-Encapsulates the three lessons learned while building the Mesh
-Evaluation p-convergence test (validation_test/panels/test_radia_export_menu.py)
-so other tests do not re-discover them painfully.
+Encapsulates the three lessons learned while building the Cubit
+p-convergence / mesh-evaluation subprocess path used by validation tests
+and docs/cubit_mesh_export/netgen/p_convergence_demo.ipynb, so other tests
+do not re-discover them painfully.
 
 Lesson 1 -- PySide6 (Qt6) ⊗ Cubit ``_cubit3.pyd`` (Qt6) DLL conflict.
     Both ship their own Qt6 binaries; loading both into the same

@@ -37,7 +37,7 @@ class TestErrorHandling:
 		"""Test handling of invalid field type specification"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Try invalid field type
 		try:
@@ -70,7 +70,7 @@ class TestObjectDuplication:
 		rad.UtiDelAll()
 
 		# Create magnet
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Duplicate it
 		mag2 = rad.ObjDpl(mag1)
@@ -88,7 +88,7 @@ class TestObjectDuplication:
 		rad.UtiDelAll()
 
 		# Create magnet with material
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		mat = rad.MatLin([1000, 1], [1, 1, 1])  # Anisotropic, easy axis [1,1,1]
 		rad.MatApl(mag1, mat)
 
@@ -106,8 +106,8 @@ class TestObjectDuplication:
 		rad.UtiDelAll()
 
 		# Create container
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag2 = rad.magnet_box([20, 0, 0], [10, 10, 10], [0, 0, 1])
 		cnt1 = rad.ObjCnt([mag1, mag2])
 
 		# Duplicate container
@@ -129,8 +129,8 @@ class TestUtilityFunctions:
 		rad.UtiDelAll()
 
 		# Create some objects
-		mag1 = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
-		mag2 = rad.ObjRecMag([20, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag1 = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		mag2 = rad.magnet_box([20, 0, 0], [10, 10, 10], [0, 0, 1])
 
 		# Delete all
 		rad.UtiDelAll()
@@ -149,13 +149,13 @@ class TestUtilityFunctions:
 
 		# Create many objects
 		for i in range(100):
-			mag = rad.ObjRecMag([i*10, 0, 0], [5, 5, 5], [0, 0, 1])
+			mag = rad.magnet_box([i*10, 0, 0], [5, 5, 5], [0, 0, 1])
 
 		# Delete all
 		rad.UtiDelAll()
 
 		# Should be able to create new objects
-		new_mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1])
+		new_mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1])
 		assert new_mag > 0
 
 
@@ -167,7 +167,7 @@ class TestDataExport:
 		rad.UtiDelAll()
 
 		# Create magnet with known magnetization
-		mag = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [1, 2, 3])
+		mag = rad.magnet_box([0, 0, 0], [10, 10, 10], [1, 2, 3])
 
 		# Get magnetization at center
 		M = rad.Fld(mag, 'm', [0, 0, 0])
@@ -180,7 +180,7 @@ class TestDataExport:
 		"""Test retrieving object information"""
 		rad.UtiDelAll()
 
-		mag = rad.ObjRecMag([5, 10, 15], [20, 30, 40], [0, 0, 1])
+		mag = rad.magnet_box([5, 10, 15], [20, 30, 40], [0, 0, 1])
 
 		# Try to get object properties (if available)
 		try:
@@ -204,7 +204,7 @@ class TestMemoryManagement:
 
 			# Create objects
 			for i in range(50):
-				mag = rad.ObjRecMag([i*10, 0, 0], [5, 5, 5], [0, 0, 1])
+				mag = rad.magnet_box([i*10, 0, 0], [5, 5, 5], [0, 0, 1])
 
 			# Compute some fields
 			H = rad.Fld(mag, 'h', [100, 0, 0])
@@ -219,7 +219,7 @@ class TestMemoryManagement:
 
 		objects = []
 		for i in range(200):
-			mag = rad.ObjRecMag([i*5, 0, 0], [3, 3, 3], [0, 0, 1])
+			mag = rad.magnet_box([i*5, 0, 0], [3, 3, 3], [0, 0, 1])
 			objects.append(mag)
 
 		# Create container

@@ -34,7 +34,7 @@ def test_rectangular_magnet(radia_clean):
     rad = radia_clean
 
     # Create 10x10x10 mm magnet with magnetization (1000 A/m in Z)
-    magnet = rad.ObjRecMag([0, 0, 0], [10, 10, 10], [0, 0, 1000])
+    magnet = rad.magnet_box([0, 0, 0], [10, 10, 10], [0, 0, 1000])
     assert isinstance(magnet, int)
     assert magnet > 0
 

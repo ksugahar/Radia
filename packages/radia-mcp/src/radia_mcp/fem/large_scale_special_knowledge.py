@@ -69,7 +69,7 @@ mesh.Refine()
 ## Lab use
 
 - Not yet production. Lab typically uses h-uniform refinement
-  (Mesh Evaluation panel sweeps p=1..5 on same mesh)
+  (the docs mesh-evaluation demo sweeps p=1..5 on the same mesh)
 - Reference layer; could add adaptive refinement to motor / accelerator
   panels later
 
