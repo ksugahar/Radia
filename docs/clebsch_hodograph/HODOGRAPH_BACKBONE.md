@@ -11,6 +11,12 @@ companion notes are specializations of it:
   executable Mathematica guardrail for the spine (`weakform_hodge`,
   `hodograph`, `canonical`, `surface_derham`, `dtn_geometry`).
 
+The public result-saved demo entry point is
+[`public_demo.ipynb`](public_demo.ipynb). The full source/result catalog is
+[`examples_catalog.ipynb`](examples_catalog.ipynb). Together they keep the
+runnable example sources, saved figures/JSON, and protected validation
+references visible beside this theory map.
+
 The point of this note (the user's *"微分幾何で理解するべき"* — understand it
 through differential geometry): the Kelvin transform, the hodograph (both
 kinds), the von Mises partial transform, the bidirectional pullback, and the
