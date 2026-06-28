@@ -1389,6 +1389,12 @@ hex elements than HDiv RT0 (yano-MSC = 6 surface-charge DOF/hex, higher per-elem
 HDiv-VIM for loop-free (mesh/mu_r-independent ~6 Newton iters) convergence.**  (yano is also preserved
 in the private MAGIC Fortran repo; Yano's academic work is cited.)
 
+**SUPERSEDED 2026-06-28 (Sugahara): "MMMM does NOT connect to HACApK" — the 2026-06-27 role split below is REVERSED.**
+MMMM is now DENSE-ONLY (no HACApK: `RadHACApKMomentSystem` + `SolveMomentHACApK` + deflation + H-LU removed,
+commits 3534d31b / 494d8374). **HDiv-VIM is AGAIN the large-scale / loop-heavy / high-`mu_r` route** (HACApK-backed,
+loop-free); MMMM is the dense, distorted-element-robust route for low/medium `mu_r`, small/medium N. PEEC stays
+HACApK-backed. The paragraph below is HISTORICAL.
+
 **ROLE SPLIT (Sugahara 2026-06-27): MMMM is the MAIN large-scale route; HDiv-VIM is NOT.** MMMM scales via
 the QR-free + sparse-PARDISO two-sided deflation (`moment_deflation`, 3a `f9cb1dd4` / 3b `0aba78be`):
 QR-free coarse op `E=(AL)ᵀ(AL)` assembled sparse + factored by PARDISO sparse-direct -> SUB-CUBIC coarse
@@ -2544,6 +2550,19 @@ From `src/radia/netgen_mesh_import.py`:
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率)
 
 ### H-Matrix Route Policy: MMMM Canonical; HDiv Symmetric Reference; PEEC Maintained (2026-06-26)
+
+> **SUPERSEDED 2026-06-28 (Sugahara): "MMMM does NOT connect to HACApK."** The MMMM↔HACApK
+> H-matrix route described below was REMOVED (3534d31b unwire + 494d8374 delete): `RadHACApKMomentSystem`,
+> `SolveMomentHACApK`, the H-LU preconditioner (`hacapk_hlu_precond`), and the two-sided deflation
+> (`moment_deflation`) are GONE. **MMMM is now DENSE-ONLY** — method 0 (dense LU) + method 1 (matrix-free
+> `MomentSystemBlockAny`); a method-2 (BICGSTAB_HMATRIX) request on a moment mesh reroutes to dense LU.
+> MMMM's value is **distorted-element robustness** (geometry-adaptive residual-eigenmode moment), for
+> low/medium `mu_r`, small/medium N. **HACApK now serves ONLY HDiv-VIM (charge-Gram H-matrix) + PEEC** —
+> those are the large-scale / loop-heavy routes (HDiv is loop-free by construction). Rationale: deflation
+> cannot fully remove the null/loop modes (not guaranteed loop-free); large loop modes only appear at large
+> `mu_r` → route those to HDiv. KEPT: `RadHACApKMMMManager` (classic tet/wedge/mixed MMM 3-DOF) + the
+> BEM/HDiv/PEEC HACApK managers. The numbered points below are HISTORICAL (pre-removal); see
+> `memory/tet-msc-unification-inprogress.md`.
 
 **POLICY** (architecture decision, Sugahara, after the moment-yano H-LU
 preconditioner shipped — commit bb4b2f5d — and the H-LU-vs-H-ILU /
