@@ -274,7 +274,7 @@ void ComputeComplexFieldBatch(
 );
 
 /**
- * @brief Element face data for MSC (Magnetic Surface Charge) integration
+ * @brief Element face data for collocation MMMM (face-charge) integration
  *
  * Stores face geometry for accurate near-field computation.
  * For tetrahedra: 4 triangular faces

@@ -1248,7 +1248,7 @@ int BuildElementFaceData(
 //-----------------------------------------------------------------------------
 // ComputeBFromMagnetizationAdaptive: Error-controlled adaptive MSC/Dipole
 //
-// Uses MSC (Magnetic Surface Charge) integration for near-field elements
+// Uses collocation MMMM (face-charge) integration for near-field elements
 // and dipole approximation for far-field elements.
 //
 // The target_error parameter specifies the maximum acceptable relative error:

@@ -438,7 +438,7 @@ int radTPolyhedron::FillInTransAndFacesInLocFrames(TVector3d* ArrayOfPoints, int
 }
 
 //-------------------------------------------------------------------------
-// Tetrahedral mesh support (MSC - Magnetic Surface Charge method)
+// Tetrahedral mesh support (collocation MMMM face-charge method)
 //-------------------------------------------------------------------------
 
 void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
@@ -2608,21 +2608,21 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
 	// =========================================================================
-	// Dispatch to specialized MSC methods based on element type
+	// Dispatch to specialized collocation MMMM face-charge methods based on element type
 	// =========================================================================
 	// Supported element types:
 	// - Tetrahedron: 4 triangular faces (AmOfFaces == 4)
 	// - Hexahedron: 6 quadrilateral faces (AmOfFaces == 6)
 	// =========================================================================
 
-	// For tetrahedral elements, use the analytical MSC method
+	// For tetrahedral elements, use the analytical collocation MMMM method
 	// The analytical method uses closed-form surface charge formulas and has been
 	// verified to produce identical results to the original Gauss integration method.
 	if(IsTetrahedron())
 	{
 		// Unified MMMM face-charge tetrahedron (Use6DOF_MSC, 4 DOF): a SOLVED soft-iron tet carries one
 		// surface charge per face (Sigma[0..3], written by the moment solve), so its field is evaluated from
-		// the 4 face charges via the face-count-generic MSC field eval (the same sigma path as wedge/hex).
+		// the 4 face charges via the face-count-generic collocation MMMM field eval (same sigma path as wedge/hex).
 		// A permanent-magnet / unsolved tet has Sigma == 0 and keeps the analytical magnetization-based field
 		// (M supplied in ObjTetrahedron).
 		bool tetSigmaIsZero = true;
@@ -2634,7 +2634,7 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 		return;
 	}
 
-	// For hexahedral elements (6 quadrilateral faces), use the MSC method
+	// For hexahedral elements (6 quadrilateral faces), use the collocation MMMM method
 	if(IsHexahedron())
 	{
 		B_comp_hexahedron_MSC(FieldPtr);

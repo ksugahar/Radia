@@ -31,12 +31,13 @@
 
 #include "rad_parallel.h"
 
-// MSC (Magnetic Surface Charge) support for 4-6 DOF face-charge polyhedra.
-// radTPolyhedron tetra/wedge/pyramid/hexahedra use one surface charge per face.
-// MSC is always enabled (unconditional)
-
-// Note: the old tetra dipole-dipole path was tested but found numerically unstable.
-// Radia production polyhedron soft-iron solve uses the surface-charge (MSC) method.
+// Collocation MMMM (Multipole Magnetic Moment Method) face-charge polyhedron support:
+// tet/wedge/pyramid/hexahedra carry one surface charge per face (4-6 DOF; legacy flag Use6DOF_MSC).
+// Always enabled (unconditional).  The old MMM / MSC (EIEM2) naming is abolished -- this IS the
+// collocation MMMM path.
+//
+// Note: the old tetra dipole-dipole path was tested but found numerically unstable; the production
+// polyhedron soft-iron solve is the collocation MMMM (face-charge) method.
 
 namespace {
 constexpr int MOM_NG = 8;
