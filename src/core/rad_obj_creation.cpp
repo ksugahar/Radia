@@ -217,18 +217,22 @@ int radTApplication::SetRecMag(double* CPoi, long lenCPoi, double* Dims, long le
 		int ElemKey;
 		const double ZeroTolCurrDens = 1.E-10;
 
-		radTRecCur* RecMagPtr = 0;
-		radTExtrPolygon* ExtrPolygonPtr = 0;
 		radThg hg;
 
-		if((!TreatRecMagsAsExtrPolygons) || ((fabs(J_vect.x)>ZeroTolCurrDens) || (fabs(J_vect.y)>ZeroTolCurrDens) || (fabs(J_vect.z)>ZeroTolCurrDens)))
+		// RecMag/RecCur separation (2026-06-28): a current-carrying block stays a radTRecCur
+		// (volume Biot-Savart); a magnetized block becomes an MMMM surface-charge polyhedron
+		// directly -- the magnet path no longer instantiates radTRecCur (which is now current-only).
+		const short isCurrent = J_IsNotZero
+			|| (fabs(J_vect.x)>ZeroTolCurrDens) || (fabs(J_vect.y)>ZeroTolCurrDens) || (fabs(J_vect.z)>ZeroTolCurrDens);
+		if(isCurrent)
 		{
-			RecMagPtr = new radTRecCur(CPoiVect, DimsVect, MagnVect, J_vect, J_IsNotZero);
-			if(RecMagPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
-			hg = radThg(RecMagPtr);
+			radTRecCur* RecCurPtr = new radTRecCur(CPoiVect, DimsVect, MagnVect, J_vect, J_IsNotZero);
+			if(RecCurPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			hg = radThg(RecCurPtr);
 		}
-		else
+		else if(TreatRecMagsAsExtrPolygons)
 		{
+			// Legacy magnet-as-extruded-polygon path (non-default flag).
 			TVector3d FirstPoiVect = CPoiVect - (0.5*DimsVect);
 			TVector2d ArrayOfPoints2d[4];
 			ArrayOfPoints2d[0] = TVector2d(FirstPoiVect.y, FirstPoiVect.z);
@@ -236,14 +240,38 @@ int radTApplication::SetRecMag(double* CPoi, long lenCPoi, double* Dims, long le
 			ArrayOfPoints2d[2] = TVector2d(FirstPoiVect.y + DimsVect.y, FirstPoiVect.z + DimsVect.z);
 			ArrayOfPoints2d[3] = TVector2d(FirstPoiVect.y, FirstPoiVect.z + DimsVect.z);
 
-			ExtrPolygonPtr = new radTExtrPolygon(FirstPoiVect, ParallelToX, DimsVect.x, ArrayOfPoints2d, 4, MagnVect);
+			radTExtrPolygon* ExtrPolygonPtr = new radTExtrPolygon(FirstPoiVect, ParallelToX, DimsVect.x, ArrayOfPoints2d, 4, MagnVect);
 			if(ExtrPolygonPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
 			hg = radThg(ExtrPolygonPtr);
 
 			if(TreatExtrPgnsAsPolyhedrons) if(!ExtrPolygonPtr->ConvertToPolyhedron(hg, this, 1)) return 0;
 		}
-
-		if(TreatRecMagsAsPolyhedrons) if(!RecMagPtr->ConvertToPolyhedron(hg, this, 1)) return 0;
+		else
+		{
+			// Magnetized rectangular block -> MMMM surface-charge polyhedron directly. Same 8-corner /
+			// 6-face box (and winding) as the former radTRecMag::ConvertToPolyhedron, so the magnet
+			// field is bit-identical to the prior magnet path.
+			TVector3d hDims = 0.5*DimsVect;
+			double xMin = CPoiVect.x - hDims.x, xMax = CPoiVect.x + hDims.x;
+			double yMin = CPoiVect.y - hDims.y, yMax = CPoiVect.y + hDims.y;
+			double zMin = CPoiVect.z - hDims.z, zMax = CPoiVect.z + hDims.z;
+			TVector3d ArrayOfPoints[8];
+			ArrayOfPoints[0] = TVector3d(xMin, yMin, zMin);
+			ArrayOfPoints[1] = TVector3d(xMax, yMin, zMin);
+			ArrayOfPoints[2] = TVector3d(xMax, yMax, zMin);
+			ArrayOfPoints[3] = TVector3d(xMin, yMax, zMin);
+			ArrayOfPoints[4] = TVector3d(xMin, yMin, zMax);
+			ArrayOfPoints[5] = TVector3d(xMax, yMin, zMax);
+			ArrayOfPoints[6] = TVector3d(xMax, yMax, zMax);
+			ArrayOfPoints[7] = TVector3d(xMin, yMax, zMax);
+			int Face0[] = { 1,5,8,4 }, Face1[] = { 2,3,7,6 }, Face2[] = { 1,2,6,5 };
+			int Face3[] = { 3,4,8,7 }, Face4[] = { 4,3,2,1 }, Face5[] = { 5,6,7,8 };
+			int* ArrayOfFaces[6] = { Face0, Face1, Face2, Face3, Face4, Face5 };
+			int ArrayOfLengths[6] = { 4,4,4,4,4,4 };
+			radTPolyhedron* PolyhedronPtr = new radTPolyhedron(ArrayOfPoints, 8, ArrayOfFaces, ArrayOfLengths, 6, MagnVect);
+			if(PolyhedronPtr == 0) { Send.ErrorMessage("Radia::Error900"); return 0;}
+			hg = radThg(PolyhedronPtr);
+		}
 
 		ElemKey = AddElementToContainer(hg);
 
