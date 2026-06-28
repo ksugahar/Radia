@@ -1806,9 +1806,8 @@ def panel_gui_pitfalls(topic: str = "") -> str:
       result_keys             -- subprocess result dict is an API contract
       regression_blast_radius -- run BOTH panels after touching shared
                                  helpers; opaque casts (PointId) bite
-      panel_qt_testing        -- use tests/panels/test_*_qt.py headless
-                                 PySide6 tests as regression guards;
-                                 string-grep tests do not catch behaviour
+      panel_qt_testing        -- retired PySide note; current gate is
+                                 validation_test/panels/test_notebook_workbench.py
       learn_edition_cap       -- ignore the 50k warning, export bypasses it
 
     Args:
@@ -1887,25 +1886,22 @@ def release_workflow(topic: str = "") -> str:
 @mcp.tool()
 def standalone_panels(topic: str = "") -> str:
     """
-    Cubit-bypass standalone launch of the four Radia-NGSolve panels —
-    how to run radia-ih / radia-em / radia-pcb / radia-heat as plain
-    PySide6 desktop apps without Cubit installed.
+    Retired standalone PySide panel topic.  The canonical Radia panel surface
+    is now the Jupyter notebook workbench (`radia_<app>.ipynb` +
+    `radia.<app>_notebook`).  This tool remains as a compatibility redirect.
 
     Read this when:
-      * A user has a `.vol` mesh from any source (Cubit, Netgen-OCC,
-        build123d, etc.) and wants to run an analysis panel without
-        paying the Coreform Cubit licence.
-      * Setting up a non-Cubit lab seat.
-      * Diagnosing "the panel I see in Cubit's Solve menu — can I
-        run it outside Cubit?"  (Yes, via the standalone .exe entries.)
+      * A user asks about the old standalone panel entry-points.
+      * An MCP client still calls the historical `standalone_panels` topic.
+      * You need the post-migration notebook route and no-PySide boundary.
 
     Topics:
-      quick_start      -- end-to-end recipe (pip install -> radia-ih .vol -> Run)
-      four_panels      -- what each launcher does
+      quick_start      -- current notebook route
+      four_panels      -- active notebook workbenches
       vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
-      vs_cubit         -- standalone vs Cubit Solve menu
-      ih_methods       -- 9 IH methods + their file/label requirements
-      troubleshooting  -- common errors when launching standalone
+      vs_cubit         -- notebook route vs Cubit export/plugin boundary
+      ih_methods       -- IH through `radia_ih.ipynb`
+      troubleshooting  -- common post-migration issues
 
     Args:
         topic: Empty for the full document, or one of the topics above.

@@ -4158,7 +4158,7 @@ Python- or build-specific details.
   session can double-click `Coreform Cubit (warm launch)` on the desktop
   or run `C:/ProgramData/CoreformCubit/cubit_refresh.cmd` to get the
   same effect immediately.
-- hibino / external users: `pip install --upgrade "radia[cubit,gui]"
+- hibino / external users: `pip install --upgrade "radia[cubit]"
   radia-mcp cubit-mesh-export` + `cubit-plugin-install` +
   `cubit-plugin-install --verify-only`.
 - mdx: `release_qud.py phase8e` installs PyPI wheels for `radia` and

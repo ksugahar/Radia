@@ -10,10 +10,10 @@ After ``pip install cubit-mesh-export``, run::
     cubit-plugin-install --all-users    # install for all user profiles (admin)
     cubit-plugin-install --check-only   # preflight only, no writes
 
-This is the SINGLE entry point for Cubit plugin and Radia panel
+This is the SINGLE entry point for Cubit plugin and Radia export-toolbar
 deployment. If the ``radia`` package is installed, this command also
-registers the PySide6 Radia-NGSolve toolbar and verifies that Cubit's
-startup files point at it.
+registers the Cubit-embedded PySide6 Radia Export Mesh toolbar and verifies
+that Cubit's startup files point at it.
 
 Safety policy (2026-04-14 -- post-incident hardening):
 
@@ -381,8 +381,9 @@ def verify_deployment(pkg_dir: Path, cubit_dir: Path, *, verbose: bool = True):
         if verbose:
             print(f"    [OK] {dst.name}  ({dst_size} bytes, sha256 match)")
 
-    # Retired Qt5 .ccl guard.  Since radia 4.80.0 Cubit UI is PySide6-only;
-    # any remaining .ccl can load stale menus or confuse first installs.
+    # Retired Qt5 .ccl guard.  Since radia 4.80.0 the Cubit-side UI is the
+    # PySide6 toolbar; any remaining .ccl can load stale menus or confuse
+    # first installs.
     for stale_ccl in [
         cubit_dir / "bin" / "cubit_mesh_export.ccl",
         cubit_dir / "bin" / "plugins" / "cubit_mesh_export.ccl",
@@ -749,7 +750,7 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
     print("  Plugin installed. All destinations verified.")
     print("=" * 60)
 
-    # Install Radia-NGSolve panels if the radia package is available.
+    # Install Radia-NGSolve export toolbar if the radia package is available.
     try:
         from radia.install_panels import install_panels
         print()
@@ -769,7 +770,7 @@ def main():
     parser = argparse.ArgumentParser(
         prog="cubit-plugin-install",
         description="Install the Radia / cubit-mesh-export Cubit plugin "
-                    "(.ccm / .pyd + Netgen DLLs) and Radia panels.")
+                    "(.ccm / .pyd + Netgen DLLs) and Radia Export Mesh toolbar.")
     parser.add_argument("--all-users", action="store_true",
                         help="also register Radia toolbar in every "
                              "user's ~/.cubit (requires admin)")

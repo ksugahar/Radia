@@ -1,13 +1,13 @@
 """
 Radia-NGSolve setup: installs Cubit plugin + Radia-NGSolve panels.
 
-After installing ``radia[cubit,gui]``, run:
+After installing ``radia[cubit]``, run:
     cubit-plugin-install                    # current user
     cubit-plugin-install --all-users        # all user profiles (admin)
 
 This command:
   1. Calls cubit-plugin-install (from cubit-mesh-export package)
-  2. Installs Radia-NGSolve toolbar panels in Cubit's startup files
+  2. Installs the Cubit-side Radia Export Mesh toolbar startup blocks
 """
 
 import sys

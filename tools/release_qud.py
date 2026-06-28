@@ -154,9 +154,9 @@ def _newest_mtime(root: Path, suffixes):
 def _bundled_plugin_mtime():
     """Newest mtime of bundled .ccm in cubit-mesh-export package.
 
-    Note (radia 4.80.0): the .ccl was removed (Qt5 GUI deleted; PySide6
-    toolbar at src/radia/panels/radia_export_menu.py replaces it).  The
-    freshness gate now tracks only the .ccm.
+    Note: the retired Qt5 .ccl target is gone. The Cubit-embedded PySide
+    toolbar is Python package data and is checked by deploy probes, not by this
+    compiled-plugin freshness gate.
     """
     pkg = REPO / "packages/cubit-mesh-export/src/cubit_mesh_export"
     times = []
@@ -213,9 +213,9 @@ def cmd_preflight(args):
 def cmd_phase0(args):
     """Clean rebuild of Cubit plugin (.ccm + .pyd).
 
-    Note (radia 4.80.0): the .ccl target was removed (Qt5 GUI deleted;
-    PySide6 toolbar at src/radia/panels/radia_export_menu.py replaces
-    it).  Phase 0 now builds only the Qt-independent .ccm + .pyd.
+    Note: the retired Qt5 .ccl target is gone. Phase 0 builds only the
+    C++/APREPRO plugin (.ccm + .pyd); the Cubit-embedded PySide toolbar is
+    shipped as Python package data.
     """
     step("Phase 0: clean rebuild of Cubit plugin (~2-3 min)")
     build_pyd = REPO / "src/cubit_plugin/build-pyd"
@@ -396,7 +396,7 @@ Start-Sleep -Seconds 2
         # different binary (ef49da18...). Force-reinstall guarantees the
         # PyPI wheel's bytes overwrite whatever is on disk, which is the
         # whole point of "PyPI is the canonical channel" in the 2-tier policy.
-{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia[cubit,gui]=={v_radia}" "cubit-mesh-export=={v_cme}"{mcp_pin}
+{python_cmd} -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir "radia[cubit]=={v_radia}" "cubit-mesh-export=={v_cme}"{mcp_pin}
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 $pyExe = (& {python_cmd} -c "import sys; print(sys.executable)").Trim()
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
@@ -498,8 +498,11 @@ print(f"VER radia-mcp          = {ver('radia-mcp')}")
 print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
 for r in ["panels/register_toolbar.py",
-          "panels/calc_peec_bem.py",
-          "panels/calc_peec_inductance.py",
+          "panels/radia_export_menu.py",
+          "notebook_workbench.py",
+          "ih_notebook.py",
+          "em_notebook.py",
+          "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_text(os.path.join(rad,r))}")
@@ -549,8 +552,11 @@ print(f"VER radia-mcp          = {ver('radia-mcp')}")
 print(f"COMPAT cme  -> radia   = [{cubit_mesh_export.COMPAT_RADIA_MIN}, {cubit_mesh_export.COMPAT_RADIA_MAX}]")
 print(f"COMPAT rad  -> cme     = [{radia.COMPAT_CUBIT_MESH_EXPORT_MIN}, {radia.COMPAT_CUBIT_MESH_EXPORT_MAX}]")
 for r in ["panels/register_toolbar.py",
-          "panels/calc_peec_bem.py",
-          "panels/calc_peec_inductance.py",
+          "panels/radia_export_menu.py",
+          "notebook_workbench.py",
+          "ih_notebook.py",
+          "em_notebook.py",
+          "panels/calc_inductance.py",
           "panels/calc_fem_kelvin.py",
           "panels/calc_fem_coilmesh.py"]:
     print(f"SHA radia/{r:35s} = {hsh_git('src/radia/' + r)}")
@@ -1087,50 +1093,45 @@ def cmd_ci_verify(args):
     return 0
 
 
-def _run_pyside6_health_audit():
-    """Layer A optional-PySide6 audit (gated in `done` since 2026-05-30).
-
-    Runs tools/audit_pyside6_only.py which checks:
-      1. zero real PyQt5 / PySide2 / PyQt6 imports in tracked *.py
-      2. core GUI modules keep their optional PySide6 imports
-      3. radia pyproject declares optional PySide6, no PyQt5 dependency
-      4. cubit_mesh_export.ccm has no Qt5 DLL dependency
-      5. headless panel smoke when PySide6 is installed; a no-PySide6
-         release target skips this smoke
-
-    Returns the audit script's exit code (0 = CLEAN).
-    """
-    step("optional PySide6 audit (Layer A: static + optional headless smoke)")
-    audit = REPO / "tools" / "audit_pyside6_only.py"
-    if not audit.exists():
-        fail(f"audit script missing: {audit}")
+def _run_retired_standalone_pyside_guard():
+    """Guard that retired non-Cubit PySide panels have not been reintroduced."""
+    step("retired standalone PySide panel guard")
+    retired = [
+        REPO / "src/radia/radia_gui_base.py",
+        REPO / "src/radia/radia_ih.py",
+        REPO / "src/radia/radia_em.py",
+        REPO / "src/radia/radia_pcb.py",
+        REPO / "src/radia/radia_motor.py",
+        REPO / "src/radia/radia_streamfunction.py",
+        REPO / "src/radia/_heat_panel.py",
+    ]
+    present = [str(p.relative_to(REPO)) for p in retired if p.exists()]
+    pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    forbidden_tokens = [
+        "PySide6>=6.5",
+        "radia-ih = \"radia.radia_ih:main\"",
+        "radia-em = \"radia.radia_em:main\"",
+        "radia-pcb = \"radia.radia_pcb:main\"",
+        "radia-streamfunction = \"radia.radia_streamfunction:main\"",
+    ]
+    present += [f"pyproject token: {t}" for t in forbidden_tokens if t in pyproject]
+    if present:
+        for item in present:
+            fail(f"retired standalone PySide panel still present: {item}")
         return 1
-    result = subprocess.run(
-        [sys.executable, str(audit)],
-        cwd=str(REPO),
-        capture_output=True, text=True,
-    )
-    if result.stdout:
-        print(result.stdout.rstrip())
-    if result.stderr:
-        print(result.stderr.rstrip())
-    if result.returncode == 0:
-        ok("optional PySide6 audit: CLEAN (no legacy Qt; panel smoke healthy/skipped).")
-    return result.returncode
+    ok("retired standalone PySide panel files and entry points are absent")
+    return 0
 
 
 def cmd_done(args):
-    """Definition-of-done check: preflight + editable verify + phase9 + optional PySide6 audit.
+    """Definition-of-done check: preflight + editable verify + phase9 + retired panel guard.
 
     Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
-    mdx / hibino, the repo is release-ready, the editable tier is intact, AND the
-    tree has no legacy Qt fallback.  If PySide6 is installed, legacy desktop
-    panels must construct headlessly; if PySide6 is absent, release remains
-    valid under the no-PySide6 target policy. Exit non-zero means do NOT tell
-    the user "release done" yet.
+    mdx / hibino, the repo is release-ready, the editable tier is intact, AND
+    the retired non-Cubit PySide panel surface has not been reintroduced.
     """
     step("Definition-of-done check "
-         "(preflight + editable tier + phase9 + optional PySide6 audit)")
+         "(preflight + editable tier + phase9 + retired standalone panel guard)")
     rc = cmd_preflight(args)
     if rc != 0:
         fail("preflight failed — repo state not release-ready.")
@@ -1149,16 +1150,16 @@ def cmd_done(args):
         fail("phase9 drift detected — at least one machine is out of sync.")
         return rc
 
-    rc = _run_pyside6_health_audit()
+    rc = _run_retired_standalone_pyside_guard()
     if rc != 0:
-        fail("optional PySide6 audit failed -- a legacy Qt reference or "
-             "panel construction regression slipped in. Fix per the audit "
-             "output, then re-run `release_qud done`.")
+        fail("retired standalone PySide panel surface reappeared. Remove it, then re-run "
+             "`release_qud done`.")
         return rc
 
     print("")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx / hibino, the editable tier is intact, and no legacy Qt fallback remains.")
+       "mdx / hibino, the editable tier is intact, and the retired standalone "
+       "PySide panel surface is absent.")
     return 0
 
 
@@ -1191,7 +1192,8 @@ def main():
                     help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
     sub.add_parser("done",
                     help="definition-of-done: preflight + editable-tier + "
-                         "phase9 + optional PySide6 audit (read-only)")
+                         "phase9 + retired standalone PySide panel guard "
+                         "(read-only)")
 
     args = p.parse_args()
     handler = {
