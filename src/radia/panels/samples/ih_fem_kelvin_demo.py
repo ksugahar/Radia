@@ -11,7 +11,7 @@ Python modules.  The `add_kelvin_cubit()` helper that builds the
 Kelvin shell + 1:1 copy-mesh + GND nodeset is a Python function in
 `cubit-mesh-export`, so any sample that needs Kelvin must be a `.py`
 script that runs in Cubit's embedded Python.  See
-`examples/induction_heating/demoted_samples/README.md` for the
+`validation_test/induction_heating/demoted_samples_legacy/README.md` for the
 .jou-vs-.py rationale (2026-04-23 demotion of confusing .jou+.py
 pairs).
 
@@ -220,8 +220,8 @@ cubit.cmd('sideset 2 name "sink"')
 # subtracted wp volume).  After subtract + imprint + merge, these
 # faces are shared between wp_vid and air_top/air_bot; tagging on
 # wp_vid propagates correctly to the BND triangles exported with
-# the air block (verified by the demoted ih_fem_kelvin_sample.py
-# which uses this exact predicate).
+# the air block (verified by the legacy validation fixture
+# ih_fem_kelvin_sample.py, which uses this exact predicate).
 cubit.cmd("sideset 3 add surface in volume %d" % wp_vid)
 cubit.cmd('sideset 3 name "sibc"')
 

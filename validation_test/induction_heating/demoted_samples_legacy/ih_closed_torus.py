@@ -16,8 +16,8 @@ import sys
 
 import cubit
 
-# See demoted_samples/README.md for why this file lives here (demoted
-# from panels/samples/ on 2026-04-23).  Locate add_kelvin: repo-relative
+# See README.md in this directory for why this file lives here (demoted
+# from panels/samples/ on 2026-04-23). Locate add_kelvin: repo-relative
 # first, then pip-installed radia package.
 _here = os.path.dirname(os.path.abspath(__file__))
 _panels_repo = os.path.normpath(

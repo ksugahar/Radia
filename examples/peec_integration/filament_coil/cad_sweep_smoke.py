@@ -150,7 +150,7 @@ def main():
     print("=" * 70)
     from ngsolve import Mesh
     from radia.ih_pipeline import IHWorkpieceContext
-    from calc_heating_bem import _extract_surface_mesh_filtered
+    from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
     vol = os.path.join(SRC, 'radia', 'panels', 'samples',
                        'ih_bem_sample.vol')

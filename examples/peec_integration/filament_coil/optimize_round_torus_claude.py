@@ -33,7 +33,7 @@ from radia.ih_pipeline import IHWorkpieceContext
 from radia.ih_optimize import IHOptimizer, RandomProposer
 from radia.ih_claude_proposer import ClaudeProposer
 
-from calc_heating_bem import _extract_surface_mesh_filtered
+from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 
 MM = 1e-3

@@ -24,7 +24,9 @@ References below that mention retired helpers such as
 entry points are the calc scripts listed above.
 
 Historical context:
-  2026-04-17: BEM modules moved examples/induction_heating/bem_reference/
+  2026-04-17: BEM modules moved into a research reference lane.
+  2026-06-28: BEM modules promoted to radia.* APIs; runnable references moved
+              to validation_test/induction_heating/bem_reference/.
   2026-04-18: T0 + A-V compound retired from panel (gap-corner 1/r cusps)
   2026-04-19: calc_peec_bem + calc_fem_coilmesh become the panel
               (A-V is BACK, this time gapped-torus-only + proper source/sink)
@@ -1288,7 +1290,9 @@ BEM (Scalar BIE, EFIE, coupled BEM-SIBC) is no longer part of the IH
 production path.  Use `mcp-server-radia-ngsolve` with topic `ngsbem_inductance`
 for BEM documentation.
 
-BEM solver modules are in `examples/induction_heating/bem_reference/`.
+BEM solver modules are importable as `radia.bem_inductance`,
+`radia.bem_coupled_solver`, and `radia.ngsbem_*`.  Runnable reference
+scripts are in `validation_test/induction_heating/bem_reference/`.
 """
 
 

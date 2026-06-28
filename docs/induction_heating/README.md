@@ -1,7 +1,9 @@
 # Induction Heating Examples
 
-This directory is the docs promotion layer for the remaining
-`examples/induction_heating` scripts.
+This directory is the docs promotion layer for the induction-heating example
+cleanup. The old loose examples topic is closed; public demonstrations now live
+as result-saved notebooks plus synchronized JSON, while executable validation
+history lives under `validation_test/induction_heating/`.
 
 Start with the public result-saved notebook:
 
@@ -15,18 +17,25 @@ The full source/hash catalog is:
 - `induction_heating_examples_catalog_results.json`
 - `induction_heating_examples_catalog_result.json`
 
-The catalog stores the full source text, SHA-256 hashes, existing result/media
-artifact hashes, protected references, and a migration lane for every current
-example script.
+The closed public demo showcase is:
+
+- `induction_heating_demo_showcase.ipynb`
+- `induction_heating_demo_showcase_results.json`
+- `induction_heating_demo_showcase_result.json`
+
+The catalogs store source hashes, route decisions, existing result/media
+artifact hashes, protected references, and the final migration lane.
 
 ## Current Routing
 
-- ESIM tutorials (`esim_demo.py`, `esim_induction_heating_demo.py`,
-  `demo_esim_impedance.py`) should become human-facing docs notebooks.
-- `bem_reference/` is protected by panel tests and should be split into
-  reusable `src` API plus runnable `validation_test` checks before deletion.
+- ESIM/WPT/RWG tutorials are represented by
+  `induction_heating_demo_showcase.ipynb` and its JSON source/hash archive.
+- Legacy `bem_reference/` has been split: reusable solver modules now live as
+  `radia.bem_inductance`, `radia.bem_coupled_solver`, and `radia.ngsbem_*`;
+  runnable reference scripts and sweep data live under
+  `validation_test/induction_heating/bem_reference/`.
 - `scattered_rhs_clean_test/` has been promoted to
   `validation_test/induction_heating/scattered_rhs_clean_test/` because it
   already carries a `.vol` fixture and `results.json`.
-- `demoted_samples/` is panel/sample history. Do not delete it until the
-  corresponding notebook-panel or validation fixture replaces each sample.
+- Former demoted Cubit samples live under
+  `validation_test/induction_heating/demoted_samples_legacy/`.

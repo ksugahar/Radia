@@ -1,31 +1,18 @@
-## FEM-Kelvin sample: gapped torus coil + cylindrical workpiece + air sphere
+## FEM-Kelvin sample with SKIN-DEPTH-RESOLVED coil mesh
 ##
-## DEMOTED from panels/samples/ to examples/induction_heating/demoted_samples/
-## on 2026-04-23.  See demoted_samples/README.md for rationale.
+## Same geometry as ih_fem_kelvin_sample.jou but with fine coil mesh
+## to support --coil-sigma 5.8e7 (eddy current in coil volume).
 ##
-## This .jou creates the PHYSICAL domain only (coil + workpiece + air).
-## KELVIN IS *NOT* ADDED by this journal.  To add Kelvin you must either:
-##   (a) playback the companion ih_fem_kelvin_sample.py instead
-##       (it creates the same geometry AND calls add_kelvin_cubit())
-##   (b) after playing this .jou, run these Cubit Python commands:
-##           python "from add_kelvin import add_kelvin_cubit"
-##           python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-##       then export: export netgen "foo.vol" order 1 overwrite
+## Cu at 7 kHz: delta = 0.79 mm.  Coil surface mesh ~ 0.31 mm
+## (cross-section circle: 60 intervals on 2*pi*3mm circumference).
+## Interior grades to ~1 mm via Cubit tet mesher.
 ##
-## Running this .jou alone produces a .vol WITHOUT the 'kelvin' material,
-## so calc_fem_coilmesh.py falls back to Dirichlet A=0 (truncation error,
-## ~3% L bias, ~20% P_wp bias on this geometry).
-##
-## Required labels (consumed by calc_fem_kelvin.py):
-##   block 1 = "coil"      (gapped torus, source J)
+## Required labels (same convention as ih_fem_kelvin_sample.jou):
+##   block 1 = "coil"      (gapped torus, source J + optional eddy)
 ##   block 2 = "air"       (inner sphere with coil + workpiece holes)
 ##   sideset 1 = "source"  (one gap face on the coil)
 ##   sideset 2 = "sink"    (other gap face on the coil)
 ##   sideset 3 = "sibc"    (hole boundary where workpiece was subtracted)
-##
-## HOLE APPROACH: workpiece is subtracted from air and NOT meshed.
-## The SIBC Robin BC is applied on the air-side hole boundary.
-## Do NOT add the workpiece to any block.
 ##
 ## Geometry:
 ##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
@@ -34,9 +21,14 @@
 ##   Air:       sphere R = 0.060 m  (~2x coil major radius)
 ##
 ## After playback + add_kelvin, export via:
-##   export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
+##   export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite
 ##
-## Run via: Solve -> Radia-NGSolve -> Induction Heating -> Method: FEM
+## Also exports STEP for PEEC comparison:
+##   File -> Export -> ih_fem_kelvin_skin_coil.step (coil volume only)
+##
+## Comparison runs:
+##   FEM truth:  calc_fem_kelvin.py --vol ...skin.vol --coil-sigma 5.8e7
+##   PEEC:       calc_fem_kelvin.py --vol ...skin.vol --peec-step ...coil.step --peec-nwinc 3
 
 reset
 
@@ -58,8 +50,6 @@ create sphere radius 0.060000
 ${air_vid = Id("volume")}
 
 # === 4. Webcut air sphere for mesh seam curves ==============================
-# ACIS sphere has 0 curves.  Webcut with zplane creates equator curves
-# needed later by copy mesh (when Kelvin is added).
 ${id_before_webcut = Id("volume")}
 webcut volume {air_vid} with plane zplane
 ${air_top = air_vid}
@@ -72,11 +62,20 @@ subtract volume {coil_vid} {wp_vid} from volume {air_top} {air_bot} keep_tool
 imprint volume {coil_vid} {wp_vid} {air_top} {air_bot}
 merge volume {coil_vid} {wp_vid} {air_top} {air_bot}
 
-# === 7. Mesh (workpiece NOT meshed — hole approach) =========================
-curve in volume {coil_vid} with length < 0.05 interval 12
-curve in volume {coil_vid} with length > 0.05 interval 48
+# === 7. STEP export (coil only, for PEEC comparison) ========================
+export step "ih_fem_kelvin_skin_coil.step" volume {coil_vid} overwrite
+
+# === 8. Mesh: SKIN-DEPTH-RESOLVED coil =====================================
+# Cross-section circles (length ~ 0.019 m < 0.05):
+#   60 intervals -> edge ~ 0.31 mm  (delta = 0.79 mm -> ~2.5 edges per delta)
+# Toroidal arcs (length ~ 0.186 m > 0.05):
+#   180 intervals -> edge ~ 1.03 mm
+# Volume interior size 0.001 (1 mm) -> natural grading from 0.3 mm surface
+
+curve in volume {coil_vid} with length < 0.05 interval 60
+curve in volume {coil_vid} with length > 0.05 interval 180
 volume {coil_vid} scheme tetmesh
-volume {coil_vid} size 0.003
+volume {coil_vid} size 0.001
 mesh volume {coil_vid}
 
 # Workpiece is NOT meshed: SIBC treats it as a hole in the air domain.
@@ -85,13 +84,13 @@ volume {air_top} {air_bot} scheme tetmesh
 volume {air_top} {air_bot} size 0.020
 mesh volume {air_top} {air_bot}
 
-# === 8. Blocks (NO workpiece block) ========================================
+# === 9. Blocks (NO workpiece block) ========================================
 block 1 add volume {coil_vid}
 block 1 name "coil"
 block 2 add volume {air_top} {air_bot}
 block 2 name "air"
 
-# === 9. Sidesets ============================================================
+# === 10. Sidesets ===========================================================
 group "coil_gaps" add surface in volume {coil_vid} with area < 0.0001
 sideset 1 add surface in coil_gaps with y_coord > -0.001
 sideset 1 name "source"
@@ -99,17 +98,16 @@ sideset 2 add surface in coil_gaps with y_coord < -0.001
 sideset 2 name "sink"
 
 # Workpiece hole boundary (SIBC Robin BC on air-side surface).
-# After subtract + imprint/merge, surfaces of wp_vid are shared with air.
-# Since wp is not meshed/blocked, these become air external boundaries.
 sideset 3 add surface in volume {wp_vid}
 sideset 3 name "sibc"
 
-# Hide air
+# Hide air for visual inspection
 volume {air_top} {air_bot} visibility off
 
 # === Next step: add Kelvin yourself (this .jou does NOT do it) ================
-# In Cubit:
+# Preserved under validation_test/induction_heating/demoted_samples_legacy/
+# on 2026-06-29. See README.md. Play ih_fem_kelvin_skin.py instead to get
+# Kelvin added automatically, or run these Cubit Python commands manually:
 #   python "from add_kelvin import add_kelvin_cubit"
 #   python "add_kelvin_cubit(R=0.060, symmetry=['z'])"
-#   export netgen "ih_fem_kelvin_sample.vol" order 1 overwrite
-# Or play the companion .py (does everything in one shot).
+#   export netgen "ih_fem_kelvin_skin.vol" order 1 overwrite

@@ -2,13 +2,13 @@
 import sys
 import os
 import numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
 
 MU_0 = 4.0 * np.pi * 1e-7
 
 
 def main():
-    from ngsbem_eddy import EddyCurrentFEMBEM, create_conductor_mesh
+    from radia.ngsbem_eddy import EddyCurrentFEMBEM, create_conductor_mesh
     from ngsolve import Integrate, CF
     from ngsolve import TaskManager
 

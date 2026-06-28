@@ -15,7 +15,7 @@ at the specified frequency. Two ways of feeding phi_inc are compared:
       ports) on the coil surface mesh to obtain the DC surface current J,
       then integrate J with a Biot-Savart kernel to phi_inc on the
       workpiece surface nodes. This is exactly the --coil-vol path of
-      calc_heating_bem.py.
+      the BEM reference validation pipeline.
 
   (b) Tier A: represent the coil as nw x nh filaments with analytical
       complex per-filament currents (path-length bias + skin-effect
@@ -73,9 +73,8 @@ from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                     compute_phi_inc_from_filaments)
 from radia.bem_inductance import compute_inductance_source_sink
 
-# Mesh extractors from the panel code (reuse, don't reinvent)
-from calc_heating_bem import (_extract_surface_mesh_filtered,
-                               _extract_surface_mesh)
+# Mesh extractor from the panel code (reuse, don't reinvent)
+from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 MU_0 = 4.0 * np.pi * 1e-7
 MM = 1e-3

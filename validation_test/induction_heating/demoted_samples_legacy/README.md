@@ -1,9 +1,11 @@
 # Demoted IH samples
 
 These files used to live in `src/radia/panels/samples/` and shipped in the
-`radia` PyPI wheel as panel Browse-dialog choices.  On **2026-04-23** they
-were demoted to `examples/` because they violate the Panel Samples Quality
-Policy (CLAUDE.md § "Panel Samples Quality Policy"):
+`radia` PyPI wheel as panel Browse-dialog choices. On **2026-04-23** they
+were demoted out of the shipped panel samples because they violate the Panel
+Samples Quality Policy (AGENTS.md § "Sample Promotion Ladder"). On
+**2026-06-29** they were moved here from the loose examples tier so validation
+history no longer depends on examples paths:
 
 - **Non-canonical**: no golden test under `tests/panels/test_*_golden.py`
   references them, so their numerical correctness is not automatically
@@ -26,8 +28,8 @@ Policy (CLAUDE.md § "Panel Samples Quality Policy"):
 
 ## How to use these now
 
-They still work — they're just no longer automatically installed into
-the Cubit panel's Browse dialog.  To run one:
+They still work for archaeology and validation experiments — they're just no
+longer automatically installed into the Cubit panel's Browse dialog. To run one:
 
 1. From the Radia source tree, copy the `.jou` / `.py` to a working
    directory of your choice (e.g. `C:\temp\`).

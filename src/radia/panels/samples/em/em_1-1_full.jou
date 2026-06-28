@@ -22,8 +22,9 @@
 #   outer hemispheres and the Kelvin's webcut hemispheres.  Without
 #   the seam the air's outer surface is a single closed sphere with
 #   no curves, and copy-mesh has no source-curve / target-curve
-#   anchors to align against.  See the IH-style ih_fem_kelvin_sample
-#   (examples/induction_heating/) for the same pattern.
+#   anchors to align against. See the IH-style
+#   validation_test/induction_heating/demoted_samples_legacy/
+#   ih_fem_kelvin_sample.py for the same pattern.
 #
 # Coordinate system (matching em_1-2_half_z and em_sample_coil.py):
 #   y = gap direction (pole tip at y~0, main leg at y~0.15)
