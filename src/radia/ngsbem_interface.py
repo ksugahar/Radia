@@ -36,8 +36,8 @@ Loop-Star Decomposition:
         M_LS * T_loop = 0      (loops are divergence-free)
 
 Usage:
-    from ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
-    from ngsbem_interface import NGBEMBridge, LoopStarTransform
+    from radia.ngsbem_peec import NGBEMPEECSolver, create_plate_mesh
+    from radia.ngsbem_interface import NGBEMBridge, LoopStarTransform
 
     mesh = create_plate_mesh(0.01, 0.001, 0.003)
     solver = NGBEMPEECSolver(mesh, sigma=5.8e7, thickness=1e-3)
@@ -745,7 +745,7 @@ class NGBEMBridge:
         Returns:
             PEECCircuitSolver instance
         """
-        from peec_topology import PEECCircuitSolver
+        from radia.peec_topology import PEECCircuitSolver
         topo = self.to_topology_dict()
         return PEECCircuitSolver(topo)
 

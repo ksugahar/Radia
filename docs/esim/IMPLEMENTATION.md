@@ -553,11 +553,11 @@ src/radia/
     calc_fem_coilmesh.py      # Layer 4: HCurl A-V volumetric coil
   radia_ih.py                 # Layer 3 GUI (PySide6) that drives all four CLIs
 
-examples/
+docs/
   ih_esim_benchmark/          # benchmark.py + analytical_bessel_baseline.py + results.json
-  induction_heating/          # esim_demo.py / esim_induction_heating_demo.py
-  # (canonical ESIM lives in src/radia/esim_cell_problem.py; the old
-  #  examples/effective_surface_impedance research scripts were removed 2026-06-27)
+  induction_heating/          # result-saved public demo showcase + migration catalog
+  # (canonical ESIM lives in src/radia/esim_cell_problem.py; old loose
+  #  research/example scripts were promoted or removed in June 2026)
 
 tests/
   test_esim_integration.py    # cell-problem + ESI table + coupled solver tests

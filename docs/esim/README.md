@@ -72,9 +72,9 @@ The MCP server `mcp-server-ih` exposes this knowledge via the
 
 - [`docs/research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb`](../research/bem_numerics/BEM_SIBC_ESIM_RESEARCH.ipynb) — research WIP (LAB-only, gitignored).
 - [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb) — wide-band nonlocal extension roadmap (deferred).
-- [`docs/induction_heating/induction_heating_examples_catalog.ipynb`](../induction_heating/induction_heating_examples_catalog.ipynb) — result-saved promotion catalog for the remaining `examples/induction_heating` scripts.
+- [`docs/induction_heating/induction_heating_demo_showcase.ipynb`](../induction_heating/induction_heating_demo_showcase.ipynb) — result-saved public ESIM/WPT/RWG demo showcase.
+- [`docs/induction_heating/induction_heating_examples_catalog.ipynb`](../induction_heating/induction_heating_examples_catalog.ipynb) — result-saved promotion catalog for the IH docs/API/validation migration.
 - [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/) — benchmark scripts producing `results.json`.
-- [`examples/induction_heating/`](../../examples/induction_heating/) — ESIM demo scripts.
 - [`src/radia/esim_cell_problem.py`](../../src/radia/esim_cell_problem.py) — cell-problem solver source.
 - [`src/radia/panels/calc_inductance.py`](../../src/radia/panels/calc_inductance.py) — scalar BIE-SIBC path (path A in [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md)).
 - [`src/radia/panels/calc_fem_kelvin.py`](../../src/radia/panels/calc_fem_kelvin.py) — FEM-Kelvin path (path C).

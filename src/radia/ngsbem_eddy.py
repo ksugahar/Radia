@@ -721,7 +721,10 @@ class EddyCurrentBEMSIBC:
         from ngsolve.bem import (SingleLayerPotentialOperator,
                                   DoubleLayerPotentialOperator,
                                   HypersingularOperator)
-        from ngsbem_peec import extract_dense_matrix
+        try:
+            from .ngsbem_peec import extract_dense_matrix
+        except ImportError:
+            from ngsbem_peec import extract_dense_matrix
 
         t_start = time.perf_counter()
         label = self.surface_label

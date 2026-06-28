@@ -409,7 +409,8 @@ When in doubt, write a smoke ``test_*.jou`` that runs the script
 through ``coreform_cubit -batch -nographics`` and verifies the block
 membership.
 
-**Reference**: commit ``ac64254``, ``examples/induction_heating/demoted_samples/ih_fem_kelvin_sample.jou``
+**Reference**: commit ``ac64254``,
+``validation_test/induction_heating/demoted_samples_legacy/ih_fem_kelvin_sample.jou``
 header comment "subtract ... keep_tool id semantics".
 
 ============================================================
@@ -417,7 +418,8 @@ header comment "subtract ... keep_tool id semantics".
 ============================================================
 
 **Symptom**: ``sideset 1 add surface 1`` works in ``ih_bem_sample.jou``
-(simple subtract sequence) but fails in ``examples/induction_heating/demoted_samples/ih_fem_kelvin_sample.jou``
+(simple subtract sequence) but fails in
+``validation_test/induction_heating/demoted_samples_legacy/ih_fem_kelvin_sample.jou``
 (extra webcuts + subtracts) — surface 1 no longer exists after the
 multiple imprint+merge cycles.
 
@@ -440,7 +442,8 @@ sideset 2 name "sink"
 Keep simpler scripts (single subtract, no webcut) on hardcoded ids
 if they are verified to work — those are easier to read.
 
-**Reference**: commit ``ac64254``, ``examples/induction_heating/demoted_samples/ih_fem_kelvin_sample.jou``
+**Reference**: commit ``ac64254``,
+``validation_test/induction_heating/demoted_samples_legacy/ih_fem_kelvin_sample.jou``
 section 11 ``Sidesets``.
 
 ============================================================
@@ -469,15 +472,16 @@ Examples (current layout after the 2026-04-23 demotion):
 
 The no-Kelvin FEM baseline (``ih_fem_sample.jou``) and the small-mesh
 FEM + Kelvin variant (``ih_fem_kelvin_sample.jou``) that used to live
-next to these are now under ``examples/induction_heating/demoted_samples/``
-— they were not golden-tested and the Kelvin variant shipped with a
+next to these are now under
+``validation_test/induction_heating/demoted_samples_legacy/`` — they were
+not golden-tested and the Kelvin variant shipped with a
 misleading "auto-Kelvin" comment.  Any NEW sample must stay aligned
 with the (panel, solver method) = one-file rule and be golden-locked
 before joining ``panels/samples/``.
 
 **Reference**: commit ``ac64254`` (split), commit ``241090c``
 (restored BEM-validated mesh density), 2026-04-23 demotion commit
-(moved non-canonical samples to examples/).
+(moved non-canonical samples out of shipped panel samples).
 
 ============================================================
 ## silent_action — Menu actions must produce visible feedback
