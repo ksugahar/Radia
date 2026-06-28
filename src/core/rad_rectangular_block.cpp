@@ -5,8 +5,10 @@
 * Project:        RADIA
 *
 * Description:    Magnetic field source:
-*                 rectangular parallelepiped with constant magnetization 
-*                 or currect density
+*                 rectangular parallelepiped with constant (Ampere) current
+*                 density -- the current block behind ObjRecCur / ObjArcCur.
+*                 (Magnetized rectangular blocks are MMMM surface-charge
+*                 polyhedra now; see radTApplication::SetRecMag.)
 *
 * Author(s):      Oleg Chubar
 *
@@ -17,9 +19,9 @@
 -------------------------------------------------------------------------*/
 
 //-------------------------------------------------------------------------
-// Implementation of class radTRecCur - a class of objects of rectangular
-// parallelipipedic shape capable to generate magnetic field.
-// RecMag is derived from radTg3d.
+// Implementation of class radTRecCur - a rectangular current-carrying block
+// (uniform current density J, volume Biot-Savart field). radTRecCur derives
+// from radTg3dRelax. Magnetized rectangular blocks are MMMM polyhedra now.
 //-------------------------------------------------------------------------
 
 #include "rad_rectangular_block.h"
