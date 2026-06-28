@@ -523,12 +523,9 @@ int radTApplication::SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoin
 		{
 			radThg hg(VolLimByPgnsPtr);
 			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
-			if(RecognizeRecMagsInPolyhedrons)
-			{
-				double RelAbsTol[] = { radCR.AbsRand, radCR.RelRand };
-				radTPolyhedron* pPolyhedron = static_cast<radTPolyhedron*>(static_cast<radTg3d*>(hg.rep));
-				pPolyhedron->CheckForSpecialShapes(pPolyhedron->VectHandlePgnAndTrans, hg, RelAbsTol);
-			}
+			// RecognizeRecMagsInPolyhedrons / CheckForSpecialShapes (polyhedron->RecMag box
+			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay MMMM
+			// surface-charge polyhedra (radTRecMag kept only as the ObjRecCur/ObjArcCur current kernel).
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
 			return ElemKey;
@@ -559,12 +556,9 @@ int radTApplication::SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfP
 		{
 			radThg hg(VolLimByPgnsPtr);
 			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
-			if(RecognizeRecMagsInPolyhedrons)
-			{
-				double RelAbsTol[] = { radCR.AbsRand, radCR.RelRand };
-				radTPolyhedron* pPolyhedron = static_cast<radTPolyhedron*>(static_cast<radTg3d*>(hg.rep));
-				pPolyhedron->CheckForSpecialShapes(pPolyhedron->VectHandlePgnAndTrans, hg, RelAbsTol);
-			}
+			// RecognizeRecMagsInPolyhedrons / CheckForSpecialShapes (polyhedron->RecMag box
+			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay MMMM
+			// surface-charge polyhedra (radTRecMag kept only as the ObjRecCur/ObjArcCur current kernel).
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
 			return ElemKey;
