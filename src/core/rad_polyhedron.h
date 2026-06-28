@@ -116,7 +116,7 @@ public:
 	short SomethingIsWrong;
 	radTPairOfDouble AuxPairOfDouble; // Used for cylindrical subdivision
 
-	// MSC (Magnetic Surface Charge) support for face-charge polyhedra.
+	// Collocation MMMM (face-charge) support for polyhedra (legacy flag Use6DOF_MSC).
 	// For 4-6 face elements, we use surface charge density (sigma) on each face
 	// instead of magnetization vector (Mx, My, Mz)
 	// Tetrahedra: 4 faces -> 4 DOF, Wedges/Pyramids: 5 faces -> 5 DOF, Hexahedra: 6 faces -> 6 DOF
@@ -358,13 +358,13 @@ public:
 	void B_intComp_frM(radTField*);
 	void B_intComp_frJ(radTField*);
 
-	// Element type detection (MSC method support)
+	// Element type detection (collocation MMMM face-charge support)
 	bool IsTetrahedron() const { return AmOfFaces == 4; }
 	bool IsWedge() const { return AmOfFaces == 5; }
 	bool IsHexahedron() const { return AmOfFaces == 6; }
 	bool IsMSCElement() const { return AmOfFaces >= 4; }
 
-	// MSC (Magnetic Surface Charge) methods for supported element types
+	// Collocation MMMM (face-charge) methods for supported element types
 	void B_comp_tetrahedron_analytical(radTField*);
 	void B_comp_wedge_analytical(radTField*);  // 3DOF wedge/prism (5 faces: 2 tri + 3 quad)
 	void B_comp_wedge_MSC(radTField*);         // Generic face-charge MSC (sigma per face, 4-6 faces)
