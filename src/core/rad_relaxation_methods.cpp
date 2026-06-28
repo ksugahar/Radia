@@ -3186,6 +3186,39 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		fprintf(stderr, "[BiCG] Error: moment block-Jacobi requires LAPACK; scalar Jacobi fallback is disabled.\n");
 		return -11;
 #endif
+		// BUILD-ONCE dense geometry kernel for the variable-DOF (tet/wedge/mixed) moment path.
+		// Mirrors the pure-hex momentKdense optimization (commit 1e5c9b50) and the classic MMM/MSC
+		// cached-matrix matvec (MatVec_VariableDOF + FlatInteract, commit ceb8f9ea).  Previously the
+		// matvec re-evaluated MomentSystemBlockAny for EVERY (h,g) pair on EVERY BiCGSTAB iteration
+		// (~one full O(nMom^2) kernel build per matvec) -- the dominant cost that made tet/wedge
+		// method-1 ~100x slower per iteration than the pure-hex path (regular tet 648 DOF: 161 iters
+		// but ~58 ms/iter).  Build the chi-INDEPENDENT kernel block K[h][g] ONCE and scatter it into
+		// a dense totalDOF x totalDOF row-major matrix (variable-DOF offsets via momOff/momDof); the
+		// matvec then applies y = diag(chi)(K x) + L_local x as a cheap dense GEMV -- bit-identical to
+		// the old per-iteration recompute, just computed once.  O(N^2) storage (= method 0 / hex);
+		// for very large N use HDiv-VIM (loop-free).
+		std::vector<double> momentKdenseAny((size_t)totalDOF * (size_t)totalDOF, 0.0);
+		{
+			auto buildKdenseRowAny = [&](size_t hh) {
+				const int h = (int)hh;
+				const int rdof = momDof[h];
+				const int roff = momOff[h];
+				double Kblk[36];
+				for(int g = 0; g < nMom; g++)
+				{
+					const int cdof = momDof[g];
+					const int coff = momOff[g];
+					IntrctPtr->MomentSystemBlockAny(h, g, nullptr, Kblk, true);   // chi-independent geometry block (incl. images)
+					for(int i = 0; i < rdof; i++)
+						for(int j = 0; j < cdof; j++)
+							momentKdenseAny[(size_t)(roff + i) * (size_t)totalDOF + (size_t)(coff + j)] = Kblk[i * 6 + j];
+				}
+			};
+			if(serialMomentOps) { for(int h = 0; h < nMom; h++) buildKdenseRowAny((size_t)h); }
+			else { ngcore::ParallelFor(ngcore::IntRange(nMom), buildKdenseRowAny); }
+		}
+		std::vector<double> momentKxAny((size_t)totalDOF, 0.0);
+
 		auto t_setup_end = std::chrono::high_resolution_clock::now();
 		rad.m_solve_t_moment_system_build += std::chrono::duration<double>(t_setup_end - t_setup_start).count();
 
@@ -3193,32 +3226,21 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
 
 		auto matvec = [&](const double* x, double* y) {
+			// build-once: y = diag(chi)(Kdense x) + L_local x  -- cheap dense GEMV, NO kernel recompute
+			cblas_dgemv(CblasRowMajor, CblasNoTrans, totalDOF, totalDOF, 1.0,
+			            momentKdenseAny.data(), totalDOF, x, 1, 0.0, momentKxAny.data(), 1);
 			auto applyRow = [&](size_t hh) {
 				const int h = (int)hh;
 				const int rdof = momDof[h];
 				const int roff = momOff[h];
-				double acc[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-				double block[36];
-				for(int g = 0; g < nMom; g++)
-				{
-					const int cdof = momDof[g];
-					const int coff = momOff[g];
-					IntrctPtr->MomentSystemBlockAny(h, g, nullptr, block, true);
-					const double rowChi = chiPerHex[h];
-					for(int i = 0; i < rdof; i++)
-					{
-						const double* Brow = &block[i * 6];
-						double sum = 0.0;
-						for(int j = 0; j < cdof; j++) sum += Brow[j] * x[(size_t)coff + j];
-						acc[i] += rowChi * sum;
-					}
-				}
+				const double chih = chiPerHex[h];
 				const double* Lh = &localLBlock[(size_t)h * 36];
 				for(int i = 0; i < rdof; i++)
 				{
-					const double* Li = &Lh[i * 6];
-					for(int j = 0; j < rdof; j++) acc[i] += Li[j] * x[(size_t)roff + j];
-					y[(size_t)roff + i] = acc[i];
+					double s = chih * momentKxAny[(size_t)roff + i];
+					const double* Li = &Lh[(size_t)i * 6];
+					for(int j = 0; j < rdof; j++) s += Li[j] * x[(size_t)roff + j];
+					y[(size_t)roff + i] = s;
 				}
 			};
 			if(serialMomentOps) { for(int h = 0; h < nMom; h++) applyRow((size_t)h); }
