@@ -1,0 +1,19 @@
+# Stream-Function Validation Lane
+
+This directory is the maintained home for stream-function verification,
+cohomology, and benchmark scripts promoted from `examples/stream_function`.
+
+## Contents
+
+- `verify_coil_field_independent.py` checks the designed coil field against
+  independent Radia and NGSolve Biot-Savart paths.
+- `verify_gradpsi_orientation.py` locks the grad-psi loop orientation fix for
+  higher-order shim coils.
+- `cohomology_net_current.py` and `cohomology_generators_whitney.py` validate
+  secular net-current / harmonic-form support on a torus.
+- `bench_*.py` scripts and `benchmarks/` hold reproducible benchmark runners
+  with committed JSON/figure outputs.
+
+Do not restore these scripts under `examples/`. Human-facing narratives belong
+under `docs/stream_function/`; reusable implementation belongs in
+`src/radia/stream_function.py` or panel calc modules.

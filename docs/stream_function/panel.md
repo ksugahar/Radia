@@ -270,7 +270,7 @@ extra lever on top.
 
 ## End-to-end validation vs an independent codebase
 
-`examples/stream_function/verify_coil_field_independent.py` designs an
+`validation_test/stream_function/verify_coil_field_independent.py` designs an
 MRI-gradient-scale coil (cylinder r = 0.15 m, L = 0.5 m, DSV r = 0.05 m) and
 checks the field **two ways** -- the numpy straight-segment Biot-Savart used in
 the designer **and** Radia's C++ `rad.ObjFlmCur` + `rad.Fld` (a separate
@@ -289,7 +289,7 @@ was an O(N²) time + memory wall — **13.3 s and 3.75 GB at N = 15 260 DOF**.
 After the sparse fix the ACA fold is ~0.3 s and peak memory ~0.2 GB at the same
 N; the design now scales **linearly** past 27 000 surface DOF (the remaining
 cost is the Biot-Savart design-matrix assembly, itself linear in N).  Locked by
-[`bench_sf_scaling.py`](../../examples/stream_function/bench_sf_scaling.py)
+[`bench_sf_scaling.py`](../../validation_test/stream_function/bench_sf_scaling.py)
 (+ committed `bench_sf_scaling.json` / `.png`).
 
 ## Validation
