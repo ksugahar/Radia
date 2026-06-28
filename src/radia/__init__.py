@@ -319,3 +319,6 @@ if "UtiDelAll" in globals():
 # radia.SoftIron("yoke.vol", mu_r=) unifies the surface-charge MSC and HDiv-VIM soft-iron paths behind one
 # .vol-driven object; the ObjHexahedron/... primitives become an internal representation detail.
 from .soft_iron import SoftIron  # noqa: E402,F401
+# radia.magnet_box(center, dimensions, magnetization) -- the ObjRecMag substitute on MMMM
+# (surface-charge ObjHexahedron); a fixed-M permanent magnet, no Solve. See CLAUDE.md PM-on-MMMM.
+from .magnet import magnet_box  # noqa: E402,F401
