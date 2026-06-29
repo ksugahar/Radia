@@ -4,8 +4,10 @@ import pytest
 
 from radia_mcp.radia_ngsolve.slot_gates import (
     coenergy_torque_periodic_summary,
+    dq_to_three_phase_currents,
     parallel_wire_force_per_length,
     quarter_wave_directional_coupler_gate,
+    three_phase_currents_to_dq_summary,
     two_port_sparameter_health,
 )
 
@@ -91,3 +93,41 @@ def test_quarter_wave_directional_coupler_gate_for_cst_slot_learning():
     assert gate["z0_odd"] == pytest.approx(20.710678118654755)
     assert gate["s21"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))
     assert gate["s31"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))
+
+
+def test_three_phase_dq_current_handoff_roundtrip_and_phase_sequence_guard():
+    id_ref = -3.0
+    iq_ref = 12.0
+    theta = 0.0
+    abc = dq_to_three_phase_currents(id_ref, iq_ref, theta)
+
+    summary = three_phase_currents_to_dq_summary(
+        abc,
+        theta,
+        expected_id=id_ref,
+        expected_iq=iq_ref,
+    )
+
+    assert abc == pytest.approx({
+        "U": -3.0,
+        "V": 11.892304845413264,
+        "W": -8.892304845413264,
+    })
+    assert summary["status"] == "ok"
+    assert summary["id"] == pytest.approx(id_ref)
+    assert summary["iq"] == pytest.approx(iq_ref)
+    assert summary["zero_sequence_abs"] == pytest.approx(0.0)
+    assert summary["abc_square_sum"] == pytest.approx(1.5 * (id_ref ** 2 + iq_ref ** 2))
+
+    swapped = {"U": abc["U"], "V": abc["W"], "W": abc["V"]}
+    wrong = three_phase_currents_to_dq_summary(
+        swapped,
+        theta,
+        expected_id=id_ref,
+        expected_iq=iq_ref,
+    )
+
+    assert wrong["checks"]["zero_sequence_ok"] is True
+    assert wrong["checks"]["iq_ok"] is False
+    assert wrong["iq"] == pytest.approx(-iq_ref)
+    assert wrong["iq_abs_error"] == pytest.approx(24.0)
