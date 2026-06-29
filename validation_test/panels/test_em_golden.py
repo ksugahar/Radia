@@ -319,8 +319,8 @@ def test_em_panel_rejects_step_coil_input():
     import subprocess
     # Use an EXISTING .step file so the extension-dispatch fires
     # before the file-not-found check.
-    real_step = os.path.join(ROOT, "examples", "cubit_panels",
-                             "accel_magnet", "coil_wire.step")
+    real_step = os.path.join(ROOT, "panels", "samples", "em",
+                             "c_type_dipole", "coil_wire.step")
     if not os.path.isfile(real_step):
         pytest.skip(f"reference .step not present: {real_step}")
 
