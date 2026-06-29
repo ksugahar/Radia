@@ -50,6 +50,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "compare_shape_volume_rows", "shape_volume_crosscheck_summary",
            "shape_name_identity_gate",
            "shape_role_metadata_gate",
+           "shape_transition_role_metadata_gate",
            "shape_mass_property_crosscheck_summary",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
            "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
@@ -1470,6 +1471,131 @@ def shape_role_metadata_gate(
             "Run this after shape_name_identity_gate and before meshing so "
             "build123d bodies retain solver role/material intent across STEP, "
             "Cubit, CST, or Netgen handoff."
+        ),
+    }
+
+
+def shape_transition_role_metadata_gate(
+    rows,
+    *,
+    required_roles=("hex_region", "mesh_transition", "tet_region"),
+    transition_role="mesh_transition",
+    required_transition_kind="pyramid",
+    required_connected_roles=("hex_region", "tet_region"),
+    require_positive_volume=True,
+    source_label="build123d",
+):
+    """Check CAD-side metadata for a future hex-to-tet transition handoff.
+
+    build123d does not create Cubit pyramid elements, but it can preserve the
+    solver intent before STEP/Cubit handoff: which body is the hex-led region,
+    which body is the tet region, and which body is the transition envelope.
+    """
+
+    def as_list(value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    normalized = []
+    for row in list(rows):
+        item = dict(row)
+        name = str(item.get("name", "")).strip()
+        role = str(
+            item.get("role")
+            or item.get("solver_role")
+            or item.get("region_role")
+            or ""
+        ).strip()
+        material = str(
+            item.get("material")
+            or item.get("material_name")
+            or item.get("mat")
+            or ""
+        ).strip()
+        transition_kind = str(
+            item.get("transition_kind")
+            or item.get("mesh_transition_kind")
+            or ""
+        ).strip()
+        connected_roles = as_list(
+            item.get("connects_roles")
+            or item.get("connected_roles")
+            or item.get("transition_between_roles")
+            or item.get("transition_between")
+        )
+        volume = item.get("volume")
+        normalized.append({
+            "name": name,
+            "role": role,
+            "material": material,
+            "transition_kind": transition_kind,
+            "connected_roles": connected_roles,
+            "volume": None if volume is None else float(volume),
+            "source_row": item,
+        })
+
+    names = [row["name"] for row in normalized if row["name"]]
+    roles = {row["role"] for row in normalized if row["role"]}
+    required_role_set = {str(role).strip() for role in required_roles if str(role).strip()}
+    connected_role_set = {str(role).strip() for role in required_connected_roles if str(role).strip()}
+    transition_rows = [row for row in normalized if row["role"] == transition_role]
+    transition_kinds = {row["transition_kind"] for row in transition_rows if row["transition_kind"]}
+    connected_roles_union = {
+        role for row in transition_rows for role in row["connected_roles"] if role
+    }
+    rows_missing_material = [
+        row["name"] for row in normalized if row["name"] and not row["material"]
+    ]
+    rows_missing_volume = [
+        row["name"] for row in normalized if row["name"] and row["volume"] is None
+    ]
+    rows_nonpositive_volume = [
+        row["name"]
+        for row in normalized
+        if row["name"] and row["volume"] is not None and row["volume"] <= 0.0
+    ]
+    missing_required_roles = sorted(required_role_set - roles)
+    duplicate_names = sorted(
+        name for name, count in Counter(names).items() if count > 1
+    )
+    checks = {
+        "names_present": len(names) == len(normalized),
+        "names_unique": not duplicate_names,
+        "required_roles_present": not missing_required_roles,
+        "transition_row_present": bool(transition_rows),
+        "transition_kind_recorded": bool(transition_kinds),
+        "transition_kind_matches": transition_kinds == {str(required_transition_kind)},
+        "transition_connects_required_roles": connected_role_set.issubset(connected_roles_union),
+        "all_rows_have_material": not rows_missing_material,
+        "all_rows_have_volume": not rows_missing_volume,
+        "all_rows_have_positive_volume": not rows_nonpositive_volume if require_positive_volume else True,
+    }
+    return {
+        "policy": "build123d_hex_tet_transition_role_metadata_gate",
+        "source_label": str(source_label),
+        "n_rows": len(normalized),
+        "names": sorted(names),
+        "duplicate_names": duplicate_names,
+        "roles": sorted(roles),
+        "required_roles": sorted(required_role_set),
+        "missing_required_roles": missing_required_roles,
+        "transition_role": str(transition_role),
+        "transition_kinds": sorted(transition_kinds),
+        "required_transition_kind": str(required_transition_kind),
+        "connected_roles": sorted(connected_roles_union),
+        "required_connected_roles": sorted(connected_role_set),
+        "rows_missing_material": sorted(rows_missing_material),
+        "rows_missing_volume": sorted(rows_missing_volume),
+        "rows_nonpositive_volume": sorted(rows_nonpositive_volume),
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Run this on build123d assembly metadata before handing a future "
+            "hex+tet model to Cubit; the pyramid is a mesh transition contract, "
+            "not a build123d primitive requirement."
         ),
     }
 
