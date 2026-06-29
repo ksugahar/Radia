@@ -78,6 +78,8 @@ document = [
     "Pillow>=10.0",
     "matplotlib>=3.8",
     "requests>=2.0",
+    "edge-tts>=6.1",
+    "pywin32>=306; platform_system == 'Windows'",
 ]
 # All MCP servers including the radia-coupled knowledge base.
 full = [
