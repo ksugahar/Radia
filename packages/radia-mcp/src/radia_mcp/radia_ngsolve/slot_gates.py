@@ -319,6 +319,109 @@ def three_phase_currents_to_dq_summary(
     return payload
 
 
+def spwm_snapshot_current_handoff_summary(
+    id_current,
+    iq_current,
+    sample_count,
+    theta0_rad=0.0,
+    sample_offset_fraction=0.5,
+    carrier_ratio=None,
+    phases=("U", "V", "W"),
+    tol=1.0e-12,
+):
+    """Build and check a balanced current snapshot table for FEMM/static solves.
+
+    SPWM and timer details live in the drive/control layer, but each FEM
+    snapshot still receives one balanced three-phase current row.  This helper
+    samples one electrical period, converts dq -> U/V/W, immediately recovers
+    dq, and checks zero-sequence, RMS, and phase-order-sensitive round-trip
+    invariants before a solver-specific circuit-current API is called.
+    """
+
+    n = int(sample_count)
+    if n < 3:
+        raise ValueError("sample_count must be at least 3")
+    d = float(id_current)
+    q = float(iq_current)
+    offset = float(sample_offset_fraction)
+    theta0 = float(theta0_rad)
+    tolerance = float(tol)
+    if tolerance < 0.0:
+        raise ValueError("tol must be non-negative")
+    carrier = None if carrier_ratio is None else float(carrier_ratio)
+    if carrier is not None and carrier <= 0.0:
+        raise ValueError("carrier_ratio must be positive when provided")
+
+    rows = []
+    id_errors = []
+    iq_errors = []
+    zero_sequence = []
+    square_errors = []
+    phase_squares = {phase: [] for phase in phases}
+    for index in range(n):
+        theta = theta0 + 2.0 * math.pi * (index + offset) / n
+        currents = dq_to_three_phase_currents(d, q, theta, phases=phases)
+        dq = three_phase_currents_to_dq_summary(
+            currents,
+            theta,
+            expected_id=d,
+            expected_iq=q,
+            phases=phases,
+            tol=tolerance,
+        )
+        id_errors.append(dq["id_abs_error"])
+        iq_errors.append(dq["iq_abs_error"])
+        zero_sequence.append(dq["zero_sequence_abs"])
+        square_errors.append(dq["abc_vs_dq_square_sum_error"])
+        for phase in phases:
+            phase_squares[phase].append(currents[phase] * currents[phase])
+        rows.append({
+            "sample": index,
+            "theta_e_rad": theta,
+            "theta_e_deg": math.degrees(theta),
+            "currents": currents,
+            "dq": {key: dq[key] for key in ("id", "iq", "i0", "status")},
+        })
+
+    amplitude = math.hypot(d, q)
+    expected_phase_rms = amplitude / math.sqrt(2.0)
+    phase_rms = {
+        phase: math.sqrt(sum(values) / n)
+        for phase, values in phase_squares.items()
+    }
+    phase_rms_errors = {
+        phase: abs(value - expected_phase_rms)
+        for phase, value in phase_rms.items()
+    }
+    checks = {
+        "dq_roundtrip_ok": max(id_errors + iq_errors) <= tolerance,
+        "zero_sequence_ok": max(zero_sequence) <= tolerance,
+        "abc_square_sum_ok": max(square_errors) <= tolerance,
+        "phase_rms_ok": max(phase_rms_errors.values()) <= max(tolerance, 1.0e-12 * max(1.0, expected_phase_rms)),
+    }
+    return {
+        "policy": "spwm_snapshot_current_handoff_gate",
+        "id": d,
+        "iq": q,
+        "current_amplitude": amplitude,
+        "sample_count": n,
+        "theta0_rad": theta0,
+        "sample_offset_fraction": offset,
+        "carrier_ratio": carrier,
+        "phase_order": list(phases),
+        "expected_phase_rms": expected_phase_rms,
+        "phase_rms": phase_rms,
+        "max_phase_rms_abs_error": max(phase_rms_errors.values()),
+        "max_id_abs_error": max(id_errors),
+        "max_iq_abs_error": max(iq_errors),
+        "max_zero_sequence_abs": max(zero_sequence),
+        "max_abc_square_sum_error": max(square_errors),
+        "checks": checks,
+        "rows": rows,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+    }
+
+
 def dq_current_from_gamma_deg(current, gamma_deg):
     """Return ``(id, iq)`` for an amplitude-invariant motor current angle.
 

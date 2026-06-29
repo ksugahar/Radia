@@ -14,6 +14,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     parallel_wire_force_per_length,
     pm_recoil_demag_step_summary,
     quarter_wave_directional_coupler_gate,
+    spwm_snapshot_current_handoff_summary,
     three_phase_currents_to_dq_summary,
     two_port_sparameter_health,
 )
@@ -156,6 +157,30 @@ def test_three_phase_dq_current_handoff_roundtrip_and_phase_sequence_guard():
     assert wrong["checks"]["iq_ok"] is False
     assert wrong["iq"] == pytest.approx(-iq_ref)
     assert wrong["iq_abs_error"] == pytest.approx(24.0)
+
+
+def test_spwm_snapshot_current_handoff_samples_one_electrical_period():
+    summary = spwm_snapshot_current_handoff_summary(
+        id_current=-2.5,
+        iq_current=11.0,
+        sample_count=24,
+        sample_offset_fraction=0.5,
+        carrier_ratio=12,
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["policy"] == "spwm_snapshot_current_handoff_gate"
+    assert summary["sample_count"] == 24
+    assert summary["carrier_ratio"] == pytest.approx(12.0)
+    assert summary["current_amplitude"] == pytest.approx(math.hypot(-2.5, 11.0))
+    assert summary["expected_phase_rms"] == pytest.approx(math.hypot(-2.5, 11.0) / math.sqrt(2.0))
+    assert summary["max_id_abs_error"] < 1.0e-14
+    assert summary["max_iq_abs_error"] < 1.0e-14
+    assert summary["max_zero_sequence_abs"] < 1.0e-14
+    assert summary["max_abc_square_sum_error"] < 1.0e-13
+    assert summary["max_phase_rms_abs_error"] < 1.0e-14
+    assert summary["rows"][0]["theta_e_deg"] == pytest.approx(7.5)
+    assert summary["rows"][0]["dq"]["status"] == "ok"
 
 
 def test_dq_torque_table_health_closes_jmag_map_column_contract():
