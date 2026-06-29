@@ -310,7 +310,7 @@ def _charge_basis_curved(fes, quad):
 
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
-                      inner_quad=None, curve_order=None, curve_gauss=8):
+                      inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager.
@@ -355,7 +355,16 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # O(quad^6) but only on NEAR pairs (far pairs keep far_quad); intorder OVERRIDES (intorder < 2*(3p)-1 may be
     # NON-PSD -- use only for a fast demag-factor estimate, NEVER for an energy/eigenvalue solve).  See
     # tests/feec/test_hdiv_vim_psd.py.
-    quad = max(p + 2, (intorder + 1) // 2) if intorder is not None else max(3 * p, 4)
+    # DEFAULT depends on the USE (2026-06-30).  The LINEAR demag only needs the 3*p PSD FLOOR (RT1 -> quad=3):
+    # that makes the NEAR build ~1.8-2.1x cheaper (the near U-list is 98% of the build = the dominant lever) and
+    # is VALIDATED to preserve demag (7e-6), per-element leak + magnetic moment, and PSD (min eig ~0).  The
+    # NONLINEAR energy-Newton KEEPS the +1 margin (max(3*p,4) -> quad=4 for RT1): the energy HESSIAN is ill-
+    # conditioned right at the 3*p PSD floor (min eig ~0), so at DEEP saturation quad=3 still converges to
+    # M->Msat but takes ~2x more Newton iters (195 vs <100, golden test_hdiv_vim_energy_newton) -- exactly the
+    # comment above's "harmless for the linear solve, costly for the ENERGY/eigenvalue use of N".  intorder
+    # still overrides for an explicit choice.
+    quad = (max(p + 2, (intorder + 1) // 2) if intorder is not None
+            else (max(3 * p, 4) if nonlinear else 3 * p))
     if curve_order is not None:
         # CURVED (isoparametric P2) Gram: curved charge map B (reference-frame change-of-basis) + the C++
         # curved-Duffy charge Gram.  Only P2 is wired (the C++ CurvedTet/TriPotential are P2); the mesh must
