@@ -11,8 +11,11 @@ Read this when:
 
 Production module: ``radia.stream_function`` (src/radia/stream_function.py),
 C++ core src/core/rad_stream_function.cpp.  ACA+ is delegated to the in-repo
-HACApK C library (cHACApK_acaplus).  Docs: docs/stream_function.md.  Examples:
-examples/stream_function/.  Tests: tests/test_stream_function.py.
+HACApK C library (cHACApK_acaplus).  Docs:
+docs/stream_function.md plus the result-saved docs/stream_function notebooks.
+Demo source/result records are cataloged by docs/stream_function/
+examples_catalog.ipynb; validation runners live under validation_test/
+stream_function.  Tests: tests/test_stream_function.py.
 
 The MCP server exposes this via ``streamfunction(topic=...)`` on the
 radia-streamfunction server (moved from radia-ngsolve aca_tsvd in 2026-06).
@@ -211,9 +214,9 @@ CMA-ES is for continuous, mid-dimension (10-300) BBO; cast int/categorical with
 care.  Use official `optuna/optuna-mcp` or plain Optuna APIs for sampler
 choice, multi-objective (NSGA-II), pruning, and lab BBO recipes.
 
-Example: examples/stream_function/demo_cmaes_magnet_design.py optimises 16
-magnetization angles for a uniform transverse field (16-D CMA-ES, ~3x objective
-reduction).  Practical note (magnetics): the planar-array field operator is
+Example: the gallery/catalog record ``demo_cmaes_magnet_design.py`` optimises
+16 magnetization angles for a uniform transverse field (16-D CMA-ES, ~3x
+objective reduction).  Practical note (magnetics): the planar-array field operator is
 either well-conditioned (close sensors -> regularisation idle) or numerically
 rank ~1 (far sensors -> reconstruction hopeless), so the natural CMA-ES use is
 nonlinear design (angles/geometry), while (ACA+)+TSVD owns the linear amplitude
@@ -372,8 +375,9 @@ Value Decomposition subfolder = the Abe / NESCOIL / TSVD line).
 ACA_TSVD_WORKFLOW = r"""
 # End-to-end workflow: SF design -> CAD(STEP) -> PEEC -> field
 
-The stream function solve is only the first stage.  examples/stream_function/
-carries it all the way to a manufacturable, field-verified conductor:
+The stream function solve is only the first stage.  The result-saved gallery and
+catalog records carry it all the way to a manufacturable, field-verified
+conductor:
 
 ## 1D axisymmetric -- demo_coil_design_gz.py (cylindrical Gz gradient)
 Target Bz = Gz*z is axisymmetric -> surface current is purely azimuthal -> psi
@@ -532,7 +536,7 @@ Gx fingerprint single-stroke = DONE (2026-05-30..31,
 
   Implemented as ``single_stroke_field_aware_phi_z`` +
   ``_kuijpers_lobe_order`` + ``single_stroke_{,lobe_,kuijpers_,nn_blend_}
-  chain_phi_z`` in ``examples/stream_function/demo_sf_to_peec_gx.py``.
+  chain_phi_z`` in the ``demo_sf_to_peec_gx.py`` gallery/catalog record.
 
   **The HARD-tier "16 % ceiling" was a kuijpers-method ARTIFACT, not a
   fundamental bound** -- the connection METHOD, not just the SF design,
@@ -1160,7 +1164,7 @@ Five chain attempts that REDUCED field accuracy (Gx, kuijpers 16.24 % ref):
 
 ## 5. Demo file ledger
 
-All under ``examples/stream_function/``:
+Demo records cataloged by ``docs/stream_function/examples_catalog.ipynb``:
 
   | File                                 | Role                                   | Best RMS | Path-A |
   | ------------------------------------ | -------------------------------------- | -------- | ------ |
@@ -1701,8 +1705,7 @@ work shrinks to a few matvecs.
 
 ## IRLS for L_inf on top of the cache
 
-``solve_linf_irls`` in
-``examples/stream_function/demo_planar_uniform_fem_psi_advanced.py``
+``solve_linf_irls`` in the ``demo_planar_uniform_fem_psi_advanced.py`` record
 rebuilds S^(k) each IRLS iter (vertex weights that depend on
 |grad psi^(k-1)|) but ALWAYS folds into the SAME ACA+TSVD base:
 
@@ -1726,7 +1729,7 @@ re-factorising A.
 
 ## Demo
 
-``examples/stream_function/demo_regularized_aca.py`` exercises all 5
+``demo_regularized_aca.py`` exercises all 5
 modes routed through the cached form (l2 / h1 / h1_sigma /
 inductance_diag / linf_irls) and reports per-mode fold time, solve
 time, continuous residual, single-stroke chain RMS, and best-fit
@@ -1789,7 +1792,7 @@ ONCE and reused across every Optuna trial -- only the cheap fold
 genuine demonstration of the folded form's amortisation (the
 deformation loop cannot show it because A changes there).
 
-Shipped in ``examples/stream_function/demo_reg_hyperparam_aca.py``:
+Shipped in the ``demo_reg_hyperparam_aca.py`` record:
 CMA-ES over a Gaussian conductivity feature
 
     sigma(x, y) = 1 + amp * exp(-((x-cx)^2 + (y-cy)^2)/width)
@@ -1973,7 +1976,7 @@ SHEET-METAL (板金) lever   [2026-06, radia 4.89.1+]
    (out-of-surface lift on the plane, in-surface reroute on the
    cylinder) -- see topic "single_stroke".
 
-DEMOS (examples/stream_function/):
+DEMO RECORDS (docs/stream_function/demo_gallery_results.json):
   demo_pareto_tikhonov_aca.py     -- folded-Tikhonov (homogeneity, peak) front
   demo_pareto_geometry_nsga.py    -- geometry lever + NSGA-II joint front
   demo_pareto_cylinder.py         -- cylinder Gx, length lever (optimum)

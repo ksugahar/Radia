@@ -81,7 +81,7 @@ least-squares decomposed into solid harmonics — the per-`(l,m)` field-RMS
 **purity** (target-harmonic field fraction — the standard gradient-coil
 quality metric) and the largest **contaminant**.  One poly-string table is the
 single source of truth for both target and analysis, so the round-trip is
-exact.  Verified (`examples/stream_function/demo_shim_coil_purity.py`, order 2,
+exact.  Verified (gallery record `demo_shim_coil_purity.py`, order 2,
 confine abe): Gx → pure `X` (purity 1.000, `Z2X` contaminant 7e-6); `Z2` →
 pure `Z2`; the 4th-order `Z4` shim → purity 0.99983 with a named ~1 % `Z3`
 contaminant (high-`l` shims are harder because an `l`-th harmonic's field
@@ -276,7 +276,7 @@ checks the field **two ways** -- the numpy straight-segment Biot-Savart used in
 the designer **and** Radia's C++ `rad.ObjFlmCur` + `rad.Fld` (a separate
 codebase).  They agree to 8–11 digits (uniform 3.5e-11, Gx 1.1e-8); the
 `abe`-confined Gx coil reaches **1.0 %** nonlinearity on the short former,
-cross-validated.  See the [examples README](../../examples/stream_function/README.md).
+cross-validated.  See the [demo ledger](examples.md).
 
 ## Scaling (large surface meshes)
 

@@ -188,22 +188,17 @@ class CommandWorkbench:
         for field in self.field_specs:
             value = getattr(self.spec, field.key)
             widgets[field.key] = self._make_widget(W, field, value)
-        btn_layout = W.Layout(width="150px", height="34px")
-        widgets["build"] = W.Button(
-            description="Build command", button_style="info",
-            icon="wrench", layout=btn_layout,
-        )
+        btn_layout = W.Layout(height="36px", margin="0 8px 0 0")
+        # No FontAwesome icons: they render as red "missing-glyph" marks when the
+        # icon font is not loaded; button_style colours carry the meaning instead.
+        widgets["build"] = W.Button(description="Show command", button_style="info",
+                                    layout=btn_layout)
         widgets["run"] = W.Button(
             description="Run", button_style="success",
-            icon="play", layout=btn_layout,
-        )
-        widgets["cancel"] = W.Button(
-            description="Cancel", button_style="danger",
-            icon="stop", disabled=True, layout=btn_layout,
-        )
-        widgets["spec_cell"] = W.Button(
-            description="Show spec cell", icon="code", layout=btn_layout,
-        )
+            layout=W.Layout(height="36px", width="130px", margin="0 8px 0 0"))
+        widgets["cancel"] = W.Button(description="Cancel", button_style="danger",
+                                     disabled=True, layout=btn_layout)
+        widgets["spec_cell"] = W.Button(description="Show spec cell", layout=btn_layout)
         cfg_style = {"description_width": "80px"}
         widgets["timeout_s"] = W.IntText(
             description="timeout [s]",
@@ -220,9 +215,11 @@ class CommandWorkbench:
         return widgets
 
     def _make_widget(self, W, field: NotebookFieldSpec, value):
-        layout = W.Layout(width=field.width)
-        # Wide description so field labels are not truncated to "Met...".
-        style = {"description_width": "150px"}
+        # The field label is rendered ABOVE the input (HTML, in _build_layout),
+        # so the widget itself carries no built-in description -- this gives the
+        # clean "label on top of a boxed field" look of the panel snapshot.
+        layout = W.Layout(width="auto", margin="0")
+        style = {"description_width": "0px"}
         if field.kind == "dropdown":
             options = list(field.options)
             option_values = [
@@ -231,72 +228,74 @@ class CommandWorkbench:
             ]
             if value not in option_values and option_values:
                 value = option_values[0]
-            return W.Dropdown(
-                description=field.label,
-                options=options,
-                value=value,
-                layout=layout,
-                style=style,
-            )
+            return W.Dropdown(description="", options=options, value=value,
+                              layout=layout, style=style)
         if field.kind == "checkbox":
-            return W.Checkbox(
-                description=field.label, value=bool(value), layout=layout, style=style
-            )
+            return W.Checkbox(description="", value=bool(value), layout=layout,
+                              style=style, indent=False)
         if field.kind == "int":
-            return W.IntText(
-                description=field.label, value=int(value), layout=layout, style=style
-            )
+            return W.IntText(description="", value=int(value), layout=layout, style=style)
         if field.kind == "float":
-            return W.FloatText(
-                description=field.label, value=float(value), layout=layout, style=style
-            )
-        return W.Text(
-            description=field.label, value=str(value), layout=layout, style=style
-        )
+            return W.FloatText(description="", value=float(value), layout=layout, style=style)
+        return W.Text(description="", value=str(value), layout=layout, style=style)
 
     def _build_layout(self, W):
-        by_section: dict[str, list[Any]] = {}
+        # Group fields by section, in the workbench's declared order. Each field
+        # is a small "label-on-top of a boxed input" cell; sections lay them out
+        # in a 3-column grid under an uppercase blue header -- matching the panel
+        # snapshot, but built from the REAL interactive widgets.
+        by_section: dict[str, list[NotebookFieldSpec]] = {}
         for field in self.field_specs:
-            by_section.setdefault(field.section, []).append(self._widgets[field.key])
-        sections = [
-            *self.section_order,
-            *[name for name in by_section if name not in self.section_order],
-        ]
-        children = [
-            W.VBox(by_section[name], layout=W.Layout(gap="4px"))
-            for name in sections
-            if name in by_section
-        ]
-        accordion = W.Accordion(children=children, selected_index=0)
-        for i, name in enumerate([name for name in sections if name in by_section]):
-            accordion.set_title(i, name)
+            by_section.setdefault(field.section, []).append(field)
+        order = [*self.section_order,
+                 *[s for s in by_section if s not in self.section_order]]
+
+        BLUE = "#1a73e8"
+        self._field_wrappers = {}
+        self._section_boxes = {}
+        section_widgets = []
+        for sec in order:
+            if sec not in by_section:
+                continue
+            boxes = []
+            for f in by_section[sec]:
+                lbl = W.HTML(f"<span style='font-size:11px;color:#5f6368;'>{f.label}</span>")
+                box = W.VBox([lbl, self._widgets[f.key]],
+                             layout=W.Layout(margin="0 0 4px 0"))
+                self._field_wrappers[f.key] = box
+                boxes.append(box)
+            grid = W.GridBox(boxes, layout=W.Layout(
+                grid_template_columns="1fr 1fr 1fr", grid_gap="4px 16px",
+                padding="2px 0 8px"))
+            hdr = W.HTML(
+                f"<div style='font-size:11px;font-weight:700;letter-spacing:.05em;"
+                f"text-transform:uppercase;color:{BLUE};border-top:1px solid #eef1f4;"
+                f"padding:9px 0 4px;'>{sec}</div>")
+            secbox = W.VBox([hdr, grid])
+            self._section_boxes[sec] = secbox
+            section_widgets.append(secbox)
+
         header = W.HTML(
-            "<div style='font-size:17px;font-weight:600;color:#202124;"
-            "padding:2px 2px 8px;border-bottom:2px solid #1a73e8;"
-            "margin-bottom:10px;'>"
-            f"{self.title}</div>"
-        )
+            "<div style='background:linear-gradient(90deg,#1a73e8,#4285f4);"
+            "color:#fff;padding:14px 18px;border-radius:10px 10px 0 0;"
+            f"font-size:17px;font-weight:600;'>{self.title}</div>")
+        body = W.VBox(section_widgets, layout=W.Layout(padding="2px 18px 0"))
         action_row = W.HBox(
-            [self._widgets["build"], self._widgets["run"],
+            [self._widgets["run"], self._widgets["build"],
              self._widgets["cancel"], self._widgets["spec_cell"]],
-            layout=W.Layout(gap="8px", padding="8px 0 4px"),
-        )
+            layout=W.Layout(padding="12px 18px 4px"))
         config_row = W.HBox(
             [self._widgets["timeout_s"], self._widgets["run_root"]],
-            layout=W.Layout(gap="12px", padding="2px 0 6px"),
-        )
+            layout=W.Layout(gap="12px", padding="0 18px 8px"))
         if self._output is not None:
             self._output.layout = W.Layout(
                 border="1px solid #e0e0e0", padding="8px",
-                margin="8px 0 0", max_height="340px", overflow="auto",
-            )
+                margin="6px 18px 14px", max_height="320px", overflow="auto")
+        self._refresh_visibility()
         return W.VBox(
-            [header, accordion, action_row, config_row, self._output],
-            layout=W.Layout(
-                border="1px solid #d0d0d0", padding="16px",
-                width="840px", gap="2px",
-            ),
-        )
+            [header, body, action_row, config_row, self._output],
+            layout=W.Layout(border="1px solid #d9dce1", padding="0 0 4px",
+                            width="900px"))
 
     def _wire_widgets(self) -> None:
         for field in self.field_specs:
@@ -319,10 +318,20 @@ class CommandWorkbench:
         if self._widgets is None:
             return
         visible = self._visible_fields()
+        wrappers = getattr(self, "_field_wrappers", {})
         for field in self.field_specs:
-            self._widgets[field.key].layout.display = (
-                "" if field.key in visible else "none"
-            )
+            disp = "" if field.key in visible else "none"
+            target = wrappers.get(field.key) or self._widgets[field.key]
+            target.layout.display = disp
+        # Hide a whole section when none of its fields are visible.
+        secboxes = getattr(self, "_section_boxes", {})
+        if secboxes:
+            by_section: dict[str, list[str]] = {}
+            for f in self.field_specs:
+                by_section.setdefault(f.section, []).append(f.key)
+            for sec, box in secboxes.items():
+                any_vis = any(k in visible for k in by_section.get(sec, []))
+                box.layout.display = "" if any_vis else "none"
         self._widgets["run"].disabled = self._is_running or not self._is_runnable()
 
     def _is_runnable(self) -> bool:

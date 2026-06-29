@@ -12,7 +12,7 @@ empirical complexity tier framework that bounds their performance.
 ## The chain methods
 
 All are in
-[`demo_sf_to_peec_gx.py`](../../examples/stream_function/demo_sf_to_peec_gx.py),
+[`demo_sf_to_peec_gx.py`](examples_catalog.ipynb),
 selectable via
 `--chain-method {field_aware, kuijpers, lobe, greedy, nn_blend}`.
 
@@ -130,7 +130,7 @@ attempts to remove them both FAILED (2026-05-31):
 The only physical way to have NO bridges is for every independent wire to
 be a **closed loop** — i.e. drive each closed contour as its own
 conductor (multiple current feeds).  That is exactly
-[`demo_coil_design_gx.py`](../../examples/stream_function/demo_coil_design_gx.py):
+[`demo_coil_design_gx.py`](examples_catalog.ipynb):
 independent saddle-shaped closed loops, **no bridges, DSV RMS 0.81 %** —
 an order of magnitude better than any single stroke.
 
@@ -380,7 +380,7 @@ class single-stroke; the hard multi-lobe Gx is intrinsically ~2 %**, where
 min-inductance + distort buys manufacturability (half the bend) rather than a
 lower floor.
 
-### Arbitrary curved formers (sphere) — FE-direct ψ ([`demo_sphere_fe_direct.py`](../../examples/stream_function/demo_sphere_fe_direct.py))
+### Arbitrary curved formers (sphere) — FE-direct ψ ([`demo_sphere_fe_direct.py`](examples_catalog.ipynb))
 
 The basis-loop representation needs a structured `(φ, z)` grid, so it is
 stuck on planes and cylinders.  **FE-direct ψ meshes ANY surface** — the
@@ -444,7 +444,7 @@ nested/helix → single stroke; multi-lobe + high precision → multi-wire.
 ### Demonstrated: EASY-tier (planar uniform Bz) to the ~200 ppm class
 
 The established iterative pipeline (in
-[`demo_planar_uniform_fem_psi.py`](../../examples/stream_function/demo_planar_uniform_fem_psi.py))
+[`demo_planar_uniform_fem_psi.py`](examples_catalog.ipynb))
 reaches the few-hundred-ppm class with only a handful of feeds:
 
 ```bash
@@ -545,11 +545,11 @@ Same iteration on basis-loop ψ oscillates 1.7 % → 15 % around the best.
 
 ## Visualising the chain
 
-```bash
-python examples/stream_function/view_sf_coil_gx_gmsh.py --mode contours
-python examples/stream_function/view_sf_coil_gx_gmsh.py --mode chain    # = kuijpers
-python examples/stream_function/view_sf_coil_gx_gmsh.py --mode step
-```
+The visualization modes (`contours`, `chain`, `step`) are tracked by the
+`view_sf_coil_gx_gmsh.py` record in
+[`examples_catalog.ipynb`](examples_catalog.ipynb).  Keep new public
+visualization entry points in docs notebooks or validation runners rather than
+adding a fresh examples command path here.
 
 `--mode contours`: shows the SF design's raw closed contours (no
 connection arcs).  Each contour is a separate Physical Group in GMSH

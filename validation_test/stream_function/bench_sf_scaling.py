@@ -65,10 +65,8 @@ def main():
 
     import sys
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                    "..", "..", "src", "radia"))
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                    "..", "..", "src", "radia", "panels"))
-    import calc_streamfunction as C
+                                    "..", "..", "src"))
+    from radia.panels import calc_streamfunction as C
     from ngsolve import Mesh, H1, specialcf, TaskManager
 
     os.makedirs(args.work_dir, exist_ok=True)

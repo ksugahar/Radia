@@ -1,23 +1,23 @@
 # HDiv-type VIM — productionization roadmap
 
-The HDiv-type VIM method is validated (see [README.md](README.md), feec suite 85/85). This document is
+The HDiv-type VIM method is validated (see [README.md](README.md)). This document is
 the roadmap to make it a **shipped production solver alongside the canonical multipole-moment MMM MSC backend**:
 a clean Radia API for the FEEC H(div) operator, plus parity and speed evidence on the cases where flat
-MSC is already strong and a clear win on curved/high-order cases. Honest scope, milestone-based, with a
+MSC is already strong and a clear win on curved tetrahedral cases. Honest scope, milestone-based, with a
 hard **definition-of-done** (the parity gate).
 
-## Current state (inventory, 2026-06-27)
+## Current state (inventory, 2026-06-29)
 
 | Layer | C++ (compiled, `_radia_pybind.pyd`) | Python-only (prototype) |
 |---|---|---|
-| Charge map B + HDiv mass | structured **hex** (`rad_hdiv_vim.cpp`) | unstructured **tet, hex, wedge** (NGSolve HDiv extraction + polytope analytic Gram, `examples/vim/`) |
-| Coulomb Gram G | **`_ChargeGramHMatrix` analytic charge Gram is the default scalable demag operator**: exact Wilton surface + `PhiTet`/polytope volume entries; tet via `cell_verts/face_verts`, hex/wedge via triangle-soup polytope ctor; IMA image charges folded into the C++ Gram. **`_ChargeGaussHMatrix` is the opt-in Gauss-point backend** (`gram_backend="gauss"`): `G_charge ~= P^T K_point P + sparse near correction`. | dense Python Gram is historical/reference-only; production entry no longer exposes `analytic_gram=` / `wilton_surface=` switches |
-| Scalable Gram H-matrix | **`_ChargeGramHMatrix`** analytic tet/polytope modes, **`_ChargeGaussHMatrix`** point-kernel mode for tet/tri uniform linear solves, `_HDivVimHMatrix` structured hex diagnostics | NGSolve extraction supplies sparse B/Mass/geometry only |
-| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)**; public `hdiv_demag_solve(..., linear_solver="auto")` uses the C++ CG path for scalar uniform linear materials; `linear_solver="hlu"` explicitly factors the tet/no-image system-A H-matrix (`_HDivVimTetSolver`) and applies H-LU once. | scipy GMRES remains for nonlinear, PM-mixed, and per-region orchestration |
+| Charge map B + HDiv mass | C++ kernels support the live RT1 charge/mass path; old structured-hex diagnostics are not public HDiv-VIM scope | unstructured **tet RT1** extraction through NGSolve |
+| Coulomb Gram G | **`_ChargeGramHMatrix` analytic charge Gram is the live scalable demag operator** for tet RT1, including curved P2 geometry. | dense Python / Gauss-point experiments are historical/reference-only |
+| Scalable Gram H-matrix | **`_ChargeGramHMatrix`** analytic tet modes; `_ChargeGaussHMatrix` is retired from the public backend | NGSolve extraction supplies sparse B/Mass/geometry only |
+| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)**; public `hdiv_demag_solve(..., linear_solver="auto")` uses the C++ CG path for scalar uniform linear materials. The old `linear_solver="hlu"` system-A experiment is retired from HDiv-VIM. | scipy GMRES remains for nonlinear and per-region orchestration |
 | Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0-Dscal*M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `hdiv_demag_solve` damped Newton uses the C++ Gram H-matvec |
 | Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
-| Symmetry image method | **C++ `_ChargeGramHMatrix` image masks/signs** (`image=` in `hdiv_demag_solve`) | old dense image prototype retained as research history |
-| **Public Radia API** | `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` and `rad.Solve(demag_backend='hdiv')` dispatch | `build_demag` returns sparse B/Mass/geometry for diagnostics |
+| Symmetry image method | retired from HDiv-VIM | use collocation MMMM for image/symmetry reduced models |
+| **Public Radia API** | `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, order=1)` and `rad.Solve(demag_backend='hdiv')` on tet mesh-backed iron | `build_demag` returns sparse B/Mass/geometry for diagnostics |
 
 TaskManager is the threading substrate.  The shared HACApK build path and the long C++ HDiv solve loops
 stand up/reuse an NGSolve `RegionTaskManager`; direct Python/NGSolve assembly and diagnostic `.matvec()`
@@ -32,33 +32,12 @@ Newton is **measured-not-warranted** — the production Newton converges in 5–
 little). The remaining gap to seal the multipole-moment MMM/HDiv pairing: the M4 production pieces + the broader **speed** parity
 matrix (M0; the nonlinear-Newton case is now measured — 5–6 iters, orchestration negligible).
 
-Progress (2026-06-17): **`rad.Solve(demag_backend='hdiv')` now dispatches the HDiv-VIM** via
-`radia.vim.soft_iron_from_mesh` (mesh↔container registry) + `radia.vim._radsolve.dispatch` — tet
-increment first, then **hex/wedge**. The dense analytic charge Gram (`build_demag(analytic_gram=True)`)
-was generalized from tet/triangle to **any flat-faced convex cell + quad face** (`_core._polytope_potential`
-/ `_cell_hull_tris` / `_face_subtris`: a cell's Newtonian potential is the divergence-theorem sum over its
-convex-hull faces of the SAME exact Wilton triangle potential; a quad face = two flat triangles). All-tet
-meshes are bit-identical to before (the C++ analytic-Gram golden depends on it); hex/wedge take the dense
-analytic path (the scalable C++ `_ChargeGramHMatrix` stays tet-only — `hdiv_demag_solve(scalable=None)`
-auto-selects, `scalable=True` on hex/wedge fail-loud). Verified: hex/wedge cubes demag_z→1/3, hex M_avg
-matches tet `<1%` (linear) / `~1.7%` (nonlinear); `rad.Solve('hdiv')` hex == direct solve to machine
-precision with ObjM write-back. Golden `tests/feec/test_hdiv_vim_hex_wedge.py` (7), example
-`examples/vim/hdiv_demag_hex_wedge.py`. The rad.Solve **container wrapper** is tet+hex (wedge wrapper needs
-an ObjWedge import — the direct `hdiv_demag_solve(wedge)` already solves it). Scalable C++ hex/wedge Gram +
-panel `calc_accel_msc` integration remain before the seal.
-
-Progress (2026-06-27): **Gauss-point H-matrix slice landed.** The new `_ChargeGaussHMatrix`
-builds a HACApK H-matrix over quadrature points with the cheap Laplace kernel, then exposes the
-charge operator as `P^T K_point P + sparse near/self correction`.  The public switch is
-`hdiv_demag_solve(..., gram_backend="gauss")`.  First scope is deliberately narrow:
-tet/triangle charge geometry, no image symmetry, uniform scalar linear material, C++ CG solve.  Validation:
-on a small tet sphere, `gram_backend="gauss"` matches the analytic backend within relative `M_z = 2.3e-3`
-and demag-factor difference `< 2e-3` (`validation_test/feec/test_hdiv_vim_gauss_hmatrix.py`).  It is
-**not yet a speed win on small low-order meshes** because the point cloud has more DOFs than the charge
-space (observed 218 charge DOFs vs 760 point DOFs); its purpose is high-order/curved cases where exact
-analytic pair entries dominate build cost.  `linear_solver="hlu"` is now available as the explicit
-tet/no-image analytic system-A H-LU path; an AMS-style auxiliary-space preconditioner is still open work,
-not completed by this slice.
+Progress (2026-06-29): **scope tightened to TET / RT1 only.** RT0, RT2+, non-tet HDiv, image symmetry,
+permanent-magnet mixing, the Gauss-point backend, and the system-A H-LU path are retired from the public
+HDiv-VIM.  `rad.Solve` keeps the engineering workflow: tet mesh-backed iron routes to HDiv-VIM RT1; hex
+/ wedge mesh-backed iron routes to collocation MMMM in `auto`, and explicit `demag_backend='hdiv'` fails
+loud on non-tet meshes.  This makes the HDiv side small enough to productionize honestly, while the
+collocation MMMM backend owns the broad element/symmetry/mixed-source cases.
 
 ## Definition of done — the parity gate (M0)
 
@@ -70,7 +49,7 @@ handles, measured head-to-head:
 | Linear soft iron (mu_r 10–1e5), convex + non-convex | match shipped MSC to its mesh-converged value | wall-clock within ~2x of MSC (target: faster) |
 | Nonlinear BH iron (cube, C-yoke, real table) | match MSC volume-avg `<1%` (done at prototype level) | within ~2x |
 | Permanent magnet + soft iron (mixed) | match MSC | within ~2x |
-| IMA symmetry 1/4, 1/8 | match the full model | fewer DOF → faster |
+| IMA symmetry 1/4, 1/8 | collocation MMMM responsibility | not HDiv-VIM scope |
 | Distorted meshes (high distortion) | mu_r-independent (done) + correct values | bounded iters (done) |
 | Standard validation set (the lab's MSC golden problems) | parity | parity |
 
@@ -298,20 +277,17 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
   > bought little and was unused (only self-tests + HDiv-VIM research called it). Removed: the
   > `Symmetric H-LDL^T` section of `cHACApK_harith.{c,h}` (1188 + 119 lines), the `_hldlt_self_test*` +
   > `factor_solve_hldlt` pybind, `tests/feec/test_hldlt_*.py` (feec 94 → 81), the hldlt examples.
-  - **DONE (2026-06-27) — explicit system-A H-LU path for the production entry.**
-    `hdiv_demag_solve(..., linear_solver="hlu")` builds `_HDivVimTetSolver` for tet/no-image scalar
-    linear materials, factors `A = M_mass + chi*N` with the existing HACApK H-LU subsystem, and applies
-    it as a one-shot direct/preconditioner path. Golden tests lock the inverse check and the sphere
-    demag solve.  The Gauss-point backend is not wired to this factorization yet; it currently uses
-    the C++ CG material solve.
+  - **RETIRED (2026-06-29) — explicit system-A H-LU path.**
+    `hdiv_demag_solve(..., linear_solver="hlu")` is no longer public HDiv-VIM scope.  The HACApK H-LU /
+    H-ILU subsystem can be reused later as a preconditioner, but the shipped HDiv-VIM contract exposes the
+    RT1 analytic-Gram solve only.
   > The old **H-LDL^T** path remains deleted.  **H-LU / H-ILU remain the live `cHACApK_hlu_*`
   > subsystem** (the rk-truncation tol switches accurate-H-LU ↔ incomplete-H-ILU).  That subsystem is
-  > still load-bearing as the MMM/MSC solver's A_SS preconditioner and now also backs the explicit
-  > HDiv system-A path above.  AMS/auxiliary-space preconditioning is a separate future step.
-- **M4 — curved/high-order + symmetry production + the curved-nonlinear-volume gap.** Wire the
-  `ngsolve.bem` single-layer (curved Gram) + the symmetry image method + a true reduced-DOF symmetry-BC
-  solve into the API. Build the genuine method gap: the curved nonlinear **volume** charge (`phi_tet` on
-  curved cells; `ngsolve.bem` is boundary-only).
+  > still load-bearing as the MMM/MSC solver's A_SS preconditioner.  AMS/auxiliary-space preconditioning
+  > is a separate future step.
+- **M4 — curved tetrahedral production + the curved-nonlinear-volume gap.** Keep the matched curved P2
+  tetrahedral Gram in the production solve.  Symmetry/image production belongs to collocation MMMM, not
+  HDiv-VIM.
 - **M5 — the seal.** HDiv-VIM passes the M0 parity gate on the full matrix -> ship it as a production
   backend with explicit support guarantees. Any default-backend change is a separate decision after the
   parity and speed evidence are in.
