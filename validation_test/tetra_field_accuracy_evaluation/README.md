@@ -101,8 +101,7 @@ Loads results from `evaluate_tetra_field.py` and `ngsolve_reference.py` and crea
 
 ## Related Benchmarks
 
-- `examples/cube_uniform_field/linear/`: Linear material benchmarks
-- `examples/cube_uniform_field/nonlinear/`: Nonlinear material benchmarks
+- `validation_test/cube_uniform_field/`: Linear/nonlinear cube uniform-field benchmark corpus
 
 ## Technical Details
 
