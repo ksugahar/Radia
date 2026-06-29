@@ -41,6 +41,39 @@ The .vol file contains: mesh points, volume elements, surface elements,
 material labels, boundary labels, and curvedelements section (high-order
 curving coefficients). NGSolve reads it without any geometry file.
 
+### Continuous-loop O-grid hex sphere gate
+
+For Coreform/Cubit-led hex validation, a compact live gate is:
+`create sphere radius 1`, `volume 1 scheme sphere`, `volume 1 size 0.25`,
+`mesh volume 1`, `block 1 add volume all`, then export Netgen `.vol` at
+orders 1, 2, and 3.  The expected inventory is 56 hexes and no tet/wedge/
+pyramid elements.  The CAD volume is exactly `4*pi/3`; NGSolve should load
+each `.vol` directly and integrate `CF(1)` with high-order quadrature.  Typical
+2026-06-29 live results were order-1 rel err 0.2336, order-2 rel err 0.00211,
+and order-3 rel err 0.00131.  Do not call `mesh.Curve()` after reading this
+high-order `.vol`; the curving is already baked into the file.
+
+On Windows PowerShell, prefer `coreform_cubit.com -nographics -batch script.py`
+or the lab launcher background path when you need to wait for batch completion
+and capture logs.  `coreform_cubit.exe` can behave as a GUI stub and return
+immediately without running the Python batch script.
+
+### Continuous-loop mapped hex brick volume/area gate
+
+For a planar all-hex sanity check, use `create brick x 2 y 3 z 4`,
+`volume 1 scheme map`, `volume 1 size 0.5`, `mesh volume 1`, and
+`block 1 add volume all`, then `export netgen "... .vol" order 1 overwrite`.
+The expected inventory is 192 hexes and no tet/wedge/pyramid elements.  Cubit's
+CAD volume and summed `get_surface_area(surface_id)` values should be exactly
+24 and 52.  NGSolve should load the exported `.vol` and integrate volume and
+boundary area to machine precision; typical 2026-06-29 live results were
+volume rel err `7.25e-15` and surface-area rel err `2.05e-15`.
+
+Batch-script gotcha: `coreform_cubit.com -nographics -batch script.py` can play
+Python line by line.  Avoid multi-line `dict(...)`, loops, or parenthesized
+blocks in quick validation scripts; write one assignment per physical line or
+use a normal Python process to generate the script.
+
 ## Choose Your Workflow
 
 1. **Is your geometry planar (no curved surfaces)?**

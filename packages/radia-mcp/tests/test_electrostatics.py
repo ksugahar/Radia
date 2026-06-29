@@ -155,6 +155,28 @@ def test_parallel_plate_capacitor_energy_force():
         parallel_plate_capacitor_energy_force(eps_r, area, 0.0, V)
 
 
+def test_parallel_plate_gap_sweep_scaling():
+    eps_r, width_per_m, voltage = 1.0, 0.005, 100.0
+    gaps = [0.0005, 0.001, 0.002]
+    rows = [
+        parallel_plate_capacitor_energy_force(eps_r, width_per_m, gap, voltage)
+        for gap in gaps
+    ]
+
+    fields = [row["electric_field_V_per_m"] for row in rows]
+    caps = [row["C"] for row in rows]
+    forces = [row["force"] for row in rows]
+
+    assert fields[0] == pytest.approx(2.0 * fields[1])
+    assert fields[1] == pytest.approx(2.0 * fields[2])
+    assert caps[0] == pytest.approx(2.0 * caps[1])
+    assert caps[1] == pytest.approx(2.0 * caps[2])
+    assert forces[0] == pytest.approx(4.0 * forces[1])
+    assert forces[1] == pytest.approx(4.0 * forces[2])
+    for gap, row in zip(gaps, rows):
+        assert row["force"] == pytest.approx(row["energy"] / gap)
+
+
 def test_capacitance_gradient_force_matches_parallel_plate_gap_force():
     eps_r, area, gap, voltage = 2.5, 2.0e-4, 5.0e-4, 120.0
     plate = parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage)
