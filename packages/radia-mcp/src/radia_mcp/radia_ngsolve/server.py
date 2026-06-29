@@ -1898,6 +1898,8 @@ def standalone_panels(topic: str = "") -> str:
     Topics:
       quick_start      -- current notebook route
       four_panels      -- active notebook workbenches
+      build_notebook_gui -- construction recipe for new notebook GUIs
+      cubit_panels_migration -- examples/cubit_panels promotion route
       vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
       vs_cubit         -- notebook route vs Cubit export/plugin boundary
       ih_methods       -- IH through `radia_ih.ipynb`

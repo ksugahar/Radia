@@ -3,7 +3,8 @@ Panel Review MCP Server (radia_mcp.panel_review)
 
 Surfaces the current Radia notebook panel review contract.  The old PySide6
 panel review chain is retired; this server keeps the historical topic names as
-compatibility redirects to the Jupyter notebook workbench route.
+compatibility redirects to the Jupyter notebook workbench route.  It also
+serves the construction recipe for new Jupyter notebook GUIs.
 
 Why an MCP server (rather than just SKILL.md files):
 
@@ -42,7 +43,7 @@ mcp = FastMCP("mcp-server-panel-review")
 @mcp.tool()
 def panel_review(topic: str = "overview") -> str:
     """
-    Get Radia notebook panel review documentation.
+    Get Radia notebook panel review / construction documentation.
 
     Historical topic names remain accepted, but all topics now point at the
     notebook workbench contract: DesignSpec, *_notebook Workbench wiring,
@@ -51,6 +52,9 @@ def panel_review(topic: str = "overview") -> str:
     Args:
         topic: Documentation topic.  Options:
             "overview"            - Notebook panel review contract
+            "build_notebook_gui"  - Construction recipe for new notebook GUIs
+            "presentation_template" - RADIA-IH presentation shell pattern
+            "cubit_panels_migration" - Routing plan for examples/cubit_panels
             "5_skills_chain"      - Compatibility alias to notebook contract
             "13_checks"           - Compatibility alias to notebook contract
             "bug_catalogue"       - Compatibility alias to notebook contract
@@ -87,6 +91,32 @@ def review_a_panel(panel_path: str = "src/radia/radia_ih.py") -> str:
     )
 
 
+@mcp.prompt()
+def build_notebook_gui(
+    app_name: str = "ih",
+    source_examples: str = "examples/cubit_panels/inductance",
+) -> str:
+    """Plan and implement a Radia Jupyter notebook GUI workbench."""
+    return (
+        f"Please build or upgrade the Radia notebook GUI for app={app_name!r} "
+        f"from source material under {source_examples}.\n\n"
+        "Use `panel_review(topic='build_notebook_gui')` first.  If the source "
+        "is `examples/cubit_panels`, also use "
+        "`panel_review(topic='cubit_panels_migration')`.\n\n"
+        "Required shape:\n"
+        "1. Move reusable computation into `src/` or a headless `calc_*.py`.\n"
+        "2. Keep heavy checks in `validation_test/`.\n"
+        "3. Create/update `<App>DesignSpec`, `<App>Workbench`, and "
+        "`src/radia/panels/notebooks/radia_<app>.ipynb`.\n"
+        "4. Save runs as `command.txt`, `run.log`, and `result.json` with "
+        "`radia_result.v2` metadata.\n"
+        "5. Run `python -m pytest validation_test/panels/"
+        "test_notebook_workbench.py -q`.\n"
+        "6. Do not add PySide6/PyQt to normal Radia Python; Cubit's own "
+        "toolbar runtime is the only PySide exception.\n"
+    )
+
+
 # ============================================================
 # Entry point
 # ============================================================
@@ -98,8 +128,8 @@ def review_a_panel(panel_path: str = "src/radia/radia_ih.py") -> str:
 register_status_tool(
     mcp,
     server_name="mcp-server-panel-review",
-    description="Radia notebook panel review contract (DesignSpec, "
-                "Workbench, result artifacts, no-PySide gate)",
+    description="Radia notebook panel review/construction contract "
+                "(DesignSpec, Workbench, result artifacts, no-PySide gate)",
     subpackage="radia_mcp.panel_review",
     related_servers=["meta"],
     optional_deps=[],
