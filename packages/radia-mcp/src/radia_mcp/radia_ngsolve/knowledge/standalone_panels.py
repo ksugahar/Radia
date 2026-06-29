@@ -105,8 +105,10 @@ tests as the canonical contract.
 ## cubit_panels_migration -- examples/cubit_panels route
 ============================================================
 
-`examples/cubit_panels` is not a permanent destination.  Before deleting it,
-move its scripts into one of these lanes:
+`examples/cubit_panels` is not a permanent destination.  The IH inductance
+scripts have moved to `validation_test/induction_heating/cubit_panels_legacy`.
+Before deleting the remaining accel-magnet material or any legacy IH copy, move
+the owned code into one of these lanes:
 
 - accel magnet geometry / coil builders -> `src/radia` EM APIs or
   `src/radia/panels/calc_accel_*.py`
@@ -118,7 +120,7 @@ move its scripts into one of these lanes:
 - Cubit journals, `.geo`, and BH tables -> protected assets until all
   references point at the new owner
 
-For the detailed 35-script routing plan, call:
+For the detailed original 35-script routing plan, call:
 
 ```
 panel_review(topic="cubit_panels_migration")

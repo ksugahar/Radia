@@ -41,7 +41,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                '../../examples/cubit_panels/inductance'))
+                                '../../validation_test/induction_heating/cubit_panels_legacy'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
 
 SIGMA_MAP = {'copper': 5.8e7, 'aluminum': 3.5e7, 'steel': 2e6}

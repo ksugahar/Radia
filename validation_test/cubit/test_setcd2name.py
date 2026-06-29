@@ -12,7 +12,7 @@ from tests.cubit.cubit_202512_helpers import (
 MODEL = os.path.abspath(
     os.path.join(
         os.path.dirname(__file__),
-        "../../examples/cubit_panels/inductance/inductance_torus.cub5",
+        "../../validation_test/induction_heating/cubit_panels_legacy/inductance_torus.cub5",
     )
 )
 

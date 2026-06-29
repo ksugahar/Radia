@@ -22,7 +22,7 @@ which has block ``coil`` (the swept gapped torus), block ``workpiece``
 ``sibc`` on the coil-side workpiece interface (required by FEM-Kelvin).
 
 Run:
-    python examples/cubit_panels/inductance/compare_bem_coupled_vs_fem_kelvin.py
+    python validation_test/induction_heating/cubit_panels_legacy/compare_bem_coupled_vs_fem_kelvin.py
 
 Expected output (recorded 2026-04-12 on the IH sample):
 

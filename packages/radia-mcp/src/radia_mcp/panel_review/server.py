@@ -94,7 +94,7 @@ def review_a_panel(panel_path: str = "src/radia/radia_ih.py") -> str:
 @mcp.prompt()
 def build_notebook_gui(
     app_name: str = "ih",
-    source_examples: str = "examples/cubit_panels/inductance",
+    source_examples: str = "validation_test/induction_heating/cubit_panels_legacy",
 ) -> str:
     """Plan and implement a Radia Jupyter notebook GUI workbench."""
     return (
