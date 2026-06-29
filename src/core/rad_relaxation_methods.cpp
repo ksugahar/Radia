@@ -2527,62 +2527,47 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 	});
 
-	if(kktNLoop > 0)
-	{
-		// LOOP-FREE KKT / SCHUR with the EXACT dense A^-1 (factor A ONCE, solve the augmented [b | Q]):
-		//   x0 = A^-1 b ;  W = A^-1 Q ;  S = Q^T W ;  l = S^-1 (Q^T x0) ;  x = x0 - W l  ->  Q^T x = 0.
-		// dgesv (nrhs = 1 + nLoop) factors A and solves all RHS in one shot; column-major B = [b | Q].
-		const int nrhsK = 1 + kktNLoop;
-		std::vector<double> Bmat((size_t)totalDOF * (size_t)nrhsK, 0.0);
-		for(int d = 0; d < totalDOF; d++) Bmat[(size_t)d] = RHS[(size_t)d];                       // col 0 = b
-		for(int a = 0; a < kktNLoop; a++)
-			for(int d = 0; d < totalDOF; d++)
-				Bmat[(size_t)d + (size_t)(1 + a) * (size_t)totalDOF] = kktQ[(size_t)d * kktNLoop + a];  // col 1+a = Q[:,a]
 		{
+			// dgesv overwrites SystemMatrix with LU factors and RHS with the solution x0 = A^-1 b
 			ngcore::SuspendTaskManager stm;
 			radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
-			int nr = nrhsK;
-			dgesv_(&totalDOF, &nr, SystemMatrix.data(), &totalDOF, ipiv.data(), Bmat.data(), &totalDOF, &info);
+			dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
 		}
-		if(info != 0) return -1;
-		// S = Q^T W (column-major for LAPACK: S[a + b*nLoop]),  rhsL = Q^T x0
-		std::vector<double> Smat((size_t)kktNLoop * (size_t)kktNLoop, 0.0), rhsL((size_t)kktNLoop, 0.0);
-		for(int a = 0; a < kktNLoop; a++)
+		if(info != 0) return -1;  // Singular matrix
+		if(kktNLoop > 0)
 		{
-			for(int b2 = 0; b2 < kktNLoop; b2++)
+			// LOOP-FREE by ORTHOGONAL projection of x0 onto the co-loop space (EXPERIMENT 2026-06-30):
+			//   x = x0 - Q (Q^T Q)^-1 Q^T x0  ->  Q^T x = 0.  The removed part is in col(Q) = field-null, so
+			// the EXTERNAL field is preserved EXACTLY -- unlike the A-weighted KKT correction A^-1 Q l (A^-1 Q
+			// lies OUTSIDE col(Q) for the moment-Galerkin operator -> ~0.8% field shift).  Tests whether method-0
+			// (direct) post-solve projection stays nonlinear-safe (method-1 design-a fought the warm-start).
+			std::vector<double> G((size_t)kktNLoop * (size_t)kktNLoop, 0.0), c((size_t)kktNLoop, 0.0);
+			for(int a = 0; a < kktNLoop; a++)
 			{
+				for(int b2 = 0; b2 < kktNLoop; b2++)
+				{
+					double s = 0.0;
+					for(int d = 0; d < totalDOF; d++) s += kktQ[(size_t)d * kktNLoop + a] * kktQ[(size_t)d * kktNLoop + b2];
+					G[(size_t)a + (size_t)b2 * (size_t)kktNLoop] = s;
+				}
 				double s = 0.0;
-				for(int d = 0; d < totalDOF; d++)
-					s += kktQ[(size_t)d * kktNLoop + a] * Bmat[(size_t)d + (size_t)(1 + b2) * (size_t)totalDOF];
-				Smat[(size_t)a + (size_t)b2 * (size_t)kktNLoop] = s;
+				for(int d = 0; d < totalDOF; d++) s += kktQ[(size_t)d * kktNLoop + a] * RHS[(size_t)d];
+				c[(size_t)a] = s;
 			}
-			double s = 0.0;
-			for(int d = 0; d < totalDOF; d++) s += kktQ[(size_t)d * kktNLoop + a] * Bmat[(size_t)d];
-			rhsL[(size_t)a] = s;
+			std::vector<int> gIpiv((size_t)kktNLoop, 0);
+			int nl = kktNLoop, oneI = 1, infoG = 0; char trN = 'N';
+			dgetrf_(&nl, &nl, G.data(), &nl, gIpiv.data(), &infoG);
+			if(infoG == 0)
+			{
+				dgetrs_(&trN, &nl, &oneI, G.data(), &nl, gIpiv.data(), c.data(), &nl, &infoG);
+				for(int d = 0; d < totalDOF; d++)
+				{
+					double s = 0.0;
+					for(int a = 0; a < kktNLoop; a++) s += kktQ[(size_t)d * kktNLoop + a] * c[(size_t)a];
+					RHS[(size_t)d] -= s;
+				}
+			}
 		}
-		// l = S^-1 rhsL (dense LU on the tiny nLoop x nLoop Schur)
-		std::vector<int> sIpiv((size_t)kktNLoop, 0);
-		int nl = kktNLoop, oneI = 1, infoS = 0; char trN = 'N';
-		dgetrf_(&nl, &nl, Smat.data(), &nl, sIpiv.data(), &infoS);
-		if(infoS != 0) return -1;
-		dgetrs_(&trN, &nl, &oneI, Smat.data(), &nl, sIpiv.data(), rhsL.data(), &nl, &infoS);
-		// x = x0 - W l, written back into RHS (the existing line-search / FlatMagn path consumes RHS)
-		for(int d = 0; d < totalDOF; d++)
-		{
-			double s = Bmat[(size_t)d];
-			for(int a = 0; a < kktNLoop; a++) s -= Bmat[(size_t)d + (size_t)(1 + a) * (size_t)totalDOF] * rhsL[(size_t)a];
-			RHS[(size_t)d] = s;
-		}
-	}
-	else
-	{
-		// dgesv overwrites SystemMatrix with LU factors and RHS with solution
-		ngcore::SuspendTaskManager stm;
-		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
-		dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
-	}
-
-	if(info != 0) return -1;  // Singular matrix
 #else
 	// Fallback: transpose to row-major and use SolveLU_Flat
 	// Each (i,j) pair touched once (j>i); safe to parallelize over outer i.
