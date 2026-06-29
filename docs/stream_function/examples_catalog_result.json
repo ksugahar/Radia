@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-29T04:59:11Z",
+  "generated_at_utc": "2026-06-29T05:13:45Z",
   "notebook": "docs/stream_function/examples_catalog.ipynb",
-  "notebook_sha256": "ca30298186877d3bb97cf8546b398479ecab71f59c6b087bfae4086d042a50f1",
+  "notebook_sha256": "73a692daad338579b28cdcdb49e7a9e392e2e19446f6503c6e74c84cbe1ca42b",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -34,9 +34,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 576,
-          "text_sha256": "9d928b48d8e68b0b12ded0b2028b20a51a9cacb50b5657948fd5264ea4453dbb",
-          "text_preview": "{\n  \"script_count\": 26,\n  \"artifact_count\": 45,\n  \"lane_counts\": {\n    \"docs_fusion_showcase\": 3,\n    \"docs_helper_or_tooling\": 1,\n    \"docs_regularization_showcase\": 7,\n    \"docs_showcase_candidate\": 8,\n    \"docs_showcase_plus_src_api_review\": 2,\n    \"docs_theory_showcase\": 5\n  },\n  \"subdir_counts\": {\n    \".\": 26\n  },\n  \"protected_script_count\": 26,\n  \"promoted_validation_lane\": \"verify/cohomology/bench scripts moved to validation_test/stream_function\",\n  \"examples_stream_function_py_remaining\": 0,\n  \"docs_local_helper_count\": 25,\n  \"validation_test_script_count\": 1\n}\n",
+          "text_chars": 673,
+          "text_sha256": "0e883207372b3f1c5a2079b7023a92a7ee0449d3bcd5e3fd6a3a4dea3714835f",
+          "text_preview": "{\n  \"script_count\": 26,\n  \"artifact_count\": 45,\n  \"lane_counts\": {\n    \"docs_fusion_showcase\": 3,\n    \"docs_helper_or_tooling\": 1,\n    \"docs_regularization_showcase\": 7,\n    \"docs_showcase_candidate\": 8,\n    \"docs_showcase_plus_src_api_review\": 2,\n    \"docs_theory_showcase\": 5\n  },\n  \"subdir_counts\": {\n    \".\": 26\n  },\n  \"protected_script_count\": 26,\n  \"promoted_validation_lane\": \"verify/cohomology/bench scripts moved to validation_test/stream_function\",\n  \"examples_stream_function_py_remaining\": 0,\n  \"docs_local_helper_count\": 25,\n  \"validation_test_script_count\": 1,\n  \"examples_stream_function_tracked_artifacts_remaining\": 0,\n  \"docs_result_artifact_count\": 45\n}\n",
           "text_truncated": false
         }
       ]

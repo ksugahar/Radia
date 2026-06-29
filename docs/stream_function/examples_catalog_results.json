@@ -15,7 +15,8 @@
     "notebook": "result-saving catalog notebook before deleting examples",
     "json": "full source text, SHA-256 hashes, result/media artifact hashes, protected references, and migration lane",
     "deletion_gate": "delete examples only after docs/src/validation_test/panel references are migrated",
-    "current_destinations": "Archive path records preserve the pre-migration examples source; current_path/current_lane record the post-migration destination."
+    "current_destinations": "Archive path records preserve the pre-migration examples source; current_path/current_lane record the post-migration destination.",
+    "result_artifacts": "Tracked stream_function result/media artifacts now live under docs/stream_function beside the result-saved notebooks."
   },
   "summary": {
     "script_count": 26,
@@ -35,7 +36,9 @@
     "promoted_validation_lane": "verify/cohomology/bench scripts moved to validation_test/stream_function",
     "examples_stream_function_py_remaining": 0,
     "docs_local_helper_count": 25,
-    "validation_test_script_count": 1
+    "validation_test_script_count": 1,
+    "examples_stream_function_tracked_artifacts_remaining": 0,
+    "docs_result_artifact_count": 45
   },
   "records": [
     {
@@ -68,7 +71,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_active_shield.json",
+          "path": "docs/stream_function/demo_active_shield.json",
           "bytes": 1387,
           "sha256": "8f6795647d2a2cc7aee028f9a6a5b5571ebc22308c50ed72304444a4546345bb",
           "json_keys": [
@@ -85,12 +88,18 @@
             "shielding_factor",
             "stray_shielded",
             "stray_unshielded"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_active_shield.json",
+          "current_path": "docs/stream_function/demo_active_shield.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_active_shield.png",
+          "path": "docs/stream_function/demo_active_shield.png",
           "bytes": 73247,
-          "sha256": "46df71f1e5c9347b7714c24af23b696e7ab1641d1cb63f1bbf3cf5af5e57dd3b"
+          "sha256": "46df71f1e5c9347b7714c24af23b696e7ab1641d1cb63f1bbf3cf5af5e57dd3b",
+          "original_path": "examples/stream_function/demo_active_shield.png",
+          "current_path": "docs/stream_function/demo_active_shield.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 2,
@@ -134,9 +143,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_cmaes_magnet_design.png",
+          "path": "docs/stream_function/demo_cmaes_magnet_design.png",
           "bytes": 23270,
-          "sha256": "1bfe763e46b5496a860cc0f37ba5ec28a9409bf441c53616581d8500abe27d66"
+          "sha256": "1bfe763e46b5496a860cc0f37ba5ec28a9409bf441c53616581d8500abe27d66",
+          "original_path": "examples/stream_function/demo_cmaes_magnet_design.png",
+          "current_path": "docs/stream_function/demo_cmaes_magnet_design.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 3,
@@ -184,9 +196,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_coil_design_gx.png",
+          "path": "docs/stream_function/demo_coil_design_gx.png",
           "bytes": 167581,
-          "sha256": "077706ae8d403a7c7403c5223f2eb2fa5ea987b22784b145838240627b586af5"
+          "sha256": "077706ae8d403a7c7403c5223f2eb2fa5ea987b22784b145838240627b586af5",
+          "original_path": "examples/stream_function/demo_coil_design_gx.png",
+          "current_path": "docs/stream_function/demo_coil_design_gx.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 2,
@@ -229,9 +244,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_coil_design_gz.png",
+          "path": "docs/stream_function/demo_coil_design_gz.png",
           "bytes": 73155,
-          "sha256": "970dd4723adcab73214d3eeb6705a2b43874a783e8e9aef450bcffac02bd75b9"
+          "sha256": "970dd4723adcab73214d3eeb6705a2b43874a783e8e9aef450bcffac02bd75b9",
+          "original_path": "examples/stream_function/demo_coil_design_gz.png",
+          "current_path": "docs/stream_function/demo_coil_design_gz.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 1,
@@ -269,9 +287,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_coil_field_synthesis.png",
+          "path": "docs/stream_function/demo_coil_field_synthesis.png",
           "bytes": 47438,
-          "sha256": "3347472796bbecbb844a2908ebe1c0767a44c6633223cc559b19ed614a31a2c4"
+          "sha256": "3347472796bbecbb844a2908ebe1c0767a44c6633223cc559b19ed614a31a2c4",
+          "original_path": "examples/stream_function/demo_coil_field_synthesis.png",
+          "current_path": "docs/stream_function/demo_coil_field_synthesis.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 1,
@@ -317,7 +338,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_fmm_biot_savart.json",
+          "path": "docs/stream_function/demo_fmm_biot_savart.json",
           "bytes": 964,
           "sha256": "834cd7b8c0cdd008f24684374a685b7d4cbebfba9edb37dc681355db92780b00",
           "json_keys": [
@@ -338,12 +359,18 @@
             "t_linear_form_dsv_s",
             "t_linear_form_ext_s",
             "t_mesh_s"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_fmm_biot_savart.json",
+          "current_path": "docs/stream_function/demo_fmm_biot_savart.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_fmm_biot_savart.png",
+          "path": "docs/stream_function/demo_fmm_biot_savart.png",
           "bytes": 23111,
-          "sha256": "aafe9aebd2211715a01a2cac7a6525d1e6889eaebc834293345db4c174932f75"
+          "sha256": "aafe9aebd2211715a01a2cac7a6525d1e6889eaebc834293345db4c174932f75",
+          "original_path": "examples/stream_function/demo_fmm_biot_savart.png",
+          "current_path": "docs/stream_function/demo_fmm_biot_savart.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 1,
@@ -381,9 +408,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_magnet_array.png",
+          "path": "docs/stream_function/demo_magnet_array.png",
           "bytes": 25310,
-          "sha256": "2ea02e6c23ae9e187ba84b497f6995c759ff26782ba8ea6ecf87ec3ec4563eb5"
+          "sha256": "2ea02e6c23ae9e187ba84b497f6995c759ff26782ba8ea6ecf87ec3ec4563eb5",
+          "original_path": "examples/stream_function/demo_magnet_array.png",
+          "current_path": "docs/stream_function/demo_magnet_array.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 1,
@@ -665,9 +695,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_planar_uniform_coil.png",
+          "path": "docs/stream_function/demo_planar_uniform_coil.png",
           "bytes": 214508,
-          "sha256": "a4d0d5a84732a4ebf8ea76f3e93a50636e28e796b610206b8bd38210716a2513"
+          "sha256": "a4d0d5a84732a4ebf8ea76f3e93a50636e28e796b610206b8bd38210716a2513",
+          "original_path": "examples/stream_function/demo_planar_uniform_coil.png",
+          "current_path": "docs/stream_function/demo_planar_uniform_coil.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 2,
@@ -714,14 +747,20 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+          "path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
           "bytes": 296957,
-          "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054"
+          "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054",
+          "original_path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+          "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.png",
+          "path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.png",
           "bytes": 200555,
-          "sha256": "1a78c16ca34a422cfb3297af89aed59a5e96ca9e0492f9635714410f0e888b0e"
+          "sha256": "1a78c16ca34a422cfb3297af89aed59a5e96ca9e0492f9635714410f0e888b0e",
+          "original_path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.png",
+          "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 6,
@@ -787,14 +826,20 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+          "path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
           "bytes": 296957,
-          "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054"
+          "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054",
+          "original_path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+          "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.png",
+          "path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.png",
           "bytes": 200555,
-          "sha256": "1a78c16ca34a422cfb3297af89aed59a5e96ca9e0492f9635714410f0e888b0e"
+          "sha256": "1a78c16ca34a422cfb3297af89aed59a5e96ca9e0492f9635714410f0e888b0e",
+          "original_path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.png",
+          "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 1,
@@ -840,9 +885,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+          "path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
           "bytes": 296957,
-          "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054"
+          "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054",
+          "original_path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+          "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 8,
@@ -984,7 +1032,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_regcoil_fusion.json",
+          "path": "docs/stream_function/demo_regcoil_fusion.json",
           "bytes": 3252,
           "sha256": "ba2306d10fc748a2cad8f5ea924cf3c797b043a445eb181c1b9c32eb491aeb4b",
           "json_keys": [
@@ -996,20 +1044,29 @@
             "regcoil_lcurve",
             "timestamp",
             "vmec_boundary"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_regcoil_fusion.json",
+          "current_path": "docs/stream_function/demo_regcoil_fusion.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion.pdf",
+          "path": "docs/stream_function/demo_regcoil_fusion.pdf",
           "bytes": 139471,
-          "sha256": "5ec349b14e7def6156ad956e4e3afa4fde51864c9dcec98580a59e3b048a1376"
+          "sha256": "5ec349b14e7def6156ad956e4e3afa4fde51864c9dcec98580a59e3b048a1376",
+          "original_path": "examples/stream_function/demo_regcoil_fusion.pdf",
+          "current_path": "docs/stream_function/demo_regcoil_fusion.pdf",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion.png",
+          "path": "docs/stream_function/demo_regcoil_fusion.png",
           "bytes": 440438,
-          "sha256": "619a92a2cdbfdf1ab3c392faefe51ed6745003f528cb3f1476d079b9c6b57401"
+          "sha256": "619a92a2cdbfdf1ab3c392faefe51ed6745003f528cb3f1476d079b9c6b57401",
+          "original_path": "examples/stream_function/demo_regcoil_fusion.png",
+          "current_path": "docs/stream_function/demo_regcoil_fusion.png",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion_advanced.json",
+          "path": "docs/stream_function/demo_regcoil_fusion_advanced.json",
           "bytes": 3331,
           "sha256": "4298fbf68c1175edc1aa4c5a23b516d04585686019bbff105cc5fb5d098a8dc0",
           "json_keys": [
@@ -1019,17 +1076,26 @@
             "force_stress",
             "real_equilibrium",
             "timestamp"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.json",
+          "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion_advanced.pdf",
+          "path": "docs/stream_function/demo_regcoil_fusion_advanced.pdf",
           "bytes": 128221,
-          "sha256": "3301b391ad0a67c9025d53316d20f9e45136b7806554c8ed574f45627638133c"
+          "sha256": "3301b391ad0a67c9025d53316d20f9e45136b7806554c8ed574f45627638133c",
+          "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.pdf",
+          "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.pdf",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion_advanced.png",
+          "path": "docs/stream_function/demo_regcoil_fusion_advanced.png",
           "bytes": 354166,
-          "sha256": "7704737c5be556b26f236b999adcf427dca968d882478b738ecb9817fa036baa"
+          "sha256": "7704737c5be556b26f236b999adcf427dca968d882478b738ecb9817fa036baa",
+          "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.png",
+          "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 4,
@@ -1091,7 +1157,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_regcoil_fusion.json",
+          "path": "docs/stream_function/demo_regcoil_fusion.json",
           "bytes": 3252,
           "sha256": "ba2306d10fc748a2cad8f5ea924cf3c797b043a445eb181c1b9c32eb491aeb4b",
           "json_keys": [
@@ -1103,20 +1169,29 @@
             "regcoil_lcurve",
             "timestamp",
             "vmec_boundary"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_regcoil_fusion.json",
+          "current_path": "docs/stream_function/demo_regcoil_fusion.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion.pdf",
+          "path": "docs/stream_function/demo_regcoil_fusion.pdf",
           "bytes": 139471,
-          "sha256": "5ec349b14e7def6156ad956e4e3afa4fde51864c9dcec98580a59e3b048a1376"
+          "sha256": "5ec349b14e7def6156ad956e4e3afa4fde51864c9dcec98580a59e3b048a1376",
+          "original_path": "examples/stream_function/demo_regcoil_fusion.pdf",
+          "current_path": "docs/stream_function/demo_regcoil_fusion.pdf",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion.png",
+          "path": "docs/stream_function/demo_regcoil_fusion.png",
           "bytes": 440438,
-          "sha256": "619a92a2cdbfdf1ab3c392faefe51ed6745003f528cb3f1476d079b9c6b57401"
+          "sha256": "619a92a2cdbfdf1ab3c392faefe51ed6745003f528cb3f1476d079b9c6b57401",
+          "original_path": "examples/stream_function/demo_regcoil_fusion.png",
+          "current_path": "docs/stream_function/demo_regcoil_fusion.png",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion_advanced.json",
+          "path": "docs/stream_function/demo_regcoil_fusion_advanced.json",
           "bytes": 3331,
           "sha256": "4298fbf68c1175edc1aa4c5a23b516d04585686019bbff105cc5fb5d098a8dc0",
           "json_keys": [
@@ -1126,17 +1201,26 @@
             "force_stress",
             "real_equilibrium",
             "timestamp"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.json",
+          "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion_advanced.pdf",
+          "path": "docs/stream_function/demo_regcoil_fusion_advanced.pdf",
           "bytes": 128221,
-          "sha256": "3301b391ad0a67c9025d53316d20f9e45136b7806554c8ed574f45627638133c"
+          "sha256": "3301b391ad0a67c9025d53316d20f9e45136b7806554c8ed574f45627638133c",
+          "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.pdf",
+          "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.pdf",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_regcoil_fusion_advanced.png",
+          "path": "docs/stream_function/demo_regcoil_fusion_advanced.png",
           "bytes": 354166,
-          "sha256": "7704737c5be556b26f236b999adcf427dca968d882478b738ecb9817fa036baa"
+          "sha256": "7704737c5be556b26f236b999adcf427dca968d882478b738ecb9817fa036baa",
+          "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.png",
+          "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 3,
@@ -1240,7 +1324,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_regularized_aca_results.json",
+          "path": "docs/stream_function/demo_regularized_aca_results.json",
           "bytes": 2043,
           "sha256": "9fba09350c05d4da7e1ff991a5b502b79b39e456d8ebbd23f8251dd13a8e8063",
           "json_keys": [
@@ -1252,7 +1336,10 @@
             "order",
             "results",
             "t_aca_ms"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_regularized_aca_results.json",
+          "current_path": "docs/stream_function/demo_regularized_aca_results.json",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 6,
@@ -1320,9 +1407,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_sf_to_peec_gx.png",
+          "path": "docs/stream_function/demo_sf_to_peec_gx.png",
           "bytes": 126431,
-          "sha256": "691f341fbb590595a117653d8db6749f629dd5366cd3f105c2b849ec3e43d1f1"
+          "sha256": "691f341fbb590595a117653d8db6749f629dd5366cd3f105c2b849ec3e43d1f1",
+          "original_path": "examples/stream_function/demo_sf_to_peec_gx.png",
+          "current_path": "docs/stream_function/demo_sf_to_peec_gx.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 6,
@@ -1390,9 +1480,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_sf_to_peec_gz.png",
+          "path": "docs/stream_function/demo_sf_to_peec_gz.png",
           "bytes": 149779,
-          "sha256": "167b53ba8f3fd3868d40deec7604732f568704cdeea3cd95f4933ce19ef1fc86"
+          "sha256": "167b53ba8f3fd3868d40deec7604732f568704cdeea3cd95f4933ce19ef1fc86",
+          "original_path": "examples/stream_function/demo_sf_to_peec_gz.png",
+          "current_path": "docs/stream_function/demo_sf_to_peec_gz.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 2,
@@ -1440,7 +1533,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_shim_coil_purity.json",
+          "path": "docs/stream_function/demo_shim_coil_purity.json",
           "bytes": 13197,
           "sha256": "b5ec46d7c8ce35a450d82133ddcc99d3d3d370e272c489b01f05cba7970bd234",
           "json_keys": [
@@ -1449,12 +1542,18 @@
             "lmax",
             "order",
             "rows"
-          ]
+          ],
+          "original_path": "examples/stream_function/demo_shim_coil_purity.json",
+          "current_path": "docs/stream_function/demo_shim_coil_purity.json",
+          "current_lane": "docs_result_artifact"
         },
         {
-          "path": "examples/stream_function/demo_shim_coil_purity.png",
+          "path": "docs/stream_function/demo_shim_coil_purity.png",
           "bytes": 37837,
-          "sha256": "ccf71d4e5374d80fc4dbd475444112b20e7993e8d9d4b196ed7d73711ba19be4"
+          "sha256": "ccf71d4e5374d80fc4dbd475444112b20e7993e8d9d4b196ed7d73711ba19be4",
+          "original_path": "examples/stream_function/demo_shim_coil_purity.png",
+          "current_path": "docs/stream_function/demo_shim_coil_purity.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 3,
@@ -1507,9 +1606,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/stream_function/demo_sphere_fe_direct.png",
+          "path": "docs/stream_function/demo_sphere_fe_direct.png",
           "bytes": 250274,
-          "sha256": "451a42d69fe93d1cc830f319b59e9119d9ab3af6c460ad0e142df4e4a58bed61"
+          "sha256": "451a42d69fe93d1cc830f319b59e9119d9ab3af6c460ad0e142df4e4a58bed61",
+          "original_path": "examples/stream_function/demo_sphere_fe_direct.png",
+          "current_path": "docs/stream_function/demo_sphere_fe_direct.png",
+          "current_lane": "docs_result_artifact"
         }
       ],
       "protected_reference_count": 4,
@@ -1602,7 +1704,7 @@
       "sha256": "b9d17749c0063a0934d0f2d00232ca288467a76dabe7fdf7752c962f28d1b3a3"
     },
     {
-      "path": "examples/stream_function/demo_active_shield.json",
+      "path": "docs/stream_function/demo_active_shield.json",
       "bytes": 1387,
       "sha256": "8f6795647d2a2cc7aee028f9a6a5b5571ebc22308c50ed72304444a4546345bb",
       "json_keys": [
@@ -1619,35 +1721,53 @@
         "shielding_factor",
         "stray_shielded",
         "stray_unshielded"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_active_shield.json",
+      "current_path": "docs/stream_function/demo_active_shield.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_active_shield.png",
+      "path": "docs/stream_function/demo_active_shield.png",
       "bytes": 73247,
-      "sha256": "46df71f1e5c9347b7714c24af23b696e7ab1641d1cb63f1bbf3cf5af5e57dd3b"
+      "sha256": "46df71f1e5c9347b7714c24af23b696e7ab1641d1cb63f1bbf3cf5af5e57dd3b",
+      "original_path": "examples/stream_function/demo_active_shield.png",
+      "current_path": "docs/stream_function/demo_active_shield.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_cmaes_magnet_design.png",
+      "path": "docs/stream_function/demo_cmaes_magnet_design.png",
       "bytes": 23270,
-      "sha256": "1bfe763e46b5496a860cc0f37ba5ec28a9409bf441c53616581d8500abe27d66"
+      "sha256": "1bfe763e46b5496a860cc0f37ba5ec28a9409bf441c53616581d8500abe27d66",
+      "original_path": "examples/stream_function/demo_cmaes_magnet_design.png",
+      "current_path": "docs/stream_function/demo_cmaes_magnet_design.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_coil_design_gx.png",
+      "path": "docs/stream_function/demo_coil_design_gx.png",
       "bytes": 167581,
-      "sha256": "077706ae8d403a7c7403c5223f2eb2fa5ea987b22784b145838240627b586af5"
+      "sha256": "077706ae8d403a7c7403c5223f2eb2fa5ea987b22784b145838240627b586af5",
+      "original_path": "examples/stream_function/demo_coil_design_gx.png",
+      "current_path": "docs/stream_function/demo_coil_design_gx.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_coil_design_gz.png",
+      "path": "docs/stream_function/demo_coil_design_gz.png",
       "bytes": 73155,
-      "sha256": "970dd4723adcab73214d3eeb6705a2b43874a783e8e9aef450bcffac02bd75b9"
+      "sha256": "970dd4723adcab73214d3eeb6705a2b43874a783e8e9aef450bcffac02bd75b9",
+      "original_path": "examples/stream_function/demo_coil_design_gz.png",
+      "current_path": "docs/stream_function/demo_coil_design_gz.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_coil_field_synthesis.png",
+      "path": "docs/stream_function/demo_coil_field_synthesis.png",
       "bytes": 47438,
-      "sha256": "3347472796bbecbb844a2908ebe1c0767a44c6633223cc559b19ed614a31a2c4"
+      "sha256": "3347472796bbecbb844a2908ebe1c0767a44c6633223cc559b19ed614a31a2c4",
+      "original_path": "examples/stream_function/demo_coil_field_synthesis.png",
+      "current_path": "docs/stream_function/demo_coil_field_synthesis.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_fmm_biot_savart.json",
+      "path": "docs/stream_function/demo_fmm_biot_savart.json",
       "bytes": 964,
       "sha256": "834cd7b8c0cdd008f24684374a685b7d4cbebfba9edb37dc681355db92780b00",
       "json_keys": [
@@ -1668,25 +1788,37 @@
         "t_linear_form_dsv_s",
         "t_linear_form_ext_s",
         "t_mesh_s"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_fmm_biot_savart.json",
+      "current_path": "docs/stream_function/demo_fmm_biot_savart.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_fmm_biot_savart.png",
+      "path": "docs/stream_function/demo_fmm_biot_savart.png",
       "bytes": 23111,
-      "sha256": "aafe9aebd2211715a01a2cac7a6525d1e6889eaebc834293345db4c174932f75"
+      "sha256": "aafe9aebd2211715a01a2cac7a6525d1e6889eaebc834293345db4c174932f75",
+      "original_path": "examples/stream_function/demo_fmm_biot_savart.png",
+      "current_path": "docs/stream_function/demo_fmm_biot_savart.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_magnet_array.png",
+      "path": "docs/stream_function/demo_magnet_array.png",
       "bytes": 25310,
-      "sha256": "2ea02e6c23ae9e187ba84b497f6995c759ff26782ba8ea6ecf87ec3ec4563eb5"
+      "sha256": "2ea02e6c23ae9e187ba84b497f6995c759ff26782ba8ea6ecf87ec3ec4563eb5",
+      "original_path": "examples/stream_function/demo_magnet_array.png",
+      "current_path": "docs/stream_function/demo_magnet_array.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_pareto_plot.png",
+      "path": "docs/stream_function/demo_pareto_plot.png",
       "bytes": 38609,
-      "sha256": "a87b7733b17a5ca3dcb953dffc57b0c8cf17ff4f534cfc85643046bf2ae0f27d"
+      "sha256": "a87b7733b17a5ca3dcb953dffc57b0c8cf17ff4f534cfc85643046bf2ae0f27d",
+      "original_path": "examples/stream_function/demo_pareto_plot.png",
+      "current_path": "docs/stream_function/demo_pareto_plot.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_pareto_results.json",
+      "path": "docs/stream_function/demo_pareto_results.json",
       "bytes": 13671,
       "sha256": "dfb964912f13c391d82f3970e81f34703916cbce1dfcf332613c49aa6d12cb12",
       "json_keys": [
@@ -1695,30 +1827,45 @@
         "n_pareto",
         "n_trials",
         "pareto"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_pareto_results.json",
+      "current_path": "docs/stream_function/demo_pareto_results.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_planar_uniform_coil.png",
+      "path": "docs/stream_function/demo_planar_uniform_coil.png",
       "bytes": 214508,
-      "sha256": "a4d0d5a84732a4ebf8ea76f3e93a50636e28e796b610206b8bd38210716a2513"
+      "sha256": "a4d0d5a84732a4ebf8ea76f3e93a50636e28e796b610206b8bd38210716a2513",
+      "original_path": "examples/stream_function/demo_planar_uniform_coil.png",
+      "current_path": "docs/stream_function/demo_planar_uniform_coil.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+      "path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
       "bytes": 296957,
-      "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054"
+      "sha256": "1f54d514672b114b49521f9e41dcfd86d31126de605acd5310602c81435d6054",
+      "original_path": "examples/stream_function/demo_planar_uniform_fem_psi.png",
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.png",
+      "path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.png",
       "bytes": 200555,
-      "sha256": "1a78c16ca34a422cfb3297af89aed59a5e96ca9e0492f9635714410f0e888b0e"
+      "sha256": "1a78c16ca34a422cfb3297af89aed59a5e96ca9e0492f9635714410f0e888b0e",
+      "original_path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.png",
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_reg_hyperparam_plot.png",
+      "path": "docs/stream_function/demo_reg_hyperparam_plot.png",
       "bytes": 170790,
-      "sha256": "d0921d2f212084bf80ab451669b54ab4318536dcd8058a4736a1c00640fdaba1"
+      "sha256": "d0921d2f212084bf80ab451669b54ab4318536dcd8058a4736a1c00640fdaba1",
+      "original_path": "examples/stream_function/demo_reg_hyperparam_plot.png",
+      "current_path": "docs/stream_function/demo_reg_hyperparam_plot.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_reg_hyperparam_results.json",
+      "path": "docs/stream_function/demo_reg_hyperparam_results.json",
       "bytes": 10274,
       "sha256": "9281f269f286ba5d14939f920c9265fe4462a969d206ff64b2b2316e1d1f0208",
       "json_keys": [
@@ -1739,10 +1886,13 @@
         "t_aca_ms",
         "t_aca_reused_across_trials",
         "trials"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_reg_hyperparam_results.json",
+      "current_path": "docs/stream_function/demo_reg_hyperparam_results.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regcoil_fusion.json",
+      "path": "docs/stream_function/demo_regcoil_fusion.json",
       "bytes": 3252,
       "sha256": "ba2306d10fc748a2cad8f5ea924cf3c797b043a445eb181c1b9c32eb491aeb4b",
       "json_keys": [
@@ -1754,20 +1904,29 @@
         "regcoil_lcurve",
         "timestamp",
         "vmec_boundary"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_regcoil_fusion.json",
+      "current_path": "docs/stream_function/demo_regcoil_fusion.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regcoil_fusion.pdf",
+      "path": "docs/stream_function/demo_regcoil_fusion.pdf",
       "bytes": 139471,
-      "sha256": "5ec349b14e7def6156ad956e4e3afa4fde51864c9dcec98580a59e3b048a1376"
+      "sha256": "5ec349b14e7def6156ad956e4e3afa4fde51864c9dcec98580a59e3b048a1376",
+      "original_path": "examples/stream_function/demo_regcoil_fusion.pdf",
+      "current_path": "docs/stream_function/demo_regcoil_fusion.pdf",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regcoil_fusion.png",
+      "path": "docs/stream_function/demo_regcoil_fusion.png",
       "bytes": 440438,
-      "sha256": "619a92a2cdbfdf1ab3c392faefe51ed6745003f528cb3f1476d079b9c6b57401"
+      "sha256": "619a92a2cdbfdf1ab3c392faefe51ed6745003f528cb3f1476d079b9c6b57401",
+      "original_path": "examples/stream_function/demo_regcoil_fusion.png",
+      "current_path": "docs/stream_function/demo_regcoil_fusion.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regcoil_fusion_advanced.json",
+      "path": "docs/stream_function/demo_regcoil_fusion_advanced.json",
       "bytes": 3331,
       "sha256": "4298fbf68c1175edc1aa4c5a23b516d04585686019bbff105cc5fb5d098a8dc0",
       "json_keys": [
@@ -1777,20 +1936,29 @@
         "force_stress",
         "real_equilibrium",
         "timestamp"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.json",
+      "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regcoil_fusion_advanced.pdf",
+      "path": "docs/stream_function/demo_regcoil_fusion_advanced.pdf",
       "bytes": 128221,
-      "sha256": "3301b391ad0a67c9025d53316d20f9e45136b7806554c8ed574f45627638133c"
+      "sha256": "3301b391ad0a67c9025d53316d20f9e45136b7806554c8ed574f45627638133c",
+      "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.pdf",
+      "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.pdf",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regcoil_fusion_advanced.png",
+      "path": "docs/stream_function/demo_regcoil_fusion_advanced.png",
       "bytes": 354166,
-      "sha256": "7704737c5be556b26f236b999adcf427dca968d882478b738ecb9817fa036baa"
+      "sha256": "7704737c5be556b26f236b999adcf427dca968d882478b738ecb9817fa036baa",
+      "original_path": "examples/stream_function/demo_regcoil_fusion_advanced.png",
+      "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_regularized_aca_results.json",
+      "path": "docs/stream_function/demo_regularized_aca_results.json",
       "bytes": 2043,
       "sha256": "9fba09350c05d4da7e1ff991a5b502b79b39e456d8ebbd23f8251dd13a8e8063",
       "json_keys": [
@@ -1802,20 +1970,29 @@
         "order",
         "results",
         "t_aca_ms"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_regularized_aca_results.json",
+      "current_path": "docs/stream_function/demo_regularized_aca_results.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_sf_to_peec_gx.png",
+      "path": "docs/stream_function/demo_sf_to_peec_gx.png",
       "bytes": 126431,
-      "sha256": "691f341fbb590595a117653d8db6749f629dd5366cd3f105c2b849ec3e43d1f1"
+      "sha256": "691f341fbb590595a117653d8db6749f629dd5366cd3f105c2b849ec3e43d1f1",
+      "original_path": "examples/stream_function/demo_sf_to_peec_gx.png",
+      "current_path": "docs/stream_function/demo_sf_to_peec_gx.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_sf_to_peec_gz.png",
+      "path": "docs/stream_function/demo_sf_to_peec_gz.png",
       "bytes": 149779,
-      "sha256": "167b53ba8f3fd3868d40deec7604732f568704cdeea3cd95f4933ce19ef1fc86"
+      "sha256": "167b53ba8f3fd3868d40deec7604732f568704cdeea3cd95f4933ce19ef1fc86",
+      "original_path": "examples/stream_function/demo_sf_to_peec_gz.png",
+      "current_path": "docs/stream_function/demo_sf_to_peec_gz.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_shim_coil_purity.json",
+      "path": "docs/stream_function/demo_shim_coil_purity.json",
       "bytes": 13197,
       "sha256": "b5ec46d7c8ce35a450d82133ddcc99d3d3d370e272c489b01f05cba7970bd234",
       "json_keys": [
@@ -1824,20 +2001,29 @@
         "lmax",
         "order",
         "rows"
-      ]
+      ],
+      "original_path": "examples/stream_function/demo_shim_coil_purity.json",
+      "current_path": "docs/stream_function/demo_shim_coil_purity.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_shim_coil_purity.png",
+      "path": "docs/stream_function/demo_shim_coil_purity.png",
       "bytes": 37837,
-      "sha256": "ccf71d4e5374d80fc4dbd475444112b20e7993e8d9d4b196ed7d73711ba19be4"
+      "sha256": "ccf71d4e5374d80fc4dbd475444112b20e7993e8d9d4b196ed7d73711ba19be4",
+      "original_path": "examples/stream_function/demo_shim_coil_purity.png",
+      "current_path": "docs/stream_function/demo_shim_coil_purity.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/demo_sphere_fe_direct.png",
+      "path": "docs/stream_function/demo_sphere_fe_direct.png",
       "bytes": 250274,
-      "sha256": "451a42d69fe93d1cc830f319b59e9119d9ab3af6c460ad0e142df4e4a58bed61"
+      "sha256": "451a42d69fe93d1cc830f319b59e9119d9ab3af6c460ad0e142df4e4a58bed61",
+      "original_path": "examples/stream_function/demo_sphere_fe_direct.png",
+      "current_path": "docs/stream_function/demo_sphere_fe_direct.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_cylinder.json",
+      "path": "docs/stream_function/pareto_cylinder.json",
       "bytes": 9690,
       "sha256": "df29556df13ceb7423dd28fa35a2a90f0c62a553aaff09113ba44e9b62427c99",
       "json_keys": [
@@ -1848,15 +2034,21 @@
         "lengths",
         "per_L",
         "radius"
-      ]
+      ],
+      "original_path": "examples/stream_function/pareto_cylinder.json",
+      "current_path": "docs/stream_function/pareto_cylinder.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_cylinder.png",
+      "path": "docs/stream_function/pareto_cylinder.png",
       "bytes": 74127,
-      "sha256": "ee75d5962cc6fee8999dd9adf10e6437d86489a7a2eca49e79744506a4ca31a0"
+      "sha256": "ee75d5962cc6fee8999dd9adf10e6437d86489a7a2eca49e79744506a4ca31a0",
+      "original_path": "examples/stream_function/pareto_cylinder.png",
+      "current_path": "docs/stream_function/pareto_cylinder.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_cylinder_deform.json",
+      "path": "docs/stream_function/pareto_cylinder_deform.json",
       "bytes": 1045,
       "sha256": "9c945a63760aeb5a7eb9149e24a970568f5577ca0d8f35c41579732f3978c254",
       "json_keys": [
@@ -1866,15 +2058,21 @@
         "opt_front",
         "radius",
         "target"
-      ]
+      ],
+      "original_path": "examples/stream_function/pareto_cylinder_deform.json",
+      "current_path": "docs/stream_function/pareto_cylinder_deform.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_cylinder_deform.png",
+      "path": "docs/stream_function/pareto_cylinder_deform.png",
       "bytes": 65292,
-      "sha256": "d359c27921691e1a8cd080ab2c5077884350aefd32c0d3b9961a57a196122fdb"
+      "sha256": "d359c27921691e1a8cd080ab2c5077884350aefd32c0d3b9961a57a196122fdb",
+      "original_path": "examples/stream_function/pareto_cylinder_deform.png",
+      "current_path": "docs/stream_function/pareto_cylinder_deform.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_deform.json",
+      "path": "docs/stream_function/pareto_deform.json",
       "bytes": 1064,
       "sha256": "ebb57ed16329e8b5fb74340ef09afa0759d836a950ef4aae81d3194d8e3d2c81",
       "json_keys": [
@@ -1882,15 +2080,21 @@
         "opt_front",
         "zcap",
         "zero_mean"
-      ]
+      ],
+      "original_path": "examples/stream_function/pareto_deform.json",
+      "current_path": "docs/stream_function/pareto_deform.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_deform.png",
+      "path": "docs/stream_function/pareto_deform.png",
       "bytes": 67211,
-      "sha256": "d43a0d570614907b5d607688468a59425cd84d0d48f6f9d4ef34ccccb0870312"
+      "sha256": "d43a0d570614907b5d607688468a59425cd84d0d48f6f9d4ef34ccccb0870312",
+      "original_path": "examples/stream_function/pareto_deform.png",
+      "current_path": "docs/stream_function/pareto_deform.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_geometry_nsga.json",
+      "path": "docs/stream_function/pareto_geometry_nsga.json",
       "bytes": 26006,
       "sha256": "a28964d25a16b754487a13fd70b8db0e82fbc511b27b535dcb09119352da8d84",
       "json_keys": [
@@ -1899,15 +2103,21 @@
         "nsga_front",
         "nsga_lower_envelope",
         "target"
-      ]
+      ],
+      "original_path": "examples/stream_function/pareto_geometry_nsga.json",
+      "current_path": "docs/stream_function/pareto_geometry_nsga.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_geometry_nsga.png",
+      "path": "docs/stream_function/pareto_geometry_nsga.png",
       "bytes": 115161,
-      "sha256": "d8d0269c4969b2dae532e210a0c6cc4be48a5f737206a5201200f37d4663468a"
+      "sha256": "d8d0269c4969b2dae532e210a0c6cc4be48a5f737206a5201200f37d4663468a",
+      "original_path": "examples/stream_function/pareto_geometry_nsga.png",
+      "current_path": "docs/stream_function/pareto_geometry_nsga.png",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_tikhonov_aca.json",
+      "path": "docs/stream_function/pareto_tikhonov_aca.json",
       "bytes": 5008,
       "sha256": "7e63a9214396cba478395f35a0ba39d16a9116e6a89d0eb731e3738605a5143d",
       "json_keys": [
@@ -1923,12 +2133,18 @@
         "peak_push_pct_vs_h1",
         "t_solve_us",
         "target"
-      ]
+      ],
+      "original_path": "examples/stream_function/pareto_tikhonov_aca.json",
+      "current_path": "docs/stream_function/pareto_tikhonov_aca.json",
+      "current_lane": "docs_result_artifact"
     },
     {
-      "path": "examples/stream_function/pareto_tikhonov_aca.png",
+      "path": "docs/stream_function/pareto_tikhonov_aca.png",
       "bytes": 69140,
-      "sha256": "343da74084de77a503da17cbca2d841496e01542689bb3b9bd71d6f9da2f8ea6"
+      "sha256": "343da74084de77a503da17cbca2d841496e01542689bb3b9bd71d6f9da2f8ea6",
+      "original_path": "examples/stream_function/pareto_tikhonov_aca.png",
+      "current_path": "docs/stream_function/pareto_tikhonov_aca.png",
+      "current_lane": "docs_result_artifact"
     },
     {
       "path": "examples/stream_function/sf_coil_gx.msh",
@@ -1956,5 +2172,5 @@
       "sha256": "262d857e5cf87a1f97bb33b783fc719e0d6cf1050aa5e3cad1e5e6a6b77442c5"
     }
   ],
-  "notebook_sha256": "ca30298186877d3bb97cf8546b398479ecab71f59c6b087bfae4086d042a50f1"
+  "notebook_sha256": "73a692daad338579b28cdcdb49e7a9e392e2e19446f6503c6e74c84cbe1ca42b"
 }
