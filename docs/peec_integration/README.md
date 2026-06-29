@@ -19,6 +19,15 @@ The cleanup route for the 63 non-public-demo scripts is
 [`cleanup_routing_results.json`](cleanup_routing_results.json) and
 [`cleanup_routing_result.json`](cleanup_routing_result.json).
 
+The completed cleanup of the remaining examples tree is
+[`post_examples_migration.ipynb`](post_examples_migration.ipynb), synchronized
+with [`post_examples_migration_results.json`](post_examples_migration_results.json)
+and [`post_examples_migration_result.json`](post_examples_migration_result.json).
+It records the 97 Python scripts and result assets that were moved from
+`docs/peec_integration/demos` into `docs/peec_integration/demos` or
+`validation_test/peec_integration`, plus the one-off scripts that were
+distilled and removed.
+
 The completed verification migration is
 [`verification_migration.ipynb`](verification_migration.ipynb), synchronized with
 [`verification_migration_results.json`](verification_migration_results.json) and
@@ -28,8 +37,6 @@ moved the PEEC verification corpus to
 centerline reader to `radia.peec_mesh_import`, and removed the distilled
 `check_funcs.py` scratch file from source.
 
-The remaining `examples/peec_integration/` tree is still a mixed staging area:
-maintained public demos, source-API candidates, benchmark scripts, experiments,
-smoke checks, and analysis helpers. Do not treat every script as a public demo.
-Use the cleanup-review table in `public_demo.ipynb` and the migration notebook
-above before rerouting any remaining examples.
+The `docs/peec_integration/demos/` tree is now the docs-coupled public demo
+corpus. Benchmark, comparison, smoke, and solver-regression scripts live under
+`validation_test/peec_integration`; reusable behavior belongs in `src/radia`.

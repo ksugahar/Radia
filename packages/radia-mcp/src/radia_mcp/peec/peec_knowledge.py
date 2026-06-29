@@ -3,10 +3,10 @@
 PUBLIC NOTEBOOK: docs/peec_integration/public_demo.ipynb -- human-facing PEEC
 entry point.  It separates maintained representative demos from validation,
 src-API, benchmark, experiment, smoke, and cleanup-review scripts in the
-130-file examples/peec_integration catalog.
+130-file docs/peec_integration/demos catalog.
 SHOWCASE NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell continued-fraction + ngbem EFIE loop L + 4 paper figures (verified).
 CATALOG NOTEBOOK: docs/peec_integration/examples_catalog.ipynb -- full source
-text/hash/result-media ledger for examples/peec_integration with migration lanes.
+text/hash/result-media ledger for docs/peec_integration/demos with migration lanes.
 CLEANUP ROUTING: docs/peec_integration/cleanup_routing.ipynb -- routes the
 63 cleanup-review scripts into validation_test (50), src API (5), and
 distill-delete (8); deletion candidates are summarized in

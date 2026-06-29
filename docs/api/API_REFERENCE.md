@@ -1778,7 +1778,7 @@ A_xm = rad.Fld(magnet, 'a', [point[0]-h, point[1], point[2]])
 
 ### Maxwell Relation Verification
 
-See `examples/ngsolve_integration/verify_curl_A_equals_B/` for a complete verification script that:
+See `validation_test/ngsolve_integration/verify_curl_A_equals_B/` for a complete verification script that:
 
 1. Creates a permanent magnet using ObjHexahedron
 2. Projects A onto HCurl space
