@@ -25,7 +25,7 @@ Caller analysis (grep across src / examples / tests) was run before any deletion
   / direct `ObjHexahedron(..., M)`. The radentry C-API `RadMatMag*` is left in
   place. (`src/lib/radia_pybind.cpp`)
 - **`create_sphere_mesh` / `create_box_mesh` (dielectric_solver) -> DEFERRED.**
-  Real caller `examples/peec_integration/applications/demo_dielectric.py`; migrate
+  Real caller `docs/peec_integration/demos/applications/demo_dielectric.py`; migrate
   to `ngsolve.occ` before deletion.
 - **`esim_vtk_export` -> DEFERRED.** Real caller `tests/test_esim_integration.py`;
   migrate the test off `ESIMVTKOutput` (to NGSolve VTKOutput) before deletion.

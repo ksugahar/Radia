@@ -193,7 +193,7 @@ def sextupole_field(pos):
 | Function | `rd.ObjBckg()` | `rad.RadiaField()` |
 | Input | Python callback | Radia object |
 | Output | Radia field source | NGSolve CoefficientFunction |
-| Location | `docs/background_fields/` | `examples/ngsolve_integration/` |
+| Location | `docs/background_fields/` | `validation_test/ngsolve_integration/` |
 
 ## Requirements
 
@@ -206,4 +206,4 @@ def sextupole_field(pos):
 
 - Result-saved notebook: `docs/background_fields/background_fields.ipynb`
 - Synchronized result JSON: `docs/background_fields/background_fields_results.json`
-- Radia to NGSolve examples: `examples/ngsolve_integration/`
+- Radia to NGSolve examples: `validation_test/ngsolve_integration/`

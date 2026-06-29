@@ -1280,8 +1280,8 @@ L_total = N * L_self + sum(2*M[i][j] for i<j)  # Neumann sum
 - Rectangular frame (10mm, w=1mm): BEM~24 nH, FastHenry=21.6 nH, Grover~24 nH
 - Computation time: ~420 ms per mesh (no bonus_intorder needed)
 
-See: `examples/peec_integration/ngsbem_peec_demo/ngbem/1_turn_coil.py`
-     `examples/peec_integration/ngsbem_peec_demo/compute_L_final.py`
+See: `validation_test/peec_integration/ngsbem_peec_demo/ngbem/1_turn_coil.py`
+     `validation_test/peec_integration/ngsbem_peec_demo/compute_L_final.py`
 
 ### With Conductor Shield (SIBC, Standalone)
 
@@ -2271,7 +2271,7 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 
 ## Test Scripts
 
-- `examples/ngsolve_integration/mesh_magnetization_import/verified_ngsolve_to_radia.py` - FEM->Radia analytical pipeline
+- `validation_test/ngsolve_integration/mesh_magnetization_import/verified_ngsolve_to_radia.py` - FEM->Radia analytical pipeline
 - `docs/kelvin/kelvin_classic_demos.ipynb` +
   `docs/kelvin/kelvin_classic_demos_results.json` - result-bearing Kelvin
   classic demos; maintained convention is `radia.kelvin_source`
@@ -2458,7 +2458,7 @@ rad.UtiDelAll()
 imported soft iron contains tetrahedra together with MSC elements, do not run one C++
 soft-iron solve on the mixed container; use all-MSC/all-MMM geometry, split the solve, or
 build a mesh-backed HDiv-VIM soft iron.
-**Example**: `examples/ngsolve_integration/mesh_magnetization_import/`
+**Example**: `validation_test/ngsolve_integration/mesh_magnetization_import/`
 **Showcase notebook** (B=curl(A) check, RadiaField->HDiv projection, batch
 evaluation, executed + rendered): `docs/ngsolve_integration/integration_basics.ipynb`
 

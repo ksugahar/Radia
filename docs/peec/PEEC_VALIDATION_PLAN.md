@@ -454,8 +454,8 @@ FastImp uses **rectangular filaments** for long thin structures (wires, traces):
 |------|--------|
 | `src/core/rad_peec_matrices.cpp` | Lines 207-223: GMD removed, Grover implemented |
 | `src/core/rad_peec_matrices.h` | No changes (API unchanged) |
-| `examples/peec_integration/demo_peec_simple_loop.py` | Verified: 1.7% error |
-| `examples/peec_integration/demo_peec_from_1d_mesh.py` | Verified: 1.8% error |
+| `docs/peec_integration/demos/demo_peec_simple_loop.py` | Verified: 1.7% error |
+| `docs/peec_integration/demos/demo_peec_from_1d_mesh.py` | Verified: 1.8% error |
 
 ---
 
@@ -515,7 +515,7 @@ Parallel: R_total = R1*R2/(R1+R2)
 
 **Result**: 0.00% error.
 
-**Validation script**: `examples/peec_integration/validation/validate_topology.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_topology.py`
 
 ---
 
@@ -560,7 +560,7 @@ Combined topology with series chain + multi-filament segments.
 
 **Result**: PASSED.
 
-**Validation script**: `examples/peec_integration/validation/validate_multifilament.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_multifilament.py`
 
 ---
 
@@ -582,7 +582,7 @@ Combined topology with series chain + multi-filament segments.
 | .default params | Inheritance of default parameters | PASSED |
 | Continuation lines | Line continuation with '+' | PASSED |
 
-**Validation script**: `examples/peec_integration/validation/validate_fasthenry.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_fasthenry.py`
 
 ### Coupled PEEC+MMM Tests
 
@@ -597,7 +597,7 @@ Combined topology with series chain + multi-filament segments.
 | .magnetic hex | FastHenry hexahedron block parsing | PASSED |
 | Coupled solve | Full parser -> coupled solve | PASSED |
 
-**Validation script**: `examples/peec_integration/validation/validate_coupled.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_coupled.py`
 
 ---
 
@@ -609,13 +609,13 @@ Combined topology with series chain + multi-filament segments.
 
 2-port transformer coupling coefficient validation.
 
-**Validation script**: `examples/peec_integration/validation/validate_coupling.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_coupling.py`
 
 ### Panel/Resonance Tests (23/23)
 
 Panel potential coefficients and LC resonance validation.
 
-**Validation script**: `examples/peec_integration/validation/validate_panel_resonance.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_panel_resonance.py`
 
 ---
 
@@ -673,7 +673,7 @@ Fixed `std::abs(dot) * M` -> `dot * M` in Rosa/Grover analytical path
 anti-parallel filaments, causing mutual inductance to cancel to ~0
 for spiral coils.
 
-**Validation script**: `examples/peec_integration/validation/validate_shield_delta_r.py`
+**Validation script**: `validation_test/peec_integration/verification/validate_shield_delta_r.py`
 
 ---
 

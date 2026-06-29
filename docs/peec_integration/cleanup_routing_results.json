@@ -18,7 +18,7 @@
     "generated_at_utc": "2026-06-28T01:22:57Z"
   },
   "policy": {
-    "scope": "63 cleanup_review scripts from examples/peec_integration",
+    "scope": "63 cleanup_review scripts from docs/peec_integration/demos",
     "targets": "validation_test for regression checks, src API for reusable behavior, distill-delete for one-off/retired/scratch code after memory is written",
     "no_deletion_yet": true
   },
@@ -33,7 +33,7 @@
   },
   "routes": [
     {
-      "path": "examples/peec_integration/analysis/analyze_dowell_prima.py",
+      "path": "docs/peec_integration/demos/analysis/analyze_dowell_prima.py",
       "name": "analyze_dowell_prima.py",
       "subdir": "analysis",
       "current_lane": "docs_mor_spice_demo",
@@ -49,12 +49,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 689,
-          "text": "examples/peec_integration/analysis/analyze_dowell_prima.py"
+          "text": "docs/peec_integration/demos/analysis/analyze_dowell_prima.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/analysis/analyze_tet_ordering.py",
+      "path": "docs/peec_integration/demos/analysis/analyze_tet_ordering.py",
       "name": "analyze_tet_ordering.py",
       "subdir": "analysis",
       "current_lane": "docs_analysis_helper_or_retired_review",
@@ -70,12 +70,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 690,
-          "text": "examples/peec_integration/analysis/analyze_tet_ordering.py"
+          "text": "docs/peec_integration/demos/analysis/analyze_tet_ordering.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/analysis/compare_symmetrized_solve.py",
+      "path": "docs/peec_integration/demos/analysis/compare_symmetrized_solve.py",
       "name": "compare_symmetrized_solve.py",
       "subdir": "analysis",
       "current_lane": "docs_analysis_helper_or_retired_review",
@@ -91,12 +91,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 691,
-          "text": "examples/peec_integration/analysis/compare_symmetrized_solve.py"
+          "text": "docs/peec_integration/demos/analysis/compare_symmetrized_solve.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/analysis/generate_paper_figures.py",
+      "path": "docs/peec_integration/demos/analysis/generate_paper_figures.py",
       "name": "generate_paper_figures.py",
       "subdir": "analysis",
       "current_lane": "docs_analysis_helper_or_retired_review",
@@ -112,12 +112,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 694,
-          "text": "examples/peec_integration/analysis/generate_paper_figures.py"
+          "text": "docs/peec_integration/demos/analysis/generate_paper_figures.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/analysis/measure_msc_asymmetry.py",
+      "path": "docs/peec_integration/demos/analysis/measure_msc_asymmetry.py",
       "name": "measure_msc_asymmetry.py",
       "subdir": "analysis",
       "current_lane": "docs_analysis_helper_or_retired_review",
@@ -133,12 +133,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 695,
-          "text": "examples/peec_integration/analysis/measure_msc_asymmetry.py"
+          "text": "docs/peec_integration/demos/analysis/measure_msc_asymmetry.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/optimize_round_torus_claude.py",
+      "path": "docs/peec_integration/demos/filament_coil/optimize_round_torus_claude.py",
       "name": "optimize_round_torus_claude.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -154,12 +154,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 742,
-          "text": "examples/peec_integration/filament_coil/optimize_round_torus_claude.py"
+          "text": "docs/peec_integration/demos/filament_coil/optimize_round_torus_claude.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/optimize_round_torus_random.py",
+      "path": "docs/peec_integration/demos/filament_coil/optimize_round_torus_random.py",
       "name": "optimize_round_torus_random.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -175,12 +175,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 743,
-          "text": "examples/peec_integration/filament_coil/optimize_round_torus_random.py"
+          "text": "docs/peec_integration/demos/filament_coil/optimize_round_torus_random.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/check_funcs.py",
+      "path": "validation_test/peec_integration/verification/check_funcs.py",
       "name": "check_funcs.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -196,12 +196,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 796,
-          "text": "examples/peec_integration/verification/check_funcs.py"
+          "text": "validation_test/peec_integration/verification/check_funcs.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/analysis/demo_analysis_framework.py",
+      "path": "docs/peec_integration/demos/analysis/demo_analysis_framework.py",
       "name": "demo_analysis_framework.py",
       "subdir": "analysis",
       "current_lane": "docs_analysis_helper_or_retired_review",
@@ -217,12 +217,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 692,
-          "text": "examples/peec_integration/analysis/demo_analysis_framework.py"
+          "text": "docs/peec_integration/demos/analysis/demo_analysis_framework.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/analysis/evaluate_peec_formula_accuracy.py",
+      "path": "docs/peec_integration/demos/analysis/evaluate_peec_formula_accuracy.py",
       "name": "evaluate_peec_formula_accuracy.py",
       "subdir": "analysis",
       "current_lane": "docs_analysis_helper_or_retired_review",
@@ -238,12 +238,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 693,
-          "text": "examples/peec_integration/analysis/evaluate_peec_formula_accuracy.py"
+          "text": "docs/peec_integration/demos/analysis/evaluate_peec_formula_accuracy.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/gmsh_centerline_reader.py",
+      "path": "validation_test/peec_integration/verification/gmsh_centerline_reader.py",
       "name": "gmsh_centerline_reader.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -259,12 +259,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 800,
-          "text": "examples/peec_integration/verification/gmsh_centerline_reader.py"
+          "text": "validation_test/peec_integration/verification/gmsh_centerline_reader.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/cubit_mesh_generation/generate_circular_coil.py",
+      "path": "validation_test/peec_integration/verification/cubit_mesh_generation/generate_circular_coil.py",
       "name": "generate_circular_coil.py",
       "subdir": "verification/cubit_mesh_generation",
       "current_lane": "validation_test_candidate",
@@ -280,12 +280,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 827,
-          "text": "examples/peec_integration/verification/cubit_mesh_generation/generate_circular_coil.py"
+          "text": "validation_test/peec_integration/verification/cubit_mesh_generation/generate_circular_coil.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/cubit_mesh_generation/generate_circular_wire.py",
+      "path": "validation_test/peec_integration/verification/cubit_mesh_generation/generate_circular_wire.py",
       "name": "generate_circular_wire.py",
       "subdir": "verification/cubit_mesh_generation",
       "current_lane": "validation_test_candidate",
@@ -301,12 +301,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 828,
-          "text": "examples/peec_integration/verification/cubit_mesh_generation/generate_circular_wire.py"
+          "text": "validation_test/peec_integration/verification/cubit_mesh_generation/generate_circular_wire.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py",
+      "path": "validation_test/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py",
       "name": "benchmark_panel_vs_ngbem.py",
       "subdir": "benchmarks",
       "current_lane": "validation_benchmark_candidate",
@@ -322,12 +322,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 713,
-          "text": "examples/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py"
+          "text": "validation_test/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/benchmarks/vf_benchmark_same_data.py",
+      "path": "validation_test/peec_integration/benchmarks/vf_benchmark_same_data.py",
       "name": "vf_benchmark_same_data.py",
       "subdir": "benchmarks",
       "current_lane": "validation_benchmark_candidate",
@@ -343,12 +343,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 714,
-          "text": "examples/peec_integration/benchmarks/vf_benchmark_same_data.py"
+          "text": "validation_test/peec_integration/benchmarks/vf_benchmark_same_data.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/coupled/test_delta_L_robustness.py",
+      "path": "validation_test/peec_integration/coupled/test_delta_L_robustness.py",
       "name": "test_delta_L_robustness.py",
       "subdir": "coupled",
       "current_lane": "src_api_plus_validation_review",
@@ -364,12 +364,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 726,
-          "text": "examples/peec_integration/coupled/test_delta_L_robustness.py"
+          "text": "validation_test/peec_integration/coupled/test_delta_L_robustness.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/coupled/validate_fem_back_reaction.py",
+      "path": "validation_test/peec_integration/coupled/validate_fem_back_reaction.py",
       "name": "validate_fem_back_reaction.py",
       "subdir": "coupled",
       "current_lane": "validation_test_candidate",
@@ -385,12 +385,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 727,
-          "text": "examples/peec_integration/coupled/validate_fem_back_reaction.py"
+          "text": "validation_test/peec_integration/coupled/validate_fem_back_reaction.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/coupled/verify_multielement_msc.py",
+      "path": "validation_test/peec_integration/coupled/verify_multielement_msc.py",
       "name": "verify_multielement_msc.py",
       "subdir": "coupled",
       "current_lane": "validation_test_candidate",
@@ -406,12 +406,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 728,
-          "text": "examples/peec_integration/coupled/verify_multielement_msc.py"
+          "text": "validation_test/peec_integration/coupled/verify_multielement_msc.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/cad_sweep_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/cad_sweep_smoke.py",
       "name": "cad_sweep_smoke.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -427,12 +427,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 730,
-          "text": "examples/peec_integration/filament_coil/cad_sweep_smoke.py"
+          "text": "validation_test/peec_integration/filament_coil/cad_sweep_smoke.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/circle_and_crosstype_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/circle_and_crosstype_smoke.py",
       "name": "circle_and_crosstype_smoke.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -448,12 +448,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 731,
-          "text": "examples/peec_integration/filament_coil/circle_and_crosstype_smoke.py"
+          "text": "validation_test/peec_integration/filament_coil/circle_and_crosstype_smoke.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_filament_vs_centerline.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_filament_vs_centerline.py",
       "name": "compare_filament_vs_centerline.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -469,12 +469,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 732,
-          "text": "examples/peec_integration/filament_coil/compare_filament_vs_centerline.py"
+          "text": "validation_test/peec_integration/filament_coil/compare_filament_vs_centerline.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_ihbem_peec_vs_tiera.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_ihbem_peec_vs_tiera.py",
       "name": "compare_ihbem_peec_vs_tiera.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -490,12 +490,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 733,
-          "text": "examples/peec_integration/filament_coil/compare_ihbem_peec_vs_tiera.py"
+          "text": "validation_test/peec_integration/filament_coil/compare_ihbem_peec_vs_tiera.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_peec_vs_tier_a.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_peec_vs_tier_a.py",
       "name": "compare_peec_vs_tier_a.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -511,12 +511,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 734,
-          "text": "examples/peec_integration/filament_coil/compare_peec_vs_tier_a.py"
+          "text": "validation_test/peec_integration/filament_coil/compare_peec_vs_tier_a.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_tier_a_vs_ngbem.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_tier_a_vs_ngbem.py",
       "name": "compare_tier_a_vs_ngbem.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -532,12 +532,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 735,
-          "text": "examples/peec_integration/filament_coil/compare_tier_a_vs_ngbem.py"
+          "text": "validation_test/peec_integration/filament_coil/compare_tier_a_vs_ngbem.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/from_step_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/from_step_smoke.py",
       "name": "from_step_smoke.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -553,12 +553,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 736,
-          "text": "examples/peec_integration/filament_coil/from_step_smoke.py"
+          "text": "validation_test/peec_integration/filament_coil/from_step_smoke.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/loft_taper_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/loft_taper_smoke.py",
       "name": "loft_taper_smoke.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -574,12 +574,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 740,
-          "text": "examples/peec_integration/filament_coil/loft_taper_smoke.py"
+          "text": "validation_test/peec_integration/filament_coil/loft_taper_smoke.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/polygon_and_b123d_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/polygon_and_b123d_smoke.py",
       "name": "polygon_and_b123d_smoke.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -595,12 +595,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 745,
-          "text": "examples/peec_integration/filament_coil/polygon_and_b123d_smoke.py"
+          "text": "validation_test/peec_integration/filament_coil/polygon_and_b123d_smoke.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/filament_coil/smoke_racetrack_tier_a.py",
+      "path": "validation_test/peec_integration/filament_coil/smoke_racetrack_tier_a.py",
       "name": "smoke_racetrack_tier_a.py",
       "subdir": "filament_coil",
       "current_lane": "docs_cad_filament_demo",
@@ -616,12 +616,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 746,
-          "text": "examples/peec_integration/filament_coil/smoke_racetrack_tier_a.py"
+          "text": "validation_test/peec_integration/filament_coil/smoke_racetrack_tier_a.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/benchmark_4case.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/benchmark_4case.py",
       "name": "benchmark_4case.py",
       "subdir": "ngsbem_peec_demo",
       "current_lane": "validation_benchmark_candidate",
@@ -637,12 +637,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 762,
-          "text": "examples/peec_integration/ngsbem_peec_demo/benchmark_4case.py"
+          "text": "validation_test/peec_integration/ngsbem_peec_demo/benchmark_4case.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py",
       "name": "verify_loop_peec_vs_ngsbem.py",
       "subdir": "ngsbem_peec_demo",
       "current_lane": "validation_test_candidate",
@@ -658,12 +658,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 768,
-          "text": "examples/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py"
+          "text": "validation_test/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py",
       "name": "verify_peec_vs_ngsbem.py",
       "subdir": "ngsbem_peec_demo",
       "current_lane": "validation_test_candidate",
@@ -679,12 +679,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 769,
-          "text": "examples/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py"
+          "text": "validation_test/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_busbar_comparison.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_busbar_comparison.py",
       "name": "experiment_busbar_comparison.py",
       "subdir": "ngsbem_peec_demo/fasthenry-like",
       "current_lane": "validation_test_candidate",
@@ -700,12 +700,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 772,
-          "text": "examples/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_busbar_comparison.py"
+          "text": "validation_test/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_busbar_comparison.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_dowell_comparison.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_dowell_comparison.py",
       "name": "experiment_dowell_comparison.py",
       "subdir": "ngsbem_peec_demo/fasthenry-like",
       "current_lane": "validation_test_candidate",
@@ -721,12 +721,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 773,
-          "text": "examples/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_dowell_comparison.py"
+          "text": "validation_test/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_dowell_comparison.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/spiral_inductor/cubit_compare_peec_vs_cad.py",
+      "path": "docs/peec_integration/demos/spiral_inductor/cubit_compare_peec_vs_cad.py",
       "name": "cubit_compare_peec_vs_cad.py",
       "subdir": "spiral_inductor",
       "current_lane": "docs_showcase_candidate",
@@ -742,12 +742,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 785,
-          "text": "examples/peec_integration/spiral_inductor/cubit_compare_peec_vs_cad.py"
+          "text": "docs/peec_integration/demos/spiral_inductor/cubit_compare_peec_vs_cad.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/check_mmm_elements.py",
+      "path": "validation_test/peec_integration/verification/check_mmm_elements.py",
       "name": "check_mmm_elements.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -763,12 +763,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 797,
-          "text": "examples/peec_integration/verification/check_mmm_elements.py"
+          "text": "validation_test/peec_integration/verification/check_mmm_elements.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/experiment_fem_convergence.py",
+      "path": "validation_test/peec_integration/verification/experiment_fem_convergence.py",
       "name": "experiment_fem_convergence.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -784,12 +784,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 798,
-          "text": "examples/peec_integration/verification/experiment_fem_convergence.py"
+          "text": "validation_test/peec_integration/verification/experiment_fem_convergence.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/experiment_loop_star_modes.py",
+      "path": "validation_test/peec_integration/verification/experiment_loop_star_modes.py",
       "name": "experiment_loop_star_modes.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -805,12 +805,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 799,
-          "text": "examples/peec_integration/verification/experiment_loop_star_modes.py"
+          "text": "validation_test/peec_integration/verification/experiment_loop_star_modes.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_bemsibc.py",
+      "path": "validation_test/peec_integration/verification/validate_bemsibc.py",
       "name": "validate_bemsibc.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -826,12 +826,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 801,
-          "text": "examples/peec_integration/verification/validate_bemsibc.py"
+          "text": "validation_test/peec_integration/verification/validate_bemsibc.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_bessel_sibc.py",
+      "path": "validation_test/peec_integration/verification/validate_bessel_sibc.py",
       "name": "validate_bessel_sibc.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -847,12 +847,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 802,
-          "text": "examples/peec_integration/verification/validate_bessel_sibc.py"
+          "text": "validation_test/peec_integration/verification/validate_bessel_sibc.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_circular_coil_sibc.py",
+      "path": "validation_test/peec_integration/verification/validate_circular_coil_sibc.py",
       "name": "validate_circular_coil_sibc.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -868,12 +868,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 803,
-          "text": "examples/peec_integration/verification/validate_circular_coil_sibc.py"
+          "text": "validation_test/peec_integration/verification/validate_circular_coil_sibc.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_circular_wire_sibc.py",
+      "path": "validation_test/peec_integration/verification/validate_circular_wire_sibc.py",
       "name": "validate_circular_wire_sibc.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -889,12 +889,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 804,
-          "text": "examples/peec_integration/verification/validate_circular_wire_sibc.py"
+          "text": "validation_test/peec_integration/verification/validate_circular_wire_sibc.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_coupled.py",
+      "path": "validation_test/peec_integration/verification/validate_coupled.py",
       "name": "validate_coupled.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -910,12 +910,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 805,
-          "text": "examples/peec_integration/verification/validate_coupled.py"
+          "text": "validation_test/peec_integration/verification/validate_coupled.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_coupling.py",
+      "path": "validation_test/peec_integration/verification/validate_coupling.py",
       "name": "validate_coupling.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -931,12 +931,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 806,
-          "text": "examples/peec_integration/verification/validate_coupling.py"
+          "text": "validation_test/peec_integration/verification/validate_coupling.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_fasthenry.py",
+      "path": "validation_test/peec_integration/verification/validate_fasthenry.py",
       "name": "validate_fasthenry.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -952,12 +952,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 807,
-          "text": "examples/peec_integration/verification/validate_fasthenry.py"
+          "text": "validation_test/peec_integration/verification/validate_fasthenry.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_loop_star.py",
+      "path": "validation_test/peec_integration/verification/validate_loop_star.py",
       "name": "validate_loop_star.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -973,12 +973,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 808,
-          "text": "examples/peec_integration/verification/validate_loop_star.py"
+          "text": "validation_test/peec_integration/verification/validate_loop_star.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_multifilament.py",
+      "path": "validation_test/peec_integration/verification/validate_multifilament.py",
       "name": "validate_multifilament.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -994,12 +994,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 809,
-          "text": "examples/peec_integration/verification/validate_multifilament.py"
+          "text": "validation_test/peec_integration/verification/validate_multifilament.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_ngbem_bridge.py",
+      "path": "validation_test/peec_integration/verification/validate_ngbem_bridge.py",
       "name": "validate_ngbem_bridge.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1015,12 +1015,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 810,
-          "text": "examples/peec_integration/verification/validate_ngbem_bridge.py"
+          "text": "validation_test/peec_integration/verification/validate_ngbem_bridge.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_panel_resonance.py",
+      "path": "validation_test/peec_integration/verification/validate_panel_resonance.py",
       "name": "validate_panel_resonance.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1036,12 +1036,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 811,
-          "text": "examples/peec_integration/verification/validate_panel_resonance.py"
+          "text": "validation_test/peec_integration/verification/validate_panel_resonance.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_shield_delta_r.py",
+      "path": "validation_test/peec_integration/verification/validate_shield_delta_r.py",
       "name": "validate_shield_delta_r.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1057,12 +1057,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 812,
-          "text": "examples/peec_integration/verification/validate_shield_delta_r.py"
+          "text": "validation_test/peec_integration/verification/validate_shield_delta_r.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_stabilized_bem.py",
+      "path": "validation_test/peec_integration/verification/validate_stabilized_bem.py",
       "name": "validate_stabilized_bem.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1078,12 +1078,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 813,
-          "text": "examples/peec_integration/verification/validate_stabilized_bem.py"
+          "text": "validation_test/peec_integration/verification/validate_stabilized_bem.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/validate_topology.py",
+      "path": "validation_test/peec_integration/verification/validate_topology.py",
       "name": "validate_topology.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1099,12 +1099,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 814,
-          "text": "examples/peec_integration/verification/validate_topology.py"
+          "text": "validation_test/peec_integration/verification/validate_topology.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_circle_area_2nd_order.py",
+      "path": "validation_test/peec_integration/verification/verify_circle_area_2nd_order.py",
       "name": "verify_circle_area_2nd_order.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1120,12 +1120,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 815,
-          "text": "examples/peec_integration/verification/verify_circle_area_2nd_order.py"
+          "text": "validation_test/peec_integration/verification/verify_circle_area_2nd_order.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_dowell_diffusion.py",
+      "path": "validation_test/peec_integration/verification/verify_dowell_diffusion.py",
       "name": "verify_dowell_diffusion.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1141,12 +1141,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 816,
-          "text": "examples/peec_integration/verification/verify_dowell_diffusion.py"
+          "text": "validation_test/peec_integration/verification/verify_dowell_diffusion.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_frequency_response_85khz.py",
+      "path": "validation_test/peec_integration/verification/verify_frequency_response_85khz.py",
       "name": "verify_frequency_response_85khz.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1162,12 +1162,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 817,
-          "text": "examples/peec_integration/verification/verify_frequency_response_85khz.py"
+          "text": "validation_test/peec_integration/verification/verify_frequency_response_85khz.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_lanczos_uv_equality.py",
+      "path": "validation_test/peec_integration/verification/verify_lanczos_uv_equality.py",
       "name": "verify_lanczos_uv_equality.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1183,12 +1183,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 818,
-          "text": "examples/peec_integration/verification/verify_lanczos_uv_equality.py"
+          "text": "validation_test/peec_integration/verification/verify_lanczos_uv_equality.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_loop_star.py",
+      "path": "validation_test/peec_integration/verification/verify_loop_star.py",
       "name": "verify_loop_star.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1204,12 +1204,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 819,
-          "text": "examples/peec_integration/verification/verify_loop_star.py"
+          "text": "validation_test/peec_integration/verification/verify_loop_star.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_ngsolve_inductance.py",
+      "path": "validation_test/peec_integration/verification/verify_ngsolve_inductance.py",
       "name": "verify_ngsolve_inductance.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1225,17 +1225,17 @@
         {
           "path": "docs/solver/NGBEM_INTEGRATION_DESIGN.md",
           "line": 932,
-          "text": "**Script**: `examples/peec_integration/verification/verify_ngsolve_inductance.py`"
+          "text": "**Script**: `validation_test/peec_integration/verification/verify_ngsolve_inductance.py`"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 820,
-          "text": "examples/peec_integration/verification/verify_ngsolve_inductance.py"
+          "text": "validation_test/peec_integration/verification/verify_ngsolve_inductance.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_peec_prima_dowell.py",
+      "path": "validation_test/peec_integration/verification/verify_peec_prima_dowell.py",
       "name": "verify_peec_prima_dowell.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1251,12 +1251,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 821,
-          "text": "examples/peec_integration/verification/verify_peec_prima_dowell.py"
+          "text": "validation_test/peec_integration/verification/verify_peec_prima_dowell.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_prima_dowell_correct.py",
+      "path": "validation_test/peec_integration/verification/verify_prima_dowell_correct.py",
       "name": "verify_prima_dowell_correct.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1272,12 +1272,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 822,
-          "text": "examples/peec_integration/verification/verify_prima_dowell_correct.py"
+          "text": "validation_test/peec_integration/verification/verify_prima_dowell_correct.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_prima_dowell_form.py",
+      "path": "validation_test/peec_integration/verification/verify_prima_dowell_form.py",
       "name": "verify_prima_dowell_form.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1293,12 +1293,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 823,
-          "text": "examples/peec_integration/verification/verify_prima_dowell_form.py"
+          "text": "validation_test/peec_integration/verification/verify_prima_dowell_form.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_prima_frequency_response.py",
+      "path": "validation_test/peec_integration/verification/verify_prima_frequency_response.py",
       "name": "verify_prima_frequency_response.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1314,12 +1314,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 824,
-          "text": "examples/peec_integration/verification/verify_prima_frequency_response.py"
+          "text": "validation_test/peec_integration/verification/verify_prima_frequency_response.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_prima_loop_star.py",
+      "path": "validation_test/peec_integration/verification/verify_prima_loop_star.py",
       "name": "verify_prima_loop_star.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1335,12 +1335,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 825,
-          "text": "examples/peec_integration/verification/verify_prima_loop_star.py"
+          "text": "validation_test/peec_integration/verification/verify_prima_loop_star.py"
         }
       ]
     },
     {
-      "path": "examples/peec_integration/verification/verify_symmetrization.py",
+      "path": "validation_test/peec_integration/verification/verify_symmetrization.py",
       "name": "verify_symmetrization.py",
       "subdir": "verification",
       "current_lane": "validation_test_candidate",
@@ -1356,10 +1356,10 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 826,
-          "text": "examples/peec_integration/verification/verify_symmetrization.py"
+          "text": "validation_test/peec_integration/verification/verify_symmetrization.py"
         }
       ]
     }
   ],
-  "notebook_sha256": "ae14d6fa0622a69913c08fa7c1dcc9df30aa6eee33d414ea4a14fe443d6b296e"
+  "notebook_sha256": "d187db608123d5d679598fc834202cf4f4f2bb43eaea131ee56c81e464507fa4"
 }

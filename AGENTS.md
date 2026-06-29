@@ -1202,7 +1202,7 @@ The complete pipeline for accelerator electromagnet analysis:
 
 ### Vector Potential A Field
 
-A field is **implemented** for all element types using face integration (Wilton et al. formula). Formula: `A = (mu_0/4pi) * (M x BufVect)`. Satisfies `B = curl(A)` (verified numerically). Verification script: `examples/ngsolve_integration/verify_curl_A_equals_B/`.
+A field is **implemented** for all element types using face integration (Wilton et al. formula). Formula: `A = (mu_0/4pi) * (M x BufVect)`. Satisfies `B = curl(A)` (verified numerically). Verification script: `validation_test/ngsolve_integration/verify_curl_A_equals_B/`.
 
 ### User-Facing Element APIs
 

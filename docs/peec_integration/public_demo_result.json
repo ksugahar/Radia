@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T01:47:02Z",
+  "generated_at_utc": "2026-06-29T06:43:30Z",
   "notebook": "docs/peec_integration/public_demo.ipynb",
-  "notebook_sha256": "41b3d5d8f0eef0a3e5cb68dcf4847a8eae321f7088c0a8938eb9da7579fbfc16",
+  "notebook_sha256": "6befdd22873823d6723ee87ebc18718e503a13487dc789e0311a2e3c29d6fbf8",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -101,8 +101,8 @@
     {
       "cell_index": 5,
       "execution_count": 5,
-      "source_sha256": "f58dd8e287050ee5331eaeec697cb8bfba14bf4d2390fc31a5662c2e38a5b78d",
-      "source_preview": "commands = {\n    'examples/peec_integration/basic_peec/demo_peec_simple_loop.py': 'python examples/peec_integration/basic_peec/demo_peec_simple_loop.py',\n    'examples/peec_integration/basic_peec/demo_frequency_response.py': 'python examples/peec_integration/basic_peec/demo_frequency_response.py',\n    'examples/peec_integration/gmsh_models/demo_gmsh_ports_peec.py': 'python examples/peec_integration/gmsh_models/demo_gmsh_ports_peec.py',\n    'examples/peec_integration/spice/demo_peec_prima_reduction.py': 'python examples/peec_integration/spice/demo_peec_prima_reduction.py',\n}\nrows=[]\nfor r in demo['selected_records']:\n    arts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['lane'], f'`{commands.get(r[\"path\"], \"python \" + r[\"path\"])}`', arts, r['source']['summary']])\nmd = '## Representative runnable companions\\n\\n' + '\\n'.join(['| script | lane | command | artifacts | ",
+      "source_sha256": "e474349fe1023a002f6ad260b6d2b764363661916d8c5997b61e73883901a265",
+      "source_preview": "commands = {\n    'docs/peec_integration/demos/basic_peec/demo_peec_simple_loop.py': 'python docs/peec_integration/demos/basic_peec/demo_peec_simple_loop.py',\n    'docs/peec_integration/demos/basic_peec/demo_frequency_response.py': 'python docs/peec_integration/demos/basic_peec/demo_frequency_response.py',\n    'docs/peec_integration/demos/gmsh_models/demo_gmsh_ports_peec.py': 'python docs/peec_integration/demos/gmsh_models/demo_gmsh_ports_peec.py',\n    'docs/peec_integration/demos/spice/demo_peec_prima_reduction.py': 'python docs/peec_integration/demos/spice/demo_peec_prima_reduction.py',\n}\nrows=[]\nfor r in demo['selected_records']:\n    arts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([f'[`{r[\"path\"]}`](../../{r[\"path\"]})', r['lane'], f'`{commands.get(r[\"path\"], \"python \" + r[\"path\"])}`', arts, r['source']['summary']])\nmd = '## Representative runnable companions\\n\\n' + '\\n'.join(['| script | lane | comman",
       "outputs": [
         {
           "output_type": "display_data",

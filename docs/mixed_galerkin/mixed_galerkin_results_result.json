@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T22:29:19Z",
+  "generated_at_utc": "2026-06-29T06:43:29Z",
   "notebook": "docs/mixed_galerkin/mixed_galerkin_results.ipynb",
-  "notebook_sha256": "517b96d9a38c3538b70d0b44917d7f987b2148d7a31db0cef63e16495efc7d92",
+  "notebook_sha256": "fa9aa2b661a6c60768dff63292140ab49b956fb0dc71126312aea99bae45dc55",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
