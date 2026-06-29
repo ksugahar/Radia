@@ -352,7 +352,15 @@ public:
 	}
 	radTPolyhedron(radTPolyhedron& aPlhdr) : radTg3dRelax(aPlhdr)
 	{
+		// radTg3dRelax(aPlhdr) above already made this object OWN a deep copy of the base
+		// pM_LinCoef.  The compiler-generated operator= invoked by "*this = aPlhdr" would
+		// shallow-overwrite that owned pointer with aPlhdr's -- leaking the deep copy AND
+		// aliasing aPlhdr's pM_LinCoef, so the base dtor (~radTg3dRelax) double-frees it.
+		// Preserve the owned base copy across the assignment; mirror the single-ownership
+		// re-deep-copy already done for pJ_LinCoef below.
+		TMatrix3d* pOwnedM_LinCoef = pM_LinCoef;
 		*this = aPlhdr;
+		pM_LinCoef = pOwnedM_LinCoef;
 		if(aPlhdr.pJ_LinCoef != 0) pJ_LinCoef = new TMatrix3d(*(aPlhdr.pJ_LinCoef));
 	}
 	// radTPolyhedron(CAuxBinStrVect&, ...) REMOVED (Phase B2c, 2026-04-15)
