@@ -183,6 +183,63 @@ def test_spwm_snapshot_current_handoff_samples_one_electrical_period():
     assert summary["rows"][0]["dq"]["status"] == "ok"
 
 
+def test_spwm_snapshot_rows_feed_jmag_style_dq_torque_table_contract():
+    summary = spwm_snapshot_current_handoff_summary(
+        id_current=-2.5,
+        iq_current=11.0,
+        sample_count=24,
+        sample_offset_fraction=0.5,
+        carrier_ratio=12,
+    )
+    current = summary["current_amplitude"]
+    gamma_deg = math.degrees(math.atan2(-summary["id"], summary["iq"]))
+    lambda_m = 0.10
+    Ld = 4.0e-3
+    Lq = 9.0e-3
+    pole_pairs = 3
+    torque = lumped_pm_dq_torque(lambda_m, Ld, Lq, summary["id"], summary["iq"], pole_pairs)
+
+    row = {
+        "sample_index": summary["rows"][0]["sample"],
+        "theta_e_deg": summary["rows"][0]["theta_e_deg"],
+        "theta_mech_deg": summary["rows"][0]["theta_e_deg"] / pole_pairs,
+        "current_U_A": summary["rows"][0]["currents"]["U"],
+        "current_V_A": summary["rows"][0]["currents"]["V"],
+        "current_W_A": summary["rows"][0]["currents"]["W"],
+        "id_A": summary["id"],
+        "iq_A": summary["iq"],
+        "gamma_deg": gamma_deg,
+        "torque_Nm": torque,
+        "carrier_ratio": summary["carrier_ratio"],
+        "sample_offset_fraction": summary["sample_offset_fraction"],
+        "phase_order": "U,V,W",
+    }
+    health = dq_torque_table_health(
+        [
+            {"gamma_deg": -30.0, "id_A": 0.5 * current, "iq_A": math.sqrt(3.0) * current / 2.0,
+             "torque_Nm": lumped_pm_dq_torque(lambda_m, Ld, Lq, 0.5 * current, math.sqrt(3.0) * current / 2.0, pole_pairs)},
+            {"gamma_deg": 0.0, "id_A": 0.0, "iq_A": current,
+             "torque_Nm": lumped_pm_dq_torque(lambda_m, Ld, Lq, 0.0, current, pole_pairs)},
+            {"gamma_deg": row["gamma_deg"], "id_A": row["id_A"], "iq_A": row["iq_A"], "torque_Nm": row["torque_Nm"]},
+            {"gamma_deg": 30.0, "id_A": -0.5 * current, "iq_A": math.sqrt(3.0) * current / 2.0,
+             "torque_Nm": lumped_pm_dq_torque(lambda_m, Ld, Lq, -0.5 * current, math.sqrt(3.0) * current / 2.0, pole_pairs)},
+        ],
+        lambda_m=lambda_m,
+        Ld=Ld,
+        Lq=Lq,
+        current=current,
+        pole_pairs=pole_pairs,
+    )
+
+    assert summary["status"] == "ok"
+    assert row["theta_mech_deg"] == pytest.approx(2.5)
+    assert row["gamma_deg"] == pytest.approx(12.80426606528675)
+    assert row["torque_Nm"] == pytest.approx(5.56875)
+    assert row["carrier_ratio"] == pytest.approx(12.0)
+    assert health["status"] == "ok"
+    assert health["peak_row"]["gamma_deg"] == pytest.approx(30.0)
+
+
 def test_dq_torque_table_health_closes_jmag_map_column_contract():
     lambda_m = 0.10
     Ld = 4.0e-3
