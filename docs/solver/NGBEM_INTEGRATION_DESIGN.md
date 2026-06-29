@@ -929,7 +929,7 @@ Independent verification of Radia PEEC+BEM results using NGSolve FEM (A-formulat
 The two methods share no code: PEEC uses Neumann formula + BEM surface currents,
 while FEM uses a full volume mesh with energy-based inductance extraction.
 
-**Script**: `examples/peec_integration/verification/verify_ngsolve_inductance.py`
+**Script**: `validation_test/peec_integration/verification/verify_ngsolve_inductance.py`
 **PEEC Reference**: `examples/peec_integration/applications/demo_circular_coil_4cases.py`
 
 ### Verification Geometry

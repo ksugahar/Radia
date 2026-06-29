@@ -13,8 +13,8 @@ unattended).
 |--------|------|-----------|
 | shipped | `bench_helmholtz_pair.py` | Analytical Helmholtz pair (uniform Bz, Maxwell) |
 
-This directory was promoted from `examples/stream_function/benchmarks`.
-Previously the example directory also held TODO-only benchmark stubs. Those
+This directory was promoted out of the examples tier.
+Previously that tier also held TODO-only benchmark stubs. Those
 were removed because they were not runnable examples. The target list is kept
 in `docs/stream_function/benchmarks.md` and
 `memory/stream_function_benchmark_stubs_prune.md` until a target is implemented

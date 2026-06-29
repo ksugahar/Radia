@@ -29,7 +29,7 @@ Reference:
 
 # Import from C++ pybind11 module (REQUIRED - no fallback)
 try:
-    from peec_matrices import PEECBuilder, create_wire_peec, create_loop_peec
+    from radia.peec_matrices import PEECBuilder, create_wire_peec, create_loop_peec
 except ImportError as e:
     raise ImportError(
         "PEEC C++ module (peec_matrices.pyd) not found. "

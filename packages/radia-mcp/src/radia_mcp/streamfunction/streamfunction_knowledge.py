@@ -130,8 +130,8 @@ DOCS + DEMOS
   SHOWCASE NOTEBOOKS (executed, outputs embedded -- the method run live):
     docs/stream_function/demo_gallery.ipynb    -- public demo gallery for the
        remaining human-facing examples; validation/benchmark runners are split
-       to validation_test/stream_function, while examples/stream_function stays
-       the runnable companion set for now
+       to validation_test/stream_function, with reusable computation promoted
+       to src/radia APIs
     docs/stream_function/theory.ipynb          -- build_fem_matrix on plane /
        cylinder / sphere + achievable RMS; Path-A residual-vs-iteration (honest
        non-monotone with auto-levels); complexity-tier table from the 4 demos
@@ -142,12 +142,12 @@ DOCS + DEMOS
     docs/stream_function/deformation.ipynb     -- run_deformation_search live:
        penalty form (--minimize-reg) + NSGA-II Pareto front (--pareto);
        cost-vs-trial + (RMS, psi^T S psi) front; flat/accuracy/reg-min table
-    examples/stream_function/demo_*.py -- runnable companions for the maintained
-       docs notebooks; obsolete source-preservation ledgers have been retired.
-    (these are the runnable companions to the .md twins; the .md keeps the
-    prose/derivations, the .ipynb embeds the produced numbers + figures)
-  examples/stream_function/demo_*.py  -- incl. the Pareto + sheet-metal
-    demos: demo_pareto_tikhonov_aca / demo_pareto_geometry_nsga /
+    docs/stream_function/examples_catalog.ipynb -- source/result migration
+       ledger for transitional demo scripts, synchronized with JSON sidecars.
+    (the .md keeps the prose/derivations; the .ipynb embeds the produced
+    numbers + figures; validation and benchmarks execute from validation_test)
+  Demo records include the Pareto + sheet-metal cases:
+    demo_pareto_tikhonov_aca / demo_pareto_geometry_nsga /
     demo_pareto_cylinder / demo_pareto_deform / demo_pareto_cylinder_deform
 
 The detailed knowledge lives in this server's own knowledge module
@@ -323,10 +323,11 @@ winding-surface Biot-Savart kernel we already assemble (A3 = 3-component A at
 the plasma points; A_n = einsum('mc,mcj->mj', plasma_normal, A3)).  No
 fusion-specific solver code.
 
-DEMOS
------
-  examples/stream_function/demo_regcoil_fusion.py            (4 parts)
-  examples/stream_function/demo_regcoil_fusion_advanced.py   (4 more parts)
+DOCS / VALIDATION SURFACES
+--------------------------
+  docs/stream_function/fusion.md
+  docs/stream_function/demo_gallery.ipynb
+  validation_test/stream_function/regcoil_fusion_helpers.py
 
 demo_regcoil_fusion.py
   1. FORWARD MAP IS EXACT.  Producible targets -- uniform vertical (PF /
@@ -443,9 +444,9 @@ win for single-conductor coils."
 
 EARNED BY MEASUREMENT (the three goldens, Repository-First)
 ----------------------------------------------------------
-  (a) VACUUM PARITY + DELIVERABLE -- test_regcoil_parity_deliverable_golden.py
-      (examples/stream_function/demo_regcoil_parity_deliverable.py): a uniform-
-      vertical B.n design on the torus winding surface hits B.n_rel ~4.9e-9
+  (a) VACUUM PARITY + DELIVERABLE -- test_regcoil_parity_deliverable_golden.py:
+      a uniform-vertical B.n design on the torus winding surface hits
+      B.n_rel ~4.9e-9
       (parity) AND the SAME run emits a ~954 kB STEP + PEEC L ~3.09 uH
       ("design equal, deliverable beyond").
   (b) IRON DIFFERENTIATOR -- test_regcoil_iron_differentiator_golden.py
@@ -504,8 +505,8 @@ ANALYSIS -- the achieved Bz over the DSV is decomposed in DESIGN mode
                -- the standard "gradient purity" gradient-coil quality metric
   * max_contaminant   the largest non-target harmonic (e.g. a Gx coil's Z2X)
 
-VERIFIED (cylinder fixture, order 2, confine abe;
-examples/stream_function/demo_shim_coil_purity.py): --target-harmonic X ->
+VERIFIED (cylinder fixture, order 2, confine abe; gallery record
+demo_shim_coil_purity.py): --target-harmonic X ->
 dominant X, purity 1.000, residual 1.5e-4, Z2X contaminant 7e-5; Z2 ->
 purity 1.000; the 4th-order Z4 shim -> purity 0.99983, residual 1.5e-2,
 named Z3 contaminant 9.5e-3 (high-l shims are harder: an l-th harmonic's
@@ -552,7 +553,7 @@ COVERAGE IS EVERYTHING (measured, the key lesson): the external null region
 must COVER the exterior, not a thin mid-plane slice.
   * LARGE full-length shell (r=0.235-0.27, spans the coil) -> GENUINE
     ~86x (39 dB) stray reduction, 100-1700x in the far field, DSV
-    homogeneity preserved (examples/stream_function/demo_active_shield.py).
+    homogeneity preserved (gallery record demo_active_shield.py).
   * TOO-SMALL thin slice -> point-sampled nulling OVERFITS the slice (~4x
     locally) and makes the field WORSE at larger z.
   * the un-sampled GAP between shield (r=0.20) and null region (r=0.235)
@@ -866,8 +867,8 @@ N=20) / 0.98% with --optimize-levels -> ~6.7% DELIVERED single-stroke wire
 (grad-psi + auto-resolution field_aware chain).  Gx (l=1) is IDENTICAL either way
 (grad-psi is a strict generalisation).  This was an orientation BUG, not a physics
 limit -- single-wire l>=2 shims DO work.  `_gradpsi_signs` / `_build_gradpsi_kdt`
-in calc_streamfunction.py; verified by examples/stream_function/
-verify_gradpsi_orientation.py.
+in calc_streamfunction.py; verified by
+validation_test/stream_function/verify_gradpsi_orientation.py.
   DELIVERED gap (loop-set ~0.01 vs single-stroke wire ~0.067) = the inter-region
   CONNECTOR (bridge) field, NOT a loop-set error.  It was mostly chain UNDER-
   RESOLUTION: the old fixed cut-opt (ncut=24,passes=4) left clustered-level Z2 at

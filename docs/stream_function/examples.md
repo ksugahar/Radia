@@ -9,12 +9,13 @@ protected references, and migration lane captured before promotion. Validation
 and benchmark runners promoted from examples now live under
 [`validation_test/stream_function/`](../../validation_test/stream_function/).
 
-Human-facing demos remain under
-[`examples/stream_function/`](../../examples/stream_function/).
 The public result-saved demo entry point is
 [`demo_gallery.ipynb`](demo_gallery.ipynb), synchronized with
 [`demo_gallery_results.json`](demo_gallery_results.json) and
-[`demo_gallery_result.json`](demo_gallery_result.json).
+[`demo_gallery_result.json`](demo_gallery_result.json).  The remaining source
+script names below are a migration ledger, not the preferred public entry
+point; as each case is promoted, link notebooks, JSON sidecars,
+`validation_test`, or `src` APIs rather than the old examples tier.
 
 ## Core demos (axisymmetric / fingerprint / planar)
 
