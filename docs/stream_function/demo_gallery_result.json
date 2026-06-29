@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-29T04:44:07Z",
+  "generated_at_utc": "2026-06-29T05:13:43Z",
   "notebook": "docs/stream_function/demo_gallery.ipynb",
-  "notebook_sha256": "f3824bbdb440f0b4ef30ccda22cbd7f23746a83338c1291d9a4d0856f490b34a",
+  "notebook_sha256": "dabd9cd9f03530c4b2f4f0ca40b82dff8b968e510b1009b297fec92d31e96ec7",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -34,9 +34,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 367,
-          "text_sha256": "06f574a6192ac3c795a5b8865feae9216a6ebf42ea1e4008e65bc19a037193ca",
-          "text_preview": "{\n  \"script_count\": 26,\n  \"source_line_count\": 10132,\n  \"artifact_count\": 33,\n  \"demo_group_counts\": {\n    \"kernel/material extension demo\": 4,\n    \"coil manufacture / field synthesis demo\": 10,\n    \"showcase demo\": 1,\n    \"regularization and Pareto demo\": 7,\n    \"fusion current-potential demo\": 3,\n    \"visualization helper\": 1\n  },\n  \"selected_gallery_count\": 7\n}\n",
+          "text_chars": 464,
+          "text_sha256": "41926f88c164ef503da7ecc02d018a1d32061aeca213192798df802515029ab1",
+          "text_preview": "{\n  \"script_count\": 26,\n  \"source_line_count\": 10132,\n  \"artifact_count\": 33,\n  \"demo_group_counts\": {\n    \"kernel/material extension demo\": 4,\n    \"coil manufacture / field synthesis demo\": 10,\n    \"showcase demo\": 1,\n    \"regularization and Pareto demo\": 7,\n    \"fusion current-potential demo\": 3,\n    \"visualization helper\": 1\n  },\n  \"selected_gallery_count\": 7,\n  \"examples_stream_function_tracked_artifacts_remaining\": 0,\n  \"docs_result_artifact_count\": 45\n}\n",
           "text_truncated": false
         }
       ]
@@ -63,8 +63,8 @@
     {
       "cell_index": 3,
       "execution_count": 3,
-      "source_sha256": "fb17bc11f3ec5ac6362e687cc73746330095c7c61f1daea5da2eba097d993432",
-      "source_preview": "rows = []\ncommands = {\n    'demo_sf_to_peec_gz.py': 'python docs/stream_function/demo_sf_to_peec_gz.py --with-peec',\n    'demo_sf_to_peec_gx.py': 'python docs/stream_function/demo_sf_to_peec_gx.py --chain-method kuijpers',\n    'demo_planar_uniform_fem_psi.py': 'python docs/stream_function/demo_planar_uniform_fem_psi.py --regularize h1 --compensated-iter 100 --compensated-step 0.05',\n    'demo_sphere_fe_direct.py': 'python docs/stream_function/demo_sphere_fe_direct.py --target z2 --distort --plot',\n    'demo_pareto_tikhonov_aca.py': 'python docs/stream_function/demo_pareto_tikhonov_aca.py --front both',\n    'demo_regcoil_fusion.py': 'python docs/stream_function/demo_regcoil_fusion.py',\n    'view_sf_coil_gx_gmsh.py': 'python docs/stream_function/view_sf_coil_gx_gmsh.py --mode contours',\n}\nfor r in archive['selected_gallery']:\n    arts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([f'[`{r[\"name\"]}`]({r.get(\"c",
+      "source_sha256": "64b32b61174b7790fdc8892ac29f61808177dfaf0c56a7b5526c8283adb5deae",
+      "source_preview": "rows = []\ncommands = {\n    'demo_sf_to_peec_gz.py': 'python docs/stream_function/demo_sf_to_peec_gz.py --with-peec',\n    'demo_sf_to_peec_gx.py': 'python docs/stream_function/demo_sf_to_peec_gx.py --chain-method kuijpers',\n    'demo_planar_uniform_fem_psi.py': 'python docs/stream_function/demo_planar_uniform_fem_psi.py --regularize h1 --compensated-iter 100 --compensated-step 0.05',\n    'demo_sphere_fe_direct.py': 'python docs/stream_function/demo_sphere_fe_direct.py --target z2 --distort --plot',\n    'demo_pareto_tikhonov_aca.py': 'python docs/stream_function/demo_pareto_tikhonov_aca.py --front both',\n    'demo_regcoil_fusion.py': 'python docs/stream_function/demo_regcoil_fusion.py',\n    'view_sf_coil_gx_gmsh.py': 'python docs/stream_function/view_sf_coil_gx_gmsh.py --mode contours',\n}\nfor r in archive['selected_gallery']:\n    arts = ', '.join(f'[{Path(a.get(\"current_path\", a[\"path\"])).name}]({a.get(\"current_path\", a[\"path\"]).split(\"docs/stream_function/\")[-1]})' for a in r.get('sibli",
       "outputs": [
         {
           "output_type": "display_data",
@@ -82,8 +82,8 @@
     {
       "cell_index": 4,
       "execution_count": 4,
-      "source_sha256": "6cd63f18c09bc8996e2670bdcfa98de5136e8c29bdd81a00c5931f314b1c2174",
-      "source_preview": "artifact_rows = []\nfor r in records:\n    for a in r.get('sibling_artifacts', []):\n        if a['path'].endswith(('.png', '.pdf', '.json')):\n            artifact_rows.append([f'[`{r[\"name\"]}`]({r.get(\"current_path\", r[\"path\"]).split(\"docs/stream_function/\")[-1]})', f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})', a['bytes'], a['sha256'][:12]])\nartifact_rows = artifact_rows[:18]\nmd = '## Saved result/media artifacts (sample)\\n\\n' + '\\n'.join(['| script | artifact | bytes | sha256 |', '| --- | --- | ---: | --- |'] + [f'| {a} | {b} | {c} | `{d}` |' for a,b,c,d in artifact_rows])\ndisplay(Markdown(md))",
+      "source_sha256": "6c852fb9546a935dc35ad000e0499e8d590dadf3d0c38e4adfdf9bdfd87c84af",
+      "source_preview": "artifact_rows = []\nfor r in records:\n    for a in r.get('sibling_artifacts', []):\n        if a['path'].endswith(('.png', '.pdf', '.json')):\n            artifact_rows.append([f'[`{r[\"name\"]}`]({r.get(\"current_path\", r[\"path\"]).split(\"docs/stream_function/\")[-1]})', f'[{Path(a.get(\"current_path\", a[\"path\"])).name}]({a.get(\"current_path\", a[\"path\"]).split(\"docs/stream_function/\")[-1]})', a['bytes'], a['sha256'][:12]])\nartifact_rows = artifact_rows[:18]\nmd = '## Saved result/media artifacts (sample)\\n\\n' + '\\n'.join(['| script | artifact | bytes | sha256 |', '| --- | --- | ---: | --- |'] + [f'| {a} | {b} | {c} | `{d}` |' for a,b,c,d in artifact_rows])\ndisplay(Markdown(md))",
       "outputs": [
         {
           "output_type": "display_data",
