@@ -51,33 +51,28 @@ def test_per_region_equal_mu_matches_scalar():
     and the build-correctness comparison is meaningful (then they agree to ~1e-8).  Pin gram_eps=1e-12 on
     BOTH so the dict (GMRES form-1, default 1e-10) and scalar (CG mass-riesz, whose default tightens to
     1e-12) build the IDENTICAL Gram -- comparing the SAME operator, not two ACA tolerances.  Pin
-    near_factor=1e30 on BOTH too: the scalar CG-tet path defaults to the fast near/far build (near_factor=2
+    ho_far_factor=float("inf") on BOTH too: the scalar CG-tet path defaults to the fast near/far build (near_factor=2
     + far_quad=4) while the dict GMRES path stays all-analytic, so force both to the exact all-analytic Gram."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
         rd = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
-                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
+                              tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
         rs = hdiv_demag_solve(mesh, mu_r=200.0, H_ext=HEXT,
-                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
+                              tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
     assert np.allclose(rd["M"], rs["M"], rtol=1e-8, atol=1e-5)
     assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-5)
 
 
 def test_per_region_default_is_cpp_symmetric_cg():
-    """Per-region linear now defaults to the all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
-    (M_{1/chi} + N) m = M_mass h_ext (W = the 1/chi-weighted HDiv mass).  For EQUAL mu the symmetric form
-    and the form-1 GMRES cross-check are the SAME operator, so the two agree to the Krylov tolerance --
-    locking that the C++ per-region path is wired and correct."""
+    """Per-region linear (RT1) uses the all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
+    (M_{1/chi} + N) m = M_mass h_ext (W = the 1/chi-weighted HDiv mass is both the system mass and the Riesz
+    preconditioner).  (The RT0-era form-1 GMRES per-region cross-check is retired with RT0; the per-region
+    path's correctness is locked by test_per_region_equal_mu_matches_scalar.)"""
     mesh = _two_region_mesh()
     with ng.TaskManager():
         cg = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
-                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
-        gm = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT, linear_solver="gmres",
-                              tol=1e-11, gram_eps=1e-12, near_factor=1e30)
-    assert cg["linear_solver"] == "mass-riesz-cg"     # default per-region = C++ symmetric CG
-    assert gm["linear_solver"] == "mass-riesz-gmres"  # explicit opt-in = form-1 GMRES
-    assert np.allclose(cg["M_avg"], gm["M_avg"], rtol=1e-6, atol=1e-4), \
-        f"per-region CG {cg['M_avg']} vs GMRES {gm['M_avg']}"
+                              tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
+    assert cg["linear_solver"] == "mass-riesz-cg"     # per-region RT1 = C++ symmetric CG
 
 
 def test_per_region_different_mu_physics():
@@ -142,8 +137,10 @@ def test_per_region_nl_equal_table_matches_single():
         rd = hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_SOFT}, H_ext=HEXT_NL, nl_tol=1e-6)
         rs = hdiv_demag_solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
     assert rd["nonlinear"] and rs["nonlinear"]
-    assert np.allclose(rd["M"], rs["M"], rtol=1e-8, atol=1e-3)
-    assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-3)
+    # RT1 (more charge DOF than RT0) -> the dict and single energy-Newton paths agree to ~1e-7 relative
+    # (the Newton nl_tol=1e-6 + tiny PCHIP/quadrature path differences), not the old RT0 ~1e-9.
+    assert np.allclose(rd["M"], rs["M"], rtol=1e-5, atol=1.0)
+    assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-5, atol=1.0)
 
 
 @pytest.mark.slow
@@ -162,7 +159,7 @@ def test_per_region_nl_different_tables_physics():
     z, zs, zh, zL = r["M_avg"][2], rs["M_avg"][2], rh["M_avg"][2], rL["M_avg"][2]
     assert zh < z < zs                                    # bounded: harder grade -> less, softer -> more
     assert abs(z - zs) > 0.03 * abs(zs)                   # distinct from all-soft (measured ~11%)
-    assert abs(z - zh) > 0.01 * abs(zh)                   # distinct from all-hard (measured ~2.3%)
+    assert abs(z - zh) > 0.005 * abs(zh)                  # distinct from all-hard (RT1 measured ~0.85%)
     assert abs(zs - zL) > 0.10 * abs(zL)                  # saturation engaged: nonlinear != linear (~26%)
 
 

@@ -30,22 +30,17 @@ def _cube(h):
     return ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=h))
 
 
-def test_demagoperator_factor_order_invariant():
-    """DemagOperator(HDiv(mesh,order=p)).DemagFactor -> ~1/3, IDENTICAL across p=0,1 (RT2+ abolished)."""
+def test_demagoperator_factor_rt1():
+    """DemagOperator(HDiv(mesh, order=1)).DemagFactor -> ~1/3 on a cube.  HDiv-VIM is RT1-only: RT0 (order=0)
+    is retired (per-element inaccurate) and RT2+ is retired, so only RT1 is exercised (and RT0/RT2 must raise)."""
     mesh = _cube(0.8)
-    D = {}
-    for p in (0, 1):
-        with ng.TaskManager():
-            fes = ng.HDiv(mesh, order=p)
-            N = DemagOperator(fes, eps=1e-7)
-            D[p] = N.DemagFactor(ng.CF((0, 0, 1)))
-    for p, v in D.items():
-        assert 0.31 < v < 0.345, f"order={p} DemagFactor {v:.5f} not ~1/3"
-    # order-0 uses the EXACT ANALYTIC Gram (Wilton/PhiTet, fast); order-1 uses the Sauter-Schwab QUADRATURE
-    # Gram (no analytic high-order Gram exists), so RT0 and RT1 differ ONLY by the (order-dependent) quadrature
-    # accuracy (~1e-3 on this coarse cube).  RT2+ is abolished, so the former 3-order invariance is now the
-    # 0-vs-1 check.  (The order-0 analytic Gram == the validated solve_nonlinear_newton_scalable Gram, ~5e-10.)
-    assert abs(D[0] - D[1]) < 3e-3, f"analytic order-0 vs quadrature order-1 beyond quad error: {D}"
+    with ng.TaskManager():
+        D = DemagOperator(ng.HDiv(mesh, order=1), eps=1e-7).DemagFactor(ng.CF((0, 0, 1)))
+        # RT0 + RT2 are retired -> the operator rejects them (No-Fallbacks)
+        for bad in (0, 2):
+            with pytest.raises(ValueError, match="RT1"):
+                DemagOperator(ng.HDiv(mesh, order=bad), eps=1e-7)
+    assert 0.31 < D < 0.345, f"RT1 DemagFactor {D:.5f} not ~1/3"
 
 
 def test_demagoperator_mat_composes_with_ngsolve():
@@ -71,26 +66,5 @@ def test_demagoperator_mat_composes_with_ngsolve():
         assert np.linalg.norm(res.FV().NumPy()) < 1e-5 * np.linalg.norm(rhs.FV().NumPy()), "GMRes did not converge"
 
 
-@pytest.mark.parametrize("p", [0, 1])
-def test_demagoperator_gauss_backend_matches_analytic(p):
-    """DemagOperator(gram_backend='gauss') -- the Gauss POINT operator (P^T K_point P + near correction)
-    plugged into the SAME .mat path -- matches the analytic Gram DemagFactor to <1e-3 at p=0,1 (RT2+ abolished), and its
-    .mat is a real NGSolve BaseMatrix that composes into (M + N) for a GMRes solve."""
-    mesh = _cube(0.8)
-    Mcf = ng.CF((0, 0, ng.z))   # non-uniform -> exercises the volume charge (div M != 0)
-    with ng.TaskManager():
-        fes = ng.HDiv(mesh, order=p)
-        D_analytic = DemagOperator(fes, eps=1e-7).DemagFactor(Mcf)
-        Ng = DemagOperator(fes, gram_backend="gauss", qpts=3, gauss_near_factor=1.0)
-        D_gauss = Ng.DemagFactor(Mcf)
-        assert Ng.gram_backend == "gauss"
-        assert abs(D_gauss - D_analytic) / abs(D_analytic) < 1e-3
-        # the gauss .mat composes with NGSolve just like the analytic one
-        u, v = fes.TnT()
-        M = ng.BilinearForm(u * v * ng.dx).Assemble()
-        gfu = ng.GridFunction(fes); gfu.Set(Mcf)
-        A = M.mat + Ng.mat
-        rhs = (M.mat * gfu.vec).Evaluate()
-        sol = GMRes(A=A, b=rhs, freedofs=fes.FreeDofs(), tol=1e-8, maxsteps=300, printrates=False)
-        res = (A * sol - rhs).Evaluate()
-        assert np.linalg.norm(res.FV().NumPy()) < 1e-5 * np.linalg.norm(rhs.FV().NumPy())
+# (test_demagoperator_gauss_backend_matches_analytic removed 2026-06-29: the 'gauss' point-operator backend
+#  is retired -- HDiv-VIM (RT1, tet) uses the analytic charge Gram only.  See test_hdiv_vim_rt1_contract.py.)

@@ -305,10 +305,16 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     contract).  Pass ho_far_factor=inf to FORCE the exact all-high-quad build (e.g. a golden reference)."""
     mesh = fes.mesh
     p = fes.globalorder
-    if p > 1:
-        raise ValueError("build_charge_gram: RT2+ (HDiv solution order >= 2) is abolished -- RT0/RT1 only "
-                         "(RT2 gave no per-element magnetization gain over RT1 and was slower).  The geometry "
-                         "curve_order is a SEPARATE knob and is unaffected.")
+    if p != 1:
+        raise ValueError(
+            "build_charge_gram: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
+            "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
+            "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
+            "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
+    if not all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
+        raise ValueError(
+            "build_charge_gram: HDiv-VIM is TET-only -- hex/wedge/pyramid soft-iron demag uses the "
+            "collocation MMMM backend, not the HDiv-VIM charge Gram.")
     pv = max(p - 1, 0)
     # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
     # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs
@@ -445,9 +451,10 @@ def build_charge_gauss(fes, qpts=3, near_factor=1.0, eps=1e-5, leafsize=64, eta=
     Gauss-Duffy points/dim of the point cloud (qpts=3 validated ~1e-4 at near_factor=1.0); scope: tet meshes.
     CALLER wraps in TaskManager."""
     from scipy.spatial import cKDTree
+    raise NotImplementedError(
+        "build_charge_gauss is RETIRED: the Gauss point-operator charge Gram was an RT0 build-speed "
+        "experiment.  HDiv-VIM (RT1, tet) uses the analytic charge Gram (build_charge_gram).")
     p = fes.globalorder
-    if p > 1:
-        raise ValueError("build_charge_gauss: RT2+ (HDiv solution order >= 2) is abolished -- RT0/RT1 only.")
     quad = max(3 * p, 4)
     cb = _charge_basis(fes, quad)
     B, M_mass = cb["B"], cb["M_mass"]
@@ -562,12 +569,14 @@ class DemagOperator:
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
                  gram_backend="analytic", qpts=3, gauss_near_factor=1.0,
                  curve_order=None, curve_gauss=8):
-        if gram_backend not in ("analytic", "gauss"):
-            raise ValueError("DemagOperator: gram_backend must be 'analytic' or 'gauss' (got %r)" % (gram_backend,))
-        if fes.globalorder > 1:
+        if gram_backend != "analytic":
             raise ValueError(
-                "DemagOperator: RT2+ (HDiv solution order >= 2) is abolished -- HDiv-VIM supports order 0 "
-                "(RT0) or 1 (RT1).  RT2 gave no per-element magnetization gain over RT1 and was slower.")
+                "DemagOperator: gram_backend must be 'analytic' -- the 'gauss' point-operator backend is "
+                "retired (RT0 build-speed experiment).  (got %r)" % (gram_backend,))
+        if fes.globalorder != 1:
+            raise ValueError(
+                "DemagOperator: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
+                "inaccurate) and RT2+ is retired (no gain over RT1).  Build the FESpace as HDiv(mesh, order=1).")
         self.space = fes
         self.gram_backend = gram_backend
         # AUTO-MATCH the Gram curve order to the MESH geometry order (mesh.GetCurveOrder()).  A STRAIGHT Gram on

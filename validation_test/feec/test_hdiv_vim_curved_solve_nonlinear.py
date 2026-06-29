@@ -34,35 +34,37 @@ def _sphere(maxh=0.6):
 
 
 def test_curved_tet_nonlinear_runs_and_matches_analytic():
-    """curve_order=2 + bh_table: the energy-Newton runs on the curved Gram and a uniform sphere matches
-    the analytic spheroid fixed point AND the RT0 nonlinear solve (curving-insensitive demag)."""
+    """curve_order=2 + bh_table at RT1: the energy-Newton runs on the curved Gram and a uniform sphere matches
+    the analytic spheroid fixed point AND the flat RT1 nonlinear solve (curving-insensitive demag)."""
     H0 = 5000.0
     Man = nl._scalar_fixed_point(_Mof, 1.0 / 3.0, H0)
     with ng.TaskManager():
         rc = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
-                              order=0, curve_order=2)
-        r0 = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=0)
+                              order=1, curve_order=2)
+        rf = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
     assert rc["nonlinear"] is True
     assert rc["linear_solver"] == "energy-newton-cpp", rc["linear_solver"]
     assert rc["curve_order"] == 2
     assert rc["iters"] < 300, rc["iters"]                         # converged -> curved Gram is PSD enough
     # a uniform sphere magnetizes to the analytic spheroid fixed point
     assert abs(rc["M_avg"][2] - Man) / abs(Man) < 1e-2, (rc["M_avg"][2], Man)
-    # the demag factor is curving-insensitive -> curved nonlinear ~ RT0 nonlinear
-    assert abs(rc["M_avg"][2] - r0["M_avg"][2]) / abs(r0["M_avg"][2]) < 1e-2
+    # the demag factor is curving-insensitive -> curved RT1 nonlinear ~ flat RT1 nonlinear
+    assert abs(rc["M_avg"][2] - rf["M_avg"][2]) / abs(rf["M_avg"][2]) < 1e-2
     # demag factor near the sphere's 1/3 (uniform-M limit)
     assert 0.30 < rc["demag"] < 0.37, rc["demag"]
 
 
-def test_flat_rt1_nonlinear_matches_rt0():
-    """FLAT (non-curved) RT1 nonlinear is now WIRED (the energy-Newton is Gram-agnostic): it runs on the flat
-    high-order Gram and matches the RT0 nonlinear solve on the same sphere (the former 'flat order>0 blocked'
-    guard was removed -- verified ~7e-4 vs RT0)."""
+def test_flat_rt1_nonlinear_matches_analytic():
+    """FLAT (non-curved) RT1 nonlinear (energy-Newton on the flat high-order Gram): a uniform sphere magnetizes
+    to the analytic spheroid fixed point.  RT0 is retired, so RT1 is the production nonlinear path and the
+    reference is the closed-form fixed point (the former 'flat order>0 blocked' guard was removed; flat RT1
+    nonlinear was verified ~7e-4 vs the old RT0 nonlinear before RT0 was dropped)."""
     H0 = 5000.0
+    Man = nl._scalar_fixed_point(_Mof, 1.0 / 3.0, H0)
     with ng.TaskManager():
         r1 = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
-        r0 = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=0)
     assert r1["nonlinear"] is True
     assert r1["linear_solver"] == "energy-newton-cpp", r1["linear_solver"]
     assert r1["iters"] < 300, r1["iters"]
-    assert abs(r1["M_avg"][2] - r0["M_avg"][2]) / abs(r0["M_avg"][2]) < 0.05, (r1["M_avg"][2], r0["M_avg"][2])
+    assert abs(r1["M_avg"][2] - Man) / abs(Man) < 1e-2, (r1["M_avg"][2], Man)
+    assert 0.30 < r1["demag"] < 0.37, r1["demag"]

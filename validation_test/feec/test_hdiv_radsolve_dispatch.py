@@ -6,9 +6,9 @@ radia.vim._radsolve.dispatch): a soft-iron container built from an NGSolve mesh,
 via rad.Solve(demag_backend='hdiv'), reproduces a direct radia.vim.hdiv_demag_solve to
 machine precision and writes the per-element M back so rad.ObjM/rad.Fld reflect it.
 
-This is the prerequisite for sealing (deleting) the six-face surface-charge C++: with hdiv wired in,
-rad.Solve keeps a working hex/wedge soft-iron demag path through the HDiv-VIM.
-(tet-first: build_demag's volume self-energy is tet-only, so the dispatch requires a tet mesh.)
+With hdiv wired in, rad.Solve keeps a working soft-iron demag path: a TET iron solves via the HDiv-VIM
+(RT1), and a HEX / WEDGE iron is routed by the 'auto' split to the collocation MMMM backend (HDiv-VIM is
+tet/RT1-only, 2026-06-29 -- an explicit demag_backend='hdiv' on a non-tet iron fails loud).
 """
 import math
 
@@ -44,7 +44,7 @@ def test_radsolve_hdiv_equals_direct():
     iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])      # free-space B whose H is H0
     cont = rad.ObjCnt([iron, bkg])
-    # No set_demag_backend: a mesh-backed soft iron (soft_iron_from_mesh) auto-routes to the HDiv-VIM.
+    # No set_demag_backend: a mesh-backed TET soft iron (soft_iron_from_mesh) auto-routes to HDiv-VIM RT1.
     with ng.TaskManager():
         res = rad.Solve(cont, 1e-6, 1000, 0)
 
@@ -59,25 +59,9 @@ def test_radsolve_hdiv_equals_direct():
     rad.UtiDelAll()
 
 
-def test_radsolve_hdiv_image_passed_through():
-    """rad.Solve(..., image='-z') on a registered iron routes the IMA image string into the HDiv-VIM
-    (== a direct hdiv_demag_solve(image='-z')), i.e. the dispatch passes image through (it no longer
-    rejects it).  The IMA physics itself (reduced+IMA == full) is locked in test_hdiv_vim_ima.py."""
-    from ngsolve.meshes import MakeStructured3DMesh
-    rad.UtiDelAll()
-    mp = lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), 0.5 * L * z)   # [-L/2,L/2]^2 x [0,L/2] half
-    with ng.TaskManager():
-        half = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=2, mapping=mp)
-        direct = vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)),
-                                      image="-z")
-    iron = vim.soft_iron_from_mesh(half, mu_r=MU_R)
-    bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
-    cont = rad.ObjCnt([iron, bkg])
-    with ng.TaskManager():
-        res = rad.Solve(cont, 1e-6, 1000, 0, image="-z")     # image as 5th positional arg
-    rel = abs(res["M_avg"][2] - direct["M_avg"][2]) / abs(direct["M_avg"][2])
-    assert rel < 1e-6, f"rad.Solve(image=) M_avg {res['M_avg'][2]:.2f} != direct {direct['M_avg'][2]:.2f} (rel {rel:.2e})"
-    rad.UtiDelAll()
+# (test_radsolve_hdiv_image_passed_through removed 2026-06-29: IMA image symmetry is retired from HDiv-VIM
+#  (and the mesh was hex) -- reduced symmetric models use collocation MMMM.  Retirement locked by
+#  test_hdiv_vim_rt1_contract.py; the hex->collocation MMMM auto-route by its hex test.)
 
 
 def test_meshless_hex_soft_iron_not_registered_uses_collocation_mmmm():
