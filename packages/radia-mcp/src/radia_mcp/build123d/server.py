@@ -158,6 +158,49 @@ def build123d_volume_crosscheck(
 
 
 @mcp.tool()
+def build123d_mass_property_crosscheck(
+    reference_rows_json: str,
+    measured_sets_json: str,
+    rtol: float = 1.0e-5,
+    bbox_atol: float = 1.0e-6,
+) -> str:
+    """Compare build123d volume/area/bbox rows with one or more CAD sources.
+
+    Use this stronger gate when the external CAD kernel can report rows shaped
+    like ``{"name": "...", "volume": 1.0, "area": 6.0, "bounding_box": ...}``.
+    It keeps volume, surface area, and optional bounding-box checks together for
+    build123d -> STEP -> Cubit/CST/external-CAD round trips.
+    """
+
+    try:
+        reference_rows = json.loads(reference_rows_json)
+        measured_sets = json.loads(measured_sets_json)
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_mass_property_crosscheck_summary
+        summary = shape_mass_property_crosscheck_summary(
+            reference_rows,
+            measured_sets,
+            rtol=rtol,
+            bbox_atol=bbox_atol,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "mass_property_crosscheck",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
 async def execute_build123d(
     script: str,
     export_dir: str = "",

@@ -292,6 +292,66 @@ def coaxial_magnets_axial_force(b_rem, radius_a, length_L, gap, mu_r=1.0):
     return {"force_N": force, "moment": moment, "sep_s": s}
 
 
+def coaxial_magnets_force_gap_sweep_summary(b_rem, radius_a, length_L, gaps, mu_r=1.0, tol=1.0e-12):
+    """Summarize the dipole-limit force contract over a gap sweep.
+
+    ELF/MAGIC, radia-ngsolve, and notebooks may report axial magnet force from
+    different APIs or tables.  In the far-field dipole limit a same-orientation
+    coaxial pair must satisfy ``F*s^4 = constant`` with
+    ``s = gap + length_L``.  This helper turns that identity into a compact
+    solver-independent gate before reading product force tables.
+    """
+
+    gap_values = [float(value) for value in gaps]
+    if not gap_values:
+        raise ValueError("gaps must not be empty")
+    if any(value < 0.0 for value in gap_values):
+        raise ValueError("gaps must be non-negative")
+    rows = []
+    for gap in gap_values:
+        row = coaxial_magnets_axial_force(b_rem, radius_a, length_L, gap, mu_r=mu_r)
+        invariant = row["force_N"] * row["sep_s"] ** 4
+        rows.append({
+            "gap_m": gap,
+            "sep_s": row["sep_s"],
+            "force_N": row["force_N"],
+            "moment": row["moment"],
+            "force_s4_invariant": invariant,
+        })
+
+    reference = rows[0]["force_s4_invariant"]
+    invariant_errors = [
+        abs(row["force_s4_invariant"] - reference) / max(abs(reference), 1.0e-300)
+        for row in rows
+    ]
+    checks = {
+        "gaps_non_decreasing": all(
+            rows[i]["gap_m"] <= rows[i + 1]["gap_m"] + float(tol)
+            for i in range(len(rows) - 1)
+        ),
+        "force_decreases_with_gap": all(
+            rows[i]["force_N"] + float(tol) >= rows[i + 1]["force_N"]
+            for i in range(len(rows) - 1)
+        ),
+        "force_s4_invariant_ok": max(invariant_errors) <= float(tol),
+        "force_positive_for_head_to_tail_pair": all(row["force_N"] > 0.0 for row in rows),
+    }
+    return {
+        "schema": "radia-ngsolve.coaxial-magnets-force-gap-sweep.v1",
+        "b_rem_T": float(b_rem),
+        "radius_a_m": float(radius_a),
+        "length_L_m": float(length_L),
+        "mu_r": float(mu_r),
+        "tol": float(tol),
+        "rows": rows,
+        "reference_force_s4_invariant": reference,
+        "max_force_s4_invariant_rel_error": max(invariant_errors),
+        "force_ratio_first_last": rows[0]["force_N"] / rows[-1]["force_N"],
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+    }
+
+
 def halbach_segmentation_factor(n_segments):
     """Bore-field reduction factor of an N-segment Halbach dipole ring relative
     to the ideal continuously-rotating magnetization (Halbach, Nucl. Instrum.
