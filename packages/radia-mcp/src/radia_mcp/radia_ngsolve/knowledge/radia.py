@@ -2388,7 +2388,7 @@ rad.UtiDelAll()
 ```
 
 **Element count**: 27 hex = 27 * 6 = 162 DOF (MSC)
-**Example**: `examples/cube_uniform_field/experiment_objm_minimal.py`
+**Example**: `validation_test/cube_uniform_field/experiment_objm_minimal.py`
 **Showcase notebook** (LU vs BiCGSTAB vs HACApK scaling, hex + tetra):
 `docs/cube_uniform_field/hmatrix_solver_scaling.ipynb`
 
@@ -2495,7 +2495,7 @@ rad.UtiDelAll()
 - 500 < N < 2000: method=1 (BiCGSTAB) -- fastest general
 - N > 2000: method=2 (HACApK) -- O(N log N) memory
 
-**Example**: `examples/cube_uniform_field/hexahedron/benchmark_hex.py`
+**Example**: `validation_test/cube_uniform_field/hexahedron/benchmark_hex.py`
 """
 
 

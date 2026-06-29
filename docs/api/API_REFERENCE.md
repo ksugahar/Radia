@@ -2004,7 +2004,7 @@ B = cuboid.get_B([25, 0, 0])
 ### General References
 
 20. [ESRF Radia Reference Guide](https://www.esrf.fr/home/Accelerators/instrumentation--equipment/Software/Radia/Documentation/ReferenceGuide.html)
-21. [examples/cube_uniform_field/](../examples/cube_uniform_field/) - Benchmark examples
+21. [validation_test/cube_uniform_field/](../validation_test/cube_uniform_field/) - Cube uniform-field benchmark corpus
 
 ---
 
