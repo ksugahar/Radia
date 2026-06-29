@@ -206,7 +206,7 @@ class TestIHFEM:
     # End-to-end FEM test removed 2026-04-18 together with the T0 path:
     # solve_fem now requires --peec-step, but build_occ_ih_mesh_3d does
     # not emit a companion STEP.  Coverage is retained by the 3-way
-    # compare in examples/peec_integration/filament_coil/
+    # compare in docs/peec_integration/demos/filament_coil/
     # compare_fem_vs_peec_skin.py (A-V T0 row excluded, PEEC+BR validated
     # to analytical 88.55 nH on the gapped torus sample).
 

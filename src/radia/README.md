@@ -174,7 +174,7 @@ B_cf = rad.RadiaField(magnet, 'b')
 B = B_cf(mesh(0, 0, 0.02))
 ```
 
-**See also:** `examples/ngsolve_integration/` for complete examples.
+**See also:** `validation_test/ngsolve_integration/` for complete examples.
 
 ### coil_builder.py
 
@@ -245,7 +245,7 @@ B_cf = rad.RadiaField(magnet, 'b')
 
 ## References
 
-- **NGSolve Integration**: `examples/ngsolve_integration/`
+- **NGSolve Integration**: `validation_test/ngsolve_integration/`
 - **Coil Builder Examples**: `docs/complex_coil_geometry/`
 - **ParaView**: https://www.paraview.org/
 - **PyVista**: https://docs.pyvista.org/

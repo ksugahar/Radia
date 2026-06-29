@@ -199,4 +199,4 @@ The sign MUST come from the dot product multiplication at the end.
 |------|-------------|
 | `src/radia/peec_shield.py` | Shield mesh, coil segments, compute functions |
 | `src/core/rad_peec_matrices.cpp` | C++ Neumann integral (sign fix line 776) |
-| `examples/peec_integration/validation/validate_shield_delta_r.py` | Validation (3/3 PASS) |
+| `validation_test/peec_integration/verification/validate_shield_delta_r.py` | Validation (3/3 PASS) |

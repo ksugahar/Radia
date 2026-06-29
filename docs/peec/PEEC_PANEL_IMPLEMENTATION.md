@@ -665,10 +665,10 @@ struct PEECSegment {
 - `src/lib/rad_peec_matrices_api.cpp` - `add_panel()`, `num_panels`
 
 **Examples & Tests**:
-- `examples/peec_integration/demo_peec_from_dual_mesh.py` - Updated for true 2D panels
-- `examples/peec_integration/test_panel_self_potential.py` - Wilton formula validation
-- `examples/peec_integration/test_panel_near_field.py` - Near-field integration test
-- `examples/peec_integration/test_quad_panel.py` - Quad panel validation
+- `docs/peec_integration/demos/demo_peec_from_dual_mesh.py` - Updated for true 2D panels
+- `docs/peec_integration/demos/test_panel_self_potential.py` - Wilton formula validation
+- `docs/peec_integration/demos/test_panel_near_field.py` - Near-field integration test
+- `docs/peec_integration/demos/test_quad_panel.py` - Quad panel validation
 
 ---
 
