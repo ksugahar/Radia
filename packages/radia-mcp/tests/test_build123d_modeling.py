@@ -24,7 +24,13 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           mounting_plate_boss_reference_row,
                                           keyed_terminal_plate_reference_row,
                                           flanged_sleeve_reference_row,
+                                          coax_annular_sleeve_reference_row,
                                           ribbed_busbar_heat_sink_reference_row,
+                                          three_phase_busbar_snubber_plate_reference_row,
+                                          rcd_snubber_heat_spreader_reference_row,
+                                          rcd_snubber_capacitance_sweep_rows,
+                                          thermal_robin_cooling_plate_reference_row,
+                                          v_type_ipm_rotor_coupon_reference_row,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
                                           box_face_pressure_moment_rows,
@@ -33,7 +39,10 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           compare_boundary_vector_area_rows,
                                           compare_shape_measurement_rows,
                                           compare_shape_volume_rows,
+                                          shape_name_identity_gate,
+                                          shape_role_metadata_gate,
                                           shape_volume_crosscheck_summary,
+                                          shape_mass_property_crosscheck_summary,
                                           shape_measurement_comparison_summary,
                                           shape_measurement_inventory_summary,
                                           worst_shape_measurement_comparison_rows,
@@ -63,24 +72,48 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "box_through_cylinder_reference_row" in doc
     assert "volume as the common currency" in doc
     assert "build123d_volume_crosscheck" in doc
+    assert "shape_mass_property_crosscheck_summary" in doc
+    assert "build123d_mass_property_crosscheck" in doc
     assert "coreform_cubit.com -nographics -batch" in doc
     assert '"box_hole", "volume": 22.994690350851265' in doc
     assert '"l_bracket_two_holes", "volume": 2.8982123980236905' in doc
     assert "boolean union/overlap accounting" in doc
     assert "mounting_plate_boss_reference_row" in doc
+    assert "three_phase_busbar_snubber_plate_reference_row" in doc
     assert '"mounting_plate_boss_five_holes", "volume": 12.786811880091562' in doc
     assert "min_edge_over_characteristic" in doc
     assert "max_volume_rel_error = 0.0" in doc
     assert "stepped cylindrical spacer" in doc
     assert "rel_error = 5.854366888206992e-6" in doc
     assert "shape_volume_crosscheck_summary(..., rtol=1e-5)" in doc
+    assert "shape_name_identity_gate" in doc
+    assert "shape_role_metadata_gate" in doc
+    assert "missing, extra, duplicate, or unnamed imported solids" in doc
     assert "keyed terminal plate" in doc
     assert '"keyed_terminal_plate_two_bosses", "volume": 9.364087557965556' in doc
     assert "flanged sleeve" in doc
     assert '"flanged_sleeve_four_bolt_holes", "volume": 5.085955762823052' in doc
+    assert "coax_annular_sleeve_reference_row" in doc
+    assert '"coax_annular_sleeve", "volume": 38.453094079939064' in doc
+    assert "max_volume_rel_error = 3.693299710979559e-5" in doc
+    assert "`1e-4` external-CAD volume gate" in doc
     assert "Ribbed busbar / heat-sink" in doc
     assert "ribbed_busbar_heat_sink_reference_row" in doc
     assert '"ribbed_busbar_heat_sink_four_holes", "volume": 13.617497357233166' in doc
+    assert "RCD snubber heat-spreader" in doc
+    assert "rcd_snubber_heat_spreader_reference_row" in doc
+    assert '"rcd_snubber_heat_spreader", "volume": 15.52205629192717' in doc
+    assert "RCD capacitance sweep design-table gate" in doc
+    assert "rcd_snubber_capacitance_sweep_rows" in doc
+    assert "parameter_key=\"capacitance_uF\"" in doc
+    assert "a `0.114` volume mismatch" in doc
+    assert "Thermal Robin cooling plate" in doc
+    assert "thermal_robin_cooling_plate_reference_row" in doc
+    assert '"thermal_robin_cooling_plate", "volume": 15.11290974078757' in doc
+    assert "multi-line dict literals" in doc
+    assert "V-type IPM rotor-coupon" in doc
+    assert "v_type_ipm_rotor_coupon_reference_row" in doc
+    assert '"v_type_ipm_rotor_coupon", "volume": 13.238339620676824' in doc
 
 
 def test_annular_segment_volume_and_validity():
@@ -556,6 +589,98 @@ def test_shape_volume_crosscheck_summary_accepts_cubit_and_external_cad_rows():
     assert by_name["coil"]["reason"] == "missing measured row"
 
 
+def test_shape_name_identity_gate_rejects_extra_missing_and_duplicate_shapes():
+    reference = [
+        {"name": "stator", "volume": 100.0, "area": 220.0},
+        {"name": "coil", "volume": 25.0, "area": 60.0},
+    ]
+    measured = [
+        {"name": "stator", "volume": 100.0, "area": 220.0},
+        {"name": "coil", "volume": 25.0, "area": 60.0},
+    ]
+
+    ok = shape_name_identity_gate(reference, measured, measured_label="cubit")
+    assert ok["status"] == "ok"
+    assert ok["policy"] == "build123d_cad_roundtrip_named_shape_identity_gate"
+    assert ok["checks"]["same_name_multiset"] is True
+    assert ok["version_note"].startswith("Use this before volume/area/bbox gates")
+
+    bad = shape_name_identity_gate(
+        reference,
+        [
+            {"name": "stator", "volume": 100.0, "area": 220.0},
+            {"name": "stator", "volume": 100.0, "area": 220.0},
+            {"name": "bolt", "volume": 1.0, "area": 2.0},
+        ],
+        measured_label="cst_import",
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["measured_label"] == "cst_import"
+    assert bad["missing_names"] == ["coil"]
+    assert bad["extra_names"] == ["bolt", "stator"]
+    assert bad["duplicate_measured_names"] == ["stator"]
+    assert bad["checks"]["measured_names_unique"] is False
+
+    summary = shape_mass_property_crosscheck_summary(
+        reference,
+        {"cst_import": [
+            {"name": "stator", "volume": 100.0, "area": 220.0},
+            {"name": "coil", "volume": 25.0, "area": 60.0},
+            {"name": "bolt", "volume": 1.0, "area": 2.0},
+        ]},
+        rtol=1.0e-12,
+    )
+    assert summary["status"] == "needs_attention"
+    assert summary["checks"]["all_sources_present_and_within_tolerance"] is True
+    assert summary["checks"]["all_sources_preserve_named_shape_identity"] is False
+    assert "missing, extra, duplicate, or unnamed shapes" in summary["issues"][0]
+    assert summary["comparison_sets"][0]["name_identity_gate"]["extra_names"] == ["bolt"]
+
+
+def test_shape_role_metadata_gate_requires_solver_handoff_semantics():
+    rows = [
+        {"name": "iron_core", "role": "magnetic_core", "material": "electrical_steel"},
+        {"name": "phase_a_coil", "role": "conductor", "material_name": "copper"},
+        {"name": "air_box", "solver_role": "air_region", "mat": "air"},
+    ]
+
+    ok = shape_role_metadata_gate(
+        rows,
+        required_names=["iron_core", "phase_a_coil"],
+        required_roles=["magnetic_core", "conductor"],
+        required_materials=["electrical_steel", "copper"],
+        source_label="slot123_build123d",
+    )
+
+    assert ok["policy"] == "build123d_solver_handoff_role_material_metadata_gate"
+    assert ok["status"] == "ok"
+    assert ok["source_label"] == "slot123_build123d"
+    assert ok["checks"]["required_roles_present"] is True
+    assert ok["checks"]["required_materials_present"] is True
+    assert ok["materials"] == ["air", "copper", "electrical_steel"]
+    assert ok["version_note"].startswith("Run this after shape_name_identity_gate")
+
+    bad = shape_role_metadata_gate(
+        [
+            {"name": "iron_core", "role": "magnetic_core", "material": "electrical_steel"},
+            {"name": "iron_core", "role": "fixture", "material": "steel"},
+            {"name": "phase_a_coil", "role": "conductor"},
+            {"name": "air_box", "material": "air"},
+        ],
+        required_names=["iron_core", "phase_a_coil", "air_box", "shaft"],
+        required_roles=["magnetic_core", "conductor", "air_region"],
+        required_materials=["electrical_steel", "copper", "air"],
+    )
+
+    assert bad["status"] == "needs_attention"
+    assert bad["duplicate_names"] == ["iron_core"]
+    assert bad["rows_missing_material"] == ["phase_a_coil"]
+    assert bad["rows_missing_role"] == ["air_box"]
+    assert bad["missing_required_names"] == ["shaft"]
+    assert bad["missing_required_roles"] == ["air_region"]
+    assert bad["missing_required_materials"] == ["copper"]
+
+
 def test_build123d_l_bracket_slot_volume_crosscheck_accepts_cubit_roundtrip():
     reference = [{"name": "l_bracket_two_holes", "volume": 2.898212398023691}]
     measured = {"cubit": [{"name": "l_bracket_two_holes", "volume": 2.8982123980236905}]}
@@ -662,6 +787,31 @@ def test_flanged_sleeve_slot43_matches_volume_roundtrip_gate():
     assert roundtrip_summary["max_volume_rel_error"] == pytest.approx(5.028278267134254e-7)
 
 
+def test_coax_annular_sleeve_slot91_uses_physical_rc_geometry_volume_gate():
+    reference = [coax_annular_sleeve_reference_row(0.9, 2.1, 3.4)]
+    sleeve = tube(0.9, 2.1, 3.4, label="coax_annular_sleeve")
+    measured = {
+        "build123d": [{"name": "coax_annular_sleeve", "volume": _vol(sleeve)}],
+        "cubit": [{"name": "coax_annular_sleeve", "volume": 38.451673891926546}],
+    }
+
+    row = reference[0]
+    strict_summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-5)
+    roundtrip_summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-4)
+
+    assert row["volume"] == pytest.approx(38.453094079939064)
+    assert _vol(sleeve) == pytest.approx(row["volume"])
+    assert row["area"] == pytest.approx(86.70795723907828)
+    assert row["terms"]["inner_void"] < 0.0
+    assert row["parameters"] == {"inner_radius": 0.9, "outer_radius": 2.1, "height": 3.4}
+    assert row["policy"] == "analytic_coax_annular_sleeve_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([4.2, 4.2, 3.4])
+    assert strict_summary["status"] == "needs_attention"
+    assert roundtrip_summary["status"] == "ok"
+    assert roundtrip_summary["sources"] == ["build123d", "cubit"]
+    assert roundtrip_summary["max_volume_rel_error"] == pytest.approx(3.693299710979559e-5)
+
+
 def test_ribbed_busbar_heat_sink_reference_matches_volume_roundtrip_gate():
     reference = [ribbed_busbar_heat_sink_reference_row(
         8.0, 3.2, 0.35,
@@ -688,6 +838,163 @@ def test_ribbed_busbar_heat_sink_reference_matches_volume_roundtrip_gate():
     assert summary["sources"] == ["build123d", "cubit"]
 
 
+def test_three_phase_busbar_snubber_plate_slot59_matches_volume_roundtrip_gate():
+    reference = [three_phase_busbar_snubber_plate_reference_row(
+        9.0, 3.6, 0.35,
+        3, 1.0, 0.6, 0.45, 2.4,
+        2, 1.2, 0.45, 0.25, 2.0,
+        0.16, 3.9, 1.35,
+        phase_tab_y0=0.15,
+        snubber_pad_y0=-1.1,
+    )]
+    measured = {
+        "build123d": [{"name": "three_phase_busbar_snubber_plate", "volume": 12.307405319295338}],
+        "cubit": [{"name": "three_phase_busbar_snubber_plate", "volume": 12.307405319295343}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(12.30740531929534)
+    assert row["terms"]["base"] == pytest.approx(11.34)
+    assert row["terms"]["three_phase_tabs"] == pytest.approx(0.81)
+    assert row["terms"]["two_snubber_pads"] == pytest.approx(0.27)
+    assert row["terms"]["four_mount_holes"] < 0.0
+    assert row["counts"] == {"phase_tabs": 3, "snubber_pads": 2, "mount_holes": 4}
+    assert row["clearances"]["mount_hole_to_y_edge"] == pytest.approx(0.29)
+    assert row["clearances"]["phase_tab_gap"] == pytest.approx(1.4)
+    assert row["policy"] == "analytic_three_phase_busbar_snubber_plate_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([9.0, 3.6, 0.8])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
+    assert summary["max_volume_rel_error"] < 5.0e-16
+
+
+def test_rcd_snubber_heat_spreader_slot75_matches_volume_roundtrip_gate():
+    reference = [rcd_snubber_heat_spreader_reference_row(
+        10.0, 4.0, 0.32,
+        5, 8.0, 0.12, 0.45, 0.45,
+        2, 1.25, 0.70, 0.38, 2.4,
+        0.16, 4.2, 1.55,
+        snubber_pad_y0=-1.55,
+    )]
+    measured = {
+        "build123d": [{"name": "rcd_snubber_heat_spreader", "volume": 15.522056291927165}],
+        "cubit": [{"name": "rcd_snubber_heat_spreader", "volume": 15.522056291927173}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(15.52205629192717)
+    assert row["terms"]["base"] == pytest.approx(12.8)
+    assert row["terms"]["straight_ribs"] == pytest.approx(2.16)
+    assert row["terms"]["snubber_pads"] == pytest.approx(0.665)
+    assert row["terms"]["four_mount_holes"] < 0.0
+    assert row["counts"] == {"ribs": 5, "snubber_pads": 2, "mount_holes": 4}
+    assert row["clearances"]["snubber_pad_to_rib_band"] == pytest.approx(0.24)
+    assert row["clearances"]["mount_hole_to_rib_band"] == pytest.approx(0.43)
+    assert row["parameters"]["rib_pitch"] == pytest.approx(0.45)
+    assert row["parameters"]["snubber_pad_y0"] == pytest.approx(-1.55)
+    assert row["policy"] == "analytic_rcd_snubber_heat_spreader_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([10.0, 4.0, 0.77])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
+    assert summary["max_volume_rel_error"] < 6.0e-16
+
+
+def test_rcd_snubber_capacitance_sweep_keeps_cad_variant_provenance():
+    rows = rcd_snubber_capacitance_sweep_rows(
+        [0.047, 0.10, 0.22],
+        [1.05, 1.25, 1.55],
+    )
+
+    assert [row["capacitance_uF"] for row in rows] == pytest.approx([0.047, 0.10, 0.22])
+    assert [row["snubber_pad_x"] for row in rows] == pytest.approx([1.05, 1.25, 1.55])
+    assert rows[0]["name"] == "rcd_snubber_heat_spreader_0.047uF"
+    assert rows[-1]["terms"]["snubber_pads"] > rows[0]["terms"]["snubber_pads"]
+    assert rows[-1]["volume"] > rows[0]["volume"]
+    assert all(row["design_table_role"].startswith("RCD snubber capacitance") for row in rows)
+
+    summary = shape_parameter_sweep_summary(
+        rows,
+        "capacitance_uF",
+        metric_keys=("volume", "snubber_pad_volume"),
+    )
+    metrics = {row["metric"]: row for row in summary["metric_rows"]}
+
+    assert summary["status"] == "ok"
+    assert summary["parameter_strictly_increasing"] is True
+    assert metrics["volume"]["monotonic_non_decreasing"] is True
+    assert metrics["snubber_pad_volume"]["monotonic_non_decreasing"] is True
+    assert metrics["snubber_pad_volume"]["delta_first_to_last"] == pytest.approx(
+        rows[-1]["snubber_pad_volume"] - rows[0]["snubber_pad_volume"]
+    )
+
+
+def test_thermal_robin_cooling_plate_slot83_matches_volume_roundtrip_gate():
+    reference = [thermal_robin_cooling_plate_reference_row(
+        9.0, 4.5, 0.30,
+        4, 7.2, 0.14, 0.55, 0.42,
+        2, 1.6, 0.80, 0.32, 2.6,
+        0.14, 3.8, 1.8,
+        fin_y0=0.45,
+        device_pad_y0=-1.45,
+    )]
+    measured = {
+        "build123d": [{"name": "thermal_robin_cooling_plate", "volume": 15.112909740787572}],
+        "cubit": [{"name": "thermal_robin_cooling_plate", "volume": 15.112909740787561}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(15.11290974078757)
+    assert row["terms"]["base"] == pytest.approx(12.15)
+    assert row["terms"]["straight_cooling_fins"] == pytest.approx(2.2176)
+    assert row["terms"]["device_pads"] == pytest.approx(0.8192)
+    assert row["terms"]["four_mount_holes"] < 0.0
+    assert row["counts"] == {"fins": 4, "device_pads": 2, "mount_holes": 4}
+    assert row["clearances"]["device_pad_to_fin_band"] == pytest.approx(0.8)
+    assert row["clearances"]["mount_hole_to_y_edge"] == pytest.approx(0.31)
+    assert row["parameters"]["fin_y0"] == pytest.approx(0.45)
+    assert row["parameters"]["device_pad_y0"] == pytest.approx(-1.45)
+    assert row["policy"] == "analytic_thermal_robin_cooling_plate_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([9.0, 4.5, 0.85])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
+    assert summary["max_volume_rel_error"] < 8.0e-16
+
+
+def test_v_type_ipm_rotor_coupon_reference_matches_volume_roundtrip_gate():
+    reference = [v_type_ipm_rotor_coupon_reference_row(
+        8.0, 5.0, 0.35,
+        2.2, 0.35, 28.0,
+        1.65, 0.55,
+        0.45,
+    )]
+    measured = {
+        "build123d": [{"name": "v_type_ipm_rotor_coupon", "volume": reference[0]["volume"]}],
+        "cubit": [{"name": "v_type_ipm_rotor_coupon", "volume": reference[0]["volume"]}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(13.238339620676824)
+    assert row["terms"]["coupon"] == pytest.approx(14.0)
+    assert row["terms"]["two_v_magnet_pockets"] == pytest.approx(-0.539)
+    assert row["terms"]["central_bore"] == pytest.approx(-0.2226603793231766)
+    assert row["counts"] == {"magnet_pockets": 2, "bore": 1}
+    assert row["clearances"]["pocket_to_bore_x"] == pytest.approx(0.1466001243676493)
+    assert row["clearances"]["mirrored_pocket_gap"] == pytest.approx(1.1932002487352986)
+    assert row["parameters"]["magnet_slot_angle_deg"] == pytest.approx(28.0)
+    assert row["policy"] == "analytic_v_type_ipm_rotor_coupon_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([8.0, 5.0, 0.35])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
+
+
 def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
     from radia_mcp.build123d.server import build123d_volume_crosscheck
 
@@ -698,6 +1005,30 @@ def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
     assert payload["status"] == "ok"
     assert payload["n_sources"] == 1
     assert payload["comparison_sets"][0]["source"] == "cubit"
+    assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
+
+
+def test_build123d_mass_property_crosscheck_mcp_tool_dispatches_json():
+    from radia_mcp.build123d.server import build123d_mass_property_crosscheck
+
+    reference = [{
+        "name": "box",
+        "volume": 24.0,
+        "area": 52.0,
+        "is_valid": True,
+        "bounding_box": {
+            "min": [-1.0, -1.5, -2.0],
+            "max": [1.0, 1.5, 2.0],
+            "center": [0.0, 0.0, 0.0],
+            "size": [2.0, 3.0, 4.0],
+        },
+    }]
+    measured = {"cubit": [dict(reference[0])], "cst_import": [dict(reference[0])]}
+    payload = json.loads(build123d_mass_property_crosscheck(json.dumps(reference), json.dumps(measured)))
+
+    assert payload["status"] == "ok"
+    assert payload["n_sources"] == 2
+    assert payload["sources"] == ["cubit", "cst_import"]
     assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
 
 
@@ -779,6 +1110,46 @@ def test_shape_measurement_health_summary_reports_worst_mismatches():
     assert worst_shape_measurement_comparison_rows([], limit=0) == []
     with pytest.raises(ValueError, match="limit must be non-negative"):
         worst_shape_measurement_comparison_rows([], limit=-1)
+
+
+def test_shape_mass_property_crosscheck_summary_handles_multiple_cad_sources():
+    box = Box(2, 3, 5).solid()
+    reference = [shape_measurement_row(box, name="cad_block")]
+    measured = {
+        "cubit": [dict(reference[0])],
+        "cst_import": [dict(reference[0])],
+    }
+
+    summary = shape_mass_property_crosscheck_summary(
+        reference,
+        measured,
+        rtol=1.0e-12,
+        bbox_atol=1.0e-12,
+    )
+
+    assert summary["policy"] == "build123d_external_cad_volume_area_bbox_crosscheck"
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["cubit", "cst_import"]
+    assert summary["n_sources"] == 2
+    assert summary["n_failed_rows"] == 0
+    assert summary["max_area_rel_error"] == pytest.approx(0.0)
+    assert all(row["n_bbox_compared"] == 1 for row in summary["comparison_sets"])
+
+    bad_cst = dict(reference[0])
+    bad_cst["area"] *= 1.01
+    bad_summary = shape_mass_property_crosscheck_summary(
+        reference,
+        {"cubit": [dict(reference[0])], "cst_import": [bad_cst]},
+        rtol=1.0e-4,
+        bbox_atol=1.0e-12,
+    )
+    by_source = {row["source"]: row for row in bad_summary["comparison_sets"]}
+
+    assert bad_summary["status"] == "needs_attention"
+    assert bad_summary["ok_for_cad_roundtrip_mass_properties"] is False
+    assert by_source["cubit"]["status"] == "ok"
+    assert by_source["cst_import"]["status"] == "needs_attention"
+    assert by_source["cst_import"]["worst_comparisons"][0]["reason"] == "outside tolerance"
 
 
 def test_segment_meshes_in_netgen():

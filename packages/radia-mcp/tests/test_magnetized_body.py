@@ -20,6 +20,7 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.magnetized_body import (
     MU0,
     coaxial_magnets_axial_force,
+    coaxial_magnets_force_gap_sweep_summary,
     cylinder_central_demag_factor,
     halbach_segmentation_factor,
     magnetic_polarizability_sphere,
@@ -153,6 +154,26 @@ def test_coaxial_force():
     assert math.isclose(res["force_N"] / res2["force_N"], 16.0, rel_tol=1e-12)
     with pytest.raises(ValueError):
         coaxial_magnets_axial_force(b_rem, A, L, gap, mu_r=0.5)
+
+
+def test_continuous_loop_slot62_coaxial_force_gap_sweep_contract():
+    b_rem, radius, length = 1.2, 0.01, 0.02
+    summary = coaxial_magnets_force_gap_sweep_summary(
+        b_rem,
+        radius,
+        length,
+        gaps=[0.01, 0.04, 0.10],
+    )
+
+    assert summary["status"] == "ok"
+    assert summary["schema"] == "radia-ngsolve.coaxial-magnets-force-gap-sweep.v1"
+    assert summary["checks"]["force_decreases_with_gap"] is True
+    assert summary["checks"]["force_s4_invariant_ok"] is True
+    assert summary["max_force_s4_invariant_rel_error"] < 1.0e-14
+    assert [row["sep_s"] for row in summary["rows"]] == pytest.approx([0.03, 0.06, 0.12])
+    assert summary["rows"][0]["force_N"] / summary["rows"][1]["force_N"] == pytest.approx(16.0)
+    assert summary["rows"][1]["force_N"] / summary["rows"][2]["force_N"] == pytest.approx(16.0)
+    assert summary["force_ratio_first_last"] == pytest.approx(256.0)
 
 
 def test_halbach_segmentation():

@@ -26,7 +26,9 @@ from radia_mcp.radia_ngsolve.waveguide import (rectangular_waveguide_cutoff, cut
                                                waveguide_offset_short_length_from_group_delay,
                                                reflection_metrics,
                                                sparameter_group_delay,
-                                               sparameter_group_delay_summary, C0)
+                                               sparameter_group_delay_summary,
+                                               matched_lossless_delay_line_sparameter_gate,
+                                               C0)
 from radia_mcp.radia_ngsolve.slot_gates import two_port_sparameter_health
 
 
@@ -211,6 +213,40 @@ def test_continuous_loop_slot47_cst_touchstone_delay_line_contract():
     assert active["status"] == "needs_attention"
     assert active["passive"] is False
     assert active["max_singular_value_squared"] == pytest.approx(1.1449000000000003)
+
+
+def test_continuous_loop_slot63_lossless_delay_line_phase_sampling_gate():
+    tau = 3.2e-9
+    freqs = [0.9e9 + 0.025e9 * i for i in range(9)]
+
+    gate = matched_lossless_delay_line_sparameter_gate(
+        freqs,
+        tau,
+        rtol=1.0e-12,
+        tol=1.0e-12,
+    )
+
+    assert gate["schema"] == "radia-ngsolve.matched-lossless-delay-line-sparameter-gate.v1"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["matched_ports_ok"] is True
+    assert gate["checks"]["lossless_power_ok"] is True
+    assert gate["checks"]["phase_sampling_step_below_pi"] is True
+    assert gate["raw_phase_jump_count"] >= 1
+    assert gate["max_true_phase_step_rad"] < math.pi
+    assert gate["group_delay"]["mean_group_delay_s"] == pytest.approx(tau, rel=1.0e-12)
+    assert gate["group_delay"]["span_group_delay_s"] < 1.0e-21
+    assert all(row["s11"]["abs"] == pytest.approx(0.0) for row in gate["rows"])
+    assert all(row["s21"]["abs"] == pytest.approx(1.0) for row in gate["rows"])
+
+    sparse = matched_lossless_delay_line_sparameter_gate(
+        [0.9e9, 1.1e9],
+        tau,
+        rtol=1.0e-12,
+        tol=1.0e-12,
+    )
+    assert sparse["status"] == "needs_attention"
+    assert sparse["checks"]["phase_sampling_step_below_pi"] is False
+    assert sparse["group_delay"]["status"] == "needs_attention"
 
 
 def test_dispersion_identities():

@@ -48,6 +48,12 @@ Good loop artifacts teach students as well as agents: they name the governing
 identity, state the tolerance, record the failure mode, and explain the next
 gate to run.
 
+Session diagnostics are a valid learning artifact when they unblock a solver
+slot, but keep them separate from physics validation.  Record which existing
+session was reused, whether direct MCP discovery failed, which fallback path
+worked, and whether any solver process was started.  Do not turn a healthy
+session-reuse result into a physics claim.
+
 Do not wait until a full loop is over to learn.  A full-loop summary is only a
 roll-up of slot-level learning that should already have been attempted.
 """
@@ -246,6 +252,10 @@ Two-port S-parameters:
   outgoing power plus absorbed power must equal one.
 * Keep return loss, insertion loss, absorbed power, and passivity residual in
   the artifact so later agents can diagnose why a sweep failed.
+* Treat one-port match quality as its own row: `S11` gives `|Gamma|`, VSWR,
+  return loss, mismatch loss, reflected power, and transmitted power.  MATLAB
+  teaching notebooks can use the same scalar gate as an optimization objective
+  or constraint, but it should not be merged with `S21` insertion loss.
 """
 
 
