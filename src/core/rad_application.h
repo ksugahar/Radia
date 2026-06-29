@@ -110,14 +110,6 @@ public:
 	// itself, for ANY BH.  Set via Python: rad.SolverConfig(loop_deflate=True/False).
 	bool m_loop_deflate;
 
-	// loop-growth-suppression GAUGE PENALTY (default 0.0 = OFF).  When lam = m_loop_penalty > 0, the
-	// collocation-MMMM linear matvec uses  A + lam * Q(Q^T Q)^-1 Q^T  (Q = field-null loop basis), which
-	// lifts the loop eigenvalue 1/chi -> 1/chi+lam and suppresses the loop content of the solution by
-	// 1/(1+lam*chi) at ANY bicgstab_tol.  A low-rank perturbation of A, so RHS + the block-Jacobi
-	// preconditioner stay UNCHANGED/consistent (unlike m_loop_deflate, which can diverge).  Production
-	// loop-suppression path.  Set via Python: rad.SolverConfig(loop_penalty=lam).
-	double m_loop_penalty;
-
 	// Newton line search damping parameters
 	// Enables adaptive backtracking line search to improve nonlinear convergence
 	// Can be configured via Python API: rad.SolverConfig(newton_damping=True, ...)
@@ -215,7 +207,6 @@ public:
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
 		m_coloop_project = false; // Default: no co-loop projection (backward compatible)
 		m_loop_deflate = false;   // Default: no loop deflation in the linear solve (backward compatible)
-		m_loop_penalty = 0.0;     // Default: no loop gauge penalty (backward compatible)
 
 		// Newton line search damping init
 		m_newton_damping_enabled = true;  // Default: enabled when Newton is active
