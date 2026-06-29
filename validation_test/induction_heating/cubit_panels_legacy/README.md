@@ -1,5 +1,10 @@
 # BEM Inductance + ESIM Surface Impedance
 
+This directory is the legacy validation corpus moved from the former IH
+Cubit-panel examples location.  It is not a public examples tier; use it to
+preserve old checks while reusable kernels migrate to `src/` and public
+walkthroughs migrate to result-saved docs notebooks.
+
 Self-inductance extraction using `ngsolve.bem.LaplaceSL` with source/sink constrained EFIE.
 Optional workpiece surface impedance (ESIM/Dowell) for induction heating analysis.
 
@@ -95,7 +100,7 @@ strongest validation we have for the coupled BEM solver.
 
 Run the cross-check:
 ```bash
-python compare_bem_coupled_vs_fem_kelvin.py
+python validation_test/induction_heating/cubit_panels_legacy/compare_bem_coupled_vs_fem_kelvin.py
 ```
 
 Background notes: `memory/bem_coupled_solver_existing.md`

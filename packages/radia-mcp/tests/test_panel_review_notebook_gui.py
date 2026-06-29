@@ -26,7 +26,7 @@ def test_panel_review_exposes_cubit_panels_migration_route():
     assert "cubit_panels_migration" in TOPICS
     doc = get_panel_review_documentation("cubit_panels_migration")
 
-    assert "35 Python scripts" in doc
+    assert "validation_test/induction_heating/cubit_panels_legacy" in doc
     assert "examples/cubit_panels" in doc
     assert "src/radia" in doc
     assert "validation_test" in doc
