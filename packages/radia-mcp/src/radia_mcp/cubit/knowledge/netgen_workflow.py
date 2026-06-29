@@ -58,6 +58,19 @@ or the lab launcher background path when you need to wait for batch completion
 and capture logs.  `coreform_cubit.exe` can behave as a GUI stub and return
 immediately without running the Python batch script.
 
+### Continuous-loop O-grid hex sphere eigenvalue gate
+
+The same O-grid sphere is also a compact PDE-spectrum gate, not only a volume
+gate.  Load the order-3 `.vol` as-is in NGSolve, build an H1 Dirichlet
+generalised eigenproblem with `laplace_dirichlet_eigenvalues(mesh, n_modes=2,
+order=3, shift=-1.0)`, and compare against the ball identities
+`lambda_1=(pi/R)^2` and `lambda_l1=(4.493409457909064/R)^2`.  The verified
+2026-06-29 live gate at `R=1` returned `lambda1=9.86268248871533` and
+`lambda_l1=20.178703158644527`, with relative errors `7.01e-4` and `5.96e-4`.
+This catches export/curving issues that pure volume integration can miss, and
+it confirms that Cubit high-order hex `.vol` files can drive a real scalar
+Dirichlet eigenvalue solve.
+
 ### Continuous-loop mapped hex brick volume/area gate
 
 For a planar all-hex sanity check, use `create brick x 2 y 3 z 4`,
@@ -74,6 +87,38 @@ Python line by line.  Avoid multi-line `dict(...)`, loops, or parenthesized
 blocks in quick validation scripts; write one assignment per physical line or
 use a normal Python process to generate the script.
 
+### Continuous-loop mapped hex quality replay gate
+
+For an all-hex quality baseline, use a mapped brick such as
+`create brick x 3 y 2 z 1`, `volume 1 scheme map`, `volume 1 size 0.25`,
+`mesh volume 1`, `block 1 add hex all`, then export Netgen `.vol` orders 1
+and 3.  The verified 2026-06-29 live slot produced 384 hexes, no
+tet/wedge/pyramid elements, scaled-Jacobian min `0.9999999999999999`, CAD
+volume 6, external area 22, and NGSolve `.vol` volume/BND relative errors
+`1.78e-14` and `1.52e-14`.
+
+Use `cubit_hex_quality_gate` on the archived Cubit quality list before trusting
+a hex-led export.  Inventory and NGSolve integration still matter: the stock
+Netgen export may write `surfaceelementsuv`, and order-3 adds `curvedelements`
+without changing the first-order topology.
+
+For slot-level learning, also run the quality distribution replay gate on the
+same archived list.  `cubit_quality_distribution_gate` records p05/p50/p95
+style quantiles and a compact histogram, so the MCP server can distinguish a
+globally weak mesh from a mostly good mesh with a small damaged tail.  This is
+the preferred evidence format before promoting Cubit hex meshes into heavier
+validation or solver-ready examples.
+
+### Continuous-loop .vol label metadata gate
+
+Before solver setup, confirm that the Netgen `.vol` export carries material
+labels and boundary names, not just element topology.  The replay helper
+`cubit_vol_label_metadata_gate` checks the parsed `materials` and `bcnames`
+sections, required material names, required boundary names, and the presence of
+volume/surface elements.  Use it before assigning sources, boundary conditions,
+or notebook panels from a Cubit/Coreform export; a volume/area/quality pass is
+not solver-ready if labels were lost.
+
 ### Continuous-loop mixed hex+pyramid+tet order-series gate
 
 For hex-led mixed workflows, replay the small Coreform/Cubit fixture exported
@@ -85,6 +130,36 @@ added, but the routing class remains `cubit_hex_or_mixed_path`.  This is why
 from file size or sidecar material volumes.  A pyramid transition block can
 report zero material volume in the `.vol.json` sidecar while still being
 present as a real topology record in the `.vol`.
+
+### Continuous-loop mixed transition metadata gate
+
+For hex-to-tet handoff, do not treat the pyramid bridge as a bookkeeping
+curiosity.  It is the explicit transition topology between the hex-led Cubit
+lane and the tet region.  Replay the `.vol` inventory with
+`cubit_mixed_transition_metadata_gate`: require hex, pyramid, and tet volume
+kinds, require the routing hint `cubit_hex_or_mixed_path`, and require a
+pyramid transition block label such as `pyramid_transition` or `pyram`.
+
+This is intentionally checked from `.vol` arity and labels rather than from the
+companion `.vol.json` material-volume table.  The sidecar can report zero
+volume for the pyramid transition block while the `.vol` still contains the
+pyramid element that makes the mixed mesh conformal.
+
+### Continuous-loop live mixed hex+pyramid+tet NGSolve BND gate
+
+The stock Cubit `export netgen` path can write boundary records as
+`surfaceelementsuv` rather than plain `surfaceelements`.  Treat
+`surfaceelementsuv` as the same surface inventory for routing; otherwise a
+valid live export looks like it has no boundary faces.  A verified 2026-06-29
+headless batch used the split `2 x 1 x 1` brick fixture (`1` mapped hex on one
+side, `1` pyramid transition, `10` tets on the other side), scaled by `0.001`,
+and exported orders 1 and 3.  NGSolve loaded both mixed `.vol` files directly:
+volume matched `2e-9`, and `Integrate(1, mesh, BND)` matched `11e-6`, not the
+external brick area `10e-6`, because the split material interface of area
+`1e-6` is included once.  This is the same material-interface rule as the
+multi-block hex gates: compare BND to external area plus material-interface
+area, and do not use an empty surface inventory as evidence that BND integration
+will fail.
 
 ### Continuous-loop two-block hex interface gate
 
@@ -99,6 +174,34 @@ multi-material blocks share an internal face.  Use Cubit's
 `get_relatives("surface", sid, "volume")` or equivalent inventory to separate
 external boundary surfaces from material interfaces before FEM/BEM coupling.
 
+The 2026-06-29 slot90 replay keeps the same rule but records the Cubit version
+explicitly before making any feature claim: the installed headless executable was
+Coreform Cubit `2025.12`, while public Coreform 2026.6 release notes list newer
+features such as anisotropic tetrahedral meshing, cohesive element generation,
+higher-order Tetra10/Tri6 Jacobian metrics, improved triangle/tet robustness,
+and expanded solver/file compatibility.  For the CAE-AI Lab loop this means:
+keep Cubit as the hex-led and mixed hex+pyramid+tet lane; route ordinary tet-only
+education meshes to Netgen/OCC; use 2026.6 tet/cohesive features only when that
+version is actually installed and the artifact records the version.
+
+Slot98 turns the 2026.6 higher-order quality-metric lesson into a replayable MCP
+gate: archive the raw Tetra10/Tri6 metric list and pass it through
+`cubit_element_quality_gate(element_type="Tetra10"|"Tri6", metric="scaled
+Jacobian"|"Jacobian", min_value=...)` before routing the mesh downstream.  This
+does not claim that 2026.6 is installed on INTEL11; it records that higher-order
+tet/tri Jacobian metrics are a lower-bound quality contract, while live hex-led
+Coreform work on this machine targets the installed 2025.12 headless executable.
+
+Slot90 used two mapped blocks with dimensions `1.25 x 1.5 x 0.75` and
+`1.75 x 1.5 x 0.75`, exported Netgen orders 1 and 3.  The live inventory was
+216 hexes, 270 quad surface records, no tet/wedge/pyramid records, CAD volume
+3.375, external area 15.75, and one material interface of area 1.125.  NGSolve
+loaded both orders and integrated volume `3.374999999999978` and BND area
+`16.87499999999997`, confirming that BND equals external area plus the shared
+interface once.  The batch-script lesson was also repeated: avoid top-level
+multi-line dict literals in `coreform_cubit.com -nographics -batch` scripts;
+write result dictionaries with one assignment per physical line.
+
 ### Continuous-loop three-block hex quality gate
 
 For a slightly heavier hex-led bookkeeping gate, create three adjacent mapped
@@ -110,6 +213,10 @@ Record Cubit's scaled-Jacobian quality in the raw artifact; the live 2026-06-29
 gate had min scaled Jacobian `0.9999999999999999` over all 216 hexes.  NGSolve
 loads both `.vol` files and integrates volume 27 while `Integrate(1, mesh, BND)`
 returns 69, again confirming that BND includes material interfaces once.
+Replay this convention with
+`cubit_bnd_area_interface_gate(external_area=57, material_interface_area=12,
+ngsolve_bnd_area=69)` so the expected comparison is executable and not just a
+prose warning.
 
 ### Continuous-loop curved hex cylinder order-series gate
 
@@ -141,7 +248,8 @@ For Cubit's main hex-led route, validate one actual field solve, not only CAD
 volume.  A robust live fixture is an annular tube: outer cylinder radius `1.0`,
 inner cylinder radius `0.6`, length `1.5`, subtract inner from outer, webcut by
 the x/y planes, `volume all scheme sweep`, and export Netgen `.vol` orders 1
-and 3.  The sweep mesh should be all hex; the verified slot had 864 hexes, no
+and 3.  The heavier order-5 closure repeats the same fixture at orders 1, 3,
+and 5.  The sweep mesh should be all hex; the verified slot had 864 hexes, no
 tet/wedge/pyramid elements, and min scaled Jacobian `0.9951847266721953`.
 
 In NGSolve, load the `.vol` directly.  The exact checks are:
@@ -153,6 +261,15 @@ In NGSolve, load the `.vol` directly.  The exact checks are:
 The order-3 live result had volume rel err `2.63e-6`, BND area rel err
 `1.43e-6`, and capacitance-per-length rel err `1.00e-6`.  This is the
 important upgrade over a geometry-only gate: curved hex export preserves a field quantity through the `.vol` path.
+
+The order-5 closure tightened the geometry gate to volume rel err `4.11e-9`
+and BND-area rel err `2.27e-9`, while the capacitance-per-length rel err stayed
+at `1.02e-6`.  For webcut annuli, do not select electrodes only by
+`normal[2] == 0`; that also catches the planar material-interface cuts.  Use a
+radial-normal check such as `abs(n dot rhat) > 0.9` before classifying an outer
+or inner cylindrical electrode.  If Cubit warns that the C++ plugin is out of
+date, record it in the slot artifact and refresh the installed plugin before
+using the result as production evidence.
 
 ## Choose Your Workflow
 

@@ -788,6 +788,99 @@ def sparameter_group_delay_summary(
     return out
 
 
+def _complex_sparameter_row(value):
+    return {
+        "real": float(value.real),
+        "imag": float(value.imag),
+        "abs": abs(value),
+        "phase_deg": math.degrees(cmath.phase(value)),
+    }
+
+
+def matched_lossless_delay_line_sparameter_gate(
+    frequencies,
+    delay_s,
+    rtol=1.0e-6,
+    atol=0.0,
+    tol=1.0e-12,
+):
+    """Check a matched lossless delay-line S-parameter sweep.
+
+    The teaching model is ``S11=S22=0`` and
+    ``S21=S12=exp(-j*2*pi*f*tau)``.  It is a compact CST/Touchstone companion
+    gate: passivity and reciprocity are necessary but not enough, because the
+    phase trace must also be sampled finely enough for unwrap-based
+    ``tau_g=-d angle(S21)/d omega`` to recover the intended delay.
+    """
+
+    freqs = [float(f) for f in frequencies]
+    tau = float(delay_s)
+    tolerance = float(tol)
+    if len(freqs) < 2:
+        raise ValueError("at least two frequency samples are required")
+    if any(b <= a for a, b in zip(freqs, freqs[1:])):
+        raise ValueError("frequencies must be strictly increasing")
+    if tau < 0.0:
+        raise ValueError("delay_s must be >= 0")
+    if tolerance < 0.0:
+        raise ValueError("tol must be non-negative")
+
+    trace = [cmath.exp(-1j * 2.0 * math.pi * freq * tau) for freq in freqs]
+    delay = sparameter_group_delay_summary(
+        freqs,
+        trace,
+        expected_group_delay_s=tau,
+        rtol=rtol,
+        atol=atol,
+    )
+    raw_phases = [cmath.phase(value) for value in trace]
+    raw_phase_jumps = [
+        abs(b - a)
+        for a, b in zip(raw_phases, raw_phases[1:])
+    ]
+    true_phase_steps = [
+        abs(2.0 * math.pi * (b - a) * tau)
+        for a, b in zip(freqs, freqs[1:])
+    ]
+    rows = [
+        {
+            "frequency_Hz": freq,
+            "s11": _complex_sparameter_row(0.0 + 0.0j),
+            "s21": _complex_sparameter_row(s21),
+            "s12": _complex_sparameter_row(s21),
+            "s22": _complex_sparameter_row(0.0 + 0.0j),
+            "power_through": abs(s21) ** 2,
+        }
+        for freq, s21 in zip(freqs, trace)
+    ]
+    max_power_balance_error = max(abs(row["power_through"] - 1.0) for row in rows)
+    max_reflection = max(row["s11"]["abs"] + row["s22"]["abs"] for row in rows)
+    phase_sampling_ok = all(step < math.pi for step in true_phase_steps)
+    checks = {
+        "matched_ports_ok": max_reflection <= tolerance,
+        "reciprocal_ok": True,
+        "lossless_power_ok": max_power_balance_error <= tolerance,
+        "phase_sampling_step_below_pi": phase_sampling_ok,
+        "group_delay_ok": delay["status"] == "ok",
+    }
+    return {
+        "schema": "radia-ngsolve.matched-lossless-delay-line-sparameter-gate.v1",
+        "frequency_start_Hz": freqs[0],
+        "frequency_stop_Hz": freqs[-1],
+        "delay_s": tau,
+        "n_points": len(freqs),
+        "max_true_phase_step_rad": max(true_phase_steps) if true_phase_steps else 0.0,
+        "raw_phase_jump_count": sum(1 for jump in raw_phase_jumps if jump > math.pi),
+        "max_raw_phase_jump_rad": max(raw_phase_jumps) if raw_phase_jumps else 0.0,
+        "max_power_balance_error": max_power_balance_error,
+        "group_delay": delay,
+        "checks": checks,
+        "rows": rows,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "tol": tolerance,
+    }
+
+
 def helmholtz_cutoff_wavenumbers_2d(mesh, n_modes, bc="neumann", wall="wall",
                                     order=3, shift=-1.0):
     """Lowest cutoff wavenumbers k_c [1/m] of a waveguide cross-section by solving the 2D
