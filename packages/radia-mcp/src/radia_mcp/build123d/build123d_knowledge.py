@@ -1588,6 +1588,38 @@ MCP tool `build123d_volume_crosscheck(...)`.  This is the right first gate
 for Cubit/CAD round trips because volume catches unit-scale mistakes, missing
 booleans, and dropped bodies without requiring identical face topology.
 
+When the external CAD kernel also reports surface area or bounding boxes, use
+the stronger `shape_mass_property_crosscheck_summary(...)` or MCP tool
+`build123d_mass_property_crosscheck(...)`.  Keep `shape_volume_crosscheck_summary`
+as the fallback for minimal imports, but prefer the mass-property gate for
+solver-ready CAD because area errors can reveal lost faces or topology drift
+even when volume happens to match.
+
+For multi-body STEP round trips, run `shape_name_identity_gate(...)` before
+trusting volume/area/bbox rows.  It compares the named-shape multiset and
+rejects missing, extra, duplicate, or unnamed imported solids.  This catches a
+common assembly failure mode: a source can contain every reference row within
+volume tolerance while also carrying an extra body that would silently enter a
+mesh or solver.
+
+After the name identity gate, run `shape_role_metadata_gate(...)` on a small
+row contract such as
+`{"name": "core", "role": "magnetic_core", "material": "electrical_steel"}`.
+Volume equality proves the body survived; role/material metadata proves the
+body is still solver-ready.  This is intentionally independent from STEP
+entity naming because Cubit, CST, Netgen, and downstream scripts may expose
+labels differently.  Keep the source-of-truth metadata row next to the
+build123d assembly and require the expected names, roles, and materials before
+meshing.
+
+Continuous-loop slot107 (2026-06-29): a build123d coaxial annular sleeve was
+checked across analytic/build123d, build123d STEP reimport, and headless Cubit
+STEP import with `shape_mass_property_crosscheck_summary(..., rtol=1e-4)`.
+The Cubit volume rel error was `3.693299710979559e-5`, while surface area and
+bbox matched within the gate.  Use this pattern when a later CST or Cubit import
+can provide area/bbox rows; append that source as `{"cst_import": rows}` or
+`{"cubit": rows}` instead of inventing a separate one-off checker.
+
 Continuous-loop gate (2026-06-29): a centered
 `Box(4, 3, 2) - Cylinder(r=0.4)` body passed the analytic mass-property gate,
 STEP export, and headless Coreform Cubit 2025.12 import with the same
@@ -1652,6 +1684,18 @@ measured `5.085958320184421` (`max_volume_rel_error =
 over-strict `1e-7` gate, so keep analytic/build123d checks tight and external
 curved STEP volume checks at a tolerance that reflects CAD-kernel healing.
 
+Coax annular sleeve continuous-loop gate (2026-06-29): a plain hollow cylinder
+is the CAD companion to the coaxial C/R teaching gate.  Use
+`coax_annular_sleeve_reference_row(inner_radius, outer_radius, height)` before
+promoting a cable shield, winding insulation, or busbar sleeve capacitance into
+an equivalent-circuit table.  The verified slot row was
+`{"name": "coax_annular_sleeve", "volume": 38.453094079939064}` for
+`r_in=0.9`, `r_out=2.1`, `height=3.4`; build123d/OCCT matched the analytic
+volume, while headless Cubit STEP import measured `38.451673891926546`
+(`max_volume_rel_error = 3.693299710979559e-5`) and preserved one volume with
+four analytic surfaces.  Use a `1e-4` external-CAD volume gate for this curved
+annular STEP round trip, while keeping the analytic/build123d gate at `1e-12`.
+
 Ribbed busbar / heat-sink continuous-loop gate (2026-06-29): a rectangular
 base plate with straight raised ribs and four bolt holes outside the fin band
 extends the same volume contract to motor terminals, conduction-cooled busbars,
@@ -1663,6 +1707,71 @@ slot is
 Keep bolt holes outside the fin footprint when you want the analytic volume to
 stay readable; if a hole cuts a rib, make that overlap term explicit before
 trusting the CAD round trip.
+
+Three-phase busbar / snubber-plate continuous-loop gate (2026-06-29): a
+motor-drive plate with three raised phase terminal tabs, two raised snubber
+component pads, and four mounting holes extends the same volume contract to
+drive-protection hardware.  Use
+`three_phase_busbar_snubber_plate_reference_row(...)` to expose the base,
+phase-tab, snubber-pad, and mount-hole terms before STEP handoff.  The verified
+slot row was
+`{"name": "three_phase_busbar_snubber_plate", "volume": 12.30740531929534}`;
+build123d measured `12.307405319295338`, headless Cubit measured
+`12.307405319295343`, and the Cubit import preserved one volume, 35 surfaces,
+and bbox size `[9.0, 3.6, 0.8]`.  This is a compact public-safe bridge from
+motor-control snubber topics to CAD: before debating EMI or switching behavior,
+make the terminal/snubber geometry measurable and repeatable.
+
+RCD snubber heat-spreader continuous-loop gate (2026-06-29): a ribbed base
+plate with two raised snubber pads and four mounting holes extends the same
+contract to drive-protection and thermal hardware.  Use
+`rcd_snubber_heat_spreader_reference_row(...)` to expose base, straight-rib,
+snubber-pad, and mount-hole terms.  The verified slot row was
+`{"name": "rcd_snubber_heat_spreader", "volume": 15.52205629192717}`;
+build123d measured `15.522056291927165`, headless Cubit measured
+`15.522056291927173`, and the Cubit import preserved one volume, 45 surfaces,
+and bbox size `[10.0, 4.0, 0.77]`.  Keep snubber pads outside the rib band
+unless an explicit pad-rib overlap term is added; the first slot attempt caught
+a `0.114` volume mismatch from a pad sitting on the edge rib.  This is a useful
+CAD-learning gate: readable analytic decomposition should fail early when the
+physical feature layout no longer matches the algebra.
+
+RCD capacitance sweep design-table gate (slot99): when a public motor-drive
+lesson varies snubber capacitance to reduce overshoot, keep the electrical
+value as explicit metadata next to the CAD variant instead of inferring it from
+pad area.  Use `rcd_snubber_capacitance_sweep_rows([0.047, 0.10, 0.22],
+[1.05, 1.25, 1.55])`, then audit it with
+`shape_parameter_sweep_summary(..., parameter_key="capacitance_uF",
+metric_keys=("volume", "snubber_pad_volume"))`.  This produces design-table
+rows whose capacitance, pad length, snubber-pad volume, and total heat-spreader
+volume stay together before the row is passed to circuit, thermal, Cubit, or
+CST validation.
+
+Thermal Robin cooling plate continuous-loop gate (2026-06-29): a base plate
+with straight cooling fins, two raised device pads, and four base-only mounting
+holes connects the CAD volume contract to conduction/convection teaching
+examples.  Use `thermal_robin_cooling_plate_reference_row(...)` to expose base,
+straight-fin, device-pad, and mount-hole terms before applying a Robin boundary
+or exporting to a mesh tool.  The verified slot row was
+`{"name": "thermal_robin_cooling_plate", "volume": 15.11290974078757}`;
+build123d measured `15.112909740787572`, headless Cubit measured
+`15.112909740787561`, and the Cubit import preserved one volume, 40 surfaces,
+and bbox size `[9.0, 4.5, 0.85]`.  Keep fins, pads, and holes disjoint unless
+an explicit overlap term is added.  For Coreform Cubit batch scripts launched
+with `coreform_cubit.com -nographics -batch`, avoid multi-line dict literals in
+the playback file; Cubit evaluates the file line-by-line in this mode, so write
+JSON records either as one-line dict assignments or by building the dictionary
+incrementally.
+
+V-type IPM rotor-coupon continuous-loop gate (2026-06-29): a rectangular
+lamination coupon with two mirrored angled magnet pockets and a central bore
+is a readable public-safe proxy for IPM rotor CAD before a full rotor sector.
+Use `v_type_ipm_rotor_coupon_reference_row(...)` to expose the coupon,
+two-pocket, and bore terms before STEP handoff.  The verified reference row is
+`{"name": "v_type_ipm_rotor_coupon", "volume": 13.238339620676824}`.  Keep the
+magnet pockets fully inside the coupon, clear of the bore, and clear of each
+other; otherwise the analytic volume must include overlap terms and is no
+longer a simple pre-FEM gate.
 
 Use the full `shape_measurement_health_summary(...)` only when the other CAD
 side also supplies area and bounding boxes.  Keep private tool provenance in

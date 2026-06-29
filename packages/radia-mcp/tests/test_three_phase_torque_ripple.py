@@ -18,6 +18,7 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.solve import (
     three_phase_torque_ripple_harmonics,
     three_phase_torque_ripple_pair_table,
+    torque_angle_table_export_health,
     torque_angle_sweep_comparison_summary,
     torque_angle_sweep_health_summary,
     torque_angle_sweep_summary,
@@ -205,6 +206,54 @@ def test_torque_angle_sweep_health_summary_flags_ripple_limits():
     assert bad["status"] == "needs_attention"
     assert bad["checks"]["ac_rms_over_mean"] is False
     assert bad["checks"]["dominant_harmonic"] is False
+
+
+def test_torque_angle_table_export_health_drops_jmag_endpoint_and_checks_units():
+    rows = []
+    for angle_deg in range(361):
+        theta = math.radians(angle_deg)
+        rows.append({
+            "RotorAngle_deg": float(angle_deg),
+            "Torque_Nm": 8.0 + 0.24 * math.cos(6.0 * theta) + 0.06 * math.sin(12.0 * theta),
+        })
+
+    health = torque_angle_table_export_health(
+        rows,
+        angle_key="RotorAngle_deg",
+        torque_key="Torque_Nm",
+        angle_unit="deg",
+        max_harmonic=18,
+        allowed_dominant_harmonics=[6],
+        max_ac_rms_over_mean=0.022,
+        min_mean_abs_torque_Nm=7.9,
+        top_harmonics=2,
+    )
+
+    assert health["status"] == "ok"
+    assert health["policy"] == "torque_angle_table_export_health"
+    assert health["input_rows"] == 361
+    assert health["n_samples"] == 360
+    assert health["dropped_repeated_endpoint"] is True
+    assert health["angle_unit"] == "deg"
+    assert health["expected_step"] == pytest.approx(1.0)
+    assert health["max_step_abs_error"] == pytest.approx(0.0)
+    assert health["torque_health"]["mean_torque_Nm"] == pytest.approx(8.0)
+    assert health["torque_health"]["dominant_harmonic"] == 6
+    assert health["torque_health"]["top_harmonic_rows"][0]["amplitude_Nm"] == pytest.approx(0.24)
+    assert health["torque_health"]["top_harmonic_rows"][1]["order"] == 12
+    assert health["torque_health"]["top_harmonic_rows"][1]["amplitude_Nm"] == pytest.approx(0.06)
+
+    uneven = [dict(row) for row in rows]
+    uneven[17]["RotorAngle_deg"] += 0.25
+    bad = torque_angle_table_export_health(
+        uneven,
+        angle_key="RotorAngle_deg",
+        torque_key="Torque_Nm",
+        angle_unit="deg",
+        max_harmonic=18,
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["uniform_angle_step"] is False
 
 
 def test_torque_angle_sweep_comparison_summary_tracks_mean_and_ripple_deltas():

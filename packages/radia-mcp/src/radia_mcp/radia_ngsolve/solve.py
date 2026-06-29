@@ -808,6 +808,104 @@ def torque_angle_sweep_health_summary(
     }
 
 
+def torque_angle_table_export_health(
+    rows,
+    angle_key="angle_deg",
+    torque_key="torque_Nm",
+    angle_unit="deg",
+    max_harmonic=None,
+    max_ac_rms_over_mean=None,
+    max_peak_to_peak_over_mean=None,
+    allowed_dominant_harmonics=None,
+    min_mean_abs_torque_Nm=None,
+    top_harmonics=5,
+    angle_tol=1.0e-9,
+):
+    """Validate a solver-exported torque-angle table before harmonic analysis.
+
+    JMAG and other motor-FEA exports often include a repeated endpoint
+    (0..360 deg) or mix mechanical/electrical angle labels.  This helper keeps
+    the table contract explicit: monotonically increasing angle, one uniform
+    period, optional endpoint removal, and then the existing Fourier health
+    summary on the torque column.
+    """
+
+    table = list(rows)
+    if len(table) < 4:
+        raise ValueError("at least four table rows are required")
+    unit = str(angle_unit).strip().lower()
+    if unit in {"deg", "degree", "degrees"}:
+        period = 360.0
+        normalized_unit = "deg"
+    elif unit in {"rad", "radian", "radians"}:
+        period = 2.0 * math.pi
+        normalized_unit = "rad"
+    else:
+        raise ValueError("angle_unit must be 'deg' or 'rad'")
+    tolerance = float(angle_tol)
+    if tolerance < 0.0:
+        raise ValueError("angle_tol must be non-negative")
+
+    angles = []
+    torques = []
+    for index, row in enumerate(table):
+        try:
+            angle = float(row[angle_key])
+            torque = float(row[torque_key])
+        except KeyError as exc:
+            raise ValueError(f"row {index} is missing {exc.args[0]!r}") from exc
+        angles.append(angle)
+        torques.append(torque)
+
+    dropped_repeated_endpoint = False
+    if len(angles) >= 2 and abs((angles[-1] - angles[0]) - period) <= tolerance:
+        angles = angles[:-1]
+        torques = torques[:-1]
+        dropped_repeated_endpoint = True
+    if len(angles) < 3:
+        raise ValueError("at least three non-endpoint samples are required")
+
+    diffs = [angles[i + 1] - angles[i] for i in range(len(angles) - 1)]
+    monotonic = all(diff > tolerance for diff in diffs)
+    expected_step = period / len(angles)
+    max_step_abs_error = max((abs(diff - expected_step) for diff in diffs), default=0.0)
+    span_error = abs((angles[-1] - angles[0] + expected_step) - period)
+    uniform = max_step_abs_error <= tolerance and span_error <= tolerance
+
+    health = torque_angle_sweep_health_summary(
+        torques,
+        max_harmonic=max_harmonic,
+        max_ac_rms_over_mean=max_ac_rms_over_mean,
+        max_peak_to_peak_over_mean=max_peak_to_peak_over_mean,
+        allowed_dominant_harmonics=allowed_dominant_harmonics,
+        min_mean_abs_torque_Nm=min_mean_abs_torque_Nm,
+        top_harmonics=top_harmonics,
+    )
+    checks = {
+        "monotonic_angle": monotonic,
+        "uniform_angle_step": uniform,
+        "torque_health_ok": health["status"] == "ok",
+    }
+    return {
+        "policy": "torque_angle_table_export_health",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "angle_key": str(angle_key),
+        "torque_key": str(torque_key),
+        "angle_unit": normalized_unit,
+        "input_rows": len(table),
+        "n_samples": len(torques),
+        "dropped_repeated_endpoint": dropped_repeated_endpoint,
+        "first_angle": angles[0],
+        "last_angle": angles[-1],
+        "period": period,
+        "expected_step": expected_step,
+        "max_step_abs_error": max_step_abs_error,
+        "span_error": span_error,
+        "checks": checks,
+        "torque_health": health,
+    }
+
+
 def torque_angle_sweep_comparison_summary(
     reference_torque_Nm,
     candidate_torque_Nm,

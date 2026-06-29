@@ -22,6 +22,7 @@ archetypes that compose them (Halbach ring, dipole/quadrupole yokes, C-core, sol
 """
 from __future__ import annotations
 
+from collections import Counter
 import math
 
 from build123d import (Axis, Box, BuildLine, BuildSketch, CenterArc, Circle, Compound, Cylinder, Helix,
@@ -34,13 +35,22 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "shape_measurement_row", "shape_measurement_rows",
            "box_through_cylinder_reference_row", "mounting_plate_boss_reference_row",
            "keyed_terminal_plate_reference_row", "flanged_sleeve_reference_row",
+           "coax_annular_sleeve_reference_row",
            "ribbed_busbar_heat_sink_reference_row",
+           "three_phase_busbar_snubber_plate_reference_row",
+           "v_type_ipm_rotor_coupon_reference_row",
+           "rcd_snubber_heat_spreader_reference_row",
+           "rcd_snubber_capacitance_sweep_rows",
+           "thermal_robin_cooling_plate_reference_row",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
            "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
            "box_face_traction_moment_rows",
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            "compare_shape_volume_rows", "shape_volume_crosscheck_summary",
+           "shape_name_identity_gate",
+           "shape_role_metadata_gate",
+           "shape_mass_property_crosscheck_summary",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
            "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
            "shape_parameter_sweep_summary",
@@ -1273,6 +1283,297 @@ def shape_volume_crosscheck_summary(reference_rows, measured_sets, rtol=1.0e-5):
     }
 
 
+def _normalize_shape_measurement_sets(measured_sets):
+    def _rows_payload(value):
+        if isinstance(value, dict):
+            rows = value.get("rows", value.get("measurements", value))
+            if isinstance(rows, dict) and ("volume" in rows or "area" in rows):
+                return [rows]
+            return rows
+        return value
+
+    if isinstance(measured_sets, dict):
+        if "rows" in measured_sets or "measurements" in measured_sets or "volume" in measured_sets:
+            return [("external_cad", _rows_payload(measured_sets))]
+        return [
+            (str(label), _rows_payload(rows))
+            for label, rows in measured_sets.items()
+        ]
+    normalized = []
+    for index, item in enumerate(list(measured_sets), start=1):
+        if isinstance(item, dict) and ("rows" in item or "measurements" in item):
+            label = str(item.get("source") or item.get("label") or f"external_cad_{index}")
+            rows = _rows_payload(item)
+        else:
+            label = f"external_cad_{index}"
+            rows = _rows_payload(item)
+        normalized.append((label, rows))
+    return normalized
+
+
+def shape_name_identity_gate(reference_rows, measured_rows, measured_label="measured"):
+    """Check that a CAD round trip preserved the same named shape multiset.
+
+    Volume and area comparisons iterate over reference rows, so an imported
+    CAD source can otherwise carry an extra solid without being noticed.  Run
+    this gate before trusting assembly-level mass-property comparisons.
+    """
+
+    reference = list(reference_rows)
+    measured = list(measured_rows)
+    reference_names = [str(row.get("name", "")).strip() for row in reference]
+    measured_names = [str(row.get("name", "")).strip() for row in measured]
+    reference_counts = Counter(reference_names)
+    measured_counts = Counter(measured_names)
+    reference_missing_name_count = reference_counts.pop("", 0)
+    measured_missing_name_count = measured_counts.pop("", 0)
+    duplicate_reference_names = sorted(
+        name for name, count in reference_counts.items() if count > 1
+    )
+    duplicate_measured_names = sorted(
+        name for name, count in measured_counts.items() if count > 1
+    )
+    missing_names = sorted(
+        name for name, count in reference_counts.items()
+        if measured_counts.get(name, 0) < count
+    )
+    extra_names = sorted(
+        name for name, count in measured_counts.items()
+        if reference_counts.get(name, 0) < count
+    )
+    count_mismatches = [
+        {
+            "name": name,
+            "reference_count": reference_counts.get(name, 0),
+            "measured_count": measured_counts.get(name, 0),
+        }
+        for name in sorted(set(reference_counts) | set(measured_counts))
+        if reference_counts.get(name, 0) != measured_counts.get(name, 0)
+    ]
+    checks = {
+        "reference_names_present": reference_missing_name_count == 0,
+        "measured_names_present": measured_missing_name_count == 0,
+        "reference_names_unique": not duplicate_reference_names,
+        "measured_names_unique": not duplicate_measured_names,
+        "same_name_multiset": not count_mismatches,
+    }
+    return {
+        "policy": "build123d_cad_roundtrip_named_shape_identity_gate",
+        "measured_label": str(measured_label),
+        "n_reference_rows": len(reference),
+        "n_measured_rows": len(measured),
+        "reference_names": sorted(reference_counts),
+        "measured_names": sorted(measured_counts),
+        "reference_missing_name_count": reference_missing_name_count,
+        "measured_missing_name_count": measured_missing_name_count,
+        "duplicate_reference_names": duplicate_reference_names,
+        "duplicate_measured_names": duplicate_measured_names,
+        "missing_names": missing_names,
+        "extra_names": extra_names,
+        "count_mismatches": count_mismatches,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Use this before volume/area/bbox gates for multi-body build123d "
+            "STEP round trips through Cubit, CST, or another CAD kernel."
+        ),
+    }
+
+
+def shape_role_metadata_gate(
+    rows,
+    required_names=(),
+    required_roles=(),
+    required_materials=(),
+    source_label="build123d",
+):
+    """Check that named CAD bodies carry solver-handoff role/material metadata.
+
+    Geometry gates can prove that a STEP round trip preserved bodies, volumes
+    and areas, but a solver also needs to know what each body *means*.  Keep a
+    tiny row contract next to build123d assemblies before exporting them:
+    ``{"name": "core", "role": "magnetic_core", "material": "steel"}``.
+    """
+
+    normalized = []
+    for row in list(rows):
+        item = dict(row)
+        name = str(item.get("name", "")).strip()
+        role = str(
+            item.get("role")
+            or item.get("solver_role")
+            or item.get("region_role")
+            or item.get("boundary_role")
+            or ""
+        ).strip()
+        material = str(
+            item.get("material")
+            or item.get("material_name")
+            or item.get("mat")
+            or ""
+        ).strip()
+        normalized.append(
+            {
+                "name": name,
+                "role": role,
+                "material": material,
+                "source_row": item,
+            }
+        )
+
+    name_counts = Counter(row["name"] for row in normalized)
+    missing_name_count = name_counts.pop("", 0)
+    duplicate_names = sorted(name for name, count in name_counts.items() if count > 1)
+    names = set(name_counts)
+    roles = {row["role"] for row in normalized if row["role"]}
+    materials = {row["material"] for row in normalized if row["material"]}
+    rows_missing_role = [row["name"] for row in normalized if row["name"] and not row["role"]]
+    rows_missing_material = [
+        row["name"] for row in normalized if row["name"] and not row["material"]
+    ]
+    required_name_set = {str(name).strip() for name in required_names if str(name).strip()}
+    required_role_set = {str(role).strip() for role in required_roles if str(role).strip()}
+    required_material_set = {
+        str(material).strip()
+        for material in required_materials
+        if str(material).strip()
+    }
+    missing_required_names = sorted(required_name_set - names)
+    missing_required_roles = sorted(required_role_set - roles)
+    missing_required_materials = sorted(required_material_set - materials)
+    checks = {
+        "names_present": missing_name_count == 0,
+        "names_unique": not duplicate_names,
+        "all_rows_have_role": not rows_missing_role,
+        "all_rows_have_material": not rows_missing_material,
+        "required_names_present": not missing_required_names,
+        "required_roles_present": not missing_required_roles,
+        "required_materials_present": not missing_required_materials,
+    }
+    return {
+        "policy": "build123d_solver_handoff_role_material_metadata_gate",
+        "source_label": str(source_label),
+        "n_rows": len(normalized),
+        "names": sorted(names),
+        "roles": sorted(roles),
+        "materials": sorted(materials),
+        "missing_name_count": missing_name_count,
+        "duplicate_names": duplicate_names,
+        "rows_missing_role": sorted(rows_missing_role),
+        "rows_missing_material": sorted(rows_missing_material),
+        "missing_required_names": missing_required_names,
+        "missing_required_roles": missing_required_roles,
+        "missing_required_materials": missing_required_materials,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Run this after shape_name_identity_gate and before meshing so "
+            "build123d bodies retain solver role/material intent across STEP, "
+            "Cubit, CST, or Netgen handoff."
+        ),
+    }
+
+
+def shape_mass_property_crosscheck_summary(
+    reference_rows,
+    measured_sets,
+    rtol=1.0e-5,
+    bbox_atol=1.0e-6,
+    worst_limit=5,
+):
+    """Return volume/area/bbox crosscheck summary for one or more CAD sources.
+
+    This is the stronger companion to :func:`shape_volume_crosscheck_summary`.
+    Use it when the external CAD kernel can report at least ``name``,
+    ``volume`` and ``area`` rows, and optionally a ``bounding_box`` compatible
+    with :func:`shape_measurement_row`.  It is intended for build123d -> STEP
+    round trips through Cubit, CST, or another CAD kernel before meshing or
+    solver setup.
+    """
+
+    if worst_limit < 0:
+        raise ValueError("worst_limit must be non-negative")
+    reference = list(reference_rows)
+    inventory = shape_measurement_inventory_summary(reference)
+    sets = []
+    all_rows = []
+    identity_gates = []
+    for label, rows in _normalize_shape_measurement_sets(measured_sets):
+        rows_list = list(rows)
+        identity_gate = shape_name_identity_gate(
+            reference,
+            rows_list,
+            measured_label=label,
+        )
+        identity_gates.append(identity_gate)
+        compared = shape_measurement_comparison_summary(
+            reference,
+            rows_list,
+            rtol=rtol,
+            measured_label=label,
+            bbox_atol=bbox_atol,
+        )
+        comparison_rows = compared["rows"]
+        failed = [row for row in comparison_rows if not row["passed"]]
+        source_summary = {
+            "source": label,
+            "status": "ok"
+            if not failed and identity_gate["status"] == "ok"
+            else "needs_attention",
+            "name_identity_gate": identity_gate,
+            "n_cases": compared["n_cases"],
+            "n_passed": compared["n_passed"],
+            "n_bbox_compared": compared["n_bbox_compared"],
+            "max_volume_rel_error": compared["max_volume_rel_error"],
+            "max_area_rel_error": compared["max_area_rel_error"],
+            "max_bbox_abs_error": compared["max_bbox_abs_error"],
+            "worst_comparisons": worst_shape_measurement_comparison_rows(
+                comparison_rows,
+                limit=worst_limit,
+            ),
+            "rows": comparison_rows,
+        }
+        sets.append(source_summary)
+        all_rows.extend(comparison_rows)
+
+    failed_rows = [row for row in all_rows if not row["passed"]]
+    failed_identity_gates = [gate for gate in identity_gates if gate["status"] != "ok"]
+    checks = {
+        "all_reference_shapes_valid": inventory["n_valid"] == inventory["n_shapes"],
+        "all_sources_present_and_within_tolerance": not failed_rows,
+        "all_sources_preserve_named_shape_identity": not failed_identity_gates,
+    }
+    issues = []
+    if not checks["all_reference_shapes_valid"]:
+        issues.append("at least one reference build123d shape is invalid")
+    if not checks["all_sources_present_and_within_tolerance"]:
+        issues.append("at least one CAD source row is missing or outside tolerance")
+    if not checks["all_sources_preserve_named_shape_identity"]:
+        issues.append("at least one CAD source has missing, extra, duplicate, or unnamed shapes")
+    volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
+    area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
+    bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
+    ok = all(checks.values())
+    return {
+        "policy": "build123d_external_cad_volume_area_bbox_crosscheck",
+        "status": "ok" if ok else "needs_attention",
+        "ok_for_cad_roundtrip_mass_properties": ok,
+        "rtol": float(rtol),
+        "bbox_atol": float(bbox_atol),
+        "n_reference_rows": len(reference),
+        "n_sources": len(sets),
+        "n_failed_rows": len(failed_rows),
+        "max_volume_rel_error": max(volume_errors) if volume_errors else 0.0,
+        "max_area_rel_error": max(area_errors) if area_errors else 0.0,
+        "max_bbox_abs_error": max(bbox_errors) if bbox_errors else 0.0,
+        "sources": [item["source"] for item in sets],
+        "checks": checks,
+        "issues": issues,
+        "inventory": inventory,
+        "comparison_sets": sets,
+    }
+
+
 def shape_measurement_comparison_summary(
     reference_rows,
     measured_rows,
@@ -1676,6 +1977,59 @@ def flanged_sleeve_reference_row(
     }
 
 
+def coax_annular_sleeve_reference_row(
+    inner_radius,
+    outer_radius,
+    height,
+    label="coax_annular_sleeve",
+):
+    """Analytic row for a hollow coaxial sleeve.
+
+    This is the CAD companion of the coaxial C/R field gate: before a motor
+    drive, cable shield, or winding-insulation model promotes a capacitance or
+    resistance into an equivalent circuit, verify that the annular solid volume
+    survived the build123d -> STEP -> external CAD-kernel round trip.
+    """
+
+    r_in = float(inner_radius)
+    r_out = float(outer_radius)
+    h = float(height)
+    if not (0.0 < r_in < r_out):
+        raise ValueError("require 0 < inner_radius < outer_radius")
+    if h <= 0.0:
+        raise ValueError("height must be positive")
+
+    volume = math.pi * (r_out * r_out - r_in * r_in) * h
+    area = (
+        2.0 * math.pi * r_out * h
+        + 2.0 * math.pi * r_in * h
+        + 2.0 * math.pi * (r_out * r_out - r_in * r_in)
+    )
+    bbox = {
+        "min": [-r_out, -r_out, -h / 2.0],
+        "max": [r_out, r_out, h / 2.0],
+        "center": [0.0, 0.0, 0.0],
+        "size": [2.0 * r_out, 2.0 * r_out, h],
+        "diagonal": math.sqrt((2.0 * r_out) ** 2 + (2.0 * r_out) ** 2 + h * h),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "area": area,
+        "bounding_box": bbox,
+        "terms": {
+            "outer_cylinder": math.pi * r_out * r_out * h,
+            "inner_void": -math.pi * r_in * r_in * h,
+        },
+        "parameters": {
+            "inner_radius": r_in,
+            "outer_radius": r_out,
+            "height": h,
+        },
+        "policy": "analytic_coax_annular_sleeve_volume_reference",
+    }
+
+
 def ribbed_busbar_heat_sink_reference_row(
     base_x,
     base_y,
@@ -1756,6 +2110,606 @@ def ribbed_busbar_heat_sink_reference_row(
             "fin_band_to_y_edge": base_y / 2.0 - fin_band_half_width,
         },
         "policy": "analytic_ribbed_busbar_heat_sink_volume_reference",
+    }
+
+
+def three_phase_busbar_snubber_plate_reference_row(
+    base_x,
+    base_y,
+    base_h,
+    phase_count,
+    phase_tab_x,
+    phase_tab_y,
+    phase_tab_h,
+    phase_pitch,
+    snubber_count,
+    snubber_pad_x,
+    snubber_pad_y,
+    snubber_pad_h,
+    snubber_pitch,
+    mount_hole_r,
+    mount_hole_x,
+    mount_hole_y,
+    phase_tab_y0=0.0,
+    snubber_pad_y0=-1.0,
+    label="three_phase_busbar_snubber_plate",
+):
+    """Analytic volume row for a motor-drive busbar with snubber pads.
+
+    The body is a rectangular busbar plate, three raised phase terminal tabs,
+    two raised snubber/component pads, and four mounting holes through the base
+    only.  It is intentionally decomposed into readable terms for public
+    motor-drive CAD validation before STEP handoff to Cubit/CST or downstream
+    meshing.
+    """
+
+    base_x = float(base_x)
+    base_y = float(base_y)
+    base_h = float(base_h)
+    phase_count = int(phase_count)
+    phase_tab_x = float(phase_tab_x)
+    phase_tab_y = float(phase_tab_y)
+    phase_tab_h = float(phase_tab_h)
+    phase_pitch = float(phase_pitch)
+    snubber_count = int(snubber_count)
+    snubber_pad_x = float(snubber_pad_x)
+    snubber_pad_y = float(snubber_pad_y)
+    snubber_pad_h = float(snubber_pad_h)
+    snubber_pitch = float(snubber_pitch)
+    mount_hole_r = float(mount_hole_r)
+    mount_hole_x = abs(float(mount_hole_x))
+    mount_hole_y = abs(float(mount_hole_y))
+    phase_tab_y0 = float(phase_tab_y0)
+    snubber_pad_y0 = float(snubber_pad_y0)
+
+    positives = (
+        base_x, base_y, base_h, phase_tab_x, phase_tab_y, phase_tab_h,
+        phase_pitch, snubber_pad_x, snubber_pad_y, snubber_pad_h,
+        snubber_pitch, mount_hole_r, mount_hole_x, mount_hole_y,
+    )
+    if any(value <= 0.0 for value in positives):
+        raise ValueError("all dimensions, pitches, and radii must be positive")
+    if phase_count < 1 or snubber_count < 1:
+        raise ValueError("phase_count and snubber_count must be positive")
+
+    phase_span = (phase_count - 1) * phase_pitch + phase_tab_x
+    snubber_span = (snubber_count - 1) * snubber_pitch + snubber_pad_x
+    if phase_span >= base_x:
+        raise ValueError("phase terminal tabs must fit across the base")
+    if snubber_span >= base_x:
+        raise ValueError("snubber pads must fit across the base")
+    if abs(phase_tab_y0) + phase_tab_y / 2.0 >= base_y / 2.0:
+        raise ValueError("phase terminal tabs must fit inside the base width")
+    if abs(snubber_pad_y0) + snubber_pad_y / 2.0 >= base_y / 2.0:
+        raise ValueError("snubber pads must fit inside the base width")
+    if mount_hole_x + mount_hole_r >= base_x / 2.0:
+        raise ValueError("mount hole x location must fit inside the base")
+    if mount_hole_y + mount_hole_r >= base_y / 2.0:
+        raise ValueError("mount hole y location must fit inside the base")
+
+    phase_centers = [
+        ((index - (phase_count - 1) / 2.0) * phase_pitch, phase_tab_y0)
+        for index in range(phase_count)
+    ]
+    snubber_centers = [
+        ((index - (snubber_count - 1) / 2.0) * snubber_pitch, snubber_pad_y0)
+        for index in range(snubber_count)
+    ]
+    hole_centers = [
+        (sx * mount_hole_x, sy * mount_hole_y)
+        for sx in (-1.0, 1.0)
+        for sy in (-1.0, 1.0)
+    ]
+
+    def _hole_clears_rectangle(hole_x, hole_y, rect_x, rect_y, rect_w, rect_h):
+        return (
+            abs(hole_x - rect_x) > rect_w / 2.0 + mount_hole_r
+            or abs(hole_y - rect_y) > rect_h / 2.0 + mount_hole_r
+        )
+
+    for hole_x, hole_y in hole_centers:
+        for rect_x, rect_y in phase_centers:
+            if not _hole_clears_rectangle(hole_x, hole_y, rect_x, rect_y, phase_tab_x, phase_tab_y):
+                raise ValueError("mount holes must not intersect phase terminal tabs")
+        for rect_x, rect_y in snubber_centers:
+            if not _hole_clears_rectangle(hole_x, hole_y, rect_x, rect_y, snubber_pad_x, snubber_pad_y):
+                raise ValueError("mount holes must not intersect snubber pads")
+
+    base_volume = base_x * base_y * base_h
+    phase_tab_volume = phase_count * phase_tab_x * phase_tab_y * phase_tab_h
+    snubber_pad_volume = snubber_count * snubber_pad_x * snubber_pad_y * snubber_pad_h
+    mount_hole_volume = 4.0 * math.pi * mount_hole_r * mount_hole_r * base_h
+    top_h = max(phase_tab_h, snubber_pad_h)
+    volume = base_volume + phase_tab_volume + snubber_pad_volume - mount_hole_volume
+    bbox = {
+        "min": [-base_x / 2.0, -base_y / 2.0, -base_h / 2.0],
+        "max": [base_x / 2.0, base_y / 2.0, base_h / 2.0 + top_h],
+        "center": [0.0, 0.0, top_h / 2.0],
+        "size": [base_x, base_y, base_h + top_h],
+        "diagonal": math.sqrt(base_x * base_x + base_y * base_y + (base_h + top_h) ** 2),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "base": base_volume,
+            "three_phase_tabs": phase_tab_volume,
+            "two_snubber_pads": snubber_pad_volume,
+            "four_mount_holes": -mount_hole_volume,
+        },
+        "counts": {
+            "phase_tabs": phase_count,
+            "snubber_pads": snubber_count,
+            "mount_holes": 4,
+        },
+        "clearances": {
+            "mount_hole_to_x_edge": base_x / 2.0 - mount_hole_x - mount_hole_r,
+            "mount_hole_to_y_edge": base_y / 2.0 - mount_hole_y - mount_hole_r,
+            "phase_tab_gap": phase_pitch - phase_tab_x,
+            "snubber_pad_gap": snubber_pitch - snubber_pad_x,
+            "phase_span_to_x_edge": (base_x - phase_span) / 2.0,
+            "snubber_span_to_x_edge": (base_x - snubber_span) / 2.0,
+        },
+        "policy": "analytic_three_phase_busbar_snubber_plate_volume_reference",
+    }
+
+
+def rcd_snubber_heat_spreader_reference_row(
+    base_x,
+    base_y,
+    base_h,
+    rib_count,
+    rib_x,
+    rib_y,
+    rib_h,
+    rib_pitch,
+    snubber_count,
+    snubber_pad_x,
+    snubber_pad_y,
+    snubber_pad_h,
+    snubber_pitch,
+    mount_hole_r,
+    mount_hole_x,
+    mount_hole_y,
+    snubber_pad_y0=-1.55,
+    label="rcd_snubber_heat_spreader",
+):
+    """Analytic volume row for a readable RCD-snubber heat-spreader plate.
+
+    This is a public-safe motor-drive hardware gate: a base plate, straight
+    cooling ribs, two snubber/component pads, and four mounting holes through
+    the base only.  Holes are required to stay outside ribs and pads so the
+    volume decomposition remains a transparent pre-mesh CAD check.
+    """
+
+    base_x = float(base_x)
+    base_y = float(base_y)
+    base_h = float(base_h)
+    rib_count = int(rib_count)
+    rib_x = float(rib_x)
+    rib_y = float(rib_y)
+    rib_h = float(rib_h)
+    rib_pitch = float(rib_pitch)
+    snubber_count = int(snubber_count)
+    snubber_pad_x = float(snubber_pad_x)
+    snubber_pad_y = float(snubber_pad_y)
+    snubber_pad_h = float(snubber_pad_h)
+    snubber_pitch = float(snubber_pitch)
+    mount_hole_r = float(mount_hole_r)
+    mount_hole_x = abs(float(mount_hole_x))
+    mount_hole_y = abs(float(mount_hole_y))
+    snubber_pad_y0 = float(snubber_pad_y0)
+
+    positives = (
+        base_x, base_y, base_h, rib_x, rib_y, rib_h, rib_pitch,
+        snubber_pad_x, snubber_pad_y, snubber_pad_h,
+        snubber_pitch, mount_hole_r, mount_hole_x, mount_hole_y,
+    )
+    if any(value <= 0.0 for value in positives):
+        raise ValueError("all dimensions, pitches, and radii must be positive")
+    if rib_count < 1 or snubber_count < 1:
+        raise ValueError("rib_count and snubber_count must be positive")
+    if rib_x >= base_x:
+        raise ValueError("ribs must fit inside the base length")
+    rib_span = (rib_count - 1) * rib_pitch + rib_y
+    if rib_span >= base_y:
+        raise ValueError("rib band must fit inside the base width")
+    snubber_span = (snubber_count - 1) * snubber_pitch + snubber_pad_x
+    if snubber_span >= base_x:
+        raise ValueError("snubber pads must fit across the base")
+    if snubber_pad_y >= base_y:
+        raise ValueError("snubber pads must fit inside the base width")
+    if abs(snubber_pad_y0) + snubber_pad_y / 2.0 >= base_y / 2.0:
+        raise ValueError("snubber pads must fit inside the base width at snubber_pad_y0")
+    if mount_hole_x + mount_hole_r >= base_x / 2.0:
+        raise ValueError("mount hole x location must fit inside the base")
+    if mount_hole_y + mount_hole_r >= base_y / 2.0:
+        raise ValueError("mount hole y location must fit inside the base")
+
+    rib_band_half_width = rib_span / 2.0
+    if mount_hole_y - mount_hole_r <= rib_band_half_width:
+        raise ValueError("mount holes must stay outside the rib band")
+    if mount_hole_x - mount_hole_r <= snubber_span / 2.0:
+        raise ValueError("mount holes must stay outside the snubber pad span")
+    if abs(snubber_pad_y0) - snubber_pad_y / 2.0 <= rib_band_half_width:
+        raise ValueError("snubber pads must stay outside the rib band for additive volume")
+
+    base_volume = base_x * base_y * base_h
+    rib_volume = rib_count * rib_x * rib_y * rib_h
+    snubber_pad_volume = snubber_count * snubber_pad_x * snubber_pad_y * snubber_pad_h
+    mount_hole_volume = 4.0 * math.pi * mount_hole_r * mount_hole_r * base_h
+    top_h = max(rib_h, snubber_pad_h)
+    volume = base_volume + rib_volume + snubber_pad_volume - mount_hole_volume
+    bbox = {
+        "min": [-base_x / 2.0, -base_y / 2.0, -base_h / 2.0],
+        "max": [base_x / 2.0, base_y / 2.0, base_h / 2.0 + top_h],
+        "center": [0.0, 0.0, top_h / 2.0],
+        "size": [base_x, base_y, base_h + top_h],
+        "diagonal": math.sqrt(base_x * base_x + base_y * base_y + (base_h + top_h) ** 2),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "base": base_volume,
+            "straight_ribs": rib_volume,
+            "snubber_pads": snubber_pad_volume,
+            "four_mount_holes": -mount_hole_volume,
+        },
+        "counts": {
+            "ribs": rib_count,
+            "snubber_pads": snubber_count,
+            "mount_holes": 4,
+        },
+        "clearances": {
+            "mount_hole_to_x_edge": base_x / 2.0 - mount_hole_x - mount_hole_r,
+            "mount_hole_to_y_edge": base_y / 2.0 - mount_hole_y - mount_hole_r,
+            "mount_hole_to_rib_band": mount_hole_y - mount_hole_r - rib_band_half_width,
+            "mount_hole_to_snubber_span": mount_hole_x - mount_hole_r - snubber_span / 2.0,
+            "snubber_pad_to_rib_band": abs(snubber_pad_y0) - snubber_pad_y / 2.0 - rib_band_half_width,
+            "rib_gap": rib_pitch - rib_y,
+            "snubber_pad_gap": snubber_pitch - snubber_pad_x,
+            "rib_span_to_y_edge": (base_y - rib_span) / 2.0,
+            "snubber_span_to_x_edge": (base_x - snubber_span) / 2.0,
+            "snubber_pad_to_y_edge": base_y / 2.0 - abs(snubber_pad_y0) - snubber_pad_y / 2.0,
+        },
+        "parameters": {
+            "rib_pitch": rib_pitch,
+            "snubber_pad_y0": snubber_pad_y0,
+        },
+        "policy": "analytic_rcd_snubber_heat_spreader_volume_reference",
+    }
+
+
+def rcd_snubber_capacitance_sweep_rows(
+    capacitance_uF_values,
+    snubber_pad_x_values,
+    *,
+    base_x=10.0,
+    base_y=4.0,
+    base_h=0.32,
+    rib_count=5,
+    rib_x=8.0,
+    rib_y=0.12,
+    rib_h=0.45,
+    rib_pitch=0.45,
+    snubber_count=2,
+    snubber_pad_y=0.70,
+    snubber_pad_h=0.38,
+    snubber_pitch=2.4,
+    mount_hole_r=0.16,
+    mount_hole_x=4.2,
+    mount_hole_y=1.55,
+    snubber_pad_y0=-1.55,
+    label_prefix="rcd_snubber_heat_spreader",
+):
+    """Return CAD design-table rows for RCD snubber capacitance variants.
+
+    The electrical capacitance value is not inferred from geometry here.  It is
+    carried as explicit provenance next to the pad dimensions and volume terms
+    so a motor-drive notebook can compare overshoot rows without losing the CAD
+    variant that produced each component footprint.
+    """
+
+    capacitances = [float(value) for value in capacitance_uF_values]
+    pad_lengths = [float(value) for value in snubber_pad_x_values]
+    if not capacitances:
+        raise ValueError("capacitance_uF_values must not be empty")
+    if len(capacitances) != len(pad_lengths):
+        raise ValueError("capacitance_uF_values and snubber_pad_x_values must have the same length")
+    if any(value <= 0.0 for value in capacitances):
+        raise ValueError("capacitance_uF_values must be positive")
+    if any(value <= 0.0 for value in pad_lengths):
+        raise ValueError("snubber_pad_x_values must be positive")
+
+    rows = []
+    for capacitance_uF, pad_x in zip(capacitances, pad_lengths):
+        label = f"{label_prefix}_{capacitance_uF:g}uF"
+        row = rcd_snubber_heat_spreader_reference_row(
+            base_x, base_y, base_h,
+            rib_count, rib_x, rib_y, rib_h, rib_pitch,
+            snubber_count, pad_x, snubber_pad_y, snubber_pad_h, snubber_pitch,
+            mount_hole_r, mount_hole_x, mount_hole_y,
+            snubber_pad_y0=snubber_pad_y0,
+            label=label,
+        )
+        row["capacitance_uF"] = capacitance_uF
+        row["snubber_pad_x"] = pad_x
+        row["snubber_pad_volume"] = row["terms"]["snubber_pads"]
+        row["design_table_role"] = "RCD snubber capacitance-to-CAD-footprint handoff"
+        rows.append(row)
+    return rows
+
+
+def thermal_robin_cooling_plate_reference_row(
+    base_x,
+    base_y,
+    base_h,
+    fin_count,
+    fin_x,
+    fin_y,
+    fin_h,
+    fin_pitch,
+    device_pad_count,
+    device_pad_x,
+    device_pad_y,
+    device_pad_h,
+    device_pad_pitch,
+    mount_hole_r,
+    mount_hole_x,
+    mount_hole_y,
+    fin_y0=0.45,
+    device_pad_y0=-1.45,
+    label="thermal_robin_cooling_plate",
+):
+    """Analytic volume row for a readable convection-cooled drive plate.
+
+    The geometry is a base plate, straight cooling fins, raised device pads,
+    and four base-only mounting holes.  It is meant as a public-safe bridge
+    between CAD volume checks and thermal Robin-boundary examples: the cooling
+    surface can change later, but the solid volume should already be measurable
+    before meshing or applying convection data.
+    """
+
+    base_x = float(base_x)
+    base_y = float(base_y)
+    base_h = float(base_h)
+    fin_count = int(fin_count)
+    fin_x = float(fin_x)
+    fin_y = float(fin_y)
+    fin_h = float(fin_h)
+    fin_pitch = float(fin_pitch)
+    device_pad_count = int(device_pad_count)
+    device_pad_x = float(device_pad_x)
+    device_pad_y = float(device_pad_y)
+    device_pad_h = float(device_pad_h)
+    device_pad_pitch = float(device_pad_pitch)
+    mount_hole_r = float(mount_hole_r)
+    mount_hole_x = abs(float(mount_hole_x))
+    mount_hole_y = abs(float(mount_hole_y))
+    fin_y0 = float(fin_y0)
+    device_pad_y0 = float(device_pad_y0)
+
+    positives = (
+        base_x, base_y, base_h, fin_x, fin_y, fin_h, fin_pitch,
+        device_pad_x, device_pad_y, device_pad_h, device_pad_pitch,
+        mount_hole_r, mount_hole_x, mount_hole_y,
+    )
+    if any(value <= 0.0 for value in positives):
+        raise ValueError("all dimensions, pitches, and radii must be positive")
+    if fin_count < 1 or device_pad_count < 1:
+        raise ValueError("fin_count and device_pad_count must be positive")
+    if fin_x >= base_x:
+        raise ValueError("fins must fit inside the base length")
+    if device_pad_y >= base_y:
+        raise ValueError("device pads must fit inside the base width")
+    if mount_hole_x + mount_hole_r >= base_x / 2.0:
+        raise ValueError("mount hole x location must fit inside the base")
+    if mount_hole_y + mount_hole_r >= base_y / 2.0:
+        raise ValueError("mount hole y location must fit inside the base")
+
+    fin_span_y = (fin_count - 1) * fin_pitch + fin_y
+    fin_min_y = fin_y0 - fin_span_y / 2.0
+    fin_max_y = fin_y0 + fin_span_y / 2.0
+    if fin_min_y <= -base_y / 2.0 or fin_max_y >= base_y / 2.0:
+        raise ValueError("fin band must fit inside the base width")
+    device_span_x = (device_pad_count - 1) * device_pad_pitch + device_pad_x
+    if device_span_x >= base_x:
+        raise ValueError("device pads must fit across the base")
+    device_min_y = device_pad_y0 - device_pad_y / 2.0
+    device_max_y = device_pad_y0 + device_pad_y / 2.0
+    if device_min_y <= -base_y / 2.0 or device_max_y >= base_y / 2.0:
+        raise ValueError("device pads must fit inside the base width at device_pad_y0")
+
+    if not (device_max_y < fin_min_y or fin_max_y < device_min_y):
+        raise ValueError("device pads must stay outside the fin band for additive volume")
+
+    hole_centers = [
+        (sx * mount_hole_x, sy * mount_hole_y)
+        for sx in (-1.0, 1.0)
+        for sy in (-1.0, 1.0)
+    ]
+
+    def _hole_clears_rectangle(hole_x, hole_y, rect_x, rect_y, rect_w, rect_h):
+        return (
+            abs(hole_x - rect_x) > rect_w / 2.0 + mount_hole_r
+            or abs(hole_y - rect_y) > rect_h / 2.0 + mount_hole_r
+        )
+
+    fin_centers = [
+        (0.0, fin_y0 + (index - (fin_count - 1) / 2.0) * fin_pitch)
+        for index in range(fin_count)
+    ]
+    device_centers = [
+        ((index - (device_pad_count - 1) / 2.0) * device_pad_pitch, device_pad_y0)
+        for index in range(device_pad_count)
+    ]
+    for hole_x, hole_y in hole_centers:
+        for rect_x, rect_y in fin_centers:
+            if not _hole_clears_rectangle(hole_x, hole_y, rect_x, rect_y, fin_x, fin_y):
+                raise ValueError("mount holes must not intersect fins")
+        for rect_x, rect_y in device_centers:
+            if not _hole_clears_rectangle(
+                hole_x, hole_y, rect_x, rect_y, device_pad_x, device_pad_y
+            ):
+                raise ValueError("mount holes must not intersect device pads")
+
+    base_volume = base_x * base_y * base_h
+    fin_volume = fin_count * fin_x * fin_y * fin_h
+    device_pad_volume = device_pad_count * device_pad_x * device_pad_y * device_pad_h
+    mount_hole_volume = 4.0 * math.pi * mount_hole_r * mount_hole_r * base_h
+    top_h = max(fin_h, device_pad_h)
+    volume = base_volume + fin_volume + device_pad_volume - mount_hole_volume
+    bbox = {
+        "min": [-base_x / 2.0, -base_y / 2.0, -base_h / 2.0],
+        "max": [base_x / 2.0, base_y / 2.0, base_h / 2.0 + top_h],
+        "center": [0.0, 0.0, top_h / 2.0],
+        "size": [base_x, base_y, base_h + top_h],
+        "diagonal": math.sqrt(base_x * base_x + base_y * base_y + (base_h + top_h) ** 2),
+    }
+    fin_device_gap = fin_min_y - device_max_y if device_max_y < fin_min_y else device_min_y - fin_max_y
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "base": base_volume,
+            "straight_cooling_fins": fin_volume,
+            "device_pads": device_pad_volume,
+            "four_mount_holes": -mount_hole_volume,
+        },
+        "counts": {
+            "fins": fin_count,
+            "device_pads": device_pad_count,
+            "mount_holes": 4,
+        },
+        "clearances": {
+            "mount_hole_to_x_edge": base_x / 2.0 - mount_hole_x - mount_hole_r,
+            "mount_hole_to_y_edge": base_y / 2.0 - mount_hole_y - mount_hole_r,
+            "fin_gap": fin_pitch - fin_y,
+            "device_pad_gap": device_pad_pitch - device_pad_x,
+            "fin_band_to_negative_y_edge": fin_min_y + base_y / 2.0,
+            "fin_band_to_positive_y_edge": base_y / 2.0 - fin_max_y,
+            "device_span_to_x_edge": (base_x - device_span_x) / 2.0,
+            "device_pad_to_y_edge": base_y / 2.0 - max(abs(device_min_y), abs(device_max_y)),
+            "device_pad_to_fin_band": fin_device_gap,
+        },
+        "parameters": {
+            "fin_y0": fin_y0,
+            "device_pad_y0": device_pad_y0,
+            "fin_pitch": fin_pitch,
+            "device_pad_pitch": device_pad_pitch,
+        },
+        "policy": "analytic_thermal_robin_cooling_plate_volume_reference",
+    }
+
+
+def v_type_ipm_rotor_coupon_reference_row(
+    coupon_x,
+    coupon_y,
+    thickness,
+    magnet_slot_length,
+    magnet_slot_width,
+    magnet_slot_angle_deg,
+    magnet_slot_center_x,
+    magnet_slot_center_y,
+    bore_radius,
+    label="v_type_ipm_rotor_coupon",
+):
+    """Analytic volume row for a readable V-type IPM rotor coupon.
+
+    The public CAD gate is a rectangular rotor-lamination coupon with two
+    through rectangular magnet pockets mirrored about the y-axis and rotated
+    into a V, plus one central through bore.  The pockets and bore are required
+    to stay inside the coupon and not overlap, so the volume is exactly
+    ``coupon - 2*pocket - bore``.  This is a compact pre-FEM geometry contract
+    before a full motor rotor sector is meshed.
+    """
+
+    coupon_x = float(coupon_x)
+    coupon_y = float(coupon_y)
+    thickness = float(thickness)
+    magnet_slot_length = float(magnet_slot_length)
+    magnet_slot_width = float(magnet_slot_width)
+    angle = float(magnet_slot_angle_deg)
+    magnet_slot_center_x = abs(float(magnet_slot_center_x))
+    magnet_slot_center_y = float(magnet_slot_center_y)
+    bore_radius = float(bore_radius)
+    positives = (
+        coupon_x, coupon_y, thickness, magnet_slot_length, magnet_slot_width,
+        magnet_slot_center_x, bore_radius,
+    )
+    if any(value <= 0.0 for value in positives):
+        raise ValueError("all dimensions except magnet_slot_center_y must be positive")
+    if not (0.0 < abs(angle) < 90.0):
+        raise ValueError("magnet_slot_angle_deg must be between 0 and 90 degrees")
+    half_x = coupon_x / 2.0
+    half_y = coupon_y / 2.0
+    theta = math.radians(abs(angle))
+    pocket_half_x = 0.5 * (
+        magnet_slot_length * math.cos(theta)
+        + magnet_slot_width * math.sin(theta)
+    )
+    pocket_half_y = 0.5 * (
+        magnet_slot_length * math.sin(theta)
+        + magnet_slot_width * math.cos(theta)
+    )
+    if magnet_slot_center_x + pocket_half_x >= half_x:
+        raise ValueError("magnet pockets must fit inside coupon_x")
+    if abs(magnet_slot_center_y) + pocket_half_y >= half_y:
+        raise ValueError("magnet pockets must fit inside coupon_y")
+    if bore_radius >= min(half_x, half_y):
+        raise ValueError("bore must fit inside the coupon")
+    pocket_inner_x = magnet_slot_center_x - pocket_half_x
+    pocket_inner_y_clearance = abs(magnet_slot_center_y) - pocket_half_y
+    if pocket_inner_x <= bore_radius:
+        raise ValueError("magnet pockets must not overlap the bore")
+    if pocket_inner_y_clearance < -bore_radius:
+        raise ValueError("magnet pockets must clear the bore in y")
+    if 2.0 * magnet_slot_center_x <= 2.0 * pocket_half_x:
+        raise ValueError("mirrored magnet pockets must not overlap each other")
+
+    base_volume = coupon_x * coupon_y * thickness
+    pocket_volume = 2.0 * magnet_slot_length * magnet_slot_width * thickness
+    bore_volume = math.pi * bore_radius * bore_radius * thickness
+    volume = base_volume - pocket_volume - bore_volume
+    bbox = {
+        "min": [-half_x, -half_y, -thickness / 2.0],
+        "max": [half_x, half_y, thickness / 2.0],
+        "center": [0.0, 0.0, 0.0],
+        "size": [coupon_x, coupon_y, thickness],
+        "diagonal": math.sqrt(coupon_x * coupon_x + coupon_y * coupon_y + thickness * thickness),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "coupon": base_volume,
+            "two_v_magnet_pockets": -pocket_volume,
+            "central_bore": -bore_volume,
+        },
+        "counts": {
+            "magnet_pockets": 2,
+            "bore": 1,
+        },
+        "clearances": {
+            "pocket_to_x_edge": half_x - magnet_slot_center_x - pocket_half_x,
+            "pocket_to_y_edge": half_y - abs(magnet_slot_center_y) - pocket_half_y,
+            "pocket_to_bore_x": pocket_inner_x - bore_radius,
+            "mirrored_pocket_gap": 2.0 * (magnet_slot_center_x - pocket_half_x),
+        },
+        "parameters": {
+            "magnet_slot_angle_deg": angle,
+            "magnet_slot_center_x": magnet_slot_center_x,
+            "magnet_slot_center_y": magnet_slot_center_y,
+            "magnet_slot_length": magnet_slot_length,
+            "magnet_slot_width": magnet_slot_width,
+            "bore_radius": bore_radius,
+        },
+        "policy": "analytic_v_type_ipm_rotor_coupon_volume_reference",
     }
 
 
