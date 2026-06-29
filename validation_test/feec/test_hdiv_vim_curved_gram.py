@@ -105,7 +105,7 @@ def test_curved_gram_entries_match_dense_curved_math():
     combinations."""
     geo = OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
     mesh = ng.Mesh(geo.GenerateMesh(maxh=1.5)); mesh.Curve(2)
-    order = 0; quad = max(3 * order, 4); cg = 8
+    order = 1; quad = max(3 * order, 4); cg = 8     # RT1 (RT0 retired); curve_order=2 is the matched geometry
     gx, gw = _g01(cg); gl, gwl = gx.tolist(), gw.tolist()
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=order)
@@ -152,7 +152,7 @@ def test_curved_demag_solve_runs_and_converges():
     mesh = ng.Mesh(geo.GenerateMesh(maxh=1.0))
     Hext = ng.CoefficientFunction((0, 0, 1.0))
     with ng.TaskManager():
-        r = hdiv_demag_solve(mesh, mu_r=100.0, H_ext=Hext, order=0, curve_order=2)
+        r = hdiv_demag_solve(mesh, mu_r=100.0, H_ext=Hext, order=1, curve_order=2)
     assert r["curve_order"] == 2
     assert r["iters"] < 400
     assert 0.20 < r["demag"] < 0.45, r["demag"]            # sphere demag ~1/3 (loose band; curving-insensitive)

@@ -120,8 +120,8 @@ from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_t
 _MU0 = 4e-7 * _PI
 # scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
 _GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
-_LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "gmres", "hlu"}
-_GRAM_BACKENDS = {"analytic", "gauss"}
+_LINEAR_SOLVERS = {"auto", "python", "cpp-cg", "gmres"}   # 'hlu' retired (RT0-only system-A H-LU)
+_GRAM_BACKENDS = {"analytic"}                             # 'gauss' retired (RT0 build-speed experiment)
 
 
 def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, gram_eps,
@@ -428,7 +428,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                      image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=None, far_quad=None, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
                      linear_solver="auto", hlu_trunc_tol=1e-8,
-                     gram_backend="analytic", gauss_near_factor=2.0, order=0,
+                     gram_backend="analytic", gauss_near_factor=2.0, order=1,
                      curve_order=None, curve_gauss=8, ho_far_factor=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
@@ -460,11 +460,33 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     """
     if H_ext is None:
         raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
-    if int(order) > 1:
+    # ---- HDiv-VIM scope: TET / RT1 only (Sugahara 2026-06-29) ----
+    # RT0 retired: per-element INACCURATE (the demag FACTOR is right ~1/3, but the per-element M leaks --
+    # raising the solution order to RT1 is what fixes it); RT2+ retired: no per-element gain over RT1, slower.
+    # hex/wedge/pyramid + pm_M + image symmetry are the collocation MMMM backend's job (rad.Solve); the 'gauss'
+    # point Gram + 'hlu' system-A solver were RT0-only experiments.  HDiv-VIM is the tet RT1 high-order element.
+    if int(order) != 1:
         raise ValueError(
-            "hdiv_demag_solve: RT2+ (HDiv solution order >= 2) is abolished -- HDiv-VIM supports order=0 "
-            "(RT0) or order=1 (RT1).  RT2 gave no per-element magnetization gain over RT1 and was markedly "
-            "slower; the geometry curve_order is a SEPARATE knob and is unaffected.")
+            "HDiv-VIM is RT1 (HDiv order=1) only.  RT0 (order=0) is RETIRED -- it is per-element INACCURATE "
+            "(the demag factor is right ~1/3 but the per-element magnetization leaks; RT1 is what fixes it); "
+            "use the collocation MMMM backend for a low-order surface-charge demag.  RT2+ is RETIRED too (no "
+            "per-element gain over RT1, markedly slower).  Pass order=1 (the default).  (The geometry "
+            "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
+    if pm_M is not None:
+        raise NotImplementedError(
+            "HDiv-VIM (RT1) is a SOFT-IRON (linear / nonlinear) demag solver and does not mix permanent "
+            "magnets (pm_M).  Place permanent magnets as direct-M elements solved by collocation MMMM "
+            "(rad.Solve), or as an applied-field source folded into H_ext.")
+    if image is not None:
+        raise NotImplementedError(
+            "HDiv-VIM (RT1) does not handle IMA mirror symmetry (image).  Use the collocation MMMM backend "
+            "(rad.Solve(..., demag_backend='collocation_mmmm', image=...)) for reduced (1/2, 1/4, 1/8) "
+            "symmetric models.")
+    if not all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
+        raise ValueError(
+            "HDiv-VIM is TET-only.  hex / wedge / pyramid soft-iron demag uses the collocation MMMM backend; "
+            "rad.Solve's 'auto' split already routes a non-tet mesh-backed iron to collocation MMMM, or force "
+            "it with demag_backend='collocation_mmmm'.")
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
@@ -479,33 +501,29 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
 
-    # Stage-1 AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved
-    # geometry as B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with
-    # geometry order (tet sphere: straight-Gram 0.336/0.308/0.279 at curve 1/2/3; matched curved Gram restores
-    # ~1/3 -- 0.338 at curve 2).  Only the TET/TRI curved charge Gram is wired (curve_order<=2 via
-    # _solve_highorder); HEX/WEDGE curved Gram is pending (the polytope curved kernel -- Stage 3), so a curved
-    # hex/wedge mesh is NOT auto-routed here (it would hit the tet-only high-order path).  curve_order=0 forces
-    # the straight Gram (a deliberate flat-Gram probe); an explicit int overrides the auto-match.
-    if curve_order is None and int(order) == 0:
+    # AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved geometry as
+    # B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with geometry order
+    # (tet sphere: straight-Gram 0.336/0.308/0.279 at curve 1/2/3; matched curved Gram restores ~1/3 -- 0.338 at
+    # curve 2).  Only curve_order=2 (isoparametric P2) is wired in build_charge_gram.  curve_order=0 forces the
+    # straight Gram (a deliberate flat-Gram probe); an explicit int overrides the auto-match.  (TET enforced above.)
+    if curve_order is None:
         _k = mesh.GetCurveOrder()
-        if _k >= 2 and all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
+        if _k >= 2:
             curve_order = _k
     elif curve_order == 0:
         curve_order = None
 
-    # ---- HIGH-ORDER (order>=1): the order-p charge-Gram material solve ----
-    # FIXED 2026-06-28 ([[hdiv-highorder-material-solve-wrong]]): the per-element change-of-basis in
-    # `_vim._charge_basis` made the order-p demag operator N = B^T G B VALID (eig(M_mass^-1 N) in [0,1]; the
-    # material solve p-converges instead of the old ~2-4x blow-up -- which was a SPURIOUS NET CHARGE from a
-    # single element-0 change-of-basis reused for all elements, invisible to the uniform-M demag-FACTOR test).
-    # The LINEAR (uniform-scalar OR per-region dict) mu_r case is wired through the same all-C++ symmetric
-    # mass-Riesz CG as RT0; the not-yet-wired order>0 combos (image / PM-mixed / nonlinear / HLU / gauss) fail
-    # loud in _solve_highorder (No-Fallbacks).  Golden: tests/feec/test_hdiv_vim_highorder_solve*.
-    if int(order) != 0 or curve_order is not None:
-        return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
-                                gram_backend, gram_eps, leaf, eta, near_factor, far_quad, tol, maxit,
-                                gmres_restart, curve_order, curve_gauss, ho_far_factor, nl_maxit, nl_tol)
+    # ---- RT1 (HDiv order=1): the order-1 charge-Gram material solve (the SOLE HDiv-VIM solve path) ----
+    # The per-element change-of-basis in `_vim._charge_basis` (2026-06-28, [[hdiv-highorder-material-solve-wrong]])
+    # makes the order-1 demag operator N = B^T G B valid (eig(M_mass^-1 N) in [0,1]; per-element M p-converges).
+    # LINEAR (uniform-scalar OR per-region dict) mu_r AND flat/curved NONLINEAR (bh_table) are wired via the same
+    # all-C++ symmetric mass-Riesz CG / energy-Newton.  order is always 1 here (the tet/RT1 guard above), so this
+    # is unconditional.  Golden: validation_test/feec/test_hdiv_vim_demag_solve*, test_hdiv_vim_curved_solve_nonlinear*.
+    return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
+                            gram_backend, gram_eps, leaf, eta, near_factor, far_quad, tol, maxit,
+                            gmres_restart, curve_order, curve_gauss, ho_far_factor, nl_maxit, nl_tol)
 
+    # ---- (dead RT0 path below -- unreachable since order==1 is enforced; removed in the dead-code purge) ----
     # ---- sparse HDiv geometry + applied field projection ----
     all_tet = all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL))
     image_masks, image_signs = [], []
@@ -1148,8 +1166,9 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
     Msat) that repels the M-iterates from the unphysical |M| > Mmax region.  Convergence: tight (relative
     Newton step < nl_tol -- 1-2 iters at moderate drive, == the forward Newton to ~1e-13), OR -- for the deep-
     saturation regime where the hard-saturation M-form intrinsically limit-cycles at the achievable precision
-    -- a settled-step acceptance (rel step < 1e-4 for 5 consecutive iters -> accept the best-energy iterate;
-    M matched the analytic uniform sphere to ~2e-6 at H0 up to 5e6, knee*5000).  Single-region (scalar
+    -- a settled-step acceptance (rel step < 3e-4 for 5 consecutive iters -> accept the best-energy iterate;
+    the RT1 limit-cycle plateau is ~1.5-1.9e-4, higher than RT0's <1e-4, so the floor is 3e-4; M matched the
+    analytic uniform sphere to ~2e-3 at H0 up to 5e6, knee*5000).  Single-region (scalar
     bh_table) AND per-region (dict) iron; PM-mixed stays on the forward path.  CALLER opens TaskManager."""
     Bc = sp.csr_matrix(B); Mmc = sp.csr_matrix(Mm)
     rhs_src = np.asarray(Mmc @ h_ext).ravel()
@@ -1268,7 +1287,11 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
         m = m + step; E = _energy(m)
         if E < Ebest:
             Ebest = E; mbest = m.copy()
-        settled = settled + 1 if rel_step < 1e-4 else 0
+        # RT1's M-form limit cycle plateaus HIGHER than RT0's (~1.5-1.9e-4 rel step on a real BH table vs
+        # <1e-4 at RT0 -- the larger RT1 charge system), so the settled-acceptance floor is 3e-4 (above the
+        # observed RT1 plateau, below an actively-converging step).  The accepted M is the BEST-ENERGY iterate
+        # (the energy minimum), VERIFIED on the sphere to ~2e-3 vs the analytic fixed point at H0 up to 5e6.
+        settled = settled + 1 if rel_step < 3e-4 else 0
         if rel_step < nl_tol:                                # tight convergence (moderate drive: 1-2 iters)
             converged = True; break
         if settled >= 5:                                     # deep-saturation M-form limit cycle: accept the

@@ -83,14 +83,8 @@ def test_default_symmetric_cg_matches_gmres(mu_r):
     assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 5e-9, "auto must equal the explicit cpp-cg alias"
 
 
-def test_explicit_hlu_linear_solver():
-    """The opt-in system-A H-LU path solves the production linear entry and reports its C++ solver."""
-    mesh = _sphere(h=0.6)
-    with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, 100.0, _HEXT, linear_solver="hlu", gram_eps=1e-8)
-    assert res["linear_solver"] == "cpp-hlu"
-    assert abs(res["demag"] - 1.0 / 3.0) < 7e-3
-    assert res["iters"] == 1
+# (test_explicit_hlu_linear_solver removed 2026-06-29: the 'hlu' system-A H-LU solver was RT0-only and is
+#  retired -- HDiv-VIM (RT1) uses the symmetric mass-Riesz CG.  See test_hdiv_vim_rt1_contract.py.)
 
 
 def test_fail_loud_on_nonmagnetic():
@@ -101,32 +95,20 @@ def test_fail_loud_on_nonmagnetic():
             hdiv_demag_solve(mesh, 1.0, _HEXT)
 
 
-@pytest.mark.parametrize("order", [1])
-def test_highorder_linear_solve_matches_rt0(order):
-    """High-order (order>0) LINEAR material solve is now production-ready (per-element change-of-basis fix,
-    2026-06-28): the order-p demag operator is valid (eig in [0,1]) and the material solve p-converges -- it
-    agrees with the order-0 (RT0) volume-average M on the uniform-field sphere (the old ~2-4x blow-up is gone)."""
+def test_rt1_linear_solve_is_physically_sane():
+    """The RT1 LINEAR material solve on the uniform-field sphere gives the sphere demag ~1/3 and a +z M_avg
+    (no ~2-4x blow-up -- the per-element change-of-basis fix, 2026-06-28).  RT0 is retired; RT1 is the demag
+    spectrum reference (eig in [0,1] locked by test_hdiv_vim_demag_spectrum_psd)."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
-        r0 = hdiv_demag_solve(mesh, 100.0, _HEXT, order=0)
-        rp = hdiv_demag_solve(mesh, 100.0, _HEXT, order=order)
-    assert rp["order"] == order and rp["ndof"] > r0["ndof"]
-    assert abs(rp["demag"] - 1.0 / 3.0) < 1e-2, f"order={order} demag {rp['demag']:.4f} not ~1/3"
-    rel = abs(rp["M_avg"][2] - r0["M_avg"][2]) / abs(r0["M_avg"][2])
-    assert rel < 0.1, f"order={order} M_avg {rp['M_avg'][2]:.0f} vs RT0 {r0['M_avg'][2]:.0f} (rel {rel:.2f})"
-    # higher order resolves more -> M_avg >= RT0 (converges up from below toward the continuum limit)
-    assert rp["M_avg"][2] >= r0["M_avg"][2] - 1.0
+        r = hdiv_demag_solve(mesh, 100.0, _HEXT, order=1)
+    assert r["order"] == 1
+    assert abs(r["demag"] - 1.0 / 3.0) < 1e-2, f"RT1 demag {r['demag']:.4f} not ~1/3"
+    assert r["M_avg"][2] > 0, f"RT1 M_avg_z {r['M_avg'][2]:.0f} should respond +z to the applied field"
 
 
-def test_order_gt0_unsupported_combos_fail_loud():
-    """order>0 wires the LINEAR (uniform / per-region) AND the flat nonlinear (energy-Newton) cases; the
-    not-yet-wired combos (image symmetry / HLU) must RAISE, not silently fall back (No-Fallbacks)."""
-    mesh = _sphere(h=0.7)
-    for kw in (dict(mu_r=100.0, image="+x"),                  # image symmetry at order>0
-               dict(mu_r=100.0, linear_solver="hlu")):        # HLU is RT0-only
-        with pytest.raises(NotImplementedError):
-            with ng.TaskManager():
-                hdiv_demag_solve(mesh, H_ext=_HEXT, order=1, **kw)
+# (test_order_gt0_unsupported_combos_fail_loud removed 2026-06-29: the retired-feature fail-loud guards
+#  (image / hlu / gauss / pm_M / non-tet) are now locked by test_hdiv_vim_rt1_contract.py.)
 
 
 def test_order_gt1_rt2_abolished():

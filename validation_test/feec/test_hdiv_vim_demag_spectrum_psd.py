@@ -50,26 +50,29 @@ def test_highorder_demag_spectrum_in_unit_interval(p):
         f"(spurious net charge / broken neutrality)"
 
 
-def test_highorder_material_solve_matches_rt0():
-    """The order-1 uniform-field cube material solve agrees with order-0 (RT0) -- no ~2x blow-up.  This is
-    the end-to-end M4 check the per-element fix restores (was p1 ~1.8x too high).  RT2+ abolished."""
+def test_rt1_material_solve_is_consistent_fixed_point():
+    """The RT1 uniform-field cube material solve sits at the consistent linear fixed point
+    M_avg ~ chi*H0/(1+chi*D) (D = the demag factor = Rayleigh quotient of N for uniform M) -- NOT the old
+    ~1.8x blow-up.  RT0 is retired, so the reference is the analytic fixed point, not the order-0 solve.
+    (The strong M4 guard is the eig-in-[0,1] spectrum test above; this is the end-to-end material-solve check.)"""
     mesh = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.7))
     H0, mu_r = 1000.0, 100.0
     chi = mu_r - 1.0
-    mavg = {}
     with ng.TaskManager():
-        for p in (0, 1):
-            fes = ng.HDiv(mesh, order=p)
-            B, G, M_mass = build_charge_gram(fes, ho_far_factor=float("inf"))
-            N = _dense_N(B, G)
-            Md = sp.csr_matrix(M_mass).toarray()
-            gfH = ng.GridFunction(fes); gfH.Set(ng.CoefficientFunction((0, 0, H0)))
-            h = gfH.vec.FV().NumPy().copy()
-            m = np.linalg.solve((1.0 / chi) * Md + N, Md @ h)
-            gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
-            vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
-            mavg[p] = ng.Integrate(gfM[2], mesh) / vol
-    # order-p within 25% of order-0 (coarse-mesh p-spread is real but NOT the old ~2-4x bug)
-    for p in (1,):
-        rel = abs(mavg[p] - mavg[0]) / abs(mavg[0])
-        assert rel < 0.25, f"order-{p} M_avg {mavg[p]:.0f} vs order-0 {mavg[0]:.0f} (rel {rel:.2f}) -- M4 regressed"
+        fes = ng.HDiv(mesh, order=1)
+        B, G, M_mass = build_charge_gram(fes, ho_far_factor=float("inf"))
+        N = _dense_N(B, G)
+        Md = sp.csr_matrix(M_mass).toarray()
+        gfH = ng.GridFunction(fes); gfH.Set(ng.CoefficientFunction((0, 0, H0)))
+        h = gfH.vec.FV().NumPy().copy()
+        m = np.linalg.solve((1.0 / chi) * Md + N, Md @ h)
+        gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
+        vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
+        mavg = ng.Integrate(gfM[2], mesh) / vol
+        gfu = ng.GridFunction(fes); gfu.Set(ng.CoefficientFunction((0, 0, 1)))
+        mu = gfu.vec.FV().NumPy().copy()
+        D = float((mu @ (N @ mu)) / (mu @ (Md @ mu)))      # demag factor (uniform-M Rayleigh quotient)
+    m_fixed = chi * H0 / (1.0 + chi * D)
+    rel = abs(mavg - m_fixed) / abs(m_fixed)
+    assert rel < 0.25, \
+        f"RT1 M_avg {mavg:.0f} vs consistent fixed point {m_fixed:.0f} (D={D:.3f}, rel {rel:.2f}) -- M4 regressed"
