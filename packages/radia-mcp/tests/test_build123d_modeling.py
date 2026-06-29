@@ -41,6 +41,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           compare_shape_volume_rows,
                                           shape_name_identity_gate,
                                           shape_role_metadata_gate,
+                                          shape_transition_role_metadata_gate,
                                           shape_volume_crosscheck_summary,
                                           shape_mass_property_crosscheck_summary,
                                           shape_measurement_comparison_summary,
@@ -88,6 +89,9 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "shape_volume_crosscheck_summary(..., rtol=1e-5)" in doc
     assert "shape_name_identity_gate" in doc
     assert "shape_role_metadata_gate" in doc
+    assert "shape_transition_role_metadata_gate" in doc
+    assert "hex_region" in doc
+    assert "transition_kind` set to `\"pyramid\"" in doc
     assert "missing, extra, duplicate, or unnamed imported solids" in doc
     assert "keyed terminal plate" in doc
     assert '"keyed_terminal_plate_two_bosses", "volume": 9.364087557965556' in doc
@@ -679,6 +683,54 @@ def test_shape_role_metadata_gate_requires_solver_handoff_semantics():
     assert bad["missing_required_names"] == ["shaft"]
     assert bad["missing_required_roles"] == ["air_region"]
     assert bad["missing_required_materials"] == ["copper"]
+
+
+def test_shape_transition_role_metadata_gate_preserves_hex_tet_handoff_intent():
+    hex_body = (Pos(-1.25, 0, 0) * Box(1.0, 1.0, 1.0)).solid()
+    hex_body.label = "hex_core"
+    transition = Box(0.5, 1.0, 1.0).solid()
+    transition.label = "pyramid_transition_envelope"
+    tet_body = (Pos(1.25, 0, 0) * Box(1.0, 1.0, 1.0)).solid()
+    tet_body.label = "tet_region"
+
+    rows = shape_measurement_rows(assembly(hex_body, transition, tet_body, label="handoff"))
+    by_name = {row["name"]: row for row in rows}
+    by_name["hex_core"].update({"role": "hex_region", "material": "core_steel"})
+    by_name["pyramid_transition_envelope"].update({
+        "role": "mesh_transition",
+        "material": "transition_air",
+        "transition_kind": "pyramid",
+        "connects_roles": ["hex_region", "tet_region"],
+    })
+    by_name["tet_region"].update({"role": "tet_region", "material": "air"})
+
+    ok = shape_transition_role_metadata_gate(rows, source_label="slot131_build123d")
+
+    assert ok["policy"] == "build123d_hex_tet_transition_role_metadata_gate"
+    assert ok["status"] == "ok"
+    assert ok["source_label"] == "slot131_build123d"
+    assert ok["checks"]["required_roles_present"] is True
+    assert ok["checks"]["transition_kind_matches"] is True
+    assert ok["checks"]["transition_connects_required_roles"] is True
+    assert ok["roles"] == ["hex_region", "mesh_transition", "tet_region"]
+    assert ok["transition_kinds"] == ["pyramid"]
+    assert ok["connected_roles"] == ["hex_region", "tet_region"]
+
+    wrong_kind = [dict(row) for row in rows]
+    for row in wrong_kind:
+        if row["name"] == "pyramid_transition_envelope":
+            row["transition_kind"] = "unknown"
+    bad_kind = shape_transition_role_metadata_gate(wrong_kind)
+    assert bad_kind["status"] == "needs_attention"
+    assert bad_kind["checks"]["transition_kind_matches"] is False
+
+    missing_connection = [dict(row) for row in rows]
+    for row in missing_connection:
+        if row["name"] == "pyramid_transition_envelope":
+            row["connects_roles"] = ["hex_region"]
+    bad_connection = shape_transition_role_metadata_gate(missing_connection)
+    assert bad_connection["status"] == "needs_attention"
+    assert bad_connection["checks"]["transition_connects_required_roles"] is False
 
 
 def test_build123d_l_bracket_slot_volume_crosscheck_accepts_cubit_roundtrip():
