@@ -2,9 +2,12 @@
 solves with BOTH demag backends -- six-face surface-charge MSC and the FEEC HDiv-VIM -- selected by
 set_demag_backend.  .vol is the SOLE Cubit<->NGSolve mesh interchange, so netgen owns the mesh
 orientation (no hand-built-mesh boundary-winding pitfalls).  This locks:
-  (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a both-backend soft-iron container;
-  (2) the HDiv path (default) and the collocation MMMM path (set_demag_backend('collocation_mmmm')) BOTH solve on it and
-      agree to within the RT0-vs-MSC discretization gap on a structured hex cube (~few %)."""
+  (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a soft-iron container;
+  (2) a HEX .vol solves with the collocation MMMM backend (the surface-charge MSC, M_avg ~ the cube fixed
+      point), AND the HDiv-VIM backend REFUSES the hex .vol (fail loud) -- HDiv-VIM is tet/RT1-only
+      (2026-06-29), so the rad.Solve 'auto' split routes a non-tet mesh-backed iron to collocation MMMM.
+  (A tet .vol would solve with BOTH backends, but the cross-backend agreement on a tet body is gated by the
+  collocation-MMMM-on-tet accuracy -- a separate concern -- so this test fixes the hex routing instead.)"""
 import math
 
 import pytest
@@ -22,7 +25,7 @@ H0 = 1000.0
 
 
 def _make_vol(path):
-    """A structured hex cube [0,L]^3 saved to a netgen .vol (netgen owns orientation)."""
+    """A structured HEX cube [0,L]^3 saved to a netgen .vol (netgen owns orientation)."""
     with ng.TaskManager():
         m = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3,
                                  mapping=lambda x, y, z: (L * x, L * y, L * z))
@@ -46,20 +49,16 @@ def _solve_from_vol(path, backend):
         rad.set_demag_backend("auto")
 
 
-def test_vol_solves_with_both_backends(tmp_path):
+def test_vol_hex_collocation_solves_hdiv_fails_loud(tmp_path):
     vol = tmp_path / "cube_hex.vol"
     _make_vol(vol)
 
-    mz_hdiv = _solve_from_vol(vol, "hdiv")
+    # collocation MMMM (surface-charge MSC) solves the hex .vol: chi = mu_r-1 = 99, cube demag ~1/3 ->
+    # M_avg_z ~ 99*H0/(1+99/3) ~ 2912; the discretized non-uniform M_avg runs higher.  Generous physical band.
     mz_collocation = _solve_from_vol(vol, "collocation_mmmm")
+    assert 2.5e3 < mz_collocation < 6.0e3, \
+        f"collocation MMMM from hex .vol gave unphysical M_avg_z={mz_collocation:.1f}"
 
-    # chi = mu_r-1 = 99, cube demag ~1/3 -> M_avg_z ~ 99*H0/(1+99/3) ~ 2912; the discretized non-uniform
-    # M_avg runs a bit higher.  Lock a generous physical band for BOTH backends.
-    for name, mz in (("hdiv", mz_hdiv), ("collocation_mmmm", mz_collocation)):
-        assert 2.5e3 < mz < 4.0e3, f"{name} from .vol gave unphysical M_avg_z={mz:.1f}"
-
-    rel = abs(mz_hdiv - mz_collocation) / abs(mz_collocation)
-    assert rel < 0.06, (
-        f"HDiv {mz_hdiv:.1f} vs collocation MMMM {mz_collocation:.1f} "
-        f"from same .vol differ {rel*100:.1f}% (> RT0-vs-MSC)"
-    )
+    # HDiv-VIM is tet/RT1-only -> it REFUSES the hex .vol (No-Fallbacks: a clear error naming collocation MMMM).
+    with pytest.raises(ValueError, match="TET"):
+        _solve_from_vol(vol, "hdiv")

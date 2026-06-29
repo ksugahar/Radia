@@ -186,7 +186,9 @@ except ImportError:
 #
 # DEFAULT = "auto" (API-split): the API you use selects the method.
 #   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> collocation MMMM (C++).
-#   - mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM.
+#   - mesh-BACKED TET soft iron (radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) + rad.Solve)
+#     -> HDiv-VIM (RT1).
+#   - mesh-BACKED HEX/WEDGE soft iron -> collocation MMMM; HDiv-VIM is tet-only.
 #   - tetrahedron (MMM) and permanent-magnet solves -> C++ solver (unchanged).
 # set_demag_backend("collocation_mmmm"|"hdiv") OVERRIDES the auto split (a soft_iron_from_mesh
 # container carries both representations, so either backend can solve it);
@@ -201,9 +203,10 @@ _BACKEND_MISSING = object()
 
 def set_demag_backend(name):
     """Select the soft-iron demag backend.  "collocation_mmmm" = canonical collocation MMMM
-    surface-charge MSC; "hdiv" = FEEC HDiv-VIM; "auto"/None = API-split default (mesh-less ->
-    collocation MMMM, soft_iron_from_mesh -> HDiv).  The choice is consulted by rad.Solve.  Returns the
-    effective backend string."""
+    surface-charge MSC; "hdiv" = FEEC HDiv-VIM; "auto"/None = API-split default
+    (mesh-less -> collocation MMMM, soft_iron_from_mesh(tet) -> HDiv-VIM RT1,
+    soft_iron_from_mesh(hex/wedge) -> collocation MMMM).  The choice is consulted
+    by rad.Solve.  Returns the effective backend string."""
     global _demag_backend
     if name in (None, "auto"):
         _demag_backend = None
@@ -258,8 +261,10 @@ if "Solve" in globals():
 
     def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: pick the soft-iron demag backend)
         """Radia relaxation solve with the API-split demag backend (see set_demag_backend):
-          - mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh) -> FEEC HDiv-VIM (default), or
-            collocation MMMM if demag_backend='collocation_mmmm';
+          - mesh-BACKED TET soft iron (radia.vim.soft_iron_from_mesh) -> FEEC HDiv-VIM (RT1, default),
+            or collocation MMMM if demag_backend='collocation_mmmm';
+          - mesh-BACKED HEX/WEDGE soft iron -> collocation MMMM (HDiv-VIM is tet-only, so 'auto' routes
+            non-tet there; an explicit demag_backend='hdiv' on a non-tet iron fails loud);
           - mesh-LESS hex/wedge/pyramid soft iron -> collocation MMMM (C++);
           - tetrahedron (MMM) and permanent magnets -> C++ solver.
         A per-call demag_backend=('collocation_mmmm'|'hdiv'|'auto') overrides the global
@@ -275,10 +280,15 @@ if "Solve" in globals():
             except Exception:
                 registered = False
         if registered:
+            from radia.vim import _radsolve
             if backend == "collocation_mmmm":
                 return _cpp_Solve(*args, **kwargs)          # collocation MMMM on the mesh-built elements
-            from radia.vim import _radsolve
-            return _radsolve.dispatch(*args, **kwargs)      # auto/hdiv -> FEEC HDiv-VIM
+            # HDiv-VIM is TET / RT1 only: 'auto' routes a non-tet (hex/wedge) mesh-backed iron to
+            # collocation MMMM; an explicit demag_backend='hdiv' on a non-tet iron falls through to dispatch
+            # and fails loud there (hdiv_demag_solve raises the tet-only error).
+            if backend is None and not _radsolve.is_tet_registered(top):
+                return _cpp_Solve(*args, **kwargs)          # auto + non-tet -> collocation MMMM
+            return _radsolve.dispatch(*args, **kwargs)      # auto-tet / explicit hdiv -> FEEC HDiv-VIM
         if backend == "hdiv":
             raise ValueError(
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "

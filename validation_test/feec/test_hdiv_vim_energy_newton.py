@@ -30,19 +30,21 @@ def _sphere(maxh=0.6):
     return ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=maxh))
 
 
-def test_default_nonlinear_is_energy_newton_cpp_and_matches_forward():
-    """Default iron-only nonlinear routes to the all-C++ energy-Newton, == the forward Newton."""
+def test_default_nonlinear_is_energy_newton_cpp():
+    """The default iron-only nonlinear solve routes to the all-C++ symmetric energy-Newton (RT1): it is the
+    default solver, converges, and gives a sane +z M with the sphere demag ~1/3 at moderate AND knee drive.
+    RT0 is retired, so the former forward-Newton (scipy splu + GMRES) cross-check is gone -- the energy-Newton
+    is validated against the closed-form spheroid fixed point in test_hdiv_vim_curved_solve_nonlinear."""
     mesh = _sphere()
     for H0 in (500.0, 5000.0):                            # moderate (linear-ish) and into the knee
         Hext = ng.CoefficientFunction((0, 0, H0))
         with ng.TaskManager():
-            re = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=0)                      # default
-            rf = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=0, linear_solver="gmres")  # forward
+            re = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=1)
         assert re["linear_solver"] == "energy-newton-cpp", re["linear_solver"]
-        assert rf["linear_solver"] == "forward-newton-gmres", rf["linear_solver"]
         assert re["nonlinear"] is True
-        rd = abs(re["M_avg"][2] - rf["M_avg"][2]) / (abs(rf["M_avg"][2]) + 1e-30)
-        assert rd < 1e-5, f"energy-Newton {re['M_avg'][2]:.4f} vs forward {rf['M_avg'][2]:.4f} at H0={H0} (rel {rd:.2e})"
+        assert re["iters"] < 100
+        assert re["M_avg"][2] > 0, f"H0={H0}: M_avg {re['M_avg']} not +z"
+        assert 0.25 < re["demag"] < 0.40, f"H0={H0}: demag {re['demag']:.4f} not ~1/3"
 
 
 def test_energy_newton_deep_saturation():
@@ -50,7 +52,7 @@ def test_energy_newton_deep_saturation():
     + settled acceptance handle the M-form limit cycle)."""
     mesh = _sphere()
     with ng.TaskManager():
-        r = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, 3e6)), order=0)
+        r = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, 3e6)), order=1)
     assert r["linear_solver"] == "energy-newton-cpp"
     # at deep drive M_avg -> Msat (the table's saturation; demag-independent there).  The soft hard-saturation
     # barrier permits a small (<~1%) overshoot of the uniform Msat at the discrete/volume-average level.
