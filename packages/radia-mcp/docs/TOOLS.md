@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **566 tools** across 43 MCP servers.
+Total: **567 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -43,7 +43,7 @@ Total: **566 tools** across 43 MCP servers.
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 95 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 18 |
-| [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 71 |
+| [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 72 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -857,6 +857,7 @@ Module: `radia_mcp.presentation.server`
 | `presentation_count_slides` | スライド数を count。beamer (.tex) の \begin{frame} か、 |
 | `presentation_count_underlines` | beamer ソース内の下線コマンドを実測。 |
 | `presentation_count_weak_expressions` | 弱気修飾語の出現。presentation では key slide 上で使うと信頼感低下。 |
+| `presentation_embed_tts_audio_in_pptx` | Generate per-slide TTS MP3 and embed it into a PowerPoint deck. |
 | `presentation_equation_slide_compliance` | 数式 slide の理系プレゼン compliance を診断。 |
 | `presentation_estimate_per_slide_time` | 原稿を slide 境界で分割し、各 slide の発表時間を推定. |
 | `presentation_estimate_speaking_time` | 原稿テキストから発表時間を推定。 |
