@@ -1,0 +1,89 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-29T07:32:42Z",
+  "notebook": "docs/maglev/examples_migration.ipynb",
+  "notebook_sha256": "934f5c3ec9db03182c5af81b12b1c6460ab75e2abab3bae066f6eaf4807ab423",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/maglev/examples_migration.ipynb",
+    "cells": 4,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 3,
+    "output_count": 3,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "0e6a211806f57909ef7518b3e78ae396a088293567b06ab57b25ec79f0876cda",
+      "source_preview": "from pathlib import Path\nimport json\nDATA = Path('examples_migration_results.json')\narchive = json.loads(DATA.read_text(encoding='utf-8'))\nsummary = archive['summary']\nsummary",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 394,
+          "text_plain_sha256": "958005187c5a886a3c497b1d2e67cc1d508c5075ee6bcf5786d0a8eaea6f7fab",
+          "text_plain_preview": "{'files': 426,\n 'python_files': 166,\n 'ipynb_files': 6,\n 'json_files': 115,\n 'media_files': 15,\n 'suffix_counts': {'.pdf': 4,\n  '.png': 11,\n  '.py': 166,\n  '.json': 115,\n  '.md': 15,\n  '<none>': 1,\n  '.tex': 1,\n  '.cls': 1,\n  '.geo': 3,\n  '.wls': 77,\n  '.ipynb': 6,\n  '.dat': 1,\n  '.txt': 7,\n  '.hpp': 11,\n  '.cpp': 7},\n 'target_root_counts': {'docs/maglev': 51, 'validation_test/maglev': 375}}",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "5abfd3262d141c42d8c8c2c227257d9cbea38205f0c6bec911982327fc91df71",
+      "source_preview": "from collections import Counter\nfiles = archive['files']\nassert archive['source_root'] == 'examples/maglev'\nassert summary['files'] == len(files)\nassert summary['python_files'] == sum(1 for f in files if f['suffix'] == '.py')\nassert all(f['target_path'].startswith(('docs/', 'validation_test/')) for f in files)\nCounter(f['target_path'].split('/')[0] + '/' + f['target_path'].split('/')[1] for f in files)",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 59,
+          "text_plain_sha256": "178a7d6c225da56ee38185952c3998cdf9258363ba9a81c91dbcf2683b756601",
+          "text_plain_preview": "Counter({'validation_test/maglev': 375, 'docs/maglev': 51})",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 3,
+      "source_sha256": "17a90992a91e0816d79f7ed52eb5ef28a444d1870561ae2231fd33fae611743e",
+      "source_preview": "from IPython.display import Markdown, display\nrows = ['| source | target | bytes | sha256 |', '|---|---|---:|---|']\nfor f in files[:40]:\n    rows.append(f\"| `{f['path']}` | `{f['target_path']}` | {f['bytes']} | `{f['sha256'][:12]}` |\")\nif len(files) > 40:\n    rows.append(f\"| ... | {len(files)-40} more files archived in JSON |  |  |\")\ndisplay(Markdown('\\n'.join(rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

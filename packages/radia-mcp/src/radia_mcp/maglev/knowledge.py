@@ -147,10 +147,10 @@ electrodynamic levitation device).
 ## Showcase notebook
 
 `docs/maglev/maglev_showcase.ipynb` -- consolidated rendered view of the
-`examples/maglev/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
+`docs/maglev/demos/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
 levitation force, shape-anisotropic ellipsoid tensor, the moving-magnet
 magnetic-Reynolds (`Rm`) crossover, and the TEAM 28 benchmark (committed
-figures + headline JSON; golden corpus kept in `examples/maglev/`).
+figures + headline JSON; golden corpus kept in `docs/maglev/demos/`).
 
 ## Levitation FORCE physics (also in this server)
 
@@ -380,7 +380,7 @@ Reynolds number of the conductor:
 `Rm` measures how strongly the induced eddy current perturbs the applied
 field.  The eddy reaction field scales like `Rm` relative to the source.
 Three regimes (verified on the rotating-magnet plate,
-`examples/maglev/rotating_magnet_eddy.py`):
+`docs/maglev/demos/rotating_magnet_eddy.py`):
 
 | Rm | reaction vs source | what to compute J / force / loss with |
 |----|--------------------|----------------------------------------|
@@ -481,7 +481,7 @@ the moving-magnet maglev tractable.)
 
 ## Verified in-repo: CLN levitation FORCE + EXTERNAL benchmark (2026-06-20)
 
-A worked, verified example lives in `examples/maglev/team28/`.  The
+A worked, verified example lives in `docs/maglev/demos/team28/`.  The
 coil-driven axisymmetric eddy problem is `(K + s*N) X = F` (K = s-independent
 magnetostatic operator, N = conductivity term, F = coil source); the CLN/Cauer
 reduction is the Krylov subspace built from the COIL SOURCE
@@ -512,7 +512,7 @@ method, 4-stage CLN, ~7 s vs ~8 h.  It also introduced the constant-basis
 `As(zgap) = sum_n a_2n i_2n` expansion that the moving-source CLN (below /
 `radia_iem_fem`) builds on -- and it explicitly flagged that motion in more
 than one parameter needs the multiport matrix-CLN (Matsuo 2018).  The radia
-`examples/maglev/team28/` is the OPEN, pip-installable, NGSolve +
+`docs/maglev/demos/team28/` is the OPEN, pip-installable, NGSolve +
 golden-tested reproduction of (a frequency-domain slice of) that published
 result -- reproducible-open value, NOT novelty.
 
@@ -556,7 +556,7 @@ rotates over a plate -- `radia_iem_fem`), the single-seed CLN basis no
 longer spans the source variation.  The paper itself flags this ("if the
 expansion is not a good approximation, the space must be expanded with an
 additional set of basis functions").  The generalization, verified in
-`examples/maglev/rotating_magnet_eddy.py`:
+`docs/maglev/demos/rotating_magnet_eddy.py`:
 1. **SVD-pre-evaluate the source rank**: POD the source field over the
    conductor across the trajectory -> M dominant spatial modes (M ~ 16 for
    the rotating magnet over a 12 mm plate; the moving localized hot-spot is
@@ -652,7 +652,7 @@ The natural idea -- get the physical (exterior-matched, free-decay /
 Stoll) eddy spectrum by a Kameari A-T accumulation with a Kelvin open
 boundary, then read off a Cauer ladder -- DOES NOT WORK for a general 3D
 isolated-conductor-in-vacuum body.  The lab's own canonical script
-`examples/maglev/research_cln/ngsolve_validation/
+`validation_test/maglev/research_cln/ngsolve_validation/
 cuboid_521_kameari_kelvin_v15_canonical.py` is a documented BREAKDOWN demo:
 even with the two known bug fixes applied, the iteration sign-flips L_1 at
 stage 1 and the Schmidt energy norm grows x15.  This is structural for the
@@ -665,7 +665,7 @@ tensor.  So the physical-tensor LTI is NOT obtained by eigen-accumulation.
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
 The verified PHYSICAL tensor is the per-frequency 3D HCurl solve
-`examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
+`docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
 complex HCurl + a FINE AIR SHELL that resolves the air reaction dipole =
 the lift / Re[alpha] part; CompactAMS + COCR; ~2-3% vs the analytic
 sphere).  rom_fit.py turns those frequency samples into a passive, stable
@@ -737,7 +737,7 @@ A, B, C, D = rom.state_space()                      # passive scalar LTI
 # diagonal (principal-axis) 3D tensor -> one MIMO LTI
 A, B, C, D, n = diagonal_tensor_state_space([rom_x, rom_y, rom_z])
 ```
-Example `examples/maglev/physical_tensor_rom.py` (default = analytic
+Example `docs/maglev/demos/physical_tensor_rom.py` (default = analytic
 sphere, fast; `--fem` = triaxial ellipsoid per-frequency tensor -> diagonal
 MIMO LTI).
 

@@ -335,7 +335,7 @@ The true 9-node curved Q2 quad is available as an opt-in production path:
 `AxiHenrotteFE_Q2_Curved`.  This element consumes the 9 curved node
 positions from `mesh.Curve(2)` and uses a quadrature-over-biquadratic-map
 BFI for stiffness and sigma mass.  The Python prototype
-`examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py` remains the
+`validation_test/maglev/research_cln/axifem/axifem_quad_q2_curved.py` remains the
 derivation/reference, while `tests/axifem/test_q2_curved.py` locks the C++
 behavior: curved Q2 reproduces the axis-aligned closed form on straight
 quads and converges on skewed annular quads.
@@ -538,7 +538,7 @@ independent paths:
    the C++ stiffness eigenvalues match the Python references and
    smoke-tests the shipped P2 curved triangle assembly path.  The
    historical curved-Q2 Python prototype remains under
-   `examples/maglev/research_cln/axifem/axifem_quad_q2_curved.py`;
+   `validation_test/maglev/research_cln/axifem/axifem_quad_q2_curved.py`;
    the production C++ curved-Q2 gate is
    `tests/axifem/test_q2_curved.py`.
 

@@ -58,36 +58,36 @@ print(f"alpha(1 kHz) / V = {a/V:.4f}")
 
 ## Examples
 
-Curated, runnable demonstrations live under `examples/maglev/` (the broad
-research corpus is in `examples/maglev/research_cln/`, see below):
+Curated, runnable demonstrations live under `docs/maglev/demos/` (the broad
+research corpus is in `validation_test/maglev/research_cln/`, see below):
 
 | Example | Script |
 |---------|--------|
-| Single cube alpha(s) sweep (CAD-direct + mesh-derived) | `examples/maglev/cube_alpha_sweep.py` |
-| Sphere induced-dipole levitation force vs frequency | `examples/maglev/sphere/maglev_sphere_force.py` |
-| Coil-driven sphere eddy force | `examples/maglev/sphere/coil_sphere_eddy_force.py` |
-| Coil + sphere equilibrium height | `examples/maglev/sphere/coil_maglev_equilibrium.py` |
-| Ellipsoid demag / alpha tensor (axisym + 3D HCurl) | `examples/maglev/ellipsoid/ellipsoid_alpha_tensor.py` |
-| 3D cuboid CLN-SIBC standalone demo | `examples/maglev/cuboid/cln_sibc_cuboid_3d.py` |
-| TEAM 28 electrodynamic levitation (CLN force / sweep) | `examples/maglev/team28/team28_cln_force.py` |
+| Single cube alpha(s) sweep (CAD-direct + mesh-derived) | `docs/maglev/demos/cube_alpha_sweep.py` |
+| Sphere induced-dipole levitation force vs frequency | `docs/maglev/demos/sphere/maglev_sphere_force.py` |
+| Coil-driven sphere eddy force | `docs/maglev/demos/sphere/coil_sphere_eddy_force.py` |
+| Coil + sphere equilibrium height | `docs/maglev/demos/sphere/coil_maglev_equilibrium.py` |
+| Ellipsoid demag / alpha tensor (axisym + 3D HCurl) | `docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor.py` |
+| 3D cuboid CLN-SIBC standalone demo | `docs/maglev/demos/cuboid/cln_sibc_cuboid_3d.py` |
+| TEAM 28 electrodynamic levitation (CLN force / sweep) | `docs/maglev/demos/team28/team28_cln_force.py` |
 
-## Research corpus (`examples/maglev/research_cln/`)
+## Research corpus (`validation_test/maglev/research_cln/`)
 
-`examples/maglev/research_cln/` holds the absorbed radia-cln research corpus — the raw
+`validation_test/maglev/research_cln/` holds the absorbed radia-cln research corpus — the raw
 verification sweeps, Mathematica derivations, and iteration history that
 back the theory but are **not** README-backed package examples (per the
 lab Sample Promotion Ladder: tests -> examples -> panels).  Contents:
 
 | Subdir | What |
 |--------|------|
-| `examples/maglev/research_cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
-| `examples/maglev/research_cln/axifem/` | Historical Henrotte-basis axifem prototype corpus; canonical artifacts now live under `docs/axifem/`, `tests/axifem/`, and `validation_test/axifem/` |
-| `examples/maglev/research_cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
-| `examples/maglev/research_cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
-| `examples/maglev/research_cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
-| `examples/maglev/research_cln/bem_cln_*` | BEM-CLN multi-conductor verification (iteration history) |
+| `validation_test/maglev/research_cln/ngsolve_validation/` | NGSolve FEM verification sweeps (dated `*_results.json` snapshots, one-off probe scripts) |
+| `validation_test/maglev/research_cln/axifem/` | Historical Henrotte-basis axifem prototype corpus; canonical artifacts now live under `docs/axifem/`, `tests/axifem/`, and `validation_test/axifem/` |
+| `validation_test/maglev/research_cln/multiconn_loop_method/` | T-Omega multiply-connected bath-plate notebook |
+| `validation_test/maglev/research_cln/tanimoto_canonical/` | Tanimoto canonical CLN notebooks (A-phi / A-T / T-Omega) |
+| `validation_test/maglev/research_cln/*.wls` | Schur-F / CF / quadrupole / polarizability symbolic derivations |
+| `validation_test/maglev/research_cln/bem_cln_*` | BEM-CLN multi-conductor verification (iteration history) |
 
-Promote a script from `research/` to `examples/maglev/` only after it gains a
+Promote a script from `research/` to `docs/maglev/demos/` only after it gains a
 README, runs standalone, and demonstrates one clear concept.
 
 ## Force computation: Lorentz vs Maxwell stress
@@ -139,9 +139,9 @@ for c_1/s).  Typical state count: 50-300 depending on accuracy target.
 - **radia-mcp** maglev knowledge: see `radia_iem_fem` and
   `cln_mor_control` topics (the published research line: Yano bachelor
   + Yano master, IEEE TMag 2018).
-- **TEAM 28** electrodynamic levitation: `examples/maglev/team28/` reproduces
+- **TEAM 28** electrodynamic levitation: `docs/maglev/demos/team28/` reproduces
   the lab full-FEM force benchmark with 5-stage CLN reduction (0.000%
   error at the equilibrium height).
 - **Sphere / ellipsoid / coil**: closed-form anchors and Radia open-
   boundary coil examples (migrated from
-  `examples/maglev/{sphere,ellipsoid,team28}/`).
+  `docs/maglev/demos/{sphere,ellipsoid,team28}/`).

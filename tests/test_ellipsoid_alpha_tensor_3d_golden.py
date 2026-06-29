@@ -1,7 +1,7 @@
 """Golden test: 3D HCurl transverse (m=1) eddy polarizability of a conducting
 ellipsoid, via CompactAMS + COCR on a graded fine-air-shell mesh.
 
-Locks examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py:
+Locks docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor_3d.py:
   - the 3D alpha_xx and alpha_zz reproduce the analytic sphere 4 pi a^3 G(x)
     (so the transverse m=1 machinery is quantitatively correct), and
   - alpha_xx == alpha_zz (isotropy) to < 2%.
@@ -24,8 +24,8 @@ pytest.importorskip("radia.sparsesolv_ngsolve")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # CLN was absorbed into radia.maglev ->
-# examples/maglev/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
-_LEV = os.path.join(_HERE, "..", "examples", "maglev")
+# docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
+_LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
 sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 

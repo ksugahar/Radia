@@ -110,7 +110,7 @@ The standalone `radia-em` panel exposes five Method choices:
 The Clebsch hodograph mode is the panel-facing, verified forward demo.  The
 broader accelerator pole-face inverse-design examples and saturation/end-pack
 studies live under `docs/clebsch_hodograph/`,
-`examples/clebsch_hodograph/`, and the `mcp-server-accelerator`
+`docs/clebsch_hodograph/demos/`, and the `mcp-server-accelerator`
 `accelerator("two_plane_design")` / `accelerator("endpack_cobake")` topics.
 
 ## Typical Parameters
@@ -867,7 +867,7 @@ Repository anchors:
 - `docs/clebsch_hodograph/DESIGN_METHODOLOGY.md`
 - `docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`
 - `docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md`
-- `examples/clebsch_hodograph/` (runnable companion set)
+- `docs/clebsch_hodograph/demos/` (runnable companion set)
 - `tests/feec/test_clebsch_hodograph_research.py`
 """
 

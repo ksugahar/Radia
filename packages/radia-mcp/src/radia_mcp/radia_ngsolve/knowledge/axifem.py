@@ -784,7 +784,7 @@ axihenrotte p=2 + Kelvin               τ₁ = 738.47 µs   -0.001 %
 axihenrotte p=2 + Kelvin + Curve(2)    τ₁ = 738.69 µs   +0.028 %
 ```
 
-Test: `examples/maglev/research_cln/axifem/test_p2_kelvin_sphere.py`.
+Test: `validation_test/maglev/research_cln/axifem/test_p2_kelvin_sphere.py`.
 
 ## Critical gotchas
 

@@ -16,7 +16,7 @@
   "policy": {
     "public_face": "docs/clebsch_hodograph/examples_catalog.ipynb is the result-saved public demo ledger.",
     "json_sync": "examples_catalog_results.json and examples_catalog_result.json are refreshed with the notebook in the same change.",
-    "companion_status": "examples/clebsch_hodograph is the runnable companion set and remains linked by validation_test/feec/test_clebsch_hodograph_research.py."
+    "companion_status": "docs/clebsch_hodograph/demos is the runnable companion set linked by validation_test/feec/test_clebsch_hodograph_research.py."
   },
   "summary": {
     "script_count": 46,
@@ -33,7 +33,7 @@
   },
   "records": [
     {
-      "path": "examples/clebsch_hodograph/a_method_clebsch_2d.py",
+      "path": "docs/clebsch_hodograph/demos/a_method_clebsch_2d.py",
       "name": "a_method_clebsch_2d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -55,7 +55,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/a_method_clebsch_2d.png",
+          "path": "docs/clebsch_hodograph/demos/a_method_clebsch_2d.png",
           "sha256": "e69353ad82dadf02667434814558475d3d6fb4ab095c2b4e5794a79e7772743c",
           "bytes": 208761
         }
@@ -65,17 +65,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 785,
-          "text": "| A-method dual | `examples/clebsch_hodograph/a_method_clebsch_2d.py` |"
+          "text": "| A-method dual | `docs/clebsch_hodograph/demos/a_method_clebsch_2d.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 159,
-          "text": "examples/clebsch_hodograph/a_method_clebsch_2d.py"
+          "text": "docs/clebsch_hodograph/demos/a_method_clebsch_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_design.py",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_design.py",
       "name": "accel_pole_design.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -95,7 +95,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/accel_pole_design.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_design.png",
           "sha256": "eee9e94c69bbe6ea00cb96da23d963eb5077d11573e4027c9944903d4a630e70",
           "bytes": 265706
         }
@@ -105,17 +105,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 788,
-          "text": "| pole geometry + multipole analyzer | `examples/clebsch_hodograph/accel_pole_design.py` |"
+          "text": "| pole geometry + multipole analyzer | `docs/clebsch_hodograph/demos/accel_pole_design.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 160,
-          "text": "examples/clebsch_hodograph/accel_pole_design.py"
+          "text": "docs/clebsch_hodograph/demos/accel_pole_design.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_dipole_body_2d.py",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_dipole_body_2d.py",
       "name": "accel_pole_dipole_body_2d.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -139,7 +139,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/accel_pole_dipole_body_2d.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_dipole_body_2d.png",
           "sha256": "26f89650f4669bb5e9b84d4586de49784a21079c08305c2a44c2072ba60a0b6d",
           "bytes": 76235
         }
@@ -149,12 +149,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 161,
-          "text": "examples/clebsch_hodograph/accel_pole_dipole_body_2d.py"
+          "text": "docs/clebsch_hodograph/demos/accel_pole_dipole_body_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_3d.py",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_3d.py",
       "name": "accel_pole_ends_3d.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -174,7 +174,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/accel_pole_ends_3d.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_ends_3d.png",
           "sha256": "9ac85689b644aaf8a9f1343bbe23681fc48b72917887ff179e27e75e86470830",
           "bytes": 82716
         }
@@ -184,17 +184,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 789,
-          "text": "| 3-D ends: integrated analyzer + end rule | `examples/clebsch_hodograph/accel_pole_ends_3d.py` |"
+          "text": "| 3-D ends: integrated analyzer + end rule | `docs/clebsch_hodograph/demos/accel_pole_ends_3d.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 162,
-          "text": "examples/clebsch_hodograph/accel_pole_ends_3d.py"
+          "text": "docs/clebsch_hodograph/demos/accel_pole_ends_3d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_fem.py",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem.py",
       "name": "accel_pole_ends_fem.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -221,22 +221,22 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/accel_pole_ends_fem.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem.png",
           "sha256": "c9781285d08b4073ce4dc7c8166e01b0c92713b96481675c2fba3fd85b770e96",
           "bytes": 93523
         },
         {
-          "path": "examples/clebsch_hodograph/accel_pole_ends_fem_curved.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem_curved.png",
           "sha256": "04411ea0e3975d331d01b39e23db14dd5f9b94cb40728333c23a9390a46c3ce3",
           "bytes": 107353
         },
         {
-          "path": "examples/clebsch_hodograph/accel_pole_ends_fem_loop.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem_loop.png",
           "sha256": "3417f7d55b2df49f26e9ca2df78413aaf0319fa11e5d6ef17dea4fb8c19437dd",
           "bytes": 55499
         },
         {
-          "path": "examples/clebsch_hodograph/accel_pole_ends_fem_openbnd.png",
+          "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem_openbnd.png",
           "sha256": "3e565733917ad52211095c1a12252a819a31d8bc2fdb1e39919db75f348da779",
           "bytes": 47350
         }
@@ -246,17 +246,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 790,
-          "text": "| 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `examples/clebsch_hodograph/accel_pole_ends_fem.py` |"
+          "text": "| 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `docs/clebsch_hodograph/demos/accel_pole_ends_fem.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 163,
-          "text": "examples/clebsch_hodograph/accel_pole_ends_fem.py"
+          "text": "docs/clebsch_hodograph/demos/accel_pole_ends_fem.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_harmonics.py",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_harmonics.py",
       "name": "accel_pole_harmonics.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -278,12 +278,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 164,
-          "text": "examples/clebsch_hodograph/accel_pole_harmonics.py"
+          "text": "docs/clebsch_hodograph/demos/accel_pole_harmonics.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/accel_quad_ends_fem.py",
+      "path": "docs/clebsch_hodograph/demos/accel_quad_ends_fem.py",
       "name": "accel_quad_ends_fem.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -307,7 +307,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/accel_quad_ends_fem.png",
+          "path": "docs/clebsch_hodograph/demos/accel_quad_ends_fem.png",
           "sha256": "f5dc26fd06a0034ee4774be16d733a986852ae63373aaab2a8d5a9e3a43f6b74",
           "bytes": 82997
         }
@@ -317,12 +317,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 165,
-          "text": "examples/clebsch_hodograph/accel_quad_ends_fem.py"
+          "text": "docs/clebsch_hodograph/demos/accel_quad_ends_fem.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py",
+      "path": "docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.py",
       "name": "bidirectional_coordinate_transform_2d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -347,7 +347,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.json",
+          "path": "docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.json",
           "sha256": "e7f8b25d5ded990358d79bbc6f579599fe0ecf5bb15ba5cd733245067a856182",
           "bytes": 783,
           "json_top_keys": [
@@ -356,7 +356,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.png",
+          "path": "docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.png",
           "sha256": "9230af552809ab76b325fd10afbd9cde3067e6177a1840e04c89ce91a5475bd5",
           "bytes": 106140
         }
@@ -366,22 +366,22 @@
         {
           "path": "docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md",
           "line": 56,
-          "text": "[`bidirectional_coordinate_transform_2d.py`](../../examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py)"
+          "text": "[`bidirectional_coordinate_transform_2d.py`](demos/bidirectional_coordinate_transform_2d.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 166,
-          "text": "examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py"
+          "text": "docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.py"
         },
         {
           "path": "packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/README.md",
           "line": 88,
-          "text": "`examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py`"
+          "text": "`docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.py`"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_design_sweep_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_design_sweep_2d.py",
       "name": "chaplygin_design_sweep_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -404,7 +404,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_design_sweep_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_design_sweep_2d.png",
           "sha256": "28b07b24b6d237edd8cb0e52865b42dd19754e1c10e3dff0f6b099fae20ed43b",
           "bytes": 121405
         }
@@ -414,12 +414,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 167,
-          "text": "examples/clebsch_hodograph/chaplygin_design_sweep_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_design_sweep_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_free_boundary_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_free_boundary_2d.py",
       "name": "chaplygin_free_boundary_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -441,7 +441,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_free_boundary_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_free_boundary_2d.png",
           "sha256": "47e5722587c0c99e6d65f71d7f8a22d45ee3533974914060993af1f03e1b302a",
           "bytes": 227746
         }
@@ -451,12 +451,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 168,
-          "text": "examples/clebsch_hodograph/chaplygin_free_boundary_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_free_boundary_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_hodograph_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_hodograph_2d.py",
       "name": "chaplygin_hodograph_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -478,7 +478,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_hodograph_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_hodograph_2d.png",
           "sha256": "9de1b3fc488805350aa4ea651dbaf89090fbe7e4629cd9d747a0edfbb1e69b12",
           "bytes": 86573
         }
@@ -488,12 +488,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 169,
-          "text": "examples/clebsch_hodograph/chaplygin_hodograph_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_hodograph_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_inverse_nonlinear_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_inverse_nonlinear_2d.py",
       "name": "chaplygin_inverse_nonlinear_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -515,7 +515,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_inverse_nonlinear_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_inverse_nonlinear_2d.png",
           "sha256": "eaa6a061dc5e9265a9c28f09e73f6c8625b7068bc43eaf4db97c0d3dc4ea92b4",
           "bytes": 275350
         }
@@ -525,12 +525,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 170,
-          "text": "examples/clebsch_hodograph/chaplygin_inverse_nonlinear_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_inverse_nonlinear_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_inverse_vonmises_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_inverse_vonmises_2d.py",
       "name": "chaplygin_inverse_vonmises_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -552,7 +552,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_inverse_vonmises_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_inverse_vonmises_2d.png",
           "sha256": "49d88fbd22011b3a5b81cef3e7cb3db1b2cda4f91cc3d29655d5612d314e039d",
           "bytes": 159711
         }
@@ -562,12 +562,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 171,
-          "text": "examples/clebsch_hodograph/chaplygin_inverse_vonmises_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_inverse_vonmises_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_taper_design_sweep_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_taper_design_sweep_2d.py",
       "name": "chaplygin_taper_design_sweep_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -589,7 +589,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_taper_design_sweep_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_taper_design_sweep_2d.png",
           "sha256": "a7d94792ef52e35c63eb99b1d84b5a583aeae3f42c81935fa3176e81dca52a1a",
           "bytes": 608959
         }
@@ -599,12 +599,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 172,
-          "text": "examples/clebsch_hodograph/chaplygin_taper_design_sweep_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_taper_design_sweep_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_turning_design_sweep_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_turning_design_sweep_2d.py",
       "name": "chaplygin_turning_design_sweep_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -627,7 +627,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_turning_design_sweep_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_turning_design_sweep_2d.png",
           "sha256": "a593daab8b085e84d01be43dd30846313790fec4b1dff8d9195598a9b7b67487",
           "bytes": 279751
         }
@@ -637,12 +637,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 173,
-          "text": "examples/clebsch_hodograph/chaplygin_turning_design_sweep_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_turning_design_sweep_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_turning_guide_2d.py",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_turning_guide_2d.py",
       "name": "chaplygin_turning_guide_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -664,7 +664,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/chaplygin_turning_guide_2d.png",
+          "path": "docs/clebsch_hodograph/demos/chaplygin_turning_guide_2d.png",
           "sha256": "ccfa8274feec5ec574cb96d9e6dba7a1a0fcee8d7d293889da0a9ec03fc67de0",
           "bytes": 311494
         }
@@ -674,12 +674,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 174,
-          "text": "examples/clebsch_hodograph/chaplygin_turning_guide_2d.py"
+          "text": "docs/clebsch_hodograph/demos/chaplygin_turning_guide_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_3d_closing_condition.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_3d_closing_condition.py",
       "name": "clebsch_3d_closing_condition.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -699,7 +699,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_3d_closing_condition.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_3d_closing_condition.png",
           "sha256": "673f75f854fb056222582d1d1ad62c5fbaaa3ede11d8ab022684ced375b75cc8",
           "bytes": 47232
         }
@@ -709,17 +709,17 @@
         {
           "path": "docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md",
           "line": 129,
-          "text": "[`clebsch_3d_closing_condition.py`](../../examples/clebsch_hodograph/clebsch_3d_closing_condition.py)"
+          "text": "[`clebsch_3d_closing_condition.py`](demos/clebsch_3d_closing_condition.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 175,
-          "text": "examples/clebsch_hodograph/clebsch_3d_closing_condition.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_3d_closing_condition.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_design_workflow.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_design_workflow.py",
       "name": "clebsch_dipole_design_workflow.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -741,7 +741,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_design_workflow.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_design_workflow.png",
           "sha256": "d0d653549cd5dcef79a928ce0cfa4f0760ec1d686777bff9b2b334412f9e16d6",
           "bytes": 133927
         }
@@ -751,12 +751,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 176,
-          "text": "examples/clebsch_hodograph/clebsch_dipole_design_workflow.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_dipole_design_workflow.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_2d.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_2d.py",
       "name": "clebsch_dipole_saturation_2d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -780,7 +780,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_2d.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_2d.png",
           "sha256": "f740ec4fc670d6c43aa396e15f5109175a7ad47e7e2b5fd65dda7ad9409733d4",
           "bytes": 146443
         }
@@ -790,17 +790,17 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 177,
-          "text": "examples/clebsch_hodograph/clebsch_dipole_saturation_2d.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_2d.py"
         },
         {
           "path": "packages/radia-mcp/src/radia_mcp/fem/potential_formulations_knowledge.py",
           "line": 350,
-          "text": "`examples/clebsch_hodograph/clebsch_dipole_saturation_2d.py`."
+          "text": "`docs/clebsch_hodograph/demos/clebsch_dipole_saturation_2d.py`."
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d.py",
       "name": "clebsch_dipole_saturation_3d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -824,12 +824,12 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d.png",
           "sha256": "f81822122f1b80a8af50d8397274b10eeaaab8b0f3374211b421c9627f8040b1",
           "bytes": 103142
         },
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.json",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.json",
           "sha256": "b0467ddaad73ff0f5ba8b657137ddcaa58a53e9ad8c7c35f3c4e23dcccd22593",
           "bytes": 2906,
           "json_top_keys": [
@@ -845,7 +845,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.png",
           "sha256": "b0e3d453a7dc2401251f86039fdc07215dcd7b17bf79b599cd60506230c838e3",
           "bytes": 68745
         }
@@ -855,17 +855,17 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 178,
-          "text": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d.py"
         },
         {
           "path": "packages/radia-mcp/src/radia_mcp/fem/potential_formulations_knowledge.py",
           "line": 341,
-          "text": "`examples/clebsch_hodograph/clebsch_dipole_saturation_3d.py` (golden"
+          "text": "`docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d.py` (golden"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.py",
       "name": "clebsch_dipole_saturation_3d_throat.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -890,7 +890,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.json",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.json",
           "sha256": "b0467ddaad73ff0f5ba8b657137ddcaa58a53e9ad8c7c35f3c4e23dcccd22593",
           "bytes": 2906,
           "json_top_keys": [
@@ -906,7 +906,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.png",
           "sha256": "b0e3d453a7dc2401251f86039fdc07215dcd7b17bf79b599cd60506230c838e3",
           "bytes": 68745
         }
@@ -916,12 +916,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 179,
-          "text": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_kelvin_3d.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_kelvin_3d.py",
       "name": "clebsch_kelvin_3d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -944,7 +944,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_kelvin_3d.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_kelvin_3d.png",
           "sha256": "c3ef4324eb0faf53aa66c6cb1aa48c44e3fa264ab9c1341945f11a1737eb7d2a",
           "bytes": 157882
         }
@@ -954,17 +954,17 @@
         {
           "path": "docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md",
           "line": 121,
-          "text": "[`clebsch_kelvin_3d.py`](../../examples/clebsch_hodograph/clebsch_kelvin_3d.py)"
+          "text": "[`clebsch_kelvin_3d.py`](demos/clebsch_kelvin_3d.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 180,
-          "text": "examples/clebsch_hodograph/clebsch_kelvin_3d.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_kelvin_3d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_kelvin_nonlinear_3d.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_kelvin_nonlinear_3d.py",
       "name": "clebsch_kelvin_nonlinear_3d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -987,7 +987,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_kelvin_nonlinear_3d.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_kelvin_nonlinear_3d.png",
           "sha256": "8b8245cc01ab2efff9049ea2c8c57ce881ac09c06a5ac745c3e55555ac912caa",
           "bytes": 96774
         }
@@ -997,12 +997,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 181,
-          "text": "examples/clebsch_hodograph/clebsch_kelvin_nonlinear_3d.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_kelvin_nonlinear_3d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_pole_shape_optimization_2d.py",
+      "path": "docs/clebsch_hodograph/demos/clebsch_pole_shape_optimization_2d.py",
       "name": "clebsch_pole_shape_optimization_2d.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1026,7 +1026,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/clebsch_pole_shape_optimization_2d.json",
+          "path": "docs/clebsch_hodograph/demos/clebsch_pole_shape_optimization_2d.json",
           "sha256": "2e355529f5887580ced434c0eb7dca16cdc03d2afb3523ae4508de1054256cae",
           "bytes": 688,
           "json_top_keys": [
@@ -1040,7 +1040,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/clebsch_pole_shape_optimization_2d.png",
+          "path": "docs/clebsch_hodograph/demos/clebsch_pole_shape_optimization_2d.png",
           "sha256": "0ab3f04511cb312d1f93be72452dd0e343b66fc7c02b35d648c7bf0dd2eac115",
           "bytes": 52734
         }
@@ -1050,12 +1050,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 182,
-          "text": "examples/clebsch_hodograph/clebsch_pole_shape_optimization_2d.py"
+          "text": "docs/clebsch_hodograph/demos/clebsch_pole_shape_optimization_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/cohomology_hodograph_currentlink.py",
+      "path": "docs/clebsch_hodograph/demos/cohomology_hodograph_currentlink.py",
       "name": "cohomology_hodograph_currentlink.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1079,12 +1079,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 183,
-          "text": "examples/clebsch_hodograph/cohomology_hodograph_currentlink.py"
+          "text": "docs/clebsch_hodograph/demos/cohomology_hodograph_currentlink.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/combined_function_frenet_sweep.py",
+      "path": "docs/clebsch_hodograph/demos/combined_function_frenet_sweep.py",
       "name": "combined_function_frenet_sweep.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1110,7 +1110,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/combined_function_frenet_sweep.json",
+          "path": "docs/clebsch_hodograph/demos/combined_function_frenet_sweep.json",
           "sha256": "d5e801989bffb56790894f405a452aecc82bc97f676c8f46d324b9ade62331f3",
           "bytes": 2994,
           "json_top_keys": [
@@ -1123,7 +1123,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/combined_function_frenet_sweep.png",
+          "path": "docs/clebsch_hodograph/demos/combined_function_frenet_sweep.png",
           "sha256": "1b85268209734b7f0be5a829676e1b75639eef3db0e8abf9199f110429376faf",
           "bytes": 93281
         }
@@ -1133,17 +1133,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 796,
-          "text": "| combined-function on a curved orbit (the Frenet sweep = twist) | `examples/clebsch_hodograph/combined_function_frenet_sweep.py` |"
+          "text": "| combined-function on a curved orbit (the Frenet sweep = twist) | `docs/clebsch_hodograph/demos/combined_function_frenet_sweep.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 184,
-          "text": "examples/clebsch_hodograph/combined_function_frenet_sweep.py"
+          "text": "docs/clebsch_hodograph/demos/combined_function_frenet_sweep.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/derham_closure_order_sweep.py",
+      "path": "docs/clebsch_hodograph/demos/derham_closure_order_sweep.py",
       "name": "derham_closure_order_sweep.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1165,7 +1165,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/derham_closure_order_sweep.png",
+          "path": "docs/clebsch_hodograph/demos/derham_closure_order_sweep.png",
           "sha256": "94c401d7a9abdeae54c96905fa20289f41989eff612e5b02322066905f298263",
           "bytes": 148728
         }
@@ -1175,12 +1175,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 185,
-          "text": "examples/clebsch_hodograph/derham_closure_order_sweep.py"
+          "text": "docs/clebsch_hodograph/demos/derham_closure_order_sweep.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_cobake.py",
+      "path": "docs/clebsch_hodograph/demos/endpack_cobake.py",
       "name": "endpack_cobake.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1205,7 +1205,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/endpack_cobake.json",
+          "path": "docs/clebsch_hodograph/demos/endpack_cobake.json",
           "sha256": "3ac60aad5224ecce352994c985613121ec51cb6e9326f108c8d5c9f58fde5816",
           "bytes": 1034,
           "json_top_keys": [
@@ -1220,12 +1220,12 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/endpack_cobake.png",
+          "path": "docs/clebsch_hodograph/demos/endpack_cobake.png",
           "sha256": "6f671e51e6df500329b199b7c16ffd486320a9701398ee354eb7e007ac28fc18",
           "bytes": 74817
         },
         {
-          "path": "examples/clebsch_hodograph/endpack_cobake_loft.json",
+          "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.json",
           "sha256": "0e46a87cbb1c8417d348fe528f64dbd238d0597c47ae9e38415657f856d6c707",
           "bytes": 1439,
           "json_top_keys": [
@@ -1247,7 +1247,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/endpack_cobake_loft.png",
+          "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.png",
           "sha256": "7a80fdd8a7010f92c56578d43ff8ae20de60123a2bef4d0c29c31091eea49f80",
           "bytes": 68981
         }
@@ -1257,17 +1257,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 800,
-          "text": "| two planes co-baked into one pole (δ shim + ĝ chamfer) | `examples/clebsch_hodograph/endpack_cobake.py` |"
+          "text": "| two planes co-baked into one pole (δ shim + ĝ chamfer) | `docs/clebsch_hodograph/demos/endpack_cobake.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 186,
-          "text": "examples/clebsch_hodograph/endpack_cobake.py"
+          "text": "docs/clebsch_hodograph/demos/endpack_cobake.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_cobake_loft.py",
+      "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.py",
       "name": "endpack_cobake_loft.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1293,7 +1293,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/endpack_cobake_loft.json",
+          "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.json",
           "sha256": "0e46a87cbb1c8417d348fe528f64dbd238d0597c47ae9e38415657f856d6c707",
           "bytes": 1439,
           "json_top_keys": [
@@ -1315,7 +1315,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/endpack_cobake_loft.png",
+          "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.png",
           "sha256": "7a80fdd8a7010f92c56578d43ff8ae20de60123a2bef4d0c29c31091eea49f80",
           "bytes": 68981
         }
@@ -1325,17 +1325,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 801,
-          "text": "| co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |"
+          "text": "| co-bake as a PRECISION tensor loft (OCC ThruSections) | `docs/clebsch_hodograph/demos/endpack_cobake_loft.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 187,
-          "text": "examples/clebsch_hodograph/endpack_cobake_loft.py"
+          "text": "docs/clebsch_hodograph/demos/endpack_cobake_loft.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_spectrometer_saturation.py",
+      "path": "docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.py",
       "name": "endpack_spectrometer_saturation.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1361,7 +1361,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/endpack_spectrometer_saturation.json",
+          "path": "docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.json",
           "sha256": "c0eae4688838dc2df1d9d4bafb3b6ee61c0ef418b8368633d13fd86df692b4a5",
           "bytes": 1117,
           "json_top_keys": [
@@ -1379,7 +1379,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/endpack_spectrometer_saturation.png",
+          "path": "docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.png",
           "sha256": "ce1874cb74f1367c1e56ed642b7b0267f0404236a0c9fb9b7142b96ffbcfbdf7",
           "bytes": 88136
         }
@@ -1389,17 +1389,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 799,
-          "text": "| spectrometer end pack NONLINEAR (corner saturable throat) | `examples/clebsch_hodograph/endpack_spectrometer_saturation.py` |"
+          "text": "| spectrometer end pack NONLINEAR (corner saturable throat) | `docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 188,
-          "text": "examples/clebsch_hodograph/endpack_spectrometer_saturation.py"
+          "text": "docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_two_plane.py",
+      "path": "docs/clebsch_hodograph/demos/endpack_two_plane.py",
       "name": "endpack_two_plane.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1427,7 +1427,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/endpack_two_plane.json",
+          "path": "docs/clebsch_hodograph/demos/endpack_two_plane.json",
           "sha256": "6e5dbdeb5cf59c658eadf81456e8674627bc27d858abacbb2140da9b09be2d68",
           "bytes": 1938,
           "json_top_keys": [
@@ -1439,7 +1439,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/endpack_two_plane.png",
+          "path": "docs/clebsch_hodograph/demos/endpack_two_plane.png",
           "sha256": "f6c404fc87d72338b462835884db528c2ef940eb95ed3a87ebf94053fb2fda9f",
           "bytes": 146523
         }
@@ -1449,17 +1449,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 798,
-          "text": "| end pack in two planes (x-y cross-section + s-y end → 3-D) | `examples/clebsch_hodograph/endpack_two_plane.py` |"
+          "text": "| end pack in two planes (x-y cross-section + s-y end → 3-D) | `docs/clebsch_hodograph/demos/endpack_two_plane.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 189,
-          "text": "examples/clebsch_hodograph/endpack_two_plane.py"
+          "text": "docs/clebsch_hodograph/demos/endpack_two_plane.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/ffag_sector_two_plane.py",
+      "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane.py",
       "name": "ffag_sector_two_plane.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1484,7 +1484,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/ffag_sector_two_plane.json",
+          "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane.json",
           "sha256": "a4f25ccc6631f1188fc001d4d6795b37e8c5761a4048ba2c51fd97c34fc34094",
           "bytes": 1296,
           "json_top_keys": [
@@ -1499,12 +1499,12 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/ffag_sector_two_plane.png",
+          "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane.png",
           "sha256": "5b2d9e02314c502d588c91f8cbe1cabd89e2e82712d0be19f95cf25e349ab23b",
           "bytes": 74085
         },
         {
-          "path": "examples/clebsch_hodograph/ffag_sector_two_plane_rung2.png",
+          "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane_rung2.png",
           "sha256": "6f4693d225dec23f2d463dc911388c02e64ee8f02a84c2811901a3042169e056",
           "bytes": 88274
         }
@@ -1514,17 +1514,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 794,
-          "text": "| two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `examples/clebsch_hodograph/ffag_sector_two_plane.py` |"
+          "text": "| two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `docs/clebsch_hodograph/demos/ffag_sector_two_plane.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 190,
-          "text": "examples/clebsch_hodograph/ffag_sector_two_plane.py"
+          "text": "docs/clebsch_hodograph/demos/ffag_sector_two_plane.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/flux_line_closure_symplectic.py",
+      "path": "docs/clebsch_hodograph/demos/flux_line_closure_symplectic.py",
       "name": "flux_line_closure_symplectic.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1543,7 +1543,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/flux_line_closure_symplectic.png",
+          "path": "docs/clebsch_hodograph/demos/flux_line_closure_symplectic.png",
           "sha256": "95257112d7056637d4657a34f0d7c9abd674bc954a888ac1294373b9cc4f8928",
           "bytes": 205925
         }
@@ -1553,12 +1553,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 191,
-          "text": "examples/clebsch_hodograph/flux_line_closure_symplectic.py"
+          "text": "docs/clebsch_hodograph/demos/flux_line_closure_symplectic.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/flux_line_realfield_ngsolve.py",
+      "path": "docs/clebsch_hodograph/demos/flux_line_realfield_ngsolve.py",
       "name": "flux_line_realfield_ngsolve.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1579,7 +1579,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/flux_line_realfield_ngsolve.png",
+          "path": "docs/clebsch_hodograph/demos/flux_line_realfield_ngsolve.png",
           "sha256": "f62ef12fadf4bc3ec8ef8417c6416425f80ef53059d1a1ff1711172e090d8ce9",
           "bytes": 137329
         }
@@ -1589,12 +1589,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 192,
-          "text": "examples/clebsch_hodograph/flux_line_realfield_ngsolve.py"
+          "text": "docs/clebsch_hodograph/demos/flux_line_realfield_ngsolve.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/hdiv_vim_clebsch_2d_az.py",
+      "path": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_2d_az.py",
       "name": "hdiv_vim_clebsch_2d_az.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1616,7 +1616,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/hdiv_vim_clebsch_2d_az.png",
+          "path": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_2d_az.png",
           "sha256": "afff46edc73ccf3947642cc7e966d609fb1da2e8554573b634cb68a50a562981",
           "bytes": 186203
         }
@@ -1626,12 +1626,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 193,
-          "text": "examples/clebsch_hodograph/hdiv_vim_clebsch_2d_az.py"
+          "text": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_2d_az.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.py",
+      "path": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_loopstar.py",
       "name": "hdiv_vim_clebsch_loopstar.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1653,7 +1653,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.png",
+          "path": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_loopstar.png",
           "sha256": "3a3bc7389d4983ac7fe66260aceeea62af346bbeb50a0eee9ba7c7854edab494",
           "bytes": 74353
         }
@@ -1663,17 +1663,17 @@
         {
           "path": "docs/clebsch_hodograph/HDIV_VIM_CLEBSCH_BRIDGE.md",
           "line": 10,
-          "text": "[`examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.py`](../../examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.py)"
+          "text": "[`docs/clebsch_hodograph/demos/hdiv_vim_clebsch_loopstar.py`](demos/hdiv_vim_clebsch_loopstar.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 194,
-          "text": "examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.py"
+          "text": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_loopstar.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/hodograph_kelvin_2d.py",
+      "path": "docs/clebsch_hodograph/demos/hodograph_kelvin_2d.py",
       "name": "hodograph_kelvin_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -1696,7 +1696,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/hodograph_kelvin_2d.png",
+          "path": "docs/clebsch_hodograph/demos/hodograph_kelvin_2d.png",
           "sha256": "5448fe616e29171fea3dab42eb62be15fbbc77fe4b448312119f3722769cac2c",
           "bytes": 183025
         }
@@ -1706,17 +1706,17 @@
         {
           "path": "docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md",
           "line": 117,
-          "text": "[`hodograph_kelvin_2d.py`](../../examples/clebsch_hodograph/hodograph_kelvin_2d.py)"
+          "text": "[`hodograph_kelvin_2d.py`](demos/hodograph_kelvin_2d.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 195,
-          "text": "examples/clebsch_hodograph/hodograph_kelvin_2d.py"
+          "text": "docs/clebsch_hodograph/demos/hodograph_kelvin_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/hodograph_kelvin_axisym.py",
+      "path": "docs/clebsch_hodograph/demos/hodograph_kelvin_axisym.py",
       "name": "hodograph_kelvin_axisym.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -1739,7 +1739,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/hodograph_kelvin_axisym.png",
+          "path": "docs/clebsch_hodograph/demos/hodograph_kelvin_axisym.png",
           "sha256": "b44cdf00bb5e02825de1debee7ee2d1d6b5d2ec5a0123638436eebcc160f4f9d",
           "bytes": 97898
         }
@@ -1749,22 +1749,22 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 786,
-          "text": "| exact open boundary | `examples/clebsch_hodograph/hodograph_kelvin_axisym.py` |"
+          "text": "| exact open boundary | `docs/clebsch_hodograph/demos/hodograph_kelvin_axisym.py` |"
         },
         {
           "path": "docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md",
           "line": 119,
-          "text": "[`hodograph_kelvin_axisym.py`](../../examples/clebsch_hodograph/hodograph_kelvin_axisym.py)"
+          "text": "[`hodograph_kelvin_axisym.py`](demos/hodograph_kelvin_axisym.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 196,
-          "text": "examples/clebsch_hodograph/hodograph_kelvin_axisym.py"
+          "text": "docs/clebsch_hodograph/demos/hodograph_kelvin_axisym.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py",
+      "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.py",
       "name": "leaf_coupling_perturbation_3d.py",
       "lane": "docs_design_bridge_demo",
       "lane_reason": "bridge example between theory and magnet-design workflow",
@@ -1792,7 +1792,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d.json",
+          "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.json",
           "sha256": "1d2d8a1b40b2f8e0c67599b1517ce421ba537666442173f1982937abac5bc26e",
           "bytes": 6430,
           "json_top_keys": [
@@ -1816,12 +1816,12 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d.png",
+          "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.png",
           "sha256": "0b5bf253c7f0d993df426774cabcab5e838b05b6f6206f1586e998594e6f7a7d",
           "bytes": 69683
         },
         {
-          "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d_sweep.json",
+          "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d_sweep.json",
           "sha256": "ea69454811d93980aac1eec3cf02b00ec26203374a1e151ee5af6e80dc01e1e8",
           "bytes": 30902,
           "json_top_keys": [
@@ -1835,7 +1835,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d_sweep.png",
+          "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d_sweep.png",
           "sha256": "da6191a1c7f7e5e177d0f93a7c743f25fdfbb59dbb811c62b7e129ce7cc30b73",
           "bytes": 69187
         }
@@ -1845,22 +1845,22 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 793,
-          "text": "| foliate-and-perturb scaling (leaf coupling ~ gap/L) | `examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` |"
+          "text": "| foliate-and-perturb scaling (leaf coupling ~ gap/L) | `docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 197,
-          "text": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py"
+          "text": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.py"
         },
         {
           "path": "packages/radia-mcp/src/radia_mcp/accelerator/knowledge.py",
           "line": 397,
-          "text": "`examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` on a real"
+          "text": "`docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.py` on a real"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/one_turn_coil_streamfunction.py",
+      "path": "docs/clebsch_hodograph/demos/one_turn_coil_streamfunction.py",
       "name": "one_turn_coil_streamfunction.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -1881,12 +1881,12 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 198,
-          "text": "examples/clebsch_hodograph/one_turn_coil_streamfunction.py"
+          "text": "docs/clebsch_hodograph/demos/one_turn_coil_streamfunction.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/saturation_loop_2d.py",
+      "path": "docs/clebsch_hodograph/demos/saturation_loop_2d.py",
       "name": "saturation_loop_2d.py",
       "lane": "docs_hodograph_transform_demo",
       "lane_reason": "hodograph / Kelvin / Chaplygin transform demonstration with saved visual result",
@@ -1908,7 +1908,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/saturation_loop_2d.png",
+          "path": "docs/clebsch_hodograph/demos/saturation_loop_2d.png",
           "sha256": "d4b5562c98314f3e236f03f06a926afdc235eebf739b9697deb1d6537dbd079a",
           "bytes": 49432
         }
@@ -1918,17 +1918,17 @@
         {
           "path": "docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md",
           "line": 156,
-          "text": "[`saturation_loop_2d.py`](../../examples/clebsch_hodograph/saturation_loop_2d.py)"
+          "text": "[`saturation_loop_2d.py`](demos/saturation_loop_2d.py)"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 199,
-          "text": "examples/clebsch_hodograph/saturation_loop_2d.py"
+          "text": "docs/clebsch_hodograph/demos/saturation_loop_2d.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d.py",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.py",
       "name": "scaling_ffag_pole_2d.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -1952,22 +1952,22 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d.png",
+          "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.png",
           "sha256": "e0743284cf92da498a8896cdf48cfa344f0f9bcc4fad539019518cfa09391bfb",
           "bytes": 50727
         },
         {
-          "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d_isochronous.png",
+          "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d_isochronous.png",
           "sha256": "71f63c680d2ff5bd2b402ee859a492495601b106e6af28010a4cb2fdaf9fbae2",
           "bytes": 79677
         },
         {
-          "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d_reshape.png",
+          "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d_reshape.png",
           "sha256": "41a5b056d8375391fb855d2bfb30898fddd0bd6deb77bdb5273b549c7247a4b0",
           "bytes": 56003
         },
         {
-          "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d_saturation.png",
+          "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d_saturation.png",
           "sha256": "da044e00f7dc9b7e34586ed6bc13fa9e2d57c625e8f4ed0061aeb75d667d35aa",
           "bytes": 74140
         }
@@ -1977,22 +1977,22 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 792,
-          "text": "| radial field index (scaling + isochronous, saturation) | `examples/clebsch_hodograph/scaling_ffag_pole_2d.py` |"
+          "text": "| radial field index (scaling + isochronous, saturation) | `docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 200,
-          "text": "examples/clebsch_hodograph/scaling_ffag_pole_2d.py"
+          "text": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.py"
         },
         {
           "path": "packages/radia-mcp/src/radia_mcp/accelerator/knowledge.py",
           "line": 289,
-          "text": "`examples/clebsch_hodograph/scaling_ffag_pole_2d.py`."
+          "text": "`docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.py`."
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_sector_saturation.py",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.py",
       "name": "scaling_ffag_sector_saturation.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -2017,7 +2017,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/scaling_ffag_sector_saturation.json",
+          "path": "docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.json",
           "sha256": "62895da8d3c47123bc895bd9a22e3c77e29016d76eedf940b886fbc2823500ea",
           "bytes": 1794,
           "json_top_keys": [
@@ -2037,7 +2037,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/scaling_ffag_sector_saturation.png",
+          "path": "docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.png",
           "sha256": "b40b171cc680919b5cadf1467833d995e7477156210ff584a033e0046523180b",
           "bytes": 85935
         }
@@ -2047,17 +2047,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 802,
-          "text": "| saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |"
+          "text": "| saturating sector body (azimuthal L_eff robust, radial k fragile) | `docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 201,
-          "text": "examples/clebsch_hodograph/scaling_ffag_sector_saturation.py"
+          "text": "docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/twist_rate_leaf_coupling.py",
+      "path": "docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.py",
       "name": "twist_rate_leaf_coupling.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -2080,7 +2080,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/twist_rate_leaf_coupling.json",
+          "path": "docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.json",
           "sha256": "064193fa92854ee86512c3cfd3ee0a5fc30547602b0bc885e8dbf0084ba85cea",
           "bytes": 570,
           "json_top_keys": [
@@ -2096,7 +2096,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/twist_rate_leaf_coupling.png",
+          "path": "docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.png",
           "sha256": "2f18ade53a6c4d2a10b759a384673f5dc009fbaeb0f7abfbda5078f3c3fafbe5",
           "bytes": 92559
         }
@@ -2106,17 +2106,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 797,
-          "text": "| fast-twist leaf coupling (the per-station 2-D validity threshold) | `examples/clebsch_hodograph/twist_rate_leaf_coupling.py` |"
+          "text": "| fast-twist leaf coupling (the per-station 2-D validity threshold) | `docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 202,
-          "text": "examples/clebsch_hodograph/twist_rate_leaf_coupling.py"
+          "text": "docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/twisting_quadrupole_pole.py",
+      "path": "docs/clebsch_hodograph/demos/twisting_quadrupole_pole.py",
       "name": "twisting_quadrupole_pole.py",
       "lane": "docs_accelerator_design_demo",
       "lane_reason": "accelerator pole, end-pack, FFAG, or beam-referenced geometry design demo",
@@ -2142,7 +2142,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/twisting_quadrupole_pole.json",
+          "path": "docs/clebsch_hodograph/demos/twisting_quadrupole_pole.json",
           "sha256": "a59d9d82cc054a65866e97f3f8cb0cdd18eaf11860d45f5695ddaea51d007aa6",
           "bytes": 2493,
           "json_top_keys": [
@@ -2154,7 +2154,7 @@
           ]
         },
         {
-          "path": "examples/clebsch_hodograph/twisting_quadrupole_pole.png",
+          "path": "docs/clebsch_hodograph/demos/twisting_quadrupole_pole.png",
           "sha256": "9e9d100b759f47a1bc05a7c728cb07524d877e679dfc5b59e03c8f70d9475fb2",
           "bytes": 101415
         }
@@ -2164,17 +2164,17 @@
         {
           "path": "docs/clebsch_hodograph/DESIGN_METHODOLOGY.md",
           "line": 795,
-          "text": "| beam-referenced equipotential surface + the twist (n-fold law) | `examples/clebsch_hodograph/twisting_quadrupole_pole.py` |"
+          "text": "| beam-referenced equipotential surface + the twist (n-fold law) | `docs/clebsch_hodograph/demos/twisting_quadrupole_pole.py` |"
         },
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 203,
-          "text": "examples/clebsch_hodograph/twisting_quadrupole_pole.py"
+          "text": "docs/clebsch_hodograph/demos/twisting_quadrupole_pole.py"
         }
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/weakform_pullback_kata.py",
+      "path": "docs/clebsch_hodograph/demos/weakform_pullback_kata.py",
       "name": "weakform_pullback_kata.py",
       "lane": "docs_differential_forms_demo",
       "lane_reason": "Clebsch, de Rham, cohomology, or pullback/Hodge demonstration",
@@ -2193,7 +2193,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/clebsch_hodograph/weakform_pullback_kata.json",
+          "path": "docs/clebsch_hodograph/demos/weakform_pullback_kata.json",
           "sha256": "b2abe22ee50a59bba3afcdbc983c86d88e9f2f89ee1cb53a67e94172f4d118cf",
           "bytes": 892,
           "json_top_keys": [
@@ -2208,59 +2208,59 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 204,
-          "text": "examples/clebsch_hodograph/weakform_pullback_kata.py"
+          "text": "docs/clebsch_hodograph/demos/weakform_pullback_kata.py"
         }
       ]
     }
   ],
   "artifacts": [
     {
-      "path": "examples/clebsch_hodograph/a_method_clebsch_2d.png",
+      "path": "docs/clebsch_hodograph/demos/a_method_clebsch_2d.png",
       "sha256": "e69353ad82dadf02667434814558475d3d6fb4ab095c2b4e5794a79e7772743c",
       "bytes": 208761
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_design.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_design.png",
       "sha256": "eee9e94c69bbe6ea00cb96da23d963eb5077d11573e4027c9944903d4a630e70",
       "bytes": 265706
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_dipole_body_2d.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_dipole_body_2d.png",
       "sha256": "26f89650f4669bb5e9b84d4586de49784a21079c08305c2a44c2072ba60a0b6d",
       "bytes": 76235
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_3d.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_3d.png",
       "sha256": "9ac85689b644aaf8a9f1343bbe23681fc48b72917887ff179e27e75e86470830",
       "bytes": 82716
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_fem.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem.png",
       "sha256": "c9781285d08b4073ce4dc7c8166e01b0c92713b96481675c2fba3fd85b770e96",
       "bytes": 93523
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_fem_curved.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem_curved.png",
       "sha256": "04411ea0e3975d331d01b39e23db14dd5f9b94cb40728333c23a9390a46c3ce3",
       "bytes": 107353
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_fem_loop.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem_loop.png",
       "sha256": "3417f7d55b2df49f26e9ca2df78413aaf0319fa11e5d6ef17dea4fb8c19437dd",
       "bytes": 55499
     },
     {
-      "path": "examples/clebsch_hodograph/accel_pole_ends_fem_openbnd.png",
+      "path": "docs/clebsch_hodograph/demos/accel_pole_ends_fem_openbnd.png",
       "sha256": "3e565733917ad52211095c1a12252a819a31d8bc2fdb1e39919db75f348da779",
       "bytes": 47350
     },
     {
-      "path": "examples/clebsch_hodograph/accel_quad_ends_fem.png",
+      "path": "docs/clebsch_hodograph/demos/accel_quad_ends_fem.png",
       "sha256": "f5dc26fd06a0034ee4774be16d733a986852ae63373aaab2a8d5a9e3a43f6b74",
       "bytes": 82997
     },
     {
-      "path": "examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.json",
+      "path": "docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.json",
       "sha256": "e7f8b25d5ded990358d79bbc6f579599fe0ecf5bb15ba5cd733245067a856182",
       "bytes": 783,
       "json_top_keys": [
@@ -2269,72 +2269,72 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.png",
+      "path": "docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.png",
       "sha256": "9230af552809ab76b325fd10afbd9cde3067e6177a1840e04c89ce91a5475bd5",
       "bytes": 106140
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_design_sweep_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_design_sweep_2d.png",
       "sha256": "28b07b24b6d237edd8cb0e52865b42dd19754e1c10e3dff0f6b099fae20ed43b",
       "bytes": 121405
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_free_boundary_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_free_boundary_2d.png",
       "sha256": "47e5722587c0c99e6d65f71d7f8a22d45ee3533974914060993af1f03e1b302a",
       "bytes": 227746
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_hodograph_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_hodograph_2d.png",
       "sha256": "9de1b3fc488805350aa4ea651dbaf89090fbe7e4629cd9d747a0edfbb1e69b12",
       "bytes": 86573
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_inverse_nonlinear_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_inverse_nonlinear_2d.png",
       "sha256": "eaa6a061dc5e9265a9c28f09e73f6c8625b7068bc43eaf4db97c0d3dc4ea92b4",
       "bytes": 275350
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_inverse_vonmises_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_inverse_vonmises_2d.png",
       "sha256": "49d88fbd22011b3a5b81cef3e7cb3db1b2cda4f91cc3d29655d5612d314e039d",
       "bytes": 159711
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_taper_design_sweep_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_taper_design_sweep_2d.png",
       "sha256": "a7d94792ef52e35c63eb99b1d84b5a583aeae3f42c81935fa3176e81dca52a1a",
       "bytes": 608959
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_turning_design_sweep_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_turning_design_sweep_2d.png",
       "sha256": "a593daab8b085e84d01be43dd30846313790fec4b1dff8d9195598a9b7b67487",
       "bytes": 279751
     },
     {
-      "path": "examples/clebsch_hodograph/chaplygin_turning_guide_2d.png",
+      "path": "docs/clebsch_hodograph/demos/chaplygin_turning_guide_2d.png",
       "sha256": "ccfa8274feec5ec574cb96d9e6dba7a1a0fcee8d7d293889da0a9ec03fc67de0",
       "bytes": 311494
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_3d_closing_condition.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_3d_closing_condition.png",
       "sha256": "673f75f854fb056222582d1d1ad62c5fbaaa3ede11d8ab022684ced375b75cc8",
       "bytes": 47232
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_design_workflow.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_design_workflow.png",
       "sha256": "d0d653549cd5dcef79a928ce0cfa4f0760ec1d686777bff9b2b334412f9e16d6",
       "bytes": 133927
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_2d.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_2d.png",
       "sha256": "f740ec4fc670d6c43aa396e15f5109175a7ad47e7e2b5fd65dda7ad9409733d4",
       "bytes": 146443
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d.png",
       "sha256": "f81822122f1b80a8af50d8397274b10eeaaab8b0f3374211b421c9627f8040b1",
       "bytes": 103142
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.json",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.json",
       "sha256": "b0467ddaad73ff0f5ba8b657137ddcaa58a53e9ad8c7c35f3c4e23dcccd22593",
       "bytes": 2906,
       "json_top_keys": [
@@ -2350,22 +2350,22 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_dipole_saturation_3d_throat.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d_throat.png",
       "sha256": "b0e3d453a7dc2401251f86039fdc07215dcd7b17bf79b599cd60506230c838e3",
       "bytes": 68745
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_kelvin_3d.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_kelvin_3d.png",
       "sha256": "c3ef4324eb0faf53aa66c6cb1aa48c44e3fa264ab9c1341945f11a1737eb7d2a",
       "bytes": 157882
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_kelvin_nonlinear_3d.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_kelvin_nonlinear_3d.png",
       "sha256": "8b8245cc01ab2efff9049ea2c8c57ce881ac09c06a5ac745c3e55555ac912caa",
       "bytes": 96774
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_pole_shape_optimization_2d.json",
+      "path": "docs/clebsch_hodograph/demos/clebsch_pole_shape_optimization_2d.json",
       "sha256": "2e355529f5887580ced434c0eb7dca16cdc03d2afb3523ae4508de1054256cae",
       "bytes": 688,
       "json_top_keys": [
@@ -2379,12 +2379,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/clebsch_pole_shape_optimization_2d.png",
+      "path": "docs/clebsch_hodograph/demos/clebsch_pole_shape_optimization_2d.png",
       "sha256": "0ab3f04511cb312d1f93be72452dd0e343b66fc7c02b35d648c7bf0dd2eac115",
       "bytes": 52734
     },
     {
-      "path": "examples/clebsch_hodograph/combined_function_frenet_sweep.json",
+      "path": "docs/clebsch_hodograph/demos/combined_function_frenet_sweep.json",
       "sha256": "d5e801989bffb56790894f405a452aecc82bc97f676c8f46d324b9ade62331f3",
       "bytes": 2994,
       "json_top_keys": [
@@ -2397,17 +2397,17 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/combined_function_frenet_sweep.png",
+      "path": "docs/clebsch_hodograph/demos/combined_function_frenet_sweep.png",
       "sha256": "1b85268209734b7f0be5a829676e1b75639eef3db0e8abf9199f110429376faf",
       "bytes": 93281
     },
     {
-      "path": "examples/clebsch_hodograph/derham_closure_order_sweep.png",
+      "path": "docs/clebsch_hodograph/demos/derham_closure_order_sweep.png",
       "sha256": "94c401d7a9abdeae54c96905fa20289f41989eff612e5b02322066905f298263",
       "bytes": 148728
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_cobake.json",
+      "path": "docs/clebsch_hodograph/demos/endpack_cobake.json",
       "sha256": "3ac60aad5224ecce352994c985613121ec51cb6e9326f108c8d5c9f58fde5816",
       "bytes": 1034,
       "json_top_keys": [
@@ -2422,12 +2422,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_cobake.png",
+      "path": "docs/clebsch_hodograph/demos/endpack_cobake.png",
       "sha256": "6f671e51e6df500329b199b7c16ffd486320a9701398ee354eb7e007ac28fc18",
       "bytes": 74817
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_cobake_loft.json",
+      "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.json",
       "sha256": "0e46a87cbb1c8417d348fe528f64dbd238d0597c47ae9e38415657f856d6c707",
       "bytes": 1439,
       "json_top_keys": [
@@ -2449,12 +2449,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_cobake_loft.png",
+      "path": "docs/clebsch_hodograph/demos/endpack_cobake_loft.png",
       "sha256": "7a80fdd8a7010f92c56578d43ff8ae20de60123a2bef4d0c29c31091eea49f80",
       "bytes": 68981
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_spectrometer_saturation.json",
+      "path": "docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.json",
       "sha256": "c0eae4688838dc2df1d9d4bafb3b6ee61c0ef418b8368633d13fd86df692b4a5",
       "bytes": 1117,
       "json_top_keys": [
@@ -2472,12 +2472,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_spectrometer_saturation.png",
+      "path": "docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.png",
       "sha256": "ce1874cb74f1367c1e56ed642b7b0267f0404236a0c9fb9b7142b96ffbcfbdf7",
       "bytes": 88136
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_two_plane.json",
+      "path": "docs/clebsch_hodograph/demos/endpack_two_plane.json",
       "sha256": "6e5dbdeb5cf59c658eadf81456e8674627bc27d858abacbb2140da9b09be2d68",
       "bytes": 1938,
       "json_top_keys": [
@@ -2489,12 +2489,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/endpack_two_plane.png",
+      "path": "docs/clebsch_hodograph/demos/endpack_two_plane.png",
       "sha256": "f6c404fc87d72338b462835884db528c2ef940eb95ed3a87ebf94053fb2fda9f",
       "bytes": 146523
     },
     {
-      "path": "examples/clebsch_hodograph/ffag_sector_two_plane.json",
+      "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane.json",
       "sha256": "a4f25ccc6631f1188fc001d4d6795b37e8c5761a4048ba2c51fd97c34fc34094",
       "bytes": 1296,
       "json_top_keys": [
@@ -2509,47 +2509,47 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/ffag_sector_two_plane.png",
+      "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane.png",
       "sha256": "5b2d9e02314c502d588c91f8cbe1cabd89e2e82712d0be19f95cf25e349ab23b",
       "bytes": 74085
     },
     {
-      "path": "examples/clebsch_hodograph/ffag_sector_two_plane_rung2.png",
+      "path": "docs/clebsch_hodograph/demos/ffag_sector_two_plane_rung2.png",
       "sha256": "6f4693d225dec23f2d463dc911388c02e64ee8f02a84c2811901a3042169e056",
       "bytes": 88274
     },
     {
-      "path": "examples/clebsch_hodograph/flux_line_closure_symplectic.png",
+      "path": "docs/clebsch_hodograph/demos/flux_line_closure_symplectic.png",
       "sha256": "95257112d7056637d4657a34f0d7c9abd674bc954a888ac1294373b9cc4f8928",
       "bytes": 205925
     },
     {
-      "path": "examples/clebsch_hodograph/flux_line_realfield_ngsolve.png",
+      "path": "docs/clebsch_hodograph/demos/flux_line_realfield_ngsolve.png",
       "sha256": "f62ef12fadf4bc3ec8ef8417c6416425f80ef53059d1a1ff1711172e090d8ce9",
       "bytes": 137329
     },
     {
-      "path": "examples/clebsch_hodograph/hdiv_vim_clebsch_2d_az.png",
+      "path": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_2d_az.png",
       "sha256": "afff46edc73ccf3947642cc7e966d609fb1da2e8554573b634cb68a50a562981",
       "bytes": 186203
     },
     {
-      "path": "examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.png",
+      "path": "docs/clebsch_hodograph/demos/hdiv_vim_clebsch_loopstar.png",
       "sha256": "3a3bc7389d4983ac7fe66260aceeea62af346bbeb50a0eee9ba7c7854edab494",
       "bytes": 74353
     },
     {
-      "path": "examples/clebsch_hodograph/hodograph_kelvin_2d.png",
+      "path": "docs/clebsch_hodograph/demos/hodograph_kelvin_2d.png",
       "sha256": "5448fe616e29171fea3dab42eb62be15fbbc77fe4b448312119f3722769cac2c",
       "bytes": 183025
     },
     {
-      "path": "examples/clebsch_hodograph/hodograph_kelvin_axisym.png",
+      "path": "docs/clebsch_hodograph/demos/hodograph_kelvin_axisym.png",
       "sha256": "b44cdf00bb5e02825de1debee7ee2d1d6b5d2ec5a0123638436eebcc160f4f9d",
       "bytes": 97898
     },
     {
-      "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d.json",
+      "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.json",
       "sha256": "1d2d8a1b40b2f8e0c67599b1517ce421ba537666442173f1982937abac5bc26e",
       "bytes": 6430,
       "json_top_keys": [
@@ -2573,12 +2573,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d.png",
+      "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.png",
       "sha256": "0b5bf253c7f0d993df426774cabcab5e838b05b6f6206f1586e998594e6f7a7d",
       "bytes": 69683
     },
     {
-      "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d_sweep.json",
+      "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d_sweep.json",
       "sha256": "ea69454811d93980aac1eec3cf02b00ec26203374a1e151ee5af6e80dc01e1e8",
       "bytes": 30902,
       "json_top_keys": [
@@ -2592,37 +2592,37 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/leaf_coupling_perturbation_3d_sweep.png",
+      "path": "docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d_sweep.png",
       "sha256": "da6191a1c7f7e5e177d0f93a7c743f25fdfbb59dbb811c62b7e129ce7cc30b73",
       "bytes": 69187
     },
     {
-      "path": "examples/clebsch_hodograph/saturation_loop_2d.png",
+      "path": "docs/clebsch_hodograph/demos/saturation_loop_2d.png",
       "sha256": "d4b5562c98314f3e236f03f06a926afdc235eebf739b9697deb1d6537dbd079a",
       "bytes": 49432
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d.png",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.png",
       "sha256": "e0743284cf92da498a8896cdf48cfa344f0f9bcc4fad539019518cfa09391bfb",
       "bytes": 50727
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d_isochronous.png",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d_isochronous.png",
       "sha256": "71f63c680d2ff5bd2b402ee859a492495601b106e6af28010a4cb2fdaf9fbae2",
       "bytes": 79677
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d_reshape.png",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d_reshape.png",
       "sha256": "41a5b056d8375391fb855d2bfb30898fddd0bd6deb77bdb5273b549c7247a4b0",
       "bytes": 56003
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_pole_2d_saturation.png",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_pole_2d_saturation.png",
       "sha256": "da044e00f7dc9b7e34586ed6bc13fa9e2d57c625e8f4ed0061aeb75d667d35aa",
       "bytes": 74140
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_sector_saturation.json",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.json",
       "sha256": "62895da8d3c47123bc895bd9a22e3c77e29016d76eedf940b886fbc2823500ea",
       "bytes": 1794,
       "json_top_keys": [
@@ -2642,12 +2642,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/scaling_ffag_sector_saturation.png",
+      "path": "docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.png",
       "sha256": "b40b171cc680919b5cadf1467833d995e7477156210ff584a033e0046523180b",
       "bytes": 85935
     },
     {
-      "path": "examples/clebsch_hodograph/twist_rate_leaf_coupling.json",
+      "path": "docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.json",
       "sha256": "064193fa92854ee86512c3cfd3ee0a5fc30547602b0bc885e8dbf0084ba85cea",
       "bytes": 570,
       "json_top_keys": [
@@ -2663,12 +2663,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/twist_rate_leaf_coupling.png",
+      "path": "docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.png",
       "sha256": "2f18ade53a6c4d2a10b759a384673f5dc009fbaeb0f7abfbda5078f3c3fafbe5",
       "bytes": 92559
     },
     {
-      "path": "examples/clebsch_hodograph/twisting_quadrupole_pole.json",
+      "path": "docs/clebsch_hodograph/demos/twisting_quadrupole_pole.json",
       "sha256": "a59d9d82cc054a65866e97f3f8cb0cdd18eaf11860d45f5695ddaea51d007aa6",
       "bytes": 2493,
       "json_top_keys": [
@@ -2680,12 +2680,12 @@
       ]
     },
     {
-      "path": "examples/clebsch_hodograph/twisting_quadrupole_pole.png",
+      "path": "docs/clebsch_hodograph/demos/twisting_quadrupole_pole.png",
       "sha256": "9e9d100b759f47a1bc05a7c728cb07524d877e679dfc5b59e03c8f70d9475fb2",
       "bytes": 101415
     },
     {
-      "path": "examples/clebsch_hodograph/weakform_pullback_kata.json",
+      "path": "docs/clebsch_hodograph/demos/weakform_pullback_kata.json",
       "sha256": "b2abe22ee50a59bba3afcdbc983c86d88e9f2f89ee1cb53a67e94172f4d118cf",
       "bytes": 892,
       "json_top_keys": [
@@ -2695,5 +2695,5 @@
       ]
     }
   ],
-  "notebook_sha256": "ac5a5ba1578d7b403721b3286de6442541d6f587c9cf0f759640947d1e0234f7"
+  "notebook_sha256": "dc83132b9ad3a5e7756093d75ee4eb200a2b3cbae13d5d8eae2846dbe630df43"
 }

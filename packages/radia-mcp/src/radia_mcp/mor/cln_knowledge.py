@@ -296,7 +296,7 @@ COMPUMAG 2023 (Paper ID 324) -- the full motion-coupled transient levitation
 height z(t) vs measurement + the conventional method, 4-stage CLN, ~7 s vs
 ~8 h; it introduced the constant-basis `A_s(zgap) = sum_n a_2n i_2n` expansion.
 
-Code: `examples/maglev/team28/` (`team28_axisym_fem.py` full-FEM baseline,
+Code: `docs/maglev/demos/team28/` (`team28_axisym_fem.py` full-FEM baseline,
 0.01% vs lab ground truth; `team28_cln_force.py` convergence;
 `team28_cln_sweep_full.py` force-vs-height + physical equilibrium + published
 comparison; golden `tests/test_team28_cln_golden.py`).  Worked example behind
