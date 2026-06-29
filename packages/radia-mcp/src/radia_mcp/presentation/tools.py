@@ -54,6 +54,7 @@ from .plans.T27 import presentation_adaptive_health_report  # noqa: F401
 from .plans.T28 import presentation_speaking_pace_estimate  # noqa: F401
 from .plans.T29 import presentation_qa_anticipation_list  # noqa: F401
 from .plans.T30 import presentation_script_vs_slide_coverage  # noqa: F401
+from .plans.T31 import presentation_embed_tts_audio_in_pptx  # noqa: F401
 
 # Talk feedback loop (CEFC/Compumag field notes) — learned Q&A catalog,
 # the presentation analog of meta/bug_patterns.py (2026-06)

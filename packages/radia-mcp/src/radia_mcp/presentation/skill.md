@@ -183,33 +183,119 @@ A4 紙に手書きで筋を書く:
 
 ここで 10 分以上悩む = まだ主張が固まっていない → 書き直し。
 
-### Phase 2: ✍️ **draft** — スライド化
+### Phase 2: 🗣️ **script-first** — 先にセリフを作る
+
+**原則: セリフを先に作り、そのセリフに合わせてスライドを作り込む。**
+スライドを先に詰め込むと、画面説明に引っ張られて話が冗長になる。
+先に「口で自然に言える文章」を作ると、必要な図・数値・キーワードだけが残る。
+
+手順:
+
+1. slideごとに「この1枚で言う1メッセージ」を1文で書く。
+2. 隣接 slide の「話題の責任範囲」を決める。例: ある slide で手法の利点を
+   言い切ったら、次 slide は比較・限界・定式化など新しい役割に集中する。
+3. その1文を起点に、実際に口で言うセリフを200-300字程度で書く。
+4. 声に出して読み、詰まる箇所・二度言っている箇所を削る。
+5. セリフから、スライドに載せるべき要素だけを抽出する。
+   - 必須図: セリフだけでは伝わらない形状・結果・比較
+   - 必須語: 聴衆が見ながら理解すべき専門語・数値・式
+   - 不要語: 口で言えば済む説明文
+6. スライド本文はセリフの要約ではなく、**セリフを支える視覚材料**にする。
+
+判断基準:
+
+- セリフ無しでスライドだけ見ても少し足りない、しかし発表を聞くと完全に分かる → 良い。
+- スライドだけで論文本文のように完結している → 発表では文字過多の疑い。
+- セリフがスライドの全文読み上げになっている → スライドを削る。
+
+特に音声入りPPTXでは、`日本語セリフ → 英語/TTSセリフ → 音声 → スライド微修正`
+の順で回す。音声化後にp.1が長すぎる等の問題が見えた場合も、まずセリフを直し、
+スライドタイトル等の公開済み情報を安易に変えない。
+
+### Phase 3: ✍️ **draft** — セリフに合わせてスライド化
 - タイトル行: 動詞句で主張 ("PEEC is 4× faster", "Fig shows X")
 - 本文: 画像 > グラフ > 表 > bullet > 本文 の優先順位
 - 1 枚 1 主張。要素が 2 つ以上あるなら分ける。
+- セリフに出てこない図・単語・箇条書きは原則削る。
+- セリフで十分説明できる文章はスライドに載せず、図・短いラベル・数値に置き換える。
 
-### Phase 3: 🔍 **diagnose** — 全体診断
+### Phase 4: 🔍 **diagnose** — 全体診断
 - `presentation_count_slides(path)` で total 数
 - `presentation_estimate_speaking_time(script)` で時間
 - `presentation_check_slide_density(text)` で密度
 - `presentation_count_weak_expressions(text)` で弱気修飾
 - `presentation_check_overfull_hbox(log)` (beamer のみ)
+- **重複・逆戻りチェック**: slideごとに「この slide で初めて言う新情報」を
+  1 行で書き出す。前 slide と同じ利点・背景・課題を再説明していたら削るか、
+  役割を変える。いったん比較・定式化・結果へ進んだ後に、導入済みのメリット説明へ
+  戻らない。例: MMMの軽さ・非線形実績は3DoF/6DoF比較に入る前に済ませ、
+  その後は3DoFと6DoFの差分だけを話す。
+- **まとめ slide 例外**: Summary は再掲してよいが、本文と同じ文を読まない。
+  「何を示したか」ではなく「何を持ち帰るか」に言い換える。
 
-### Phase 4: 🎤 **rehearse** — 声に出して練習
+### Phase 5: 🎤 **rehearse** — 声に出して練習
 - ストップウォッチで時間測定 (初稿は 120% 時間かかる)
 - 録音して聞き返す (つまる箇所 = 筋が悪い)
-- 他人に見せる (1 人ラボの場合は鏡 or ペット)
+- 他人に見せる。難しければ録音・録画を見返す。
 
-### Phase 5: 🛡️ **prepare Q&A** — 想定問答
+### Phase 6: 🛡️ **prepare Q&A** — 想定問答
 - 主張ごとに「なぜそう言える?」を書き出し backup スライド
 - Limitation は先手で言及 (反撃を誘う)
 - 「この論文知ってる?」の可能性 → 主要 3 本 + 比較 1 枚
 
-### Phase 6: 🎬 **deliver** — 本番
+### Phase 7: 🎬 **deliver** — 本番
 - 最初 30 秒は話せることを暗記
 - Slide 送り遅れ防止: clicker 左手、lab pointer 右手
 - 時間超過は **致命的** (座長の評価が下がる)
 - Q&A では **質問を復唱** → 答え → "Does that answer your question?"
+
+---
+
+## 🔊 Audio Narration Deck — 英語TTS音声をPPTXへ埋め込む
+
+オンライン参加・非同期提出・音声入りbackup deck用のworkflow。
+
+### 基本方針
+
+1. **日本語原稿を先に確定**する。
+2. 日本語のセリフを **英語発表原稿** に翻訳し、必要なら読み上げ用に
+   **TTS版**も作る。
+3. TTS版は slideごとに `## Slide N — title` で区切る。
+4. `presentation_embed_tts_audio_in_pptx` で、各 slide の英文を
+   `edge-tts` のMP3へ変換し、PowerPoint COMでPPTXへ埋め込む。
+
+### PowerPoint再生ルール
+
+- **Slide 1**: 発表開始のクリックで音声開始 (`on_click`)。
+- **Slide 2以降**: slide到達時、直前動作と同時に音声開始 (`with_previous`)。
+- 音声アイコンはスライド外 (`-100, -100`) に配置し、再生中以外は非表示。
+- 必要な場合だけ `auto_advance_after_audio=True` を指定し、音声終了後に
+  自動で次スライドへ送る。PowerPointが音声長を返せない環境では、
+  原稿語数から概算するため、最終確認は必ずPowerPointで行う。
+
+### 代表コマンド
+
+```python
+from radia_mcp.presentation.plans.T31 import presentation_embed_tts_audio_in_pptx
+
+presentation_embed_tts_audio_in_pptx(
+    pptx_path=r"C:\path\deck.pptx",
+    script_md_path=r"C:\path\deck_English_TTS.md",
+    output_pptx_path=r"C:\path\deck_audio.pptx",
+    voice="en-US-AndrewMultilingualNeural",
+    rate="+0%",
+    first_slide_on_click=True,
+    following_slides_with_previous=True,
+    auto_advance_after_audio=False,
+)
+```
+
+### 注意
+
+- `edge-tts` と `pywin32` が必要。`pip install radia-mcp[document]` で入る。
+- PowerPoint COMを使うため、実行はWindows + PowerPointインストール済み環境で行う。
+- 既存音声があるdeckへ再適用する場合は、既存audio/media shapeを削除してから埋め込む。
+- 発表者ノートにも同じ英文を入れるので、音声deckを開いたときに原稿を確認できる。
 
 ---
 
@@ -301,6 +387,17 @@ A4 紙に手書きで筋を書く:
 ## 🗂️ OK/NG スライド例
 
 ### Title slide
+
+#### Published title is immutable
+
+学会プログラム・予稿・Webページ等で発表タイトルが公開済みの場合、**スライド上の正式タイトルは原則変更しない**。
+タイトルが長く見える場合は、タイトル自体を短縮するのではなく、**タイトルスライドのセリフを短くする**。
+
+- OK: p.1は挨拶・所属・共著者紹介だけにし、研究内容の導入はp.2へ送る。
+- OK: 口頭では長い正式タイトルを読み上げず、スライドを見せるだけにする。
+- NG: プログラム公開後に、聞きやすさだけを理由に正式タイトルを書き換える。
+
+例外は、主催者へ訂正連絡済み、誤字修正、または提出前の内部版のみ。
 
 **NG**:
 > 「誘導加熱の数値解析について」 (主張なし)
