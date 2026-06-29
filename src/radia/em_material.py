@@ -187,11 +187,7 @@ class EMMaterial:
         Lazy-imports esim_cell_problem to avoid import overhead when not
         needed.
         """
-        import sys as _sys
-        radia_src = os.path.join(os.path.dirname(os.path.abspath(__file__)))
-        if radia_src not in _sys.path:
-            _sys.path.insert(0, radia_src)
-        from esim_cell_problem import ESIMFiniteSlabSolver
+        from radia.esim_cell_problem import ESIMFiniteSlabSolver
 
         return ESIMFiniteSlabSolver(
             half_thickness=half_thickness,

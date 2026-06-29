@@ -701,7 +701,7 @@ def B_s_at_obs_with_kelvin(obs_points, filament_paths, currents,
     Returns:
         (N, 3) real array of B values [T].
     """
-    from biot_savart import h_segments_batch
+    from radia.biot_savart import h_segments_batch
 
     obs = np.asarray(obs_points, dtype=float)
     if obs.ndim == 1:

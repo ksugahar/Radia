@@ -66,53 +66,23 @@ res = aca_tsvd(len(obs), len(sources), entry, modes=20)
 phi = pseudo_inverse_solve(res, B_target, k_mode=10)
 ```
 
-Or jump through the result-saved public gallery
-[`demo_gallery.ipynb`](demo_gallery.ipynb), then run one of the companion demos in
-[`examples/stream_function/`](../../examples/stream_function/):
+For the human-facing path, start from the result-saved public notebooks instead
+of running loose example scripts:
 
-```bash
-# Simplest: axisymmetric Gz gradient → single-stroke helix → field
-python examples/stream_function/demo_sf_to_peec_gz.py --with-peec
+| Route | Artifact |
+|-------|----------|
+| Public demo gallery | [`demo_gallery.ipynb`](demo_gallery.ipynb), synchronized with [`demo_gallery_results.json`](demo_gallery_results.json) |
+| Full source/result ledger | [`examples_catalog.ipynb`](examples_catalog.ipynb), synchronized with [`examples_catalog_results.json`](examples_catalog_results.json) |
+| Theory and FE-direct psi | [`theory.ipynb`](theory.ipynb) |
+| Regularization and Pareto trade-offs | [`regularization.ipynb`](regularization.ipynb) |
+| Surface deformation search | [`deformation.ipynb`](deformation.ipynb) |
+| Runnable validation/benchmarks | [`validation_test/stream_function/`](../../validation_test/stream_function/) |
+| Reusable Stage-2 API/CLI | [`src/radia/panels/calc_streamfunction.py`](../../src/radia/panels/calc_streamfunction.py) |
 
-# Transverse Gx fingerprint, 3 chain methods (greedy, lobe, kuijpers)
-python examples/stream_function/demo_sf_to_peec_gx.py --chain-method kuijpers
-
-# Planar uniform Bz, basis-loop
-python examples/stream_function/demo_planar_uniform_coil.py --compensated-iter 30
-
-# Planar uniform Bz, H1 FE-direct (PATH-A MONOTONE CONVERGENCE)
-python examples/stream_function/demo_planar_uniform_fem_psi.py \
-    --regularize h1 --compensated-iter 100 --compensated-step 0.05
-
-# Advanced: 1/σ regularisation + surface deformation via CMA-ES
-python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
-    --regularize h1 --order 3 --deform --deform-params bump --deform-trials 20
-
-# Regularisation-folded ACA+TSVD: 5-mode sweep via one cached factorisation
-python examples/stream_function/demo_regularized_aca.py --order 2
-
-# Constrained: min ohmic dissipation s.t. RMS <= 2.5% (MRI-shim form)
-python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
-    --regularize h1 --deform --deform-params bump --deform-trials 20 \
-    --minimize-reg --eps-rms 0.025
-
-# Multi-objective NSGA-II: trace the (RMS, energy) Pareto front in one shot
-python examples/stream_function/demo_planar_uniform_fem_psi_advanced.py \
-    --regularize h1 --deform --deform-params bump --deform-trials 50 \
-    --pareto
-
-# Optimise the regularisation SHAPE (sigma) with the ACA+ base reused
-# across trials: 2.09% -> 0.73% chain RMS, no geometry change
-python examples/stream_function/demo_reg_hyperparam_aca.py --trials 30
-
-# Cylinder Gx: field_aware single-stroke + SINGLE-CURRENT sheet-metal distort
-# (8.5% -> 1.4% with one bent wire; + a few electric shims -> 1.0%)
-python examples/stream_function/demo_sf_to_peec_gx.py --distort --distort-comps rsz
-
-# Sphere former (ANY curved surface): FE-direct psi -> manufacturable 1-wire NMR
-# shim (Z2: 4.3% -> 0.36% at ~2mm bend, real inter-turn spacing 10.5mm)
-python examples/stream_function/demo_sphere_fe_direct.py --target z2 --distort --plot
-```
+The transitional demo source names are cataloged in
+[`examples.md`](examples.md); new public links should point to the notebooks,
+JSON sidecars, `validation_test`, or `src` API rather than the old examples
+tree.
 
 ## What this is, what it is not
 

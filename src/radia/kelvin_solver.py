@@ -29,7 +29,7 @@ from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction,
                       Periodic, TaskManager, curl, dx, InnerProduct,
                       Conj, Integrate)
 
-from kelvin_material import make_kelvin_nu_cf, NU_0
+from radia.kelvin_material import make_kelvin_nu_cf, NU_0
 
 
 def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):

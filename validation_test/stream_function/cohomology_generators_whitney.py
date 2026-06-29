@@ -39,11 +39,8 @@ import scipy.sparse.linalg as spla
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", ".."))
-_EXAMPLES = os.path.join(_REPO, "examples", "stream_function")
 sys.path.insert(0, _HERE)
-sys.path.insert(0, _EXAMPLES)
-sys.path.insert(0, os.path.join(_REPO, "src", "radia"))
-sys.path.insert(0, os.path.join(_REPO, "src", "radia", "panels"))
+sys.path.insert(0, os.path.join(_REPO, "src"))
 
 
 def _to_scipy(mat):
@@ -52,7 +49,7 @@ def _to_scipy(mat):
 
 
 def main(no_cohomology=False):
-    import demo_regcoil_fusion as D
+    import regcoil_fusion_helpers as D
     from ngsolve import (Mesh, HCurl, H1, specialcf, TaskManager, BilinearForm,
                          curl, grad, ds, InnerProduct, GridFunction, Integrate,
                          x, y, z, sqrt)

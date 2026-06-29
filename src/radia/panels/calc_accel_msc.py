@@ -281,8 +281,8 @@ def solve_msc(coil_script="", vol_file="",
 
     # --- FEEC HDiv-VIM backend (radia.vim) -- the only backend exposed by this panel.  KELVIN-less, IRON-ONLY:
     # the VIM solves the WHOLE registered mesh as iron, so the .vol must contain ONLY 'yoke' volume
-    # elements (no air / kelvin).  Tet / hex / wedge all supported.  IMA mirror symmetry (the reduced
-    # 1/2,1/4,1/8 model) is supported via the image-charge Gram (currently the DENSE analytic path).
+    # elements (no air / kelvin).  HDiv-VIM is TET / RT1 only; hex/wedge and IMA symmetry use the
+    # collocation MMMM backend outside this panel.
     if demag_backend != "hdiv":
         return {"error": "demag_backend=%r is not available in this panel. Use demag_backend='hdiv' "
                          "(the FEEC HDiv-VIM). Mesh-less multipole-moment MMM MSC remains available through "
@@ -294,6 +294,13 @@ def solve_msc(coil_script="", vol_file="",
         return {"error": "the HDiv-VIM needs an IRON-ONLY .vol (it is KELVIN-less; air/kelvin regions "
                          "are not used).  This .vol has %d non-'yoke' volume elements (materials %s).  "
                          "Export the yoke block alone." % (n_nonyoke, sorted(set(mesh.GetMaterials())))}
+    if n_hex or n_wedge:
+        return {"error": "the HDiv-VIM panel requires a TET-only .vol (RT1 tetrahedral HDiv space).  "
+                         "This mesh has %d hex and %d wedge elements; use collocation MMMM for "
+                         "hex/wedge soft iron." % (n_hex, n_wedge)}
+    if ima:
+        return {"error": "IMA/image symmetry is retired from HDiv-VIM. Use collocation MMMM for reduced "
+                         "symmetry models, or run the full tet HDiv-VIM model with --ima empty."}
     import radia.vim as _vim
     if is_linear:
         iron = _vim.soft_iron_from_mesh(mesh, mu_r=float(mu_r))
@@ -302,11 +309,10 @@ def solve_msc(coil_script="", vol_file="",
         iron = _vim.soft_iron_from_mesh(mesh, bh_table=bh_data)
         _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
     model = rad.ObjCnt([iron, coil_container])
-    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM), IMA={ima or '(none)'}, tol={tol}, maxiter={max_iter}")
+    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM RT1/tet), tol={tol}, maxiter={max_iter}")
     t_solve_start = time.perf_counter()
     with _TM():
-        # image=ima folds the IMA mirror Gram (reduced model); empty -> full model.  Auto-routes to HDiv-VIM.
-        res = rad.Solve(model, tol, max_iter, solver, image=ima) if ima else rad.Solve(model, tol, max_iter, solver)
+        res = rad.Solve(model, tol, max_iter, solver, demag_backend="hdiv")
     t_solve = time.perf_counter() - t_solve_start
     # the HDiv dispatch returns the hdiv_demag_solve dict (raises on non-convergence)
     n_iter = int(res.get("iters", 0)) if isinstance(res, dict) else 0

@@ -43,7 +43,7 @@ from ngsolve import (
     x, y, z, LinearForm, Integrate, Cross,
 )
 
-from stream_function import aca_tsvd, pseudo_inverse_solve
+from radia.stream_function import aca_tsvd, pseudo_inverse_solve
 
 MU0 = 4e-7 * math.pi
 PI = math.pi
