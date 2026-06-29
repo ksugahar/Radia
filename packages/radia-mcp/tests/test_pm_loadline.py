@@ -19,6 +19,8 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.solve import (
     pm_circuit_loadline_gap_field,
     pm_circuit_loadline_operating_point,
+    pm_loadline_demag_risk_summary,
+    pm_temperature_demag_sweep_summary,
     MU0,
 )
 
@@ -87,6 +89,93 @@ def test_continuous_loop_pm_loadline_demag_margin_gate():
     assert rows[3]["demag_margin_A_per_m"] == pytest.approx(-20105.698021609453)
     assert rows[-1]["B_identity_abs_error_T"] < 1.0e-14
     assert [row["safe_against_knee"] for row in rows] == [True, True, True, False, False]
+
+
+def test_pm_loadline_demag_risk_summary_marks_safe_prefix():
+    params = {
+        "Br": 1.068,
+        "magnet_len": 0.004,
+        "iron_path": 0.08,
+        "mu_r": 1000.0,
+        "mu_rec": 1.05,
+        "H_knee": -4.95e5,
+    }
+    rows = [
+        {"gap_m": gap, **pm_circuit_loadline_operating_point(gap=gap, **params)}
+        for gap in (0.0005, 0.001, 0.002, 0.004, 0.008)
+    ]
+
+    summary = pm_loadline_demag_risk_summary(rows, axis_key="gap_m")
+
+    assert summary["schema"] == "radia-ngsolve.pm-loadline-demag-risk-summary.v1"
+    assert summary["risk_label"] == "red"
+    assert summary["safe_prefix_count"] == 4
+    assert summary["first_unsafe_index"] == 4
+    assert summary["first_unsafe_gap_m"] == pytest.approx(0.008)
+    assert summary["largest_safe_gap_m"] == pytest.approx(0.004)
+    assert summary["minimum_demag_margin_A_per_m"] == pytest.approx(-54988.18063331157)
+    assert summary["checks"]["safe_region_is_prefix"] is True
+    assert summary["checks"]["margin_monotone_decreasing"] is True
+
+
+def test_continuous_loop_pm_temperature_demag_sweep_gate():
+    sweep = pm_temperature_demag_sweep_summary(
+        Br_20C=1.2,
+        H_knee_20C=-9.0e5,
+        temperature_C=120.0,
+        magnet_len=0.004,
+        gaps=(0.0005, 0.001, 0.002, 0.004, 0.008),
+        iron_path=0.08,
+        mu_r=1000.0,
+        mu_rec=1.05,
+    )
+
+    assert sweep["schema"] == "radia-ngsolve.pm-temperature-demag-sweep.v1"
+    assert sweep["Br_hot_T"] == pytest.approx(1.068)
+    assert sweep["H_knee_hot_A_per_m"] == pytest.approx(-495000.0)
+    assert sweep["first_unsafe_gap_m"] == pytest.approx(0.008)
+    assert sweep["safe_prefix_count"] == 4
+    assert sweep["risk_label"] == "red"
+    assert sweep["risk_summary"]["largest_safe_gap_m"] == pytest.approx(0.004)
+    assert all(sweep["checks"].values())
+    assert [row["safe_against_knee"] for row in sweep["rows"]] == [True, True, True, True, False]
+    assert sweep["rows"][0]["demag_margin_A_per_m"] == pytest.approx(388659.7126007991)
+    assert sweep["rows"][-1]["demag_margin_A_per_m"] == pytest.approx(-54988.18063331157)
+
+
+def test_continuous_loop_slot46_elf_hbrm_hbcn_loadline_contract():
+    sweep = pm_temperature_demag_sweep_summary(
+        Br_20C=1.2,
+        H_knee_20C=-9.0e5,
+        temperature_C=120.0,
+        magnet_len=0.004,
+        gaps=(0.0005, 0.001, 0.002, 0.004, 0.008),
+        iron_path=0.08,
+        mu_r=1000.0,
+        mu_rec=1.05,
+    )
+
+    assert sweep["Br_hot_T"] == pytest.approx(1.068)
+    assert sweep["H_knee_hot_A_per_m"] == pytest.approx(-495000.0)
+    assert sweep["safe_prefix_count"] == 4
+    assert sweep["first_unsafe_gap_m"] == pytest.approx(0.008)
+    assert sweep["risk_summary"]["largest_safe_gap_m"] == pytest.approx(0.004)
+    assert sweep["minimum_demag_margin_A_per_m"] == pytest.approx(-54988.18063331157)
+    assert sweep["risk_label"] == "red"
+    assert all(sweep["checks"].values())
+
+    expected = [
+        (0.0005, 0.9276872964169381, 388659.7126007991, True),
+        (0.001, 0.8327485380116959, 316707.4616903156, True),
+        (0.002, 0.6912621359223301, 209477.6508674107, True),
+        (0.004, 0.5159420289855072, 76605.92876076762, True),
+        (0.008, 0.3423076923076923, -54988.18063331157, False),
+    ]
+    for row, (gap, b_gap, margin, safe) in zip(sweep["rows"], expected):
+        assert row["gap_m"] == pytest.approx(gap)
+        assert row["B_gap_T"] == pytest.approx(b_gap)
+        assert row["demag_margin_A_per_m"] == pytest.approx(margin)
+        assert row["safe_against_knee"] is safe
 
 
 def _rect(wp, x0, y0, w, h):

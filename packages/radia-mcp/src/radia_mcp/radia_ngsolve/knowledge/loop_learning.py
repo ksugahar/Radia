@@ -11,6 +11,7 @@ TOPICS = {
     "mesh_geometry_vol": "Geometry, Cubit/build123d mass properties, and Netgen .vol gates",
     "force_moment": "Force, moment, Maxwell traction, Lorentz, and coenergy gates",
     "motor_airgap_torque": "Motor air-gap Maxwell shear torque from Br/Bt harmonics",
+    "electrostatic_layered_dielectric": "Layered dielectric stack capacitance, D-continuity, and energy gates",
     "acoustic_impedance_power": "Acoustic impedance reflection, absorption, and boundary power",
     "rf_acoustic_passivity": "Acoustic/RF passivity and power-balance identities",
     "mcp_closure": "How to decide whether an MCP server has actually learned",
@@ -175,6 +176,28 @@ then compare with the closed form above.
 """
 
 
+ELECTROSTATIC_LAYERED_DIELECTRIC = r"""
+# Electrostatic layered-dielectric loop lesson
+
+For a parallel-plate stack with layers normal to the field, the normal electric
+displacement is constant through all layers:
+
+* `C = eps0*A/sum(d_i/eps_ri)`
+* `D = eps0*V/sum(d_i/eps_ri)`
+* `E_i = D/(eps0*eps_ri)`
+* `Delta V_i = E_i*d_i`
+
+This is a compact public gate for dielectric assignment, interface continuity,
+terminal charge, and energy-density integration.  It is stronger than checking
+capacitance alone: if a solver accidentally leaves every domain as vacuum, the
+capacitance, interface potential, layer fields, and energy split all fail in a
+diagnostic way.
+
+In radia-ngsolve, use `layered_parallel_plate_stack_summary` to record the
+analytic values and residuals from a solver artifact.
+"""
+
+
 ACOUSTIC_IMPEDANCE_POWER = r"""
 # Acoustic impedance power loop lesson
 
@@ -257,6 +280,7 @@ _TOPIC_TEXT = {
     "mesh_geometry_vol": MESH_GEOMETRY_VOL,
     "force_moment": FORCE_MOMENT,
     "motor_airgap_torque": MOTOR_AIRGAP_TORQUE,
+    "electrostatic_layered_dielectric": ELECTROSTATIC_LAYERED_DIELECTRIC,
     "acoustic_impedance_power": ACOUSTIC_IMPEDANCE_POWER,
     "rf_acoustic_passivity": RF_ACOUSTIC_PASSIVITY,
     "mcp_closure": MCP_CLOSURE,

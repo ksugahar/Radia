@@ -86,6 +86,74 @@ from file size or sidecar material volumes.  A pyramid transition block can
 report zero material volume in the `.vol.json` sidecar while still being
 present as a real topology record in the `.vol`.
 
+### Continuous-loop two-block hex interface gate
+
+For material-interface bookkeeping, create two adjacent mapped bricks
+(`1 x 2 x 3` and `2 x 2 x 3`), `imprint`/`merge`, assign one block per
+volume, and export Netgen `.vol` orders 1 and 2.  The expected inventory is
+144 hexes, no tet/wedge/pyramid elements, CAD volume 18, external area 42, and
+one shared material interface of area 6.  NGSolve `Integrate(1, mesh, BND)` on
+this `.vol` returns 48, not 42: it includes the material interface once.
+Therefore do not compare `BND` area blindly with the external CAD area when
+multi-material blocks share an internal face.  Use Cubit's
+`get_relatives("surface", sid, "volume")` or equivalent inventory to separate
+external boundary surfaces from material interfaces before FEM/BEM coupling.
+
+### Continuous-loop three-block hex quality gate
+
+For a slightly heavier hex-led bookkeeping gate, create three adjacent mapped
+bricks with widths `1.0, 1.5, 2.0`, common `2 x 3` cross-section, `imprint`/
+`merge`, assign one block per volume, and export Netgen `.vol` orders 1 and 3.
+The expected inventory is 216 hexes, no tet/wedge/pyramid elements, CAD volume
+27, external area 57, and two material interfaces whose total area is 12.
+Record Cubit's scaled-Jacobian quality in the raw artifact; the live 2026-06-29
+gate had min scaled Jacobian `0.9999999999999999` over all 216 hexes.  NGSolve
+loads both `.vol` files and integrates volume 27 while `Integrate(1, mesh, BND)`
+returns 69, again confirming that BND includes material interfaces once.
+
+### Continuous-loop curved hex cylinder order-series gate
+
+For curved hex validation, a cylinder should use Cubit's hex-led auto/sweep
+route rather than forcing every webcut quarter volume to `scheme map`.  The
+failed map route can produce "Trouble finding logical box" and zero exported
+mesh; `volume all scheme auto` selected a sweep-compatible all-hex mesh for the
+live slot.
+
+The verified live gate used `create cylinder height 1.25 radius 0.5`, webcut
+with x/y planes, `volume all scheme auto`, `volume all size 0.18`, and exported
+Netgen `.vol` orders 1, 3, and 5.  The inventory stayed 224 hexes with no tet,
+wedge, or pyramid elements.  NGSolve direct `.vol` integration showed the
+curved-geometry convergence clearly:
+
+| order | volume rel err | BND area rel err |
+|---:|---:|---:|
+| 1 | 0.0255 | 0.00816 |
+| 3 | 4.08e-5 | 1.88e-5 |
+| 5 | 1.57e-7 | 6.99e-8 |
+
+For multi-volume cylinder webcuts, compare NGSolve `BND` area with external
+CAD area plus material-interface area, not external area alone.  The planar
+cut interfaces are part of NGSolve's boundary integration set.
+
+### Continuous-loop annular hex tube capacitance field gate
+
+For Cubit's main hex-led route, validate one actual field solve, not only CAD
+volume.  A robust live fixture is an annular tube: outer cylinder radius `1.0`,
+inner cylinder radius `0.6`, length `1.5`, subtract inner from outer, webcut by
+the x/y planes, `volume all scheme sweep`, and export Netgen `.vol` orders 1
+and 3.  The sweep mesh should be all hex; the verified slot had 864 hexes, no
+tet/wedge/pyramid elements, and min scaled Jacobian `0.9951847266721953`.
+
+In NGSolve, load the `.vol` directly.  The exact checks are:
+
+* volume `pi*(b^2-a^2)*L`,
+* BND area = external CAD area + planar webcut material-interface area,
+* capacitance per length `2*pi/log(b/a)` for the annular Laplace problem.
+
+The order-3 live result had volume rel err `2.63e-6`, BND area rel err
+`1.43e-6`, and capacitance-per-length rel err `1.00e-6`.  This is the
+important upgrade over a geometry-only gate: curved hex export preserves a field quantity through the `.vol` path.
+
 ## Choose Your Workflow
 
 1. **Is your geometry planar (no curved surfaces)?**
