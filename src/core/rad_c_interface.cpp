@@ -1654,17 +1654,6 @@ bool RadGetLoopDeflate()
 	return rad.m_loop_deflate;
 }
 
-// loop-growth-suppression gauge penalty (free functions; same pattern).  Default 0.0 (OFF).
-void RadSetLoopPenalty(double v)
-{
-	rad.m_loop_penalty = v;
-}
-
-double RadGetLoopPenalty()
-{
-	return rad.m_loop_penalty;
-}
-
 void SetNewtonDamping(bool enabled, int max_iter, double min_omega)
 {
 	if(enabled) {
