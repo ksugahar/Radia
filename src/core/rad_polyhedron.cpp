@@ -118,7 +118,10 @@ int radTPolyhedron::CheckIfFacePolygonsArePlanar(TVector3d* ArrayOfPoints, int**
 	const bool isHexOrWedge = (AmOfFaces == 5 || AmOfFaces == 6);
 	if(isHexOrWedge)
 	{
-		mFaceNonPlanar.assign(AmOfFaces, 0);
+		// The mFaceNonPlanar flag was removed (7966c2b4): non-planar quad faces use the stored
+		// REAL vertices (mRealFaceVerts) as the single path -- no per-face planar flag is kept.
+		// The warped wedge/pyramid commit (4a4049d8) re-introduced two stale mFaceNonPlanar writes
+		// (the member is undeclared -> a latent build break masked by the build cache); removed here.
 		mRealFaceVerts.assign((size_t)AmOfFaces*4, TVector3d(0.0, 0.0, 0.0));
 		mRealFaceNV.assign(AmOfFaces, 0);
 	}
@@ -176,7 +179,7 @@ int radTPolyhedron::CheckIfFacePolygonsArePlanar(TVector3d* ArrayOfPoints, int**
 				// triangle is always planar (this inner loop never runs for it), so the wedge/
 				// pyramid tri faces keep the unchanged path.  For any other element keep the
 				// original strict behavior (Error047) -- unchanged.
-				if(isHexOrWedge) { mFaceNonPlanar[i] = 1; break; }
+				if(isHexOrWedge) { break; }  // tolerate non-planar quad; real verts (mRealFaceVerts) are used downstream
 				SomethingIsWrong=1; Send.ErrorMessage("Radia::Error047"); return 0;
 			}
 		}

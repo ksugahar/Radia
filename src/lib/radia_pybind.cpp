@@ -1782,6 +1782,18 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 void RadSetMomentAnalyticKernel(bool on);
 bool RadGetMomentAnalyticKernel();
 
+// co-loop projection toggle (defined in src/core/rad_c_interface.cpp)
+void RadSetColoopProject(bool v);
+bool RadGetColoopProject();
+
+// loop-growth-suppression deflation toggle (defined in src/core/rad_c_interface.cpp)
+void RadSetLoopDeflate(bool v);
+bool RadGetLoopDeflate();
+
+// loop-growth-suppression gauge penalty (defined in src/core/rad_c_interface.cpp)
+void RadSetLoopPenalty(double v);
+double RadGetLoopPenalty();
+
 namespace radia_solver_ext {
 
 py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_method, const std::string& image = "") {
@@ -2068,6 +2080,18 @@ void SolverConfig(py::kwargs kwargs) {
         SetNewtonMethod(kwargs["newton_method"].cast<bool>());
     }
 
+    if (kwargs.contains("coloop_project")) {
+        ::RadSetColoopProject(kwargs["coloop_project"].cast<bool>());
+    }
+
+    if (kwargs.contains("loop_deflate")) {
+        ::RadSetLoopDeflate(kwargs["loop_deflate"].cast<bool>());
+    }
+
+    if (kwargs.contains("loop_penalty")) {
+        ::RadSetLoopPenalty(kwargs["loop_penalty"].cast<double>());
+    }
+
     if (kwargs.contains("newton_damping") || kwargs.contains("newton_damping_max_iter") || kwargs.contains("newton_damping_min_omega")) {
         bool enabled = kwargs.contains("newton_damping") ? kwargs["newton_damping"].cast<bool>() : true;
         int max_iter = kwargs.contains("newton_damping_max_iter") ? kwargs["newton_damping_max_iter"].cast<int>() : 5;
@@ -2110,6 +2134,9 @@ py::dict GetSolverConfig() {
     config["moment_gmres_restart"] = GetMomentGMRESRestart();
     config["moment_anderson_depth"] = GetMomentAndersonDepth();
     config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
+    config["coloop_project"] = ::RadGetColoopProject();
+    config["loop_deflate"] = ::RadGetLoopDeflate();
+    config["loop_penalty"] = ::RadGetLoopPenalty();
 
     // Relaxation parameter
     { double relax = 0.0;
