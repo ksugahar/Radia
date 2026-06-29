@@ -227,8 +227,9 @@ class RegularizedTSVD:
     DOFs).  Padding back to full DOF (e.g. Dirichlet zero on boundary)
     is the caller's responsibility.
 
-    See ``examples/stream_function/demo_planar_uniform_fem_psi.py`` for
-    the canonical Path-A usage pattern.
+    See ``docs/stream_function/theory.ipynb`` and the docs-local
+    ``demo_planar_uniform_fem_psi.py`` helper for the canonical Path-A usage
+    pattern.
     """
 
     base: StreamTSVD
@@ -324,8 +325,8 @@ class RegularizedTSVD:
         re-solves only the small core (no re-factorisation).  Special case
         ``S = I``: the core reduces to the classic Tikhonov filter factors
         ``sigma / (sigma^2 + alpha)``.  See
-        ``docs/stream_function/regularization.md`` and
-        ``examples/stream_function/demo_pareto_tikhonov_aca.py``.
+        ``docs/stream_function/regularization.md`` and its docs-local
+        ``demo_pareto_tikhonov_aca.py`` helper.
 
         Parameters
         ----------

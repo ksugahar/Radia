@@ -23,7 +23,7 @@ Reuses the tested REGCOIL design core from demo_regcoil_fusion.py
 and the production manufacture helpers from calc_streamfunction.py
 (_write_step_polylines / _peec_inductance / _close_loop).
 
-Run:  python demo_regcoil_parity_deliverable.py
+Run:  python validation_test/stream_function/demo_regcoil_parity_deliverable.py
 Golden: tests/panels/test_regcoil_parity_deliverable_golden.py
 """
 from __future__ import annotations
@@ -35,9 +35,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
+DOCS_STREAM_FUNCTION = os.path.join(REPO, "docs", "stream_function")
 sys.path.insert(0, os.path.join(REPO, "src", "radia"))
 sys.path.insert(0, os.path.join(REPO, "src", "radia", "panels"))
-sys.path.insert(0, HERE)                       # to import demo_regcoil_fusion
+sys.path.insert(0, DOCS_STREAM_FUNCTION)       # to import docs-local fusion demo
 
 
 def main():

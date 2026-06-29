@@ -1,6 +1,6 @@
 """Golden (a): REGCOIL vacuum parity + the deliverable REGCOIL does NOT produce.
 
-`examples/stream_function/demo_regcoil_parity_deliverable.py` designs a PRODUCIBLE
+`validation_test/stream_function/demo_regcoil_parity_deliverable.py` designs a PRODUCIBLE
 vacuum target (uniform vertical B.n) on a torus winding surface and, from the
 SAME run:
   - reaches B.n residual ~machine precision  (REGCOIL/NESCOIL forward-map parity)
@@ -26,7 +26,7 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-DEMO = os.path.join(REPO, "examples", "stream_function",
+DEMO = os.path.join(REPO, "validation_test", "stream_function",
                     "demo_regcoil_parity_deliverable.py")
 
 

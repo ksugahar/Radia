@@ -20,9 +20,10 @@
     "git_commit": "42313312c3ed0834d22341407fc39b0349bebe7b"
   },
   "policy": {
-    "public_face": "stream_function demos stay public through result-saved docs notebooks; examples/stream_function remains the runnable companion set for now.",
+    "public_face": "stream_function demos stay public through result-saved docs notebooks; helper sources now live beside the notebooks under docs/stream_function.",
     "validation_split": "verify/cohomology/bench scripts are protected validation assets under validation_test/stream_function, not the public demo face.",
-    "json_sync": "demo_gallery_results.json and demo_gallery_result.json are refreshed with the notebook in the same change."
+    "json_sync": "demo_gallery_results.json and demo_gallery_result.json are refreshed with the notebook in the same change.",
+    "examples_pruned": "examples/stream_function/*.py was migrated out: docs-local helpers for public demos, validation_test for runnable golden validation."
   },
   "summary": {
     "script_count": 26,
@@ -107,7 +108,9 @@
           "text": "homogeneity preserved (examples/stream_function/demo_active_shield.py)."
         }
       ],
-      "demo_group": "kernel/material extension demo"
+      "demo_group": "kernel/material extension demo",
+      "current_path": "docs/stream_function/demo_active_shield.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_cmaes_magnet_design.py",
@@ -157,7 +160,9 @@
           "text": "Example: examples/stream_function/demo_cmaes_magnet_design.py optimises 16"
         }
       ],
-      "demo_group": "kernel/material extension demo"
+      "demo_group": "kernel/material extension demo",
+      "current_path": "docs/stream_function/demo_cmaes_magnet_design.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_coil_design_gx.py",
@@ -201,7 +206,9 @@
           "text": "examples/stream_function/demo_coil_design_gx.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_coil_design_gx.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_coil_design_gz.py",
@@ -240,7 +247,9 @@
           "text": "examples/stream_function/demo_coil_design_gz.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_coil_design_gz.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_coil_field_synthesis.py",
@@ -279,7 +288,9 @@
           "text": "examples/stream_function/demo_coil_field_synthesis.py"
         }
       ],
-      "demo_group": "showcase demo"
+      "demo_group": "showcase demo",
+      "current_path": "docs/stream_function/demo_coil_field_synthesis.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_fmm_biot_savart.py",
@@ -350,7 +361,9 @@
           "text": "examples/stream_function/demo_fmm_biot_savart.py"
         }
       ],
-      "demo_group": "kernel/material extension demo"
+      "demo_group": "kernel/material extension demo",
+      "current_path": "docs/stream_function/demo_fmm_biot_savart.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_magnet_array.py",
@@ -389,7 +402,9 @@
           "text": "examples/stream_function/demo_magnet_array.py"
         }
       ],
-      "demo_group": "kernel/material extension demo"
+      "demo_group": "kernel/material extension demo",
+      "current_path": "docs/stream_function/demo_magnet_array.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_cylinder.py",
@@ -435,7 +450,9 @@
           "text": "examples/stream_function/demo_pareto_cylinder.py"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_pareto_cylinder.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_cylinder_deform.py",
@@ -482,7 +499,9 @@
           "text": "examples/stream_function/demo_pareto_cylinder_deform.py"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_pareto_cylinder_deform.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_deform.py",
@@ -531,7 +550,9 @@
           "text": "examples/stream_function/demo_pareto_deform.py"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_pareto_deform.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_geometry_nsga.py",
@@ -576,7 +597,9 @@
           "text": "examples/stream_function/demo_pareto_geometry_nsga.py"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_pareto_geometry_nsga.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_tikhonov_aca.py",
@@ -624,7 +647,9 @@
           "text": "examples/stream_function/demo_pareto_tikhonov_aca.py"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_pareto_tikhonov_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_coil.py",
@@ -672,7 +697,9 @@
           "text": "examples/stream_function/demo_planar_uniform_coil.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_planar_uniform_coil.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi.py",
@@ -745,7 +772,9 @@
           "text": "examples/stream_function/demo_planar_uniform_fem_psi.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.py",
@@ -792,7 +821,9 @@
           "text": "examples/stream_function/demo_planar_uniform_fem_psi_aca.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi_advanced.py",
@@ -874,7 +905,9 @@
           "text": "``examples/stream_function/demo_planar_uniform_fem_psi_advanced.py``"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_advanced.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_reg_hyperparam_aca.py",
@@ -933,7 +966,9 @@
           "text": "Shipped in ``examples/stream_function/demo_reg_hyperparam_aca.py``:"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_reg_hyperparam_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_fusion.py",
@@ -1039,7 +1074,9 @@
           "text": "examples/stream_function/demo_regcoil_fusion.py            (4 parts)"
         }
       ],
-      "demo_group": "fusion current-potential demo"
+      "demo_group": "fusion current-potential demo",
+      "current_path": "docs/stream_function/demo_regcoil_fusion.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_fusion_advanced.py",
@@ -1140,7 +1177,9 @@
           "text": "examples/stream_function/demo_regcoil_fusion_advanced.py   (4 more parts)"
         }
       ],
-      "demo_group": "fusion current-potential demo"
+      "demo_group": "fusion current-potential demo",
+      "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_parity_deliverable.py",
@@ -1190,7 +1229,9 @@
           "text": "(examples/stream_function/demo_regcoil_parity_deliverable.py): a uniform-"
         }
       ],
-      "demo_group": "fusion current-potential demo"
+      "demo_group": "fusion current-potential demo",
+      "current_path": "validation_test/stream_function/demo_regcoil_parity_deliverable.py",
+      "current_lane": "validation_test"
     },
     {
       "path": "examples/stream_function/demo_regularized_aca.py",
@@ -1269,7 +1310,9 @@
           "text": "``examples/stream_function/demo_regularized_aca.py`` exercises all 5"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_regularized_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sf_to_peec_gx.py",
@@ -1338,7 +1381,9 @@
           "text": "chain_phi_z`` in ``examples/stream_function/demo_sf_to_peec_gx.py``."
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_sf_to_peec_gx.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sf_to_peec_gz.py",
@@ -1387,7 +1432,9 @@
           "text": "examples/stream_function/demo_sf_to_peec_gz.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_sf_to_peec_gz.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_shim_coil_purity.py",
@@ -1453,7 +1500,9 @@
           "text": "examples/stream_function/demo_shim_coil_purity.py): --target-harmonic X ->"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_shim_coil_purity.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sphere_fe_direct.py",
@@ -1512,7 +1561,9 @@
           "text": "examples/stream_function/demo_sphere_fe_direct.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_sphere_fe_direct.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/view_sf_coil_gx_gmsh.py",
@@ -1562,7 +1613,9 @@
           "text": "examples/stream_function/view_sf_coil_gx_gmsh.py"
         }
       ],
-      "demo_group": "visualization helper"
+      "demo_group": "visualization helper",
+      "current_path": "docs/stream_function/view_sf_coil_gx_gmsh.py",
+      "current_lane": "docs_local_helper"
     }
   ],
   "selected_gallery": [
@@ -1612,7 +1665,9 @@
           "text": "examples/stream_function/demo_pareto_tikhonov_aca.py"
         }
       ],
-      "demo_group": "regularization and Pareto demo"
+      "demo_group": "regularization and Pareto demo",
+      "current_path": "docs/stream_function/demo_pareto_tikhonov_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi.py",
@@ -1685,7 +1740,9 @@
           "text": "examples/stream_function/demo_planar_uniform_fem_psi.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_fusion.py",
@@ -1791,7 +1848,9 @@
           "text": "examples/stream_function/demo_regcoil_fusion.py            (4 parts)"
         }
       ],
-      "demo_group": "fusion current-potential demo"
+      "demo_group": "fusion current-potential demo",
+      "current_path": "docs/stream_function/demo_regcoil_fusion.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sf_to_peec_gx.py",
@@ -1860,7 +1919,9 @@
           "text": "chain_phi_z`` in ``examples/stream_function/demo_sf_to_peec_gx.py``."
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_sf_to_peec_gx.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sf_to_peec_gz.py",
@@ -1909,7 +1970,9 @@
           "text": "examples/stream_function/demo_sf_to_peec_gz.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_sf_to_peec_gz.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sphere_fe_direct.py",
@@ -1968,7 +2031,9 @@
           "text": "examples/stream_function/demo_sphere_fe_direct.py"
         }
       ],
-      "demo_group": "coil manufacture / field synthesis demo"
+      "demo_group": "coil manufacture / field synthesis demo",
+      "current_path": "docs/stream_function/demo_sphere_fe_direct.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/view_sf_coil_gx_gmsh.py",
@@ -2018,8 +2083,10 @@
           "text": "examples/stream_function/view_sf_coil_gx_gmsh.py"
         }
       ],
-      "demo_group": "visualization helper"
+      "demo_group": "visualization helper",
+      "current_path": "docs/stream_function/view_sf_coil_gx_gmsh.py",
+      "current_lane": "docs_local_helper"
     }
   ],
-  "notebook_sha256": "17b12d7554c0da43c4382210b07ed00606c135c301482cd6cada4a967984bdb2"
+  "notebook_sha256": "f3824bbdb440f0b4ef30ccda22cbd7f23746a83338c1291d9a4d0856f490b34a"
 }
