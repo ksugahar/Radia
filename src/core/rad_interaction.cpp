@@ -3826,9 +3826,21 @@ void radTInteraction::PrecomputeWedgeGeometry()
 
 			m_wedgeTriOffset[w*5+f] = triCount;
 
+			// Get face vertices and split into triangles. Stored real vertices keep warped
+			// quad geometry exact; triangular faces fall through to the flattened-polygon
+			// reconstruction.
 			TVector3d V[4];
-			for(int v = 0; v < nv && v < 4; v++)
-				V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+			TVector3d RV[4]; int rnv = 0;
+			if(poly->GetRealFaceVerts(f, RV, rnv) && rnv >= 4)
+			{
+				nv = 4;
+				V[0] = RV[0]; V[1] = RV[1]; V[2] = RV[2]; V[3] = RV[3];
+			}
+			else
+			{
+				for(int v = 0; v < nv && v < 4; v++)
+					V[v] = tr->TrPoint(TVector3d(verts2d[v].x, verts2d[v].y, pgn->CoordZ));
+			}
 
 			int numTris = (nv == 3) ? 1 : 2;
 			m_wedgeFaceNumTris[w*5+f] = numTris;
