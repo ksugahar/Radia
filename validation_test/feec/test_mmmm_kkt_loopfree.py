@@ -1,19 +1,21 @@
-"""Golden lock: method-0 (dense LU) KKT/Schur loop-free collocation-MMMM solve (2026-06-30).
+"""Golden lock: method-0 (dense LU) loop-free collocation-MMMM solve (2026-06-30).
 
-The collocation surface-charge (MMMM) operator has a field-null loop near-null space (cell-graph
-cycles; A q = (1/chi) q).  The EXACT dense-LU solve returns A^-1 b, whose loop content is amplified
-by chi -> the per-element |M| is inflated (loop-POLLUTED; field-null, so the EXTERNAL field is still
-right).  rad.SolverConfig(loop_deflate=True) enforces the loop-free constraint Q^T x = 0 via a Schur
-complement that reuses the EXACT A^-1 (one dense factorization of the augmented RHS [b | Q], Q =
-BuildLoopBasis): S = Q^T(A^-1 Q), l = S^-1(Q^T A^-1 b), x = A^-1 b - (A^-1 Q) l.  A is NEVER modified
-(penalty / deflation that modified A made the iterative method-1 solver diverge; an iterative A^-1 also
-diverges on the loop near-null RHS -- the DIRECT LU is what makes this work).
+The collocation surface-charge (MMMM) operator has a field-null loop space (cell-graph cycles).  The
+EXACT dense-LU solve returns A^-1 b, whose loop content is amplified by chi -> the per-element |M| is
+inflated (loop-POLLUTED; the loops are field-null, so the EXTERNAL field is still right).
+rad.SolverConfig(loop_deflate=True) removes the loop content by the ORTHOGONAL projection of x0 onto the
+co-loop space: x = x0 - Q (Q^T Q)^-1 Q^T x0 (Q = BuildLoopBasis) -> Q^T x = 0.  The removed part lies in
+col(Q) = field-null, so the EXTERNAL field is preserved EXACTLY (to machine precision) -- the projection
+is field-exact, unlike the A-weighted KKT/Schur correction A^-1 Q l (A^-1 Q lies outside col(Q) for the
+moment-Galerkin operator and shifts the field ~0.8%).  A is never modified; using the DIRECT dense LU is
+essential (an iterative A^-1 diverges on the loop near-null space -- the method-1 routes all failed).
+method-0 post-solve projection is nonlinear-SAFE (no iterative warm-start to fight, unlike method-1).
 
 These lock:
   (1) default loop_deflate is OFF (regression / backward compat),
   (2) plain method-0 LU is loop-POLLUTED (|M|max inflated),
-  (3) method-0 + KKT/Schur is LOOP-FREE (|M|max drops to the physical level), for linear AND nonlinear,
-  (4) the EXTERNAL field is preserved (loops ~field-null) -> the physical observable is unchanged,
+  (3) method-0 + loop_deflate is LOOP-FREE (|M|max drops to the physical level), for linear AND nonlinear,
+  (4) the EXTERNAL field is preserved to ~machine precision (orthogonal projection removes only field-null),
   (5) method-1 (iterative) + loop_deflate FAILS LOUD (cannot resolve the loop near-null space of A).
 Self-contained (mesh-less ObjHexahedron + MatLin / MatSatIsoTab), no NGSolve, fast.
 """
@@ -83,9 +85,9 @@ def test_method0_kkt_is_loop_free(material):
     # (3) KKT/Schur removes the loop circulation -> |M|max drops to the physical band (~1.05e5)
     assert 0.98e5 < mmax_kkt < 1.10e5, f"{material}: KKT |M|max={mmax_kkt:.3e} out of loop-free band"
     assert mmax_kkt < 0.92 * mmax_plain, f"{material}: KKT did not reduce |M|max ({mmax_kkt:.3e} vs {mmax_plain:.3e})"
-    # (4) loops are ~field-null -> the EXTERNAL field is preserved (KKT vs plain within ~2%)
+    # (4) orthogonal projection removes only field-null content -> EXTERNAL field preserved (field-exact)
     dB = np.linalg.norm(B_kkt - B_plain) / np.linalg.norm(B_plain)
-    assert dB < 2.0e-2, f"{material}: external B shifted {dB:.2e} (>2%)"
+    assert dB < 1.0e-3, f"{material}: external B shifted {dB:.2e} (orthogonal projection should be field-exact)"
 
 
 def test_method1_loop_deflate_fails_loud():
