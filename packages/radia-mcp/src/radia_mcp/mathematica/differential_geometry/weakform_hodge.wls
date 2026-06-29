@@ -31,7 +31,7 @@
   law (CEFC 2026, "A Pullback-Based Formulation of Kelvin Transformation"):
     spherical  inversion (conformal)     -> nu' = (r'/R)^2 nu        (isotropic)
     cylindrical inversion (non-conformal) -> nu' = diag(1,1,(rho'/R)^4) nu (anisotropic)
-  and matches W of  examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py
+  and matches W of  docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.py
   (symbolic_pullback_check, golden) + docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md sec.1.
 
   d carries topology, Star carries material+metric: the pullback (kStar) is a

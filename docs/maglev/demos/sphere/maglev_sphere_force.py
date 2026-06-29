@@ -3,7 +3,7 @@ conducting sphere, with the coefficient PINNED by the analytic perfect-
 conductor limit and the frequency response REDUCED by CLN/Cauer.
 
 This is the isotropic levitation-FORCE primitive of the 3D CLN-SIBC route
-(examples/maglev/cuboid/cln_sibc_cuboid_3d.py).  A sphere
+(docs/maglev/demos/cuboid/cln_sibc_cuboid_3d.py).  A sphere
 is isotropic, so the scalar polarizability already ported applies directly
 -- no anisotropic alpha tensor is needed to demonstrate (and verify) a
 levitation force.  The cuboid a!=b!=c anisotropy is a separable refinement

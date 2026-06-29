@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T01:11:23Z",
+  "generated_at_utc": "2026-06-29T07:36:11Z",
   "notebook": "docs/clebsch_hodograph/public_demo.ipynb",
-  "notebook_sha256": "cace1267ec07f7fc0b3049e9f8263dc98e1f629465c3fb39e4ffc6845fdb7b54",
+  "notebook_sha256": "e1f1453eef6dbde3d8579c40fb27b5deb9a3835c6f544e1d1f8508d7ec2112af",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -325,7 +325,7 @@
     {
       "cell_index": 6,
       "execution_count": 5,
-      "source_sha256": "831b2f728aa6373d491eb93195c193af10a77b4ec1eff95ccd5429d01a6aa887",
+      "source_sha256": "827fced58d56774314606d9e1e3ecbb8657765d4e1d487c7cc2e075c1722c718",
       "source_preview": "protected = [r for r in catalog['records'] if r['protected_reference_count']]\nrows = []\nfor r in protected[:12]:\n    first = r['protected_references'][0] if r['protected_references'] else {}\n    where = f'{first.get(\"path\", \"\")}:{first.get(\"line\", \"\")}' if first else '-'\n    rows.append([f'[`{r[\"name\"]}`](../../{r[\"path\"]})', r['protected_reference_count'], where])\nmd = '## Protected validation references\\n\\n' + '\\n'.join(['| script | refs | first protected reference |', '| --- | ---: | --- |'] + [f'| {a} | {b} | {c} |' for a,b,c in rows])\ndisplay(Markdown(md))",
       "outputs": [
         {

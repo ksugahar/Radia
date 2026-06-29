@@ -1,0 +1,89 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-29T07:32:39Z",
+  "notebook": "docs/clebsch_hodograph/examples_migration.ipynb",
+  "notebook_sha256": "f53a95a3cb009e262995acd9d874562b28c31b61e5b6b63b8180b739e215c7ae",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/clebsch_hodograph/examples_migration.ipynb",
+    "cells": 4,
+    "code_cells": 3,
+    "executed_code_cells": 3,
+    "code_cells_with_outputs": 3,
+    "output_count": 3,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "0e6a211806f57909ef7518b3e78ae396a088293567b06ab57b25ec79f0876cda",
+      "source_preview": "from pathlib import Path\nimport json\nDATA = Path('examples_migration_results.json')\narchive = json.loads(DATA.read_text(encoding='utf-8'))\nsummary = archive['summary']\nsummary",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 226,
+          "text_plain_sha256": "27124c534075cd9e7d23a39756713432f91d7c4c6fdcb153547f0c40a1a659c1",
+          "text_plain_preview": "{'files': 119,\n 'python_files': 46,\n 'ipynb_files': 0,\n 'json_files': 15,\n 'media_files': 50,\n 'suffix_counts': {'.png': 50, '.py': 46, '.json': 15, '.geo': 7, '.md': 1},\n 'target_root_counts': {'docs/clebsch_hodograph': 119}}",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 2,
+      "execution_count": 2,
+      "source_sha256": "f0c53d1ece0aaf200a3890d4e8ada2b560a488ccadae7b42492e22d8003c7cff",
+      "source_preview": "from collections import Counter\nfiles = archive['files']\nassert archive['source_root'] == 'examples/clebsch_hodograph'\nassert summary['files'] == len(files)\nassert summary['python_files'] == sum(1 for f in files if f['suffix'] == '.py')\nassert all(f['target_path'].startswith(('docs/', 'validation_test/')) for f in files)\nCounter(f['target_path'].split('/')[0] + '/' + f['target_path'].split('/')[1] for f in files)",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 40,
+          "text_plain_sha256": "48c227e57631f0277d202074a4fafb5d106097a3c0d9e83eb1b5bfa4aafbd060",
+          "text_plain_preview": "Counter({'docs/clebsch_hodograph': 119})",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 3,
+      "source_sha256": "17a90992a91e0816d79f7ed52eb5ef28a444d1870561ae2231fd33fae611743e",
+      "source_preview": "from IPython.display import Markdown, display\nrows = ['| source | target | bytes | sha256 |', '|---|---|---:|---|']\nfor f in files[:40]:\n    rows.append(f\"| `{f['path']}` | `{f['target_path']}` | {f['bytes']} | `{f['sha256'][:12]}` |\")\nif len(files) > 40:\n    rows.append(f\"| ... | {len(files)-40} more files archived in JSON |  |  |\")\ndisplay(Markdown('\\n'.join(rows)))",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

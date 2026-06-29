@@ -1,7 +1,7 @@
 """Golden test: isotropic AC levitation force on a conducting sphere.
 
 Locks the verified result of
-examples/maglev/sphere/maglev_sphere_force.py:
+docs/maglev/demos/sphere/maglev_sphere_force.py:
   - the analytic sphere response G(x) hits its physical limits
     (DC Re[G]->0, high-freq Re[G]->-1/2),
   - Re[G] < 0 across the band (a lift at every frequency),
@@ -19,8 +19,8 @@ import pytest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # CLN was absorbed into radia.maglev ->
-# examples/maglev/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
-_LEV = os.path.join(_HERE, "..", "examples", "maglev")
+# docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
+_LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
 sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 

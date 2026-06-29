@@ -628,7 +628,7 @@ decomposition) for a trimmed hybrid.
 
 This **unifies the lab's two design lines**:
 
-- φ-side iron pole — the hodograph (`examples/clebsch_hodograph/`).
+- φ-side iron pole — the hodograph (`docs/clebsch_hodograph/demos/`).
 - A-side coil current — the stream function
   (`src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py`,
   verified against Radia to 3.4e-10).
@@ -781,23 +781,23 @@ coil = A-side), so the framework is one method, not two.
 
 | Role | Code |
 |---|---|
-| φ-side iron pole (hodograph) | `examples/clebsch_hodograph/` |
-| A-method dual | `examples/clebsch_hodograph/a_method_clebsch_2d.py` |
-| exact open boundary | `examples/clebsch_hodograph/hodograph_kelvin_axisym.py` |
+| φ-side iron pole (hodograph) | `docs/clebsch_hodograph/demos/` |
+| A-method dual | `docs/clebsch_hodograph/demos/a_method_clebsch_2d.py` |
+| exact open boundary | `docs/clebsch_hodograph/demos/hodograph_kelvin_axisym.py` |
 | cohomology (current-linking) | `src/radia/cohomology.py` |
-| pole geometry + multipole analyzer | `examples/clebsch_hodograph/accel_pole_design.py` |
-| 3-D ends: integrated analyzer + end rule | `examples/clebsch_hodograph/accel_pole_ends_3d.py` |
-| 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `examples/clebsch_hodograph/accel_pole_ends_fem.py` |
+| pole geometry + multipole analyzer | `docs/clebsch_hodograph/demos/accel_pole_design.py` |
+| 3-D ends: integrated analyzer + end rule | `docs/clebsch_hodograph/demos/accel_pole_ends_3d.py` |
+| 3-D ends: FEM rung (reduced-Ω + CoilBuilder) | `docs/clebsch_hodograph/demos/accel_pole_ends_fem.py` |
 | forward (reduced potential + CoilBuilder) | `src/radia/panels/calc_accel_magnet.py` |
-| radial field index (scaling + isochronous, saturation) | `examples/clebsch_hodograph/scaling_ffag_pole_2d.py` |
-| foliate-and-perturb scaling (leaf coupling ~ gap/L) | `examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` |
-| two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `examples/clebsch_hodograph/ffag_sector_two_plane.py` |
-| beam-referenced equipotential surface + the twist (n-fold law) | `examples/clebsch_hodograph/twisting_quadrupole_pole.py` |
-| combined-function on a curved orbit (the Frenet sweep = twist) | `examples/clebsch_hodograph/combined_function_frenet_sweep.py` |
-| fast-twist leaf coupling (the per-station 2-D validity threshold) | `examples/clebsch_hodograph/twist_rate_leaf_coupling.py` |
-| end pack in two planes (x-y cross-section + s-y end → 3-D) | `examples/clebsch_hodograph/endpack_two_plane.py` |
-| spectrometer end pack NONLINEAR (corner saturable throat) | `examples/clebsch_hodograph/endpack_spectrometer_saturation.py` |
-| two planes co-baked into one pole (δ shim + ĝ chamfer) | `examples/clebsch_hodograph/endpack_cobake.py` |
-| co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |
-| saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |
+| radial field index (scaling + isochronous, saturation) | `docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.py` |
+| foliate-and-perturb scaling (leaf coupling ~ gap/L) | `docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.py` |
+| two-plane → 3-D method (FFAG sector: transverse + azimuthal) | `docs/clebsch_hodograph/demos/ffag_sector_two_plane.py` |
+| beam-referenced equipotential surface + the twist (n-fold law) | `docs/clebsch_hodograph/demos/twisting_quadrupole_pole.py` |
+| combined-function on a curved orbit (the Frenet sweep = twist) | `docs/clebsch_hodograph/demos/combined_function_frenet_sweep.py` |
+| fast-twist leaf coupling (the per-station 2-D validity threshold) | `docs/clebsch_hodograph/demos/twist_rate_leaf_coupling.py` |
+| end pack in two planes (x-y cross-section + s-y end → 3-D) | `docs/clebsch_hodograph/demos/endpack_two_plane.py` |
+| spectrometer end pack NONLINEAR (corner saturable throat) | `docs/clebsch_hodograph/demos/endpack_spectrometer_saturation.py` |
+| two planes co-baked into one pole (δ shim + ĝ chamfer) | `docs/clebsch_hodograph/demos/endpack_cobake.py` |
+| co-bake as a PRECISION tensor loft (OCC ThruSections) | `docs/clebsch_hodograph/demos/endpack_cobake_loft.py` |
+| saturating sector body (azimuthal L_eff robust, radial k fragile) | `docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

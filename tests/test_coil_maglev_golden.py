@@ -1,6 +1,6 @@
 """Golden test: AC levitation equilibrium of a Cu sphere above a coil.
 
-Puts examples/maglev/sphere/coil_maglev_equilibrium.py
+Puts docs/maglev/demos/sphere/coil_maglev_equilibrium.py
 under CI.  The script composes Radia's open-boundary coil field with the
 verified induced-dipole levitation force and finds the stable equilibrium
 height.  Its own hard asserts are the primary lock (a non-zero exit means
@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("radia")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_TEAM28 = os.path.join(_HERE, "..", "examples", "maglev", "sphere")
+_TEAM28 = os.path.join(_HERE, "..", "docs", "maglev", "demos", "sphere")
 _SCRIPT = os.path.join(_TEAM28, "coil_maglev_equilibrium.py")
 _JSON = os.path.join(_TEAM28, "coil_maglev_equilibrium_results.json")
 
