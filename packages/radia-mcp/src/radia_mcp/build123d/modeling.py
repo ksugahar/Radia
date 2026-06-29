@@ -33,6 +33,8 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
            "box_through_cylinder_reference_row", "mounting_plate_boss_reference_row",
+           "keyed_terminal_plate_reference_row", "flanged_sleeve_reference_row",
+           "ribbed_busbar_heat_sink_reference_row",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
            "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
            "box_face_traction_moment_rows",
@@ -1501,6 +1503,259 @@ def mounting_plate_boss_reference_row(
             "four_corner_holes": -corner_hole_volume,
         },
         "policy": "analytic_mounting_plate_boss_volume_reference",
+    }
+
+
+def keyed_terminal_plate_reference_row(
+    base_x,
+    base_y,
+    base_h,
+    boss_r,
+    boss_h,
+    boss_x,
+    boss_hole_r,
+    window_x,
+    window_y,
+    key_slot_x,
+    key_slot_y,
+    mount_hole_r,
+    mount_hole_x,
+    mount_hole_y,
+    label="keyed_terminal_plate_two_bosses",
+):
+    """Analytic volume row for a keyed terminal plate with two bosses.
+
+    The body is a centered rectangular base plate, two cylindrical bosses on
+    the top face, a centered rectangular window through the base, a centered
+    edge key-slot cut through the base at ``+Y``, two boss holes through
+    plate+boss, and two mirrored mounting holes through the base only.  This
+    is a compact motor-fixture/terminal-plate CAD gate for build123d -> STEP
+    -> external CAD-kernel volume checks.
+    """
+
+    base_x = float(base_x)
+    base_y = float(base_y)
+    base_h = float(base_h)
+    boss_r = float(boss_r)
+    boss_h = float(boss_h)
+    boss_x = abs(float(boss_x))
+    boss_hole_r = float(boss_hole_r)
+    window_x = float(window_x)
+    window_y = float(window_y)
+    key_slot_x = float(key_slot_x)
+    key_slot_y = float(key_slot_y)
+    mount_hole_r = float(mount_hole_r)
+    mount_hole_x = abs(float(mount_hole_x))
+    mount_hole_y = float(mount_hole_y)
+
+    positive = (
+        base_x, base_y, base_h, boss_r, boss_h, boss_x, boss_hole_r,
+        window_x, window_y, key_slot_x, key_slot_y, mount_hole_r, mount_hole_x,
+    )
+    if any(value <= 0.0 for value in positive):
+        raise ValueError("all dimensions and radii except mount_hole_y must be positive")
+    if boss_hole_r >= boss_r:
+        raise ValueError("boss hole radius must be smaller than boss radius")
+    if boss_x + boss_r >= base_x / 2.0:
+        raise ValueError("boss footprint must fit on the plate")
+    if 2.0 * boss_r >= base_y:
+        raise ValueError("boss diameter must fit inside the plate width")
+    if window_x >= base_x or window_y >= base_y:
+        raise ValueError("window must fit inside the plate")
+    if key_slot_x >= base_x or key_slot_y >= base_y:
+        raise ValueError("key slot must fit inside the plate")
+    if base_y / 2.0 - key_slot_y - window_y / 2.0 <= 0.0:
+        raise ValueError("center window and edge key slot must not overlap")
+    if boss_x - boss_r <= max(window_x, key_slot_x) / 2.0:
+        raise ValueError("boss footprint must not overlap the centered window or key slot")
+    if mount_hole_x + mount_hole_r >= base_x / 2.0:
+        raise ValueError("mount hole x location must fit inside the plate")
+    if abs(mount_hole_y) + mount_hole_r >= base_y / 2.0:
+        raise ValueError("mount hole y location must fit inside the plate")
+    if math.hypot(mount_hole_x - boss_x, mount_hole_y) <= boss_r + mount_hole_r:
+        raise ValueError("mount holes must not intersect the boss footprints")
+
+    base_volume = base_x * base_y * base_h
+    boss_volume = 2.0 * math.pi * boss_r * boss_r * boss_h
+    window_volume = window_x * window_y * base_h
+    key_slot_volume = key_slot_x * key_slot_y * base_h
+    boss_hole_volume = 2.0 * math.pi * boss_hole_r * boss_hole_r * (base_h + boss_h)
+    mount_hole_volume = 2.0 * math.pi * mount_hole_r * mount_hole_r * base_h
+    volume = base_volume + boss_volume - window_volume - key_slot_volume - boss_hole_volume - mount_hole_volume
+    bbox = {
+        "min": [-base_x / 2.0, -base_y / 2.0, -base_h / 2.0],
+        "max": [base_x / 2.0, base_y / 2.0, base_h / 2.0 + boss_h],
+        "center": [0.0, 0.0, boss_h / 2.0],
+        "size": [base_x, base_y, base_h + boss_h],
+        "diagonal": math.sqrt(base_x * base_x + base_y * base_y + (base_h + boss_h) ** 2),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "base": base_volume,
+            "two_bosses": boss_volume,
+            "rectangular_window": -window_volume,
+            "edge_key_slot": -key_slot_volume,
+            "two_boss_holes": -boss_hole_volume,
+            "two_mount_holes": -mount_hole_volume,
+        },
+        "policy": "analytic_keyed_terminal_plate_volume_reference",
+    }
+
+
+def flanged_sleeve_reference_row(
+    flange_r,
+    flange_h,
+    hub_r,
+    hub_h,
+    bore_r,
+    bolt_circle_r,
+    bolt_r,
+    bolt_count=4,
+    label="flanged_sleeve_four_bolt_holes",
+):
+    """Analytic volume row for a coaxial flanged sleeve with bolt holes.
+
+    The body is a lower flange annulus plus a raised hub annulus, with a
+    central bore through both regions and equally spaced vertical bolt holes
+    through the flange only.  It is a compact motor-fixture / bearing-seat CAD
+    gate for build123d -> STEP -> external CAD-kernel volume checks.
+    """
+
+    flange_r = float(flange_r)
+    flange_h = float(flange_h)
+    hub_r = float(hub_r)
+    hub_h = float(hub_h)
+    bore_r = float(bore_r)
+    bolt_circle_r = float(bolt_circle_r)
+    bolt_r = float(bolt_r)
+    bolt_count = int(bolt_count)
+
+    if any(value <= 0.0 for value in (flange_r, flange_h, hub_r, hub_h, bore_r, bolt_circle_r, bolt_r)):
+        raise ValueError("all dimensions and radii must be positive")
+    if bolt_count < 1:
+        raise ValueError("bolt_count must be positive")
+    if not (bore_r < hub_r < flange_r):
+        raise ValueError("require bore_r < hub_r < flange_r")
+    if bolt_circle_r + bolt_r >= flange_r:
+        raise ValueError("bolt holes must fit inside the flange")
+    if bolt_circle_r - bolt_r <= hub_r:
+        raise ValueError("bolt holes must not intersect the raised hub footprint")
+    if bolt_circle_r - bolt_r <= bore_r:
+        raise ValueError("bolt holes must not intersect the central bore")
+    if bolt_count > 1:
+        chord = 2.0 * bolt_circle_r * math.sin(math.pi / bolt_count)
+        if chord <= 2.0 * bolt_r:
+            raise ValueError("adjacent bolt holes must not overlap")
+
+    flange_volume = math.pi * (flange_r * flange_r - bore_r * bore_r) * flange_h
+    hub_volume = math.pi * (hub_r * hub_r - bore_r * bore_r) * hub_h
+    bolt_hole_volume = bolt_count * math.pi * bolt_r * bolt_r * flange_h
+    volume = flange_volume + hub_volume - bolt_hole_volume
+    total_h = flange_h + hub_h
+    bbox = {
+        "min": [-flange_r, -flange_r, -flange_h / 2.0],
+        "max": [flange_r, flange_r, flange_h / 2.0 + hub_h],
+        "center": [0.0, 0.0, hub_h / 2.0],
+        "size": [2.0 * flange_r, 2.0 * flange_r, total_h],
+        "diagonal": math.sqrt((2.0 * flange_r) ** 2 + (2.0 * flange_r) ** 2 + total_h ** 2),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "flange_annulus": flange_volume,
+            "hub_annulus": hub_volume,
+            "bolt_holes": -bolt_hole_volume,
+        },
+        "bolt_count": bolt_count,
+        "policy": "analytic_flanged_sleeve_volume_reference",
+    }
+
+
+def ribbed_busbar_heat_sink_reference_row(
+    base_x,
+    base_y,
+    base_h,
+    fin_count,
+    fin_w,
+    fin_h,
+    fin_pitch,
+    hole_r,
+    hole_x,
+    hole_y,
+    label="ribbed_busbar_heat_sink_four_holes",
+):
+    """Analytic volume row for a finned busbar / heat-sink plate.
+
+    The body is a centered rectangular base plate with evenly spaced straight
+    ribs on the top face and four vertical bolt holes through the base only.
+    Holes are kept outside the fin band on purpose, so the volume decomposes
+    into three readable terms: base, ribs, and bolt-hole removal.  This gives a
+    compact CAD-kernel round-trip gate for motor terminals, heat-spreader
+    plates, and conduction-cooled busbar fixtures before meshing.
+    """
+
+    base_x = float(base_x)
+    base_y = float(base_y)
+    base_h = float(base_h)
+    fin_count = int(fin_count)
+    fin_w = float(fin_w)
+    fin_h = float(fin_h)
+    fin_pitch = float(fin_pitch)
+    hole_r = float(hole_r)
+    hole_x = abs(float(hole_x))
+    hole_y = abs(float(hole_y))
+
+    if any(value <= 0.0 for value in (base_x, base_y, base_h, fin_w, fin_h, fin_pitch, hole_r)):
+        raise ValueError("all dimensions, pitches, and radii must be positive")
+    if fin_count < 1:
+        raise ValueError("fin_count must be positive")
+    if fin_w >= fin_pitch:
+        raise ValueError("fin_w must be smaller than fin_pitch")
+
+    fin_band_half_width = 0.5 * ((fin_count - 1) * fin_pitch + fin_w)
+    if fin_band_half_width >= base_y / 2.0:
+        raise ValueError("fin band must fit on the base")
+    if hole_x + hole_r >= base_x / 2.0:
+        raise ValueError("bolt hole x location must fit inside the base")
+    if hole_y + hole_r >= base_y / 2.0:
+        raise ValueError("bolt hole y location must fit inside the base")
+    if hole_y - hole_r <= fin_band_half_width:
+        raise ValueError("bolt holes must stay outside the fin footprint")
+
+    base_volume = base_x * base_y * base_h
+    fin_volume = fin_count * base_x * fin_w * fin_h
+    bolt_hole_volume = 4.0 * math.pi * hole_r * hole_r * base_h
+    volume = base_volume + fin_volume - bolt_hole_volume
+    total_h = base_h + fin_h
+    bbox = {
+        "min": [-base_x / 2.0, -base_y / 2.0, -base_h / 2.0],
+        "max": [base_x / 2.0, base_y / 2.0, base_h / 2.0 + fin_h],
+        "center": [0.0, 0.0, fin_h / 2.0],
+        "size": [base_x, base_y, total_h],
+        "diagonal": math.sqrt(base_x * base_x + base_y * base_y + total_h * total_h),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "base": base_volume,
+            "straight_ribs": fin_volume,
+            "four_base_holes": -bolt_hole_volume,
+        },
+        "fin_count": fin_count,
+        "clearances": {
+            "hole_to_x_edge": base_x / 2.0 - hole_x - hole_r,
+            "hole_to_y_edge": base_y / 2.0 - hole_y - hole_r,
+            "hole_to_fin_band": hole_y - hole_r - fin_band_half_width,
+            "fin_band_to_y_edge": base_y / 2.0 - fin_band_half_width,
+        },
+        "policy": "analytic_ribbed_busbar_heat_sink_volume_reference",
     }
 
 

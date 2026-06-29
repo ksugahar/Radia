@@ -1616,6 +1616,54 @@ surface-area rel error `0.0`, and bbox size abs error `0.0`.  Record
 `min_edge_over_characteristic` along with volume; a CAD body can be valid but
 still mesh-hostile if tiny features slip below the meshability threshold.
 
+Curved STEP round-trip gate (2026-06-29): a stepped cylindrical spacer with a
+central bore and four bolt holes matched the analytic and build123d/OCCT volume
+exactly (`4.8536349860900865`), while headless Cubit STEP import measured
+`4.853663401216389` (`rel_error = 5.854366888206992e-6`).  This is acceptable
+for an external CAD-kernel round trip, but it would fail an over-strict
+`1e-6` gate.  Use a two-level policy: analytic/build123d checks can stay near
+`1e-12`, but curved boolean STEP handoff to another CAD kernel should use
+`shape_volume_crosscheck_summary(..., rtol=1e-5)` and also record surface area,
+bbox, and `min_edge_over_characteristic`.
+
+Fixture/terminal-plate continuous-loop gate (2026-06-29): a keyed terminal plate
+with two raised bosses, a rectangular window, an edge key slot, two boss holes,
+and two mirrored mounting holes passed the same analytic -> build123d -> external
+CAD volume contract via `keyed_terminal_plate_reference_row(...)`.
+The reference row was
+`{"name": "keyed_terminal_plate_two_bosses", "volume": 9.364087557965556}`;
+build123d and the external CAD import both measured `9.364087557965554`, with
+`max_volume_rel_error = 1.8969887118250976e-16`, surface-area rel error
+`3.4826588433543787e-16`, bbox size abs error `0.0`, and
+`min_edge_over_characteristic = 0.05`.  This is the recommended pattern for
+motor terminal boards, fixture plates, and sensor brackets: decompose each
+boolean feature into a visible volume term before trusting the downstream mesh
+or solver path.
+
+Flanged sleeve continuous-loop gate (2026-06-29): a coaxial flanged sleeve with
+a central bore, raised hub, and four flange bolt holes extends the same pattern
+to bearing seats, motor fixtures, and shaft-interface hardware.  Use
+`flanged_sleeve_reference_row(...)` to expose flange-annulus, hub-annulus, and
+bolt-hole terms before STEP handoff.  The reference row was
+`{"name": "flanged_sleeve_four_bolt_holes", "volume": 5.085955762823052}`;
+build123d/OCCT measured `5.085955762823052`, while the external CAD import
+measured `5.085958320184421` (`max_volume_rel_error =
+5.028278267134254e-7`).  This is below a `1e-6` round-trip gate but above an
+over-strict `1e-7` gate, so keep analytic/build123d checks tight and external
+curved STEP volume checks at a tolerance that reflects CAD-kernel healing.
+
+Ribbed busbar / heat-sink continuous-loop gate (2026-06-29): a rectangular
+base plate with straight raised ribs and four bolt holes outside the fin band
+extends the same volume contract to motor terminals, conduction-cooled busbars,
+and heat-spreader fixtures.  Use
+`ribbed_busbar_heat_sink_reference_row(...)` to expose the base, straight-rib,
+and base-hole terms before STEP handoff.  The reference row for the continuous
+slot is
+`{"name": "ribbed_busbar_heat_sink_four_holes", "volume": 13.617497357233166}`.
+Keep bolt holes outside the fin footprint when you want the analytic volume to
+stay readable; if a hole cuts a rib, make that overlap term explicit before
+trusting the CAD round trip.
+
 Use the full `shape_measurement_health_summary(...)` only when the other CAD
 side also supplies area and bounding boxes.  Keep private tool provenance in
 the private lane; public artifacts should describe this as an external CAD

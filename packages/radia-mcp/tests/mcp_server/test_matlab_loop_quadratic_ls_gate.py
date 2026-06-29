@@ -103,3 +103,35 @@ def test_fem_bem_trace_least_squares_contract_keeps_interior_unforced():
     assert np.linalg.norm(_trace_gradient(T, M, g, alpha, u)) < 1.0e-10
     assert _trace_objective(T, M, g, alpha, u0) > _trace_objective(T, M, g, alpha, u)
     assert np.max(np.abs(analytic - finite_difference)) < 1.0e-6
+
+
+def test_fem_bem_tikhonov_path_exposes_regularization_tradeoff():
+    T = np.hstack([np.eye(4), np.zeros((4, 1))])
+    M = np.array(
+        [
+            [2.0, 0.2, 0.1, 0.0],
+            [0.2, 1.5, 0.0, 0.1],
+            [0.1, 0.0, 1.2, 0.2],
+            [0.0, 0.1, 0.2, 1.8],
+        ]
+    )
+    g = np.array([10.0, 20.0, 30.0, 40.0])
+    alphas = np.array([0.0, 1.0e-3, 1.0e-1, 1.0])
+    solution_norms = []
+    trace_residuals = []
+
+    for alpha in alphas:
+        normal = T.T @ M @ T + alpha * np.eye(5)
+        rhs = T.T @ M @ g
+        if alpha == 0.0:
+            u = np.linalg.lstsq(normal, rhs, rcond=None)[0]
+        else:
+            u = np.linalg.solve(normal, rhs)
+        solution_norms.append(float(np.linalg.norm(u)))
+        trace_residuals.append(float(np.linalg.norm(T @ u - g)))
+        assert np.linalg.norm(_trace_gradient(T, M, g, alpha, u)) < 1.0e-10
+
+    assert all(a >= b - 1.0e-10 for a, b in zip(solution_norms, solution_norms[1:]))
+    assert all(a <= b + 1.0e-10 for a, b in zip(trace_residuals, trace_residuals[1:]))
+    assert solution_norms[-1] < solution_norms[0]
+    assert trace_residuals[-1] > trace_residuals[0]

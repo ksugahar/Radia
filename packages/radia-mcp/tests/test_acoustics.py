@@ -22,6 +22,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     baffled_circular_piston_radiation,
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
+    helmholtz_green_low_frequency_teaching_report,
     planar_helmholtz_dtn_symbol,
     planar_mode_radiation_impedance,
     pulsating_sphere_radiation,
@@ -104,6 +105,22 @@ def test_helmholtz_green_series_convergence_and_validation():
         helmholtz_green_3d(0.0, 1.0)
     with pytest.raises(ValueError):
         helmholtz_green_low_frequency_series(1.0, 1.0, order=-1)
+
+
+def test_low_frequency_helmholtz_teaching_report_exposes_cancellation_scale():
+    r = 0.75
+    k = 1.0e-9
+    report = helmholtz_green_low_frequency_teaching_report(r, k, order=6)
+
+    assert report["kind"] == "low_frequency_helmholtz_teaching_report"
+    assert report["policy"] == "readable_bem_kernel_split_not_production_quadrature"
+    assert report["time_convention"] == "exp(+i omega t), outgoing exp(-i k r)"
+    assert report["kr_abs"] == pytest.approx(0.75e-9)
+    assert report["cancellation_ratio"] > 1.0e8
+    assert report["stable_error"] < 2.0e-17
+    assert report["correction_agreement"] < 1.0e-15
+    assert report["stable_correction"].imag == pytest.approx(-k / (4.0 * math.pi))
+    assert report["stable_correction"].real == pytest.approx(-(k * k) * r / (8.0 * math.pi))
 
 
 def test_spherical_dtn_monopole_matches_closed_form_and_impedance():

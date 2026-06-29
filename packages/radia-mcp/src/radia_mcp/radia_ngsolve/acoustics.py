@@ -96,6 +96,45 @@ def helmholtz_green_low_frequency_series(distance, wavenumber, order=6):
     }
 
 
+def helmholtz_green_low_frequency_teaching_report(distance, wavenumber, order=6):
+    """Explain the readable low-frequency Helmholtz BEM split.
+
+    This wraps :func:`helmholtz_green_low_frequency_series` in a teaching-shaped
+    dictionary.  The important lesson is not speed; it is that the singular
+    Laplace kernel and the smooth Helmholtz correction should be kept visible
+    when students read a FEM/BEM coupling code.
+    """
+
+    series = helmholtz_green_low_frequency_series(distance, wavenumber, order=order)
+    laplace = series["laplace_term"]
+    stable_correction = series["regular_part"]
+    direct_correction = series["exact"] - laplace
+    correction_scale = abs(stable_correction)
+    cancellation_ratio = math.inf if correction_scale == 0.0 else abs(laplace) / correction_scale
+    return {
+        "kind": "low_frequency_helmholtz_teaching_report",
+        "policy": "readable_bem_kernel_split_not_production_quadrature",
+        "time_convention": "exp(+i omega t), outgoing exp(-i k r)",
+        "distance": series["distance"],
+        "wavenumber": series["wavenumber"],
+        "order": series["order"],
+        "kr_abs": series["kr_abs"],
+        "laplace_term": laplace,
+        "stable_correction": stable_correction,
+        "direct_correction": direct_correction,
+        "single_layer": series["approx"],
+        "direct_green": series["exact"],
+        "stable_error": series["abs_error"],
+        "correction_agreement": abs(stable_correction - direct_correction),
+        "cancellation_ratio": cancellation_ratio,
+        "notes": [
+            "G_k = G_0 + (exp(-1i*k*r)-1)/(4*pi*r)",
+            "G_0 keeps the singular Laplace quadrature visible",
+            "the correction is smooth and can be evaluated by a Taylor split at low k*r",
+        ],
+    }
+
+
 def spherical_hankel2(degree, argument):
     r"""Spherical Hankel function ``h_l^(2)(z)`` for outgoing waves.
 
