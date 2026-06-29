@@ -537,6 +537,19 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     }
 }
 
+// GLOBAL monotonic build-id source for the QuadDot thread_local memo.  MUST be shared by EVERY
+// RadHACApKChargeGram constructor: the memo (cache_owner) is a single function-local thread_local in
+// QuadDot, so two constructors with INDEPENDENT counters would hand out colliding ids (each starting at 0)
+// -> a high-order build (counter A, id 1) followed by a curved build (counter B, id 1) would NOT clear the
+// thread_local cache (cache_owner == m_build_id) and the curved build would reuse the high-order build's
+// stale PhiInner values -> nondeterministic per-element corruption under a warm (shared-TaskManager-region)
+// threadpool.  A single global counter guarantees strictly-increasing, never-reused ids across all builds.
+static long long NextChargeGramBuildId()
+{
+    static std::atomic<long long> s_id{0};
+    return s_id.fetch_add(1) + 1;
+}
+
 // HIGH-ORDER constructor: polynomial charges (monomial basis per host).  See the header for the contract.
 RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
@@ -555,7 +568,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     const int n_cell = n_el;
     const int n_bf   = (int)(m_faceV.size() / 9);
     m_n = (int)m_host.size();                       // number of polynomial CHARGES (the H-matrix dofs)
-    { static std::atomic<long long> s_id{0}; m_build_id = s_id.fetch_add(1) + 1; }   // unique id for the QuadDot memo
+    m_build_id = NextChargeGramBuildId();           // GLOBAL unique id for the QuadDot memo (see NextChargeGramBuildId)
     // per-(kind,host) co-located charge count -> the QuadDot memo engages only where n_mono>1 (reuse exists);
     // skips e.g. p=1 volume (1 monomial/cell) so the cache never adds overhead where there is nothing to reuse.
     m_nmono.assign(m_n, 1);
@@ -804,7 +817,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     const int n_cell = n_el;
     const int n_bf   = (int)(m_faceNodes.size() / 18);
     m_n = (int)m_host.size();
-    { static std::atomic<long long> s_id{0}; m_build_id = s_id.fetch_add(1) + 1; }
+    m_build_id = NextChargeGramBuildId();           // GLOBAL unique id (shared with the high-order ctor)
     m_nmono.assign(m_n, 1);
     {
         std::unordered_map<long long, int> cnt;
@@ -1196,6 +1209,10 @@ double RadHACApKChargeGram::QuadDot(int tgt, int src) const
         // cache would thrash to zero hits.  With the (host,src) key both directions reuse: the row direction
         // across the co-located rows of a leaf, the col direction across the consecutive co-located cols.
         // Cap-based eviction bounds the per-thread working set; cleared on a new build (owner id).
+        // CORRECTNESS DEPENDS on m_build_id being GLOBALLY unique across ALL constructors (NextChargeGramBuildId):
+        // this thread_local memo outlives a single build (the TaskManager threadpool persists across builds in
+        // one TM region), so a colliding id from a sibling constructor would skip the clear and reuse another
+        // build's stale PhiInner values.  See NextChargeGramBuildId (2026-06-29 shared-TM corruption fix).
         static thread_local long long cache_owner = -1;
         static thread_local std::unordered_map<long long, std::vector<double>> cache;
         if (cache_owner != m_build_id) { cache.clear(); cache_owner = m_build_id; }
