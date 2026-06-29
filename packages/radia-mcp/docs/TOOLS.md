@@ -993,12 +993,12 @@ Module: `radia_mcp.meta.server`
 
 ## `mcp-server-panel-review`
 
-_Radia notebook panel review contract (DesignSpec / Workbench / result artifacts / validation_test / no-PySide gate). Historical PySide topic names are compatibility aliases._
+_Radia notebook panel review and construction contract (DesignSpec / Workbench / result artifacts / validation_test / no-PySide gate), including the cubit_panels migration route._
 
 Module: `radia_mcp.panel_review.server`
 
 | Tool | Description |
 |---|---|
-| `panel_review` | Get Radia notebook panel review documentation. |
+| `panel_review` | Get Radia notebook panel review / construction documentation. |
 | `panel_review_status` | (no description) |
-| `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 10 topics. |
+| `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
