@@ -9,6 +9,8 @@ import math
 import os
 import sys
 
+import pytest
+
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -92,6 +94,52 @@ def test_closed_form_matches_direct_time_waveform_fourier():
     assert math.isclose(mean, out["mean_power"], abs_tol=1e-12)
     assert math.isclose(_fourier_amplitude(p, 6), out["power_ripple"][6], abs_tol=1e-12)
     assert math.isclose(_fourier_amplitude(p, 12), out["power_ripple"][12], abs_tol=1e-12)
+
+
+def test_continuous_loop_slot44_backemf_handoff_gate():
+    harmonics = {1: 1.0, 3: 0.35, 5: 0.08, 7: 0.04, 11: 0.018, 13: 0.012}
+    current_peak = 14.0
+    mechanical_speed = 120.0
+
+    out = three_phase_torque_ripple_harmonics(
+        harmonics,
+        current_peak=current_peak,
+        mechanical_speed=mechanical_speed,
+    )
+    table = three_phase_torque_ripple_pair_table(
+        harmonics,
+        current_peak=current_peak,
+        mechanical_speed=mechanical_speed,
+    )
+    p = _sample_power(harmonics, current_peak, samples=4096)
+    torque = [value / mechanical_speed for value in p]
+    health = torque_angle_sweep_health_summary(
+        torque,
+        max_harmonic=18,
+        max_ac_rms_over_mean=0.09,
+        allowed_dominant_harmonics=[6],
+        min_mean_abs_torque_Nm=0.17,
+        top_harmonics=2,
+    )
+
+    assert out["mean_power"] == pytest.approx(21.0)
+    assert out["mean_torque"] == pytest.approx(0.175)
+    assert out["power_ripple"][6] == pytest.approx(2.52)
+    assert out["power_ripple"][12] == pytest.approx(0.63)
+    assert out["torque_ripple"][6] == pytest.approx(0.021)
+    assert out["torque_ripple"][12] == pytest.approx(0.00525)
+    assert out["normalized_ripple"][6] == pytest.approx(0.12)
+    assert out["normalized_ripple"][12] == pytest.approx(0.03)
+    assert 3 not in out["power_ripple"]
+    assert [row["ripple_order"] for row in table] == [6, 12]
+    assert table[0]["contributing_harmonics"] == [5, 7]
+    assert table[1]["contributing_harmonics"] == [11, 13]
+    assert sum(p) / len(p) == pytest.approx(out["mean_power"], abs=1.0e-12)
+    assert _fourier_amplitude(p, 6) == pytest.approx(out["power_ripple"][6], abs=1.0e-10)
+    assert _fourier_amplitude(p, 12) == pytest.approx(out["power_ripple"][12], abs=1.0e-10)
+    assert health["status"] == "ok"
+    assert health["dominant_harmonic"] == 6
+    assert health["ac_rms_over_mean"] == pytest.approx(0.08746427842267951)
 
 
 def test_torque_angle_sweep_summary_extracts_ripple_harmonics():

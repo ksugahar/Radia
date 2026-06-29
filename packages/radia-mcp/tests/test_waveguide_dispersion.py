@@ -25,7 +25,9 @@ from radia_mcp.radia_ngsolve.waveguide import (rectangular_waveguide_cutoff, cut
                                                waveguide_offset_short_s11,
                                                waveguide_offset_short_length_from_group_delay,
                                                reflection_metrics,
-                                               sparameter_group_delay, C0)
+                                               sparameter_group_delay,
+                                               sparameter_group_delay_summary, C0)
+from radia_mcp.radia_ngsolve.slot_gates import two_port_sparameter_health
 
 
 def test_dielectric_slab_sparams():
@@ -166,6 +168,49 @@ def test_sparameter_group_delay_matches_offset_short_phase_slope():
         sparameter_group_delay([1.0, 1.0], [1.0, 1.0])
     with pytest.raises(ValueError):
         sparameter_group_delay([1.0, 2.0], [1.0])
+
+
+def test_sparameter_group_delay_summary_unwraps_touchstone_like_phase():
+    tau = 3.2e-9
+    freqs = [0.9e9 + 0.025e9 * i for i in range(9)]
+    trace = [0.83 * cmath.exp(-1j * 2.0 * math.pi * f * tau) for f in freqs]
+
+    summary = sparameter_group_delay_summary(freqs, trace, expected_group_delay_s=tau, rtol=1.0e-12)
+
+    assert summary["schema"] == "radia-ngsolve.sparameter-group-delay-summary.v1"
+    assert summary["status"] == "ok"
+    assert summary["n_points"] == len(freqs)
+    assert summary["mean_group_delay_s"] == pytest.approx(tau, rel=1.0e-12)
+    assert summary["span_group_delay_s"] < 1.0e-21
+    assert summary["negative_group_delay_count"] == 0
+    assert summary["max_rel_error"] < 1.0e-12
+
+
+def test_continuous_loop_slot47_cst_touchstone_delay_line_contract():
+    tau = 1.75e-9
+    freqs = [1.8e9, 1.9e9, 2.0e9, 2.1e9, 2.2e9]
+    s11 = 0.02 + 0.0j
+    s21_abs = 0.78
+    trace = [s21_abs * cmath.exp(-1j * 2.0 * math.pi * f * tau) for f in freqs]
+    rows = [
+        two_port_sparameter_health(s11, s21, s12=s21, s22=s11, tol=1.0e-9)
+        for s21 in trace
+    ]
+    delays = sparameter_group_delay_summary(freqs, trace, expected_group_delay_s=tau, rtol=1.0e-12)
+
+    assert delays["schema"] == "radia-ngsolve.sparameter-group-delay-summary.v1"
+    assert delays["status"] == "ok"
+    assert delays["mean_group_delay_s"] == pytest.approx(1.7500000000000024e-09)
+    assert delays["span_group_delay_s"] < 2.0e-23
+    assert delays["max_rel_error"] < 1.0e-12
+    assert all(row["status"] == "ok" for row in rows)
+    assert all(row["passive"] is True and row["reciprocal"] is True for row in rows)
+    assert max(row["max_singular_value_squared"] for row in rows) == pytest.approx(0.6399999999999999)
+
+    active = two_port_sparameter_health(0.05, 1.02, s12=1.02, s22=0.05, tol=1.0e-9)
+    assert active["status"] == "needs_attention"
+    assert active["passive"] is False
+    assert active["max_singular_value_squared"] == pytest.approx(1.1449000000000003)
 
 
 def test_dispersion_identities():

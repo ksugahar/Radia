@@ -17,6 +17,7 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.solve import (short_circuit_dq_currents, short_circuit_operating_point,
                                            characteristic_current,
+                                           field_weakening_speed_capability,
                                            dq_torque)
 
 LM, LD, LQ, R, P = 0.1, 0.5e-3, 1.5e-3, 0.05, 4
@@ -73,9 +74,47 @@ def test_nonsalient_critical_speed():
     assert abs(math.hypot(idh, iqh) - LM / Ls) / (LM / Ls) < 1e-3
 
 
+def test_continuous_loop_slot45_pm_short_circuit_fault_table():
+    R, Ld, Lq, lm, p, Imax = 0.05, 0.008, 0.016, 0.1, 4, 20.0
+    cap = field_weakening_speed_capability(lm, Ld, Imax)
+    assert cap["characteristic_current"] == pytest.approx(12.5)
+    assert cap["infinite_speed_possible"] is True
+    assert cap["mtpv_possible"] is True
+    assert cap["current_margin"] == pytest.approx(7.5)
+    assert cap["current_ratio"] == pytest.approx(1.6)
+
+    omega_e_values = [1.0, 2.0, 5.0, 6.25, 10.0, 20.0, 50.0, 100.0, 500.0, 1000.0, 5000.0]
+    rows = [short_circuit_operating_point(R, Ld, Lq, lm, omega_e, p) | {
+        "omega_e": omega_e,
+        "omega_mech": omega_e / p,
+    } for omega_e in omega_e_values]
+    peak = max(rows, key=lambda row: abs(row["torque"]))
+    high = rows[-1]
+
+    assert peak["omega_e"] == pytest.approx(6.25)
+    assert peak["id"] == pytest.approx(-8.333333333333332)
+    assert peak["iq"] == pytest.approx(-4.166666666666666)
+    assert peak["current_ratio_to_characteristic"] == pytest.approx(0.7453559924999298)
+    assert peak["d_axis_demag_fraction"] == pytest.approx(0.6666666666666665)
+    assert peak["torque"] == pytest.approx(-4.166666666666666)
+
+    assert high["omega_e"] == pytest.approx(5000.0)
+    assert high["id"] == pytest.approx(-12.49999023438263)
+    assert high["iq"] == pytest.approx(-0.0078124938964891436)
+    assert high["current_ratio_to_characteristic"] == pytest.approx(0.9999994140629387)
+    assert high["d_axis_demag_fraction"] == pytest.approx(0.9999992187506104)
+    assert high["torque"] == pytest.approx(-0.009374989013683319)
+
+    max_terminal_residual = max(max(abs(row["vd_residual"]), abs(row["vq_residual"])) for row in rows)
+    max_speed_contract_error = max(abs(row["omega_e"] - p * row["omega_mech"]) for row in rows)
+    assert max_terminal_residual <= 1.0e-12
+    assert max_speed_contract_error <= 1.0e-12
+
+
 if __name__ == "__main__":
     test_characteristic_current()
     test_short_circuit_equations_and_limit()
     test_braking_torque_peak_and_decay()
     test_nonsalient_critical_speed()
+    test_continuous_loop_slot45_pm_short_circuit_fault_table()
     print("[OK] short-circuit currents -> Ich, braking-torque peak/decay, critical speed validated.")

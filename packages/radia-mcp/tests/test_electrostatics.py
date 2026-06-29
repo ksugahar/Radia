@@ -19,8 +19,11 @@ from radia_mcp.radia_ngsolve.electrostatics import (
     isolated_disk_capacitance,
     spreading_resistance_disk,
     coaxial_shell_resistance,
+    coaxial_rc_duality_summary,
     coaxial_capacitor_energy_force,
+    spherical_capacitor_energy_summary,
     layered_parallel_plate_capacitance,
+    layered_parallel_plate_stack_summary,
     parallel_plate_capacitor_energy_force,
     capacitance_gradient_force_summary,
     dielectric_sphere_polarizability,
@@ -69,6 +72,38 @@ def test_coaxial_shell_resistance():
         coaxial_shell_resistance(rho, 0.02, 0.01, L)   # r_outer < r_inner
 
 
+def test_coaxial_rc_duality_summary_cancels_geometry_factor():
+    sigma, eps_r, a, b, length = 5.0, 2.25, 0.01, 0.05, 0.4
+    out = coaxial_rc_duality_summary(sigma, eps_r, a, b, length)
+
+    expected_r = math.log(b / a) / (2.0 * math.pi * sigma * length)
+    expected_c = 2.0 * math.pi * EPS0 * eps_r * length / math.log(b / a)
+    assert out["policy"] == "coaxial_annulus_ec_es_rc_duality"
+    assert out["R_ohm"] == pytest.approx(expected_r)
+    assert out["C_F"] == pytest.approx(expected_c)
+    assert out["tau_s"] == pytest.approx(EPS0 * eps_r / sigma)
+    assert out["tau_rel_error"] < 1.0e-12
+    assert out["checks"]["positive_R"]
+    assert out["checks"]["positive_C"]
+    assert out["checks"]["geometry_cancels_in_RC"]
+
+    measured = coaxial_rc_duality_summary(
+        sigma,
+        eps_r,
+        a,
+        b,
+        length,
+        measured_resistance_ohm=expected_r * (1.0 + 2.0e-8),
+        measured_capacitance_F=expected_c * (1.0 - 1.0e-8),
+    )
+    assert measured["measured_R_rel_error"] == pytest.approx(2.0e-8)
+    assert measured["measured_C_rel_error"] == pytest.approx(1.0e-8)
+    assert measured["measured_tau_rel_error"] < 3.0e-8
+
+    with pytest.raises(ValueError):
+        coaxial_rc_duality_summary(0.0, eps_r, a, b, length)
+
+
 def test_coaxial_capacitor_energy_force():
     er, a, b, length, voltage = 2.5, 0.01, 0.03, 0.2, 120.0
     out = coaxial_capacitor_energy_force(er, a, b, length, voltage)
@@ -107,6 +142,44 @@ def test_coaxial_capacitor_energy_force():
         coaxial_capacitor_energy_force(er, b, a, length, voltage)
 
 
+def test_spherical_capacitor_energy_summary_tracks_energy_field_and_pressure():
+    er, a, b, voltage = 2.5, 0.01, 0.035, 12.0
+    sample = math.sqrt(a * b)
+    out = spherical_capacitor_energy_summary(er, a, b, voltage, sample_radius=sample)
+    eps = EPS0 * er
+    expected_c = 4.0 * math.pi * eps * a * b / (b - a)
+    expected_e_sample = voltage * a * b / ((b - a) * sample * sample)
+
+    assert out["policy"] == "spherical_capacitor_energy_field_gate"
+    assert out["C_F"] == pytest.approx(expected_c)
+    assert out["energy_J"] == pytest.approx(0.5 * expected_c * voltage * voltage)
+    assert out["electric_field_sample_V_per_m"] == pytest.approx(expected_e_sample)
+    assert out["electric_field_inner_V_per_m"] / out["electric_field_outer_V_per_m"] == pytest.approx((b / a) ** 2)
+    assert out["pressure_ratio"] == pytest.approx((b / a) ** 4)
+    assert out["checks"]["energy_matches_half_CV2"]
+    assert out["checks"]["field_scales_as_inverse_r_squared"]
+    assert out["checks"]["pressure_ratio_geometry_only"]
+
+    measured = spherical_capacitor_energy_summary(
+        er,
+        a,
+        b,
+        voltage,
+        sample_radius=sample,
+        measured_capacitance_F=expected_c * (1.0 + 5.0e-5),
+        measured_energy_J=0.5 * expected_c * voltage * voltage * (1.0 - 6.0e-5),
+        measured_sample_field_V_per_m=expected_e_sample * (1.0 + 8.0e-3),
+    )
+    assert measured["measured_C_rel_error"] == pytest.approx(5.0e-5)
+    assert measured["measured_energy_rel_error"] == pytest.approx(6.0e-5)
+    assert measured["measured_sample_field_rel_error"] == pytest.approx(8.0e-3)
+
+    with pytest.raises(ValueError):
+        spherical_capacitor_energy_summary(er, b, a, voltage)
+    with pytest.raises(ValueError):
+        spherical_capacitor_energy_summary(er, a, b, voltage, sample_radius=b)
+
+
 def test_layered_parallel_plate_capacitance():
     area, d = 1e-4, 1e-3
     # single layer must reduce to the plain slab C = eps0 eps_r A / d
@@ -123,6 +196,55 @@ def test_layered_parallel_plate_capacitance():
     assert math.isclose(mix["eps_eff"], 2.0 / (1.0 / 2.0 + 1.0 / 8.0), rel_tol=1e-12)
     with pytest.raises(ValueError):
         layered_parallel_plate_capacitance(area, [d, d], [4.0])   # length mismatch
+
+
+def test_layered_parallel_plate_stack_summary_tracks_d_continuity_and_energy():
+    area = 2.0e-2
+    thicknesses = [8.0e-4, 1.2e-3]
+    eps_r_layers = [2.0, 6.0]
+    voltage = 10.0
+    out = layered_parallel_plate_stack_summary(area, thicknesses, eps_r_layers, voltage)
+
+    series = thicknesses[0] / eps_r_layers[0] + thicknesses[1] / eps_r_layers[1]
+    expected_c = EPS0 * area / series
+    expected_d = EPS0 * voltage / series
+    expected_fields = [expected_d / (EPS0 * er) for er in eps_r_layers]
+    expected_drops = [field * thick for field, thick in zip(expected_fields, thicknesses)]
+
+    assert out["policy"] == "layered_parallel_plate_series_dielectric"
+    assert out["C"] == pytest.approx(expected_c)
+    assert out["normal_displacement_C_per_m2"] == pytest.approx(expected_d)
+    assert out["layer_fields_V_per_m"] == pytest.approx(expected_fields)
+    assert out["layer_voltage_drops_V"] == pytest.approx(expected_drops)
+    assert out["interface_voltages_V"] == pytest.approx([expected_drops[0]])
+    assert sum(out["layer_voltage_drops_V"]) == pytest.approx(voltage)
+    assert out["energy_J"] == pytest.approx(0.5 * expected_c * voltage * voltage)
+    assert out["checks"]["voltage_drops_sum_to_drive"]
+    assert out["checks"]["layer_energies_sum_to_total"]
+
+    measured = layered_parallel_plate_stack_summary(
+        area,
+        thicknesses,
+        eps_r_layers,
+        voltage,
+        measured_capacitance_F=expected_c * (1.0 + 2.0e-9),
+        measured_interface_voltages=[expected_drops[0] + 1.0e-10],
+        measured_layer_fields_V_per_m=[-expected_fields[0], -expected_fields[1]],
+        measured_energy_J=0.5 * expected_c * voltage * voltage * (1.0 - 3.0e-9),
+    )
+    assert measured["measured_capacitance_rel_error"] == pytest.approx(2.0e-9)
+    assert measured["measured_interface_voltage_abs_errors_V"] == pytest.approx([1.0e-10])
+    assert measured["measured_layer_field_rel_errors"] == pytest.approx([0.0, 0.0])
+    assert measured["measured_energy_rel_error"] == pytest.approx(3.0e-9)
+
+    with pytest.raises(ValueError):
+        layered_parallel_plate_stack_summary(
+            area,
+            thicknesses,
+            eps_r_layers,
+            voltage,
+            measured_interface_voltages=[1.0, 2.0],
+        )
 
 
 def test_parallel_plate_capacitor_energy_force():

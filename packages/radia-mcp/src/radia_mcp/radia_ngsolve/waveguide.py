@@ -740,6 +740,54 @@ def sparameter_group_delay(frequencies, s_values):
     return delays
 
 
+def sparameter_group_delay_summary(
+    frequencies,
+    s_values,
+    expected_group_delay_s=None,
+    rtol=1.0e-6,
+    atol=0.0,
+):
+    """Summarize group delay from a sampled complex S-parameter trace.
+
+    This is the public, solver-independent counterpart to CST/Touchstone phase
+    post-processing. The input phase is unwrapped by
+    :func:`sparameter_group_delay`; this wrapper records min/max/mean delay and,
+    when a reference delay is supplied, an explicit pass/fail residual.
+    """
+    delays = sparameter_group_delay(frequencies, s_values)
+    freqs = [float(f) for f in frequencies]
+    mean_delay = sum(delays) / len(delays)
+    min_delay = min(delays)
+    max_delay = max(delays)
+    out = {
+        "schema": "radia-ngsolve.sparameter-group-delay-summary.v1",
+        "n_points": len(delays),
+        "frequency_start_Hz": freqs[0],
+        "frequency_stop_Hz": freqs[-1],
+        "group_delay_s": delays,
+        "minimum_group_delay_s": min_delay,
+        "maximum_group_delay_s": max_delay,
+        "mean_group_delay_s": mean_delay,
+        "span_group_delay_s": max_delay - min_delay,
+        "negative_group_delay_count": sum(1 for value in delays if value < 0.0),
+    }
+    if expected_group_delay_s is not None:
+        expected = float(expected_group_delay_s)
+        abs_error = max(abs(value - expected) for value in delays)
+        rel_error = abs_error / max(abs(expected), 1.0e-300)
+        out.update({
+            "expected_group_delay_s": expected,
+            "max_abs_error_s": abs_error,
+            "max_rel_error": rel_error,
+            "rtol": float(rtol),
+            "atol": float(atol),
+            "status": "ok" if abs_error <= float(atol) or rel_error <= float(rtol) else "needs_attention",
+        })
+    else:
+        out["status"] = "ok" if out["negative_group_delay_count"] == 0 else "needs_attention"
+    return out
+
+
 def helmholtz_cutoff_wavenumbers_2d(mesh, n_modes, bc="neumann", wall="wall",
                                     order=3, shift=-1.0):
     """Lowest cutoff wavenumbers k_c [1/m] of a waveguide cross-section by solving the 2D

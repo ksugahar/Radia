@@ -1152,6 +1152,93 @@ def pm_drive_speed_sweep(lambda_m, Ld, Lq, Imax, Vmax, pole_pairs,
     }
 
 
+def pm_drive_efficiency_map_health(sweep_or_rows, required_regions=("MTPA", "FW", "MTPV"), tol=1.0e-9):
+    """Summarise whether a PM drive speed/efficiency map is internally consistent.
+
+    This is the small table-health gate to run before comparing a JMAG efficiency
+    map (or any FE-exported drive table) with a solver-independent dq reference.
+    It checks that rows are feasible, efficiencies are bounded, electrical and
+    mechanical speeds obey ``omega_e = pole_pairs * omega_mech``, power balances
+    as ``P_in = P_em + P_cu``, and the expected operating regions are present.
+    """
+
+    if isinstance(sweep_or_rows, dict) and "rows" in sweep_or_rows:
+        rows = list(sweep_or_rows["rows"])
+        params = dict(sweep_or_rows.get("parameters", {}))
+    else:
+        rows = list(sweep_or_rows)
+        params = {}
+    if not rows:
+        raise ValueError("efficiency map rows must not be empty")
+    pp = params.get("pole_pairs")
+    region_counts = {}
+    feasible_rows = []
+    power_balance_errors = []
+    speed_contract_errors = []
+    bounded_efficiency = []
+    speed_multiples = []
+
+    for row in rows:
+        region = str(row.get("region", ""))
+        region_counts[region] = region_counts.get(region, 0) + 1
+        if row.get("feasible") is True:
+            feasible_rows.append(row)
+        if "efficiency" in row:
+            eta = float(row["efficiency"])
+            bounded_efficiency.append(0.0 <= eta <= 1.0 + float(tol))
+        if all(key in row for key in ("P_in", "P_em", "P_cu")):
+            scale = max(abs(float(row["P_in"])), abs(float(row["P_em"])), abs(float(row["P_cu"])), 1.0)
+            power_balance_errors.append(abs(float(row["P_in"]) - float(row["P_em"]) - float(row["P_cu"])) / scale)
+        if pp is not None and all(key in row for key in ("omega_e", "omega_mech")):
+            scale = max(abs(float(row["omega_e"])), 1.0)
+            speed_contract_errors.append(abs(float(row["omega_e"]) - float(pp) * float(row["omega_mech"])) / scale)
+        if "speed_multiple" in row:
+            speed_multiples.append(float(row["speed_multiple"]))
+
+    if not feasible_rows:
+        raise ValueError("at least one feasible row is required")
+
+    def _row_metric(row, key, default=-math.inf):
+        return float(row[key]) if key in row else default
+
+    max_eff_row = max(feasible_rows, key=lambda row: _row_metric(row, "efficiency"))
+    max_torque_row = max(feasible_rows, key=lambda row: _row_metric(row, "torque"))
+    max_power_row = max(feasible_rows, key=lambda row: _row_metric(row, "P_em"))
+    required = [str(region) for region in required_regions]
+    checks = {
+        "rows_nonempty": True,
+        "all_rows_feasible": len(feasible_rows) == len(rows),
+        "efficiency_bounded": all(bounded_efficiency) if bounded_efficiency else False,
+        "power_balance_ok": max(power_balance_errors) <= float(tol) if power_balance_errors else False,
+        "speed_contract_ok": max(speed_contract_errors) <= float(tol) if speed_contract_errors else (pp is None),
+        "required_regions_present": all(region_counts.get(region, 0) > 0 for region in required),
+        "speed_multiples_non_decreasing": all(
+            speed_multiples[i] <= speed_multiples[i + 1] + float(tol)
+            for i in range(len(speed_multiples) - 1)
+        ) if speed_multiples else True,
+    }
+    return {
+        "policy": "pm_drive_efficiency_map_health_gate",
+        "n_rows": len(rows),
+        "n_feasible_rows": len(feasible_rows),
+        "region_sequence": [str(row.get("region", "")) for row in rows],
+        "region_counts": region_counts,
+        "required_regions": required,
+        "max_efficiency": float(max_eff_row.get("efficiency", math.nan)),
+        "max_efficiency_region": str(max_eff_row.get("region", "")),
+        "max_efficiency_speed_multiple": max_eff_row.get("speed_multiple"),
+        "max_torque_Nm": float(max_torque_row.get("torque", math.nan)),
+        "max_torque_region": str(max_torque_row.get("region", "")),
+        "max_output_power_W": float(max_power_row.get("P_em", math.nan)),
+        "max_output_power_region": str(max_power_row.get("region", "")),
+        "max_power_balance_rel_error": max(power_balance_errors) if power_balance_errors else math.nan,
+        "max_speed_contract_rel_error": max(speed_contract_errors) if speed_contract_errors else math.nan,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "tol": float(tol),
+    }
+
+
 def induction_machine_thevenin(V1, R1, X1, Xm):
     """Thevenin source the rotor branch sees in a 3-phase induction-machine single-cage
     equivalent circuit (the shunt magnetizing reactance ``Xm`` moved to the source):
@@ -1197,6 +1284,234 @@ def induction_machine_breakdown(V1, R1, X1, R2, X2, Xm, omega_s):
     Vth, Rth, Xth = induction_machine_thevenin(V1, R1, X1, Xm)
     root = math.hypot(Rth, Xth + X2)
     return R2 / root, 3.0 * Vth * Vth / (2.0 * omega_s * (Rth + root))
+
+
+def induction_machine_slip_sweep_summary(
+    V1,
+    R1,
+    X1,
+    R2,
+    X2,
+    Xm,
+    line_frequency_hz,
+    pole_pairs,
+    slips=(0.005, 0.03, 0.1, 0.2, 1.0),
+    tol=1.0e-12,
+):
+    """Summarize the induction-machine slip-frequency teaching contract.
+
+    FEMM-style induction-motor workflows identify rotor/cage parameters from
+    time-harmonic solves at ``f_slip = slip * f_line`` and then use an
+    equivalent circuit for the torque-speed curve.  This helper keeps that
+    handoff visible: every row records slip, slip frequency, speed, torque, and
+    the closed-form breakdown point.  It is deliberately circuit-only so it can
+    serve as a public, solver-independent gate for FE-extracted parameters.
+    """
+
+    f_line = float(line_frequency_hz)
+    pp = float(pole_pairs)
+    if f_line <= 0.0:
+        raise ValueError("line_frequency_hz must be > 0")
+    if pp <= 0.0:
+        raise ValueError("pole_pairs must be > 0")
+    slip_values = [float(slip) for slip in slips]
+    if not slip_values:
+        raise ValueError("slips must not be empty")
+    if any(slip <= 0.0 for slip in slip_values):
+        raise ValueError("slips must be positive")
+
+    omega_s = 2.0 * math.pi * f_line / pp
+    s_breakdown, torque_breakdown = induction_machine_breakdown(
+        V1, R1, X1, R2, X2, Xm, omega_s
+    )
+    Vth, Rth, Xth = induction_machine_thevenin(V1, R1, X1, Xm)
+    rows = []
+    for slip in slip_values:
+        torque = induction_machine_torque(V1, R1, X1, R2, X2, Xm, omega_s, slip)
+        rows.append({
+            "slip": slip,
+            "slip_frequency_hz": slip * f_line,
+            "mechanical_speed_rad_per_s": (1.0 - slip) * omega_s,
+            "mechanical_speed_rpm": (1.0 - slip) * 60.0 * f_line / pp,
+            "torque_Nm": torque,
+            "torque_over_breakdown": torque / torque_breakdown if torque_breakdown else math.nan,
+        })
+
+    doubled_s_breakdown, doubled_torque_breakdown = induction_machine_breakdown(
+        V1, R1, X1, 2.0 * float(R2), X2, Xm, omega_s
+    )
+    sampled_peak = max(row["torque_Nm"] for row in rows)
+    checks = {
+        "slip_frequency_contract": all(
+            abs(row["slip_frequency_hz"] - row["slip"] * f_line) <= float(tol)
+            for row in rows
+        ),
+        "motoring_torque_nonnegative": all(row["torque_Nm"] >= -float(tol) for row in rows),
+        "breakdown_ge_sampled_torque": torque_breakdown + float(tol) >= sampled_peak,
+        "breakdown_slip_positive": s_breakdown > 0.0,
+        "doubling_rotor_resistance_doubles_breakdown_slip": abs(
+            doubled_s_breakdown - 2.0 * s_breakdown
+        ) <= max(float(tol), 1.0e-12 * max(1.0, abs(2.0 * s_breakdown))),
+        "doubling_rotor_resistance_preserves_breakdown_torque": abs(
+            doubled_torque_breakdown - torque_breakdown
+        ) <= max(float(tol), 1.0e-12 * max(1.0, abs(torque_breakdown))),
+    }
+    return {
+        "policy": "induction_machine_slip_frequency_equivalent_circuit_gate",
+        "inputs": {
+            "V1": float(V1),
+            "R1": float(R1),
+            "X1": float(X1),
+            "R2": float(R2),
+            "X2": float(X2),
+            "Xm": float(Xm),
+            "line_frequency_hz": f_line,
+            "pole_pairs": pp,
+        },
+        "thevenin": {"Vth": Vth, "Rth": Rth, "Xth": Xth},
+        "omega_sync_mech_rad_per_s": omega_s,
+        "synchronous_speed_rpm": 60.0 * f_line / pp,
+        "breakdown": {
+            "slip": s_breakdown,
+            "torque_Nm": torque_breakdown,
+            "slip_frequency_hz": s_breakdown * f_line,
+        },
+        "rotor_resistance_scaling": {
+            "R2_scale": 2.0,
+            "breakdown_slip": doubled_s_breakdown,
+            "breakdown_torque_Nm": doubled_torque_breakdown,
+        },
+        "rows": rows,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "tol": float(tol),
+    }
+
+
+def _induction_phase_voltage_current(line_voltage, line_current, connection):
+    key = str(connection).strip().lower()
+    if key in {"wye", "star", "y"}:
+        return float(line_voltage) / math.sqrt(3.0), float(line_current), "wye"
+    if key in {"delta", "d"}:
+        return float(line_voltage), float(line_current) / math.sqrt(3.0), "delta"
+    raise ValueError("connection must be 'wye'/'star' or 'delta'")
+
+
+def induction_machine_noload_lockedrotor_summary(
+    no_load_voltage_ll,
+    no_load_current_line,
+    no_load_power_total,
+    locked_voltage_ll,
+    locked_current_line,
+    locked_power_total,
+    line_frequency_hz,
+    pole_pairs,
+    stator_resistance_ohm=None,
+    connection="wye",
+    tol=1.0e-12,
+):
+    """Extract per-phase induction-machine equivalent-circuit parameters from
+    no-load and locked-rotor test rows.
+
+    Inputs are three-phase line-line voltage, line current, and total real
+    power.  For the default wye/star connection, ``V_phase=V_LL/sqrt(3)`` and
+    ``I_phase=I_line``.  The no-load row estimates the magnetizing branch
+    (``Rc``, ``Xm``); the locked-rotor row estimates series ``R_eq`` and
+    ``X_eq``.  If ``stator_resistance_ohm`` is supplied, ``R2' = R_eq - R1``
+    is reported as a teaching check before calling
+    :func:`induction_machine_slip_sweep_summary`.
+    """
+
+    f_line = float(line_frequency_hz)
+    pp = float(pole_pairs)
+    if f_line <= 0.0:
+        raise ValueError("line_frequency_hz must be > 0")
+    if pp <= 0.0:
+        raise ValueError("pole_pairs must be > 0")
+    values = (
+        no_load_voltage_ll, no_load_current_line, no_load_power_total,
+        locked_voltage_ll, locked_current_line, locked_power_total,
+    )
+    if any(float(value) <= 0.0 for value in values):
+        raise ValueError("test voltages, currents, and powers must be positive")
+
+    v0, i0, connection_key = _induction_phase_voltage_current(
+        no_load_voltage_ll, no_load_current_line, connection
+    )
+    vlr, ilr, _ = _induction_phase_voltage_current(
+        locked_voltage_ll, locked_current_line, connection_key
+    )
+    p0_phase = float(no_load_power_total) / 3.0
+    plr_phase = float(locked_power_total) / 3.0
+    no_load_pf = float(no_load_power_total) / (3.0 * v0 * i0)
+    locked_pf = float(locked_power_total) / (3.0 * vlr * ilr)
+    if no_load_pf > 1.0 + float(tol):
+        raise ValueError("no-load apparent power is smaller than real power")
+    if locked_pf > 1.0 + float(tol):
+        raise ValueError("locked-rotor apparent power is smaller than real power")
+
+    iw = p0_phase / v0
+    im_sq = i0 * i0 - iw * iw
+    if im_sq < -float(tol):
+        raise ValueError("no-load power component exceeds no-load current")
+    im = math.sqrt(max(0.0, im_sq))
+    rc = v0 * v0 / p0_phase
+    xm = v0 / im if im > 0.0 else math.inf
+
+    z_eq = vlr / ilr
+    r_eq = plr_phase / (ilr * ilr)
+    x_sq = z_eq * z_eq - r_eq * r_eq
+    if x_sq < -float(tol):
+        raise ValueError("locked-rotor resistance exceeds impedance magnitude")
+    x_eq = math.sqrt(max(0.0, x_sq))
+    r2_est = None if stator_resistance_ohm is None else r_eq - float(stator_resistance_ohm)
+    checks = {
+        "no_load_power_factor_le_one": no_load_pf <= 1.0 + float(tol),
+        "locked_rotor_power_factor_le_one": locked_pf <= 1.0 + float(tol),
+        "magnetizing_current_real": im_sq >= -float(tol),
+        "locked_rotor_reactance_real": x_sq >= -float(tol),
+        "positive_magnetizing_reactance": xm > 0.0,
+        "positive_locked_rotor_reactance": x_eq > 0.0,
+    }
+    if r2_est is not None:
+        checks["estimated_rotor_resistance_positive"] = r2_est > -float(tol)
+
+    return {
+        "policy": "induction_machine_noload_lockedrotor_parameter_gate",
+        "connection": connection_key,
+        "line_frequency_hz": f_line,
+        "pole_pairs": pp,
+        "synchronous_speed_rpm": 60.0 * f_line / pp,
+        "no_load": {
+            "line_voltage_V": float(no_load_voltage_ll),
+            "line_current_A": float(no_load_current_line),
+            "total_power_W": float(no_load_power_total),
+            "phase_voltage_V": v0,
+            "phase_current_A": i0,
+            "power_factor": no_load_pf,
+            "core_loss_current_A": iw,
+            "magnetizing_current_A": im,
+            "Rc_ohm": rc,
+            "Xm_ohm": xm,
+        },
+        "locked_rotor": {
+            "line_voltage_V": float(locked_voltage_ll),
+            "line_current_A": float(locked_current_line),
+            "total_power_W": float(locked_power_total),
+            "phase_voltage_V": vlr,
+            "phase_current_A": ilr,
+            "power_factor": locked_pf,
+            "Zeq_ohm": z_eq,
+            "Req_ohm": r_eq,
+            "Xeq_ohm": x_eq,
+            "R1_ohm": None if stator_resistance_ohm is None else float(stator_resistance_ohm),
+            "R2_referred_est_ohm": r2_est,
+            "equal_split_leakage_reactance_ohm": 0.5 * x_eq,
+        },
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "tol": float(tol),
+    }
 
 
 def synchronous_power_angle_torque(V, E, Xd, Xq, omega_e, pole_pairs, delta):
@@ -2252,6 +2567,157 @@ def pm_circuit_loadline_operating_point(Br, magnet_len, gap, iron_path, mu_r, mu
             "safe_against_knee": margin >= 0.0,
         })
     return out
+
+
+def pm_loadline_demag_risk_summary(rows, axis_key=None, amber_margin_A_per_m=1.0e5):
+    """Summarize PM load-line demagnetization margins as a reusable risk gate.
+
+    ``rows`` should contain ``demag_margin_A_per_m`` and, ideally,
+    ``safe_against_knee`` from :func:`pm_circuit_loadline_operating_point`.
+    The summary keeps the student-facing contract compact: safe rows must form
+    a prefix, the first unsafe operating point is explicit, and the red/amber/
+    green label is based only on the minimum load-line margin.
+    """
+    rows = list(rows)
+    if not rows:
+        raise ValueError("rows must contain at least one load-line operating point")
+    if amber_margin_A_per_m < 0.0:
+        raise ValueError("amber_margin_A_per_m must be non-negative")
+    if axis_key is None:
+        axis_key = next((key for key in ("gap_m", "temperature_C", "point") if key in rows[0]), None)
+
+    margins = []
+    safe_flags = []
+    for row in rows:
+        if "demag_margin_A_per_m" in row:
+            margin = float(row["demag_margin_A_per_m"])
+        elif "H_m_A_per_m" in row and "H_knee_A_per_m" in row:
+            margin = demag_margin(float(row["H_m_A_per_m"]), float(row["H_knee_A_per_m"]))
+        else:
+            raise KeyError("each row needs demag_margin_A_per_m or H_m_A_per_m + H_knee_A_per_m")
+        margins.append(margin)
+        safe_flags.append(bool(row.get("safe_against_knee", margin >= 0.0)))
+
+    first_unsafe_index = next((idx for idx, safe in enumerate(safe_flags) if not safe), None)
+    minimum_index = min(range(len(margins)), key=margins.__getitem__)
+    safe_prefix_count = first_unsafe_index if first_unsafe_index is not None else len(rows)
+    min_margin = margins[minimum_index]
+    risk_label = "red" if min_margin < 0.0 else ("amber" if min_margin <= amber_margin_A_per_m else "green")
+
+    summary = {
+        "schema": "radia-ngsolve.pm-loadline-demag-risk-summary.v1",
+        "axis_key": axis_key,
+        "row_count": len(rows),
+        "safe_prefix_count": safe_prefix_count,
+        "all_safe_against_knee": all(safe_flags),
+        "first_unsafe_index": first_unsafe_index,
+        "minimum_margin_index": minimum_index,
+        "minimum_demag_margin_A_per_m": min_margin,
+        "risk_label": risk_label,
+        "checks": {
+            "safe_region_is_prefix": all(not safe_flags[i] or safe_flags[i - 1] for i in range(1, len(safe_flags))),
+            "margin_monotone_decreasing": all(a > b for a, b in zip(margins, margins[1:])),
+            "margin_monotone_nonincreasing": all(a >= b for a, b in zip(margins, margins[1:])),
+        },
+    }
+    if axis_key is not None:
+        summary["minimum_margin_axis_value"] = rows[minimum_index].get(axis_key)
+        summary["first_unsafe_axis_value"] = (
+            rows[first_unsafe_index].get(axis_key) if first_unsafe_index is not None else None
+        )
+        if axis_key == "gap_m":
+            summary["first_unsafe_gap_m"] = summary["first_unsafe_axis_value"]
+            summary["largest_safe_gap_m"] = (
+                rows[safe_prefix_count - 1].get(axis_key) if safe_prefix_count > 0 else None
+            )
+    return summary
+
+
+def pm_temperature_demag_sweep_summary(
+    Br_20C,
+    H_knee_20C,
+    temperature_C,
+    magnet_len,
+    gaps,
+    iron_path,
+    mu_r,
+    mu_rec=1.05,
+    br_temp_coeff_pct_per_K=-0.11,
+    knee_temp_coeff_pct_per_K=-0.45,
+):
+    """Temperature-aware PM load-line / demagnetization-margin sweep.
+
+    This is a solver-independent teaching gate for motor demagnetization studies:
+    first update room-temperature remanence and irreversible-demag knee to the hot
+    operating point, then run the same leakage-free load line for each gap.
+    ``H_knee_20C`` is signed (negative in the second quadrant); the temperature
+    coefficient is applied to its magnitude and the sign is restored.
+    """
+    if magnet_len <= 0.0:
+        raise ValueError("magnet_len must be positive")
+    if iron_path < 0.0:
+        raise ValueError("iron_path must be non-negative")
+    if mu_r <= 0.0:
+        raise ValueError("mu_r must be positive")
+    if mu_rec <= 0.0:
+        raise ValueError("mu_rec must be positive")
+    gaps = [float(gap) for gap in gaps]
+    if not gaps:
+        raise ValueError("gaps must contain at least one value")
+    if any(gap < 0.0 for gap in gaps):
+        raise ValueError("gaps must be non-negative")
+
+    dT = float(temperature_C) - 20.0
+    br_scale = 1.0 + float(br_temp_coeff_pct_per_K) * dT / 100.0
+    knee_scale = 1.0 + float(knee_temp_coeff_pct_per_K) * dT / 100.0
+    if br_scale <= 0.0:
+        raise ValueError("hot Br scale must remain positive")
+    if knee_scale <= 0.0:
+        raise ValueError("hot H_knee scale must remain positive")
+
+    br_hot = float(Br_20C) * br_scale
+    h_knee_hot = -abs(float(H_knee_20C)) * knee_scale
+    rows = []
+    for gap in gaps:
+        op = pm_circuit_loadline_operating_point(
+            Br=br_hot,
+            magnet_len=magnet_len,
+            gap=gap,
+            iron_path=iron_path,
+            mu_r=mu_r,
+            mu_rec=mu_rec,
+            H_knee=h_knee_hot,
+        )
+        row = {"gap_m": gap}
+        row.update(op)
+        rows.append(row)
+
+    b_values = [row["B_gap_T"] for row in rows]
+    h_values = [row["H_m_A_per_m"] for row in rows]
+    margins = [row["demag_margin_A_per_m"] for row in rows]
+    risk_summary = pm_loadline_demag_risk_summary(rows, axis_key="gap_m")
+    return {
+        "schema": "radia-ngsolve.pm-temperature-demag-sweep.v1",
+        "temperature_C": float(temperature_C),
+        "Br_hot_T": br_hot,
+        "H_knee_hot_A_per_m": h_knee_hot,
+        "Br_scale": br_scale,
+        "H_knee_scale": knee_scale,
+        "gaps_m": gaps,
+        "rows": rows,
+        "first_unsafe_gap_m": risk_summary["first_unsafe_gap_m"],
+        "safe_prefix_count": risk_summary["safe_prefix_count"],
+        "minimum_demag_margin_A_per_m": risk_summary["minimum_demag_margin_A_per_m"],
+        "risk_label": risk_summary["risk_label"],
+        "risk_summary": risk_summary,
+        "checks": {
+            "B_gap_monotone_decreasing": all(a > b for a, b in zip(b_values, b_values[1:])),
+            "H_m_monotone_more_negative": all(a > b for a, b in zip(h_values, h_values[1:])),
+            "margin_monotone_decreasing": all(a > b for a, b in zip(margins, margins[1:])),
+            "safe_region_is_prefix": risk_summary["checks"]["safe_region_is_prefix"],
+            "permeance_identity": max(row["B_identity_abs_error_T"] for row in rows) < 1.0e-12,
+        },
+    }
 
 
 def two_wire_external_inductance(separation, radius):

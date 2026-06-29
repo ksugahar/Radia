@@ -22,6 +22,9 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_measurement_row, shape_measurement_rows,
                                           box_through_cylinder_reference_row,
                                           mounting_plate_boss_reference_row,
+                                          keyed_terminal_plate_reference_row,
+                                          flanged_sleeve_reference_row,
+                                          ribbed_busbar_heat_sink_reference_row,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
                                           box_face_pressure_moment_rows,
@@ -68,6 +71,16 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert '"mounting_plate_boss_five_holes", "volume": 12.786811880091562' in doc
     assert "min_edge_over_characteristic" in doc
     assert "max_volume_rel_error = 0.0" in doc
+    assert "stepped cylindrical spacer" in doc
+    assert "rel_error = 5.854366888206992e-6" in doc
+    assert "shape_volume_crosscheck_summary(..., rtol=1e-5)" in doc
+    assert "keyed terminal plate" in doc
+    assert '"keyed_terminal_plate_two_bosses", "volume": 9.364087557965556' in doc
+    assert "flanged sleeve" in doc
+    assert '"flanged_sleeve_four_bolt_holes", "volume": 5.085955762823052' in doc
+    assert "Ribbed busbar / heat-sink" in doc
+    assert "ribbed_busbar_heat_sink_reference_row" in doc
+    assert '"ribbed_busbar_heat_sink_four_holes", "volume": 13.617497357233166' in doc
 
 
 def test_annular_segment_volume_and_validity():
@@ -572,6 +585,107 @@ def test_mounting_plate_boss_reference_matches_slot19_volume_gate():
     assert summary["status"] == "ok"
     assert summary["sources"] == ["build123d", "cubit"]
     assert summary["max_volume_rel_error"] < 2.0e-16
+
+
+def test_stepped_spacer_slot27_uses_external_kernel_roundtrip_tolerance():
+    reference = [{"name": "stepped_spacer_four_bolt_holes", "volume": 4.8536349860900865}]
+    measured = {
+        "build123d": [{"name": "stepped_spacer_four_bolt_holes", "volume": 4.8536349860900865}],
+        "cubit": [{"name": "stepped_spacer_four_bolt_holes", "volume": 4.853663401216389}],
+    }
+
+    strict_summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-6)
+    roundtrip_summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-5)
+
+    assert strict_summary["status"] == "needs_attention"
+    assert strict_summary["comparison_sets"][0]["status"] == "ok"
+    assert strict_summary["comparison_sets"][1]["status"] == "needs_attention"
+    assert roundtrip_summary["status"] == "ok"
+    assert roundtrip_summary["ok_for_cad_roundtrip_volume"] is True
+    assert roundtrip_summary["max_volume_rel_error"] == pytest.approx(5.854366888206992e-6)
+
+
+def test_keyed_terminal_plate_slot35_matches_volume_roundtrip_gate():
+    reference = [keyed_terminal_plate_reference_row(
+        8.0, 3.0, 0.4,
+        0.55, 0.5, 2.5, 0.22,
+        1.8, 0.8,
+        0.7, 1.0,
+        0.15, 3.4, -0.9,
+    )]
+    measured = {
+        "build123d": [{"name": "keyed_terminal_plate_two_bosses", "volume": 9.364087557965554}],
+        "cubit": [{"name": "keyed_terminal_plate_two_bosses", "volume": 9.364087557965554}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(9.364087557965556)
+    assert row["terms"]["base"] == pytest.approx(9.6)
+    assert row["terms"]["rectangular_window"] < 0.0
+    assert row["terms"]["edge_key_slot"] < 0.0
+    assert row["policy"] == "analytic_keyed_terminal_plate_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([8.0, 3.0, 0.9])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
+    assert summary["max_volume_rel_error"] < 2.0e-16
+
+
+def test_flanged_sleeve_slot43_matches_volume_roundtrip_gate():
+    reference = [flanged_sleeve_reference_row(
+        1.8, 0.35,
+        0.75, 1.1,
+        0.28,
+        1.25, 0.12,
+        bolt_count=4,
+    )]
+    measured = {
+        "build123d": [{"name": "flanged_sleeve_four_bolt_holes", "volume": 5.085955762823052}],
+        "cubit": [{"name": "flanged_sleeve_four_bolt_holes", "volume": 5.085958320184421}],
+    }
+
+    row = reference[0]
+    strict_summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-7)
+    roundtrip_summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-6)
+
+    assert row["volume"] == pytest.approx(5.085955762823052)
+    assert row["terms"]["flange_annulus"] == pytest.approx(3.476360766756322)
+    assert row["terms"]["hub_annulus"] == pytest.approx(1.6729295039631007)
+    assert row["terms"]["bolt_holes"] < 0.0
+    assert row["bolt_count"] == 4
+    assert row["policy"] == "analytic_flanged_sleeve_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([3.6, 3.6, 1.45])
+    assert strict_summary["status"] == "needs_attention"
+    assert roundtrip_summary["status"] == "ok"
+    assert roundtrip_summary["sources"] == ["build123d", "cubit"]
+    assert roundtrip_summary["max_volume_rel_error"] == pytest.approx(5.028278267134254e-7)
+
+
+def test_ribbed_busbar_heat_sink_reference_matches_volume_roundtrip_gate():
+    reference = [ribbed_busbar_heat_sink_reference_row(
+        8.0, 3.2, 0.35,
+        4, 0.2, 0.75, 0.35,
+        0.18, 3.2, 1.25,
+    )]
+    measured = {
+        "build123d": [{"name": "ribbed_busbar_heat_sink_four_holes", "volume": reference[0]["volume"]}],
+        "cubit": [{"name": "ribbed_busbar_heat_sink_four_holes", "volume": reference[0]["volume"]}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(13.617497357233166)
+    assert row["terms"]["base"] == pytest.approx(8.96)
+    assert row["terms"]["straight_ribs"] == pytest.approx(4.8)
+    assert row["terms"]["four_base_holes"] < 0.0
+    assert row["fin_count"] == 4
+    assert row["clearances"]["hole_to_fin_band"] > 0.0
+    assert row["policy"] == "analytic_ribbed_busbar_heat_sink_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([8.0, 3.2, 1.1])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
 
 
 def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
