@@ -176,3 +176,76 @@ def quarter_wave_directional_coupler_gate(coupling, z0=50.0):
         "lossless": abs(power_sum - 1.0) <= 1.0e-15,
         "status": "ok" if abs(product_error) <= 1.0e-12 and abs(power_sum - 1.0) <= 1.0e-15 else "needs_attention",
     }
+
+
+def dq_to_three_phase_currents(id_current, iq_current, theta_e_rad, phases=("U", "V", "W")):
+    """Return balanced three-phase currents from amplitude-invariant dq values.
+
+    The convention is ``i_phase = id*cos(theta_phase) - iq*sin(theta_phase)``
+    with phase angles ``U=theta``, ``V=theta-120deg``, and ``W=theta+120deg``.
+    It is intentionally a small handoff contract for motor FEM and drive
+    notebooks before any solver-specific circuit-current API is called.
+    """
+
+    phase_names = tuple(phases)
+    if len(phase_names) != 3:
+        raise ValueError("exactly three phase names are required")
+    theta = float(theta_e_rad)
+    angles = (theta, theta - 2.0 * math.pi / 3.0, theta + 2.0 * math.pi / 3.0)
+    d = float(id_current)
+    q = float(iq_current)
+    return {
+        phase: d * math.cos(angle) - q * math.sin(angle)
+        for phase, angle in zip(phase_names, angles)
+    }
+
+
+def three_phase_currents_to_dq_summary(
+    currents,
+    theta_e_rad,
+    expected_id=None,
+    expected_iq=None,
+    phases=("U", "V", "W"),
+    tol=1.0e-12,
+):
+    """Recover dq currents and balance checks from a three-phase current row."""
+
+    phase_names = tuple(phases)
+    if len(phase_names) != 3:
+        raise ValueError("exactly three phase names are required")
+    theta = float(theta_e_rad)
+    angles = (theta, theta - 2.0 * math.pi / 3.0, theta + 2.0 * math.pi / 3.0)
+    values = [float(currents[phase]) for phase in phase_names]
+    d = (2.0 / 3.0) * sum(value * math.cos(angle) for value, angle in zip(values, angles))
+    q = -(2.0 / 3.0) * sum(value * math.sin(angle) for value, angle in zip(values, angles))
+    i0 = sum(values) / 3.0
+    abc_square_sum = sum(value * value for value in values)
+    dq_square_sum = 1.5 * (d * d + q * q)
+    payload = {
+        "policy": "three_phase_dq_current_handoff_gate",
+        "phase_order": list(phase_names),
+        "theta_e_rad": theta,
+        "id": d,
+        "iq": q,
+        "i0": i0,
+        "abc_square_sum": abc_square_sum,
+        "dq_square_sum_scaled": dq_square_sum,
+        "abc_vs_dq_square_sum_error": abs(abc_square_sum - dq_square_sum),
+        "zero_sequence_abs": abs(i0),
+        "tol": float(tol),
+    }
+    checks = {
+        "zero_sequence_ok": abs(i0) <= float(tol),
+        "abc_square_sum_ok": abs(abc_square_sum - dq_square_sum) <= float(tol),
+    }
+    if expected_id is not None:
+        payload["expected_id"] = float(expected_id)
+        payload["id_abs_error"] = abs(d - float(expected_id))
+        checks["id_ok"] = payload["id_abs_error"] <= float(tol)
+    if expected_iq is not None:
+        payload["expected_iq"] = float(expected_iq)
+        payload["iq_abs_error"] = abs(q - float(expected_iq))
+        checks["iq_ok"] = payload["iq_abs_error"] <= float(tol)
+    payload["checks"] = checks
+    payload["status"] = "ok" if all(checks.values()) else "needs_attention"
+    return payload
