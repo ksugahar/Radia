@@ -181,6 +181,7 @@ build.log
 *.bak_*
 *.old_*
 *.lockedold
+*.lockedold*
 *.lockedold.pyd
 *.locked-old.pyd
 git_bisect_test.ps1
