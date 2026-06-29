@@ -2493,6 +2493,18 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	}
 	}  // end else (pure-MMM dense path; the moment path above already filled SystemMatrix + RHS)
 
+	// ---- loop-free KKT / Schur setup (method-0 DIRECT LU; rad.m_loop_deflate, default OFF) ----
+	// Build the field-null loop basis Q (BuildLoopBasis, ROW-MAJOR totalDOF x nLoop) so the LU solve
+	// below enforces Q^T x = 0 EXACTLY via a Schur complement, using the EXACT dense A^-1.  Unlike ANY
+	// iterative solver, the dense LU handles the loop near-null space of A (A q = (1/chi) q) without
+	// divergence -- the whole reason the method-1 (BiCGSTAB/GMRES) loop-free routes failed.
+	std::vector<double> kktQ; int kktNLoop = 0;
+	if(rad.m_loop_deflate && IntrctPtr != nullptr)
+	{
+		IntrctPtr->BuildLoopBasis(kktQ, kktNLoop);
+		if(!(kktNLoop > 0 && (long long)kktQ.size() == (long long)totalDOF * (long long)kktNLoop)) kktNLoop = 0;
+	}
+
 	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
 	auto t_lu_start = std::chrono::high_resolution_clock::now();
 #ifdef HAVE_LAPACK
@@ -2515,8 +2527,56 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		}
 	});
 
-	// dgesv overwrites SystemMatrix with LU factors and RHS with solution
+	if(kktNLoop > 0)
 	{
+		// LOOP-FREE KKT / SCHUR with the EXACT dense A^-1 (factor A ONCE, solve the augmented [b | Q]):
+		//   x0 = A^-1 b ;  W = A^-1 Q ;  S = Q^T W ;  l = S^-1 (Q^T x0) ;  x = x0 - W l  ->  Q^T x = 0.
+		// dgesv (nrhs = 1 + nLoop) factors A and solves all RHS in one shot; column-major B = [b | Q].
+		const int nrhsK = 1 + kktNLoop;
+		std::vector<double> Bmat((size_t)totalDOF * (size_t)nrhsK, 0.0);
+		for(int d = 0; d < totalDOF; d++) Bmat[(size_t)d] = RHS[(size_t)d];                       // col 0 = b
+		for(int a = 0; a < kktNLoop; a++)
+			for(int d = 0; d < totalDOF; d++)
+				Bmat[(size_t)d + (size_t)(1 + a) * (size_t)totalDOF] = kktQ[(size_t)d * kktNLoop + a];  // col 1+a = Q[:,a]
+		{
+			ngcore::SuspendTaskManager stm;
+			radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
+			int nr = nrhsK;
+			dgesv_(&totalDOF, &nr, SystemMatrix.data(), &totalDOF, ipiv.data(), Bmat.data(), &totalDOF, &info);
+		}
+		if(info != 0) return -1;
+		// S = Q^T W (column-major for LAPACK: S[a + b*nLoop]),  rhsL = Q^T x0
+		std::vector<double> Smat((size_t)kktNLoop * (size_t)kktNLoop, 0.0), rhsL((size_t)kktNLoop, 0.0);
+		for(int a = 0; a < kktNLoop; a++)
+		{
+			for(int b2 = 0; b2 < kktNLoop; b2++)
+			{
+				double s = 0.0;
+				for(int d = 0; d < totalDOF; d++)
+					s += kktQ[(size_t)d * kktNLoop + a] * Bmat[(size_t)d + (size_t)(1 + b2) * (size_t)totalDOF];
+				Smat[(size_t)a + (size_t)b2 * (size_t)kktNLoop] = s;
+			}
+			double s = 0.0;
+			for(int d = 0; d < totalDOF; d++) s += kktQ[(size_t)d * kktNLoop + a] * Bmat[(size_t)d];
+			rhsL[(size_t)a] = s;
+		}
+		// l = S^-1 rhsL (dense LU on the tiny nLoop x nLoop Schur)
+		std::vector<int> sIpiv((size_t)kktNLoop, 0);
+		int nl = kktNLoop, oneI = 1, infoS = 0; char trN = 'N';
+		dgetrf_(&nl, &nl, Smat.data(), &nl, sIpiv.data(), &infoS);
+		if(infoS != 0) return -1;
+		dgetrs_(&trN, &nl, &oneI, Smat.data(), &nl, sIpiv.data(), rhsL.data(), &nl, &infoS);
+		// x = x0 - W l, written back into RHS (the existing line-search / FlatMagn path consumes RHS)
+		for(int d = 0; d < totalDOF; d++)
+		{
+			double s = Bmat[(size_t)d];
+			for(int a = 0; a < kktNLoop; a++) s -= Bmat[(size_t)d + (size_t)(1 + a) * (size_t)totalDOF] * rhsL[(size_t)a];
+			RHS[(size_t)d] = s;
+		}
+	}
+	else
+	{
+		// dgesv overwrites SystemMatrix with LU factors and RHS with solution
 		ngcore::SuspendTaskManager stm;
 		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
 		dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
@@ -3160,170 +3220,19 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			const double bicg_tol = rad.m_bicg_tol;
 			const int bicg_max_iter = 10000;
 
-			// ---- loop-growth-suppression DEFLATION (default OFF; rad.m_loop_deflate) ----
-			// Solve the co-loop-projected system  P A P x = P b  (P = I - Q(Q^T Q)^-1 Q^T, Q =
-			// field-null loop basis from BuildLoopBasis) so the field-null loop circulation NEVER
-			// enters the solution -> loop-free at ANY bicg_tol (decouples co-loop accuracy from loop
-			// suppression, unlike loose-tol early-stopping).  matvec/precond are wrapped as P(.)P +
-			// (I-P) (identity on the loop subspace -> non-singular iteration); RHS + initial guess are
-			// projected onto co-loop.  PROTOTYPE: dense Q (O(N*nLoop)/matvec); a sparse local cycle
-			// basis is the O(N) production form.
-			const double loopPen = rad.m_loop_penalty;
-			const bool loopDef = rad.m_loop_deflate;
-			std::vector<double> dfQ, dfGLU; std::vector<int> dfIpiv; int dfNLoop = 0;
-			if((loopDef || loopPen > 0.0) && IntrctPtr != nullptr)
+			// Loop-free (rad.m_loop_deflate) is supported ONLY by the DIRECT method-0 (dense LU) KKT/Schur
+			// path: the field-null loops are the near-null space of A, which an iterative solver
+			// (BiCGSTAB/GMRES) cannot resolve (A^-1 Q diverges).  Fail loud rather than silently returning
+			// a loop-polluted solve.
+			if(rad.m_loop_deflate)
 			{
-				IntrctPtr->BuildLoopBasis(dfQ, dfNLoop);
-				if(dfNLoop > 0 && (long long)dfQ.size() == (long long)totalDOF * (long long)dfNLoop)
-				{
-					dfGLU.assign((size_t)dfNLoop * (size_t)dfNLoop, 0.0);
-					for(int a = 0; a < dfNLoop; a++)
-						for(int b = 0; b < dfNLoop; b++)
-						{
-							double s = 0.0;
-							for(int d = 0; d < totalDOF; d++)
-								s += dfQ[(size_t)d * dfNLoop + a] * dfQ[(size_t)d * dfNLoop + b];
-							dfGLU[(size_t)a * dfNLoop + b] = s;
-						}
-					dfIpiv.assign((size_t)dfNLoop, 0);
-					int ndf = dfNLoop, infod = 0;
-					dgetrf_(&ndf, &ndf, dfGLU.data(), &ndf, dfIpiv.data(), &infod);
-					if(infod != 0) dfNLoop = 0;  // factorization failed -> disable (fail safe: no deflation)
-				}
-				else dfNLoop = 0;  // no loops / size mismatch -> no deflation
+				fprintf(stderr, "Radia::Solve> loop_deflate (loop-free) requires method=0 (direct LU); the method-1 iterative solver cannot resolve the loop near-null space of A.\n");
+				return -4;
 			}
-			// applyP: in-place co-loop projection  v <- v - Q (Q^T Q)^-1 Q^T v   (no-op if dfNLoop==0)
-			auto applyP = [&](double* v) {
-				if(dfNLoop <= 0) return;
-				std::vector<double> c((size_t)dfNLoop, 0.0);
-				for(int a = 0; a < dfNLoop; a++)
-				{
-					double s = 0.0;
-					for(int d = 0; d < totalDOF; d++) s += dfQ[(size_t)d * dfNLoop + a] * v[d];
-					c[a] = s;
-				}
-				int ndf = dfNLoop, nrhs = 1, infod = 0; char tr = 'N';
-				dgetrs_(&tr, &ndf, &nrhs, dfGLU.data(), &ndf, dfIpiv.data(), c.data(), &ndf, &infod);
-				for(int d = 0; d < totalDOF; d++)
-				{
-					double s = 0.0;
-					for(int a = 0; a < dfNLoop; a++) s += dfQ[(size_t)d * dfNLoop + a] * c[a];
-					v[d] -= s;
-				}
-			};
-			// GAUGE PENALTY matvec: y = A x + lam * Q (Q^T Q)^-1 Q^T x   (precond + RHS UNCHANGED, so the
-			// block-Jacobi stays consistent -- a low-rank perturbation of A, unlike deflation).  Lifts the
-			// field-null loop eigenvalue 1/chi -> 1/chi+lam, suppressing the loop content of the solution
-			// by 1/(1+lam*chi) at ANY bicg_tol.
-			auto matvecPen = [&](const double* x, double* y) {
-				matvec(x, y);
-				if(dfNLoop <= 0 || loopPen <= 0.0) return;
-				std::vector<double> c((size_t)dfNLoop, 0.0);
-				for(int a = 0; a < dfNLoop; a++)
-				{
-					double s = 0.0;
-					for(int d = 0; d < totalDOF; d++) s += dfQ[(size_t)d * dfNLoop + a] * x[d];
-					c[a] = s;
-				}
-				int ndf = dfNLoop, nrhs = 1, infod = 0; char tr = 'N';
-				dgetrs_(&tr, &ndf, &nrhs, dfGLU.data(), &ndf, dfIpiv.data(), c.data(), &ndf, &infod);
-				for(int d = 0; d < totalDOF; d++)
-				{
-					double s = 0.0;
-					for(int a = 0; a < dfNLoop; a++) s += dfQ[(size_t)d * dfNLoop + a] * c[a];
-					y[d] += loopPen * s;
-				}
-			};
-			// DEFLATION wrapped operator / preconditioner: P(.)P + (I-P)  (identity on the loop subspace).
-			auto matvecD = [&](const double* x, double* y) {
-				if(dfNLoop <= 0) { matvec(x, y); return; }
-				std::vector<double> px(x, x + totalDOF); applyP(px.data());   // px = P x
-				matvec(px.data(), y);                                        // y  = A (P x)
-				applyP(y);                                                   // y  = P A P x
-				for(int d = 0; d < totalDOF; d++) y[d] += (x[d] - px[d]);    // + (I-P) x
-			};
-			auto precondD = [&](const double* x, double* y) {
-				if(dfNLoop <= 0) { precond(x, y); return; }
-				std::vector<double> px(x, x + totalDOF); applyP(px.data());
-				precond(px.data(), y);
-				applyP(y);
-				for(int d = 0; d < totalDOF; d++) y[d] += (x[d] - px[d]);
-			};
+
 			auto t_bicg_start = std::chrono::high_resolution_clock::now();
 			radia::bicgstab::Result result;
-			if(dfNLoop > 0 && loopPen > 0.0)
-			{
-				// GAUGE PENALTY (production path): consistent block-Jacobi, RHS + initial guess unchanged.
-				result = radia::bicgstab::Solve<double>(totalDOF, matvecPen, precond, RHS.data(), sigma.data(),
-				                                        bicg_tol, bicg_max_iter);
-			}
-			else if(dfNLoop > 0 && loopDef)
-			{
-				// LOOP-FREE via KKT / SCHUR complement (A kept INTACT; reuses the plain A-solve, which
-				// converges -- unlike the saddle-GMRES whose restart stalls on the ~240-iter A-block).
-				// Solve  A x = b  s.t.  Q^T x = 0 :   x0 = A^-1 b ;  W = A^-1 Q (nLoop solves) ;
-				// S = Q^T W ;  l = S^-1 (Q^T x0) ;  x = x0 - W l  ->  Q^T x = 0 BY CONSTRUCTION (loop-free).
-				// A is NEVER modified (penalty/deflation modified A -> BiCGSTAB diverged); only A^-1 applies,
-				// so each solve is the SAME well-behaved plain solve.  NONLINEAR-SAFE: the constraint is
-				// solved fresh INSIDE each Picard linear step (not a post-step projection that fights
-				// self-consistency).  HACApK-reusable: A^-1 -> H-LU; the nLoop solves are a block apply.
-				// PROTOTYPE cost: nLoop+1 plain solves per A (per Picard step) + dense nLoop x nLoop Schur.
-				const int krylov = rad.m_moment_krylov_solver;
-				auto Asolve = [&](const double* rhsv, double* solv) -> radia::bicgstab::Result {
-					if(krylov == 1) {
-						radia::gmres::Result g = radia::gmres::Solve(totalDOF, matvec, precond, rhsv, solv,
-						                                             bicg_tol, bicg_max_iter, rad.m_moment_gmres_restart);
-						return radia::bicgstab::Result{g.iterations, g.residual, g.converged};
-					}
-					return radia::bicgstab::Solve<double>(totalDOF, matvec, precond, rhsv, solv, bicg_tol, bicg_max_iter);
-				};
-				// x0 = A^-1 b  (into sigma; warm-started from FlatMagn)
-				radia::bicgstab::Result r0 = Asolve(RHS.data(), sigma.data());
-				int worstIt = r0.iterations; double worstRes = r0.residual; bool allConv = r0.converged;
-				// W = A^-1 Q, column by column
-				std::vector<double> Wmat((size_t)totalDOF * (size_t)dfNLoop, 0.0);
-				std::vector<double> qcol((size_t)totalDOF), wcol((size_t)totalDOF);
-				for(int a = 0; a < dfNLoop; a++)
-				{
-					for(int d = 0; d < totalDOF; d++) qcol[(size_t)d] = dfQ[(size_t)d * dfNLoop + a];
-					std::fill(wcol.begin(), wcol.end(), 0.0);
-					radia::bicgstab::Result ra = Asolve(qcol.data(), wcol.data());
-					for(int d = 0; d < totalDOF; d++) Wmat[(size_t)d * dfNLoop + a] = wcol[(size_t)d];
-					if(ra.iterations > worstIt) worstIt = ra.iterations;
-					if(ra.residual > worstRes) worstRes = ra.residual;
-					allConv = allConv && ra.converged;
-				}
-				// S = Q^T W (column-major for LAPACK: S[a + b*nLoop]),  rhsL = Q^T x0
-				std::vector<double> Smat((size_t)dfNLoop * (size_t)dfNLoop, 0.0), rhsL((size_t)dfNLoop, 0.0);
-				for(int a = 0; a < dfNLoop; a++)
-				{
-					for(int b2 = 0; b2 < dfNLoop; b2++)
-					{
-						double s = 0.0;
-						for(int d = 0; d < totalDOF; d++) s += dfQ[(size_t)d * dfNLoop + a] * Wmat[(size_t)d * dfNLoop + b2];
-						Smat[(size_t)a + (size_t)b2 * dfNLoop] = s;   // column-major (a=row, b2=col)
-					}
-					double s = 0.0;
-					for(int d = 0; d < totalDOF; d++) s += dfQ[(size_t)d * dfNLoop + a] * sigma[(size_t)d];
-					rhsL[(size_t)a] = s;
-				}
-				// l = S^-1 rhsL (dense LU);  x = x0 - W l
-				std::vector<int> sIpiv((size_t)dfNLoop, 0);
-				int nl = dfNLoop, oneI = 1, infoS = 0; char trN = 'N';
-				dgetrf_(&nl, &nl, Smat.data(), &nl, sIpiv.data(), &infoS);
-				if(infoS == 0)
-				{
-					dgetrs_(&trN, &nl, &oneI, Smat.data(), &nl, sIpiv.data(), rhsL.data(), &nl, &infoS);
-					for(int d = 0; d < totalDOF; d++)
-					{
-						double s = 0.0;
-						for(int a = 0; a < dfNLoop; a++) s += Wmat[(size_t)d * dfNLoop + a] * rhsL[(size_t)a];
-						sigma[(size_t)d] -= s;
-					}
-				}
-				result.iterations = worstIt; result.residual = worstRes; result.converged = allConv;
-			}
-			else if(rad.m_moment_krylov_solver == 1)
+			if(rad.m_moment_krylov_solver == 1)
 			{
 				// GMRES for the plain (non-loop-free) solve -- makes the m_moment_krylov_solver=1 flag LIVE
 				// (was a dead stub).  GMRES is robust where BiCGSTAB stalls on the non-normal operator.
