@@ -351,14 +351,14 @@ def test_streamfunction_biplanar(biplanar_vols):
 def test_streamfunction_figures_no_in_figure_title():
     """Lab figure convention (radia_mcp.figure): NO in-figure title on ANY
     figure -- the caption carries it.  The shipped panel calc cannot import the
-    radia_mcp save-time gate, and the examples/ demos that DON'T use
+    radia_mcp save-time gate, and the docs-local demo helpers that DON'T use
     save_lab_figure have no runtime gate either, so lock the whole SF figure
-    suite statically: the shipped calc AND every examples/stream_function
-    demo use no ax.set_title / fig.suptitle (panels are identified by (a)-(d)
+    suite statically: the shipped calc AND every docs/stream_function demo
+    helper use no ax.set_title / fig.suptitle (panels are identified by (a)-(d)
     corner text via ax.text / ax.text2D).  Fast (source scan; no NGSolve)."""
     import glob
     targets = [CALC] + sorted(glob.glob(os.path.join(
-        REPO, "examples", "stream_function", "demo_*.py")))
+        REPO, "docs", "stream_function", "demo_*.py")))
     bad = []
     for path in targets:
         with open(path, encoding="utf-8") as f:

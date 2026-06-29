@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:31Z",
+  "generated_at_utc": "2026-06-29T04:52:54Z",
   "notebook": "docs/stream_function/regularization.ipynb",
-  "notebook_sha256": "a1bdd6a63f003d5d55a91aa5d45994f3f79612f51a7858606871eb5ee0d5e99e",
+  "notebook_sha256": "6e219d692849cfb0e5f469db91275396ea0fe6dc747c3e6046427e5fca20caf3",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -16,7 +16,7 @@
     "code_cells": 7,
     "executed_code_cells": 7,
     "code_cells_with_outputs": 7,
-    "output_count": 22,
+    "output_count": 18,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -28,15 +28,15 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "78424c22ba5f8fb76247cbcf12d7ebf6cdae48bf9f73ca4c6f6bb2fdaeda43f0",
-      "source_preview": "import sys, time\nfrom pathlib import Path\nimport numpy as np\nimport radia\nEX = Path(radia.__file__).resolve().parents[2] / \"examples\" / \"stream_function\"\nassert (EX / \"demo_planar_uniform_fem_psi.py\").exists(), f\"shipped demos not found: {EX}\"\nsys.path.insert(0, str(EX))\n\n%matplotlib inline\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\n\nimport demo_planar_uniform_fem_psi as P\nimport demo_planar_uniform_fem_psi_advanced as ADV\nimport demo_regularized_aca as RA\nfrom radia.stream_function import (aca_tsvd, pseudo_inverse_solve,\n                                   pseudo_inverse_solve_regularized, RegularizedTSVD)\nfrom ngsolve import TaskManager\n\n# planar uniform-Bz benchmark (regularization.md default)\nPLANE_HALF, MAXH, ORDER = 0.25, 0.025, 2\nTH, TZ, NT, B0 = 0.05, 0.10, 5, 1.0e-3\nN_SAMPLE, NLEVELS = 81, 12\n_g = np.linspace(-TH, TH, NT); _X, _Y = np.meshgrid(_g, _g, indexing=\"ij\")\nTARGETS = np.column_stack([_X.ravel(), _Y.ravel(), TZ * np.ones(_X.size)])\nB = B0 * np.o",
+      "source_sha256": "d4879b244c1d10c784e56f270a0507506eff11782422f22b483b0c3cbf624277",
+      "source_preview": "import sys, time\nfrom pathlib import Path\nimport numpy as np\nimport radia\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / \"demo_planar_uniform_fem_psi.py\").exists():\n    NOTEBOOK_DIR = Path(\"docs/stream_function\").resolve()\nHELPERS = NOTEBOOK_DIR\nsys.path.insert(0, str(HELPERS))\n\n%matplotlib inline\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\n\nimport demo_planar_uniform_fem_psi as P\nimport demo_planar_uniform_fem_psi_advanced as ADV\nimport demo_regularized_aca as RA\nfrom radia.stream_function import (aca_tsvd, pseudo_inverse_solve,\n                                   pseudo_inverse_solve_regularized, RegularizedTSVD)\nfrom ngsolve import TaskManager\n\n# planar uniform-Bz benchmark (regularization.md default)\nPLANE_HALF, MAXH, ORDER = 0.25, 0.025, 2\nTH, TZ, NT, B0 = 0.05, 0.10, 5, 1.0e-3\nN_SAMPLE, NLEVELS = 81, 12\n_g = np.linspace(-TH, TH, NT); _X, _Y = np.meshgrid(_g, _g, indexing=\"ij\")\nTARGETS = np.column_stack([_X.ravel(), _Y.ravel(), TZ * np.ones(_X.size)])\nB = ",
       "outputs": [
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 154,
-          "text_sha256": "a27f9c6fef4718ad06cb466d59e90dd286b97a6108cc91ca1c403eab46768fb8",
-          "text_preview": "radia: \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\src\\radia\\__init__.py\nexamples: \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\examples\\stream_function\n",
+          "text_chars": 128,
+          "text_sha256": "e280449302127067f436988458bff9d7baf70210bde365d53a1f10fa82f812f9",
+          "text_preview": "radia: \\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\src\\radia\\__init__.py\ndocs helpers: S:\\Radia\\01_GitHub\\docs\\stream_function\n",
           "text_truncated": false
         }
       ]
@@ -51,8 +51,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 120,
-          "text_sha256": "4267bca3d9bd4640942b6badfe354fa2fd375728f89e09d076c4150f35fa043d",
-          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=2, ndof=1933, free=1773\n  matrix A: M=25 x ndof=1933, assembled in 0.01 s\n",
+          "text_sha256": "513a9657be12f9df79b1894971c558ccae3bae18142d1c8472ebea2a368844ed",
+          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=2, ndof=1933, free=1773\n  matrix A: M=25 x ndof=1933, assembled in 0.02 s\n",
           "text_truncated": false
         },
         {
@@ -83,8 +83,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 760,
-          "text_sha256": "38751144dc553098c3fbfe70d8297b237c1e3babb939fcceb61eceef87086841",
-          "text_preview": "mode                 RMS   p2p/mean  contours  wall[s]  ndof_free\n-----------------------------------------------------------------\nl2                 1.78%      7.59%        56     0.12       1773\nh1                 2.09%      6.81%        27     0.32       1773\nh1_sigma           1.16%      4.01%        44     0.13       1773\ninductance_diag    2.46%      7.75%        27     0.20       1773\nlinf*              5.22%     18.44%        12     0.55         95\n\nl2/h1/h1_sigma/inductance_diag : order=2, maxh=0.025  (shared mesh)\nh1_sigma sigma(x,y)            : exp(-(x*x + y*y) / 0.02)  (1/sigma weighting)\n* linf                          : order=1, maxh=0.05 reduced problem;\n                                  scipy SLSQP is O(ndof^2)/iter (experimental).\n",
+          "text_sha256": "8fe9359a060391f9493bced8fe428fff573a7624fc0d9df4d5ca7f4dab810160",
+          "text_preview": "mode                 RMS   p2p/mean  contours  wall[s]  ndof_free\n-----------------------------------------------------------------\nl2                 1.78%      7.59%        56     0.83       1773\nh1                 2.09%      6.81%        27     0.51       1773\nh1_sigma           1.16%      4.01%        44     0.37       1773\ninductance_diag    2.46%      7.75%        27     0.55       1773\nlinf*              5.23%     18.45%        12     0.37         95\n\nl2/h1/h1_sigma/inductance_diag : order=2, maxh=0.025  (shared mesh)\nh1_sigma sigma(x,y)            : exp(-(x*x + y*y) / 0.02)  (1/sigma weighting)\n* linf                          : order=1, maxh=0.05 reduced problem;\n                                  scipy SLSQP is O(ndof^2)/iter (experimental).\n",
           "text_truncated": false
         }
       ]
@@ -108,7 +108,7 @@
           "rich_output_hashes": {
             "image/png": {
               "chars": 421724,
-              "sha256": "3e5fd9c4ecd6e91e0609e8f4594a4f51b7bde3052ef67d3da8cb443c34cc525f"
+              "sha256": "9baf406a05214231387f5a145abc7edc25f2e71820fff77f7d6ff88640123cd1"
             }
           }
         }
@@ -123,33 +123,17 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 68,
-          "text_sha256": "d53ecc8c69f7065d9642afb2ee52f4b4414e34ddb48fae0f72d9156045c20eba",
-          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=1, ndof=504, free=424\n",
+          "text_chars": 117,
+          "text_sha256": "776dc66c4f307e0505b1c1f1c1d41e6be4828bf31b4211d912a09d51d031692f",
+          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=1, ndof=504, free=424\n  matrix A: M=25 x ndof=504, assembled in 0.02 s\n",
           "text_truncated": false
         },
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 50,
-          "text_sha256": "6232bd2892a163df490721f8be629a2702e796d70d4a095f3472b8eec6a66cbc",
-          "text_preview": "  matrix A: M=25 x ndof=504, assembled in 11.04 s\n",
-          "text_truncated": false
-        },
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 70,
-          "text_sha256": "db697ea5c3aec10b730876420e701ce7ed9ba7bb6d74bf218db6d9e6f428cf9f",
-          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=2, ndof=1933, free=1773\n",
-          "text_truncated": false
-        },
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 51,
-          "text_sha256": "48ed85a6d95b7c1f66ea40f08cc39d8c64faaa2aaabb5607516e5414705c23ba",
-          "text_preview": "  matrix A: M=25 x ndof=1933, assembled in 10.35 s\n",
+          "text_chars": 120,
+          "text_sha256": "f23274a20f853ed03931940e14bf77264a970a4cafdf35df4ef354bada9307b3",
+          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=2, ndof=1933, free=1773\n  matrix A: M=25 x ndof=1933, assembled in 0.05 s\n",
           "text_truncated": false
         },
         {
@@ -163,25 +147,17 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 50,
-          "text_sha256": "06ec7f0dc3a8392ac04aaa5aa7a6299995a659337e4301e481f7c9b946e09cda",
-          "text_preview": "  matrix A: M=25 x ndof=4288, assembled in 4.27 s\n",
+          "text_chars": 51,
+          "text_sha256": "a880652b05c82715ebeca9ea252deb1c734456f30e4fbcd228515cafe1774d94",
+          "text_preview": "  matrix A: M=25 x ndof=4288, assembled in 14.81 s\n",
           "text_truncated": false
         },
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 70,
-          "text_sha256": "5ad69f65296d83d0db184e169b8d7d689c99f094148e3f8a70effbbbb22f4710",
-          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=4, ndof=7569, free=7249\n",
-          "text_truncated": false
-        },
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 50,
-          "text_sha256": "7d96522a0aab1a74b6fcfe706bd2713dffee26ca21115231403004f5984fa11d",
-          "text_preview": "  matrix A: M=25 x ndof=7569, assembled in 0.23 s\n",
+          "text_chars": 120,
+          "text_sha256": "d99eec6c7d8857c4365f27a7c2d462b935000e4306258cc0b9d4733760ba6067",
+          "text_preview": "  mesh: 926 triangles, 504 vertices, H1 order=4, ndof=7569, free=7249\n  matrix A: M=25 x ndof=7569, assembled in 0.04 s\n",
           "text_truncated": false
         },
         {
@@ -196,16 +172,16 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 51,
-          "text_sha256": "f533c3391a5006c4750f00c8830aa1638cbb00cd64974cabbdf6ac1701f32ef0",
-          "text_preview": "  matrix A: M=25 x ndof=11776, assembled in 0.85 s\n",
+          "text_sha256": "6a263be0b43e57d5dc459fead0543881c2dd8720430f5867f00385b4b70f727f",
+          "text_preview": "  matrix A: M=25 x ndof=11776, assembled in 0.30 s\n",
           "text_truncated": false
         },
         {
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 302,
-          "text_sha256": "9559f20176d1c7aee3583a9f488a63763f877c54c1659e7108d6d49c74cdfb0a",
-          "text_preview": "  p    ndof      RMS   p2p/mean  wall[s]\n----------------------------------------\n  1     504    1.02%      3.77%     22.7\n  2    1933    2.09%      6.81%     23.8\n  3    4288    0.51%      1.83%     16.6  <- sweet spot\n  4    7569    2.04%      7.65%      8.3\n  5   11776    2.09%      7.27%     19.7\n",
+          "text_sha256": "a954f733213cf8296da11a822614d7ec19241d2a4c6bbb769703329d78c275f8",
+          "text_preview": "  p    ndof      RMS   p2p/mean  wall[s]\n----------------------------------------\n  1     504    1.02%      3.77%      0.8\n  2    1933    2.09%      6.81%      2.0\n  3    4288    0.51%      1.83%     33.7  <- sweet spot\n  4    7569    2.04%      7.65%      9.4\n  5   11776    2.09%      7.27%     21.9\n",
           "text_truncated": false
         }
       ]
@@ -244,33 +220,25 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 85,
-          "text_sha256": "074bc82f93813f741014e111aaff1349693b652677c8da36b28692718f5ef0dd",
-          "text_preview": "(1) S=I folded form vs pseudo_inverse_solve: rel diff = 9.53e-16  (machine precision)",
+          "text_chars": 151,
+          "text_sha256": "ed0fe3561b1b1fc183713ebdf822e56fa8c557aac952eb1c4df42386720b1373",
+          "text_preview": "(1) S=I folded form vs pseudo_inverse_solve: rel diff = 1.30e-15  (machine precision)\n(2) folded Tikhonov vs dense (A^T A + alpha S)^-1 A^T B, S = H1:\n",
           "text_truncated": false
         },
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 66,
-          "text_sha256": "3846ffb917249f681eeb49876561df0187d094c13c86a514ebac8191c93e75b6",
-          "text_preview": "\n(2) folded Tikhonov vs dense (A^T A + alpha S)^-1 A^T B, S = H1:\n",
+          "text_chars": 74,
+          "text_sha256": "ddeb7a2d50d79175649522e17a9b08a18f23f49c242050d274a91aae556d83b7",
+          "text_preview": "    alpha = 1.862e-18:  rel diff = 1.84e-10  (= ACA compression residual)\n",
           "text_truncated": false
         },
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 148,
-          "text_sha256": "50ade053112cb9ea0d428a73e133698c6f03144e8803c2e7ee5b22064d9eb2c3",
-          "text_preview": "    alpha = 1.862e-18:  rel diff = 2.16e-10  (= ACA compression residual)\n    alpha = 1.862e-15:  rel diff = 3.06e-13  (= ACA compression residual)\n",
-          "text_truncated": false
-        },
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 383,
-          "text_sha256": "576628f9043007c78aac3fd73fe7ac24f14a60130a3ec93a13683ddbd49d522d",
-          "text_preview": "    alpha = 1.862e-13:  rel diff = 1.08e-14  (= ACA compression residual)\n\nOne ACA+TSVD factorisation (rank 25) backs every seminorm S and every alpha;\neach solve(B, alpha) is O(k*(M+N)) -- the whole L-curve reuses the one factorisation.\nSee demo_regularized_aca.py (5-mode sweep) and demo_pareto_tikhonov_aca.py\n(folded-Tikhonov (homogeneity, peak-J) Pareto front at ~50 us/point).\n",
+          "text_chars": 457,
+          "text_sha256": "5aeece72f369f2fd3d7f870155ccbdf0524ad025daa8e78c341635a60c895615",
+          "text_preview": "    alpha = 1.862e-15:  rel diff = 3.19e-13  (= ACA compression residual)\n    alpha = 1.862e-13:  rel diff = 1.09e-14  (= ACA compression residual)\n\nOne ACA+TSVD factorisation (rank 25) backs every seminorm S and every alpha;\neach solve(B, alpha) is O(k*(M+N)) -- the whole L-curve reuses the one factorisation.\nSee demo_regularized_aca.py (5-mode sweep) and demo_pareto_tikhonov_aca.py\n(folded-Tikhonov (homogeneity, peak-J) Pareto front at ~50 us/point).\n",
           "text_truncated": false
         }
       ]
