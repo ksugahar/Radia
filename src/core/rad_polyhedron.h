@@ -128,29 +128,24 @@ public:
 	bool Use6DOF_MSC;          // Historical name; true if element uses per-face MSC (4-6 faces)
 	double CurrentChi;         // Chi used for current solve (for H = M/chi update)
 
-	// --- Real face-vertex geometry (warped-hex support) ------------------------------
+	// --- Real face-vertex geometry (warped quad support) -----------------------------
 	// A general (Cubit/C-type) hexahedron is a TRILINEAR element whose quad faces are
 	// bilinear (non-planar): the 4 corners of a quad face are not coplanar.  The planar
 	// radTPolygon face representation (2D points + a single CoordZ) cannot hold such a
 	// face, so the original code REJECTED it (Error047) which left a half-built object and
 	// downstream heap corruption.  Instead we KEEP the REAL global vertices of every
-	// hexahedron face here and route the (already triangle-based) collocation field +
-	// interaction paths through them -- the quad's 4 real vertices are represented EXACTLY
-	// by the two triangles (V0V1V2)+(V0V2V3) the code already forms.  This is a SINGLE
-	// path: planar AND non-planar hex faces both use the real vertices (the real vertices
-	// are the exact input, so this is at least as accurate as the flattened polygon, which
-	// round-trips the input through a rotation).  Populated only for hexahedra built via
-	// FillInTransAndFacesInLocFrames (AmOfFaces==6); tets are always planar and wedge quads
-	// keep the original behavior for now, so for those (and for subdivision-created hexes
-	// that never run FillIn) GetRealFaceVerts returns false and the caller falls back to
-	// the flattened-polygon reconstruction.
+	// hexahedron / 5-face element face here and route the (already triangle-based)
+	// collocation field + interaction paths through them. The quad's 4 real vertices are
+	// represented exactly by the two triangles (V0V1V2)+(V0V2V3) the code already forms.
+	// Planar and non-planar stored quad faces share this path. Tets and subdivision-created
+	// polyhedra do not populate this storage, so callers fall back to flattened polygons.
 	std::vector<TVector3d> mRealFaceVerts;  // flat: real global vertex k of face f at [f*4 + k]
-	std::vector<int> mRealFaceNV;           // per-face real vertex count (4 for a hex quad); 0/absent => not stored
+	std::vector<int> mRealFaceNV;           // per-face real vertex count (3 for tri, 4 for quad); 0/absent => not stored
 
 	// Real global vertices of face f.  Returns true (and fills out[0..n-1]) whenever the
-	// real vertices were stored for f (hexahedra built through FillInTransAndFacesInLocFrames);
+	// real vertices were stored for f (5/6-face elements built through FillInTransAndFacesInLocFrames);
 	// returns false otherwise so the caller uses the flattened-polygon reconstruction
-	// (tets, wedges, and subdivision-created polyhedra).
+	// (tets and subdivision-created polyhedra).
 	bool GetRealFaceVerts(int f, TVector3d* out, int& n) const
 	{
 		if(f < 0 || f >= (int)mRealFaceNV.size()) return false;
