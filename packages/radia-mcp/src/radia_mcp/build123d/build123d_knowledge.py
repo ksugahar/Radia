@@ -1605,6 +1605,17 @@ same STEP -> Cubit volume check with
 than a single box-hole body because it catches boolean union/overlap accounting
 and multiple-hole subtraction before the geometry enters the mesh pipeline.
 
+Boss-and-hole continuous-loop gate (2026-06-29): a mounting plate with a raised
+cylindrical boss, one central through-hole, and four corner through-holes passed
+the same analytic -> build123d -> Cubit STEP import volume contract via
+`mounting_plate_boss_reference_row(...)`.  The reference row was
+`{"name": "mounting_plate_boss_five_holes", "volume": 12.786811880091562}`;
+build123d measured `12.78681188009156`, Cubit measured
+`12.786811880091562`, `max_volume_rel_error = 1.3892101143412853e-16`,
+surface-area rel error `0.0`, and bbox size abs error `0.0`.  Record
+`min_edge_over_characteristic` along with volume; a CAD body can be valid but
+still mesh-hostile if tiny features slip below the meshability threshold.
+
 Use the full `shape_measurement_health_summary(...)` only when the other CAD
 side also supplies area and bounding boxes.  Keep private tool provenance in
 the private lane; public artifacts should describe this as an external CAD

@@ -49,6 +49,7 @@ def summarize_netgen_vol_inventory(text: str, source: str | None = None) -> dict
     volume_rows = _read_counted_section(lines, "volumeelements", required=False)
     point_rows = _read_counted_section(lines, "points", required=False)
     material_rows = _read_counted_section(lines, "materials", required=False)
+    curvedelements_present = _has_section(lines, "curvedelements")
 
     surface_kind_counts = _count_by_np(surface_rows, 4, SURFACE_KIND_BY_NP)
     volume_kind_counts = _count_by_np(volume_rows, 1, VOLUME_KIND_BY_NP)
@@ -78,12 +79,18 @@ def summarize_netgen_vol_inventory(text: str, source: str | None = None) -> dict
         "volume_kind_counts": volume_kind_counts,
         "points": len(point_rows),
         "materials": materials,
+        "curvedelements_present": curvedelements_present,
         "is_tri_tet_only": is_tri_tet_only,
         "has_mixed_hex_transition": has_mixed_hex_transition,
         "routing_hint": routing_hint,
         "policy": (
             "Cubit/Coreform owns hex-led and mixed hex+pyramid+tet inventory; "
             "Netgen/OCC owns tet-only generation for the first-order education path."
+        ),
+        "order_series_policy": (
+            "Route high-order Cubit .vol files from the first-order element arity "
+            "inventory. The curvedelements section can grow with order without "
+            "changing whether the mesh is tri/tet-only or hex-led mixed."
         ),
     }
 
@@ -114,6 +121,11 @@ def _read_counted_section(lines: list[str], name: str, *, required: bool) -> lis
     if required:
         raise ValueError(f"section {name!r} not found")
     return []
+
+
+def _has_section(lines: Iterable[str], name: str) -> bool:
+    needle = name.lower()
+    return any(line.strip().lower() == needle for line in lines)
 
 
 def _count_by_np(rows: Iterable[str], np_column: int, kind_by_np: dict[int, str]) -> dict[str, int]:

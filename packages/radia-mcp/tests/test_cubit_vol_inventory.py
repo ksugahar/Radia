@@ -70,11 +70,20 @@ endmesh
 """
 
 
+CURVED_MIXED_VOL = MIXED_VOL + """
+curvedelements
+2
+1 2 3 4
+5 6 7 8
+"""
+
+
 def test_cubit_vol_inventory_classifies_hex_pyramid_tet_mixed_mesh():
     inv = summarize_netgen_vol_inventory(MIXED_VOL, source="unit")
 
     assert inv["volume_kind_counts"] == {"hex": 1, "pyramid": 1, "tet": 1}
     assert inv["surface_kind_counts"] == {"quad": 1, "triangle": 1}
+    assert inv["curvedelements_present"] is False
     assert inv["has_mixed_hex_transition"] is True
     assert inv["is_tri_tet_only"] is False
     assert inv["routing_hint"] == "cubit_hex_or_mixed_path"
@@ -87,9 +96,20 @@ def test_cubit_vol_inventory_keeps_tet_only_on_netgen_route():
 
     assert inv["volume_kind_counts"] == {"tet": 1}
     assert inv["surface_kind_counts"] == {"triangle": 1}
+    assert inv["curvedelements_present"] is False
     assert inv["has_mixed_hex_transition"] is False
     assert inv["is_tri_tet_only"] is True
     assert inv["routing_hint"] == "netgen_tri_tet_path"
+
+
+def test_cubit_vol_inventory_keeps_curved_mixed_mesh_on_cubit_route():
+    inv = summarize_netgen_vol_inventory(CURVED_MIXED_VOL)
+
+    assert inv["curvedelements_present"] is True
+    assert inv["volume_kind_counts"] == {"hex": 1, "pyramid": 1, "tet": 1}
+    assert inv["surface_kind_counts"] == {"quad": 1, "triangle": 1}
+    assert inv["routing_hint"] == "cubit_hex_or_mixed_path"
+    assert "curvedelements section can grow with order" in inv["order_series_policy"]
 
 
 def test_cubit_vol_inventory_mcp_tool_dispatches_json():
@@ -112,6 +132,8 @@ def test_cubit_docs_route_tet_only_to_netgen_and_mixed_to_cubit():
     assert "cubit_vol_inventory" in routing
     assert "cubit_hex_or_mixed_path" in routing
     assert "Inventory them explicitly" in routing
+    assert "high-order `.vol` files" in routing
+    assert "companion `.vol.json` material volume alone" in routing
     assert "hex-led and mixed hex+pyramid+tet lane" in pyramid
 
 
@@ -134,3 +156,13 @@ def test_netgen_workflow_records_mapped_hex_brick_area_gate():
     assert "192 hexes" in doc
     assert "surface-area rel err `2.05e-15`" in doc
     assert "Avoid multi-line `dict(...)`" in doc
+
+
+def test_netgen_workflow_records_mixed_order_series_gate():
+    doc = get_netgen_documentation("overview")
+
+    assert "mixed hex+pyramid+tet order-series gate" in doc
+    assert "1 hex, 1 pyramid, 10 tets" in doc
+    assert "curvedelements" in doc
+    assert "cubit_hex_or_mixed_path" in doc
+    assert "zero material volume" in doc

@@ -177,6 +177,13 @@ Route by semantic inventory:
   Inventory them explicitly and route to a solver/export contract that supports
   them, or perform a deliberate conversion.  Do not split them implicitly in a
   generic `.vol` reader.
+- **high-order `.vol` files** still route by the first-order element arity in
+  `surfaceelements` and `volumeelements`.  Order-2..5 exports add
+  `curvedelements` data and grow the file, but the hex/pyramid/tet inventory
+  remains the same routing contract.  Do not infer element existence from the
+  companion `.vol.json` material volume alone: transition blocks such as
+  pyramids can legitimately report zero material volume in the sidecar while
+  still being present in the `.vol` topology.
 
 ## See also
 
