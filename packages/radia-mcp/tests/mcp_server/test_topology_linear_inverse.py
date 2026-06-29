@@ -17,7 +17,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from radia_mcp.topology_optimization.linear_inverse import (
-    tsvd_solve, tikhonov_solve, filter_factors, lcurve)
+    tsvd_solve, tikhonov_solve, filter_factors, lcurve, lcurve_corner)
 
 
 def _build():
@@ -30,6 +30,20 @@ def _build():
     x_true = Vt @ rng.standard_normal(3)                  # truth in row space (recoverable)
     b = A @ x_true + 1e-6 * rng.standard_normal(8)        # mild noise
     return A, b, s, x_true
+
+
+def test_lcurve_corner_selects_interior_regularization():
+    A, b, _, _ = _build()
+    lams = np.array([1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0])
+    corner = lcurve_corner(A, b, lams)
+
+    assert 0 < corner["index"] < len(lams) - 1
+    assert corner["lambda"] == lams[corner["index"]]
+    assert corner["curvature"][0] == 0.0
+    assert corner["curvature"][-1] == 0.0
+    assert corner["curvature"][corner["index"]] > 0.0
+    assert corner["residual_norm"] == corner["points"][corner["index"]][0]
+    assert corner["solution_norm"] == corner["points"][corner["index"]][1]
 
 
 def main():
@@ -70,6 +84,11 @@ def main():
     assert r[0] <= r[1] <= r[2], r            # bigger lam -> worse fit
     assert xn[0] >= xn[1] >= xn[2], xn        # bigger lam -> smaller solution
     print(f"  L-curve residuals = {np.round(r,5)}  solnorms = {np.round(xn,4)}")
+
+    corner = lcurve_corner(A, b, [1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0])
+    assert 0 < corner["index"] < 4, corner
+    print(f"  L-curve corner lambda = {corner['lambda']:.1e}  "
+          f"curvature = {corner['curvature'][corner['index']]:.3g}")
 
     print("\n[OK] TSVD/Tikhonov field-synthesis inversion: TSVD(k=rank)==pinv (1e-10), "
           "Tikhonov(lam->0)==pinv, filter factors, TSVD + L-curve monotonicity verified.")

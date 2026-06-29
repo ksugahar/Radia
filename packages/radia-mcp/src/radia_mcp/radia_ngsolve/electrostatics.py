@@ -82,6 +82,69 @@ def coaxial_shell_resistance(resistivity_rho, r_inner, r_outer, length_L):
     return {"R": resistivity_rho * math.log(r_outer / r_inner) / (2.0 * math.pi * length_L)}
 
 
+def coaxial_rc_duality_summary(conductivity_sigma, eps_r, r_inner, r_outer, length_L=1.0,
+                               measured_resistance_ohm=None, measured_capacitance_F=None):
+    r"""Summary gate for the EC/ES duality of a coaxial annulus.
+
+    The same annular geometry solves two Laplace problems:
+
+    * steady radial conduction: ``R = ln(b/a)/(2*pi*sigma*L)``
+    * electrostatics: ``C = 2*pi*eps0*eps_r*L/ln(b/a)``
+
+    Their product cancels the geometry and leaves the dielectric relaxation time
+    ``R*C = eps/sigma``.  This is a compact teaching gate for checking that an
+    EC solver and an ES solver used the same full circular boundaries and units.
+    """
+
+    if conductivity_sigma <= 0:
+        raise ValueError("conductivity_sigma must be > 0")
+    if eps_r <= 0:
+        raise ValueError("eps_r must be > 0")
+    if length_L <= 0:
+        raise ValueError("length_L must be > 0")
+    if not (r_outer > r_inner > 0):
+        raise ValueError("require r_outer > r_inner > 0")
+
+    sigma = float(conductivity_sigma)
+    er = float(eps_r)
+    length = float(length_L)
+    resistance = coaxial_shell_resistance(1.0 / sigma, r_inner, r_outer, length)["R"]
+    capacitance = 2.0 * math.pi * EPS0 * er * length / math.log(r_outer / r_inner)
+    tau = resistance * capacitance
+    expected_tau = EPS0 * er / sigma
+    out = {
+        "policy": "coaxial_annulus_ec_es_rc_duality",
+        "R_ohm": resistance,
+        "C_F": capacitance,
+        "tau_s": tau,
+        "expected_tau_s": expected_tau,
+        "tau_rel_error": abs(tau - expected_tau) / expected_tau,
+        "conductivity_sigma": sigma,
+        "eps_r": er,
+        "r_inner": float(r_inner),
+        "r_outer": float(r_outer),
+        "length_L": length,
+        "checks": {
+            "positive_R": resistance > 0.0,
+            "positive_C": capacitance > 0.0,
+            "geometry_cancels_in_RC": abs(tau - expected_tau) / expected_tau < 1.0e-12,
+        },
+    }
+    if measured_resistance_ohm is not None:
+        measured_r = float(measured_resistance_ohm)
+        out["measured_R_ohm"] = measured_r
+        out["measured_R_rel_error"] = abs(measured_r - resistance) / resistance
+    if measured_capacitance_F is not None:
+        measured_c = float(measured_capacitance_F)
+        out["measured_C_F"] = measured_c
+        out["measured_C_rel_error"] = abs(measured_c - capacitance) / capacitance
+    if measured_resistance_ohm is not None and measured_capacitance_F is not None:
+        measured_tau = float(measured_resistance_ohm) * float(measured_capacitance_F)
+        out["measured_tau_s"] = measured_tau
+        out["measured_tau_rel_error"] = abs(measured_tau - expected_tau) / expected_tau
+    return out
+
+
 def coaxial_capacitor_energy_force(eps_r, r_inner, r_outer, length_L, voltage):
     r"""Capacitance, energy, field pressure, and radial force of a coaxial capacitor.
 
@@ -148,6 +211,85 @@ def coaxial_capacitor_energy_force(eps_r, r_inner, r_outer, length_L, voltage):
     }
 
 
+def spherical_capacitor_energy_summary(eps_r, r_inner, r_outer, voltage, sample_radius=None,
+                                       measured_capacitance_F=None,
+                                       measured_energy_J=None,
+                                       measured_sample_field_V_per_m=None):
+    r"""Closed-form spherical-capacitor gate for 3D electrostatic solvers.
+
+    A spherical shell with inner radius ``a``, outer radius ``b``, dielectric
+    ``eps = eps0 eps_r``, inner voltage ``V`` and grounded outer conductor has
+
+        C = 4 pi eps a b / (b-a),
+        E(r) = V a b / ((b-a) r^2),
+        W = 1/2 C V^2,
+        p(r) = 1/2 eps E(r)^2.
+
+    The pressure ratio is especially useful as a geometry-only check:
+
+        p_inner / p_outer = (b/a)^4.
+
+    Optional measured values are compared against the exact reference so a
+    notebook, NGSolve validation, or commercial cross-check can write one compact
+    JSON row without embedding solver-specific provenance in this public helper.
+    """
+
+    if eps_r <= 0:
+        raise ValueError("eps_r must be > 0")
+    if not (r_outer > r_inner > 0):
+        raise ValueError("require r_outer > r_inner > 0")
+    if sample_radius is not None and not (r_inner < sample_radius < r_outer):
+        raise ValueError("sample_radius must lie between r_inner and r_outer")
+
+    eps = EPS0 * float(eps_r)
+    a = float(r_inner)
+    b = float(r_outer)
+    v = float(voltage)
+    radius = math.sqrt(a * b) if sample_radius is None else float(sample_radius)
+    capacitance = 4.0 * math.pi * eps * a * b / (b - a)
+    energy = 0.5 * capacitance * v * v
+    e_inner = v * a * b / ((b - a) * a * a)
+    e_outer = v * a * b / ((b - a) * b * b)
+    e_sample = v * a * b / ((b - a) * radius * radius)
+    p_inner = 0.5 * eps * e_inner * e_inner
+    p_outer = 0.5 * eps * e_outer * e_outer
+    out = {
+        "policy": "spherical_capacitor_energy_field_gate",
+        "C_F": capacitance,
+        "energy_J": energy,
+        "eps_r": float(eps_r),
+        "r_inner": a,
+        "r_outer": b,
+        "voltage": v,
+        "sample_radius": radius,
+        "electric_field_inner_V_per_m": e_inner,
+        "electric_field_outer_V_per_m": e_outer,
+        "electric_field_sample_V_per_m": e_sample,
+        "pressure_inner_Pa": p_inner,
+        "pressure_outer_Pa": p_outer,
+        "pressure_ratio": p_inner / p_outer,
+        "checks": {
+            "positive_C": capacitance > 0.0,
+            "energy_matches_half_CV2": abs(energy - 0.5 * capacitance * v * v) <= 1.0e-30,
+            "field_scales_as_inverse_r_squared": abs((e_inner / e_outer) - (b / a) ** 2) / ((b / a) ** 2) < 1.0e-12,
+            "pressure_ratio_geometry_only": abs((p_inner / p_outer) - (b / a) ** 4) / ((b / a) ** 4) < 1.0e-12,
+        },
+    }
+    if measured_capacitance_F is not None:
+        measured_c = float(measured_capacitance_F)
+        out["measured_C_F"] = measured_c
+        out["measured_C_rel_error"] = abs(measured_c - capacitance) / capacitance
+    if measured_energy_J is not None:
+        measured_w = float(measured_energy_J)
+        out["measured_energy_J"] = measured_w
+        out["measured_energy_rel_error"] = abs(measured_w - energy) / energy
+    if measured_sample_field_V_per_m is not None:
+        measured_e = abs(float(measured_sample_field_V_per_m))
+        out["measured_sample_field_V_per_m"] = measured_e
+        out["measured_sample_field_rel_error"] = abs(measured_e - e_sample) / e_sample
+    return out
+
+
 def layered_parallel_plate_capacitance(area, thicknesses, eps_r_layers):
     r"""Capacitance of a parallel-plate stack of dielectric layers normal to the
     plates (layers in SERIES on the field line):
@@ -177,6 +319,95 @@ def layered_parallel_plate_capacitance(area, thicknesses, eps_r_layers):
     series = sum(d / e for d, e in zip(thicknesses, eps_r_layers))
     total = sum(thicknesses)
     return {"C": EPS0 * area / series, "eps_eff": total / series}
+
+
+def layered_parallel_plate_stack_summary(
+    area,
+    thicknesses,
+    eps_r_layers,
+    voltage,
+    measured_capacitance_F=None,
+    measured_interface_voltages=None,
+    measured_layer_fields_V_per_m=None,
+    measured_energy_J=None,
+):
+    r"""Readable validation summary for a layered parallel-plate capacitor.
+
+    Layers are stacked normal to the plates, so the normal displacement ``D`` is
+    constant through the stack.  This gives
+
+        C = eps0 A / sum_i(d_i/eps_ri),
+        D = eps0 V / sum_i(d_i/eps_ri),
+        E_i = D/(eps0 eps_ri),
+        Delta V_i = E_i d_i.
+
+    The helper records the capacitance, effective permittivity, layer fields,
+    voltage drops, interface potentials from the grounded plate, and per-layer
+    energy.  Optional measured values add residuals for solver artifacts.
+    """
+
+    base = layered_parallel_plate_capacitance(area, thicknesses, eps_r_layers)
+    v = float(voltage)
+    series = sum(d / e for d, e in zip(thicknesses, eps_r_layers))
+    displacement = EPS0 * v / series
+    fields = [displacement / (EPS0 * float(e)) for e in eps_r_layers]
+    voltage_drops = [field * float(d) for field, d in zip(fields, thicknesses)]
+    interface_voltages = []
+    acc = 0.0
+    for drop in voltage_drops[:-1]:
+        acc += drop
+        interface_voltages.append(acc)
+    energies = [
+        0.5 * EPS0 * float(e) * field * field * float(area) * float(d)
+        for e, field, d in zip(eps_r_layers, fields, thicknesses)
+    ]
+    energy = sum(energies)
+
+    out = {
+        "policy": "layered_parallel_plate_series_dielectric",
+        "C": base["C"],
+        "eps_eff": base["eps_eff"],
+        "area": float(area),
+        "thicknesses": [float(d) for d in thicknesses],
+        "eps_r_layers": [float(e) for e in eps_r_layers],
+        "voltage": v,
+        "normal_displacement_C_per_m2": displacement,
+        "layer_fields_V_per_m": fields,
+        "layer_voltage_drops_V": voltage_drops,
+        "interface_voltages_V": interface_voltages,
+        "layer_energies_J": energies,
+        "energy_J": energy,
+        "checks": {
+            "voltage_drops_sum_to_drive": abs(sum(voltage_drops) - v) <= max(1.0e-12, abs(v) * 1.0e-12),
+            "layer_energies_sum_to_total": abs(energy - 0.5 * base["C"] * v * v)
+            <= max(1.0e-18, abs(energy) * 1.0e-12),
+        },
+    }
+    if measured_capacitance_F is not None:
+        measured_c = float(measured_capacitance_F)
+        out["measured_capacitance_F"] = measured_c
+        out["measured_capacitance_rel_error"] = abs(measured_c - base["C"]) / base["C"]
+    if measured_interface_voltages is not None:
+        measured = [float(x) for x in measured_interface_voltages]
+        if len(measured) != len(interface_voltages):
+            raise ValueError("measured_interface_voltages length must match n_layers - 1")
+        out["measured_interface_voltages_V"] = measured
+        out["measured_interface_voltage_abs_errors_V"] = [
+            abs(a - b) for a, b in zip(measured, interface_voltages)
+        ]
+    if measured_layer_fields_V_per_m is not None:
+        measured = [float(x) for x in measured_layer_fields_V_per_m]
+        if len(measured) != len(fields):
+            raise ValueError("measured_layer_fields_V_per_m length must match n_layers")
+        out["measured_layer_fields_V_per_m"] = measured
+        out["measured_layer_field_rel_errors"] = [
+            abs(abs(a) - b) / b for a, b in zip(measured, fields)
+        ]
+    if measured_energy_J is not None:
+        measured_e = float(measured_energy_J)
+        out["measured_energy_J"] = measured_e
+        out["measured_energy_rel_error"] = abs(measured_e - energy) / energy
+    return out
 
 
 def parallel_plate_capacitor_energy_force(eps_r, area, gap, voltage):

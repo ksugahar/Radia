@@ -5552,9 +5552,11 @@ capacitance matrix).
 ```python
 from radia_mcp.radia_ngsolve.electrostatic3d import (
     solve_electrostatic_3d, capacitance_from_energy, spherical_capacitor_C, EPS0)
+from radia_mcp.radia_ngsolve.electrostatics import spherical_capacitor_energy_summary
 # conductors = named boundaries; eps_cf = EPS0 (or mesh.MaterialCF for dielectrics)
 gfV = solve_electrostatic_3d(mesh, EPS0, {"inner": V0, "outer": 0.0}, order=2)
 C   = capacitance_from_energy(gfV, EPS0, V0, mesh)      # C = 2 W / V0^2
+row = spherical_capacitor_energy_summary(er, a, b, V0, sample_radius=(a*b)**0.5)
 ```
 
 -div(eps grad V) = rho ;  E = -grad V ;  W = 1/2 integral eps |grad V|^2 ;  C = 2W/V^2.
@@ -5571,6 +5573,11 @@ C = 4 pi eps0 / [(1/er1)(1/a-1/c) + (1/er2)(1/c-1/b)] matches to 0.1 %
 (capacitance_dielectric.py). ISOLATED
 conductor self-capacitance: put the ground boundary far away (C_sphere -> 4 pi eps0 R
 as the box -> infinity).
+
+Spherical-capacitor JSON gate: ``spherical_capacitor_energy_summary`` records
+``C=4*pi*eps*a*b/(b-a)``, ``W=0.5*C*V^2``, ``E(r)=V*a*b/((b-a)r^2)``, and
+``p_inner/p_outer=(b/a)^4``.  Use it as a compact 3D field/energy check before
+trusting mesh-derived capacitance rows or notebook results.
 
 Capacitance MATRIX: ``capacitance_matrix(mesh, eps_cf, [names], order)`` energises each
 conductor to 1 V (others grounded) and reads EVERY conductor's charge from the FEM
@@ -5876,6 +5883,13 @@ GROWING with the gap. Tool-independent gate: FE below the load line (upper bound
 B_gap/loadline both FALLING with the gap, + a radia self-regression; an independent 2D FE
 solver matches radia to ~0.3 % (capability parity, internal cross-val). Validated
 tests/test_pm_loadline.py.
+
+For hot-magnet demagnetisation screening, keep the compact student-facing summary:
+``pm_loadline_demag_risk_summary(rows)`` checks that safe load-line rows form a prefix,
+records ``safe_prefix_count`` / ``first_unsafe_gap_m`` / ``largest_safe_gap_m``, and labels
+the minimum margin as green (>100 kA/m), amber (0..100 kA/m), or red (<0).  This is a
+pre-run margin contract only; local per-element field checks are still required for a final
+irreversible-demag claim.
 """
 
 
@@ -6300,7 +6314,10 @@ machine. The single-cage equivalent circuit, reduced by Thevenin (shunt Xm -> so
 
 ```python
 from radia_mcp.radia_ngsolve.solve import (induction_machine_thevenin,
-    induction_machine_torque, induction_machine_breakdown)
+    induction_machine_torque, induction_machine_breakdown,
+    induction_machine_noload_lockedrotor_summary)
+tests = induction_machine_noload_lockedrotor_summary(
+    V0_LL, I0_line, P0_total, Vlr_LL, Ilr_line, Plr_total, f_line, pole_pairs)
 Vth, Rth, Xth = induction_machine_thevenin(V1, R1, X1, Xm)
 T  = induction_machine_torque(V1, R1, X1, R2, X2, Xm, omega_s, slip)   # air-gap torque [N.m]
 s_max, T_max = induction_machine_breakdown(V1, R1, X1, R2, X2, Xm, omega_s)
@@ -6320,8 +6337,11 @@ at synchronism (s->0), rises to T_max at s_max, the s=1 value is the starting to
 VALIDATION (tests/test_induction_machine.py):
 the closed-form (s_max, T_max) == an INDEPENDENT numeric slip sweep argmax to <1e-3 / <1e-4,
 and the R2-invariance of T_max (with s_max ∝ R2) holds exactly. PURE circuit theory ->
-tool-independent. The analytic basis for the JMAG-roadmap IM 1/4-model FE study (anti-periodic
-+ slip + cage), the induction-machine companion to dq_torque for PM machines.
+tool-independent. Continuous-loop slot 36 adds the no-load / locked-rotor front gate:
+400 V/5 A/900 W no-load gives Rc=177.7777777777778 ohm and Xm=47.830502044476084 ohm;
+90 V/20 A/1200 W locked-rotor gives Req=1.0 ohm, Xeq=2.3979157616563596 ohm, and
+R2'=0.6 ohm if R1=0.4 ohm. The analytic basis for the JMAG-roadmap IM 1/4-model FE study
+(anti-periodic + slip + cage), the induction-machine companion to dq_torque for PM machines.
 """
 
 
@@ -6392,6 +6412,13 @@ At R=0 (lossless) P_in = P_em and efficiency = 1. |V| rises ~linearly with speed
 when it hits the inverter ceiling you are at the field-weakening limit (#37); |I| vs the device
 rating. The terminal (V, I, P, PF) layer for inverter/drive SIZING; closes the dq loop
 currents (MTPA/FW) -> terminals. Validated tests/test_dq_operating_point.py.
+
+For map exports, run ``pm_drive_efficiency_map_health(sweep)`` before comparing rows from a FE
+tool.  It checks the table contract: efficiencies bounded in [0,1], ``P_in = P_em + P_cu``,
+``omega_e = p omega_mech``, nondecreasing speed rows, and required regions such as MTPA/FW/MTPV.
+Continuous-loop slot 37 fixes the JMAG-style speed map gate: regions [MTPA, FW, FW, MTPV],
+max efficiency 0.994425732150756 in MTPV, max output power 2597.750669164122 W in FW, and
+power/speed contract errors below roundoff.
 """
 
 

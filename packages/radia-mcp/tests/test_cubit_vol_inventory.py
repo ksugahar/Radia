@@ -166,3 +166,50 @@ def test_netgen_workflow_records_mixed_order_series_gate():
     assert "curvedelements" in doc
     assert "cubit_hex_or_mixed_path" in doc
     assert "zero material volume" in doc
+
+
+def test_netgen_workflow_records_two_block_interface_bnd_gate():
+    doc = get_netgen_documentation("overview")
+
+    assert "two-block hex interface gate" in doc
+    assert "144 hexes" in doc
+    assert "external area 42" in doc
+    assert "material interface of area 6" in doc
+    assert "Integrate(1, mesh, BND)" in doc
+    assert "returns 48, not 42" in doc
+    assert "get_relatives" in doc
+
+
+def test_netgen_workflow_records_three_block_hex_quality_gate():
+    doc = get_netgen_documentation("overview")
+
+    assert "three-block hex quality gate" in doc
+    assert "216 hexes" in doc
+    assert "external area 57" in doc
+    assert "total area is 12" in doc
+    assert "scaled Jacobian `0.9999999999999999`" in doc
+    assert "returns 69" in doc
+
+
+def test_netgen_workflow_records_curved_hex_cylinder_order_series_gate():
+    doc = get_netgen_documentation("overview")
+
+    assert "curved hex cylinder order-series gate" in doc
+    assert "volume all scheme auto" in doc
+    assert "Trouble finding logical box" in doc
+    assert "224 hexes" in doc
+    assert "1.57e-7" in doc
+    assert "6.99e-8" in doc
+    assert "material-interface area" in doc
+
+
+def test_netgen_workflow_records_annular_hex_tube_field_gate():
+    doc = get_netgen_documentation("overview")
+
+    assert "annular hex tube capacitance field gate" in doc
+    assert "volume all scheme sweep" in doc
+    assert "864 hexes" in doc
+    assert "min scaled Jacobian `0.9951847266721953`" in doc
+    assert "capacitance per length `2*pi/log(b/a)`" in doc
+    assert "capacitance-per-length rel err `1.00e-6`" in doc
+    assert "curved hex export preserves a field quantity" in doc

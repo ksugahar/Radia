@@ -69,3 +69,43 @@ def lcurve(A, b, lams):
         x = tikhonov_solve(A, b, lam)
         out.append((float(np.linalg.norm(A @ x - b)), float(np.linalg.norm(x))))
     return out
+
+
+def lcurve_corner(A, b, lams, eps=1.0e-300):
+    """Select the L-curve corner by maximum discrete curvature in log-log space.
+
+    The return value is a small dictionary so notebook/MATLAB teaching gates can
+    record the chosen lambda, its index, and the full curvature vector without a
+    plotting dependency.  Endpoints have zero curvature by definition; at least
+    three positive lambda samples are required.
+    """
+    lams = np.asarray(lams, dtype=float)
+    if lams.ndim != 1 or lams.size < 3:
+        raise ValueError("lams must be a one-dimensional array with at least three entries")
+    if np.any(lams <= 0.0):
+        raise ValueError("lams must be positive for log-log L-curve curvature")
+
+    pts = lcurve(A, b, lams)
+    residuals = np.asarray([p[0] for p in pts], dtype=float)
+    solution_norms = np.asarray([p[1] for p in pts], dtype=float)
+    xy = np.column_stack((np.log(np.maximum(residuals, eps)),
+                          np.log(np.maximum(solution_norms, eps))))
+
+    curvature = np.zeros(lams.shape, dtype=float)
+    for i in range(1, lams.size - 1):
+        a = xy[i] - xy[i - 1]
+        c = xy[i + 1] - xy[i]
+        chord = xy[i + 1] - xy[i - 1]
+        denom = np.linalg.norm(a) * np.linalg.norm(c) * np.linalg.norm(chord)
+        if denom > 0.0:
+            curvature[i] = 2.0 * abs(a[0] * c[1] - a[1] * c[0]) / denom
+
+    index = int(np.argmax(curvature))
+    return {
+        "lambda": float(lams[index]),
+        "index": index,
+        "curvature": curvature.tolist(),
+        "residual_norm": float(residuals[index]),
+        "solution_norm": float(solution_norms[index]),
+        "points": pts,
+    }

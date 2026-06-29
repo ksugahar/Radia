@@ -331,6 +331,7 @@ IMPLEMENTATION (radia_mcp.topology_optimization.linear_inverse):
   tikhonov_solve(A, b, lam)  Tikhonov solution, argmin ||A x - b||^2 + lam^2 ||x||^2.
   filter_factors(s, lam)     phi_n = s_n^2/(s_n^2+lam^2).
   lcurve(A, b, lams)         (residual_norm, solution_norm) trade-off points.
+  lcurve_corner(A, b, lams)  maximum discrete curvature in log-log L-curve space.
 
 VERIFICATION (golden-locked by tests/mcp_server/test_topology_linear_inverse.py, on a
 controlled 8x5 rank-3 system with singular values [5, 1, 0.05]):
@@ -339,6 +340,9 @@ controlled 8x5 rank-3 system with singular values [5, 1, 0.05]):
   * filter factors phi = s^2/(s^2+lam^2) (the 0.05 mode damped to 0.059 at lam=0.2).
   * TSVD residual non-increasing and solution norm non-decreasing in k; Tikhonov L-curve
     residual increasing and solution norm decreasing as lam grows.
+  * The L-curve corner helper returns an interior lambda, zero endpoint curvature,
+    the selected residual/norm point, and the full curvature vector for notebook
+    or MATLAB teaching artifacts.
 
 WHERE IT PLUGS IN: `field_synthesis` supplies the (analytic) forward map A; this topic
 inverts it stably; `outer_loop` then tunes the manufacturable parameters around it.

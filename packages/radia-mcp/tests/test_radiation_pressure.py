@@ -284,6 +284,40 @@ def test_two_port_sparameter_sweep_health_checks_reciprocity_and_force():
     assert nonreciprocal["max_s21_s12_abs_error"] == pytest.approx(0.08)
 
 
+def test_two_port_touchstone_style_sweep_gate_records_frequency_and_design_row():
+    def ma(mag, phase_deg):
+        phase = math.radians(phase_deg)
+        return mag * complex(math.cos(phase), math.sin(phase))
+
+    frequencies = [0.9e9, 1.0e9, 1.1e9]
+    s11 = [ma(0.05, 0.0), ma(0.10, 0.0), ma(0.22, 0.0)]
+    s21 = [ma(0.95, -5.0), ma(0.70, -90.0), ma(0.42, -160.0)]
+    s12 = [ma(0.9500001, -5.0), ma(0.7000001, -90.0), ma(0.4200001, -160.0)]
+    s22 = [ma(0.05, 0.0), ma(0.10, 0.0), ma(0.22, 0.0)]
+
+    health = two_port_sparameter_sweep_health_summary(
+        frequencies,
+        s11,
+        s21,
+        s12_values=s12,
+        s22_values=s22,
+        power_incident_W=1.0,
+        reciprocity_tolerance=1.0e-5,
+        return_symmetry_tolerance=1.0e-5,
+    )
+
+    design_idx = min(range(len(frequencies)), key=lambda i: abs(frequencies[i] - 1.0e9))
+    assert health["status"] == "ok"
+    assert health["frequency_monotonic_increasing"] is True
+    assert health["reciprocity_ok"] is True
+    assert health["return_symmetry_ok"] is True
+    assert health["passivity_ok"] is True
+    assert design_idx == 1
+    assert health["reciprocity_rows"][design_idx]["frequency_Hz"] == pytest.approx(1.0e9)
+    assert health["reciprocity_rows"][design_idx]["s21_s12_abs_error"] == pytest.approx(1.0e-7)
+    assert health["max_force_frequency_Hz"] == pytest.approx(1.1e9)
+
+
 def test_oblique_radiation_pressure_reduces_to_normal_incidence():
     intensity = 7.0
     area = 0.25

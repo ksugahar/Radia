@@ -3,9 +3,16 @@ import math
 import pytest
 
 from radia_mcp.radia_ngsolve.slot_gates import (
+    acoustic_plane_wave_intensity_convention_gate,
+    box_projected_gradient_least_squares_gate,
+    branch_line_hybrid_gate,
     coenergy_torque_periodic_summary,
+    dq_current_from_gamma_deg,
+    dq_torque_table_health,
     dq_to_three_phase_currents,
+    lumped_pm_dq_torque,
     parallel_wire_force_per_length,
+    pm_recoil_demag_step_summary,
     quarter_wave_directional_coupler_gate,
     three_phase_currents_to_dq_summary,
     two_port_sparameter_health,
@@ -95,6 +102,24 @@ def test_quarter_wave_directional_coupler_gate_for_cst_slot_learning():
     assert gate["s31"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))
 
 
+def test_branch_line_hybrid_gate_for_cst_port_order_and_phase():
+    gate = branch_line_hybrid_gate(z0=50.0)
+
+    assert gate["status"] == "ok"
+    assert gate["through_branch_impedance"] == pytest.approx(50.0)
+    assert gate["shunt_branch_impedance"] == pytest.approx(50.0 / math.sqrt(2.0))
+    assert gate["s11"]["abs"] == pytest.approx(0.0)
+    assert gate["s41"]["abs"] == pytest.approx(0.0)
+    assert gate["s21"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))
+    assert gate["s31"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))
+    assert gate["split_power_sum"] == pytest.approx(1.0)
+    assert gate["through_phase_deg"] == pytest.approx(-90.0)
+    assert gate["coupled_phase_deg"] == pytest.approx(180.0)
+    assert gate["phase_difference_deg"] == pytest.approx(-90.0)
+    assert gate["max_column_power_error"] == pytest.approx(0.0)
+    assert gate["max_orthogonality_error"] == pytest.approx(0.0)
+
+
 def test_three_phase_dq_current_handoff_roundtrip_and_phase_sequence_guard():
     id_ref = -3.0
     iq_ref = 12.0
@@ -131,3 +156,131 @@ def test_three_phase_dq_current_handoff_roundtrip_and_phase_sequence_guard():
     assert wrong["checks"]["iq_ok"] is False
     assert wrong["iq"] == pytest.approx(-iq_ref)
     assert wrong["iq_abs_error"] == pytest.approx(24.0)
+
+
+def test_dq_torque_table_health_closes_jmag_map_column_contract():
+    lambda_m = 0.10
+    Ld = 4.0e-3
+    Lq = 9.0e-3
+    current = 20.0
+    pole_pairs = 3
+    rows = []
+    for gamma_deg in range(-60, 65, 5):
+        id_current, iq_current = dq_current_from_gamma_deg(current, gamma_deg)
+        rows.append({
+            "gamma_deg": float(gamma_deg),
+            "id_A": id_current,
+            "iq_A": iq_current,
+            "torque_Nm": lumped_pm_dq_torque(lambda_m, Ld, Lq, id_current, iq_current, pole_pairs),
+        })
+
+    health = dq_torque_table_health(
+        rows,
+        lambda_m=lambda_m,
+        Ld=Ld,
+        Lq=Lq,
+        current=current,
+        pole_pairs=pole_pairs,
+    )
+
+    assert health["status"] == "ok"
+    assert health["row_count"] == 25
+    assert health["max_current_abs_error_A"] < 1.0e-12
+    assert health["max_torque_abs_error_Nm"] < 1.0e-12
+    assert health["pure_q_row"]["gamma_deg"] == pytest.approx(0.0)
+    assert health["pure_q_row"]["torque_Nm"] == pytest.approx(9.0)
+    assert health["peak_row"]["gamma_deg"] == pytest.approx(30.0)
+    assert health["peak_row"]["id_A"] == pytest.approx(-10.0)
+    assert health["peak_row"]["iq_A"] == pytest.approx(17.320508075688775)
+    assert health["peak_row"]["torque_Nm"] == pytest.approx(11.691342951089922)
+    assert health["peak_row"]["torque_Nm"] / health["pure_q_row"]["torque_Nm"] - 1.0 == pytest.approx(
+        0.299038105676658
+    )
+
+    wrong_peak = [dict(row) for row in rows]
+    for row in wrong_peak:
+        if row["gamma_deg"] == 30.0:
+            row["torque_Nm"] = row["torque_Nm"] - 4.0
+    bad = dq_torque_table_health(wrong_peak, lambda_m, Ld, Lq, current, pole_pairs)
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["torque_column_ok"] is False
+    assert bad["checks"]["peak_row_matches_closed_form"] is False
+
+
+def test_pm_recoil_demag_step_summary_tracks_irreversible_crossing():
+    safe = pm_recoil_demag_step_summary(
+        {0: -2.0e5, 1: -4.0e5, 2: -2.2e5},
+        H_knee_A_per_m=-5.0e5,
+    )
+    assert safe["status"] == "ok"
+    assert safe["irreversible_demag"] is False
+    assert safe["recoil_remanence_ratio_proxy"] == pytest.approx(1.0)
+
+    crossed = pm_recoil_demag_step_summary(
+        {0: -2.0e5, 1: -6.0e5, 2: -3.0e5},
+        H_knee_A_per_m=-5.0e5,
+    )
+    assert crossed["status"] == "ok"
+    assert crossed["irreversible_demag"] is True
+    assert crossed["margins_A_per_m"]["1"] == pytest.approx(-1.0e5)
+    assert crossed["recoil_remanence_ratio_proxy"] == pytest.approx(0.8)
+
+    overclaimed_recovery = pm_recoil_demag_step_summary(
+        {0: -2.0e5, 1: -6.0e5, 2: -1.0e5},
+        H_knee_A_per_m=-5.0e5,
+    )
+    assert overclaimed_recovery["status"] == "needs_attention"
+    assert overclaimed_recovery["checks"]["step2_not_stronger_than_nominal_after_crossing"] is False
+
+
+def test_box_projected_gradient_gate_closes_matlab_optimization_contract():
+    gate = box_projected_gradient_least_squares_gate(
+        matrix=[[1.0, 0.0], [0.0, 1.0]],
+        rhs=[2.0, -1.0],
+        lower=[0.0, 0.0],
+        upper=[1.0, 3.0],
+        initial=[0.0, 0.0],
+        step_size=1.0,
+        max_iterations=5,
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["x"] == pytest.approx([1.0, 0.0])
+    assert gate["gradient"] == pytest.approx([-1.0, 1.0])
+    assert gate["active_upper"] == [True, False]
+    assert gate["active_lower"] == [False, True]
+    assert gate["objective_history"][0] == pytest.approx(2.5)
+    assert gate["objective"] == pytest.approx(1.0)
+    assert gate["max_kkt_residual"] == pytest.approx(0.0)
+    assert gate["projected_gradient_residual"] == pytest.approx(0.0)
+
+    bad_bounds = dict(
+        matrix=[[1.0]],
+        rhs=[1.0],
+        lower=[2.0],
+        upper=[1.0],
+    )
+    with pytest.raises(ValueError):
+        box_projected_gradient_least_squares_gate(**bad_bounds)
+
+
+def test_acoustic_plane_wave_intensity_gate_closes_comsol_amplitude_contract():
+    gate = acoustic_plane_wave_intensity_convention_gate(
+        pressure_peak=2.0,
+        rho=1.2,
+        c=343.0,
+        area=0.5,
+    )
+
+    z0 = 1.2 * 343.0
+    expected_intensity = 0.5 * 2.0 * (2.0 / z0)
+    assert gate["status"] == "ok"
+    assert gate["specific_impedance_Pa_s_per_m"] == pytest.approx(z0)
+    assert gate["pressure_rms_Pa"] == pytest.approx(math.sqrt(2.0))
+    assert gate["intensity_from_peak_W_per_m2"] == pytest.approx(expected_intensity)
+    assert gate["intensity_from_rms_W_per_m2"] == pytest.approx(expected_intensity)
+    assert gate["power_from_peak_W"] == pytest.approx(0.5 * expected_intensity)
+    assert gate["peak_rms_power_residual_W"] == pytest.approx(0.0)
+
+    with pytest.raises(ValueError):
+        acoustic_plane_wave_intensity_convention_gate(1.0, rho=0.0)

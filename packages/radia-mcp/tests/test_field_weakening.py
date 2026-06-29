@@ -23,6 +23,7 @@ from radia_mcp.radia_ngsolve.solve import (
     field_weakening_operating_point,
     field_weakening_speed_capability,
     pm_drive_operating_point,
+    pm_drive_efficiency_map_health,
     pm_drive_speed_sweep,
 )
 
@@ -195,3 +196,55 @@ def test_pm_drive_speed_sweep_records_infeasible_rows():
     assert [row["region"] for row in wide["rows"]] == ["MTPA", "FW", "MTPV"]
     assert wide["rows"][0]["P_cu"] > 0.0
     assert wide["rows"][0]["voltage_utilization"] > wide["rows"][0]["voltage_utilization_lossless"]
+
+
+def test_jmag_pm_drive_speed_sweep_gate_records_region_and_voltage_contract():
+    sweep = pm_drive_speed_sweep(
+        0.1,
+        8.0e-3,
+        16.0e-3,
+        20.0,
+        120.0,
+        4,
+        speed_multiples=(0.5, 1.0, 2.0, 10.0),
+        R=0.05,
+    )
+    rows = sweep["rows"]
+
+    assert sweep["omega_base"] == pytest.approx(455.32785624862885)
+    assert [row["region"] for row in rows] == ["MTPA", "FW", "FW", "MTPV"]
+    assert rows[0]["torque"] == pytest.approx(18.851963084409263)
+    assert rows[2]["torque"] == pytest.approx(11.410462301017828)
+    assert rows[3]["id"] == pytest.approx(-12.91999276662178)
+    assert rows[3]["iq"] == pytest.approx(1.633723744208235)
+    assert rows[3]["current_utilization"] < 0.7
+    assert rows[1]["voltage_utilization_lossless"] == pytest.approx(1.0)
+    assert rows[1]["voltage_utilization"] > 1.0
+    assert rows[2]["voltage_utilization"] > rows[2]["voltage_utilization_lossless"]
+
+
+def test_jmag_efficiency_map_health_gate_summarizes_drive_rows():
+    sweep = pm_drive_speed_sweep(
+        0.1,
+        8.0e-3,
+        16.0e-3,
+        20.0,
+        120.0,
+        4,
+        speed_multiples=(0.5, 1.0, 2.0, 10.0),
+        R=0.05,
+    )
+    health = pm_drive_efficiency_map_health(sweep)
+
+    assert health["status"] == "ok"
+    assert health["policy"] == "pm_drive_efficiency_map_health_gate"
+    assert health["region_sequence"] == ["MTPA", "FW", "FW", "MTPV"]
+    assert health["region_counts"] == {"MTPA": 1, "FW": 2, "MTPV": 1}
+    assert health["max_efficiency"] == pytest.approx(0.994425732150756)
+    assert health["max_efficiency_region"] == "MTPV"
+    assert health["max_torque_Nm"] == pytest.approx(18.85196308440927)
+    assert health["max_torque_region"] in {"MTPA", "FW"}
+    assert health["max_output_power_W"] == pytest.approx(2597.750669164122)
+    assert health["max_output_power_region"] == "FW"
+    assert health["max_power_balance_rel_error"] < 1.0e-15
+    assert health["max_speed_contract_rel_error"] == pytest.approx(0.0)
