@@ -2536,11 +2536,13 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		if(info != 0) return -1;  // Singular matrix
 		if(kktNLoop > 0)
 		{
-			// LOOP-FREE by ORTHOGONAL projection of x0 onto the co-loop space (EXPERIMENT 2026-06-30):
-			//   x = x0 - Q (Q^T Q)^-1 Q^T x0  ->  Q^T x = 0.  The removed part is in col(Q) = field-null, so
-			// the EXTERNAL field is preserved EXACTLY -- unlike the A-weighted KKT correction A^-1 Q l (A^-1 Q
-			// lies OUTSIDE col(Q) for the moment-Galerkin operator -> ~0.8% field shift).  Tests whether method-0
-			// (direct) post-solve projection stays nonlinear-safe (method-1 design-a fought the warm-start).
+			// LOOP-FREE by ORTHOGONAL projection of x0 onto the co-loop space:
+			//   x = x0 - Q (Q^T Q)^-1 Q^T x0  ->  Q^T x = 0.  The removed part is in col(Q) = field-null, so the
+			// EXTERNAL field is preserved EXACTLY -- unlike the A-weighted KKT correction A^-1 Q l (A^-1 Q lies
+			// OUTSIDE col(Q) because the loops are not eigenvectors of the NON-SYMMETRIC multipole-moment (MMMM)
+			// operator A = BuildMomentSystemCore -- the moment-matching system, not a Galerkin one -- so the KKT
+			// correction shifts the field ~0.8%).  method-0 (direct) post-solve projection is nonlinear-safe (no
+			// iterative warm-start to fight, unlike the method-1 iterate-projection that diverged).
 			std::vector<double> G((size_t)kktNLoop * (size_t)kktNLoop, 0.0), c((size_t)kktNLoop, 0.0);
 			for(int a = 0; a < kktNLoop; a++)
 			{
