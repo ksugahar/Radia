@@ -1,14 +1,12 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T16:52:50Z",
+  "generated_at_utc": "2026-06-29T08:47:23Z",
   "notebook": "docs/examples_classification/examples_classification.ipynb",
-  "notebook_sha256": "93c4aa7b6078e8208c9ee4f4d7ab9dd52783225ae1800260087fe25aa1cb100a",
+  "notebook_sha256": "c0e3efec69537a631c5eedea113a14b17c4fa23363a6c4ed8791560e459ee107",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
-    "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "platform": "Windows-2022Server-10.0.20348-SP0"
   },
   "summary": {
     "path": "docs/examples_classification/examples_classification.ipynb",
@@ -36,9 +34,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 1515,
-          "text_plain_sha256": "ecee231673da373e37272c59870dbd20701a007972a9d8c032a5913d21f96abd",
-          "text_plain_preview": "{'total_examples_files': 1156,\n 'tracked_examples_files': 1156,\n 'total_python_files': 512,\n 'topics': 10,\n 'empty_topics': [],\n 'route_counts': {'non_python_docs_or_asset_review': 95,\n  'result_artifact_review': 418,\n  'docs_notebook_candidate': 154,\n  'validation_benchmark_candidate': 39,\n  'protected_mesh_or_cad_asset_review': 48,\n  'research_docs_or_distill_review': 86,\n  'validation_test_candidate': 179,\n  'src_api_or_comment_reference_review': 6,\n  'protected_validation_reference': 27,\n  'asset_or_fixture_review': 3,\n  'src_api_candidate': 19,\n  'symbolic_derivation_review': 78,\n  'distill_delete_review': 2,\n  'unclassified_existing_review': 2},\n 'topic_recommendation_counts': {'new_topic_review': 1,\n  'protected_until_validation_references_are_migrated': 4,\n  'split_validation_test_first_then_docs_prune': 6},\n 'protected_validation_reference_files': 27,\n 'validation_test_candidates': 179,\n 'validation_benchmark_candidates': 39,\n 'src_api_candidates': 19,\n 'docs_notebook_candidates': 154,\n 'distill_delete_reviews': 2,\n 'agentic_review_count': 4,\n 'topics_with_examples_reference_debt': 6,\n 'examples_reference_policy': 'blocked_by_examples_reference is not a final lane; migrate refs to docs/src/validation_test/panels before deleting examples.',\n 'docs_quality_next_topics': ['clebsch_hodograph',\n  'stream_function',\n  'peec_integration',\n  'cubit_panels',\n  'maglev'],\n 'latest_worktree_tracked_existing_files': 1156,\n 'latest_worktree_tracked_python_files': 512,\n 'migration_log_count': 6}",
+          "text_plain_chars": 1144,
+          "text_plain_sha256": "a83a029bb7057b6d46cacf0e45a265b741952b40176ae992344287524568e62c",
+          "text_plain_preview": "{'total_examples_files': 164,\n 'tracked_examples_files': 164,\n 'total_python_files': 80,\n 'topics': 3,\n 'empty_topics': [],\n 'route_counts': {'non_python_docs_or_asset_review': 2,\n  'protected_mesh_or_cad_asset_review': 6,\n  'src_docs_or_validation_migration_candidate': 6,\n  'active_development_asset': 8,\n  'active_development_excluded_from_cleanup': 74,\n  'active_development_result_artifact': 68},\n 'topic_recommendation_counts': {'active_development_excluded_from_cleanup': 1,\n  'accel_magnet_remaining_migration_debt': 1,\n  'review': 1},\n 'protected_validation_reference_files': 0,\n 'validation_test_candidates': 0,\n 'validation_benchmark_candidates': 0,\n 'src_api_candidates': 0,\n 'docs_notebook_candidates': 0,\n 'distill_delete_reviews': 0,\n 'agentic_review_count': 1,\n 'topics_with_examples_reference_debt': 1,\n 'examples_reference_policy': 'blocked_by_examples_reference is not a final lane; migrate refs to docs/src/validation_test/panels before deleting examples.',\n 'docs_quality_next_topics': ['cubit_panels'],\n 'latest_worktree_tracked_existing_files': 164,\n 'latest_worktree_tracked_python_files': 80,\n 'migration_log_count': 7}",
           "text_plain_truncated": false
         }
       ]
@@ -84,9 +82,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 444,
-          "text_plain_sha256": "e6736ab1e6721168c005ed00eae0a2a3eeade7aac1e2fb7282f9699986d02632",
-          "text_plain_preview": "{'induction_heating remaining public demos': {'to': {'docs_results': ['docs/induction_heating/induction_heating_demo_showcase.ipynb',\n    'docs/induction_heating/induction_heating_demo_showcase_results.json',\n    'docs/induction_heating/induction_heating_demo_showcase_result.json'],\n   'validation_test': ['validation_test/induction_heating/demoted_samples_legacy/']},\n  'files_removed_from_examples': 14,\n  'python_removed_from_examples': 8}}",
+          "text_plain_chars": 242,
+          "text_plain_sha256": "23f430d2b39eabd4e37d00414ba4e9ef468e0deb48f4359439a8f2770e3d1838",
+          "text_plain_preview": "{'cubit_panels induction-heating legacy corpus': {'from': 'examples/cubit_panels/inductance',\n  'to': 'validation_test/induction_heating/cubit_panels_legacy',\n  'tracked_files_removed_from_examples': 53,\n  'python_removed_from_examples': 29}}",
           "text_plain_truncated": false
         }
       ]

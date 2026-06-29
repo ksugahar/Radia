@@ -1467,7 +1467,7 @@ of 0.35-1.0 depending on Z_s. Only correct for PEC (Z_s -> 0).
 Fix requires MFIE `n x curl(SL)` (not available in ngsolve.bem).
 **Use FEM-SIBC (fem_esim_3d.py) for finite Z_s problems.**
 
-See: `examples/cubit_panels/inductance/efie_sibc.py`
+See: `validation_test/induction_heating/cubit_panels_legacy/efie_sibc.py`
 
 ## Loop-Star Solver Modes (FIXED 2026-02-22)
 
@@ -3415,7 +3415,7 @@ ESIM verified against NGSolve H1 FEM (p=4) as independent method:
 | Linear Z_s vs NGSolve FEM | 0.04% |
 | Nonlinear Z_s vs NGSolve FEM + Picard | 0.78% |
 
-Run: `python examples/cubit_panels/inductance/verify_esim.py`
+Run: `python validation_test/induction_heating/cubit_panels_legacy/verify_esim.py`
 
 ## Key Files
 
@@ -4107,8 +4107,8 @@ with high-Z_s materials. Use FEM-SIBC (Level 3) for these cases.
 
 ### Verification
 
-- `examples/cubit_panels/inductance/verify_sphere_sibc.py` -- Sphere benchmark
-- `examples/cubit_panels/inductance/fem_esim_3d.py` -- FEM-SIBC reference
+- `validation_test/induction_heating/cubit_panels_legacy/verify_sphere_sibc.py` -- Sphere benchmark
+- `validation_test/induction_heating/cubit_panels_legacy/fem_esim_3d.py` -- FEM-SIBC reference
 """
 
 

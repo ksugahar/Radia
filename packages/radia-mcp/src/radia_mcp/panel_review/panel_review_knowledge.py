@@ -139,11 +139,14 @@ workbenches and must not depend on PySide6/PyQt.
 CUBIT_PANELS_MIGRATION = """
 # `examples/cubit_panels` migration plan
 
-As of 2026-06-29, `examples/cubit_panels` still contains 35 Python scripts.
-Treat this directory as a source to distill into `src`, `validation_test`, and
-notebook/docs surfaces, not as a long-lived examples tier.  Do not delete it
-while MCP knowledge, docs, validation, or panel tests still point directly at
-`examples/cubit_panels`.
+As of 2026-06-29, the induction-heating side has been drained from
+`examples/cubit_panels/inductance` into
+`validation_test/induction_heating/cubit_panels_legacy`.  The remaining
+tracked Python scripts under `examples/cubit_panels` are the accel-magnet
+source material.  Treat any remaining examples path as a source to distill into
+`src`, `validation_test`, and notebook/docs surfaces, not as a long-lived
+examples tier.  Do not delete it while MCP knowledge, docs, validation, or
+panel tests still point directly at `examples/cubit_panels`.
 
 ## Destination rules
 
@@ -174,8 +177,9 @@ notebook/panel track:
 
 ## Induction heating side
 
-`examples/cubit_panels/inductance` is mostly the source material for the IH
-notebook/panel track:
+The original `examples/cubit_panels/inductance` Python and display-asset corpus
+now lives under `validation_test/induction_heating/cubit_panels_legacy`.  This
+is a protected legacy validation corpus, not a final public docs surface:
 
 - Validation-first: `compare_bem_coupled_vs_fem_kelvin.py`, `verify_*.py`, and
   `test_*.py` belong in `validation_test/induction_heating` or a more specific
@@ -187,13 +191,14 @@ notebook/panel track:
   kernels are in `src`.
 - API candidates: `create_induction_model.py`, `fem_esim_3d_cubit.py`,
   `inductance_hodge.py`, `inductance_source_sink.py`, and shared torus/coil
-  builders should move to `src/radia` or `src/radia/panels/calc_*.py`.
+  builders should move from the legacy corpus to `src/radia` or
+  `src/radia/panels/calc_*.py`.
 - Display `.geo` files are visualization assets; keep or regenerate them next
   to the notebook/test that owns them.
 
-## 35-script inventory
+## Original 35-script inventory
 
-Route each Python script before moving or deleting:
+Route each Python script before deleting the corresponding legacy copy:
 
 | Script | Target after unblock |
 |--------|----------------------|
@@ -222,10 +227,10 @@ Route each Python script before moving or deleting:
 | `inductance/inductance_torus.py` | `src`/panel calc or Cubit fixture |
 | `inductance/mfie_sphere_demo.py` | IH/BEM docs notebook plus validation |
 | `inductance/pmchwt_sibc.py` | IH/BEM docs notebook plus validation |
-| `inductance/pmchwt_sibc_test.py` | `validation_test` |
+| `inductance/pmchwt_sibc_test.py` | `validation_test` (renamed to `validation_pmchwt_sibc.py` to avoid pytest auto-collection) |
 | `inductance/scalar_bie_sibc.py` | IH docs notebook plus validation |
-| `inductance/test_interp_quality.py` | `validation_test` |
-| `inductance/test_nxH_rhs.py` | `validation_test` |
+| `inductance/test_interp_quality.py` | `validation_test` (renamed to `validation_interp_quality.py`) |
+| `inductance/test_nxH_rhs.py` | `validation_test` (renamed to `validation_nxH_rhs.py`) |
 | `inductance/verify_esim.py` | `validation_test` |
 | `inductance/verify_laplace_bem.py` | `validation_test` |
 | `inductance/verify_per_node_sibc_sphere.py` | `validation_test` |

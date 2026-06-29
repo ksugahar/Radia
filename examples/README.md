@@ -29,7 +29,7 @@ As of the latest migration batch, the largest remaining topics are:
 | `vim` | Move `validation_test/feec` direct imports first; promote reusable HDiv/VIM helpers to `src`. |
 | `clebsch_hodograph` | Use the validation-test research harness as migration driver; keep docs notebooks as showcase. |
 | `cube_uniform_field` | Move benchmark drivers and result corpus under validation/docs ownership. |
-| `cubit_panels` | Move `verify_*.py` to `validation_test`; keep Cubit assets under docs/panels owners. |
+| `cubit_panels` | IH inductance scripts moved to `validation_test/induction_heating/cubit_panels_legacy`; remaining accel-magnet sources still need `src`/docs/panels ownership. |
 | `stream_function` | Extract reusable code to `src`, keep result-saved docs notebooks as the public layer. |
 | `induction_heating` | Promote BEM helpers to `src`; move checks to `validation_test`; keep ESIM demos in docs. |
 

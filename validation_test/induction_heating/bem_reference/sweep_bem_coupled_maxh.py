@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.join(REPO, "src", "radia"))
 sys.path.insert(0, os.path.join(REPO, "src", "radia", "panels"))
 sys.path.insert(0, os.path.join(REPO, "src"))
 # Sibling directory for experiment_coupled_bem imports (impedance_esim etc.)
-sys.path.insert(0, os.path.join(REPO, "examples", "cubit_panels", "inductance"))
+sys.path.insert(0, os.path.join(REPO, "validation_test", "induction_heating", "cubit_panels_legacy"))
 sys.path.insert(0, HERE)
 
 MU_0 = 4e-7 * math.pi
