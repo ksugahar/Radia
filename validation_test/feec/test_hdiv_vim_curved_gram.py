@@ -10,8 +10,13 @@ quad via the P2 map + curved measure x the curved inner potential), on represent
 ROLE (de-risked 2026-06-28, memory hdiv-vim-sauter-schwab-cg): curved helps NEAR-SURFACE FIELD / FLUX
 accuracy (sigma=M.n on the TRUE curved surface), NOT the volume-averaged demag FACTOR (curving-insensitive
 ~3e-5 on a sphere -- see also test_hdiv_vim_curved.py which measures the win vs the exact dipole FIELD).  So
-this golden locks the GRAM CORRECTNESS (== the validated curved potentials) + that the curved solve RUNS, NOT
-a demag-factor improvement.
+the GRAM-correctness + curved-solve-runs goldens lock the math, NOT a demag-factor improvement.
+
+UPDATE 2026-06-29 (Sugahara, memory hdiv-vim-tet-rt1-only METRIC FLIP): test_curved_moment_beats_flat ALSO
+locks curving's HEADLINE engineering win -- the MAGNETIC MOMENT m = INT M dV (the dipole far-field quantity),
+which the demag factor (volume-insensitive), per-element leak (RT1+Piola noise), and M_avg (volume divided
+out) ALL hide.  A faceted P1 sphere under-counts the volume ~9% -> moment ~9% low; P2 curving recovers it to
+<0.2% -> moment ~0.13% (flat-vs-curved >10x vs the analytic linear-sphere dipole).
 """
 import numpy as np
 import pytest
@@ -158,3 +163,38 @@ def test_curved_demag_solve_runs_and_converges():
     assert 0.20 < r["demag"] < 0.45, r["demag"]            # sphere demag ~1/3 (loose band; curving-insensitive)
     assert abs(r["M_avg"][2]) > 1.0                         # responds to the applied field
     assert abs(r["M_avg"][0]) < 0.05 and abs(r["M_avg"][1]) < 0.05   # transverse leak small (true sphere)
+
+
+def test_curved_moment_beats_flat():
+    """Curving's REAL engineering win = the MAGNETIC MOMENT m = INT M dV (the dipole FAR-FIELD quantity),
+    NOT the volume-averaged demag factor (curving-insensitive) NOR the per-element leak (RT1 + curved-Piola
+    FE noise that averages out).  A faceted P1 sphere INSCRIBES the surface (flat faces chord across) and
+    UNDER-counts the volume by ~9% at this coarse mesh -> its moment is ~9% low -> the dipole far field is
+    ~9% wrong.  P2 curving pushes the mid-edge nodes onto the sphere -> volume recovered to <0.2% -> the
+    moment is accurate to ~0.13%.  This locks that curved RT1 beats flat by >10x on the moment vs the
+    analytic linear-sphere dipole (m_z err ~= the volume deficit, since M_avg is curving-insensitive).
+    Measured margins: flat ~9.3% / curved ~0.13% (70x).  (Sugahara 2026-06-29; C:\\temp\\moment_err.py.)"""
+    R, mu_r, H0 = 1.0, 100.0, 1.0e4
+    M_in = 3.0 * (mu_r - 1.0) / (mu_r + 2.0) * H0           # uniform internal M of a linear sphere
+    m_exact = M_in * (4.0 / 3.0 * np.pi * R ** 3)           # z-only analytic dipole moment INT M dV
+
+    def moment_err(curve):
+        """Generate a fresh mesh, (optionally) P2-curve it, solve, and return |m_comp - m_exact| / |m_exact|.
+        Each solve runs in its OWN TaskManager region (no cross-solve state; Netgen is deterministic so the
+        flat and curved meshes share topology -- apples to apples)."""
+        mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), R)).GenerateMesh(maxh=0.6))
+        Hext = ng.CoefficientFunction((0, 0, H0))
+        with ng.TaskManager():
+            if curve:
+                mesh.Curve(2)
+            r = hdiv_demag_solve(mesh, mu_r=mu_r, H_ext=Hext, order=1,
+                                 curve_order=2 if curve else None)
+            V = float(ng.Integrate(ng.CoefficientFunction(1.0), mesh))   # mesh volume (curved when curved)
+        m = np.asarray(r["M_avg"], float) * V                # magnetic moment = volume-averaged M * mesh volume
+        return float(np.linalg.norm([m[0], m[1], m[2] - m_exact]) / m_exact)
+
+    e_flat = moment_err(False)
+    e_curved = moment_err(True)
+    assert e_curved < 5.0e-3, "curved moment err %.4f%% (want <0.5%%)" % (100 * e_curved)
+    assert e_curved < e_flat / 10.0, \
+        "curving win too small: flat %.4f%% curved %.4f%% (want curved < flat/10)" % (100 * e_flat, 100 * e_curved)
