@@ -142,14 +142,43 @@ def test_fixed_modules_import_only_src_on_path():
     )
 
 
-@pytest.mark.slow
-def test_filaments_from_step_reaches_coil_builder():
-    """End-to-end: filaments_from_step -> to_coil_builder -> coil_builder.
+def test_to_coil_builder_import_resolves():
+    """Lock coil_from_step.py line 737 specifically.
 
-    This is the exact path from the bug report.  Runs under the conftest
-    only-src config (src/radia is NOT on sys.path), so a bare
-    `from coil_builder import CoilBuilder` would raise ModuleNotFoundError
-    here.
+    ``to_coil_builder`` does ``from radia.coil_builder import CoilBuilder``
+    as its FIRST statement, before any geometry work.  Calling it under the
+    conftest only-src config (src/radia NOT on sys.path) must reach PAST
+    that import and fail later on the deliberately-invalid ``result``.  A
+    regression to the bare ``from coil_builder import CoilBuilder`` would
+    instead raise ``ModuleNotFoundError('coil_builder')`` at the import --
+    the exact bug from the report.  No build123d / STEP needed, so this
+    runs everywhere.
+    """
+    from radia.coil_from_step import to_coil_builder
+
+    with pytest.raises(Exception) as exc:
+        # Reaches the line-737 import (must succeed), then fails when
+        # polyline_to_segments(None) dereferences result.polyline.
+        to_coil_builder(None)
+
+    err = exc.value
+    assert not (isinstance(err, ModuleNotFoundError)
+                and (getattr(err, "name", "") or "") == "coil_builder"), (
+        f"coil_from_step bare-import regression (line ~737): {err!r}"
+    )
+
+
+@pytest.mark.slow
+def test_filaments_from_step_runs_only_src_on_path():
+    """End-to-end: filaments_from_step on a real STEP under only-src config.
+
+    The conftest deliberately keeps src/radia OFF sys.path, so any bare
+    intra-package import anywhere in the filaments_from_step pipeline
+    (centerline extraction -> to_coil_builder -> peec bundle) would raise
+    ``ModuleNotFoundError`` here.  The keiko loft routes through the
+    walking-plane reconstruction (its result dict has no ``coil_builder``
+    key), so we only assert the pipeline COMPLETED and produced filaments
+    -- the point is that nothing along the way hit a broken bare import.
     """
     pytest.importorskip("build123d")
     pytest.importorskip("netgen")
@@ -160,6 +189,5 @@ def test_filaments_from_step_reaches_coil_builder():
     res = filaments_from_step(
         KEIKO_STEP, nwinc=2, nhinc=2, cad_units_per_meter=1000.0,
     )
-    # CoilBuilder path returns a dict including the built coil_builder.
-    assert "coil_builder" in res
+    assert isinstance(res, dict)
     assert res.get("filament_paths"), "no filament paths reconstructed"
