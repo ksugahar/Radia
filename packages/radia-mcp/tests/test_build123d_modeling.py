@@ -21,6 +21,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           enclosure_clearance_row, enclosure_difference_region,
                                           shape_measurement_row, shape_measurement_rows,
                                           box_through_cylinder_reference_row,
+                                          mounting_plate_boss_reference_row,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
                                           box_face_pressure_moment_rows,
@@ -63,6 +64,9 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert '"box_hole", "volume": 22.994690350851265' in doc
     assert '"l_bracket_two_holes", "volume": 2.8982123980236905' in doc
     assert "boolean union/overlap accounting" in doc
+    assert "mounting_plate_boss_reference_row" in doc
+    assert '"mounting_plate_boss_five_holes", "volume": 12.786811880091562' in doc
+    assert "min_edge_over_characteristic" in doc
     assert "max_volume_rel_error = 0.0" in doc
 
 
@@ -548,6 +552,26 @@ def test_build123d_l_bracket_slot_volume_crosscheck_accepts_cubit_roundtrip():
     assert summary["status"] == "ok"
     assert summary["ok_for_cad_roundtrip_volume"] is True
     assert summary["max_volume_rel_error"] == pytest.approx(1.5322866265870984e-16)
+
+
+def test_mounting_plate_boss_reference_matches_slot19_volume_gate():
+    reference = [mounting_plate_boss_reference_row(6.0, 4.0, 0.5, 0.8, 0.6, 0.25, 0.18, 2.2, 1.2)]
+    measured = {
+        "build123d": [{"name": "mounting_plate_boss_five_holes", "volume": 12.78681188009156}],
+        "cubit": [{"name": "mounting_plate_boss_five_holes", "volume": 12.786811880091562}],
+    }
+
+    row = reference[0]
+    summary = shape_volume_crosscheck_summary(reference, measured, rtol=1.0e-12)
+
+    assert row["volume"] == pytest.approx(12.786811880091562)
+    assert row["terms"]["base"] == pytest.approx(12.0)
+    assert row["terms"]["central_hole"] < 0.0
+    assert row["policy"] == "analytic_mounting_plate_boss_volume_reference"
+    assert row["bounding_box"]["size"] == pytest.approx([6.0, 4.0, 1.1])
+    assert summary["status"] == "ok"
+    assert summary["sources"] == ["build123d", "cubit"]
+    assert summary["max_volume_rel_error"] < 2.0e-16
 
 
 def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():

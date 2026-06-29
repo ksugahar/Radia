@@ -74,6 +74,19 @@ def test_mtpa_limits():
     assert mtpa_operating_point(0.2, 1e-3, 5e-4, 0.0, 4) == (0.0, 0.0, 0.0, 0.0)
 
 
+def test_continuous_loop_mtpa_ipm_control_gate():
+    lm, Ld, Lq, I, p = 0.10, 4.0e-3, 9.0e-3, 20.0, 3
+    g, id_, iq, T = mtpa_operating_point(lm, Ld, Lq, I, p)
+    T_pure_q = dq_torque(lm, Ld, Lq, 0.0, I, p)
+
+    assert math.degrees(g) == pytest.approx(30.0)
+    assert id_ == pytest.approx(-10.0)
+    assert iq == pytest.approx(17.320508075688775)
+    assert T == pytest.approx(11.691342951089922)
+    assert T_pure_q == pytest.approx(9.0)
+    assert T / T_pure_q - 1.0 == pytest.approx(0.299038105676658)
+
+
 if __name__ == "__main__":
     for c in CASES:
         test_mtpa_matches_numeric_argmax(*c)

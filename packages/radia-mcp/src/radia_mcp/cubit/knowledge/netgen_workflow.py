@@ -74,6 +74,18 @@ Python line by line.  Avoid multi-line `dict(...)`, loops, or parenthesized
 blocks in quick validation scripts; write one assignment per physical line or
 use a normal Python process to generate the script.
 
+### Continuous-loop mixed hex+pyramid+tet order-series gate
+
+For hex-led mixed workflows, replay the small Coreform/Cubit fixture exported
+as Netgen `.vol` orders 1 through 5.  The expected topology is invariant across
+orders: 1 hex, 1 pyramid, 10 tets, 6 quad boundary faces, and 10 triangle
+boundary faces.  The files grow with order because `curvedelements` data is
+added, but the routing class remains `cubit_hex_or_mixed_path`.  This is why
+`cubit_vol_inventory` routes from `surfaceelements` and `volumeelements`, not
+from file size or sidecar material volumes.  A pyramid transition block can
+report zero material volume in the `.vol.json` sidecar while still being
+present as a real topology record in the `.vol`.
+
 ## Choose Your Workflow
 
 1. **Is your geometry planar (no curved surfaces)?**
