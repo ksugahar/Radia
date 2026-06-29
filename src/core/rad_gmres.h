@@ -3,20 +3,22 @@
  *
  * Templated restarted GMRES(m) with RIGHT preconditioning, for real (double) systems.
  *
- * Shares the radia::blas BLAS helpers from rad_bicgstab.h and uses the SAME matvec/precond
- * lambda interface, so it is a drop-in alternative to radia::bicgstab::Solve for the
+ * Shares the radia::blas reduction helpers (dot / nrm2) from rad_bicgstab.h and uses the SAME
+ * matvec/precond lambda interface, so it is a drop-in alternative to radia::bicgstab::Solve for the
  * collocation-MMMM moment solver:
  *
  *   auto matvec  = [&](const double* x, double* y){ ... y = A x ... };
  *   auto precond = [&](const double* x, double* y){ ... y = M^-1 x ... };
  *   auto res = radia::gmres::Solve(n, matvec, precond, rhs, sol, tol, max_iter, restart);
  *
- * GMRES is needed (over BiCGSTAB) for NON-NORMAL / INDEFINITE systems -- in particular the KKT
- * saddle system  [[A, Q],[Q^T, 0]]  used for the loop-free collocation-MMMM solve (A kept INTACT;
- * Q = field-null loop basis).  BiCGSTAB breaks down on that saddle (verified); GMRES converges.
+ * The O(n) vector updates (axpy / scal / copy in the Arnoldi loop) are TaskManager-parallelized via
+ * ngcore::ParallelFor (serial below a small-n threshold), matching the lab parallelization policy;
+ * the caller already runs inside a RegionTaskManager (the moment solve self-wraps), and the dominant
+ * O(n^2) cost is the matvec lambda, which is itself TaskManager-parallel.
  *
- * Algorithm: Saad-Schultz 1986, restarted GMRES(m), modified Gram-Schmidt Arnoldi + Givens
- * rotations, right preconditioning (so the Hessenberg residual is the TRUE residual ||b - A x||).
+ * GMRES is needed (over BiCGSTAB) for NON-NORMAL / INDEFINITE systems.  Algorithm: Saad-Schultz 1986,
+ * restarted GMRES(m), modified Gram-Schmidt Arnoldi + Givens rotations, right preconditioning (the
+ * Hessenberg residual is the TRUE residual ||b - A x||).
  *
  * Part of Radia project.
  */
@@ -24,7 +26,8 @@
 #ifndef RAD_GMRES_H
 #define RAD_GMRES_H
 
-#include "rad_bicgstab.h"   // radia::blas::{dot,nrm2,axpy,scal,copy}
+#include "rad_bicgstab.h"   // radia::blas::{dot,nrm2}
+#include "rad_parallel.h"   // ngcore::ParallelFor, ngcore::IntRange (TaskManager)
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -61,12 +64,24 @@ Result Solve(int n,
 {
     using radia::blas::dot;
     using radia::blas::nrm2;
-    using radia::blas::axpy;
-    using radia::blas::scal;
-    using radia::blas::copy;
 
     Result result = {0, 1.0, false};
     if(n <= 0) return result;
+
+    // TaskManager-parallel O(n) vector updates (serial below the threshold to avoid fork overhead).
+    const bool serialVec = (n <= 2048);
+    auto pCopy = [&](const double* x, double* y) {
+        if(serialVec) { for(int i = 0; i < n; ++i) y[i] = x[i]; }
+        else ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) { y[i] = x[i]; });
+    };
+    auto pScal = [&](double a, double* x) {
+        if(serialVec) { for(int i = 0; i < n; ++i) x[i] *= a; }
+        else ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) { x[i] *= a; });
+    };
+    auto pAxpy = [&](double a, const double* x, double* y) {  // y += a x
+        if(serialVec) { for(int i = 0; i < n; ++i) y[i] += a * x[i]; }
+        else ngcore::ParallelFor(ngcore::IntRange(n), [&](size_t i) { y[i] += a * x[i]; });
+    };
 
     const int m = std::max(1, std::min(restart, std::max(1, max_iter)));
     std::vector<std::vector<double>> V((size_t)m + 1, std::vector<double>((size_t)n));
@@ -82,12 +97,12 @@ Result Solve(int n,
     {
         // r0 = b - A x  (V[0] = normalized residual)
         matvec(sol, w.data());
-        copy(n, rhs, V[0].data());
-        axpy(n, -1.0, w.data(), V[0].data());
+        pCopy(rhs, V[0].data());
+        pAxpy(-1.0, w.data(), V[0].data());
         double beta = nrm2(n, V[0].data());
         result.residual = beta / bnorm;
         if(result.residual < tol) { result.converged = true; break; }
-        scal(n, 1.0 / beta, V[0].data());
+        pScal(1.0 / beta, V[0].data());
 
         std::fill(g.begin(), g.end(), 0.0);
         g[0] = beta;
@@ -104,14 +119,14 @@ Result Solve(int n,
             {
                 double hij = dot(n, w.data(), V[(size_t)i].data());
                 H[(size_t)i + (size_t)j * (m + 1)] = hij;
-                axpy(n, -hij, V[(size_t)i].data(), w.data());
+                pAxpy(-hij, V[(size_t)i].data(), w.data());
             }
             double hjp = nrm2(n, w.data());
             H[(size_t)(j + 1) + (size_t)j * (m + 1)] = hjp;
             if(hjp > 1e-30)
             {
-                copy(n, w.data(), V[(size_t)j + 1].data());
-                scal(n, 1.0 / hjp, V[(size_t)j + 1].data());
+                pCopy(w.data(), V[(size_t)j + 1].data());
+                pScal(1.0 / hjp, V[(size_t)j + 1].data());
             }
 
             // apply previous Givens rotations to the new column j
@@ -157,9 +172,9 @@ Result Solve(int n,
 
         // x <- x + M^-1 (V(:,0:k-1) y)   (right preconditioning)
         std::fill(tmp.begin(), tmp.end(), 0.0);
-        for(int i = 0; i < k; ++i) axpy(n, y[(size_t)i], V[(size_t)i].data(), tmp.data());
+        for(int i = 0; i < k; ++i) pAxpy(y[(size_t)i], V[(size_t)i].data(), tmp.data());
         precond(tmp.data(), z.data());
-        axpy(n, 1.0, z.data(), sol);
+        pAxpy(1.0, z.data(), sol);
 
         if(std::isnan(result.residual) || std::isinf(result.residual)) break;
     }
