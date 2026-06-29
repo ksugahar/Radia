@@ -1,6 +1,6 @@
 {
   "schema": "radia.document_meta.examples_classification.v2",
-  "generated_at_utc": "2026-06-29T08:47:20Z",
+  "generated_at_utc": "2026-06-29T10:39:53Z",
   "repo_root": "S:\\Radia\\01_GitHub",
   "policy": {
     "inventory_source": "rg --files examples",
@@ -35,23 +35,18 @@
     }
   },
   "summary": {
-    "total_examples_files": 164,
-    "tracked_examples_files": 164,
-    "total_python_files": 80,
-    "topics": 3,
+    "total_examples_files": 150,
+    "tracked_examples_files": 150,
+    "total_python_files": 74,
+    "topics": 1,
     "empty_topics": [],
     "route_counts": {
-      "non_python_docs_or_asset_review": 2,
-      "protected_mesh_or_cad_asset_review": 6,
-      "src_docs_or_validation_migration_candidate": 6,
       "active_development_asset": 8,
       "active_development_excluded_from_cleanup": 74,
       "active_development_result_artifact": 68
     },
     "topic_recommendation_counts": {
-      "active_development_excluded_from_cleanup": 1,
-      "accel_magnet_remaining_migration_debt": 1,
-      "review": 1
+      "active_development_excluded_from_cleanup": 1
     },
     "protected_validation_reference_files": 0,
     "validation_test_candidates": 0,
@@ -60,14 +55,14 @@
     "docs_notebook_candidates": 0,
     "distill_delete_reviews": 0,
     "agentic_review_count": 1,
-    "topics_with_examples_reference_debt": 1,
+    "topics_with_examples_reference_debt": 0,
     "examples_reference_policy": "blocked_by_examples_reference is not a final lane; migrate refs to docs/src/validation_test/panels before deleting examples.",
     "docs_quality_next_topics": [
-      "cubit_panels"
+      "vim"
     ],
-    "latest_worktree_tracked_existing_files": 164,
-    "latest_worktree_tracked_python_files": 80,
-    "migration_log_count": 7
+    "latest_worktree_tracked_existing_files": 150,
+    "latest_worktree_tracked_python_files": 74,
+    "migration_log_count": 8
   },
   "topics": [
     {
@@ -90,347 +85,16 @@
       "blocked_by_examples_reference": false,
       "reference_blocker_roots": [],
       "target_after_unblock": [
-        "active-development"
-      ],
-      "agentic_note": "VIM is intentionally not cleaned in this batch because it is under active development.",
-      "recommendation_is_blocker_not_destination": false
-    },
-    {
-      "topic": "cubit_panels",
-      "files": 13,
-      "tracked_files": 13,
-      "python_files": 6,
-      "json_files": 0,
-      "markdown_files": 1,
-      "route_counts": {
-        "non_python_docs_or_asset_review": 1,
-        "protected_mesh_or_cad_asset_review": 6,
-        "src_docs_or_validation_migration_candidate": 6
-      },
-      "docs_notebooks": [],
-      "docs_notebook_count": 0,
-      "result_saved_docs_notebook_count": 0,
-      "reference_root_counts": {},
-      "recommendation": "accel_magnet_remaining_migration_debt",
-      "blocked_by_examples_reference": true,
-      "reference_blocker_roots": [],
-      "target_after_unblock": [
-        "src",
+        "active-development",
         "docs",
-        "panels",
+        "src",
         "validation_test"
       ],
-      "agentic_note": "IH inductance corpus moved to validation_test/induction_heating/cubit_panels_legacy; remaining tracked examples are accel-magnet source/assets.",
-      "recommendation_is_blocker_not_destination": true
-    },
-    {
-      "topic": "README.md",
-      "files": 1,
-      "tracked_files": 1,
-      "python_files": 0,
-      "json_files": 0,
-      "markdown_files": 1,
-      "route_counts": {
-        "non_python_docs_or_asset_review": 1
-      },
-      "docs_notebooks": [],
-      "docs_notebook_count": 0,
-      "result_saved_docs_notebook_count": 0,
-      "reference_root_counts": {},
-      "recommendation": "review",
-      "blocked_by_examples_reference": false,
-      "reference_blocker_roots": [],
-      "target_after_unblock": [
-        "review"
-      ],
-      "agentic_note": "Support file or newly discovered examples topic.",
+      "agentic_note": "VIM is the only remaining examples topic. It stays active for HDiv/VIM research; public documentation should be promoted to result-saved docs notebooks, reusable helpers to src, and golden checks to validation_test before pruning.",
       "recommendation_is_blocker_not_destination": false
     }
   ],
   "files": [
-    {
-      "path": "examples/README.md",
-      "topic": "README.md",
-      "suffix": ".md",
-      "bytes": 2656,
-      "sha256": "f29527614c571ca8242cdc137f08184fce94f0ee80aa1592887921118f431d95",
-      "tracked": true,
-      "route": "non_python_docs_or_asset_review",
-      "route_reason": "Top-level examples migration README.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "review"
-      ],
-      "route_is_temporary_blocker": false
-    },
-    {
-      "path": "examples/cubit_panels/README.md",
-      "topic": "cubit_panels",
-      "suffix": ".md",
-      "bytes": 364,
-      "sha256": "9f0b451583c12cd1b7c13aff93b0d9460569a54db101636a9b470ba67d224764",
-      "tracked": true,
-      "route": "non_python_docs_or_asset_review",
-      "route_reason": "Remaining cubit_panels support document/asset.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels",
-        "distill-delete"
-      ],
-      "route_is_temporary_blocker": true
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/BH.txt",
-      "topic": "cubit_panels",
-      "suffix": ".txt",
-      "bytes": 3985,
-      "sha256": "2446029cd9b7f7a6c4ed5e35ff7ad48cbc78fa297c2c27fc36501f9b457cdcde",
-      "tracked": true,
-      "route": "protected_mesh_or_cad_asset_review",
-      "route_reason": "Remaining accel-magnet Cubit/CAD/material asset; keep until owning validation/docs/panel path is migrated.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels"
-      ],
-      "route_is_temporary_blocker": true
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/coil_dipole.py",
-      "topic": "cubit_panels",
-      "suffix": ".py",
-      "bytes": 4203,
-      "sha256": "80fc6dd7a8c8e0dd7308e4d14c77d6a58e03bd174c0493191477b198f3dde444",
-      "tracked": true,
-      "route": "src_docs_or_validation_migration_candidate",
-      "route_reason": "Remaining accel-magnet source material; route to src/docs/panels/validation before deleting.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "src",
-        "docs",
-        "panels",
-        "validation_test"
-      ],
-      "route_is_temporary_blocker": true,
-      "line_count": 106,
-      "summary": "\"\"\""
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/coil_full.step",
-      "topic": "cubit_panels",
-      "suffix": ".step",
-      "bytes": 125277,
-      "sha256": "d32e9c36f3fc0959dfd3d09fad44f9dd2a45446796014c26bfe7601ac57f932b",
-      "tracked": true,
-      "route": "protected_mesh_or_cad_asset_review",
-      "route_reason": "Remaining accel-magnet Cubit/CAD/material asset; keep until owning validation/docs/panel path is migrated.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels"
-      ],
-      "route_is_temporary_blocker": true
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/coil_wire.step",
-      "topic": "cubit_panels",
-      "suffix": ".step",
-      "bytes": 4777,
-      "sha256": "f198de24249007fcf744fc20de2d0d3f950a975fbb7d58ab01d67fbfd4a2c68f",
-      "tracked": true,
-      "route": "protected_mesh_or_cad_asset_review",
-      "route_reason": "Remaining accel-magnet Cubit/CAD/material asset; keep until owning validation/docs/panel path is migrated.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels"
-      ],
-      "route_is_temporary_blocker": true
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/experiment_mmm_ima.py",
-      "topic": "cubit_panels",
-      "suffix": ".py",
-      "bytes": 15360,
-      "sha256": "15677c4dbf678a1ace7248e645d03fcfaed93d16b4243743cfd327132119fddc",
-      "tracked": true,
-      "route": "src_docs_or_validation_migration_candidate",
-      "route_reason": "Remaining accel-magnet source material; route to src/docs/panels/validation before deleting.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "src",
-        "docs",
-        "panels",
-        "validation_test"
-      ],
-      "route_is_temporary_blocker": true,
-      "line_count": 438,
-      "summary": "#!/usr/bin/env python"
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/experiment_occ_dipole.py",
-      "topic": "cubit_panels",
-      "suffix": ".py",
-      "bytes": 32288,
-      "sha256": "7af953662abff06ed3f286f2dccee4f9221fea2cc47ae7198a83e29c0a2bc99a",
-      "tracked": true,
-      "route": "src_docs_or_validation_migration_candidate",
-      "route_reason": "Remaining accel-magnet source material; route to src/docs/panels/validation before deleting.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "src",
-        "docs",
-        "panels",
-        "validation_test"
-      ],
-      "route_is_temporary_blocker": true,
-      "line_count": 801,
-      "summary": "#!/usr/bin/env python"
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/experiment_step_fem.py",
-      "topic": "cubit_panels",
-      "suffix": ".py",
-      "bytes": 8160,
-      "sha256": "45ab420f346a074d0f5d9601daebf8fa5691ceafa47dac214750fc0956dafe1b",
-      "tracked": true,
-      "route": "src_docs_or_validation_migration_candidate",
-      "route_reason": "Remaining accel-magnet source material; route to src/docs/panels/validation before deleting.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "src",
-        "docs",
-        "panels",
-        "validation_test"
-      ],
-      "route_is_temporary_blocker": true,
-      "line_count": 249,
-      "summary": "#!/usr/bin/env python"
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/experiment_step_fem_full.py",
-      "topic": "cubit_panels",
-      "suffix": ".py",
-      "bytes": 4433,
-      "sha256": "8c451de55e956586cd399ad6e8dada58cda97e963739619ccc8e06d302c952b6",
-      "tracked": true,
-      "route": "src_docs_or_validation_migration_candidate",
-      "route_reason": "Remaining accel-magnet source material; route to src/docs/panels/validation before deleting.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "src",
-        "docs",
-        "panels",
-        "validation_test"
-      ],
-      "route_is_temporary_blocker": true,
-      "line_count": 131,
-      "summary": "#!/usr/bin/env python"
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/experiment_step_fem_nokelvin.py",
-      "topic": "cubit_panels",
-      "suffix": ".py",
-      "bytes": 4025,
-      "sha256": "a27da516c33a8175df54a3cb67ae7af48a42dc18b660a47f85caad810297af01",
-      "tracked": true,
-      "route": "src_docs_or_validation_migration_candidate",
-      "route_reason": "Remaining accel-magnet source material; route to src/docs/panels/validation before deleting.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "src",
-        "docs",
-        "panels",
-        "validation_test"
-      ],
-      "route_is_temporary_blocker": true,
-      "line_count": 117,
-      "summary": "#!/usr/bin/env python"
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/view_full.geo",
-      "topic": "cubit_panels",
-      "suffix": ".geo",
-      "bytes": 124,
-      "sha256": "4585fe2db55d45983e8248bed00bd988245c2105e2a41b52fedada10f377d6d5",
-      "tracked": true,
-      "route": "protected_mesh_or_cad_asset_review",
-      "route_reason": "Remaining accel-magnet Cubit/CAD/material asset; keep until owning validation/docs/panel path is migrated.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels"
-      ],
-      "route_is_temporary_blocker": true
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/yoke.jou",
-      "topic": "cubit_panels",
-      "suffix": ".jou",
-      "bytes": 2050,
-      "sha256": "e30475e66911e5f9344c07ff9a55d3861add36b1588f3fa74c5fea34421db4ab",
-      "tracked": true,
-      "route": "protected_mesh_or_cad_asset_review",
-      "route_reason": "Remaining accel-magnet Cubit/CAD/material asset; keep until owning validation/docs/panel path is migrated.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels"
-      ],
-      "route_is_temporary_blocker": true
-    },
-    {
-      "path": "examples/cubit_panels/accel_magnet/yoke.step",
-      "topic": "cubit_panels",
-      "suffix": ".step",
-      "bytes": 15448,
-      "sha256": "adddb1d2f74c86ee072e1712d89a305ec8825694547d8bb5aa703310ab31c351",
-      "tracked": true,
-      "route": "protected_mesh_or_cad_asset_review",
-      "route_reason": "Remaining accel-magnet Cubit/CAD/material asset; keep until owning validation/docs/panel path is migrated.",
-      "reference_count": 0,
-      "reference_roots": {},
-      "references": [],
-      "target_after_unblock": [
-        "validation_test",
-        "docs",
-        "panels"
-      ],
-      "route_is_temporary_blocker": true
-    },
     {
       "path": "examples/vim/README.md",
       "topic": "vim",
@@ -3286,19 +2950,17 @@
       "stream_function",
       "vim"
     ],
-    "policy_note": "Examples references are blockers to migrate, not final destinations. Docs may point to docs; executable code should point to src or validation_test.",
+    "policy_note": "docs/*.ipynb plus synchronized JSON are the canonical documentation layer; examples/ is not a documentation archive.",
     "docs_quality_next_topics": [
-      "clebsch_hodograph",
-      "stream_function",
-      "peec_integration",
-      "induction_heating",
-      "cubit_panels",
-      "maglev"
+      "vim"
     ],
     "first_batch_recommendation": [
       "Resolve examples references used by validation_test first.",
       "Improve docs notebooks for user-facing topics with Markdown theory, saved outputs, and JSON sidecars.",
       "Delete examples only after references and ownership move."
+    ],
+    "current_examples_scope": [
+      "vim"
     ]
   },
   "migration_log": [
@@ -3490,23 +3152,37 @@
       "examples_files_removed_from_examples": 53,
       "examples_python_removed_from_examples": 29,
       "policy_note": "VIM remains active development and is intentionally excluded; cubit_panels now has only accel-magnet tracked source/assets in examples."
+    },
+    {
+      "batch_id": "2026-06-29-examples-root-readme-prune",
+      "completed_at_utc": "2026-06-29T10:39:53Z",
+      "action": "delete root examples README and make docs/examples_classification the canonical examples ledger",
+      "moved_topics": {
+        "examples_root_readme": {
+          "from": "examples/README.md",
+          "to": "docs/examples_classification/examples_classification.ipynb",
+          "files_removed_from_examples": 1,
+          "python_removed_from_examples": 0
+        }
+      },
+      "examples_files_removed_from_examples": 1,
+      "examples_python_removed_from_examples": 0,
+      "policy_note": "Root examples README was deleted because result-saved docs notebooks and synchronized JSON are the canonical documentation layer; examples/ now contains only the active VIM research corpus."
     }
   ],
   "current_worktree_examples_snapshot": {
-    "tracked_paths_total": 164,
-    "tracked_existing_files": 164,
+    "tracked_paths_total": 150,
+    "tracked_existing_files": 150,
     "tracked_deleted_files": 0,
-    "tracked_python_files": 80,
+    "tracked_python_files": 74,
     "tracked_ipynb_files": 0,
     "tracked_json_files": 68,
-    "tracked_markdown_files": 7,
-    "tracked_topics": 3,
+    "tracked_markdown_files": 5,
+    "tracked_topics": 1,
     "topic_counts": {
-      "README.md": 1,
-      "cubit_panels": 13,
       "vim": 150
     },
     "deleted_sample": []
   },
-  "notebook_sha256": "c0e3efec69537a631c5eedea113a14b17c4fa23363a6c4ed8791560e459ee107"
+  "notebook_sha256": "41f3635d3afe6d1e1c596ef1a86e672961ccc9adc21cf39f3592104b1c3f92e3"
 }

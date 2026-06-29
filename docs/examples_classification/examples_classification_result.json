@@ -1,12 +1,14 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-29T08:47:23Z",
+  "generated_at_utc": "2026-06-29T10:39:57Z",
   "notebook": "docs/examples_classification/examples_classification.ipynb",
-  "notebook_sha256": "c0e3efec69537a631c5eedea113a14b17c4fa23363a6c4ed8791560e459ee107",
+  "notebook_sha256": "41f3635d3afe6d1e1c596ef1a86e672961ccc9adc21cf39f3592104b1c3f92e3",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
-    "platform": "Windows-2022Server-10.0.20348-SP0"
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
   },
   "summary": {
     "path": "docs/examples_classification/examples_classification.ipynb",
@@ -34,9 +36,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 1144,
-          "text_plain_sha256": "a83a029bb7057b6d46cacf0e45a265b741952b40176ae992344287524568e62c",
-          "text_plain_preview": "{'total_examples_files': 164,\n 'tracked_examples_files': 164,\n 'total_python_files': 80,\n 'topics': 3,\n 'empty_topics': [],\n 'route_counts': {'non_python_docs_or_asset_review': 2,\n  'protected_mesh_or_cad_asset_review': 6,\n  'src_docs_or_validation_migration_candidate': 6,\n  'active_development_asset': 8,\n  'active_development_excluded_from_cleanup': 74,\n  'active_development_result_artifact': 68},\n 'topic_recommendation_counts': {'active_development_excluded_from_cleanup': 1,\n  'accel_magnet_remaining_migration_debt': 1,\n  'review': 1},\n 'protected_validation_reference_files': 0,\n 'validation_test_candidates': 0,\n 'validation_benchmark_candidates': 0,\n 'src_api_candidates': 0,\n 'docs_notebook_candidates': 0,\n 'distill_delete_reviews': 0,\n 'agentic_review_count': 1,\n 'topics_with_examples_reference_debt': 1,\n 'examples_reference_policy': 'blocked_by_examples_reference is not a final lane; migrate refs to docs/src/validation_test/panels before deleting examples.',\n 'docs_quality_next_topics': ['cubit_panels'],\n 'latest_worktree_tracked_existing_files': 164,\n 'latest_worktree_tracked_python_files': 80,\n 'migration_log_count': 7}",
+          "text_plain_chars": 940,
+          "text_plain_sha256": "351fbfe5d1729521a54c3d25bbde35facce2a49fd1708077acafd65b0a7d21ae",
+          "text_plain_preview": "{'total_examples_files': 150,\n 'tracked_examples_files': 150,\n 'total_python_files': 74,\n 'topics': 1,\n 'empty_topics': [],\n 'route_counts': {'active_development_asset': 8,\n  'active_development_excluded_from_cleanup': 74,\n  'active_development_result_artifact': 68},\n 'topic_recommendation_counts': {'active_development_excluded_from_cleanup': 1},\n 'protected_validation_reference_files': 0,\n 'validation_test_candidates': 0,\n 'validation_benchmark_candidates': 0,\n 'src_api_candidates': 0,\n 'docs_notebook_candidates': 0,\n 'distill_delete_reviews': 0,\n 'agentic_review_count': 1,\n 'topics_with_examples_reference_debt': 0,\n 'examples_reference_policy': 'blocked_by_examples_reference is not a final lane; migrate refs to docs/src/validation_test/panels before deleting examples.',\n 'docs_quality_next_topics': ['vim'],\n 'latest_worktree_tracked_existing_files': 150,\n 'latest_worktree_tracked_python_files': 74,\n 'migration_log_count': 8}",
           "text_plain_truncated": false
         }
       ]
@@ -82,9 +84,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 242,
-          "text_plain_sha256": "23f430d2b39eabd4e37d00414ba4e9ef468e0deb48f4359439a8f2770e3d1838",
-          "text_plain_preview": "{'cubit_panels induction-heating legacy corpus': {'from': 'examples/cubit_panels/inductance',\n  'to': 'validation_test/induction_heating/cubit_panels_legacy',\n  'tracked_files_removed_from_examples': 53,\n  'python_removed_from_examples': 29}}",
+          "text_plain_chars": 199,
+          "text_plain_sha256": "dfe28245fad83af79fbf5d824b694aeb72a16c318fdfdd19a0d49195cb0612af",
+          "text_plain_preview": "{'examples_root_readme': {'from': 'examples/README.md',\n  'to': 'docs/examples_classification/examples_classification.ipynb',\n  'files_removed_from_examples': 1,\n  'python_removed_from_examples': 0}}",
           "text_plain_truncated": false
         }
       ]
