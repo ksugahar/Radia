@@ -19,16 +19,18 @@ This validation workflow compares Radia PEEC SIBC implementation against exact B
 ## File Structure
 
 ```
-validation/
+validation_test/peec_integration/verification/
 ├── README.md                           # This file
 ├── cubit_mesh_generation/
 │   ├── generate_circular_wire.py       # Cubit script to generate centerline
-│   ├── circular_wire_centerline.msh    # Generated GMSH mesh (output)
-│   └── circular_wire_params.txt        # Wire parameters (output)
-├── gmsh_centerline_reader.py           # GMSH v2.2 reader for 1D elements
+│   ├── circular_wire_centerline.msh    # Generated GMSH mesh
+│   └── circular_wire_params.txt        # Wire parameters
 ├── validate_circular_wire_sibc.py      # Validation script (main)
-└── validation_circular_wire_sibc.png   # Results plot (output)
+└── validation_circular_wire_sibc.png   # Results plot
 ```
+
+The 1D GMSH reader is now the reusable API
+`radia.peec_mesh_import.GMSHCenterlineReader`, not a local example helper.
 
 ## Step-by-Step Instructions
 

@@ -4,8 +4,9 @@
 equation on distorted meshes (see [`../loop_star_breakdown.md`](../loop_star_breakdown.md)) are
 **field-null by construction** when the magnetization lives in NGSolve's H(div) (RT) finite-element
 space — so the **HDiv-type VIM** complements the canonical **multipole-moment MMM** MSC backend with a
-de-Rham-exact operator for **curved geometry, polynomial high order, and symmetry models** that flat
-surface-charge elements cannot represent.
+de-Rham-exact operator for **tetrahedral RT1 soft-iron demag**, including curved P2 tetrahedral
+geometry.  Non-tet bodies, symmetry-reduced image models, and permanent-magnet mixing are intentionally
+routed to the collocation MMMM backend.
 
 The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix and high-order extensibility,
 but the charge-Coulomb Gram integrals dominate matrix construction.  Multipole-moment MMM gives up
@@ -47,12 +48,13 @@ forces the cohomology-aware `installCycle` loop-star construction in multipole-m
 | centroid-monopole + sub-point self | quick probes, near-field correction | crude (~2–3% on the demag factor) |
 | **Wilton analytic surface** (`wilton_surface=True`) | **uniform-M linear demag** (div M = 0 → surface charge only) | sphere/cube → 1/3 to `<0.15%` |
 | **full analytic volume** (`analytic_gram=True`, `phi_tet`) | **NON-uniform / nonlinear** (div M ≠ 0 → volume charge) | required — see §4 |
-| **Gauss-point H-matrix** (`hdiv_demag_solve(..., gram_backend="gauss")`) | opt-in productionization path for tet/tri uniform linear solves | `G ~= P^T K_point P + near correction`; validated vs analytic backend, not yet a small-mesh speed win |
-| **`ngsolve.bem` Laplace single-layer** | **curved + high-order + scalable** surface Gram | exact (curved + order-2), FMM |
+| **Retired Gauss-point H-matrix** | not a live public backend | it was an RT0 build-speed experiment and is now fail-loud; RT1 uses the analytic charge Gram |
+| **Curved P2 tetrahedral charge Gram** | curved RT1 tet demag | matched curved cell/face geometry; no straight-Gram drift on curved tetrahedra |
 
 The surface single-layer is the key architectural unlock: the uniform-M surface demag Gram **is** the
-Laplace single-layer of σ = M·n, and NGSolve 6.2.2604 `ngsolve.bem` supplies it high-order + curved +
-FMM-accelerated, with no hand-rolled singular quadrature.
+Laplace single-layer of σ = M·n.  The current shipped route is the analytic charge Gram used by the
+RT1 tetrahedral solver; earlier `ngsolve.bem` / Gauss-point experiments remain research history rather
+than public backends.
 
 ## 3. Validation matrix (golden-locked) — with reference honesty
 
@@ -70,7 +72,7 @@ What each number is measured against, precisely:
 | Curved + high-order demag | **ANALYTIC** | curved+o2 exact; flat floored |
 | Curved field vs shipped Radia (flat) | **ANALYTIC** dipole | accuracy-per-DOF **~10–30×** |
 | Curved × nonlinear field | **ANALYTIC** dipole | flat `~9%` → curved `<0.4%` (~23×) |
-| Symmetry models 1/2, 1/4, 1/8 | full-sphere demag | reproduced from ~1/N DOF (`<0.4%`) |
+| Symmetry models 1/2, 1/4, 1/8 | retired from HDiv-VIM | use collocation MMMM for reduced image/symmetry models |
 
 **Reference rules:** sphere / spheroid / ellipsoid / dipole are validated vs **analytic truth** (real
 errors). Cube / C-yoke have **no analytic solution** — validated vs **shipped Radia** (a trusted
@@ -91,13 +93,10 @@ in **6 Newton iters** and matches Radia to `<1%`.
 
 ## 5. Symmetry models (1/2, 1/4, 1/8)
 
-- **Loops:** automatic — `ker B` on the cut mesh, field-null `~4e-16`, count adapts to the cut topology
-  (sphere full/½/¼/⅛ → 58/54/18/6), **no cohomology loop-star `installCycle`**.
-- **Demag value:** the **image method** — only the real surface (spherical cap) carries σ = M·n; the
-  flat cut faces are symmetry planes (no real charge). Reflecting the cap charge over the reduction
-  planes with sign `= (−1)^(#z-reflections)` (σ = n_z flips under a z-mirror — the IMA sign rule:
-  field-parallel mirror keeps sign, field-perpendicular flips) reconstructs the full sphere. The
-  reduced models reproduce the full demag from ~1/N the DOF (1/2 +0.08%, 1/4 +0.11%, 1/8 −0.32%).
+Image / IMA symmetry is retired from HDiv-VIM.  HDiv-VIM is now the tet/RT1 soft-iron path; reduced
+symmetry models, hex/wedge bodies, and permanent-magnet mixing are the responsibility of collocation
+MMMM.  This keeps the public HDiv contract small and fail-loud instead of carrying experimental image
+rules in the Galerkin path.
 
 ## 6. HDiv-type vs multipole-moment MMM
 
@@ -106,9 +105,9 @@ in **6 Newton iters** and matches Radia to `<1%`.
 | Linear demag (sphere/spheroid/triaxial) | ✓ | ✓ exact vs analytic |
 | Nonlinear (cube / C-yoke) | ✓ | ✓ `<1%` vs Radia, 6 iters |
 | Distorted-mesh μr-independence | ✓ (hand-crafted) | ✓ **by construction** (`4e-16`) |
-| Symmetry 1/4, 1/8 | ✓ (loop-star by hand) | ✓ **automatic** (ker B + image method) |
-| **Curved / polynomial high-order** | ✗ (flat elements) | ✓ **accuracy-per-DOF ~10–30×** |
-| Hand-crafted elements | required | **not needed** (de-Rham-exact, general tet/hex/wedge) |
+| Symmetry 1/4, 1/8 | ✓ (loop-star / image handling) | retired; use collocation MMMM |
+| **Curved tetrahedral geometry** | ✗ (flat elements) | ✓ RT1 + curved P2 tet geometry |
+| Hand-crafted elements | required | **not needed for tet RT1** (de-Rham-exact) |
 
 ## 7. Honest status & open work
 
@@ -120,10 +119,9 @@ The HDiv-type VIM is a **validated research prototype** (Python + NGSolve) with 
 accuracy-per-DOF win over the shipped flat solver on curved problems, and parity on the flat cases. The
 remaining lift to make it a **production backend alongside multipole-moment MMM MSC**:
 
-1. **C++ productionization** — the charge Gram (Wilton surface / `phi_tet` volume / `ngsolve.bem`
-   single-layer / Gauss-point H-matrix) + the Newton loop in C++ behind a Radia API. The scalar uniform
-   linear path already has C++ CG and explicit tet/no-image H-LU; nonlinear and mixed-material
-   orchestration still need the next production lift before a fair **wall-clock** comparison.
+1. **C++ productionization** — keep the live analytic charge Gram + RT1 Newton path behind a Radia API
+   and measure it honestly against collocation MMMM.  The retired Gauss-point and H-LU paths are not
+   part of the public HDiv-VIM contract.
 2. **Curved nonlinear volume charge** — `ngsolve.bem` is boundary-only, so non-uniform nonlinear on
    curved cells still needs the Newtonian volume potential (`phi_tet`) on curved geometry.
 
@@ -138,8 +136,7 @@ remaining lift to make it a **production backend alongside multipole-moment MMM 
 | Curved geometry / field win | `hdiv_demag_curved.py`, `hdiv_curved_nonlinear_field.py` | `test_hdiv_vim_curved{,_nonlinear,_nonlinear_field}.py` |
 | Head-to-head vs shipped Radia | `compare_curved_vs_radia_field.py` | `test_curved_vs_radia_field.py` |
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
-| Symmetry models (loops + image demag) | `hdiv_demag_symmetry_image.py` | `test_hdiv_vim_symmetry_{loops,image}.py` |
-| Gauss-point charge H-matrix | `hdiv_demag_solve(..., gram_backend="gauss")` | `test_hdiv_vim_gauss_hmatrix.py` |
+| RT1 / tet-only public contract | `hdiv_demag_solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py` |
 
 All under `examples/vim/` and `validation_test/feec/` (the FEEC suite is split out of lightweight CI).
 

@@ -23,8 +23,8 @@ Two demos cover eight parts:
 
 | demo | parts |
 |------|-------|
-| [`examples/stream_function/demo_regcoil_fusion.py`](../../examples/stream_function/demo_regcoil_fusion.py) | forward map  /  REGCOIL L-curve  /  net current  /  VMEC boundary |
-| [`examples/stream_function/demo_regcoil_fusion_advanced.py`](../../examples/stream_function/demo_regcoil_fusion_advanced.py) | coil force/stress  /  real li383 wout  /  FOCUS standoff  /  FOCUS winding-shape |
+| [`demo_regcoil_fusion.py`](examples_catalog.ipynb) | forward map  /  REGCOIL L-curve  /  net current  /  VMEC boundary |
+| [`demo_regcoil_fusion_advanced.py`](examples_catalog.ipynb) | coil force/stress  /  real li383 wout  /  FOCUS standoff  /  FOCUS winding-shape |
 
 All numbers below are reproduced by the demos and locked by
 `tests/panels/test_streamfunction_golden.py::test_regcoil_fusion_*`.
@@ -98,7 +98,7 @@ head-to-head at community mode counts is unmeasured.
 | (c) [`test_streamfunction_manufacture_e2e_golden.py`](../../tests/panels/test_streamfunction_manufacture_e2e_golden.py) | **manufacture end-to-end** | target `x` -> `psi` **0.042 %** -> single-stroke wire **0.197 %** -> distort **0.175 %** (no regress) -> STEP -> PEEC `L` **81.8 uH** |
 
 The driver for (a) is
-[`examples/stream_function/demo_regcoil_parity_deliverable.py`](../../examples/stream_function/demo_regcoil_parity_deliverable.py)
+[`demo_regcoil_parity_deliverable.py`](examples_catalog.ipynb)
 (it reuses the `demo_regcoil_fusion` helpers + `calc_streamfunction`'s
 `_write_step_polylines` / `_peec_inductance`); (b) reuses the Kelvin-DtN
 `act8_03_general_iron_design` bridge; (c) runs the production

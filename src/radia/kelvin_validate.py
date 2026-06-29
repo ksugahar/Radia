@@ -25,9 +25,9 @@ from ngsolve import (CoefficientFunction as CF, GridFunction,
                       Mesh)
 from netgen.occ import OCCGeometry
 
-from kelvin_geometry import add_kelvin_exterior_domain
-from kelvin_solver import (solve_full_A_kelvin, inductance_from_energy,
-                            NU_0)
+from radia.kelvin_geometry import add_kelvin_exterior_domain
+from radia.kelvin_solver import (solve_full_A_kelvin, inductance_from_energy,
+                                 NU_0)
 
 
 def _per_vertex_A_from_radia(mesh, radia_handle):

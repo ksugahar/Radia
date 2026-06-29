@@ -42,8 +42,7 @@ import tempfile
 import numpy as np
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, os.path.join(REPO, "src", "radia", "panels"))
-sys.path.insert(0, os.path.join(REPO, "src", "radia"))
+sys.path.insert(0, os.path.join(REPO, "src"))
 
 _GEN = r"""
 import os, sys
@@ -135,7 +134,7 @@ def run_target(cs, coil, evalv, name, target_cf, nlevels=20):
 
 
 def main():
-    import calc_streamfunction as cs
+    from radia.panels import calc_streamfunction as cs
     with tempfile.TemporaryDirectory() as td:
         r = subprocess.run([sys.executable, "-c", _GEN, td],
                            capture_output=True, text=True,

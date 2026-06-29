@@ -16,7 +16,8 @@ of coil design, generalised to any Radia source family.
 - **Full docs**: [`docs/stream_function/`](stream_function/README.md)
 - Module: [`src/radia/stream_function.py`](../src/radia/stream_function.py)
 - C++ core: `src/core/rad_stream_function.{h,cpp}`
-- Examples: [`examples/stream_function/`](../examples/stream_function/)
+- Public demo gallery: [`docs/stream_function/demo_gallery.ipynb`](stream_function/demo_gallery.ipynb)
+- Source/result ledger: [`docs/stream_function/examples_catalog.ipynb`](stream_function/examples_catalog.ipynb)
 - Tests: `tests/test_stream_function.py`
 - MCP knowledge: `aca_tsvd(topic=session_2026_05_30)` for the full session-log
   narrative; `aca_tsvd(topic=single_stroke)` for the chain construction detail.
@@ -215,8 +216,8 @@ study.optimize(objective, n_trials=200)     # objective builds Radia magnets,
                                             # evaluates the field, returns a scalar
 ```
 
-`examples/stream_function/demo_cmaes_magnet_design.py` is a runnable example:
-16 magnetization angles optimised by CMA-ES for a uniform transverse field.
+The public gallery/catalog record for `demo_cmaes_magnet_design.py` captures the
+16-magnetization-angle CMA-ES case for a uniform transverse field.
 See the `radia-mcp` `optuna_*` tools for sampler choice, multi-objective
 (NSGA-II), pruning, and lab BBO recipes.
 

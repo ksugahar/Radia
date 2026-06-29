@@ -30,7 +30,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(REPO / "examples" / "stream_function"))
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "src"))  # for radia
 from benchmark_framework import (
     Benchmark, BenchmarkSpec, add_common_args,

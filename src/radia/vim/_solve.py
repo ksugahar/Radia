@@ -8,9 +8,9 @@ Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunct
 Biot-Savart field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
 ## Formulation (verified-first, 2026-06-15)
-ONE projected weak form everywhere -- the magnetization M is the RT0 primary, the constitutive law
+ONE projected weak form everywhere -- the magnetization M is the RT1 primary, the constitutive law
 M = M(H) is imposed in the L2 sense (M_mass m = INT M(H).v dx), and H = h_ext - M_mass^-1 N m is the
-weak total field (N = B^T G B, h_ext = H_ext L2-projected onto RT0 order 0).  LINEAR soft iron is the
+weak total field (N = B^T G B, h_ext = H_ext L2-projected onto HDiv order 1).  LINEAR soft iron is the
 CONSTANT-chi special case M = chi H, giving the form-1 system
 
     (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext ,   M_chi = INT chi(x) u.v dx   (the chi-weighted mass),
@@ -37,7 +37,7 @@ H-matvec is the only O(N log N) cost.
 
 ## Linear solve dispatch -- SYMMETRIC C++ CG default (symmetric HACApK), GMRES cross-check opt-in
 For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the SPD +N system
-`((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL RT0 H(div) mass inverse
+`((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL RT1 H(div) mass inverse
 `M_mass^{-1}` (the MASS RIESZ map), ENTIRELY in C++ (PARDISO mass factor + C++ Krylov, no Python glue).
 CG (not GMRES) because the charge-Gram is applied via the EXACTLY-SYMMETRIC H-matvec (`matvec_sym`): the
 HACApK H-matrix stores both (I,J) and (J,I) leaf blocks but ACA-truncates them INDEPENDENTLY, so the
@@ -49,14 +49,14 @@ FASTER than the general one (it touches half the leaves).  So CG is the default 
 "対称HACApKを実装しよう。CGがいいね").  `linear_solver="cpp-cg"` is an explicit alias for this symmetric C++ CG.
 `linear_solver="gmres"` is the asymmetry-tolerant cross-check/opt-in (mass-Riesz GMRES on the GENERAL matvec,
 Python recurrence) -- it was the default 2026-06-27 morning before the symmetric matvec landed.
-`linear_solver="hlu"` is an opt-in tet-only system-A H-LU path (`A = M_mass + chi*N` on face DOFs).
-`linear_solver="python"` is the form-1 GMRES + `M_mass^{-1}` sparse LU, used for per-region chi / PM-mixed /
-nonlinear Newton paths until their material-specific operators move to C++.  (The mass Riesz makes the
+`linear_solver="python"` is the form-1 GMRES + `M_mass^{-1}` sparse LU, used for per-region chi /
+nonlinear Newton paths until their material-specific operators move to C++.  The old system-A H-LU path
+is retired from the public HDiv-VIM backend.  (The mass Riesz makes the
 operator well-conditioned by construction -- the earlier "h-explosion => need AMS" was a monopole-Gram
 artifact; the accurate analytic Gram + mass Riesz needs no auxiliary-space preconditioner.)
 
 The uniform-linear Krylov paths (default CG = auto/cpp-cg, and the gmres cross-check) build the analytic Gram
-at the tight `gram_eps=1e-12`; per-region / nonlinear / H-LU keep `1e-10`.  (With the symmetric matvec the CG
+at the tight `gram_eps=1e-12`; per-region / nonlinear keep `1e-10`.  (With the symmetric matvec the CG
 no longer NEEDS 1e-12 for symmetry -- symmetry is now STRUCTURAL, independent of the ACA accuracy -- 1e-12 is
 kept only for solution ACCURACY + golden stability.)  An explicit `gram_eps` always wins.  All material solve
 paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.

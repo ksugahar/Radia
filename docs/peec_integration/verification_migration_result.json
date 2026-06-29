@@ -1,0 +1,132 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-06-29T01:17:57Z",
+  "notebook": "docs/peec_integration/verification_migration.ipynb",
+  "notebook_sha256": "7b06536daf6a20bbfcbe3a8a66147006c713bdd4f74a2df18ed75e6c3c48a6ee",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.2"
+  },
+  "summary": {
+    "path": "docs/peec_integration/verification_migration.ipynb",
+    "cells": 7,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 6,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "18a75945299a7a3847b23b0ae55ddb13e4584a9e482f6824fff379406602f463",
+      "source_preview": "from pathlib import Path\nimport json, platform, sys\nrepo = Path.cwd()\nresult_path = repo / 'docs/peec_integration/verification_migration_results.json'\ndata = json.loads(result_path.read_text(encoding='utf-8'))\nprint(json.dumps({\n    'generated_at_utc': data['generated_at_utc'],\n    'checked_at_utc': data['post_migration']['checked_at_utc'],\n    'python': sys.version.split()[0],\n    'platform': platform.platform(),\n    'radia_version': data['runtime']['radia_version'],\n    'git_head': data['runtime']['git_head'],\n    'git_dirty': data['runtime']['git_dirty'],\n}, indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 267,
+          "text_sha256": "70afc0ad5158e993c99212054d58f0744342a5dac82fe2fc596d4f14d52dc6e4",
+          "text_preview": "{\n  \"generated_at_utc\": \"2026-06-29T01:09:32.902995+00:00\",\n  \"checked_at_utc\": \"2026-06-29T01:14:36.455325+00:00\",\n  \"python\": \"3.12.10\",\n  \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n  \"radia_version\": \"4.95.2\",\n  \"git_head\": \"b237df86\",\n  \"git_dirty\": true\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "e97d6c3c410e997b151865aab5b5f479bfca576d1e71ae9d03af7ad53ca9bb70",
+      "source_preview": "from IPython.display import Markdown, display\nsummary = data['summary']\nlines = ['| Item | Value |', '| --- | ---: |']\nlines.append(f\"| Archived tracked files | {summary['total_files']} |\")\nlines.append(f\"| Python files | {summary['python_files']} |\")\nlines.append(f\"| Media/mesh assets | {summary['media_or_mesh_assets']} |\")\nfor lane, count in sorted(summary['by_lane'].items()):\n    lines.append(f'| Lane: `{lane}` | {count} |')\ndisplay(Markdown('\\n'.join(lines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 4,
+      "execution_count": 3,
+      "source_sha256": "3d949b688f0bab8259e0e5ddf05380341b121e67cc6c9637493c3cc73bad24b8",
+      "source_preview": "rows = []\nfor f in data['files']:\n    rows.append((f['lane'], f['old_path'], f['target_path'], f['reason']))\nrows = sorted(rows)\nlines = ['| Lane | Old path | Target | Reason |', '| --- | --- | --- | --- |']\nfor lane, old, target, reason in rows[:20]:\n    lines.append(f'| `{lane}` | `{old}` | `{target}` | {reason} |')\ndisplay(Markdown('\\n'.join(lines)))\nprint(f'showing 20 of {len(rows)} archived files')\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 32,
+          "text_sha256": "1f28aa81a6043d8c6d082d9989094e592ac96b19b0466c8f15c7a4ba6609eae7",
+          "text_preview": "showing 20 of 43 archived files\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 4,
+      "source_sha256": "79ee78c7cd06436a60614316c91facbe8e8396e908f1fc4026ec3e7cb4088e05",
+      "source_preview": "post = data['post_migration']\nassert not post['old_source_root_exists'], post\nassert post['validation_root_exists'], post\nassert post['validation_file_count'] == data['summary']['by_lane']['validation_test'], post\nassert not post['missing_validation_targets'], post['missing_validation_targets']\nassert not post['old_paths_still_present'], post['old_paths_still_present']\nassert post['src_api_class_present'] and post['src_api_helper_present'], post\nassert post['distill_delete_removed'], post\nprint('migration checks: PASS')\nprint(json.dumps({\n    'validation_file_count': post['validation_file_count'],\n    'old_reference_count_after_migration': post['old_reference_count_after_migration'],\n    'src_api': 'src/radia/peec_mesh_import.py',\n}, indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 149,
+          "text_sha256": "628b611f92b68dae620030680f6bff3f0e6ff86a956d7bf50fb5c1242dca870b",
+          "text_preview": "migration checks: PASS\n{\n  \"validation_file_count\": 41,\n  \"old_reference_count_after_migration\": 329,\n  \"src_api\": \"src/radia/peec_mesh_import.py\"\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 5,
+      "source_sha256": "657f022c3c232c876ddbd2b1451d3b3ee6e1622969780e31ad2788badd85d607",
+      "source_preview": "media = data['media_hashes']\nlines = ['| Asset | Target | SHA-256 prefix | Bytes |', '| --- | --- | ---: | ---: |']\nfor item in media:\n    lines.append(f\"| `{item['path']}` | `{item['target_path']}` | `{item['sha256'][:12]}` | {item['size_bytes']} |\")\ndisplay(Markdown('\\n'.join(lines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

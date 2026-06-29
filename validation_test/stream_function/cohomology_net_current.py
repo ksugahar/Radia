@@ -25,9 +25,10 @@ removed).  It also VALIDATES the generators numerically:
   * the TF generator's field obeys Ampere  B_tor * R = const inside, ~0 outside
   * the surface Euler characteristic (gmsh-free) confirms b1 = 2 (the COUNT)
 
-Builds on demo_regcoil_fusion.py (analytic torus generators) + the surface-FE
-stream function in calc_streamfunction.py.  Reuses radia.stream_function only
-through the design solve.  Caller wraps NGSolve work in TaskManager.
+Builds on regcoil_fusion_helpers.py (analytic torus generators) + the
+surface-FE stream function in radia.panels.calc_streamfunction.  Reuses
+radia.stream_function only through the design solve.  Caller wraps NGSolve work
+in TaskManager.
 
 Run:  python validation_test/stream_function/cohomology_net_current.py
 """
@@ -41,11 +42,8 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, "..", ".."))
-_EXAMPLES = os.path.join(_REPO, "examples", "stream_function")
 sys.path.insert(0, _HERE)
-sys.path.insert(0, _EXAMPLES)
-sys.path.insert(0, os.path.join(_REPO, "src", "radia"))
-sys.path.insert(0, os.path.join(_REPO, "src", "radia", "panels"))
+sys.path.insert(0, os.path.join(_REPO, "src"))
 
 MU0 = 4.0e-7 * math.pi
 
@@ -88,8 +86,8 @@ def _div_and_nonexactness(coil, n_cf, K):
 
 
 def main(no_cohomology=False):
-    import demo_regcoil_fusion as D
-    import calc_streamfunction as C
+    import regcoil_fusion_helpers as D
+    from radia.panels import calc_streamfunction as C
     from ngsolve import Mesh, H1, specialcf, TaskManager
 
     print("=== cohomology net-current for SF coil design (torus, b1=2) ===")

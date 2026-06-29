@@ -31,6 +31,127 @@ Part of Radia project
 import numpy as np
 
 
+class GMSHCenterlineReader:
+    """Read 1D line elements from a GMSH v2.2 ASCII centerline mesh."""
+
+    def __init__(self, filename, unit_scale=1.0):
+        self.filename = str(filename)
+        self.unit_scale = float(unit_scale)
+        self.nodes = {}
+        self.edge_elements = []
+        self.physical_groups = {}
+
+    def read(self):
+        """Read nodes and two-node line elements from the mesh file."""
+        self.nodes = {}
+        self.edge_elements = []
+        self.physical_groups = {}
+
+        with open(self.filename, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if line == "$PhysicalNames":
+                i = self._read_physical_names(lines, i + 1)
+            elif line == "$Nodes":
+                i = self._read_nodes(lines, i + 1)
+            elif line == "$Elements":
+                i = self._read_elements(lines, i + 1)
+            i += 1
+
+        return self.nodes, self.edge_elements
+
+    def _read_physical_names(self, lines, start_idx):
+        num_names = int(lines[start_idx].strip())
+        idx = start_idx + 1
+        for _ in range(num_names):
+            parts = lines[idx].strip().split(maxsplit=2)
+            if len(parts) >= 3:
+                group_id = int(parts[1])
+                self.physical_groups[group_id] = parts[2].strip('"')
+            idx += 1
+
+        while idx < len(lines) and lines[idx].strip() != "$EndPhysicalNames":
+            idx += 1
+        return idx
+
+    def _read_nodes(self, lines, start_idx):
+        num_nodes = int(lines[start_idx].strip())
+        idx = start_idx + 1
+        for _ in range(num_nodes):
+            parts = lines[idx].strip().split()
+            node_id = int(parts[0])
+            x, y, z = (float(parts[1]) * self.unit_scale,
+                       float(parts[2]) * self.unit_scale,
+                       float(parts[3]) * self.unit_scale)
+            self.nodes[node_id] = [x, y, z]
+            idx += 1
+
+        while idx < len(lines) and lines[idx].strip() != "$EndNodes":
+            idx += 1
+        return idx
+
+    def _read_elements(self, lines, start_idx):
+        num_elements = int(lines[start_idx].strip())
+        idx = start_idx + 1
+        for _ in range(num_elements):
+            parts = lines[idx].strip().split()
+            element_type = int(parts[1])
+            if element_type == 1:
+                num_tags = int(parts[2])
+                node_start_idx = 3 + num_tags
+                node1 = int(parts[node_start_idx])
+                node2 = int(parts[node_start_idx + 1])
+                self.edge_elements.append([node1, node2])
+            idx += 1
+
+        while idx < len(lines) and lines[idx].strip() != "$EndElements":
+            idx += 1
+        return idx
+
+    def get_segments(self):
+        """Return centerline segments as ``[[start_xyz, end_xyz], ...]``."""
+        segments = []
+        for node1_id, node2_id in self.edge_elements:
+            segments.append([self.nodes[node1_id], self.nodes[node2_id]])
+        return segments
+
+    def get_total_length(self):
+        """Compute the total polyline length of all 1D elements."""
+        total_length = 0.0
+        for start, end in self.get_segments():
+            total_length += np.linalg.norm(np.array(end) - np.array(start))
+        return float(total_length)
+
+    def summary(self):
+        """Return a compact, JSON-friendly mesh summary."""
+        return {
+            "filename": self.filename,
+            "nodes": len(self.nodes),
+            "edge_elements": len(self.edge_elements),
+            "total_length": self.get_total_length(),
+            "physical_groups": dict(self.physical_groups),
+        }
+
+    def print_info(self):
+        """Print a short centerline mesh summary."""
+        info = self.summary()
+        print("GMSH Centerline Mesh Info:")
+        print(f"  Nodes: {info['nodes']}")
+        print(f"  Edge elements: {info['edge_elements']}")
+        print(f"  Total length: {info['total_length']:.6f} m")
+        if self.physical_groups:
+            print(f"  Physical groups: {self.physical_groups}")
+
+
+def read_gmsh_centerline(filename, unit_scale=1.0):
+    """Read a GMSH v2.2 ASCII centerline mesh and return ``(nodes, edges)``."""
+    reader = GMSHCenterlineReader(filename, unit_scale=unit_scale)
+    return reader.read()
+
+
 def surface_mesh_to_peec(mesh_source, sigma=5.8e7, thickness=1e-3,
                          ports=None, unit_scale=1.0, include_panels=True):
     """Convert a surface mesh to PEEC topology with panels and filaments.

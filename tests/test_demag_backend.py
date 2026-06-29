@@ -1,10 +1,12 @@
 """The demag-backend API: BOTH multipole-moment MMM MSC and the FEEC HDiv-VIM are kept.
 
 Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
-solved by the canonical collocation MMMM demag; mesh-BACKED soft iron (radia.vim.soft_iron_from_mesh)
-is solved by the FEEC HDiv-VIM.  set_demag_backend("collocation_mmmm"|"hdiv") overrides;
-"auto"/None restores the split.  Tet (MMM) and permanent-magnet solves are unaffected.  The mesh-backed
-HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
+solved by the canonical collocation MMMM demag; mesh-BACKED TET soft iron
+(radia.vim.soft_iron_from_mesh) is solved by FEEC HDiv-VIM RT1; mesh-BACKED
+HEX/WEDGE soft iron routes to collocation MMMM because HDiv-VIM is tet-only.
+set_demag_backend("collocation_mmmm"|"hdiv") overrides; "auto"/None restores
+the split.  Tet (MMM) and permanent-magnet solves are unaffected.  The
+mesh-backed HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math
 
 import pytest

@@ -1,9 +1,9 @@
 """calc_accel_msc.solve_msc with the FEEC HDiv-VIM backend (the only backend exposed by this panel).
 
 The accelerator-magnet MSC panel drives the HDiv-VIM (radia.vim.soft_iron_from_mesh + rad.Solve, which
-auto-routes a mesh-backed soft iron to the HDiv-VIM).  This panel intentionally does not expose the
-mesh-less multipole-moment MMM backend.  The HDiv-VIM is KELVIN-less / iron-only, so the .vol must contain only the 'yoke' volume
-material, and IMA symmetry is not supported there yet.
+routes a mesh-backed TET soft iron to HDiv-VIM RT1).  This panel intentionally does not expose the
+mesh-less multipole-moment MMM backend.  The HDiv-VIM is KELVIN-less / iron-only / TET-only, so the .vol
+must contain only the 'yoke' volume material, and IMA symmetry is not supported there.
 
 Locks:
   (1) on an iron-only yoke + coil, the hdiv backend magnetizes the iron (converged, M_avg large) -- the
@@ -15,7 +15,7 @@ Locks:
 Also guards the 2026-06-17 coil-bug fix: solve_msc used to rad.UtiDelAll() AFTER building the coil
 (destroying it); now the iron responds to the coil, so M_avg is large (~1e5 A/m), not ~0.
 
-Slow: each solve runs the real HDiv-VIM solver on a small (64-hex) yoke.
+Slow: each solve runs the real HDiv-VIM solver on a small tet yoke.
 """
 import math
 import os
@@ -36,7 +36,6 @@ pytestmark = [
 ]
 
 import ngsolve as ng  # noqa: E402
-from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 L = 0.01          # 10 mm cube yoke
 MU_R = 1000.0
@@ -58,11 +57,12 @@ def coil_script(tmp_path_factory):
 
 
 def _iron_only_yoke_vol(path):
-    """A 4^3-hex iron cube centred at origin, single material 'yoke', saved as a Netgen .vol."""
-    mp = lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), L * (z - 0.5))  # noqa: E731
+    """A small tet iron cube centred at origin, single material 'yoke', saved as a Netgen .vol."""
+    from netgen.csg import CSGeometry, OrthoBrick, Pnt
+    geo = CSGeometry()
+    geo.Add(OrthoBrick(Pnt(-L / 2, -L / 2, -L / 2), Pnt(L / 2, L / 2, L / 2)).mat("yoke"))
     with ng.TaskManager():
-        mesh = MakeStructured3DMesh(hexes=True, nx=4, ny=4, nz=4, mapping=mp)
-    mesh.ngmesh.SetMaterial(1, "yoke")
+        mesh = ng.Mesh(geo.GenerateMesh(maxh=L / 3))
     mesh.ngmesh.Save(str(path))
     return str(path)
 
@@ -119,21 +119,14 @@ def test_hdiv_rejects_multimaterial(tmp_path, coil_script):
     assert "iron-only" in r["error"].lower()
 
 
-def test_hdiv_ima_runs(tmp_path, coil_script):
-    """demag_backend='hdiv' with an IMA image string now RUNS via the image-charge Gram (the panel passes
-    it through to the HDiv-VIM).  Uses a HALF yoke (z>0) + image='-z' -- a valid reduced model.  The IMA
-    physics (reduced+IMA == full) itself is locked in validation_test/feec/test_hdiv_vim_ima.py."""
+def test_hdiv_ima_rejected(tmp_path, coil_script):
+    """demag_backend='hdiv' with an IMA image string returns a clean error; IMA is collocation MMMM scope."""
     from calc_accel_msc import solve_msc
-    p = tmp_path / "half_yoke.vol"
-    mp = lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), 0.5 * L * z)   # [-L/2,L/2]^2 x [0,L/2] half  # noqa: E731
-    with ng.TaskManager():
-        m = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=2, mapping=mp)
-    m.ngmesh.SetMaterial(1, "yoke")
-    m.ngmesh.Save(str(p))
+    p = _iron_only_yoke_vol(tmp_path / "half_yoke.vol")
     r = solve_msc(coil_script=coil_script, vol_file=str(p), mat=_linear_mat(),
                   demag_backend="hdiv", ima="-z", solver=0, tol=1e-7, max_iter=800)
-    assert "error" not in r, r
-    assert r["converged"] and r["ima"] == "-z"
+    assert "error" in r, r
+    assert "ima" in r["error"].lower() or "image" in r["error"].lower()
 
 
 if __name__ == "__main__":

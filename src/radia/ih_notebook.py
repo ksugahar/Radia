@@ -154,7 +154,7 @@ __all__ = [
 class IHWorkbench(CommandWorkbench):
     """Browser-stable IH design panel for JupyterHub."""
 
-    title = "Radia IH"
+    title = "IH"
     field_specs = IH_FIELD_SPECS
     section_order = (
         "Study",

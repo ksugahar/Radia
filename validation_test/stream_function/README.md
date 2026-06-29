@@ -1,7 +1,7 @@
 # Stream-Function Validation Lane
 
 This directory is the maintained home for stream-function verification,
-cohomology, and benchmark scripts promoted from `examples/stream_function`.
+cohomology, and benchmark scripts promoted out of the examples tier.
 
 ## Contents
 

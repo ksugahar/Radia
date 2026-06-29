@@ -154,10 +154,8 @@ def dispatch(top, *solve_args, **solve_kwargs):
     import ngsolve
     from ._solve import hdiv_demag_solve
 
-    # IMA mirror symmetry: rad.Solve(image='+x-z', ...).  The image string may arrive as a kwarg or as
-    # the 5th positional arg (rad.Solve(obj, prec, maxiter, method, image)).  It folds the mirror-image
-    # charge interactions into the demag (radia.vim image-charge Gram), so the registered mesh is the
-    # REDUCED (1/2, 1/4, 1/8) model and the solve reproduces the full model (currently the DENSE path).
+    # IMA mirror symmetry is retired from HDiv-VIM.  Keep parsing the legacy image argument here only so
+    # hdiv_demag_solve can fail loud with the canonical "use collocation MMMM" message.
     image = solve_kwargs.pop("image", None)
     if image is None and len(solve_args) >= 4 and solve_args[3]:
         image = solve_args[3]

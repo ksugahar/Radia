@@ -13,15 +13,16 @@ Date: 2026-02-13
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
+HERE = os.path.dirname(__file__)
+REPO_ROOT = os.path.abspath(os.path.join(HERE, '../../..'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'src'))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'src/radia'))
 
 import numpy as np
 from scipy.special import iv, ellipk, ellipe  # Modified Bessel and elliptic integrals
 import matplotlib.pyplot as plt
 
-# Add path for GMSH reader
-sys.path.insert(0, os.path.dirname(__file__))
-from gmsh_centerline_reader import GMSHCenterlineReader
+from radia.peec_mesh_import import GMSHCenterlineReader
 
 print("=" * 70)
 print("PEEC SIBC Validation: Circular Coil vs Analytical")
