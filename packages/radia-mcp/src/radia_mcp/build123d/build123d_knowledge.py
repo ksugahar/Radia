@@ -1612,6 +1612,15 @@ labels differently.  Keep the source-of-truth metadata row next to the
 build123d assembly and require the expected names, roles, and materials before
 meshing.
 
+For CAD that will enter the Cubit mixed hex+pyramid+tet lane, also run
+`shape_transition_role_metadata_gate(...)`.  The build123d side keeps the
+solver handoff intent: one row with role `hex_region`, one with role
+`mesh_transition`, and one with role `tet_region`; the transition row must have
+`transition_kind` set to `"pyramid"` and `connects_roles` containing
+`["hex_region", "tet_region"]`.  This is a CAD-side contract only: Cubit later
+creates the actual pyramid transition elements and the `.vol` inventory gate
+checks that they survived export.
+
 Continuous-loop slot107 (2026-06-29): a build123d coaxial annular sleeve was
 checked across analytic/build123d, build123d STEP reimport, and headless Cubit
 STEP import with `shape_mass_property_crosscheck_summary(..., rtol=1e-4)`.

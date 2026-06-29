@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **567 tools** across 43 MCP servers.
+Total: **568 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 30 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 31 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -121,6 +121,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
+| `build123d_mass_property_crosscheck` | Compare build123d volume/area/bbox rows with one or more CAD sources. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
 | `build123d_status` | (no description) |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
