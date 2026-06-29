@@ -607,10 +607,10 @@ CATALOG: dict[str, dict[str, Any]] = {
     "panel-review": {
         "subpackage": "radia_mcp.panel_review",
         "entry_point": "mcp-server-panel-review",
-        "description": "Radia notebook panel review contract "
-                       "(DesignSpec / Workbench / result artifacts / "
-                       "validation_test / no-PySide gate). Historical "
-                       "PySide topic names are compatibility aliases.",
+        "description": "Radia notebook panel review and construction "
+                       "contract (DesignSpec / Workbench / result "
+                       "artifacts / validation_test / no-PySide gate), "
+                       "including the cubit_panels migration route.",
         "primary_tools": ["panel_review"],
         "related": ["electromagnet", "ih", "motor"],
         "tags": ["meta"],

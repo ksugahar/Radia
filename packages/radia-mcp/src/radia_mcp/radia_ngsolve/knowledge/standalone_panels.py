@@ -22,8 +22,8 @@ Normal Radia Python on LAB / 100号機 / mdx / hibino should not install PySide6
 The only protected PySide6 runtime is Coreform Cubit's embedded Python runtime;
 do not uninstall or delete that Cubit-owned copy.
 
-Topics: quick_start, four_panels, vol_sources, vs_cubit, ih_methods,
-        troubleshooting
+Topics: quick_start, four_panels, build_notebook_gui, cubit_panels_migration,
+        vol_sources, vs_cubit, ih_methods, troubleshooting
 
 ============================================================
 ## quick_start -- notebook panel route
@@ -70,6 +70,59 @@ Active notebook workbenches:
 
 The old `radia_*.py` PySide modules were removed; do not restore them as a
 compatibility alias.
+
+============================================================
+## build_notebook_gui -- construction recipe
+============================================================
+
+For the full construction checklist, call the dedicated panel-review MCP topic:
+
+```
+panel_review(topic="build_notebook_gui")
+```
+
+Short version:
+
+- Move reusable kernels to `src/`; keep heavy numerical gates in
+  `validation_test/`.
+- Create `<App>DesignSpec` and `<App>Workbench` around a headless
+  `src/radia/panels/calc_*.py` command.
+- The notebook cell imports `DesignSpec` + `Workbench`, creates `spec`, and
+  calls `workbench.display()`.
+- `CommandWorkbench` runs locally and saves `command.txt`, `run.log`, and
+  `result.json` with `radia.notebook_panel_run.v2` metadata.
+- Do not store presets in JSON; persistent defaults live in the notebook
+  `DesignSpec(...)` cell.
+- Presentation CSS may restyle the page but must not put a Jupyter
+  cell-selection layer over run buttons.
+
+The NGSolve User Meeting `RADIA-IH.ipynb` draft is a presentation shell for
+the IH workbench: title Markdown, optional dark CSS, `IHDesignSpec` +
+`IHWorkbench`, and short tips.  Keep the repository notebook and validation
+tests as the canonical contract.
+
+============================================================
+## cubit_panels_migration -- examples/cubit_panels route
+============================================================
+
+`examples/cubit_panels` is not a permanent destination.  Before deleting it,
+move its scripts into one of these lanes:
+
+- accel magnet geometry / coil builders -> `src/radia` EM APIs or
+  `src/radia/panels/calc_accel_*.py`
+- IH validation scripts (`verify_*`, `compare_*`, `test_*`) ->
+  `validation_test/induction_heating` or a specific validation subtree
+- IH demonstrations (`scalar_bie_sibc.py`, `bem_sibc_workpiece.py`,
+  `efie_sibc.py`, `fem_esim_*.py`, `impedance_esim.py`) -> src kernels plus
+  result-saved docs notebooks
+- Cubit journals, `.geo`, and BH tables -> protected assets until all
+  references point at the new owner
+
+For the detailed 35-script routing plan, call:
+
+```
+panel_review(topic="cubit_panels_migration")
+```
 
 ============================================================
 ## vol_sources -- mesh inputs still matter
@@ -126,8 +179,9 @@ solver.  JSON files are run artifacts, not preset storage.
 
 
 _TOPICS = (
-    "quick_start", "four_panels", "vol_sources", "vs_cubit",
-    "ih_methods", "troubleshooting",
+    "quick_start", "four_panels", "build_notebook_gui",
+    "cubit_panels_migration", "vol_sources", "vs_cubit", "ih_methods",
+    "troubleshooting",
 )
 
 

@@ -1,4 +1,4 @@
-"""Retired PySide panel review knowledge, redirected to notebook panels."""
+"""Radia notebook panel review and construction knowledge."""
 
 PANEL_REVIEW_NOTEBOOK = """
 # Radia panel review after notebook migration
@@ -37,8 +37,216 @@ protected and must not be removed.
 """
 
 
+NOTEBOOK_GUI_BUILD = """
+# Build a Radia Jupyter notebook GUI
+
+Use this when promoting an `examples/<topic>/*.py` script, a former PySide
+panel, or a Cubit-panel prototype into the current browser-native Radia panel
+surface.  The construction target is always:
+
+```
+src/radia/<app>_design.py
+src/radia/<app>_notebook.py
+src/radia/notebook_workbench.py
+src/radia/panels/calc_<app>.py
+src/radia/panels/notebooks/radia_<app>.ipynb
+validation_test/panels/test_notebook_workbench.py
+```
+
+The notebook GUI is thin: it maps `DesignSpec` fields into ipywidgets and
+launches the validated `calc_*.py` command.  It does not re-implement solver
+logic.
+
+Construction checklist:
+
+1. Move reusable solver, geometry, parser, or mesh-helper code to `src/`.
+2. Keep heavy numerical checks in `validation_test/<topic>/`; add a docs
+   notebook only as the human-facing showcase layer.
+3. Define `<App>DesignSpec` as the canonical initial-value store.  JSON is a
+   run artifact, not a preset store.
+4. Implement `DesignSpec.build_command()`, `missing_required_inputs()`, and
+   `visible_fields()` where needed.  The command must target a headless
+   `src/radia/panels/calc_*.py` script with argparse flags.
+5. In `<app>_notebook.py`, declare `NotebookFieldSpec(...)` rows, subclass
+   `CommandWorkbench`, set `title`, `field_specs`, `section_order`, and an
+   app-specific `run_root` such as `runs/radia_ih`.
+6. In `radia_<app>.ipynb`, include concise Markdown notes plus a code cell:
+
+```python
+from radia.<app>_design import <App>DesignSpec
+from radia.<app>_notebook import <App>Workbench
+
+spec = <App>DesignSpec()
+workbench = <App>Workbench(spec)
+workbench.display()
+```
+
+7. Register the notebook in
+   `src/radia/panels/notebooks/panel_notebook_manifest.json`.
+8. Extend `validation_test/panels/test_notebook_workbench.py` so the workbench
+   builds the expected headless command and the notebook has no PySide/PyQt
+   imports.
+9. Run:
+
+```powershell
+python -m pytest validation_test/panels/test_notebook_workbench.py -q
+```
+
+Run artifacts:
+
+- `CommandWorkbench.run_local()` writes a timestamped run directory with
+  `command.txt`, `run.log`, and `result.json`.
+- `result.json` starts with `radia_result`, schema
+  `radia.notebook_panel_run.v2`, Radia/Python/platform versions, status,
+  command, wall time, and the four heaviest timing stages discoverable from
+  solver JSON outputs.
+- Docs/showcase notebooks must be committed with outputs and synchronized
+  adjacent JSON containing `generated_at_utc`, version/runtime data, and a
+  matching `notebook_sha256`.
+
+Presentation template:
+
+The NGSolve User Meeting draft
+`W:/02_学会資料/2026年度/2026_06_29_NGSolve_User_Meeting/HDiv-VIM@菅原/RADIA-IH.ipynb`
+is a presentation shell for the IH workbench.  Its pattern is:
+
+1. Markdown title explaining that the notebook is the panel.
+2. Optional dark/presentation CSS.
+3. `IHDesignSpec` + `IHWorkbench` display cell.
+4. Short tips about required inputs and saved run artifacts.
+
+Use that shell for talks and operator-facing demos; keep the repository
+notebook contract in `src/radia/panels/notebooks/radia_ih.ipynb` as the source
+of truth for migration notes, domain cautions, and tests.
+
+CSS / JupyterLab guard:
+
+Presentation CSS may restyle colors, typography, and widget backgrounds, but
+must not change pointer events, z-index, positioning, or layout ownership of
+Jupyter cells and input areas.  If hovering the notebook run/play button makes
+it translucent or unclickable, a cell-selection layer is covering the toolbar;
+scope the CSS to visual properties and verify that both the cell run button and
+the workbench `Run` button remain clickable.
+
+Cubit boundary:
+
+The Cubit Export Mesh toolbar is still a Cubit-embedded plugin surface and may
+use Coreform Cubit's bundled PySide6.  Normal Radia Python panels are notebook
+workbenches and must not depend on PySide6/PyQt.
+"""
+
+
+CUBIT_PANELS_MIGRATION = """
+# `examples/cubit_panels` migration plan
+
+As of 2026-06-29, `examples/cubit_panels` still contains 35 Python scripts.
+Treat this directory as a source to distill into `src`, `validation_test`, and
+notebook/docs surfaces, not as a long-lived examples tier.  Do not delete it
+while MCP knowledge, docs, validation, or panel tests still point directly at
+`examples/cubit_panels`.
+
+## Destination rules
+
+- Reusable geometry/model builders -> `src/radia/...` API plus focused tests.
+- Numerical checks, golden locks, and solver comparisons -> `validation_test`.
+- User-facing demonstrations -> result-saved docs notebooks plus synchronized
+  JSON.
+- Presentation/operator GUI -> `src/radia/panels/notebooks/radia_<app>.ipynb`
+  using `DesignSpec` + `CommandWorkbench`.
+- Cubit journals, `.geo`, BH tables, and mesh/CAD assets remain protected until
+  the owning API/notebook/test no longer references the examples path.
+
+## Accel magnet side
+
+`examples/cubit_panels/accel_magnet` is mostly the source material for the EM
+notebook/panel track:
+
+- `coil_dipole.py`, `experiment_occ_dipole.py`, and STEP/FEM helpers should be
+  distilled into `src/radia` EM geometry/coil APIs or existing
+  `src/radia/panels/calc_accel_*.py` scripts.
+- `experiment_mmm_ima.py` is a diagnostic/showcase candidate; keep numerical
+  claims in validation, and show the explanation in a docs notebook if it is
+  user-facing.
+- `BH.txt`, `yoke.jou`, and `view_full.geo` are assets, not cruft.  Move or
+  re-reference them only after `src/radia/em_material.py`,
+  `src/radia/step_mesh_builder.py`, `src/radia/panels/samples/em/README.md`,
+  and `validation_test/panels/test_em_golden.py` no longer point at examples.
+
+## Induction heating side
+
+`examples/cubit_panels/inductance` is mostly the source material for the IH
+notebook/panel track:
+
+- Validation-first: `compare_bem_coupled_vs_fem_kelvin.py`, `verify_*.py`, and
+  `test_*.py` belong in `validation_test/induction_heating` or a more specific
+  validation subtree.
+- Docs/showcase: `scalar_bie_sibc.py`, `bem_sibc_workpiece.py`,
+  `efie_sibc.py`, `pmchwt_sibc.py`, `mfie_sphere_demo.py`,
+  `fem_esim_3d.py`, `fem_esim_kelvin.py`, `fem_total_field.py`, and
+  `impedance_esim.py` should become result-saved notebooks only after reusable
+  kernels are in `src`.
+- API candidates: `create_induction_model.py`, `fem_esim_3d_cubit.py`,
+  `inductance_hodge.py`, `inductance_source_sink.py`, and shared torus/coil
+  builders should move to `src/radia` or `src/radia/panels/calc_*.py`.
+- Display `.geo` files are visualization assets; keep or regenerate them next
+  to the notebook/test that owns them.
+
+## 35-script inventory
+
+Route each Python script before moving or deleting:
+
+| Script | Target after unblock |
+|--------|----------------------|
+| `accel_magnet/coil_dipole.py` | `src` EM coil API |
+| `accel_magnet/experiment_mmm_ima.py` | docs notebook plus validation notes |
+| `accel_magnet/experiment_occ_dipole.py` | `src`/panel calc plus EM docs |
+| `accel_magnet/experiment_step_fem.py` | `src`/panel calc plus EM docs |
+| `accel_magnet/experiment_step_fem_full.py` | distill into EM docs/API |
+| `accel_magnet/experiment_step_fem_nokelvin.py` | distill into EM docs/API |
+| `inductance/bem_sibc_workpiece.py` | IH docs notebook plus src kernel |
+| `inductance/compare_bem_coupled_vs_fem_kelvin.py` | `validation_test` |
+| `inductance/create_induction_model.py` | `src` Cubit/IH model API |
+| `inductance/efie_sibc.py` | IH docs notebook plus validation |
+| `inductance/experiment_bem_sibc_solver.py` | `validation_test` |
+| `inductance/experiment_coupled_bem.py` | IH docs notebook plus validation |
+| `inductance/experiment_coupled_bem_steel.py` | IH docs notebook plus validation |
+| `inductance/experiment_surface_J_accuracy.py` | `validation_test` |
+| `inductance/fem_esim_3d.py` | IH docs notebook plus src kernel |
+| `inductance/fem_esim_3d_cubit.py` | `src` Cubit/IH API plus validation |
+| `inductance/fem_esim_kelvin.py` | IH docs notebook plus validation |
+| `inductance/fem_scattered_coil.py` | `src` incident-field/coil helper |
+| `inductance/fem_total_field.py` | IH docs notebook plus src helper |
+| `inductance/impedance_esim.py` | IH docs notebook plus src kernel |
+| `inductance/inductance_hodge.py` | `src` BEM inductance API |
+| `inductance/inductance_source_sink.py` | `src` BEM inductance API |
+| `inductance/inductance_torus.py` | `src`/panel calc or Cubit fixture |
+| `inductance/mfie_sphere_demo.py` | IH/BEM docs notebook plus validation |
+| `inductance/pmchwt_sibc.py` | IH/BEM docs notebook plus validation |
+| `inductance/pmchwt_sibc_test.py` | `validation_test` |
+| `inductance/scalar_bie_sibc.py` | IH docs notebook plus validation |
+| `inductance/test_interp_quality.py` | `validation_test` |
+| `inductance/test_nxH_rhs.py` | `validation_test` |
+| `inductance/verify_esim.py` | `validation_test` |
+| `inductance/verify_laplace_bem.py` | `validation_test` |
+| `inductance/verify_per_node_sibc_sphere.py` | `validation_test` |
+| `inductance/verify_per_node_sibc_spheroid.py` | `validation_test` |
+| `inductance/verify_per_node_sibc_torus.py` | `validation_test` |
+| `inductance/verify_sphere_sibc.py` | `validation_test` |
+
+## Deletion gate
+
+After each promotion batch, run a repository reference search for
+`examples/cubit_panels`.  Remaining references must name a concrete
+`target_after_unblock` (`src`, `validation_test`, `docs`, or delete after
+distillation).  New long-lived references to examples are not allowed.
+"""
+
+
 TOPICS = {
     "overview": PANEL_REVIEW_NOTEBOOK,
+    "build_notebook_gui": NOTEBOOK_GUI_BUILD,
+    "presentation_template": NOTEBOOK_GUI_BUILD,
+    "cubit_panels_migration": CUBIT_PANELS_MIGRATION,
     "5_skills_chain": PANEL_REVIEW_NOTEBOOK,
     "13_checks": PANEL_REVIEW_NOTEBOOK,
     "bug_catalogue": PANEL_REVIEW_NOTEBOOK,
@@ -47,7 +255,7 @@ TOPICS = {
     "widget_calc_gap": PANEL_REVIEW_NOTEBOOK,
     "smoke_scenarios": PANEL_REVIEW_NOTEBOOK,
     "red_flags": PANEL_REVIEW_NOTEBOOK,
-    "workflow": PANEL_REVIEW_NOTEBOOK,
+    "workflow": NOTEBOOK_GUI_BUILD,
 }
 
 
