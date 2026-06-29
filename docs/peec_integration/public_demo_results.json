@@ -78,7 +78,7 @@
   },
   "selected_records": [
     {
-      "path": "examples/peec_integration/basic_peec/demo_peec_simple_loop.py",
+      "path": "docs/peec_integration/demos/basic_peec/demo_peec_simple_loop.py",
       "name": "demo_peec_simple_loop.py",
       "subdir": "basic_peec",
       "lane": "docs_basic_peec_demo",
@@ -104,13 +104,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 710,
-          "text": "examples/peec_integration/basic_peec/demo_peec_simple_loop.py"
+          "text": "docs/peec_integration/demos/basic_peec/demo_peec_simple_loop.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/basic_peec/demo_frequency_response.py",
+      "path": "docs/peec_integration/demos/basic_peec/demo_frequency_response.py",
       "name": "demo_frequency_response.py",
       "subdir": "basic_peec",
       "lane": "docs_basic_peec_demo",
@@ -136,13 +136,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 704,
-          "text": "examples/peec_integration/basic_peec/demo_frequency_response.py"
+          "text": "docs/peec_integration/demos/basic_peec/demo_frequency_response.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/gmsh_models/demo_gmsh_ports_peec.py",
+      "path": "docs/peec_integration/demos/gmsh_models/demo_gmsh_ports_peec.py",
       "name": "demo_gmsh_ports_peec.py",
       "subdir": "gmsh_models",
       "lane": "docs_mesh_pipeline_demo",
@@ -169,13 +169,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 749,
-          "text": "examples/peec_integration/gmsh_models/demo_gmsh_ports_peec.py"
+          "text": "docs/peec_integration/demos/gmsh_models/demo_gmsh_ports_peec.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/spice/demo_peec_prima_reduction.py",
+      "path": "docs/peec_integration/demos/spice/demo_peec_prima_reduction.py",
       "name": "demo_peec_prima_reduction.py",
       "subdir": "spice",
       "lane": "docs_mor_spice_demo",
@@ -201,13 +201,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 779,
-          "text": "examples/peec_integration/spice/demo_peec_prima_reduction.py"
+          "text": "docs/peec_integration/demos/spice/demo_peec_prima_reduction.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/applications/demo_induction_heating.py",
+      "path": "docs/peec_integration/demos/applications/demo_induction_heating.py",
       "name": "demo_induction_heating.py",
       "subdir": "applications",
       "lane": "docs_application_demo",
@@ -228,7 +228,7 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/peec_integration/applications/demo_induction_heating.png",
+          "path": "docs/peec_integration/demos/applications/demo_induction_heating.png",
           "sha256": "3fa3b8fbb42d7ddfc6713520e4c003182a7078d773871ed3750ec2902a49a366",
           "bytes": 233895
         }
@@ -238,13 +238,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 701,
-          "text": "examples/peec_integration/applications/demo_induction_heating.py"
+          "text": "docs/peec_integration/demos/applications/demo_induction_heating.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/wpt/demo_wpt.py",
+      "path": "docs/peec_integration/demos/wpt/demo_wpt.py",
       "name": "demo_wpt.py",
       "subdir": "wpt",
       "lane": "docs_application_demo",
@@ -267,27 +267,27 @@
       },
       "sibling_artifacts": [
         {
-          "path": "examples/peec_integration/wpt/demo_wpt_basic.png",
+          "path": "docs/peec_integration/demos/wpt/demo_wpt_basic.png",
           "sha256": "06689f0e24a49d21297fd579bd5baea1dc54993902683cd302264e7619dcc9cb",
           "bytes": 115976
         },
         {
-          "path": "examples/peec_integration/wpt/demo_wpt_multi_turn.png",
+          "path": "docs/peec_integration/demos/wpt/demo_wpt_multi_turn.png",
           "sha256": "92ecad36f8c1cb9d0ab002cdc3c0e93f35e341120e1529f5331fa2cd2ed82418",
           "bytes": 44643
         },
         {
-          "path": "examples/peec_integration/wpt/demo_wpt_s_params.png",
+          "path": "docs/peec_integration/demos/wpt/demo_wpt_s_params.png",
           "sha256": "f8c05bafb798cd0eff3b865f0424fa9063756cd169c9e8c43d24fbf5bd010d88",
           "bytes": 46828
         },
         {
-          "path": "examples/peec_integration/wpt/demo_wpt_skin_effect.png",
+          "path": "docs/peec_integration/demos/wpt/demo_wpt_skin_effect.png",
           "sha256": "2b848d3dfc934f25446b756c03970846bcfd57edd819f3c0f4862f455bedddfa",
           "bytes": 81598
         },
         {
-          "path": "examples/peec_integration/wpt/demo_wpt_variable_k.png",
+          "path": "docs/peec_integration/demos/wpt/demo_wpt_variable_k.png",
           "sha256": "90afbcc9c95955893e17dd52b47617ff8f6b0c1f4aa772df7ed40c2d8eb8ea09",
           "bytes": 64741
         }
@@ -297,13 +297,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 830,
-          "text": "examples/peec_integration/wpt/demo_wpt.py"
+          "text": "docs/peec_integration/demos/wpt/demo_wpt.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py",
       "name": "verify_peec_vs_ngsbem.py",
       "subdir": "ngsbem_peec_demo",
       "lane": "validation_test_candidate",
@@ -335,13 +335,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 769,
-          "text": "examples/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py"
+          "text": "validation_test/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py"
         }
       ],
       "cleanup_review_reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/coupled/demo_coupled_frequency_sweep.py",
+      "path": "validation_test/peec_integration/coupled/demo_coupled_frequency_sweep.py",
       "name": "demo_coupled_frequency_sweep.py",
       "subdir": "coupled",
       "lane": "src_api_plus_validation_review",
@@ -369,13 +369,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 722,
-          "text": "examples/peec_integration/coupled/demo_coupled_frequency_sweep.py"
+          "text": "validation_test/peec_integration/coupled/demo_coupled_frequency_sweep.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/filament_coil/ih_cad_first_demo.py",
+      "path": "docs/peec_integration/demos/filament_coil/ih_cad_first_demo.py",
       "name": "ih_cad_first_demo.py",
       "subdir": "filament_coil",
       "lane": "docs_cad_filament_demo",
@@ -402,13 +402,13 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 737,
-          "text": "examples/peec_integration/filament_coil/ih_cad_first_demo.py"
+          "text": "docs/peec_integration/demos/filament_coil/ih_cad_first_demo.py"
         }
       ],
       "cleanup_review_reason": null
     },
     {
-      "path": "examples/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py",
+      "path": "validation_test/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py",
       "name": "benchmark_panel_vs_ngbem.py",
       "subdir": "benchmarks",
       "lane": "validation_benchmark_candidate",
@@ -437,7 +437,7 @@
         {
           "path": "src/radia.egg-info/SOURCES.txt",
           "line": 713,
-          "text": "examples/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py"
+          "text": "validation_test/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py"
         }
       ],
       "cleanup_review_reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
@@ -472,205 +472,205 @@
   ],
   "cleanup_review_sample": [
     {
-      "path": "examples/peec_integration/analysis/analyze_dowell_prima.py",
+      "path": "docs/peec_integration/demos/analysis/analyze_dowell_prima.py",
       "lane": "docs_mor_spice_demo",
       "reason": "analysis scratch/helper; docs-coupled helper or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/analysis/analyze_tet_ordering.py",
+      "path": "docs/peec_integration/demos/analysis/analyze_tet_ordering.py",
       "lane": "docs_analysis_helper_or_retired_review",
       "reason": "analysis scratch/helper; docs-coupled helper or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/analysis/compare_symmetrized_solve.py",
+      "path": "docs/peec_integration/demos/analysis/compare_symmetrized_solve.py",
       "lane": "docs_analysis_helper_or_retired_review",
       "reason": "comparison helper; validation or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/analysis/demo_analysis_framework.py",
+      "path": "docs/peec_integration/demos/analysis/demo_analysis_framework.py",
       "lane": "docs_analysis_helper_or_retired_review",
       "reason": "analysis/helper lane; not a front-page public demo unless tied to a result notebook"
     },
     {
-      "path": "examples/peec_integration/analysis/evaluate_peec_formula_accuracy.py",
+      "path": "docs/peec_integration/demos/analysis/evaluate_peec_formula_accuracy.py",
       "lane": "docs_analysis_helper_or_retired_review",
       "reason": "analysis/helper lane; not a front-page public demo unless tied to a result notebook"
     },
     {
-      "path": "examples/peec_integration/analysis/generate_paper_figures.py",
+      "path": "docs/peec_integration/demos/analysis/generate_paper_figures.py",
       "lane": "docs_analysis_helper_or_retired_review",
       "reason": "analysis/helper lane; not a front-page public demo unless tied to a result notebook"
     },
     {
-      "path": "examples/peec_integration/analysis/measure_msc_asymmetry.py",
+      "path": "docs/peec_integration/demos/analysis/measure_msc_asymmetry.py",
       "lane": "docs_analysis_helper_or_retired_review",
       "reason": "measurement helper; docs-coupled helper or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py",
+      "path": "validation_test/peec_integration/benchmarks/benchmark_panel_vs_ngbem.py",
       "lane": "validation_benchmark_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/benchmarks/vf_benchmark_same_data.py",
+      "path": "validation_test/peec_integration/benchmarks/vf_benchmark_same_data.py",
       "lane": "validation_benchmark_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/coupled/test_delta_L_robustness.py",
+      "path": "validation_test/peec_integration/coupled/test_delta_L_robustness.py",
       "lane": "src_api_plus_validation_review",
       "reason": "test-like script under examples; should move to validation_test/tests"
     },
     {
-      "path": "examples/peec_integration/coupled/validate_fem_back_reaction.py",
+      "path": "validation_test/peec_integration/coupled/validate_fem_back_reaction.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/coupled/verify_multielement_msc.py",
+      "path": "validation_test/peec_integration/coupled/verify_multielement_msc.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/filament_coil/cad_sweep_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/cad_sweep_smoke.py",
       "lane": "docs_cad_filament_demo",
       "reason": "smoke script; should become a small test or be deleted after coverage"
     },
     {
-      "path": "examples/peec_integration/filament_coil/circle_and_crosstype_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/circle_and_crosstype_smoke.py",
       "lane": "docs_cad_filament_demo",
       "reason": "smoke script; should become a small test or be deleted after coverage"
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_filament_vs_centerline.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_filament_vs_centerline.py",
       "lane": "docs_cad_filament_demo",
       "reason": "comparison helper; validation or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_ihbem_peec_vs_tiera.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_ihbem_peec_vs_tiera.py",
       "lane": "docs_cad_filament_demo",
       "reason": "comparison helper; validation or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_peec_vs_tier_a.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_peec_vs_tier_a.py",
       "lane": "docs_cad_filament_demo",
       "reason": "comparison helper; validation or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/filament_coil/compare_tier_a_vs_ngbem.py",
+      "path": "validation_test/peec_integration/filament_coil/compare_tier_a_vs_ngbem.py",
       "lane": "docs_cad_filament_demo",
       "reason": "comparison helper; validation or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/filament_coil/from_step_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/from_step_smoke.py",
       "lane": "docs_cad_filament_demo",
       "reason": "smoke script; should become a small test or be deleted after coverage"
     },
     {
-      "path": "examples/peec_integration/filament_coil/loft_taper_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/loft_taper_smoke.py",
       "lane": "docs_cad_filament_demo",
       "reason": "smoke script; should become a small test or be deleted after coverage"
     },
     {
-      "path": "examples/peec_integration/filament_coil/optimize_round_torus_claude.py",
+      "path": "docs/peec_integration/demos/filament_coil/optimize_round_torus_claude.py",
       "lane": "docs_cad_filament_demo",
       "reason": "agent-named optimization scratch; keep out of public demo and review for distill/delete"
     },
     {
-      "path": "examples/peec_integration/filament_coil/optimize_round_torus_random.py",
+      "path": "docs/peec_integration/demos/filament_coil/optimize_round_torus_random.py",
       "lane": "docs_cad_filament_demo",
       "reason": "optimization exploration; public only after distilled result notebook"
     },
     {
-      "path": "examples/peec_integration/filament_coil/polygon_and_b123d_smoke.py",
+      "path": "validation_test/peec_integration/filament_coil/polygon_and_b123d_smoke.py",
       "lane": "docs_cad_filament_demo",
       "reason": "smoke script; should become a small test or be deleted after coverage"
     },
     {
-      "path": "examples/peec_integration/filament_coil/smoke_racetrack_tier_a.py",
+      "path": "validation_test/peec_integration/filament_coil/smoke_racetrack_tier_a.py",
       "lane": "docs_cad_filament_demo",
       "reason": "smoke script; should become a small test or be deleted after coverage"
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/benchmark_4case.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/benchmark_4case.py",
       "lane": "validation_benchmark_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_busbar_comparison.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_busbar_comparison.py",
       "lane": "validation_test_candidate",
       "reason": "experiment script; validation or memory-distilled cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_dowell_comparison.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/fasthenry-like/experiment_dowell_comparison.py",
       "lane": "validation_test_candidate",
       "reason": "experiment script; validation or memory-distilled cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/verify_loop_peec_vs_ngsbem.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py",
+      "path": "validation_test/peec_integration/ngsbem_peec_demo/verify_peec_vs_ngsbem.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/spiral_inductor/cubit_compare_peec_vs_cad.py",
+      "path": "docs/peec_integration/demos/spiral_inductor/cubit_compare_peec_vs_cad.py",
       "lane": "docs_showcase_candidate",
       "reason": "comparison helper; validation or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/verification/check_funcs.py",
+      "path": "validation_test/peec_integration/verification/check_funcs.py",
       "lane": "validation_test_candidate",
       "reason": "ad-hoc check script; validation_test or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/verification/check_mmm_elements.py",
+      "path": "validation_test/peec_integration/verification/check_mmm_elements.py",
       "lane": "validation_test_candidate",
       "reason": "ad-hoc check script; validation_test or cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/verification/cubit_mesh_generation/generate_circular_coil.py",
+      "path": "validation_test/peec_integration/verification/cubit_mesh_generation/generate_circular_coil.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/verification/cubit_mesh_generation/generate_circular_wire.py",
+      "path": "validation_test/peec_integration/verification/cubit_mesh_generation/generate_circular_wire.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/verification/experiment_fem_convergence.py",
+      "path": "validation_test/peec_integration/verification/experiment_fem_convergence.py",
       "lane": "validation_test_candidate",
       "reason": "experiment script; validation or memory-distilled cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/verification/experiment_loop_star_modes.py",
+      "path": "validation_test/peec_integration/verification/experiment_loop_star_modes.py",
       "lane": "validation_test_candidate",
       "reason": "experiment script; validation or memory-distilled cleanup candidate"
     },
     {
-      "path": "examples/peec_integration/verification/gmsh_centerline_reader.py",
+      "path": "validation_test/peec_integration/verification/gmsh_centerline_reader.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/verification/validate_bemsibc.py",
+      "path": "validation_test/peec_integration/verification/validate_bemsibc.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/verification/validate_bessel_sibc.py",
+      "path": "validation_test/peec_integration/verification/validate_bessel_sibc.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     },
     {
-      "path": "examples/peec_integration/verification/validate_circular_coil_sibc.py",
+      "path": "validation_test/peec_integration/verification/validate_circular_coil_sibc.py",
       "lane": "validation_test_candidate",
       "reason": "verification/benchmark lane; not a public demo until promoted to validation_test with durable JSON"
     }
   ],
-  "notebook_sha256": "41b3d5d8f0eef0a3e5cb68dcf4847a8eae321f7088c0a8938eb9da7579fbfc16"
+  "notebook_sha256": "6befdd22873823d6723ee87ebc18718e503a13487dc789e0311a2e3c29d6fbf8"
 }

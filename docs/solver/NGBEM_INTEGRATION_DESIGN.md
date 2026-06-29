@@ -801,7 +801,7 @@ fes_bem = HDivSurface(mesh_surf, order=2)
 Low-frequency BEM is already implemented using ngbem's existing product space (`HDivSurface x SurfaceL2`).
 A dedicated MQS kernel is unnecessary -- the Weggler stabilized EFIE equivalent formulation is obtained naturally.
 
-**Reference implementation**: `examples/peec_integration/ngsbem_peec_demo/`
+**Reference implementation**: `docs/peec_integration/demos/ngsbem_peec_demo/`
 
 ### Verified Approach: Product Space = Weggler EFIE
 
@@ -930,7 +930,7 @@ The two methods share no code: PEEC uses Neumann formula + BEM surface currents,
 while FEM uses a full volume mesh with energy-based inductance extraction.
 
 **Script**: `validation_test/peec_integration/verification/verify_ngsolve_inductance.py`
-**PEEC Reference**: `examples/peec_integration/applications/demo_circular_coil_4cases.py`
+**PEEC Reference**: `docs/peec_integration/demos/applications/demo_circular_coil_4cases.py`
 
 ### Verification Geometry
 

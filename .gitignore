@@ -16,7 +16,6 @@ Build_PyPI_Package.ps1
 build_log.txt
 logs/
 src/FastMaxwellv1.0/
-examples/peec_integration/spiral_inductor/
 # Scratch artifacts: use C:\temp, not in-repo temp/
 # (global policy — merged into C:\temp 2026-04-21)
 temp/
@@ -247,7 +246,6 @@ file_format_documents/
 # Keep example data CSV files
 !examples/Universal_Relaxation_Network/data/**/*.csv
 !examples/Universal_Relaxation_Network/results/*.csv
-!examples/peec_integration/data/*.csv
 
 # ============================================================================
 # IMPORTANT: PyPI Distribution Files - DO NOT IGNORE

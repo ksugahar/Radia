@@ -13,7 +13,7 @@
 ## At 7 kHz Cu: delta = 0.79 mm -> ~5 edges per delta (vs ~2.5 before).
 ## At 7 kHz steel: delta = 0.66 mm -> similar.
 ##
-## Used by examples/peec_integration/filament_coil/compare_fem_vs_peec_skin.py
+## Used by validation_test/peec_integration/filament_coil/compare_fem_vs_peec_skin.py
 ## to verify that A-V L converges toward the PEEC+BR value as the coil
 ## mesh is refined (see memory sibc_3d_coil_mesh_discovery, 2026-04-14).
 

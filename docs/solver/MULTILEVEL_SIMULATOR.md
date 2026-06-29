@@ -305,7 +305,7 @@ src/radia/
 ├── bem_inductance.py        # Level 2: Direct BEM inductance
 └── esim_coupled_solver.py   # Level 3: FEM coupled solver
 
-examples/peec_integration/
+docs/peec_integration/demos/
 ├── coupled/
 │   ├── demo_schur_complement.py       # Schur complement demo
 │   └── verify_multielement_msc.py     # Multi-element MSC validation

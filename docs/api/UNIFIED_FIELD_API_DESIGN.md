@@ -71,7 +71,7 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
     │ - Coupled core models (FEM-BEM, Radia MMM, etc.) │
     │ - Port extraction via Schur complement            │
     │                                                   │
-    │ See: examples/peec_integration/ngsbem_peec_demo/ │
+    │ See: docs/peec_integration/demos/ngsbem_peec_demo/ │
     └───────────────────────────────────────────────────┘
 ```
 
@@ -151,7 +151,7 @@ points = np.array([[0, 0, 0.1], [0, 0, 0.2], [0, 0, 0.3]])
 B_batch = np.asarray(rad.Fld(magnet, 'b', points))  # (3, 3) array
 
 # 3. Surface BEM (via ngbem, not rad.Fld)
-# See examples/peec_integration/ngsbem_peec_demo/
+# See docs/peec_integration/demos/ngsbem_peec_demo/
 ```
 
 ## References
