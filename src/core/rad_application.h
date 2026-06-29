@@ -90,6 +90,34 @@ public:
 	// Can be set via Python API: rad.SolverConfig(newton_method=True/False)
 	bool m_use_newton;
 
+	// co-loop projection (default OFF, backward compatible).  When true, the moment-method
+	// nonlinear iteration projects the moment iterate onto the co-loop (loop-free) subspace
+	// each outer step: FlatMagn <- FlatMagn - Q (Q^T Q)^-1 Q^T FlatMagn, Q = field-null loop
+	// basis (radTInteraction::BuildLoopBasis).  The loops are field-null, so the field/H is
+	// unchanged; the magnetisation |M| the B-input (B = mu0(H+M)) constitutive law reads is
+	// the loop-free one -> removes the loop-driven spurious saturation that slows B-input
+	// hysteresis (play/energy) solves.  NO-OP for H-input materials (chi from |H|).
+	// Set via Python: rad.SolverConfig(coloop_project=True/False).
+	bool m_coloop_project;
+
+	// loop-growth-suppression DEFLATION (default OFF, backward compatible).  When true, the
+	// collocation-MMMM linear BiCGSTAB solves the co-loop-projected system  P A P x = P b
+	// (P = I - Q(Q^T Q)^-1 Q^T, Q = field-null loop basis from radTInteraction::BuildLoopBasis),
+	// keeping the solution in the co-loop subspace so the field-null loop circulation NEVER enters
+	// the solution -- loop-free at ANY bicgstab_tol (decouples co-loop accuracy from loop
+	// suppression, unlike loose-tol early-stopping).  Distinct from m_coloop_project (which projects
+	// only the CONSTITUTIVE M, post-solve, for B-input hysteresis); this deflates the LINEAR SOLVE
+	// itself, for ANY BH.  Set via Python: rad.SolverConfig(loop_deflate=True/False).
+	bool m_loop_deflate;
+
+	// loop-growth-suppression GAUGE PENALTY (default 0.0 = OFF).  When lam = m_loop_penalty > 0, the
+	// collocation-MMMM linear matvec uses  A + lam * Q(Q^T Q)^-1 Q^T  (Q = field-null loop basis), which
+	// lifts the loop eigenvalue 1/chi -> 1/chi+lam and suppresses the loop content of the solution by
+	// 1/(1+lam*chi) at ANY bicgstab_tol.  A low-rank perturbation of A, so RHS + the block-Jacobi
+	// preconditioner stay UNCHANGED/consistent (unlike m_loop_deflate, which can diverge).  Production
+	// loop-suppression path.  Set via Python: rad.SolverConfig(loop_penalty=lam).
+	double m_loop_penalty;
+
 	// Newton line search damping parameters
 	// Enables adaptive backtracking line search to improve nonlinear convergence
 	// Can be configured via Python API: rad.SolverConfig(newton_damping=True, ...)
@@ -185,6 +213,9 @@ public:
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
+		m_coloop_project = false; // Default: no co-loop projection (backward compatible)
+		m_loop_deflate = false;   // Default: no loop deflation in the linear solve (backward compatible)
+		m_loop_penalty = 0.0;     // Default: no loop gauge penalty (backward compatible)
 
 		// Newton line search damping init
 		m_newton_damping_enabled = true;  // Default: enabled when Newton is active

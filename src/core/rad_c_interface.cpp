@@ -1631,6 +1631,40 @@ bool GetNewtonMethod()
 	return rad.m_use_newton;
 }
 
+// co-loop projection toggle (free functions; called directly from the pybind SolverConfig,
+// same pattern as RadSetMomentAnalyticKernel).  Default OFF.
+void RadSetColoopProject(bool v)
+{
+	rad.m_coloop_project = v;
+}
+
+bool RadGetColoopProject()
+{
+	return rad.m_coloop_project;
+}
+
+// loop-growth-suppression deflation toggle (free functions; same pattern).  Default OFF.
+void RadSetLoopDeflate(bool v)
+{
+	rad.m_loop_deflate = v;
+}
+
+bool RadGetLoopDeflate()
+{
+	return rad.m_loop_deflate;
+}
+
+// loop-growth-suppression gauge penalty (free functions; same pattern).  Default 0.0 (OFF).
+void RadSetLoopPenalty(double v)
+{
+	rad.m_loop_penalty = v;
+}
+
+double RadGetLoopPenalty()
+{
+	return rad.m_loop_penalty;
+}
+
 void SetNewtonDamping(bool enabled, int max_iter, double min_omega)
 {
 	if(enabled) {
