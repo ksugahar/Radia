@@ -587,9 +587,9 @@ xi ~ 1 regime; identical to scalar in the asymptotic regime
   passes through per-node Z_s to the SIBC core
 - `src/radia/panels/calc_inductance.py::_dowell_Zs`,
   `_build_per_node_Zs`, `_run_coupled_bem(use_local_curvature=True)`
-- `examples/cubit_panels/inductance/verify_per_node_sibc_sphere.py`
-- `examples/cubit_panels/inductance/verify_per_node_sibc_spheroid.py`
-- `examples/cubit_panels/inductance/verify_per_node_sibc_torus.py`
+- `validation_test/induction_heating/cubit_panels_legacy/verify_per_node_sibc_sphere.py`
+- `validation_test/induction_heating/cubit_panels_legacy/verify_per_node_sibc_spheroid.py`
+- `validation_test/induction_heating/cubit_panels_legacy/verify_per_node_sibc_torus.py`
 
 ### Residual cleanup (commit ca5cb46, 2026-04-12)
 
@@ -664,7 +664,7 @@ report the correct sign in both regimes (Lenz screening for copper,
 flux concentration for ferromagnetic steel).
 
 **Canonical regression script**:
-`examples/cubit_panels/inductance/compare_bem_coupled_vs_fem_kelvin.py`
+`validation_test/induction_heating/cubit_panels_legacy/compare_bem_coupled_vs_fem_kelvin.py`
 
 Run after any change to `bem_coupled_solver.py` to confirm the cross-
 check is still tight.

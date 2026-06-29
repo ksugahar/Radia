@@ -19,6 +19,14 @@ reaching back into `examples/`.
 
 The public docs catalog is `docs/induction_heating/`.
 
+## Cubit Panels Legacy
+
+`cubit_panels_legacy/` contains the former IH Cubit-panel Python and
+Cubit/display assets.  Keep it as a protected validation corpus while reusable
+kernels are promoted to `src/` and public explanations move into result-saved
+docs notebooks.  Do not add new examples-path references back to the old IH
+Cubit-panel examples location.
+
 ## Demoted Sample Legacy Fixtures
 
 `demoted_samples_legacy/` contains the old IH Cubit journals and Cubit-side
