@@ -368,7 +368,7 @@ if __name__ == "__main__":
         # Default test with yoke.step
         step_file = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            '..', '..', 'examples', 'cubit_panels', 'accel_magnet',
+            '..', '..', 'panels', 'samples', 'em', 'c_type_dipole',
             'yoke.step')
     else:
         step_file = sys.argv[1]

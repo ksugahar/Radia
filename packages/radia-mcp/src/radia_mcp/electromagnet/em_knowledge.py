@@ -7,7 +7,8 @@ Radia (CoilBuilder, MMM/MSC, IMA) + Cubit (hex mesh) + NGSolve (FEM, Kelvin).
 Sources:
   - CLAUDE.md "Accelerator Magnet Solver Architecture"
   - CLAUDE.md "Hantila Polarization Method"
-  - examples/cubit_panels/accel_magnet/
+  - panels/samples/em/c_type_dipole/ (rescued panel-only STEP fixtures)
+  - src/radia/panels/samples/em/ (legacy packaged EM panel samples)
   - src/radia/coil_builder.py
   - src/radia/coil_geometry.py
 """
