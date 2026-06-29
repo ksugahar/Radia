@@ -41,6 +41,27 @@ def test_coenergy_torque_gate_uses_absolute_tolerance_at_zero_crossings():
     assert max(row["abs_error"] for row in zero_rows) < 1.0e-12
 
 
+def test_coenergy_torque_gate_improves_with_angle_resolution():
+    amp = 0.25
+    summaries = []
+    for n in (64, 256):
+        theta = [2.0 * math.pi * i / n for i in range(n)]
+        coenergy = [-amp * math.cos(t) for t in theta]
+        torque = [amp * math.sin(t) for t in theta]
+        summaries.append(coenergy_torque_periodic_summary(
+            theta,
+            coenergy,
+            torque,
+            rtol=2.0e-3,
+            atol=1.0e-12,
+        ))
+
+    coarse, fine = summaries
+    assert coarse["status"] == "ok"
+    assert fine["status"] == "ok"
+    assert fine["max_abs_error"] < 0.07 * coarse["max_abs_error"]
+
+
 def test_two_port_sparameter_health_checks_passivity_and_reciprocity():
     health = two_port_sparameter_health(0.1, 0.7, s12=0.7, s22=0.1)
     assert health["status"] == "ok"

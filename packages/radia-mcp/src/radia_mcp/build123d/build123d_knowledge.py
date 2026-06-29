@@ -1588,6 +1588,23 @@ MCP tool `build123d_volume_crosscheck(...)`.  This is the right first gate
 for Cubit/CAD round trips because volume catches unit-scale mistakes, missing
 booleans, and dropped bodies without requiring identical face topology.
 
+Continuous-loop gate (2026-06-29): a centered
+`Box(4, 3, 2) - Cylinder(r=0.4)` body passed the analytic mass-property gate,
+STEP export, and headless Coreform Cubit 2025.12 import with the same
+`{"name": "box_hole", "volume": 22.994690350851265}` row.  The external CAD
+volume crosscheck reported `max_volume_rel_error = 0.0`.  On Windows, prefer
+`coreform_cubit.com -nographics -batch script.py` for captured headless checks;
+`coreform_cubit.exe` can behave like a launcher and return before a batch script
+has actually executed.
+
+Heavier continuous-loop gate (2026-06-29): an L bracket formed by fusing two
+boxes, subtracting their overlap once, then cutting two through holes passed the
+same STEP -> Cubit volume check with
+`{"name": "l_bracket_two_holes", "volume": 2.8982123980236905}` and
+`max_volume_rel_error = 1.5322866265870984e-16`.  This is a better regression
+than a single box-hole body because it catches boolean union/overlap accounting
+and multiple-hole subtraction before the geometry enters the mesh pipeline.
+
 Use the full `shape_measurement_health_summary(...)` only when the other CAD
 side also supplies area and bounding boxes.  Keep private tool provenance in
 the private lane; public artifacts should describe this as an external CAD
