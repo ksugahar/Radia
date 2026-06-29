@@ -110,7 +110,9 @@ def test_curved_gram_entries_match_dense_curved_math():
     combinations."""
     geo = OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
     mesh = ng.Mesh(geo.GenerateMesh(maxh=1.5)); mesh.Curve(2)
-    order = 1; quad = max(3 * order, 4); cg = 8     # RT1 (RT0 retired); curve_order=2 is the matched geometry
+    order = 1; quad = 3 * order; cg = 8     # RT1 (RT0 retired); quad = the LINEAR build_charge_gram default (3*p
+    #                                          PSD floor) -- the dense reference MUST use the SAME quad as the
+    #                                          production Gram here (build_charge_gram with no bh_table -> linear)
     gx, gw = _g01(cg); gl, gwl = gx.tolist(), gw.tolist()
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=order)
