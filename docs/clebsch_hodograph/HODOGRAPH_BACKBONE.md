@@ -1,6 +1,6 @@
 # The coordinate-transform backbone — one diagram, every variant a cell
 
-This is the **spine** for the `examples/clebsch_hodograph/` line. The two
+This is the **spine** for the `docs/clebsch_hodograph/demos/` line. The two
 companion notes are specializations of it:
 
 - [`DESIGN_METHODOLOGY.md`](DESIGN_METHODOLOGY.md) — the A–φ design loop (iron
@@ -59,7 +59,7 @@ Hodge star is the explicit weight
 `W` **is** the discrete Hodge star written in computational coordinates. This
 identity is verified to machine precision (deformed-mesh assembly == reference +
 `W`, `~1e-16`, conformal and non-conformal `φ`) in
-[`bidirectional_coordinate_transform_2d.py`](../../examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py)
+[`bidirectional_coordinate_transform_2d.py`](demos/bidirectional_coordinate_transform_2d.py)
 (golden `test_bidirectional_coordinate_transform_2d`). Everything below is what
 `W` and `⋆_ν` do in each cell.
 
@@ -120,11 +120,11 @@ invariant in 2-D**, so a conformal `φ` leaves `⋆` (hence `W`) untouched.
 | **3-D** | `J = sI ⇒ W = sI` | scale `s` (and more) | `⋆` on `Ω¹(ℝ³)` is **not** conformally invariant |
 
 This is exactly why
-[`hodograph_kelvin_2d.py`](../../examples/clebsch_hodograph/hodograph_kelvin_2d.py)
+[`hodograph_kelvin_2d.py`](demos/hodograph_kelvin_2d.py)
 is weight-free (`μ′ = μ₀`) while
-[`hodograph_kelvin_axisym.py`](../../examples/clebsch_hodograph/hodograph_kelvin_axisym.py)
+[`hodograph_kelvin_axisym.py`](demos/hodograph_kelvin_axisym.py)
 and
-[`clebsch_kelvin_3d.py`](../../examples/clebsch_hodograph/clebsch_kelvin_3d.py)
+[`clebsch_kelvin_3d.py`](demos/clebsch_kelvin_3d.py)
 carry the `(R/ρ′)²` / `2πr` Kelvin weight (the `symbolic_pullback_check()` in the
 bidirectional example derives all three from the same `W`).
 
@@ -132,7 +132,7 @@ Dimension also decides whether the **field-side** transform even exists globally
 in 3-D the Clebsch representation `B = ∇α×∇β` needs **two** potentials for
 **three** coordinates, and a global pair exists iff the **helicity**
 `h = ∫A·B` vanishes (Moffatt 1969). Verified in
-[`clebsch_3d_closing_condition.py`](../../examples/clebsch_hodograph/clebsch_3d_closing_condition.py)
+[`clebsch_3d_closing_condition.py`](demos/clebsch_3d_closing_condition.py)
 (Clebsch `h = −7e-17`, ABC Beltrami `h = 3(2π)³ ≠ 0`, chaotic). **This is why 3-D
 does not auto-linearize** — the full field-plane interchange has a topological
 obstruction; only the *partial* (one-potential) transform is always available.
@@ -159,7 +159,7 @@ geometry (axis 1, the field plane) can fold.*
 The same SPD fact picks the well-conditioned formulation: the convex coenergy
 `∫ W(|B|)` (`W′ = ν` monotone ⇒ `W` convex) is the **B-input A-formulation**,
 the de Rham dual where the solve is stable at the knee — see
-[`saturation_loop_2d.py`](../../examples/clebsch_hodograph/saturation_loop_2d.py)
+[`saturation_loop_2d.py`](demos/saturation_loop_2d.py)
 and the conditioning discussion in
 [`HDIV_VIM_CLEBSCH_BRIDGE.md`](HDIV_VIM_CLEBSCH_BRIDGE.md) §2.
 

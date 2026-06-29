@@ -136,10 +136,10 @@ electrodynamic levitation device).
 ## Showcase notebook
 
 `docs/maglev/maglev_showcase.ipynb` -- consolidated rendered view of the
-`examples/maglev/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
+`docs/maglev/demos/` tier: mixed-Galerkin `alpha(s)` sweep, validated sphere
 levitation force, shape-anisotropic ellipsoid tensor, the moving-magnet
 magnetic-Reynolds (`Rm`) crossover, and the TEAM 28 benchmark (committed
-figures + headline JSON; golden corpus kept in `examples/maglev/`).
+figures + headline JSON; golden corpus kept in `docs/maglev/demos/`).
 
 ## Levitation FORCE physics (also in this server)
 
@@ -366,7 +366,7 @@ Fixes that WORK (all in the matured runs):
 `Rm` measures how strongly the induced eddy current perturbs the applied
 field.  The eddy reaction field scales like `Rm` relative to the source.
 Three regimes (verified on the rotating-magnet plate,
-`examples/maglev/rotating_magnet_eddy.py`):
+`docs/maglev/demos/rotating_magnet_eddy.py`):
 
 | Rm | reaction vs source | what to compute J / force / loss with |
 |----|--------------------|----------------------------------------|
@@ -427,7 +427,7 @@ So the physical-tensor LTI is NOT obtained by eigen-accumulation.
 ## The verified route: AAA + NNLS sample fit of the per-frequency tensor
 
 The verified PHYSICAL tensor is the per-frequency 3D HCurl solve
-`examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
+`docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor_3d.py` (gauged
 complex HCurl + a FINE AIR SHELL that resolves the air reaction dipole =
 the lift / Re[alpha] part; CompactAMS + COCR; ~2-3% vs the analytic
 sphere).  rom_fit.py turns those frequency samples into a passive, stable
@@ -499,7 +499,7 @@ A, B, C, D = rom.state_space()                      # passive scalar LTI
 # diagonal (principal-axis) 3D tensor -> one MIMO LTI
 A, B, C, D, n = diagonal_tensor_state_space([rom_x, rom_y, rom_z])
 ```
-Example `examples/maglev/physical_tensor_rom.py` (default = analytic
+Example `docs/maglev/demos/physical_tensor_rom.py` (default = analytic
 sphere, fast; `--fem` = triaxial ellipsoid per-frequency tensor -> diagonal
 MIMO LTI).
 

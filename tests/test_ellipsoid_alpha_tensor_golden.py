@@ -1,7 +1,7 @@
 """Golden test: shape-anisotropic eddy-current polarizability of an ellipsoid.
 
 Locks the analytic shape-anisotropy result of
-examples/maglev/ellipsoid/ellipsoid_alpha_tensor.py:
+docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor.py:
   - the demagnetizing tensor sums to 1 and the Osborn integral matches the
     spheroid closed form (sphere 1/3, 2:1 prolate N_c=0.1736),
   - a triaxial body a1!=a2!=a3 gives three DISTINCT alpha_i (genuine shape
@@ -21,8 +21,8 @@ pytest.importorskip("scipy")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # CLN was absorbed into radia.maglev ->
-# examples/maglev/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
-_LEV = os.path.join(_HERE, "..", "examples", "maglev")
+# docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
+_LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
 sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 

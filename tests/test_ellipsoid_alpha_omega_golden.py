@@ -2,7 +2,7 @@
 conducting spheroid (axisymmetric FEM), validated against the analytic sphere
 and the analytic demag-tensor HF anchor.
 
-Locks examples/maglev/ellipsoid/ellipsoid_alpha_omega_axisym.py:
+Locks docs/maglev/demos/ellipsoid/ellipsoid_alpha_omega_axisym.py:
   - the FEM alpha_c(omega) of a SPHERE reproduces the analytic 4 pi a^3 G(x)
     (the uniform-field BC + moment extractor are correct),
   - the high-frequency limit of a spheroid reaches the analytic perfect-
@@ -22,8 +22,8 @@ pytest.importorskip("netgen.occ")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # CLN was absorbed into radia.maglev ->
-# examples/maglev/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
-_LEV = os.path.join(_HERE, "..", "examples", "maglev")
+# docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
+_LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
 sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 

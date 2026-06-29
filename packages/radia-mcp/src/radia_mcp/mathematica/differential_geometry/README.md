@@ -8,7 +8,7 @@ Symbolic (Mathematica / `.wls`) reference for the **lab policy**:
 > map (mesh deformation / Kelvin open boundary / a hodograph chart) **modulates
 > the material** as an explicit weight.
 
-This is the differential-geometry **half** of `examples/clebsch_hodograph/`
+This is the differential-geometry **half** of `docs/clebsch_hodograph/demos/`
 (the spine is [`docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md`](../../../../../../docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md)),
 re-expressed symbolically. Companion to the FEEC shape-function bases in
 [`../basis_functions/`](../basis_functions/) (the de Rham complex those weak
@@ -85,7 +85,7 @@ is self-contained and self-testing (`ALL PASS` on success), in the same clean
 ## Source of truth / prior art
 
 - **Weak form / Hodge / pullback weight**: `docs/clebsch_hodograph/HODOGRAPH_BACKBONE.md` §1–2;
-  `examples/clebsch_hodograph/bidirectional_coordinate_transform_2d.py`
+  `docs/clebsch_hodograph/demos/bidirectional_coordinate_transform_2d.py`
   (`symbolic_pullback_check`, golden) — these `.wls` are the Mathematica twin/extension.
 - **Pullback Kelvin material law**: H. Nagamine, T. Yamaguchi, K. Sugahara,
   "A Pullback-Based Formulation of Kelvin Transformation in Electromagnetic Field
