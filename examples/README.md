@@ -16,22 +16,22 @@ Do not add new long-lived references to `examples/`. If a test, notebook, MCP
 knowledge file, or panel still points here, treat that as migration debt and
 record the intended `target_after_unblock`.
 
-## Current Large Topics
+## Current State
 
 The current worktree snapshot is tracked in
 [`docs/examples_classification/examples_classification.ipynb`](../docs/examples_classification/examples_classification.ipynb).
-As of the latest migration batch, the largest remaining topics are:
+As of the 2026-06-29 migration check, the tracked non-`vim` contents of
+`examples/` have been drained. The only remaining tracked files are this README
+and the active `examples/vim/` research corpus.
 
 | Topic | Current lane |
 |---|---|
-| `maglev` | Split into `validation_test`, `docs`, `src`, and distill-delete. |
-| `peec_integration` | Move validation corpus first, then promote reusable readers/generators to `src`. |
-| `vim` | Move `validation_test/feec` direct imports first; promote reusable HDiv/VIM helpers to `src`. |
-| `clebsch_hodograph` | Use the validation-test research harness as migration driver; keep docs notebooks as showcase. |
-| `cube_uniform_field` | Move benchmark drivers and result corpus under validation/docs ownership. |
-| `cubit_panels` | IH inductance scripts moved to `validation_test/induction_heating/cubit_panels_legacy`; remaining accel-magnet sources still need `src`/docs/panels ownership. |
-| `stream_function` | Extract reusable code to `src`, keep result-saved docs notebooks as the public layer. |
-| `induction_heating` | Promote BEM helpers to `src`; move checks to `validation_test`; keep ESIM demos in docs. |
+| `vim` | Active HDiv/VIM and FEEC research corpus. Move reusable helpers to `src`, validation locks to `validation_test/feec`, and public demonstrations to result-saved docs notebooks before pruning. |
+
+Former non-`vim` topics have been promoted to their owning `docs/`, `src/`,
+`validation_test/`, `panels/`, or `memory/` locations. If a deleted topic must
+be recovered, use git history as the archive and recreate only the canonical
+artifact in its final destination.
 
 ## Policy
 

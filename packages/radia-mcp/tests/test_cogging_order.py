@@ -7,6 +7,8 @@ no commercial tooling); the rule is independently confirmed by a slotted multi-p
 import os
 import sys
 
+import pytest
+
 _SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -89,6 +91,27 @@ def test_cogging_skew_plan_fractional_slot_tradeoff():
     assert fractional_slot["fundamental_emf_skew_factor"] < integer_slot["fundamental_emf_skew_factor"]
     assert abs(half_slot["cogging_skew_factor"]) > abs(fractional_slot["cogging_skew_factor"])
     assert half_slot["fundamental_emf_skew_factor"] > fractional_slot["fundamental_emf_skew_factor"]
+
+
+def test_continuous_loop_skew_tradeoff_gate_for_motor_teaching():
+    integer_slot = cogging_skew_plan(36, 4, emf_harmonics=(1, 5, 7, 11, 13))
+    fractional_slot = cogging_skew_plan(12, 10, emf_harmonics=(1, 5, 7, 11, 13))
+    half_fractional = cogging_skew_plan(12, 10, skew_slot_pitches=0.5, emf_harmonics=(1, 5, 7, 11, 13))
+
+    assert integer_slot["cogging_order_per_rev"] == 36
+    assert integer_slot["cogging_period_mech_deg"] == 10.0
+    assert integer_slot["skew_angle_mech_deg"] == 10.0
+    assert abs(integer_slot["cogging_skew_factor"]) < 1.0e-12
+    assert integer_slot["fundamental_emf_skew_factor"] == pytest.approx(0.9949307700452986)
+
+    assert fractional_slot["cogging_order_per_rev"] == 60
+    assert fractional_slot["skew_angle_mech_deg"] == pytest.approx(30.0)
+    assert abs(fractional_slot["cogging_skew_factor"]) < 1.0e-12
+    assert fractional_slot["fundamental_emf_skew_factor"] == pytest.approx(0.7379129755873375)
+
+    assert half_fractional["skew_slot_pitches"] == 0.5
+    assert half_fractional["fundamental_emf_skew_factor"] == pytest.approx(0.9301189496680686)
+    assert abs(half_fractional["cogging_skew_factor"]) == pytest.approx(0.1273239544735163)
 
 
 def main():

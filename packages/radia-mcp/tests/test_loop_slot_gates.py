@@ -5,6 +5,7 @@ import pytest
 from radia_mcp.radia_ngsolve.slot_gates import (
     coenergy_torque_periodic_summary,
     parallel_wire_force_per_length,
+    quarter_wave_directional_coupler_gate,
     two_port_sparameter_health,
 )
 
@@ -76,3 +77,17 @@ def test_two_port_sparameter_health_checks_passivity_and_reciprocity():
     active = two_port_sparameter_health(0.2, 1.1, s12=1.1, s22=0.2)
     assert active["passive"] is False
     assert active["status"] == "needs_attention"
+
+
+def test_quarter_wave_directional_coupler_gate_for_cst_slot_learning():
+    gate = quarter_wave_directional_coupler_gate(1.0 / math.sqrt(2.0), z0=50.0)
+    assert gate["status"] == "ok"
+    assert gate["impedance_product"] == pytest.approx(50.0 ** 2)
+    assert gate["power_sum"] == pytest.approx(1.0)
+    assert gate["matched"] is True
+    assert gate["isolated"] is True
+    assert gate["lossless"] is True
+    assert gate["z0_even"] == pytest.approx(120.71067811865474)
+    assert gate["z0_odd"] == pytest.approx(20.710678118654755)
+    assert gate["s21"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))
+    assert gate["s31"]["abs"] == pytest.approx(1.0 / math.sqrt(2.0))

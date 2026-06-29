@@ -32,7 +32,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "mirrored", "assembly", "shape_envelope_row", "enclosing_box",
            "enclosure_clearance_row", "enclosure_difference_region",
            "shape_measurement_row", "shape_measurement_rows",
-           "box_through_cylinder_reference_row",
+           "box_through_cylinder_reference_row", "mounting_plate_boss_reference_row",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
            "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
            "box_face_traction_moment_rows",
@@ -1432,6 +1432,75 @@ def box_through_cylinder_reference_row(x, y, z, radius, axis="z", label="box_hol
         "hole_radius": radius,
         "hole_length": hole_length,
         "policy": "analytic_box_through_cylinder_mass_property_reference",
+    }
+
+
+def mounting_plate_boss_reference_row(
+    base_x,
+    base_y,
+    base_h,
+    boss_r,
+    boss_h,
+    central_hole_r,
+    corner_hole_r,
+    corner_hole_x,
+    corner_hole_y,
+    label="mounting_plate_boss_five_holes",
+):
+    """Analytic volume row for a plate + cylindrical boss + five vertical holes.
+
+    The geometry is a centered rectangular plate with a cylindrical boss on
+    its top face, one central through-hole through plate and boss, and four
+    corner holes through the plate only.  It is a compact CAD-kernel
+    round-trip gate for build123d -> STEP -> Cubit/CST volume checks.
+    """
+
+    base_x = float(base_x)
+    base_y = float(base_y)
+    base_h = float(base_h)
+    boss_r = float(boss_r)
+    boss_h = float(boss_h)
+    central_hole_r = float(central_hole_r)
+    corner_hole_r = float(corner_hole_r)
+    corner_hole_x = abs(float(corner_hole_x))
+    corner_hole_y = abs(float(corner_hole_y))
+    dims = (base_x, base_y, base_h, boss_r, boss_h, central_hole_r, corner_hole_r)
+    if any(value <= 0.0 for value in dims):
+        raise ValueError("all dimensions and radii must be positive")
+    if 2.0 * boss_r >= min(base_x, base_y):
+        raise ValueError("boss diameter must fit on the plate")
+    if central_hole_r >= boss_r:
+        raise ValueError("central hole radius must be smaller than boss radius")
+    if corner_hole_x + corner_hole_r >= base_x / 2.0:
+        raise ValueError("corner hole x location must fit inside the plate")
+    if corner_hole_y + corner_hole_r >= base_y / 2.0:
+        raise ValueError("corner hole y location must fit inside the plate")
+    if math.hypot(corner_hole_x, corner_hole_y) - corner_hole_r <= boss_r:
+        raise ValueError("corner holes must not intersect the boss footprint")
+
+    base_volume = base_x * base_y * base_h
+    boss_volume = math.pi * boss_r * boss_r * boss_h
+    central_hole_volume = math.pi * central_hole_r * central_hole_r * (base_h + boss_h)
+    corner_hole_volume = 4.0 * math.pi * corner_hole_r * corner_hole_r * base_h
+    volume = base_volume + boss_volume - central_hole_volume - corner_hole_volume
+    bbox = {
+        "min": [-base_x / 2.0, -base_y / 2.0, -base_h / 2.0],
+        "max": [base_x / 2.0, base_y / 2.0, base_h / 2.0 + boss_h],
+        "center": [0.0, 0.0, boss_h / 2.0],
+        "size": [base_x, base_y, base_h + boss_h],
+        "diagonal": math.sqrt(base_x * base_x + base_y * base_y + (base_h + boss_h) ** 2),
+    }
+    return {
+        "name": str(label),
+        "volume": volume,
+        "bounding_box": bbox,
+        "terms": {
+            "base": base_volume,
+            "boss": boss_volume,
+            "central_hole": -central_hole_volume,
+            "four_corner_holes": -corner_hole_volume,
+        },
+        "policy": "analytic_mounting_plate_boss_volume_reference",
     }
 
 

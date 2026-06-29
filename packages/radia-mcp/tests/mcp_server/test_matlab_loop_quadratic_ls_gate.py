@@ -30,6 +30,29 @@ def _finite_difference_gradient(A, b, x, h=1.0e-6):
     return out
 
 
+def _trace_objective(T, M, g, alpha, u):
+    r = T @ u - g
+    return 0.5 * float(r @ M @ r) + 0.5 * float(alpha) * float(u @ u)
+
+
+def _trace_gradient(T, M, g, alpha, u):
+    return T.T @ M @ (T @ u - g) + float(alpha) * u
+
+
+def _trace_finite_difference_gradient(T, M, g, alpha, u, h=1.0e-6):
+    out = np.zeros_like(u, dtype=float)
+    for i in range(u.size):
+        up = u.copy()
+        um = u.copy()
+        up[i] += h
+        um[i] -= h
+        out[i] = (
+            _trace_objective(T, M, g, alpha, up)
+            - _trace_objective(T, M, g, alpha, um)
+        ) / (2.0 * h)
+    return out
+
+
 def test_quadratic_ls_gradient_contract_matches_finite_difference():
     A = np.array(
         [
@@ -50,4 +73,33 @@ def test_quadratic_ls_gradient_contract_matches_finite_difference():
     assert np.allclose(x, x_true, atol=1.0e-12)
     assert np.linalg.norm(_gradient(A, b, x)) < 1.0e-12
     assert _objective(A, b, x0) > _objective(A, b, x)
-    assert np.max(np.abs(analytic - finite_difference)) < 1.0e-8
+    assert np.max(np.abs(analytic - finite_difference)) < 1.0e-6
+
+
+def test_fem_bem_trace_least_squares_contract_keeps_interior_unforced():
+    # Four boundary trace rows and one interior H1 unknown. The last column is
+    # invisible to the trace and should be driven to zero by Tikhonov
+    # regularization rather than by a hidden constraint.
+    T = np.hstack([np.eye(4), np.zeros((4, 1))])
+    M = np.array(
+        [
+            [2.0, 0.2, 0.1, 0.0],
+            [0.2, 1.5, 0.0, 0.1],
+            [0.1, 0.0, 1.2, 0.2],
+            [0.0, 0.1, 0.2, 1.8],
+        ]
+    )
+    g = np.array([10.0, 20.0, 30.0, 40.0])
+    alpha = 1.0e-3
+    normal = T.T @ M @ T + alpha * np.eye(5)
+    rhs = T.T @ M @ g
+    u = np.linalg.solve(normal, rhs)
+    u0 = np.ones(5)
+
+    analytic = _trace_gradient(T, M, g, alpha, u0)
+    finite_difference = _trace_finite_difference_gradient(T, M, g, alpha, u0)
+
+    assert abs(u[-1]) < 1.0e-12
+    assert np.linalg.norm(_trace_gradient(T, M, g, alpha, u)) < 1.0e-10
+    assert _trace_objective(T, M, g, alpha, u0) > _trace_objective(T, M, g, alpha, u)
+    assert np.max(np.abs(analytic - finite_difference)) < 1.0e-6

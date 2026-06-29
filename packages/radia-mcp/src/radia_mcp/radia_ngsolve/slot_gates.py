@@ -130,3 +130,49 @@ def two_port_sparameter_health(s11, s21, s12=None, s22=None, tol=1.0e-9):
         "status": "ok" if reciprocity_error <= float(tol) and lambda_max <= 1.0 + float(tol) else "needs_attention",
         "tol": float(tol),
     }
+
+
+def quarter_wave_directional_coupler_gate(coupling, z0=50.0):
+    """Return algebraic checks for an ideal coupled-line directional coupler.
+
+    ``coupling`` is the linear voltage coupling coefficient.  At the design
+    electrical length, the ideal lossless coupler has matched and isolated
+    ports, ``|S21|^2 + |S31|^2 = 1``, and even/odd impedances satisfying
+    ``Z0e * Z0o = z0^2``.
+    """
+
+    c = float(coupling)
+    z = float(z0)
+    if not (0.0 < c < 1.0):
+        raise ValueError("coupling must be in (0, 1)")
+    if z <= 0.0:
+        raise ValueError("z0 must be > 0")
+    z_even = z * math.sqrt((1.0 + c) / (1.0 - c))
+    z_odd = z * math.sqrt((1.0 - c) / (1.0 + c))
+    s11 = 0.0 + 0.0j
+    s41 = 0.0 + 0.0j
+    s21 = 1j * math.sqrt(1.0 - c * c)
+    s31 = complex(-c, 0.0)
+    product_error = z_even * z_odd - z * z
+    power_sum = abs(s21) ** 2 + abs(s31) ** 2
+    return {
+        "policy": "quarter_wave_directional_coupler_algebra_gate",
+        "coupling": c,
+        "z0": z,
+        "z0_even": z_even,
+        "z0_odd": z_odd,
+        "impedance_product": z_even * z_odd,
+        "impedance_product_error": product_error,
+        "coupling_db": -20.0 * math.log10(c),
+        "s11": _complex_row(s11),
+        "s21": _complex_row(s21),
+        "s31": _complex_row(s31),
+        "s41": _complex_row(s41),
+        "through_phase_deg": math.degrees(cmath.phase(s21)),
+        "coupled_phase_deg": math.degrees(cmath.phase(s31)),
+        "power_sum": power_sum,
+        "matched": abs(s11) <= 1.0e-15,
+        "isolated": abs(s41) <= 1.0e-15,
+        "lossless": abs(power_sum - 1.0) <= 1.0e-15,
+        "status": "ok" if abs(product_error) <= 1.0e-12 and abs(power_sum - 1.0) <= 1.0e-15 else "needs_attention",
+    }
