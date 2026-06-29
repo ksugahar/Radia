@@ -67,6 +67,28 @@ def test_loadline_operating_point_gap_sweep_monotone():
     assert all(a > b for a, b in zip(pcs, pcs[1:]))
 
 
+def test_continuous_loop_pm_loadline_demag_margin_gate():
+    params = {
+        "Br": 1.2,
+        "magnet_len": 0.004,
+        "iron_path": 0.08,
+        "mu_r": 1000.0,
+        "mu_rec": 1.05,
+        "H_knee": -4.5e5,
+    }
+    rows = [
+        pm_circuit_loadline_operating_point(gap=gap, **params)
+        for gap in (0.0005, 0.001, 0.002, 0.004, 0.008)
+    ]
+
+    assert rows[0]["B_gap_T"] == pytest.approx(1.042345276872964)
+    assert rows[1]["permeance_coefficient"] == pytest.approx(3.7168141592920354)
+    assert rows[2]["H_m_A_per_m"] == pytest.approx(-320811.6282388644)
+    assert rows[3]["demag_margin_A_per_m"] == pytest.approx(-20105.698021609453)
+    assert rows[-1]["B_identity_abs_error_T"] < 1.0e-14
+    assert [row["safe_against_knee"] for row in rows] == [True, True, True, False, False]
+
+
 def _rect(wp, x0, y0, w, h):
     return wp.MoveTo(x0, y0).Rectangle(w, h).Face()
 

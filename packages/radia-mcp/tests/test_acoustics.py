@@ -392,6 +392,17 @@ def test_acoustic_impedance_slot_power_identity_for_passive_loads():
     assert max(reactive_absorption) < 1.0e-12
 
 
+def test_acoustic_impedance_negative_real_part_is_active_not_absorbing():
+    out = acoustic_impedance_reflection_summary(-2.0, rho=1.0, c=1.0)
+    reflection = complex(out["pressure_reflection_coefficient"])
+    expected_power = 0.5 * (1.0 - abs(reflection) ** 2)
+
+    assert abs(reflection) > 1.0
+    assert out["absorption_coefficient"] < 0.0
+    assert out["boundary_active_intensity_into_load"] == pytest.approx(expected_power)
+    assert expected_power < 0.0
+
+
 def test_acoustic_impedance_radiation_pressure_absorber_reflector_limits():
     rho, c = 1.2041, 343.0
     z0 = rho * c

@@ -16,7 +16,7 @@ Radia provides **analytical field sources** ($B$, $H$, $A$, $\Phi$) as native C+
 Three things in this repository do not, as far as we know, exist anywhere else:
 
 1. **Analytic EM sources *inside* NGSolve's assembly loop.** `rad.RadiaField()` hands Radia's coils and magnets to NGSolve as a native C++ `CoefficientFunction`, evaluated by a GIL-free Fast Multipole Method *during* finite-element assembly — an **exact** source term, with no air mesh and no grid interpolation.
-2. **Curved high-order *hex* meshes in NGSolve — [`cubit-mesh-export`](packages/cubit-mesh-export/).** Netgen gives NGSolve high-order curved *tetrahedra*; high-order **hexahedral** meshes have had no path in. This exports Coreform Cubit hex meshes to NGSolve `.vol` with ACIS geometry projection at **order 1–5** — the only route we know of to **high-order hex FEM in the NGSolve / Netgen ecosystem**. A curved hex sphere's NGSolve volume converges to the analytic value as the order rises — order 1 **−23 %** → order 2 **−0.2 %** → order 3 **+0.1 %** ([runnable demo](examples/cubit_mesh_export/hex_sphere_highorder/), no Cubit needed to reproduce).
+2. **Curved high-order *hex* meshes in NGSolve — [`cubit-mesh-export`](packages/cubit-mesh-export/).** Netgen gives NGSolve high-order curved *tetrahedra*; high-order **hexahedral** meshes have had no path in. This exports Coreform Cubit hex meshes to NGSolve `.vol` with ACIS geometry projection at **order 1–5** — the only route we know of to **high-order hex FEM in the NGSolve / Netgen ecosystem**. A curved hex sphere's NGSolve volume converges to the analytic value as the order rises — order 1 **−23 %** → order 2 **−0.2 %** → order 3 **+0.1 %** ([runnable demo](docs/cubit_mesh_export/hex_sphere_highorder/), no Cubit needed to reproduce).
 3. **The first public MCP server suite for CAE meshing — [`radia-mcp`](packages/radia-mcp/).** The first and only [Model Context Protocol](https://modelcontextprotocol.io/) servers for Coreform Cubit, Gmsh, and build123d: an AI agent can generate real meshes, author CAD, and run FEM / BEM / PEEC *correctly* — not just describe them.
 
 ## ✨ Why Radia?
@@ -48,7 +48,7 @@ print(rad.Fld(magnet, 'b', [0, 0, 20]), "T")   # -> [0.0, 0.0, +Bz]  (on-axis Bx
 ```
 
 No mesh, no artificial boundary, no solver setup: the field is an **analytic object** you can evaluate anywhere, move with a transform, or hand to NGSolve as a source.
-**Next:** [full install + GUI panels](#quick-start) · [worked examples](examples/) · [AI-assisted workflows](#-ai-native-knowledge-the-radia-mcp-server-suite).
+**Next:** [full install + GUI panels](#quick-start) · [method notebooks](docs/) · [AI-assisted workflows](#-ai-native-knowledge-the-radia-mcp-server-suite).
 
 ## 🖼️ Gallery
 
@@ -56,7 +56,7 @@ No mesh, no artificial boundary, no solver setup: the field is an **analytic obj
 |:--:|:--:|:--:|
 | ![Rectangular magnet 2D field](docs/analytical_formulas/rect_magnet_2d_field.png) | ![Solenoid axial field](docs/analytical_formulas/solenoid_axial_field.png) | ![Three-phase line field](docs/analytical_formulas/three_phase_line_field.png) |
 
-Every plot above is reproduced by the self-contained notebook [`docs/analytical_formulas/analytical_formulas.ipynb`](docs/analytical_formulas/analytical_formulas.ipynb) and checked against a closed-form reference. More worked examples — Halbach arrays, eddy-current shielding, induction heating, accelerator magnets — live throughout [`examples/`](examples/).
+Every plot above is reproduced by the self-contained notebook [`docs/analytical_formulas/analytical_formulas.ipynb`](docs/analytical_formulas/analytical_formulas.ipynb) and checked against a closed-form reference. More worked examples — Halbach arrays, eddy-current shielding, induction heating, accelerator magnets — live throughout [`docs/`](docs/).
 
 ## 👤 Who is this for?
 
@@ -612,7 +612,7 @@ cubit-plugin-install --verify-only      # SHA-256 confirm every deployed binary
 ### Documentation
 
 - **[Function Reference](docs/cubit/Function_Reference.md)** -- Full API and command reference
-- **[Examples](examples/cubit/)** -- Export examples for all supported formats
+- **[Examples](docs/cubit_mesh_export/)** -- Export examples for all supported formats
 
 ## License
 
