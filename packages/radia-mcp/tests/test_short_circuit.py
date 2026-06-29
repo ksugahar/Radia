@@ -18,7 +18,8 @@ if _SRC not in sys.path:
 from radia_mcp.radia_ngsolve.solve import (short_circuit_dq_currents, short_circuit_operating_point,
                                            characteristic_current,
                                            field_weakening_speed_capability,
-                                           dq_torque)
+                                           dq_torque,
+                                           pm_temperature_demag_sweep_summary)
 
 LM, LD, LQ, R, P = 0.1, 0.5e-3, 1.5e-3, 0.05, 4
 
@@ -111,10 +112,38 @@ def test_continuous_loop_slot45_pm_short_circuit_fault_table():
     assert max_speed_contract_error <= 1.0e-12
 
 
+def test_continuous_loop_slot54_fault_current_demag_screening_gate():
+    R, Ld, Lq, lm, p, Imax = 0.05, 0.008, 0.016, 0.1, 4, 20.0
+    cap = field_weakening_speed_capability(lm, Ld, Imax)
+    high = short_circuit_operating_point(R, Ld, Lq, lm, 5000.0, p)
+    sweep = pm_temperature_demag_sweep_summary(
+        Br_20C=1.2,
+        H_knee_20C=-9.0e5,
+        temperature_C=120.0,
+        magnet_len=0.004,
+        gaps=(0.0005, 0.001, 0.002, 0.004, 0.008),
+        iron_path=0.08,
+        mu_r=1000.0,
+        mu_rec=1.05,
+    )
+
+    assert cap["characteristic_current"] == pytest.approx(12.5)
+    assert cap["current_margin"] == pytest.approx(7.5)
+    assert high["id"] == pytest.approx(-12.49999023438263)
+    assert high["d_axis_demag_fraction"] == pytest.approx(0.9999992187506104)
+    assert high["current_ratio_to_characteristic"] == pytest.approx(0.9999994140629387)
+    assert sweep["first_unsafe_gap_m"] == pytest.approx(0.008)
+    assert sweep["safe_prefix_count"] == 4
+    assert sweep["risk_label"] == "red"
+    assert sweep["risk_summary"]["minimum_demag_margin_A_per_m"] == pytest.approx(-54988.18063331157)
+    assert all(sweep["checks"].values())
+
+
 if __name__ == "__main__":
     test_characteristic_current()
     test_short_circuit_equations_and_limit()
     test_braking_torque_peak_and_decay()
     test_nonsalient_critical_speed()
     test_continuous_loop_slot45_pm_short_circuit_fault_table()
+    test_continuous_loop_slot54_fault_current_demag_screening_gate()
     print("[OK] short-circuit currents -> Ich, braking-torque peak/decay, critical speed validated.")
