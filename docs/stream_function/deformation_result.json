@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:31Z",
+  "generated_at_utc": "2026-06-29T04:56:47Z",
   "notebook": "docs/stream_function/deformation.ipynb",
-  "notebook_sha256": "339735f3c486e641620e560fd02dcb6eea5258018d7dde6257323c8d3096f83d",
+  "notebook_sha256": "caf673cf2af5d7d79ade23311655cba43b4142aadc8afc25246282d8a598597d",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -28,8 +28,8 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "63e7ff4be54335312b5e1a6fce9f990b2277ff918a4fcf82e072332e22de08f1",
-      "source_preview": "import sys, time\nfrom types import SimpleNamespace\nfrom pathlib import Path\nimport numpy as np\nimport radia\nEX = Path(radia.__file__).resolve().parents[2] / \"examples\" / \"stream_function\"\nassert (EX / \"demo_planar_uniform_fem_psi_advanced.py\").exists(), f\"shipped demos not found: {EX}\"\nsys.path.insert(0, str(EX))\n\n%matplotlib inline\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\n\nimport optuna\nimport demo_planar_uniform_fem_psi_advanced as ADV\nprint(\"radia :\", radia.__file__)\nprint(\"optuna:\", optuna.__version__)\n\n# Shared planar uniform-Bz benchmark + bump deformation (deformation.md defaults).\ndef make_args(**over):\n    base = dict(plane_half=0.25, maxh=0.025, order=2,\n                target_half=0.05, target_z=0.10, n_target=5, B0=1.0e-3,\n                n_sample=81, nlevels=12, regularize=\"h1\", sigma_cf=None, jmax=50.0,\n                deform=True, deform_params=\"bump\",\n                minimize_reg=False, pareto=False, eps_rms=0.02, reg_penalty=100.0)\n    base.u",
+      "source_sha256": "fff3cc042701f445111627a143ef3c87f92b05c01f753262dc5bc6d888695dac",
+      "source_preview": "import sys, time\nfrom types import SimpleNamespace\nfrom pathlib import Path\nimport numpy as np\nimport radia\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / \"demo_planar_uniform_fem_psi_advanced.py\").exists():\n    NOTEBOOK_DIR = Path(\"docs/stream_function\").resolve()\nHELPERS = NOTEBOOK_DIR\nsys.path.insert(0, str(HELPERS))\n\n%matplotlib inline\nimport matplotlib.pyplot as plt\nfrom IPython.display import display\n\nimport optuna\nimport demo_planar_uniform_fem_psi_advanced as ADV\nprint(\"radia :\", radia.__file__)\nprint(\"optuna:\", optuna.__version__)\n\n# Shared planar uniform-Bz benchmark + bump deformation (deformation.md defaults).\ndef make_args(**over):\n    base = dict(plane_half=0.25, maxh=0.025, order=2,\n                target_half=0.05, target_z=0.10, n_target=5, B0=1.0e-3,\n                n_sample=81, nlevels=12, regularize=\"h1\", sigma_cf=None, jmax=50.0,\n                deform=True, deform_params=\"bump\",\n                minimize_reg=False, pareto=False, eps_rms=0.02, reg_penalty=100.0)\n ",
       "outputs": [
         {
           "output_type": "stream",
@@ -51,8 +51,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 71,
-          "text_sha256": "20a0f1ecc50bd316c71dcc4a7d5aa034bfe82807ceb036352a94989515191391",
-          "text_preview": "flat baseline (0.7 s): RMS = 2.09 %,  reg_norm psi^T S psi = 2.590e+06\n",
+          "text_sha256": "183375a18ca538a2abf571929a5458be32ac8129b15e31bc9a21275339e6e780",
+          "text_preview": "flat baseline (3.1 s): RMS = 2.09 %,  reg_norm psi^T S psi = 2.590e+06\n",
           "text_truncated": false
         }
       ]
@@ -67,8 +67,8 @@
           "output_type": "stream",
           "name": "stdout",
           "text_chars": 120,
-          "text_sha256": "f6ef671ed4e3116920a00e2bdcb888428d624903e32a4bf4a20a787f227a7e4e",
-          "text_preview": "penalty CMA-ES: 10 trials in 21.6 s, eps_rms = 2.5 %, feasible = 8/10\nbest feasible: reg_norm = 2.177e+06, RMS = 1.02 %\n",
+          "text_sha256": "8c3a51666db94b479df599fbf7186088cc84729bad24e5c80f157d601ca08de4",
+          "text_preview": "penalty CMA-ES: 10 trials in 34.8 s, eps_rms = 2.5 %, feasible = 8/10\nbest feasible: reg_norm = 2.177e+06, RMS = 1.02 %\n",
           "text_truncated": false
         }
       ]
@@ -107,9 +107,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 563,
-          "text_sha256": "c82a37a0958a40f86d63cfa96cb78ad6c25af268ef8281612daa5c5cbc4c756d",
-          "text_preview": "NSGA-II: 30 trials in 21.8 s, 8 Pareto-optimal points\n\n       RMS      reg_norm  bump (amp, cx, cy)\n  ----------------------------------------------------\n     0.52%     2.800e+06  (-0.032, -0.063, -0.013)\n     0.58%     2.800e+06  (-0.032, -0.059, +0.007)\n     0.61%     2.459e+06  (+0.021, -0.144, +0.141)\n     1.06%     2.443e+06  (+0.021, -0.144, -0.095)\n     1.46%     2.317e+06  (+0.047, -0.144, +0.141)\n     1.46%     2.315e+06  (+0.047, -0.144, +0.141)\n     1.84%     2.301e+06  (+0.033, -0.086, -0.095)\n     2.35%     2.294e+06  (+0.033, -0.072, -0.095)\n",
+          "text_chars": 564,
+          "text_sha256": "f215a24564fb42d385f76450bfddb722e38fcdb9046546b9048950a585f34252",
+          "text_preview": "NSGA-II: 30 trials in 155.5 s, 8 Pareto-optimal points\n\n       RMS      reg_norm  bump (amp, cx, cy)\n  ----------------------------------------------------\n     0.52%     2.800e+06  (-0.032, -0.063, -0.013)\n     0.58%     2.800e+06  (-0.032, -0.059, +0.007)\n     0.61%     2.459e+06  (+0.021, -0.144, +0.141)\n     1.06%     2.443e+06  (+0.021, -0.144, -0.095)\n     1.46%     2.317e+06  (+0.047, -0.144, +0.141)\n     1.46%     2.315e+06  (+0.047, -0.144, +0.141)\n     1.84%     2.301e+06  (+0.033, -0.086, -0.095)\n     2.35%     2.294e+06  (+0.033, -0.072, -0.095)\n",
           "text_truncated": false
         }
       ]

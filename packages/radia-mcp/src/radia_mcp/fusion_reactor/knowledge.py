@@ -1159,8 +1159,9 @@ CURRENT POTENTIAL psi (surface current K = n x grad psi) -- via
 `radia.stream_function` + `calc_streamfunction.py` (knowledge:
 `radia_mcp.streamfunction`).  Honest positioning:
 
-**DESIGN -- AT PARITY.**  examples/stream_function/demo_regcoil_fusion.py
-(+_advanced) reproduce the REGCOIL workflow: current potential, the Tikhonov
+**DESIGN -- AT PARITY.**  docs/stream_function/fusion.md and the docs-local
+demo_regcoil_fusion.py (+_advanced) helpers reproduce the REGCOIL workflow:
+current potential, the Tikhonov
 L-curve (B.n residual vs peak |grad psi|), the net-current secular term
 Psi = psi + (G/2pi) zeta + (I/2pi) theta (the 2 first-cohomology generators,
 b1 = 2 - chi, gmsh-free), VMEC-shaped boundaries (li383 / NCSX-like, B.n ~4e-8),

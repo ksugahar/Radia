@@ -14,7 +14,8 @@
   "policy": {
     "notebook": "result-saving catalog notebook before deleting examples",
     "json": "full source text, SHA-256 hashes, result/media artifact hashes, protected references, and migration lane",
-    "deletion_gate": "delete examples only after docs/src/validation_test/panel references are migrated"
+    "deletion_gate": "delete examples only after docs/src/validation_test/panel references are migrated",
+    "current_destinations": "Archive path records preserve the pre-migration examples source; current_path/current_lane record the post-migration destination."
   },
   "summary": {
     "script_count": 26,
@@ -31,7 +32,10 @@
       ".": 26
     },
     "protected_script_count": 26,
-    "promoted_validation_lane": "verify/cohomology/bench scripts moved to validation_test/stream_function"
+    "promoted_validation_lane": "verify/cohomology/bench scripts moved to validation_test/stream_function",
+    "examples_stream_function_py_remaining": 0,
+    "docs_local_helper_count": 25,
+    "validation_test_script_count": 1
   },
   "records": [
     {
@@ -101,7 +105,9 @@
           "line": 551,
           "text": "homogeneity preserved (examples/stream_function/demo_active_shield.py)."
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_active_shield.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_cmaes_magnet_design.py",
@@ -150,7 +156,9 @@
           "line": 214,
           "text": "Example: examples/stream_function/demo_cmaes_magnet_design.py optimises 16"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_cmaes_magnet_design.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_coil_design_gx.py",
@@ -193,7 +201,9 @@
           "line": 878,
           "text": "examples/stream_function/demo_coil_design_gx.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_coil_design_gx.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_coil_design_gz.py",
@@ -231,7 +241,9 @@
           "line": 879,
           "text": "examples/stream_function/demo_coil_design_gz.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_coil_design_gz.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_coil_field_synthesis.py",
@@ -269,7 +281,9 @@
           "line": 880,
           "text": "examples/stream_function/demo_coil_field_synthesis.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_coil_field_synthesis.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_fmm_biot_savart.py",
@@ -339,7 +353,9 @@
           "line": 881,
           "text": "examples/stream_function/demo_fmm_biot_savart.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_fmm_biot_savart.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_magnet_array.py",
@@ -377,7 +393,9 @@
           "line": 882,
           "text": "examples/stream_function/demo_magnet_array.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_magnet_array.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_cylinder.py",
@@ -422,7 +440,9 @@
           "line": 883,
           "text": "examples/stream_function/demo_pareto_cylinder.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_pareto_cylinder.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_cylinder_deform.py",
@@ -468,7 +488,9 @@
           "line": 884,
           "text": "examples/stream_function/demo_pareto_cylinder_deform.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_pareto_cylinder_deform.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_deform.py",
@@ -516,7 +538,9 @@
           "line": 885,
           "text": "examples/stream_function/demo_pareto_deform.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_pareto_deform.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_geometry_nsga.py",
@@ -560,7 +584,9 @@
           "line": 886,
           "text": "examples/stream_function/demo_pareto_geometry_nsga.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_pareto_geometry_nsga.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_pareto_tikhonov_aca.py",
@@ -607,7 +633,9 @@
           "line": 887,
           "text": "examples/stream_function/demo_pareto_tikhonov_aca.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_pareto_tikhonov_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_coil.py",
@@ -654,7 +682,9 @@
           "line": 888,
           "text": "examples/stream_function/demo_planar_uniform_coil.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_planar_uniform_coil.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi.py",
@@ -726,7 +756,9 @@
           "line": 889,
           "text": "examples/stream_function/demo_planar_uniform_fem_psi.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi_aca.py",
@@ -772,7 +804,9 @@
           "line": 890,
           "text": "examples/stream_function/demo_planar_uniform_fem_psi_aca.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_planar_uniform_fem_psi_advanced.py",
@@ -853,7 +887,9 @@
           "line": 1705,
           "text": "``examples/stream_function/demo_planar_uniform_fem_psi_advanced.py``"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_planar_uniform_fem_psi_advanced.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_reg_hyperparam_aca.py",
@@ -911,7 +947,9 @@
           "line": 1792,
           "text": "Shipped in ``examples/stream_function/demo_reg_hyperparam_aca.py``:"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_reg_hyperparam_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_fusion.py",
@@ -1016,7 +1054,9 @@
           "line": 324,
           "text": "examples/stream_function/demo_regcoil_fusion.py            (4 parts)"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_regcoil_fusion.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_fusion_advanced.py",
@@ -1116,7 +1156,9 @@
           "line": 325,
           "text": "examples/stream_function/demo_regcoil_fusion_advanced.py   (4 more parts)"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_regcoil_fusion_advanced.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_regcoil_parity_deliverable.py",
@@ -1165,7 +1207,9 @@
           "line": 443,
           "text": "(examples/stream_function/demo_regcoil_parity_deliverable.py): a uniform-"
         }
-      ]
+      ],
+      "current_path": "validation_test/stream_function/demo_regcoil_parity_deliverable.py",
+      "current_lane": "validation_test"
     },
     {
       "path": "examples/stream_function/demo_regularized_aca.py",
@@ -1243,7 +1287,9 @@
           "line": 1729,
           "text": "``examples/stream_function/demo_regularized_aca.py`` exercises all 5"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_regularized_aca.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sf_to_peec_gx.py",
@@ -1311,7 +1357,9 @@
           "line": 535,
           "text": "chain_phi_z`` in ``examples/stream_function/demo_sf_to_peec_gx.py``."
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_sf_to_peec_gx.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sf_to_peec_gz.py",
@@ -1359,7 +1407,9 @@
           "line": 898,
           "text": "examples/stream_function/demo_sf_to_peec_gz.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_sf_to_peec_gz.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_shim_coil_purity.py",
@@ -1424,7 +1474,9 @@
           "line": 504,
           "text": "examples/stream_function/demo_shim_coil_purity.py): --target-harmonic X ->"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_shim_coil_purity.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/demo_sphere_fe_direct.py",
@@ -1482,7 +1534,9 @@
           "line": 900,
           "text": "examples/stream_function/demo_sphere_fe_direct.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/demo_sphere_fe_direct.py",
+      "current_lane": "docs_local_helper"
     },
     {
       "path": "examples/stream_function/view_sf_coil_gx_gmsh.py",
@@ -1531,7 +1585,9 @@
           "line": 901,
           "text": "examples/stream_function/view_sf_coil_gx_gmsh.py"
         }
-      ]
+      ],
+      "current_path": "docs/stream_function/view_sf_coil_gx_gmsh.py",
+      "current_lane": "docs_local_helper"
     }
   ],
   "artifacts": [
@@ -1900,5 +1956,5 @@
       "sha256": "262d857e5cf87a1f97bb33b783fc719e0d6cf1050aa5e3cad1e5e6a6b77442c5"
     }
   ],
-  "notebook_sha256": "6b30016dcc1c76fe168f010b45417595f145ccac4f816912cffdb77026d59c0c"
+  "notebook_sha256": "ca30298186877d3bb97cf8546b398479ecab71f59c6b087bfae4086d042a50f1"
 }

@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T01:04:30Z",
+  "generated_at_utc": "2026-06-29T04:44:07Z",
   "notebook": "docs/stream_function/demo_gallery.ipynb",
-  "notebook_sha256": "17b12d7554c0da43c4382210b07ed00606c135c301482cd6cada4a967984bdb2",
+  "notebook_sha256": "f3824bbdb440f0b4ef30ccda22cbd7f23746a83338c1291d9a4d0856f490b34a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -63,8 +63,8 @@
     {
       "cell_index": 3,
       "execution_count": 3,
-      "source_sha256": "39882b8ef406118d162263d2c62ae6fc3f999426807ff9c21a96684a20e3fdfb",
-      "source_preview": "rows = []\ncommands = {\n    'demo_sf_to_peec_gz.py': 'python examples/stream_function/demo_sf_to_peec_gz.py --with-peec',\n    'demo_sf_to_peec_gx.py': 'python examples/stream_function/demo_sf_to_peec_gx.py --chain-method kuijpers',\n    'demo_planar_uniform_fem_psi.py': 'python examples/stream_function/demo_planar_uniform_fem_psi.py --regularize h1 --compensated-iter 100 --compensated-step 0.05',\n    'demo_sphere_fe_direct.py': 'python examples/stream_function/demo_sphere_fe_direct.py --target z2 --distort --plot',\n    'demo_pareto_tikhonov_aca.py': 'python examples/stream_function/demo_pareto_tikhonov_aca.py --front both',\n    'demo_regcoil_fusion.py': 'python examples/stream_function/demo_regcoil_fusion.py',\n    'view_sf_coil_gx_gmsh.py': 'python examples/stream_function/view_sf_coil_gx_gmsh.py --mode contours',\n}\nfor r in archive['selected_gallery']:\n    arts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append(",
+      "source_sha256": "fb17bc11f3ec5ac6362e687cc73746330095c7c61f1daea5da2eba097d993432",
+      "source_preview": "rows = []\ncommands = {\n    'demo_sf_to_peec_gz.py': 'python docs/stream_function/demo_sf_to_peec_gz.py --with-peec',\n    'demo_sf_to_peec_gx.py': 'python docs/stream_function/demo_sf_to_peec_gx.py --chain-method kuijpers',\n    'demo_planar_uniform_fem_psi.py': 'python docs/stream_function/demo_planar_uniform_fem_psi.py --regularize h1 --compensated-iter 100 --compensated-step 0.05',\n    'demo_sphere_fe_direct.py': 'python docs/stream_function/demo_sphere_fe_direct.py --target z2 --distort --plot',\n    'demo_pareto_tikhonov_aca.py': 'python docs/stream_function/demo_pareto_tikhonov_aca.py --front both',\n    'demo_regcoil_fusion.py': 'python docs/stream_function/demo_regcoil_fusion.py',\n    'view_sf_coil_gx_gmsh.py': 'python docs/stream_function/view_sf_coil_gx_gmsh.py --mode contours',\n}\nfor r in archive['selected_gallery']:\n    arts = ', '.join(f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})' for a in r.get('sibling_artifacts', [])[:3]) or '-'\n    rows.append([f'[`{r[\"name\"]}`]({r.get(\"c",
       "outputs": [
         {
           "output_type": "display_data",
@@ -82,8 +82,8 @@
     {
       "cell_index": 4,
       "execution_count": 4,
-      "source_sha256": "c7837c75611f215577faf5cc6bfd4600d0f5b79ddfcd03c3934913886fb54e06",
-      "source_preview": "artifact_rows = []\nfor r in records:\n    for a in r.get('sibling_artifacts', []):\n        if a['path'].endswith(('.png', '.pdf', '.json')):\n            artifact_rows.append([f'[`{r[\"name\"]}`](../../{r[\"path\"]})', f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})', a['bytes'], a['sha256'][:12]])\nartifact_rows = artifact_rows[:18]\nmd = '## Saved result/media artifacts (sample)\\n\\n' + '\\n'.join(['| script | artifact | bytes | sha256 |', '| --- | --- | ---: | --- |'] + [f'| {a} | {b} | {c} | `{d}` |' for a,b,c,d in artifact_rows])\ndisplay(Markdown(md))",
+      "source_sha256": "6cd63f18c09bc8996e2670bdcfa98de5136e8c29bdd81a00c5931f314b1c2174",
+      "source_preview": "artifact_rows = []\nfor r in records:\n    for a in r.get('sibling_artifacts', []):\n        if a['path'].endswith(('.png', '.pdf', '.json')):\n            artifact_rows.append([f'[`{r[\"name\"]}`]({r.get(\"current_path\", r[\"path\"]).split(\"docs/stream_function/\")[-1]})', f'[{Path(a[\"path\"]).name}](../../{a[\"path\"]})', a['bytes'], a['sha256'][:12]])\nartifact_rows = artifact_rows[:18]\nmd = '## Saved result/media artifacts (sample)\\n\\n' + '\\n'.join(['| script | artifact | bytes | sha256 |', '| --- | --- | ---: | --- |'] + [f'| {a} | {b} | {c} | `{d}` |' for a,b,c,d in artifact_rows])\ndisplay(Markdown(md))",
       "outputs": [
         {
           "output_type": "display_data",
