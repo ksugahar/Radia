@@ -20,7 +20,7 @@ Use the existing notes as the theory spine:
 | Symbolic differential-geometry WLS index | [DIFFERENTIAL_GEOMETRY_WLS.md](DIFFERENTIAL_GEOMETRY_WLS.md) |
 
 The runnable companion set is
-[`examples/clebsch_hodograph/`](../../examples/clebsch_hodograph/). It is part
+[`docs/clebsch_hodograph/demos/`](demos/). It is part
 of the documented result chain because
 `validation_test/feec/test_clebsch_hodograph_research.py` golden-locks those
 research examples directly.

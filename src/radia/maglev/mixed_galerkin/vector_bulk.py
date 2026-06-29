@@ -27,7 +27,7 @@ SCOPE / CAVEATS (honest):
     MODEL, not the physical exterior-matched (free-decay / Stoll) spectrum.
     The verified PHYSICAL polarizability tensor (exterior reaction field)
     is the per-frequency 3D HCurl solve in
-    examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py.
+    docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor_3d.py.
   * The curl-curl kernel is removed by HCurl(nograds=True) + an interior
     tree-cotree gauge; this is FINICKY -- it needs an adequately fine mesh
     (h <~ a/25 for ~2% leading-tau accuracy; a coarse mesh under-resolves

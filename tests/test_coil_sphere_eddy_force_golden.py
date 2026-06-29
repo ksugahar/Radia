@@ -1,7 +1,7 @@
 """Golden test: full eddy-current Lorentz force on a sphere-in-coil vs the
 induced-dipole force -- the point-dipole approximation error at a/L ~ 0.5.
 
-Locks examples/maglev/sphere/coil_sphere_eddy_force.py:
+Locks docs/maglev/demos/sphere/coil_sphere_eddy_force.py:
   - the FULL axisymmetric eddy-current force and the induced-dipole force
     are the same order at a/L ~ 0.5 (ratio near 1, but not identical), and
   - shrinking the sphere (a/L 0.5 -> 0.1) drives the ratio TOWARD 1 -- the

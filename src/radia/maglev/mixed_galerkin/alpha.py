@@ -134,7 +134,7 @@ def bulk_foster_matrix_via_eigen(mesh, sigma: float, mu: float, drive_cfs,
     `alpha_matrix_from_Y`), and the scalar A_z model has a single field
     component.  The verified physical vector polarizability TENSOR (transverse
     m=1 components + triaxial shape anisotropy) is the full 3D HCurl solve in
-    examples/maglev/ellipsoid/ellipsoid_alpha_tensor_3d.py.
+    docs/maglev/demos/ellipsoid/ellipsoid_alpha_tensor_3d.py.
     P=1 with drive_cfs=[1.0] reproduces `bulk_foster_via_eigen` exactly.
 
     Parameters

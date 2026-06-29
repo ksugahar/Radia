@@ -286,7 +286,7 @@ RADIAL field index
 that controls how the gap field grows with radius.  This is a
 hodograph-native, single-valued SHAPE design (no topology change),
 shipped + golden-tested in
-`examples/clebsch_hodograph/scaling_ffag_pole_2d.py`.
+`docs/clebsch_hodograph/demos/scaling_ffag_pole_2d.py`.
 
 ## Two achromaticities -- and they are DIFFERENT (mutually exclusive)
 
@@ -370,7 +370,7 @@ sweep (reproduces the physical-remesh k(r) to ~5e-4).
 This is the radial-index companion to the `end_pole` (longitudinal
 chamfer) topic and the `kolkata` SC-cyclotron case study.  It is part of
 the electromagnet / accelerator-magnet domain (Clebsch-hodograph
-pole-face inverse design, `examples/clebsch_hodograph/`,
+pole-face inverse design, `docs/clebsch_hodograph/demos/`,
 `docs/clebsch_hodograph/DESIGN_METHODOLOGY.md` section 3.3).  Goldens:
 `tests/feec/test_clebsch_hodograph_research.py`
 (`test_scaling_ffag_pole_2d_step1/_step2_saturation/_step3_reshape/
@@ -394,7 +394,7 @@ along the beam:
 This pays off ONLY if the inter-leaf coupling is small AND localised to the
 ends.  Whether it does is governed by the ASPECT RATIO L_iron / gap, and is
 MEASURED (no model assumption) in
-`examples/clebsch_hodograph/leaf_coupling_perturbation_3d.py` on a real
+`docs/clebsch_hodograph/demos/leaf_coupling_perturbation_3d.py` on a real
 reduced-Omega + CoilBuilder finite-length C-frame dipole (beam = y, gap = z;
 geometry parametrised by L so L/gap can be swept).
 

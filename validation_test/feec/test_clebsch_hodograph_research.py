@@ -1,5 +1,5 @@
 """Golden lock for the Clebsch hodograph RESEARCH examples
-(examples/clebsch_hodograph/): the A-method (vector-potential primary) dual
+(docs/clebsch_hodograph/demos/): the A-method (vector-potential primary) dual
 and the Kelvin (exact open boundary) variant.  Imports each script's
 solve() and asserts the headline accuracy + bidirectional consistency bands.
 
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-EXDIR = Path(__file__).resolve().parents[2] / "examples" / "clebsch_hodograph"
+EXDIR = Path(__file__).resolve().parents[2] / "docs" / "clebsch_hodograph" / "demos"
 sys.path.insert(0, str(EXDIR))
 
 

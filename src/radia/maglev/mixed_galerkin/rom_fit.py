@@ -6,7 +6,7 @@ Turns frequency samples alpha(j omega_i) into a passive + stable LTI
 
 i.e. one RC relaxation state per pole plus a feedthrough D = alpha_inf.  This is
 the EXTERIOR-MATCHED *physical* polarizability-tensor ROM: it fits the verified
-per-frequency 3D HCurl solve (examples/maglev/ellipsoid/
+per-frequency 3D HCurl solve (docs/maglev/demos/ellipsoid/
 ellipsoid_alpha_tensor_3d.py, which carries the air reaction dipole, the lift /
 Re[alpha] part), NOT the interior-PEC bulk eigenmodes
 (mixed_galerkin.bulk_foster_via_eigen / bulk_foster_vector_via_eigen).
@@ -14,7 +14,7 @@ Re[alpha] part), NOT the interior-PEC bulk eigenmodes
 Why a sample fit and not a Kameari + Kelvin eigen-accumulation: the 3D HCurl
 Kameari + Kelvin accumulation structurally BREAKS DOWN on the
 isolated-conductor-in-vacuum problem (L_n sign flip at stage 1; see
-examples/maglev/research_cln/ngsolve_validation/
+validation_test/maglev/research_cln/ngsolve_validation/
 cuboid_521_kameari_kelvin_v15_canonical.py).  Sphere axisym Kameari reaches the
 Stoll Cauer ladder to 0.000%, but the general 3D body does not.  This module
 sidesteps that by building the LTI on the verified per-frequency solve instead.

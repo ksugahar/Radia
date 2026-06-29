@@ -338,7 +338,7 @@ for it in range(niter):                          # B-input Picard
 
 ## Verified (lab)
 
-`examples/clebsch_hodograph/clebsch_dipole_saturation_3d.py` (golden
+`docs/clebsch_hodograph/demos/clebsch_dipole_saturation_3d.py` (golden
 `test_clebsch_dipole_saturation_3d_aform`): on an H-frame dipole, at a LOW
 drive (`NI=3 kA-t`, iron `<mu_r>~1200`) the B-input A-formulation converges to
 `resid 8e-6` in **15 iters**, while the reduced-Omega `mu(|H|)` Picard STALLS
@@ -347,7 +347,7 @@ formulation's conditioning.
 
 The 2-D linear-cost companion (the iron flux path as a saturable Chaplygin
 guide -> a magnetic-circuit 1-shot, `B_gap(NI)` at linear cost) is
-`examples/clebsch_hodograph/clebsch_dipole_saturation_2d.py`.
+`docs/clebsch_hodograph/demos/clebsch_dipole_saturation_2d.py`.
 
 ## Cross-reference
 

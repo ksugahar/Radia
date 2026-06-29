@@ -1,13 +1,13 @@
 # The HDiv-VIM ↔ Clebsch bridge (the de Rham capstone) and the saturation frontier
 
-This note maps how the two research lines in `examples/clebsch_hodograph/` —
+This note maps how the two research lines in `docs/clebsch_hodograph/demos/` —
 the **HDiv-VIM demag solver** (`radia.vim`, the FEEC `H(div)` element Radia
 is migrating to) and the **Clebsch hodograph** design line — are one structure
 seen from two sides, and pins down exactly what is *verified* versus what is the
 *open* hard part.
 
 The verified linear (kinematic) level is
-[`examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.py`](../../examples/clebsch_hodograph/hdiv_vim_clebsch_loopstar.py)
+[`docs/clebsch_hodograph/demos/hdiv_vim_clebsch_loopstar.py`](demos/hdiv_vim_clebsch_loopstar.py)
 (golden `test_hdiv_vim_clebsch_loopstar`).
 
 ## One structure, four faces
