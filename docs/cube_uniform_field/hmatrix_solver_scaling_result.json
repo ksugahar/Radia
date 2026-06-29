@@ -1,8 +1,8 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:26Z",
+  "generated_at_utc": "2026-06-29T05:19:38Z",
   "notebook": "docs/cube_uniform_field/hmatrix_solver_scaling.ipynb",
-  "notebook_sha256": "a9489eba73e5f5f7ee7ebab278d2980deb05e14f132e58449e4dbc11638ebc03",
+  "notebook_sha256": "fe9a2bf797ba8313d7b5ac4245b9bf8000dea0eac6f6674270f2a989120533f6",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -28,8 +28,8 @@
     {
       "cell_index": 1,
       "execution_count": 1,
-      "source_sha256": "d1e97a1e6a1a5713da66ede014a2d28f3621e2155b65ceefac02247846898e3a",
-      "source_preview": "\nimport os, glob, json\n\nREL = \"../../examples/cube_uniform_field\"\n\ndef load_runs(elem, solver):\n    rows = []\n    for fp in glob.glob(os.path.join(REL, elem, \"nonlinear\", solver, \"*_results.json\")):\n        d = json.load(open(fp))\n        rows.append(d)\n    rows.sort(key=lambda d: d[\"n_elements\"])\n    return rows\n\nprint(\"Hexahedral cube, uniform applied field, nonlinear soft iron -- MSC 6-DOF/hex.\")\nprint(\"Solver scaling: LU vs BiCGSTAB vs HACApK (H-matrix). Times in seconds.\\n\")\nprint(f\"{'n_div':>5} {'n_elem':>7} {'ndof':>7} \"\n      f\"{'t_LU':>9} {'t_BiCG':>9} {'t_HACApK':>9} \"\n      f\"{'Hmat_MB':>8} {'dense_MB':>9} {'compress':>8}\")\nprint(\"-\" * 86)\n\nlu  = {d[\"n_div\"]: d for d in load_runs(\"hexahedron\", \"lu\")}\nbcg = {d[\"n_div\"]: d for d in load_runs(\"hexahedron\", \"bicgstab\")}\nhac = {d[\"n_div\"]: d for d in load_runs(\"hexahedron\", \"hacapk\")}\nfor n in sorted(hac):\n    h = hac[n]\n    hm = h.get(\"hmatrix\", {}) or {}\n    def t(dct):\n        return f\"{dct[n]['t_solve']:9.2f}\" if n in dct els",
+      "source_sha256": "62089b9e012932a4f83f5f5de2100d5e64e4b42322cfebd8ad33be57274e095e",
+      "source_preview": "\nimport os, glob, json\n\nREL = \"../../validation_test/cube_uniform_field\"\n\ndef load_runs(elem, solver):\n    rows = []\n    for fp in glob.glob(os.path.join(REL, elem, \"nonlinear\", solver, \"*_results.json\")):\n        d = json.load(open(fp))\n        rows.append(d)\n    rows.sort(key=lambda d: d[\"n_elements\"])\n    return rows\n\nprint(\"Hexahedral cube, uniform applied field, nonlinear soft iron -- MSC 6-DOF/hex.\")\nprint(\"Solver scaling: LU vs BiCGSTAB vs HACApK (H-matrix). Times in seconds.\\n\")\nprint(f\"{'n_div':>5} {'n_elem':>7} {'ndof':>7} \"\n      f\"{'t_LU':>9} {'t_BiCG':>9} {'t_HACApK':>9} \"\n      f\"{'Hmat_MB':>8} {'dense_MB':>9} {'compress':>8}\")\nprint(\"-\" * 86)\n\nlu  = {d[\"n_div\"]: d for d in load_runs(\"hexahedron\", \"lu\")}\nbcg = {d[\"n_div\"]: d for d in load_runs(\"hexahedron\", \"bicgstab\")}\nhac = {d[\"n_div\"]: d for d in load_runs(\"hexahedron\", \"hacapk\")}\nfor n in sorted(hac):\n    h = hac[n]\n    hm = h.get(\"hmatrix\", {}) or {}\n    def t(dct):\n        return f\"{dct[n]['t_solve']:9.2f}\" if n in ",
       "outputs": [
         {
           "output_type": "stream",
@@ -52,8 +52,8 @@
     {
       "cell_index": 3,
       "execution_count": 2,
-      "source_sha256": "08a69559b1bc017c60069a697c03e610d67b66f93c48f573d9f83cb3c75b7320",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/cube_uniform_field/hexahedron/scaling_time.png'))",
+      "source_sha256": "7af4c072e1a0f95e66e321a4a20adc3b2430701cdd02e7ce110016232cec7599",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/cube_uniform_field/hexahedron/scaling_time.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -77,8 +77,8 @@
     {
       "cell_index": 4,
       "execution_count": 3,
-      "source_sha256": "80c10062724a0de4fd6555c50f16389aa49e5a051b8d97438bd322e26d6e70bf",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/cube_uniform_field/hexahedron/scaling_memory.png'))",
+      "source_sha256": "f466ef51488e1ca50f6629fef7d352218f425c653d72e3dbadf9728f7b9973f5",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/cube_uniform_field/hexahedron/scaling_memory.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -102,8 +102,8 @@
     {
       "cell_index": 6,
       "execution_count": 4,
-      "source_sha256": "0f712caeba18440789744db33ab39f947835ebd439a9728876f879c50ee598e3",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/cube_uniform_field/tetrahedron/scaling_time.png'))",
+      "source_sha256": "53742c9e8c022c78c9ef34249793040131d2e180198221d4638bbee90381048a",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/cube_uniform_field/tetrahedron/scaling_time.png'))",
       "outputs": [
         {
           "output_type": "display_data",
@@ -127,8 +127,8 @@
     {
       "cell_index": 7,
       "execution_count": 5,
-      "source_sha256": "866ff1b7040912170db67e868ed58bca445aaee86b421c0ab30dba6b99cc9d9e",
-      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../examples/cube_uniform_field/tetrahedron/scaling_memory.png'))",
+      "source_sha256": "b9b1dc8db314016dc3c3259dc70260658315cdf30325cb842c6be739e395118b",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image('../../validation_test/cube_uniform_field/tetrahedron/scaling_memory.png'))",
       "outputs": [
         {
           "output_type": "display_data",
