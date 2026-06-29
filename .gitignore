@@ -436,14 +436,10 @@ src/radia/panels/samples/*_peec_*.msh.opt
 src/radia/panels/samples/*_fem_*.msh.opt
 src/radia/panels/samples/*_qa_*.vol.json
 
-# Panel inductance dev test scripts (one-shot probes, not regression suite)
-examples/cubit_panels/inductance/test_*.py
-
 # ============================================================================
 # Cubit Mesh Export - Sample Output Files (pre-generated, version-controlled)
 # ============================================================================
 !examples/cubit/**/*.msh
-examples/cubit_panels/inductance/results/
 !examples/cubit/**/*.exo
 !examples/cubit/**/*.bdf
 !examples/cubit/**/*.meg

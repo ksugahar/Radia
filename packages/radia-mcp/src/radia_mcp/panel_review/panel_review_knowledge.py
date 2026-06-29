@@ -45,11 +45,12 @@ panel, or a Cubit-panel prototype into the current browser-native Radia panel
 surface.  The construction target is always:
 
 ```
+panels/calc_<app>.py                  # target layout for panel CLI scripts
+panels/notebooks/radia_<app>.ipynb    # target layout for notebook panels
+panels/samples/<app>/...              # panel-owned samples and fixtures
 src/radia/<app>_design.py
 src/radia/<app>_notebook.py
 src/radia/notebook_workbench.py
-src/radia/panels/calc_<app>.py
-src/radia/panels/notebooks/radia_<app>.ipynb
 validation_test/panels/test_notebook_workbench.py
 ```
 
@@ -66,7 +67,8 @@ Construction checklist:
    run artifact, not a preset store.
 4. Implement `DesignSpec.build_command()`, `missing_required_inputs()`, and
    `visible_fields()` where needed.  The command must target a headless
-   `src/radia/panels/calc_*.py` script with argparse flags.
+   `panels/calc_*.py` script with argparse flags.  During the staged migration,
+   existing `src/radia/panels/calc_*.py` scripts remain legacy-compatible.
 5. In `<app>_notebook.py`, declare `NotebookFieldSpec(...)` rows, subclass
    `CommandWorkbench`, set `title`, `field_specs`, `section_order`, and an
    app-specific `run_root` such as `runs/radia_ih`.
@@ -81,8 +83,9 @@ workbench = <App>Workbench(spec)
 workbench.display()
 ```
 
-7. Register the notebook in
-   `src/radia/panels/notebooks/panel_notebook_manifest.json`.
+7. Register the notebook in `panels/notebooks/panel_notebook_manifest.json`
+   once the root panel tree owns it.  During the staged migration, keep the
+   legacy manifest in `src/radia/panels/notebooks/` synchronized.
 8. Extend `validation_test/panels/test_notebook_workbench.py` so the workbench
    builds the expected headless command and the notebook has no PySide/PyQt
    imports.
@@ -116,8 +119,9 @@ is a presentation shell for the IH workbench.  Its pattern is:
 4. Short tips about required inputs and saved run artifacts.
 
 Use that shell for talks and operator-facing demos; keep the repository
-notebook contract in `src/radia/panels/notebooks/radia_ih.ipynb` as the source
-of truth for migration notes, domain cautions, and tests.
+notebook contract in `panels/notebooks/radia_ih.ipynb` once migrated.  The
+current legacy source-of-truth path is
+`src/radia/panels/notebooks/radia_ih.ipynb`.
 
 CSS / JupyterLab guard:
 
@@ -141,12 +145,11 @@ CUBIT_PANELS_MIGRATION = """
 
 As of 2026-06-29, the induction-heating side has been drained from
 `examples/cubit_panels/inductance` into
-`validation_test/induction_heating/cubit_panels_legacy`.  The remaining
-tracked Python scripts under `examples/cubit_panels` are the accel-magnet
-source material.  Treat any remaining examples path as a source to distill into
-`src`, `validation_test`, and notebook/docs surfaces, not as a long-lived
-examples tier.  Do not delete it while MCP knowledge, docs, validation, or
-panel tests still point directly at `examples/cubit_panels`.
+`validation_test/induction_heating/cubit_panels_legacy`.  The accel-magnet
+staging scripts were later pruned from `examples`; only rescued panel fixtures
+belong under `panels/samples/em/c_type_dipole/`.  Treat any remaining
+`examples/cubit_panels` path as reference debt to eliminate, not as a
+long-lived examples tier.
 
 ## Destination rules
 
@@ -154,26 +157,25 @@ panel tests still point directly at `examples/cubit_panels`.
 - Numerical checks, golden locks, and solver comparisons -> `validation_test`.
 - User-facing demonstrations -> result-saved docs notebooks plus synchronized
   JSON.
-- Presentation/operator GUI -> `src/radia/panels/notebooks/radia_<app>.ipynb`
+- Presentation/operator GUI and panel-owned samples -> repo-root `panels/`
   using `DesignSpec` + `CommandWorkbench`.
-- Cubit journals, `.geo`, BH tables, and mesh/CAD assets remain protected until
-  the owning API/notebook/test no longer references the examples path.
+- Cubit journals, `.geo`, BH tables, and mesh/CAD assets remain protected only
+  while an owning API/notebook/test still needs them.  Do not keep stale
+  development logs as examples.
 
 ## Accel magnet side
 
-`examples/cubit_panels/accel_magnet` is mostly the source material for the EM
-notebook/panel track:
+The former `examples/cubit_panels/accel_magnet` tree was source material for
+the EM notebook/panel track:
 
-- `coil_dipole.py`, `experiment_occ_dipole.py`, and STEP/FEM helpers should be
-  distilled into `src/radia` EM geometry/coil APIs or existing
-  `src/radia/panels/calc_accel_*.py` scripts.
-- `experiment_mmm_ima.py` is a diagnostic/showcase candidate; keep numerical
-  claims in validation, and show the explanation in a docs notebook if it is
-  user-facing.
-- `BH.txt`, `yoke.jou`, and `view_full.geo` are assets, not cruft.  Move or
-  re-reference them only after `src/radia/em_material.py`,
-  `src/radia/step_mesh_builder.py`, `src/radia/panels/samples/em/README.md`,
-  and `validation_test/panels/test_em_golden.py` no longer point at examples.
+- `coil_dipole.py` duplicated the panel coil sample and was pruned.
+- `experiment_mmm_ima.py`, `experiment_occ_dipole.py`, and STEP/FEM helper
+  probes were development diagnostics; their lesson lives in memory, not in
+  the source tree.
+- `coil_wire.step` and `yoke.step` were rescued to
+  `panels/samples/em/c_type_dipole/`.
+- `BH.txt` is embedded in `src/radia/em_material.py` and shipped as
+  `src/radia/panels/samples/em_sample_bh.txt`; the examples copy was removed.
 
 ## Induction heating side
 
@@ -191,8 +193,8 @@ is a protected legacy validation corpus, not a final public docs surface:
   kernels are in `src`.
 - API candidates: `create_induction_model.py`, `fem_esim_3d_cubit.py`,
   `inductance_hodge.py`, `inductance_source_sink.py`, and shared torus/coil
-  builders should move from the legacy corpus to `src/radia` or
-  `src/radia/panels/calc_*.py`.
+  builders should move from the legacy corpus to `src/radia` only when they
+  become reusable APIs.  Panel-only wiring belongs under `panels/`.
 - Display `.geo` files are visualization assets; keep or regenerate them next
   to the notebook/test that owns them.
 
@@ -202,12 +204,12 @@ Route each Python script before deleting the corresponding legacy copy:
 
 | Script | Target after unblock |
 |--------|----------------------|
-| `accel_magnet/coil_dipole.py` | `src` EM coil API |
-| `accel_magnet/experiment_mmm_ima.py` | docs notebook plus validation notes |
-| `accel_magnet/experiment_occ_dipole.py` | `src`/panel calc plus EM docs |
-| `accel_magnet/experiment_step_fem.py` | `src`/panel calc plus EM docs |
-| `accel_magnet/experiment_step_fem_full.py` | distill into EM docs/API |
-| `accel_magnet/experiment_step_fem_nokelvin.py` | distill into EM docs/API |
+| `accel_magnet/coil_dipole.py` | pruned; duplicate of panel coil sample |
+| `accel_magnet/experiment_mmm_ima.py` | pruned after memory distillation |
+| `accel_magnet/experiment_occ_dipole.py` | pruned; superseded by panel calc/sample |
+| `accel_magnet/experiment_step_fem.py` | pruned; superseded by `step_mesh_builder.py` and panel calc |
+| `accel_magnet/experiment_step_fem_full.py` | pruned after memory distillation |
+| `accel_magnet/experiment_step_fem_nokelvin.py` | pruned after memory distillation |
 | `inductance/bem_sibc_workpiece.py` | IH docs notebook plus src kernel |
 | `inductance/compare_bem_coupled_vs_fem_kelvin.py` | `validation_test` |
 | `inductance/create_induction_model.py` | `src` Cubit/IH model API |
@@ -242,8 +244,8 @@ Route each Python script before deleting the corresponding legacy copy:
 
 After each promotion batch, run a repository reference search for
 `examples/cubit_panels`.  Remaining references must name a concrete
-`target_after_unblock` (`src`, `validation_test`, `docs`, or delete after
-distillation).  New long-lived references to examples are not allowed.
+`target_after_unblock` (`src`, `validation_test`, `docs`, `panels`, or delete
+after distillation).  New long-lived references to examples are not allowed.
 """
 
 

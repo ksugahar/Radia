@@ -37,7 +37,8 @@ MU_0 = 4e-7 * np.pi
 
 # ============================================================
 # BH curve data (100 points, from CEFC 2020 nonlinear model)
-# Source data file: examples/cubit_panels/accel_magnet/BH.txt
+# Source data: CEFC 2020 C-type panel sample
+# (also shipped as src/radia/panels/samples/em_sample_bh.txt)
 # Units: H [A/m], B [T]
 # ============================================================
 STEEL_BH: List[List[float]] = [
