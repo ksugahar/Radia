@@ -52,6 +52,9 @@ fi
 # ---- Duty 2: upload binaries (never blocks the push) ----------------------
 UPLOAD_FILES=()
 for f in src/radia/*.pyd; do
+    case "$f" in
+        *locked-old.pyd|*.lockedold.pyd) continue ;;
+    esac
     [ -f "$f" ] && UPLOAD_FILES+=("$f")
 done
 [ -f "src/ext/fmm3d/lib/fmm3d.lib" ] && UPLOAD_FILES+=("src/ext/fmm3d/lib/fmm3d.lib")
