@@ -756,11 +756,13 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         mesh.Curve(int(curve_order))
         fes = ng.HDiv(mesh, order=order)
         B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
-                                         curve_order=int(curve_order), curve_gauss=int(curve_gauss))
+                                         curve_order=int(curve_order), curve_gauss=int(curve_gauss),
+                                         nonlinear=bh_table is not None)
     else:
         fes = ng.HDiv(mesh, order=order)
         B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
-                                         far_quad=eff_far, ho_far_factor=eff_hofar)
+                                         far_quad=eff_far, ho_far_factor=eff_hofar,
+                                         nonlinear=bh_table is not None)
     Mm = sp.csr_matrix(M_mass); B = sp.csr_matrix(B)
     n_face = fes.ndof; n_el = mesh.GetNE(ng.VOL); n_charge = B.shape[0]
     gfH = ng.GridFunction(fes); gfH.Set(H_ext); h_ext = gfH.vec.FV().NumPy().copy()
