@@ -889,7 +889,9 @@ Mesh.VolumeEdges = 0;
 ## 4. Cubit Panel Integration
 
 The Cubit panel opens GMSH for results display:
-- Output: `examples/cubit_panels/<solver>/results/`
+- Output: panel or validation run directories; do not use the retired
+  examples staging tree (for example `runs/radia_*`, `panels/samples/...`, or
+  `validation_test/...` depending on owner)
 - Uses `pythonw.exe` to launch GMSH (no console window)
 - .geo companion file auto-generated with display settings
 

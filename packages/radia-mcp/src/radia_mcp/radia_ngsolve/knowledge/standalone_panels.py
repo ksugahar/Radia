@@ -13,7 +13,8 @@ The PySide6 standalone panel route is retired.  The canonical panel surface is
 now a result-bearing Jupyter notebook workbench:
 
 ```
-src/radia/panels/notebooks/radia_<app>.ipynb
+panels/notebooks/radia_<app>.ipynb          # target layout
+src/radia/panels/notebooks/radia_<app>.ipynb # legacy during migration
 radia.<app>_design.<App>DesignSpec
 radia.<app>_notebook.<App>Workbench
 ```
@@ -86,7 +87,8 @@ Short version:
 - Move reusable kernels to `src/`; keep heavy numerical gates in
   `validation_test/`.
 - Create `<App>DesignSpec` and `<App>Workbench` around a headless
-  `src/radia/panels/calc_*.py` command.
+  `panels/calc_*.py` command.  Existing `src/radia/panels/calc_*.py` scripts
+  are legacy-compatible during the staged migration.
 - The notebook cell imports `DesignSpec` + `Workbench`, creates `spec`, and
   calls `workbench.display()`.
 - `CommandWorkbench` runs locally and saves `command.txt`, `run.log`, and
@@ -106,12 +108,13 @@ tests as the canonical contract.
 ============================================================
 
 `examples/cubit_panels` is not a permanent destination.  The IH inductance
-scripts have moved to `validation_test/induction_heating/cubit_panels_legacy`.
-Before deleting the remaining accel-magnet material or any legacy IH copy, move
-the owned code into one of these lanes:
+scripts have moved to `validation_test/induction_heating/cubit_panels_legacy`,
+and the remaining accel-magnet examples were pruned after rescuing panel
+fixtures to `panels/samples/em/c_type_dipole`.  Any future legacy copy should
+move into one of these lanes:
 
-- accel magnet geometry / coil builders -> `src/radia` EM APIs or
-  `src/radia/panels/calc_accel_*.py`
+- reusable accel magnet geometry / coil builders -> `src/radia` EM APIs
+- panel-only samples, notebooks, and calc wrappers -> repo-root `panels/`
 - IH validation scripts (`verify_*`, `compare_*`, `test_*`) ->
   `validation_test/induction_heating` or a specific validation subtree
 - IH demonstrations (`scalar_bie_sibc.py`, `bem_sibc_workpiece.py`,
