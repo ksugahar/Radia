@@ -852,6 +852,354 @@ def farfield_pattern_metadata_gate(
     }
 
 
+def farfield_lobe_notebook_handoff_gate(
+    metadata,
+    row,
+    lobe_id_key="lobe_id",
+    tol=1.0e-9,
+):
+    """Bundle far-field metadata and one lobe row before notebook use.
+
+    A notebook panel should not receive a naked gain scalar.  The lobe row must
+    carry a stable row identity, frequency, theta/phi location, polarization
+    basis, accepted-power normalization, gain/directivity units, and the
+    radiation-efficiency identity ``G = eta_rad * D``.
+    """
+
+    if not isinstance(row, dict):
+        raise ValueError("row must be a mapping")
+    tolerance = float(tol)
+    if tolerance < 0.0:
+        raise ValueError("tol must be non-negative")
+
+    meta_gate = farfield_pattern_metadata_gate(metadata, tol=tolerance)
+
+    def pick(*keys, default=None):
+        for key in keys:
+            if key in row and row[key] is not None:
+                return row[key]
+        return default
+
+    def normalize_token(value):
+        if value is None:
+            return None
+        return str(value).strip().replace("-", "_").replace("/", "_").lower()
+
+    def normalize_basis(value):
+        token = normalize_token(value)
+        aliases = {
+            "theta_phi": "theta_phi",
+            "etheta_ephi": "theta_phi",
+            "spherical_theta_phi": "theta_phi",
+            "lhcp_rhcp": "circular",
+            "rhcp_lhcp": "circular",
+            "linear": "linear",
+        }
+        return aliases.get(token, token)
+
+    def contains_angle(values, target):
+        return any(abs(value - target) <= max(tolerance, 1.0e-9) for value in values)
+
+    lobe_id = pick(lobe_id_key, "row_id", "case_id", "label", default=None)
+    row_frequency = pick("frequency_hz", "frequency_Hz", "freq_hz", default=None)
+    row_frequency = None if row_frequency is None else float(row_frequency)
+    theta = pick("theta_deg", "theta", default=None)
+    phi = pick("phi_deg", "phi", default=None)
+    theta = None if theta is None else float(theta)
+    phi = None if phi is None else float(phi)
+    row_basis = normalize_basis(pick("polarization_basis", "basis", "polarization", default=None))
+    row_norm = normalize_token(pick("normalization", "power_normalization", default=None))
+    gain_unit = str(pick("gain_unit", "gain_quantity_unit", default="") or "").strip()
+    directivity_unit = str(pick("directivity_unit", default="") or "").strip()
+
+    gain_raw = pick("gain_dbi", "gain_dBi", "gain_db", "gain_DB", default=None)
+    directivity_raw = pick("directivity_dbi", "directivity_dBi", "directivity_db", "directivity_DB", default=None)
+    radiated_raw = pick("radiated_power_w", "radiated_power_W", "prad_w", "P_rad_W", default=None)
+    accepted_raw = pick("accepted_power_w", "accepted_power_W", "pacc_w", "P_acc_W", default=None)
+
+    checks = {
+        "metadata_gate_ok": meta_gate["status"] == "ok",
+        "lobe_id_recorded": lobe_id is not None and str(lobe_id).strip() != "",
+        "row_frequency_recorded": row_frequency is not None,
+        "row_frequency_matches_metadata": (
+            row_frequency is not None
+            and meta_gate["frequency_hz"] is not None
+            and abs(row_frequency - meta_gate["frequency_hz"]) <= tolerance * max(1.0, abs(meta_gate["frequency_hz"]))
+        ),
+        "theta_recorded": theta is not None,
+        "theta_on_export_grid": theta is not None and contains_angle(meta_gate["theta_values_deg"], theta),
+        "phi_recorded": phi is not None,
+        "phi_on_export_grid": phi is not None and contains_angle(meta_gate["phi_values_deg"], phi),
+        "polarization_basis_recorded": row_basis is not None,
+        "polarization_basis_matches_metadata": row_basis is not None and row_basis == meta_gate["polarization_basis"],
+        "normalization_recorded": row_norm is not None,
+        "normalization_is_accepted_power": row_norm == "accepted_power",
+        "normalization_matches_metadata": row_norm is not None and row_norm == meta_gate["normalization"],
+        "gain_unit_recorded": bool(gain_unit),
+        "gain_unit_is_dbi": gain_unit == "dBi",
+        "directivity_unit_recorded": bool(directivity_unit),
+        "directivity_unit_is_dbi": directivity_unit == "dBi",
+        "gain_recorded": gain_raw is not None,
+        "directivity_recorded": directivity_raw is not None,
+        "radiated_power_recorded": radiated_raw is not None,
+        "accepted_power_recorded": accepted_raw is not None,
+        "radiated_power_nonnegative": False,
+        "accepted_power_positive": False,
+        "radiation_efficiency_in_0_1": False,
+        "gain_not_above_directivity": False,
+        "gain_matches_directivity_times_efficiency": False,
+    }
+    values = {
+        "gain_dbi": None,
+        "directivity_dbi": None,
+        "gain_linear": None,
+        "directivity_linear": None,
+        "radiated_power_w": None,
+        "accepted_power_w": None,
+        "radiation_efficiency": None,
+        "expected_gain_linear": None,
+        "efficiency_from_gain_over_directivity": None,
+        "gain_relative_error": None,
+    }
+    if None not in (gain_raw, directivity_raw, radiated_raw, accepted_raw):
+        gain_dbi = float(gain_raw)
+        directivity_dbi = float(directivity_raw)
+        radiated = float(radiated_raw)
+        accepted = float(accepted_raw)
+        gain_linear = 10.0 ** (gain_dbi / 10.0)
+        directivity_linear = 10.0 ** (directivity_dbi / 10.0)
+        checks["radiated_power_nonnegative"] = radiated >= 0.0
+        checks["accepted_power_positive"] = accepted > 0.0
+        if accepted > 0.0 and directivity_linear > 0.0:
+            eta = radiated / accepted
+            expected_gain = directivity_linear * eta
+            rel_error = abs(gain_linear - expected_gain) / max(abs(expected_gain), abs(gain_linear), 1.0)
+            checks["radiation_efficiency_in_0_1"] = 0.0 <= eta <= 1.0 + tolerance
+            checks["gain_not_above_directivity"] = gain_linear <= directivity_linear + tolerance
+            checks["gain_matches_directivity_times_efficiency"] = rel_error <= tolerance
+            values.update(
+                {
+                    "gain_dbi": gain_dbi,
+                    "directivity_dbi": directivity_dbi,
+                    "gain_linear": gain_linear,
+                    "directivity_linear": directivity_linear,
+                    "radiated_power_w": radiated,
+                    "accepted_power_w": accepted,
+                    "radiation_efficiency": eta,
+                    "expected_gain_linear": expected_gain,
+                    "efficiency_from_gain_over_directivity": gain_linear / directivity_linear,
+                    "gain_relative_error": rel_error,
+                }
+            )
+
+    return {
+        "policy": "farfield_lobe_notebook_handoff_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "metadata_gate": meta_gate,
+        "lobe_id_key": lobe_id_key,
+        "lobe_id": lobe_id,
+        "frequency_hz": row_frequency,
+        "theta_deg": theta,
+        "phi_deg": phi,
+        "polarization_basis": row_basis,
+        "normalization": row_norm,
+        "gain_unit": gain_unit,
+        "directivity_unit": directivity_unit,
+        "checks": checks,
+        "tol": tolerance,
+        "notes": [
+            "Run this after the far-field export metadata gate and before a notebook panel plots or ranks lobes.",
+            "The row identity, angular location, accepted-power normalization, and G=eta_rad*D identity must travel together.",
+        ],
+        **values,
+    }
+
+def cst_result_export_package_gate(
+    artifacts,
+    expected_project_id=None,
+    expected_run_id=None,
+    expected_export_id=None,
+    expected_frequency_Hz=None,
+    required_kinds=("touchstone_metadata", "touchstone_row", "farfield_metadata", "farfield_lobe"),
+    frequency_rtol=1.0e-12,
+):
+    """Check that CST RF result artifacts belong to one export package."""
+
+    rows_in = list(artifacts)
+    if not rows_in:
+        raise ValueError("artifacts must not be empty")
+
+    def _norm(value):
+        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    def _first(row, names):
+        for name in names:
+            if name in row and row[name] is not None:
+                return row[name]
+        return None
+
+    required = tuple(_norm(kind) for kind in required_kinds)
+    expected_policies = {
+        "touchstone_metadata": {"touchstone_port_metadata_gate"},
+        "touchstone_row": {"touchstone_row_solver_ready_preflight_gate", "two_port_sparameter_health"},
+        "farfield_metadata": {"farfield_pattern_metadata_gate"},
+        "farfield_lobe": {"farfield_lobe_notebook_handoff_gate"},
+    }
+    tolerance = float(frequency_rtol)
+    if not required:
+        raise ValueError("required_kinds must not be empty")
+    if tolerance < 0.0:
+        raise ValueError("frequency_rtol must be non-negative")
+
+    details = []
+    kind_counts = {}
+    project_ids = []
+    run_ids = []
+    export_ids = []
+    frequencies = []
+    missing_project_id = []
+    missing_run_id = []
+    missing_export_id = []
+    missing_frequency = []
+    bad_source_tool = []
+    missing_paths = []
+    unknown_kinds = []
+    bad_upstream_status = []
+    bad_upstream_policy = []
+
+    for index, row in enumerate(rows_in, start=1):
+        if not isinstance(row, dict):
+            raise ValueError("each artifact must be a dictionary")
+        kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
+        project_id = _first(row, ("project_id", "cst_project_id", "model_id"))
+        run_id = _first(row, ("run_id", "solver_run_id", "study_id"))
+        export_id = _first(row, ("export_id", "result_set_id", "dataset_id"))
+        source_tool = _first(row, ("source_tool", "tool", "source"))
+        source_tool_norm = _norm(source_tool)
+        path = _first(row, ("path", "file", "artifact_path", "table_path"))
+        frequency = _first(row, ("frequency_Hz", "frequency_hz", "freq_Hz", "freq_hz"))
+        gate_policy = _first(row, ("gate_policy", "policy", "validator"))
+        gate_policy_norm = _norm(gate_policy)
+        status = _first(row, ("status", "gate_status", "validation_status"))
+        status_norm = _norm(status)
+        pass_flag = bool(row.get("pass", False))
+        if kind:
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        else:
+            unknown_kinds.append(index)
+        if kind and kind not in set(required) | set(expected_policies):
+            unknown_kinds.append(kind)
+        if not project_id:
+            missing_project_id.append(index)
+        else:
+            project_ids.append(str(project_id))
+        if not run_id:
+            missing_run_id.append(index)
+        else:
+            run_ids.append(str(run_id))
+        if not export_id:
+            missing_export_id.append(index)
+        else:
+            export_ids.append(str(export_id))
+        if frequency is None:
+            missing_frequency.append(index)
+        else:
+            frequencies.append(float(frequency))
+        if source_tool_norm not in {"cst", "cst_studio", "cst_studio_suite"}:
+            bad_source_tool.append({"index": index, "source_tool": source_tool})
+        if not path:
+            missing_paths.append(index)
+        if not (pass_flag or status_norm in {"ok", "pass", "passed", "verified"}):
+            bad_upstream_status.append({"index": index, "kind": kind, "status": status})
+        if kind in expected_policies and gate_policy_norm not in expected_policies[kind]:
+            bad_upstream_policy.append({
+                "index": index,
+                "kind": kind,
+                "gate_policy": gate_policy,
+                "expected": sorted(expected_policies[kind]),
+            })
+        details.append({
+            "index": index,
+            "kind": kind,
+            "project_id": None if project_id is None else str(project_id),
+            "run_id": None if run_id is None else str(run_id),
+            "export_id": None if export_id is None else str(export_id),
+            "frequency_Hz": None if frequency is None else float(frequency),
+            "source_tool": source_tool,
+            "path": path,
+            "gate_policy": gate_policy,
+            "status": status,
+            "pass": pass_flag,
+        })
+
+    unique_project_ids = sorted(set(project_ids))
+    unique_run_ids = sorted(set(run_ids))
+    unique_export_ids = sorted(set(export_ids))
+    max_frequency_rel_span = 0.0
+    if frequencies:
+        max_frequency_rel_span = abs(max(frequencies) - min(frequencies)) / max(max(abs(f) for f in frequencies), 1.0)
+    checks = {
+        "required_kinds_present": set(required).issubset(set(kind_counts)),
+        "no_unknown_kinds": not unknown_kinds,
+        "project_ids_present": not missing_project_id,
+        "project_ids_unique": len(unique_project_ids) == 1,
+        "run_ids_present": not missing_run_id,
+        "run_ids_unique": len(unique_run_ids) == 1,
+        "export_ids_present": not missing_export_id,
+        "export_ids_unique": len(unique_export_ids) == 1,
+        "frequencies_present": not missing_frequency,
+        "frequencies_match": bool(frequencies) and max_frequency_rel_span <= tolerance,
+        "source_tool_is_cst": not bad_source_tool,
+        "paths_present": not missing_paths,
+        "upstream_gate_status_ok": not bad_upstream_status,
+        "upstream_gate_policy_known": not bad_upstream_policy,
+    }
+    if expected_project_id is not None:
+        checks["expected_project_id_matches"] = unique_project_ids == [str(expected_project_id)]
+    if expected_run_id is not None:
+        checks["expected_run_id_matches"] = unique_run_ids == [str(expected_run_id)]
+    if expected_export_id is not None:
+        checks["expected_export_id_matches"] = unique_export_ids == [str(expected_export_id)]
+    if expected_frequency_Hz is not None:
+        expected_f = float(expected_frequency_Hz)
+        checks["expected_frequency_matches"] = (
+            bool(frequencies)
+            and max(abs(freq - expected_f) / max(abs(freq), abs(expected_f), 1.0) for freq in frequencies) <= tolerance
+        )
+
+    return {
+        "policy": "cst_result_export_package_gate",
+        "required_kinds": list(required),
+        "present_kinds": dict(sorted(kind_counts.items())),
+        "project_ids": unique_project_ids,
+        "run_ids": unique_run_ids,
+        "export_ids": unique_export_ids,
+        "frequencies_Hz": sorted(set(frequencies)),
+        "max_frequency_rel_span": max_frequency_rel_span,
+        "expected_project_id": None if expected_project_id is None else str(expected_project_id),
+        "expected_run_id": None if expected_run_id is None else str(expected_run_id),
+        "expected_export_id": None if expected_export_id is None else str(expected_export_id),
+        "expected_frequency_Hz": None if expected_frequency_Hz is None else float(expected_frequency_Hz),
+        "missing_project_id_rows": missing_project_id,
+        "missing_run_id_rows": missing_run_id,
+        "missing_export_id_rows": missing_export_id,
+        "missing_frequency_rows": missing_frequency,
+        "bad_source_tool_rows": bad_source_tool,
+        "missing_path_rows": missing_paths,
+        "unknown_kinds": unknown_kinds,
+        "bad_upstream_status_rows": bad_upstream_status,
+        "bad_upstream_policy_rows": bad_upstream_policy,
+        "artifacts": details,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Run after Touchstone and far-field sub-gates so CST notebook rows "
+            "cannot mix S-parameter and radiation evidence from different "
+            "project/run/export/frequency packages."
+        ),
+    }
+
+
 def touchstone_row_solver_ready_preflight_gate(
     row,
     data_format="MA",
@@ -2023,6 +2371,212 @@ def jmag_symmetry_sweep_coverage_gate(
     }
 
 
+def jmag_export_case_package_gate(
+    artifacts,
+    expected_case_id=None,
+    expected_study_id=None,
+    expected_result_set_id=None,
+    required_kinds=("column_metadata", "symmetry_coverage", "value_table", "notebook_row"),
+):
+    """Check that JMAG-derived export artifacts belong to one case package.
+
+    JMAG postprocessing often exports column metadata, sector/symmetry coverage,
+    value tables, and selected notebook rows separately.  This gate keeps the
+    case/study/result-set identity explicit so a downstream notebook cannot
+    join a stale table from another sweep or design point.
+    """
+
+    rows_in = list(artifacts)
+    if not rows_in:
+        raise ValueError("artifacts must not be empty")
+
+    def _norm(value):
+        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    def _first(row, names):
+        for name in names:
+            if name in row and row[name] is not None:
+                return row[name]
+        return None
+
+    required = tuple(_norm(kind) for kind in required_kinds)
+    if not required:
+        raise ValueError("required_kinds must not be empty")
+
+    expected_policies = {
+        "column_metadata": {"jmag_motor_table_column_metadata_gate"},
+        "symmetry_coverage": {"jmag_symmetry_sweep_coverage_gate"},
+        "value_table": {
+            "pm_drive_terminal_table_health_gate",
+            "pm_drive_loss_bucket_efficiency_gate",
+            "pm_drive_efficiency_map_health_gate",
+            "dq_torque_table_health",
+            "torque_angle_table_export_health",
+        },
+        "notebook_row": {
+            "pm_drive_operating_point_notebook_handoff_gate",
+            "pm_drive_terminal_table_health_gate",
+            "pm_drive_loss_bucket_efficiency_gate",
+        },
+    }
+
+    details = []
+    kind_counts = {}
+    case_ids = []
+    study_ids = []
+    result_set_ids = []
+    notebook_operating_points = []
+    table_operating_points = []
+    missing_case_id = []
+    missing_study_id = []
+    missing_result_set_id = []
+    missing_notebook_operating_point = []
+    bad_source_tool = []
+    missing_paths = []
+    unknown_kinds = []
+    bad_upstream_status = []
+    bad_upstream_policy = []
+
+    for index, row in enumerate(rows_in, start=1):
+        if not isinstance(row, dict):
+            raise ValueError("each artifact must be a dictionary")
+        kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
+        case_id = _first(row, ("case_id", "jmag_case_id", "design_case_id"))
+        study_id = _first(row, ("study_id", "study_name", "study"))
+        result_set_id = _first(row, ("result_set_id", "result_id", "dataset_id", "export_id"))
+        source_tool = _first(row, ("source_tool", "tool", "source"))
+        source_tool_norm = _norm(source_tool)
+        path = _first(row, ("path", "file", "table_path", "artifact_path"))
+        gate_policy = _first(row, ("gate_policy", "policy", "validator"))
+        gate_policy_norm = _norm(gate_policy)
+        status = _first(row, ("status", "gate_status", "validation_status"))
+        status_norm = _norm(status)
+        pass_flag = bool(row.get("pass", False))
+
+        if kind:
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        else:
+            unknown_kinds.append(index)
+        if kind and kind not in set(required) | set(expected_policies):
+            unknown_kinds.append(kind)
+        if not case_id:
+            missing_case_id.append(index)
+        else:
+            case_ids.append(str(case_id))
+        if not study_id:
+            missing_study_id.append(index)
+        else:
+            study_ids.append(str(study_id))
+        if not result_set_id:
+            missing_result_set_id.append(index)
+        else:
+            result_set_ids.append(str(result_set_id))
+        if source_tool_norm not in {"jmag", "jmag_designer", "jmagdesigner"}:
+            bad_source_tool.append({"index": index, "source_tool": source_tool})
+        if not path:
+            missing_paths.append(index)
+        if not (pass_flag or status_norm in {"ok", "pass", "passed", "verified"}):
+            bad_upstream_status.append({"index": index, "kind": kind, "status": status})
+        if kind in expected_policies and gate_policy_norm not in expected_policies[kind]:
+            bad_upstream_policy.append({
+                "index": index,
+                "kind": kind,
+                "gate_policy": gate_policy,
+                "expected": sorted(expected_policies[kind]),
+            })
+
+        if kind == "value_table":
+            op_ids = row.get("operating_point_ids")
+            if op_ids is not None:
+                table_operating_points.extend(str(item) for item in op_ids)
+            op_single = _first(row, ("operating_point_id", "op_id"))
+            if op_single is not None:
+                table_operating_points.append(str(op_single))
+        if kind == "notebook_row":
+            op_id = _first(row, ("operating_point_id", "op_id"))
+            if not op_id:
+                missing_notebook_operating_point.append(index)
+            else:
+                notebook_operating_points.append(str(op_id))
+
+        details.append({
+            "index": index,
+            "kind": kind,
+            "case_id": None if case_id is None else str(case_id),
+            "study_id": None if study_id is None else str(study_id),
+            "result_set_id": None if result_set_id is None else str(result_set_id),
+            "source_tool": source_tool,
+            "path": path,
+            "gate_policy": gate_policy,
+            "status": status,
+            "pass": pass_flag,
+        })
+
+    required_set = set(required)
+    present_set = set(kind_counts)
+    unique_case_ids = sorted(set(case_ids))
+    unique_study_ids = sorted(set(study_ids))
+    unique_result_set_ids = sorted(set(result_set_ids))
+    table_op_set = set(table_operating_points)
+    checks = {
+        "required_kinds_present": required_set.issubset(present_set),
+        "no_unknown_kinds": not unknown_kinds,
+        "case_ids_present": not missing_case_id,
+        "case_ids_unique": len(unique_case_ids) == 1,
+        "study_ids_present": not missing_study_id,
+        "study_ids_unique": len(unique_study_ids) == 1,
+        "result_set_ids_present": not missing_result_set_id,
+        "result_set_ids_unique": len(unique_result_set_ids) == 1,
+        "source_tool_is_jmag": not bad_source_tool,
+        "paths_present": not missing_paths,
+        "upstream_gate_status_ok": not bad_upstream_status,
+        "upstream_gate_policy_known": not bad_upstream_policy,
+        "notebook_operating_point_present": not missing_notebook_operating_point,
+        "notebook_operating_point_in_value_table": (
+            bool(notebook_operating_points)
+            and bool(table_op_set)
+            and all(op_id in table_op_set for op_id in notebook_operating_points)
+        ),
+    }
+    if expected_case_id is not None:
+        checks["expected_case_id_matches"] = unique_case_ids == [str(expected_case_id)]
+    if expected_study_id is not None:
+        checks["expected_study_id_matches"] = unique_study_ids == [str(expected_study_id)]
+    if expected_result_set_id is not None:
+        checks["expected_result_set_id_matches"] = unique_result_set_ids == [str(expected_result_set_id)]
+
+    return {
+        "policy": "jmag_export_case_package_gate",
+        "required_kinds": list(required),
+        "present_kinds": dict(sorted(kind_counts.items())),
+        "case_ids": unique_case_ids,
+        "study_ids": unique_study_ids,
+        "result_set_ids": unique_result_set_ids,
+        "table_operating_point_ids": sorted(table_op_set),
+        "notebook_operating_point_ids": sorted(set(notebook_operating_points)),
+        "expected_case_id": None if expected_case_id is None else str(expected_case_id),
+        "expected_study_id": None if expected_study_id is None else str(expected_study_id),
+        "expected_result_set_id": None if expected_result_set_id is None else str(expected_result_set_id),
+        "missing_case_id_rows": missing_case_id,
+        "missing_study_id_rows": missing_study_id,
+        "missing_result_set_id_rows": missing_result_set_id,
+        "missing_notebook_operating_point_rows": missing_notebook_operating_point,
+        "bad_source_tool_rows": bad_source_tool,
+        "missing_path_rows": missing_paths,
+        "unknown_kinds": unknown_kinds,
+        "bad_upstream_status_rows": bad_upstream_status,
+        "bad_upstream_policy_rows": bad_upstream_policy,
+        "artifacts": details,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Run after JMAG column metadata, symmetry coverage, value-table, "
+            "and notebook-row gates so a panel cannot join rows from different "
+            "case/study/result-set exports."
+        ),
+    }
+
+
 def spwm_snapshot_current_handoff_summary(
     id_current,
     iq_current,
@@ -2339,6 +2893,184 @@ def motor_current_snapshot_table_contract_gate(
         "checks": checks,
         "rows": row_summaries,
         "status": "ok" if all(checks.values()) else "needs_attention",
+    }
+
+
+def femm_motor_model_artifact_package_gate(
+    artifacts,
+    expected_model_id=None,
+    expected_operating_point_id=None,
+    required_kinds=("block_labels", "current_snapshot", "torque_table"),
+):
+    """Check that FEMM-derived motor artifacts belong to one model snapshot.
+
+    Block labels, current snapshots, and torque-angle tables are often exported
+    by different scripts.  This package gate keeps the model identity and the
+    operating-point identity explicit before the rows are promoted to
+    radia-ngsolve or notebook examples.
+    """
+
+    rows_in = list(artifacts)
+    if not rows_in:
+        raise ValueError("artifacts must not be empty")
+
+    def _norm(value):
+        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    def _first(row, names):
+        for name in names:
+            if name in row and row[name] is not None:
+                return row[name]
+        return None
+
+    required = tuple(_norm(kind) for kind in required_kinds)
+    if not required:
+        raise ValueError("required_kinds must not be empty")
+
+    expected_policies = {
+        "block_labels": {"femm_block_label_source_contract_gate"},
+        "current_snapshot": {
+            "motor_current_snapshot_table_contract_gate",
+            "femm_static_current_circuit_rows_gate",
+            "spwm_snapshot_current_handoff_gate",
+        },
+        "torque_table": {
+            "torque_angle_table_export_health",
+            "torque_angle_sweep_health_summary",
+        },
+    }
+
+    details = []
+    kind_counts = {}
+    model_ids = []
+    operating_point_ids = []
+    missing_model_id = []
+    missing_operating_point_id = []
+    bad_source_tool = []
+    missing_paths = []
+    unknown_kinds = []
+    bad_upstream_status = []
+    bad_upstream_policy = []
+    bad_current_kind = []
+    bad_torque_metadata = []
+
+    for index, row in enumerate(rows_in, start=1):
+        if not isinstance(row, dict):
+            raise ValueError("each artifact must be a dictionary")
+        kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
+        model_id = _first(row, ("model_id", "motor_model_id", "geometry_id"))
+        operating_point_id = _first(row, ("operating_point_id", "op_id", "snapshot_id"))
+        source_tool = _first(row, ("source_tool", "tool", "source"))
+        source_tool_norm = _norm(source_tool)
+        path = _first(row, ("path", "file", "table_path", "artifact_path"))
+        gate_policy = _first(row, ("gate_policy", "policy", "validator"))
+        gate_policy_norm = _norm(gate_policy)
+        status = _first(row, ("status", "gate_status", "validation_status"))
+        status_norm = _norm(status)
+        pass_flag = bool(row.get("pass", False))
+
+        if kind:
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        else:
+            unknown_kinds.append(index)
+        if kind and kind not in set(required) | set(expected_policies):
+            unknown_kinds.append(kind)
+        if not model_id:
+            missing_model_id.append(index)
+        else:
+            model_ids.append(str(model_id))
+        if kind in {"current_snapshot", "torque_table"}:
+            if not operating_point_id:
+                missing_operating_point_id.append(index)
+            else:
+                operating_point_ids.append(str(operating_point_id))
+        if source_tool_norm not in {"femm", "pyfemm"}:
+            bad_source_tool.append({"index": index, "source_tool": source_tool})
+        if not path:
+            missing_paths.append(index)
+        if not (pass_flag or status_norm in {"ok", "pass", "passed", "verified"}):
+            bad_upstream_status.append({"index": index, "kind": kind, "status": status})
+        if kind in expected_policies and gate_policy_norm not in expected_policies[kind]:
+            bad_upstream_policy.append({
+                "index": index,
+                "kind": kind,
+                "gate_policy": gate_policy,
+                "expected": sorted(expected_policies[kind]),
+            })
+        if kind == "current_snapshot" and _norm(row.get("current_kind")) not in {"instantaneous", "instant", "snapshot", "sample", "peak"}:
+            bad_current_kind.append(index)
+        if kind == "torque_table":
+            angle_basis_ok = _norm(row.get("angle_basis")) == "mechanical"
+            source_function_ok = str(row.get("source_function") or "").strip() == "mo_blockintegral(22)"
+            locked = row.get("rotor_current_phase_locked")
+            locked_ok = locked is True or _norm(locked) == "true"
+            if not (angle_basis_ok and source_function_ok and locked_ok):
+                bad_torque_metadata.append({
+                    "index": index,
+                    "angle_basis": row.get("angle_basis"),
+                    "source_function": row.get("source_function"),
+                    "rotor_current_phase_locked": row.get("rotor_current_phase_locked"),
+                })
+        details.append({
+            "index": index,
+            "kind": kind,
+            "model_id": None if model_id is None else str(model_id),
+            "operating_point_id": None if operating_point_id is None else str(operating_point_id),
+            "source_tool": source_tool,
+            "path": path,
+            "gate_policy": gate_policy,
+            "status": status,
+            "pass": pass_flag,
+        })
+
+    required_set = set(required)
+    present_set = set(kind_counts)
+    unique_model_ids = sorted(set(model_ids))
+    unique_operating_point_ids = sorted(set(operating_point_ids))
+    checks = {
+        "required_kinds_present": required_set.issubset(present_set),
+        "no_unknown_kinds": not unknown_kinds,
+        "model_ids_present": not missing_model_id,
+        "model_ids_unique": len(unique_model_ids) == 1,
+        "source_tool_is_femm": not bad_source_tool,
+        "paths_present": not missing_paths,
+        "operating_point_ids_present_for_current_and_torque": not missing_operating_point_id,
+        "operating_point_ids_unique": len(unique_operating_point_ids) == 1,
+        "upstream_gate_status_ok": not bad_upstream_status,
+        "upstream_gate_policy_known": not bad_upstream_policy,
+        "current_snapshot_is_instantaneous": not bad_current_kind,
+        "torque_table_metadata_solver_ready": not bad_torque_metadata,
+    }
+    if expected_model_id is not None:
+        checks["expected_model_id_matches"] = unique_model_ids == [str(expected_model_id)]
+    if expected_operating_point_id is not None:
+        checks["expected_operating_point_id_matches"] = unique_operating_point_ids == [str(expected_operating_point_id)]
+
+    return {
+        "policy": "femm_motor_model_artifact_package_gate",
+        "required_kinds": list(required),
+        "present_kinds": dict(sorted(kind_counts.items())),
+        "model_ids": unique_model_ids,
+        "operating_point_ids": unique_operating_point_ids,
+        "expected_model_id": None if expected_model_id is None else str(expected_model_id),
+        "expected_operating_point_id": None if expected_operating_point_id is None else str(expected_operating_point_id),
+        "missing_model_id_rows": missing_model_id,
+        "missing_operating_point_id_rows": missing_operating_point_id,
+        "bad_source_tool_rows": bad_source_tool,
+        "missing_path_rows": missing_paths,
+        "unknown_kinds": unknown_kinds,
+        "bad_upstream_status_rows": bad_upstream_status,
+        "bad_upstream_policy_rows": bad_upstream_policy,
+        "bad_current_kind_rows": bad_current_kind,
+        "bad_torque_metadata_rows": bad_torque_metadata,
+        "artifacts": details,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Run after FEMM block-label, current-snapshot, and torque-table "
+            "gates so a notebook or radia-ngsolve handoff cannot mix rows from "
+            "different motor models or operating points."
+        ),
     }
 
 
@@ -3565,6 +4297,164 @@ def pm_bem_surface_normal_metadata_gate(
         "version_note": (
             "Use this before PM magnetic-charge BEM assembly so surface normals, "
             "magnetization direction, and outward convention are explicit."
+        ),
+    }
+
+
+def pm_demag_package_identity_gate(
+    artifacts,
+    expected_case_id=None,
+    expected_magnet_id=None,
+    required_kinds=("run_result", "loadline_metadata", "bem_surface", "recoil_steps"),
+):
+    """Check that PM demag artifacts describe one magnet/case package."""
+
+    rows_in = list(artifacts)
+    if not rows_in:
+        raise ValueError("artifacts must not be empty")
+
+    def _norm(value):
+        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    def _first(row, names):
+        for name in names:
+            if name in row and row[name] is not None:
+                return row[name]
+        return None
+
+    required = tuple(_norm(kind) for kind in required_kinds)
+    if not required:
+        raise ValueError("required_kinds must not be empty")
+
+    expected_policies = {
+        "run_result": {
+            "elf_python_run_result_parse",
+            "elf_python_run_result_parse_path",
+            "run_result_loadline_handoff",
+        },
+        "loadline_metadata": {"pm_loadline_metadata_gate"},
+        "bem_surface": {"pm_bem_surface_normal_metadata_gate"},
+        "recoil_steps": {"pm_recoil_demag_three_step_gate", "pm_recoil_demag_step_summary"},
+    }
+    required_run_columns = {"H_pm_A_per_m", "H_knee_A_per_m", "safe_against_knee"}
+
+    details = []
+    kind_counts = {}
+    case_ids = []
+    magnet_ids = []
+    missing_case_id = []
+    missing_magnet_id = []
+    missing_paths = []
+    unknown_kinds = []
+    bad_upstream_status = []
+    bad_upstream_policy = []
+    missing_run_columns = []
+    bad_recoil_steps = []
+
+    for index, row in enumerate(rows_in, start=1):
+        if not isinstance(row, dict):
+            raise ValueError("each artifact must be a dictionary")
+        kind = _norm(_first(row, ("kind", "artifact_kind", "type")))
+        case_id = _first(row, ("case_id", "run_case_id", "demag_case_id"))
+        magnet_id = _first(row, ("magnet_id", "material_id", "pm_id", "mid"))
+        path = _first(row, ("path", "file", "artifact_path", "table_path"))
+        gate_policy = _first(row, ("gate_policy", "policy", "validator"))
+        gate_policy_norm = _norm(gate_policy)
+        status = _first(row, ("status", "gate_status", "validation_status"))
+        status_norm = _norm(status)
+        pass_flag = bool(row.get("pass", False))
+
+        if kind:
+            kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        else:
+            unknown_kinds.append(index)
+        if kind and kind not in set(required) | set(expected_policies):
+            unknown_kinds.append(kind)
+        if not case_id:
+            missing_case_id.append(index)
+        else:
+            case_ids.append(str(case_id))
+        if not magnet_id:
+            missing_magnet_id.append(index)
+        else:
+            magnet_ids.append(str(magnet_id))
+        if not path:
+            missing_paths.append(index)
+        if not (pass_flag or status_norm in {"ok", "pass", "passed", "verified"}):
+            bad_upstream_status.append({"index": index, "kind": kind, "status": status})
+        if kind in expected_policies and gate_policy_norm not in expected_policies[kind]:
+            bad_upstream_policy.append({
+                "index": index,
+                "kind": kind,
+                "gate_policy": gate_policy,
+                "expected": sorted(expected_policies[kind]),
+            })
+        if kind == "run_result":
+            columns = set(str(name) for name in row.get("normalized_columns", row.get("columns", ())))
+            missing = sorted(required_run_columns - columns)
+            if missing:
+                missing_run_columns.append({"index": index, "missing": missing})
+        if kind == "recoil_steps":
+            steps = [int(step) for step in row.get("steps", row.get("required_steps", ()))]
+            if set(steps) != {0, 1, 2}:
+                bad_recoil_steps.append({"index": index, "steps": steps})
+
+        details.append({
+            "index": index,
+            "kind": kind,
+            "case_id": None if case_id is None else str(case_id),
+            "magnet_id": None if magnet_id is None else str(magnet_id),
+            "path": path,
+            "gate_policy": gate_policy,
+            "status": status,
+            "pass": pass_flag,
+        })
+
+    required_set = set(required)
+    present_set = set(kind_counts)
+    unique_case_ids = sorted(set(case_ids))
+    unique_magnet_ids = sorted(set(magnet_ids))
+    checks = {
+        "required_kinds_present": required_set.issubset(present_set),
+        "no_unknown_kinds": not unknown_kinds,
+        "case_ids_present": not missing_case_id,
+        "case_ids_unique": len(unique_case_ids) == 1,
+        "magnet_ids_present": not missing_magnet_id,
+        "magnet_ids_unique": len(unique_magnet_ids) == 1,
+        "paths_present": not missing_paths,
+        "upstream_gate_status_ok": not bad_upstream_status,
+        "upstream_gate_policy_known": not bad_upstream_policy,
+        "run_result_has_loadline_columns": not missing_run_columns,
+        "recoil_steps_are_three_step": not bad_recoil_steps,
+    }
+    if expected_case_id is not None:
+        checks["expected_case_id_matches"] = unique_case_ids == [str(expected_case_id)]
+    if expected_magnet_id is not None:
+        checks["expected_magnet_id_matches"] = unique_magnet_ids == [str(expected_magnet_id)]
+
+    return {
+        "policy": "pm_demag_package_identity_gate",
+        "required_kinds": list(required),
+        "present_kinds": dict(sorted(kind_counts.items())),
+        "case_ids": unique_case_ids,
+        "magnet_ids": unique_magnet_ids,
+        "expected_case_id": None if expected_case_id is None else str(expected_case_id),
+        "expected_magnet_id": None if expected_magnet_id is None else str(expected_magnet_id),
+        "missing_case_id_rows": missing_case_id,
+        "missing_magnet_id_rows": missing_magnet_id,
+        "missing_path_rows": missing_paths,
+        "unknown_kinds": unknown_kinds,
+        "bad_upstream_status_rows": bad_upstream_status,
+        "bad_upstream_policy_rows": bad_upstream_policy,
+        "missing_run_result_loadline_columns": missing_run_columns,
+        "bad_recoil_step_rows": bad_recoil_steps,
+        "artifacts": details,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Run after RunResult parsing, PM load-line metadata, BEM surface "
+            "normal metadata, and recoil-step gates so demag notebooks cannot "
+            "mix rows from different magnets or cases."
         ),
     }
 

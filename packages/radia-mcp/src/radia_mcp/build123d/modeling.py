@@ -52,6 +52,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "shape_role_metadata_gate",
            "shape_transition_role_metadata_gate",
            "shape_mass_property_crosscheck_summary",
+           "shape_cubit_export_package_handoff_gate",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
            "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
            "shape_parameter_sweep_summary",
@@ -1697,6 +1698,85 @@ def shape_mass_property_crosscheck_summary(
         "issues": issues,
         "inventory": inventory,
         "comparison_sets": sets,
+    }
+
+
+def shape_cubit_export_package_handoff_gate(
+    shape_rows,
+    package_gate,
+    *,
+    geometry_id_key="geometry_id",
+    expected_export_id=None,
+) -> dict:
+    """Check that build123d CAD rows hand off to the intended Cubit package.
+
+    This is the CAD-side companion to ``cubit_export_package_identity_gate``.
+    build123d keeps the geometry intent and mass properties; Cubit later owns
+    the hex-led ``.vol`` package.  The two should meet on an explicit
+    ``geometry_id`` instead of only a human-readable filename.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    if not isinstance(package_gate, dict):
+        raise ValueError("package_gate must be a mapping")
+
+    geometry_ids = [str(row.get(geometry_id_key, "")).strip() for row in rows]
+    names = [str(row.get("name", "")).strip() for row in rows]
+    package_geometry_ids = [str(value).strip() for value in package_gate.get("geometry_ids", [])]
+    package_export_ids = [str(value).strip() for value in package_gate.get("export_ids", [])]
+    package_checks = package_gate.get("checks", {})
+    if not isinstance(package_checks, dict):
+        package_checks = {}
+    expected_export = None if expected_export_id is None else str(expected_export_id).strip()
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "package_gate_ok": package_gate.get("status") == "ok",
+        "package_has_export_id": bool(package_export_ids),
+        "package_has_geometry_id": bool(package_geometry_ids),
+        "package_vol_sidecar_pairs_vol": package_checks.get("vol_sidecar_pairs_vol") is True,
+        "package_raw_result_present": "raw_result" in package_gate.get("kinds", []),
+        "geometry_id_matches_package": bool(geometry_ids)
+        and bool(package_geometry_ids)
+        and set(geometry_ids) == set(package_geometry_ids),
+        "export_id_matches_expected": expected_export is None or set(package_export_ids) == {expected_export},
+    }
+    issues = []
+    if not checks["shape_geometry_ids_recorded"]:
+        issues.append("build123d rows need an explicit geometry_id before Cubit handoff")
+    if not checks["geometry_id_matches_package"]:
+        issues.append("build123d geometry_id does not match the Cubit export package")
+    if not checks["package_vol_sidecar_pairs_vol"]:
+        issues.append("Cubit package did not prove the .vol/.vol.json pairing")
+    return {
+        "policy": "build123d_cubit_export_package_handoff_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "geometry_id_key": geometry_id_key,
+        "shape_names": names,
+        "shape_geometry_ids": sorted(set(geometry_ids)),
+        "package_geometry_ids": sorted(set(package_geometry_ids)),
+        "package_export_ids": sorted(set(package_export_ids)),
+        "expected_export_id": expected_export,
+        "package_policy": package_gate.get("policy"),
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use after build123d mass-property rows pass and before Cubit .vol packages enter notebooks or solver-ready runs.",
+            "The CAD intent row and the mesh export package should share geometry_id; filenames alone are not enough.",
+        ],
     }
 
 

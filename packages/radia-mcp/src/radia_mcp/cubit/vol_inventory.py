@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections import Counter
 from math import isfinite
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 
 
 VOLUME_KIND_BY_NP = {
@@ -423,6 +423,238 @@ def cubit_bnd_area_interface_gate(
     }
 
 
+def cubit_mass_property_sidecar_gate(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    expected_total_volume: float | None = None,
+    expected_total_area: float | None = None,
+    expected_bbox_size: Iterable[float] | None = None,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 1e-12,
+) -> dict[str, object]:
+    """Validate Cubit CAD mass-property sidecar rows before mesh routing.
+
+    Cubit/Coreform can own the hex-led mesh route, but the CAD handoff should
+    keep volume, summed surface area, and bounding-box dimensions as a small
+    sidecar.  This replay gate makes those checks executable without reopening
+    Cubit, and gives build123d/CST/CAD lanes a common volume/area/bbox contract.
+    """
+
+    records = [dict(row) for row in rows]
+    relative_tolerance = float(rel_tol)
+    absolute_tolerance = float(abs_tol)
+    if relative_tolerance < 0.0:
+        raise ValueError("rel_tol must be non-negative")
+    if absolute_tolerance < 0.0:
+        raise ValueError("abs_tol must be non-negative")
+    if not records:
+        raise ValueError("rows must not be empty")
+
+    total_volume = 0.0
+    total_area = 0.0
+    volume_values: list[float] = []
+    area_values: list[float] = []
+    row_names: list[str] = []
+    row_issues: list[dict[str, object]] = []
+    bbox_size: list[float] | None = None
+
+    for index, row in enumerate(records):
+        name = str(row.get("name", "")).strip()
+        row_names.append(name)
+        try:
+            volume = float(row.get("volume"))
+            area = float(row.get("area"))
+        except (TypeError, ValueError):
+            row_issues.append({"index": index, "name": name, "reason": "missing volume or area"})
+            continue
+        volume_values.append(volume)
+        area_values.append(area)
+        total_volume += volume
+        total_area += area
+        bbox = row.get("bounding_box") or row.get("bbox")
+        if isinstance(bbox, Mapping) and bbox.get("size") is not None:
+            try:
+                bbox_size = [float(value) for value in bbox["size"]]
+            except (TypeError, ValueError):
+                row_issues.append({"index": index, "name": name, "reason": "invalid bbox size"})
+
+    expected_volume_ok = True
+    expected_volume_rel_error = None
+    if expected_total_volume is not None:
+        expected_volume = float(expected_total_volume)
+        expected_volume_rel_error = _relative_error(total_volume, expected_volume)
+        expected_volume_ok = _within_tolerance(
+            total_volume,
+            expected_volume,
+            rel_tol=relative_tolerance,
+            abs_tol=absolute_tolerance,
+        )
+
+    expected_area_ok = True
+    expected_area_rel_error = None
+    if expected_total_area is not None:
+        expected_area = float(expected_total_area)
+        expected_area_rel_error = _relative_error(total_area, expected_area)
+        expected_area_ok = _within_tolerance(
+            total_area,
+            expected_area,
+            rel_tol=relative_tolerance,
+            abs_tol=absolute_tolerance,
+        )
+
+    expected_bbox_ok = True
+    bbox_size_abs_error = None
+    expected_bbox_list = None
+    if expected_bbox_size is not None:
+        expected_bbox_list = [float(value) for value in expected_bbox_size]
+        if len(expected_bbox_list) != 3:
+            raise ValueError("expected_bbox_size must have three values")
+        if bbox_size is None or len(bbox_size) != 3:
+            expected_bbox_ok = False
+        else:
+            bbox_size_abs_error = max(abs(a - b) for a, b in zip(bbox_size, expected_bbox_list))
+            expected_bbox_ok = bbox_size_abs_error <= absolute_tolerance
+
+    checks = {
+        "rows_present": bool(records),
+        "row_names_recorded": all(bool(name) for name in row_names),
+        "all_rows_have_volume_area": len(volume_values) == len(records) and len(area_values) == len(records),
+        "all_values_finite": all(isfinite(value) for value in volume_values + area_values),
+        "all_volumes_positive": all(value > 0.0 for value in volume_values),
+        "all_areas_positive": all(value > 0.0 for value in area_values),
+        "total_volume_expected_ok": expected_volume_ok,
+        "total_area_expected_ok": expected_area_ok,
+        "bbox_size_expected_ok": expected_bbox_ok,
+    }
+    return {
+        "policy": "cubit_mass_property_sidecar_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "row_count": len(records),
+        "row_names": row_names,
+        "total_volume": total_volume,
+        "total_area": total_area,
+        "expected_total_volume": expected_total_volume,
+        "expected_total_area": expected_total_area,
+        "expected_bbox_size": expected_bbox_list,
+        "bbox_size": bbox_size,
+        "max_bbox_size_abs_error": bbox_size_abs_error,
+        "volume_rel_error": expected_volume_rel_error,
+        "area_rel_error": expected_area_rel_error,
+        "rel_tol": relative_tolerance,
+        "abs_tol": absolute_tolerance,
+        "checks": checks,
+        "issues": row_issues,
+        "notes": [
+            "Run this before mesh export or solver-ready promotion when Cubit owns the hex-led route.",
+            "Volume alone is not enough for CAD handoff; carry summed surface area and bounding-box size when available.",
+        ],
+    }
+
+
+def cubit_export_package_identity_gate(
+    artifacts: Iterable[Mapping[str, object]],
+    *,
+    expected_export_id: str | None = None,
+    expected_geometry_id: str | None = None,
+    required_kinds: Iterable[str] = ("vol", "vol_sidecar", "raw_result"),
+    expected_order: int | None = None,
+    expected_routing_hint: str | None = None,
+    inventory: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Check that Cubit export files travel as one identified package.
+
+    Cubit-led validation often creates several files for the same mesh:
+    ``.vol``, ``.vol.json``, raw batch JSON, and optional mass-property
+    sidecars.  This gate prevents notebook or solver-ready promotion when those
+    files have lost a stable export id, geometry id, order, or routing hint.
+    """
+
+    records = [dict(row) for row in artifacts]
+    if not records:
+        raise ValueError("artifacts must not be empty")
+
+    required = [str(kind).strip() for kind in required_kinds if str(kind).strip()]
+    kinds = [str(row.get("kind", "")).strip() for row in records]
+    paths = [str(row.get("path", "")).strip() for row in records]
+    export_ids = [str(row.get("export_id", "")).strip() for row in records]
+    geometry_ids = [str(row.get("geometry_id", "")).strip() for row in records]
+    orders: list[int] = []
+    order_issues: list[dict[str, object]] = []
+    for index, row in enumerate(records):
+        if row.get("order") is None:
+            continue
+        try:
+            orders.append(int(row["order"]))
+        except (TypeError, ValueError):
+            order_issues.append({"index": index, "kind": kinds[index], "reason": "invalid order"})
+
+    vol_paths = [path for kind, path in zip(kinds, paths) if kind == "vol" and path]
+    sidecar_paths = [path for kind, path in zip(kinds, paths) if kind in {"vol_sidecar", "sidecar"} and path]
+
+    def normalized_path(value: str) -> str:
+        return value.replace("/", "\\").rstrip("\\").lower()
+
+    expected_sidecars = {normalized_path(f"{path}.json") for path in vol_paths}
+    actual_sidecars = {normalized_path(path) for path in sidecar_paths}
+    inv = dict(inventory or {})
+    inv_source = str(inv.get("source", "")).strip()
+    inv_routing = str(inv.get("routing_hint", "")).strip()
+    expected_export = None if expected_export_id is None else str(expected_export_id).strip()
+    expected_geometry = None if expected_geometry_id is None else str(expected_geometry_id).strip()
+    expected_hint = None if expected_routing_hint is None else str(expected_routing_hint).strip()
+    expected_order_value = None if expected_order is None else int(expected_order)
+
+    checks = {
+        "artifacts_present": bool(records),
+        "kinds_recorded": all(bool(kind) for kind in kinds),
+        "paths_recorded": all(bool(path) for path in paths),
+        "required_kinds_present": all(kind in kinds for kind in required),
+        "export_ids_recorded": all(bool(value) for value in export_ids),
+        "export_id_unique": len(set(export_ids)) == 1,
+        "export_id_matches_expected": expected_export is None or set(export_ids) == {expected_export},
+        "geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "geometry_id_unique": len(set(geometry_ids)) == 1,
+        "geometry_id_matches_expected": expected_geometry is None or set(geometry_ids) == {expected_geometry},
+        "vol_path_recorded": bool(vol_paths),
+        "vol_paths_have_vol_suffix": bool(vol_paths)
+        and all(normalized_path(path).endswith(".vol") for path in vol_paths),
+        "vol_sidecar_path_recorded": bool(sidecar_paths),
+        "vol_sidecar_pairs_vol": bool(expected_sidecars) and expected_sidecars.issubset(actual_sidecars),
+        "orders_valid": not order_issues,
+        "order_matches_expected": expected_order_value is None or (
+            bool(orders) and all(order == expected_order_value for order in orders)
+        ),
+        "inventory_source_matches_vol": not inv_source
+        or normalized_path(inv_source) in {normalized_path(path) for path in vol_paths},
+        "inventory_routing_hint_matches_expected": expected_hint is None or inv_routing == expected_hint,
+    }
+    return {
+        "policy": "cubit_export_package_identity_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "artifact_count": len(records),
+        "kinds": kinds,
+        "required_kinds": required,
+        "paths": paths,
+        "export_ids": sorted(set(export_ids)),
+        "geometry_ids": sorted(set(geometry_ids)),
+        "expected_export_id": expected_export,
+        "expected_geometry_id": expected_geometry,
+        "orders": sorted(set(orders)),
+        "expected_order": expected_order_value,
+        "expected_routing_hint": expected_hint,
+        "inventory_source": inv_source,
+        "inventory_routing_hint": inv_routing,
+        "expected_vol_sidecars": sorted(expected_sidecars),
+        "actual_vol_sidecars": sorted(actual_sidecars),
+        "order_issues": order_issues,
+        "checks": checks,
+        "notes": [
+            "Use this before docs/panel notebooks or solver-ready runs consume a Cubit export package.",
+            "A .vol, .vol.json, raw result, and mass-property sidecar should share export_id and geometry_id.",
+        ],
+    }
+
+
 def summarize_netgen_vol_inventory(text: str, source: str | None = None) -> dict[str, object]:
     """Return mixed-element inventory for a Netgen ``.vol`` text.
 
@@ -524,6 +756,20 @@ def _read_counted_section(lines: list[str], name: str, *, required: bool) -> lis
 def _has_section(lines: Iterable[str], name: str) -> bool:
     needle = name.lower()
     return any(line.strip().lower() == needle for line in lines)
+
+
+def _relative_error(observed: float, expected: float) -> float:
+    return abs(observed - expected) / max(abs(expected), abs(observed), 1.0)
+
+
+def _within_tolerance(
+    observed: float,
+    expected: float,
+    *,
+    rel_tol: float,
+    abs_tol: float,
+) -> bool:
+    return abs(observed - expected) <= max(abs_tol, rel_tol * max(abs(expected), 1.0))
 
 
 def _first_existing_section(lines: Iterable[str], names: Iterable[str]) -> str | None:

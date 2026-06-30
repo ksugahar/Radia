@@ -26,6 +26,7 @@ from radia_mcp.radia_ngsolve.solve import (
     pm_drive_efficiency_map_health,
     pm_drive_speed_sweep,
 )
+from radia_mcp.radia_ngsolve.knowledge.ngsolve import get_ngsolve_documentation
 
 
 def _numeric_fw_argmax(lambda_m, Ld, Lq, Imax, Vmax, omega_e, pole_pairs):
@@ -248,3 +249,14 @@ def test_jmag_efficiency_map_health_gate_summarizes_drive_rows():
     assert health["max_output_power_region"] == "FW"
     assert health["max_power_balance_rel_error"] < 1.0e-15
     assert health["max_speed_contract_rel_error"] == pytest.approx(0.0)
+
+
+def test_pm_drive_map_knowledge_records_operating_point_notebook_handoff():
+    doc = get_ngsolve_documentation("dq_operating_point")
+
+    assert "Continuous-loop slot 141" in doc
+    assert "operating_point_id" in doc
+    assert "pm_drive_terminal_table_health" in doc
+    assert "pm_drive_loss_bucket_efficiency_gate" in doc
+    assert "DC-bus voltage-margin" in doc
+    assert "report-only versus selector feasibility" in doc
