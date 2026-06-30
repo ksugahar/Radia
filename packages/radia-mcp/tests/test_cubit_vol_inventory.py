@@ -5,7 +5,9 @@ from radia_mcp.cubit.knowledge.netgen_workflow import get_netgen_documentation
 from radia_mcp.cubit.vol_inventory import (
     cubit_bnd_area_interface_gate,
     cubit_element_quality_gate,
+    cubit_export_package_identity_gate,
     cubit_hex_quality_gate,
+    cubit_mass_property_sidecar_gate,
     cubit_mixed_transition_metadata_gate,
     cubit_quality_distribution_gate,
     cubit_vol_label_metadata_gate,
@@ -298,6 +300,14 @@ def test_netgen_workflow_records_mapped_hex_brick_area_gate():
     assert "192 hexes" in doc
     assert "surface-area rel err `2.05e-15`" in doc
     assert "Avoid multi-line `dict(...)`" in doc
+    assert "Cubit mass-property sidecar gate" in doc
+    assert "cubit_mass_property_sidecar_gate" in doc
+    assert "get_volume_volume" in doc
+    assert "bbox size `[1.5, 2.0, 0.75]`" in doc
+    assert "Cubit export package identity gate" in doc
+    assert "cubit_export_package_identity_gate" in doc
+    assert "`export_id`, `geometry_id`, order, and routing hint" in doc
+    assert "old sidecar or a raw JSON from a different geometry" in doc
 
 
 def test_cubit_hex_quality_gate_replays_mapped_hex_quality_slot():
@@ -405,6 +415,115 @@ def test_cubit_bnd_area_interface_gate_matches_external_plus_interface_once():
     assert bad["status"] == "needs_attention"
     assert bad["matches_external_only"] is True
     assert bad["checks"]["matches_external_plus_interface"] is False
+
+
+def test_cubit_mass_property_sidecar_gate_records_volume_area_and_bbox():
+    rows = [
+        {
+            "name": "hex_brick",
+            "volume": 2.25,
+            "area": 11.25,
+            "bounding_box": {"size": [1.5, 2.0, 0.75]},
+        }
+    ]
+    gate = cubit_mass_property_sidecar_gate(
+        rows,
+        expected_total_volume=2.25,
+        expected_total_area=11.25,
+        expected_bbox_size=[1.5, 2.0, 0.75],
+        rel_tol=1e-12,
+        abs_tol=1e-12,
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["policy"] == "cubit_mass_property_sidecar_gate"
+    assert gate["checks"]["total_volume_expected_ok"] is True
+    assert gate["checks"]["total_area_expected_ok"] is True
+    assert gate["checks"]["bbox_size_expected_ok"] is True
+    assert gate["volume_rel_error"] == 0.0
+    assert gate["area_rel_error"] == 0.0
+    assert "Volume alone is not enough" in " ".join(gate["notes"])
+
+    bad = cubit_mass_property_sidecar_gate(
+        [{"name": "hex_brick", "volume": 2.25, "area": 10.0, "bounding_box": {"size": [1.5, 2.0, 0.7]}}],
+        expected_total_volume=2.25,
+        expected_total_area=11.25,
+        expected_bbox_size=[1.5, 2.0, 0.75],
+        rel_tol=1e-12,
+        abs_tol=1e-12,
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["total_volume_expected_ok"] is True
+    assert bad["checks"]["total_area_expected_ok"] is False
+    assert bad["checks"]["bbox_size_expected_ok"] is False
+
+
+def test_cubit_export_package_identity_gate_pairs_vol_sidecar_raw_and_ids():
+    vol_path = r"S:\CoreformCubit\_crossval\slot146_hex_brick_o3.vol"
+    artifacts = [
+        {
+            "kind": "vol",
+            "path": vol_path,
+            "export_id": "slot146_hex_brick_o3",
+            "geometry_id": "hex_brick_v1",
+            "order": 3,
+        },
+        {
+            "kind": "vol_sidecar",
+            "path": vol_path + ".json",
+            "export_id": "slot146_hex_brick_o3",
+            "geometry_id": "hex_brick_v1",
+            "order": 3,
+        },
+        {
+            "kind": "raw_result",
+            "path": r"S:\CoreformCubit\_crossval\slot146_hex_brick_raw.json",
+            "export_id": "slot146_hex_brick_o3",
+            "geometry_id": "hex_brick_v1",
+        },
+        {
+            "kind": "mass_property_sidecar",
+            "path": r"S:\CoreformCubit\_crossval\slot146_hex_brick_mass.json",
+            "export_id": "slot146_hex_brick_o3",
+            "geometry_id": "hex_brick_v1",
+        },
+    ]
+    inventory = {"source": vol_path, "routing_hint": "cubit_hex_or_mixed_path"}
+
+    gate = cubit_export_package_identity_gate(
+        artifacts,
+        expected_export_id="slot146_hex_brick_o3",
+        expected_geometry_id="hex_brick_v1",
+        expected_order=3,
+        expected_routing_hint="cubit_hex_or_mixed_path",
+        inventory=inventory,
+    )
+
+    assert gate["policy"] == "cubit_export_package_identity_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["vol_sidecar_pairs_vol"] is True
+    assert gate["checks"]["geometry_id_unique"] is True
+    assert gate["checks"]["inventory_source_matches_vol"] is True
+    assert gate["checks"]["inventory_routing_hint_matches_expected"] is True
+
+    wrong_sidecar = [dict(row) for row in artifacts]
+    wrong_sidecar[1]["path"] = r"S:\CoreformCubit\_crossval\slot146_other.vol.json"
+    bad_sidecar = cubit_export_package_identity_gate(
+        wrong_sidecar,
+        expected_export_id="slot146_hex_brick_o3",
+        expected_geometry_id="hex_brick_v1",
+        expected_order=3,
+        expected_routing_hint="cubit_hex_or_mixed_path",
+        inventory=inventory,
+    )
+    assert bad_sidecar["status"] == "needs_attention"
+    assert bad_sidecar["checks"]["vol_sidecar_pairs_vol"] is False
+
+    wrong_geometry = [dict(row) for row in artifacts]
+    wrong_geometry[-1]["geometry_id"] = "hex_brick_v2"
+    bad_geometry = cubit_export_package_identity_gate(wrong_geometry)
+    assert bad_geometry["status"] == "needs_attention"
+    assert bad_geometry["checks"]["geometry_id_unique"] is False
 
 
 def test_netgen_workflow_records_mapped_hex_quality_replay_gate():

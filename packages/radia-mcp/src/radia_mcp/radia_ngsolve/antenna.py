@@ -305,3 +305,69 @@ def circular_aperture_pattern(diameter_over_lambda, theta_deg):
         "directivity_uniform": (math.pi * D) ** 2,
         "first_null_deg": first_null_deg,
     }
+
+
+def farfield_gain_directivity_efficiency_gate(
+    gain_dbi,
+    directivity_dbi,
+    radiated_power_w,
+    accepted_power_w,
+    tol=1.0e-9,
+):
+    r"""Check the far-field gain/directivity/radiation-efficiency identity.
+
+    For antenna rows normalized to accepted power,
+
+        eta_rad = P_rad / P_acc,
+        G = eta_rad * D,
+
+    where ``D`` is directivity and ``G`` is gain.  CST and other RF solvers can
+    export plausible gain/directivity rows while losing whether the normalization
+    was accepted, incident, or radiated power.  This helper is the public,
+    solver-independent row gate: it keeps power normalization, dBi conversion,
+    and the gain <= directivity sanity check together.
+    """
+
+    gain_linear = 10.0 ** (float(gain_dbi) / 10.0)
+    directivity_linear = 10.0 ** (float(directivity_dbi) / 10.0)
+    prad = float(radiated_power_w)
+    pacc = float(accepted_power_w)
+    tolerance = float(tol)
+    if tolerance < 0.0:
+        raise ValueError("tol must be >= 0")
+    if directivity_linear <= 0.0:
+        raise ValueError("directivity must be positive")
+    if pacc <= 0.0:
+        raise ValueError("accepted_power_w must be > 0")
+    if prad < 0.0:
+        raise ValueError("radiated_power_w must be >= 0")
+
+    eta_rad = prad / pacc
+    expected_gain = directivity_linear * eta_rad
+    gain_rel_error = abs(gain_linear - expected_gain) / max(abs(expected_gain), abs(gain_linear), 1.0)
+    efficiency_from_gain = gain_linear / directivity_linear
+    checks = {
+        "radiation_efficiency_in_0_1": 0.0 <= eta_rad <= 1.0 + tolerance,
+        "gain_not_above_directivity": gain_linear <= directivity_linear + tolerance,
+        "gain_matches_directivity_times_efficiency": gain_rel_error <= tolerance,
+    }
+    return {
+        "schema": "farfield-gain-directivity-efficiency-gate/v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "gain_dbi": float(gain_dbi),
+        "directivity_dbi": float(directivity_dbi),
+        "gain_linear": gain_linear,
+        "directivity_linear": directivity_linear,
+        "radiated_power_w": prad,
+        "accepted_power_w": pacc,
+        "radiation_efficiency": eta_rad,
+        "efficiency_from_gain_over_directivity": efficiency_from_gain,
+        "expected_gain_linear": expected_gain,
+        "gain_relative_error": gain_rel_error,
+        "checks": checks,
+        "tol": tolerance,
+        "notes": [
+            "Use after far-field metadata confirms accepted-power normalization.",
+            "Directivity uses radiated power; gain uses accepted power and should equal eta_rad times directivity.",
+        ],
+    }

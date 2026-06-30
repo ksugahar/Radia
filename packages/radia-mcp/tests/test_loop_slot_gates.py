@@ -12,16 +12,20 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     coenergy_torque_periodic_summary,
     coaxial_rc_duality_gate,
     coaxial_pm_force_gap_sweep_gate,
+    cst_result_export_package_gate,
     dq_current_from_gamma_deg,
     dq_torque_table_health,
     dq_to_three_phase_currents,
     drive_cycle_weighted_efficiency_gate,
     double_layer_winding_pitch_harmonic_gate,
     femm_block_label_source_contract_gate,
+    femm_motor_model_artifact_package_gate,
     femm_pm_magnetization_convention_gate,
     femm_static_current_circuit_rows_gate,
+    farfield_lobe_notebook_handoff_gate,
     farfield_pattern_metadata_gate,
     flux_linkage_back_emf_derivative_gate,
+    jmag_export_case_package_gate,
     ipm_saliency_torque_component_gate,
     inverter_dc_bus_voltage_limit_gate,
     jmag_motor_table_column_metadata_gate,
@@ -33,6 +37,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     one_port_match_quality_gate,
     parallel_wire_force_per_length,
     pm_bem_surface_normal_metadata_gate,
+    pm_demag_package_identity_gate,
     pm_drive_loss_bucket_efficiency_gate,
     pm_drive_terminal_table_health,
     pm_loadline_metadata_gate,
@@ -349,6 +354,148 @@ def test_farfield_pattern_metadata_gate_freezes_units_cuts_and_polarization_befo
     missing_norm = farfield_pattern_metadata_gate({key: value for key, value in metadata.items() if key != "normalization"})
     assert missing_norm["status"] == "needs_attention"
     assert missing_norm["checks"]["normalization_matches_expected"] is False
+
+
+def test_farfield_lobe_notebook_handoff_gate_bundles_metadata_and_gain_row():
+    metadata = {
+        "frequency_hz": 2.45e9,
+        "angle_unit": "deg",
+        "theta_values_deg": [0.0, 90.0, 180.0],
+        "phi_values_deg": [0.0, 90.0],
+        "coordinate_system": "spherical",
+        "polarization_basis": "theta_phi",
+        "quantity": "gain",
+        "quantity_unit": "dBi",
+        "normalization": "accepted_power",
+        "field_components": ["Etheta", "Ephi"],
+        "row_count": 6,
+    }
+    directivity_dbi = 7.0
+    eta = 0.65
+    gain_dbi = 10.0 * math.log10((10.0 ** (directivity_dbi / 10.0)) * eta)
+    row = {
+        "lobe_id": "main",
+        "frequency_hz": 2.45e9,
+        "theta_deg": 90.0,
+        "phi_deg": 0.0,
+        "polarization_basis": "theta_phi",
+        "normalization": "accepted_power",
+        "gain_unit": "dBi",
+        "directivity_unit": "dBi",
+        "gain_dbi": gain_dbi,
+        "directivity_dbi": directivity_dbi,
+        "radiated_power_w": 6.5,
+        "accepted_power_w": 10.0,
+    }
+    gate = farfield_lobe_notebook_handoff_gate(metadata, row)
+
+    assert gate["policy"] == "farfield_lobe_notebook_handoff_gate"
+    assert gate["status"] == "ok"
+    assert gate["metadata_gate"]["status"] == "ok"
+    assert gate["lobe_id"] == "main"
+    assert gate["radiation_efficiency"] == pytest.approx(eta)
+    assert gate["gain_relative_error"] < 1.0e-12
+    assert all(gate["checks"].values())
+
+    missing_lobe = farfield_lobe_notebook_handoff_gate(
+        metadata,
+        {key: value for key, value in row.items() if key != "lobe_id"},
+    )
+    assert missing_lobe["status"] == "needs_attention"
+    assert missing_lobe["checks"]["lobe_id_recorded"] is False
+
+    wrong_cut = farfield_lobe_notebook_handoff_gate(metadata, {**row, "phi_deg": 45.0})
+    assert wrong_cut["status"] == "needs_attention"
+    assert wrong_cut["checks"]["phi_on_export_grid"] is False
+
+    too_high_gain = farfield_lobe_notebook_handoff_gate(
+        metadata,
+        {**row, "gain_dbi": directivity_dbi + 0.2},
+    )
+    assert too_high_gain["status"] == "needs_attention"
+    assert too_high_gain["checks"]["gain_not_above_directivity"] is False
+
+
+def test_cst_result_export_package_gate_keeps_touchstone_and_farfield_rows_together():
+    artifacts = [
+        {
+            "kind": "touchstone_metadata",
+            "project_id": "rf_widget_v1",
+            "run_id": "run_2p45g_001",
+            "export_id": "export_A",
+            "frequency_Hz": 2.45e9,
+            "source_tool": "CST Studio Suite",
+            "path": "slot151_ports.s2p",
+            "gate_policy": "touchstone_port_metadata_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "touchstone_row",
+            "project_id": "rf_widget_v1",
+            "run_id": "run_2p45g_001",
+            "export_id": "export_A",
+            "frequency_Hz": 2.45e9,
+            "source_tool": "CST",
+            "path": "slot151_ports_row.json",
+            "gate_policy": "touchstone_row_solver_ready_preflight_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "farfield_metadata",
+            "project_id": "rf_widget_v1",
+            "run_id": "run_2p45g_001",
+            "export_id": "export_A",
+            "frequency_Hz": 2.45e9,
+            "source_tool": "CST",
+            "path": "slot151_farfield_metadata.json",
+            "gate_policy": "farfield_pattern_metadata_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "farfield_lobe",
+            "project_id": "rf_widget_v1",
+            "run_id": "run_2p45g_001",
+            "export_id": "export_A",
+            "frequency_Hz": 2.45e9,
+            "source_tool": "CST",
+            "path": "slot151_farfield_lobe.json",
+            "gate_policy": "farfield_lobe_notebook_handoff_gate",
+            "status": "ok",
+        },
+    ]
+
+    gate = cst_result_export_package_gate(
+        artifacts,
+        expected_project_id="rf_widget_v1",
+        expected_run_id="run_2p45g_001",
+        expected_export_id="export_A",
+        expected_frequency_Hz=2.45e9,
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["policy"] == "cst_result_export_package_gate"
+    assert gate["project_ids"] == ["rf_widget_v1"]
+    assert gate["run_ids"] == ["run_2p45g_001"]
+    assert gate["export_ids"] == ["export_A"]
+    assert gate["checks"]["frequencies_match"] is True
+
+    stale_export = [dict(row) for row in artifacts]
+    stale_export[3]["export_id"] = "export_old"
+    stale_export_gate = cst_result_export_package_gate(stale_export)
+    assert stale_export_gate["status"] == "needs_attention"
+    assert stale_export_gate["checks"]["export_ids_unique"] is False
+
+    wrong_frequency = [dict(row) for row in artifacts]
+    wrong_frequency[2]["frequency_Hz"] = 2.40e9
+    wrong_frequency_gate = cst_result_export_package_gate(wrong_frequency)
+    assert wrong_frequency_gate["status"] == "needs_attention"
+    assert wrong_frequency_gate["checks"]["frequencies_match"] is False
+
+    wrong_source = [dict(row) for row in artifacts]
+    wrong_source[1]["source_tool"] = "JMAG"
+    wrong_source_gate = cst_result_export_package_gate(wrong_source)
+    assert wrong_source_gate["status"] == "needs_attention"
+    assert wrong_source_gate["checks"]["source_tool_is_cst"] is False
 
 
 def test_touchstone_row_solver_ready_preflight_bundles_match_and_passivity():
@@ -756,6 +903,92 @@ def test_jmag_symmetry_sweep_coverage_gate_checks_sector_span_before_values():
     assert bad_span["checks"]["mechanical_sector_span_matches_symmetry"] is False
 
 
+def test_jmag_export_case_package_gate_keeps_case_study_and_result_set_ids():
+    artifacts = [
+        {
+            "kind": "column_metadata",
+            "case_id": "case_fw_004",
+            "study_id": "pm_drive_map",
+            "result_set_id": "resultset_20260629_A",
+            "source_tool": "JMAG-Designer",
+            "path": "slot149_columns.json",
+            "gate_policy": "jmag_motor_table_column_metadata_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "symmetry_coverage",
+            "case_id": "case_fw_004",
+            "study_id": "pm_drive_map",
+            "result_set_id": "resultset_20260629_A",
+            "source_tool": "JMAG",
+            "path": "slot149_symmetry.json",
+            "gate_policy": "jmag_symmetry_sweep_coverage_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "value_table",
+            "case_id": "case_fw_004",
+            "study_id": "pm_drive_map",
+            "result_set_id": "resultset_20260629_A",
+            "source_tool": "JMAG",
+            "path": "slot149_pm_drive_table.csv",
+            "gate_policy": "pm_drive_terminal_table_health_gate",
+            "status": "ok",
+            "operating_point_ids": ["MTPA", "FW"],
+        },
+        {
+            "kind": "notebook_row",
+            "case_id": "case_fw_004",
+            "study_id": "pm_drive_map",
+            "result_set_id": "resultset_20260629_A",
+            "source_tool": "JMAG",
+            "path": "slot149_notebook_row.json",
+            "gate_policy": "pm_drive_operating_point_notebook_handoff_gate",
+            "status": "ok",
+            "operating_point_id": "FW",
+        },
+    ]
+
+    gate = jmag_export_case_package_gate(
+        artifacts,
+        expected_case_id="case_fw_004",
+        expected_study_id="pm_drive_map",
+        expected_result_set_id="resultset_20260629_A",
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["policy"] == "jmag_export_case_package_gate"
+    assert gate["case_ids"] == ["case_fw_004"]
+    assert gate["study_ids"] == ["pm_drive_map"]
+    assert gate["result_set_ids"] == ["resultset_20260629_A"]
+    assert gate["notebook_operating_point_ids"] == ["FW"]
+    assert gate["checks"]["notebook_operating_point_in_value_table"] is True
+
+    stale_result = [dict(row) for row in artifacts]
+    stale_result[3]["result_set_id"] = "resultset_old"
+    stale_result_gate = jmag_export_case_package_gate(stale_result)
+    assert stale_result_gate["status"] == "needs_attention"
+    assert stale_result_gate["checks"]["result_set_ids_unique"] is False
+
+    missing_case = [dict(row) for row in artifacts]
+    missing_case[0].pop("case_id")
+    missing_case_gate = jmag_export_case_package_gate(missing_case)
+    assert missing_case_gate["status"] == "needs_attention"
+    assert missing_case_gate["checks"]["case_ids_present"] is False
+
+    missing_op_in_table = [dict(row) for row in artifacts]
+    missing_op_in_table[2]["operating_point_ids"] = ["MTPA"]
+    missing_op_gate = jmag_export_case_package_gate(missing_op_in_table)
+    assert missing_op_gate["status"] == "needs_attention"
+    assert missing_op_gate["checks"]["notebook_operating_point_in_value_table"] is False
+
+    wrong_source = [dict(row) for row in artifacts]
+    wrong_source[1]["source_tool"] = "FEMM"
+    wrong_source_gate = jmag_export_case_package_gate(wrong_source)
+    assert wrong_source_gate["status"] == "needs_attention"
+    assert wrong_source_gate["checks"]["source_tool_is_jmag"] is False
+
+
 def test_two_port_s_to_yz_equivalent_gate_keeps_reference_impedance_contract():
     gate_50 = two_port_s_to_yz_equivalent_gate(0.0, 0.0, s12=0.0, s22=0.0, z0=50.0)
     gate_75 = two_port_s_to_yz_equivalent_gate(0.0, 0.0, s12=0.0, s22=0.0, z0=75.0)
@@ -1056,6 +1289,74 @@ def test_motor_current_snapshot_table_contract_closes_angle_and_metadata_rows():
     swapped_gate = motor_current_snapshot_table_contract_gate(swapped, pole_pairs=pole_pairs)
     assert swapped_gate["status"] == "needs_attention"
     assert swapped_gate["checks"]["dq_recovery_ok"] is False
+
+
+def test_femm_motor_model_artifact_package_keeps_model_and_operating_point_ids():
+    artifacts = [
+        {
+            "kind": "block_labels",
+            "model_id": "ipm_teaching_v1",
+            "source_tool": "FEMM",
+            "path": "slot148_block_labels.json",
+            "gate_policy": "femm_block_label_source_contract_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "current_snapshot",
+            "model_id": "ipm_teaching_v1",
+            "operating_point_id": "id-3_iq12_theta0",
+            "source_tool": "FEMM",
+            "path": "slot148_current_snapshot.json",
+            "gate_policy": "motor_current_snapshot_table_contract_gate",
+            "status": "ok",
+            "current_kind": "instantaneous",
+        },
+        {
+            "kind": "torque_table",
+            "model_id": "ipm_teaching_v1",
+            "operating_point_id": "id-3_iq12_theta0",
+            "source_tool": "FEMM",
+            "path": "slot148_torque_angle.csv",
+            "gate_policy": "torque_angle_table_export_health",
+            "status": "ok",
+            "angle_basis": "mechanical",
+            "source_function": "mo_blockintegral(22)",
+            "rotor_current_phase_locked": True,
+        },
+    ]
+
+    gate = femm_motor_model_artifact_package_gate(
+        artifacts,
+        expected_model_id="ipm_teaching_v1",
+        expected_operating_point_id="id-3_iq12_theta0",
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["policy"] == "femm_motor_model_artifact_package_gate"
+    assert gate["model_ids"] == ["ipm_teaching_v1"]
+    assert gate["operating_point_ids"] == ["id-3_iq12_theta0"]
+    assert gate["checks"]["required_kinds_present"] is True
+    assert gate["checks"]["upstream_gate_policy_known"] is True
+    assert "different motor models or operating points" in gate["version_note"]
+
+    wrong_model = [dict(row) for row in artifacts]
+    wrong_model[2]["model_id"] = "stale_motor_v0"
+    wrong_model_gate = femm_motor_model_artifact_package_gate(wrong_model)
+    assert wrong_model_gate["status"] == "needs_attention"
+    assert wrong_model_gate["checks"]["model_ids_unique"] is False
+
+    missing_op = [dict(row) for row in artifacts]
+    missing_op[1].pop("operating_point_id")
+    missing_op_gate = femm_motor_model_artifact_package_gate(missing_op)
+    assert missing_op_gate["status"] == "needs_attention"
+    assert missing_op_gate["checks"]["operating_point_ids_present_for_current_and_torque"] is False
+
+    bad_torque = [dict(row) for row in artifacts]
+    bad_torque[2]["angle_basis"] = "electrical"
+    bad_torque[2]["rotor_current_phase_locked"] = False
+    bad_torque_gate = femm_motor_model_artifact_package_gate(bad_torque)
+    assert bad_torque_gate["status"] == "needs_attention"
+    assert bad_torque_gate["checks"]["torque_table_metadata_solver_ready"] is False
 
 
 def test_balanced_back_emf_line_voltage_gate_cancels_triplen_from_line_line():
@@ -1591,6 +1892,82 @@ def test_pm_bem_surface_normal_metadata_gate_balances_closed_pm_surface_charge()
     assert bad["nonpositive_area_surfaces"] == ["side"]
     assert bad["missing_magnetization_surfaces"] == ["side"]
     assert bad["checks"]["closed_surface_charge_balances"] is False
+
+
+def test_pm_demag_package_identity_gate_bundles_run_result_loadline_bem_and_recoil():
+    artifacts = [
+        {
+            "kind": "run_result",
+            "case_id": "demag_case_007",
+            "magnet_id": "pm_A",
+            "path": "slot150_run_result.json",
+            "gate_policy": "elf_python_run_result_parse_path",
+            "status": "ok",
+            "normalized_columns": ["case_id", "H_pm_A_per_m", "H_knee_A_per_m", "safe_against_knee"],
+        },
+        {
+            "kind": "loadline_metadata",
+            "case_id": "demag_case_007",
+            "magnet_id": "pm_A",
+            "path": "slot150_loadline_metadata.json",
+            "gate_policy": "pm_loadline_metadata_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "bem_surface",
+            "case_id": "demag_case_007",
+            "magnet_id": "pm_A",
+            "path": "slot150_bem_surface.json",
+            "gate_policy": "pm_bem_surface_normal_metadata_gate",
+            "status": "ok",
+        },
+        {
+            "kind": "recoil_steps",
+            "case_id": "demag_case_007",
+            "magnet_id": "pm_A",
+            "path": "slot150_recoil_steps.json",
+            "gate_policy": "pm_recoil_demag_three_step_gate",
+            "status": "ok",
+            "steps": [0, 1, 2],
+        },
+    ]
+
+    gate = pm_demag_package_identity_gate(
+        artifacts,
+        expected_case_id="demag_case_007",
+        expected_magnet_id="pm_A",
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["policy"] == "pm_demag_package_identity_gate"
+    assert gate["case_ids"] == ["demag_case_007"]
+    assert gate["magnet_ids"] == ["pm_A"]
+    assert gate["checks"]["run_result_has_loadline_columns"] is True
+    assert gate["checks"]["recoil_steps_are_three_step"] is True
+
+    stale_magnet = [dict(row) for row in artifacts]
+    stale_magnet[2]["magnet_id"] = "pm_B"
+    stale_magnet_gate = pm_demag_package_identity_gate(stale_magnet)
+    assert stale_magnet_gate["status"] == "needs_attention"
+    assert stale_magnet_gate["checks"]["magnet_ids_unique"] is False
+
+    missing_case = [dict(row) for row in artifacts]
+    missing_case[0].pop("case_id")
+    missing_case_gate = pm_demag_package_identity_gate(missing_case)
+    assert missing_case_gate["status"] == "needs_attention"
+    assert missing_case_gate["checks"]["case_ids_present"] is False
+
+    missing_h = [dict(row) for row in artifacts]
+    missing_h[0]["normalized_columns"] = ["case_id", "H_pm_A_per_m"]
+    missing_h_gate = pm_demag_package_identity_gate(missing_h)
+    assert missing_h_gate["status"] == "needs_attention"
+    assert missing_h_gate["checks"]["run_result_has_loadline_columns"] is False
+
+    bad_steps = [dict(row) for row in artifacts]
+    bad_steps[3]["steps"] = [0, 1]
+    bad_steps_gate = pm_demag_package_identity_gate(bad_steps)
+    assert bad_steps_gate["status"] == "needs_attention"
+    assert bad_steps_gate["checks"]["recoil_steps_are_three_step"] is False
 
 
 def test_box_projected_gradient_gate_closes_matlab_optimization_contract():

@@ -44,6 +44,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_transition_role_metadata_gate,
                                           shape_volume_crosscheck_summary,
                                           shape_mass_property_crosscheck_summary,
+                                          shape_cubit_export_package_handoff_gate,
                                           shape_measurement_comparison_summary,
                                           shape_measurement_inventory_summary,
                                           worst_shape_measurement_comparison_rows,
@@ -51,6 +52,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_bbox_pair_clearance_summary,
                                           shape_parameter_sweep_summary)
 from radia_mcp.build123d.build123d_knowledge import get_build123d_documentation
+from radia_mcp.cubit.vol_inventory import cubit_export_package_identity_gate, cubit_mass_property_sidecar_gate
 from build123d import Box, Compound, Pos
 
 
@@ -75,6 +77,9 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "build123d_volume_crosscheck" in doc
     assert "shape_mass_property_crosscheck_summary" in doc
     assert "build123d_mass_property_crosscheck" in doc
+    assert "shape_cubit_export_package_handoff_gate" in doc
+    assert "explicit `geometry_id`" in doc
+    assert "stale sidecars and wrong-geometry" in doc
     assert "coreform_cubit.com -nographics -batch" in doc
     assert '"box_hole", "volume": 22.994690350851265' in doc
     assert '"l_bracket_two_holes", "volume": 2.8982123980236905' in doc
@@ -118,6 +123,9 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "V-type IPM rotor-coupon" in doc
     assert "v_type_ipm_rotor_coupon_reference_row" in doc
     assert '"v_type_ipm_rotor_coupon", "volume": 13.238339620676824' in doc
+    assert "Cubit mass-property\nsidecar" in doc
+    assert "cubit_mass_property_sidecar_gate" in doc
+    assert "surface area\nand bbox dimensions" in doc
 
 
 def test_annular_segment_volume_and_validity():
@@ -205,6 +213,90 @@ def test_shape_measurement_row_matches_box_geometry():
     assert row["bounding_box"]["size"] == pytest.approx([2.0, 3.0, 4.0])
     assert row["bounding_box"]["diagonal"] == pytest.approx(math.sqrt(29.0))
     assert row["characteristic_length"] == pytest.approx(4.0)
+
+
+def test_build123d_measurement_row_can_feed_cubit_mass_property_sidecar_gate():
+    box = Box(1.5, 2.0, 0.75).solid()
+    box.label = "hex_brick"
+    row = shape_measurement_row(box)
+
+    gate = cubit_mass_property_sidecar_gate(
+        [row],
+        expected_total_volume=2.25,
+        expected_total_area=11.25,
+        expected_bbox_size=[1.5, 2.0, 0.75],
+        rel_tol=1.0e-12,
+        abs_tol=1.0e-12,
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["row_names"] == ["hex_brick"]
+    assert gate["total_volume"] == pytest.approx(2.25)
+    assert gate["total_area"] == pytest.approx(11.25)
+    assert gate["bbox_size"] == pytest.approx([1.5, 2.0, 0.75])
+
+
+def test_build123d_cubit_export_package_handoff_matches_geometry_identity():
+    box = Box(1.5, 2.0, 0.75).solid()
+    box.label = "hex_brick"
+    row = shape_measurement_row(box)
+    row["geometry_id"] = "hex_brick_v1"
+    vol_path = r"S:\CoreformCubit\_crossval\slot147_hex_brick_o3.vol"
+    package = cubit_export_package_identity_gate(
+        [
+            {
+                "kind": "vol",
+                "path": vol_path,
+                "export_id": "slot147_hex_brick_o3",
+                "geometry_id": "hex_brick_v1",
+                "order": 3,
+            },
+            {
+                "kind": "vol_sidecar",
+                "path": vol_path + ".json",
+                "export_id": "slot147_hex_brick_o3",
+                "geometry_id": "hex_brick_v1",
+                "order": 3,
+            },
+            {
+                "kind": "raw_result",
+                "path": r"S:\CoreformCubit\_crossval\slot147_hex_brick_raw.json",
+                "export_id": "slot147_hex_brick_o3",
+                "geometry_id": "hex_brick_v1",
+            },
+        ],
+        expected_export_id="slot147_hex_brick_o3",
+        expected_geometry_id="hex_brick_v1",
+        expected_order=3,
+        expected_routing_hint="cubit_hex_or_mixed_path",
+        inventory={"source": vol_path, "routing_hint": "cubit_hex_or_mixed_path"},
+    )
+
+    handoff = shape_cubit_export_package_handoff_gate(
+        [row],
+        package,
+        expected_export_id="slot147_hex_brick_o3",
+    )
+
+    assert handoff["policy"] == "build123d_cubit_export_package_handoff_gate"
+    assert handoff["status"] == "ok"
+    assert handoff["checks"]["geometry_id_matches_package"] is True
+    assert handoff["checks"]["package_vol_sidecar_pairs_vol"] is True
+    assert handoff["checks"]["shape_rows_have_volume_area_bbox"] is True
+
+    wrong_row = dict(row)
+    wrong_row["geometry_id"] = "hex_brick_old"
+    bad_geometry = shape_cubit_export_package_handoff_gate([wrong_row], package)
+    assert bad_geometry["status"] == "needs_attention"
+    assert bad_geometry["checks"]["geometry_id_matches_package"] is False
+
+    stale_package = dict(package)
+    stale_package["status"] = "needs_attention"
+    stale_package["checks"] = {**package["checks"], "vol_sidecar_pairs_vol": False}
+    bad_package = shape_cubit_export_package_handoff_gate([row], stale_package)
+    assert bad_package["status"] == "needs_attention"
+    assert bad_package["checks"]["package_gate_ok"] is False
+    assert bad_package["checks"]["package_vol_sidecar_pairs_vol"] is False
 
 
 def test_box_through_cylinder_reference_matches_build123d_mass_properties():
