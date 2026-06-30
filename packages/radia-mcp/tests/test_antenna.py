@@ -19,6 +19,7 @@ from radia_mcp.radia_ngsolve.antenna import (
     CIN_2PI,
     ETA0,
     circular_aperture_pattern,
+    farfield_gain_directivity_efficiency_gate,
     finite_dipole_directivity,
     half_wave_dipole_impedance,
     short_dipole_radiation_resistance,
@@ -132,6 +133,45 @@ def test_circular_aperture_pattern():
         circular_aperture_pattern(0.0, 0.0)
 
 
+def test_farfield_gain_directivity_efficiency_gate():
+    directivity_dbi = 6.0
+    eta = 0.72
+    gain_dbi = 10.0 * math.log10((10.0 ** (directivity_dbi / 10.0)) * eta)
+    got = farfield_gain_directivity_efficiency_gate(
+        gain_dbi=gain_dbi,
+        directivity_dbi=directivity_dbi,
+        radiated_power_w=7.2,
+        accepted_power_w=10.0,
+    )
+
+    assert got["status"] == "ok"
+    assert got["radiation_efficiency"] == pytest.approx(0.72)
+    assert got["efficiency_from_gain_over_directivity"] == pytest.approx(0.72)
+    assert got["gain_relative_error"] < 1.0e-12
+    assert all(got["checks"].values())
+
+    too_high_gain = farfield_gain_directivity_efficiency_gate(
+        gain_dbi=directivity_dbi + 0.1,
+        directivity_dbi=directivity_dbi,
+        radiated_power_w=7.2,
+        accepted_power_w=10.0,
+    )
+    assert too_high_gain["status"] == "needs_attention"
+    assert too_high_gain["checks"]["gain_not_above_directivity"] is False
+
+    inconsistent_power = farfield_gain_directivity_efficiency_gate(
+        gain_dbi=gain_dbi,
+        directivity_dbi=directivity_dbi,
+        radiated_power_w=5.0,
+        accepted_power_w=10.0,
+    )
+    assert inconsistent_power["status"] == "needs_attention"
+    assert inconsistent_power["checks"]["gain_matches_directivity_times_efficiency"] is False
+
+    with pytest.raises(ValueError):
+        farfield_gain_directivity_efficiency_gate(gain_dbi, directivity_dbi, 1.0, 0.0)
+
+
 if __name__ == "__main__":
     test_short_dipole_radiation_resistance()
     test_small_loop_radiation_resistance()
@@ -139,4 +179,5 @@ if __name__ == "__main__":
     test_finite_dipole_directivity()
     test_uniform_linear_array_factor()
     test_circular_aperture_pattern()
+    test_farfield_gain_directivity_efficiency_gate()
     print("[OK] antenna closed forms: dipole/loop R_rad, D0, array factor, aperture.")

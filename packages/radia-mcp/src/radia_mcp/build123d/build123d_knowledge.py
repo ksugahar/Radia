@@ -1595,6 +1595,22 @@ as the fallback for minimal imports, but prefer the mass-property gate for
 solver-ready CAD because area errors can reveal lost faces or topology drift
 even when volume happens to match.
 
+The build123d measurement row is also compatible with the Cubit mass-property
+sidecar contract: `shape_measurement_row(part)` already contains `name`,
+`volume`, `area`, and `bounding_box.size`, so it can be replayed by
+`cubit_mass_property_sidecar_gate` before Cubit owns the hex-led route.  Use
+this bridge when build123d creates the CAD intent but Cubit provides the
+hex/mixed mesh; volume should remain the common currency, while surface area
+and bbox dimensions catch scale or face-selection mistakes before `.vol`
+inventory.
+
+When Cubit has exported the mesh package, connect the build123d CAD row to the
+`.vol` package with `shape_cubit_export_package_handoff_gate`.  The build123d
+row should carry an explicit `geometry_id`; the Cubit package gate should carry
+the same `geometry_id`, a stable `export_id`, order, `.vol`/`.vol.json` pair,
+raw result, and routing hint.  This catches stale sidecars and wrong-geometry
+mesh packages before notebooks or solver-ready runs consume the files.
+
 For multi-body STEP round trips, run `shape_name_identity_gate(...)` before
 trusting volume/area/bbox rows.  It compares the named-shape multiset and
 rejects missing, extra, duplicate, or unnamed imported solids.  This catches a
