@@ -5890,6 +5890,14 @@ records ``safe_prefix_count`` / ``first_unsafe_gap_m`` / ``largest_safe_gap_m``,
 the minimum margin as green (>100 kA/m), amber (0..100 kA/m), or red (<0).  This is a
 pre-run margin contract only; local per-element field checks are still required for a final
 irreversible-demag claim.
+
+Continuous-loop slot 142 adds the RunResult handoff rule for ELF/MAGIC-style notebooks: before
+turning local product result rows into a load-line or demag-margin panel, normalize the row into
+``case_id``, ``temperature_C``, ``gap_m``, ``B_gap_T``, ``H_pm_A_per_m``,
+``H_knee_A_per_m``, ``recoil_mu_r``, and ``safe_against_knee``.  Run
+``pm_loadline_metadata_gate`` first, then ``pm_temperature_demag_sweep_summary`` or
+``pm_recoil_demag_step_summary``.  A parsed RunResult without H units, demag sign convention,
+magnetization axis, knee reference, and recoil permeability is not solver-ready evidence.
 """
 
 
@@ -6419,6 +6427,14 @@ tool.  It checks the table contract: efficiencies bounded in [0,1], ``P_in = P_e
 Continuous-loop slot 37 fixes the JMAG-style speed map gate: regions [MTPA, FW, FW, MTPV],
 max efficiency 0.994425732150756 in MTPV, max output power 2597.750669164122 W in FW, and
 power/speed contract errors below roundoff.
+
+Continuous-loop slot 141 extends the notebook handoff rule: a useful FE operating-point row is
+not only an efficiency number.  Preserve an ``operating_point_id`` plus region, speed, torque,
+``id/iq``, terminal-voltage and power-factor columns, loss buckets, and DC-bus voltage-margin
+metadata.  Run ``pm_drive_efficiency_map_health`` together with
+``pm_drive_terminal_table_health`` and ``pm_drive_loss_bucket_efficiency_gate`` so the notebook
+can show why the row is feasible, where the losses went, and which voltage-utilization value is
+report-only versus selector feasibility.
 """
 
 
@@ -6886,6 +6902,25 @@ S-PARAMETER post-processing (#221): the same propagation constants feed simple R
 loss / delivered power / VSWR.  For phase traces, ``sparameter_group_delay(frequencies, s_values)``
 unwraps ``arg(S)`` and returns ``tau_g = -d arg(S)/d omega``; the offset-short check gives the
 round-trip delay ``2d/v_group``.
+
+Continuous-loop slot 143 adds the FAR-FIELD notebook handoff rule: after
+``farfield_pattern_metadata_gate`` confirms frequency, degree/radian convention, theta/phi cuts,
+polarization basis, field components, row count, and accepted-power normalization, a notebook lobe
+row must still carry ``lobe_id``, ``theta_deg``, ``phi_deg``, ``gain_unit=dBi``,
+``directivity_unit=dBi``, radiated/accepted powers, and the identity ``G = eta_rad * D``.  Use
+``farfield_lobe_notebook_handoff_gate`` before plotting or ranking antenna/EMC lobes; negative
+controls should include missing lobe identity, a phi/theta location outside the exported cut grid,
+and gain above directivity.
+
+Continuous-loop slot 144 mirrors the same rule in the MATLAB/Gypsilab teaching lane as
+``educationalFarfieldLobeNotebookHandoff``.  The purpose is not performance; it is readability:
+students see metadata, lobe identity, angular cut membership, polarization basis, and
+``G = eta_rad * D`` in one MATLAB struct before a notebook panel plots the row.
+
+Continuous-loop slot 145 adds the source-table variant of the same rule: a lobe row
+should carry source dataset identity and gain/directivity expression identity together
+with the public row checks.  This keeps docs/panel notebooks replayable without relying
+on column position or a naked gain scalar.
 
 TE10 conductor loss: finite-conductivity rectangular-guide walls are a matched lossy line section.
 ``rectangular_waveguide_te10_conductor_loss(f, a, b, sigma, length=None)`` integrates

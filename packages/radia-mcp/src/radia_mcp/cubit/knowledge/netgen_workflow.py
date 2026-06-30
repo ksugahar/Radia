@@ -87,6 +87,34 @@ Python line by line.  Avoid multi-line `dict(...)`, loops, or parenthesized
 blocks in quick validation scripts; write one assignment per physical line or
 use a normal Python process to generate the script.
 
+### Continuous-loop Cubit mass-property sidecar gate
+
+Before Cubit exports a mesh or hands CAD rows to build123d/CST/radia-ngsolve
+cross-checks, save a compact mass-property sidecar: volume name, Cubit
+`get_volume_volume`, summed `get_surface_area(surface_id)` over the volume's
+surfaces, and bounding-box size from `get_total_bounding_box`.  Replay it with
+`cubit_mass_property_sidecar_gate`.
+
+This is deliberately earlier than `.vol` inventory.  Volume is the common CAD
+currency, but volume alone can hide a wrong scale or clipped face; the sidecar
+should also carry total surface area and bbox dimensions whenever they are
+available.  For a simple `1.5 x 2.0 x 0.75` mapped brick the expected values
+are volume `2.25`, surface area `11.25`, and bbox size `[1.5, 2.0, 0.75]`.
+
+### Continuous-loop Cubit export package identity gate
+
+Before docs notebooks, panel notebooks, or solver-ready validation consume a
+Cubit export, keep the files as one named package.  The `.vol`, companion
+`.vol.json`, raw Coreform batch result, and optional mass-property sidecar
+should carry a stable `export_id`, `geometry_id`, order, and routing hint.
+Replay that bookkeeping with `cubit_export_package_identity_gate`.
+
+This gate catches a quiet but expensive mistake: a valid `.vol` can be paired
+with an old sidecar or a raw JSON from a different geometry.  The package gate
+requires the `.vol.json` path to pair with the `.vol`, requires raw result
+presence, checks shared `export_id`/`geometry_id`, and can verify the inventory
+source plus `cubit_hex_or_mixed_path` routing hint.
+
 ### Continuous-loop mapped hex quality replay gate
 
 For an all-hex quality baseline, use a mapped brick such as

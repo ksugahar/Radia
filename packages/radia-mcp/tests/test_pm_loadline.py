@@ -23,6 +23,7 @@ from radia_mcp.radia_ngsolve.solve import (
     pm_temperature_demag_sweep_summary,
     MU0,
 )
+from radia_mcp.radia_ngsolve.knowledge.ngsolve import get_ngsolve_documentation
 
 W, ww, b = 0.24, 0.12, 0.06
 MU_R, RBOX = 2000.0, 0.60
@@ -176,6 +177,20 @@ def test_continuous_loop_slot46_elf_hbrm_hbcn_loadline_contract():
         assert row["B_gap_T"] == pytest.approx(b_gap)
         assert row["demag_margin_A_per_m"] == pytest.approx(margin)
         assert row["safe_against_knee"] is safe
+
+
+def test_pm_loadline_knowledge_records_run_result_handoff_contract():
+    doc = get_ngsolve_documentation("pm_loadline")
+
+    assert "Continuous-loop slot 142" in doc
+    assert "RunResult handoff rule" in doc
+    assert "case_id" in doc
+    assert "temperature_C" in doc
+    assert "H_pm_A_per_m" in doc
+    assert "H_knee_A_per_m" in doc
+    assert "pm_loadline_metadata_gate" in doc
+    assert "pm_temperature_demag_sweep_summary" in doc
+    assert "pm_recoil_demag_step_summary" in doc
 
 
 def _rect(wp, x0, y0, w, h):
