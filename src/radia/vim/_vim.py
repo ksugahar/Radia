@@ -209,12 +209,19 @@ def _charge_basis(fes, quad):
     # hdiv-highorder-material-solve-wrong round 4.
     rtq, rsq = _tet_ref(quad), _tri_ref(quad)
     Brows, host, kind, expo = [], [], [], []
-    for c in range(len(vels)):
-        Sv = sp.csr_matrix(_change_of_basis(L2v.GetFE(vels[c]), mons_v, *rtq, dim=3,
-                                            trafo=mesh.GetTrafo(vels[c]), Vmesh=vV[c]))
-        blk = Sv @ Bv_d[vdof[c], :]                             # sparse (nmons_v x ndof)
-        for a, (i, j, k) in enumerate(mons_v):
-            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+    if pv == 0:
+        # RT1 fast path: the VOLUME change-of-basis is the IDENTITY (Sv == [[1.0]], geometry-INDEPENDENT -- the
+        # single constant monomial IS the L2-order-0 constant shape; verified max spread 0.0).  Take the Bv_d rows
+        # directly, skipping ~1056 redundant per-cell _change_of_basis calls (~0.8s, the bulk of the loop).
+        for c in range(len(vels)):
+            Brows.append(Bv_d[vdof[c], :]); host.append(c); kind.append(0); expo += [0, 0, 0]
+    else:
+        for c in range(len(vels)):
+            Sv = sp.csr_matrix(_change_of_basis(L2v.GetFE(vels[c]), mons_v, *rtq, dim=3,
+                                                trafo=mesh.GetTrafo(vels[c]), Vmesh=vV[c]))
+            blk = Sv @ Bv_d[vdof[c], :]                         # sparse (nmons_v x ndof)
+            for a, (i, j, k) in enumerate(mons_v):
+                Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     for f in range(len(bels)):
         Ss = sp.csr_matrix(_change_of_basis(L2b.GetFE(bels[f]), mons_s, *rsq, dim=2,
                                             trafo=mesh.GetTrafo(bels[f]), Vmesh=bV[f]))
@@ -290,11 +297,14 @@ def _charge_basis_curved(fes, quad):
     cell_nodes, face_nodes = [], []
     for c, e in enumerate(vels):
         tr = mesh.GetTrafo(e)
-        cell_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TET_NODES]))
-        Sv = sp.csr_matrix(_change_of_basis_ref(L2v.GetFE(e), mons_v, rtp, rtw, dim=3))
-        blk = Sv @ Bv_d[vdof[c], :]
-        for a, (i, j, k) in enumerate(mons_v):
-            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+        cell_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TET_NODES]))   # P2 nodes (curved geom, kept)
+        if pv == 0:                                            # RT1: volume Sv == [[1]] (identity) -> Bv_d row direct
+            Brows.append(Bv_d[vdof[c], :]); host.append(c); kind.append(0); expo += [0, 0, 0]
+        else:
+            Sv = sp.csr_matrix(_change_of_basis_ref(L2v.GetFE(e), mons_v, rtp, rtw, dim=3))
+            blk = Sv @ Bv_d[vdof[c], :]
+            for a, (i, j, k) in enumerate(mons_v):
+                Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     for f, e in enumerate(bels):
         tr = mesh.GetTrafo(e)
         face_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TRI_NODES]))
