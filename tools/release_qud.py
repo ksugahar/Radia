@@ -23,7 +23,8 @@ Usage:
         Upgrade mdx from PyPI. Refuses to run if pip index versions
         radia / cubit-mesh-export don't match the local repo
         (i.e. PyPI hasn't propagated yet). radia-mcp is intentionally
-        not installed on mdx.
+        not installed on mdx -- and is actively uninstalled if a prior
+        release left it behind (mdx is a compute consumer, no MCP).
 
     python tools/release_qud.py phase9
         Cross-machine consistency probe. Final gate.
@@ -350,7 +351,8 @@ def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubi
     """PyPI-install recipe for downstream Cubit-equipped machines.
 
     Used for hibino and mdx.  hibino gets radia-mcp; mdx is a compute
-    consumer and intentionally skips the MCP server package.
+    consumer and intentionally skips the MCP server package -- and
+    actively uninstalls radia-mcp if a prior release left it behind.
 
     Recipe:
       1. PyPI propagation check (refuse if stale)
@@ -374,6 +376,16 @@ def _deploy_pypi(ssh_host, label, *, include_mcp=True, python_cmd="python", cubi
     v_cme   = v["cubit-mesh-export"]
     v_mcp   = v["radia-mcp"]
     mcp_pin = f' "radia-mcp=={v_mcp}"' if include_mcp else ""
+    # mdx is a compute consumer: radia-mcp must NOT be present there.  Older
+    # (pre-policy) releases left radia-mcp installed, so on any
+    # include_mcp=False target actively uninstall it rather than merely
+    # skipping the install -- "absent" is the enforced invariant, not a
+    # passive side effect.  `pip uninstall -y` on an already-absent package
+    # is a no-op (exit 0), so this is safe to run unconditionally there.
+    mcp_uninstall_ps = (
+        "" if include_mcp
+        else f"{python_cmd} -m pip uninstall -y radia-mcp\n"
+    )
     cubit_optional_ps = "$true" if cubit_optional else "$false"
 
     ps_block = f"""
@@ -387,7 +399,7 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {{
   Stop-Process -Id $_.Id -Force
 }}
 Start-Sleep -Seconds 2
-        # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
+{mcp_uninstall_ps}        # --force-reinstall is mandatory: `pip install --upgrade X==Y` on a
         # machine already at X==Y is a NO-OP and leaves the on-disk files
         # untouched. That bit us 2026-05-26: 100号機 was already at
         # cubit-mesh-export==0.10.1 from a prior NAS-source install, so
