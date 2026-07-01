@@ -66,6 +66,71 @@ def _tri_ref(o):
     return np.array(P), np.array(W)            # ref-tri pts (lam1,lam2); weights sum 1/2
 
 
+# ---------------- SYMMETRIC degree-5 simplex rules (Keast 1986 15-pt tet / Dunavant 1985 7-pt tri)
+# These REPLACE the degree-5 PRODUCT Gauss-Duffy _tet_ref(3) (27 pts) / _tri_ref(3) (9 pts) for the OUTER
+# charge-Gram quadrature ONLY (near + default far, both degree 5).  Same polynomial degree, 1.80x/1.29x
+# FEWER points.  Valid because the INNER integral is carried by the exact analytic PhiTet/TriPotential, so the
+# outer integrand is C^{1,alpha} (smooth) even on self/face/edge/vertex-adjacent pairs -- a symmetric rule does
+# NOT need the Duffy point-clustering.  VALIDATED (C:\temp\symquad_*.py, 2026-07-02): degree-5 exact to 1e-17;
+# on the charge-Gram it reproduces demag to <=7e-6, leaves the transverse leak IDENTICAL, and PRESERVES PSD
+# (min eig ~0, unchanged from product-27) while building the Gram ~1.5-1.8x faster (grows with N).  The
+# fully-double-ANALYTIC route was surveyed (research agent) and rejected: no tractable closed form for the
+# dominant tet-tet Galerkin double integral -- the symmetric outer rule is the real, cheap lever.  See memory
+# hdiv-vim-gram-build-near-factor (b).  Only the degree-5 pair (quad==3: linear RT1 near + default far_quad=3)
+# is tabulated; nonlinear (quad=4), curved, inner-subtraction, and any other order fall back to the product
+# rule.  The change-of-basis quadrature stays on _tet_ref/_tri_ref (S is exact at either rule -> bit-identical).
+def _sym_orbit(bary, ncoord):
+    """Expand a barycentric orbit to all distinct permutations, dropping the first coord (x,y[,z] = the last
+    ncoord barycentric coords); any assignment is equivalent for a symmetric rule."""
+    from itertools import permutations
+    seen = set()
+    for p in permutations(bary):
+        if p not in seen:
+            seen.add(p)
+            yield p[1:1 + ncoord]
+
+
+def _tet_ref_sym5():
+    b = 1.0 / 3.0
+    c = 8.0 / 11.0; d = 1.0 / 11.0
+    e = 0.0665501535736643; f = 0.4334498464263357
+    orbits = [((0.25, 0.25, 0.25, 0.25), 0.1817020685825351),
+              ((0.0, b, b, b),            0.0361607142857143),
+              ((c, d, d, d),              0.0698714945161738),
+              ((e, e, f, f),              0.0656948493683187)]
+    P, W = [], []
+    for bary, w in orbits:
+        for pt in _sym_orbit(bary, 3):
+            P.append(pt); W.append(w / 6.0)    # normalize vol-1 -> ref-tet vol 1/6
+    return np.array(P), np.array(W)            # (15,3), weights sum 1/6
+
+
+def _tri_ref_sym5():
+    a = 0.4701420641051151; b = 0.1012865073234563
+    orbits = [((1.0 / 3, 1.0 / 3, 1.0 / 3), 0.2250000000000000),
+              ((a, a, 1 - 2 * a),           0.1323941527885062),
+              ((b, b, 1 - 2 * b),           0.1259391805448271)]
+    P, W = [], []
+    for bary, w in orbits:
+        for pt in _sym_orbit(bary, 2):
+            P.append(pt); W.append(w * 0.5)    # normalize area-1 -> ref-tri area 1/2
+    return np.array(P), np.array(W)            # (7,2), weights sum 1/2
+
+
+_SYM5_TET = _tet_ref_sym5()
+_SYM5_TRI = _tri_ref_sym5()
+
+
+def _outer_tet(quad):
+    """OUTER Gram tet quadrature: symmetric degree-5 (Keast-15) at quad==3, else product Gauss-Duffy."""
+    return _SYM5_TET if quad == 3 else _tet_ref(quad)
+
+
+def _outer_tri(quad):
+    """OUTER Gram tri quadrature: symmetric degree-5 (Dunavant-7) at quad==3, else product Gauss-Duffy."""
+    return _SYM5_TRI if quad == 3 else _tri_ref(quad)
+
+
 def _monos_vol(pv):
     return [(i, j, k) for i in range(pv + 1) for j in range(pv + 1 - i) for k in range(pv + 1 - i - j)]
 
@@ -401,8 +466,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     cb = _charge_basis(fes, quad)
     B, M_mass, host, kind, expo = cb["B"], cb["M_mass"], cb["host"], cb["kind"], cb["expo"]
     cell_verts, face_verts, n_el = cb["cell_verts"], cb["face_verts"], cb["n_el"]
-    rtp, rtw = _tet_ref(quad)
-    rsp, rsw = _tri_ref(quad)
+    # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad==3 (linear RT1), else product.
+    rtp, rtw = _outer_tet(quad)
+    rsp, rsw = _outer_tri(quad)
     if p == 0:
         # order-0 = CONSTANT charges -> use the FAST ANALYTIC Gram (Wilton/PhiTet, exact), NOT quadrature.
         # The high-order QUADRATURE constructor (Sauter-Schwab over charge pairs) is ~100x slower per
@@ -423,8 +489,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                   ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
                   eps=eps, leaf=leafsize, eta=eta)
         if np.isfinite(ho_far_factor):
-            rtp_lo, rtw_lo = _tet_ref(far_quad)
-            rsp_lo, rsw_lo = _tri_ref(far_quad)
+            rtp_lo, rtw_lo = _outer_tet(far_quad)      # symmetric degree-5 at far_quad==3 (default), else product
+            rsp_lo, rsw_lo = _outer_tri(far_quad)
             kw.update(ref_tet_pts_lo=rtp_lo.ravel().tolist(), ref_tet_w_lo=rtw_lo.tolist(),
                       ref_tri_pts_lo=rsp_lo.ravel().tolist(), ref_tri_w_lo=rsw_lo.tolist(),
                       ho_far_factor=ho_far_factor)
