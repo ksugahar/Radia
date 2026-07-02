@@ -76,3 +76,41 @@ def test_pure_hex_routes_to_hex_branch():
         # 1 hex -> 8 Q1 volume charges + 6 faces * 4 = 24 surface charges = 32 charges; ndof = HDiv order-1 dofs
         assert B.shape[0] == 8 + 6 * 4
         assert G.ndof() == B.shape[0]
+
+
+# The worst hex of a REAL Cubit cylinder mesh (|J|min/max = 0.376 -- genuine trilinear warp).  The
+# near-affine boxes above CANNOT catch warped-hex regressions: the shipped pre-Piola model passed them at
+# 0.998 while CONVERGING to eig 1.0105 > 1 on this hex (the non-Coulomb-orthogonal L2 charge projection
+# leaked the physical bound by O(warp^2)).  This fixture locks the Piola-exact charge model on real warp.
+_WORST_CYL_HEX_CORNERS = [   # x-fastest corner order (ix + 2*iy + 4*iz)
+    (-0.5, 1e-16, 0.5),
+    (-0.4619397662556434, 0.1913417161825449, 0.5),
+    (-0.3799374424886703, -5.15188134101e-05, 0.5),
+    (-0.3135968748399616, 0.0996211631527812, 0.5),
+    (-0.5, -1e-16, 0.3),
+    (-0.461939766255643, 0.1913417161825455, 0.3),
+    (-0.3799374424886702, -5.151881341e-05, 0.2999999999999999),
+    (-0.3135968748399616, 0.0996211631527814, 0.2999999999999999),
+]
+
+
+def test_hex_rt1_strongly_warped_real_hex_spectrum():
+    """Piola-exact charge model on GENUINE warp: the worst cylinder hex's demag spectrum must respect the
+    physical bound [0, 1].  (Pre-Piola this converged to 1.0105 -- a real-mesh-only failure mode.)"""
+    corners = np.array(_WORST_CYL_HEX_CORNERS)
+
+    def trilerp(x, y, z):
+        out = np.zeros(3)
+        for i in range(8):
+            rx, ry, rz = i & 1, (i >> 1) & 1, (i >> 2) & 1
+            out += (x if rx else 1 - x) * (y if ry else 1 - y) * (z if rz else 1 - z) * corners[i]
+        return tuple(out)
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1, mapping=trilerp)
+    with ng.TaskManager():
+        fes = ng.HDiv(mesh, order=1)
+        B, G, M_mass = build_charge_gram(fes)
+        N = _materialize_N(B, G)
+        w = sla.eigh(N, M_mass.toarray(), eigvals_only=True)
+    assert w.min() > -1e-8, f"warped hex: N not PSD (min eig {w.min():.2e})"
+    assert w.max() < 1.005, f"warped hex: demag spectrum escaped [0,1] (max eig {w.max():.6f})"
