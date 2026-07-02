@@ -241,7 +241,7 @@ def test_build123d_cubit_export_package_handoff_matches_geometry_identity():
     box.label = "hex_brick"
     row = shape_measurement_row(box)
     row["geometry_id"] = "hex_brick_v1"
-    vol_path = r"S:\CoreformCubit\_crossval\slot147_hex_brick_o3.vol"
+    vol_path = "artifacts/slot147_hex_brick_o3.vol"
     package = cubit_export_package_identity_gate(
         [
             {
@@ -260,7 +260,7 @@ def test_build123d_cubit_export_package_handoff_matches_geometry_identity():
             },
             {
                 "kind": "raw_result",
-                "path": r"S:\CoreformCubit\_crossval\slot147_hex_brick_raw.json",
+                "path": "artifacts/slot147_hex_brick_raw.json",
                 "export_id": "slot147_hex_brick_o3",
                 "geometry_id": "hex_brick_v1",
             },
