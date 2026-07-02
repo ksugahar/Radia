@@ -57,6 +57,17 @@ physics discrepancy for tightly-packed multi-turn coils.
 > resonance/Q (see VOLUME_PEEC_DESIGN.md).  Treat the "BEM-A is the
 > correct tool / 15 mΩ is right" conclusion below as SUPERSEDED for
 > tightly-wound round-wire coils.
+>
+> **BEM-A FIX SHIPPED (opt-in): the impedance-EFIE.**  Putting Z_s into
+> the saddle system ((1,1) = jωμ0 SL + Z_s M, complex) makes J the
+> finite-impedance current so it cannot over-concentrate; on the coil
+> this gives **4.63 mΩ** (vs the PEC path's 15.14), a 4th independent
+> method in the ~4.5-5 mΩ band, and reproduces Bessel on a smooth
+> wire.  Flag: `calc_inductance.py --bema-impedance-efie`
+> (`compute_inductance_source_sink(impedance_efie=True, omega,
+> Z_s_complex)`).  Golden:
+> `validation_test/bem/test_coil_bem_a_impedance_efie.py`.  See
+> VOLUME_PEEC_DESIGN.md "2026-07-02 outcome".
 
 The structural ceiling of perimeter PEEC + proximity iteration is
 ~1.2× the self-skin value and is a **formulation ceiling, not an
