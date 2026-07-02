@@ -1586,6 +1586,33 @@ COCR does NOT fit the raw saddle
 initial r^T A r = 0) nor the Schur complement (diverges); the div-free
 reduction is what makes it fit.
 
+## L differs from PEEC by ~4% -- BENIGN, and curve order does NOT close it
+
+R is the accepted metric and it AGREES (impedance-EFIE 4.63 mOhm ~= perimeter
+PEEC 4.5 / analytic 4.8, all in the ~4.5-5 band).  The residual L gap --
+BEM-A EXTERNAL L 411.6 nH vs PEEC 430 nH (~4.3%) on the kubota 3-turn coil --
+is a KNOWN, BENIGN geometry/convention difference, LEFT AS-IS (Sugahara
+2026-07-03: signed off because R agrees).  It is NOT a defect, and raising the
+mesh curve order does NOT close it:
+
+- MEASURED (torus 150 kHz, fixed RT0 DOF n_J=5745): curve_order 1/2/3 give
+  L=87.2702 nH and R=1.04531 mOhm BIT-IDENTICAL.  ``mesh.Curve(p)`` is a NO-OP
+  in this path because the in-memory surface extraction
+  (``_extract_surface_mesh_filtered``) strips the CAD/curvedelements
+  association, so there is no geometry to project the mid-side nodes onto.
+  Raising geometry order would require a Cubit ``export netgen ... order N``
+  surface ``.vol`` loaded directly.
+- Even properly applied, curve order is NOT the lever: EXTERNAL L is
+  loop-dominated (turn radius, enclosed area, N^2 -- already resolved by flat
+  elements), and round-wire faceting enters L only logarithmically
+  (ln(8R/a)) = a sub-1% effect.  The ~4% gap is the "surface mesh != PEEC
+  filament geometry" mismatch + PEEC finite n_peri + external-L(BEM) vs
+  bundle-L(PEEC) convention -- none touched by curve order.
+- 430 nH is NOT validated ground truth (it is PEEC's own approximation; the
+  FEM A-V 3-D reference is still TBD).  If L ever needs reconciling: match the
+  SAME STEP geometry, h-refine the surface mesh, then anchor to FEM A-V
+  (``calc_fem_coilmesh.py``) or measurement -- NOT curve order.
+
 Refs: ``docs/peec/VOLUME_PEEC_DESIGN.md``,
 ``docs/esim/R_MISMATCH_PEEC_VS_BEMA.md``,
 ``validation_test/bem/test_coil_bem_a_impedance_efie.py``.
