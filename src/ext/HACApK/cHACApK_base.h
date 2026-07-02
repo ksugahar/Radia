@@ -207,6 +207,10 @@ extern void cHACApK_fill_leafmtx_hyp(
   int *lnpe,
   int *lthr); // [0:]
 
+/* Symmetric-fill mode: skip filling strictly-lower leaves (only matvec_sym-valid; see cHACApK_base.c).
+ * Set to 1 around ONE BuildHMatrix of a symmetric-use manager, reset to 0 after. */
+extern void cHACApK_set_sym_fill(int flag);
+
 extern void cHACApK_count_blrnmb(
   st_cHACApK_cluster st_cltl,
   st_cHACApK_cluster st_cltt,
