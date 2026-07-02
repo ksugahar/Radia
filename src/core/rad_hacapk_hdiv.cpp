@@ -1985,6 +1985,19 @@ void RadHACApKChargeGram::ExtractCoordinates()
     m_coordinates = m_cent;   // [n*3] charge centroids (the cluster-tree points)
 }
 
+extern "C" void cHACApK_set_sym_fill(int flag);   // cHACApK_base.c (skip strictly-lower leaves at fill)
+
+bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
+{
+    // Symmetric fill: the Gram's applies all route through MatVecSym (see the header doc), so skip the
+    // strictly-lower leaves at fill time -- ~2x build, identical upper leaves (MatVecSym bit-identical).
+    // Set/reset around this ONE build; base BuildHMatrix returns bool (no exceptions cross the C fill).
+    cHACApK_set_sym_fill(1);
+    const bool ok = RadHACApKBase::BuildHMatrix(params);
+    cHACApK_set_sym_fill(0);
+    return ok;
+}
+
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
     if (m_hexmode) {
@@ -2101,7 +2114,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
         if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG-valid Gram apply
-        else           MatVec(q, Gq);                  // general (asymmetric ACA) O(N log N) Gram H-matvec
+        else           MatVec(q, Gq);                  // shadowed: also MatVecSym (sym-fill leaves lower empty)
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double ga = Gq[a];
@@ -2189,7 +2202,7 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
         if (symmetric) MatVecSym(q, Gq);                           // EXACTLY symmetric -> MINRES-valid Gram apply
-        else           MatVec(q, Gq);                              // general (asymmetric ACA) H-matvec
+        else           MatVec(q, Gq);                              // shadowed: also MatVecSym (sym-fill leaves lower empty)
         y.assign((size_t)n_face, 0.0);
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) { // y = -B^T (G B x)
             double ga = Gq[a];

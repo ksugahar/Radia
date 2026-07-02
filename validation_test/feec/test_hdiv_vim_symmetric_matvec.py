@@ -1,15 +1,19 @@
 """Golden: the SYMMETRIC charge-Gram H-matvec (symmetric HACApK).
 
-The HACApK H-matrix stores both the (I,J) and (J,I) admissible leaf blocks but ACA-truncates them
-INDEPENDENTLY, so the GENERAL matvec (`matvec`) is only approximately symmetric.  `matvec_sym` applies the
-UPPER-triangular leaves only -- each upper leaf supplies its own block AND the mirror as its exact transpose
--- so the operator is EXACTLY symmetric (||G - G^T|| == 0) regardless of the per-block truncation.  This is
-what makes the +N CG robust by construction (the symmetric-CG default), replacing the earlier GMRES retreat.
+`matvec_sym` applies the UPPER-triangular leaves only -- each upper leaf supplies its own block AND the
+mirror as its exact transpose -- so the operator is EXACTLY symmetric (||G - G^T|| == 0) regardless of the
+per-block ACA truncation.  This is what makes the +N CG robust by construction (the symmetric-CG default).
+
+SYMMETRIC FILL (2026-07-03): the ChargeGram build now SKIPS the strictly-lower leaves entirely (they were
+never read by matvec_sym; ~2x build), and plain `matvec` / `matvec_transpose` on the ChargeGram are ROUTED
+to `matvec_sym` (for the symmetric operator they are the same map; the base implementations would read the
+empty lower leaves).  Tests (1)-(2) therefore lock the ROUTING identity G == G^T == G_sym exactly -- a
+routing regression (someone rebinding matvec to the base general apply on a sym-fill build) breaks them
+with an O(1) error, not a subtle drift.
 
 Locks:
-  (1) matvec_transpose is the exact transpose of matvec;
-  (2) matvec_sym is EXACTLY symmetric (G_sym == G_sym^T to machine precision) and == 0.5*(G + G^T)
-      (which proves the upper-triangular leaf partition is symmetric -- the construction's premise);
+  (1) matvec_transpose == matvec (both routed to the symmetric apply);
+  (2) matvec / matvec_sym are EXACTLY symmetric and mutually identical;
   (3) the default solve uses the symmetric CG and matches the GMRES cross-check.
 """
 import numpy as np
