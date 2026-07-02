@@ -141,11 +141,14 @@ def compute_inductance_source_sink(
             saddle system (the physically-correct SIBC-EFIE) instead of
             the post-hoc PEC integral above.  The (1,1) block becomes
             ``jω mu0 SL + Z_s M`` (complex), so J is the finite-impedance
-            current -- it does NOT over-concentrate at edges/gaps, and
-            R = Re(Z), L = Im(Z)/ω from the self-consistent
-            ``Z = Z_s (J^H M J) + jω mu0 (J^H SL J)``.  Requires ``omega``
-            and ``Z_s_complex``.  On smooth geometry (isolated wire)
-            this reproduces the same Bessel R as the PEC path (validated);
+            current -- it does NOT over-concentrate at edges/gaps.
+            R = Re(Z_s)*(J^H M J) (the same SIBC-dissipation formula as
+            the PEC path, but with the non-over-concentrated J) and
+            L = mu0*(J^H SL J) (EXTERNAL inductance, same convention as
+            the PEC path -- the internal reactance Im(Z_s)*(J^H M J)/omega
+            is deliberately NOT folded into L, so only R changes vs PEC).
+            Requires ``omega`` and ``Z_s_complex``.  On smooth geometry
+            (isolated wire) this reproduces the same Bessel R as PEC (validated);
             on the kubota 3-turn coil it gives 4.63 mΩ vs the PEC path's
             spurious 15.14 mΩ (matches volume/perimeter PEEC + analytic
             proximity ~4.5-5 mΩ).  See docs/peec/VOLUME_PEEC_DESIGN.md.
@@ -275,9 +278,17 @@ def compute_inductance_source_sink(
         t_lu = time.perf_counter() - t0
         JHMJ = float(np.real(np.conj(J) @ M @ J))
         JHSLJ = float(np.real(np.conj(J) @ SL @ J))
-        Z_port = Z_s_complex * JHMJ + 1j * omega * MU_0 * JHSLJ
-        R_coil = float(Z_port.real)
-        L = float(Z_port.imag / omega)
+        # R = Re(Zs)*(J^H M J): same SIBC-dissipation formula as the PEC
+        # path, but with the finite-impedance (non-over-concentrated) J,
+        # so it is physical instead of the PEC over-estimate.
+        R_coil = float(Z_s_complex.real * JHMJ)
+        # L = mu0*(J^H SL J): EXTERNAL inductance, same convention as the
+        # PEC path (L = mu0 J SL J).  We deliberately DROP the internal
+        # reactance Im(Zs)*(J^H M J)/omega so L stays consistent with the
+        # PEC path (only R changes); reporting internal inductance in L
+        # would shift the geometry-dominated L and break its goldens for
+        # no benefit to the R fix the impedance-EFIE is for.
+        L = float(MU_0 * JHSLJ)
         residual = float(np.max(np.abs(D @ J - g)))
         _log("BEMA",
             f"impedance-EFIE done ({solver}, {t_lu:.1f}s): "

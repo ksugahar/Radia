@@ -457,7 +457,7 @@ def _solve_coil_bem_a(args):
     # Full complex Leontovich surface impedance for the impedance-EFIE.
     Z_s_coil_complex = (1.0 + 1.0j) / (args.coil_sigma * delta_skin) \
                         if omega > 0 else 0.0
-    use_imp_efie = bool(getattr(args, "bema_impedance_efie", False)) \
+    use_imp_efie = bool(getattr(args, "bema_impedance_efie", True)) \
                     and omega > 0
 
     # Saddle-point solver selection.
@@ -1842,20 +1842,21 @@ def build_argparser():
                              "indefinite), gmres (generic Krylov). "
                              "Defaults to auto.")
     parser.add_argument("--bema-impedance-efie",
-                        action=argparse.BooleanOptionalAction, default=False,
-                        help="BEM-A R formulation.  Default (off) computes R "
-                             "post-hoc from the perfect-conductor current, "
-                             "R=Re(Zs) integral|J|^2 dS, which OVER-estimates "
-                             "R for tightly-wound / near-contact / faceted "
-                             "coils (perfect-conductor J concentrates "
-                             "singularly at edges/gaps where SIBC breaks "
-                             "down: kubota 3-turn coil = 15.1 mOhm vs the "
-                             "physical ~4.6).  On (--bema-impedance-efie) puts "
-                             "Zs INTO the saddle system (complex "
-                             "jw*mu0*SL+Zs*M) so J is the finite-impedance "
-                             "current and R is physical (4.63 mOhm on that "
-                             "coil, matches volume/perimeter PEEC). Smooth "
-                             "geometry (isolated wire) is unchanged (=Bessel).")
+                        action=argparse.BooleanOptionalAction, default=True,
+                        help="BEM-A R formulation.  DEFAULT (on) is the "
+                             "impedance-EFIE: Zs is put INTO the saddle system "
+                             "(complex jw*mu0*SL+Zs*M) so J is the "
+                             "finite-impedance current and R is physical "
+                             "(kubota 3-turn coil = 4.63 mOhm, matches "
+                             "volume/perimeter PEEC).  --no-bema-impedance-efie "
+                             "reverts to the legacy post-hoc PEC integral "
+                             "R=Re(Zs) integral|J|^2 dS, which OVER-estimates R "
+                             "for tightly-wound / near-contact / faceted coils "
+                             "(perfect-conductor J concentrates singularly at "
+                             "edges/gaps where SIBC breaks down: same coil = "
+                             "15.1 mOhm) -- kept only for comparison/validation. "
+                             "Smooth geometry (isolated wire) is identical for "
+                             "both (=Bessel).")
 
     # ----- Coil material -----
     parser.add_argument("--coil-sigma", type=float, default=5.8e7,
