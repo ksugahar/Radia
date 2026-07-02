@@ -370,8 +370,7 @@ def _charge_basis_curved(fes, quad):
     Brows, host, kind, expo = [], [], [], []
     cell_nodes, face_nodes = [], []
     for c, e in enumerate(vels):
-        tr = mesh.GetTrafo(e)
-        cell_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TET_NODES]))   # P2 nodes (curved geom, kept)
+        cell_nodes.append(_trafo_lattice_nodes(mesh, e, _IR_TET_NODES))   # P2 nodes (curved geom, kept)
         if pv == 0:                                            # RT1: volume Sv == [[1]] (identity) -> Bv_d row direct
             Brows.append(Bv_d[vdof[c], :]); host.append(c); kind.append(0); expo += [0, 0, 0]
         else:
@@ -380,8 +379,7 @@ def _charge_basis_curved(fes, quad):
             for a, (i, j, k) in enumerate(mons_v):
                 Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     for f, e in enumerate(bels):
-        tr = mesh.GetTrafo(e)
-        face_nodes.append(np.array([list(tr(ip).point) for ip in _IR_TRI_NODES]))
+        face_nodes.append(_trafo_lattice_nodes(mesh, e, _IR_TRI_NODES))
         Ss = sp.csr_matrix(_change_of_basis_ref(L2b.GetFE(e), mons_s, rsp, rsw, dim=2))
         blk = Ss @ Bb_d[bdof[f], :]
         for a, (i, j) in enumerate(mons_s):
@@ -424,6 +422,31 @@ def _ref_prod_gauss(n, dim):
     return np.array(P), np.array(W)
 
 
+def _trafo_lattice_nodes(mesh, e, ir, max_tries=8):
+    """GetTrafo lattice extraction with a DETERMINISM CONTRACT (2026-07-03): evaluate the element's
+    lattice until two CONSECUTIVE evaluations agree bit-for-bit (and are finite), fail LOUD otherwise.
+
+    Why: the scalar `tr(ip).point` path occasionally returns UNINITIALIZED memory (~1e-310 denormals in
+    single coordinates of a few lattice points) on the FIRST process-wide basis extraction -- caught in
+    the wild at ~2-8%% of fresh processes (load-sensitive) on the affine wiring golden, poisoning the
+    Gram geometry while B/M_mass (assembled via the SIMD mapped-rule path) stay bit-exact.  The
+    corruption window can persist across several re-evaluations (a 60-run validation saw one element
+    stay unstable for 4 consecutive tries), so the contract retries generously; two consecutive
+    bit-identical finite evaluations are accepted, anything else raises -- nothing is silently
+    accepted.  See memory ngsolve-gettrafo-first-touch-garbage."""
+    prev = None
+    for _ in range(max_tries):
+        tr = mesh.GetTrafo(e)
+        cur = np.array([list(tr(ip).point) for ip in ir])
+        if prev is not None and np.array_equal(prev, cur) and np.all(np.isfinite(cur)):
+            return cur
+        prev = cur
+    raise RuntimeError(
+        f"GetTrafo lattice evaluation unstable for element {e} after {max_tries} tries "
+        "(NGSolve scalar trafo path returned differing node coordinates -- do not trust this mesh "
+        "extraction; rerun, and report the incident).")
+
+
 def _charge_basis_hex(fes, cob_quad=3):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
     flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager.
@@ -461,8 +484,7 @@ def _charge_basis_hex(fes, cob_quad=3):
     Brows, host, kind, expo = [], [], [], []
     cell_nodes, face_nodes = [], []
     for c, e in enumerate(vels):
-        tr = mesh.GetTrafo(e)
-        cell_nodes.append(np.array([list(tr(ip).point) for ip in ir_hex]))
+        cell_nodes.append(_trafo_lattice_nodes(mesh, e, ir_hex))
         fe = L2v.GetFE(e)
         Phi = np.array([fe.CalcShape(*pt) for pt in rhp])            # (nq, nphi) ref shapes
         Mref = (Phi * rhw[:, None]).T @ Phi                          # INT_ref phi phi dxi (exact, Q1 shapes)
@@ -473,8 +495,7 @@ def _charge_basis_hex(fes, cob_quad=3):
             Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     n_el = len(vels)
     for f, e in enumerate(bels):
-        tr = mesh.GetTrafo(e)
-        face_nodes.append(np.array([list(tr(ip).point) for ip in ir_quad]))
+        face_nodes.append(_trafo_lattice_nodes(mesh, e, ir_quad))
         fe = L2b.GetFE(e)
         Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in rqp])
         Mref = (Phi * rqw[:, None]).T @ Phi
@@ -518,6 +539,12 @@ def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1
         far_tet_pts=ftp.ravel().tolist(), far_tet_w=ftw.tolist(),
         far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
         near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+    chk = G.hex_state_check()
+    if chk["ctor"] != chk["now"]:
+        raise RuntimeError(
+            "hex charge Gram instance state was corrupted between construction and use "
+            f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption "
+            "(0xc0000374 class) -- do NOT trust this Gram; rerun, and report the incident.")
     return cb["B"], G, cb["M_mass"]
 
 

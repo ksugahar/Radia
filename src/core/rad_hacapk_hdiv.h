@@ -28,6 +28,8 @@
 #include "rad_hdiv_vim.h"   // rad_hdiv::Mesh / ChargeMapCSC / ChargeQuad
 #include <unordered_map>
 #include <memory>
+#include <string>
+#include <utility>
 
 //-------------------------------------------------------------------------
 // RadHACApKHDivManager: builds N = B^T G B (HDiv-type VIM) as a HACApK H-matrix.
@@ -278,6 +280,10 @@ public:
     // Q2 lattice geometry maps (PUBLIC static utilities: the file-local cloud builder uses them too).
     static void HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3]);
     static void QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2]);
+    // Values-only variants (no Jacobian): the radial inner integrands are Piola (REF measure, no |det J|),
+    // so the self radial loop needs only X -- ~4x less shape work per point than the full map.
+    static void HexQ2MapX(const double* nd27, const double xi[3], double X[3]);
+    static void QuadQ2MapX(const double* nd9, const double uv[2], double X[3]);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -445,18 +451,50 @@ private:
     std::vector<std::vector<int>> m_faceCharges;         // [n_bf] global charge indices per boundary face
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
-    // NEAR/SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
-    // anchor x0 = the ref point where the pulled-back kernel 1/|p-X(xi)| peaks (xiT for the self host --
-    // exact, no inverse; else a short Newton inverse of the Q2 map), CLAMPED into the ref sub-simplex, then
-    // 4 signed radial sub-tets (3 signed sub-tris on faces) from x0 with the Duffy apex AT x0: the u^2 (u)
-    // volume element kills the 1/r peak exactly, and the map's warp enters only as a SMOOTH |det J| factor
-    // per quadrature point -- robust on strongly distorted (|J| ratio ~0.4) and curved hexes alike, where
-    // the corner-graded-cloud / linearized-subtraction schemes oscillated +-3% (eig 1.02-1.11 > 1 on the
-    // real Cubit cylinder mesh; the box gates' mild distortion had masked it).  ONE mechanism for self AND
-    // near, flat AND curved.  m_glIn/m_gwIn is the radial 1D Gauss rule (n=5 -> 4*125 pts per cell call);
-    // not cloud-cacheable (x0 varies per outer point).  xiT == nullptr -> Newton anchor.
+    // SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
+    // anchor x0 = xiT, the outer point's OWN ref coords (the pulled-back kernel 1/|p-X(xi)| peaks there --
+    // exact, no inverse), CLAMPED into the ref sub-simplex, then 4 signed radial sub-tets (3 signed
+    // sub-tris on faces) from x0 with the Duffy apex AT x0: the u^2 (u) volume element kills the 1/r peak
+    // exactly, and the map's warp enters only as a SMOOTH factor per quadrature point -- robust on strongly
+    // distorted (|J| ratio ~0.4) and curved hexes alike, where the corner-graded-cloud / linearized-
+    // subtraction schemes oscillated +-3% (eig 1.02-1.11 > 1 on the real Cubit cylinder mesh).  SELF-ONLY
+    // since 2026-07-03: non-self near calls use the static-SITE radial below (the anchor-Newton branch was
+    // removed with them).  m_glIn/m_gwIn is the radial 1D Gauss rule (n=5 -> 4*125 pts per cell call);
+    // not cacheable here (x0 = xiT varies per outer point).
     void PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
                               const std::vector<int>& srcG, double* inn) const;
+    // NON-SELF near inner (touch/shell, 2026-07-03): the SAME radial signed decomposition but anchored at
+    // the nearest of a FIXED set of ref-space SITES (tet: 4 corners + 6 edge mids + 4 face centers +
+    // centroid = 15; tri: 3+3+1 = 7).  The radial cone tiling is EXACT from ANY anchor -- the site only
+    // aligns the grading with the kernel peak (p is OUTSIDE the sub-simplex here, r_min > 0), so nearest-
+    // site anchoring costs only quadrature alignment, measured at the entry-drift/eig gates.  Because the
+    // sites are fixed in REF space, EVERYTHING host-independent is precomputed per (sub, site) at ctor
+    // time: the Q2 shape-value matrix S [nq x 27|9] (so the mapped nodes are X = S @ nodes -- no per-point
+    // HexLag3), the Q1 monomial matrix M [nq x 8|4], and the signed Piola weights w [nq] (GW^3 u^2 v D,
+    // orientation folded; cones whose base face contains the site are degenerate and skipped, so corner
+    // sites carry 1 cone, edge 2, face-center 3, centroid 4 -- nq varies).  Per call this leaves ONE
+    // nq x 27 "GEMV" + nq kernel evals: ~3-6x cheaper than the removed per-point Newton radial, with ZERO
+    // per-host cloud memory (the old per-(host,sub,corner) cloud cache idea was rejected for its O(hosts)
+    // thread_local footprint).
+    struct HexSiteRad { int nq = 0; std::vector<double> S, M, w; };
+    std::vector<HexSiteRad> m_cellSiteRad;               // [6*15] per (sub, site), ref-space tables
+    std::vector<HexSiteRad> m_faceSiteRad;               // [2*7]
+    std::vector<double> m_cellSiteX;                     // [n_el*6*15*3] mapped site positions (site pick)
+    std::vector<double> m_faceSiteX;                     // [n_bf*2*7*3]
+    void BuildHexSiteTables();                           // ctor helper: fills the four members above
+    void PhiInnerHexSiteVec(int kindS, int hS, int subB, const double p[3],
+                            const std::vector<int>& srcG, double* inn) const;
+public:
+    // Heap-stomp canary (2026-07-03 flake hunt): checksum over every hex-mode member array a block
+    // computation reads, stored at ctor end.  A later mismatch proves the instance data was OVERWRITTEN
+    // (the 0xc0000374-class heap corruption) rather than computed wrong.
+    double HexStateChecksum() const;
+    double HexStateCtorChecksum() const { return m_hex_state_sum; }
+    std::vector<std::pair<std::string, double>> HexStateBreakdown() const;   // per-array (forensics)
+    const std::vector<double>& HexStoredCellNodes() const { return m_hexNodes; }
+    const std::vector<double>& HexStoredFaceNodes() const { return m_quadNodes; }
+private:
+    double m_hex_state_sum = 0.0;
     std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS) const;  // directed [nT*nS] block, INV4PI folded
     const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS) const;  // thread_local block cache
 
