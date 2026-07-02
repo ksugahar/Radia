@@ -10,8 +10,8 @@ identical transverse leak, and (critically) PRESERVED PSD -- while building the 
 The fully-double-ANALYTIC alternative was surveyed and rejected (no tractable closed form for the dominant
 tet-tet Galerkin double integral); the symmetric outer rule is the real, cheap lever.  This golden guards:
   1. the transcribed Keast/Dunavant constants (degree-5 exactness -- a transcription typo fails here),
-  2. the dispatch (symmetric ONLY at quad==3 = linear RT1 near + default far_quad=3; nonlinear quad=4 -> product),
-  3. the equivalence claim (symmetric build == product build on demag + PSD, on the actual charge Gram).
+  2. the dispatch (symmetric at quad in {3,4}; other orders stay on product),
+  3. the equivalence claim (symmetric build == product build on demag + PSD / nonlinear convergence).
 
 NGSolve + Netgen required (importorskip)."""
 import numpy as np
@@ -52,12 +52,14 @@ def test_symmetric_rules_are_degree5_exact():
 
 
 def test_outer_rule_dispatch():
-    """The symmetric rule is used ONLY at quad==3 (degree 5: linear RT1 near + default far_quad=3).  Any other
-    order (nonlinear quad=4, non-default far_quad, inner subtraction) falls back to the product Gauss-Duffy rule,
-    so nonlinear/curved paths are untouched."""
-    assert _outer_tet(3)[0].shape[0] == 15 and _outer_tri(3)[0].shape[0] == 7        # symmetric
-    for q in (2, 4, 5):
-        assert _outer_tet(q)[0].shape[0] == _tet_ref(q)[0].shape[0]                   # product
+    """The symmetric degree-5 rule is used at quad in {3,4}: quad==3 = linear RT1 near + default far_quad=3
+    (product _tet_ref(3) is only degree 3), quad==4 = the nonlinear energy-Newton near rule (product
+    _tet_ref(4)=64pts is degree 5, matched by the 15-pt symmetric rule at 4.3x fewer points).  Any OTHER order
+    (inner subtraction iq=2, intorder overrides, curved) falls back to product Gauss-Duffy."""
+    for q in (3, 4):                                                                  # symmetric degree-5
+        assert _outer_tet(q)[0].shape[0] == 15 and _outer_tri(q)[0].shape[0] == 7
+    for q in (2, 5, 6):                                                               # product fall-back
+        assert _outer_tet(q)[0].shape[0] == _tet_ref(q)[0].shape[0]
         assert _outer_tri(q)[0].shape[0] == _tri_ref(q)[0].shape[0]
 
 
@@ -92,3 +94,36 @@ def test_symmetric_reproduces_product_demag_and_psd(monkeypatch):
     assert w_prod.min() >= -1e-9 * w_prod.max(), f"product Gram NOT PSD: {w_prod.min():.2e}"
     # the largest (dominant demag-energy) eigenvalues agree tightly -- same physics
     assert abs(w_sym[-1] - w_prod[-1]) <= 5e-3 * abs(w_prod[-1]), "dominant demag eigenvalue drifted"
+
+
+# realistic saturating BH table (mu_r ~ 4000 low, sat ~2.2 T) for the nonlinear equivalence lock
+_H = np.array([0, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 3e4, 1e5, 3e5, 1e6])
+_B = np.array([0, 0.30, 0.60, 1.0, 1.45, 1.7, 1.9, 2.0, 2.05, 2.1, 2.15, 2.25, 2.5])
+_BH = np.column_stack([_H, _B]).tolist()
+_MSAT = _B[-1] / (4e-7 * np.pi) - _H[-1]
+
+
+def test_symmetric_nonlinear_matches_product(monkeypatch):
+    """The NONLINEAR energy-Newton (quad=4) now uses the SAME degree-5 symmetric rule (product _tet_ref(4)=64pts
+    is itself only effective degree 5).  Lock that the symmetric build converges in the SAME or FEWER Newton
+    iterations than product-64, well under 100, drives M -> Msat at deep saturation, and matches demag -- across
+    a moderate drive and deep saturation.  A regression that under-resolves the energy Hessian (the 195-vs-<100
+    iter blowup the degree-3 product-27 rule caused) fails here."""
+    from radia.vim import hdiv_demag_solve
+    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.6))
+    for H0, deep in ((5000.0, False), (3e6, True)):
+        Hext = ng.CoefficientFunction((0, 0, H0))
+        with ng.TaskManager():
+            r_sym = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=1)        # default = symmetric
+            monkeypatch.setattr(V, "_outer_tet", _tet_ref)                            # force product-64
+            monkeypatch.setattr(V, "_outer_tri", _tri_ref)
+            r_prod = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=1)
+            monkeypatch.undo()
+        assert r_sym["iters"] < 100, f"H0={H0}: symmetric nonlinear iters {r_sym['iters']} >= 100"
+        assert r_sym["iters"] <= r_prod["iters"] + 5, (
+            f"H0={H0}: symmetric iters {r_sym['iters']} >> product {r_prod['iters']} (Hessian under-resolved)")
+        assert r_sym["M_avg"][2] > 0 and np.isfinite(r_sym["M_avg"][2])
+        assert abs(r_sym["demag"] - r_prod["demag"]) < 1e-3, (
+            f"H0={H0}: demag drift {abs(r_sym['demag'] - r_prod['demag']):.2e}")
+        if deep:
+            assert 0.95 * _MSAT < r_sym["M_avg"][2] < 1.03 * _MSAT, (r_sym["M_avg"][2], _MSAT)

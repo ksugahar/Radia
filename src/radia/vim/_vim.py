@@ -67,18 +67,23 @@ def _tri_ref(o):
 
 
 # ---------------- SYMMETRIC degree-5 simplex rules (Keast 1986 15-pt tet / Dunavant 1985 7-pt tri)
-# These REPLACE the degree-5 PRODUCT Gauss-Duffy _tet_ref(3) (27 pts) / _tri_ref(3) (9 pts) for the OUTER
-# charge-Gram quadrature ONLY (near + default far, both degree 5).  Same polynomial degree, 1.80x/1.29x
-# FEWER points.  Valid because the INNER integral is carried by the exact analytic PhiTet/TriPotential, so the
-# outer integrand is C^{1,alpha} (smooth) even on self/face/edge/vertex-adjacent pairs -- a symmetric rule does
-# NOT need the Duffy point-clustering.  The in-repo validation lock checks degree-5 exactness to 1e-17;
-# on the charge-Gram it reproduces demag to <=7e-6, leaves the transverse leak identical, and preserves PSD
-# (min eig ~0, unchanged from product-27) while building the Gram ~1.5-1.8x faster (grows with N).  The
-# fully-double-ANALYTIC route was surveyed and rejected: no tractable closed form for the
-# dominant tet-tet Galerkin double integral -- the symmetric outer rule is the real, cheap lever.  Only the
-# degree-5 pair (quad==3: linear RT1 near + default far_quad=3)
-# is tabulated; nonlinear (quad=4), curved, inner-subtraction, and any other order fall back to the product
-# rule.  The change-of-basis quadrature stays on _tet_ref/_tri_ref (S is exact at either rule -> bit-identical).
+# These REPLACE the PRODUCT Gauss-Duffy OUTER charge-Gram quadrature at quad==3 (linear near + default far)
+# AND quad==4 (the nonlinear energy-Newton near rule).  KEY FACT (measured): the Duffy-collapse Jacobian
+# (1-a)^2(1-b) LOWERS the effective simplex degree of _tet_ref(o) to 2o-3 (NOT the 1D 2o-1) -- so product
+# _tet_ref(3)=27pts is only degree 3, and _tet_ref(4)=64pts is degree 5.  Keast-15 is degree 5, so it
+# (a) UPGRADES the linear near rule (degree 3 -> 5) at 27->15 pts, and (b) MATCHES the nonlinear rule's
+# degree 5 at 64->15 pts (4.3x fewer).  Valid because the INNER integral is carried by the exact analytic
+# PhiTet/TriPotential, so the outer integrand is C^{1,alpha} (smooth) even on self/face/edge/vertex-adjacent
+# pairs -- a symmetric rule does NOT need the Duffy point-clustering.  Validated (locks below): degree-5
+# exact to 1e-17; on the charge-Gram it reproduces demag to <=7e-6, leaves the transverse leak identical,
+# and preserves PSD (min eig ~0); the NONLINEAR energy-Newton converges in the SAME or FEWER iterations
+# (deep saturation H0=3e6: 15 vs product-64's 17) with M->Msat.  Build ~1.5-2.8x faster (grows with N; the
+# nonlinear win is larger since product-64 has 4.3x the near points).  The fully-double-ANALYTIC route was
+# surveyed and rejected: no tractable closed form for the dominant tet-tet Galerkin double integral -- the
+# symmetric outer rule is the real, cheap lever.  Only the degree-5 pair (quad in {3,4}: linear near +
+# default far_quad=3 + nonlinear near) is tabulated; curved, inner-subtraction (iq=2), and any other order
+# fall back to the product rule.  The change-of-basis quadrature stays on _tet_ref/_tri_ref (S is exact at
+# either rule -> bit-identical).
 def _sym_orbit(bary, ncoord):
     """Expand a barycentric orbit to all distinct permutations, dropping the first coord (x,y[,z] = the last
     ncoord barycentric coords); any assignment is equivalent for a symmetric rule."""
@@ -122,13 +127,17 @@ _SYM5_TRI = _tri_ref_sym5()
 
 
 def _outer_tet(quad):
-    """OUTER Gram tet quadrature: symmetric degree-5 (Keast-15) at quad==3, else product Gauss-Duffy."""
-    return _SYM5_TET if quad == 3 else _tet_ref(quad)
+    """OUTER Gram tet quadrature: symmetric degree-5 (Keast-15) for quad in {3,4} -- quad==3 is the linear
+    near + default far rule (product _tet_ref(3) is only degree 3), quad==4 is the nonlinear energy-Newton
+    near rule (product _tet_ref(4)=64pts is degree 5, matched by the 15-pt symmetric rule).  Any other order
+    (inner subtraction iq=2, intorder overrides, curved) falls back to product Gauss-Duffy."""
+    return _SYM5_TET if quad in (3, 4) else _tet_ref(quad)
 
 
 def _outer_tri(quad):
-    """OUTER Gram tri quadrature: symmetric degree-5 (Dunavant-7) at quad==3, else product Gauss-Duffy."""
-    return _SYM5_TRI if quad == 3 else _tri_ref(quad)
+    """OUTER Gram tri quadrature: symmetric degree-5 (Dunavant-7) for quad in {3,4} (linear + nonlinear near +
+    default far); else product Gauss-Duffy."""
+    return _SYM5_TRI if quad in (3, 4) else _tri_ref(quad)
 
 
 def _monos_vol(pv):
@@ -433,11 +442,16 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # DEFAULT depends on the USE (2026-06-30).  The LINEAR demag only needs the 3*p PSD FLOOR (RT1 -> quad=3):
     # that makes the NEAR build ~1.8-2.1x cheaper (the near U-list is 98% of the build = the dominant lever) and
     # is VALIDATED to preserve demag (7e-6), per-element leak + magnetic moment, and PSD (min eig ~0).  The
-    # NONLINEAR energy-Newton KEEPS the +1 margin (max(3*p,4) -> quad=4 for RT1): the energy HESSIAN is ill-
-    # conditioned right at the 3*p PSD floor (min eig ~0), so at DEEP saturation quad=3 still converges to
-    # M->Msat but takes ~2x more Newton iters (195 vs <100, golden test_hdiv_vim_energy_newton) -- exactly the
-    # comment above's "harmless for the linear solve, costly for the ENERGY/eigenvalue use of N".  intorder
-    # still overrides for an explicit choice.
+    # NONLINEAR energy-Newton KEEPS the +1 margin (max(3*p,4) -> quad=4 for RT1): the energy HESSIAN wants more
+    # than the linear near accuracy at DEEP saturation -- with the OLD product _tet_ref(3) (effective degree 3)
+    # deep saturation still converged to M->Msat but took ~2x more Newton iters (195 vs <100).  quad=4 buys the
+    # effective degree 5 the energy solve needs.  NOTE (2026-07-02): both quad==3 and quad==4 now route through
+    # the SYMMETRIC degree-5 Keast-15/Dunavant-7 outer rule (_outer_tet/_outer_tri) -- the product _tet_ref(4)
+    # (64 pts) is itself only effective degree 5 (the Duffy Jacobian lowers 2o-1 to 2o-3), so the 15-pt
+    # symmetric rule matches its degree at 4.3x fewer points and the nonlinear solve converges in the SAME or
+    # FEWER iters (deep saturation 15 vs 64-pt 17; golden test_hdiv_vim_energy_newton).  So quad=4 is still the
+    # nonlinear choice (degree 5 > the old degree-3 product-27), just delivered by the symmetric rule.  intorder
+    # still overrides for an explicit choice.  See tests/feec/test_hdiv_vim_psd.py + _symmetric_outer_quad.py.
     quad = (max(p + 2, (intorder + 1) // 2) if intorder is not None
             else (max(3 * p, 4) if nonlinear else 3 * p))
     if curve_order is not None:
@@ -466,7 +480,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     cb = _charge_basis(fes, quad)
     B, M_mass, host, kind, expo = cb["B"], cb["M_mass"], cb["host"], cb["kind"], cb["expo"]
     cell_verts, face_verts, n_el = cb["cell_verts"], cb["face_verts"], cb["n_el"]
-    # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad==3 (linear RT1), else product.
+    # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
     rtp, rtw = _outer_tet(quad)
     rsp, rsw = _outer_tri(quad)
     if p == 0:
@@ -489,7 +503,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                   ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
                   eps=eps, leaf=leafsize, eta=eta)
         if np.isfinite(ho_far_factor):
-            rtp_lo, rtw_lo = _outer_tet(far_quad)      # symmetric degree-5 at far_quad==3 (default), else product
+            rtp_lo, rtw_lo = _outer_tet(far_quad)      # symmetric degree-5 at far_quad in {3,4}, else product
             rsp_lo, rsw_lo = _outer_tri(far_quad)
             kw.update(ref_tet_pts_lo=rtp_lo.ravel().tolist(), ref_tet_w_lo=rtw_lo.tolist(),
                       ref_tri_pts_lo=rsp_lo.ravel().tolist(), ref_tri_w_lo=rsw_lo.tolist(),
