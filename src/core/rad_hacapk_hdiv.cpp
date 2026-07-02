@@ -15,6 +15,7 @@
 #include <stdexcept>
 #include <atomic>
 #include <functional>
+#include <cstddef>
 
 #ifdef HAVE_LAPACK
 #include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the RT0 mass for the MASS RIESZ precond
@@ -1938,14 +1939,37 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
 
 // thread_local block cache (build_id-guarded, same discipline as the cloud cache).  Keyed by the directed
 // (kindT,hT,kindS,hS); a HACApK dense leaf touches all nT*nS entries of a host pair -> computed once, reused.
+struct HexBlockKey {
+    int kindT;
+    int hT;
+    int kindS;
+    int hS;
+    bool operator==(const HexBlockKey& o) const
+    {
+        return kindT == o.kindT && hT == o.hT && kindS == o.kindS && hS == o.hS;
+    }
+};
+
+struct HexBlockKeyHash {
+    std::size_t operator()(const HexBlockKey& k) const
+    {
+        std::size_t h = 1469598103934665603ull;
+        auto mix = [&](int v) {
+            h ^= static_cast<std::size_t>(static_cast<unsigned int>(v));
+            h *= 1099511628211ull;
+        };
+        mix(k.kindT); mix(k.hT); mix(k.kindS); mix(k.hS);
+        return h;
+    }
+};
+
 static thread_local long long s_hex_block_owner = -1;
-static thread_local std::unordered_map<long long, std::vector<double>> s_hex_block_cache;
+static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_hex_block_cache;
 
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS) const
 {
     if (s_hex_block_owner != m_build_id) { s_hex_block_cache.clear(); s_hex_block_owner = m_build_id; }
-    const long long key = ((long long)kindT << 63) | ((long long)kindS << 62)
-                        | ((long long)hT << 31) | (long long)hS;
+    const HexBlockKey key{kindT, hT, kindS, hS};
     auto it = s_hex_block_cache.find(key);
     if (it == s_hex_block_cache.end()) {
         if (s_hex_block_cache.size() > 200000u) s_hex_block_cache.clear();
