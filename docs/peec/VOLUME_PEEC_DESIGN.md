@@ -36,14 +36,26 @@ intrinsically modest):
 - BEM-A **is** correctly calibrated on self-skin: BEM-A on an
   isolated straight wire = 0.3165 mΩ (maxh 1.5 mm) / 0.3153 (maxh
   1.0 mm) vs Bessel 0.3148 (0.5 % / 0.16 %, mesh-stable).  So the
-  coil over-estimate is coil-specific — hypothesised as
-  perfect-conductor surface-current J over-concentration at the
-  near-contact regions between turns (`Re(Zs)·∫|J|² dS` is
-  mesh-sensitive there; this doc's own record has BEM-A coil
-  2.90 mΩ coarse → 15.14 mΩ fine).  NOT confirmed via a coil BEM-A
-  mesh-convergence sweep (re-mesh + dense EFIE > 20 min per level)
-  nor a 2-wire BEM-A (disconnected / busbar-connected conductors →
-  singular EFIE saddle, a BEM-A robustness gap).
+  coil over-estimate is coil-specific.
+- **MECHANISM CONFIRMED (loss map on the R=15.144 mΩ solve):** the
+  SIBC loss `Re(Zs)·∫|J|² dS` is pathologically concentrated — **top
+  2 % of the surface area carries 71 % of the loss**; peak/mean loss
+  density = 5767×.  The near-contact turn-gap tris (21 % of area,
+  identified by cross-turn arc-length proximity < 3.5 mm) carry
+  **69.7 % of the loss** at ~10⁵× the density elsewhere; the very
+  top-density spikes are the source/sink injection edges + faceted-
+  STEP edges.  A uniform physical skin would put ~2 % of loss in 2 %
+  of area — the 71 % concentration is the **perfect-conductor J
+  singularity** at near-touching surfaces + edges.  There the J
+  varies on a scale far finer than the skin depth δ, so the
+  Leontovich SIBC (which assumes J smooth over δ) **breaks down** and
+  over-integrates |J|²; the real finite-σ current spreads over δ and
+  does not concentrate this way.  Hence BEM-A's 15.1 mΩ is a
+  SIBC-breakdown over-estimate, mesh-divergent (consistent with the
+  2.90 → 15.14 refinement jump), NOT the physical AC resistance.
+  (A full BEM-A mesh-convergence sweep was impractical — dense EFIE
+  on the 634-face coil.stp > 15 min/level; a 2-wire BEM-A hit a
+  singular EFIE saddle on disconnected / busbar conductors.)
 
 **Recommendation**: keep perimeter PEEC (~4.5 mΩ) as the screening
 R; do NOT trust BEM-A R for tightly-wound multi-turn coils without a
