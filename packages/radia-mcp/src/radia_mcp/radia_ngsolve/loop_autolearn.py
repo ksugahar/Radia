@@ -17,7 +17,7 @@ from .slot_gates import (
     MU0,
     box_projected_gradient_least_squares_gate,
     coaxial_rc_duality_gate,
-    computed_reference_crossval_rows_gate,
+    computed_reference_rows_gate,
     cross_validation_artifact_to_mcp_feedback_gate,
     parallel_wire_force_per_length,
     source_native_seed_queue_gate,
@@ -299,6 +299,7 @@ def build_autonomous_basic_learning_artifact(
     radia_mcp_version="unknown",
     command="",
     check_local_sources=True,
+    strict_rotation=False,
 ):
     """Process every queued slot and return one learning artifact."""
 
@@ -310,7 +311,9 @@ def build_autonomous_basic_learning_artifact(
     slots = queue_artifact.get("slots")
     if not isinstance(slots, list):
         slots = []
-    expected_tools = queue_artifact.get("rotation") or EXPECTED_ROTATION
+    expected_tools = queue_artifact.get("rotation") or (
+        EXPECTED_ROTATION if strict_rotation else ()
+    )
     queue_gate = source_native_seed_queue_gate(
         queue_artifact,
         expected_tools=expected_tools,
@@ -359,7 +362,7 @@ def build_autonomous_basic_learning_artifact(
             }
         )
 
-    row_gate = computed_reference_crossval_rows_gate(
+    row_gate = computed_reference_rows_gate(
         {"rows": rows},
         max_global_rel_error=1.0e-9,
     )
@@ -382,7 +385,7 @@ def build_autonomous_basic_learning_artifact(
     artifact = {
         "schema": "radia.crossval.v1",
         "tool_slot": "radia-mcp",
-        "case": "autonomous 160-slot basic learning pass",
+        "case": f"autonomous {len(slots)}-slot basic learning pass",
         "artifact_role": "autonomous_basic_learning",
         "pass": pass_artifact,
         "created_at_utc": run_date,
@@ -450,12 +453,12 @@ def build_autonomous_basic_learning_artifact(
             }
         },
         "public_lesson": (
-            "A 160-slot source-native queue can be processed autonomously by separating basic public analogue rows "
+            "A source-native queue can be processed autonomously by separating basic public analogue rows "
             "from heavier source-tool solver-ready work; every slot must leave a family, lane state, and next action."
         ),
         "learning_targets": [
             "radia-mcp: loop_autolearn.build_autonomous_basic_learning_artifact",
-            "radia-mcp: computed_reference_crossval_rows_gate",
+            "radia-mcp: computed_reference_rows_gate",
             "radia-mcp: source_native_seed_queue_gate",
         ],
         "verification": {

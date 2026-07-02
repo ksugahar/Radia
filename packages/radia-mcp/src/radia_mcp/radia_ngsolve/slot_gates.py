@@ -6035,7 +6035,7 @@ def source_native_seed_queue_gate(
     }
 
 
-def computed_reference_crossval_rows_gate(
+def computed_reference_rows_gate(
     artifact,
     rows=None,
     require_pass=True,
@@ -6199,7 +6199,7 @@ def computed_reference_crossval_rows_gate(
         ),
     }
     return {
-        "policy": "computed_reference_crossval_rows_gate",
+        "policy": "computed_reference_rows_gate",
         "status": "ok" if all(checks.values()) else "needs_attention",
         "row_count": len(rows),
         "valid_row_count": len(normalized_rows),
