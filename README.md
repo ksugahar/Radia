@@ -65,6 +65,21 @@ Every plot above is reproduced by the self-contained notebook [`docs/analytical_
 - **Accelerator & undulator designers** — Radia's original use case at the ESRF: insertion devices, Halbach undulators, and beamline magnets with analytic field fidelity.
 - **Anyone fighting "air mesh"** in a general-purpose FEM tool for an open-boundary or moving-source problem.
 
+## 🧭 Repository Architecture & Policy
+
+Radia is organized as a layered CAE stack, not as one monolithic solver. The repository policy is to use the strongest public ecosystem pieces where they already exist, and to implement only the missing electromagnetic and multiphysics layers.
+
+| Layer | Radia policy |
+|---|---|
+| Differential geometry | Use the de Rham-complex design exposed by NGSolve where possible; keep Radia's collocation and integral-method formulations compatible with that language. |
+| Analysis methods | Use NGSolve / ngsolve.bem for FEM and BEM. Implement Radia-specific magnetic moment, multipole moment, PEEC, and source-provider methods in Radia. |
+| Linear algebra | Reuse proven solvers and compression ideas such as AMS, BDDC, shifted ICCG, BiCGSTAB, ACA / TSVD, and HACApK instead of inventing local replacements. |
+| Physical methods | Focus development effort on the physics layer: ESIM / SIBC, reduced potentials, Kelvin transforms, CLN, stream functions, and open-region source models. |
+| Applications | Keep application examples concrete: induction heating, MagLev, electromagnets, printed circuit boards, and motors. |
+| Interfaces | Provide GUIs only for application-level workflows. Generic reusable capabilities should stay as Python APIs, notebooks, CLI tools, and MCP servers. |
+
+The practical rules are simple: follow NGSolve's Python API style when extending finite-element workflows; use pybind11 for C++ functionality exposed to Python; avoid reinventing public ecosystem tools; and implement multiple independent methods for the same model whenever that enables cross-validation. The `radia-mcp` servers are part of this policy: they let agents drive the workflow, collect lessons from validation, and keep the repository's knowledge executable rather than only descriptive.
+
 ## 🚀 Mission: The Design Tool for Open-Space Magnetics
 
 **Radia** is a specialized simulation framework developed as a **Design Tool** targeting:
