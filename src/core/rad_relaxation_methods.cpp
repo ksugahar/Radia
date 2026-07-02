@@ -2996,31 +2996,66 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			return -11;
 #endif
 
-			// BUILD-ONCE dense geometry interaction (Sugahara 2026-06-27): the matrix-free
-			// MomentKernelMatVec6x6 RE-evaluates the full O(nHex^2) kernel on EVERY matvec, so a
-			// BiCGSTAB solve (~tens of matvecs) repeats ~N matrix builds (each matvec ~ one build).
-			// Instead build the chi-INDEPENDENT geometry block matrix K ONCE
-			// (K[h][g] = MomentSystemBlock6x6(h,g,kernelOnly=true), incl. INV4PI + IMA images); the
-			// matvec then applies y = diag(chi)(K x) + L_local x as a cheap dense GEMV, and a nonlinear
-			// Picard loop reuses K, updating only chi (the block diagonal).  O(N^2) storage (= method 0);
-			// for very large N use method 2 (HACApK, O(N log N)).
-			// O(N^2) dense; research code -- NO artificial size cap.  A too-large allocation fails loud
-			// (std::bad_alloc) rather than being pre-empted; use method 2 (HACApK, O(N log N)) for very large N.
-			const size_t momentDenseElems = (size_t)totalDOF * (size_t)totalDOF;
-			std::vector<double> momentKdense(momentDenseElems, 0.0);
-			auto buildKdenseRow = [&](size_t hh) {
-				const int h = (int)hh;
-				double Kblk[36];
-				for(int g = 0; g < nHex; g++)
+			// BUILD-ONCE geometry coupling K (Sugahara 2026-06-27): the matrix-free MomentKernelMatVec6x6
+			// RE-evaluates the full O(nHex^2) kernel on EVERY matvec, so a BiCGSTAB solve (~tens of matvecs)
+			// repeats ~N matrix builds.  Instead build the chi-INDEPENDENT geometry block matrix K ONCE
+			// (K[h][g] = MomentSystemBlock6x6(h,g,kernelOnly=true), incl. INV4PI + IMA images); the matvec
+			// applies y = diag(chi)(K x) + L_local x, and a nonlinear Picard loop reuses K (only chi, the
+			// block diagonal, changes).
+			//   method 0/1 -> DENSE K (momentKdense, O(N^2) storage, cheap dense GEMV).
+			//   method 2   -> H-MATRIX K (RadHACApKMomentSystem kernel-only, O(N log N) matvec + storage) --
+			//                 the collocation-MMMM COARSE tier (Sugahara 2026-07-02, loop-free abandoned;
+			//                 field-correct but loop-polluted internal M, acceptable for coarse/optimization).
+			const bool useHMatrixK = rad.m_moment_use_hmatrix;
+			std::vector<double> momentKdense;              // dense K   (built when !useHMatrixK)
+			std::vector<double> momentHKx;                 // matvec input copy (the H-matvec uses the vector API)
+			if(useHMatrixK)
+			{
+				// BUILD-ONCE across the Picard loop: m_momentHK is a member, so the H-matrix K survives
+				// between SolveLinearStep calls of one solve (K is chi-free; only chi changes per iteration).
+				if(m_momentHK && m_momentHK->GetInteraction() != IntrctPtr)
 				{
-					IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, Kblk, true);   // chi-independent geometry block (incl. images)
-					for(int i = 0; i < 6; i++)
-						for(int j = 0; j < 6; j++)
-							momentKdense[(size_t)(6*h+i) * (size_t)totalDOF + (size_t)(6*g+j)] = Kblk[i*6+j];
+					delete m_momentHK;
+					m_momentHK = nullptr;
 				}
-			};
-			if(serialElementOps) { for(int h = 0; h < nHex; h++) buildKdenseRow((size_t)h); }
-			else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildKdenseRow); }
+				if(!m_momentHK)
+				{
+					m_momentHK = new RadHACApKMomentSystem(IntrctPtr);
+					RadHACApKParams hkParams;
+					hkParams.aca_eps   = rad.m_hacapk_eps;
+					hkParams.leaf_size = rad.m_hacapk_leaf_size;
+					hkParams.eta       = rad.m_hacapk_eta;
+					hkParams.print_level = 0;
+					if(!m_momentHK->BuildHMatrix(hkParams))   // self-wraps a RegionTaskManager; nests under rtm harmlessly
+					{
+						delete m_momentHK;
+						m_momentHK = nullptr;
+						fprintf(stderr, "[BiCG] Error: collocation-MMMM moment H-matrix (method 2) build failed; no dense fallback.\n");
+						return -12;
+					}
+				}
+				momentHKx.assign((size_t)totalDOF, 0.0);
+			}
+			else
+			{
+				// O(N^2) dense; research code -- NO artificial size cap.  A too-large allocation fails loud
+				// (std::bad_alloc); use method 2 (HACApK, O(N log N)) for very large N.
+				const size_t momentDenseElems = (size_t)totalDOF * (size_t)totalDOF;
+				momentKdense.assign(momentDenseElems, 0.0);
+				auto buildKdenseRow = [&](size_t hh) {
+					const int h = (int)hh;
+					double Kblk[36];
+					for(int g = 0; g < nHex; g++)
+					{
+						IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, Kblk, true);   // chi-independent geometry block (incl. images)
+						for(int i = 0; i < 6; i++)
+							for(int j = 0; j < 6; j++)
+								momentKdense[(size_t)(6*h+i) * (size_t)totalDOF + (size_t)(6*g+j)] = Kblk[i*6+j];
+					}
+				};
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) buildKdenseRow((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildKdenseRow); }
+			}
 			std::vector<double> momentKx((size_t)totalDOF, 0.0);
 
 			auto t_setup_end = std::chrono::high_resolution_clock::now();
@@ -3030,9 +3065,18 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			for(int i = 0; i < totalDOF; i++) sigma[i] = ctx.FlatMagn[i];
 
 			auto matvec = [&](const double* x, double* y) {
-				// build-once: y = diag(chi)(Kdense x) + L_local x  -- cheap dense GEMV, NO kernel recompute
-				cblas_dgemv(CblasRowMajor, CblasNoTrans, totalDOF, totalDOF, 1.0,
-				            momentKdense.data(), totalDOF, x, 1, 0.0, momentKx.data(), 1);
+				// build-once: y = diag(chi)(K x) + L_local x.  K x via dense GEMV (method 0/1) or the
+				// RadHACApKMomentSystem H-matvec (method 2, O(N log N)); NO kernel recompute either way.
+				if(useHMatrixK)
+				{
+					std::memcpy(momentHKx.data(), x, (size_t)totalDOF * sizeof(double));
+					m_momentHK->MatVec(momentHKx, momentKx);   // momentKx = K x  (y overwritten, no accumulate)
+				}
+				else
+				{
+					cblas_dgemv(CblasRowMajor, CblasNoTrans, totalDOF, totalDOF, 1.0,
+					            momentKdense.data(), totalDOF, x, 1, 0.0, momentKx.data(), 1);
+				}
 				auto applyRow = [&](size_t hh) {
 					const int h = (int)hh;
 					const double chih = chiPerHex[h];
@@ -3089,6 +3133,9 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			auto t_bicg_end = std::chrono::high_resolution_clock::now();
 			rad.m_solve_t_linear_solve += std::chrono::duration<double>(t_bicg_end - t_bicg_start).count();
 			rad.m_solve_linear_iterations += result.iterations;
+			ctx.last_solve_was_moment_hacapk = useHMatrixK;
+			ctx.last_moment_linear_tol = bicg_tol;
+			ctx.last_moment_krylov_solver = rad.m_moment_krylov_solver;
 
 			if(!result.converged)
 			{
