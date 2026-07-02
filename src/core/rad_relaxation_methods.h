@@ -391,7 +391,12 @@ public:
 		IntrctPtr = InInteractionPtr;
 	}
 
-	~radTRelaxationMethNo_1() {}
+	~radTRelaxationMethNo_1() {
+		if(m_momentHK) {
+			delete m_momentHK;
+			m_momentHK = nullptr;
+		}
+	}
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
@@ -404,6 +409,13 @@ protected:
 	bool NeedsDenseMatrix() const override;
 
 private:
+	// Collocation-MMMM COARSE tier (method-2 request routed here by SolveGen): the chi-free geometry
+	// coupling K as a RadHACApKMomentSystem H-matrix, built ONCE on the first SolveLinearStep and
+	// REUSED across the nonlinear Picard iterations (K is chi-independent; only the block-diagonal
+	// chi changes between iterations).  Owned; deleted in the destructor.  nullptr when the solve
+	// uses the dense K (method 0/1) or before the first method-2 linear step.
+	RadHACApKMomentSystem* m_momentHK = nullptr;
+
 	// Variable DOF version of BiCGSTAB
 	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)
 	int SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,

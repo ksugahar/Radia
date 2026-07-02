@@ -338,6 +338,46 @@ private:
 };
 
 //-------------------------------------------------------------------------
+// RadHACApKMomentSystem: the chi-free multipole-moment (MMMM) geometry coupling K as a
+// HACApK H-matrix -- the O(N log N) matvec kernel for the collocation-MMMM COARSE-tier
+// HACApK-BiCGSTAB demag solve (Sugahara 2026-07-02; docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).
+//-------------------------------------------------------------------------
+
+/* Revived matvec-ONLY (2026-07-02): NO H-LU, NO deflation, NO loop-free.  Collocation MMMM gives up
+ * loop-free (the internal M is field-correct but loop-polluted -- acceptable for the coarse / optimization
+ * tier; accurate + hysteresis work uses the loop-free HDiv-VIM).  The method-2 pure-hex moment BiCGSTAB
+ * (radTRelaxationMethNo_1::SolveLinearStep, pureHexMatrixFree) builds this chi-INDEPENDENT geometry K
+ * ONCE (incl. INV4PI + IMA images) and applies A(chi)x = L_local x + diag_row(chi)(K x) with K x via this
+ * H-matvec, so a nonlinear Picard loop reuses K (only the block-diagonal chi changes).  The entry K[i][j]
+ * is computed ON DEMAND by radTInteraction::MomentSystemBlock6x6(..., kernelOnly=true) (no dense build).
+ * HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment); tet/wedge/mixed
+ * method-2 stay on the dense moment LU (the moment H-matrix is hex-only). */
+class RadHACApKMomentSystem : public RadHACApKBase {
+public:
+    explicit RadHACApKMomentSystem(radTInteraction* interaction);   // chi-free K_geometry (kernel-only)
+    ~RadHACApKMomentSystem() override {}
+
+    radTInteraction* GetInteraction() const { return m_interaction; }
+
+    // K[i][j] on demand (the chi-free geometry entry; rows 6h+t, cols = face DOF).
+    double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
+    // 6x6 geometry block unit behind the scalar HACApK callback.
+    void GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const;
+    // The H-matrix stores the chi-free K directly (no MSC sign flip / 1-chi shift).
+    double ComputeSystemEntry(int dof_i, int dof_j) const override { return GetInteractionMatrixElement(dof_i, dof_j); }
+
+protected:
+    void ExtractCoordinates() override;   // cluster tree = hex centroids; ndof = 6*nHex
+    void OnBeforeBuild() override;
+    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }   // chi folded outside K (in the matvec)
+    bool IsVariableDOF() const override { return false; }
+    int  GetUniformNFFC() const override { return 6; }                    // 6 DOF per hex
+
+private:
+    radTInteraction* m_interaction;   // not owned
+};
+
+//-------------------------------------------------------------------------
 // Global callback state for HACApK
 // (Required because HACApK C interface uses global callback function)
 //-------------------------------------------------------------------------

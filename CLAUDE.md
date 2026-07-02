@@ -2550,16 +2550,31 @@ From `src/radia/netgen_mesh_import.py`:
 - **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率)
 
-### H-Matrix Route Policy: HDiv/BEM/PEEC Use HACApK; MMMM Is Dense/Matrix-Free (2026-06-28)
+### H-Matrix Route Policy: HDiv/BEM/PEEC + collocation-MMMM COARSE tier Use HACApK (2026-07-02)
 
-**Current policy**: collocation MMMM does **not** connect to HACApK.  Its live
-routes are dense LU for small/medium problems and matrix-free BiCGSTAB for the
-nonlinear / larger dense path.  If a moment-mesh solve asks for method 2, it is
-rerouted away from the removed moment-HACApK path.  Do not reintroduce a
-moment-specific HACApK manager, H-LU flag, or runtime loop-deflation API.
+**Current policy** (supersedes the 2026-06-28 "MMMM does NOT connect to HACApK"):
+collocation MMMM's **PURE-HEX COARSE tier connects to HACApK, matvec-only**
+(Sugahara 2026-07-02).  A `rad.Solve(..., method=2)` on a pure-hex moment object
+routes to the matrix-free moment BiCGSTAB with the chi-free geometry coupling K
+built once as a `RadHACApKMomentSystem` H-matrix (O(N log N) matvec), reused across
+the nonlinear Picard loop (only the block-diagonal chi changes).  **Loop-free is
+abandoned** for this route: the internal M is field-correct but loop-polluted --
+acceptable for the coarse / optimization tier; accurate + hysteresis work uses the
+loop-free HDiv-VIM.  Verified 2026-07-02 (clean -Rebuild): method-2 == method-0
+dense LU externally (tight eps 6.8e-13 on a 720-DOF bar), `linear_iterations>0`
+(BiCGSTAB, not LU), and ACA is genuinely live (loose `hacapk_eps=0.5` -> 5.5% field
+error + more iters on the long-bar far-field geometry); 34 MMMM/demag goldens pass.
 
-HACApK remains canonical for the routes where the operator is still designed as
-an H-matrix problem:
+**Still forbidden** (these were the DEAD parts, removed and NOT revived):
+- **NO H-LU** on the moment path (no-pivot H-LU is wrong AND slow at compression<1;
+  see `memory/collocation_loopfree_abandoned.md`).
+- **NO runtime loop-deflation / loop-free** moment API (collocation gives up loop-free).
+- **NO PARDISO coarse-op / two-sided deflation** machinery.
+- The moment H-matrix is **HEX-ONLY**: tet/wedge/mixed method-2 stay on the dense
+  moment LU; method 0 (dense LU) and method 1 (matrix-free dense-K BiCGSTAB) are
+  unchanged for all element classes.
+
+HACApK is canonical for the routes where the operator is designed as an H-matrix problem:
 
 1. **HDiv-VIM**: charge-Gram H-matrix and HDiv system managers are the production
    large-scale / loop-free path.  This is the route for high-mu, loop-heavy, and
@@ -2567,9 +2582,12 @@ an H-matrix problem:
 2. **Classic MMM method 2**: the legacy tet/wedge/mixed MMM manager remains the
    method-2 route for those element classes.  It is not the collocation MMMM
    moment path.
-3. **BEM and PEEC**: the scalar Galerkin BEM and PEEC managers remain maintained
+3. **Collocation-MMMM coarse tier (pure-hex, matvec-only)**: `RadHACApKMomentSystem`
+   is the chi-free geometry-K H-matrix consumed by the method-2 moment BiCGSTAB
+   (loop-free abandoned; no H-LU, no deflation).
+4. **BEM and PEEC**: the scalar Galerkin BEM and PEEC managers remain maintained
    HACApK adapters.
-4. **Point-kernel / Gauss tools**: point-kernel HACApK support is kept as a
+5. **Point-kernel / Gauss tools**: point-kernel HACApK support is kept as a
    building block for the Gauss-point charge-Gram direction.
 
 **HACApK-connected surface currently kept**:
@@ -2577,6 +2595,7 @@ an H-matrix problem:
 | Subclass / adapter | Role | Python entry / test surface |
 |---|---|---|
 | `RadHACApKMMMManager` | classic MMM method-2 for tet, wedge, and mixed variable-DOF meshes | `rad.Solve(..., 2)` on classic MMM meshes; retired-guard validation |
+| `RadHACApKMomentSystem` | collocation-MMMM COARSE tier: chi-free geometry-K H-matrix (pure-hex, matvec-only; loop-free abandoned) | `rad.Solve(..., 2)` on pure-hex moment meshes; `test_method2_hacapk_*` |
 | `RadHACApKBEMManager` | BEM / SIBC Laplace Galerkin | `radia.bem_sibc_solver` and BEM HACApK matvec validation |
 | `RadHACApKHDivManager` | HDiv-VIM structured-hex RT0 probe/demo path | `_hdiv_vim_hmatrix_probe` validation |
 | `RadHACApKChargeGram` | production HDiv-VIM charge-Gram H-matrix | HDiv linear/nonlinear charge-Gram validation |

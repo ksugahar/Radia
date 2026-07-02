@@ -68,6 +68,12 @@ public:
 	int m_moment_krylov_solver;
 	int m_moment_gmres_restart;
 	int m_moment_anderson_depth;
+	// Collocation-MMMM COARSE-tier HACApK-BiCGSTAB (Sugahara 2026-07-02): set by SolveGen when a
+	// method-2 (HACApK) request lands on a PURE-HEX moment object.  The pure-hex moment BiCGSTAB
+	// (radTRelaxationMethNo_1) then builds the chi-free geometry K as a RadHACApKMomentSystem
+	// H-matrix (O(N log N) matvec) instead of the dense K.  Loop-free is abandoned (field-correct,
+	// loop-polluted internal M -- coarse/optimization tier only).  false = dense K (method 0/1).
+	bool m_moment_use_hmatrix;
 
 	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
 	// 0.0 = full step (no under-relaxation)
@@ -181,6 +187,7 @@ public:
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
 		m_moment_krylov_solver = 0;
 		m_moment_gmres_restart = 40;
+		m_moment_use_hmatrix = false;
 		m_moment_anderson_depth = 0;
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
