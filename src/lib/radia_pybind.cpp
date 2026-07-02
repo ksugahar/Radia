@@ -3583,6 +3583,29 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "so CG/MINRES on B^T G_sym B use a machine-symmetric operator (the ACA-asymmetry failure mode is removed).")
         .def("entry", &RadHACApKChargeGram::GetInteractionMatrixElement, py::arg("i"), py::arg("j"),
              "Charge-Gram entry G[i,j] from the analytic / polytope / high-order kernel.")
+        .def("hex_state_check", [](RadHACApKChargeGram& s) {
+                 py::dict d;
+                 d["ctor"] = s.HexStateCtorChecksum();
+                 d["now"] = s.HexStateChecksum();
+                 return d;
+             },
+             "Heap-stomp canary (hex mode): ctor-time vs recomputed checksum of every member array the "
+             "block computation reads.  ctor != now proves the instance data was overwritten after "
+             "construction (0xc0000374-class corruption), not computed wrong.")
+        .def("hex_stored_nodes", [](RadHACApKChargeGram& s) {
+                 py::dict d;
+                 d["cell_nodes"] = s.HexStoredCellNodes();
+                 d["face_nodes"] = s.HexStoredFaceNodes();
+                 return d;
+             },
+             "The Q2 lattice node arrays THIS instance was constructed from (flake forensics: compare "
+             "two instances' inputs directly).")
+        .def("hex_state_breakdown", [](RadHACApKChargeGram& s) {
+                 py::dict d;
+                 for (const auto& kv : s.HexStateBreakdown()) d[kv.first.c_str()] = kv.second;
+                 return d;
+             },
+             "Per-array checksum breakdown (flake forensics: WHICH array differs between instances).")
         .def("solve_linear_material",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
@@ -4819,13 +4842,21 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   moment_krylov (str): Moment method-2 Krylov solver, "bicgstab" or "gmres"
                   moment_gmres_restart (int): Restart length for moment GMRES (default: 40)
                   moment_anderson_depth (int): Safeguarded moment Anderson acceleration depth, 0 or 1
+                      (default: 1 since 2026-07-03, the "Anderson+Picard" standard for every moment
+                      Picard solve -- rescues coupled-block hysteresis divergence on the descending
+                      branch; acceptance is safeguarded so well-behaved solves are unaffected.
+                      Set 0 for plain Picard.)
                   relax_param (float): Under-relaxation (0=full step, <1=damped)
                   newton_method (bool): True=Newton-Raphson, False=Picard (default)
                   newton_damping (bool): Enable Newton line search damping
                   newton_damping_max_iter (int): Max line search iterations (default: 5)
                   newton_damping_min_omega (float): Minimum omega (default: 0.01)
-                  b_input_newton (bool): Enable B-input Newton for hysteresis (default: False)
-                  b_input_hantila (bool): Enable B-input Hantila for hysteresis (default: False)
+                  b_input_newton (bool): Enable B-input hysteresis stepping (default: False).
+                      All-moment (DOF>=4) bodies route to the moment B-input Picard(+Anderson);
+                      the dense 3-DOF B-input Newton survives only for genuine 3-DOF dipoles.
+                  b_input_hantila (bool): Same routing as b_input_newton for all-moment bodies
+                      (moment B-input Picard); the dense Hantila polarization path survives only
+                      for genuine 3-DOF dipoles (default: False)
                   hantila_alpha (float): Hantila polarization parameter (0=auto, default: 0)
                   hantila_relax (float): Hantila under-relaxation (0=full step, default: 0)
 
@@ -4833,10 +4864,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
                   rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
                   rad.SolverConfig(moment_krylov="gmres", moment_gmres_restart=40)
-                  rad.SolverConfig(moment_anderson_depth=1)
+                  rad.SolverConfig(moment_anderson_depth=0)   # opt out to plain Picard
                   rad.SolverConfig(newton_method=True, newton_damping=True)
-                  rad.SolverConfig(b_input_newton=True)  # For energy-based hysteresis
-                  rad.SolverConfig(b_input_hantila=True)  # Hantila polarization (faster)
+                  rad.SolverConfig(b_input_newton=True)  # B-input hysteresis stepping
           )pbdoc");
 
     m.def("GetSolverConfig", &radia_solver_ext::GetSolverConfig,

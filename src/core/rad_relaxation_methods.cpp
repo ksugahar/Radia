@@ -770,7 +770,7 @@ static void RestoreChiArray(NonlinearContext& ctx, radTInteraction* IntrctPtr, c
 
 static double TryMomentAndersonAcceleration(NonlinearContext& ctx, radTInteraction* IntrctPtr, double baseRelChange)
 {
-	if(rad.m_moment_anderson_depth <= 0 || !ctx.last_solve_was_moment_hacapk || ctx.use_newton ||
+	if(rad.m_moment_anderson_depth <= 0 || !ctx.last_solve_was_moment || ctx.use_newton ||
 	   ctx.totalDOF <= 0 || ctx.OldMagn.size() != (size_t)ctx.totalDOF)
 		return baseRelChange;
 
@@ -1067,6 +1067,7 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 		// Store old values for convergence check
 		StoreOldValuesAndComputeBnorm(ctx, IntrctPtr);
 		ctx.last_solve_was_moment_hacapk = false;
+		ctx.last_solve_was_moment = false;
 		ctx.last_moment_linear_tol = 0.0;
 		ctx.last_moment_krylov_solver = rad.m_moment_krylov_solver;
 
@@ -2323,6 +2324,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			fprintf(stderr, "Radia::Solve> newton_method=True is not implemented for the multipole-moment surface-charge path; refusing to run Picard silently.\n");
 			return -4;
 		}
+		ctx.last_solve_was_moment = true;   // moment LU path -> Anderson(1) eligible (safeguarded)
 		std::vector<int> momElem; IntrctPtr->CollectMomentElems(momElem);   // hex(6)+wedge/pyramid(5), matches BuildMomentSystemCore
 		int nMom = (int)momElem.size();
 		std::vector<double> chiPerHex((size_t)nMom), HextPerHex((size_t)nMom*3);
@@ -2880,6 +2882,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			fprintf(stderr, "Radia::Solve> newton_method=True is not implemented for the multipole-moment surface-charge path; refusing to run Picard silently.\n");
 			return -4;
 		}
+		ctx.last_solve_was_moment = true;   // moment dense-K / H-matrix path -> Anderson(1) eligible (safeguarded)
 		// Keep the TaskManager active for dense moment assembly, matvec, and block-Jacobi application.
 		// Without this region the method-1 moment branch falls back to effectively serial ngcore::ParallelFor
 		// execution, which makes MDX scaling measurements misleading.
