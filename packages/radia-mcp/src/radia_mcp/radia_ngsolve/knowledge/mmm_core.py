@@ -733,6 +733,35 @@ reduction at very high mu_r via a coarse-space preconditioner -- stays
 deprioritized: iterations are already N-independent and modest at engineering
 mu_r, and the deflation machinery it would resemble was deliberately removed.
 
+ANDERSON+PICARD DEFAULT (2026-07-03, Sugahara decision): `moment_anderson_depth`
+now DEFAULTS to 1 and the safeguarded Anderson(1) mixing is gated on ANY moment
+Picard solve (method 0 LU / 1 dense-K / 2 H-matrix; previously method-2-only and
+default off).  WHY: plain Picard converges the ascending leg of a hysteresis
+loop but DIVERGES on strongly-COUPLED blocks at the first steep DESCENDING-branch
+step (measured on a 4x4x4 hex block, synthetic play material; `relax_param=0.3`
+does NOT rescue -- the mixing DIRECTION matters, not the step size).  Anderson(1)
+completes the full loop: method 2 median 4.5 iters/step (max 22, ~0.6 s total),
+method 0 median 10 (max 86), final Mz m0-vs-m2 rel ~6e-5.  The acceptance is
+SAFEGUARDED (accelerated iterate kept only if it reduces the residual) so linear
+and well-behaved solves are unchanged (74 regression tests green on the flip).
+Opt out with `rad.SolverConfig(moment_anderson_depth=0)`.
+Golden: validation_test/hysteresis/test_binput_moment.py::
+test_E_coupled_block_loop_default_anderson.
+
+HYSTERESIS SOLVER ROUTING (same probe): on all-moment (DOF>=4) hysteresis bodies
+BOTH `b_input_newton=True` and `b_input_hantila=True` route to the SAME moment
+B-input Picard(+Anderson) -- verified bit-identical.  The dense 3-DOF B-input
+Newton/Hantila survive only for genuine 3-DOF dipoles, which no longer exist for
+soft iron post tet/RecMag->MSC unification.  Picard-vs-Hantila verdict for the
+VIM/demag class: Picard(+Anderson) wins -- the demag factor caps the effective
+contrast (open-boundary regularization), chord adapts to the operating point
+while Hantila's global alpha must cover the steepest descending-branch slope
+(its own auto-alpha rule: max chi x1.5 -> contraction (M-m)/(M+m) -> hundreds of
+iterations), and MMMM already owns Hantila's expensive-part-once economics via
+the chi-free cross-solve K cache.  Hantila's remaining niche: guaranteed
+convergence for pathological monotone laws + time-periodic FEM (constant
+operator diagonalizes per harmonic).
+
 ### Properties (verified)
 
 - dof = sum of per-element DOF (tet/RecMag 3, wedge/pyramid 5, hex 6). A 32-hex block

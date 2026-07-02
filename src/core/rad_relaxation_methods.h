@@ -88,6 +88,7 @@ struct NonlinearContext {
 	double max_B_rel_change;    // Maximum relative B change this iteration
 	double nonlinear_tol;       // Outer nonlinear convergence tolerance
 	bool last_solve_was_moment_hacapk;  // True when the last linear step used the moment method-2 path
+	bool last_solve_was_moment;         // True when the last linear step used ANY moment path (LU / dense-K / H-matrix) -- gates Anderson
 	double last_moment_linear_tol;      // Effective tolerance used by the last moment Krylov solve
 	int last_moment_krylov_solver;      // 0=BiCGSTAB, 1=GMRES
 
@@ -144,6 +145,7 @@ struct NonlinearContext {
 		, max_B_rel_change(0.0)
 		, nonlinear_tol(0.0)
 		, last_solve_was_moment_hacapk(false)
+		, last_solve_was_moment(false)
 		, last_moment_linear_tol(0.0)
 		, last_moment_krylov_solver(0)
 		, relax_param(0.0)

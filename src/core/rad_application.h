@@ -207,7 +207,12 @@ public:
 		m_moment_krylov_solver = 0;
 		m_moment_gmres_restart = 40;
 		m_moment_use_hmatrix = false;
-		m_moment_anderson_depth = 0;
+		m_moment_anderson_depth = 1;  // Default ON (2026-07-03, Sugahara "Anderson+Picard"): safeguarded Anderson(1)
+		                              // on every moment Picard solve (LU / dense-K / H-matrix).  Rescues the measured
+		                              // coupled-block B-input hysteresis divergence on the descending branch (plain
+		                              // Picard fails, relax=0.3 fails; Anderson completes at ~4.5 iters/step).  The
+		                              // acceptance is safeguarded (accelerated iterate kept only if it reduces the
+		                              // residual), so linear and well-behaved solves are unaffected.  0 = plain Picard.
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
