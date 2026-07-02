@@ -107,10 +107,9 @@ def test_impedance_efie_torus_absolute(gapped_torus_vol):
     from radia.bem.coil_inductance_ngsolve import (
         compute_inductance_source_sink)
 
-    mesh = _surface_mesh(gapped_torus_vol)
-
     results = {}
     with TaskManager():
+        mesh = _surface_mesh(gapped_torus_vol)
         for freq in (150e3, 7e3):
             omega = 2 * math.pi * freq
             results[freq] = compute_inductance_source_sink(
