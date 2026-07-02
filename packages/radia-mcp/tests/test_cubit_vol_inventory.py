@@ -459,7 +459,7 @@ def test_cubit_mass_property_sidecar_gate_records_volume_area_and_bbox():
 
 
 def test_cubit_export_package_identity_gate_pairs_vol_sidecar_raw_and_ids():
-    vol_path = r"S:\CoreformCubit\_crossval\slot146_hex_brick_o3.vol"
+    vol_path = "artifacts/slot146_hex_brick_o3.vol"
     artifacts = [
         {
             "kind": "vol",
@@ -477,13 +477,13 @@ def test_cubit_export_package_identity_gate_pairs_vol_sidecar_raw_and_ids():
         },
         {
             "kind": "raw_result",
-            "path": r"S:\CoreformCubit\_crossval\slot146_hex_brick_raw.json",
+            "path": "artifacts/slot146_hex_brick_raw.json",
             "export_id": "slot146_hex_brick_o3",
             "geometry_id": "hex_brick_v1",
         },
         {
             "kind": "mass_property_sidecar",
-            "path": r"S:\CoreformCubit\_crossval\slot146_hex_brick_mass.json",
+            "path": "artifacts/slot146_hex_brick_mass.json",
             "export_id": "slot146_hex_brick_o3",
             "geometry_id": "hex_brick_v1",
         },
@@ -507,7 +507,7 @@ def test_cubit_export_package_identity_gate_pairs_vol_sidecar_raw_and_ids():
     assert gate["checks"]["inventory_routing_hint_matches_expected"] is True
 
     wrong_sidecar = [dict(row) for row in artifacts]
-    wrong_sidecar[1]["path"] = r"S:\CoreformCubit\_crossval\slot146_other.vol.json"
+    wrong_sidecar[1]["path"] = "artifacts/slot146_other.vol.json"
     bad_sidecar = cubit_export_package_identity_gate(
         wrong_sidecar,
         expected_export_id="slot146_hex_brick_o3",
