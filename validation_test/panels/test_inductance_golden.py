@@ -217,6 +217,17 @@ def test_inductance_bem_a_vacuum_rect_united():
                      hint="BEM-A converged ~153.5 nH; ~3.5% above PEEC "
                           "due to rect-corner current crowding modelled "
                           "by surface RWG.")
+    # Panel-level R lock for the unified impedance-EFIE (the ONLY
+    # place the CLI-path BEM-A R is asserted since the PEC removal;
+    # captured 0.6785 mOhm at 50 kHz / maxh=0.012 on LAB 2026-07-02,
+    # +-20% band for per-machine re-mesh variation).
+    _assert_in_range(result["R_coil_mOhm"], 0.54, 0.82,
+                     "R_coil_mOhm (BEM-A impedance-EFIE band)",
+                     hint="Captured 0.6785 mOhm (impedance-EFIE, Zs in "
+                          "the saddle).  A big jump suggests the PEC "
+                          "post-hoc over-concentration came back; a "
+                          "collapse suggests Zs fell out of the "
+                          "(1,1)=jw*mu0*SL+Zs*M block.")
     assert result["bem_a_residual"] < 1e-12
 
 
