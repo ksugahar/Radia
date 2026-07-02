@@ -17,6 +17,7 @@ def test_loop_learning_topics_cover_current_loop_lessons():
         "bem_demag_source_mesh",
         "acoustic_impedance_power",
         "rf_acoustic_passivity",
+        "artifact_feedback",
         "mcp_closure",
     }.issubset(TOPICS)
 
@@ -97,6 +98,15 @@ def test_loop_learning_topics_cover_current_loop_lessons():
     assert "solver_configuration_digest" in rf
     assert "relative_tolerance" in rf
     assert "Purely reactive impedance" in rf
+
+    artifact_feedback = get_loop_learning_documentation("artifact_feedback")
+    assert "cross_validation_artifact_to_mcp_feedback_gate" in artifact_feedback
+    assert "solver_result_artifact_provenance_timing_gate" in artifact_feedback
+    assert "learning_lanes.public" in artifact_feedback
+    assert "notebook_source_artifact_id" in artifact_feedback
+    assert "verification.public" in artifact_feedback
+    assert "public-safe lesson" in artifact_feedback
+    assert "learned" in artifact_feedback
 
 
 def test_loop_learning_closure_prevents_overclaiming():

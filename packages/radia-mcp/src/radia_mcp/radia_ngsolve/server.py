@@ -1925,6 +1925,7 @@ def loop_learning(topic: str = "overview") -> str:
       force_moment            -- Lorentz, Maxwell traction, coenergy, moments
       motor_airgap_torque     -- Br/Bt harmonic torque phase and sign gates
       rf_acoustic_passivity   -- acoustic impedance and two-port passivity gates
+      artifact_feedback       -- JSON/notebook/result artifact -> MCP knowledge
       mcp_closure             -- collected/distilled/encoded/verified/learned labels
       all                     -- complete document
 
