@@ -3151,6 +3151,47 @@ def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_a
     assert notebook_gate["status"] == "needs_attention"
     assert notebook_gate["checks"]["notebook_source_digest_recorded_when_required"] is False
 
+    replayable = {
+        **artifact,
+        "verification": {
+            "public": "pytest packages/radia-mcp/tests/test_loop_slot_gates.py",
+            "commands": [
+                {
+                    "command": "python -m pytest packages/radia-mcp/tests/test_loop_slot_gates.py -q",
+                    "result": "passed",
+                }
+            ],
+        },
+    }
+    replayable_gate = cross_validation_artifact_to_mcp_feedback_gate(
+        replayable,
+        require_replayable_verification_commands=True,
+    )
+    assert replayable_gate["status"] == "ok"
+    assert replayable_gate["checks"]["replay_command_recorded_when_required"] is True
+    assert replayable_gate["checks"]["replay_commands_normalized_when_required"] is True
+    assert replayable_gate["normalized_replay_commands"] == [
+        "python -m pytest packages/radia-mcp/tests/test_loop_slot_gates.py -q"
+    ]
+
+    annotated_command = {
+        **artifact,
+        "verification": {
+            "commands": [
+                {
+                    "command": "python -m pytest packages/radia-mcp/tests/test_loop_slot_gates.py -q -> passed"
+                }
+            ],
+        },
+    }
+    annotated_gate = cross_validation_artifact_to_mcp_feedback_gate(
+        annotated_command,
+        require_replayable_verification_commands=True,
+    )
+    assert annotated_gate["status"] == "needs_attention"
+    assert annotated_gate["checks"]["replay_command_recorded_when_required"] is True
+    assert annotated_gate["checks"]["replay_commands_normalized_when_required"] is False
+
 
 def test_owned_solver_model_tag_lifecycle_gate_requires_owned_cleanup_before_reuse():
     artifact = {
