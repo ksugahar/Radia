@@ -15,14 +15,45 @@ On the 3-turn pancake (Cu, n_peri=16, 150 kHz):
 | **2026-05-20 (+ proximity)** | **4.4793 mΩ** | **431.32 nH** | **production default** |
 | LCR hi-tester measurement | ~15 mΩ | — | see §6 |
 
-The gap from 4.48 → 15 mΩ on the measurement is most plausibly
-**lead/contact resistance** (5–50 mΩ typical at 2-terminal probes at low
-Ohm); 4-terminal Kelvin re-measurement on the coil terminals is the
-deciding test.  The structural ceiling of perimeter PEEC + proximity
-iteration is ~1.2× the self-skin value (it captures surface-Leontovich
-proximity but **not** transverse eddy loops in the wire interior); see
-[`VOLUME_PEEC_DESIGN.md`](../peec/VOLUME_PEEC_DESIGN.md) for the
-deferred radial-filament path that would close that remaining gap.
+**Update 2026-07-02 (3-turn measurement case reopen)**: on a
+converged BEM-A run of the SAME 3-turn coil geometry, BEM-A returns
+**R = 15.14 mΩ** matching the LCR hi-tester ~15 mΩ.  So the
+4.48 → 15 mΩ gap is NOT lead/contact resistance -- BEM-A reproduces
+the measurement without leads.  The gap is a real PEEC vs BEM-A
+physics discrepancy for tightly-packed multi-turn coils.
+
+The structural ceiling of perimeter PEEC + proximity iteration is
+~1.2× the self-skin value and is a **formulation ceiling, not an
+algorithm-parameter ceiling**.  Investigated 2026-07-02:
+
+- Increased ``n_peri`` from 16 to 32 to 64 (more parallel perimeter
+  filaments): R stays 4.3--4.5 mΩ, no trend toward 15 mΩ.
+- Increased eval-point density per filament from 1 (centroid) to 32,
+  128, 256 axial samples: same 4.4 mΩ saturation.
+- Switched from Zs_fil-embedded iteration to direct dissipation
+  summation (``R = R_bessel + ∫|H_prox|² / |I_port|²``): same 4.4 mΩ.
+- Varied the near-source exclusion (source segments within
+  ``R_exclude_factor × wire_radius`` of an eval point are dropped
+  to avoid double-counting the self-skin baked into Bessel):
+  factor 1.0 gives 4.3 mΩ, factor 8.0 gives 3.7 mΩ.  Peak is 4.3 mΩ.
+
+Root cause: at the wire surface the discrete-filament Biot-Savart
+sum from N line currents distributed around the perimeter yields
+tangential H on the order of 1300 A/m at N=16, versus Ampere's
+``I/(2πa) = 5052 A/m`` for the isolated wire.  Ampere's limit is
+approached only as N → ∞ (log-divergently).  For N in the practical
+range (16--64), the surface H that Biot-Savart produces is
+fundamentally under the surface H that BEM-A's EFIE saddle J
+distribution produces on the same surface -- the two formulations
+are not equivalent for surface impedance dissipation.
+
+**Correct tool for this problem class**: BEM-A (surface EFIE
+saddle) captures the physics that perimeter-filament PEEC
+structurally cannot.  Volume PEEC (deferred, see
+[`VOLUME_PEEC_DESIGN.md`](../peec/VOLUME_PEEC_DESIGN.md), ~1-week
+effort) would add radial filaments to represent the transverse eddy
+loops inside the wire cross-section; combined with the existing
+perimeter filaments this may close the gap.
 
 To get the self-only Bessel R/L for cross-checks: pass
 `--no-peec-proximity` to `calc_inductance.py`.
