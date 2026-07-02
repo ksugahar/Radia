@@ -2677,50 +2677,37 @@ rad.Solve(container, 0.0001, 1000, 1)
 rad.SolverConfig(relax_param=0.0)  # Reset to full step
 ```
 
-### Hantila Polarization Method
+### Nonlinear Iteration: Anderson+Picard Default (Hantila Historical)
 
-Hantila (1975) splits the constitutive relation into constant linear part + residual:
+**POLICY (2026-07-03, Sugahara "Anderson+Picardで行きます")**: the production
+nonlinear iteration for the moment path (ALL soft iron -- tet/wedge/pyramid/hex
+face-charge elements) is **Picard + safeguarded Anderson(1)**, default ON
+(`moment_anderson_depth = 1`, gated on ANY moment solve: method 0 LU, method 1
+dense-K, method 2 H-matrix; hysteresis uses the B-input moment Picard).  The
+safeguard accepts the accelerated iterate only when it reduces the residual, so
+linear and well-behaved solves are unaffected.  `rad.SolverConfig(
+moment_anderson_depth=0)` opts out to plain Picard.
 
-```
-B = mu_0*(1+alpha)*H + mu_0*R    where R = M - alpha*H
-```
+**Why**: plain Picard DIVERGES on strongly-coupled hysteresis blocks at the
+descending-branch steep-slope steps (measured 2026-07-03, 4x4x4 hex block;
+`relax_param=0.3` does NOT rescue); Anderson(1) completes the full loop at
+~4.5 iters/step (method 2) / ~10 (method 0), methods agreeing to ~6e-5.
+Golden: `validation_test/hysteresis/test_binput_moment.py::
+test_E_coupled_block_loop_default_anderson` (also locks the default).
 
-For Radia MMM, the interaction matrix N maps M -> H_demag (constant, geometry-only):
-
-```
-H = H_ext + N*M
-Substituting M = alpha*H + R:
-(I - alpha*N)*H = H_ext + N*R    <- constant LHS, LU factored ONCE
-```
-
-**Advantages over Picard/Newton**:
-
-| Feature | Picard (rad.Solve) | Newton | Hantila |
-|---------|-------------------|--------|---------|
-| Matrix factorization | Every iteration | Every iteration | **Once** |
-| Jacobian needed | No | Yes (dM/dH) | **No** |
-| BH curves | Yes | Yes | **Yes** |
-| Hysteresis | No | No | **Yes** |
-| Cost per iteration | O(N^3) LU | O(N^3) LU | **O(N^2) back-sub** |
-
-**Current limitation**: MMM (tetrahedra, 3 DOF) only. MSC (hexahedra, 6 DOF) requires sigma-M conversion (future).
-
-**Usage**:
-```python
-from radia.hantila_solver import solve_hantila
-
-# BH curve case
-result = solve_hantila(iron_container, source=coil,
-                       bh_data=BH_DATA, alpha=500.0, tol=1e-4)
-
-# Hysteresis case (per-element material handles)
-result = solve_hantila(iron_container, source=coil,
-                       mat_handles=handles, alpha=500.0, relax=0.5)
-
-# Result: M and H per element, convergence info
-M = result['M']  # (n_elem, 3) in A/m
-B = rad.Fld(iron_container, 'b', [0, 0, 0.05])  # Field evaluation
-```
+**Hantila polarization method (historical)**: Hantila (1975) splits
+`B = mu_0*(1+alpha)*H + mu_0*R` (R = M - alpha*H), giving a CONSTANT LHS
+`(I - alpha*N)` LU-factored once -- guaranteed contraction for any monotone
+constitutive law, but slow (contraction rate (M-m)/(M+m) with GLOBAL slope
+bounds; its own auto-alpha must cover the steepest descending-branch chi x1.5).
+The dense 3-DOF `AutoRelax_BInput_Hantila` (+ B-input Newton) survive in C++
+ONLY for genuine 3-DOF dipole elements; after the tet/RecMag->MSC unification
+no soft-iron 3-DOF elements exist, so `b_input_hantila=True` /
+`b_input_newton=True` on all-moment bodies ROUTE to the moment B-input
+Picard(+Anderson) (verified bit-identical, 2026-07-03).  The Python
+`radia.hantila_solver` PoC was removed with the moment unification.
+MMMM already owns Hantila's one economic advantage (expensive-part-built-once)
+via the chi-free cross-solve K cache.
 
 Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
 

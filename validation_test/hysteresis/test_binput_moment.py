@@ -41,6 +41,11 @@ verifies the converged state actually satisfies the play relation H = Forward(B)
   (C) tet(4) and hex(6) both solve without Error205 and pass (A)/(A').
   (D) With b_input OFF and a linear MatLin material, the same geometry solves
       (no regression of the linear / H-input moment path).
+  (E) STRONG-COUPLING regression (2026-07-03 "Anderson+Picard" default): a 4x4x4
+      hex block driven around a full loop completes on BOTH method 0 and method 2
+      with the DEFAULT config (moment_anderson_depth=1), stays hysteretic, and the
+      two methods agree.  With depth=0 (plain Picard) this block DIVERGES on the
+      descending branch -- a failure mode the weakly-coupled (A)-(D) cases cannot see.
 """
 
 import sys
@@ -311,6 +316,65 @@ def test_D_linear_no_binput_regression(name, build):
     rad.UtiDelAll()
 
 
+# ==========================================================================
+# (E) STRONG-COUPLING regression: 4x4x4 hex block, full hysteresis loop with
+#     the DEFAULT config -- locks the 2026-07-03 "Anderson+Picard" decision
+#     (moment_anderson_depth default 1, gated on ANY moment path).
+#
+# Measured 2026-07-03 (probe C:\temp\mmmm_profile\probe_hantila_vs_picard.py):
+# with moment_anderson_depth=0 (plain Picard) this block DIVERGES at the first
+# steep DESCENDING-branch step (relax_param=0.3 does NOT rescue; the descending
+# play branch has the steepest differential slope); the safeguarded Anderson(1)
+# default completes the full loop (method 2 median 4.5 iters/step, max 22;
+# method 0 median 10, max 86; final Mz m0 vs m2 rel ~6e-5).  The (A)-(D) cases
+# (single hex / 5-tet cube) are weakly coupled and cannot see this failure mode.
+# ==========================================================================
+def test_E_coupled_block_loop_default_anderson():
+    assert rad.GetSolverConfig()["moment_anderson_depth"] == 1, \
+        "moment_anderson_depth default regressed (must be 1, the 2026-07-03 Anderson+Picard decision)"
+    K_, eta_, tables_ = _synthetic_play()
+    L = 0.01
+
+    def build_block(n=4):
+        objs = []
+        for ix in range(n):
+            for iy in range(n):
+                for iz in range(n):
+                    x0, y0, z0 = ix * L, iy * L, iz * L
+                    v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                         [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                    h = rad.ObjHexahedron(v, [0, 0, 0])
+                    rad.MatApl(h, rad.MatPlayHysteresis(K_, eta_, tables_))
+                    objs.append(h)
+        return objs
+
+    drive = np.concatenate([np.linspace(0.05, 0.4, 8),
+                            np.linspace(0.4, -0.4, 16)[1:],
+                            np.linspace(-0.4, 0.4, 16)[1:]])
+    mz_final = {}
+    for method in (0, 2):
+        rad.UtiDelAll()
+        rad.SolverConfig(b_input_newton=True)   # stabilization comes from the DEFAULT anderson depth
+        objs = build_block()
+        mz = []
+        for bext in drive:
+            cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p, b=float(bext): [0, 0, b])])
+            rad.Solve(cont, 1e-6, 800, method)  # raises if any step diverges (= the depth=0 failure mode)
+            st = dict(rad.GetSolveStats())
+            assert int(st.get("nonl_iterations", 0)) < 400, f"m{method}: runaway Picard at B={bext:+.3f}"
+            mz.append(float(np.mean([_objm_list(h)[0][1][2] for h in objs])))
+        rad.SolverConfig(b_input_newton=False)
+        mz = np.asarray(mz)
+        # hysteretic gate: ascending leg vs the descending revisit of the same B values must separate
+        assert np.max(np.abs(mz[:8] - mz[8:23][::-1][:8])) > 1e-3 * np.max(np.abs(mz)), \
+            f"m{method}: loop closed (no hysteresis)"
+        mz_final[method] = mz[-1]
+        rad.UtiDelAll()
+    rel = abs(mz_final[0] - mz_final[2]) / max(abs(mz_final[0]), 1e-30)
+    assert rel < 1e-3, f"method-0 vs method-2 final Mz disagree: rel={rel:.2e}"
+    print(f"[E] coupled 4x4x4 loop OK on m0+m2, final Mz rel={rel:.2e}")
+
+
 if __name__ == "__main__":
     t0 = time.time()
     test_A_hex_play_relation_satisfied()
@@ -321,4 +385,5 @@ if __name__ == "__main__":
     test_B_hysteresis_loop()
     for nm, bld in [("hex", _build_hex), ("tet", _build_tet)]:
         test_D_linear_no_binput_regression(nm, bld)
+    test_E_coupled_block_loop_default_anderson()
     print(f"\nALL B-input moment validation passed in {time.time()-t0:.1f}s")

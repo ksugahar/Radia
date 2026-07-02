@@ -90,6 +90,32 @@ no code change):
   was CPU contention (load jumped 5% -> 57% mid-run), not code -- re-run
   timing anomalies on a quiet machine before believing them.
 
+## Anderson+Picard Default (Hysteresis Stabilization)
+
+Decision + measurements, 2026_07_03 (Sugahara: "Anderson+Picardで行きます"):
+
+- `moment_anderson_depth` DEFAULTS to 1; the safeguarded Anderson(1) mixing is
+  gated on ANY moment Picard solve (method 0 LU / 1 dense-K / 2 H-matrix) via
+  the new `ctx.last_solve_was_moment` flag (previously method-2-only, default
+  off).  Opt out: `rad.SolverConfig(moment_anderson_depth=0)`.
+- Why: plain B-input Picard DIVERGES on a strongly-coupled 4x4x4 hex hysteresis
+  block at the first steep DESCENDING-branch step (`relax_param=0.3` does NOT
+  rescue -- mixing direction, not step size, is what matters).  Anderson(1)
+  completes the full loop: method 2 median 4.5 iters/step (max 22), method 0
+  median 10 (max 86), final Mz m0-vs-m2 rel ~6e-5.  Weakly-coupled goldens
+  (single hex, 5-tet cube) cannot see this failure mode.
+- Safeguarded acceptance (keep accelerated iterate only if the residual drops)
+  means linear / well-behaved solves are unchanged: 74 regression tests green
+  on the default flip.
+- Routing fact locked the same day: on all-moment hysteresis bodies BOTH
+  `b_input_newton=True` and `b_input_hantila=True` route to this same moment
+  B-input Picard(+Anderson) (verified bit-identical); the dense 3-DOF
+  Newton/Hantila survive only for genuine 3-DOF dipoles (none exist for soft
+  iron post-unification).
+- Golden: `validation_test/hysteresis/test_binput_moment.py::
+  test_E_coupled_block_loop_default_anderson` (locks the default value, the
+  full-loop completion on m0+m2, hysteretic branch separation, and m0==m2).
+
 ## Engineering Benchmark Range
 
 Decision, 2026_06_26:
