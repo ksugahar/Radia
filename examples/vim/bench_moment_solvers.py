@@ -15,8 +15,11 @@ process so psutil peak_wset is per-case accurate):
     per-iteration cost.
   - iterations, converged, peak_memory_mb, external-B probe values (cross-method correctness).
 
-Geometries: 'cube' n x n x n (compact, near-field dominated -- H-matrix mostly dense blocks) and
-'bar' 2 x 2 x m (elongated -- admissible far blocks, ACA compression pays off).
+Geometries: 'cube' n x n x n (compact, near-field dominated -- H-matrix mostly dense blocks),
+'bar' 2 x 2 x m (elongated -- admissible far blocks, ACA compression pays off), and 'ctype'
+(the validated voxelized hex C-yoke of bench_multipole_moment_scaling.py: outer 0.12 m square,
+inner cavity, +x gap; nxy=nside, nz=max(2,nside//3); in-plane drive H=[0,H0,0] -- the realistic
+loop-heavy engineering geometry).
 
 mdx-ready: imports `radia` DIRECTLY (PyPI on mdx / editable on LAB), fully self-contained.
 
@@ -51,31 +54,88 @@ def get_peak_memory_mb():
     return (mem.peak_wset if hasattr(mem, "peak_wset") else mem.rss) / (1024.0 * 1024.0)
 
 
+# --- C-yoke voxelization (inline copy of bench_multipole_moment_scaling.py's validated builder;
+# kept inline so the benchmark has zero import-path dependency = mdx-clean) ---
+
+def _inside_cyoke(cx, cy):
+    # outer square [-0.06,0.06]^2, minus inner cavity [-0.035,0.035]^2, minus gap x>0.018 (C opens +x)
+    if not (-0.06 <= cx <= 0.06 and -0.06 <= cy <= 0.06):
+        return False
+    if -0.035 <= cx <= 0.035 and -0.035 <= cy <= 0.035:
+        return False
+    if cx > 0.018 and -0.035 <= cy <= 0.035:
+        return False
+    return True
+
+
+def ctype_grid(nside):
+    """(nxy, nz) for a ctype case: nz keeps ~cubic voxels (z extent 0.04 vs xy extent 0.12)."""
+    return nside, max(2, nside // 3)
+
+
+def count_ctype_hexes(nside):
+    """Exact hex count of the ctype voxelization (pure python, no radia -- used by the sweep planner)."""
+    nxy, nz = ctype_grid(nside)
+    xs = np.linspace(-0.06, 0.06, nxy + 1)
+    n_inplane = sum(1 for j in range(nxy) for i in range(nxy)
+                    if _inside_cyoke(0.5 * (xs[i] + xs[i + 1]), 0.5 * (xs[j] + xs[j + 1])))
+    return n_inplane * nz
+
+
 def build_model(geom, nside, mu_r):
-    """Pure-hex block: cube nside^3 or bar 2x2xnside.  Returns (container, nHex, extents)."""
-    if geom == "cube":
-        nx = ny = nz = nside
-    elif geom == "bar":
-        nx = ny = 2
-        nz = nside
-    else:
-        raise ValueError("geom must be cube|bar")
+    """Pure-hex model: cube nside^3, bar 2x2xnside, or the voxelized C-yoke.
+    Returns (container, nHex, extents, origin_centered)."""
     objs = []
-    for iz in range(nz):
-        for ix in range(nx):
-            for iy in range(ny):
-                x0, y0, z0 = ix * L, iy * L, iz * L
-                v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
-                     [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
-                h = rad.ObjHexahedron(v, [0, 0, 0])
-                rad.MatApl(h, rad.MatLin(mu_r))
-                objs.append(h)
-    cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])])
-    return cont, len(objs), (nx * L, ny * L, nz * L)
+    if geom in ("cube", "bar"):
+        if geom == "cube":
+            nx = ny = nz = nside
+        else:
+            nx = ny = 2
+            nz = nside
+        for iz in range(nz):
+            for ix in range(nx):
+                for iy in range(ny):
+                    x0, y0, z0 = ix * L, iy * L, iz * L
+                    v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                         [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                    h = rad.ObjHexahedron(v, [0, 0, 0])
+                    rad.MatApl(h, rad.MatLin(mu_r))
+                    objs.append(h)
+        extents = (nx * L, ny * L, nz * L)
+        centered = False
+        bckg = [0.0, 0.0, MU0 * H0]                      # z-drive
+    elif geom == "ctype":
+        nxy, nz = ctype_grid(nside)
+        xs = np.linspace(-0.06, 0.06, nxy + 1)
+        zs = np.linspace(-0.02, 0.02, nz + 1)
+        for k in range(nz):
+            for j in range(nxy):
+                for i in range(nxy):
+                    if not _inside_cyoke(0.5 * (xs[i] + xs[i + 1]), 0.5 * (xs[j] + xs[j + 1])):
+                        continue
+                    x0, x1, y0, y1 = xs[i], xs[i + 1], xs[j], xs[j + 1]
+                    z0, z1 = zs[k], zs[k + 1]
+                    v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
+                         [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]]
+                    h = rad.ObjHexahedron(v, [0, 0, 0])
+                    rad.MatApl(h, rad.MatLin(mu_r))
+                    objs.append(h)
+        extents = (0.12, 0.12, 0.04)
+        centered = True
+        bckg = [0.0, MU0 * H0, 0.0]                      # in-plane y-drive (excites the C loop)
+    else:
+        raise ValueError("geom must be cube|bar|ctype")
+    cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: list(bckg))])
+    return cont, len(objs), extents, centered
 
 
-def probe_points(extents):
+def probe_points(geom, extents):
     ex, ey, ez = extents
+    if geom == "ctype":
+        # gap-center (the engineering observable) + two external points; yoke is origin-centered
+        return [[0.045, 0.0, 0.0],
+                [0.09, 0.03, 0.005],
+                [0.0, 0.09, 0.01]]
     return [[1.5 * ex, 0.25 * ey, 0.25 * ez],
             [0.25 * ex, 1.5 * ey, 0.50 * ez],
             [0.50 * ex, 0.50 * ey, 1.4 * ez]]
@@ -89,9 +149,9 @@ def run_case(args):
                      hacapk_eps=args.hacapk_eps, hacapk_leaf=args.hacapk_leaf,
                      hacapk_eta=args.hacapk_eta)
 
-    cont, n_hex, extents = build_model(args.geom, args.nside, args.mu_r)
+    cont, n_hex, extents, _centered = build_model(args.geom, args.nside, args.mu_r)
     ndof = 6 * n_hex
-    pts = probe_points(extents)
+    pts = probe_points(args.geom, extents)
 
     case = {
         "method": args.method, "geom": args.geom, "nside": args.nside,
@@ -148,12 +208,18 @@ def run_case(args):
 
 def sweep(args):
     """Spawn one subprocess per case (Benchmark Policy: per-case memory accuracy), aggregate JSON."""
-    cube_sides = args.cube_sides or [4, 6, 8, 10, 12, 16, 20]
-    bar_sides = args.bar_sides or [25, 50, 100, 200, 400, 800]
+    cube_sides = args.cube_sides if args.cube_sides is not None else [4, 6, 8, 10, 12, 16, 20]
+    bar_sides = args.bar_sides if args.bar_sides is not None else [25, 50, 100, 200, 400, 800]
+    ctype_sides = args.ctype_sides if args.ctype_sides is not None else [12, 18, 24, 30, 36]
     plan = []
-    for geom, sides in (("cube", cube_sides), ("bar", bar_sides)):
+    for geom, sides in (("cube", cube_sides), ("bar", bar_sides), ("ctype", ctype_sides)):
         for ns in sides:
-            n_hex = ns ** 3 if geom == "cube" else 4 * ns
+            if geom == "cube":
+                n_hex = ns ** 3
+            elif geom == "bar":
+                n_hex = 4 * ns
+            else:
+                n_hex = count_ctype_hexes(ns)
             ndof = 6 * n_hex
             for method in (0, 1, 2):
                 if method == 0 and ndof > args.max_lu_dof:
@@ -209,7 +275,7 @@ def sweep(args):
             "hex_edge_m": L, "H0_A_per_m": H0, "mu_r": args.mu_r,
             "bicg_tol": args.bicg_tol, "hacapk_eps": args.hacapk_eps,
             "hacapk_leaf": args.hacapk_leaf, "hacapk_eta": args.hacapk_eta,
-            "cube_sides": cube_sides, "bar_sides": bar_sides,
+            "cube_sides": cube_sides, "bar_sides": bar_sides, "ctype_sides": ctype_sides,
             "max_lu_dof": args.max_lu_dof, "max_dense_dof": args.max_dense_dof,
             "radia_version": getattr(rad, "__version__", "unknown"),
             "python_version": platform.python_version(),
@@ -229,7 +295,12 @@ def sweep(args):
         def w(m, f):
             return f"{row[m][f]:9.3f}" if m in row else "        -"
         rel2 = f"{row[2].get('rel_vs_ref', 0.0):9.2e}" if 2 in row else "        -"
-        ndof = 6 * (key[1] ** 3 if key[0] == "cube" else 4 * key[1])
+        if key[0] == "cube":
+            ndof = 6 * key[1] ** 3
+        elif key[0] == "bar":
+            ndof = 6 * 4 * key[1]
+        else:
+            ndof = 6 * count_ctype_hexes(key[1])
         print(f"{key[0]:5s} {key[1]:5d} {ndof:7d} | {w(0,'t_wall_solve1')} {w(1,'t_wall_solve1')} {w(2,'t_wall_solve1')} |"
               f" {w(0,'t_wall_solve2')} {w(1,'t_wall_solve2')} {w(2,'t_wall_solve2')} | {rel2}")
 
@@ -238,8 +309,9 @@ def build_argparser():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sweep", action="store_true", help="run the full 3-method sweep (subprocess per case)")
     ap.add_argument("--method", type=int, choices=(0, 1, 2), default=2, help="0=LU, 1=BiCGSTAB dense-K, 2=HACApK-BiCGSTAB")
-    ap.add_argument("--geom", choices=("cube", "bar"), default="cube")
-    ap.add_argument("--nside", type=int, default=6, help="cube: n^3 hex; bar: 2x2xn hex")
+    ap.add_argument("--geom", choices=("cube", "bar", "ctype"), default="cube")
+    ap.add_argument("--nside", type=int, default=6,
+                    help="cube: n^3 hex; bar: 2x2xn hex; ctype: nxy=n voxel C-yoke (nz=max(2,n//3))")
     ap.add_argument("--mu-r", type=float, default=200.0)
     ap.add_argument("--bicg-tol", type=float, default=1e-8)
     ap.add_argument("--hacapk-eps", type=float, default=1e-4)
@@ -247,6 +319,7 @@ def build_argparser():
     ap.add_argument("--hacapk-eta", type=float, default=2.0)
     ap.add_argument("--cube-sides", type=int, nargs="*", default=None)
     ap.add_argument("--bar-sides", type=int, nargs="*", default=None)
+    ap.add_argument("--ctype-sides", type=int, nargs="*", default=None)
     ap.add_argument("--max-lu-dof", type=int, default=8000, help="skip method 0 above this dof (LU wall)")
     ap.add_argument("--max-dense-dof", type=int, default=26000, help="skip method 1 above this dof (dense-K wall)")
     ap.add_argument("--case-timeout", type=float, default=3600.0, help="per-case subprocess timeout [s]")
