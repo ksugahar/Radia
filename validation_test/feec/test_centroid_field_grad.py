@@ -1,7 +1,7 @@
 """Golden test for the C++ surface-charge MSC centroid field+gradient accessor: rad.GetCentroidFieldGrad(handle).
 
 This is the kernel of the parameter-free surface-charge MSC moment formulation (the fix for the eval-point alpha and
-the finite-difference conditioning noise; see examples/vim/multipole_moment_analytic_selfterm.py).  For each hex
+the finite-difference conditioning noise).  For each hex
 element it returns the demag field H and gradient gradH at the element CENTROID as linear functionals of
 every source DOF charge:
   SELF face  -> bare charged-face field (interior centroid -> finite, no center charge);
