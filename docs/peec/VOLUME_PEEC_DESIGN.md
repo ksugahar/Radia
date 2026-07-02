@@ -1,9 +1,64 @@
 # Volume PEEC for Pancake Coils — Design Notes
 
-**Status (2026-05-20)**: DEFERRED.  Waiting on a 4-terminal Kelvin
-re-measurement on the 3-turn pancake to confirm whether the
-remaining ~10 mΩ gap to the LCR hi-tester reading (15 mΩ) is real
-or measurement lead/contact resistance.
+**Status (2026-07-02)**: PROTOTYPED in `C:\temp` (research per the
+"run in C:\temp" policy), NOT shipped — because it does NOT close the
+gap, and the investigation indicates the gap most likely should NOT
+be closed (the PEEC ~4.5 mΩ is probably correct; BEM-A's 15 mΩ is the
+outlier).  See the "2026-07-02 outcome" section below.  Prior status
+(2026-05-20): DEFERRED, waiting on a 4-terminal Kelvin re-measurement.
+
+## 2026-07-02 outcome — volume PEEC prototyped, does NOT reach 15 mΩ
+
+A cross-section-averaged volume PEEC (graded polar grid, per-cell
+sub-area, full Ruehli mutual with cross-section averaging on close
+pairs — a real fix over the C++ filamentary mutual, which DIVERGES
+with refinement) was built and validated:
+
+- **Isolated straight wire**: reproduces the closed-form Bessel AC
+  resistance (the model is sound).  Filamentary (center-only) mutual
+  diverges as the mesh refines; cross-section averaging is REQUIRED.
+- **3-turn coil**: CONVERGES to ~3.7 mΩ as angular resolution
+  increases (n_angular 16/24/32/48 → 3.40/3.53/3.59/3.63 mΩ,
+  increments halving).  It does **not** trend toward BEM-A's 15.1 mΩ.
+
+**Why the gap should not be closed** (round-wire proximity is
+intrinsically modest):
+
+- Analytic strong-skin proximity `P_prox/P_self = 2 a²/s² ≈ 0.29` per
+  neighbour at the coil's `s/2a = 1.32` (2 mm surface gap).  Even the
+  numeric 2-wire bundle gives 1.21× at that gap and only 1.30× when
+  nearly touching.  A 3-turn coil (middle turn = 2 neighbours, with
+  field build-up) caps at ~1.4–1.7× → coil R ≈ 4.5–5 mΩ.
+- Three independent methods agree: volume PEEC 3.7, perimeter PEEC
+  4.5, analytic ~4.8 mΩ.  **BEM-A's 15.1 mΩ (4.48× self-skin) is the
+  3× outlier** — a 4.48× proximity factor is not physical for round
+  wires at these gaps (it needs H_ext/H_self > 1.3; here it is ~0.6).
+- BEM-A **is** correctly calibrated on self-skin: BEM-A on an
+  isolated straight wire = 0.3165 mΩ (maxh 1.5 mm) / 0.3153 (maxh
+  1.0 mm) vs Bessel 0.3148 (0.5 % / 0.16 %, mesh-stable).  So the
+  coil over-estimate is coil-specific — hypothesised as
+  perfect-conductor surface-current J over-concentration at the
+  near-contact regions between turns (`Re(Zs)·∫|J|² dS` is
+  mesh-sensitive there; this doc's own record has BEM-A coil
+  2.90 mΩ coarse → 15.14 mΩ fine).  NOT confirmed via a coil BEM-A
+  mesh-convergence sweep (re-mesh + dense EFIE > 20 min per level)
+  nor a 2-wire BEM-A (disconnected / busbar-connected conductors →
+  singular EFIE saddle, a BEM-A robustness gap).
+
+**Recommendation**: keep perimeter PEEC (~4.5 mΩ) as the screening
+R; do NOT trust BEM-A R for tightly-wound multi-turn coils without a
+mesh-convergence check; the decisive ground-truth arbiter remains the
+**4-terminal Kelvin re-measurement** (the 2-terminal LCR hi-tester
+~15 mΩ almost certainly includes contact/lead resistance).  Volume
+PEEC via the constant-current parallel-filament bundle also mildly
+UNDER-counts the coil's along-length-varying proximity (conical
+helix → nearest-neighbour direction rotates), so its 3.7 mΩ is a
+lower bound; a proper volume PEEC would need a full 3-D PEEC MNA
+(nodes at each station, radial current exchange) — a much larger
+effort than the ~1 week estimated below, and not worth it while
+BEM-A already brackets from above and perimeter PEEC is near the
+true value.  Prototype: `C:\temp\volpeec_proto\`
+(wire_bessel_clean.py, coil_volume_vec.py, two_wire_prox.py).
 
 What actually shipped in v4.57.0: **perimeter PEEC + proximity-iterative
 solver** ([`peec_proximity.py`](../../src/radia/peec_proximity.py)),
