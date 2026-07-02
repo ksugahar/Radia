@@ -20,6 +20,7 @@ TOPICS = {
     "geometric_time_integration": "Energy-drift checks for geometric time integration teaching gates",
     "source_native_seed_queue": "How to start multi-tool loop slots from source-native examples without leaking provenance",
     "autonomous_basic_learning": "How to process a full source-native queue into basic learning rows and solver-ready follow-ups",
+    "em_force_target": "How to turn force_torque_motor loop slots into public EM-force gates and source-tool candidates",
     "artifact_feedback": "How cross-validation JSON and notebook/result artifacts become MCP knowledge",
     "mcp_closure": "How to decide whether an MCP server has actually learned",
 }
@@ -539,6 +540,33 @@ MCP feedback artifact gate.
 """
 
 
+EM_FORCE_TARGET = r"""
+# Electromagnetic force target pass
+
+Use an EM force target pass after an autonomous basic-learning artifact has
+classified loop slots.  The pass selects `force_torque_motor` slots and gives
+each slot one solver-independent public row before live/source-tool execution:
+
+* FEMM-like conductor-force slots: signed parallel-wire Lorentz force.
+* COMSOL-like actuator slots: magnetic air-gap pressure / reluctance force.
+* JMAG-like motor slots: IPM dq torque split into magnet and reluctance terms.
+* ELF/MAGIC-like PM/BEM slots: force-gap sweep with a fourth-power far-field
+  invariant.
+
+The public lane is learned only when the analytic rows pass
+`computed_reference_rows_gate` and the artifact feedback gate records the MCP
+target and focused verification.  The source-tool lane normally remains
+`candidate` at this stage.  It becomes learned only after the owning private
+MCP/converter or live workflow gets its own focused edit and verification.
+
+In radia-mcp, use
+`em_force_target.build_em_force_target_artifact` or the validation CLI
+`validation/force/electromagnetic_force_target.py`.  Treat its output as the
+solver-ready queue for heavier FEMM/JMAG/ELF/COMSOL force slots, not as a claim
+that those solvers have executed.
+"""
+
+
 ARTIFACT_FEEDBACK = r"""
 # Cross-validation and notebook artifact feedback
 
@@ -643,6 +671,7 @@ _TOPIC_TEXT = {
     "geometric_time_integration": GEOMETRIC_TIME_INTEGRATION,
     "source_native_seed_queue": SOURCE_NATIVE_SEED_QUEUE,
     "autonomous_basic_learning": AUTONOMOUS_BASIC_LEARNING,
+    "em_force_target": EM_FORCE_TARGET,
     "artifact_feedback": ARTIFACT_FEEDBACK,
     "mcp_closure": MCP_CLOSURE,
 }
