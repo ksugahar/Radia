@@ -6424,7 +6424,7 @@ currents (MTPA/FW) -> terminals. Validated tests/test_dq_operating_point.py.
 For map exports, run ``pm_drive_efficiency_map_health(sweep)`` before comparing rows from a FE
 tool.  It checks the table contract: efficiencies bounded in [0,1], ``P_in = P_em + P_cu``,
 ``omega_e = p omega_mech``, nondecreasing speed rows, and required regions such as MTPA/FW/MTPV.
-Continuous-loop slot 37 fixes the JMAG-style speed map gate: regions [MTPA, FW, FW, MTPV],
+Continuous-loop slot 37 fixes the motor speed-map gate: regions [MTPA, FW, FW, MTPV],
 max efficiency 0.994425732150756 in MTPV, max output power 2597.750669164122 W in FW, and
 power/speed contract errors below roundoff.
 
