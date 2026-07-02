@@ -5788,6 +5788,7 @@ def cross_validation_artifact_to_mcp_feedback_gate(
     required_versions=("solver", "radia_mcp"),
     min_timing_stages=1,
     max_timing_stages=4,
+    require_replayable_verification_commands=False,
 ):
     """Check that a cross-validation or notebook result was fed back to MCP.
 
@@ -5841,6 +5842,43 @@ def cross_validation_artifact_to_mcp_feedback_gate(
         }
         return ranks.get(text, -1), text
 
+    def replay_command_candidates(record):
+        if not isinstance(record, dict):
+            return []
+        commands = []
+        nested = record.get("commands")
+        if isinstance(nested, (list, tuple)):
+            for item in nested:
+                if isinstance(item, dict):
+                    value = item.get("command")
+                    if value is not None and str(value).strip():
+                        commands.append(str(value).strip())
+                elif str(item).strip():
+                    commands.append(str(item).strip())
+        command = record.get("command")
+        if command is not None and str(command).strip():
+            commands.append(str(command).strip())
+        return commands
+
+    def is_normalized_replay_command(command):
+        text = str(command or "").strip()
+        if not text:
+            return False
+        if "->" in text:
+            return False
+        return any(
+            text.startswith(prefix)
+            for prefix in (
+                "python ",
+                "python -m ",
+                "pytest ",
+                "pwsh ",
+                "powershell ",
+                "git ",
+                "matlab -batch",
+            )
+        )
+
     learning_lanes = artifact.get("learning_lanes", {})
     if not isinstance(learning_lanes, dict):
         learning_lanes = {}
@@ -5886,6 +5924,13 @@ def cross_validation_artifact_to_mcp_feedback_gate(
             "tests",
         ),
     )
+    replay_commands = [
+        *replay_command_candidates(verification),
+        *replay_command_candidates(mcp_feedback),
+    ]
+    normalized_replay_commands = [
+        command for command in replay_commands if is_normalized_replay_command(command)
+    ]
     public_lesson = first_from(
         (artifact, mcp_feedback),
         (
@@ -5986,6 +6031,14 @@ def cross_validation_artifact_to_mcp_feedback_gate(
         "notebook_source_path_recorded_when_required": (
             not bool(require_notebook_source) or bool(str(notebook_source_path).strip())
         ),
+        "replay_command_recorded_when_required": (
+            not bool(require_replayable_verification_commands) or bool(replay_commands)
+        ),
+        "replay_commands_normalized_when_required": (
+            not bool(require_replayable_verification_commands)
+            or bool(replay_commands)
+            and len(normalized_replay_commands) == len(replay_commands)
+        ),
     }
 
     learned = all(checks.values())
@@ -6003,6 +6056,8 @@ def cross_validation_artifact_to_mcp_feedback_gate(
         "notebook_source_artifact_id": str(notebook_source_artifact_id or ""),
         "notebook_source_digest": str(notebook_source_digest or ""),
         "notebook_source_path": str(notebook_source_path or ""),
+        "replay_commands": replay_commands,
+        "normalized_replay_commands": normalized_replay_commands,
         "provenance_gate_status": provenance_gate["status"],
         "provenance_gate_policy": provenance_gate["policy"],
         "dominant_timing_stages": provenance_gate.get("dominant_timing_stages", []),
@@ -6010,6 +6065,7 @@ def cross_validation_artifact_to_mcp_feedback_gate(
         "notes": [
             "Use this after a JSON, notebook, or cross-validation result exists.",
             "The artifact is learned only after a public-safe lesson, MCP target, and focused verification are recorded.",
+            "Store replayable commands separately from human result notes; keep annotations like '-> passed' in result fields.",
             "Pair this feedback gate with the solver/result provenance and table metadata gates before notebook reuse.",
             "Keep private source-tool provenance in the owning private lane; public radia-mcp records only the scrubbed lesson and gate.",
         ],
