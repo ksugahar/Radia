@@ -407,26 +407,21 @@ private:
 
     // HEX RT1 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
     // the HEX/QUAD REFERENCE frame (evaluated directly at ref coords -- no physical->ref inverse), geometry +
-    // measure come from the Q2 lattice maps.  m_qp/m_qw hold the prebuilt REGULAR outer clouds (monomial
-    // folded), used for far sub pairs; graded outer clouds are built on the fly in QuadDotHex.
+    // measure come from the Q2 lattice maps.  Entries are served block-wise (GetHexBlock); the inner is the
+    // ref-frame radial decomposition (PhiInnerHexRadialVec) for near/self, cached far clouds otherwise.
     bool m_hexmode = false;
-    bool m_hex_curved = false;      // Q2 lattice deviates from the trilinear corner interp (ctor-detected):
-                                    // curved hexes keep the graded-Duffy self inner (PhiTet subtraction is
-                                    // the straight-sub-tet identity)
     int  m_hex_n_bf = 0;
     std::vector<double> m_hexNodes, m_quadNodes;        // [n_el*81] 27-node Q2 hex, [n_bf*27] 9-node Q2 quad
     std::vector<double> m_symTetP, m_symTetW;           // regular outer tet rule (bary lam1..3; W sums 1/6)
     std::vector<double> m_symTriP, m_symTriW;           // regular outer tri rule (bary lam1..2; W sums 1/2)
     std::vector<double> m_glOut, m_gwOut;               // 1D [0,1] Gauss -> graded OUTER Duffy (near/self subs)
-    std::vector<double> m_glIn, m_gwIn;                 // 1D [0,1] Gauss -> fine graded INNER Duffy
+    std::vector<double> m_glIn, m_gwIn;                 // 1D [0,1] Gauss -> the RADIAL inner rule (PhiInnerHexRadialVec)
     std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
     std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)
     double m_near_grade = 1.5, m_far_inner_factor = 4.0;
     std::vector<double> m_cellSubC, m_cellSubS, m_cellSubV;  // [n_el*6*3] sub-tet centroids, [n_el*6] sizes, [n_el*6*4*3] phys corners
     std::vector<double> m_faceSubC, m_faceSubS, m_faceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3] (sub-tri)
     double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1 monomial (i,j,k in {0,1})
-    double PhiInnerHexSub(int src, int sub, const double p[3]) const;  // INT_{src host's sub-simplex} mono_src(xi)/|p-y| dy
-    double QuadDotHex(int tgt, int src) const;          // pair-graded outer x graded inner (the validated scheme)
     // BLOCK-MEMO (the 64x co-location win): the near/far/grading decisions depend ONLY on host+sub geometry
     // (all co-located charges of a (kind,host) share m_cent/m_size), so the WHOLE directed host-pair block is
     // computed in ONE pass -- the 1/r sqrt is shared across all nT*nS monomial combos (the numpy-proto
@@ -437,15 +432,18 @@ private:
     std::vector<std::vector<int>> m_faceCharges;         // [n_bf] global charge indices per boundary face
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
-    // SELF-host inner by SINGULARITY SUBTRACTION -- the tet path's PhiAtHO technique reused for hex:
-    //   INT_sub m(y)/|p-y| dy = m(xiT)*Phi_sub(p) + INT_sub (m(y)-m(xiT))/|p-y| dy,
-    // Phi_sub = the EXACT constant-charge potential (rad_hdiv::PhiTet / TriPotential -- the same kernels the
-    // tet Gram uses), remainder BOUNDED -> a cheap regular symmetric rule replaces the glin^3 graded Duffy.
-    // xiT = the outer point's OWN hex/quad ref coords (self host => same ref frame, no Q2 inverse needed).
-    // The OUTER grading is NOT relaxed by this (it is required by the Q1 charge degree, independent of how
-    // the inner is computed) -- callers keep the graded outer.  FLAT hexes only (m_hex_curved gates it).
-    void PhiInnerHexSelfSubVec(int kindS, int hS, int subB, const double p[3], const double xiT[3],
-                               const std::vector<int>& srcG, double* inn) const;
+    // NEAR/SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
+    // anchor x0 = the ref point where the pulled-back kernel 1/|p-X(xi)| peaks (xiT for the self host --
+    // exact, no inverse; else a short Newton inverse of the Q2 map), CLAMPED into the ref sub-simplex, then
+    // 4 signed radial sub-tets (3 signed sub-tris on faces) from x0 with the Duffy apex AT x0: the u^2 (u)
+    // volume element kills the 1/r peak exactly, and the map's warp enters only as a SMOOTH |det J| factor
+    // per quadrature point -- robust on strongly distorted (|J| ratio ~0.4) and curved hexes alike, where
+    // the corner-graded-cloud / linearized-subtraction schemes oscillated +-3% (eig 1.02-1.11 > 1 on the
+    // real Cubit cylinder mesh; the box gates' mild distortion had masked it).  ONE mechanism for self AND
+    // near, flat AND curved.  m_glIn/m_gwIn is the radial 1D Gauss rule (n=5 -> 4*125 pts per cell call);
+    // not cloud-cacheable (x0 varies per outer point).  xiT == nullptr -> Newton anchor.
+    void PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
+                              const std::vector<int>& srcG, double* inn) const;
     std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS) const;  // directed [nT*nS] block, INV4PI folded
     const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS) const;  // thread_local block cache
 
