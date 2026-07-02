@@ -1004,37 +1004,6 @@ int radTApplication::GetInteractMatrix(int InteractElemKey, double* pMatrix, int
 
 //-------------------------------------------------------------------------
 
-int radTApplication::GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF)
-{
-	// surface-charge MSC cell-graph cycle (loop) basis L (m_totalDOF x nLoop, ROW-MAJOR).  Two-call pattern:
-	// pass pL=nullptr to read back nLoop+dof, then allocate and call again to fill.
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
-
-		int totalDOF = InteractPtr->GetTotalDOF();
-		if(pDOF) *pDOF = totalDOF;
-
-		std::vector<double> Lflat; int nLoop = 0;
-		InteractPtr->BuildLoopBasis(Lflat, nLoop);
-		if(pNLoop) *pNLoop = nLoop;
-
-		if(pL != nullptr && nLoop > 0 && totalDOF > 0)
-			std::memcpy(pL, Lflat.data(), (size_t)totalDOF * (size_t)nLoop * sizeof(double));
-
-		return 1;
-	}
-	catch (...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
 int radTApplication::GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
 {
 	// Per-DOF hex face geometry (m_totalDOF x 11, ROW-MAJOR).  Two-call pattern:
