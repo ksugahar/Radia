@@ -7,20 +7,30 @@ to 1014 triangles).  ngsolve.bem stores the dense Galerkin matrix
 internally and exposes it via COO for O(1) extraction; intree's
 ``radia.bem.efie_rwg.solve_inductance_source_sink_intree`` was deleted.
 
-Solves the constrained EFIE on the coil surface:
-  [SL  D^T] [J]   [0]
-  [D   0  ] [p] = [g]
+Solves the constrained impedance-EFIE on the coil surface (the SOLE
+AC formulation since 2026-07-02):
+
+  [jw*mu0*SL + Z_s*M   D^T] [J]   [0]
+  [D                    0 ] [p] = [g]      (complex, omega > 0)
 
 where SL = LaplaceSL (single-layer BEM operator on surface currents),
-D = divergence matrix (HDivSurface -> SurfaceL2), g = source/sink
-current injection (+1/A_src at source, -1/A_snk at sink), J = surface
-current coefficients, p = Lagrange multiplier enforcing current
-conservation.
+M = HDivSurface mass matrix carrying the complex Leontovich surface
+impedance Z_s = (1+j)/(sigma*delta), D = divergence matrix
+(HDivSurface -> SurfaceL2), g = source/sink current injection
+(+1/A_src at source, -1/A_snk at sink), J = the FINITE-IMPEDANCE
+surface current, p = Lagrange multiplier enforcing current
+conservation.  At omega == 0 the system reduces to the real vacuum
+saddle [SL, D^T; D, 0] (DC limit, R = 0).
 
-Inductance: ``L = mu_0 * J^T @ SL @ J``.
-AC SIBC resistance: ``R = Re(Z_s) * J^T @ M @ J`` where M is the
-HDivSurface mass matrix and Re(Z_s) = 1/(σ δ) is the real part of
-the surface impedance.
+External inductance: ``L = mu_0 * (J^H @ SL @ J)``.
+AC SIBC resistance:  ``R = Re(Z_s) * (J^H @ M @ J)``.
+
+The historical PEC formulation (real perfect-conductor saddle, R
+evaluated post-hoc from the PEC current) was REMOVED 2026-07-02: it
+over-estimated R ~3x on tightly-wound coils because the PEC J
+concentrates singularly at near-contact gaps/edges where the
+Leontovich integral breaks down (kubota 3-turn: 15.14 mOhm vs the
+physical 4.63).  See docs/peec/VOLUME_PEEC_DESIGN.md.
 
 Per-triangle J sampling: ``compute_centroids_areas_J(...)`` returns
 the centroid + area + averaged J vector per BND triangle, ready to
@@ -52,17 +62,33 @@ def _solve_saddle(K, rhs, method, tol=1e-8, maxiter=2000):
                storage for the LU factors (saves N^2 memory vs the
                default copy).  Best for ndof <~ 25000.  Memory O(N^2),
                work O(N^3).
-      "minres" Krylov solver for symmetric indefinite systems
-               (scipy.sparse.linalg.minres). Best when ndof is large
-               and the matrix is symmetric (the saddle point IS
-               symmetric: K^T = [[SL, D'],[D, 0]] = K).  Memory still
-               O(N^2) because K is dense, but no factorization copy.
-      "gmres"  General iterative Krylov (scipy.sparse.linalg.gmres).
-               Use only if MINRES stalls.
+      "minres" Krylov solver for REAL symmetric indefinite systems
+               (scipy.sparse.linalg.minres) -- valid ONLY for the
+               omega=0 real vacuum-L saddle.  REJECTED (ValueError)
+               for the complex AC impedance-EFIE saddle: minres
+               assumes a Hermitian operator, but that system is
+               complex-symmetric (K^T = K, not Hermitian), so minres
+               silently returns a wrong solution.
+      "gmres"  General complex-capable Krylov
+               (scipy.sparse.linalg.gmres).  The large-N choice for
+               the AC impedance-EFIE saddle.
 
     NOTE: with method="lu", K is overwritten with its LU factors in
     place.  Callers must not reuse K after this call.
     """
+    if method == "minres" and np.iscomplexobj(K):
+        # scipy MINRES assumes a real-symmetric / Hermitian operator.
+        # The impedance-EFIE saddle is complex-SYMMETRIC (K^T = K, NOT
+        # Hermitian), so minres silently returns a WRONG solution
+        # (measured: for K=(1+1j)*I it returns (K^H)^-1 b, not K^-1 b,
+        # emitting only ComplexWarnings).  Fail fast per CLAUDE.md
+        # "No Fallbacks"; use lu or gmres.
+        raise ValueError(
+            "MINRES cannot solve the complex impedance-EFIE saddle: "
+            "scipy minres assumes a Hermitian operator, but this system "
+            "is complex-symmetric (K^T = K), so it silently returns a "
+            "wrong solution.  Use solver='lu' (dense direct) or "
+            "solver='gmres'.")
     if method == "lu":
         x = scipy_solve(K, rhs, overwrite_a=True)
         # K has been overwritten -- cannot compute K@x for residual cheaply
@@ -114,9 +140,38 @@ def _to_dense(mat):
 
 def compute_inductance_source_sink(
         mesh, source_label="source", sink_label="sink",
-        fes_order=0, solver="lu", Z_s_re=0.0, log_fn=None,
-        impedance_efie=False, omega=0.0, Z_s_complex=None):
-    """Compute self-inductance + (optional) AC SIBC R via ngsolve.bem saddle EFIE.
+        fes_order=0, solver="lu", omega=0.0, Z_s_complex=None,
+        log_fn=None):
+    """Coil impedance via the ngsolve.bem impedance-EFIE saddle (SOLE formulation).
+
+    For ``omega > 0`` this solves the **impedance-EFIE**: the Leontovich
+    surface impedance sits INSIDE the saddle system, so the recovered J
+    is the *finite-impedance* surface current::
+
+        [ jω μ0 SL + Z_s M   D^T ] [J]   [0]
+        [ D                   0  ] [p] = [g]      (complex)
+
+    with R = Re(Z_s)·(Jᴴ M J) (Leontovich SIBC dissipation of the
+    finite-impedance J) and L = μ0·(Jᴴ SL J) (EXTERNAL inductance; the
+    internal surface reactance Im(Z_s)·(Jᴴ M J)/ω is deliberately NOT
+    folded into L, keeping L a pure geometry quantity).
+
+    The historical "PEC post-hoc" formulation (real perfect-conductor
+    saddle + R = Re(Z_s)·JᵀMJ evaluated afterwards) was REMOVED
+    2026-07-02: the perfect-conductor J concentrates singularly at
+    near-touching surfaces and edges, where it varies below the skin
+    depth and the Leontovich integral breaks down -- on the kubota
+    3-turn pancake it over-estimated R 3× (15.14 mΩ vs the physical
+    4.63 mΩ confirmed by volume PEEC / perimeter PEEC / analytic
+    proximity).  On smooth geometry (isolated straight wire) the
+    impedance-EFIE reproduces the closed-form Bessel R (0.16-0.5 %),
+    i.e. nothing was lost by the removal.  See
+    docs/peec/VOLUME_PEEC_DESIGN.md "2026-07-02 outcome".
+
+    For ``omega == 0`` (DC) the AC impedance degenerates and the solve
+    reduces to the real vacuum-inductance saddle ``[SL, D^T; D, 0]``
+    with R = 0 -- the physical DC limit, selected by the caller passing
+    ``omega=0`` (frequency=0), not a fallback.
 
     Args:
         mesh: NGSolve Mesh (volume mesh with boundary, or surface-only).
@@ -127,41 +182,26 @@ def compute_inductance_source_sink(
         fes_order: HDivSurface polynomial order.  0 = RT₀ (= RWG, the
             production setting); 1+ for higher-order is supported by
             NGSolve but not validated against radia goldens here.
-        solver: saddle-point solver — "lu" (dense direct, default),
-            "minres" (symmetric Krylov), or "gmres".
-        Z_s_re: real part of surface impedance Z_s = 1/(σ δ) for
-            AC SIBC closure on the conductor.  Pass 0.0 to skip
-            (vacuum L only).  Used to compute R = Z_s_re * J^T M J
-            **post-hoc from the PEC current** -- this OVER-estimates R
-            for tightly-wound / near-contact / faceted geometries,
-            because the perfect-conductor J concentrates singularly at
-            near-touching surfaces and edges (where the Leontovich SIBC
-            breaks down).  Prefer ``impedance_efie=True`` there.
-        impedance_efie: if True, put the surface impedance INTO the
-            saddle system (the physically-correct SIBC-EFIE) instead of
-            the post-hoc PEC integral above.  The (1,1) block becomes
-            ``jω mu0 SL + Z_s M`` (complex), so J is the finite-impedance
-            current -- it does NOT over-concentrate at edges/gaps.
-            R = Re(Z_s)*(J^H M J) (the same SIBC-dissipation formula as
-            the PEC path, but with the non-over-concentrated J) and
-            L = mu0*(J^H SL J) (EXTERNAL inductance, same convention as
-            the PEC path -- the internal reactance Im(Z_s)*(J^H M J)/omega
-            is deliberately NOT folded into L, so only R changes vs PEC).
-            Requires ``omega`` and ``Z_s_complex``.  On smooth geometry
-            (isolated wire) this reproduces the same Bessel R as PEC (validated);
-            on the kubota 3-turn coil it gives 4.63 mΩ vs the PEC path's
-            spurious 15.14 mΩ (matches volume/perimeter PEEC + analytic
-            proximity ~4.5-5 mΩ).  See docs/peec/VOLUME_PEEC_DESIGN.md.
-        omega: angular frequency [rad/s]; required when impedance_efie.
-        Z_s_complex: full complex surface impedance
-            ``Z_s = (1+j)/(σ δ)`` [Ohm/sq]; required when impedance_efie.
+        solver: saddle-point solver — "lu" (dense direct, default) or
+            "gmres".  "minres" is accepted only for the ``omega == 0``
+            real solve: scipy's MINRES silently discards the imaginary
+            part of a complex system (solves the real part only), so it
+            is REJECTED for the AC impedance-EFIE (fail fast).
+        omega: angular frequency [rad/s].  0 selects the DC vacuum-L
+            solve (R = 0).
+        Z_s_complex: complex Leontovich surface impedance
+            ``Z_s = (1+j)/(σ δ)`` [Ohm/sq]; REQUIRED when ``omega > 0``.
 
     Returns:
         dict with keys
-        ``L``         : float [H], self-inductance for unit terminal current
-        ``R``         : float [Ω], AC SIBC dissipation (0.0 if Z_s_re=0)
-        ``J``         : (n_J,) HDivSurface coefficients (unit terminal current)
-        ``gf_J``      : NGSolve GridFunction(HDivSurface) wrapping J
+        ``L``         : float [H], external self-inductance at unit terminal current
+        ``R``         : float [Ω], SIBC dissipation of the impedance-EFIE J
+                        (0.0 for the omega=0 DC solve)
+        ``J``         : (n_J,) HDivSurface coefficients (complex for omega>0)
+        ``gf_J``      : GridFunction(HDivSurface) holding Re(J)
+        ``gf_J_im``   : GridFunction(HDivSurface) holding Im(J)
+                        (all-zero for the omega=0 DC solve) -- sample BOTH
+                        to reconstruct the complex per-triangle current
         ``SL``, ``D`` : dense Galerkin matrices (post-processing)
         ``A_source``, ``A_sink`` : port areas [m²]
         ``residual``  : max|D J - g|, machine precision for LU solve
@@ -238,30 +278,29 @@ def compute_inductance_source_sink(
     g_red = g[:-1]
     n_constraint = n_f - 1
 
-    # Mass matrix on HDivSurface (∫_S jt·jv dS) -- needed for the
-    # post-hoc PEC R and for the impedance-EFIE (1,1) block.
-    M = None
-    if Z_s_re != 0.0 or impedance_efie:
-        bf_M = BilinearForm(fes_J)
-        bf_M += jt.Trace() * jv.Trace() * ds
-        bf_M.Assemble()
-        M = _to_dense(bf_M.mat)
-
     t0 = time.perf_counter()
     _saddle_n = n_J + n_constraint
     _zero_c = np.zeros((n_constraint, n_constraint))
 
-    if impedance_efie:
-        # --- Impedance-EFIE: put Z_s INTO the system so J is the
-        #     finite-impedance (not perfect-conductor) current.  The
-        #     (1,1) block is jω mu0 SL + Z_s M (complex); the resistive
-        #     Z_s M term penalises the singular edge/near-contact
-        #     concentration that makes the post-hoc PEC integral
-        #     over-estimate R.  Z = Z_s (J^H M J) + jω mu0 (J^H SL J). ---
-        if Z_s_complex is None or omega <= 0.0:
+    if omega > 0.0:
+        # --- Impedance-EFIE (the sole AC formulation): Z_s sits INSIDE
+        #     the system so J is the finite-impedance (not perfect-
+        #     conductor) current.  The (1,1) block is jω μ0 SL + Z_s M
+        #     (complex); the resistive Z_s M term penalises the singular
+        #     edge/near-contact concentration that made the removed PEC
+        #     post-hoc integral over-estimate R 3x on tightly-wound
+        #     coils. ---
+        if Z_s_complex is None or Z_s_complex == 0:
             raise ValueError(
-                "impedance_efie=True requires omega>0 and Z_s_complex "
-                f"(got omega={omega}, Z_s_complex={Z_s_complex}).")
+                "omega > 0 requires the complex Leontovich surface "
+                "impedance Z_s_complex = (1+1j)/(sigma*delta) "
+                f"(got omega={omega}, Z_s_complex={Z_s_complex!r}).  "
+                "For a pure vacuum-L solve pass omega=0.")
+        # Mass matrix on HDivSurface (∫_S jt·jv dS) for the Z_s M block.
+        bf_M = BilinearForm(fes_J)
+        bf_M += jt.Trace() * jv.Trace() * ds
+        bf_M.Assemble()
+        M = _to_dense(bf_M.mat)
         _log("BEMA",
             f"impedance-EFIE saddle assembly (complex, "
             f"{_saddle_n}x{_saddle_n}, ~{(_saddle_n*_saddle_n*16)/1e9:.1f} GB)")
@@ -270,6 +309,7 @@ def compute_inductance_source_sink(
             [A11,                          D_red.T.astype(complex)],
             [D_red.astype(complex),        _zero_c.astype(complex)]
         ])
+        del A11   # np.block copied it; free ~n_J^2 x 16 B before the LU
         rhs = np.zeros(n_J + n_constraint, dtype=complex)
         rhs[n_J:] = g_red
         _log("BEMA", f"impedance-EFIE solve start (method={solver})")
@@ -278,27 +318,37 @@ def compute_inductance_source_sink(
         t_lu = time.perf_counter() - t0
         JHMJ = float(np.real(np.conj(J) @ M @ J))
         JHSLJ = float(np.real(np.conj(J) @ SL @ J))
-        # R = Re(Zs)*(J^H M J): same SIBC-dissipation formula as the PEC
-        # path, but with the finite-impedance (non-over-concentrated) J,
-        # so it is physical instead of the PEC over-estimate.
+        # R = Re(Zs)*(J^H M J): the Leontovich SIBC dissipation of the
+        # finite-impedance J -- physical, unlike the removed PEC
+        # post-hoc integral.
         R_coil = float(Z_s_complex.real * JHMJ)
-        # L = mu0*(J^H SL J): EXTERNAL inductance, same convention as the
-        # PEC path (L = mu0 J SL J).  We deliberately DROP the internal
-        # reactance Im(Zs)*(J^H M J)/omega so L stays consistent with the
-        # PEC path (only R changes); reporting internal inductance in L
-        # would shift the geometry-dominated L and break its goldens for
-        # no benefit to the R fix the impedance-EFIE is for.
+        # L = mu0*(J^H SL J): EXTERNAL inductance (pure geometry).  The
+        # internal surface reactance Im(Zs)*(J^H M J)/omega is
+        # deliberately NOT folded into L: L stays the geometry quantity
+        # every downstream consumer and golden expects, and only R
+        # carries the conductor physics.
         L = float(MU_0 * JHSLJ)
         residual = float(np.max(np.abs(D @ J - g)))
         _log("BEMA",
             f"impedance-EFIE done ({solver}, {t_lu:.1f}s): "
             f"R={R_coil*1e3:.4f} mOhm, L={L*1e9:.2f} nH")
         gf_J = GridFunction(fes_J)
-        gf_J.vec.FV().NumPy()[:] = J.real
+        gf_J.vec.FV().NumPy()[:] = np.ascontiguousarray(J.real)
+        gf_J_im = GridFunction(fes_J)
+        gf_J_im.vec.FV().NumPy()[:] = np.ascontiguousarray(J.imag)
     else:
-        # --- PEC saddle (real) + post-hoc SIBC R ---
+        # --- omega == 0: DC / vacuum-inductance solve (real saddle,
+        #     R = 0).  The physical DC limit selected by frequency=0;
+        #     the AC surface impedance does not exist here. ---
+        if omega != 0.0:
+            # Negative or NaN omega must not silently degrade to the
+            # DC vacuum solve (a sign typo in --frequency would return
+            # R=0 with Z_s_complex ignored).  Fail fast.
+            raise ValueError(
+                f"omega must be > 0 (AC impedance-EFIE) or exactly 0 "
+                f"(DC vacuum-L solve); got omega={omega!r}.")
         _log("BEMA",
-            f"saddle assembly start: K is {_saddle_n}x{_saddle_n} "
+            f"DC vacuum-L saddle assembly: K is {_saddle_n}x{_saddle_n} "
             f"(~{(_saddle_n*_saddle_n*8)/1e9:.1f} GB), solver={solver}")
         K = np.block([
             [SL,              D_red.T],
@@ -307,20 +357,21 @@ def compute_inductance_source_sink(
         rhs = np.zeros(n_J + n_constraint)
         rhs[n_J:] = g_red
         _log("BEMA",
-            f"saddle solve start (method={solver}, ndof={_saddle_n})")
+            f"DC saddle solve start (method={solver}, ndof={_saddle_n})")
         x, solve_info = _solve_saddle(K, rhs, method=solver)
         J = x[:n_J]
         t_lu = time.perf_counter() - t0
         _log("BEMA",
-            f"saddle solve done ({solver}, iters={solve_info.get('iterations','-')}, "
+            f"DC saddle solve done ({solver}, "
+            f"iters={solve_info.get('iterations','-')}, "
             f"residual={solve_info.get('residual',0.0):.2e}, {t_lu:.1f}s)")
         L = MU_0 * J @ SL @ J
         residual = np.max(np.abs(D @ J - g))
         R_coil = 0.0
-        if Z_s_re != 0.0:
-            R_coil = float(Z_s_re * (J @ M @ J))
         gf_J = GridFunction(fes_J)
         gf_J.vec.FV().NumPy()[:] = J
+        gf_J_im = GridFunction(fes_J)
+        gf_J_im.vec[:] = 0.0
 
     t_total = time.perf_counter() - t_start
 
@@ -340,6 +391,7 @@ def compute_inductance_source_sink(
         'SL': SL,
         'D': D,
         'gf_J': gf_J,
+        'gf_J_im': gf_J_im,
     }
 
 
@@ -347,9 +399,17 @@ def compute_centroids_areas_J(mesh, gf_J):
     """Sample the HDivSurface coil current at each BND triangle's centroid.
 
     Returns (centroids, areas, J_per_tri) -- (n_t, *)-shaped float64
-    arrays ready to feed into
-    ``radia.bem_sibc_solver.compute_phi_inc_from_surface_J`` for the
-    workpiece weak-coupling bridge.
+    arrays.  ``gf_J`` is a REAL GridFunction; since the impedance-EFIE
+    current is complex, callers reconstruct the complex per-triangle
+    current by sampling BOTH GridFunctions returned by
+    ``compute_inductance_source_sink``::
+
+        cen, ar, J_re = compute_centroids_areas_J(mesh, res["gf_J"])
+        _,   _,  J_im = compute_centroids_areas_J(mesh, res["gf_J_im"])
+        J_per_tri = J_re + 1j * J_im
+
+    (``radia.bem_sibc_solver.compute_phi_inc_from_surface_J`` is
+    real-only, so downstream keeps bridging Re and Im separately.)
 
     Per-element averaging via NGSolve ``Integrate(..., element_wise=True)``
     over each component of the HDivSurface field.  This avoids the
