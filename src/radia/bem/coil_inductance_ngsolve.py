@@ -114,7 +114,8 @@ def _to_dense(mat):
 
 def compute_inductance_source_sink(
         mesh, source_label="source", sink_label="sink",
-        fes_order=0, solver="lu", Z_s_re=0.0, log_fn=None):
+        fes_order=0, solver="lu", Z_s_re=0.0, log_fn=None,
+        impedance_efie=False, omega=0.0, Z_s_complex=None):
     """Compute self-inductance + (optional) AC SIBC R via ngsolve.bem saddle EFIE.
 
     Args:
@@ -130,7 +131,27 @@ def compute_inductance_source_sink(
             "minres" (symmetric Krylov), or "gmres".
         Z_s_re: real part of surface impedance Z_s = 1/(σ δ) for
             AC SIBC closure on the conductor.  Pass 0.0 to skip
-            (vacuum L only).  Used to compute R = Z_s_re * J^T M J.
+            (vacuum L only).  Used to compute R = Z_s_re * J^T M J
+            **post-hoc from the PEC current** -- this OVER-estimates R
+            for tightly-wound / near-contact / faceted geometries,
+            because the perfect-conductor J concentrates singularly at
+            near-touching surfaces and edges (where the Leontovich SIBC
+            breaks down).  Prefer ``impedance_efie=True`` there.
+        impedance_efie: if True, put the surface impedance INTO the
+            saddle system (the physically-correct SIBC-EFIE) instead of
+            the post-hoc PEC integral above.  The (1,1) block becomes
+            ``jω mu0 SL + Z_s M`` (complex), so J is the finite-impedance
+            current -- it does NOT over-concentrate at edges/gaps, and
+            R = Re(Z), L = Im(Z)/ω from the self-consistent
+            ``Z = Z_s (J^H M J) + jω mu0 (J^H SL J)``.  Requires ``omega``
+            and ``Z_s_complex``.  On smooth geometry (isolated wire)
+            this reproduces the same Bessel R as the PEC path (validated);
+            on the kubota 3-turn coil it gives 4.63 mΩ vs the PEC path's
+            spurious 15.14 mΩ (matches volume/perimeter PEEC + analytic
+            proximity ~4.5-5 mΩ).  See docs/peec/VOLUME_PEEC_DESIGN.md.
+        omega: angular frequency [rad/s]; required when impedance_efie.
+        Z_s_complex: full complex surface impedance
+            ``Z_s = (1+j)/(σ δ)`` [Ohm/sq]; required when impedance_efie.
 
     Returns:
         dict with keys
@@ -214,46 +235,83 @@ def compute_inductance_source_sink(
     g_red = g[:-1]
     n_constraint = n_f - 1
 
-    t0 = time.perf_counter()
-    _saddle_n = n_J + n_constraint
-    _log("BEMA",
-        f"saddle assembly start: K is {_saddle_n}x{_saddle_n} "
-        f"(~{(_saddle_n*_saddle_n*8)/1e9:.1f} GB), solver={solver}")
-    K = np.block([
-        [SL,              D_red.T],
-        [D_red, np.zeros((n_constraint, n_constraint))]
-    ])
-    rhs = np.zeros(n_J + n_constraint)
-    rhs[n_J:] = g_red
-    _log("BEMA",
-        f"saddle solve start (method={solver}, ndof={_saddle_n})")
-
-    x, solve_info = _solve_saddle(K, rhs, method=solver)
-    J = x[:n_J]
-    t_lu = time.perf_counter() - t0
-    _log("BEMA",
-        f"saddle solve done ({solver}, iters={solve_info.get('iterations','-')}, "
-        f"residual={solve_info.get('residual',0.0):.2e}, {t_lu:.1f}s)")
-
-    # --- Inductance: L = mu_0 * J^T @ SL @ J ---
-    L = MU_0 * J @ SL @ J
-    residual = np.max(np.abs(D @ J - g))
-
-    # --- (Optional) AC SIBC R = Z_s_re * J^T M J ---
-    R_coil = 0.0
-    if Z_s_re != 0.0:
-        # Mass matrix on HDivSurface: ∫_S (jt · jv) dS
+    # Mass matrix on HDivSurface (∫_S jt·jv dS) -- needed for the
+    # post-hoc PEC R and for the impedance-EFIE (1,1) block.
+    M = None
+    if Z_s_re != 0.0 or impedance_efie:
         bf_M = BilinearForm(fes_J)
         bf_M += jt.Trace() * jv.Trace() * ds
         bf_M.Assemble()
         M = _to_dense(bf_M.mat)
-        R_coil = float(Z_s_re * (J @ M @ J))
+
+    t0 = time.perf_counter()
+    _saddle_n = n_J + n_constraint
+    _zero_c = np.zeros((n_constraint, n_constraint))
+
+    if impedance_efie:
+        # --- Impedance-EFIE: put Z_s INTO the system so J is the
+        #     finite-impedance (not perfect-conductor) current.  The
+        #     (1,1) block is jω mu0 SL + Z_s M (complex); the resistive
+        #     Z_s M term penalises the singular edge/near-contact
+        #     concentration that makes the post-hoc PEC integral
+        #     over-estimate R.  Z = Z_s (J^H M J) + jω mu0 (J^H SL J). ---
+        if Z_s_complex is None or omega <= 0.0:
+            raise ValueError(
+                "impedance_efie=True requires omega>0 and Z_s_complex "
+                f"(got omega={omega}, Z_s_complex={Z_s_complex}).")
+        _log("BEMA",
+            f"impedance-EFIE saddle assembly (complex, "
+            f"{_saddle_n}x{_saddle_n}, ~{(_saddle_n*_saddle_n*16)/1e9:.1f} GB)")
+        A11 = 1j * omega * MU_0 * SL + Z_s_complex * M
+        Kc = np.block([
+            [A11,                          D_red.T.astype(complex)],
+            [D_red.astype(complex),        _zero_c.astype(complex)]
+        ])
+        rhs = np.zeros(n_J + n_constraint, dtype=complex)
+        rhs[n_J:] = g_red
+        _log("BEMA", f"impedance-EFIE solve start (method={solver})")
+        x, solve_info = _solve_saddle(Kc, rhs, method=solver)
+        J = x[:n_J]                       # complex current
+        t_lu = time.perf_counter() - t0
+        JHMJ = float(np.real(np.conj(J) @ M @ J))
+        JHSLJ = float(np.real(np.conj(J) @ SL @ J))
+        Z_port = Z_s_complex * JHMJ + 1j * omega * MU_0 * JHSLJ
+        R_coil = float(Z_port.real)
+        L = float(Z_port.imag / omega)
+        residual = float(np.max(np.abs(D @ J - g)))
+        _log("BEMA",
+            f"impedance-EFIE done ({solver}, {t_lu:.1f}s): "
+            f"R={R_coil*1e3:.4f} mOhm, L={L*1e9:.2f} nH")
+        gf_J = GridFunction(fes_J)
+        gf_J.vec.FV().NumPy()[:] = J.real
+    else:
+        # --- PEC saddle (real) + post-hoc SIBC R ---
+        _log("BEMA",
+            f"saddle assembly start: K is {_saddle_n}x{_saddle_n} "
+            f"(~{(_saddle_n*_saddle_n*8)/1e9:.1f} GB), solver={solver}")
+        K = np.block([
+            [SL,              D_red.T],
+            [D_red, _zero_c]
+        ])
+        rhs = np.zeros(n_J + n_constraint)
+        rhs[n_J:] = g_red
+        _log("BEMA",
+            f"saddle solve start (method={solver}, ndof={_saddle_n})")
+        x, solve_info = _solve_saddle(K, rhs, method=solver)
+        J = x[:n_J]
+        t_lu = time.perf_counter() - t0
+        _log("BEMA",
+            f"saddle solve done ({solver}, iters={solve_info.get('iterations','-')}, "
+            f"residual={solve_info.get('residual',0.0):.2e}, {t_lu:.1f}s)")
+        L = MU_0 * J @ SL @ J
+        residual = np.max(np.abs(D @ J - g))
+        R_coil = 0.0
+        if Z_s_re != 0.0:
+            R_coil = float(Z_s_re * (J @ M @ J))
+        gf_J = GridFunction(fes_J)
+        gf_J.vec.FV().NumPy()[:] = J
 
     t_total = time.perf_counter() - t_start
-
-    # --- GridFunction for post-processing ---
-    gf_J = GridFunction(fes_J)
-    gf_J.vec.FV().NumPy()[:] = J
 
     return {
         'L': float(L),
