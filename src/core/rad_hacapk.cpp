@@ -1200,6 +1200,23 @@ void RadHACApKMomentSystem::OnBeforeBuild()
     m_interaction->PrecomputeMomentGeometry();
 }
 
+bool RadHACApKMomentSystem::GeometryMatches() const
+{
+    if (!m_interaction) return false;
+    const std::vector<int>& hexElem = m_interaction->GetHexaElemIndices();
+    int nHex = (int)hexElem.size();
+    if (m_n_elem != nHex || m_ndof != 6 * nHex) return false;
+    if ((int)m_coordinates.size() != 3 * nHex) return false;
+    for (int h = 0; h < nHex; h++) {
+        // Same computation as ExtractCoordinates -> bit-identical when the geometry is unchanged.
+        TVector3d c = m_interaction->GetElementCenter(hexElem[h]);
+        if (m_coordinates[(size_t)h * 3 + 0] != c.x ||
+            m_coordinates[(size_t)h * 3 + 1] != c.y ||
+            m_coordinates[(size_t)h * 3 + 2] != c.z) return false;
+    }
+    return true;
+}
+
 void RadHACApKMomentSystem::GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const
 {
     if (!block) return;

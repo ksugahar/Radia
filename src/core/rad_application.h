@@ -35,6 +35,7 @@ using PyObject = _object;
 //-------------------------------------------------------------------------
 
 struct TVector2d;
+class RadHACApKMomentSystem;   // collocation-MMMM coarse-tier chi-free geometry-K H-matrix (rad_hacapk.h)
 
 //-------------------------------------------------------------------------
 
@@ -74,6 +75,23 @@ public:
 	// H-matrix (O(N log N) matvec) instead of the dense K.  Loop-free is abandoned (field-correct,
 	// loop-polluted internal M -- coarse/optimization tier only).  false = dense K (method 0/1).
 	bool m_moment_use_hmatrix;
+
+	// CROSS-SOLVE cache of the chi-free moment geometry (Sugahara 2026-07-02 speedup pass): the
+	// coarse tier's real use case is an OPTIMIZATION INNER LOOP that re-Solves the SAME geometry
+	// many times (only source / material changes).  K, localL, and diagK are pure geometry
+	// (chi-independent), so they are cached here across rad.Solve calls instead of being rebuilt
+	// per solve (K, O(N log N) ACA fill) or per Picard iteration (localL/diagK, 2N kernel evals).
+	// Validity = (interaction pointer match) + (hacapk eps/leaf/eta match) + GeometryMatches()
+	// (bit-exact centroid compare against the CURRENT interaction -- ABA-safe, O(N) doubles).
+	// Owned; freed by InvalidateMomentHK() (called from Initialize() / on rebuild).  NSDMI null
+	// init keeps the ctor's Initialize() call safe (delete nullptr).
+	RadHACApKMomentSystem* m_moment_hk = nullptr;
+	double m_moment_hk_eps = 0.0;
+	int    m_moment_hk_leaf = 0;
+	double m_moment_hk_eta = 0.0;
+	std::vector<double> m_moment_hk_localL;   // chi-free per-hex local moment 6x6 blocks
+	std::vector<double> m_moment_hk_diagK;    // chi-free per-hex self geometry 6x6 blocks
+	void InvalidateMomentHK();                // defined in rad_material_impl.cpp (complete type there)
 
 	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
 	// 0.0 = full step (no under-relaxation)
@@ -224,6 +242,7 @@ public:
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
 		m_cached_image_spec.clear();
+		InvalidateMomentHK();   // cross-Solve moment K/L/diagK cache (NSDMI-null before first call -> safe)
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 

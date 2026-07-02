@@ -2938,19 +2938,106 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			}
 
 			auto t_setup_start = std::chrono::high_resolution_clock::now();
-			IntrctPtr->PrecomputeMomentGeometry();
 
-			std::vector<double> localLBlock((size_t)nHex * 36, 0.0);
-			std::vector<double> diagKBlock((size_t)nHex * 36, 0.0);
-			std::vector<double> zeroChi((size_t)nHex, 0.0);
-			auto buildLocalBlocks = [&](size_t hh) {
-				const int h = (int)hh;
-				IntrctPtr->MomentSystemBlock6x6(h, h, zeroChi.data(), &localLBlock[(size_t)h * 36]);
-				IntrctPtr->MomentSystemBlock6x6(h, h, nullptr, &diagKBlock[(size_t)h * 36], true);
-			};
-			if(serialElementOps) { for(int h = 0; h < nHex; h++) buildLocalBlocks((size_t)h); }
-			else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildLocalBlocks); }
+			// BUILD-ONCE geometry (Sugahara 2026-06-27 / 2026-07-02): the chi-INDEPENDENT pieces -- the
+			// geometry coupling K (K[h][g] = MomentSystemBlock6x6(h,g,kernelOnly=true), incl. INV4PI + IMA
+			// images), the local moment blocks L, and the self geometry blocks diagK -- are pure geometry,
+			// so they are built ONCE and reused; only chi (the block diagonal) changes per Picard iteration.
+			//   method 0/1 -> DENSE K (momentKdense, O(N^2) storage, cheap dense GEMV), rebuilt per call.
+			//   method 2   -> H-MATRIX K (RadHACApKMomentSystem kernel-only, O(N log N) matvec + storage),
+			//                 the collocation-MMMM COARSE tier (loop-free abandoned; field-correct but
+			//                 loop-polluted internal M, acceptable for coarse/optimization).  K + L + diagK
+			//                 are cached CROSS-SOLVE on radTApplication (optimization inner loops re-Solve
+			//                 the SAME geometry many times; validity = interaction ptr + hacapk params +
+			//                 GeometryMatches() bit-exact centroid compare, ABA-safe).
+			const bool useHMatrixK = rad.m_moment_use_hmatrix;
+			std::vector<double> localLBlockOwn, diagKBlockOwn;   // dense-path storage (method 0/1)
+			const double* localLBlock = nullptr;
+			const double* diagKBlock = nullptr;
+			std::vector<double> momentKdense;              // dense K   (built when !useHMatrixK)
+			std::vector<double> momentHKx;                 // matvec input copy (the H-matvec uses the vector API)
+			if(useHMatrixK)
+			{
+				const bool hkCacheValid = rad.m_moment_hk
+					&& rad.m_moment_hk->GetInteraction() == IntrctPtr
+					&& rad.m_moment_hk_eps == rad.m_hacapk_eps
+					&& rad.m_moment_hk_leaf == rad.m_hacapk_leaf_size
+					&& rad.m_moment_hk_eta == rad.m_hacapk_eta
+					&& (int)rad.m_moment_hk_localL.size() == nHex * 36
+					&& (int)rad.m_moment_hk_diagK.size() == nHex * 36
+					&& rad.m_moment_hk->GeometryMatches();
+				if(!hkCacheValid)
+				{
+					rad.InvalidateMomentHK();
+					IntrctPtr->PrecomputeMomentGeometry();
+					RadHACApKMomentSystem* hk = new RadHACApKMomentSystem(IntrctPtr);
+					RadHACApKParams hkParams;
+					hkParams.aca_eps   = rad.m_hacapk_eps;
+					hkParams.leaf_size = rad.m_hacapk_leaf_size;
+					hkParams.eta       = rad.m_hacapk_eta;
+					hkParams.print_level = 0;
+					if(!hk->BuildHMatrix(hkParams))   // self-wraps a RegionTaskManager; nests under rtm harmlessly
+					{
+						delete hk;
+						fprintf(stderr, "[BiCG] Error: collocation-MMMM moment H-matrix (method 2) build failed; no dense fallback.\n");
+						return -12;
+					}
+					rad.m_moment_hk = hk;
+					rad.m_moment_hk_eps = rad.m_hacapk_eps;
+					rad.m_moment_hk_leaf = rad.m_hacapk_leaf_size;
+					rad.m_moment_hk_eta = rad.m_hacapk_eta;
+					rad.m_moment_hk_localL.assign((size_t)nHex * 36, 0.0);
+					rad.m_moment_hk_diagK.assign((size_t)nHex * 36, 0.0);
+					std::vector<double> zeroChi((size_t)nHex, 0.0);
+					auto buildLocalBlocks = [&](size_t hh) {
+						const int h = (int)hh;
+						IntrctPtr->MomentSystemBlock6x6(h, h, zeroChi.data(), &rad.m_moment_hk_localL[(size_t)h * 36]);
+						IntrctPtr->MomentSystemBlock6x6(h, h, nullptr, &rad.m_moment_hk_diagK[(size_t)h * 36], true);
+					};
+					if(serialElementOps) { for(int h = 0; h < nHex; h++) buildLocalBlocks((size_t)h); }
+					else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildLocalBlocks); }
+				}
+				localLBlock = rad.m_moment_hk_localL.data();
+				diagKBlock  = rad.m_moment_hk_diagK.data();
+				momentHKx.assign((size_t)totalDOF, 0.0);
+			}
+			else
+			{
+				IntrctPtr->PrecomputeMomentGeometry();
+				localLBlockOwn.assign((size_t)nHex * 36, 0.0);
+				diagKBlockOwn.assign((size_t)nHex * 36, 0.0);
+				std::vector<double> zeroChi((size_t)nHex, 0.0);
+				auto buildLocalBlocks = [&](size_t hh) {
+					const int h = (int)hh;
+					IntrctPtr->MomentSystemBlock6x6(h, h, zeroChi.data(), &localLBlockOwn[(size_t)h * 36]);
+					IntrctPtr->MomentSystemBlock6x6(h, h, nullptr, &diagKBlockOwn[(size_t)h * 36], true);
+				};
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) buildLocalBlocks((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildLocalBlocks); }
+				localLBlock = localLBlockOwn.data();
+				diagKBlock  = diagKBlockOwn.data();
 
+				// O(N^2) dense; research code -- NO artificial size cap.  A too-large allocation fails loud
+				// (std::bad_alloc); use method 2 (HACApK, O(N log N)) for very large N.
+				const size_t momentDenseElems = (size_t)totalDOF * (size_t)totalDOF;
+				momentKdense.assign(momentDenseElems, 0.0);
+				auto buildKdenseRow = [&](size_t hh) {
+					const int h = (int)hh;
+					double Kblk[36];
+					for(int g = 0; g < nHex; g++)
+					{
+						IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, Kblk, true);   // chi-independent geometry block (incl. images)
+						for(int i = 0; i < 6; i++)
+							for(int j = 0; j < 6; j++)
+								momentKdense[(size_t)(6*h+i) * (size_t)totalDOF + (size_t)(6*g+j)] = Kblk[i*6+j];
+					}
+				};
+				if(serialElementOps) { for(int h = 0; h < nHex; h++) buildKdenseRow((size_t)h); }
+				else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildKdenseRow); }
+			}
+
+			// Block-Jacobi preconditioner: chi-DEPENDENT (L + chi*diagK per hex), rebuilt each Picard
+			// iteration from the cached/built chi-free blocks -- 6x6 assembles + LU only, NO kernel evals.
 			std::vector<double> blockInverse((size_t)nHex * 36, 0.0);
 #ifdef HAVE_LAPACK
 			std::atomic<int> bj_bad_elem{-1};
@@ -2996,66 +3083,6 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			return -11;
 #endif
 
-			// BUILD-ONCE geometry coupling K (Sugahara 2026-06-27): the matrix-free MomentKernelMatVec6x6
-			// RE-evaluates the full O(nHex^2) kernel on EVERY matvec, so a BiCGSTAB solve (~tens of matvecs)
-			// repeats ~N matrix builds.  Instead build the chi-INDEPENDENT geometry block matrix K ONCE
-			// (K[h][g] = MomentSystemBlock6x6(h,g,kernelOnly=true), incl. INV4PI + IMA images); the matvec
-			// applies y = diag(chi)(K x) + L_local x, and a nonlinear Picard loop reuses K (only chi, the
-			// block diagonal, changes).
-			//   method 0/1 -> DENSE K (momentKdense, O(N^2) storage, cheap dense GEMV).
-			//   method 2   -> H-MATRIX K (RadHACApKMomentSystem kernel-only, O(N log N) matvec + storage) --
-			//                 the collocation-MMMM COARSE tier (Sugahara 2026-07-02, loop-free abandoned;
-			//                 field-correct but loop-polluted internal M, acceptable for coarse/optimization).
-			const bool useHMatrixK = rad.m_moment_use_hmatrix;
-			std::vector<double> momentKdense;              // dense K   (built when !useHMatrixK)
-			std::vector<double> momentHKx;                 // matvec input copy (the H-matvec uses the vector API)
-			if(useHMatrixK)
-			{
-				// BUILD-ONCE across the Picard loop: m_momentHK is a member, so the H-matrix K survives
-				// between SolveLinearStep calls of one solve (K is chi-free; only chi changes per iteration).
-				if(m_momentHK && m_momentHK->GetInteraction() != IntrctPtr)
-				{
-					delete m_momentHK;
-					m_momentHK = nullptr;
-				}
-				if(!m_momentHK)
-				{
-					m_momentHK = new RadHACApKMomentSystem(IntrctPtr);
-					RadHACApKParams hkParams;
-					hkParams.aca_eps   = rad.m_hacapk_eps;
-					hkParams.leaf_size = rad.m_hacapk_leaf_size;
-					hkParams.eta       = rad.m_hacapk_eta;
-					hkParams.print_level = 0;
-					if(!m_momentHK->BuildHMatrix(hkParams))   // self-wraps a RegionTaskManager; nests under rtm harmlessly
-					{
-						delete m_momentHK;
-						m_momentHK = nullptr;
-						fprintf(stderr, "[BiCG] Error: collocation-MMMM moment H-matrix (method 2) build failed; no dense fallback.\n");
-						return -12;
-					}
-				}
-				momentHKx.assign((size_t)totalDOF, 0.0);
-			}
-			else
-			{
-				// O(N^2) dense; research code -- NO artificial size cap.  A too-large allocation fails loud
-				// (std::bad_alloc); use method 2 (HACApK, O(N log N)) for very large N.
-				const size_t momentDenseElems = (size_t)totalDOF * (size_t)totalDOF;
-				momentKdense.assign(momentDenseElems, 0.0);
-				auto buildKdenseRow = [&](size_t hh) {
-					const int h = (int)hh;
-					double Kblk[36];
-					for(int g = 0; g < nHex; g++)
-					{
-						IntrctPtr->MomentSystemBlock6x6(h, g, nullptr, Kblk, true);   // chi-independent geometry block (incl. images)
-						for(int i = 0; i < 6; i++)
-							for(int j = 0; j < 6; j++)
-								momentKdense[(size_t)(6*h+i) * (size_t)totalDOF + (size_t)(6*g+j)] = Kblk[i*6+j];
-					}
-				};
-				if(serialElementOps) { for(int h = 0; h < nHex; h++) buildKdenseRow((size_t)h); }
-				else { ngcore::ParallelFor(ngcore::IntRange(nHex), buildKdenseRow); }
-			}
 			std::vector<double> momentKx((size_t)totalDOF, 0.0);
 
 			auto t_setup_end = std::chrono::high_resolution_clock::now();
@@ -3070,7 +3097,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 				if(useHMatrixK)
 				{
 					std::memcpy(momentHKx.data(), x, (size_t)totalDOF * sizeof(double));
-					m_momentHK->MatVec(momentHKx, momentKx);   // momentKx = K x  (y overwritten, no accumulate)
+					rad.m_moment_hk->MatVec(momentHKx, momentKx);   // momentKx = K x  (y overwritten, no accumulate)
 				}
 				else
 				{
