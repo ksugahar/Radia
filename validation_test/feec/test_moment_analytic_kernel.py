@@ -113,3 +113,50 @@ def test_analytic_kernel_config_roundtrip_and_default_on():
     assert rad.GetSolverConfig()["moment_analytic_kernel"] is False
     rad.SolverConfig(moment_analytic_kernel=True)
     assert rad.GetSolverConfig()["moment_analytic_kernel"] is True
+
+
+def test_cross_solve_analytic_flip_respected_no_utildelall():
+    """DETERMINISTIC guard for the 2026-07-02 cross-solve moment-K cache fix (commit 9120bb9d).
+
+    method 2 caches the chi-free geometry K on radTApplication ACROSS Solve calls (optimization
+    inner loops re-Solve the SAME geometry many times).  Here we Solve the SAME container TWICE
+    with method 2 WITHOUT UtiDelAll in between, flipping moment_analytic_kernel between the two
+    solves.  The 2nd solve MUST reflect the new kernel -- the cached K must be rebuilt.
+
+    If the cross-solve cache validity key were missing the kernel flag (regression on part (a) of
+    the fix) AND the lifecycle invalidation hooks were absent (part (b)), the 2nd solve would
+    reuse the 1st solve's stale K and the two field sets would be bit-identical (rel==0).  The
+    rel>1e-9 assert fails in that regression; rel<5e-3 confirms both are the same physics.
+
+    This is the DETERMINISTIC complement to the ABA lifecycle bug (which is nondeterministic on
+    LAB via heap-address reuse -- it only bit when UtiDelAll freed then an identical geometry
+    rebuilt at the same address).  The 'flag baked into K must be in the key' requirement is not
+    address-dependent, so this test catches a key/hook regression every run.  General rule this
+    locks (bug_patterns cross-solve-cache-config-flag-key-and-lifecycle): a cross-call cache must
+    key on EVERY config flag baked into the cached artifact AND invalidate at EVERY lifecycle site
+    that can free the pointed-to object."""
+    rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
+    rad.SolverConfig(bicgstab_tol=1e-10)
+    L = 0.01; n = 2
+    objs = []
+    for ix in range(n):
+        for iy in range(n):
+            for iz in range(n):
+                x0, y0, z0 = ix * L, iy * L, iz * L
+                v = [[x0, y0, z0], [x0 + L, y0, z0], [x0 + L, y0 + L, z0], [x0, y0 + L, z0],
+                     [x0, y0, z0 + L], [x0 + L, y0, z0 + L], [x0 + L, y0 + L, z0 + L], [x0, y0 + L, z0 + L]]
+                h = rad.ObjHexahedron(v, [0, 0, 0]); rad.MatApl(h, rad.MatLin(200.0)); objs.append(h)
+    cont = rad.ObjCnt(objs + [rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])])
+    pts = ([0.05, 0.01, 0.01], [0.0, 0.05, 0.02], [0.012, 0.012, 0.06])
+    # Solve #1: GAUSS kernel, method 2 -> builds + caches the moment K (gauss) on radTApplication
+    rad.SolverConfig(moment_analytic_kernel=False)
+    rad.Solve(cont, 1e-8, 3000, 2)
+    Bg = np.asarray([rad.Fld(cont, "b", p) for p in pts], float)
+    # Solve #2: ANALYTIC kernel, SAME container, NO UtiDelAll -> the cross-solve K cache MUST rebuild
+    rad.SolverConfig(moment_analytic_kernel=True)
+    rad.Solve(cont, 1e-8, 3000, 2)
+    Ba = np.asarray([rad.Fld(cont, "b", p) for p in pts], float)
+    rel = np.linalg.norm(Ba - Bg) / max(np.linalg.norm(Bg), 1e-30)
+    assert rel > 1e-9, (f"cross-solve analytic flip IGNORED (rel {rel:.2e}) -- stale moment K reused; "
+                        f"kernel flag missing from cross-solve cache key / lifecycle hook")
+    assert rel < 5e-3, f"cross-solve analytic vs gauss not same physics (rel {rel:.2e})"
