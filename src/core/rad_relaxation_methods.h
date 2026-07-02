@@ -391,12 +391,7 @@ public:
 		IntrctPtr = InInteractionPtr;
 	}
 
-	~radTRelaxationMethNo_1() {
-		if(m_momentHK) {
-			delete m_momentHK;
-			m_momentHK = nullptr;
-		}
-	}
+	~radTRelaxationMethNo_1() {}
 
 	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
 
@@ -410,11 +405,10 @@ protected:
 
 private:
 	// Collocation-MMMM COARSE tier (method-2 request routed here by SolveGen): the chi-free geometry
-	// coupling K as a RadHACApKMomentSystem H-matrix, built ONCE on the first SolveLinearStep and
-	// REUSED across the nonlinear Picard iterations (K is chi-independent; only the block-diagonal
-	// chi changes between iterations).  Owned; deleted in the destructor.  nullptr when the solve
-	// uses the dense K (method 0/1) or before the first method-2 linear step.
-	RadHACApKMomentSystem* m_momentHK = nullptr;
+	// coupling K (RadHACApKMomentSystem H-matrix) + the chi-free localL/diagK blocks live in the
+	// CROSS-SOLVE cache on radTApplication (rad.m_moment_hk*), so an optimization inner loop that
+	// re-Solves the same geometry reuses them across rad.Solve calls, not just across the Picard
+	// iterations of one solve.  See rad_application.h / SolveLinearStep's hkCacheValid check.
 
 	// Variable DOF version of BiCGSTAB
 	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)
