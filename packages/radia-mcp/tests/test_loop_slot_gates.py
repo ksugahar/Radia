@@ -14,7 +14,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     coenergy_torque_periodic_summary,
     coaxial_rc_duality_gate,
     coaxial_pm_force_gap_sweep_gate,
-    computed_reference_crossval_rows_gate,
+    computed_reference_rows_gate,
     cross_validation_artifact_to_mcp_feedback_gate,
     source_native_seed_queue_gate,
     cst_abcd_cascade_solver_ready_manifest_gate,
@@ -3221,7 +3221,7 @@ def test_source_native_seed_queue_gate_separates_preflight_from_crossval_learnin
     assert feedback_gate["provenance_gate_status"] == "ok"
 
 
-def test_computed_reference_crossval_rows_gate_checks_real_result_rows():
+def test_computed_reference_rows_gate_checks_real_result_rows():
     artifact = {
         "results": [
             {
@@ -3264,7 +3264,7 @@ def test_computed_reference_crossval_rows_gate_checks_real_result_rows():
         ]
     }
 
-    gate = computed_reference_crossval_rows_gate(
+    gate = computed_reference_rows_gate(
         artifact,
         max_global_rel_error=0.01,
     )
@@ -3288,7 +3288,7 @@ def test_computed_reference_crossval_rows_gate_checks_real_result_rows():
             }
         ]
     }
-    mismatch_gate = computed_reference_crossval_rows_gate(too_loose_claim)
+    mismatch_gate = computed_reference_rows_gate(too_loose_claim)
     assert mismatch_gate["status"] == "needs_attention"
     assert mismatch_gate["checks"]["rel_error_matches_computed_reference"] is False
 
@@ -3304,13 +3304,13 @@ def test_computed_reference_crossval_rows_gate_checks_real_result_rows():
             }
         ]
     }
-    fail_gate = computed_reference_crossval_rows_gate(failing_row)
+    fail_gate = computed_reference_rows_gate(failing_row)
     assert fail_gate["status"] == "needs_attention"
     assert fail_gate["checks"]["row_errors_within_tolerance"] is False
     assert fail_gate["checks"]["pass_flags_true_when_required"] is False
 
     missing = {"rows": [{"quantity": "pressure", "computed": 1.0, "reference": 1.0}]}
-    missing_gate = computed_reference_crossval_rows_gate(missing)
+    missing_gate = computed_reference_rows_gate(missing)
     assert missing_gate["status"] == "needs_attention"
     assert missing_gate["checks"]["required_fields_present"] is False
 
