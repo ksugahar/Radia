@@ -1534,6 +1534,51 @@ All EM solvers read a pre-meshed `.vol` (no auto air-mesh generation).
 INDUCTION_HEATING_PEEC_BEM_SIBC = """
 # PEEC (coil filament) + BEM-SIBC (workpiece) — production path for rotating WP
 
+## POLICY: BEM-A coil solver = impedance-EFIE (the SOLE AC formulation)
+
+**POLICY (2026-07-03, Sugahara):** the BEM-A coil solver
+(``--coil-solver bem-a``, ``radia.bem.coil_inductance_ngsolve``) uses the
+**impedance-EFIE** formulation and ONLY that.  The Leontovich surface
+impedance ``Z_s = (1+j)/(sigma*delta)`` sits INSIDE the saddle system::
+
+    [ jw*mu0*SL + Z_s*M   D^T ] [J]   [0]
+    [ D                    0  ] [p] = [g]      (complex, omega > 0)
+
+so the recovered J is the FINITE-IMPEDANCE surface current, and
+``R = Re(Z_s) * (J^H M J)`` (Leontovich SIBC dissipation),
+``L = mu_0 * (J^H SL J)`` (EXTERNAL inductance -- the internal surface
+reactance ``Im(Z_s)*(J^H M J)/omega`` is deliberately NOT folded into L).
+At ``omega == 0`` it reduces to the real vacuum-L saddle (R = 0).
+
+**The historical PEC post-hoc formulation is REMOVED and must not return.**
+It solved a perfect-conductor saddle then integrated ``R = Re(Z_s)*|J|^2 dS``
+afterwards; the PEC J concentrates singularly at near-contact turn gaps /
+edges where it varies below the skin depth and the Leontovich integral
+breaks down, over-estimating R ~3x on tightly-wound coils (kubota 3-turn
+pancake: PEC 15.14 mOhm vs the physical 4.63, the latter confirmed by
+volume PEEC 3.7 / perimeter PEEC 4.5 / analytic proximity 4.8).  On smooth
+geometry both agreed (isolated straight wire = closed-form Bessel to <1%),
+so the removal loses nothing.
+
+**Scalable solver = loop-COCR** (``--coil-saddle-solver loop_cocr``, and
+``auto`` selects it for large systems: > 5000 tris AC / 10000 DC).  It
+reduces the saddle to the divergence-free (loop / stream-function) subspace
+via the sparse projector onto ker(D), giving the complex-symmetric operator
+``Pi A11 Pi`` that COCR (Sogabe-Zhang, UNCONJUGATED inner products) solves in
+~24 MESH-INDEPENDENT iterations -- EXACT vs the dense LU (dR/dL < 0.01% on the
+gapped torus) and replacing BOTH the O(N^3) LU and the unpreconditioned GMRES
+that stalled (~1e5 matvecs) on the indefinite AC saddle.  The SL matvec is
+dense (default) or HACApK-compressed (``--coil-loop-matvec hacapk``,
+O(N log N), matvec accuracy ~3e-7, the bem_sibc_solver HACApKBEMManager
+pattern); both give identical R/L.  COCR does NOT fit the raw saddle
+(structural breakdown -- rhs = [0; g] lives in the constraint block so the
+initial r^T A r = 0) nor the Schur complement (diverges); the div-free
+reduction is what makes it fit.
+
+Refs: ``docs/peec/VOLUME_PEEC_DESIGN.md``,
+``docs/esim/R_MISMATCH_PEEC_VS_BEMA.md``,
+``validation_test/bem/test_coil_bem_a_impedance_efie.py``.
+
 ## When to use this
 
 - Workpiece moves/rotates relative to coil (different relative position per step)
