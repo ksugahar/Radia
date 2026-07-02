@@ -1365,6 +1365,41 @@ void RadHACApKChargeGram::QuadQ2Map(const double* nd9, const double uv[2], doubl
         }
 }
 
+// Values-only Q2 maps (no Jacobian): the Piola radial inner needs only X (REF measure -- no |det J|).
+void RadHACApKChargeGram::HexQ2MapX(const double* nd27, const double xi[3], double X[3])
+{
+    double vx[3], dx[3], vy[3], dy[3], vz[3], dz[3];
+    HexLag3(xi[0], vx, dx); HexLag3(xi[1], vy, dy); HexLag3(xi[2], vz, dz);
+    X[0] = X[1] = X[2] = 0.0;
+    for (int iz = 0; iz < 3; ++iz)
+        for (int iy = 0; iy < 3; ++iy) {
+            const double syz = vy[iy]*vz[iz];
+            for (int ix = 0; ix < 3; ++ix) {
+                const double* nd = &nd27[3*(ix + 3*iy + 9*iz)];
+                const double s = vx[ix]*syz;
+                X[0] += s*nd[0]; X[1] += s*nd[1]; X[2] += s*nd[2];
+            }
+        }
+}
+
+void RadHACApKChargeGram::QuadQ2MapX(const double* nd9, const double uv[2], double X[3])
+{
+    double vu[3], du[3], vv[3], dv[3];
+    HexLag3(uv[0], vu, du); HexLag3(uv[1], vv, dv);
+    X[0] = X[1] = X[2] = 0.0;
+    for (int iv = 0; iv < 3; ++iv)
+        for (int iu = 0; iu < 3; ++iu) {
+            const double* nd = &nd9[3*(iu + 3*iv)];
+            const double s = vu[iu]*vv[iv];
+            X[0] += s*nd[0]; X[1] += s*nd[1]; X[2] += s*nd[2];
+        }
+}
+
+// Radial-cone face table of the ref sub-tet (vertex i's opposite face, oriented so the signed 6-vol D of
+// (x0, b1, b2, b3) sums the tet exactly from any interior anchor) -- shared by the SELF radial and the
+// static-SITE table generator.
+static const int HEXTET_FC[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
+
 static inline double HexDet3(const double J[3][3])
 {
     return J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1]) - J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])
@@ -1571,6 +1606,198 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexLocalOf[a] = (int)grp.size();
         grp.push_back(a);
     }
+    BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
+}
+
+// Ref coords of anchor site k of cell sub-tet s (hex-ref frame): 0-3 corners, 4-9 edge midpoints
+// ((0,1),(0,2),(0,3),(1,2),(1,3),(2,3)), 10-13 face centers (HEXTET_FC order), 14 centroid.
+static void HexSiteRef(int s, int k, double x0[3])
+{
+    const int* tv = HEXREF_TETS[s];
+    double V[4][3];
+    for (int i = 0; i < 4; ++i) for (int d = 0; d < 3; ++d) V[i][d] = HEXREF_V[tv[i]][d];
+    static const int E[6][2] = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
+    if (k < 4)       for (int d = 0; d < 3; ++d) x0[d] = V[k][d];
+    else if (k < 10) for (int d = 0; d < 3; ++d) x0[d] = 0.5*(V[E[k-4][0]][d] + V[E[k-4][1]][d]);
+    else if (k < 14) {
+        const int* f = HEXTET_FC[k-10];
+        for (int d = 0; d < 3; ++d) x0[d] = (V[f[0]][d] + V[f[1]][d] + V[f[2]][d])/3.0;
+    } else            for (int d = 0; d < 3; ++d) x0[d] = 0.25*(V[0][d]+V[1][d]+V[2][d]+V[3][d]);
+}
+
+// Ref uv coords of anchor site k of face sub-tri s: 0-2 corners, 3-5 edge midpoints ((0,1),(1,2),(2,0)),
+// 6 centroid.
+static void QuadSiteRef(int s, int k, double u0[2])
+{
+    const int* tv = QUADREF_TRIS[s];
+    double V[3][2];
+    for (int i = 0; i < 3; ++i) for (int d = 0; d < 2; ++d) V[i][d] = QUADREF_V[tv[i]][d];
+    if (k < 3)      for (int d = 0; d < 2; ++d) u0[d] = V[k][d];
+    else if (k < 6) for (int d = 0; d < 2; ++d) u0[d] = 0.5*(V[k-3][d] + V[(k-2)%3][d]);
+    else            for (int d = 0; d < 2; ++d) u0[d] = (V[0][d]+V[1][d]+V[2][d])/3.0;
+}
+
+// Build the host-INDEPENDENT static-site radial tables (see the header doc): for each (cell sub, site) /
+// (face sub, site), the radial-cone nodes from the site are FIXED ref points, so the Q2 shape values S,
+// the Q1 monomial values M, and the signed Piola weights w are precomputed once; a call is then one
+// nq x 27|9 "GEMV" (X = S @ nodes) + nq kernel evals.  Cones whose base face contains the site have D = 0
+// and are skipped (corner sites keep 1 of 4 cones, edge mids 2, face centers 3, centroid 4).  Also fills
+// the per-host MAPPED site positions used by the nearest-site pick.
+void RadHACApKChargeGram::BuildHexSiteTables()
+{
+    const int nR = (int)m_glIn.size();
+    const double* GL = m_glIn.data();
+    const double* GW = m_gwIn.data();
+    m_cellSiteRad.assign(6*15, HexSiteRad());
+    for (int s = 0; s < 6; ++s) {
+        const int* tv = HEXREF_TETS[s];
+        double V[4][3];
+        for (int i = 0; i < 4; ++i) for (int d = 0; d < 3; ++d) V[i][d] = HEXREF_V[tv[i]][d];
+        double E0[3], E1[3], E2[3];
+        for (int d = 0; d < 3; ++d) { E0[d] = V[1][d]-V[0][d]; E1[d] = V[2][d]-V[0][d]; E2[d] = V[3][d]-V[0][d]; }
+        const double hv = E0[0]*(E1[1]*E2[2]-E1[2]*E2[1]) - E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])
+                        + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
+        const double sgnT = (hv >= 0.0) ? 1.0 : -1.0;
+        for (int k = 0; k < 15; ++k) {
+            HexSiteRad& R = m_cellSiteRad[(size_t)s*15 + k];
+            double x0[3];
+            HexSiteRef(s, k, x0);
+            for (int f = 0; f < 4; ++f) {
+                const double* b1 = V[HEXTET_FC[f][0]];
+                const double* b2 = V[HEXTET_FC[f][1]];
+                const double* b3 = V[HEXTET_FC[f][2]];
+                double d1[3], d2[3], d3[3], e21[3], e32[3];
+                for (int d = 0; d < 3; ++d) {
+                    d1[d] = b1[d]-x0[d]; d2[d] = b2[d]-x0[d]; d3[d] = b3[d]-x0[d];
+                    e21[d] = b2[d]-b1[d]; e32[d] = b3[d]-b2[d];
+                }
+                const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
+                const double D = d1[0]*cr[0] + d1[1]*cr[1] + d1[2]*cr[2];
+                if (std::fabs(D) < 1e-12) continue;              // degenerate cone: site lies on this face
+                for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                    for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                        for (int c = 0; c < nR; ++c) { const double w = GL[c];
+                            double y[3];
+                            for (int d = 0; d < 3; ++d) y[d] = x0[d] + u*(d1[d] + v*(e21[d] + w*e32[d]));
+                            R.w.push_back(sgnT*GW[a]*GW[b]*GW[c]*(u*u*v*D));
+                            double vx[3], dxu[3], vy[3], dyu[3], vz[3], dzu[3];
+                            HexLag3(y[0], vx, dxu); HexLag3(y[1], vy, dyu); HexLag3(y[2], vz, dzu);
+                            for (int iz = 0; iz < 3; ++iz)
+                                for (int iy = 0; iy < 3; ++iy)
+                                    for (int ix = 0; ix < 3; ++ix) R.S.push_back(vx[ix]*vy[iy]*vz[iz]);
+                            const double m1 = y[0], m2 = y[1], m4 = y[2];   // Q1 monomials, idx = e0+2e1+4e2
+                            R.M.push_back(1.0);   R.M.push_back(m1);    R.M.push_back(m2);    R.M.push_back(m1*m2);
+                            R.M.push_back(m4);    R.M.push_back(m1*m4); R.M.push_back(m2*m4); R.M.push_back(m1*m2*m4);
+                        }
+                    }
+                }
+            }
+            R.nq = (int)R.w.size();
+        }
+    }
+    m_faceSiteRad.assign(2*7, HexSiteRad());
+    for (int s = 0; s < 2; ++s) {
+        const int* tv = QUADREF_TRIS[s];
+        double V[3][2];
+        for (int i = 0; i < 3; ++i) for (int d = 0; d < 2; ++d) V[i][d] = QUADREF_V[tv[i]][d];
+        for (int k = 0; k < 7; ++k) {
+            HexSiteRad& R = m_faceSiteRad[(size_t)s*7 + k];
+            double u0[2];
+            QuadSiteRef(s, k, u0);
+            for (int kf = 0; kf < 3; ++kf) {
+                const double* A = V[kf]; const double* B = V[(kf+1)%3];
+                const double ea[2] = {A[0]-u0[0], A[1]-u0[1]};
+                const double eb[2] = {B[0]-u0[0], B[1]-u0[1]};
+                const double s2 = ea[0]*eb[1] - ea[1]*eb[0];
+                if (std::fabs(s2) < 1e-12) continue;             // degenerate cone: site lies on this edge
+                for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                    for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                        const double yu = u0[0] + u*(ea[0] + v*(eb[0]-ea[0]));
+                        const double yv = u0[1] + u*(ea[1] + v*(eb[1]-ea[1]));
+                        R.w.push_back(GW[a]*GW[b]*(u*s2));       // QUADREF_TRIS are CCW: signed s2 sums to +
+                        double vu[3], duu[3], vv[3], dvu[3];
+                        HexLag3(yu, vu, duu); HexLag3(yv, vv, dvu);
+                        for (int iv = 0; iv < 3; ++iv)
+                            for (int iu = 0; iu < 3; ++iu) R.S.push_back(vu[iu]*vv[iv]);
+                        R.M.push_back(1.0); R.M.push_back(yu); R.M.push_back(yv); R.M.push_back(yu*yv);
+                    }
+                }
+            }
+            R.nq = (int)R.w.size();
+        }
+    }
+    // ---- mapped site positions per host (the nearest-site pick is a physical distance test) ----
+    m_cellSiteX.assign((size_t)m_n_el*6*15*3, 0.0);
+    for (int c = 0; c < m_n_el; ++c) {
+        const double* nd = &m_hexNodes[(size_t)c*81];
+        for (int s = 0; s < 6; ++s)
+            for (int k = 0; k < 15; ++k) {
+                double x0[3], X[3];
+                HexSiteRef(s, k, x0);
+                HexQ2MapX(nd, x0, X);
+                double* out = &m_cellSiteX[(((size_t)c*6 + s)*15 + k)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+            }
+    }
+    m_faceSiteX.assign((size_t)m_hex_n_bf*2*7*3, 0.0);
+    for (int f = 0; f < m_hex_n_bf; ++f) {
+        const double* nd = &m_quadNodes[(size_t)f*27];
+        for (int s = 0; s < 2; ++s)
+            for (int k = 0; k < 7; ++k) {
+                double u0[2], X[3];
+                QuadSiteRef(s, k, u0);
+                QuadQ2MapX(nd, u0, X);
+                double* out = &m_faceSiteX[(((size_t)f*2 + s)*7 + k)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+            }
+    }
+    m_hex_state_sum = HexStateChecksum();   // heap-stomp canary: everything a block compute reads
+}
+
+// Checksum of every hex-mode member array the block computation reads (heap-stomp canary; see header).
+double RadHACApKChargeGram::HexStateChecksum() const
+{
+    double s = 0.0;
+    for (const auto& kv : HexStateBreakdown()) s += kv.second;
+    return s;
+}
+
+// Per-array checksum breakdown (flake forensics: which array differs between two instances).
+std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdown() const
+{
+    std::vector<std::pair<std::string, double>> out;
+    auto add = [&out](const char* name, const std::vector<double>& v) {
+        double s = 0.0;
+        for (double x : v) s += x;
+        out.emplace_back(name, s);
+    };
+    auto addi = [&out](const char* name, const std::vector<int>& v) {
+        double s = 0.0;
+        for (int x : v) s += (double)x;
+        out.emplace_back(name, s);
+    };
+    add("hexNodes", m_hexNodes); add("quadNodes", m_quadNodes);
+    add("symTetP", m_symTetP); add("symTetW", m_symTetW);
+    add("symTriP", m_symTriP); add("symTriW", m_symTriW);
+    add("glOut", m_glOut); add("gwOut", m_gwOut); add("glIn", m_glIn); add("gwIn", m_gwIn);
+    add("farTetP", m_farTetP); add("farTetW", m_farTetW);
+    add("farTriP", m_farTriP); add("farTriW", m_farTriW);
+    add("cellSubC", m_cellSubC); add("cellSubS", m_cellSubS); add("cellSubV", m_cellSubV);
+    add("faceSubC", m_faceSubC); add("faceSubS", m_faceSubS); add("faceSubV", m_faceSubV);
+    add("cent", m_cent); add("size", m_size);
+    addi("host", m_host); addi("kind", m_kind); addi("expo", m_expo); addi("hexLocalOf", m_hexLocalOf);
+    {
+        double s = 0.0;
+        for (const HexSiteRad& R : m_cellSiteRad) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        out.emplace_back("cellSiteRad", s);
+    }
+    {
+        double s = 0.0;
+        for (const HexSiteRad& R : m_faceSiteRad) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        out.emplace_back("faceSiteRad", s);
+    }
+    add("cellSiteX", m_cellSiteX); add("faceSiteX", m_faceSiteX);
+    return out;
 }
 
 // A materialized quadrature cloud on one sub-simplex: physical points, geometry weights (rule weight x
@@ -1647,8 +1874,49 @@ static const HexQuadCloud& HexGetCloud(long long build_id, long long key,
 
 // Vectorized inner: INT over sub `subB` of src host (kindS,hS) of mono_b(y)/|p-y| dy for ALL source local
 // charges srcG[], accumulated into inn[ls].  FAR field point -> the cheap cached far cloud (smooth 1/r);
-// NEAR -> the radial signed decomposition (PhiInnerHexRadialVec, Newton anchor) -- accurate on distorted
-// and curved hexes where the old corner-graded glIn cloud left +-3% self/near-energy errors (eig > 1).
+// NEAR -> the static-SITE radial (PhiInnerHexSiteVec: precomputed ref tables anchored at the nearest
+// site) -- the same exact radial cone tiling as the self path, served at shape-"GEMV" cost.
+// NON-SELF near inner: the static-SITE radial (see the header doc).  Nearest mapped site anchors the
+// precomputed ref-space radial tables; the per-call work is one nq x 27|9 shape "GEMV" + nq kernel evals.
+void RadHACApKChargeGram::PhiInnerHexSiteVec(int kindS, int hS, int subB, const double p[3],
+                                             const std::vector<int>& srcG, double* inn) const
+{
+    const bool cell = (kindS == 0);
+    const int nsite = cell ? 15 : 7;
+    const double* sx = cell ? &m_cellSiteX[(((size_t)hS*6 + subB)*15)*3]
+                            : &m_faceSiteX[(((size_t)hS*2 + subB)*7)*3];
+    int best = 0; double bd = 1e300;
+    for (int k = 0; k < nsite; ++k) {
+        const double dx = p[0]-sx[3*k], dy = p[1]-sx[3*k+1], dz = p[2]-sx[3*k+2];
+        const double d = dx*dx + dy*dy + dz*dz;
+        if (d < bd) { bd = d; best = k; }
+    }
+    const HexSiteRad& R = cell ? m_cellSiteRad[(size_t)subB*15 + best] : m_faceSiteRad[(size_t)subB*7 + best];
+    const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nn = cell ? 27 : 9;
+    const int nm = cell ? 8 : 4;
+    const int nS = (int)srcG.size();
+    int col[8];
+    for (int ls = 0; ls < nS; ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        col[ls] = e[0] + 2*e[1] + (cell ? 4*e[2] : 0);
+    }
+    for (int q = 0; q < R.nq; ++q) {
+        const double* Sq = &R.S[(size_t)q*nn];
+        double X0 = 0.0, X1 = 0.0, X2 = 0.0;
+        for (int n2 = 0; n2 < nn; ++n2) {
+            const double s = Sq[n2]; const double* v = &nd[3*n2];
+            X0 += s*v[0]; X1 += s*v[1]; X2 += s*v[2];
+        }
+        const double dx = p[0]-X0, dy = p[1]-X1, dz = p[2]-X2;
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r < 1e-300) continue;
+        const double g = R.w[q]/r;
+        const double* Mq = &R.M[(size_t)q*nm];
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += g*Mq[col[ls]];
+    }
+}
+
 void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                                             const std::vector<int>& srcG, double* inn) const
 {
@@ -1659,7 +1927,7 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
     const double dxc = p[0]-cs[0], dyc = p[1]-cs[1], dzc = p[2]-cs[2];
     const bool far_pt = std::sqrt(dxc*dxc + dyc*dyc + dzc*dzc) > m_far_inner_factor*sz;
     if (!far_pt) {
-        PhiInnerHexRadialVec(kindS, hS, subB, p, nullptr, srcG, inn);
+        PhiInnerHexSiteVec(kindS, hS, subB, p, srcG, inn);
         return;
     }
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
@@ -1707,18 +1975,21 @@ static void ClosestPointTri2D(const double V[3][2], const double p[2], double ou
     }
 }
 
-// NEAR/SELF inner: the tet path's PhiAtHO_Duffy RADIAL signed decomposition ported to the REF frame (see
-// the header doc).  Anchor x0 = the ref point where the pulled-back kernel 1/|p-X(xi)| peaks (xiT exact
-// for the self host; else a short Newton inverse of the Q2 map -- anchor QUALITY only, the radial tiling
-// is exact from ANY x0), clamped into the ref sub-simplex; 4 signed radial sub-tets (3 signed sub-tris on
-// faces) from x0 with the Duffy apex AT x0: the u^2 (u) volume element kills the 1/r peak exactly, and the
-// map's warp enters only as the SMOOTH per-point |det J| / surface-J factor -- robust on strongly
-// distorted and curved hexes alike (the corner-graded-cloud / linearized-subtraction schemes oscillated
-// +-3%, eig 1.02-1.11 > 1, on the real Cubit cylinder).  m_glIn/m_gwIn = the radial 1D Gauss rule.
+// SELF inner: the tet path's PhiAtHO_Duffy RADIAL signed decomposition ported to the REF frame (see the
+// header doc).  Anchor x0 = xiT, the outer point's own ref coords (the pulled-back kernel 1/|p-X(xi)|
+// peaks there -- exact, no inverse), clamped into the ref sub-simplex; 4 signed radial sub-tets (3 signed
+// sub-tris on faces) from x0 with the Duffy apex AT x0: the u^2 (u) volume element kills the 1/r peak
+// exactly, and the map's warp enters only as a SMOOTH per-point factor -- robust on strongly distorted
+// and curved hexes alike (the corner-graded-cloud / linearized-subtraction schemes oscillated +-3%,
+// eig 1.02-1.11 > 1, on the real Cubit cylinder).  SELF-ONLY since 2026-07-03: non-self near calls take
+// PhiInnerHexSiteVec (static-site radial; the per-outer-point Newton-anchor branch was removed with
+// them).  m_glIn/m_gwIn = the radial 1D Gauss rule.
 void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, const double p[3],
                                                const double* xiT, const std::vector<int>& srcG,
                                                double* inn) const
 {
+    if (!xiT)
+        throw std::logic_error("PhiInnerHexRadialVec: xiT required (SELF-only; non-self near uses the site radial)");
     const bool cell = (kindS == 0);
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
     const int nR = (int)m_glIn.size();
@@ -1732,33 +2003,8 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
         const int* tv = HEXREF_TETS[subB];
         double V[4][3];
         for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) V[i][k] = HEXREF_V[tv[i]][k];
-        // ---- anchor: xiT (self, exact) or Newton inverse of the Q2 map ----
-        double xr[3];
-        if (xiT) { xr[0] = xiT[0]; xr[1] = xiT[1]; xr[2] = xiT[2]; }
-        else {
-            xr[0] = 0.25*(V[0][0]+V[1][0]+V[2][0]+V[3][0]);
-            xr[1] = 0.25*(V[0][1]+V[1][1]+V[2][1]+V[3][1]);
-            xr[2] = 0.25*(V[0][2]+V[1][2]+V[2][2]+V[3][2]);
-            for (int it = 0; it < 6; ++it) {
-                double X[3], J[3][3];
-                HexQ2Map(nd, xr, X, J);
-                const double rv[3] = {X[0]-p[0], X[1]-p[1], X[2]-p[2]};
-                if (rv[0]*rv[0] + rv[1]*rv[1] + rv[2]*rv[2] < 1e-28) break;
-                const double c0[3] = {J[0][0], J[1][0], J[2][0]};
-                const double c1[3] = {J[0][1], J[1][1], J[2][1]};
-                const double c2[3] = {J[0][2], J[1][2], J[2][2]};
-                auto det3c = [](const double* a, const double* b, const double* c) {
-                    return a[0]*(b[1]*c[2]-b[2]*c[1]) - a[1]*(b[0]*c[2]-b[2]*c[0])
-                         + a[2]*(b[0]*c[1]-b[1]*c[0]);
-                };
-                const double det = det3c(c0, c1, c2);
-                if (std::fabs(det) < 1e-300) break;
-                xr[0] -= det3c(rv, c1, c2)/det;
-                xr[1] -= det3c(c0, rv, c2)/det;
-                xr[2] -= det3c(c0, c1, rv)/det;
-                for (int k = 0; k < 3; ++k) xr[k] = xr[k] < -1.0 ? -1.0 : (xr[k] > 2.0 ? 2.0 : xr[k]);
-            }
-        }
+        // ---- anchor: xiT (the outer point's own ref coords -- the self kernel peaks there), clamped ----
+        const double xr[3] = {xiT[0], xiT[1], xiT[2]};
         double x0[3];
         rad_hdiv::ClosestPointTet(V, xr, x0);                    // clamp into the ref sub-tet
         // ---- orientation of the ref sub-tet (computed, not assumed) ----
@@ -1768,9 +2014,9 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
                         + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
         const double sgnT = (hv >= 0.0) ? 1.0 : -1.0;
         // ---- 4 signed radial sub-tets from x0 (the PhiAtHO_Duffy pattern, in REF space) ----
-        static const int FC[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
         for (int f = 0; f < 4; ++f) {
-            const double* b1 = V[FC[f][0]]; const double* b2 = V[FC[f][1]]; const double* b3 = V[FC[f][2]];
+            const double* b1 = V[HEXTET_FC[f][0]]; const double* b2 = V[HEXTET_FC[f][1]];
+            const double* b3 = V[HEXTET_FC[f][2]];
             double d1[3], d2[3], d3[3], e21[3], e32[3];
             for (int k = 0; k < 3; ++k) {
                 d1[k] = b1[k]-x0[k]; d2[k] = b2[k]-x0[k]; d3[k] = b3[k]-x0[k];
@@ -1784,8 +2030,8 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
                     for (int c = 0; c < nR; ++c) { const double w = GL[c];
                         double y[3];
                         for (int k = 0; k < 3; ++k) y[k] = x0[k] + u*(d1[k] + v*(e21[k] + w*e32[k]));
-                        double X[3], J[3][3];
-                        HexQ2Map(nd, y, X, J);
+                        double X[3];
+                        HexQ2MapX(nd, y, X);                     // Piola: values-only, no Jacobian
                         const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
                         const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
                         if (r < 1e-300) continue;
@@ -1800,30 +2046,8 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
         const int* tvq = QUADREF_TRIS[subB];
         double V2[3][2];
         for (int i = 0; i < 3; ++i) for (int k = 0; k < 2; ++k) V2[i][k] = QUADREF_V[tvq[i]][k];
-        // ---- anchor: xiT (self) or Gauss-Newton closest point on the Q2 surface ----
-        double ur[2];
-        if (xiT) { ur[0] = xiT[0]; ur[1] = xiT[1]; }
-        else {
-            ur[0] = (V2[0][0]+V2[1][0]+V2[2][0])/3.0;
-            ur[1] = (V2[0][1]+V2[1][1]+V2[2][1])/3.0;
-            for (int it = 0; it < 6; ++it) {
-                double X[3], T[3][2];
-                QuadQ2Map(nd, ur, X, T);
-                const double rx = X[0]-p[0], ry = X[1]-p[1], rz = X[2]-p[2];
-                const double g0 = T[0][0]*rx + T[1][0]*ry + T[2][0]*rz;
-                const double g1 = T[0][1]*rx + T[1][1]*ry + T[2][1]*rz;
-                const double a00 = T[0][0]*T[0][0] + T[1][0]*T[1][0] + T[2][0]*T[2][0];
-                const double a01 = T[0][0]*T[0][1] + T[1][0]*T[1][1] + T[2][0]*T[2][1];
-                const double a11 = T[0][1]*T[0][1] + T[1][1]*T[1][1] + T[2][1]*T[2][1];
-                const double det = a00*a11 - a01*a01;
-                if (std::fabs(det) < 1e-300) break;
-                const double du = ( a11*g0 - a01*g1)/det;
-                const double dv = (-a01*g0 + a00*g1)/det;
-                ur[0] -= du; ur[1] -= dv;
-                for (int k = 0; k < 2; ++k) ur[k] = ur[k] < -1.0 ? -1.0 : (ur[k] > 2.0 ? 2.0 : ur[k]);
-                if (du*du + dv*dv < 1e-24) break;
-            }
-        }
+        // ---- anchor: xiT (the outer point's own ref uv coords), clamped ----
+        const double ur[2] = {xiT[0], xiT[1]};
         double u0[2];
         ClosestPointTri2D(V2, ur, u0);                           // clamp into the ref sub-tri
         // ---- 3 signed radial sub-tris from u0 (PhiAtHO_Duffy face pattern, in REF uv space) ----
@@ -1837,8 +2061,8 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
                 for (int b = 0; b < nR; ++b) { const double v = GL[b];
                     const double yuv[2] = {u0[0] + u*(ea[0] + v*(eb[0]-ea[0])),
                                            u0[1] + u*(ea[1] + v*(eb[1]-ea[1]))};
-                    double X[3], T[3][2];
-                    QuadQ2Map(nd, yuv, X, T);
+                    double X[3];
+                    QuadQ2MapX(nd, yuv, X);                      // Piola: values-only, no Jacobian
                     const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
                     const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
                     if (r < 1e-300) continue;
@@ -2000,6 +2224,11 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
 
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
+    // Fail-loud bounds guard (2026-07-03 flake hunt): a HACApK-side index bug (1-based lod handling /
+    // buffer overrun) would otherwise read garbage hosts and produce plausible-but-wrong blocks.
+    if (a < 0 || a >= m_n || b < 0 || b >= m_n)
+        throw std::out_of_range("ChargeGram entry index out of range: a=" + std::to_string(a)
+                                + " b=" + std::to_string(b) + " n=" + std::to_string(m_n));
     if (m_hexmode) {
         // HEX RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
         // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.

@@ -58,6 +58,13 @@ def test_hex_rt1_wiring_spectrum_in_bound(name, mapping):
         mu = gf.vec.FV().NumPy().copy()
         demag = float((mu @ (N @ mu)) / (mu @ (M_mass @ mu)))
 
+    # Instance-integrity canary (2026-07-03): the flaky eig blowup this gate once showed was traced to
+    # NGSolve GetTrafo first-touch garbage in the basis extraction (fixed by the _trafo_lattice_nodes
+    # determinism contract; see memory ngsolve-gettrafo-first-touch-garbage).  Keep the cheap state
+    # checksum so any future instance corruption fails loud instead of leaking a wrong spectrum.
+    chk = G.hex_state_check()
+    assert chk["ctor"] == chk["now"], f"{name}: hex Gram state canary mismatch {chk}"
+
     # physical demag bound: 0 <= eig(M^-1 N) <= 1 (PSD floor + the self-energy cap)
     assert w.min() > -1e-8, f"{name}: N not PSD (min eig {w.min():.2e})"
     assert w.max() < 1.005, f"{name}: demag spectrum escaped [0,1] (max eig {w.max():.6f})"
