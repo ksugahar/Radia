@@ -45,11 +45,18 @@ physics discrepancy for tightly-packed multi-turn coils.
 > the skin depth δ where the Leontovich SIBC breaks down — so BEM-A
 > over-integrates |J|² and the 15.1 mΩ is a SIBC-breakdown,
 > mesh-divergent over-estimate (matches the 2.90→15.14 jump), NOT the
-> physical R.  The 2-terminal LCR ~15 mΩ additionally likely includes
-> contact/lead R.  **Ground truth still needs the 4-terminal Kelvin
-> re-measurement.**  Treat the "BEM-A is the correct tool / 15 mΩ is
-> right" conclusion below as SUPERSEDED for tightly-wound round-wire
-> coils.
+> physical R.  The 2-terminal LCR ~15 mΩ is **also not a trustworthy
+> arbiter**: at 150 kHz the coil is reactance-dominated (Q = ωL/R ≈
+> 27–90), so R is a tiny real part and a **1° phase error ≈ 7 mΩ** —
+> distinguishing 4.5 vs 15 mΩ is at/below a bench LCR's phase floor,
+> on top of contact/lead R.  So "BEM-A matches the measurement" is
+> most likely a coincidence of two independent UPWARD biases (BEM
+> SIBC-breakdown + LCR phase/contact error), NOT mutual validation.
+> **Ground truth needs a phase-independent measurement** — DC
+> 4-terminal R_dc × simulated R_ac/R_dc, calorimetric loss, or
+> resonance/Q (see VOLUME_PEEC_DESIGN.md).  Treat the "BEM-A is the
+> correct tool / 15 mΩ is right" conclusion below as SUPERSEDED for
+> tightly-wound round-wire coils.
 
 The structural ceiling of perimeter PEEC + proximity iteration is
 ~1.2× the self-skin value and is a **formulation ceiling, not an
