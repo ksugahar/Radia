@@ -83,6 +83,115 @@ This is the signed/directional gate behind
 ``force.parallel_wire_lorentz_force_summary`` and the scalar
 ``solve.two_wire_force_per_length``.
 
+When a two-wire row is promoted from an external solver or a recovered table,
+the current values alone are not enough evidence.  Bind the row to
+``current_source_artifact_id`` and ``current_definition_method`` (for example
+``femm_circuit_current_snapshot``) so a stale current table or RMS/peak
+convention cannot pass merely because the final force value still matches the
+Ampere-law toy case.  Slot 2026-07-01/332 makes this an executable
+``parallel_wire_force_result_package_gate`` contract.
+
+Likewise, do not leave the force sign convention implicit.  A two-wire row
+should record a value such as
+``force_sign_convention="positive_radial_force_points_away_from_wire1_attraction_is_negative"``
+and pass ``expected_force_sign_convention`` into
+``parallel_wire_force_result_package_gate``.  This keeps an attraction row from
+being reused with the opposite radial sign convention even when the vector
+components and Ampere-law magnitude still agree.  Slot 2026-07-01/340 adds this
+as a result-package identity check.
+
+Result JSON needs execution evidence too.  When FEMM force rows are promoted to
+cross-validation or notebook evidence, record ``created_at_utc``,
+``run_timestamp_utc``, ``solver_version``, ``radia_mcp_version``,
+``run_duration_s``, and a compact ``timing_breakdown_s`` with the dominant
+stages first, for example mesh, solve, postprocess, and write-json.  Slot
+2026-07-01/371 adds
+``require_execution_metadata`` and ``require_timing_breakdown`` to
+``parallel_wire_force_result_package_gate`` so a row with the right force value
+but missing or stale execution provenance cannot be reused silently.  Slot
+2026-07-01/399 extends the same package with ``expected_created_at_utc`` and
+``max_created_run_skew_s`` so a copied result artifact with a stale
+``created_at_utc`` cannot masquerade as the force row from the current run.
+
+The input model artifact is part of the same evidence chain.  A FEMM force row
+should carry ``model_input_artifact_id``, ``model_input_digest``, and
+``model_input_path`` for the `.fem` file that generated the loaded `.ans` and
+postprocess table.  Slot 2026-07-01/378 adds
+``require_model_input_artifact`` to
+``parallel_wire_force_result_package_gate`` so a copied force table or `.ans`
+reference cannot be joined to stale geometry, labels, or source definitions
+just because the Ampere-law force value still matches.
+
+The postprocess script file is its own artifact.  Trace id, command digest, and
+output table identity say what commands and results were observed, but they do
+not prove which pyFEMM/Lua script file generated the trace.  Slot
+2026-07-01/385 adds ``postprocess_script_artifact_id``,
+``postprocess_script_digest``, and ``postprocess_script_path`` plus
+``require_postprocess_script_artifact`` to
+``parallel_wire_force_result_package_gate``.  A stale script digest or missing
+script path now fails even when the command trace, output table, model input,
+and Ampere-law force value still look correct.
+
+The output table schema is also evidence.  A JSON/CSV file identity can remain
+stable while the reader silently switches from ``Fx_N_per_m``/``Fy_N_per_m`` and
+radial N/m columns to an older scalar ``force_N`` layout.  Slot
+2026-07-02/406 adds ``postprocess_output_schema_id``,
+``postprocess_output_columns``, and ``postprocess_output_units`` plus
+``require_postprocess_output_schema`` to
+``parallel_wire_force_result_package_gate`` so a stale force-table layout is
+rejected even when the output artifact id/digest and Ampere-law force value
+still look plausible.
+
+The physical convention schema is separate from the output-table schema.  A
+force table can keep the right columns and values while dropping the convention
+that says how source/target regions, materials, centers, current definition,
+projection axis, and sign convention should be read.  Slot 2026-07-02/413 adds
+``force_convention_schema_id`` plus ``require_force_convention_schema`` to
+``parallel_wire_force_result_package_gate``.  Treat this as the row-layout
+contract for the physics meaning, not as another file digest; stale
+value-only convention rows are rejected even when Ampere force and force-table
+schema checks still pass.
+
+The component basis is its own reusable contract.  A FEMM force row can keep
+the right physics convention, sign convention, and output-table layout while
+the component family silently changes from global ``Fx/Fy`` to local ``r/t``,
+or while the scalar radial projection basis is interpreted in the opposite
+wire-pair direction.  Slot 2026-07-02/427 adds
+``force_component_basis_schema_id`` plus
+``require_force_component_basis_schema`` to
+``parallel_wire_force_result_package_gate``.  Use a schema such as
+``femm_global_xy_radial_projection_basis_v1`` before importing weighted-stress
+block-force rows into notebooks, radia-ngsolve validation records, or
+optimization objectives.
+
+The unit basis is separate again.  A planar FEMM force row can keep the right
+global ``Fx/Fy`` component basis and the right radial projection while silently
+switching from per-length ``N/m`` evidence to depth-integrated total ``N``.
+Slot 2026-07-02/434 adds ``force_unit_basis_schema_id`` plus
+``require_force_unit_basis_schema`` to
+``parallel_wire_force_result_package_gate``.  Use a schema such as
+``femm_planar_force_per_length_depth_basis_v1`` so the N/m comparison basis,
+stored ``mi_probdef`` problem depth, and total-force exclusion travel together
+as one reusable contract.
+
+Point magnetic-field samples need the same evidence discipline.  A FEMM
+``mo_getb(px, py)`` row or NGSolve/radia-ngsolve point probe should carry
+``field_probe_id``, ``probe_point_xy_m``, ``field_component_frame``,
+``field_units="T"``, ``field_probe_method``, ``solution_artifact_id``,
+``solution_digest``, ``solution_path``, ``solution_loaded=true``, and, when
+available, postprocess/output artifact identities.  Slot 2026-07-01/348 adds
+``magnetic_field_probe_result_package_gate`` so stale ``.ans`` files, wrong
+probe points, wrong extraction methods, or copied output tables fail before
+Bx/By values are compared.  Slot 2026-07-01/356 extends the same gate with
+FEMM coordinate provenance: record ``problem_length_unit``,
+``probe_point_input_xy``, ``probe_point_input_unit``, and
+``coordinate_scale_to_m`` so the raw ``mo_getb(px, py)`` input can be checked
+against the meter-valued ``probe_point_xy_m`` before NGSolve/radia-ngsolve
+field rows are compared.  Slot 2026-07-01/364 then tightens the loaded-solution
+side: require the ``.ans`` artifact id, digest, and path together before a point
+probe row can be promoted, because a fresh ``mo_getb`` command trace can still
+be joined to an old solution file.
+
 Discrete force rows to force/torque:
 
 ```text
@@ -135,6 +244,55 @@ T = r^2 L integral tau(theta) dtheta
 This is the machine-torque post-processing path for exported air-gap samples.
 The uniform helper is a closed-form special case; the sampled helper integrates
 segment contributions so sector scaling and harmonic signs stay visible.
+For table-based line-probe exports, keep the sample-grid package with the field
+table: ``sample_grid_id``, ``sample_grid_digest``, and ``sample_count`` belong
+beside ``result_set_id``, ``export_artifact_id``, ``field_probe_id``, and the
+output artifact.  Slot 2026-07-01/357 adds this to
+``jmag_airgap_flux_sample_metadata_gate`` so a stale angle grid or truncated
+row count cannot be joined to a plausible Br/Bt table before torque comparison.
+After the shear integration, do not promote a bare scalar torque.  The result
+package should repeat ``input_field_table_artifact_id``,
+``input_field_table_digest``, ``sample_grid_id``, ``sample_grid_digest``,
+``integration_method``, ``integration_policy``, ``torque_output_artifact_id``,
+``torque_output_digest``, ``component_frame``, and
+``torque_sign_convention``.  Slot 2026-07-01/365 adds
+``jmag_airgap_torque_integration_package_gate`` so stale field tables, stale
+angle grids, wrong integration methods, and missing torque-output digests fail
+before the torque scalar is handed to a notebook, optimizer, or cross-solver
+comparison.  Slot 2026-07-01/372 extends that package with
+``run_timestamp_utc``, ``solver_version``, ``radia_mcp_version``,
+``run_duration_s``, and dominant ``timing_breakdown_s`` sections, so a scalar
+torque from an old JMAG version or incomplete timing log cannot become reusable
+notebook/cross-validation evidence by value alone.
+Slot 2026-07-01/379 adds the upstream model-input identity to the same package:
+record the project/model artifact id, digest, and path beside the field-table,
+sample-grid, integration, torque-output, and execution metadata.  That keeps a
+plausible Maxwell-shear torque scalar from being joined to stale project
+geometry, material state, or current definitions.
+Slot 2026-07-01/386 adds one more export-side identity: the JMAG export recipe
+or macro/script file that generated the Br/Bt table and torque package.  Record
+``export_recipe_artifact_id``, ``export_recipe_digest``, and
+``export_recipe_path`` and use ``require_export_recipe_artifact`` before
+promoting the torque scalar.  A stale export recipe digest or missing recipe
+path is now rejected even when the field table, sample grid, model input,
+execution metadata, and torque value still look plausible.
+Slot 2026-07-02/407 adds the table-layout identity of the torque result
+itself.  Record ``torque_output_schema_id``, ``torque_output_columns``, and
+``torque_output_units`` beside the output artifact id/digest.  A stale scalar
+``torque_Nm`` layout is now rejected even when the torque output artifact,
+digest, and torque value still match the expected replay case.
+Slot 2026-07-02/414 separates the torque physics convention from the output
+table schema.  Record ``torque_convention_schema_id`` for angle unit/basis,
+radius/axial-length scaling, torque sign, and integration policy.  Slot
+2026-07-02/421 then separates the postprocess-row convention:
+``torque_postprocess_row_convention_schema_id`` tells downstream readers which
+RotorAngle/Br/Bt/torque-density rows were selected, expanded, normalized, and
+reduced to the reusable scalar.  Slot 2026-07-02/428 adds the Br/Bt component
+basis as its own contract: ``torque_component_basis_schema_id`` binds
+cylindrical radial/tangential components, normal/tangent orientation, and the
+positive torque axis before ``torque_Nm`` is reused.  Treat output schema,
+physics convention, row convention, and component basis as four different
+identities; a torque scalar can look right while any one of them is stale.
 
 2D sector-to-machine torque scaling:
 
@@ -248,6 +406,25 @@ careful remeshing.
 - For 2D planar results, forces are per unit out-of-plane length and torque is
   per unit length.  Axisymmetric helpers include the ``2 pi r`` weight and return
   full 3D force/inductance.
+- When a two-wire force row comes from an external 2D solver, bind the force
+  value to the problem definition as well as the result artifact: planar versus
+  axisymmetric, meters versus millimeters, and static versus AC frequency change
+  what an otherwise correct-looking ``N/m`` number means.
+- For FEMM-derived force rows, also keep the ``mi_probdef`` solver precision
+  and Triangle ``minangle`` in the row package.  A toy Ampere-law value may
+  still match when the solver tolerance is coarse; a validation artifact should
+  prove the solve/mesh-quality settings that produced the postprocessed row.
+- For current-driven FEMM force rows, preserve the current source artifact and
+  definition method along with ``current1_A`` / ``current2_A``.  This is the
+  current-side twin of result-set and postprocess-output identity.
+- For force rows that expose radial or target-axis scalar values, preserve the
+  force sign convention explicitly.  Frame and projection axis say where the
+  component is measured; sign convention says which physical direction is
+  positive and whether attraction is negative or positive.
+- For cross-validation JSON, preserve the execution timestamp, solver version,
+  radia-mcp version, total runtime, and about four dominant timing sections.
+  Values can match while the provenance is stale; promote rows only after the
+  execution metadata and timing breakdown pass the package gate.
 
 ## Related radia-ngsolve topics
 
@@ -524,6 +701,31 @@ saturating case), and the SAME source (azimuthal divergence-free coil current
 density). Force is taken by the equivalent weighted Maxwell-stress / surface
 force-calculation method on both sides, which is why NGSolve's eggshell volume
 stress and the reference's surface stress agree.
+
+For force-result tables, do not promote a scalar radial force without its vector
+component frame and projection axis.  A two-wire or air-gap row should name the
+global/local frame, target selection, observable id, unit basis (N or N/m), and
+the radial sign convention before comparing values.  This prevents a correct
+magnitude from hiding a stale table, swapped target, or inverted projection.
+Slot 2026-07-01/308 tightens this into an executable contract: FEMM
+mo_blockintegral(18/19) rows should match the expected component frame and
+radial projection axis, not merely record some frame-like text.
+
+Slot 2026-07-01/341 extends the same rule to excitation provenance.  A force
+row driven by coils or current tables is not self-describing when it only stores
+current magnitudes; it should also carry the excitation-source artifact id and
+the current-definition method (instantaneous, peak, RMS, direct-current table,
+etc.).  This prevents a stale source table or convention drift from looking like
+a valid force regression just because geometry, material, frame, and report
+method still match.
+
+Slot 2026-07-01/392 extends the force-result package to optimization and
+notebook replay.  A correct Ampere/Maxwell force value is not enough when the row
+is reused as an objective: preserve the parameter-set artifact id/digest/path and
+the objective-observable id/family beside model, solution, current, script,
+frame, sign, and unit evidence.  This prevents a stale design point or scalar
+objective from becoming the next notebook default just because the force row is
+numerically plausible.
 """
 
 _TOPICS = {
