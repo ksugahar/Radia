@@ -1555,6 +1555,14 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_cent[3*a] = cen[0]; m_cent[3*a+1] = cen[1]; m_cent[3*a+2] = cen[2];
         m_size[a] = sz;
     }
+    // ---- (kind,host)->local reverse maps for the block memo (co-located charges grouped per host) ----
+    m_hexLocalOf.assign((size_t)m_n, 0);
+    m_cellCharges.assign((size_t)n_el, {}); m_faceCharges.assign((size_t)n_bf, {});
+    for (int a = 0; a < m_n; ++a) {
+        std::vector<int>& grp = (m_kind[a] == 0) ? m_cellCharges[m_host[a]] : m_faceCharges[m_host[a]];
+        m_hexLocalOf[a] = (int)grp.size();
+        grp.push_back(a);
+    }
     // ---- prebuilt REGULAR outer clouds per charge (monomial folded) for far sub pairs ----
     m_qp.resize(m_n); m_qw.resize(m_n);
     for (int a = 0; a < m_n; ++a) {
@@ -1799,6 +1807,153 @@ double RadHACApKChargeGram::QuadDotHex(int tgt, int src) const
     return total*RAD_INV_FOUR_PI;
 }
 
+// Vectorized inner: INT over sub `subB` of src host (kindS,hS) of mono_b(y)/|p-y| dy for ALL source local
+// charges srcG[], accumulated into inn[ls].  Geometry cloud is monomial-INDEPENDENT (shared) so the 1/r
+// sqrt is evaluated ONCE per inner point and reused across every source monomial.  Same far/near dispatch
+// and cloud keys as PhiInnerHexSub (bit-identical per-source value).
+void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
+                                            const std::vector<int>& srcG, double* inn) const
+{
+    const bool cell = (kindS == 0);
+    const size_t sid = cell ? ((size_t)hS*6 + subB) : ((size_t)hS*2 + subB);
+    const double* cs = cell ? &m_cellSubC[sid*3] : &m_faceSubC[sid*3];
+    const double  sz = cell ? m_cellSubS[sid] : m_faceSubS[sid];
+    const double dxc = p[0]-cs[0], dyc = p[1]-cs[1], dzc = p[2]-cs[2];
+    const bool far_pt = std::sqrt(dxc*dxc + dyc*dyc + dzc*dzc) > m_far_inner_factor*sz;
+    const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nv = cell ? 4 : 3;
+    const HexQuadCloud* cl;
+    if (far_pt) {
+        cl = &HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, false, hS, subB, 3),
+            [&](HexQuadCloud& c) {
+                if (cell) HexBuildCloud(nd, true, subB, m_farTetP.data(), m_farTetW.data(),
+                                        (int)m_farTetW.size(), false, c);
+                else      HexBuildCloud(nd, false, subB, m_farTriP.data(), m_farTriW.data(),
+                                        (int)m_farTriW.size(), false, c);
+            });
+    } else {
+        int corner = 0; double best = 1e300;
+        const double* subV = cell ? &m_cellSubV[sid*4*3] : &m_faceSubV[sid*3*3];
+        for (int i = 0; i < nv; ++i) {
+            const double dx = subV[3*i]-p[0], dy = subV[3*i+1]-p[1], dz = subV[3*i+2]-p[2];
+            const double d = dx*dx + dy*dy + dz*dz;
+            if (d < best) { best = d; corner = i; }
+        }
+        cl = &HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, true, hS, subB, corner),
+            [&](HexQuadCloud& c) {
+                std::vector<double> gb, gwv;
+                HexDuffyBary(cell ? 3 : 2, corner, m_glIn, m_gwIn, gb, gwv);
+                HexBuildCloud(nd, cell, subB, gb.data(), gwv.data(), (int)gwv.size(), true, c);
+            });
+    }
+    const int nq = (int)cl->wgeo.size();
+    const int nS = (int)srcG.size();
+    for (int q = 0; q < nq; ++q) {
+        const double dx = p[0]-cl->pts[3*q], dy = p[1]-cl->pts[3*q+1], dz = p[2]-cl->pts[3*q+2];
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r < 1e-300) continue;
+        const double gr = cl->wgeo[q]/r;
+        const double* xi = &cl->xi[3*q];
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += gr*HexMonoEval(srcG[ls], xi);
+    }
+}
+
+// The whole DIRECTED host-pair block (target host (kindT,hT) outer x source host (kindS,hS) inner) for every
+// local charge pair, computed in ONE pass.  All near/far/grading decisions are host+sub geometric (identical
+// across the block), so this is bit-identical to calling QuadDotHex(a,b) for each (a in tgt host, b in src
+// host) -- but the expensive 1/r sqrt on each (outer pt, inner pt) is shared across all nT*nS monomial
+// combos.  Returns [nT*nS] row-major, INV4PI folded (== QuadDotHex output).
+std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kindS, int hS) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const bool cellT = (kindT == 0), cellS = (kindS == 0);
+    const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
+    const int rt = tgtG[0], rs = srcG[0];      // representative charges (host-level cent/size)
+    const double dxh = m_cent[3*rt]-m_cent[3*rs], dyh = m_cent[3*rt+1]-m_cent[3*rs+1],
+                 dzh = m_cent[3*rt+2]-m_cent[3*rs+2];
+    const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
+    const bool near_hosts = (kindT == kindS && hT == hS)
+                            || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
+    const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
+    const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const int nvT = cellT ? 4 : 3;
+    std::vector<double> inn(nS), owt(nT);
+    for (int sA = 0; sA < nsubT; ++sA) {
+        const size_t sidA = cellT ? ((size_t)hT*6 + sA) : ((size_t)hT*2 + sA);
+        const double szA = cellT ? m_cellSubS[sidA] : m_faceSubS[sidA];
+        const double* subVA = cellT ? &m_cellSubV[sidA*4*3] : &m_faceSubV[sidA*3*3];
+        for (int sB = 0; sB < nsubS; ++sB) {
+            const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
+            const double* cB = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
+            const double szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
+            const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
+            const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
+            const bool near_sub = near_hosts &&
+                std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
+            // OUTER geometry cloud on target sub sA (monomial-FREE): regular symmetric or graded toward cB.
+            const HexQuadCloud* oc;
+            if (!near_sub) {
+                oc = &HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, false, hT, sA, 3),
+                    [&](HexQuadCloud& c) {
+                        if (cellT) HexBuildCloud(ndT, true, sA, m_symTetP.data(), m_symTetW.data(), nqreg, false, c);
+                        else       HexBuildCloud(ndT, false, sA, m_symTriP.data(), m_symTriW.data(), nqreg, false, c);
+                    });
+            } else {
+                int corner = 0; double best = 1e300;
+                for (int i = 0; i < nvT; ++i) {
+                    const double ddx = subVA[3*i]-cB[0], ddy = subVA[3*i+1]-cB[1], ddz = subVA[3*i+2]-cB[2];
+                    const double d = ddx*ddx + ddy*ddy + ddz*ddz;
+                    if (d < best) { best = d; corner = i; }
+                }
+                oc = &HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
+                    [&](HexQuadCloud& c) {
+                        std::vector<double> gb, gw;
+                        HexDuffyBary(cellT ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
+                        HexBuildCloud(ndT, cellT, sA, gb.data(), gw.data(), (int)gw.size(), true, c);
+                    });
+            }
+            const int nqo = (int)oc->wgeo.size();
+            for (int q = 0; q < nqo; ++q) {
+                const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
+                const double* xiT = &oc->xi[3*q];
+                for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+                PhiInnerHexSubVec(kindS, hS, sB, pq, srcG, inn.data());     // shares sqrt over source locals
+                const double wg = oc->wgeo[q];
+                for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
+                for (int lt = 0; lt < nT; ++lt) {
+                    const double wl = owt[lt];
+                    double* row = &blk[(size_t)lt*nS];
+                    for (int ls = 0; ls < nS; ++ls) row[ls] += wl*inn[ls];
+                }
+            }
+        }
+    }
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
+    return blk;
+}
+
+// thread_local block cache (build_id-guarded, same discipline as the cloud cache).  Keyed by the directed
+// (kindT,hT,kindS,hS); a HACApK dense leaf touches all nT*nS entries of a host pair -> computed once, reused.
+static thread_local long long s_hex_block_owner = -1;
+static thread_local std::unordered_map<long long, std::vector<double>> s_hex_block_cache;
+
+const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS) const
+{
+    if (s_hex_block_owner != m_build_id) { s_hex_block_cache.clear(); s_hex_block_owner = m_build_id; }
+    const long long key = ((long long)kindT << 63) | ((long long)kindS << 62)
+                        | ((long long)hT << 31) | (long long)hS;
+    auto it = s_hex_block_cache.find(key);
+    if (it == s_hex_block_cache.end()) {
+        if (s_hex_block_cache.size() > 200000u) s_hex_block_cache.clear();
+        it = s_hex_block_cache.emplace(key, QuadBlockHex(kindT, hT, kindS, hS)).first;
+    }
+    return it->second;
+}
+
 void RadHACApKChargeGram::ExtractCoordinates()
 {
     m_n_elem = m_n;
@@ -1811,8 +1966,15 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
     if (m_hexmode) {
         // HEX RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
         // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.
-        if (a == b) return QuadDotHex(a, a);
-        return 0.5*(QuadDotHex(a, b) + QuadDotHex(b, a));
+        // Served from the whole-host-pair block memo (the 64x co-location win) -- bit-identical to
+        // 0.5*(QuadDotHex(a,b)+QuadDotHex(b,a)) but the 1/r sqrt is shared across the block.
+        const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
+        const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
+        const std::vector<double>& bAB = GetHexBlock(kA, hA, kB, hB);      // target A, source B  [nA*nB]
+        const std::vector<double>& bBA = GetHexBlock(kB, hB, kA, hA);      // target B, source A  [nB*nA]
+        const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
+        const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
+        return 0.5*(bAB[(size_t)la*nB + lb] + bBA[(size_t)lb*nA + la]);
     }
     if (m_highorder) {
         // polynomial charges, symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
