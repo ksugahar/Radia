@@ -18,6 +18,7 @@ def test_loop_learning_topics_cover_current_loop_lessons():
         "acoustic_impedance_power",
         "rf_acoustic_passivity",
         "source_native_seed_queue",
+        "autonomous_basic_learning",
         "artifact_feedback",
         "mcp_closure",
     }.issubset(TOPICS)
@@ -108,6 +109,13 @@ def test_loop_learning_topics_cover_current_loop_lessons():
     assert "learning_lanes" in source_native
     assert "candidate" in source_native
     assert "encoded and verified MCP changes" in source_native
+
+    autonomous = get_loop_learning_documentation("autonomous_basic_learning")
+    assert "process every queued slot" in autonomous
+    assert "computed/reference/tolerance/pass" in autonomous
+    assert "source-tool" in autonomous
+    assert "solver-ready queue" in autonomous
+    assert "build_autonomous_basic_learning_artifact" in autonomous
 
     artifact_feedback = get_loop_learning_documentation("artifact_feedback")
     assert "cross_validation_artifact_to_mcp_feedback_gate" in artifact_feedback
