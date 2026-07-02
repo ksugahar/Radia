@@ -34,14 +34,22 @@ physics discrepancy for tightly-packed multi-turn coils.
 > **~4.5–5 mΩ**.  Three methods agree (volume 3.7, perimeter 4.5,
 > analytic 4.8); **BEM-A 15.1 (4.48×) is the 3× OUTLIER** and 4.48×
 > is unphysical for round wires at these gaps.  BEM-A self-skin IS
-> calibrated (isolated wire = Bessel to 0.5 %, mesh-stable), so the
-> coil figure is suspected to be a perfect-conductor J
-> over-concentration at the near-contact turn gaps (`Re(Zs)·∫|J|²dS`
-> mesh-sensitive; this doc's own 2.90→15.14 refinement jump).  The
-> 2-terminal LCR ~15 mΩ likely includes contact/lead R.  **Ground
-> truth still needs the 4-terminal Kelvin re-measurement.**  Until
-> then, treat the "BEM-A is the correct tool / 15 mΩ is right"
-> conclusion below as UNDER REVIEW.
+> calibrated (isolated wire = Bessel to 0.5 %, mesh-stable).
+> **MECHANISM CONFIRMED by a loss map on the 15.144 mΩ solve:** the
+> SIBC loss `Re(Zs)·∫|J|²dS` is pathologically concentrated — **top
+> 2 % of the surface area = 71 % of the loss** (peak/mean density
+> 5767×); the near-contact turn-gap tris (21 % area) carry 69.7 % of
+> the loss at ~10⁵× the density elsewhere, plus source/sink injection
+> + faceted-edge spikes.  That is the perfect-conductor **J
+> singularity** at near-touching surfaces/edges, varying far below
+> the skin depth δ where the Leontovich SIBC breaks down — so BEM-A
+> over-integrates |J|² and the 15.1 mΩ is a SIBC-breakdown,
+> mesh-divergent over-estimate (matches the 2.90→15.14 jump), NOT the
+> physical R.  The 2-terminal LCR ~15 mΩ additionally likely includes
+> contact/lead R.  **Ground truth still needs the 4-terminal Kelvin
+> re-measurement.**  Treat the "BEM-A is the correct tool / 15 mΩ is
+> right" conclusion below as SUPERSEDED for tightly-wound round-wire
+> coils.
 
 The structural ceiling of perimeter PEEC + proximity iteration is
 ~1.2× the self-skin value and is a **formulation ceiling, not an
