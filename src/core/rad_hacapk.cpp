@@ -1163,5 +1163,108 @@ double RadHACApKMMMManager::GetGenericElement(int elem_i, int elem_j, int local_
 }
 
 //=========================================================================
+// RadHACApKMomentSystem: the chi-free multipole-moment (MMMM) geometry coupling K as a
+// HACApK H-matrix -- the O(N log N) matvec kernel for the collocation-MMMM COARSE-tier
+// HACApK-BiCGSTAB demag solve (Sugahara 2026-07-02, revived matvec-only; no H-LU, no
+// deflation, no loop-free).  See docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb.
+//=========================================================================
+
+RadHACApKMomentSystem::RadHACApKMomentSystem(radTInteraction* interaction)
+    : m_interaction(interaction)
+{
+}
+
+void RadHACApKMomentSystem::ExtractCoordinates()
+{
+    if (!m_interaction) { m_ndof = 0; m_n_elem = 0; return; }
+    const std::vector<int>& hexElem = m_interaction->GetHexaElemIndices();
+    int nHex = (int)hexElem.size();
+    m_n_elem = nHex;
+    m_ndof = 6 * nHex;
+    m_coordinates.resize((size_t)nHex * 3);
+    m_dof_offset.resize(nHex + 1);
+    for (int h = 0; h < nHex; h++) {
+        TVector3d c = m_interaction->GetElementCenter(hexElem[h]);
+        m_coordinates[(size_t)h * 3 + 0] = c.x;
+        m_coordinates[(size_t)h * 3 + 1] = c.y;
+        m_coordinates[(size_t)h * 3 + 2] = c.z;
+        m_dof_offset[h] = 6 * h;
+    }
+    m_dof_offset[nHex] = 6 * nHex;
+}
+
+void RadHACApKMomentSystem::OnBeforeBuild()
+{
+    if (!m_interaction) return;
+    RadHACApKCallback::SetInteraction(m_interaction, m_n_elem, 6);
+    m_interaction->PrecomputeMomentGeometry();
+}
+
+void RadHACApKMomentSystem::GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const
+{
+    if (!block) return;
+    if (!m_interaction || elem_i < 0 || elem_j < 0 || elem_i >= m_n_elem || elem_j >= m_n_elem) {
+        std::fill(block, block + 36, 0.0);
+        return;
+    }
+    // kernelOnly=true ignores chi (MomentSystemBlock6x6: chiH = kernelOnly ? 1.0 : chiPerHex[.]), so pass
+    // nullptr -- the entry is the chi-free geometry K (incl. INV4PI + IMA images), local L folded outside.
+    m_interaction->MomentSystemBlock6x6(elem_i, elem_j, nullptr, block, /*kernelOnly*/true);
+}
+
+double RadHACApKMomentSystem::GetInteractionMatrixElement(int dof_i, int dof_j) const
+{
+    if (!m_interaction) return 0.0;
+    if (dof_i < 0 || dof_j < 0 || dof_i >= m_ndof || dof_j >= m_ndof) return 0.0;
+    int elem_i = dof_i / 6, elem_j = dof_j / 6;
+    int local_i = dof_i - 6 * elem_i, local_j = dof_j - 6 * elem_j;
+
+    // The scalar HACApK callback queries the 36 entries of a 6x6 geometry block one at a time; memo the
+    // last block + a small direct-mapped hash so a block is computed once per 36 queries, not 36 times.
+    static constexpr int TL_HASH_SIZE_MOMENT6 = 1024;
+    static constexpr int TL_HASH_MASK_MOMENT6 = TL_HASH_SIZE_MOMENT6 - 1;
+    static thread_local uint64_t tl_cached_generation = 0;
+    static thread_local int tl_single_elem_i = -1;
+    static thread_local int tl_single_elem_j = -1;
+    static thread_local double tl_single_block[36];
+    static thread_local int tl_cache_elem_i[TL_HASH_SIZE_MOMENT6];
+    static thread_local int tl_cache_elem_j[TL_HASH_SIZE_MOMENT6];
+    static thread_local double tl_cache_block[TL_HASH_SIZE_MOMENT6][36];
+    static thread_local bool tl_initialized = false;
+
+    uint64_t current_gen = RadHACApKCallback::GetGeneration();
+    if (tl_cached_generation != current_gen || !tl_initialized) {
+        tl_single_elem_i = -1;
+        tl_single_elem_j = -1;
+        for (int i = 0; i < TL_HASH_SIZE_MOMENT6; i++) {
+            tl_cache_elem_i[i] = -1;
+            tl_cache_elem_j[i] = -1;
+        }
+        tl_cached_generation = current_gen;
+        tl_initialized = true;
+    }
+
+    if (tl_single_elem_i == elem_i && tl_single_elem_j == elem_j) {
+        return tl_single_block[local_i * 6 + local_j];
+    }
+
+    unsigned int hash_idx = (((unsigned int)elem_i * 73856093u) ^ ((unsigned int)elem_j * 19349663u)) & TL_HASH_MASK_MOMENT6;
+    if (tl_cache_elem_i[hash_idx] == elem_i && tl_cache_elem_j[hash_idx] == elem_j) {
+        std::memcpy(tl_single_block, tl_cache_block[hash_idx], 36 * sizeof(double));
+        tl_single_elem_i = elem_i;
+        tl_single_elem_j = elem_j;
+        return tl_single_block[local_i * 6 + local_j];
+    }
+
+    GetInteractionBlock6x6(elem_i, elem_j, tl_single_block);
+    tl_single_elem_i = elem_i;
+    tl_single_elem_j = elem_j;
+    tl_cache_elem_i[hash_idx] = elem_i;
+    tl_cache_elem_j[hash_idx] = elem_j;
+    std::memcpy(tl_cache_block[hash_idx], tl_single_block, 36 * sizeof(double));
+    return tl_single_block[local_i * 6 + local_j];
+}
+
+//=========================================================================
 // End of rad_hacapk.cpp
 //=========================================================================

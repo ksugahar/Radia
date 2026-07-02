@@ -660,9 +660,19 @@ A_raw, dof = rad.MomentSystemDenseRaw(handle, chi)
 
 `BuildMomentSystem` returns the normalized dense multipole-moment MMM system
 for a uniform field.  `MomentSystemDenseRaw` is the unnormalized
-entry-by-entry matrix kept for diagnostics/regression.  The former HACApK
-moment-probe route is retired: collocation MMMM is dense or matrix-free and
-does not connect to HACApK.
+entry-by-entry matrix kept for diagnostics/regression.
+
+Collocation-MMMM COARSE tier (2026-07-02): a `rad.Solve(..., method=2)` request on
+a PURE-HEX moment object runs HACApK-BiCGSTAB -- the chi-free geometry coupling K
+is built once as a `RadHACApKMomentSystem` H-matrix (O(N log N) matvec, reused
+across the nonlinear Picard loop) and the matvec applies
+`y = L_local x + diag_row(chi) (K x)`.  MATVEC-ONLY: no H-LU, no deflation, no
+loop-free (the internal M is field-correct but loop-polluted -- acceptable for the
+coarse / optimization tier; accurate + hysteresis work uses the loop-free
+HDiv-VIM).  Tune with `rad.SolverConfig(hacapk_eps=, hacapk_leaf=, hacapk_eta=)`;
+tet/wedge/mixed method-2 fall back to the dense moment LU (hex-only H-matrix).
+NOTE: a compact cube is near-field dominated (mostly-dense H-matrix); ACA
+compression pays off on elongated / well-separated geometry.
 
 ### Properties (verified)
 
@@ -689,9 +699,12 @@ the real ACA+ shifts the near-zero eigenvalues (it does not materially --
 see "eigenvalue_nullspace"). C++ path: `RadHACApKMMMManager::MatVec`
 exposed via `radTApplication::HMatrixDensify`.
 
-The former multipole-moment HACApK probe was intentionally removed.  Use the
-dense probes above for MMMM diagnostics, and `HMatrixDensify` only for the
-classic MMM H-matrix path.
+The former multipole-moment HACApK PROBE (`MomentHMatrixProbe`) remains removed --
+use the dense probes above for MMMM diagnostics, and `HMatrixDensify` only for the
+classic MMM H-matrix path.  The multipole-moment H-matrix itself is live again as
+the method-2 coarse-tier SOLVE route (see above); to verify it is engaged, check
+`rad.GetSolveStats()['linear_iterations'] > 0` and sweep `hacapk_eps` on an
+elongated geometry (loose eps must change the field).
 
 See "eigenvalue_nullspace" for why the spectrum of A matters, and
 `docs/solver/MSC_NULLSPACE_DEFLATION.md` for the full treatment.

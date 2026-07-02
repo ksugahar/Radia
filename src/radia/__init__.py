@@ -211,7 +211,16 @@ def set_demag_backend(name):
     Positioning (2026-06-30, Sugahara): HDiv-VIM is the PRIMARY accurate soft-iron
     method (loop-free by construction); collocation MMMM is the COARSE / fast tier for
     optimization inner loops + mesh-less quick passes (loop-polluted internal M, but
-    field-correct -- loops are field-null).  Returns the effective backend string."""
+    field-correct -- loops are field-null).
+
+    Coarse-tier scalability (2026-07-02, Sugahara): a PURE-HEX collocation-MMMM solve
+    accepts rad.Solve(..., method=2) to run HACApK-BiCGSTAB -- the chi-free geometry
+    coupling K is built once as an H-matrix (RadHACApKMomentSystem, O(N log N) matvec)
+    and BiCGSTAB solves the field-correct (loop-abandoned) moment system; tune with
+    rad.SolverConfig(hacapk_eps=, hacapk_leaf=, hacapk_eta=).  method=0 (dense LU) and
+    method=1 (matrix-free dense-K BiCGSTAB) are unchanged; tet/wedge/mixed method=2 fall
+    back to the dense moment LU (the moment H-matrix is hex-only).  Returns the effective
+    backend string."""
     global _demag_backend
     if name in (None, "auto"):
         _demag_backend = None
