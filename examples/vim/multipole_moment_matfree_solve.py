@@ -61,8 +61,8 @@ def _norm(row, rhs):
 
 
 def build_linear_system(hexes, Happ, mu_r=MU_R):
-    """Assemble the dense LINEAR moment system (fixed chi), exactly as multipole_moment_cyoke_gate.multipole_moment_mmm,
-    and return A, b, plus the per-element row block 6e..6e+5 and own-face DOF set for block-Jacobi."""
+    """Assemble the dense LINEAR moment system (fixed chi), and return A, b, plus the per-element row
+    block 6e..6e+5 and own-face DOF set for block-Jacobi."""
     chi = mu_r - 1.0
     rad.UtiDelAll(); rad.set_demag_backend("collocation_mmmm")
     objs = [rad.ObjHexahedron([list(v) for v in V], [0, 0, 0]) for V in hexes]

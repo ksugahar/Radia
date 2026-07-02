@@ -28,10 +28,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "src", "radia"))
 sys.path.insert(0, HERE)
 import radia as rad  # noqa: E402
-from multipole_moment_cyoke_gate import build_cyoke_hexes, _norm, FREUD  # noqa: E402
+from multipole_moment_matfree_solve import build_cyoke_hexes, _norm  # noqa: E402
 
 MU0 = 4e-7 * math.pi
 MU_R0 = 1000.0; CHI0 = MU_R0 - 1.0; MSAT = 1.0e6
+FREUD = [(0, 1, 2, 6), (0, 1, 5, 6), (0, 3, 2, 6),
+         (0, 3, 7, 6), (0, 4, 5, 6), (0, 4, 7, 6)]
 
 
 def chi_secant(Hmag):
