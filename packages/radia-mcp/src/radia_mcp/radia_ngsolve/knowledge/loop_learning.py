@@ -18,6 +18,7 @@ TOPICS = {
     "acoustic_impedance_power": "Acoustic impedance reflection, absorption, and boundary power",
     "rf_acoustic_passivity": "Acoustic/RF passivity and power-balance identities",
     "geometric_time_integration": "Energy-drift checks for geometric time integration teaching gates",
+    "source_native_seed_queue": "How to start multi-tool loop slots from source-native examples without leaking provenance",
     "artifact_feedback": "How cross-validation JSON and notebook/result artifacts become MCP knowledge",
     "mcp_closure": "How to decide whether an MCP server has actually learned",
 }
@@ -464,6 +465,43 @@ reducing the local truncation error.
 """
 
 
+SOURCE_NATIVE_SEED_QUEUE = r"""
+# Source-native seed queue lesson
+
+A multi-tool validation rotation should not be seeded with generated toy cases
+when the goal is to improve tool-aware MCP behavior.  Every source-tool slot
+should begin from a real source-native example:
+
+* official tutorials, model pages, training decks, or application-library
+  models from the owning ecosystem;
+* community or manual examples for open/community tools;
+* upstream package examples for CAD/mesh libraries;
+* lab examples only when they are directly derived from those source-native
+  workflows and are kept in the private provenance lane.
+
+Generated scripts are still useful, but only as replay harnesses, reduced
+public analogues, schema gates, or negative controls.  They are not the lesson
+seed for the source-tool lane.
+
+For each queued slot, record:
+
+* `source_native_example`: a scrubbed id or internal pointer to the real source;
+* `source_native_type`: local artifact, public URL, training model, manual
+  example, or upstream example;
+* `lesson_axis`: the API, file-format, physics, meshing, or solver behavior to
+  extract;
+* `intended_validation`: the later solver or open-reference gate;
+* `learning_lanes`: public/open and source-tool states, using candidate until
+  a real MCP code/knowledge/test change is verified.
+
+Public radia-mcp should store only the generic rule and the open validation
+candidate.  Private provenance, commercial model names, file-system paths, and
+benchmark values stay in the owning internal artifact.  This lets a 20-round
+queue be useful immediately as a review ledger while keeping the word
+`learned` reserved for encoded and verified MCP changes.
+"""
+
+
 ARTIFACT_FEEDBACK = r"""
 # Cross-validation and notebook artifact feedback
 
@@ -566,6 +604,7 @@ _TOPIC_TEXT = {
     "acoustic_impedance_power": ACOUSTIC_IMPEDANCE_POWER,
     "rf_acoustic_passivity": RF_ACOUSTIC_PASSIVITY,
     "geometric_time_integration": GEOMETRIC_TIME_INTEGRATION,
+    "source_native_seed_queue": SOURCE_NATIVE_SEED_QUEUE,
     "artifact_feedback": ARTIFACT_FEEDBACK,
     "mcp_closure": MCP_CLOSURE,
 }

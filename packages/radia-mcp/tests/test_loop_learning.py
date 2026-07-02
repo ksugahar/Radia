@@ -17,6 +17,7 @@ def test_loop_learning_topics_cover_current_loop_lessons():
         "bem_demag_source_mesh",
         "acoustic_impedance_power",
         "rf_acoustic_passivity",
+        "source_native_seed_queue",
         "artifact_feedback",
         "mcp_closure",
     }.issubset(TOPICS)
@@ -98,6 +99,15 @@ def test_loop_learning_topics_cover_current_loop_lessons():
     assert "solver_configuration_digest" in rf
     assert "relative_tolerance" in rf
     assert "Purely reactive impedance" in rf
+
+    source_native = get_loop_learning_documentation("source_native_seed_queue")
+    assert "source-native example" in source_native
+    assert "Generated scripts" in source_native
+    assert "replay harnesses" in source_native
+    assert "source_native_example" in source_native
+    assert "learning_lanes" in source_native
+    assert "candidate" in source_native
+    assert "encoded and verified MCP changes" in source_native
 
     artifact_feedback = get_loop_learning_documentation("artifact_feedback")
     assert "cross_validation_artifact_to_mcp_feedback_gate" in artifact_feedback
