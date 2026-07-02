@@ -14,6 +14,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     coenergy_torque_periodic_summary,
     coaxial_rc_duality_gate,
     coaxial_pm_force_gap_sweep_gate,
+    computed_reference_crossval_rows_gate,
     cross_validation_artifact_to_mcp_feedback_gate,
     source_native_seed_queue_gate,
     cst_abcd_cascade_solver_ready_manifest_gate,
@@ -3218,6 +3219,100 @@ def test_source_native_seed_queue_gate_separates_preflight_from_crossval_learnin
     assert feedback_gate["status"] == "ok"
     assert feedback_gate["learning_stage"] == "learned"
     assert feedback_gate["provenance_gate_status"] == "ok"
+
+
+def test_computed_reference_crossval_rows_gate_checks_real_result_rows():
+    artifact = {
+        "results": [
+            {
+                "name": "coax_line_inductance",
+                "checks": [
+                    {
+                        "quantity": "external_inductance_per_m",
+                        "computed": 2.7599084905172834e-7,
+                        "reference": 2.7725887222397814e-7,
+                        "unit": "H/m",
+                        "rel_error": 0.004573426855842696,
+                        "tolerance": 0.01,
+                        "pass": True,
+                    },
+                    {
+                        "quantity": "characteristic_impedance",
+                        "computed": 82.92982911875659,
+                        "reference": 83.17766166719343,
+                        "unit": "ohm",
+                        "rel_error": 0.0029795565716726068,
+                        "tolerance": 0.01,
+                        "pass": True,
+                    },
+                ],
+            },
+            {
+                "name": "parallel_plate_pressure",
+                "checks": [
+                    {
+                        "quantity": "pressure",
+                        "computed": 1.1067734765999921,
+                        "reference": 1.1067734766000001,
+                        "unit": "Pa",
+                        "rel_error": 7.222440676711394e-15,
+                        "tolerance": 1.0e-3,
+                        "pass": True,
+                    }
+                ],
+            },
+        ]
+    }
+
+    gate = computed_reference_crossval_rows_gate(
+        artifact,
+        max_global_rel_error=0.01,
+    )
+    assert gate["status"] == "ok"
+    assert gate["row_count"] == 3
+    assert gate["valid_row_count"] == 3
+    assert gate["checks"]["row_errors_within_tolerance"] is True
+    assert gate["checks"]["rel_error_matches_computed_reference"] is True
+    assert gate["max_rel_error"] == pytest.approx(0.004573426855842696)
+
+    too_loose_claim = {
+        "rows": [
+            {
+                "case": "coax_line_inductance",
+                "quantity": "external_inductance_per_m",
+                "computed": 2.7599084905172834e-7,
+                "reference": 2.7725887222397814e-7,
+                "rel_error": 0.0,
+                "tolerance": 0.01,
+                "pass": True,
+            }
+        ]
+    }
+    mismatch_gate = computed_reference_crossval_rows_gate(too_loose_claim)
+    assert mismatch_gate["status"] == "needs_attention"
+    assert mismatch_gate["checks"]["rel_error_matches_computed_reference"] is False
+
+    failing_row = {
+        "rows": [
+            {
+                "case": "coax_line_inductance",
+                "quantity": "external_inductance_per_m",
+                "computed": 2.7599084905172834e-7,
+                "reference": 2.7725887222397814e-7,
+                "tolerance": 1.0e-4,
+                "pass": False,
+            }
+        ]
+    }
+    fail_gate = computed_reference_crossval_rows_gate(failing_row)
+    assert fail_gate["status"] == "needs_attention"
+    assert fail_gate["checks"]["row_errors_within_tolerance"] is False
+    assert fail_gate["checks"]["pass_flags_true_when_required"] is False
+
+    missing = {"rows": [{"quantity": "pressure", "computed": 1.0, "reference": 1.0}]}
+    missing_gate = computed_reference_crossval_rows_gate(missing)
+    assert missing_gate["status"] == "needs_attention"
+    assert missing_gate["checks"]["required_fields_present"] is False
 
 
 def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_and_verification():
