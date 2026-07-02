@@ -1511,6 +1511,235 @@ class NetgenTriTetVolMesh:
             "surface_triangles_global": [list(tri.nodes) for tri in self.surface_triangles],
         }
 
+    def fem_bem_trace_package_handoff(
+        self,
+        *,
+        mesh_id: str,
+        export_id: str,
+        source_path: str | None = None,
+        bem_kernel_manifest_id: str | None = None,
+        bem_kernel_family: str = "laplace_single_layer",
+        bem_kernel_strategy: str = "direct_laplace_1_over_4pi_r",
+        kernel_time_convention: str | None = None,
+        assembly_rule_id: str = "first_order_tet_h1_trace_tri_p1_bem_teaching_v1",
+        quadrature_rule_id: str = "tri_p1_exact_mass_regular_kernel_teaching_v1",
+        expected_bem_kernel_manifest_id: str | None = None,
+        expected_bem_kernel_family: str | None = None,
+        expected_bem_kernel_strategy: str | None = None,
+        expected_kernel_time_convention: str | None = None,
+        expected_assembly_rule_id: str | None = None,
+        expected_quadrature_rule_id: str | None = None,
+        normal_flux_artifact_id: str | None = None,
+        normal_flux_digest: str | None = None,
+        normal_flux_convention: str = "outward_from_volume",
+        expected_normal_flux_artifact_id: str | None = None,
+        expected_normal_flux_digest: str | None = None,
+        expected_normal_flux_convention: str | None = None,
+        require_normal_flux_artifact: bool = False,
+    ) -> dict[str, object]:
+        """Bundle the readable first-order FEM/BEM views for notebook handoff.
+
+        MATLAB/Gypsilab teaching notebooks should not assemble a volume FEM
+        view, a boundary BEM view, and a trace matrix as unrelated arrays.  This
+        helper keeps the explicit package identity next to the tri/tet health
+        report, H1-to-P1 trace gather, HCurl/RWG topology, and optional BEM
+        kernel manifest identity.
+        """
+
+        mesh_id_text = str(mesh_id).strip()
+        export_id_text = str(export_id).strip()
+        if not mesh_id_text:
+            raise ValueError("mesh_id must be a non-empty string")
+        if not export_id_text:
+            raise ValueError("export_id must be a non-empty string")
+
+        source_text = source_path if source_path is not None else self.source
+        view = self.fem_bem_trace_view()
+        trace = self.p1_fem_bem_trace_matrix_summary()
+        topology = self.first_order_fem_bem_topology()
+        health = self.mesh_health_summary()
+        trace_nodes = list(view["trace_node_ids"])
+        hcurl_edge_ids = list(topology["rwg"]["hcurl_edge_ids"])
+        rwg_dof_edge_ids = list(topology["rwg"]["dof_edge_ids"])
+        kernel_manifest_text = "" if bem_kernel_manifest_id is None else str(bem_kernel_manifest_id).strip()
+        kernel_family_text = str(bem_kernel_family).strip()
+        kernel_strategy_text = str(bem_kernel_strategy).strip()
+        kernel_time_text = "" if kernel_time_convention is None else str(kernel_time_convention).strip()
+        assembly_rule_text = str(assembly_rule_id).strip()
+        quadrature_rule_text = str(quadrature_rule_id).strip()
+        expected_kernel_manifest_text = (
+            None
+            if expected_bem_kernel_manifest_id is None
+            else str(expected_bem_kernel_manifest_id).strip()
+        )
+        expected_kernel_family_text = (
+            None
+            if expected_bem_kernel_family is None
+            else str(expected_bem_kernel_family).strip()
+        )
+        expected_kernel_strategy_text = (
+            None
+            if expected_bem_kernel_strategy is None
+            else str(expected_bem_kernel_strategy).strip()
+        )
+        expected_kernel_time_text = (
+            None
+            if expected_kernel_time_convention is None
+            else str(expected_kernel_time_convention).strip()
+        )
+        expected_assembly_rule_text = (
+            None
+            if expected_assembly_rule_id is None
+            else str(expected_assembly_rule_id).strip()
+        )
+        expected_quadrature_rule_text = (
+            None
+            if expected_quadrature_rule_id is None
+            else str(expected_quadrature_rule_id).strip()
+        )
+        normal_flux_artifact_text = "" if normal_flux_artifact_id is None else str(normal_flux_artifact_id).strip()
+        normal_flux_digest_text = "" if normal_flux_digest is None else str(normal_flux_digest).strip()
+        normal_flux_convention_text = str(normal_flux_convention).strip()
+        expected_normal_flux_artifact_text = (
+            None
+            if expected_normal_flux_artifact_id is None
+            else str(expected_normal_flux_artifact_id).strip()
+        )
+        expected_normal_flux_digest_text = (
+            None
+            if expected_normal_flux_digest is None
+            else str(expected_normal_flux_digest).strip()
+        )
+        expected_normal_flux_convention_text = (
+            None
+            if expected_normal_flux_convention is None
+            else str(expected_normal_flux_convention).strip()
+        )
+        checks = {
+            "package_identity_recorded": bool(mesh_id_text and export_id_text),
+            "source_path_recorded": bool(source_text),
+            "mesh_health_ok": health["status"] == "ok",
+            "tri_tet_shared_node_policy": view["policy"] == "netgen_vol_tri_tet_only_shared_one_based_nodes",
+            "trace_is_boolean_gather": trace["is_boolean_gather"] is True,
+            "trace_cols_match_boundary_nodes": trace["cols"] == trace_nodes,
+            "trace_rows_match_compact_bem_nodes": trace["rows"] == topology["scalar_bem"]["node_ids"],
+            "scalar_bem_uses_global_trace_nodes": topology["scalar_bem"]["global_node_ids"] == trace_nodes,
+            "rwg_edges_have_volume_hcurl_edge_ids": len(hcurl_edge_ids) == len(rwg_dof_edge_ids),
+            "interior_nodes_have_zero_boundary_action": trace["interior_column_nnz_max"] == 0,
+            "bem_kernel_family_recorded": bool(kernel_family_text),
+            "bem_kernel_strategy_recorded": bool(kernel_strategy_text),
+            "assembly_rule_id_recorded": bool(assembly_rule_text),
+            "quadrature_rule_id_recorded": bool(quadrature_rule_text),
+            "bem_kernel_manifest_id_recorded_when_expected": (
+                expected_kernel_manifest_text is None or bool(kernel_manifest_text)
+            ),
+            "bem_kernel_manifest_id_matches_expected": (
+                expected_kernel_manifest_text is None
+                or kernel_manifest_text == expected_kernel_manifest_text
+            ),
+            "bem_kernel_family_matches_expected": (
+                expected_kernel_family_text is None
+                or kernel_family_text == expected_kernel_family_text
+            ),
+            "bem_kernel_strategy_matches_expected": (
+                expected_kernel_strategy_text is None
+                or kernel_strategy_text == expected_kernel_strategy_text
+            ),
+            "kernel_time_convention_recorded_when_expected": (
+                expected_kernel_time_text is None or bool(kernel_time_text)
+            ),
+            "kernel_time_convention_matches_expected": (
+                expected_kernel_time_text is None or kernel_time_text == expected_kernel_time_text
+            ),
+            "assembly_rule_id_recorded_when_expected": (
+                expected_assembly_rule_text is None or bool(assembly_rule_text)
+            ),
+            "assembly_rule_id_matches_expected": (
+                expected_assembly_rule_text is None or assembly_rule_text == expected_assembly_rule_text
+            ),
+            "quadrature_rule_id_recorded_when_expected": (
+                expected_quadrature_rule_text is None or bool(quadrature_rule_text)
+            ),
+            "quadrature_rule_id_matches_expected": (
+                expected_quadrature_rule_text is None or quadrature_rule_text == expected_quadrature_rule_text
+            ),
+            "normal_flux_convention_recorded": bool(normal_flux_convention_text),
+            "normal_flux_artifact_id_recorded_when_required": (
+                not require_normal_flux_artifact or bool(normal_flux_artifact_text)
+            ),
+            "normal_flux_digest_recorded_when_required": (
+                not require_normal_flux_artifact or bool(normal_flux_digest_text)
+            ),
+            "normal_flux_artifact_id_recorded_when_expected": (
+                expected_normal_flux_artifact_text is None or bool(normal_flux_artifact_text)
+            ),
+            "normal_flux_artifact_id_matches_expected": (
+                expected_normal_flux_artifact_text is None
+                or normal_flux_artifact_text == expected_normal_flux_artifact_text
+            ),
+            "normal_flux_digest_recorded_when_expected": (
+                expected_normal_flux_digest_text is None or bool(normal_flux_digest_text)
+            ),
+            "normal_flux_digest_matches_expected": (
+                expected_normal_flux_digest_text is None
+                or normal_flux_digest_text == expected_normal_flux_digest_text
+            ),
+            "normal_flux_convention_recorded_when_expected": (
+                expected_normal_flux_convention_text is None or bool(normal_flux_convention_text)
+            ),
+            "normal_flux_convention_matches_expected": (
+                expected_normal_flux_convention_text is None
+                or normal_flux_convention_text == expected_normal_flux_convention_text
+            ),
+        }
+        return {
+            "policy": "netgen_vol_first_order_fem_bem_trace_package_handoff",
+            "status": "ok" if all(checks.values()) else "needs_attention",
+            "mesh_id": mesh_id_text,
+            "export_id": export_id_text,
+            "source_path": source_text,
+            "bem_kernel_manifest_id": kernel_manifest_text,
+            "bem_kernel_family": kernel_family_text,
+            "bem_kernel_strategy": kernel_strategy_text,
+            "kernel_time_convention": kernel_time_text,
+            "assembly_rule_id": assembly_rule_text,
+            "quadrature_rule_id": quadrature_rule_text,
+            "expected_bem_kernel_manifest_id": expected_kernel_manifest_text,
+            "expected_bem_kernel_family": expected_kernel_family_text,
+            "expected_bem_kernel_strategy": expected_kernel_strategy_text,
+            "expected_kernel_time_convention": expected_kernel_time_text,
+            "expected_assembly_rule_id": expected_assembly_rule_text,
+            "expected_quadrature_rule_id": expected_quadrature_rule_text,
+            "normal_flux_artifact_id": normal_flux_artifact_text,
+            "normal_flux_digest": normal_flux_digest_text,
+            "normal_flux_convention": normal_flux_convention_text,
+            "expected_normal_flux_artifact_id": expected_normal_flux_artifact_text,
+            "expected_normal_flux_digest": expected_normal_flux_digest_text,
+            "expected_normal_flux_convention": expected_normal_flux_convention_text,
+            "require_normal_flux_artifact": require_normal_flux_artifact,
+            "checks": checks,
+            "inventory": view,
+            "mesh_health_status": health["status"],
+            "trace_matrix": trace,
+            "topology_policy": topology["policy"],
+            "topology_counts": {
+                "h1_nodes": len(topology["h1"]["node_ids"]),
+                "hcurl_edges": len(topology["hcurl"]["edges"]),
+                "scalar_bem_nodes": len(topology["scalar_bem"]["node_ids"]),
+                "rwg_edges": len(topology["rwg"]["dof_edge_ids"]),
+            },
+            "teaching_note": (
+                "For first-order tri/tet .vol coupling, P1 FEM and scalar BEM "
+                "share one-based boundary nodes through a boolean gather; RWG "
+                "boundary edges reference the same volume HCurl edge ids.  If a "
+                "BEM kernel manifest is attached, its family, strategy, and time "
+                "convention are part of the package identity.  The assembly and "
+                "quadrature rule ids identify how operator rows were produced.  "
+                "Normal-flux sign evidence is a separate artifact so orientation "
+                "checks do not get inferred from a valid-looking trace matrix."
+            ),
+        }
+
     def first_order_fem_bem_topology(self) -> dict[str, object]:
         """Return first-order H1/HCurl/P1/RWG topology with one-based ids.
 

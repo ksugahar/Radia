@@ -42,9 +42,22 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_name_identity_gate,
                                           shape_role_metadata_gate,
                                           shape_transition_role_metadata_gate,
+                                          shape_cubit_meshing_scheme_intent_gate,
+                                          cst_cad_volume_export_manifest_gate,
                                           shape_volume_crosscheck_summary,
+                                          shape_volume_crosscheck_source_coverage_gate,
+                                          shape_volume_crosscheck_source_identity_gate,
+                                          shape_external_cad_volume_evidence_package_gate,
+                                          shape_cad_route_source_contract_gate,
                                           shape_mass_property_crosscheck_summary,
                                           shape_cubit_export_package_handoff_gate,
+                                          shape_cubit_quality_package_handoff_gate,
+                                          shape_cubit_quality_ledger_handoff_gate,
+                                          shape_cubit_solver_route_handoff_gate,
+                                          shape_cad_handoff_manifest_gate,
+                                          shape_submodel_cad_handoff_gate,
+                                          shape_curvilinear_mesh_intent_gate,
+                                          shape_mesh_environment_handoff_gate,
                                           shape_measurement_comparison_summary,
                                           shape_measurement_inventory_summary,
                                           worst_shape_measurement_comparison_rows,
@@ -52,7 +65,13 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_bbox_pair_clearance_summary,
                                           shape_parameter_sweep_summary)
 from radia_mcp.build123d.build123d_knowledge import get_build123d_documentation
-from radia_mcp.cubit.vol_inventory import cubit_export_package_identity_gate, cubit_mass_property_sidecar_gate
+from radia_mcp.cubit.vol_inventory import (
+    cubit_export_package_identity_gate,
+    cubit_headless_installation_route_gate,
+    cubit_mass_property_sidecar_gate,
+    cubit_meshing_scheme_trace_gate,
+    cubit_mixed_solver_route_manifest_gate,
+)
 from build123d import Box, Compound, Pos
 
 
@@ -75,11 +94,110 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "box_through_cylinder_reference_row" in doc
     assert "volume as the common currency" in doc
     assert "build123d_volume_crosscheck" in doc
+    assert "shape_volume_crosscheck_source_coverage_gate" in doc
+    assert "(\"cubit\", \"cst_import\")" in doc
+    assert "Slot331 extends the volume crosscheck with source-identity metadata" in doc
+    assert "shape_volume_crosscheck_source_identity_gate" in doc
+    assert "build123d_volume_crosscheck_source_identity_gate" in doc
+    assert "measurement_method" in doc
+    assert "source_artifact_id" in doc
+    assert "shape_external_cad_volume_evidence_package_gate" in doc
+    assert "build123d_external_cad_volume_evidence_package" in doc
+    assert "Slot339 bundles coverage, source identity, and route contract" in doc
+    assert "mesh-volume-after-import" in doc
+    assert "Slot391 extends the same volume crosscheck" in doc
+    assert "parameter_set_artifact_id" in doc
+    assert "parameter_set_digest" in doc
+    assert "parameter_set_path" in doc
+    assert "objective_observable_id" in doc
+    assert "objective_observable_family" in doc
+    assert "stale sizing parameters" in doc
+    assert "Slot398 extends the downstream mesh-environment handoff" in doc
+    assert "shape_mesh_environment_handoff_gate" in doc
+    assert "sanitized `version_probe_summary`" in doc
+    assert "stale summary version line" in doc
     assert "shape_mass_property_crosscheck_summary" in doc
     assert "build123d_mass_property_crosscheck" in doc
+    assert "Slot211 tightens that bridge" in doc
+    assert "volume_unit" in doc
+    assert "mm^3" in doc
     assert "shape_cubit_export_package_handoff_gate" in doc
+    assert "shape_cubit_quality_package_handoff_gate" in doc
+    assert "headless mesh-quality package" in doc
+    assert "Slot370 adds the stricter Cubit quality-ledger handoff" in doc
+    assert "shape_cubit_quality_ledger_handoff_gate" in doc
+    assert "cubit_quality_ledger_handoff" in doc
+    assert "cubit_quality_ledger_json" in doc
+    assert "mesh_digest" in doc
+    assert "Slot384 carries the Coreform mixed-route reader contract" in doc
+    assert "require_solver_contract_artifact=True" in doc
+    assert "solver_contract_digest" in doc
+    assert "mixed-element reader contract digest is stale" in doc
+    assert "Slot419 extends the same mixed-route handoff" in doc
+    assert "solver_route_convention_schema_id" in doc
+    assert "require_solver_route_convention_schema=True" in doc
+    assert "value-only or missing route\nconvention" in doc
+    assert "shape_cad_handoff_manifest_gate" in doc
+    assert "Slot347 adds the Cubit solver-route handoff" in doc
+    assert "shape_cubit_solver_route_handoff_gate" in doc
+    assert "cubit_solver_route_handoff" in doc
+    assert "cubit_mixed_solver_route_manifest_gate" in doc
+    assert "no_implicit_tetization=true" in doc
+    assert "tet_only_owner=netgen_tri_tet_path" in doc
+    assert "Slot251 adds the local submodel CAD preflight" in doc
+    assert "shape_submodel_cad_handoff_gate" in doc
+    assert "crop_box" in doc
+    assert "boundary-handoff gate" in doc
+    assert "Slot259 extends this handoff" in doc
+    assert "transition_handoff" in doc
+    assert "volume_kind_counts` containing a `pyramid" in doc
+    assert "shape_curvilinear_mesh_intent_gate" in doc
+    assert "cubit_curvilinear_handoff" in doc
+    assert "projection_error_within_tolerance" in doc
+    assert "negative_jacobian_count_zero" in doc
+    assert "Slot323 also lets this gate consume" in doc
+    assert "cubit_mixed_order_series_inventory_gate" in doc
+    assert "non-curved first-order inventory" in doc
+    assert "shape_mesh_environment_handoff_gate" in doc
+    assert "require_export_inventory=True" in doc
+    assert "export_inventory" in doc
+    assert "cubit_headless_installation_route_gate" in doc
+    assert "release note is only a watchlist" in doc
+    assert "Slot227 extends this bridge" in doc
+    assert 'license_status="ValidStudent"' in doc
+    assert "coreform_cubit.com -version" in doc
+    assert "not CAD evidence" in doc
+    assert "Slot355 carries the Slot354 console-binary rule" in doc
+    assert "binary_path_is_console_com=True" in doc
+    assert "version_probe_uses_recorded_binary=True" in doc
+    assert "coreform_cubit.exe" in doc
+    assert "external volume summary JSON" in doc
+    assert "final build123d-side preflight" in doc
+    assert "stale STEP or stale quality JSON" in doc
+    assert "Slot315 extends the same CAD handoff" in doc
+    assert "cad_measurement_convention" in doc
+    assert "occt_closed_solid_mass_properties" in doc
+    assert "mesh_volume_after_import" in doc
+    assert "Slot426 extends the same CAD handoff" in doc
+    assert "cad_measurement_postprocess_row_convention_schema_id" in doc
+    assert "build123d_occt_mass_property_row_convention_v1" in doc
+    assert "require_measurement_postprocess_row_convention_schema=True" in doc
+    assert "Slot433 extends the same CAD handoff" in doc
+    assert "cad_measurement_component_basis_schema_id" in doc
+    assert "build123d_occt_volume_area_bbox_component_basis_v1" in doc
+    assert "require_measurement_component_basis_schema=True" in doc
+    assert "stale scalar-volume\ncomponent basis" in doc
+    assert "Slot235 extends this handoff" in doc
+    assert "tri/tet-only" in doc
     assert "explicit `geometry_id`" in doc
     assert "stale sidecars and wrong-geometry" in doc
+    assert "Slot405 extends that CAD-to-Cubit handoff" in doc
+    assert "require_sidecar_inventory_counts=True" in doc
+    assert "vol_sidecar_element_count_matches_inventory" in doc
+    assert "vol_sidecar_order_matches_expected" in doc
+    assert "Slot412 extends the same handoff" in doc
+    assert "vol_sidecar_schema_id" in doc
+    assert "require_sidecar_schema=True" in doc
     assert "coreform_cubit.com -nographics -batch" in doc
     assert '"box_hole", "volume": 22.994690350851265' in doc
     assert '"l_bracket_two_holes", "volume": 2.8982123980236905' in doc
@@ -97,6 +215,24 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "shape_transition_role_metadata_gate" in doc
     assert "hex_region" in doc
     assert "transition_kind` set to `\"pyramid\"" in doc
+    assert "Slot267 extends the same bridge with surface-family intent" in doc
+    assert 'required_surface_kinds=("quad", "triangle")' in doc
+    assert 'expected_surface_kinds=["quad", "triangle"]' in doc
+    assert "Slot275 extends the same bridge with material/block label intent" in doc
+    assert "downstream_material_name" in doc
+    assert "allowed_zero_downstream_material_names" in doc
+    assert "Slot291 extends the bridge with Cubit meshing-scheme intent" in doc
+    assert "shape_cubit_meshing_scheme_intent_gate" in doc
+    assert "cubit_meshing_scheme_trace_gate" in doc
+    assert "hex_region -> map" in doc
+    assert "export netgen" in doc
+    assert "Slot363 carries the Slot362 export-artifact rule into build123d" in doc
+    assert "require_downstream_export_output_artifact=True" in doc
+    assert "export_output_artifact_id" in doc
+    assert "export_output_digest" in doc
+    assert "export_output_path" in doc
+    assert "cubit_meshing_scheme_handoff" in doc
+    assert "old Cubit `.vol` digest" in doc
     assert "missing, extra, duplicate, or unnamed imported solids" in doc
     assert "keyed terminal plate" in doc
     assert '"keyed_terminal_plate_two_bosses", "volume": 9.364087557965556' in doc
@@ -257,6 +393,9 @@ def test_build123d_cubit_export_package_handoff_matches_geometry_identity():
                 "export_id": "slot147_hex_brick_o3",
                 "geometry_id": "hex_brick_v1",
                 "order": 3,
+                "n_elements": 12,
+                "n_points": 13,
+                "vol_sidecar_schema_id": "coreform_netgen_vol_sidecar_inventory_v1",
             },
             {
                 "kind": "raw_result",
@@ -269,19 +408,35 @@ def test_build123d_cubit_export_package_handoff_matches_geometry_identity():
         expected_geometry_id="hex_brick_v1",
         expected_order=3,
         expected_routing_hint="cubit_hex_or_mixed_path",
-        inventory={"source": vol_path, "routing_hint": "cubit_hex_or_mixed_path"},
+        expected_vol_sidecar_schema_id="coreform_netgen_vol_sidecar_inventory_v1",
+        require_vol_sidecar_schema=True,
+        require_vol_sidecar_inventory_counts=True,
+        inventory={
+            "source": vol_path,
+            "routing_hint": "cubit_hex_or_mixed_path",
+            "volume_elements": 12,
+            "points": 13,
+        },
     )
 
     handoff = shape_cubit_export_package_handoff_gate(
         [row],
         package,
         expected_export_id="slot147_hex_brick_o3",
+        require_sidecar_schema=True,
+        require_sidecar_inventory_counts=True,
     )
 
     assert handoff["policy"] == "build123d_cubit_export_package_handoff_gate"
     assert handoff["status"] == "ok"
     assert handoff["checks"]["geometry_id_matches_package"] is True
     assert handoff["checks"]["package_vol_sidecar_pairs_vol"] is True
+    assert handoff["checks"]["package_sidecar_schema_recorded"] is True
+    assert handoff["checks"]["package_sidecar_schema_matches_expected"] is True
+    assert handoff["checks"]["package_sidecar_inventory_counts_recorded"] is True
+    assert handoff["checks"]["package_sidecar_element_count_matches_inventory"] is True
+    assert handoff["checks"]["package_sidecar_point_count_matches_inventory"] is True
+    assert handoff["checks"]["package_sidecar_order_matches_expected"] is True
     assert handoff["checks"]["shape_rows_have_volume_area_bbox"] is True
 
     wrong_row = dict(row)
@@ -297,6 +452,1641 @@ def test_build123d_cubit_export_package_handoff_matches_geometry_identity():
     assert bad_package["status"] == "needs_attention"
     assert bad_package["checks"]["package_gate_ok"] is False
     assert bad_package["checks"]["package_vol_sidecar_pairs_vol"] is False
+
+    stale_sidecar_package = dict(package)
+    stale_sidecar_package["checks"] = {
+        **package["checks"],
+        "vol_sidecar_element_count_matches_inventory": False,
+    }
+    bad_sidecar_counts = shape_cubit_export_package_handoff_gate(
+        [row],
+        stale_sidecar_package,
+        require_sidecar_inventory_counts=True,
+    )
+    assert bad_sidecar_counts["status"] == "needs_attention"
+    assert bad_sidecar_counts["checks"]["package_sidecar_element_count_matches_inventory"] is False
+
+    stale_schema_package = dict(package)
+    stale_schema_package["checks"] = {
+        **package["checks"],
+        "expected_vol_sidecar_schema_id_matches": False,
+    }
+    bad_sidecar_schema = shape_cubit_export_package_handoff_gate(
+        [row],
+        stale_schema_package,
+        require_sidecar_schema=True,
+    )
+    assert bad_sidecar_schema["status"] == "needs_attention"
+    assert bad_sidecar_schema["checks"]["package_sidecar_schema_matches_expected"] is False
+
+
+def test_build123d_cubit_quality_package_handoff_matches_geometry_identity():
+    box = Box(1.0, 1.0, 1.0).solid()
+    box.label = "unit_brick"
+    row = shape_measurement_row(box)
+    row["geometry_id"] = "unit_brick_mapped_hex_v1"
+    package = {
+        "policy": "cubit_headless_batch_quality_package_gate",
+        "status": "ok",
+        "export_id": "slot154_headless_hex_quality_A",
+        "geometry_id": "unit_brick_mapped_hex_v1",
+        "quality_count": 64,
+        "export_inventory_source": r"artifacts/cubit/slot154_hex.vol",
+        "export_inventory_volume_kind_counts": {"hex": 64},
+        "export_inventory_routing_hint": "cubit_hex_or_mixed_path",
+        "export_inventory_is_tri_tet_only": False,
+        "checks": {
+            "headless_command_recorded": True,
+            "quality_count_positive": True,
+            "export_inventory_recorded": True,
+            "export_inventory_volume_elements_positive": True,
+            "export_inventory_routing_hint_matches_expected": True,
+            "export_inventory_count_matches_quality": True,
+            "export_inventory_contains_quality_element": True,
+            "export_inventory_not_tri_tet_only_for_cubit_hex_route": True,
+        },
+    }
+
+    handoff = shape_cubit_quality_package_handoff_gate(
+        [row],
+        package,
+        expected_export_id="slot154_headless_hex_quality_A",
+        require_export_inventory=True,
+    )
+
+    assert handoff["policy"] == "build123d_cubit_quality_package_handoff_gate"
+    assert handoff["status"] == "ok"
+    assert handoff["checks"]["geometry_id_matches_quality_package"] is True
+    assert handoff["checks"]["quality_package_headless"] is True
+    assert handoff["checks"]["quality_package_count_positive"] is True
+    assert handoff["checks"]["quality_package_export_inventory_present"] is True
+    assert handoff["checks"]["quality_package_export_inventory_count_matches"] is True
+    assert handoff["checks"]["quality_package_export_inventory_contains_quality_element"] is True
+    assert handoff["checks"]["quality_package_export_inventory_not_tri_tet_only_for_cubit_route"] is True
+    assert handoff["quality_package_export_inventory_volume_kind_counts"] == {"hex": 64}
+    assert handoff["quality_package_export_inventory_is_tri_tet_only"] is False
+
+    wrong_row = dict(row)
+    wrong_row["geometry_id"] = "unit_brick_old"
+    bad_geometry = shape_cubit_quality_package_handoff_gate([wrong_row], package)
+    assert bad_geometry["status"] == "needs_attention"
+    assert bad_geometry["checks"]["geometry_id_matches_quality_package"] is False
+
+    gui_package = dict(package)
+    gui_package["checks"] = {**package["checks"], "headless_command_recorded": False}
+    bad_gui = shape_cubit_quality_package_handoff_gate([row], gui_package)
+    assert bad_gui["status"] == "needs_attention"
+    assert bad_gui["checks"]["quality_package_headless"] is False
+
+    zero_count = dict(package)
+    zero_count["quality_count"] = 0
+    zero_count["checks"] = {**package["checks"], "quality_count_positive": False}
+    bad_count = shape_cubit_quality_package_handoff_gate([row], zero_count)
+    assert bad_count["status"] == "needs_attention"
+    assert bad_count["checks"]["quality_package_count_positive"] is False
+
+    missing_inventory = dict(package)
+    missing_inventory["checks"] = {
+        key: value for key, value in package["checks"].items()
+        if not key.startswith("export_inventory")
+    }
+    bad_inventory = shape_cubit_quality_package_handoff_gate(
+        [row],
+        missing_inventory,
+        require_export_inventory=True,
+    )
+    assert bad_inventory["status"] == "needs_attention"
+    assert bad_inventory["checks"]["quality_package_export_inventory_present"] is False
+
+    tri_tet_inventory = dict(package)
+    tri_tet_inventory["export_inventory_volume_kind_counts"] = {"tet": 64}
+    tri_tet_inventory["export_inventory_routing_hint"] = "netgen_tri_tet_path"
+    tri_tet_inventory["export_inventory_is_tri_tet_only"] = True
+    tri_tet_inventory["checks"] = {
+        **package["checks"],
+        "export_inventory_routing_hint_matches_expected": False,
+        "export_inventory_contains_quality_element": False,
+        "export_inventory_not_tri_tet_only_for_cubit_hex_route": False,
+    }
+    bad_route = shape_cubit_quality_package_handoff_gate(
+        [row],
+        tri_tet_inventory,
+        expected_export_id="slot154_headless_hex_quality_A",
+        require_export_inventory=True,
+    )
+    assert bad_route["status"] == "needs_attention"
+    assert bad_route["checks"]["quality_package_export_inventory_routing_ok"] is False
+    assert bad_route["checks"]["quality_package_export_inventory_contains_quality_element"] is False
+    assert bad_route["checks"]["quality_package_export_inventory_not_tri_tet_only_for_cubit_route"] is False
+    assert bad_route["quality_package_export_inventory_is_tri_tet_only"] is True
+
+
+def test_build123d_cubit_quality_ledger_handoff_binds_mesh_digest_and_route():
+    box = Box(1.0, 1.0, 1.0).solid()
+    box.label = "unit_brick_quality_ledger"
+    row = shape_measurement_row(box)
+    row["geometry_id"] = "unit_brick_quality_ledger_v1"
+    row["mesh_route"] = "cubit_hex_or_mixed_path"
+    ledger = {
+        "policy": "cubit_mesh_quality_ledger_identity_gate",
+        "status": "ok",
+        "quality_artifact_id": "slot369_hex_quality_ledger_json_v1",
+        "quality_digest": "sha256:slot369-quality-ledger",
+        "metric_set_id": "cubit_scaled_jacobian_hex_v1",
+        "export_id": "slot369_hex_quality_ledger",
+        "geometry_id": "unit_brick_quality_ledger_v1",
+        "mesh_artifact_id": "slot369_hex_quality_ledger_vol_v1",
+        "mesh_digest": "sha256:slot369-hex-quality-vol",
+        "routing_hint": "cubit_hex_or_mixed_path",
+        "min_scaled_jacobian": 1.0,
+        "negative_jacobian_count": 0,
+        "element_type_counts": {"hex": 64},
+        "inventory_is_tri_tet_only": False,
+        "checks": {
+            "quality_artifact_id_recorded": True,
+            "quality_digest_recorded": True,
+            "metric_set_id_recorded": True,
+            "mesh_artifact_id_recorded": True,
+            "mesh_digest_recorded": True,
+            "min_scaled_jacobian_above_threshold": True,
+            "negative_jacobian_count_zero": True,
+            "hex_or_mixed_volume_family_present": True,
+            "not_tri_tet_only_for_cubit_quality_ledger": True,
+            "created_at_utc_recorded_when_required": True,
+            "created_at_utc_parseable_when_present": True,
+            "version_recorded_when_required": True,
+            "elapsed_s_recorded_when_required": True,
+            "elapsed_s_finite_nonnegative_when_present": True,
+            "timing_breakdown_recorded_when_required": True,
+            "timing_breakdown_has_required_stage_count": True,
+            "timing_breakdown_values_finite_nonnegative": True,
+            "timing_breakdown_total_within_elapsed_when_present": True,
+        },
+    }
+
+    handoff = shape_cubit_quality_ledger_handoff_gate(
+        [row],
+        ledger,
+        expected_quality_artifact_id="slot369_hex_quality_ledger_json_v1",
+        expected_quality_digest="sha256:slot369-quality-ledger",
+        expected_metric_set_id="cubit_scaled_jacobian_hex_v1",
+        expected_export_id="slot369_hex_quality_ledger",
+        expected_mesh_artifact_id="slot369_hex_quality_ledger_vol_v1",
+        expected_mesh_digest="sha256:slot369-hex-quality-vol",
+        require_quality_execution_metadata=True,
+    )
+
+    assert handoff["policy"] == "build123d_cubit_quality_ledger_handoff_gate"
+    assert handoff["status"] == "ok"
+    assert handoff["checks"]["geometry_id_matches_quality_ledger"] is True
+    assert handoff["checks"]["expected_quality_digest_matches"] is True
+    assert handoff["checks"]["expected_mesh_digest_matches"] is True
+    assert handoff["checks"]["mesh_route_matches_expected"] is True
+    assert handoff["checks"]["routing_hint_matches_expected"] is True
+    assert handoff["checks"]["hex_or_mixed_volume_family_present"] is True
+    assert handoff["checks"]["not_tri_tet_only_for_cubit_quality_ledger"] is True
+    assert handoff["checks"]["quality_ledger_execution_metadata_ok"] is True
+    assert handoff["require_quality_execution_metadata"] is True
+    assert handoff["quality_digest"] == "sha256:slot369-quality-ledger"
+    assert handoff["mesh_digest"] == "sha256:slot369-hex-quality-vol"
+
+    wrong_row = dict(row)
+    wrong_row["geometry_id"] = "unit_brick_old"
+    bad_geometry = shape_cubit_quality_ledger_handoff_gate([wrong_row], ledger)
+    assert bad_geometry["status"] == "needs_attention"
+    assert bad_geometry["checks"]["geometry_id_matches_quality_ledger"] is False
+
+    stale_ledger = dict(ledger)
+    stale_ledger["status"] = "needs_attention"
+    stale_ledger["quality_digest"] = "sha256:old-quality-ledger"
+    stale_ledger["checks"] = {**ledger["checks"], "expected_quality_digest_matches": False}
+    bad_digest = shape_cubit_quality_ledger_handoff_gate(
+        [row],
+        stale_ledger,
+        expected_quality_digest="sha256:slot369-quality-ledger",
+    )
+    assert bad_digest["status"] == "needs_attention"
+    assert bad_digest["checks"]["quality_ledger_gate_ok"] is False
+    assert bad_digest["checks"]["expected_quality_digest_matches"] is False
+
+    tri_tet_ledger = {
+        **ledger,
+        "routing_hint": "netgen_tri_tet_path",
+        "element_type_counts": {"tet": 64},
+        "inventory_is_tri_tet_only": True,
+        "checks": {
+            **ledger["checks"],
+            "hex_or_mixed_volume_family_present": False,
+            "not_tri_tet_only_for_cubit_quality_ledger": False,
+        },
+    }
+    bad_route = shape_cubit_quality_ledger_handoff_gate([row], tri_tet_ledger)
+    assert bad_route["status"] == "needs_attention"
+    assert bad_route["checks"]["routing_hint_matches_expected"] is False
+    assert bad_route["checks"]["hex_or_mixed_volume_family_present"] is False
+    assert bad_route["checks"]["not_tri_tet_only_for_cubit_quality_ledger"] is False
+
+    weak_mesh = {**ledger, "min_scaled_jacobian": 0.05, "negative_jacobian_count": 2}
+    bad_quality = shape_cubit_quality_ledger_handoff_gate([row], weak_mesh)
+    assert bad_quality["status"] == "needs_attention"
+    assert bad_quality["checks"]["min_scaled_jacobian_above_threshold"] is False
+    assert bad_quality["checks"]["negative_jacobian_count_zero"] is False
+
+    missing_execution = {
+        **ledger,
+        "checks": {
+            **ledger["checks"],
+            "timing_breakdown_has_required_stage_count": False,
+        },
+    }
+    bad_execution = shape_cubit_quality_ledger_handoff_gate(
+        [row],
+        missing_execution,
+        require_quality_execution_metadata=True,
+    )
+    assert bad_execution["status"] == "needs_attention"
+    assert bad_execution["checks"]["quality_ledger_execution_metadata_ok"] is False
+
+
+def test_build123d_cad_handoff_manifest_bundles_volume_files_and_quality():
+    box = Box(1.0, 2.0, 3.0).solid()
+    box.label = "terminal_block"
+    row = shape_measurement_row(box)
+    row["geometry_id"] = "terminal_block_v1"
+    row["mesh_route"] = "cubit_hex_or_mixed_path"
+    row["role"] = "hex_region"
+    row["expected_cubit_scheme"] = "map"
+    row["downstream_meshing_trace_id"] = "slot363_terminal_block_scheme_trace"
+    row["expected_cubit_command_fragments"] = ["create brick", "volume 1 scheme map", "export netgen"]
+    row["expected_cubit_export_order"] = 2
+    row["units"] = {"length": "mm", "area": "mm^2", "volume": "mm^3"}
+    row["cad_measurement_convention"] = "occt_closed_solid_mass_properties"
+    row["cad_measurement_postprocess_row_convention_schema_id"] = (
+        "build123d_occt_mass_property_row_convention_v1"
+    )
+    row["cad_measurement_component_basis_schema_id"] = (
+        "build123d_occt_volume_area_bbox_component_basis_v1"
+    )
+    external_volume = shape_volume_crosscheck_summary(
+        [row],
+        {
+            "cubit": [{"name": "terminal_block", "volume": row["volume"]}],
+            "cst": [{"name": "terminal_block", "volume": row["volume"]}],
+        },
+        rtol=1.0e-12,
+    )
+    quality_package = {
+        "policy": "cubit_headless_batch_quality_package_gate",
+        "status": "ok",
+        "export_id": "slot163_terminal_block_hex_quality_A",
+        "geometry_id": "terminal_block_v1",
+        "quality_count": 27,
+        "checks": {
+            "headless_command_recorded": True,
+            "quality_count_positive": True,
+        },
+    }
+    quality_handoff = shape_cubit_quality_package_handoff_gate(
+        [row],
+        quality_package,
+        expected_export_id="slot163_terminal_block_hex_quality_A",
+    )
+    quality_ledger_gate = {
+        "policy": "cubit_mesh_quality_ledger_identity_gate",
+        "status": "ok",
+        "quality_artifact_id": "slot369_terminal_block_quality_ledger_v1",
+        "quality_digest": "sha256:slot369-terminal-block-quality-ledger",
+        "metric_set_id": "cubit_scaled_jacobian_hex_v1",
+        "export_id": "slot163_terminal_block_hex_quality_A",
+        "geometry_id": "terminal_block_v1",
+        "mesh_artifact_id": "slot363_terminal_block_vol_v1",
+        "mesh_digest": "sha256:slot363-terminal-block-vol",
+        "routing_hint": "cubit_hex_or_mixed_path",
+        "min_scaled_jacobian": 1.0,
+        "negative_jacobian_count": 0,
+        "element_type_counts": {"hex": 27},
+        "inventory_is_tri_tet_only": False,
+        "checks": {
+            "quality_artifact_id_recorded": True,
+            "quality_digest_recorded": True,
+            "metric_set_id_recorded": True,
+            "mesh_artifact_id_recorded": True,
+            "mesh_digest_recorded": True,
+            "min_scaled_jacobian_above_threshold": True,
+            "negative_jacobian_count_zero": True,
+            "hex_or_mixed_volume_family_present": True,
+            "not_tri_tet_only_for_cubit_quality_ledger": True,
+        },
+    }
+    quality_ledger_handoff = shape_cubit_quality_ledger_handoff_gate(
+        [row],
+        quality_ledger_gate,
+        expected_quality_artifact_id="slot369_terminal_block_quality_ledger_v1",
+        expected_quality_digest="sha256:slot369-terminal-block-quality-ledger",
+        expected_metric_set_id="cubit_scaled_jacobian_hex_v1",
+        expected_export_id="slot163_terminal_block_hex_quality_A",
+        expected_mesh_artifact_id="slot363_terminal_block_vol_v1",
+        expected_mesh_digest="sha256:slot363-terminal-block-vol",
+    )
+    solver_route_gate = cubit_mixed_solver_route_manifest_gate(
+        {
+            "volume_kind_counts": {"hex": 1, "pyramid": 1, "tet": 1},
+            "surface_kind_counts": {"quad": 1, "triangle": 1},
+            "routing_hint": "cubit_hex_or_mixed_path",
+        },
+        {
+            "solver_route_package_id": "slot347_terminal_block_solver_route_v1",
+            "routing_hint": "cubit_hex_or_mixed_path",
+            "route_policy": "hex_primary_pyramid_transition_tet_compatibility",
+            "downstream_solver": "NGSolve/radia-ngsolve",
+            "downstream_solver_contract_artifact_id": "slot384_terminal_block_reader_contract_v1",
+            "downstream_solver_contract_digest": "sha256:slot384-terminal-block-reader-contract",
+            "downstream_solver_contract_path": r"artifacts/cubit/slot384_terminal_block_reader_contract.json",
+            "solver_route_convention_schema_id": "coreform_mixed_hex_pyramid_tet_route_convention_v1",
+            "tet_only_owner": "netgen_tri_tet_path",
+            "no_implicit_tetization": True,
+            "volume_routes": [
+                {"volume_kind": "hex", "solver_role": "primary_volume_fem"},
+                {"volume_kind": "pyramid", "solver_role": "transition_bridge", "not_primary_region": True},
+                {"volume_kind": "tet", "solver_role": "compatibility_subregion_volume_fem"},
+            ],
+            "surface_routes": [
+                {"surface_kind": "quad", "solver_role": "hex_boundary_trace"},
+                {"surface_kind": "triangle", "solver_role": "tet_boundary_trace"},
+            ],
+        },
+        expected_package_id="slot347_terminal_block_solver_route_v1",
+        expected_solver_contract_artifact_id="slot384_terminal_block_reader_contract_v1",
+        expected_solver_contract_digest="sha256:slot384-terminal-block-reader-contract",
+        expected_solver_contract_path=r"artifacts/cubit/slot384_terminal_block_reader_contract.json",
+        expected_solver_route_convention_schema_id="coreform_mixed_hex_pyramid_tet_route_convention_v1",
+        require_solver_contract_artifact=True,
+        require_solver_route_convention_schema=True,
+    )
+    solver_route_handoff = shape_cubit_solver_route_handoff_gate(
+        [row],
+        solver_route_gate,
+        expected_solver_route_package_id="slot347_terminal_block_solver_route_v1",
+        expected_solver_contract_artifact_id="slot384_terminal_block_reader_contract_v1",
+        expected_solver_contract_digest="sha256:slot384-terminal-block-reader-contract",
+        expected_solver_contract_path=r"artifacts/cubit/slot384_terminal_block_reader_contract.json",
+        expected_solver_route_convention_schema_id="coreform_mixed_hex_pyramid_tet_route_convention_v1",
+        require_solver_contract_artifact=True,
+        require_solver_route_convention_schema=True,
+    )
+    scheme_trace = cubit_meshing_scheme_trace_gate(
+        {
+            "trace_id": "slot363_terminal_block_scheme_trace",
+            "command_digest": "sha256:slot363-terminal-block-map-export",
+            "commands": [
+                "create brick x 1 y 2 z 3",
+                "volume 1 scheme map",
+                'export netgen "artifacts/cubit/slot363_terminal_block.vol" order 2 overwrite',
+            ],
+            "volume_schemes": {"1": "map"},
+            "export_order": 2,
+            "export_output_artifact_id": "slot363_terminal_block_vol_v1",
+            "export_output_digest": "sha256:slot363-terminal-block-vol",
+            "export_output_path": r"artifacts/cubit/slot363_terminal_block.vol",
+        },
+        expected_trace_id="slot363_terminal_block_scheme_trace",
+        expected_command_digest="sha256:slot363-terminal-block-map-export",
+        expected_volume_schemes={"1": "map"},
+        required_command_fragments=("create brick", "volume 1 scheme map", "export netgen"),
+        expected_export_order=2,
+        expected_export_output_artifact_id="slot363_terminal_block_vol_v1",
+        expected_export_output_digest="sha256:slot363-terminal-block-vol",
+        expected_export_output_path=r"artifacts/cubit/slot363_terminal_block.vol",
+        require_export_output_artifact=True,
+    )
+    scheme_handoff = shape_cubit_meshing_scheme_intent_gate(
+        [row],
+        scheme_trace_gate=scheme_trace,
+        required_roles=("hex_region",),
+        expected_scheme_by_role={"hex_region": "map"},
+        required_command_fragments=("create brick", "volume 1 scheme map", "export netgen"),
+        expected_trace_id="slot363_terminal_block_scheme_trace",
+        expected_export_order=2,
+        expected_export_output_artifact_id="slot363_terminal_block_vol_v1",
+        expected_export_output_digest="sha256:slot363-terminal-block-vol",
+        expected_export_output_path=r"artifacts/cubit/slot363_terminal_block.vol",
+        require_downstream_export_output_artifact=True,
+    )
+    manifest = [
+        {
+            "kind": "step",
+            "path": r"artifacts/build123d/terminal_block.step",
+            "cad_output_artifact_id": "terminal_block_cad_output_step_v1",
+            "cad_output_digest": "sha256:terminal_block_cad_output_step_v1",
+            "cad_output_path": r"artifacts/build123d/terminal_block.step",
+        },
+        {
+            "kind": "build123d_measurement_json",
+            "path": r"artifacts/build123d/terminal_block_measure.json",
+            "cad_output_artifact_id": "terminal_block_cad_output_step_v1",
+            "cad_output_digest": "sha256:terminal_block_cad_output_step_v1",
+            "cad_output_path": r"artifacts/build123d/terminal_block.step",
+        },
+        {
+            "kind": "external_volume_summary_json",
+            "path": r"artifacts/build123d/terminal_block_volume.json",
+            "cad_output_artifact_id": "terminal_block_cad_output_step_v1",
+            "cad_output_digest": "sha256:terminal_block_cad_output_step_v1",
+            "cad_output_path": r"artifacts/build123d/terminal_block.step",
+        },
+        {
+            "kind": "cubit_quality_json",
+            "path": r"artifacts/cubit/terminal_block_quality.json",
+            "cad_output_artifact_id": "terminal_block_cad_output_step_v1",
+            "cad_output_digest": "sha256:terminal_block_cad_output_step_v1",
+            "cad_output_path": r"artifacts/build123d/terminal_block.step",
+        },
+        {
+            "kind": "cubit_quality_ledger_json",
+            "path": r"artifacts/cubit/terminal_block_quality_ledger.json",
+            "cad_output_artifact_id": "terminal_block_cad_output_step_v1",
+            "cad_output_digest": "sha256:terminal_block_cad_output_step_v1",
+            "cad_output_path": r"artifacts/build123d/terminal_block.step",
+        },
+        {
+            "kind": "cubit_solver_route_json",
+            "path": r"artifacts/cubit/terminal_block_solver_route.json",
+            "cad_output_artifact_id": "terminal_block_cad_output_step_v1",
+            "cad_output_digest": "sha256:terminal_block_cad_output_step_v1",
+            "cad_output_path": r"artifacts/build123d/terminal_block.step",
+        },
+    ]
+    for item in manifest:
+        item["cad_observable_id"] = "terminal_block_cad_handoff_measurements_v1"
+        item["cad_observable_family"] = "cad_mass_properties_handoff"
+        item["length_unit"] = "mm"
+        item["area_unit"] = "mm^2"
+        item["volume_unit"] = "mm^3"
+        item["cad_measurement_convention"] = "occt_closed_solid_mass_properties"
+        item["cad_measurement_postprocess_row_convention_schema_id"] = (
+            "build123d_occt_mass_property_row_convention_v1"
+        )
+        item["cad_measurement_component_basis_schema_id"] = (
+            "build123d_occt_volume_area_bbox_component_basis_v1"
+        )
+
+    gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=manifest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        cubit_quality_ledger_handoff=quality_ledger_handoff,
+        cubit_solver_route_handoff=solver_route_handoff,
+        cubit_meshing_scheme_handoff=scheme_handoff,
+        required_file_kinds=(
+            "step",
+            "build123d_measurement_json",
+            "external_volume_summary_json",
+            "cubit_quality_json",
+            "cubit_quality_ledger_json",
+        ),
+        expected_geometry_ids=("terminal_block_v1",),
+        expected_cad_output_artifact_id="terminal_block_cad_output_step_v1",
+        expected_cad_output_digest="sha256:terminal_block_cad_output_step_v1",
+        require_cad_output_artifact=True,
+        expected_cad_observable_id="terminal_block_cad_handoff_measurements_v1",
+        expected_cad_observable_family="cad_mass_properties_handoff",
+        require_cad_observable=True,
+        expected_length_unit="mm",
+        expected_area_unit="mm^2",
+        expected_volume_unit="mm^3",
+        expected_measurement_convention="occt_closed_solid_mass_properties",
+        expected_measurement_postprocess_row_convention_schema_id=(
+            "build123d_occt_mass_property_row_convention_v1"
+        ),
+        expected_measurement_component_basis_schema_id=(
+            "build123d_occt_volume_area_bbox_component_basis_v1"
+        ),
+        require_measurement_postprocess_row_convention_schema=True,
+        require_measurement_component_basis_schema=True,
+    )
+
+    assert gate["policy"] == "build123d_cad_handoff_manifest_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["external_volume_summary_ok"] is True
+    assert gate["checks"]["cubit_quality_handoff_ok"] is True
+    assert gate["checks"]["cubit_quality_ledger_handoff_ok"] is True
+    assert gate["checks"]["cubit_solver_route_handoff_ok"] is True
+    assert gate["checks"]["cubit_meshing_scheme_handoff_ok"] is True
+    assert solver_route_handoff["checks"]["solver_contract_artifact_id_recorded_when_required"] is True
+    assert solver_route_handoff["checks"]["solver_contract_digest_recorded_when_required"] is True
+    assert solver_route_handoff["checks"]["solver_contract_path_recorded_when_required"] is True
+    assert solver_route_handoff["checks"]["expected_solver_contract_artifact_id_matches"] is True
+    assert solver_route_handoff["checks"]["expected_solver_contract_digest_matches"] is True
+    assert solver_route_handoff["checks"]["expected_solver_contract_path_matches"] is True
+    assert solver_route_handoff["checks"]["solver_route_convention_schema_id_recorded_when_required"] is True
+    assert solver_route_handoff["checks"]["expected_solver_route_convention_schema_id_matches"] is True
+    assert solver_route_handoff["solver_contract_artifact_id"] == "slot384_terminal_block_reader_contract_v1"
+    assert solver_route_handoff["solver_contract_digest"] == "sha256:slot384-terminal-block-reader-contract"
+    assert solver_route_handoff["solver_contract_path"] == r"artifacts/cubit/slot384_terminal_block_reader_contract.json"
+    assert solver_route_handoff["solver_route_convention_schema_id"] == "coreform_mixed_hex_pyramid_tet_route_convention_v1"
+    assert gate["checks"]["required_file_kinds_present"] is True
+    assert gate["checks"]["cad_output_artifact_id_recorded_when_required"] is True
+    assert gate["checks"]["cad_output_digest_recorded_when_required"] is True
+    assert gate["checks"]["cad_output_path_recorded_when_required"] is True
+    assert gate["checks"]["expected_cad_output_artifact_id_matches"] is True
+    assert gate["checks"]["expected_cad_output_digest_matches"] is True
+    assert gate["checks"]["cad_observable_id_recorded_when_required"] is True
+    assert gate["checks"]["expected_cad_observable_id_matches"] is True
+    assert gate["checks"]["expected_cad_observable_family_matches"] is True
+    assert gate["checks"]["cad_unit_metadata_consistent_when_present"] is True
+    assert gate["checks"]["expected_cad_length_unit_matches"] is True
+    assert gate["checks"]["expected_cad_area_unit_matches"] is True
+    assert gate["checks"]["expected_cad_volume_unit_matches"] is True
+    assert gate["checks"]["cad_measurement_convention_consistent_when_present"] is True
+    assert gate["checks"]["expected_cad_measurement_convention_matches"] is True
+    assert gate["checks"]["cad_measurement_postprocess_row_convention_schema_id_consistent_when_present"] is True
+    assert gate["checks"]["cad_measurement_postprocess_row_convention_schema_id_recorded_when_required"] is True
+    assert gate["checks"]["cad_measurement_postprocess_row_convention_schema_id_recorded_when_expected"] is True
+    assert (
+        gate["checks"][
+            "expected_cad_measurement_postprocess_row_convention_schema_id_matches"
+        ]
+        is True
+    )
+    assert gate["checks"]["cad_measurement_component_basis_schema_id_consistent_when_present"] is True
+    assert gate["checks"]["cad_measurement_component_basis_schema_id_recorded_when_required"] is True
+    assert gate["checks"]["cad_measurement_component_basis_schema_id_recorded_when_expected"] is True
+    assert (
+        gate["checks"]["expected_cad_measurement_component_basis_schema_id_matches"]
+        is True
+    )
+    assert gate["cad_output_artifact_id"] == "terminal_block_cad_output_step_v1"
+    assert gate["cad_output_digest"] == "sha256:terminal_block_cad_output_step_v1"
+    assert gate["cad_output_path"] == r"artifacts/build123d/terminal_block.step"
+    assert gate["cad_observable_id"] == "terminal_block_cad_handoff_measurements_v1"
+    assert gate["cad_observable_family"] == "cad_mass_properties_handoff"
+    assert gate["units"] == {"length": ["mm"], "area": ["mm^2"], "volume": ["mm^3"]}
+    assert gate["cad_measurement_convention"] == "occt_closed_solid_mass_properties"
+    assert gate["cad_measurement_postprocess_row_convention_schema_id"] == (
+        "build123d_occt_mass_property_row_convention_v1"
+    )
+    assert gate["cad_measurement_postprocess_row_convention_schema_ids"] == [
+        "build123d_occt_mass_property_row_convention_v1"
+    ]
+    assert gate["require_measurement_postprocess_row_convention_schema"] is True
+    assert gate["cad_measurement_component_basis_schema_id"] == (
+        "build123d_occt_volume_area_bbox_component_basis_v1"
+    )
+    assert gate["cad_measurement_component_basis_schema_ids"] == [
+        "build123d_occt_volume_area_bbox_component_basis_v1"
+    ]
+    assert gate["require_measurement_component_basis_schema"] is True
+    assert gate["external_volume_sources"] == ["cubit", "cst"]
+    assert gate["cubit_quality_ledger_handoff_policy"] == "build123d_cubit_quality_ledger_handoff_gate"
+    assert gate["cubit_solver_route_handoff_policy"] == "build123d_cubit_solver_route_handoff_gate"
+    assert gate["cubit_meshing_scheme_handoff_policy"] == "build123d_cubit_meshing_scheme_intent_gate"
+    assert scheme_handoff["checks"]["downstream_export_output_artifact_id_recorded_when_required"] is True
+    assert scheme_handoff["checks"]["downstream_export_output_digest_matches"] is True
+    assert scheme_handoff["checks"]["downstream_export_output_path_matches"] is True
+    assert solver_route_handoff["checks"]["solver_route_pyramid_transition_role_recorded"] is True
+    assert solver_route_handoff["checks"]["solver_route_no_implicit_tetization"] is True
+
+    stale_volume = {**external_volume, "status": "needs_attention"}
+    bad_volume = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=manifest,
+        external_volume_summary=stale_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+    )
+    assert bad_volume["status"] == "needs_attention"
+    assert bad_volume["checks"]["external_volume_summary_ok"] is False
+
+    missing_file = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=manifest[:2],
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+    )
+    assert missing_file["status"] == "needs_attention"
+    assert missing_file["checks"]["required_file_kinds_present"] is False
+
+    stale_output = [dict(item) for item in manifest]
+    stale_output[1]["cad_output_artifact_id"] = "terminal_block_old_step"
+    stale_output_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_output,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_cad_output_artifact_id="terminal_block_cad_output_step_v1",
+        require_cad_output_artifact=True,
+    )
+    assert stale_output_gate["status"] == "needs_attention"
+    assert stale_output_gate["checks"]["cad_output_artifact_id_consistent_when_present"] is False
+    assert stale_output_gate["checks"]["expected_cad_output_artifact_id_matches"] is True
+
+    stale_digest = [dict(item) for item in manifest]
+    stale_digest[1]["cad_output_digest"] = "sha256:terminal_block_old_step"
+    stale_digest_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_digest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_cad_output_digest="sha256:terminal_block_cad_output_step_v1",
+        require_cad_output_artifact=True,
+    )
+    assert stale_digest_gate["status"] == "needs_attention"
+    assert stale_digest_gate["checks"]["cad_output_digest_consistent_when_present"] is False
+    assert stale_digest_gate["checks"]["expected_cad_output_digest_matches"] is True
+
+    missing_output_path = [dict(item) for item in manifest]
+    for item in missing_output_path:
+        item.pop("cad_output_path")
+    missing_output_path_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=missing_output_path,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        require_cad_output_artifact=True,
+    )
+    assert missing_output_path_gate["status"] == "needs_attention"
+    assert missing_output_path_gate["checks"]["cad_output_path_recorded_when_required"] is False
+
+    stale_observable = [dict(item) for item in manifest]
+    stale_observable[1]["cad_observable_id"] = "aa_mesh_inventory_v1"
+    stale_observable_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_observable,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_cad_observable_id="terminal_block_cad_handoff_measurements_v1",
+        require_cad_observable=True,
+    )
+    assert stale_observable_gate["status"] == "needs_attention"
+    assert stale_observable_gate["checks"]["cad_observable_id_consistent_when_present"] is False
+    assert stale_observable_gate["checks"]["expected_cad_observable_id_matches"] is False
+
+    stale_observable_family = [dict(item) for item in manifest]
+    stale_observable_family[1]["cad_observable_family"] = "aa_mesh_inventory"
+    stale_observable_family_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_observable_family,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_cad_observable_family="cad_mass_properties_handoff",
+        require_cad_observable=True,
+    )
+    assert stale_observable_family_gate["status"] == "needs_attention"
+    assert stale_observable_family_gate["checks"]["cad_observable_family_consistent_when_present"] is False
+    assert stale_observable_family_gate["checks"]["expected_cad_observable_family_matches"] is False
+
+    stale_volume_unit = [dict(item) for item in manifest]
+    stale_volume_unit[1]["volume_unit"] = "m^3"
+    stale_volume_unit_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_volume_unit,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_volume_unit="mm^3",
+    )
+    assert stale_volume_unit_gate["status"] == "needs_attention"
+    assert stale_volume_unit_gate["checks"]["cad_unit_metadata_consistent_when_present"] is False
+    assert stale_volume_unit_gate["checks"]["expected_cad_volume_unit_matches"] is False
+
+    wrong_convention = [dict(item) for item in manifest]
+    wrong_convention[2]["cad_measurement_convention"] = "mesh_volume_after_import"
+    wrong_convention_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=wrong_convention,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_measurement_convention="occt_closed_solid_mass_properties",
+    )
+    assert wrong_convention_gate["status"] == "needs_attention"
+    assert wrong_convention_gate["checks"]["cad_measurement_convention_consistent_when_present"] is False
+    assert wrong_convention_gate["checks"]["expected_cad_measurement_convention_matches"] is False
+
+    stale_measurement_row_convention = [dict(item) for item in manifest]
+    stale_measurement_row_convention[2]["cad_measurement_postprocess_row_convention_schema_id"] = (
+        "build123d_scalar_volume_row_v0"
+    )
+    stale_measurement_row_convention_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_measurement_row_convention,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_measurement_convention="occt_closed_solid_mass_properties",
+        expected_measurement_postprocess_row_convention_schema_id=(
+            "build123d_occt_mass_property_row_convention_v1"
+        ),
+        require_measurement_postprocess_row_convention_schema=True,
+    )
+    assert stale_measurement_row_convention_gate["status"] == "needs_attention"
+    assert stale_measurement_row_convention_gate["checks"]["expected_cad_measurement_convention_matches"] is True
+    assert (
+        stale_measurement_row_convention_gate["checks"][
+            "cad_measurement_postprocess_row_convention_schema_id_consistent_when_present"
+        ]
+        is False
+    )
+    assert (
+        stale_measurement_row_convention_gate["checks"][
+            "expected_cad_measurement_postprocess_row_convention_schema_id_matches"
+        ]
+        is False
+    )
+
+    missing_measurement_row_convention_row = {
+        key: value
+        for key, value in row.items()
+        if key != "cad_measurement_postprocess_row_convention_schema_id"
+    }
+    missing_measurement_row_convention_manifest = [
+        {
+            key: value
+            for key, value in item.items()
+            if key != "cad_measurement_postprocess_row_convention_schema_id"
+        }
+        for item in manifest
+    ]
+    missing_measurement_row_convention_gate = shape_cad_handoff_manifest_gate(
+        [missing_measurement_row_convention_row],
+        file_manifest=missing_measurement_row_convention_manifest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_measurement_postprocess_row_convention_schema_id=(
+            "build123d_occt_mass_property_row_convention_v1"
+        ),
+        require_measurement_postprocess_row_convention_schema=True,
+    )
+    assert missing_measurement_row_convention_gate["status"] == "needs_attention"
+    assert (
+        missing_measurement_row_convention_gate["checks"][
+            "cad_measurement_postprocess_row_convention_schema_id_recorded_when_required"
+        ]
+        is False
+    )
+    assert (
+        missing_measurement_row_convention_gate["checks"][
+            "cad_measurement_postprocess_row_convention_schema_id_recorded_when_expected"
+        ]
+        is False
+    )
+
+    stale_measurement_component_basis = [dict(item) for item in manifest]
+    stale_measurement_component_basis[2]["cad_measurement_component_basis_schema_id"] = (
+        "build123d_scalar_volume_component_basis_v0"
+    )
+    stale_measurement_component_basis_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=stale_measurement_component_basis,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_measurement_convention="occt_closed_solid_mass_properties",
+        expected_measurement_postprocess_row_convention_schema_id=(
+            "build123d_occt_mass_property_row_convention_v1"
+        ),
+        expected_measurement_component_basis_schema_id=(
+            "build123d_occt_volume_area_bbox_component_basis_v1"
+        ),
+        require_measurement_component_basis_schema=True,
+    )
+    assert stale_measurement_component_basis_gate["status"] == "needs_attention"
+    assert stale_measurement_component_basis_gate["checks"]["expected_cad_measurement_convention_matches"] is True
+    assert (
+        stale_measurement_component_basis_gate["checks"][
+            "expected_cad_measurement_postprocess_row_convention_schema_id_matches"
+        ]
+        is True
+    )
+    assert (
+        stale_measurement_component_basis_gate["checks"][
+            "cad_measurement_component_basis_schema_id_consistent_when_present"
+        ]
+        is False
+    )
+    assert (
+        stale_measurement_component_basis_gate["checks"][
+            "expected_cad_measurement_component_basis_schema_id_matches"
+        ]
+        is False
+    )
+
+    missing_measurement_component_basis_row = {
+        key: value
+        for key, value in row.items()
+        if key != "cad_measurement_component_basis_schema_id"
+    }
+    missing_measurement_component_basis_manifest = [
+        {
+            key: value
+            for key, value in item.items()
+            if key != "cad_measurement_component_basis_schema_id"
+        }
+        for item in manifest
+    ]
+    missing_measurement_component_basis_gate = shape_cad_handoff_manifest_gate(
+        [missing_measurement_component_basis_row],
+        file_manifest=missing_measurement_component_basis_manifest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+        expected_measurement_component_basis_schema_id=(
+            "build123d_occt_volume_area_bbox_component_basis_v1"
+        ),
+        require_measurement_component_basis_schema=True,
+    )
+    assert missing_measurement_component_basis_gate["status"] == "needs_attention"
+    assert (
+        missing_measurement_component_basis_gate["checks"][
+            "cad_measurement_component_basis_schema_id_recorded_when_required"
+        ]
+        is False
+    )
+    assert (
+        missing_measurement_component_basis_gate["checks"][
+            "cad_measurement_component_basis_schema_id_recorded_when_expected"
+        ]
+        is False
+    )
+
+    stale_solver_contract_handoff = shape_cubit_solver_route_handoff_gate(
+        [row],
+        {
+            **solver_route_gate,
+            "solver_contract_digest": "sha256:stale-reader-contract",
+            "checks": {
+                **solver_route_gate["checks"],
+                "expected_solver_contract_digest_matches": False,
+            },
+        },
+        expected_solver_route_package_id="slot347_terminal_block_solver_route_v1",
+        expected_solver_contract_digest="sha256:slot384-terminal-block-reader-contract",
+        require_solver_contract_artifact=True,
+    )
+    assert stale_solver_contract_handoff["status"] == "needs_attention"
+    assert stale_solver_contract_handoff["checks"]["expected_solver_contract_digest_matches"] is False
+
+    stale_route_convention_handoff = shape_cubit_solver_route_handoff_gate(
+        [row],
+        {
+            **solver_route_gate,
+            "solver_route_convention_schema_id": "coreform_value_only_mixed_route_v0",
+            "checks": {
+                **solver_route_gate["checks"],
+                "expected_solver_route_convention_schema_id_matches": False,
+            },
+        },
+        expected_solver_route_package_id="slot347_terminal_block_solver_route_v1",
+        expected_solver_route_convention_schema_id="coreform_mixed_hex_pyramid_tet_route_convention_v1",
+        require_solver_route_convention_schema=True,
+    )
+    assert stale_route_convention_handoff["status"] == "needs_attention"
+    assert (
+        stale_route_convention_handoff["checks"]["expected_solver_route_convention_schema_id_matches"]
+        is False
+    )
+
+    missing_route_convention_handoff = shape_cubit_solver_route_handoff_gate(
+        [row],
+        {
+            **solver_route_gate,
+            "solver_route_convention_schema_id": "",
+            "checks": {
+                **solver_route_gate["checks"],
+                "solver_route_convention_schema_id_recorded_when_required": False,
+            },
+        },
+        expected_solver_route_package_id="slot347_terminal_block_solver_route_v1",
+        require_solver_route_convention_schema=True,
+    )
+    assert missing_route_convention_handoff["status"] == "needs_attention"
+    assert (
+        missing_route_convention_handoff["checks"]["solver_route_convention_schema_id_recorded_when_required"]
+        is False
+    )
+
+    stale_solver_route_handoff = shape_cubit_solver_route_handoff_gate(
+        [row],
+        {
+            **solver_route_gate,
+            "status": "needs_attention",
+            "checks": {
+                **solver_route_gate["checks"],
+                "pyramid_transition_role_recorded": False,
+                "no_implicit_tetization_recorded": False,
+            },
+        },
+        expected_solver_route_package_id="slot347_terminal_block_solver_route_v1",
+    )
+    bad_solver_route_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=manifest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        cubit_solver_route_handoff=stale_solver_route_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+    )
+    assert stale_solver_route_handoff["status"] == "needs_attention"
+    assert stale_solver_route_handoff["checks"]["solver_route_gate_ok"] is False
+    assert stale_solver_route_handoff["checks"]["solver_route_pyramid_transition_role_recorded"] is False
+    assert stale_solver_route_handoff["checks"]["solver_route_no_implicit_tetization"] is False
+    assert bad_solver_route_gate["status"] == "needs_attention"
+    assert bad_solver_route_gate["checks"]["cubit_solver_route_handoff_ok"] is False
+
+    stale_quality_ledger = {
+        **quality_ledger_handoff,
+        "status": "needs_attention",
+        "checks": {
+            **quality_ledger_handoff["checks"],
+            "expected_mesh_digest_matches": False,
+        },
+    }
+    bad_quality_ledger_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=manifest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        cubit_quality_ledger_handoff=stale_quality_ledger,
+        required_file_kinds=(
+            "step",
+            "build123d_measurement_json",
+            "external_volume_summary_json",
+            "cubit_quality_json",
+            "cubit_quality_ledger_json",
+        ),
+    )
+    assert stale_quality_ledger["status"] == "needs_attention"
+    assert bad_quality_ledger_gate["status"] == "needs_attention"
+    assert bad_quality_ledger_gate["checks"]["cubit_quality_ledger_handoff_ok"] is False
+
+    stale_scheme_trace = dict(scheme_trace)
+    stale_scheme_trace["export_output_digest"] = "sha256:old-slot362-vol"
+    stale_scheme_handoff = shape_cubit_meshing_scheme_intent_gate(
+        [row],
+        scheme_trace_gate=stale_scheme_trace,
+        required_roles=("hex_region",),
+        expected_scheme_by_role={"hex_region": "map"},
+        required_command_fragments=("create brick", "volume 1 scheme map", "export netgen"),
+        expected_trace_id="slot363_terminal_block_scheme_trace",
+        expected_export_order=2,
+        expected_export_output_artifact_id="slot363_terminal_block_vol_v1",
+        expected_export_output_digest="sha256:slot363-terminal-block-vol",
+        expected_export_output_path=r"artifacts/cubit/slot363_terminal_block.vol",
+        require_downstream_export_output_artifact=True,
+    )
+    stale_scheme_gate = shape_cad_handoff_manifest_gate(
+        [row],
+        file_manifest=manifest,
+        external_volume_summary=external_volume,
+        cubit_quality_handoff=quality_handoff,
+        cubit_meshing_scheme_handoff=stale_scheme_handoff,
+        required_file_kinds=("step", "build123d_measurement_json", "external_volume_summary_json", "cubit_quality_json"),
+    )
+    assert stale_scheme_handoff["status"] == "needs_attention"
+    assert stale_scheme_handoff["checks"]["downstream_export_output_digest_matches"] is False
+    assert stale_scheme_gate["status"] == "needs_attention"
+    assert stale_scheme_gate["checks"]["cubit_meshing_scheme_handoff_ok"] is False
+
+
+def test_build123d_submodel_cad_handoff_gate_binds_crop_recipe_and_boundary_contract():
+    local = Box(1.0, 1.0, 1.0).solid()
+    local.label = "slot251_local_tip_crop"
+    row = shape_measurement_row(local)
+    row["geometry_id"] = "slot251_local_tip_crop_v1"
+    boundary_handoff = {
+        "policy": "cubit_submodel_boundary_handoff_mesh_package_gate",
+        "status": "ok",
+        "submodel_region_id": "slot251_zoom_region_tip_01",
+        "zoom_boundary_id": "zoom_boundary_outer",
+        "boundary_transfer_error_estimate": 0.018,
+        "checks": {
+            "boundary_transfer_error_estimate_recorded": True,
+        },
+    }
+    files = [
+        {"kind": "step", "path": r"artifacts/build123d/slot251_local_tip_crop.step"},
+        {"kind": "build123d_measurement_json", "path": r"artifacts/build123d/slot251_local_tip_crop_measure.json"},
+    ]
+
+    gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot251_local_box_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot251_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot251_local_tip_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        expected_geometry_ids=("slot251_local_tip_crop_v1",),
+    )
+
+    assert gate["policy"] == "build123d_submodel_cad_handoff_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["recipe_id_recorded"] is True
+    assert gate["checks"]["shape_bboxes_inside_crop"] is True
+    assert gate["checks"]["step_file_present"] is True
+    assert gate["checks"]["measurement_json_present"] is True
+    assert gate["checks"]["boundary_handoff_ok"] is True
+    assert gate["checks"]["boundary_handoff_submodel_matches"] is True
+    assert gate["checks"]["boundary_handoff_error_recorded"] is True
+
+    crop_too_small = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot251_local_box_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot251_zoom_region_tip_01",
+        crop_box={"min": [-0.25, -0.25, -0.25], "max": [0.25, 0.25, 0.25]},
+        export_id="slot251_local_tip_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+    )
+    assert crop_too_small["status"] == "needs_attention"
+    assert crop_too_small["checks"]["shape_bboxes_inside_crop"] is False
+
+    wrong_boundary = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot251_local_box_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot251_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot251_local_tip_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff={**boundary_handoff, "submodel_region_id": "other_region"},
+    )
+    assert wrong_boundary["status"] == "needs_attention"
+    assert wrong_boundary["checks"]["boundary_handoff_submodel_matches"] is False
+
+    missing_files = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot251_local_box_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot251_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot251_local_tip_crop_step_v1",
+        unit="mm",
+        file_manifest=[],
+        boundary_handoff=boundary_handoff,
+    )
+    assert missing_files["status"] == "needs_attention"
+    assert missing_files["checks"]["file_manifest_present"] is False
+
+
+def test_build123d_submodel_cad_handoff_gate_pairs_transition_intent_with_pyramid_boundary():
+    local = Box(1.0, 1.0, 1.0).solid()
+    local.label = "slot259_local_mixed_crop"
+    row = shape_measurement_row(local)
+    row["geometry_id"] = "slot259_local_mixed_crop_v1"
+    boundary_handoff = {
+        "policy": "cubit_submodel_boundary_handoff_mesh_package_gate",
+        "status": "ok",
+        "submodel_region_id": "slot259_zoom_region_tip_01",
+        "zoom_boundary_id": "zoom_boundary_outer",
+        "boundary_transfer_error_estimate": 0.012,
+        "volume_kind_counts": {"hex": 1, "pyramid": 1, "tet": 1},
+        "surface_kind_counts": {"quad": 6, "triangle": 4},
+        "transition_policy": "keep pyramid bridge as an explicit conformal hex-to-tet transition",
+        "checks": {
+            "boundary_transfer_error_estimate_recorded": True,
+            "transition_policy_recorded_when_present": True,
+        },
+    }
+    transition_rows = [
+        {
+            "name": "slot259_hex_core",
+            "role": "hex_region",
+            "material": "core_steel",
+            "volume": 1.0,
+        },
+        {
+            "name": "slot259_pyramid_transition_envelope",
+            "role": "mesh_transition",
+            "material": "transition_air",
+            "transition_kind": "pyramid",
+            "connects_roles": ["hex_region", "tet_region"],
+            "expected_surface_kinds": ["quad", "triangle"],
+            "volume": 0.25,
+        },
+        {
+            "name": "slot259_tet_region",
+            "role": "tet_region",
+            "material": "air",
+            "volume": 1.0,
+        },
+    ]
+    transition_handoff = shape_transition_role_metadata_gate(
+        transition_rows,
+        required_surface_kinds=("quad", "triangle"),
+        source_label="slot259_build123d",
+    )
+    files = [
+        {"kind": "step", "path": r"artifacts/build123d/slot259_local_mixed_crop.step"},
+        {"kind": "build123d_measurement_json", "path": r"artifacts/build123d/slot259_local_mixed_crop_measure.json"},
+    ]
+
+    gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot259_local_mixed_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot259_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot259_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=transition_handoff,
+        expected_geometry_ids=("slot259_local_mixed_crop_v1",),
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["checks"]["transition_handoff_ok"] is True
+    assert gate["checks"]["transition_handoff_present_for_pyramid_boundary"] is True
+    assert gate["checks"]["transition_handoff_kind_matches_boundary"] is True
+    assert gate["checks"]["transition_handoff_connects_hex_tet"] is True
+    assert gate["checks"]["transition_handoff_surface_kinds_recorded"] is True
+    assert gate["checks"]["transition_handoff_surface_kinds_match_boundary"] is True
+    assert gate["boundary_volume_kind_counts"]["pyramid"] == 1
+    assert gate["boundary_surface_kind_counts"] == {"quad": 6, "triangle": 4}
+    assert gate["transition_handoff_kinds"] == ["pyramid"]
+    assert gate["transition_handoff_surface_kinds"] == ["quad", "triangle"]
+
+    missing_transition = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot259_local_mixed_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot259_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot259_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+    )
+    assert missing_transition["status"] == "needs_attention"
+    assert missing_transition["checks"]["transition_handoff_present_for_pyramid_boundary"] is False
+
+    wrong_kind = {
+        **transition_handoff,
+        "transition_kinds": ["wedge"],
+        "status": "ok",
+    }
+    wrong_kind_gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot259_local_mixed_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot259_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot259_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=wrong_kind,
+    )
+    assert wrong_kind_gate["status"] == "needs_attention"
+    assert wrong_kind_gate["checks"]["transition_handoff_kind_matches_boundary"] is False
+
+    missing_quad = {
+        **transition_handoff,
+        "surface_kinds": ["triangle"],
+        "required_surface_kinds": ["quad", "triangle"],
+        "status": "ok",
+    }
+    missing_quad_gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot259_local_mixed_crop_recipe",
+        parent_model_id="slot249_global_plate_bending_coarse_v1",
+        submodel_region_id="slot259_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot259_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=missing_quad,
+    )
+    assert missing_quad_gate["status"] == "needs_attention"
+    assert missing_quad_gate["checks"]["transition_handoff_surface_kinds_match_boundary"] is False
+
+
+def test_build123d_submodel_cad_handoff_gate_pairs_material_intent_with_cubit_sidecar_labels():
+    local = Box(1.0, 1.0, 1.0).solid()
+    local.label = "slot275_local_mixed_crop"
+    row = shape_measurement_row(local)
+    row["geometry_id"] = "slot275_local_mixed_crop_v1"
+    boundary_handoff = {
+        "policy": "cubit_submodel_boundary_handoff_mesh_package_gate",
+        "status": "ok",
+        "submodel_region_id": "slot275_zoom_region_tip_01",
+        "zoom_boundary_id": "zoom_boundary_outer",
+        "boundary_transfer_error_estimate": 0.01,
+        "volume_kind_counts": {"hex": 1, "pyramid": 1, "tet": 1},
+        "surface_kind_counts": {"quad": 6, "triangle": 4},
+        "material_names": ["hex_core", "pyramid_transition", "tet_region"],
+        "allowed_zero_measurement_names": ["pyramid_transition"],
+        "roles_present": ["hex_to_transition", "transition_to_tet"],
+        "checks": {"boundary_transfer_error_estimate_recorded": True},
+    }
+    transition_rows = [
+        {
+            "name": "slot275_hex_body",
+            "role": "hex_region",
+            "material": "core_steel",
+            "downstream_material_name": "hex_core",
+            "volume": 1.0,
+        },
+        {
+            "name": "slot275_transition_envelope",
+            "role": "mesh_transition",
+            "material": "transition_air",
+            "transition_kind": "pyramid",
+            "connects_roles": ["hex_region", "tet_region"],
+            "expected_surface_kinds": ["quad", "triangle"],
+            "expected_interface_roles": ["hex_to_transition", "transition_to_tet"],
+            "downstream_material_name": "pyramid_transition",
+            "volume": 0.25,
+        },
+        {
+            "name": "slot275_tet_body",
+            "role": "tet_region",
+            "material": "air",
+            "downstream_material_name": "tet_region",
+            "volume": 1.0,
+        },
+    ]
+    transition_handoff = shape_transition_role_metadata_gate(
+        transition_rows,
+        required_surface_kinds=("quad", "triangle"),
+        required_interface_roles=("hex_to_transition", "transition_to_tet"),
+        expected_downstream_material_names=("hex_core", "pyramid_transition", "tet_region"),
+        allowed_zero_downstream_material_names=("pyramid_transition",),
+        source_label="slot275_build123d",
+    )
+    files = [
+        {"kind": "step", "path": r"artifacts/build123d/slot275_local_mixed_crop.step"},
+        {"kind": "build123d_measurement_json", "path": r"artifacts/build123d/slot275_local_mixed_crop_measure.json"},
+    ]
+
+    gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot275_local_mixed_crop_recipe",
+        parent_model_id="slot274_coreform_material_sidecar_v1",
+        submodel_region_id="slot275_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot275_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=transition_handoff,
+        expected_geometry_ids=("slot275_local_mixed_crop_v1",),
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["checks"]["boundary_material_names_recorded"] is True
+    assert gate["checks"]["transition_handoff_material_names_recorded"] is True
+    assert gate["checks"]["transition_handoff_material_names_match_boundary"] is True
+    assert gate["checks"]["transition_handoff_zero_material_names_match_boundary"] is True
+    assert gate["checks"]["boundary_interface_roles_recorded"] is True
+    assert gate["checks"]["transition_handoff_interface_roles_recorded"] is True
+    assert gate["checks"]["transition_handoff_interface_roles_match_boundary"] is True
+    assert gate["boundary_material_names"] == ["hex_core", "pyramid_transition", "tet_region"]
+    assert gate["transition_handoff_material_names"] == ["hex_core", "pyramid_transition", "tet_region"]
+    assert gate["boundary_interface_roles"] == ["hex_to_transition", "transition_to_tet"]
+    assert gate["transition_handoff_interface_roles"] == ["hex_to_transition", "transition_to_tet"]
+
+    stale_materials = {
+        **transition_handoff,
+        "downstream_material_names": ["hex_core", "tet_region"],
+        "status": "ok",
+    }
+    stale_gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot275_local_mixed_crop_recipe",
+        parent_model_id="slot274_coreform_material_sidecar_v1",
+        submodel_region_id="slot275_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot275_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=stale_materials,
+        expected_geometry_ids=("slot275_local_mixed_crop_v1",),
+    )
+    assert stale_gate["status"] == "needs_attention"
+    assert stale_gate["checks"]["transition_handoff_material_names_match_boundary"] is False
+
+    stale_zero_contract = {
+        **transition_handoff,
+        "allowed_zero_downstream_material_names": [],
+        "status": "ok",
+    }
+    stale_zero_gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot275_local_mixed_crop_recipe",
+        parent_model_id="slot274_coreform_material_sidecar_v1",
+        submodel_region_id="slot275_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot275_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=stale_zero_contract,
+        expected_geometry_ids=("slot275_local_mixed_crop_v1",),
+    )
+    assert stale_zero_gate["status"] == "needs_attention"
+    assert stale_zero_gate["checks"]["transition_handoff_zero_material_names_match_boundary"] is False
+
+    stale_interface_roles = {
+        **transition_handoff,
+        "interface_roles": ["hex_to_transition"],
+        "required_interface_roles": ["hex_to_transition"],
+        "status": "ok",
+    }
+    stale_interface_gate = shape_submodel_cad_handoff_gate(
+        [row],
+        recipe_id="slot275_local_mixed_crop_recipe",
+        parent_model_id="slot274_coreform_material_sidecar_v1",
+        submodel_region_id="slot275_zoom_region_tip_01",
+        crop_box={"min": [-1.0, -1.0, -1.0], "max": [1.0, 1.0, 1.0]},
+        export_id="slot275_local_mixed_crop_step_v1",
+        unit="mm",
+        file_manifest=files,
+        boundary_handoff=boundary_handoff,
+        transition_handoff=stale_interface_roles,
+        expected_geometry_ids=("slot275_local_mixed_crop_v1",),
+    )
+    assert stale_interface_gate["status"] == "needs_attention"
+    assert stale_interface_gate["checks"]["transition_handoff_interface_roles_match_boundary"] is False
+
+
+def test_build123d_curvilinear_mesh_intent_gate_keeps_cubit_route_explicit():
+    box = Box(2.0, 1.0, 1.0).solid()
+    box.label = "curved_hex_block"
+    row = shape_measurement_row(box)
+    row["geometry_id"] = "slot171_curved_hex_block_v1"
+    row["role"] = "hex_region"
+    row["mesh_route"] = "cubit_hex_or_mixed_path"
+    row["downstream_handoff"] = "cubit_curvilinear_handoff"
+    manifest_gate = {
+        "policy": "cubit_curvilinear_handoff_manifest_gate",
+        "status": "ok",
+        "checks": {
+            "projection_error_recorded": True,
+            "projection_error_within_tolerance": True,
+            "negative_jacobian_count_recorded": True,
+            "negative_jacobian_count_zero": True,
+        },
+    }
+    order_series_gate = {
+        "policy": "cubit_mixed_order_series_inventory_gate",
+        "status": "ok",
+        "checks": {
+            "volume_kind_counts_invariant": True,
+            "surface_kind_counts_invariant": True,
+            "routing_hint_is_cubit_mixed": True,
+            "first_order_inventory_present": True,
+            "first_order_inventory_not_curved": True,
+        },
+    }
+
+    gate = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_manifest_gate=manifest_gate,
+        downstream_order_series_gate=order_series_gate,
+    )
+
+    assert gate["policy"] == "build123d_curvilinear_mesh_intent_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["required_roles_present"] is True
+    assert gate["checks"]["route_is_cubit_hex_or_mixed"] is True
+    assert gate["checks"]["handoff_label_recorded"] is True
+    assert gate["checks"]["downstream_manifest_ok"] is True
+    assert gate["checks"]["downstream_projection_error_ok"] is True
+    assert gate["checks"]["downstream_negative_jacobian_zero"] is True
+    assert gate["checks"]["downstream_order_series_ok"] is True
+    assert gate["checks"]["downstream_order_series_policy_known"] is True
+    assert gate["checks"]["downstream_order_series_topology_invariant"] is True
+    assert gate["checks"]["downstream_order_series_route_matches"] is True
+    assert gate["checks"]["downstream_order_series_first_order_inventory"] is True
+    assert gate["roles"] == ["hex_region"]
+    assert gate["routes"] == ["cubit_hex_or_mixed_path"]
+    assert gate["handoffs"] == ["cubit_curvilinear_handoff"]
+    assert gate["downstream_order_series_policy"] == "cubit_mixed_order_series_inventory_gate"
+
+    tet_row = dict(row)
+    tet_row["mesh_route"] = "netgen_tri_tet_path"
+    bad_route = shape_curvilinear_mesh_intent_gate([tet_row])
+    assert bad_route["status"] == "needs_attention"
+    assert bad_route["checks"]["route_is_cubit_hex_or_mixed"] is False
+    assert bad_route["checks"]["not_tet_only_route"] is False
+
+    missing_role = dict(row)
+    missing_role["role"] = "tet_only"
+    bad_role = shape_curvilinear_mesh_intent_gate([missing_role])
+    assert bad_role["status"] == "needs_attention"
+    assert bad_role["checks"]["required_roles_present"] is False
+    assert bad_role["checks"]["not_tet_only_route"] is False
+
+    stale_manifest = {**manifest_gate, "status": "needs_attention"}
+    bad_manifest = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_manifest_gate=stale_manifest,
+    )
+    assert bad_manifest["status"] == "needs_attention"
+    assert bad_manifest["checks"]["downstream_manifest_ok"] is False
+
+    poor_projection_manifest = {
+        **manifest_gate,
+        "checks": {
+            **manifest_gate["checks"],
+            "projection_error_within_tolerance": False,
+        },
+    }
+    poor_projection = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_manifest_gate=poor_projection_manifest,
+    )
+    assert poor_projection["status"] == "needs_attention"
+    assert poor_projection["checks"]["downstream_projection_error_ok"] is False
+    assert "projection error within tolerance" in " ".join(poor_projection["issues"])
+
+    inverted_manifest = {
+        **manifest_gate,
+        "checks": {
+            **manifest_gate["checks"],
+            "negative_jacobian_count_zero": False,
+        },
+    }
+    inverted = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_manifest_gate=inverted_manifest,
+    )
+    assert inverted["status"] == "needs_attention"
+    assert inverted["checks"]["downstream_negative_jacobian_zero"] is False
+    assert "zero negative-Jacobian" in " ".join(inverted["issues"])
+
+    stale_order_series = {
+        **order_series_gate,
+        "checks": {
+            **order_series_gate["checks"],
+            "volume_kind_counts_invariant": False,
+        },
+    }
+    stale_order_gate = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_manifest_gate=manifest_gate,
+        downstream_order_series_gate=stale_order_series,
+    )
+    assert stale_order_gate["status"] == "needs_attention"
+    assert stale_order_gate["checks"]["downstream_order_series_topology_invariant"] is False
+    assert "topology invariant" in " ".join(stale_order_gate["issues"])
+
+    wrong_order_policy = {**order_series_gate, "policy": "cubit_mixed_transition_metadata_gate"}
+    wrong_order_gate = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_order_series_gate=wrong_order_policy,
+    )
+    assert wrong_order_gate["status"] == "needs_attention"
+    assert wrong_order_gate["checks"]["downstream_order_series_policy_known"] is False
+
+    missing_first_order = {
+        **order_series_gate,
+        "checks": {
+            **order_series_gate["checks"],
+            "first_order_inventory_present": False,
+        },
+    }
+    missing_first_gate = shape_curvilinear_mesh_intent_gate(
+        [row],
+        downstream_order_series_gate=missing_first_order,
+    )
+    assert missing_first_gate["status"] == "needs_attention"
+    assert missing_first_gate["checks"]["downstream_order_series_first_order_inventory"] is False
+
+
+def test_build123d_mesh_environment_handoff_gate_binds_cad_rows_to_installed_cubit_evidence():
+    box = Box(2.0, 1.0, 0.5).solid()
+    box.label = "mesh_ready_block"
+    row = shape_measurement_row(box)
+    row["geometry_id"] = "slot187_mesh_ready_block_v1"
+    row["mesh_route"] = "cubit_hex_or_mixed_path"
+    environment = cubit_headless_installation_route_gate(
+        {
+            "installed_version": "2025.12",
+            "binary_path": "C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.com",
+            "binary_exists": True,
+            "headless_flags": ["-nographics", "-batch"],
+            "gui_policy": "headless_no_gui_daemon_by_default",
+            "allow_gui_daemon": False,
+            "release_note_version": "2026.6",
+            "release_note_status": "watchlist",
+            "live_claimed_release_version": "2025.12",
+            "license_status": "ValidStudent",
+            "version_probe_command": "C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.com -version",
+            "version_probe_summary": {
+                "license_status": "ValidStudent",
+                "version_line": "Coreform Cubit Version 2025.12 Build 3d8d3af7",
+                "binary_kind": "coreform_cubit.com synchronous console probe",
+            },
+        }
+    )
+
+    gate = shape_mesh_environment_handoff_gate([row], environment)
+
+    assert gate["policy"] == "build123d_mesh_environment_handoff_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["shape_rows_have_volume_area_bbox"] is True
+    assert gate["checks"]["mesh_route_matches_expected"] is True
+    assert gate["checks"]["mesh_environment_gate_ok"] is True
+    assert gate["checks"]["headless_flags_present"] is True
+    assert gate["checks"]["live_claim_matches_installed"] is True
+    assert gate["checks"]["release_note_watchlist_not_live_claim"] is True
+    assert gate["checks"]["license_status_allows_headless_probe"] is True
+    assert gate["checks"]["version_probe_is_synchronous_console"] is True
+    assert gate["checks"]["binary_path_is_console_com"] is True
+    assert gate["checks"]["version_probe_uses_recorded_binary"] is True
+    assert gate["checks"]["version_probe_summary_records_installed_version"] is True
+    assert gate["checks"]["version_probe_summary_records_license_status"] is True
+    assert gate["binary_path"].endswith("coreform_cubit.com")
+    assert gate["license_status"] == "ValidStudent"
+    assert "coreform_cubit.com -version" in gate["version_probe_command"]
+    assert gate["version_probe_summary"]["version_line"].startswith("Coreform Cubit Version 2025.12")
+
+    gui_binary_environment = cubit_headless_installation_route_gate(
+        {
+            "installed_version": "2025.12",
+            "binary_path": "C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.exe",
+            "binary_exists": True,
+            "headless_flags": ["-nographics", "-batch"],
+            "gui_policy": "headless_no_gui_daemon_by_default",
+            "allow_gui_daemon": False,
+            "release_note_version": "2026.6",
+            "release_note_status": "watchlist",
+            "live_claimed_release_version": "2025.12",
+            "license_status": "ValidStudent",
+            "version_probe_command": "C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.com -version",
+        }
+    )
+    gui_binary = shape_mesh_environment_handoff_gate([row], gui_binary_environment)
+    assert gui_binary["status"] == "needs_attention"
+    assert gui_binary["checks"]["binary_path_is_console_com"] is False
+    assert gui_binary["checks"]["version_probe_uses_recorded_binary"] is False
+    assert any("coreform_cubit.com" in issue for issue in gui_binary["issues"])
+
+    overclaim_environment = cubit_headless_installation_route_gate(
+        {
+            "installed_version": "2025.12",
+            "binary_path": "C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.exe",
+            "binary_exists": True,
+            "headless_flags": ["-nographics", "-batch"],
+            "gui_policy": "headless_no_gui_daemon_by_default",
+            "release_note_version": "2026.6",
+            "release_note_status": "installed",
+            "live_claimed_release_version": "2026.6",
+        }
+    )
+    overclaim = shape_mesh_environment_handoff_gate([row], overclaim_environment)
+    assert overclaim["status"] == "needs_attention"
+    assert overclaim["checks"]["mesh_environment_gate_ok"] is False
+    assert overclaim["checks"]["live_claim_matches_installed"] is False
+
+    stale_probe_summary_environment = cubit_headless_installation_route_gate(
+        {
+            "installed_version": "2025.12",
+            "binary_path": "C:/Program Files/Coreform Cubit 2025.12/bin/coreform_cubit.com",
+            "binary_exists": True,
+            "headless_flags": ["-nographics", "-batch"],
+            "gui_policy": "headless_no_gui_daemon_by_default",
+            "allow_gui_daemon": False,
+            "live_claimed_release_version": "2025.12",
+            "license_status": "ValidStudent",
+            "version_probe_summary": {
+                "license_status": "ValidStudent",
+                "version_line": "Coreform Cubit Version 2026.6 Build future",
+            },
+        }
+    )
+    stale_probe_summary = shape_mesh_environment_handoff_gate(
+        [row], stale_probe_summary_environment
+    )
+    assert stale_probe_summary["status"] == "needs_attention"
+    assert stale_probe_summary["checks"]["mesh_environment_gate_ok"] is False
+    assert stale_probe_summary["checks"]["version_probe_summary_records_installed_version"] is False
+    assert stale_probe_summary["checks"]["version_probe_summary_records_license_status"] is True
+    assert any("version-probe summary" in issue for issue in stale_probe_summary["issues"])
+
+    tet_row = dict(row)
+    tet_row["mesh_route"] = "netgen_tri_tet_path"
+    bad_route = shape_mesh_environment_handoff_gate([tet_row], environment)
+    assert bad_route["status"] == "needs_attention"
+    assert bad_route["checks"]["mesh_route_matches_expected"] is False
 
 
 def test_box_through_cylinder_reference_matches_build123d_mass_properties():
@@ -685,6 +2475,464 @@ def test_shape_volume_crosscheck_summary_accepts_cubit_and_external_cad_rows():
     assert by_name["coil"]["reason"] == "missing measured row"
 
 
+def test_shape_volume_crosscheck_source_coverage_gate_requires_cubit_and_cst_rows():
+    reference = [
+        {"name": "stator", "volume": 100.0},
+        {"name": "coil", "volume": 25.0},
+    ]
+    summary = shape_volume_crosscheck_summary(
+        reference,
+        {
+            "cubit": [
+                {"name": "stator", "volume": 100.0},
+                {"name": "coil", "volume": 25.0},
+            ],
+            "cst_import": [
+                {"name": "stator", "volume": 100.00000001},
+                {"name": "coil", "volume": 24.99999999},
+            ],
+        },
+        rtol=1.0e-8,
+    )
+
+    gate = shape_volume_crosscheck_source_coverage_gate(
+        summary,
+        required_sources=("cubit", "cst_import"),
+        max_allowed_volume_rel_error=1.0e-8,
+    )
+
+    assert gate["policy"] == "build123d_volume_crosscheck_source_coverage_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["required_sources_present"] is True
+    assert gate["checks"]["volume_error_within_limit"] is True
+
+    missing_cst = shape_volume_crosscheck_summary(
+        reference,
+        {"cubit": [{"name": "stator", "volume": 100.0}, {"name": "coil", "volume": 25.0}]},
+        rtol=1.0e-8,
+    )
+    bad = shape_volume_crosscheck_source_coverage_gate(missing_cst)
+    assert bad["status"] == "needs_attention"
+    assert bad["missing_sources"] == ["cst_import"]
+    assert bad["checks"]["required_sources_present"] is False
+
+
+def test_shape_volume_crosscheck_source_identity_gate_binds_methods_body_keys_and_artifacts():
+    reference = [
+        {"name": "stator", "volume": 100.0},
+        {"name": "coil", "volume": 25.0},
+    ]
+    summary = shape_volume_crosscheck_summary(
+        reference,
+        [
+            {
+                "source": "cubit",
+                "rows": [
+                    {"name": "stator", "volume": 100.0},
+                    {"name": "coil", "volume": 25.0},
+                ],
+                "measurement_method": "coreform_cubit_volume_command",
+                "body_identity_key": "name",
+                "source_artifact_id": "slot331_cubit_volume_rows_v1",
+                "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+                "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+                "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+                "objective_observable_id": "slot391_volume_quality_objective_v1",
+                "objective_observable_family": "cad_volume_crosscheck",
+            },
+            {
+                "source": "cst_import",
+                "rows": [
+                    {"name": "stator", "volume": 100.00000001},
+                    {"name": "coil", "volume": 24.99999999},
+                ],
+                "measurement_method": "cst_modeler_solid_volume_export",
+                "body_identity_key": "name",
+                "source_artifact_id": "slot331_cst_volume_rows_v1",
+                "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+                "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+                "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+                "objective_observable_id": "slot391_volume_quality_objective_v1",
+                "objective_observable_family": "cad_volume_crosscheck",
+            },
+        ],
+        rtol=1.0e-8,
+    )
+
+    assert summary["status"] == "ok"
+    by_source = {item["source"]: item for item in summary["comparison_sets"]}
+    assert by_source["cubit"]["measurement_method"] == "coreform_cubit_volume_command"
+    assert by_source["cst_import"]["source_artifact_id"] == "slot331_cst_volume_rows_v1"
+
+    gate = shape_volume_crosscheck_source_identity_gate(
+        summary,
+        expected_measurement_methods={
+            "cubit": "coreform_cubit_volume_command",
+            "cst_import": "cst_modeler_solid_volume_export",
+        },
+        expected_body_identity_keys={"cubit": "name", "cst_import": "name"},
+        expected_source_artifact_ids={
+            "cubit": "slot331_cubit_volume_rows_v1",
+            "cst_import": "slot331_cst_volume_rows_v1",
+        },
+        expected_parameter_set_artifact_ids={
+            "cubit": "slot391_cad_parameter_set_v1",
+            "cst_import": "slot391_cad_parameter_set_v1",
+        },
+        expected_parameter_set_digests={
+            "cubit": "sha256:slot391-cad-parameter-set",
+            "cst_import": "sha256:slot391-cad-parameter-set",
+        },
+        expected_parameter_set_paths={
+            "cubit": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "cst_import": r"artifacts/build123d/slot391_cad_parameter_set.json",
+        },
+        expected_objective_observable_ids={
+            "cubit": "slot391_volume_quality_objective_v1",
+            "cst_import": "slot391_volume_quality_objective_v1",
+        },
+        expected_objective_observable_families={
+            "cubit": "cad_volume_crosscheck",
+            "cst_import": "cad_volume_crosscheck",
+        },
+    )
+
+    assert gate["policy"] == "build123d_volume_crosscheck_source_identity_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["expected_measurement_methods_match"] is True
+    assert gate["checks"]["expected_body_identity_keys_match"] is True
+    assert gate["checks"]["expected_source_artifact_ids_match"] is True
+    assert gate["checks"]["expected_parameter_set_artifact_ids_match"] is True
+    assert gate["checks"]["expected_parameter_set_digests_match"] is True
+    assert gate["checks"]["expected_parameter_set_paths_match"] is True
+    assert gate["checks"]["expected_objective_observable_ids_match"] is True
+    assert gate["checks"]["expected_objective_observable_families_match"] is True
+
+    stale_method = shape_volume_crosscheck_source_identity_gate(
+        summary,
+        expected_measurement_methods={"cubit": "mesh_volume_after_import"},
+        expected_body_identity_keys={"cubit": "name"},
+        expected_source_artifact_ids={"cubit": "slot331_cubit_volume_rows_v1"},
+    )
+    assert stale_method["status"] == "needs_attention"
+    assert stale_method["checks"]["expected_measurement_methods_match"] is False
+
+    missing_artifact_summary = {
+        **summary,
+        "comparison_sets": [
+            {key: value for key, value in item.items() if key != "source_artifact_id"}
+            for item in summary["comparison_sets"]
+        ],
+    }
+    missing_artifact = shape_volume_crosscheck_source_identity_gate(
+        missing_artifact_summary,
+        expected_source_artifact_ids={"cubit": "slot331_cubit_volume_rows_v1"},
+    )
+    assert missing_artifact["status"] == "needs_attention"
+    assert missing_artifact["checks"]["source_artifact_ids_recorded_when_expected"] is False
+
+    stale_parameter_digest = shape_volume_crosscheck_source_identity_gate(
+        summary,
+        expected_parameter_set_digests={"cubit": "sha256:stale-cad-parameter-set"},
+    )
+    assert stale_parameter_digest["status"] == "needs_attention"
+    assert stale_parameter_digest["checks"]["expected_parameter_set_digests_match"] is False
+
+    missing_parameter_path_summary = {
+        **summary,
+        "comparison_sets": [
+            {key: value for key, value in item.items() if key != "parameter_set_path"}
+            for item in summary["comparison_sets"]
+        ],
+    }
+    missing_parameter_path = shape_volume_crosscheck_source_identity_gate(
+        missing_parameter_path_summary,
+        expected_parameter_set_paths={
+            "cubit": r"artifacts/build123d/slot391_cad_parameter_set.json",
+        },
+    )
+    assert missing_parameter_path["status"] == "needs_attention"
+    assert missing_parameter_path["checks"]["parameter_set_paths_recorded_when_expected"] is False
+
+    wrong_objective_family = shape_volume_crosscheck_source_identity_gate(
+        summary,
+        expected_objective_observable_families={"cubit": "mesh_quality"},
+    )
+    assert wrong_objective_family["status"] == "needs_attention"
+    assert wrong_objective_family["checks"]["expected_objective_observable_families_match"] is False
+
+
+def test_shape_external_cad_volume_evidence_package_binds_coverage_identity_and_route():
+    box = Box(2, 3, 4).solid()
+    row = shape_measurement_row(box, name="cad_block")
+    row.update({
+        "geometry_id": "cad_block_revB",
+        "recipe_id": "slot339_box_recipe",
+        "cad_kernel": "occt",
+        "cad_kernel_version": "7.8-test",
+        "script_path": r"artifacts/build123d/slot339_build123d.py",
+        "export_id": "slot339_box_step",
+        "authoring_source": "build123d_occt",
+        "mesh_route": "cubit_hex_or_mixed_path",
+        "length_unit": "m",
+        "area_unit": "m^2",
+        "volume_unit": "m^3",
+    })
+    measured = [
+        {
+            "source": "cubit",
+            "rows": [{"name": "cad_block", "volume": 24.0}],
+            "measurement_method": "coreform_cubit_volume_command",
+            "body_identity_key": "name",
+            "source_artifact_id": "slot339_cubit_volume_rows_v1",
+            "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+            "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+            "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "objective_observable_id": "slot391_volume_quality_objective_v1",
+            "objective_observable_family": "cad_volume_crosscheck",
+        },
+        {
+            "source": "cst_import",
+            "rows": [{"name": "cad_block", "volume": 24.0}],
+            "measurement_method": "cst_modeler_solid_volume_export",
+            "body_identity_key": "name",
+            "source_artifact_id": "slot339_cst_volume_rows_v1",
+            "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+            "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+            "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "objective_observable_id": "slot391_volume_quality_objective_v1",
+            "objective_observable_family": "cad_volume_crosscheck",
+        },
+    ]
+    summary = shape_volume_crosscheck_summary([row], measured, rtol=1.0e-12)
+
+    package = shape_external_cad_volume_evidence_package_gate(
+        [row],
+        summary,
+        required_sources=("cubit", "cst_import"),
+        max_allowed_volume_rel_error=1.0e-12,
+        expected_measurement_methods={
+            "cubit": "coreform_cubit_volume_command",
+            "cst_import": "cst_modeler_solid_volume_export",
+        },
+        expected_body_identity_keys={"cubit": "name", "cst_import": "name"},
+        expected_source_artifact_ids={
+            "cubit": "slot339_cubit_volume_rows_v1",
+            "cst_import": "slot339_cst_volume_rows_v1",
+        },
+        expected_parameter_set_artifact_ids={
+            "cubit": "slot391_cad_parameter_set_v1",
+            "cst_import": "slot391_cad_parameter_set_v1",
+        },
+        expected_parameter_set_digests={
+            "cubit": "sha256:slot391-cad-parameter-set",
+            "cst_import": "sha256:slot391-cad-parameter-set",
+        },
+        expected_parameter_set_paths={
+            "cubit": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "cst_import": r"artifacts/build123d/slot391_cad_parameter_set.json",
+        },
+        expected_objective_observable_ids={
+            "cubit": "slot391_volume_quality_objective_v1",
+            "cst_import": "slot391_volume_quality_objective_v1",
+        },
+        expected_objective_observable_families={
+            "cubit": "cad_volume_crosscheck",
+            "cst_import": "cad_volume_crosscheck",
+        },
+        expected_route="cubit_hex_or_mixed_path",
+        expected_length_unit="m",
+        expected_area_unit="m^2",
+        expected_volume_unit="m^3",
+        required_metadata_fields=("recipe_id", "cad_kernel", "cad_kernel_version", "script_path", "export_id"),
+    )
+
+    assert package["policy"] == "build123d_external_cad_volume_evidence_package_gate"
+    assert package["status"] == "ok"
+    assert package["coverage_gate_status"] == "ok"
+    assert package["source_identity_gate_status"] == "ok"
+    assert package["route_contract_gate_status"] == "ok"
+    assert package["checks"]["source_identity_metadata_complete"] is True
+    assert package["checks"]["gate_source_sets_consistent"] is True
+    assert package["source_identity_gate"]["checks"]["expected_parameter_set_digests_match"] is True
+    assert package["source_identity_gate"]["checks"]["expected_objective_observable_families_match"] is True
+
+    missing_artifact_summary = {
+        **summary,
+        "comparison_sets": [
+            {key: value for key, value in item.items() if not (item["source"] == "cst_import" and key == "source_artifact_id")}
+            for item in summary["comparison_sets"]
+        ],
+    }
+    missing_artifact = shape_external_cad_volume_evidence_package_gate([row], missing_artifact_summary)
+    assert missing_artifact["status"] == "needs_attention"
+    assert missing_artifact["checks"]["source_identity_metadata_complete"] is False
+
+    tet_row = dict(row)
+    tet_row["mesh_route"] = "netgen_tri_tet_path"
+    wrong_route = shape_external_cad_volume_evidence_package_gate([tet_row], summary)
+    assert wrong_route["status"] == "needs_attention"
+    assert wrong_route["checks"]["route_contract_gate_ok"] is False
+
+
+def test_shape_cad_route_source_contract_gate_requires_route_and_source_groups():
+    box = Box(2, 3, 4).solid()
+    row = shape_measurement_row(box, name="hex_block")
+    row.update({
+        "geometry_id": "hex_block_revA",
+        "recipe_id": "slot243_box_recipe",
+        "cad_kernel": "occt",
+        "cad_kernel_version": "7.8-test",
+        "script_path": r"artifacts/build123d/slot243_build123d.py",
+        "export_id": "slot243_box_step",
+        "authoring_source": "build123d_occt",
+        "mesh_route": "cubit_hex_or_mixed_path",
+        "length_unit": "m",
+        "area_unit": "m^2",
+        "volume_unit": "m^3",
+    })
+    summary = shape_mass_property_crosscheck_summary(
+        [row],
+        {
+            "coreform_cubit": [dict(row)],
+            "external_cad": [dict(row)],
+        },
+        rtol=1.0e-12,
+        bbox_atol=1.0e-12,
+    )
+
+    gate = shape_cad_route_source_contract_gate(
+        [row],
+        summary,
+        expected_length_unit="m",
+        expected_area_unit="m^2",
+        expected_volume_unit="m^3",
+        required_metadata_fields=(
+            "recipe_id",
+            "cad_kernel",
+            "cad_kernel_version",
+            "script_path",
+            "export_id",
+        ),
+    )
+
+    assert gate["policy"] == "build123d_cad_route_source_contract_gate"
+    assert gate["status"] == "ok"
+    assert gate["checks"]["authoring_source_is_build123d"] is True
+    assert gate["checks"]["mesh_route_matches_expected"] is True
+    assert gate["checks"]["required_source_groups_present"] is True
+    assert gate["checks"]["shape_length_unit_expected_ok"] is True
+    assert gate["checks"]["shape_area_unit_expected_ok"] is True
+    assert gate["checks"]["shape_volume_unit_expected_ok"] is True
+    assert gate["checks"]["required_shape_metadata_present"] is True
+    assert gate["required_metadata_fields"] == [
+        "recipe_id",
+        "cad_kernel",
+        "cad_kernel_version",
+        "script_path",
+        "export_id",
+    ]
+    assert gate["missing_required_metadata_by_shape"] == {}
+    assert gate["units"] == {"length": ["m"], "area": ["m^2"], "volume": ["m^3"]}
+    assert [item["matched"] for item in gate["matched_source_groups"]] == [
+        "coreform_cubit",
+        "external_cad",
+    ]
+
+    tet_row = dict(row)
+    tet_row["mesh_route"] = "netgen_tri_tet_path"
+    bad_route = shape_cad_route_source_contract_gate([tet_row], summary)
+    assert bad_route["status"] == "needs_attention"
+    assert bad_route["checks"]["mesh_route_matches_expected"] is False
+    assert bad_route["checks"]["disallowed_routes_absent"] is False
+
+    missing_external = shape_mass_property_crosscheck_summary(
+        [row],
+        {"coreform_cubit": [dict(row)]},
+        rtol=1.0e-12,
+        bbox_atol=1.0e-12,
+    )
+    bad_source = shape_cad_route_source_contract_gate([row], missing_external)
+    assert bad_source["status"] == "needs_attention"
+    assert bad_source["checks"]["required_source_groups_present"] is False
+    assert bad_source["missing_source_groups"] == [["external_cad", "cst_import"]]
+
+    wrong_unit = dict(row)
+    wrong_unit["volume_unit"] = "mm^3"
+    bad_unit = shape_cad_route_source_contract_gate(
+        [wrong_unit],
+        summary,
+        expected_volume_unit="m^3",
+    )
+    assert bad_unit["status"] == "needs_attention"
+    assert bad_unit["checks"]["shape_volume_unit_expected_ok"] is False
+    assert "expected CAD units" in " ".join(bad_unit["issues"])
+
+    missing_metadata = dict(row)
+    missing_metadata.pop("recipe_id")
+    bad_metadata = shape_cad_route_source_contract_gate(
+        [missing_metadata],
+        summary,
+        required_metadata_fields=("recipe_id", "cad_kernel"),
+    )
+    assert bad_metadata["status"] == "needs_attention"
+    assert bad_metadata["checks"]["required_shape_metadata_present"] is False
+    assert bad_metadata["missing_required_metadata_by_shape"] == {"hex_block": ["recipe_id"]}
+    assert "required CAD provenance metadata" in " ".join(bad_metadata["issues"])
+
+
+def test_cst_cad_volume_export_manifest_gate_normalizes_rows_for_crosscheck():
+    manifest = {
+        "source_tool": "CST Studio Suite",
+        "project_id": "cad_volume_widget",
+        "run_id": "run_geom_001",
+        "export_id": "cst_volume_export_D",
+        "geometry_id": "widget_revA",
+        "volume_unit": "mm^3",
+        "volume_rows": [
+            {"solid_name": "stator", "volume": 100.0e9, "status": "exported"},
+            {"solid_name": "coil", "volume": 25.0e9, "status": "exported"},
+        ],
+    }
+    gate = cst_cad_volume_export_manifest_gate(
+        manifest,
+        expected_geometry_id="widget_revA",
+        expected_export_id="cst_volume_export_D",
+        required_shape_names=("stator", "coil"),
+    )
+
+    assert gate["policy"] == "cst_cad_volume_export_manifest_gate"
+    assert gate["status"] == "ok"
+    assert gate["normalized_rows"][0]["volume_m3"] == pytest.approx(100.0)
+    assert gate["normalized_rows"][1]["volume_m3"] == pytest.approx(25.0)
+    assert all(gate["checks"].values())
+
+    summary = shape_volume_crosscheck_summary(
+        [{"name": "stator", "volume": 100.0}, {"name": "coil", "volume": 25.0}],
+        {
+            "cst_import": gate["normalized_rows"],
+            "cubit": [{"name": "stator", "volume": 100.0}, {"name": "coil", "volume": 25.0}],
+        },
+        rtol=1.0e-12,
+    )
+    coverage = shape_volume_crosscheck_source_coverage_gate(summary)
+    assert summary["status"] == "ok"
+    assert coverage["status"] == "ok"
+
+    duplicate = dict(manifest)
+    duplicate["volume_rows"] = [dict(row) for row in manifest["volume_rows"]]
+    duplicate["volume_rows"][1]["solid_name"] = "stator"
+    duplicate_gate = cst_cad_volume_export_manifest_gate(duplicate)
+    assert duplicate_gate["status"] == "needs_attention"
+    assert duplicate_gate["checks"]["shape_names_unique"] is False
+
+    unknown_unit = dict(manifest)
+    unknown_unit["volume_unit"] = "litre"
+    unit_gate = cst_cad_volume_export_manifest_gate(unknown_unit)
+    assert unit_gate["status"] == "needs_attention"
+    assert unit_gate["checks"]["volume_units_known"] is False
+
+
 def test_shape_name_identity_gate_rejects_extra_missing_and_duplicate_shapes():
     reference = [
         {"name": "stator", "volume": 100.0, "area": 220.0},
@@ -793,10 +3041,17 @@ def test_shape_transition_role_metadata_gate_preserves_hex_tet_handoff_intent():
         "material": "transition_air",
         "transition_kind": "pyramid",
         "connects_roles": ["hex_region", "tet_region"],
+        "expected_surface_kinds": ["quad", "triangle"],
+        "expected_interface_roles": ["hex_to_transition", "transition_to_tet"],
     })
     by_name["tet_region"].update({"role": "tet_region", "material": "air"})
 
-    ok = shape_transition_role_metadata_gate(rows, source_label="slot131_build123d")
+    ok = shape_transition_role_metadata_gate(
+        rows,
+        required_surface_kinds=("quad", "triangle"),
+        required_interface_roles=("hex_to_transition", "transition_to_tet"),
+        source_label="slot131_build123d",
+    )
 
     assert ok["policy"] == "build123d_hex_tet_transition_role_metadata_gate"
     assert ok["status"] == "ok"
@@ -807,6 +3062,11 @@ def test_shape_transition_role_metadata_gate_preserves_hex_tet_handoff_intent():
     assert ok["roles"] == ["hex_region", "mesh_transition", "tet_region"]
     assert ok["transition_kinds"] == ["pyramid"]
     assert ok["connected_roles"] == ["hex_region", "tet_region"]
+    assert ok["checks"]["required_surface_kinds_present"] is True
+    assert ok["surface_kinds"] == ["quad", "triangle"]
+    assert ok["checks"]["interface_roles_recorded"] is True
+    assert ok["checks"]["required_interface_roles_present"] is True
+    assert ok["interface_roles"] == ["hex_to_transition", "transition_to_tet"]
 
     wrong_kind = [dict(row) for row in rows]
     for row in wrong_kind:
@@ -823,6 +3083,241 @@ def test_shape_transition_role_metadata_gate_preserves_hex_tet_handoff_intent():
     bad_connection = shape_transition_role_metadata_gate(missing_connection)
     assert bad_connection["status"] == "needs_attention"
     assert bad_connection["checks"]["transition_connects_required_roles"] is False
+
+    missing_surface_family = [dict(row) for row in rows]
+    for row in missing_surface_family:
+        if row["name"] == "pyramid_transition_envelope":
+            row["expected_surface_kinds"] = ["triangle"]
+    bad_surface_family = shape_transition_role_metadata_gate(
+        missing_surface_family,
+        required_surface_kinds=("quad", "triangle"),
+    )
+    assert bad_surface_family["status"] == "needs_attention"
+    assert bad_surface_family["checks"]["required_surface_kinds_present"] is False
+
+    missing_interface_role = [dict(row) for row in rows]
+    for row in missing_interface_role:
+        if row["name"] == "pyramid_transition_envelope":
+            row["expected_interface_roles"] = ["hex_to_transition"]
+    bad_interface_role = shape_transition_role_metadata_gate(
+        missing_interface_role,
+        required_surface_kinds=("quad", "triangle"),
+        required_interface_roles=("hex_to_transition", "transition_to_tet"),
+    )
+    assert bad_interface_role["status"] == "needs_attention"
+    assert bad_interface_role["checks"]["required_interface_roles_present"] is False
+    assert bad_interface_role["missing_required_interface_roles"] == ["transition_to_tet"]
+
+
+def test_shape_transition_role_metadata_gate_records_downstream_material_labels():
+    rows = [
+        {
+            "name": "slot275_hex_body",
+            "role": "hex_region",
+            "material": "core_steel",
+            "downstream_material_name": "hex_core",
+            "volume": 1.0,
+        },
+        {
+            "name": "slot275_transition_envelope",
+            "role": "mesh_transition",
+            "material": "transition_air",
+            "transition_kind": "pyramid",
+            "connects_roles": ["hex_region", "tet_region"],
+            "expected_surface_kinds": ["quad", "triangle"],
+            "expected_interface_roles": ["hex_to_transition", "transition_to_tet"],
+            "downstream_material_name": "pyramid_transition",
+            "volume": 0.25,
+        },
+        {
+            "name": "slot275_tet_body",
+            "role": "tet_region",
+            "material": "air",
+            "downstream_material_name": "tet_region",
+            "volume": 1.0,
+        },
+    ]
+
+    gate = shape_transition_role_metadata_gate(
+        rows,
+        required_surface_kinds=("quad", "triangle"),
+        required_interface_roles=("hex_to_transition", "transition_to_tet"),
+        expected_downstream_material_names=("hex_core", "pyramid_transition", "tet_region"),
+        allowed_zero_downstream_material_names=("pyramid_transition",),
+        source_label="slot275_build123d",
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["checks"]["downstream_material_names_recorded"] is True
+    assert gate["checks"]["expected_downstream_material_names_present"] is True
+    assert gate["checks"]["allowed_zero_downstream_material_names_declared"] is True
+    assert gate["downstream_material_names"] == ["hex_core", "pyramid_transition", "tet_region"]
+    assert gate["allowed_zero_downstream_material_names"] == ["pyramid_transition"]
+
+    missing_downstream_name = [dict(row) for row in rows]
+    missing_downstream_name[1].pop("downstream_material_name")
+    bad = shape_transition_role_metadata_gate(
+        missing_downstream_name,
+        required_surface_kinds=("quad", "triangle"),
+        required_interface_roles=("hex_to_transition", "transition_to_tet"),
+        expected_downstream_material_names=("hex_core", "pyramid_transition", "tet_region"),
+        allowed_zero_downstream_material_names=("pyramid_transition",),
+    )
+
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["downstream_material_names_recorded"] is False
+    assert bad["checks"]["expected_downstream_material_names_present"] is False
+    assert bad["missing_expected_downstream_material_names"] == ["pyramid_transition"]
+    assert bad["rows_missing_downstream_material_name"] == ["slot275_transition_envelope"]
+
+
+def test_shape_cubit_meshing_scheme_intent_gate_binds_cad_roles_to_downstream_trace():
+    rows = [
+        {
+            "name": "slot291_hex_body",
+            "role": "hex_region",
+            "material": "core_steel",
+            "mesh_route": "cubit_hex_or_mixed_path",
+            "expected_cubit_scheme": "map",
+            "downstream_meshing_trace_id": "slot291_mixed_scheme_trace",
+            "expected_cubit_command_fragments": ["imprint all", "merge all", "export netgen"],
+            "expected_cubit_export_order": 2,
+            "volume": 1.0,
+        },
+        {
+            "name": "slot291_transition_envelope",
+            "role": "mesh_transition",
+            "material": "transition_air",
+            "mesh_route": "cubit_hex_or_mixed_path",
+            "expected_cubit_scheme": "tetmesh",
+            "downstream_meshing_trace_id": "slot291_mixed_scheme_trace",
+            "expected_cubit_command_fragments": ["imprint all", "merge all", "export netgen"],
+            "expected_cubit_export_order": 2,
+            "volume": 0.25,
+        },
+        {
+            "name": "slot291_tet_body",
+            "role": "tet_region",
+            "material": "air",
+            "mesh_route": "cubit_hex_or_mixed_path",
+            "expected_cubit_scheme": "tetmesh",
+            "downstream_meshing_trace_id": "slot291_mixed_scheme_trace",
+            "expected_cubit_command_fragments": ["imprint all", "merge all", "export netgen"],
+            "expected_cubit_export_order": 2,
+            "volume": 1.0,
+        },
+    ]
+    scheme_trace = cubit_meshing_scheme_trace_gate(
+        {
+            "trace_id": "slot291_mixed_scheme_trace",
+            "command_digest": "sha256:slot291-imprint-merge-map-tet-export",
+            "commands": [
+                "imprint all",
+                "merge all",
+                "volume 1 scheme map",
+                "volume 2 scheme tetmesh",
+                "volume 3 scheme tetmesh",
+                "export netgen \"slot291_mixed.vol\" order 2 overwrite",
+            ],
+            "volume_schemes": {"1": "map", "2": "tetmesh", "3": "tetmesh"},
+            "export_order": 2,
+            "export_output_artifact_id": "slot291_mixed_vol_v1",
+            "export_output_digest": "sha256:slot291-mixed-vol",
+            "export_output_path": r"artifacts/cubit/slot291_mixed.vol",
+        },
+        expected_trace_id="slot291_mixed_scheme_trace",
+        expected_command_digest="sha256:slot291-imprint-merge-map-tet-export",
+        expected_volume_schemes={"1": "map", "2": "tetmesh", "3": "tetmesh"},
+        expected_export_order=2,
+        expected_export_output_artifact_id="slot291_mixed_vol_v1",
+        expected_export_output_digest="sha256:slot291-mixed-vol",
+        expected_export_output_path=r"artifacts/cubit/slot291_mixed.vol",
+        require_export_output_artifact=True,
+    )
+
+    gate = shape_cubit_meshing_scheme_intent_gate(
+        rows,
+        scheme_trace_gate=scheme_trace,
+        expected_scheme_by_role={
+            "hex_region": "map",
+            "mesh_transition": "tetmesh",
+            "tet_region": "tetmesh",
+        },
+        expected_trace_id="slot291_mixed_scheme_trace",
+        expected_export_order=2,
+        expected_export_output_artifact_id="slot291_mixed_vol_v1",
+        expected_export_output_digest="sha256:slot291-mixed-vol",
+        expected_export_output_path=r"artifacts/cubit/slot291_mixed.vol",
+        require_downstream_export_output_artifact=True,
+        source_label="slot291_build123d",
+    )
+
+    assert gate["policy"] == "build123d_cubit_meshing_scheme_intent_gate"
+    assert gate["status"] == "ok"
+    assert gate["role_scheme_intent"] == {
+        "hex_region": "map",
+        "mesh_transition": "tetmesh",
+        "tet_region": "tetmesh",
+    }
+    assert gate["checks"]["downstream_scheme_trace_gate_ok"] is True
+    assert gate["checks"]["downstream_trace_id_matches"] is True
+    assert gate["checks"]["required_command_fragments_present"] is True
+    assert gate["checks"]["downstream_export_output_artifact_id_matches"] is True
+    assert gate["checks"]["downstream_export_output_digest_matches"] is True
+    assert gate["checks"]["downstream_export_output_path_matches"] is True
+
+    stale_scheme = [dict(row) for row in rows]
+    stale_scheme[0]["expected_cubit_scheme"] = "tetmesh"
+    bad_scheme = shape_cubit_meshing_scheme_intent_gate(
+        stale_scheme,
+        scheme_trace_gate=scheme_trace,
+        expected_scheme_by_role={
+            "hex_region": "map",
+            "mesh_transition": "tetmesh",
+            "tet_region": "tetmesh",
+        },
+        expected_trace_id="slot291_mixed_scheme_trace",
+        expected_export_order=2,
+    )
+    assert bad_scheme["status"] == "needs_attention"
+    assert bad_scheme["checks"]["expected_scheme_by_role_matches"] is False
+    assert bad_scheme["missing_expected_scheme_roles"] == ["hex_region"]
+
+    missing_export_fragment = [dict(row) for row in rows]
+    for row in missing_export_fragment:
+        row["expected_cubit_command_fragments"] = ["imprint all", "merge all"]
+    bad_fragment = shape_cubit_meshing_scheme_intent_gate(
+        missing_export_fragment,
+        scheme_trace_gate=scheme_trace,
+        expected_trace_id="slot291_mixed_scheme_trace",
+        expected_export_order=2,
+    )
+    assert bad_fragment["status"] == "needs_attention"
+    assert bad_fragment["checks"]["required_command_fragments_present"] is False
+
+    stale_trace = dict(scheme_trace)
+    stale_trace["trace_id"] = "slot290_old_scheme_trace"
+    bad_trace = shape_cubit_meshing_scheme_intent_gate(
+        rows,
+        scheme_trace_gate=stale_trace,
+        expected_trace_id="slot291_mixed_scheme_trace",
+        expected_export_order=2,
+    )
+    assert bad_trace["status"] == "needs_attention"
+    assert bad_trace["checks"]["downstream_trace_id_matches"] is False
+
+    stale_digest_trace = dict(scheme_trace)
+    stale_digest_trace["export_output_digest"] = "sha256:old-mixed-vol"
+    bad_output = shape_cubit_meshing_scheme_intent_gate(
+        rows,
+        scheme_trace_gate=stale_digest_trace,
+        expected_trace_id="slot291_mixed_scheme_trace",
+        expected_export_order=2,
+        expected_export_output_digest="sha256:slot291-mixed-vol",
+        require_downstream_export_output_artifact=True,
+    )
+    assert bad_output["status"] == "needs_attention"
+    assert bad_output["checks"]["downstream_export_output_digest_matches"] is False
 
 
 def test_build123d_l_bracket_slot_volume_crosscheck_accepts_cubit_roundtrip():
@@ -1152,6 +3647,200 @@ def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
     assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
 
 
+def test_build123d_volume_crosscheck_source_gates_mcp_tool_dispatch_json():
+    from radia_mcp.build123d.server import (
+        build123d_volume_crosscheck,
+        build123d_volume_crosscheck_source_coverage_gate,
+        build123d_volume_crosscheck_source_identity_gate,
+    )
+
+    reference = [{"name": "box", "volume": 24.0}]
+    measured = [
+        {
+            "source": "cubit",
+            "rows": [{"name": "box", "volume": 24.0}],
+            "measurement_method": "coreform_cubit_volume_command",
+            "body_identity_key": "name",
+            "source_artifact_id": "slot331_cubit_volume_rows_v1",
+            "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+            "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+            "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "objective_observable_id": "slot391_volume_quality_objective_v1",
+            "objective_observable_family": "cad_volume_crosscheck",
+        },
+        {
+            "source": "cst_import",
+            "rows": [{"name": "box", "volume": 24.0}],
+            "measurement_method": "cst_modeler_solid_volume_export",
+            "body_identity_key": "name",
+            "source_artifact_id": "slot331_cst_volume_rows_v1",
+            "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+            "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+            "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "objective_observable_id": "slot391_volume_quality_objective_v1",
+            "objective_observable_family": "cad_volume_crosscheck",
+        },
+    ]
+    summary_json = build123d_volume_crosscheck(json.dumps(reference), json.dumps(measured))
+    coverage = json.loads(build123d_volume_crosscheck_source_coverage_gate(
+        summary_json,
+        required_sources_json=json.dumps(["cubit", "cst_import"]),
+        max_allowed_volume_rel_error=1.0e-12,
+    ))
+    identity = json.loads(build123d_volume_crosscheck_source_identity_gate(
+        summary_json,
+        expected_measurement_methods_json=json.dumps({
+            "cubit": "coreform_cubit_volume_command",
+            "cst_import": "cst_modeler_solid_volume_export",
+        }),
+        expected_body_identity_keys_json=json.dumps({
+            "cubit": "name",
+            "cst_import": "name",
+        }),
+        expected_source_artifact_ids_json=json.dumps({
+            "cubit": "slot331_cubit_volume_rows_v1",
+            "cst_import": "slot331_cst_volume_rows_v1",
+        }),
+        expected_parameter_set_artifact_ids_json=json.dumps({
+            "cubit": "slot391_cad_parameter_set_v1",
+            "cst_import": "slot391_cad_parameter_set_v1",
+        }),
+        expected_parameter_set_digests_json=json.dumps({
+            "cubit": "sha256:slot391-cad-parameter-set",
+            "cst_import": "sha256:slot391-cad-parameter-set",
+        }),
+        expected_parameter_set_paths_json=json.dumps({
+            "cubit": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "cst_import": r"artifacts/build123d/slot391_cad_parameter_set.json",
+        }),
+        expected_objective_observable_ids_json=json.dumps({
+            "cubit": "slot391_volume_quality_objective_v1",
+            "cst_import": "slot391_volume_quality_objective_v1",
+        }),
+        expected_objective_observable_families_json=json.dumps({
+            "cubit": "cad_volume_crosscheck",
+            "cst_import": "cad_volume_crosscheck",
+        }),
+    ))
+
+    assert coverage["status"] == "ok"
+    assert coverage["checks"]["required_sources_present"] is True
+    assert identity["status"] == "ok"
+    assert identity["checks"]["expected_measurement_methods_match"] is True
+    assert identity["checks"]["expected_source_artifact_ids_match"] is True
+    assert identity["checks"]["expected_parameter_set_digests_match"] is True
+    assert identity["checks"]["expected_objective_observable_families_match"] is True
+
+
+def test_build123d_external_cad_volume_evidence_package_mcp_tool_dispatch_json():
+    from radia_mcp.build123d.server import (
+        build123d_external_cad_volume_evidence_package,
+        build123d_volume_crosscheck,
+    )
+
+    shape_row = {
+        "name": "box",
+        "volume": 24.0,
+        "area": 52.0,
+        "is_valid": True,
+        "geometry_id": "box_revB",
+        "recipe_id": "slot339_box_recipe",
+        "cad_kernel": "occt",
+        "cad_kernel_version": "7.8-test",
+        "script_path": r"artifacts/build123d/slot339_build123d.py",
+        "export_id": "slot339_box_step",
+        "authoring_source": "build123d_occt",
+        "mesh_route": "cubit_hex_or_mixed_path",
+        "length_unit": "m",
+        "area_unit": "m^2",
+        "volume_unit": "m^3",
+        "bounding_box": {
+            "min": [-1.0, -1.5, -2.0],
+            "max": [1.0, 1.5, 2.0],
+            "center": [0.0, 0.0, 0.0],
+            "size": [2.0, 3.0, 4.0],
+        },
+    }
+    measured = [
+        {
+            "source": "cubit",
+            "rows": [{"name": "box", "volume": 24.0}],
+            "measurement_method": "coreform_cubit_volume_command",
+            "body_identity_key": "name",
+            "source_artifact_id": "slot339_cubit_volume_rows_v1",
+            "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+            "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+            "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "objective_observable_id": "slot391_volume_quality_objective_v1",
+            "objective_observable_family": "cad_volume_crosscheck",
+        },
+        {
+            "source": "cst_import",
+            "rows": [{"name": "box", "volume": 24.0}],
+            "measurement_method": "cst_modeler_solid_volume_export",
+            "body_identity_key": "name",
+            "source_artifact_id": "slot339_cst_volume_rows_v1",
+            "parameter_set_artifact_id": "slot391_cad_parameter_set_v1",
+            "parameter_set_digest": "sha256:slot391-cad-parameter-set",
+            "parameter_set_path": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "objective_observable_id": "slot391_volume_quality_objective_v1",
+            "objective_observable_family": "cad_volume_crosscheck",
+        },
+    ]
+    volume_summary_json = build123d_volume_crosscheck(json.dumps([shape_row]), json.dumps(measured), rtol=1.0e-12)
+    payload = json.loads(build123d_external_cad_volume_evidence_package(
+        json.dumps([shape_row]),
+        volume_summary_json,
+        required_sources_json=json.dumps(["cubit", "cst_import"]),
+        expected_measurement_methods_json=json.dumps({
+            "cubit": "coreform_cubit_volume_command",
+            "cst_import": "cst_modeler_solid_volume_export",
+        }),
+        expected_body_identity_keys_json=json.dumps({"cubit": "name", "cst_import": "name"}),
+        expected_source_artifact_ids_json=json.dumps({
+            "cubit": "slot339_cubit_volume_rows_v1",
+            "cst_import": "slot339_cst_volume_rows_v1",
+        }),
+        expected_parameter_set_artifact_ids_json=json.dumps({
+            "cubit": "slot391_cad_parameter_set_v1",
+            "cst_import": "slot391_cad_parameter_set_v1",
+        }),
+        expected_parameter_set_digests_json=json.dumps({
+            "cubit": "sha256:slot391-cad-parameter-set",
+            "cst_import": "sha256:slot391-cad-parameter-set",
+        }),
+        expected_parameter_set_paths_json=json.dumps({
+            "cubit": r"artifacts/build123d/slot391_cad_parameter_set.json",
+            "cst_import": r"artifacts/build123d/slot391_cad_parameter_set.json",
+        }),
+        expected_objective_observable_ids_json=json.dumps({
+            "cubit": "slot391_volume_quality_objective_v1",
+            "cst_import": "slot391_volume_quality_objective_v1",
+        }),
+        expected_objective_observable_families_json=json.dumps({
+            "cubit": "cad_volume_crosscheck",
+            "cst_import": "cad_volume_crosscheck",
+        }),
+        expected_length_unit="m",
+        expected_area_unit="m^2",
+        expected_volume_unit="m^3",
+        required_metadata_fields_json=json.dumps([
+            "recipe_id",
+            "cad_kernel",
+            "cad_kernel_version",
+            "script_path",
+            "export_id",
+        ]),
+        max_allowed_volume_rel_error=1.0e-12,
+    ))
+
+    assert payload["status"] == "ok"
+    assert payload["checks"]["coverage_gate_ok"] is True
+    assert payload["checks"]["source_identity_gate_ok"] is True
+    assert payload["checks"]["route_contract_gate_ok"] is True
+    assert payload["source_identity_gate"]["checks"]["expected_parameter_set_digests_match"] is True
+
+
 def test_build123d_mass_property_crosscheck_mcp_tool_dispatches_json():
     from radia_mcp.build123d.server import build123d_mass_property_crosscheck
 
@@ -1174,6 +3863,252 @@ def test_build123d_mass_property_crosscheck_mcp_tool_dispatches_json():
     assert payload["n_sources"] == 2
     assert payload["sources"] == ["cubit", "cst_import"]
     assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
+
+
+def test_build123d_cad_route_source_contract_mcp_tool_dispatches_json():
+    from radia_mcp.build123d.server import build123d_cad_route_source_contract
+
+    rows = [{
+        "name": "box",
+        "volume": 24.0,
+        "area": 52.0,
+        "is_valid": True,
+        "geometry_id": "box_revA",
+        "recipe_id": "slot243_box_recipe",
+        "cad_kernel": "occt",
+        "cad_kernel_version": "7.8-test",
+        "script_path": r"artifacts/build123d/slot243_build123d.py",
+        "export_id": "slot243_box_step",
+        "source_kind": "build123d_occt",
+        "mesh_route": "cubit_hex_or_mixed_path",
+        "length_unit": "m",
+        "area_unit": "m^2",
+        "volume_unit": "m^3",
+        "bounding_box": {
+            "min": [-1.0, -1.5, -2.0],
+            "max": [1.0, 1.5, 2.0],
+            "center": [0.0, 0.0, 0.0],
+            "size": [2.0, 3.0, 4.0],
+        },
+    }]
+    crosscheck = shape_volume_crosscheck_summary(
+        rows,
+        {
+            "coreform_cubit": [{"name": "box", "volume": 24.0}],
+            "cst_import": [{"name": "box", "volume": 24.0}],
+        },
+        rtol=1.0e-12,
+    )
+    payload = json.loads(build123d_cad_route_source_contract(
+        json.dumps(rows),
+        json.dumps(crosscheck),
+        expected_length_unit="m",
+        expected_area_unit="m^2",
+        expected_volume_unit="m^3",
+        required_metadata_fields_json=json.dumps([
+            "recipe_id",
+            "cad_kernel",
+            "cad_kernel_version",
+            "script_path",
+            "export_id",
+        ]),
+    ))
+
+    assert payload["status"] == "ok"
+    assert payload["external_crosscheck_sources"] == ["coreform_cubit", "cst_import"]
+    assert payload["checks"]["required_source_groups_present"] is True
+    assert payload["checks"]["shape_volume_unit_expected_ok"] is True
+    assert payload["checks"]["required_shape_metadata_present"] is True
+
+
+def test_build123d_cubit_solver_route_handoff_mcp_tool_dispatches_json():
+    from radia_mcp.build123d.server import (
+        build123d_cad_handoff_manifest,
+        build123d_cubit_quality_ledger_handoff,
+        build123d_cubit_solver_route_handoff,
+    )
+
+    rows = [{
+        "name": "box",
+        "volume": 24.0,
+        "area": 52.0,
+        "geometry_id": "box_revA",
+        "mesh_route": "cubit_hex_or_mixed_path",
+        "length_unit": "m",
+        "area_unit": "m^2",
+        "volume_unit": "m^3",
+        "cad_measurement_convention": "occt_closed_solid_mass_properties",
+        "cad_measurement_postprocess_row_convention_schema_id": (
+            "build123d_occt_mass_property_row_convention_v1"
+        ),
+        "cad_measurement_component_basis_schema_id": (
+            "build123d_occt_volume_area_bbox_component_basis_v1"
+        ),
+        "bounding_box": {
+            "min": [-1.0, -1.5, -2.0],
+            "max": [1.0, 1.5, 2.0],
+            "center": [0.0, 0.0, 0.0],
+            "size": [2.0, 3.0, 4.0],
+        },
+    }]
+    external_volume = shape_volume_crosscheck_summary(
+        rows,
+        {"cubit": [{"name": "box", "volume": 24.0}]},
+        rtol=1.0e-12,
+    )
+    solver_route_gate = cubit_mixed_solver_route_manifest_gate(
+        {
+            "volume_kind_counts": {"hex": 1, "pyramid": 1, "tet": 1},
+            "surface_kind_counts": {"quad": 1, "triangle": 1},
+            "routing_hint": "cubit_hex_or_mixed_path",
+        },
+        {
+            "solver_route_package_id": "slot347_box_solver_route_v1",
+            "routing_hint": "cubit_hex_or_mixed_path",
+            "route_policy": "hex_primary_pyramid_transition_tet_compatibility",
+            "downstream_solver": "NGSolve/radia-ngsolve",
+            "solver_route_convention_schema_id": "coreform_mixed_hex_pyramid_tet_route_convention_v1",
+            "tet_only_owner": "netgen_tri_tet_path",
+            "no_implicit_tetization": True,
+            "volume_routes": [
+                {"volume_kind": "hex", "solver_role": "primary_volume_fem"},
+                {"volume_kind": "pyramid", "solver_role": "transition_bridge", "not_primary_region": True},
+                {"volume_kind": "tet", "solver_role": "compatibility_subregion_volume_fem"},
+            ],
+            "surface_routes": [
+                {"surface_kind": "quad", "solver_role": "hex_boundary_trace"},
+                {"surface_kind": "triangle", "solver_role": "tet_boundary_trace"},
+            ],
+        },
+        expected_package_id="slot347_box_solver_route_v1",
+        expected_solver_route_convention_schema_id="coreform_mixed_hex_pyramid_tet_route_convention_v1",
+        require_solver_route_convention_schema=True,
+    )
+    solver_route_handoff = json.loads(build123d_cubit_solver_route_handoff(
+        json.dumps(rows),
+        json.dumps(solver_route_gate),
+        expected_solver_route_package_id="slot347_box_solver_route_v1",
+        expected_solver_route_convention_schema_id="coreform_mixed_hex_pyramid_tet_route_convention_v1",
+        require_solver_route_convention_schema=True,
+    ))
+    quality_ledger_gate = {
+        "policy": "cubit_mesh_quality_ledger_identity_gate",
+        "status": "ok",
+        "quality_artifact_id": "slot370_box_quality_ledger_v1",
+        "quality_digest": "sha256:slot370-box-quality-ledger",
+        "metric_set_id": "cubit_scaled_jacobian_hex_v1",
+        "export_id": "slot370_box_hex_quality",
+        "geometry_id": "box_revA",
+        "mesh_artifact_id": "slot370_box_hex_vol_v1",
+        "mesh_digest": "sha256:slot370-box-hex-vol",
+        "routing_hint": "cubit_hex_or_mixed_path",
+        "min_scaled_jacobian": 1.0,
+        "negative_jacobian_count": 0,
+        "element_type_counts": {"hex": 1},
+        "inventory_is_tri_tet_only": False,
+        "checks": {
+            "quality_digest_recorded": True,
+            "mesh_digest_recorded": True,
+            "min_scaled_jacobian_above_threshold": True,
+            "negative_jacobian_count_zero": True,
+            "hex_or_mixed_volume_family_present": True,
+            "not_tri_tet_only_for_cubit_quality_ledger": True,
+        },
+    }
+    quality_ledger_handoff = json.loads(build123d_cubit_quality_ledger_handoff(
+        json.dumps(rows),
+        json.dumps(quality_ledger_gate),
+        expected_quality_artifact_id="slot370_box_quality_ledger_v1",
+        expected_quality_digest="sha256:slot370-box-quality-ledger",
+        expected_metric_set_id="cubit_scaled_jacobian_hex_v1",
+        expected_export_id="slot370_box_hex_quality",
+        expected_mesh_artifact_id="slot370_box_hex_vol_v1",
+        expected_mesh_digest="sha256:slot370-box-hex-vol",
+    ))
+    file_manifest = [
+        {
+            "kind": "step",
+            "path": r"artifacts/build123d/slot347_box.step",
+            "length_unit": "m",
+            "area_unit": "m^2",
+            "volume_unit": "m^3",
+            "cad_measurement_convention": "occt_closed_solid_mass_properties",
+            "cad_measurement_postprocess_row_convention_schema_id": (
+                "build123d_occt_mass_property_row_convention_v1"
+            ),
+            "cad_measurement_component_basis_schema_id": (
+                "build123d_occt_volume_area_bbox_component_basis_v1"
+            ),
+        },
+        {
+            "kind": "build123d_measurement_json",
+            "path": r"artifacts/build123d/slot347_box_measure.json",
+            "length_unit": "m",
+            "area_unit": "m^2",
+            "volume_unit": "m^3",
+            "cad_measurement_convention": "occt_closed_solid_mass_properties",
+            "cad_measurement_postprocess_row_convention_schema_id": (
+                "build123d_occt_mass_property_row_convention_v1"
+            ),
+            "cad_measurement_component_basis_schema_id": (
+                "build123d_occt_volume_area_bbox_component_basis_v1"
+            ),
+        },
+        {
+            "kind": "cubit_quality_ledger_json",
+            "path": r"artifacts/cubit/slot370_box_quality_ledger.json",
+            "length_unit": "m",
+            "area_unit": "m^2",
+            "volume_unit": "m^3",
+            "cad_measurement_convention": "occt_closed_solid_mass_properties",
+            "cad_measurement_postprocess_row_convention_schema_id": (
+                "build123d_occt_mass_property_row_convention_v1"
+            ),
+            "cad_measurement_component_basis_schema_id": (
+                "build123d_occt_volume_area_bbox_component_basis_v1"
+            ),
+        },
+    ]
+    handoff = json.loads(build123d_cad_handoff_manifest(
+        json.dumps(rows),
+        json.dumps(file_manifest),
+        external_volume_summary_json=json.dumps(external_volume),
+        cubit_quality_ledger_handoff_json=json.dumps(quality_ledger_handoff),
+        cubit_solver_route_handoff_json=json.dumps(solver_route_handoff),
+        required_file_kinds_json=json.dumps(["step", "build123d_measurement_json", "cubit_quality_ledger_json"]),
+        expected_geometry_ids_json=json.dumps(["box_revA"]),
+        expected_length_unit="m",
+        expected_area_unit="m^2",
+        expected_volume_unit="m^3",
+        expected_measurement_convention="occt_closed_solid_mass_properties",
+        expected_measurement_postprocess_row_convention_schema_id=(
+            "build123d_occt_mass_property_row_convention_v1"
+        ),
+        expected_measurement_component_basis_schema_id=(
+            "build123d_occt_volume_area_bbox_component_basis_v1"
+        ),
+        require_measurement_postprocess_row_convention_schema=True,
+        require_measurement_component_basis_schema=True,
+    ))
+
+    assert solver_route_handoff["status"] == "ok"
+    assert solver_route_handoff["checks"]["solver_route_pyramid_transition_role_recorded"] is True
+    assert solver_route_handoff["checks"]["solver_route_no_implicit_tetization"] is True
+    assert solver_route_handoff["checks"]["solver_route_convention_schema_id_recorded_when_required"] is True
+    assert solver_route_handoff["checks"]["expected_solver_route_convention_schema_id_matches"] is True
+    assert solver_route_handoff["solver_route_convention_schema_id"] == "coreform_mixed_hex_pyramid_tet_route_convention_v1"
+    assert quality_ledger_handoff["status"] == "ok"
+    assert quality_ledger_handoff["checks"]["expected_quality_digest_matches"] is True
+    assert quality_ledger_handoff["checks"]["expected_mesh_digest_matches"] is True
+    assert handoff["status"] == "ok"
+    assert handoff["checks"]["expected_cad_measurement_postprocess_row_convention_schema_id_matches"] is True
+    assert handoff["require_measurement_postprocess_row_convention_schema"] is True
+    assert handoff["checks"]["expected_cad_measurement_component_basis_schema_id_matches"] is True
+    assert handoff["require_measurement_component_basis_schema"] is True
+    assert handoff["checks"]["cubit_quality_ledger_handoff_ok"] is True
+    assert handoff["cubit_quality_ledger_handoff_policy"] == "build123d_cubit_quality_ledger_handoff_gate"
+    assert handoff["checks"]["cubit_solver_route_handoff_ok"] is True
+    assert handoff["cubit_solver_route_handoff_policy"] == "build123d_cubit_solver_route_handoff_gate"
 
 
 def test_compare_shape_measurement_rows_compares_bbox_when_present():

@@ -48,11 +48,24 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            "compare_shape_volume_rows", "shape_volume_crosscheck_summary",
+           "shape_volume_crosscheck_source_coverage_gate",
+           "shape_volume_crosscheck_source_identity_gate",
+           "shape_external_cad_volume_evidence_package_gate",
+           "shape_cad_route_source_contract_gate",
+           "cst_cad_volume_export_manifest_gate",
            "shape_name_identity_gate",
            "shape_role_metadata_gate",
            "shape_transition_role_metadata_gate",
+           "shape_cubit_meshing_scheme_intent_gate",
            "shape_mass_property_crosscheck_summary",
            "shape_cubit_export_package_handoff_gate",
+           "shape_cubit_quality_package_handoff_gate",
+           "shape_cubit_quality_ledger_handoff_gate",
+           "shape_cubit_solver_route_handoff_gate",
+           "shape_cad_handoff_manifest_gate",
+           "shape_submodel_cad_handoff_gate",
+           "shape_curvilinear_mesh_intent_gate",
+           "shape_mesh_environment_handoff_gate",
            "shape_measurement_inventory_summary", "worst_shape_measurement_comparison_rows",
            "shape_measurement_health_summary", "shape_bbox_pair_clearance_summary",
            "shape_parameter_sweep_summary",
@@ -1221,17 +1234,31 @@ def compare_shape_volume_rows(
 def _normalize_volume_measurement_sets(measured_sets):
     if isinstance(measured_sets, dict):
         if "rows" in measured_sets or "volume" in measured_sets:
-            return [("external_cad", measured_sets)]
-        return [(str(label), rows) for label, rows in measured_sets.items()]
+            meta = {key: value for key, value in measured_sets.items() if key != "rows"}
+            return [("external_cad", measured_sets, meta)]
+        return [
+            (
+                str(label),
+                rows,
+                (
+                    {key: value for key, value in rows.items() if key != "rows"}
+                    if isinstance(rows, dict) and "rows" in rows
+                    else {}
+                ),
+            )
+            for label, rows in measured_sets.items()
+        ]
     normalized = []
     for index, item in enumerate(list(measured_sets), start=1):
         if isinstance(item, dict) and "rows" in item:
             label = str(item.get("source") or item.get("label") or f"external_cad_{index}")
             rows = item["rows"]
+            meta = {key: value for key, value in item.items() if key not in {"rows", "source", "label"}}
         else:
             label = f"external_cad_{index}"
             rows = item
-        normalized.append((label, rows))
+            meta = {}
+        normalized.append((label, rows, meta))
     return normalized
 
 
@@ -1249,7 +1276,7 @@ def shape_volume_crosscheck_summary(reference_rows, measured_sets, rtol=1.0e-5):
     reference = _normalize_volume_rows(reference_rows)
     sets = []
     all_rows = []
-    for label, rows in _normalize_volume_measurement_sets(measured_sets):
+    for label, rows, metadata in _normalize_volume_measurement_sets(measured_sets):
         compared = compare_shape_volume_rows(
             reference,
             rows,
@@ -1266,6 +1293,21 @@ def shape_volume_crosscheck_summary(reference_rows, measured_sets, rtol=1.0e-5):
             "status": "ok" if passed == len(compared) else "needs_attention",
             "rows": compared,
         }
+        for key in (
+            "source_artifact_id",
+            "source_artifact_digest",
+            "measurement_method",
+            "body_identity_key",
+            "volume_unit",
+            "cad_kernel",
+            "parameter_set_artifact_id",
+            "parameter_set_digest",
+            "parameter_set_path",
+            "objective_observable_id",
+            "objective_observable_family",
+        ):
+            if key in metadata and metadata[key] is not None:
+                source_summary[key] = str(metadata[key]).strip()
         sets.append(source_summary)
         all_rows.extend(compared)
 
@@ -1282,6 +1324,669 @@ def shape_volume_crosscheck_summary(reference_rows, measured_sets, rtol=1.0e-5):
         "max_volume_rel_error": max(all_errors) if all_errors else 0.0,
         "sources": [item["source"] for item in sets],
         "comparison_sets": sets,
+    }
+
+
+def shape_volume_crosscheck_source_coverage_gate(
+    volume_summary,
+    required_sources=("cubit", "cst_import"),
+    max_allowed_volume_rel_error=None,
+):
+    """Check that external CAD volume crosscheck used the required sources.
+
+    build123d can validate analytic CAD volume internally, but CAE handoff is
+    stronger when at least Cubit and external CAD rows agree on the
+    same named bodies.  This gate sits on top of
+    ``shape_volume_crosscheck_summary`` and prevents a build123d-only or
+    single-kernel replay from masquerading as a multi-source CAD crosscheck.
+    """
+
+    summary = dict(volume_summary)
+    required = [str(source).strip() for source in required_sources if str(source).strip()]
+    sources = [str(source).strip() for source in summary.get("sources", [])]
+    source_set = set(sources)
+    missing_sources = [source for source in required if source not in source_set]
+    max_error = float(summary.get("max_volume_rel_error", math.inf))
+    allowed_error = (
+        None if max_allowed_volume_rel_error is None else float(max_allowed_volume_rel_error)
+    )
+    checks = {
+        "summary_policy_known": summary.get("policy") == "build123d_external_cad_volume_crosscheck",
+        "summary_status_ok": summary.get("status") == "ok"
+        and summary.get("ok_for_cad_roundtrip_volume") is True,
+        "required_sources_present": not missing_sources,
+        "source_count_sufficient": len(source_set) >= len(set(required)),
+        "volume_error_within_limit": allowed_error is None or max_error <= allowed_error,
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "build123d_volume_crosscheck_source_coverage_gate",
+        "status": "ok" if not issues else "needs_attention",
+        "required_sources": required,
+        "sources": sources,
+        "missing_sources": missing_sources,
+        "max_volume_rel_error": max_error,
+        "max_allowed_volume_rel_error": allowed_error,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use this after shape_volume_crosscheck_summary when Cubit and external CAD rows are both required.",
+            "Volume is the common CAD currency; solver-ready promotion still needs labels, files, and mesh/package gates.",
+        ],
+    }
+
+
+def shape_volume_crosscheck_source_identity_gate(
+    volume_summary,
+    *,
+    expected_measurement_methods=None,
+    expected_body_identity_keys=None,
+    expected_source_artifact_ids=None,
+    expected_parameter_set_artifact_ids=None,
+    expected_parameter_set_digests=None,
+    expected_parameter_set_paths=None,
+    expected_objective_observable_ids=None,
+    expected_objective_observable_families=None,
+):
+    """Check source identity metadata for external CAD volume crosschecks.
+
+    Volume values alone cannot prove which CAD body list, export artifact, or
+    measurement API produced each source.  This gate sits after
+    :func:`shape_volume_crosscheck_summary` and requires per-source method,
+    body identity key, and artifact identity when the caller knows them.
+    """
+
+    summary = dict(volume_summary)
+    sets = list(summary.get("comparison_sets", []) or [])
+
+    def norm_map(value):
+        if value is None:
+            return {}
+        return {str(key).strip(): str(val).strip() for key, val in dict(value).items()}
+
+    expected_methods = norm_map(expected_measurement_methods)
+    expected_body_keys = norm_map(expected_body_identity_keys)
+    expected_artifacts = norm_map(expected_source_artifact_ids)
+    expected_parameter_ids = norm_map(expected_parameter_set_artifact_ids)
+    expected_parameter_digests = norm_map(expected_parameter_set_digests)
+    expected_parameter_paths = norm_map(expected_parameter_set_paths)
+    expected_objective_ids = norm_map(expected_objective_observable_ids)
+    expected_objective_families = norm_map(expected_objective_observable_families)
+    by_source = {str(item.get("source", "")).strip(): dict(item) for item in sets}
+
+    def field_matches(expected, field):
+        missing = []
+        mismatched = []
+        for source, expected_value in expected.items():
+            row = by_source.get(source, {})
+            actual = str(row.get(field, "") or "").strip()
+            if not actual:
+                missing.append(source)
+            elif actual != expected_value:
+                mismatched.append(source)
+        return missing, mismatched
+
+    missing_methods, mismatched_methods = field_matches(expected_methods, "measurement_method")
+    missing_body_keys, mismatched_body_keys = field_matches(expected_body_keys, "body_identity_key")
+    missing_artifacts, mismatched_artifacts = field_matches(expected_artifacts, "source_artifact_id")
+    missing_parameter_ids, mismatched_parameter_ids = field_matches(
+        expected_parameter_ids, "parameter_set_artifact_id"
+    )
+    missing_parameter_digests, mismatched_parameter_digests = field_matches(
+        expected_parameter_digests, "parameter_set_digest"
+    )
+    missing_parameter_paths, mismatched_parameter_paths = field_matches(
+        expected_parameter_paths, "parameter_set_path"
+    )
+    missing_objective_ids, mismatched_objective_ids = field_matches(
+        expected_objective_ids, "objective_observable_id"
+    )
+    missing_objective_families, mismatched_objective_families = field_matches(
+        expected_objective_families, "objective_observable_family"
+    )
+    expected_sources = (
+        set(expected_methods)
+        | set(expected_body_keys)
+        | set(expected_artifacts)
+        | set(expected_parameter_ids)
+        | set(expected_parameter_digests)
+        | set(expected_parameter_paths)
+        | set(expected_objective_ids)
+        | set(expected_objective_families)
+    )
+    missing_expected_sources = sorted(expected_sources - set(by_source))
+    checks = {
+        "summary_policy_known": summary.get("policy") == "build123d_external_cad_volume_crosscheck",
+        "summary_status_ok": summary.get("status") == "ok",
+        "expected_sources_present": not missing_expected_sources,
+        "measurement_methods_recorded_when_expected": not missing_methods,
+        "expected_measurement_methods_match": not mismatched_methods,
+        "body_identity_keys_recorded_when_expected": not missing_body_keys,
+        "expected_body_identity_keys_match": not mismatched_body_keys,
+        "source_artifact_ids_recorded_when_expected": not missing_artifacts,
+        "expected_source_artifact_ids_match": not mismatched_artifacts,
+        "parameter_set_artifact_ids_recorded_when_expected": not missing_parameter_ids,
+        "expected_parameter_set_artifact_ids_match": not mismatched_parameter_ids,
+        "parameter_set_digests_recorded_when_expected": not missing_parameter_digests,
+        "expected_parameter_set_digests_match": not mismatched_parameter_digests,
+        "parameter_set_paths_recorded_when_expected": not missing_parameter_paths,
+        "expected_parameter_set_paths_match": not mismatched_parameter_paths,
+        "objective_observable_ids_recorded_when_expected": not missing_objective_ids,
+        "expected_objective_observable_ids_match": not mismatched_objective_ids,
+        "objective_observable_families_recorded_when_expected": not missing_objective_families,
+        "expected_objective_observable_families_match": not mismatched_objective_families,
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "build123d_volume_crosscheck_source_identity_gate",
+        "status": "ok" if not issues else "needs_attention",
+        "sources": sorted(by_source),
+        "expected_measurement_methods": expected_methods,
+        "expected_body_identity_keys": expected_body_keys,
+        "expected_source_artifact_ids": expected_artifacts,
+        "expected_parameter_set_artifact_ids": expected_parameter_ids,
+        "expected_parameter_set_digests": expected_parameter_digests,
+        "expected_parameter_set_paths": expected_parameter_paths,
+        "expected_objective_observable_ids": expected_objective_ids,
+        "expected_objective_observable_families": expected_objective_families,
+        "missing_expected_sources": missing_expected_sources,
+        "missing_measurement_methods": missing_methods,
+        "mismatched_measurement_methods": mismatched_methods,
+        "missing_body_identity_keys": missing_body_keys,
+        "mismatched_body_identity_keys": mismatched_body_keys,
+        "missing_source_artifact_ids": missing_artifacts,
+        "mismatched_source_artifact_ids": mismatched_artifacts,
+        "missing_parameter_set_artifact_ids": missing_parameter_ids,
+        "mismatched_parameter_set_artifact_ids": mismatched_parameter_ids,
+        "missing_parameter_set_digests": missing_parameter_digests,
+        "mismatched_parameter_set_digests": mismatched_parameter_digests,
+        "missing_parameter_set_paths": missing_parameter_paths,
+        "mismatched_parameter_set_paths": mismatched_parameter_paths,
+        "missing_objective_observable_ids": missing_objective_ids,
+        "mismatched_objective_observable_ids": mismatched_objective_ids,
+        "missing_objective_observable_families": missing_objective_families,
+        "mismatched_objective_observable_families": mismatched_objective_families,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Run this after volume crosscheck when Cubit, CST, or another CAD row set supplies source metadata.",
+            "A volume match is not reusable if the source artifact id, measurement method, or body identity key drifted.",
+            "For parametric CAD or optimization loops, bind the parameter-set artifact and objective observable identity before reusing volume rows.",
+        ],
+    }
+
+
+def shape_cad_route_source_contract_gate(
+    shape_rows,
+    external_crosscheck_summary,
+    *,
+    required_source_groups=(("cubit", "coreform_cubit", "coreform"), ("external_cad", "cst_import")),
+    expected_route="cubit_hex_or_mixed_path",
+    expected_authoring_sources=("build123d", "build123d_occt", "occt"),
+    disallowed_routes=("netgen_tri_tet_path", "tet_only"),
+    expected_length_unit=None,
+    expected_area_unit=None,
+    expected_volume_unit=None,
+    required_metadata_fields=(),
+):
+    """Check build123d CAD rows before Cubit/CAD cross-validation handoff.
+
+    This gate ties together three pieces of evidence that otherwise drift apart
+    in loop artifacts: build123d/OCCT authored shape rows, an external CAD
+    volume or mass-property crosscheck, and the downstream Cubit hex/mixed mesh
+    route.  It is deliberately a policy gate; the numerical tolerance still
+    lives in ``shape_volume_crosscheck_summary`` or
+    ``shape_mass_property_crosscheck_summary``.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    summary = dict(external_crosscheck_summary or {})
+    route = str(expected_route or "").strip()
+    accepted_authors = {
+        str(source).strip().lower()
+        for source in expected_authoring_sources
+        if str(source).strip()
+    }
+    blocked_routes = {
+        str(item).strip().lower()
+        for item in disallowed_routes
+        if str(item).strip()
+    }
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    def _norm(value):
+        return str(value or "").strip()
+
+    def _norm_lower(value):
+        return _norm(value).lower()
+
+    def _norm_unit(value):
+        return _norm_lower(value).replace(" ", "")
+
+    def _row_unit(row, kind):
+        key_groups = {
+            "length": ("length_unit", "unit_length", "lengthUnit"),
+            "area": ("area_unit", "unit_area", "areaUnit"),
+            "volume": ("volume_unit", "unit_volume", "volumeUnit"),
+        }
+        units = row.get("units")
+        for key in key_groups[kind]:
+            value = row.get(key)
+            if value:
+                return _norm_unit(value)
+        if isinstance(units, dict):
+            for key in key_groups[kind]:
+                value = units.get(key) or units.get(kind)
+                if value:
+                    return _norm_unit(value)
+        return ""
+
+    names = [_norm(row.get("name")) for row in rows]
+    geometry_ids = [_norm(row.get("geometry_id")) for row in rows]
+    authoring_sources = [
+        _norm(row.get("authoring_source") or row.get("source_kind") or row.get("source"))
+        for row in rows
+    ]
+    routes = [
+        _norm(row.get("mesh_route") or row.get("routing_hint"))
+        for row in rows
+    ]
+    length_units = sorted({unit for unit in (_row_unit(row, "length") for row in rows) if unit})
+    area_units = sorted({unit for unit in (_row_unit(row, "area") for row in rows) if unit})
+    volume_units = sorted({unit for unit in (_row_unit(row, "volume") for row in rows) if unit})
+    expected_length_unit_norm = _norm_unit(expected_length_unit)
+    expected_area_unit_norm = _norm_unit(expected_area_unit)
+    expected_volume_unit_norm = _norm_unit(expected_volume_unit)
+    route_set = {item for item in routes if item}
+    summary_policy = summary.get("policy")
+    summary_sources = [_norm(source) for source in summary.get("sources", [])]
+    summary_source_lut = {_norm_lower(source): source for source in summary_sources}
+    required_groups = [
+        tuple(_norm(source) for source in group if _norm(source))
+        for group in required_source_groups
+    ]
+    required_groups = [group for group in required_groups if group]
+    required_metadata = [
+        _norm(field)
+        for field in required_metadata_fields
+        if _norm(field)
+    ]
+    missing_metadata_by_shape = {
+        name or f"shape_{index}": [
+            field for field in required_metadata
+            if not _norm(row.get(field))
+        ]
+        for index, (name, row) in enumerate(zip(names, rows), start=1)
+    }
+    missing_metadata_by_shape = {
+        name: missing
+        for name, missing in missing_metadata_by_shape.items()
+        if missing
+    }
+    matched_groups = []
+    missing_groups = []
+    for group in required_groups:
+        match = next(
+            (summary_source_lut[_norm_lower(source)] for source in group if _norm_lower(source) in summary_source_lut),
+            None,
+        )
+        if match is None:
+            missing_groups.append(list(group))
+        else:
+            matched_groups.append({"accepted": list(group), "matched": match})
+
+    summary_known = summary_policy in {
+        "build123d_external_cad_volume_crosscheck",
+        "build123d_external_cad_volume_area_bbox_crosscheck",
+    }
+    summary_ok = summary.get("status") == "ok" and (
+        summary.get("ok_for_cad_roundtrip_volume") is True
+        or summary.get("ok_for_cad_roundtrip_mass_properties") is True
+    )
+    route_lower = {_norm_lower(item) for item in route_set}
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "authoring_source_recorded": all(bool(source) for source in authoring_sources),
+        "authoring_source_is_build123d": all(
+            _norm_lower(source) in accepted_authors for source in authoring_sources
+        ),
+        "mesh_route_recorded": all(bool(item) for item in routes),
+        "mesh_route_matches_expected": route_set == {route},
+        "disallowed_routes_absent": not (route_lower & blocked_routes),
+        "external_crosscheck_policy_known": summary_known,
+        "external_crosscheck_ok": summary_ok,
+        "external_crosscheck_sources_recorded": bool(summary_sources),
+        "required_source_groups_present": not missing_groups,
+    }
+    if required_metadata:
+        checks["required_shape_metadata_present"] = not missing_metadata_by_shape
+    if length_units or area_units or volume_units:
+        checks["shape_unit_metadata_unique_when_present"] = (
+            len(length_units) <= 1 and len(area_units) <= 1 and len(volume_units) <= 1
+        )
+    if expected_length_unit_norm:
+        checks["shape_length_unit_expected_ok"] = length_units == [expected_length_unit_norm]
+    if expected_area_unit_norm:
+        checks["shape_area_unit_expected_ok"] = area_units == [expected_area_unit_norm]
+    if expected_volume_unit_norm:
+        checks["shape_volume_unit_expected_ok"] = volume_units == [expected_volume_unit_norm]
+    issues = []
+    if not checks["shape_rows_have_volume_area_bbox"]:
+        issues.append("shape rows must carry volume, area, and bounding_box")
+    if not checks["authoring_source_is_build123d"]:
+        issues.append("shape rows must record a build123d/OCCT authoring source")
+    if not checks["mesh_route_matches_expected"]:
+        issues.append("shape rows must route to the expected Cubit hex/mixed mesh lane")
+    if not checks["external_crosscheck_ok"]:
+        issues.append("external CAD volume or mass-property crosscheck is missing or not ok")
+    if missing_groups:
+        issues.append("external crosscheck is missing one or more required source groups")
+    if missing_metadata_by_shape:
+        issues.append("shape rows are missing required CAD provenance metadata")
+    if (
+        expected_length_unit_norm
+        and checks.get("shape_length_unit_expected_ok") is False
+        or expected_area_unit_norm
+        and checks.get("shape_area_unit_expected_ok") is False
+        or expected_volume_unit_norm
+        and checks.get("shape_volume_unit_expected_ok") is False
+    ):
+        issues.append("shape rows must carry the expected CAD units before cross-source volume reuse")
+
+    return {
+        "policy": "build123d_cad_route_source_contract_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "shape_names": names,
+        "geometry_ids": sorted(set(geometry_ids)),
+        "authoring_sources": sorted(set(source for source in authoring_sources if source)),
+        "routes": sorted(route_set),
+        "units": {"length": length_units, "area": area_units, "volume": volume_units},
+        "expected_units": {
+            "length": expected_length_unit_norm or None,
+            "area": expected_area_unit_norm or None,
+            "volume": expected_volume_unit_norm or None,
+        },
+        "expected_route": route,
+        "external_crosscheck_policy": summary_policy,
+        "external_crosscheck_sources": summary_sources,
+        "required_source_groups": [list(group) for group in required_groups],
+        "matched_source_groups": matched_groups,
+        "missing_source_groups": missing_groups,
+        "required_metadata_fields": required_metadata,
+        "missing_required_metadata_by_shape": missing_metadata_by_shape,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use after volume or mass-property crosscheck, before Cubit/CST/solver-ready promotion.",
+            "build123d owns CAD intent and authoring identity; Cubit owns hex/mixed mesh evidence.",
+            "Tet-only Netgen routes remain useful, but they should not be mixed into this Cubit route gate.",
+            "Record length/area/volume units when this row will be compared with Cubit, CST, or external CAD volume evidence.",
+            "When solver-ready promotion needs provenance, require CAD row fields such as recipe_id, cad_kernel, cad_kernel_version, script_path, and export_id.",
+        ],
+    }
+
+
+def shape_external_cad_volume_evidence_package_gate(
+    shape_rows,
+    volume_summary,
+    *,
+    required_sources=("cubit", "cst_import"),
+    max_allowed_volume_rel_error=None,
+    expected_measurement_methods=None,
+    expected_body_identity_keys=None,
+    expected_source_artifact_ids=None,
+    expected_parameter_set_artifact_ids=None,
+    expected_parameter_set_digests=None,
+    expected_parameter_set_paths=None,
+    expected_objective_observable_ids=None,
+    expected_objective_observable_families=None,
+    expected_route="cubit_hex_or_mixed_path",
+    expected_length_unit=None,
+    expected_area_unit=None,
+    expected_volume_unit=None,
+    required_metadata_fields=(),
+):
+    """Bundle external CAD volume evidence before Cubit/CST reuse.
+
+    This is the build123d-side package gate for slots where a geometry claim is
+    stronger than "OCCT volume matched a number": the same build123d shape rows
+    must have a valid multi-source volume summary, explicit source identity for
+    each CAD exporter/importer, and a route contract for the Cubit hex/mixed
+    lane.  It composes the narrower gates instead of replacing them.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    summary = dict(volume_summary or {})
+    required = tuple(str(source).strip() for source in required_sources if str(source).strip())
+    coverage_gate = shape_volume_crosscheck_source_coverage_gate(
+        summary,
+        required_sources=required,
+        max_allowed_volume_rel_error=max_allowed_volume_rel_error,
+    )
+    identity_gate = shape_volume_crosscheck_source_identity_gate(
+        summary,
+        expected_measurement_methods=expected_measurement_methods,
+        expected_body_identity_keys=expected_body_identity_keys,
+        expected_source_artifact_ids=expected_source_artifact_ids,
+        expected_parameter_set_artifact_ids=expected_parameter_set_artifact_ids,
+        expected_parameter_set_digests=expected_parameter_set_digests,
+        expected_parameter_set_paths=expected_parameter_set_paths,
+        expected_objective_observable_ids=expected_objective_observable_ids,
+        expected_objective_observable_families=expected_objective_observable_families,
+    )
+    route_gate = shape_cad_route_source_contract_gate(
+        rows,
+        summary,
+        required_source_groups=tuple((source,) for source in required),
+        expected_route=expected_route,
+        expected_length_unit=expected_length_unit,
+        expected_area_unit=expected_area_unit,
+        expected_volume_unit=expected_volume_unit,
+        required_metadata_fields=required_metadata_fields,
+    )
+
+    comparison_sets = [dict(item) for item in summary.get("comparison_sets", []) or []]
+    summary_sources = sorted(str(source).strip() for source in summary.get("sources", []) if str(source).strip())
+    coverage_sources = sorted(str(source).strip() for source in coverage_gate.get("sources", []) if str(source).strip())
+    identity_sources = sorted(str(source).strip() for source in identity_gate.get("sources", []) if str(source).strip())
+    route_sources = sorted(
+        str(source).strip()
+        for source in route_gate.get("external_crosscheck_sources", [])
+        if str(source).strip()
+    )
+
+    def _has(item, key):
+        return bool(str(item.get(key, "") or "").strip())
+
+    artifact_ids = [
+        str(item.get("source_artifact_id", "") or "").strip()
+        for item in comparison_sets
+        if str(item.get("source_artifact_id", "") or "").strip()
+    ]
+    checks = {
+        "shape_rows_present": bool(rows),
+        "volume_summary_policy_known": summary.get("policy") == "build123d_external_cad_volume_crosscheck",
+        "volume_summary_ok": summary.get("status") == "ok"
+        and summary.get("ok_for_cad_roundtrip_volume") is True,
+        "coverage_gate_ok": coverage_gate.get("status") == "ok",
+        "source_identity_gate_ok": identity_gate.get("status") == "ok",
+        "route_contract_gate_ok": route_gate.get("status") == "ok",
+        "reference_row_count_matches_shape_rows": int(summary.get("n_reference_rows", -1)) == len(rows),
+        "source_identity_metadata_complete": bool(comparison_sets)
+        and all(
+            _has(item, "measurement_method")
+            and _has(item, "body_identity_key")
+            and _has(item, "source_artifact_id")
+            for item in comparison_sets
+        ),
+        "source_artifact_ids_unique": len(set(artifact_ids)) == len(artifact_ids),
+        "gate_source_sets_consistent": summary_sources == coverage_sources == identity_sources
+        and set(route_sources) == set(summary_sources),
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "build123d_external_cad_volume_evidence_package_gate",
+        "status": "ok" if not issues else "needs_attention",
+        "required_sources": list(required),
+        "sources": summary_sources,
+        "coverage_gate_status": coverage_gate.get("status"),
+        "source_identity_gate_status": identity_gate.get("status"),
+        "route_contract_gate_status": route_gate.get("status"),
+        "max_volume_rel_error": summary.get("max_volume_rel_error"),
+        "source_artifact_ids": artifact_ids,
+        "coverage_gate": coverage_gate,
+        "source_identity_gate": identity_gate,
+        "route_contract_gate": route_gate,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use after shape_volume_crosscheck_summary when Cubit and external CAD rows are both part of the claim.",
+            "This package gate keeps volume values, source identity, body identity, and Cubit hex/mixed route intent together.",
+            "It is CAD evidence only; Cubit still owns mesh quality, order, and .vol inventory evidence.",
+        ],
+    }
+
+
+def cst_cad_volume_export_manifest_gate(
+    manifest,
+    *,
+    expected_geometry_id=None,
+    expected_export_id=None,
+    required_shape_names=(),
+):
+    """Check CST CAD volume rows before using them in build123d/Cubit crosschecks.
+
+    CST CAD/solid volume exports are useful as an external-CAD source for
+    ``shape_volume_crosscheck_summary``, but only after source, identity, unit,
+    and body names are explicit.  This gate returns normalized metre-cubed rows
+    that can be passed on as a ``cst_import`` measured set.
+    """
+
+    data = dict(manifest)
+    rows = list(data.get("volume_rows") or data.get("rows") or data.get("cad_volume_rows") or [])
+    if not rows:
+        raise ValueError("manifest must include volume_rows/rows")
+
+    def _norm(value):
+        return str(value or "").strip()
+
+    def _status_ok(value):
+        return str(value or "ok").strip().lower().replace("-", "_") in {
+            "ok",
+            "pass",
+            "passed",
+            "verified",
+            "exported",
+        }
+
+    unit_scales = {
+        "m3": 1.0,
+        "m^3": 1.0,
+        "meter^3": 1.0,
+        "metre^3": 1.0,
+        "mm3": 1.0e-9,
+        "mm^3": 1.0e-9,
+        "cm3": 1.0e-6,
+        "cm^3": 1.0e-6,
+    }
+
+    manifest_unit = _norm(data.get("volume_unit") or data.get("unit") or "m^3").lower().replace(" ", "")
+    normalized_rows = []
+    unknown_unit_rows = []
+    missing_name_rows = []
+    nonpositive_rows = []
+    bad_status_rows = []
+    for index, row in enumerate(rows, start=1):
+        name = _norm(row.get("name") or row.get("solid_name") or row.get("body_name"))
+        if not name:
+            missing_name_rows.append(index)
+        row_unit = _norm(row.get("volume_unit") or row.get("unit") or manifest_unit).lower().replace(" ", "")
+        if row_unit not in unit_scales:
+            unknown_unit_rows.append({"row": index, "unit": row_unit})
+            scale = math.nan
+        else:
+            scale = unit_scales[row_unit]
+        if "volume_m3" in row:
+            volume_m3 = float(row["volume_m3"])
+        else:
+            volume = row.get("volume", row.get("volume_value"))
+            if volume is None:
+                volume = row.get("cad_volume")
+            volume_m3 = float(volume) * scale if volume is not None and math.isfinite(scale) else math.nan
+        if not math.isfinite(volume_m3) or volume_m3 <= 0.0:
+            nonpositive_rows.append(index)
+        if not _status_ok(row.get("status", data.get("status", "ok"))):
+            bad_status_rows.append(index)
+        normalized_rows.append(
+            {
+                "name": name,
+                "volume": volume_m3,
+                "volume_m3": volume_m3,
+                "source_unit": row_unit,
+                "source_tool": "CST",
+                "row": index,
+            }
+        )
+
+    names = [row["name"] for row in normalized_rows if row["name"]]
+    duplicate_names = sorted(name for name, count in Counter(names).items() if count > 1)
+    required = [_norm(name) for name in required_shape_names if _norm(name)]
+    missing_required = [name for name in required if name not in set(names)]
+    source_key = str(data.get("source_tool", "")).strip().lower()
+    geometry_id = _norm(data.get("geometry_id"))
+    export_id = _norm(data.get("export_id"))
+    project_id = _norm(data.get("project_id"))
+    run_id = _norm(data.get("run_id"))
+    checks = {
+        "source_tool_is_cst": "cst" in source_key,
+        "manifest_identity_present": bool(project_id and run_id and export_id and geometry_id),
+        "expected_geometry_id_matches": expected_geometry_id is None or geometry_id == str(expected_geometry_id),
+        "expected_export_id_matches": expected_export_id is None or export_id == str(expected_export_id),
+        "volume_rows_present": bool(rows),
+        "volume_units_known": not unknown_unit_rows,
+        "shape_names_present": not missing_name_rows,
+        "shape_names_unique": not duplicate_names,
+        "required_shape_names_present": not missing_required,
+        "positive_volumes": not nonpositive_rows,
+        "row_status_ok": not bad_status_rows,
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cst_cad_volume_export_manifest_gate",
+        "status": "ok" if not issues else "needs_attention",
+        "project_id": project_id,
+        "run_id": run_id,
+        "export_id": export_id,
+        "geometry_id": geometry_id,
+        "source_tool": data.get("source_tool"),
+        "volume_unit": manifest_unit,
+        "required_shape_names": required,
+        "shape_names": names,
+        "duplicate_shape_names": duplicate_names,
+        "missing_required_shape_names": missing_required,
+        "unknown_unit_rows": unknown_unit_rows,
+        "missing_name_rows": missing_name_rows,
+        "nonpositive_rows": nonpositive_rows,
+        "bad_status_rows": bad_status_rows,
+        "normalized_rows": normalized_rows,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use normalized_rows as the CST measured set for shape_volume_crosscheck_summary.",
+            "Volume is a CAD handoff gate; solver-ready status still needs mesh, ports, or physics-specific manifests.",
+        ],
     }
 
 
@@ -1483,6 +2188,10 @@ def shape_transition_role_metadata_gate(
     transition_role="mesh_transition",
     required_transition_kind="pyramid",
     required_connected_roles=("hex_region", "tet_region"),
+    required_surface_kinds=(),
+    required_interface_roles=(),
+    expected_downstream_material_names=(),
+    allowed_zero_downstream_material_names=(),
     require_positive_volume=True,
     source_label="build123d",
 ):
@@ -1490,7 +2199,8 @@ def shape_transition_role_metadata_gate(
 
     build123d does not create Cubit pyramid elements, but it can preserve the
     solver intent before STEP/Cubit handoff: which body is the hex-led region,
-    which body is the tet region, and which body is the transition envelope.
+    which body is the tet region, which body is the transition envelope, and
+    which downstream Cubit material/block labels should appear in sidecars.
     """
 
     def as_list(value):
@@ -1527,6 +2237,27 @@ def shape_transition_role_metadata_gate(
             or item.get("transition_between_roles")
             or item.get("transition_between")
         )
+        surface_kinds = as_list(
+            item.get("surface_kinds")
+            or item.get("expected_surface_kinds")
+            or item.get("mesh_surface_kinds")
+            or item.get("surface_family_intent")
+        )
+        interface_roles = as_list(
+            item.get("interface_roles")
+            or item.get("expected_interface_roles")
+            or item.get("transition_interface_roles")
+            or item.get("mesh_interface_roles")
+            or item.get("interface_role_intent")
+        )
+        downstream_material_name = str(
+            item.get("downstream_material_name")
+            or item.get("cubit_material_name")
+            or item.get("material_block_name")
+            or item.get("sidecar_material_name")
+            or item.get("expected_material_name")
+            or ""
+        ).strip()
         volume = item.get("volume")
         normalized.append({
             "name": name,
@@ -1534,6 +2265,9 @@ def shape_transition_role_metadata_gate(
             "material": material,
             "transition_kind": transition_kind,
             "connected_roles": connected_roles,
+            "surface_kinds": surface_kinds,
+            "interface_roles": interface_roles,
+            "downstream_material_name": downstream_material_name,
             "volume": None if volume is None else float(volume),
             "source_row": item,
         })
@@ -1542,13 +2276,48 @@ def shape_transition_role_metadata_gate(
     roles = {row["role"] for row in normalized if row["role"]}
     required_role_set = {str(role).strip() for role in required_roles if str(role).strip()}
     connected_role_set = {str(role).strip() for role in required_connected_roles if str(role).strip()}
+    required_surface_kind_set = {
+        str(kind).strip() for kind in required_surface_kinds if str(kind).strip()
+    }
+    required_interface_role_set = {
+        str(role).strip()
+        for role in required_interface_roles
+        if str(role).strip()
+    }
+    expected_downstream_material_set = {
+        str(name).strip()
+        for name in expected_downstream_material_names
+        if str(name).strip()
+    }
+    allowed_zero_downstream_material_set = {
+        str(name).strip()
+        for name in allowed_zero_downstream_material_names
+        if str(name).strip()
+    }
     transition_rows = [row for row in normalized if row["role"] == transition_role]
     transition_kinds = {row["transition_kind"] for row in transition_rows if row["transition_kind"]}
     connected_roles_union = {
         role for row in transition_rows for role in row["connected_roles"] if role
     }
+    transition_surface_kinds = {
+        kind for row in transition_rows for kind in row["surface_kinds"] if kind
+    }
+    transition_interface_roles = {
+        role for row in transition_rows for role in row["interface_roles"] if role
+    }
+    downstream_material_names = {
+        row["downstream_material_name"] for row in normalized if row["downstream_material_name"]
+    }
     rows_missing_material = [
         row["name"] for row in normalized if row["name"] and not row["material"]
+    ]
+    rows_missing_downstream_material_name = [
+        row["name"] for row in normalized if row["name"] and not row["downstream_material_name"]
+    ]
+    rows_missing_interface_roles = [
+        row["name"]
+        for row in transition_rows
+        if row["name"] and required_interface_role_set and not row["interface_roles"]
     ]
     rows_missing_volume = [
         row["name"] for row in normalized if row["name"] and row["volume"] is None
@@ -1559,6 +2328,15 @@ def shape_transition_role_metadata_gate(
         if row["name"] and row["volume"] is not None and row["volume"] <= 0.0
     ]
     missing_required_roles = sorted(required_role_set - roles)
+    missing_expected_downstream_material_names = sorted(
+        expected_downstream_material_set - downstream_material_names
+    )
+    missing_required_interface_roles = sorted(
+        required_interface_role_set - transition_interface_roles
+    )
+    missing_allowed_zero_downstream_material_names = sorted(
+        allowed_zero_downstream_material_set - downstream_material_names
+    )
     duplicate_names = sorted(
         name for name, count in Counter(names).items() if count > 1
     )
@@ -1570,6 +2348,24 @@ def shape_transition_role_metadata_gate(
         "transition_kind_recorded": bool(transition_kinds),
         "transition_kind_matches": transition_kinds == {str(required_transition_kind)},
         "transition_connects_required_roles": connected_role_set.issubset(connected_roles_union),
+        "required_surface_kinds_present": (
+            not required_surface_kind_set
+            or required_surface_kind_set.issubset(transition_surface_kinds)
+        ),
+        "interface_roles_recorded": (
+            not required_interface_role_set
+            or bool(transition_interface_roles)
+        ),
+        "required_interface_roles_present": not missing_required_interface_roles,
+        "downstream_material_names_recorded": (
+            not expected_downstream_material_set
+            or not rows_missing_downstream_material_name
+        ),
+        "expected_downstream_material_names_present": not missing_expected_downstream_material_names,
+        "allowed_zero_downstream_material_names_declared": (
+            not allowed_zero_downstream_material_set
+            or not missing_allowed_zero_downstream_material_names
+        ),
         "all_rows_have_material": not rows_missing_material,
         "all_rows_have_volume": not rows_missing_volume,
         "all_rows_have_positive_volume": not rows_nonpositive_volume if require_positive_volume else True,
@@ -1588,7 +2384,19 @@ def shape_transition_role_metadata_gate(
         "required_transition_kind": str(required_transition_kind),
         "connected_roles": sorted(connected_roles_union),
         "required_connected_roles": sorted(connected_role_set),
+        "surface_kinds": sorted(transition_surface_kinds),
+        "required_surface_kinds": sorted(required_surface_kind_set),
+        "interface_roles": sorted(transition_interface_roles),
+        "required_interface_roles": sorted(required_interface_role_set),
+        "missing_required_interface_roles": missing_required_interface_roles,
+        "downstream_material_names": sorted(downstream_material_names),
+        "expected_downstream_material_names": sorted(expected_downstream_material_set),
+        "allowed_zero_downstream_material_names": sorted(allowed_zero_downstream_material_set),
+        "missing_expected_downstream_material_names": missing_expected_downstream_material_names,
+        "missing_allowed_zero_downstream_material_names": missing_allowed_zero_downstream_material_names,
         "rows_missing_material": sorted(rows_missing_material),
+        "rows_missing_downstream_material_name": sorted(rows_missing_downstream_material_name),
+        "rows_missing_interface_roles": sorted(rows_missing_interface_roles),
         "rows_missing_volume": sorted(rows_missing_volume),
         "rows_nonpositive_volume": sorted(rows_nonpositive_volume),
         "checks": checks,
@@ -1596,8 +2404,265 @@ def shape_transition_role_metadata_gate(
         "version_note": (
             "Run this on build123d assembly metadata before handing a future "
             "hex+tet model to Cubit; the pyramid is a mesh transition contract, "
-            "not a build123d primitive requirement."
+            "not a build123d primitive requirement.  When the downstream Cubit "
+            "path will verify mixed surface families, preserve that surface "
+            "family intent here before STEP export.  If the downstream Cubit "
+            "sidecar will verify material/block labels, record those expected "
+            "downstream material names here rather than relying on CAD body "
+            "names to match by accident.  If the downstream Cubit package will "
+            "verify hex-to-transition and transition-to-tet interface roles, "
+            "record those role names in the CAD-side transition manifest too."
         ),
+    }
+
+
+def shape_cubit_meshing_scheme_intent_gate(
+    shape_rows,
+    *,
+    scheme_trace_gate=None,
+    required_roles=("hex_region", "mesh_transition", "tet_region"),
+    expected_scheme_by_role=None,
+    required_command_fragments=("imprint all", "merge all", "export netgen"),
+    expected_export_order=None,
+    expected_trace_id=None,
+    expected_export_output_artifact_id=None,
+    expected_export_output_digest=None,
+    expected_export_output_path=None,
+    require_downstream_export_output_artifact=False,
+    expected_route="cubit_hex_or_mixed_path",
+    source_label="build123d",
+):
+    """Check CAD-side Cubit meshing-scheme intent before Cubit owns the mesh.
+
+    build123d can say which CAD roles are intended for mapped hex, tetmesh, or
+    transition meshing, but Cubit still owns the actual volume ids and exported
+    mesh.  This gate keeps the CAD-side role-to-scheme intent tied to the
+    downstream Cubit scheme trace id and, when available, to
+    ``cubit_meshing_scheme_trace_gate`` evidence.
+    """
+
+    def text(value):
+        return str(value or "").strip()
+
+    def as_list(value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [part.strip() for part in value.replace(";", ",").split(",") if part.strip()]
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    def norm_scheme(value):
+        value = text(value).lower()
+        aliases = {
+            "mapped": "map",
+            "mapped_hex": "map",
+            "hex_map": "map",
+            "tet": "tetmesh",
+            "tetrahedral": "tetmesh",
+            "tet_mesh": "tetmesh",
+        }
+        return aliases.get(value, value)
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+
+    expected_role_scheme = {
+        text(role): norm_scheme(scheme)
+        for role, scheme in (expected_scheme_by_role or {}).items()
+        if text(role) and text(scheme)
+    }
+    if not expected_role_scheme:
+        expected_role_scheme = {
+            "hex_region": "map",
+            "mesh_transition": "tetmesh",
+            "tet_region": "tetmesh",
+        }
+    required_role_set = {text(role) for role in required_roles if text(role)}
+    required_fragments = [fragment.lower() for fragment in as_list(required_command_fragments)]
+    expected_order = None if expected_export_order is None else int(expected_export_order)
+    expected_trace = None if expected_trace_id is None else text(expected_trace_id)
+    route = text(expected_route)
+
+    normalized = []
+    command_fragments = set()
+    trace_ids = set()
+    export_orders = set()
+    route_values = set()
+    for row in rows:
+        name = text(row.get("name"))
+        role = text(row.get("role") or row.get("solver_role") or row.get("region_role"))
+        scheme = norm_scheme(
+            row.get("expected_cubit_scheme")
+            or row.get("cubit_scheme")
+            or row.get("mesh_scheme")
+            or row.get("expected_mesh_scheme")
+            or row.get("downstream_mesh_scheme")
+        )
+        route_value = text(row.get("mesh_route") or row.get("routing_hint"))
+        trace_id = text(
+            row.get("downstream_meshing_trace_id")
+            or row.get("cubit_meshing_trace_id")
+            or row.get("scheme_trace_id")
+            or row.get("meshing_trace_id")
+        )
+        export_order = row.get("expected_cubit_export_order", row.get("export_order"))
+        if export_order is not None and text(export_order):
+            export_orders.add(int(export_order))
+        if route_value:
+            route_values.add(route_value)
+        if trace_id:
+            trace_ids.add(trace_id)
+        command_fragments.update(fragment.lower() for fragment in as_list(
+            row.get("expected_cubit_command_fragments")
+            or row.get("required_command_fragments")
+            or row.get("command_fragments")
+        ))
+        normalized.append(
+            {
+                "name": name,
+                "role": role,
+                "expected_cubit_scheme": scheme,
+                "mesh_route": route_value,
+                "downstream_meshing_trace_id": trace_id,
+                "expected_cubit_export_order": export_order,
+            }
+        )
+
+    names = [row["name"] for row in normalized if row["name"]]
+    roles = {row["role"] for row in normalized if row["role"]}
+    role_scheme = {
+        row["role"]: row["expected_cubit_scheme"]
+        for row in normalized
+        if row["role"] and row["expected_cubit_scheme"]
+    }
+    missing_required_roles = sorted(required_role_set - roles)
+    missing_expected_scheme_roles = sorted(
+        role for role in expected_role_scheme if role_scheme.get(role) != expected_role_scheme[role]
+    )
+    missing_fragments = sorted(set(required_fragments) - command_fragments)
+    duplicate_names = sorted(name for name, count in Counter(names).items() if count > 1)
+
+    downstream = dict(scheme_trace_gate or {})
+    downstream_checks = downstream.get("checks", {})
+    if not isinstance(downstream_checks, dict):
+        downstream_checks = {}
+    downstream_commands = "\n".join(
+        str(command).lower()
+        for command in downstream.get("commands", [])
+    )
+    downstream_trace_id = text(downstream.get("trace_id"))
+    downstream_export_order = downstream.get("export_order")
+    downstream_export_order_int = (
+        None if downstream_export_order is None or text(downstream_export_order) == "" else int(downstream_export_order)
+    )
+    downstream_output_artifact_id = text(downstream.get("export_output_artifact_id"))
+    downstream_output_digest = text(downstream.get("export_output_digest"))
+    downstream_output_path = text(downstream.get("export_output_path"))
+    expected_output_artifact = (
+        None if expected_export_output_artifact_id is None else text(expected_export_output_artifact_id)
+    )
+    expected_output_digest = (
+        None if expected_export_output_digest is None else text(expected_export_output_digest)
+    )
+    expected_output_path = (
+        None if expected_export_output_path is None else text(expected_export_output_path)
+    )
+    output_required = bool(
+        require_downstream_export_output_artifact
+        or expected_output_artifact is not None
+        or expected_output_digest is not None
+        or expected_output_path is not None
+    )
+
+    checks = {
+        "shape_rows_present": bool(normalized),
+        "shape_names_recorded": len(names) == len(normalized),
+        "shape_names_unique": not duplicate_names,
+        "required_roles_present": not missing_required_roles,
+        "mesh_route_recorded": all(bool(row["mesh_route"]) for row in normalized),
+        "mesh_route_matches_expected": route_values == {route},
+        "scheme_intent_recorded": all(bool(row["expected_cubit_scheme"]) for row in normalized),
+        "expected_scheme_by_role_matches": not missing_expected_scheme_roles,
+        "downstream_trace_id_recorded": bool(trace_ids),
+        "expected_trace_id_matches": expected_trace is None or trace_ids == {expected_trace},
+        "command_fragments_recorded": bool(command_fragments),
+        "required_command_fragments_present": not missing_fragments,
+        "export_order_recorded": expected_order is None or export_orders == {expected_order},
+        "expected_export_order_matches": expected_order is None or export_orders == {expected_order},
+    }
+    if downstream:
+        checks["downstream_scheme_trace_gate_ok"] = (
+            downstream.get("policy") == "cubit_meshing_scheme_trace_gate"
+            and downstream.get("status") == "ok"
+        )
+        checks["downstream_trace_id_matches"] = (
+            not trace_ids or downstream_trace_id in trace_ids
+        )
+        checks["downstream_export_order_matches"] = (
+            expected_order is None or downstream_export_order_int == expected_order
+        )
+        checks["downstream_command_fragments_present"] = all(
+            fragment in downstream_commands for fragment in required_fragments
+        )
+        checks["downstream_export_output_artifact_id_recorded_when_required"] = (
+            not output_required or bool(downstream_output_artifact_id)
+        )
+        checks["downstream_export_output_digest_recorded_when_required"] = (
+            not output_required or bool(downstream_output_digest)
+        )
+        checks["downstream_export_output_path_recorded_when_required"] = (
+            not output_required or bool(downstream_output_path)
+        )
+        checks["downstream_export_output_artifact_id_matches"] = (
+            expected_output_artifact is None or downstream_output_artifact_id == expected_output_artifact
+        )
+        checks["downstream_export_output_digest_matches"] = (
+            expected_output_digest is None or downstream_output_digest == expected_output_digest
+        )
+        checks["downstream_export_output_path_matches"] = (
+            expected_output_path is None or downstream_output_path == expected_output_path
+        )
+
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "build123d_cubit_meshing_scheme_intent_gate",
+        "source_label": str(source_label),
+        "status": "ok" if not issues else "needs_attention",
+        "shape_names": sorted(names),
+        "duplicate_names": duplicate_names,
+        "roles": sorted(roles),
+        "required_roles": sorted(required_role_set),
+        "missing_required_roles": missing_required_roles,
+        "role_scheme_intent": role_scheme,
+        "expected_scheme_by_role": expected_role_scheme,
+        "missing_expected_scheme_roles": missing_expected_scheme_roles,
+        "mesh_routes": sorted(route_values),
+        "expected_route": route,
+        "downstream_meshing_trace_ids": sorted(trace_ids),
+        "expected_trace_id": expected_trace,
+        "command_fragments": sorted(command_fragments),
+        "required_command_fragments": sorted(required_fragments),
+        "missing_required_command_fragments": missing_fragments,
+        "export_orders": sorted(export_orders),
+        "expected_export_order": expected_order,
+        "downstream_scheme_trace_policy": downstream.get("policy"),
+        "downstream_scheme_trace_status": downstream.get("status"),
+        "downstream_export_output_artifact_id": downstream_output_artifact_id or None,
+        "downstream_export_output_digest": downstream_output_digest or None,
+        "downstream_export_output_path": downstream_output_path or None,
+        "expected_export_output_artifact_id": expected_output_artifact,
+        "expected_export_output_digest": expected_output_digest,
+        "expected_export_output_path": expected_output_path,
+        "require_downstream_export_output_artifact": output_required,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use this after build123d transition/material/interface intent and before Cubit meshing.",
+            "build123d records role-to-scheme intent; Cubit records actual volume ids and export commands.",
+            "When a downstream .vol is already exported, bind its artifact id, digest, and path before promoting the CAD handoff.",
+            "Do not treat this as proof that the .vol inventory is solver-ready; run Cubit inventory gates separately.",
+        ],
     }
 
 
@@ -1707,6 +2772,8 @@ def shape_cubit_export_package_handoff_gate(
     *,
     geometry_id_key="geometry_id",
     expected_export_id=None,
+    require_sidecar_inventory_counts=False,
+    require_sidecar_schema=False,
 ) -> dict:
     """Check that build123d CAD rows hand off to the intended Cubit package.
 
@@ -1730,6 +2797,8 @@ def shape_cubit_export_package_handoff_gate(
     if not isinstance(package_checks, dict):
         package_checks = {}
     expected_export = None if expected_export_id is None else str(expected_export_id).strip()
+    sidecar_counts_required = bool(require_sidecar_inventory_counts)
+    sidecar_schema_required = bool(require_sidecar_schema)
 
     def has_bbox(row):
         bbox = row.get("bounding_box") or row.get("bbox")
@@ -1748,6 +2817,30 @@ def shape_cubit_export_package_handoff_gate(
         "package_has_export_id": bool(package_export_ids),
         "package_has_geometry_id": bool(package_geometry_ids),
         "package_vol_sidecar_pairs_vol": package_checks.get("vol_sidecar_pairs_vol") is True,
+        "package_sidecar_schema_recorded": (
+            not sidecar_schema_required
+            or package_checks.get("vol_sidecar_schema_id_recorded_when_required") is True
+        ),
+        "package_sidecar_schema_matches_expected": (
+            not sidecar_schema_required
+            or package_checks.get("expected_vol_sidecar_schema_id_matches") is True
+        ),
+        "package_sidecar_inventory_counts_recorded": (
+            not sidecar_counts_required
+            or package_checks.get("vol_sidecar_inventory_counts_recorded_when_required") is True
+        ),
+        "package_sidecar_element_count_matches_inventory": (
+            not sidecar_counts_required
+            or package_checks.get("vol_sidecar_element_count_matches_inventory") is True
+        ),
+        "package_sidecar_point_count_matches_inventory": (
+            not sidecar_counts_required
+            or package_checks.get("vol_sidecar_point_count_matches_inventory") is True
+        ),
+        "package_sidecar_order_matches_expected": (
+            not sidecar_counts_required
+            or package_checks.get("vol_sidecar_order_matches_expected") is True
+        ),
         "package_raw_result_present": "raw_result" in package_gate.get("kinds", []),
         "geometry_id_matches_package": bool(geometry_ids)
         and bool(package_geometry_ids)
@@ -1761,6 +2854,17 @@ def shape_cubit_export_package_handoff_gate(
         issues.append("build123d geometry_id does not match the Cubit export package")
     if not checks["package_vol_sidecar_pairs_vol"]:
         issues.append("Cubit package did not prove the .vol/.vol.json pairing")
+    if sidecar_counts_required and not (
+        checks["package_sidecar_element_count_matches_inventory"]
+        and checks["package_sidecar_point_count_matches_inventory"]
+        and checks["package_sidecar_order_matches_expected"]
+    ):
+        issues.append("Cubit package sidecar counts/order do not match the parsed .vol inventory")
+    if sidecar_schema_required and not (
+        checks["package_sidecar_schema_recorded"]
+        and checks["package_sidecar_schema_matches_expected"]
+    ):
+        issues.append("Cubit package sidecar schema id is missing or stale")
     return {
         "policy": "build123d_cubit_export_package_handoff_gate",
         "status": "ok" if all(checks.values()) else "needs_attention",
@@ -1770,12 +2874,1693 @@ def shape_cubit_export_package_handoff_gate(
         "package_geometry_ids": sorted(set(package_geometry_ids)),
         "package_export_ids": sorted(set(package_export_ids)),
         "expected_export_id": expected_export,
+        "require_sidecar_inventory_counts": sidecar_counts_required,
+        "require_sidecar_schema": sidecar_schema_required,
         "package_policy": package_gate.get("policy"),
         "checks": checks,
         "issues": issues,
         "notes": [
             "Use after build123d mass-property rows pass and before Cubit .vol packages enter notebooks or solver-ready runs.",
             "The CAD intent row and the mesh export package should share geometry_id; filenames alone are not enough.",
+            "When Cubit .vol.json schema identity is available, require the package schema id before accepting the CAD-to-mesh handoff.",
+            "When Cubit .vol.json metadata is available, require sidecar element/point counts and order to match the parsed .vol inventory before CAD-to-mesh handoff.",
+        ],
+    }
+
+
+def shape_cubit_quality_package_handoff_gate(
+    shape_rows,
+    quality_package_gate,
+    *,
+    geometry_id_key="geometry_id",
+    expected_export_id=None,
+    require_export_inventory=False,
+) -> dict:
+    """Check that build123d CAD rows match a Cubit headless quality package.
+
+    This is the CAD-side companion to
+    ``cubit_headless_batch_quality_package_gate``.  It is used when Cubit has
+    already proven a headless mesh-quality run.  When a ``.vol`` package is
+    being consumed, set ``require_export_inventory=True`` so the CAD row also
+    demands the parsed export inventory checks from the Cubit package gate.
+    The CAD intent and mesh-quality evidence still need to meet on explicit
+    ``geometry_id`` and ``export_id`` values.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    if not isinstance(quality_package_gate, dict):
+        raise ValueError("quality_package_gate must be a mapping")
+
+    geometry_ids = [str(row.get(geometry_id_key, "")).strip() for row in rows]
+    names = [str(row.get("name", "")).strip() for row in rows]
+    package_geometry_id = str(quality_package_gate.get("geometry_id", "")).strip()
+    package_export_id = str(quality_package_gate.get("export_id", "")).strip()
+    package_checks = quality_package_gate.get("checks", {})
+    if not isinstance(package_checks, dict):
+        package_checks = {}
+    expected_export = None if expected_export_id is None else str(expected_export_id).strip()
+    inventory_required = bool(require_export_inventory)
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "quality_package_gate_ok": quality_package_gate.get("status") == "ok",
+        "quality_package_policy_known": (
+            quality_package_gate.get("policy") == "cubit_headless_batch_quality_package_gate"
+        ),
+        "quality_package_has_export_id": bool(package_export_id),
+        "quality_package_has_geometry_id": bool(package_geometry_id),
+        "quality_package_headless": package_checks.get("headless_command_recorded") is True,
+        "quality_package_count_positive": package_checks.get("quality_count_positive") is True
+        or int(quality_package_gate.get("quality_count", 0) or 0) > 0,
+        "quality_package_export_inventory_present": (
+            not inventory_required
+            or package_checks.get("export_inventory_recorded") is True
+        ),
+        "quality_package_export_inventory_volume_positive": (
+            not inventory_required
+            or package_checks.get("export_inventory_volume_elements_positive") is True
+        ),
+        "quality_package_export_inventory_routing_ok": (
+            not inventory_required
+            or package_checks.get("export_inventory_routing_hint_matches_expected") is True
+        ),
+        "quality_package_export_inventory_count_matches": (
+            not inventory_required
+            or package_checks.get("export_inventory_count_matches_quality") is True
+        ),
+        "quality_package_export_inventory_contains_quality_element": (
+            not inventory_required
+            or package_checks.get("export_inventory_contains_quality_element") is True
+        ),
+        "quality_package_export_inventory_not_tri_tet_only_for_cubit_route": (
+            not inventory_required
+            or package_checks.get("export_inventory_not_tri_tet_only_for_cubit_hex_route") is True
+        ),
+        "geometry_id_matches_quality_package": bool(geometry_ids)
+        and bool(package_geometry_id)
+        and set(geometry_ids) == {package_geometry_id},
+        "export_id_matches_expected": expected_export is None or package_export_id == expected_export,
+    }
+    issues = []
+    if not checks["shape_geometry_ids_recorded"]:
+        issues.append("build123d rows need an explicit geometry_id before Cubit quality handoff")
+    if not checks["geometry_id_matches_quality_package"]:
+        issues.append("build123d geometry_id does not match the Cubit quality package")
+    if not checks["quality_package_headless"]:
+        issues.append("Cubit quality package did not prove headless execution")
+    if not checks["quality_package_count_positive"]:
+        issues.append("Cubit quality package has no positive element-quality count")
+    if inventory_required and not checks["quality_package_export_inventory_present"]:
+        issues.append("Cubit quality package did not include parsed .vol inventory evidence")
+    if inventory_required and not checks["quality_package_export_inventory_count_matches"]:
+        issues.append("Cubit .vol inventory count does not match the quality package count")
+    if inventory_required and not checks["quality_package_export_inventory_contains_quality_element"]:
+        issues.append("Cubit .vol inventory does not contain the replayed quality element kind")
+    if inventory_required and not checks["quality_package_export_inventory_not_tri_tet_only_for_cubit_route"]:
+        issues.append("Cubit hex-led quality package is paired with tri/tet-only inventory")
+    return {
+        "policy": "build123d_cubit_quality_package_handoff_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "geometry_id_key": geometry_id_key,
+        "shape_names": names,
+        "shape_geometry_ids": sorted(set(geometry_ids)),
+        "quality_package_geometry_id": package_geometry_id,
+        "quality_package_export_id": package_export_id,
+        "expected_export_id": expected_export,
+        "quality_package_policy": quality_package_gate.get("policy"),
+        "quality_count": int(quality_package_gate.get("quality_count", 0) or 0),
+        "require_export_inventory": inventory_required,
+        "quality_package_export_inventory_source": quality_package_gate.get("export_inventory_source"),
+        "quality_package_export_inventory_volume_kind_counts": quality_package_gate.get("export_inventory_volume_kind_counts"),
+        "quality_package_export_inventory_routing_hint": quality_package_gate.get("export_inventory_routing_hint"),
+        "quality_package_export_inventory_is_tri_tet_only": quality_package_gate.get("export_inventory_is_tri_tet_only"),
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use after build123d mass-property rows pass and Cubit has a headless quality package.",
+            "Mesh-quality evidence is only reusable when it matches the CAD row geometry_id and export_id.",
+            "When a .vol is being consumed, require the Cubit package gate's export_inventory checks too.",
+            "Cubit hex-led quality evidence must stay on the Cubit hex/mixed route and must not be paired with a tri/tet-only inventory.",
+        ],
+    }
+
+
+def shape_cubit_quality_ledger_handoff_gate(
+    shape_rows,
+    quality_ledger_gate,
+    *,
+    geometry_id_key="geometry_id",
+    expected_quality_artifact_id=None,
+    expected_quality_digest=None,
+    expected_metric_set_id=None,
+    expected_export_id=None,
+    expected_mesh_artifact_id=None,
+    expected_mesh_digest=None,
+    expected_route="cubit_hex_or_mixed_path",
+    min_scaled_jacobian_threshold=0.2,
+    require_hex_or_mixed_route=True,
+    require_quality_execution_metadata=False,
+) -> dict:
+    """Check that build123d CAD rows match a Cubit mesh-quality ledger.
+
+    This is the build123d-side companion to
+    ``cubit_mesh_quality_ledger_identity_gate``.  It is stricter than the
+    older quality-package handoff: a reusable quality row must travel with its
+    own artifact id, digest, metric-set id, exported mesh id/digest, geometry
+    id, and Cubit hex/mixed routing hint.  That keeps a fresh CAD package from
+    accidentally reusing a stale quality JSON or a quality row from another
+    mesh.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    if not isinstance(quality_ledger_gate, dict):
+        raise ValueError("quality_ledger_gate must be a mapping")
+
+    def as_text(value):
+        return str(value or "").strip()
+
+    def as_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def as_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    def counts_from(row, *names):
+        for name in names:
+            value = row.get(name)
+            if isinstance(value, dict):
+                counts = {}
+                for key, count in value.items():
+                    try:
+                        counts[str(key).strip().lower().replace("-", "_").replace(" ", "_")] = int(count)
+                    except (TypeError, ValueError):
+                        counts[str(key).strip().lower().replace("-", "_").replace(" ", "_")] = -1
+                return counts
+        return {}
+
+    geometry_ids = [as_text(row.get(geometry_id_key)) for row in rows]
+    names = [as_text(row.get("name")) for row in rows]
+    routes = {
+        as_text(row.get("mesh_route", row.get("routing_hint")))
+        for row in rows
+        if as_text(row.get("mesh_route", row.get("routing_hint")))
+    }
+    ledger_checks = quality_ledger_gate.get("checks", {})
+    if not isinstance(ledger_checks, dict):
+        ledger_checks = {}
+    quality_artifact_id = as_text(quality_ledger_gate.get("quality_artifact_id"))
+    quality_digest = as_text(quality_ledger_gate.get("quality_digest"))
+    metric_set_id = as_text(quality_ledger_gate.get("metric_set_id"))
+    export_id = as_text(quality_ledger_gate.get("export_id"))
+    ledger_geometry_id = as_text(quality_ledger_gate.get("geometry_id"))
+    mesh_artifact_id = as_text(quality_ledger_gate.get("mesh_artifact_id"))
+    mesh_digest = as_text(quality_ledger_gate.get("mesh_digest"))
+    routing_hint = as_text(quality_ledger_gate.get("routing_hint"))
+    element_counts = counts_from(quality_ledger_gate, "element_type_counts", "volume_kind_counts")
+    min_j = as_float(quality_ledger_gate.get("min_scaled_jacobian"))
+    negative_j = as_int(quality_ledger_gate.get("negative_jacobian_count"))
+    expected_quality_artifact = (
+        None if expected_quality_artifact_id is None else as_text(expected_quality_artifact_id)
+    )
+    expected_quality_hash = None if expected_quality_digest is None else as_text(expected_quality_digest)
+    expected_metric_set = None if expected_metric_set_id is None else as_text(expected_metric_set_id)
+    expected_export = None if expected_export_id is None else as_text(expected_export_id)
+    expected_mesh_artifact = None if expected_mesh_artifact_id is None else as_text(expected_mesh_artifact_id)
+    expected_mesh_hash = None if expected_mesh_digest is None else as_text(expected_mesh_digest)
+    expected_route_text = as_text(expected_route)
+    threshold = float(min_scaled_jacobian_threshold)
+    if threshold <= 0.0:
+        raise ValueError("min_scaled_jacobian_threshold must be > 0")
+    route_required = bool(require_hex_or_mixed_route)
+    tri_tet_only = bool(quality_ledger_gate.get("inventory_is_tri_tet_only")) or (
+        bool(element_counts) and set(element_counts).issubset({"tet", "tri", "triangle"})
+    )
+    hex_or_mixed_present = any(element_counts.get(kind, 0) > 0 for kind in ("hex", "pyramid", "wedge"))
+    quality_execution_checks = (
+        "created_at_utc_recorded_when_required",
+        "created_at_utc_parseable_when_present",
+        "version_recorded_when_required",
+        "elapsed_s_recorded_when_required",
+        "elapsed_s_finite_nonnegative_when_present",
+        "timing_breakdown_recorded_when_required",
+        "timing_breakdown_has_required_stage_count",
+        "timing_breakdown_values_finite_nonnegative",
+        "timing_breakdown_total_within_elapsed_when_present",
+    )
+    quality_execution_metadata_ok = all(
+        ledger_checks.get(name) is True for name in quality_execution_checks
+    )
+
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "mesh_route_recorded": (not route_required) or bool(routes),
+        "mesh_route_matches_expected": (not route_required) or routes == {expected_route_text},
+        "quality_ledger_gate_ok": quality_ledger_gate.get("status") == "ok",
+        "quality_ledger_policy_known": (
+            quality_ledger_gate.get("policy") == "cubit_mesh_quality_ledger_identity_gate"
+        ),
+        "quality_ledger_execution_metadata_ok": (
+            (not bool(require_quality_execution_metadata)) or quality_execution_metadata_ok
+        ),
+        "quality_artifact_id_recorded": bool(quality_artifact_id),
+        "quality_digest_recorded": bool(quality_digest),
+        "metric_set_id_recorded": bool(metric_set_id),
+        "export_id_recorded": bool(export_id),
+        "quality_ledger_geometry_id_recorded": bool(ledger_geometry_id),
+        "mesh_artifact_id_recorded": bool(mesh_artifact_id),
+        "mesh_digest_recorded": bool(mesh_digest),
+        "routing_hint_recorded": bool(routing_hint),
+        "element_type_counts_recorded": bool(element_counts),
+        "element_type_counts_positive": bool(element_counts) and all(count > 0 for count in element_counts.values()),
+        "min_scaled_jacobian_recorded": min_j is not None,
+        "min_scaled_jacobian_above_threshold": min_j is not None and min_j >= threshold,
+        "negative_jacobian_count_recorded": negative_j is not None,
+        "negative_jacobian_count_zero": negative_j == 0,
+        "geometry_id_matches_quality_ledger": bool(geometry_ids)
+        and bool(ledger_geometry_id)
+        and set(geometry_ids) == {ledger_geometry_id},
+        "routing_hint_matches_expected": (not route_required) or routing_hint == expected_route_text,
+        "hex_or_mixed_volume_family_present": (not route_required) or hex_or_mixed_present,
+        "not_tri_tet_only_for_cubit_quality_ledger": (not route_required) or not tri_tet_only,
+        "ledger_not_tri_tet_only_check_not_failed": (
+            ledger_checks.get("not_tri_tet_only_for_cubit_quality_ledger") is not False
+        ),
+        "expected_quality_artifact_id_matches": (
+            expected_quality_artifact is None or quality_artifact_id == expected_quality_artifact
+        ),
+        "expected_quality_digest_matches": expected_quality_hash is None or quality_digest == expected_quality_hash,
+        "expected_metric_set_id_matches": expected_metric_set is None or metric_set_id == expected_metric_set,
+        "expected_export_id_matches": expected_export is None or export_id == expected_export,
+        "expected_mesh_artifact_id_matches": (
+            expected_mesh_artifact is None or mesh_artifact_id == expected_mesh_artifact
+        ),
+        "expected_mesh_digest_matches": expected_mesh_hash is None or mesh_digest == expected_mesh_hash,
+    }
+    issues = []
+    if not checks["geometry_id_matches_quality_ledger"]:
+        issues.append("build123d geometry_id does not match the Cubit quality ledger")
+    if not checks["quality_ledger_gate_ok"]:
+        issues.append("Cubit quality ledger identity gate is not ok")
+    if not checks["quality_ledger_execution_metadata_ok"]:
+        issues.append("Cubit quality ledger is missing required version/date/elapsed/timing execution metadata")
+    if not checks["quality_digest_recorded"] or not checks["mesh_digest_recorded"]:
+        issues.append("Cubit quality ledger must record both quality digest and mesh digest")
+    if not checks["min_scaled_jacobian_above_threshold"]:
+        issues.append("Cubit quality ledger minimum scaled Jacobian is below threshold")
+    if not checks["negative_jacobian_count_zero"]:
+        issues.append("Cubit quality ledger reports negative Jacobians")
+    if not checks["mesh_route_matches_expected"] or not checks["routing_hint_matches_expected"]:
+        issues.append("build123d CAD route and Cubit quality ledger route do not match")
+    if route_required and not checks["not_tri_tet_only_for_cubit_quality_ledger"]:
+        issues.append("Cubit quality ledger is tri/tet-only but this CAD handoff requested the Cubit hex/mixed route")
+    if not checks["expected_quality_digest_matches"]:
+        issues.append("Cubit quality ledger digest does not match the expected quality artifact digest")
+    if not checks["expected_mesh_digest_matches"]:
+        issues.append("Cubit quality ledger mesh digest does not match the expected mesh artifact digest")
+
+    return {
+        "policy": "build123d_cubit_quality_ledger_handoff_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "geometry_id_key": geometry_id_key,
+        "shape_names": names,
+        "shape_geometry_ids": sorted(set(geometry_ids)),
+        "mesh_routes": sorted(routes),
+        "expected_route": expected_route_text,
+        "quality_ledger_policy": quality_ledger_gate.get("policy"),
+        "quality_artifact_id": quality_artifact_id,
+        "quality_digest": quality_digest,
+        "metric_set_id": metric_set_id,
+        "export_id": export_id,
+        "quality_ledger_geometry_id": ledger_geometry_id,
+        "mesh_artifact_id": mesh_artifact_id,
+        "mesh_digest": mesh_digest,
+        "routing_hint": routing_hint,
+        "min_scaled_jacobian": min_j,
+        "min_scaled_jacobian_threshold": threshold,
+        "negative_jacobian_count": negative_j,
+        "element_type_counts": element_counts,
+        "inventory_is_tri_tet_only": tri_tet_only,
+        "require_hex_or_mixed_route": route_required,
+        "require_quality_execution_metadata": bool(require_quality_execution_metadata),
+        "expected_quality_artifact_id": expected_quality_artifact,
+        "expected_quality_digest": expected_quality_hash,
+        "expected_metric_set_id": expected_metric_set,
+        "expected_export_id": expected_export,
+        "expected_mesh_artifact_id": expected_mesh_artifact,
+        "expected_mesh_digest": expected_mesh_hash,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use after build123d mass-property rows pass and Cubit has produced a mesh-quality ledger identity gate.",
+            "This gate binds CAD geometry_id to quality artifact id/digest, metric-set id, exported mesh id/digest, route, and element counts.",
+            "For Cubit hex-led lanes, reject tri/tet-only ledgers even when the stale quality metric itself looks healthy.",
+            "When required, propagate the Cubit quality-ledger execution metadata checks before CAD-to-mesh handoff reuse.",
+        ],
+    }
+
+
+def shape_cubit_solver_route_handoff_gate(
+    shape_rows,
+    solver_route_gate,
+    *,
+    geometry_id_key="geometry_id",
+    expected_route="cubit_hex_or_mixed_path",
+    expected_solver_route_package_id=None,
+    expected_solver_contract_artifact_id=None,
+    expected_solver_contract_digest=None,
+    expected_solver_contract_path=None,
+    expected_solver_route_convention_schema_id=None,
+    require_solver_contract_artifact=False,
+    require_solver_route_convention_schema=False,
+    require_no_implicit_tetization=True,
+) -> dict:
+    """Check that build123d CAD rows match a Cubit solver-route manifest.
+
+    build123d owns CAD intent, while Cubit owns the mixed hex+pyramid+tet mesh
+    route.  This gate binds the CAD rows to the downstream solver-route gate so
+    a STEP/measurement package cannot claim a Cubit mixed route while the
+    actual solver route silently tetizes pyramids or omits transition roles.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    if not isinstance(solver_route_gate, dict):
+        raise ValueError("solver_route_gate must be a mapping")
+
+    def norm(value):
+        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    geometry_ids = [str(row.get(geometry_id_key, "")).strip() for row in rows]
+    names = [str(row.get("name", "")).strip() for row in rows]
+    routes = {
+        str(row.get("mesh_route", row.get("routing_hint", ""))).strip()
+        for row in rows
+        if str(row.get("mesh_route", row.get("routing_hint", ""))).strip()
+    }
+    roles = {
+        norm(row.get("role", row.get("mesh_role", row.get("region_role", ""))))
+        for row in rows
+        if norm(row.get("role", row.get("mesh_role", row.get("region_role", ""))))
+    }
+    route_checks = solver_route_gate.get("checks", {})
+    if not isinstance(route_checks, dict):
+        route_checks = {}
+    expected_package = (
+        None
+        if expected_solver_route_package_id is None
+        else str(expected_solver_route_package_id).strip()
+    )
+    solver_route_package = str(
+        solver_route_gate.get("solver_route_package_id", solver_route_gate.get("package_id", ""))
+    ).strip()
+    solver_contract_artifact_id = str(solver_route_gate.get("solver_contract_artifact_id", "")).strip()
+    solver_contract_digest = str(solver_route_gate.get("solver_contract_digest", "")).strip()
+    solver_contract_path = str(solver_route_gate.get("solver_contract_path", "")).strip()
+    solver_route_convention_schema_id = str(
+        solver_route_gate.get("solver_route_convention_schema_id", "")
+    ).strip()
+    expected_contract_id = (
+        None
+        if expected_solver_contract_artifact_id is None
+        else str(expected_solver_contract_artifact_id).strip()
+    )
+    expected_contract_digest = (
+        None if expected_solver_contract_digest is None else str(expected_solver_contract_digest).strip()
+    )
+    expected_contract_path = (
+        None if expected_solver_contract_path is None else str(expected_solver_contract_path).strip()
+    )
+    expected_route_convention_schema = (
+        None
+        if expected_solver_route_convention_schema_id is None
+        else str(expected_solver_route_convention_schema_id).strip()
+    )
+    expected_route_text = str(expected_route or "").strip()
+    no_implicit_required = bool(require_no_implicit_tetization)
+    solver_contract_required = bool(require_solver_contract_artifact)
+    route_convention_required = bool(
+        require_solver_route_convention_schema or expected_route_convention_schema is not None
+    )
+
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "mesh_route_recorded": bool(routes),
+        "mesh_route_matches_expected": routes == {expected_route_text},
+        "solver_route_gate_ok": solver_route_gate.get("status") == "ok",
+        "solver_route_policy_known": (
+            solver_route_gate.get("policy") == "cubit_mixed_solver_route_manifest_gate"
+        ),
+        "solver_route_package_id_recorded": bool(solver_route_package),
+        "expected_solver_route_package_id_matches": (
+            expected_package is None or solver_route_package == expected_package
+        ),
+        "solver_contract_artifact_id_recorded_when_required": (
+            not solver_contract_required
+            or (
+                bool(solver_contract_artifact_id)
+                and route_checks.get("solver_contract_artifact_id_recorded_when_required") is not False
+            )
+        ),
+        "solver_contract_digest_recorded_when_required": (
+            not solver_contract_required
+            or (
+                bool(solver_contract_digest)
+                and route_checks.get("solver_contract_digest_recorded_when_required") is not False
+            )
+        ),
+        "solver_contract_path_recorded_when_required": (
+            not solver_contract_required
+            or (
+                bool(solver_contract_path)
+                and route_checks.get("solver_contract_path_recorded_when_required") is not False
+            )
+        ),
+        "expected_solver_contract_artifact_id_matches": (
+            expected_contract_id is None
+            or (
+                solver_contract_artifact_id == expected_contract_id
+                and route_checks.get("expected_solver_contract_artifact_id_matches") is not False
+            )
+        ),
+        "expected_solver_contract_digest_matches": (
+            expected_contract_digest is None
+            or (
+                solver_contract_digest == expected_contract_digest
+                and route_checks.get("expected_solver_contract_digest_matches") is not False
+            )
+        ),
+        "expected_solver_contract_path_matches": (
+            expected_contract_path is None
+            or (
+                solver_contract_path == expected_contract_path
+                and route_checks.get("expected_solver_contract_path_matches") is not False
+            )
+        ),
+        "solver_route_convention_schema_id_recorded_when_required": (
+            not route_convention_required
+            or (
+                bool(solver_route_convention_schema_id)
+                and route_checks.get("solver_route_convention_schema_id_recorded_when_required") is not False
+            )
+        ),
+        "expected_solver_route_convention_schema_id_matches": (
+            expected_route_convention_schema is None
+            or (
+                solver_route_convention_schema_id == expected_route_convention_schema
+                and route_checks.get("expected_solver_route_convention_schema_id_matches") is not False
+            )
+        ),
+        "solver_route_routing_hint_matches_expected": (
+            solver_route_gate.get("routing_hint") == expected_route_text
+        ),
+        "solver_route_volume_routes_cover_inventory": (
+            route_checks.get("volume_route_kinds_cover_inventory") is True
+        ),
+        "solver_route_surface_routes_cover_inventory": (
+            route_checks.get("surface_route_kinds_cover_inventory") is True
+        ),
+        "solver_route_pyramid_transition_role_recorded": (
+            route_checks.get("pyramid_transition_role_recorded") is True
+        ),
+        "solver_route_no_implicit_tetization": (
+            not no_implicit_required
+            or route_checks.get("no_implicit_tetization_recorded") is True
+        ),
+        "solver_route_tet_only_owner_is_netgen": (
+            route_checks.get("tet_only_owner_is_netgen") is True
+        ),
+        "cad_role_not_tet_only": "tet_only" not in roles,
+    }
+    issues = []
+    if not checks["mesh_route_matches_expected"]:
+        issues.append("build123d mesh_route does not match the expected Cubit mixed route")
+    if not checks["solver_route_gate_ok"]:
+        issues.append("Cubit solver-route manifest gate is not ok")
+    if not checks["solver_route_pyramid_transition_role_recorded"]:
+        issues.append("Cubit solver route did not keep pyramid cells as transition bridge cells")
+    if not checks["solver_route_no_implicit_tetization"]:
+        issues.append("Cubit solver route allows implicit tetization")
+    if not checks["solver_contract_path_recorded_when_required"]:
+        issues.append("Cubit solver route did not record the downstream solver contract path")
+    if not checks["expected_solver_contract_digest_matches"]:
+        issues.append("Cubit solver route contract digest does not match the expected downstream reader contract")
+    if not checks["solver_route_convention_schema_id_recorded_when_required"]:
+        issues.append("Cubit solver route did not record the solver-route convention schema id")
+    if not checks["expected_solver_route_convention_schema_id_matches"]:
+        issues.append("Cubit solver route convention schema id does not match the expected route convention")
+    return {
+        "policy": "build123d_cubit_solver_route_handoff_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "geometry_id_key": geometry_id_key,
+        "shape_names": names,
+        "shape_geometry_ids": sorted(set(geometry_ids)),
+        "mesh_routes": sorted(routes),
+        "expected_route": expected_route_text,
+        "cad_roles": sorted(roles),
+        "solver_route_policy": solver_route_gate.get("policy"),
+        "solver_route_package_id": solver_route_package,
+        "expected_solver_route_package_id": expected_package,
+        "solver_contract_artifact_id": solver_contract_artifact_id,
+        "solver_contract_digest": solver_contract_digest,
+        "solver_contract_path": solver_contract_path,
+        "solver_route_convention_schema_id": solver_route_convention_schema_id,
+        "expected_solver_contract_artifact_id": expected_contract_id,
+        "expected_solver_contract_digest": expected_contract_digest,
+        "expected_solver_contract_path": expected_contract_path,
+        "expected_solver_route_convention_schema_id": expected_route_convention_schema,
+        "require_solver_contract_artifact": solver_contract_required,
+        "require_solver_route_convention_schema": route_convention_required,
+        "require_no_implicit_tetization": no_implicit_required,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use after build123d CAD rows request a Cubit mixed route and before Cubit/solver notebooks consume the package.",
+            "The CAD row owns mesh intent; the Cubit route gate owns hex primary, pyramid transition, tet compatibility, and no implicit tetization.",
+            "When the Cubit route is promoted as solver-ready, propagate the downstream solver/reader contract artifact id, digest, and path from the Cubit route gate.",
+            "When the route convention is part of the claim, propagate solver_route_convention_schema_id so CAD handoffs do not reuse value-only mixed-route manifests.",
+        ],
+    }
+
+
+def shape_cad_handoff_manifest_gate(
+    shape_rows,
+    *,
+    file_manifest=(),
+    external_volume_summary=None,
+    cubit_export_handoff=None,
+    cubit_quality_handoff=None,
+    cubit_quality_ledger_handoff=None,
+    cubit_solver_route_handoff=None,
+    cubit_meshing_scheme_handoff=None,
+    required_file_kinds=("step", "build123d_measurement_json"),
+    expected_geometry_ids=None,
+    expected_cad_output_artifact_id=None,
+    expected_cad_output_digest=None,
+    require_cad_output_artifact=False,
+    expected_cad_observable_id=None,
+    expected_cad_observable_family=None,
+    require_cad_observable=False,
+    expected_length_unit=None,
+    expected_area_unit=None,
+    expected_volume_unit=None,
+    expected_measurement_convention=None,
+    expected_measurement_postprocess_row_convention_schema_id=None,
+    expected_measurement_component_basis_schema_id=None,
+    require_measurement_postprocess_row_convention_schema=False,
+    require_measurement_component_basis_schema=False,
+) -> dict:
+    """Check the final build123d CAD handoff manifest before meshing/solver work.
+
+    build123d is the geometry authoring lane.  Before a shape package is handed
+    to Cubit, CST, or a solver notebook, keep the build123d mass-property rows,
+    exported file list, external CAD volume check, and optional Cubit package
+    handoff gates together.  This prevents a good volume row from travelling
+    with the wrong STEP file, stale mesh-quality package, or stale mixed solver
+    route manifest.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    files = [dict(item) for item in (file_manifest or ())]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    def collect_file_values(*names):
+        values = []
+        for item in files:
+            for name in names:
+                if name in item and item[name] is not None:
+                    text = str(item[name]).strip()
+                    if text:
+                        values.append(text)
+        return values
+
+    def unique_strings(values):
+        return sorted(set(values))
+
+    def norm_unit(value):
+        return str(value or "").strip().lower().replace(" ", "")
+
+    def norm_label(value):
+        return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+    def collect_row_values(*names):
+        values = []
+        for row in rows:
+            units = row.get("units")
+            for name in names:
+                value = row.get(name)
+                if value is not None:
+                    text = str(value).strip()
+                    if text:
+                        values.append(text)
+            if isinstance(units, dict):
+                for name in names:
+                    unit_key = {
+                        "length_unit": "length",
+                        "unit_length": "length",
+                        "area_unit": "area",
+                        "unit_area": "area",
+                        "volume_unit": "volume",
+                        "unit_volume": "volume",
+                    }.get(name)
+                    for key in (name, unit_key):
+                        if not key:
+                            continue
+                        value = units.get(key)
+                        if value is not None:
+                            text = str(value).strip()
+                            if text:
+                                values.append(text)
+        return values
+
+    geometry_ids = [str(row.get("geometry_id", "")).strip() for row in rows]
+    names = [str(row.get("name", "")).strip() for row in rows]
+    expected_ids = None if expected_geometry_ids is None else {
+        str(value).strip() for value in expected_geometry_ids if str(value).strip()
+    }
+    file_kinds = [str(item.get("kind", "")).strip() for item in files]
+    file_paths = [str(item.get("path", "")).strip() for item in files]
+    required_kinds = [str(kind).strip() for kind in required_file_kinds if str(kind).strip()]
+    cad_output_artifact_ids = unique_strings(collect_file_values(
+        "cad_output_artifact_id",
+        "step_output_artifact_id",
+        "export_output_artifact_id",
+        "output_artifact_id",
+    ))
+    cad_output_digests = unique_strings(collect_file_values(
+        "cad_output_digest",
+        "step_output_digest",
+        "export_output_digest",
+        "output_digest",
+        "cad_output_sha256",
+        "step_sha256",
+    ))
+    cad_output_paths = unique_strings(collect_file_values(
+        "cad_output_path",
+        "step_output_path",
+        "export_output_path",
+        "output_path",
+    ))
+    cad_observable_ids = unique_strings(collect_file_values(
+        "cad_observable_id",
+        "handoff_observable_id",
+        "output_observable_id",
+        "observable_id",
+    ))
+    cad_observable_families = unique_strings(collect_file_values(
+        "cad_observable_family",
+        "handoff_observable_family",
+        "output_observable_family",
+        "observable_family",
+    ))
+    cad_output_artifact_id = cad_output_artifact_ids[0] if cad_output_artifact_ids else ""
+    cad_output_digest = cad_output_digests[0] if cad_output_digests else ""
+    cad_output_path = cad_output_paths[0] if cad_output_paths else ""
+    cad_observable_id = cad_observable_ids[0] if cad_observable_ids else ""
+    cad_observable_family = cad_observable_families[0] if cad_observable_families else ""
+    length_units = unique_strings(
+        norm_unit(value)
+        for value in (
+            collect_row_values("length_unit", "unit_length")
+            + collect_file_values("length_unit", "unit_length")
+        )
+        if str(value).strip()
+    )
+    area_units = unique_strings(
+        norm_unit(value)
+        for value in (
+            collect_row_values("area_unit", "unit_area")
+            + collect_file_values("area_unit", "unit_area")
+        )
+        if str(value).strip()
+    )
+    volume_units = unique_strings(
+        norm_unit(value)
+        for value in (
+            collect_row_values("volume_unit", "unit_volume")
+            + collect_file_values("volume_unit", "unit_volume")
+        )
+        if str(value).strip()
+    )
+    measurement_conventions = unique_strings(
+        norm_label(value)
+        for value in (
+            collect_row_values(
+                "cad_measurement_convention",
+                "measurement_convention",
+                "mass_property_convention",
+            )
+            + collect_file_values(
+                "cad_measurement_convention",
+                "measurement_convention",
+                "mass_property_convention",
+            )
+        )
+        if str(value).strip()
+    )
+    measurement_postprocess_row_convention_schema_ids = unique_strings(
+        value
+        for value in (
+            collect_row_values(
+                "cad_measurement_postprocess_row_convention_schema_id",
+                "cadMeasurementPostprocessRowConventionSchemaId",
+                "measurement_postprocess_row_convention_schema_id",
+                "measurementPostprocessRowConventionSchemaId",
+                "postprocess_row_convention_schema_id",
+                "postprocessRowConventionSchemaId",
+            )
+            + collect_file_values(
+                "cad_measurement_postprocess_row_convention_schema_id",
+                "cadMeasurementPostprocessRowConventionSchemaId",
+                "measurement_postprocess_row_convention_schema_id",
+                "measurementPostprocessRowConventionSchemaId",
+                "postprocess_row_convention_schema_id",
+                "postprocessRowConventionSchemaId",
+            )
+        )
+        if str(value).strip()
+    )
+    measurement_component_basis_schema_ids = unique_strings(
+        value
+        for value in (
+            collect_row_values(
+                "cad_measurement_component_basis_schema_id",
+                "cadMeasurementComponentBasisSchemaId",
+                "measurement_component_basis_schema_id",
+                "measurementComponentBasisSchemaId",
+                "mass_property_component_basis_schema_id",
+                "massPropertyComponentBasisSchemaId",
+                "component_basis_schema_id",
+                "componentBasisSchemaId",
+            )
+            + collect_file_values(
+                "cad_measurement_component_basis_schema_id",
+                "cadMeasurementComponentBasisSchemaId",
+                "measurement_component_basis_schema_id",
+                "measurementComponentBasisSchemaId",
+                "mass_property_component_basis_schema_id",
+                "massPropertyComponentBasisSchemaId",
+                "component_basis_schema_id",
+                "componentBasisSchemaId",
+            )
+        )
+        if str(value).strip()
+    )
+    length_unit = length_units[0] if length_units else ""
+    area_unit = area_units[0] if area_units else ""
+    volume_unit = volume_units[0] if volume_units else ""
+    measurement_convention = measurement_conventions[0] if measurement_conventions else ""
+    measurement_postprocess_row_convention_schema_id = (
+        measurement_postprocess_row_convention_schema_ids[0]
+        if measurement_postprocess_row_convention_schema_ids
+        else ""
+    )
+    measurement_component_basis_schema_id = (
+        measurement_component_basis_schema_ids[0]
+        if measurement_component_basis_schema_ids
+        else ""
+    )
+    expected_cad_output_artifact = (
+        None if expected_cad_output_artifact_id is None else str(expected_cad_output_artifact_id).strip()
+    )
+    expected_cad_output_hash = (
+        None if expected_cad_output_digest is None else str(expected_cad_output_digest).strip()
+    )
+    expected_cad_observable = (
+        None if expected_cad_observable_id is None else str(expected_cad_observable_id).strip()
+    )
+    expected_cad_observable_kind = (
+        None if expected_cad_observable_family is None else str(expected_cad_observable_family).strip()
+    )
+    expected_length_unit_norm = norm_unit(expected_length_unit)
+    expected_area_unit_norm = norm_unit(expected_area_unit)
+    expected_volume_unit_norm = norm_unit(expected_volume_unit)
+    expected_measurement_convention_norm = norm_label(expected_measurement_convention)
+    expected_measurement_postprocess_row_convention_schema = (
+        ""
+        if expected_measurement_postprocess_row_convention_schema_id is None
+        else str(expected_measurement_postprocess_row_convention_schema_id).strip()
+    )
+    expected_measurement_component_basis_schema = (
+        ""
+        if expected_measurement_component_basis_schema_id is None
+        else str(expected_measurement_component_basis_schema_id).strip()
+    )
+    measurement_postprocess_row_convention_schema_required = bool(
+        require_measurement_postprocess_row_convention_schema
+        or expected_measurement_postprocess_row_convention_schema
+    )
+    measurement_component_basis_schema_required = bool(
+        require_measurement_component_basis_schema
+        or expected_measurement_component_basis_schema
+    )
+
+    volume_summary = dict(external_volume_summary or {})
+    export_handoff = dict(cubit_export_handoff or {})
+    quality_handoff = dict(cubit_quality_handoff or {})
+    quality_ledger_handoff = dict(cubit_quality_ledger_handoff or {})
+    solver_route_handoff = dict(cubit_solver_route_handoff or {})
+    meshing_scheme_handoff = dict(cubit_meshing_scheme_handoff or {})
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "geometry_ids_match_expected": expected_ids is None or set(geometry_ids) == expected_ids,
+        "file_manifest_present": bool(files),
+        "file_kinds_recorded": all(bool(kind) for kind in file_kinds),
+        "file_paths_recorded": all(bool(path) for path in file_paths),
+        "required_file_kinds_present": all(kind in file_kinds for kind in required_kinds),
+        "external_volume_summary_ok": volume_summary.get("status") == "ok",
+        "external_volume_sources_recorded": bool(volume_summary.get("sources")),
+        "cubit_export_handoff_ok": not export_handoff or export_handoff.get("status") == "ok",
+        "cubit_quality_handoff_ok": not quality_handoff or quality_handoff.get("status") == "ok",
+        "cubit_quality_ledger_handoff_ok": (
+            not quality_ledger_handoff or quality_ledger_handoff.get("status") == "ok"
+        ),
+        "cubit_solver_route_handoff_ok": (
+            not solver_route_handoff or solver_route_handoff.get("status") == "ok"
+        ),
+        "cubit_meshing_scheme_handoff_ok": (
+            not meshing_scheme_handoff or meshing_scheme_handoff.get("status") == "ok"
+        ),
+        "cad_output_artifact_id_consistent_when_present": len(cad_output_artifact_ids) <= 1,
+        "cad_output_digest_consistent_when_present": len(cad_output_digests) <= 1,
+        "cad_output_path_consistent_when_present": len(cad_output_paths) <= 1,
+        "cad_output_artifact_id_recorded_when_required": (
+            not require_cad_output_artifact or bool(cad_output_artifact_id)
+        ),
+        "cad_output_digest_recorded_when_required": (
+            not require_cad_output_artifact or bool(cad_output_digest)
+        ),
+        "cad_output_path_recorded_when_required": (
+            not require_cad_output_artifact or bool(cad_output_path)
+        ),
+        "cad_output_artifact_id_recorded_when_expected": (
+            expected_cad_output_artifact is None or bool(cad_output_artifact_id)
+        ),
+        "expected_cad_output_artifact_id_matches": (
+            expected_cad_output_artifact is None or cad_output_artifact_id == expected_cad_output_artifact
+        ),
+        "cad_output_digest_recorded_when_expected": (
+            expected_cad_output_hash is None or bool(cad_output_digest)
+        ),
+        "expected_cad_output_digest_matches": (
+            expected_cad_output_hash is None or cad_output_digest == expected_cad_output_hash
+        ),
+        "cad_observable_id_consistent_when_present": len(cad_observable_ids) <= 1,
+        "cad_observable_family_consistent_when_present": len(cad_observable_families) <= 1,
+        "cad_unit_metadata_consistent_when_present": (
+            len(length_units) <= 1 and len(area_units) <= 1 and len(volume_units) <= 1
+        ),
+        "cad_measurement_convention_consistent_when_present": len(measurement_conventions) <= 1,
+        "cad_measurement_postprocess_row_convention_schema_id_consistent_when_present": (
+            len(measurement_postprocess_row_convention_schema_ids) <= 1
+        ),
+        "cad_measurement_component_basis_schema_id_consistent_when_present": (
+            len(measurement_component_basis_schema_ids) <= 1
+        ),
+        "cad_observable_id_recorded_when_required": (
+            not require_cad_observable or bool(cad_observable_id)
+        ),
+        "cad_observable_family_recorded_when_required": (
+            not require_cad_observable or bool(cad_observable_family)
+        ),
+        "cad_observable_id_recorded_when_expected": (
+            expected_cad_observable is None or bool(cad_observable_id)
+        ),
+        "expected_cad_observable_id_matches": (
+            expected_cad_observable is None or cad_observable_id == expected_cad_observable
+        ),
+        "cad_observable_family_recorded_when_expected": (
+            expected_cad_observable_kind is None or bool(cad_observable_family)
+        ),
+        "expected_cad_observable_family_matches": (
+            expected_cad_observable_kind is None or cad_observable_family == expected_cad_observable_kind
+        ),
+        "cad_length_unit_recorded_when_expected": (
+            not expected_length_unit_norm or bool(length_unit)
+        ),
+        "expected_cad_length_unit_matches": (
+            not expected_length_unit_norm or length_units == [expected_length_unit_norm]
+        ),
+        "cad_area_unit_recorded_when_expected": (
+            not expected_area_unit_norm or bool(area_unit)
+        ),
+        "expected_cad_area_unit_matches": (
+            not expected_area_unit_norm or area_units == [expected_area_unit_norm]
+        ),
+        "cad_volume_unit_recorded_when_expected": (
+            not expected_volume_unit_norm or bool(volume_unit)
+        ),
+        "expected_cad_volume_unit_matches": (
+            not expected_volume_unit_norm or volume_units == [expected_volume_unit_norm]
+        ),
+        "cad_measurement_convention_recorded_when_expected": (
+            not expected_measurement_convention_norm or bool(measurement_convention)
+        ),
+        "expected_cad_measurement_convention_matches": (
+            not expected_measurement_convention_norm
+            or measurement_conventions == [expected_measurement_convention_norm]
+        ),
+        "cad_measurement_postprocess_row_convention_schema_id_recorded_when_required": (
+            not measurement_postprocess_row_convention_schema_required
+            or bool(measurement_postprocess_row_convention_schema_id)
+        ),
+        "cad_measurement_postprocess_row_convention_schema_id_recorded_when_expected": (
+            not expected_measurement_postprocess_row_convention_schema
+            or bool(measurement_postprocess_row_convention_schema_id)
+        ),
+        "expected_cad_measurement_postprocess_row_convention_schema_id_matches": (
+            not expected_measurement_postprocess_row_convention_schema
+            or measurement_postprocess_row_convention_schema_ids
+            == [expected_measurement_postprocess_row_convention_schema]
+        ),
+        "cad_measurement_component_basis_schema_id_recorded_when_required": (
+            not measurement_component_basis_schema_required
+            or bool(measurement_component_basis_schema_id)
+        ),
+        "cad_measurement_component_basis_schema_id_recorded_when_expected": (
+            not expected_measurement_component_basis_schema
+            or bool(measurement_component_basis_schema_id)
+        ),
+        "expected_cad_measurement_component_basis_schema_id_matches": (
+            not expected_measurement_component_basis_schema
+            or measurement_component_basis_schema_ids
+            == [expected_measurement_component_basis_schema]
+        ),
+    }
+    issues = []
+    if not checks["shape_rows_have_volume_area_bbox"]:
+        issues.append("shape rows must carry volume, area, and bounding_box before CAD handoff")
+    if not checks["required_file_kinds_present"]:
+        issues.append("file manifest is missing one or more required export/result kinds")
+    if not checks["external_volume_summary_ok"]:
+        issues.append("external CAD volume crosscheck is missing or not ok")
+    if not checks["cubit_export_handoff_ok"]:
+        issues.append("Cubit export package handoff is not ok")
+    if not checks["cubit_quality_handoff_ok"]:
+        issues.append("Cubit quality package handoff is not ok")
+    if not checks["cubit_quality_ledger_handoff_ok"]:
+        issues.append("Cubit quality ledger handoff is not ok")
+    if not checks["cubit_solver_route_handoff_ok"]:
+        issues.append("Cubit solver-route handoff is not ok")
+    if not checks["cubit_meshing_scheme_handoff_ok"]:
+        issues.append("Cubit meshing-scheme handoff is not ok")
+    if (
+        expected_length_unit_norm
+        and checks["expected_cad_length_unit_matches"] is False
+        or expected_area_unit_norm
+        and checks["expected_cad_area_unit_matches"] is False
+        or expected_volume_unit_norm
+        and checks["expected_cad_volume_unit_matches"] is False
+    ):
+        issues.append("CAD handoff rows/files must carry the expected length/area/volume units")
+    if (
+        expected_measurement_convention_norm
+        and checks["expected_cad_measurement_convention_matches"] is False
+    ):
+        issues.append("CAD handoff rows/files must carry the expected mass-property measurement convention")
+    if (
+        expected_measurement_postprocess_row_convention_schema
+        and checks["expected_cad_measurement_postprocess_row_convention_schema_id_matches"] is False
+    ):
+        issues.append("CAD handoff rows/files must carry the expected mass-property postprocess-row convention schema")
+    if (
+        expected_measurement_component_basis_schema
+        and checks["expected_cad_measurement_component_basis_schema_id_matches"] is False
+    ):
+        issues.append("CAD handoff rows/files must carry the expected mass-property component-basis schema")
+    return {
+        "policy": "build123d_cad_handoff_manifest_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "shape_names": names,
+        "geometry_ids": sorted(set(geometry_ids)),
+        "expected_geometry_ids": None if expected_ids is None else sorted(expected_ids),
+        "file_kinds": file_kinds,
+        "file_paths": file_paths,
+        "required_file_kinds": required_kinds,
+        "external_volume_policy": volume_summary.get("policy"),
+        "external_volume_sources": volume_summary.get("sources", []),
+        "cubit_export_handoff_policy": export_handoff.get("policy"),
+        "cubit_quality_handoff_policy": quality_handoff.get("policy"),
+        "cubit_quality_ledger_handoff_policy": quality_ledger_handoff.get("policy"),
+        "cubit_solver_route_handoff_policy": solver_route_handoff.get("policy"),
+        "cubit_meshing_scheme_handoff_policy": meshing_scheme_handoff.get("policy"),
+        "cad_output_artifact_id": cad_output_artifact_id or None,
+        "cad_output_digest": cad_output_digest or None,
+        "cad_output_path": cad_output_path or None,
+        "cad_output_artifact_ids": cad_output_artifact_ids,
+        "cad_output_digests": cad_output_digests,
+        "cad_output_paths": cad_output_paths,
+        "expected_cad_output_artifact_id": expected_cad_output_artifact,
+        "expected_cad_output_digest": expected_cad_output_hash,
+        "require_cad_output_artifact": bool(require_cad_output_artifact),
+        "cad_observable_id": cad_observable_id or None,
+        "cad_observable_family": cad_observable_family or None,
+        "cad_observable_ids": cad_observable_ids,
+        "cad_observable_families": cad_observable_families,
+        "expected_cad_observable_id": expected_cad_observable,
+        "expected_cad_observable_family": expected_cad_observable_kind,
+        "require_cad_observable": bool(require_cad_observable),
+        "units": {"length": length_units, "area": area_units, "volume": volume_units},
+        "expected_units": {
+            "length": expected_length_unit_norm or None,
+            "area": expected_area_unit_norm or None,
+            "volume": expected_volume_unit_norm or None,
+        },
+        "cad_measurement_convention": measurement_convention or None,
+        "cad_measurement_conventions": measurement_conventions,
+        "expected_cad_measurement_convention": expected_measurement_convention_norm or None,
+        "cad_measurement_postprocess_row_convention_schema_id": (
+            measurement_postprocess_row_convention_schema_id or None
+        ),
+        "cad_measurement_postprocess_row_convention_schema_ids": (
+            measurement_postprocess_row_convention_schema_ids
+        ),
+        "expected_cad_measurement_postprocess_row_convention_schema_id": (
+            expected_measurement_postprocess_row_convention_schema or None
+        ),
+        "require_measurement_postprocess_row_convention_schema": (
+            measurement_postprocess_row_convention_schema_required
+        ),
+        "cad_measurement_component_basis_schema_id": (
+            measurement_component_basis_schema_id or None
+        ),
+        "cad_measurement_component_basis_schema_ids": (
+            measurement_component_basis_schema_ids
+        ),
+        "expected_cad_measurement_component_basis_schema_id": (
+            expected_measurement_component_basis_schema or None
+        ),
+        "require_measurement_component_basis_schema": (
+            measurement_component_basis_schema_required
+        ),
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use this as the last build123d-side preflight before Cubit/CST/solver notebooks consume CAD exports.",
+            "Volume is the common CAD currency, but the manifest must also keep area, bbox, file identity, and downstream package gates together.",
+            "When a STEP or manifest package is consumed downstream, bind the CAD output artifact id, digest, and path explicitly.",
+            "Bind the CAD observable id/family too, so volume/area/bbox manifests are not confused with mesh, field, or solver-ready observables.",
+            "Bind length/area/volume units and mass-property measurement convention so Cubit/CST/build123d volume cross-checks cannot mix model-unit, mm, and SI interpretations.",
+            "Bind the mass-property postprocess-row convention schema so volume/area/bbox rows cannot silently switch selected solids, compound aggregation, or objective reduction semantics.",
+            "Bind the mass-property component-basis schema so volume, area, bbox, center, and derived components cannot be reinterpreted as one scalar value.",
+            "When a Cubit mixed route is requested, bind the Cubit solver-route handoff too so pyramid transition cells cannot be silently tetized downstream.",
+            "When Cubit scheme intent is available, bind the meshing-scheme handoff too so a fresh CAD package cannot reuse a stale exported .vol artifact.",
+            "When Cubit quality-ledger identity is available, bind it too so a CAD package cannot reuse stale mesh-quality digests.",
+        ],
+    }
+
+
+def shape_submodel_cad_handoff_gate(
+    shape_rows,
+    *,
+    recipe_id,
+    parent_model_id,
+    submodel_region_id,
+    crop_box,
+    export_id="",
+    unit="",
+    file_manifest=(),
+    boundary_handoff=None,
+    transition_handoff=None,
+    expected_geometry_ids=None,
+    bbox_atol=1.0e-12,
+) -> dict:
+    """Check build123d local CAD identity before submodel mesh handoff.
+
+    This is the CAD-side companion to solver/Cubit submodel boundary-handoff
+    gates.  It keeps the local recipe, crop box, shape mass properties, export
+    files, and optional downstream boundary-handoff gate together.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    recipe_text = str(recipe_id or "").strip()
+    parent_text = str(parent_model_id or "").strip()
+    submodel_text = str(submodel_region_id or "").strip()
+    export_text = str(export_id or "").strip()
+    unit_text = str(unit or "").strip()
+    files = [dict(item) for item in (file_manifest or ())]
+    boundary = dict(boundary_handoff or {})
+    transition = dict(transition_handoff or {})
+    expected_ids = None if expected_geometry_ids is None else {
+        str(value).strip() for value in expected_geometry_ids if str(value).strip()
+    }
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("min") is not None and bbox.get("max") is not None
+
+    def normalize_box(box):
+        data = dict(box or {})
+        if data.get("min") is not None and data.get("max") is not None:
+            mins = [float(v) for v in data["min"]]
+            maxs = [float(v) for v in data["max"]]
+        elif data.get("center") is not None and data.get("size") is not None:
+            center = [float(v) for v in data["center"]]
+            size = [float(v) for v in data["size"]]
+            mins = [center[i] - 0.5 * size[i] for i in range(3)]
+            maxs = [center[i] + 0.5 * size[i] for i in range(3)]
+        else:
+            return None
+        if len(mins) != 3 or len(maxs) != 3:
+            return None
+        size = [maxs[i] - mins[i] for i in range(3)]
+        if any(not math.isfinite(v) for v in mins + maxs + size):
+            return None
+        if any(v < 0.0 for v in size):
+            return None
+        center = [(mins[i] + maxs[i]) * 0.5 for i in range(3)]
+        return {"min": mins, "max": maxs, "size": size, "center": center}
+
+    crop = normalize_box(crop_box)
+    names = [str(row.get("name", "")).strip() for row in rows]
+    geometry_ids = [str(row.get("geometry_id", "")).strip() for row in rows]
+    row_bboxes = [_row_bounding_box(row) if has_bbox(row) else None for row in rows]
+    tol = float(bbox_atol)
+
+    def row_inside_crop(bbox):
+        if crop is None or bbox is None:
+            return False
+        return all(
+            bbox["min"][i] >= crop["min"][i] - tol
+            and bbox["max"][i] <= crop["max"][i] + tol
+            for i in range(3)
+        )
+
+    file_kinds = [str(item.get("kind", "")).strip() for item in files]
+    file_paths = [str(item.get("path", "")).strip() for item in files]
+    boundary_checks = boundary.get("checks", {})
+    if not isinstance(boundary_checks, dict):
+        boundary_checks = {}
+    boundary_submodel = str(boundary.get("submodel_region_id", "") or "").strip()
+    transition_checks = transition.get("checks", {})
+    if not isinstance(transition_checks, dict):
+        transition_checks = {}
+    boundary_volume_counts = boundary.get("volume_kind_counts", {})
+    if not isinstance(boundary_volume_counts, dict):
+        boundary_volume_counts = {}
+    boundary_surface_counts = boundary.get("surface_kind_counts", {})
+    if not isinstance(boundary_surface_counts, dict):
+        boundary_surface_counts = {}
+    boundary_has_pyramid = int(boundary_volume_counts.get("pyramid", 0) or 0) > 0
+    boundary_surface_kinds = {
+        str(kind).strip()
+        for kind, count in boundary_surface_counts.items()
+        if str(kind).strip() and int(count or 0) > 0
+    }
+
+    def as_name_set(value):
+        if value is None:
+            return set()
+        if isinstance(value, str):
+            return {
+                part.strip()
+                for part in value.replace(";", ",").split(",")
+                if part.strip()
+            }
+        if isinstance(value, dict):
+            return {str(item).strip() for item in value.values() if str(item).strip()}
+        return {str(item).strip() for item in value if str(item).strip()}
+
+    boundary_material_names = as_name_set(
+        boundary.get("material_names")
+        or boundary.get("materials")
+        or boundary.get("expected_material_names")
+        or boundary.get("sidecar_material_names")
+        or boundary.get("row_names")
+    )
+    boundary_allowed_zero_material_names = as_name_set(
+        boundary.get("allowed_zero_measurement_names")
+        or boundary.get("allowed_zero_material_names")
+        or boundary.get("zero_volume_material_names")
+    )
+    transition_kinds_raw = transition.get("transition_kinds", ())
+    if isinstance(transition_kinds_raw, str):
+        transition_kinds = {transition_kinds_raw.strip()}
+    else:
+        transition_kinds = {
+            str(value).strip() for value in transition_kinds_raw if str(value).strip()
+        }
+    transition_surface_kinds_raw = (
+        transition.get("surface_kinds")
+        or transition.get("transition_surface_kinds")
+        or transition.get("required_surface_kinds")
+        or ()
+    )
+    if isinstance(transition_surface_kinds_raw, str):
+        transition_surface_kinds = {
+            part.strip()
+            for part in transition_surface_kinds_raw.replace(";", ",").split(",")
+            if part.strip()
+        }
+    else:
+        transition_surface_kinds = {
+            str(value).strip()
+            for value in transition_surface_kinds_raw
+            if str(value).strip()
+        }
+    transition_material_names = as_name_set(
+        transition.get("downstream_material_names")
+        or transition.get("material_names")
+    )
+    transition_allowed_zero_material_names = as_name_set(
+        transition.get("allowed_zero_downstream_material_names")
+        or transition.get("allowed_zero_material_names")
+    )
+    boundary_interface_roles = as_name_set(
+        boundary.get("interface_roles")
+        or boundary.get("roles_present")
+        or boundary.get("required_roles")
+        or boundary.get("interface_adjacency_roles")
+    )
+    transition_interface_roles = as_name_set(
+        transition.get("interface_roles")
+        or transition.get("required_interface_roles")
+        or transition.get("transition_interface_roles")
+    )
+
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "geometry_ids_match_expected": expected_ids is None or set(geometry_ids) == expected_ids,
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "recipe_id_recorded": bool(recipe_text),
+        "parent_model_id_recorded": bool(parent_text),
+        "submodel_region_id_recorded": bool(submodel_text),
+        "crop_box_recorded": crop is not None,
+        "shape_bboxes_inside_crop": bool(row_bboxes) and all(row_inside_crop(bbox) for bbox in row_bboxes),
+        "export_id_recorded": bool(export_text),
+        "unit_recorded": bool(unit_text),
+        "file_manifest_present": bool(files),
+        "file_kinds_recorded": all(bool(kind) for kind in file_kinds),
+        "file_paths_recorded": all(bool(path) for path in file_paths),
+        "step_file_present": "step" in file_kinds,
+        "measurement_json_present": "build123d_measurement_json" in file_kinds,
+        "boundary_handoff_ok": (
+            not boundary
+            or (
+                boundary.get("status") == "ok"
+                and "boundary_handoff" in str(boundary.get("policy", ""))
+            )
+        ),
+        "boundary_handoff_submodel_matches": (
+            not boundary
+            or (bool(boundary_submodel) and boundary_submodel == submodel_text)
+        ),
+        "transition_handoff_ok": (
+            not transition
+            or (
+                transition.get("status") == "ok"
+                and transition.get("policy") == "build123d_hex_tet_transition_role_metadata_gate"
+            )
+        ),
+    }
+    if boundary:
+        checks["boundary_handoff_has_zoom_boundary"] = bool(boundary.get("zoom_boundary_id"))
+        checks["boundary_handoff_error_recorded"] = (
+            boundary.get("boundary_transfer_error_estimate") is not None
+            or boundary_checks.get("boundary_transfer_error_estimate_recorded") is True
+        )
+    if boundary_has_pyramid or transition:
+        checks["transition_handoff_present_for_pyramid_boundary"] = bool(transition)
+        checks["transition_handoff_kind_matches_boundary"] = (
+            not boundary_has_pyramid or "pyramid" in transition_kinds
+        )
+        checks["transition_handoff_connects_hex_tet"] = (
+            not boundary_has_pyramid
+            or transition_checks.get("transition_connects_required_roles") is True
+        )
+    if boundary_surface_kinds or transition_surface_kinds:
+        checks["transition_handoff_surface_kinds_recorded"] = bool(transition_surface_kinds)
+        checks["transition_handoff_surface_kinds_match_boundary"] = (
+            not boundary_surface_kinds
+            or boundary_surface_kinds.issubset(transition_surface_kinds)
+        )
+    if boundary_material_names or transition_material_names:
+        checks["boundary_material_names_recorded"] = bool(boundary_material_names)
+        checks["transition_handoff_material_names_recorded"] = bool(transition_material_names)
+        checks["transition_handoff_material_names_match_boundary"] = (
+            not boundary_material_names
+            or boundary_material_names.issubset(transition_material_names)
+        )
+    if boundary_allowed_zero_material_names or transition_allowed_zero_material_names:
+        checks["transition_handoff_zero_material_names_match_boundary"] = (
+            not boundary_allowed_zero_material_names
+            or boundary_allowed_zero_material_names.issubset(transition_allowed_zero_material_names)
+        )
+    if boundary_interface_roles or transition_interface_roles:
+        checks["boundary_interface_roles_recorded"] = bool(boundary_interface_roles)
+        checks["transition_handoff_interface_roles_recorded"] = bool(transition_interface_roles)
+        checks["transition_handoff_interface_roles_match_boundary"] = (
+            not boundary_interface_roles
+            or boundary_interface_roles.issubset(transition_interface_roles)
+        )
+
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "build123d_submodel_cad_handoff_gate",
+        "status": "ok" if not issues else "needs_attention",
+        "shape_names": names,
+        "geometry_ids": sorted(set(geometry_ids)),
+        "expected_geometry_ids": None if expected_ids is None else sorted(expected_ids),
+        "recipe_id": recipe_text,
+        "parent_model_id": parent_text,
+        "submodel_region_id": submodel_text,
+        "crop_box": crop,
+        "export_id": export_text,
+        "unit": unit_text,
+        "file_kinds": file_kinds,
+        "file_paths": file_paths,
+        "boundary_handoff_policy": boundary.get("policy"),
+        "boundary_handoff_status": boundary.get("status"),
+        "boundary_volume_kind_counts": boundary_volume_counts,
+        "boundary_surface_kind_counts": boundary_surface_counts,
+        "boundary_material_names": sorted(boundary_material_names),
+        "boundary_allowed_zero_material_names": sorted(boundary_allowed_zero_material_names),
+        "boundary_interface_roles": sorted(boundary_interface_roles),
+        "transition_handoff_policy": transition.get("policy"),
+        "transition_handoff_status": transition.get("status"),
+        "transition_handoff_kinds": sorted(transition_kinds),
+        "transition_handoff_surface_kinds": sorted(transition_surface_kinds),
+        "transition_handoff_material_names": sorted(transition_material_names),
+        "transition_handoff_allowed_zero_material_names": sorted(transition_allowed_zero_material_names),
+        "transition_handoff_interface_roles": sorted(transition_interface_roles),
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use this before a local build123d CAD crop is promoted to Cubit/Netgen meshing.",
+            "The CAD recipe, crop box, shape measurements, files, and boundary-handoff gate must travel together.",
+            "A good local volume is not enough if the parent model or inherited boundary contract is missing.",
+            "When the downstream Cubit boundary handoff contains a pyramid bridge, also attach the build123d hex-to-tet transition intent gate.",
+            "If the downstream Cubit gate has surface-family evidence, keep the expected quad/triangle surface-family intent in the build123d transition handoff too.",
+            "If the downstream Cubit gate has material/block labels or sidecar row names, keep matching downstream material names in the build123d transition handoff.",
+            "If the downstream Cubit gate has interface-adjacency roles, keep matching hex-to-transition and transition-to-tet intent in the build123d transition handoff.",
+        ],
+    }
+
+
+def shape_curvilinear_mesh_intent_gate(
+    shape_rows,
+    *,
+    downstream_manifest_gate=None,
+    downstream_order_series_gate=None,
+    required_roles=("hex_region",),
+    expected_route="cubit_hex_or_mixed_path",
+    expected_handoff="cubit_curvilinear_handoff",
+) -> dict:
+    """Check build123d CAD rows before Cubit curvilinear mesh handoff.
+
+    build123d owns CAD shape intent and mass properties.  Cubit owns high-order
+    hex/mixed meshing.  This gate keeps that split explicit by requiring CAD
+    rows to carry volume/area/bbox plus a mesh role, route, and downstream
+    handoff label before the Cubit curvilinear manifest is allowed to consume
+    the STEP package.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    manifest_gate = dict(downstream_manifest_gate or {})
+    order_series_gate = dict(downstream_order_series_gate or {})
+    required = {str(role).strip() for role in required_roles if str(role).strip()}
+    route = str(expected_route or "").strip()
+    handoff = str(expected_handoff or "").strip()
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    names = [str(row.get("name", "")).strip() for row in rows]
+    geometry_ids = [str(row.get("geometry_id", "")).strip() for row in rows]
+    roles = {str(row.get("role", row.get("mesh_role", ""))).strip() for row in rows if str(row.get("role", row.get("mesh_role", ""))).strip()}
+    routes = {str(row.get("mesh_route", row.get("routing_hint", ""))).strip() for row in rows if str(row.get("mesh_route", row.get("routing_hint", ""))).strip()}
+    handoffs = {str(row.get("downstream_handoff", row.get("handoff", ""))).strip() for row in rows if str(row.get("downstream_handoff", row.get("handoff", ""))).strip()}
+    manifest_checks = manifest_gate.get("checks", {})
+    if not isinstance(manifest_checks, dict):
+        manifest_checks = {}
+    order_series_checks = order_series_gate.get("checks", {})
+    if not isinstance(order_series_checks, dict):
+        order_series_checks = {}
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "required_roles_present": required.issubset(roles),
+        "route_is_cubit_hex_or_mixed": routes == {route},
+        "handoff_label_recorded": handoffs == {handoff},
+        "not_tet_only_route": "netgen_tri_tet_path" not in routes and "tet_only" not in roles,
+        "downstream_manifest_ok": not manifest_gate or manifest_gate.get("status") == "ok",
+        "downstream_projection_error_ok": not manifest_gate or (
+            manifest_checks.get("projection_error_recorded") is True
+            and manifest_checks.get("projection_error_within_tolerance") is True
+        ),
+        "downstream_negative_jacobian_zero": not manifest_gate or (
+            manifest_checks.get("negative_jacobian_count_recorded") is True
+            and manifest_checks.get("negative_jacobian_count_zero") is True
+        ),
+        "downstream_order_series_ok": not order_series_gate or order_series_gate.get("status") == "ok",
+        "downstream_order_series_policy_known": not order_series_gate or (
+            order_series_gate.get("policy") == "cubit_mixed_order_series_inventory_gate"
+        ),
+        "downstream_order_series_topology_invariant": not order_series_gate or (
+            order_series_checks.get("volume_kind_counts_invariant") is True
+            and order_series_checks.get("surface_kind_counts_invariant") is True
+        ),
+        "downstream_order_series_route_matches": not order_series_gate or (
+            order_series_checks.get("routing_hint_is_cubit_mixed") is True
+        ),
+        "downstream_order_series_first_order_inventory": not order_series_gate or (
+            order_series_checks.get("first_order_inventory_present") is True
+            and order_series_checks.get("first_order_inventory_not_curved") is True
+        ),
+    }
+    issues = []
+    if not checks["shape_rows_have_volume_area_bbox"]:
+        issues.append("CAD rows must carry volume, area, and bounding_box before curvilinear handoff")
+    if not checks["required_roles_present"]:
+        issues.append("CAD rows do not include all required mesh roles")
+    if not checks["route_is_cubit_hex_or_mixed"]:
+        issues.append("curvilinear mesh intent must route to Cubit hex/mixed, not tet-only Netgen")
+    if not checks["downstream_manifest_ok"]:
+        issues.append("downstream Cubit curvilinear manifest gate is not ok")
+    if not checks["downstream_projection_error_ok"]:
+        issues.append("downstream Cubit curvilinear manifest must record projection error within tolerance")
+    if not checks["downstream_negative_jacobian_zero"]:
+        issues.append("downstream Cubit curvilinear manifest must record zero negative-Jacobian elements")
+    if not checks["downstream_order_series_ok"]:
+        issues.append("downstream Cubit order-series inventory gate is not ok")
+    if not checks["downstream_order_series_policy_known"]:
+        issues.append("downstream Cubit order-series gate policy is not cubit_mixed_order_series_inventory_gate")
+    if not checks["downstream_order_series_topology_invariant"]:
+        issues.append("downstream Cubit order series must keep volume and surface topology invariant")
+    if not checks["downstream_order_series_route_matches"]:
+        issues.append("downstream Cubit order series must keep cubit_hex_or_mixed_path routing")
+    if not checks["downstream_order_series_first_order_inventory"]:
+        issues.append("downstream Cubit order series must include non-curved first-order inventory")
+
+    return {
+        "policy": "build123d_curvilinear_mesh_intent_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "shape_names": names,
+        "geometry_ids": sorted(set(geometry_ids)),
+        "roles": sorted(roles),
+        "routes": sorted(routes),
+        "handoffs": sorted(handoffs),
+        "required_roles": sorted(required),
+        "expected_route": route,
+        "expected_handoff": handoff,
+        "downstream_manifest_policy": manifest_gate.get("policy"),
+        "downstream_manifest_checks": manifest_checks,
+        "downstream_order_series_policy": order_series_gate.get("policy"),
+        "downstream_order_series_checks": order_series_checks,
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use this on build123d CAD rows before Cubit owns high-order hex or mixed meshing.",
+            "The first-order tri/tet education path remains separate from Cubit curvilinear handoff.",
+            "Volume/area/bbox are CAD evidence; order, projection error, and Jacobian quality remain downstream Cubit evidence.",
+            "If a Cubit order series is attached, first-order topology/routing must remain invariant when curvedelements grow with order.",
+        ],
+    }
+
+
+def shape_mesh_environment_handoff_gate(
+    shape_rows,
+    mesh_environment_gate,
+    *,
+    expected_route="cubit_hex_or_mixed_path",
+    expected_environment_policy="cubit_headless_installation_route_gate",
+) -> dict:
+    """Check that CAD intent is handed to a verified mesh environment.
+
+    build123d owns geometry and mass properties, but it should not imply that a
+    downstream mesher version was actually available.  This gate binds CAD rows
+    to a mesh-environment replay gate so release-note watchlists cannot be
+    mistaken for installed headless execution evidence.
+    """
+
+    rows = [dict(row) for row in shape_rows]
+    if not rows:
+        raise ValueError("shape_rows must not be empty")
+    environment = dict(mesh_environment_gate or {})
+    route = str(expected_route or "").strip()
+    expected_policy = str(expected_environment_policy or "").strip()
+
+    def has_bbox(row):
+        bbox = row.get("bounding_box") or row.get("bbox")
+        return isinstance(bbox, dict) and bbox.get("size") is not None
+
+    names = [str(row.get("name", "")).strip() for row in rows]
+    geometry_ids = [str(row.get("geometry_id", "")).strip() for row in rows]
+    routes = {
+        str(row.get("mesh_route", row.get("routing_hint", ""))).strip()
+        for row in rows
+        if str(row.get("mesh_route", row.get("routing_hint", ""))).strip()
+    }
+    env_checks = environment.get("checks", {})
+    if not isinstance(env_checks, dict):
+        env_checks = {}
+    license_status = str(environment.get("license_status", "")).strip()
+    version_probe_command = str(environment.get("version_probe_command", "")).strip()
+    version_probe_summary = environment.get("version_probe_summary", {})
+    if version_probe_summary is None:
+        version_probe_summary = {}
+    if not isinstance(version_probe_summary, dict):
+        version_probe_summary = {}
+    checks = {
+        "shape_rows_present": bool(rows),
+        "shape_names_recorded": all(bool(name) for name in names),
+        "shape_geometry_ids_recorded": all(bool(value) for value in geometry_ids),
+        "shape_geometry_ids_unique": len(set(geometry_ids)) == len(geometry_ids),
+        "shape_rows_have_volume_area_bbox": all(
+            row.get("volume") is not None and row.get("area") is not None and has_bbox(row)
+            for row in rows
+        ),
+        "mesh_route_matches_expected": routes == {route},
+        "mesh_environment_gate_ok": environment.get("status") == "ok",
+        "mesh_environment_policy_known": environment.get("policy") == expected_policy,
+        "installed_version_recorded": bool(environment.get("installed_version")),
+        "binary_path_recorded": bool(environment.get("binary_path")),
+        "binary_exists": environment.get("binary_exists") is True
+        or env_checks.get("binary_exists") is True,
+        "binary_path_is_console_com": env_checks.get("binary_path_is_console_com") is True,
+        "headless_flags_present": env_checks.get("required_headless_flags_present") is True,
+        "live_claim_matches_installed": env_checks.get("live_claim_matches_installed_version") is True,
+        "release_note_watchlist_not_live_claim": env_checks.get("release_note_watchlist_not_live_claim") is True,
+        "license_status_allows_headless_probe": (
+            not license_status or env_checks.get("license_status_allows_headless_probe") is True
+        ),
+        "version_probe_is_synchronous_console": (
+            not version_probe_command or env_checks.get("version_probe_is_synchronous_console") is True
+        ),
+        "version_probe_uses_recorded_binary": (
+            not version_probe_command or env_checks.get("version_probe_uses_recorded_binary") is True
+        ),
+        "version_probe_summary_records_installed_version": (
+            not version_probe_summary
+            or env_checks.get("version_probe_summary_records_installed_version") is True
+        ),
+        "version_probe_summary_records_license_status": (
+            not version_probe_summary
+            or env_checks.get("version_probe_summary_records_license_status") is True
+        ),
+    }
+    issues = []
+    if not checks["shape_rows_have_volume_area_bbox"]:
+        issues.append("build123d CAD rows must carry volume, area, and bbox before mesh-environment handoff")
+    if not checks["mesh_route_matches_expected"]:
+        issues.append("CAD mesh_route does not match the expected downstream mesh lane")
+    if not checks["mesh_environment_gate_ok"]:
+        issues.append("mesh environment gate is not ok")
+    if not checks["binary_path_is_console_com"]:
+        issues.append("mesh environment binary must be the console coreform_cubit.com executable")
+    if not checks["version_probe_uses_recorded_binary"]:
+        issues.append("mesh environment version probe must use the recorded binary path")
+    if not checks["live_claim_matches_installed"]:
+        issues.append("mesh environment live claim does not match installed version")
+    if not checks["version_probe_summary_records_installed_version"]:
+        issues.append("mesh environment version-probe summary does not record the installed version")
+    return {
+        "policy": "build123d_mesh_environment_handoff_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "shape_names": names,
+        "geometry_ids": sorted(set(geometry_ids)),
+        "routes": sorted(routes),
+        "expected_route": route,
+        "mesh_environment_policy": environment.get("policy"),
+        "installed_version": environment.get("installed_version"),
+        "binary_path": environment.get("binary_path"),
+        "license_status": license_status,
+        "version_probe_command": version_probe_command,
+        "version_probe_summary": version_probe_summary,
+        "release_note_version": environment.get("release_note_version"),
+        "live_claimed_release_version": environment.get("live_claimed_release_version"),
+        "checks": checks,
+        "issues": issues,
+        "notes": [
+            "Use this before sending build123d CAD rows into Cubit/Coreform headless meshing.",
+            "A release-note watchlist is useful learning, but installed-version evidence must support live mesh claims.",
+            "Slot354-style Cubit handoff requires coreform_cubit.com, not the GUI launcher executable, and the version probe must use that same recorded binary.",
+            "Volume/area/bbox remain build123d evidence; headless flags and mesher version remain downstream environment evidence.",
+            "When provided, sanitized license status and synchronous version-probe summary remain downstream environment evidence, not CAD evidence.",
         ],
     }
 

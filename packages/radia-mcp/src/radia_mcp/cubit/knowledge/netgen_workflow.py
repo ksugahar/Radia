@@ -100,6 +100,20 @@ currency, but volume alone can hide a wrong scale or clipped face; the sidecar
 should also carry total surface area and bbox dimensions whenever they are
 available.  For a simple `1.5 x 2.0 x 0.75` mapped brick the expected values
 are volume `2.25`, surface area `11.25`, and bbox size `[1.5, 2.0, 0.75]`.
+Slot210 adds the unit contract for Cubit/build123d/CST CAD cross-checks:
+record `length_unit`, `area_unit`, and `volume_unit` (or a `units` mapping)
+with the sidecar, then pass the expected units into
+`cubit_mass_property_sidecar_gate`.  A perfect numeric volume is still
+`needs_attention` if one CAD lane reports `mm^3` while the replay gate expects
+`m^3`.
+
+Slot274 adds material/block label identity for mixed routes.  If a hex core,
+pyramid transition, and tet region are exported as one solver-ready package,
+the mass-property sidecar should keep rows named like `hex_core`,
+`pyramid_transition`, and `tet_region`, and those names should match the `.vol`
+inventory material labels.  A transition material may report zero CAD volume in
+the sidecar, but only when that exact row name is passed as an allowed zero
+measurement; missing or stale material names stay `needs_attention`.
 
 ### Continuous-loop Cubit export package identity gate
 
@@ -114,6 +128,243 @@ with an old sidecar or a raw JSON from a different geometry.  The package gate
 requires the `.vol.json` path to pair with the `.vol`, requires raw result
 presence, checks shared `export_id`/`geometry_id`, and can verify the inventory
 source plus `cubit_hex_or_mixed_path` routing hint.
+
+Slot306 adds the observable identity to the same package.  Keep
+`export_observable_id` and `export_observable_family` next to the emitted
+`export_output_artifact_id`/digest/path.  The output artifact says which file
+was emitted; the observable identity says what that file is being used to
+measure or prove, such as `netgen_vol_inventory`, `quality_distribution`, a
+sidecar material map, or a solver-ready mesh contract.  This prevents a fresh
+`.vol` file from being paired with a stale inventory/quality/result-table
+interpretation.
+
+### Continuous-loop headless batch quality package gate
+
+For hex-led Cubit work, keep the headless batch result and quality replay rows
+as one package too.  The raw batch JSON should record `export_id`,
+`geometry_id`, Cubit version, `-nographics -batch` command line, output paths,
+and `pass=true`; the quality replay row should carry the same
+`export_id`/`geometry_id`, element type, count, and status.  Replay the pair
+with `cubit_headless_batch_quality_package_gate` before a docs notebook or
+solver-ready run consumes the quality evidence.
+
+This gate catches a second stale-row class: a valid quality distribution can be
+reused with the wrong mesh, or a GUI command line can sneak into a headless
+automation slot.  Treat missing headless command evidence, mismatched
+`geometry_id`, and zero quality count as `needs_attention`.
+
+When the run also exported a `.vol`, pass the parsed inventory into
+`cubit_headless_batch_quality_package_gate` as `export_inventory`.  The gate
+then binds the inventory source path, positive `volumeelements`, volume-kind
+count such as `hex: 64`, and `cubit_hex_or_mixed_path` routing hint to the same
+headless package.  This is the slot194 lesson: a batch raw JSON and a quality
+row are not enough once the export file is handed to a notebook or solver; the
+export inventory must agree with the same mesh count and route.
+
+Slot234 adds the route-separation check for the MATLAB/Gypsilab `.vol` policy:
+if a quality package claims a Cubit hex-led route, the parsed inventory must
+not be tri/tet-only and must contain the quality element kind being replayed.
+This prevents a valid hex quality row from being paired with a Netgen
+tri/tet-only export, and keeps Cubit hex/mixed evidence out of the educational
+tri/tet `.vol` reader.
+
+Slot242 adds process-evidence checks for headless Cubit automation.  When the
+raw batch JSON records process metadata, `cubit_headless_batch_quality_package_gate`
+now requires `process_mode=headless_batch`, `-nographics -batch`, a disabled GUI
+daemon, a batch script path that appears in the command line, a recorded process
+exit code, and either `exit_code=0` or an explicit headless startup/warning note
+for the known valid-artifact/nonzero-exit path.  This keeps batch/process health
+separate from mesh quality while preventing a persistent GUI daemon or stale
+script path from becoming solver-ready evidence.
+
+Slot314 tightens the noisy-exit path.  If a headless Cubit batch ends nonzero
+after writing valid `.vol`/quality artifacts, record
+`process_exit_policy=artifact_evidence_over_process_exit` and
+`solver_ready_claimed=false`.  This policy does not make a nonzero process exit
+healthy by itself; it only says that archived artifact evidence can be replayed
+while solver-ready promotion remains blocked until inventory, quality, and
+process evidence agree.  A nonzero exit with `solver_ready_claimed=true` or a
+missing/wrong `process_exit_policy` should fail before downstream notebooks or
+LLM-driven solver imports reuse the mesh.
+
+Keep the batch process exit status separate from the archived raw JSON.  A
+headless run can produce a valid mesh-quality JSON and still end with a startup
+or plugin freshness warning.  Record that warning explicitly, and do not promote
+plugin-specific export evidence until the export plugin freshness has been
+checked; simple Cubit API quality replay can still be useful when the raw JSON
+and package identity gates pass.
+
+Slot369 adds a mesh-quality ledger identity gate.  After
+`cubit_quality_distribution_gate` proves that a scaled-Jacobian/Jacobian list is
+healthy, replay `cubit_mesh_quality_ledger_identity_gate` before reusing the
+row in notebooks or solver-ready imports.  The ledger should carry
+`mesh_quality_artifact_id`, `mesh_quality_digest`, `quality_metric_set_id`,
+`mesh_artifact_id`, `mesh_digest`, `export_id`, `geometry_id`, routing hint,
+element-type counts, `min_scaled_jacobian`, and `negative_jacobian_count`.
+Negative controls should include a stale quality digest, a nonzero
+negative-Jacobian count, and a tri/tet-only inventory paired with a Cubit
+hex-led quality row.  This turns Cubit 2026.6-style quality-metric learning and
+high-order mesh literature into a reusable artifact contract instead of a loose
+table of nice-looking minimum values.
+
+Slot376 extends that ledger to execution evidence.  When a quality ledger is
+promoted beyond a raw Cubit replay, require `created_at_utc`, Cubit/Coreform
+`version`, nonnegative `elapsed_s`, and a compact `timing_breakdown_s` with the
+dominant stages.  Reject stale versions, non-parseable timestamps, sparse timing
+breakdowns, and timing totals that cannot fit inside the recorded elapsed time.
+
+Slot390 extends the same quality ledger to parametric meshing and optimization
+evidence.  When a Cubit quality row is produced from a mesh-size, smoothing,
+scheme, or design-variable parameter set, carry `parameter_set_artifact_id`,
+`parameter_set_digest`, `parameter_set_path`, `objective_observable_id`, and
+`objective_observable_family` with the ledger and replay
+`cubit_mesh_quality_ledger_identity_gate(..., require_parameter_set_artifact=True)`.
+Reject stale parameter-set digests, missing parameter-set paths, and wrong
+objective families before a quality row is reused by notebooks, panels, or
+solver-ready mixed-mesh imports.
+
+Slot425 adds postprocess-row convention schema identity to the quality ledger.
+`quality_metric_set_id` says which metric family was computed, but it does not
+say how a distribution was selected, aggregated, reduced to a minimum, or handed
+to a notebook objective.  Carry
+`mesh_quality_postprocess_row_convention_schema_id` and replay
+`cubit_mesh_quality_ledger_identity_gate(...,
+require_quality_postprocess_row_convention_schema=True)` before using quality
+rows as panel defaults, solver-ready evidence, or optimization objectives.
+Reject stale scalar-row conventions and missing postprocess-row convention
+schemas even when `quality_metric_set_id`, mesh digest, and parameter/objective
+identity all look plausible.
+
+Slot432 adds component-basis schema identity to that same quality ledger.
+`quality_metric_set_id` names the metric family and
+`mesh_quality_postprocess_row_convention_schema_id` names the row reduction, but
+neither says which element family, quality component, coordinate basis, or
+normalization the row represents.  Carry
+`mesh_quality_component_basis_schema_id` and replay
+`cubit_mesh_quality_ledger_identity_gate(...,
+require_quality_component_basis_schema=True)` before a Cubit quality row becomes
+a notebook default, panel slider target, or optimization objective.  Reject
+stale scalar-value component bases and missing component-basis schemas even
+when metric-set, postprocess-row convention, mesh digest, and parameter/objective
+identity all pass.
+
+Slot330 binds that headless/process evidence to the mixed solver-ready package.
+When `cubit_mixed_solver_ready_package_gate` is used for a hex+pyramid+tet
+handoff, pass the verified `cubit_headless_batch_quality_package_gate` as
+`headless_batch_quality_gate` whenever process evidence is available.  The
+package then requires the same export/geometry identity plus
+`process_mode=headless_batch`, `-nographics -batch`, disabled GUI daemon, batch
+script identity, and a successful or explicitly documented process exit before
+the mixed mesh is promoted.  This prevents a good mixed topology package from
+being accidentally paired with a GUI run, stale batch script, or undocumented
+nonzero exit.
+
+Slot354 tightens installed-version evidence.  When replaying
+`cubit_headless_installation_route_gate`, record the actual console binary path
+as `coreform_cubit.com`, not the GUI `coreform_cubit.exe` stub, and require the
+`.com -version` probe command to use that same recorded binary.  Release-note
+knowledge such as Coreform Cubit 2026.6 stays a watchlist until that installed
+binary reports the same version.  This keeps live headless evidence separate
+from documentation-only release learning and from GUI daemon paths.
+
+Slot346 adds the downstream solver-route manifest.  A mixed Cubit
+hex+pyramid+tet package should say how each element family will be consumed:
+hex cells are the primary volume-FEM region, pyramid cells are explicit
+transition bridge cells, and tet cells are compatibility or subregion cells.
+Record `solver_route_package_id`, `route_policy`, `downstream_solver`,
+`tet_only_owner=netgen_tri_tet_path`, `no_implicit_tetization=true`,
+`volume_routes`, and `surface_routes`, then replay the contract with
+`cubit_mixed_solver_route_manifest_gate` and pass it into
+`cubit_mixed_solver_ready_package_gate`.  Pyramid cells are not display-only
+mesh noise and should not be silently split or tetized before a solver-ready
+claim.
+
+Slot383 adds downstream solver-reader contract identity to that same route
+manifest.  When a mixed hex+pyramid+tet route is promoted as solver-ready, the
+manifest should also carry `solver_contract_artifact_id`,
+`solver_contract_digest`, and `solver_contract_path` (or the
+`downstream_solver_contract_*` aliases) for the NGSolve/radia-ngsolve reader
+contract that actually accepts those element families.  A fresh Cubit route
+manifest with a stale solver-reader digest, or no contract path, remains
+`needs_attention`; do not infer solver readiness from element counts alone.
+
+Slot418 adds solver-route convention schema identity to the same manifest.
+`route_policy` and the element-route rows say what the package claims, while
+`solver_route_convention_schema_id` records the versioned meaning of hex
+primary, pyramid transition, tet compatibility/subregion, surface trace, and
+no-implicit-tetization roles.  Pass
+`expected_solver_route_convention_schema_id` plus
+`require_solver_route_convention_schema=True` to
+`cubit_mixed_solver_route_manifest_gate`.  A value-only route convention or
+missing schema id should fail even when element counts, route policy, and the
+downstream solver-reader contract digest look plausible.
+
+Slot404 binds the emitted Netgen `.vol` file to its Cubit `.vol.json` sidecar.
+The export package already carries export id, geometry id, order, observable id,
+and output digest, but a stale sidecar can still have the right filename and
+wrong counts.  When sidecar count metadata is available, pass
+`require_vol_sidecar_inventory_counts=True` to
+`cubit_export_package_identity_gate` and require the sidecar `n_elements`,
+`n_points`, and `order` to match the parsed `.vol` inventory.  For the
+`01_Tet_Hex_Pyramid_order1.vol` fixture this means 12 volume elements, 13
+points, and order 1.  A stale sidecar element count should fail before a mixed
+mesh is promoted to a panel, notebook, or solver-ready route.  Also do not infer
+order from the filename: in a headless Cubit 2025.12 smoke run, omitting the
+`order` argument while writing an `*_order1.vol` filename produced a sidecar
+with `order=2`; adding `order 1` made the sidecar record `order=1`.
+
+Slot411 adds schema identity for the same sidecar.  Counts and order protect
+against stale data, but an old `.vol.json` layout can still carry plausible
+`n_elements`, `n_points`, and `order` fields while meaning "material volume
+table" instead of "Netgen `.vol` inventory sidecar".  Store
+`vol_sidecar_schema_id` on the `.vol.json` artifact row and pass
+`expected_vol_sidecar_schema_id` plus `require_vol_sidecar_schema=True` to
+`cubit_export_package_identity_gate` before notebooks or solver-ready routes
+consume the package.  A stale legacy sidecar schema or a missing schema id
+should fail even when the sidecar filename and counts still match the parsed
+`.vol`.
+
+### Continuous-loop Coreform Cubit 2026.6 release routing gate
+
+Coreform Cubit 2026.6 was released on 1 June 2026.  The official release notes
+list anisotropic tetrahedral meshing, cohesive element generation, higher-order
+Tetra10/Tri6 Jacobian and scaled-Jacobian metrics, improved triangle/tet
+robustness, lower-memory Sculpt refinement, expanded solver/file compatibility
+including 64-bit Exodus IDs, namespaces for tracking names through operations,
+GNN feature extraction, and an included Python 3.12 runtime:
+`https://coreform.com/coreform-cubit/release-notes/v2026-6/`.
+
+Use `cubit_release_feature_routing_gate` to turn that public release knowledge
+into lab routing before treating it as validation evidence.  The CAE-AI Lab
+policy remains: Cubit is the hex-led and mixed hex+pyramid+tet lane; tet-only
+education stays on Netgen/OCC unless a slot explicitly needs Coreform's advanced
+tet controls.  For 2026.6, map higher-order Tetra10/Tri6 metrics into archived
+quality replay, cohesive elements into explicit interface/block identity
+examples, anisotropic tet meshing into an advanced reference lane, and solver
+I/O improvements into format-compatibility notes rather than `.vol` parser
+relaxation.
+
+### Continuous-loop third-party curvilinear handoff manifest gate
+
+The new literature on high-order curvilinear mesh generation from third-party
+meshes reinforces a practical Cubit rule: high-order export is not solver-ready
+until the imported mesh, CAD/geometry association, curved export order, routing
+hint, and quality metrics travel together.  Use
+`cubit_curvilinear_handoff_manifest_gate` for this package.  A healthy package
+records a `third_party_mesh` or `imported_mesh` source, hex or mixed volume
+kinds, preserved boundary ids, a CAD projection/association policy, Netgen
+`.vol` or other curved export order at least 2, no implicit tetization or
+element splitting, a bounded CAD projection error such as
+`projection_quality.max_distance <= projection_quality.tolerance`, a
+scaled-Jacobian/Jacobian quality minimum, and `negative_jacobian_count = 0`.
+
+Do not relax the first-order tri/tet `.vol` parser for this.  Tet-only
+education remains on Netgen/OCC; Cubit owns the hex-led or mixed curvilinear
+handoff lane.  The manifest is the bridge between a mesh-recovery paper idea
+and a readable CAE-AI Lab workflow: it says what geometry the high-order nodes
+are curved to, what topology was preserved, how far the projected boundary
+nodes are from the intended CAD entity, and which quality evidence allows the
+export to move toward NGSolve or another solver.
 
 ### Continuous-loop mapped hex quality replay gate
 
@@ -150,14 +401,16 @@ not solver-ready if labels were lost.
 ### Continuous-loop mixed hex+pyramid+tet order-series gate
 
 For hex-led mixed workflows, replay the small Coreform/Cubit fixture exported
-as Netgen `.vol` orders 1 through 5.  The expected topology is invariant across
-orders: 1 hex, 1 pyramid, 10 tets, 6 quad boundary faces, and 10 triangle
-boundary faces.  The files grow with order because `curvedelements` data is
-added, but the routing class remains `cubit_hex_or_mixed_path`.  This is why
-`cubit_vol_inventory` routes from `surfaceelements` and `volumeelements`, not
-from file size or sidecar material volumes.  A pyramid transition block can
-report zero material volume in the `.vol.json` sidecar while still being
-present as a real topology record in the `.vol`.
+as Netgen `.vol` orders 1 through 5.  Use
+`cubit_mixed_order_series_inventory_gate` to keep the expected topology
+invariant across orders: 1 hex, 1 pyramid, 10 tets, 6 quad boundary faces, and
+10 triangle boundary faces.  The files grow with order because
+`curvedelements` data is added, but the routing class remains
+`cubit_hex_or_mixed_path`.  This is why `cubit_vol_inventory` routes from
+`surfaceelements` and `volumeelements`, not from file size or sidecar material
+volumes.  A pyramid transition block can report zero material volume in the
+`.vol.json` sidecar while still being present as a real topology record in the
+`.vol`.
 
 ### Continuous-loop mixed transition metadata gate
 
@@ -165,13 +418,26 @@ For hex-to-tet handoff, do not treat the pyramid bridge as a bookkeeping
 curiosity.  It is the explicit transition topology between the hex-led Cubit
 lane and the tet region.  Replay the `.vol` inventory with
 `cubit_mixed_transition_metadata_gate`: require hex, pyramid, and tet volume
-kinds, require the routing hint `cubit_hex_or_mixed_path`, and require a
-pyramid transition block label such as `pyramid_transition` or `pyram`.
+kinds, require quad and triangle surface families, require the routing hint
+`cubit_hex_or_mixed_path`, and require a pyramid transition block label such
+as `pyramid_transition` or `pyram`.
 
 This is intentionally checked from `.vol` arity and labels rather than from the
 companion `.vol.json` material-volume table.  The sidecar can report zero
 volume for the pyramid transition block while the `.vol` still contains the
-pyramid element that makes the mixed mesh conformal.
+pyramid element that makes the mixed mesh conformal.  Surface arity matters
+too: a hex-led mixed handoff should expose quad faces as well as triangle
+faces before boundary labels or NGSolve BND rows are trusted.
+
+Slot282 adds the interface-adjacency ledger.  After the mixed-transition gate
+passes, replay `cubit_mixed_interface_adjacency_gate` with rows such as
+`hex_to_transition` on a quad face touching `hex_core` and
+`pyramid_transition`, plus `transition_to_tet` on triangle faces touching
+`pyramid_transition` and `tet_region`.  This catches a stale interface ledger:
+the `.vol` can still contain the right hex/pyramid/tet and quad/triangle
+counts while the solver-ready boundary row has swapped or forgotten which
+surface is the hex-pyramid interface and which surface is the pyramid-tet
+interface.
 
 ### Continuous-loop live mixed hex+pyramid+tet NGSolve BND gate
 
@@ -188,6 +454,67 @@ external brick area `10e-6`, because the split material interface of area
 multi-block hex gates: compare BND to external area plus material-interface
 area, and do not use an empty surface inventory as evidence that BND integration
 will fail.
+
+### Continuous-loop mixed solver-ready package gate
+
+After the mixed transition, export identity, BND-area, and quality gates pass
+individually, bind them with `cubit_mixed_solver_ready_package_gate` before a
+notebook or solver-ready validation consumes the mesh.  A healthy mixed Cubit
+package records:
+
+* `.vol` inventory with `hex`, `pyramid`, and `tet` volume kinds;
+* `cubit_mixed_transition_metadata_gate` status `ok`;
+* `cubit_export_package_identity_gate` status `ok` and routing hint
+  `cubit_hex_or_mixed_path`;
+* `cubit_ngsolve_bnd_area_includes_material_interfaces_once` status `ok`;
+* `cubit_quality_distribution_gate` status `ok` with positive quality count.
+* optional `cubit_mixed_interface_adjacency_gate` status `ok` to freeze the
+  hex-pyramid and pyramid-tet interface roles.
+* optional `cubit_curvilinear_handoff_manifest_gate` status `ok` to bind
+  third-party/CAD association, boundary id preservation, projection tolerance,
+  curved export order, no implicit element conversion, and zero
+  negative-Jacobian evidence to the same mixed package.
+* optional export output artifact identity: `export_output_artifact_id`,
+  `export_output_digest`, and `export_output_path` bind the actual emitted
+  `.vol`/sidecar package consumed by notebooks or solver-ready steps.
+
+This is the Cubit counterpart to build123d CAD handoff gates: Cubit owns the
+mixed mesh evidence, while tet-only `.vol` education remains on the Netgen/OCC
+route.
+
+Slot338 adds the literature-driven curvilinear handoff row to this package
+gate.  The high-order third-party mesh lesson is discovery followed by strict
+validation: an imported mesh must record CAD/source association and projection
+quality before the mixed solver-ready package can reuse its curved `.vol`.
+
+Slot362 binds Cubit scheme traces to the actual exported mesh artifact.  When
+`cubit_meshing_scheme_trace_gate` is promoted to solver-ready evidence, record
+`export_output_artifact_id`, `export_output_digest`, and `export_output_path`
+beside the command digest, volume schemes, and export order.  A fresh journal
+trace with an old `.vol` digest is a stale mesh package and should fail before
+NGSolve/radia-ngsolve consumes it.
+
+### Continuous-loop submodel boundary handoff mesh package gate
+
+When a Cubit hex-led or mixed `.vol` is used as a local/zoomed submodel, bind
+the mesh inventory to the parent-to-local boundary handoff metadata with
+`cubit_submodel_boundary_handoff_mesh_package_gate`.  A healthy package records
+the `.vol` source, `volume_kind_counts` with at least the expected `hex` family,
+`cubit_hex_or_mixed_path` routing, boundary labels from `bcnames`,
+`parent_model_id`, `submodel_region_id`, `zoom_boundary_id`,
+`boundary_transfer_quantity`, `boundary_transfer_error_estimate`,
+`boundary_transfer_error_unit`, `local_refinement_rule`,
+`transition_policy` when a pyramid bridge is present, and
+`target_observable_id`.  This is the mesh-side companion to the generic
+submodel gate: local hex refinement is not enough unless the inherited boundary
+condition, mixed-mesh family inventory, transition policy, and error budget are
+attached to the same artifact.
+
+Slot202 adds the routing-policy row to this package gate.  When
+`cubit_release_feature_routing_gate` has encoded the lab rule, pass it into
+`cubit_mixed_solver_ready_package_gate(..., routing_policy_gate=...)`.  The
+package is then rejected if Cubit is mislabeled as the tet-only default route or
+if Netgen/OCC is not recorded as the ordinary tet-only owner.
 
 ### Continuous-loop two-block hex interface gate
 
@@ -219,6 +546,14 @@ Jacobian"|"Jacobian", min_value=...)` before routing the mesh downstream.  This
 does not claim that 2026.6 is installed on INTEL11; it records that higher-order
 tet/tri Jacobian metrics are a lower-bound quality contract, while live hex-led
 Coreform work on this machine targets the installed 2025.12 headless executable.
+
+Slot226 rechecked the installed-version lane directly with
+`coreform_cubit.com -version`.  The synchronous console probe reported
+`status: ValidStudent` and `Coreform Cubit Version 2025.12 Build 3d8d3af7`.
+Record this as installation/session evidence only: it proves the local headless
+route can report a valid license and installed version, but it is not a mesh
+quality result.  The public 2026.6 release-note features remain a watchlist
+until a 2026.6 executable is installed and replayed.
 
 Slot90 used two mapped blocks with dimensions `1.25 x 1.5 x 0.75` and
 `1.75 x 1.5 x 0.75`, exported Netgen orders 1 and 3.  The live inventory was

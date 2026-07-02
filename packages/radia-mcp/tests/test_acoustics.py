@@ -23,6 +23,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
     helmholtz_green_low_frequency_teaching_report,
+    low_frequency_helmholtz_kernel_manifest_gate,
     planar_helmholtz_dtn_symbol,
     planar_mode_radiation_impedance,
     pulsating_sphere_radiation,
@@ -121,6 +122,43 @@ def test_low_frequency_helmholtz_teaching_report_exposes_cancellation_scale():
     assert report["correction_agreement"] < 1.0e-15
     assert report["stable_correction"].imag == pytest.approx(-k / (4.0 * math.pi))
     assert report["stable_correction"].real == pytest.approx(-(k * k) * r / (8.0 * math.pi))
+
+
+def test_low_frequency_helmholtz_kernel_manifest_gate_requires_split_identity():
+    report = helmholtz_green_low_frequency_teaching_report(0.75, 1.0e-9, order=6)
+    report["kernel_family"] = "helmholtz_single_layer"
+    report["low_frequency_strategy"] = "laplace_plus_taylor_regular_part"
+
+    gate = low_frequency_helmholtz_kernel_manifest_gate(
+        report,
+        expected_kernel_family="helmholtz_single_layer",
+        expected_low_frequency_strategy="laplace_plus_taylor_regular_part",
+        expected_time_convention="exp(+i omega t), outgoing exp(-i k r)",
+        max_kr_abs=1.0e-6,
+        min_cancellation_ratio=1.0e8,
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["checks"]["kernel_family_recorded"] is True
+    assert gate["checks"]["low_frequency_strategy_recorded"] is True
+    assert gate["checks"]["expected_kernel_family_matches"] is True
+    assert gate["checks"]["expected_low_frequency_strategy_matches"] is True
+    assert gate["checks"]["expected_time_convention_matches"] is True
+    assert gate["checks"]["kr_abs_within_low_frequency_limit"] is True
+    assert gate["checks"]["cancellation_ratio_large_enough"] is True
+
+    wrong_strategy = dict(report, low_frequency_strategy="direct_exp_minus_laplace")
+    wrong_gate = low_frequency_helmholtz_kernel_manifest_gate(
+        wrong_strategy,
+        expected_low_frequency_strategy="laplace_plus_taylor_regular_part",
+    )
+    assert wrong_gate["status"] == "needs_attention"
+    assert wrong_gate["checks"]["expected_low_frequency_strategy_matches"] is False
+
+    high_kr = dict(report, kr_abs=0.2)
+    high_kr_gate = low_frequency_helmholtz_kernel_manifest_gate(high_kr, max_kr_abs=1.0e-3)
+    assert high_kr_gate["status"] == "needs_attention"
+    assert high_kr_gate["checks"]["kr_abs_within_low_frequency_limit"] is False
 
 
 def test_spherical_dtn_monopole_matches_closed_form_and_impedance():

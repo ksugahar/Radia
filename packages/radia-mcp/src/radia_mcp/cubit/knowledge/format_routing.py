@@ -177,6 +177,29 @@ Route by semantic inventory:
   Inventory them explicitly and route to a solver/export contract that supports
   them, or perform a deliberate conversion.  Do not split them implicitly in a
   generic `.vol` reader.
+- **mixed transition surface families** matter too.  A hex-led mixed handoff
+  should expose quad and triangle surface families before boundary labels,
+  interface area checks, or NGSolve BND rows are trusted.
+- **mixed transition adjacency roles** are separate from element counts.  Keep
+  a small ledger of `hex_to_transition` quad faces touching the pyramid bridge
+  and `transition_to_tet` triangle faces touching the tet side before
+  solver-ready boundary rows are promoted.
+- **Cubit meshing scheme traces** are separate from topology inventory.  Keep
+  the journal/command trace id, command digest, `volume <id> scheme ...` rows,
+  and `export netgen "...vol" order N` command next to the mixed package.
+  `cubit_meshing_scheme_trace_gate` catches stale mapped-hex/tetmesh scheme
+  drift before a hex-led `.vol` is reused.
+- **Cubit export output artifacts** are separate from both command traces and
+  topology inventory.  Keep `export_output_artifact_id`,
+  `export_output_digest`, and `export_output_path` next to the package so a
+  notebook or solver-ready step cannot silently read a stale `.vol`/sidecar
+  output after the Cubit journal or mesh inventory changed.
+- **Cubit export observable identity** is separate from the emitted file.
+  Keep `export_observable_id` and `export_observable_family` with the package
+  so agents know whether the `.vol` output is being used as a Netgen inventory,
+  quality distribution, sidecar material map, command log, or solver-ready mesh
+  contract.  A file digest match alone does not prove the consumer is reading
+  the intended observable.
 - **high-order `.vol` files** still route by the first-order element arity in
   `surfaceelements` and `volumeelements`.  Order-2..5 exports add
   `curvedelements` data and grow the file, but the hex/pyramid/tet inventory

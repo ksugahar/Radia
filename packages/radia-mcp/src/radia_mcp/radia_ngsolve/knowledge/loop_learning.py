@@ -11,9 +11,13 @@ TOPICS = {
     "mesh_geometry_vol": "Geometry, Cubit/build123d mass properties, and Netgen .vol gates",
     "force_moment": "Force, moment, Maxwell traction, Lorentz, and coenergy gates",
     "motor_airgap_torque": "Motor air-gap Maxwell shear torque from Br/Bt harmonics",
+    "fem_bem_trace_orientation": "FEM/BEM trace packages with normal-flux orientation evidence",
+    "fem_bem_solver_report": "FEM/BEM coupled solves with solver-report identity",
+    "bem_demag_source_mesh": "BEM demag source-balance surface mesh identity",
     "electrostatic_layered_dielectric": "Layered dielectric stack capacitance, D-continuity, and energy gates",
     "acoustic_impedance_power": "Acoustic impedance reflection, absorption, and boundary power",
     "rf_acoustic_passivity": "Acoustic/RF passivity and power-balance identities",
+    "geometric_time_integration": "Energy-drift checks for geometric time integration teaching gates",
     "mcp_closure": "How to decide whether an MCP server has actually learned",
 }
 
@@ -151,6 +155,13 @@ Force gates should compare independent descriptions of the same quantity:
 Do not use a single solver output as its own proof.  Each gate should include a
 closed form, a conservation identity, a symmetry/antisymmetry check, or an
 independent discretization identity.
+
+For force rows replayed from an external 2D solver, bind the numeric result to
+the input model artifact as well as the solution and postprocess artifacts.
+The reusable package should carry a model-input artifact id, digest, and path
+next to the loaded-solution id and output-table digest.  That prevents a copied
+force table from passing an analytic value check while it is actually tied to
+stale geometry, block labels, or source definitions.
 """
 
 
@@ -176,9 +187,123 @@ extraction.  It checks sign convention, phase convention, sector scaling,
 radius/stack-length scaling, and the difference between mesh-independent
 harmonic torque and mesh-sensitive weighted-stress extraction.
 
+When a sampled air-gap torque scalar is promoted from a solver export to a
+notebook or optimizer, keep the upstream model input package with it.  The
+torque-result package should repeat the field-table artifact, sample-grid
+artifact, integration method, torque-output artifact, and the project/model
+input artifact id, digest, and path.  This prevents a plausible Maxwell-shear
+torque value from being joined to stale project geometry, material, or current
+definitions.
+
 In radia-ngsolve, the executable helper is
 `air_gap_shear_torque_from_angle_samples`: feed angle samples and Br/Bt samples,
 then compare with the closed form above.
+"""
+
+
+FEM_BEM_TRACE_ORIENTATION = r"""
+# FEM/BEM trace orientation lesson
+
+A first-order tri/tet FEM/BEM handoff is not complete just because the trace
+matrix is one-hot and the boundary rows have the expected ids.
+
+Keep `trace_basis_schema_id` with the trace package.  It binds the volume H1
+nodal basis, boundary/surface P1 basis, and compact trace-row ordering before
+the row is reused by a BEM kernel, notebook result, or optimizer-visible
+postprocess table.
+
+Keep the normal-flux evidence as a separate artifact:
+
+* `normal_flux_artifact_id`: the report that checked stored triangle orientation
+  against the outward-from-volume convention.
+* `normal_flux_digest`: the actual orientation/sign table or flux-balance
+  report consumed by the notebook.
+* `normal_flux_convention`: for example `outward_from_volume`.
+
+This matters for scalar potential, acoustic, and low-frequency BEM teaching
+examples.  A stale normal-flux sign report can leave trace rows, kernel family,
+and assembly/quadrature ids looking valid while the Neumann/source sign is
+wrong.  Use `netgen_vol_first_order_fem_bem_trace_package_handoff` with
+`require_normal_flux_artifact=True` before reusing normal derivatives, flux
+integrals, or surface-source rows.
+"""
+
+
+FEM_BEM_SOLVER_REPORT = r"""
+# FEM/BEM solver-report identity lesson
+
+A FEM/BEM teaching package is still not reusable as a solved result just
+because the trace matrix, BEM kernel manifest, assembly/quadrature ids, normal
+orientation, and coupled-system digest are present.
+
+Keep the linear solve report as its own evidence:
+
+* `linear_solver_report_artifact_id`: which solve report was generated.
+* `linear_solver_report_digest`: the concrete report content consumed by the
+  notebook/result package.
+* `linear_solver_name`: for example a minimum-norm rank-deficient teaching
+  solve, direct factorization, or Krylov method.
+* `linear_solver_tolerance`: the target residual/solve tolerance.
+* `linear_solver_residual_norm`: the measured residual norm.
+* `linear_solver_iteration_count`: iteration count or `1` for a direct solve.
+* `result_artifact_id`: the solved-result package or executed notebook result
+  that consumed the solve report.
+* `run_started_at` or `created_at_utc`: an ISO-like timestamp for when the
+  result package was produced.
+* `tool_version`: the solver or teaching environment version that produced the
+  result package.
+* `notebook_source_artifact_id`, `notebook_source_digest`, and
+  `notebook_source_path`: the notebook or source script revision that produced
+  the visible result package.
+* `parameter_set_artifact_id`, `parameter_set_digest`, and
+  `parameter_set_path`: the initial values or design variables used by the
+  notebook/result package.
+* `objective_observable_id` and `objective_observable_family`: the scalar
+  objective or teaching observable that an optimizer, panel, or replayed
+  notebook will consume.
+* `timing_breakdown_s`: a compact timing ledger with about four dominant stages
+  so later notebooks can see whether mesh read, trace assembly, solve, or JSON
+  write dominated the teaching run.
+
+This keeps a valid coupled-system artifact from being paired with a stale solve
+report, stale notebook/source script, stale parameter defaults, or an
+optimization objective from a different observable family.  Use
+`netgen_vol_first_order_fem_bem_trace_package_handoff` with
+`require_linear_solver_report=True` and, when notebooks or optimization reuse
+the row, `require_parameter_set_artifact=True`.  Then keep the result artifact
+id, timestamp, version, notebook/source identity, parameter-set identity,
+objective-observable identity, and compact timing ledger with archived notebook
+or JSON results.
+"""
+
+
+BEM_DEMAG_SOURCE_MESH = r"""
+# BEM demag source-balance surface mesh lesson
+
+For PM demagnetization and magnetic-charge BEM workflows, the source-balance
+row is not only a scalar residual.
+
+Keep these identities separate:
+
+* `surface_mesh_id`: which closed PM surface mesh was used.
+* `surface_mesh_digest`: the actual mesh artifact, node/face order, and
+  surface-row set used by the BEM source balance.
+* `surface_row_count`: a quick row-count guard against truncated surface
+  ledgers.
+* `source_balance_artifact_id` and `source_balance_digest`: the computed
+  source-balance evidence.
+* `source_convention`: for example `sigma_m = M dot n`, with the normal
+  convention recorded explicitly.
+
+The mesh identity and the source-balance result identity are twins, but they
+are not the same artifact.  A stale surface mesh can produce a plausible
+near-zero source-balance residual, especially for symmetric PM teaching cases.
+
+Before promoting a demag-margin notebook or comparing against an open solver,
+run `pm_demag_margin_screening_package_gate` with the expected BEM surface mesh
+id, mesh digest, row count, source-balance artifact, source-balance digest, and
+source convention.  Negative controls should include stale mesh digest, wrong
+row count, stale source-balance digest, and wrong source convention.
 """
 
 
@@ -250,12 +375,91 @@ Two-port S-parameters:
 * Passivity gate: the largest eigenvalue of `S^H S` must be no larger than 1.
 * Power balance gate: for each unit incident port excitation,
   outgoing power plus absorbed power must equal one.
+* Keep the frequency-axis identity with S-parameter rows: `frequency_grid_id`,
+  `frequency_grid_digest`, row count, selected row index, and selected
+  frequency should travel together before passivity, equivalent-circuit, BEM,
+  or notebook reuse.
+* Keep the project/model input artifact identity with solver-ready
+  Touchstone/S-parameter manifests: `model_input_artifact_id`,
+  `model_input_digest`, and `model_input_path` should travel with the port,
+  grid, row, output, and timing evidence.  A valid S-parameter table is not the
+  same evidence package after geometry, materials, ports, or solver setup were
+  regenerated.
+* Keep the exact Touchstone export recipe with the same package:
+  `export_recipe_artifact_id`, `export_recipe_digest`, and
+  `export_recipe_path` identify the macro/script/postprocess recipe that
+  produced the raw file or selected row.  The recipe identity is part of the
+  operator/source ledger, just like reference planes, port basis, and current
+  conventions in electromagnetic papers.
+* Keep the postprocessed Touchstone output table schema with the same package:
+  `touchstone_output_schema_id`, `touchstone_output_columns`, and
+  `touchstone_output_units` distinguish a full two-port table from scalar-only
+  rows such as a lone `S21` objective export.  A raw/output artifact digest can
+  still be correct while the table layout is stale, reordered, or in different
+  units.
+* Keep the port-mode-basis schema with the port-mode-basis value:
+  `touchstone_port_mode_basis_schema_id` records how single-ended versus
+  mixed-mode power waves, reference orientation, and port order are interpreted.
+  The value `single_ended_power_wave_modes` alone is not enough provenance for
+  notebook, BEM, optimization, or equivalent-circuit reuse.
+* Pair solver-ready Touchstone/S-parameter manifests with
+  `solver_result_artifact_provenance_timing_gate`: record parseable
+  `created_at_utc` / `run_date_utc`, solver and MCP versions, and about four
+  dominant `timing_breakdown_s` stages before notebook, equivalent-circuit,
+  BEM, or optimization reuse.
+* Use the same discipline for solver-derived result tables from frequency,
+  design, or parameter sweeps: `sweep_axis_id`, `sweep_axis_digest`, and
+  `sweep_axis_row_count` belong beside the solution-data and exported-table
+  artifacts.  A copied table with the wrong parameter grid is a different
+  evidence package even when the dataset, solution tag, columns, and units
+  still look plausible.
+* When the table is produced by a parameter study, notebook panel, or
+  optimization objective, keep `parameter_set_artifact_id`,
+  `parameter_set_digest`, `parameter_set_path`, `objective_observable_id`, and
+  `objective_observable_family` with the result-table package.  Column names,
+  units, solution data, and sweep axis can all be correct while the row still
+  belongs to a stale design-variable set or a different objective family.
+* Solver-derived result tables also need solver-configuration identity:
+  `solver_configuration_artifact_id`, `solver_configuration_digest`,
+  `solver_sequence_tag`, `linear_solver`, and `relative_tolerance`.  A copied
+  table produced with a different solver setup is different evidence even when
+  the solution tag, sweep axis, output artifact, and numeric rows still look
+  plausible.
+* Replayable result tables should keep schema identities separate:
+  `result_table_schema_id` for layout, `physics_convention_schema_id` for
+  physical meaning, `result_postprocess_row_convention_schema_id` for row
+  reduction/objective semantics, and `result_component_basis_schema_id` for
+  component columns, complex representation, and basis/normalization ordering.
+  A stale component basis can keep the same values and row convention while
+  changing how the columns should be interpreted.
 * Keep return loss, insertion loss, absorbed power, and passivity residual in
   the artifact so later agents can diagnose why a sweep failed.
 * Treat one-port match quality as its own row: `S11` gives `|Gamma|`, VSWR,
   return loss, mismatch loss, reflected power, and transmitted power.  MATLAB
   teaching notebooks can use the same scalar gate as an optimization objective
   or constraint, but it should not be merged with `S21` insertion loss.
+"""
+
+
+GEOMETRIC_TIME_INTEGRATION = r"""
+# Geometric time-integration loop lesson
+
+For teaching dynamics, use a Hamiltonian toy problem before a heavy field solve.
+The harmonic oscillator is enough to expose a real numerical-analysis lesson:
+
+* explicit Euler is a useful negative control because its energy drifts upward
+  on a fixed time grid;
+* symplectic Euler does not conserve the exact energy pointwise, but its energy
+  error remains bounded and oscillatory;
+* implicit midpoint is symplectic and, for the linear oscillator, preserves the
+  quadratic Hamiltonian to roundoff.
+
+Record every method on the same time grid: method name, step size, step count,
+omega, initial energy, final relative drift, and maximum relative energy drift.
+Then run `geometric_integrator_energy_drift_gate` before claiming that a MATLAB
+or notebook dynamics example demonstrates a geometric integrator.  The gate is
+also a compact way to teach why preserving structure can matter more than only
+reducing the local truncation error.
 """
 
 
@@ -281,6 +485,25 @@ plainly.
 
 Apply the labels per slot.  Advancing the rotation without at least recording
 the MCP learning status makes later review harder and weakens the loop.
+
+When a direct MCP connector misses an already-running shared solver session,
+close the slot with session evidence rather than starting another process.
+Record the direct-discovery status, `matlab.engine.find_matlab()` engine list,
+selected shared engine name, successful shared-engine eval status, and
+`started_new_process=false` / `killed_process=false`.
+Use `shared_solver_session_health_gate` to keep a reusable session-health check
+separate from physics residuals or FEM/BEM result values.  A pure MATLAB or
+notebook validation can still use the selected shared engine when that is the
+session of record; the artifact must say which engine was used and that no
+solver process was started or killed.  If the selected engine name is absent
+from the recorded `find_matlab()` list, keep the slot at `needs_attention` even
+when passive diagnostics found a solver-owned MATLAB process.
+
+For an external solver slot, a visible shared engine name is not enough to call
+the slot live.  Close the discovery false-negative only after code executed in
+the selected shared engine reports both a successful solver-session attach and
+a solver-native preflight verdict.  Record those two payloads as session-health
+evidence, not as physics validation.
 """
 
 
@@ -290,9 +513,13 @@ _TOPIC_TEXT = {
     "mesh_geometry_vol": MESH_GEOMETRY_VOL,
     "force_moment": FORCE_MOMENT,
     "motor_airgap_torque": MOTOR_AIRGAP_TORQUE,
+    "fem_bem_trace_orientation": FEM_BEM_TRACE_ORIENTATION,
+    "fem_bem_solver_report": FEM_BEM_SOLVER_REPORT,
+    "bem_demag_source_mesh": BEM_DEMAG_SOURCE_MESH,
     "electrostatic_layered_dielectric": ELECTROSTATIC_LAYERED_DIELECTRIC,
     "acoustic_impedance_power": ACOUSTIC_IMPEDANCE_POWER,
     "rf_acoustic_passivity": RF_ACOUSTIC_PASSIVITY,
+    "geometric_time_integration": GEOMETRIC_TIME_INTEGRATION,
     "mcp_closure": MCP_CLOSURE,
 }
 

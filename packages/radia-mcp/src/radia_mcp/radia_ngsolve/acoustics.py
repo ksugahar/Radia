@@ -135,6 +135,115 @@ def helmholtz_green_low_frequency_teaching_report(distance, wavenumber, order=6)
     }
 
 
+def low_frequency_helmholtz_kernel_manifest_gate(
+    report,
+    expected_kernel_family=None,
+    expected_low_frequency_strategy=None,
+    expected_time_convention=None,
+    max_kr_abs=None,
+    max_stable_error=1.0e-12,
+    max_correction_agreement=1.0e-12,
+    min_cancellation_ratio=None,
+):
+    """Check a readable low-frequency Helmholtz BEM kernel report.
+
+    This is a manifest gate for teaching code, not a production quadrature
+    checker.  It verifies that the singular Laplace part, smooth Helmholtz
+    correction, time convention, kernel family, and low-frequency strategy are
+    recorded before a MATLAB/Gypsilab or NGSolve BEM row is reused.
+    """
+
+    if not isinstance(report, dict):
+        raise ValueError("report must be a dictionary")
+
+    def first(names):
+        for name in names:
+            if name in report and report[name] is not None:
+                return report[name]
+        return None
+
+    def as_float(value, default=None):
+        if value is None:
+            return default
+        return float(value)
+
+    def has_value(value):
+        return value is not None and str(value).strip() != ""
+
+    kind = str(first(("kind", "report_kind")) or "")
+    policy = str(first(("policy", "gate_policy")) or "")
+    kernel_family = first(("kernel_family", "kernelFamily", "bem_kernel_family", "bemKernelFamily"))
+    strategy = first((
+        "low_frequency_strategy",
+        "lowFrequencyStrategy",
+        "stabilization_strategy",
+        "kernel_split_strategy",
+    ))
+    time_convention = first(("time_convention", "timeConvention"))
+    kr_abs = as_float(first(("kr_abs", "krAbs")), None)
+    if kr_abs is None:
+        kr = first(("kr", "kTimesR"))
+        kr_abs = None if kr is None else abs(complex(kr))
+    stable_error = as_float(first(("stable_error", "stableError")), math.inf)
+    correction_agreement = as_float(first(("correction_agreement", "correctionAgreement")), math.inf)
+    cancellation_ratio = as_float(first(("cancellation_ratio", "cancellationRatio")), 0.0)
+    laplace_term = first(("laplace_term", "laplaceTerm"))
+    stable_correction = first(("stable_correction", "stableCorrection"))
+    direct_correction = first(("direct_correction", "directCorrection"))
+
+    checks = {
+        "kind_is_low_frequency_report": kind == "low_frequency_helmholtz_teaching_report",
+        "policy_records_readable_split": "kernel_split" in policy or "bem_kernel_split" in policy,
+        "kernel_family_recorded": has_value(kernel_family),
+        "low_frequency_strategy_recorded": has_value(strategy),
+        "time_convention_recorded": has_value(time_convention),
+        "kr_abs_recorded": kr_abs is not None,
+        "laplace_term_recorded": laplace_term is not None,
+        "stable_correction_recorded": stable_correction is not None,
+        "direct_correction_recorded": direct_correction is not None,
+        "stable_error_within_tolerance": stable_error <= float(max_stable_error),
+        "correction_agreement_within_tolerance": correction_agreement <= float(max_correction_agreement),
+    }
+    if expected_kernel_family is not None:
+        checks["expected_kernel_family_matches"] = str(kernel_family or "") == str(expected_kernel_family)
+    if expected_low_frequency_strategy is not None:
+        checks["expected_low_frequency_strategy_matches"] = str(strategy or "") == str(expected_low_frequency_strategy)
+    if expected_time_convention is not None:
+        checks["expected_time_convention_matches"] = str(time_convention or "") == str(expected_time_convention)
+    if max_kr_abs is not None:
+        checks["kr_abs_within_low_frequency_limit"] = kr_abs is not None and kr_abs <= float(max_kr_abs)
+    if min_cancellation_ratio is not None:
+        checks["cancellation_ratio_large_enough"] = cancellation_ratio >= float(min_cancellation_ratio)
+
+    return {
+        "policy": "low_frequency_helmholtz_kernel_manifest_gate",
+        "kind": kind,
+        "kernel_family": None if kernel_family is None else str(kernel_family),
+        "low_frequency_strategy": None if strategy is None else str(strategy),
+        "time_convention": None if time_convention is None else str(time_convention),
+        "kr_abs": kr_abs,
+        "stable_error": stable_error,
+        "correction_agreement": correction_agreement,
+        "cancellation_ratio": cancellation_ratio,
+        "expected_kernel_family": None if expected_kernel_family is None else str(expected_kernel_family),
+        "expected_low_frequency_strategy": (
+            None if expected_low_frequency_strategy is None else str(expected_low_frequency_strategy)
+        ),
+        "expected_time_convention": None if expected_time_convention is None else str(expected_time_convention),
+        "max_kr_abs": None if max_kr_abs is None else float(max_kr_abs),
+        "max_stable_error": float(max_stable_error),
+        "max_correction_agreement": float(max_correction_agreement),
+        "min_cancellation_ratio": None if min_cancellation_ratio is None else float(min_cancellation_ratio),
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "version_note": (
+            "Use before low-frequency Helmholtz BEM teaching rows are reused: "
+            "kernel family, time convention, Laplace singular term, smooth "
+            "correction strategy, and kr limit must be explicit."
+        ),
+    }
+
+
 def spherical_hankel2(degree, argument):
     r"""Spherical Hankel function ``h_l^(2)(z)`` for outgoing waves.
 

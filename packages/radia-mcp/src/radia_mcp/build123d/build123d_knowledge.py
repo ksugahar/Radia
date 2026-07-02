@@ -1588,6 +1588,57 @@ MCP tool `build123d_volume_crosscheck(...)`.  This is the right first gate
 for Cubit/CAD round trips because volume catches unit-scale mistakes, missing
 booleans, and dropped bodies without requiring identical face topology.
 
+When the validation claim specifically says "checked against Cubit and CST",
+wrap the volume summary with `shape_volume_crosscheck_source_coverage_gate(...)`
+and require sources such as `("cubit", "cst_import")`.  This keeps a
+single-source Cubit replay or build123d-only self-check from being mistaken for
+a two-kernel CAD crosscheck.
+
+Slot331 extends the volume crosscheck with source-identity metadata.  When an
+external CAD row set is created by Cubit, CST, or another importer, pass it as
+`{"source": "cubit", "rows": [...], "measurement_method": "...",
+"body_identity_key": "name", "source_artifact_id": "..."}`.  The summary keeps
+those fields, and `shape_volume_crosscheck_source_identity_gate(...)` can then
+require the expected measurement method, body identity key, and source artifact
+id before the volume rows are reused.  MCP callers can use
+`build123d_volume_crosscheck_source_identity_gate(...)` on the JSON returned by
+`build123d_volume_crosscheck(...)`.  This prevents a correct numeric volume from
+hiding a stale volume table, a mesh-volume-after-import method, or a row set
+keyed by an unstable body index instead of the build123d body name.
+
+Slot339 bundles coverage, source identity, and route contract into
+`shape_external_cad_volume_evidence_package_gate(...)` and the MCP tool
+`build123d_external_cad_volume_evidence_package(...)`.  Use it after
+`build123d_volume_crosscheck(...)` when the claim is "this build123d STEP is
+checked by Cubit and external CAD rows": the package requires both sources,
+per-source `measurement_method`, `body_identity_key`, and
+`source_artifact_id`, plus the build123d row's `geometry_id`, units, metadata,
+and `mesh_route="cubit_hex_or_mixed_path"`.  This keeps a numerically correct
+but stale CST table, a Cubit-only replay, or a tet-route CAD row from being
+promoted as Cubit/CST hex-mixed evidence.
+
+Slot391 extends the same volume crosscheck for parametric CAD and optimization
+replay.  When the CAD row set belongs to a parameter sweep, sizing study, or
+objective-driven design loop, pass per-source `parameter_set_artifact_id`,
+`parameter_set_digest`, `parameter_set_path`, `objective_observable_id`, and
+`objective_observable_family` through the measured-set metadata.  Then call
+`shape_volume_crosscheck_source_identity_gate(...)` or
+`shape_external_cad_volume_evidence_package_gate(...)` with the expected
+parameter/objective maps before solver-ready promotion.  This prevents a
+correct volume match from hiding stale sizing parameters, missing parameter-set
+paths, or an objective family that changed from CAD volume to mesh quality,
+thermal mass, or another downstream metric.
+
+Slot398 extends the downstream mesh-environment handoff.  A build123d CAD row
+with valid volume, area, bbox, source identity, parameter set, and objective
+identity is still not proof that the downstream hex/mixed mesher was live.  Bind
+it to `shape_mesh_environment_handoff_gate(...)` with a verified
+`cubit_headless_installation_route_gate(...)` payload.  When a version probe was
+used, pass only a sanitized `version_probe_summary`; raw license diagnostics
+belong in private operational logs, not in result-bearing CAD notebooks.  A
+stale summary version line must fail before a CAD row is promoted to Cubit
+mesh-ready evidence.
+
 When the external CAD kernel also reports surface area or bounding boxes, use
 the stronger `shape_mass_property_crosscheck_summary(...)` or MCP tool
 `build123d_mass_property_crosscheck(...)`.  Keep `shape_volume_crosscheck_summary`
@@ -1604,12 +1655,276 @@ hex/mixed mesh; volume should remain the common currency, while surface area
 and bbox dimensions catch scale or face-selection mistakes before `.vol`
 inventory.
 
+Slot211 tightens that bridge: build123d CAD rows that are compared against
+Cubit, CST, or other CAD kernels should carry `length_unit`, `area_unit`, and
+`volume_unit` (or a `units` mapping).  Pass the expected units to
+`shape_cad_route_source_contract_gate` / `build123d_cad_route_source_contract`;
+a row with matching numeric volume but `mm^3` instead of `m^3` is not
+solver-ready evidence.
+
 When Cubit has exported the mesh package, connect the build123d CAD row to the
 `.vol` package with `shape_cubit_export_package_handoff_gate`.  The build123d
 row should carry an explicit `geometry_id`; the Cubit package gate should carry
 the same `geometry_id`, a stable `export_id`, order, `.vol`/`.vol.json` pair,
 raw result, and routing hint.  This catches stale sidecars and wrong-geometry
 mesh packages before notebooks or solver-ready runs consume the files.
+
+Slot405 extends that CAD-to-Cubit handoff with `.vol.json` count identity.
+When the Cubit package gate has parsed sidecar metadata, call
+`shape_cubit_export_package_handoff_gate(..., require_sidecar_inventory_counts=True)`.
+The build123d CAD volume can match the Cubit material-volume sidecar while the
+mesh sidecar still has stale `n_elements`, `n_points`, or `order`.  Require the
+package checks `vol_sidecar_element_count_matches_inventory`,
+`vol_sidecar_point_count_matches_inventory`, and
+`vol_sidecar_order_matches_expected` before promoting the build123d row to a
+notebook, panel, optimizer, or mixed-mesh solver-ready route.
+
+Slot412 extends the same handoff with `.vol.json` schema identity.  A build123d
+CAD row can match the Cubit material-volume sidecar and the mesh sidecar can
+still report plausible counts/order while the sidecar layout is a legacy
+material-volume table rather than the Netgen `.vol` inventory schema.  Require
+`vol_sidecar_schema_id` in the Cubit package gate, then call
+`shape_cubit_export_package_handoff_gate(..., require_sidecar_schema=True)` so a
+stale or missing sidecar schema fails before the CAD row becomes a notebook,
+panel, optimizer, or solver-route input.
+
+When Cubit has not yet produced a `.vol` package but has produced a
+headless mesh-quality package, use `shape_cubit_quality_package_handoff_gate`.  The
+build123d row still carries the explicit `geometry_id`, while the Cubit quality
+package carries the same `geometry_id`, a stable `export_id`, a headless
+command proof, and a positive quality-element count.  This catches GUI/leaked
+session evidence, zero-count quality rows, and stale mesh-quality packages
+before they are reused as CAD validation evidence.
+
+Once the `.vol` export is part of the handoff, call
+`shape_cubit_quality_package_handoff_gate(..., require_export_inventory=True)`.
+That asks the Cubit package gate for parsed `export_inventory` evidence:
+positive volume elements, a route such as `cubit_hex_or_mixed_path`, and an
+inventory element count that agrees with the quality row.  This is the build123d
+side of the slot194 Coreform lesson: CAD mass properties, mesh quality, and
+`.vol` topology inventory are three different evidence rows and should only be
+promoted when their `geometry_id`/`export_id` package agrees.
+
+Slot235 extends this handoff with the slot234 Coreform route lesson: if Cubit
+is the owner of a hex-led or mixed route, the parsed export inventory must
+contain the same quality element family and must not be a tri/tet-only
+inventory.  In other words, build123d may author the CAD intent, but it should
+not consume a Cubit hex quality row through the Netgen/MATLAB tri/tet-only
+education path.  Keep the CAD row, quality row, route hint, element-kind
+counts, and inventory sidecar as separately checked evidence before promotion.
+
+Slot370 adds the stricter Cubit quality-ledger handoff.  After Cubit produces
+`cubit_mesh_quality_ledger_identity_gate`, call
+`shape_cubit_quality_ledger_handoff_gate` from the build123d side and bind
+`quality_artifact_id`, `quality_digest`, `metric_set_id`, `mesh_artifact_id`,
+`mesh_digest`, `geometry_id`, and `routing_hint` before solver-ready reuse.
+This turns the quality JSON into evidence tied to the exported mesh artifact,
+not just a plausible minimum scaled-Jacobian number.  Pass the result into
+`shape_cad_handoff_manifest_gate` as `cubit_quality_ledger_handoff` and include
+`cubit_quality_ledger_json` in the file manifest when the ledger exists.
+
+Slot377 extends this handoff to execution metadata.  If the Cubit quality
+ledger was promoted with `created_at_utc`, version, elapsed time, and timing
+breakdown checks, call `shape_cubit_quality_ledger_handoff_gate` with
+`require_quality_execution_metadata=True`.  This prevents a fresh build123d CAD
+row from reusing a stale or context-free Cubit quality ledger whose geometry
+and digests happen to look valid.
+
+Slot384 carries the Coreform mixed-route reader contract back into the
+build123d CAD handoff.  When a build123d row requests
+`mesh_route="cubit_hex_or_mixed_path"`, call
+`shape_cubit_solver_route_handoff_gate` with
+`require_solver_contract_artifact=True` and pass the expected
+`solver_contract_artifact_id`, `solver_contract_digest`, and
+`solver_contract_path` from the Cubit route manifest.  A fresh STEP/measurement
+row and an otherwise healthy Cubit route should still fail if the downstream
+NGSolve/radia-ngsolve mixed-element reader contract digest is stale or missing.
+
+Slot419 extends the same mixed-route handoff with route-convention schema
+identity.  The downstream reader contract says which solver can consume the
+mesh, but `solver_route_convention_schema_id` says what the route roles mean:
+hex primary volume cells, pyramid transition bridge cells, tet compatibility
+or subregion cells, surface trace families, and no implicit tetization.  Pass
+`expected_solver_route_convention_schema_id` and
+`require_solver_route_convention_schema=True` to
+`shape_cubit_solver_route_handoff_gate`; a value-only or missing route
+convention should fail even when CAD volume, Cubit route policy, and reader
+contract identity look plausible.
+
+Before handing the CAD package to Cubit, CST, or a solver notebook, collect the
+shape rows, file list, external CAD volume summary, and optional Cubit package
+handoff gates with `shape_cad_handoff_manifest_gate`.  Required file kinds
+should usually include a STEP file, a build123d measurement JSON, and the
+external volume summary JSON; add Cubit quality or export package JSON when
+those exist, and add Cubit quality-ledger JSON when a quality ledger is part of
+the handoff.  This is the final build123d-side preflight: volume remains the
+common currency, but area, bbox, file identity, and downstream package gates
+must travel together so a stale STEP or stale quality JSON cannot masquerade as
+a valid CAD handoff.
+
+Slot299 extends this handoff with CAD output artifact identity.  When a STEP,
+measurement JSON, or package manifest is consumed downstream, add
+`cad_output_artifact_id`, `cad_output_digest`, and `cad_output_path` to the file
+manifest and require them with `shape_cad_handoff_manifest_gate`.  This keeps
+the build123d-authored output artifact separate from the Cubit command trace
+and from the later Cubit `.vol` export artifact.
+
+Slot307 extends this handoff with CAD observable identity.  Add
+`cad_observable_id` and `cad_observable_family` to the same file manifest when
+the package is being used as a volume/area/bbox handoff, external CAD volume
+crosscheck, mesh-intent row, or solver-ready CAD contract.  The output artifact
+identity says which STEP/JSON file was emitted; the observable identity says
+what engineering evidence that file is meant to provide.  Do not let a fresh
+STEP digest silently reuse an old mass-property or mesh-intent interpretation.
+
+Slot315 extends the same CAD handoff with unit and measurement-convention
+identity.  Put `length_unit`, `area_unit`, `volume_unit`, and
+`cad_measurement_convention` on the build123d row or file manifest, and pass
+the expected values to `shape_cad_handoff_manifest_gate`.  For closed OCCT
+solids, use a convention such as `occt_closed_solid_mass_properties`; a stale
+`m^3` row, missing `mm^3` volume unit, or `mesh_volume_after_import`
+convention should fail before Cubit/CST/build123d volume cross-check evidence
+is reused.
+
+Slot426 extends the same CAD handoff with measurement postprocess-row
+convention identity.  `cad_measurement_convention` says which mass-property
+measurement method was used, but `cad_measurement_postprocess_row_convention_schema_id`
+says how volume, area, bbox, compound selection, and objective rows were
+selected and reduced.  For the ordinary build123d/OCCT mass-property ledger,
+use `build123d_occt_mass_property_row_convention_v1` and call
+`shape_cad_handoff_manifest_gate(..., require_measurement_postprocess_row_convention_schema=True)`.
+A stale scalar-volume row convention should fail even when
+`occt_closed_solid_mass_properties` still matches.
+
+Slot433 extends the same CAD handoff with measurement component-basis schema
+identity.  The measurement convention names the OCCT mass-property method and
+the row-convention schema names the row reduction, but neither says whether the
+row represents volume, area, bbox size, bbox center, a selected compound, or a
+derived objective component.  Put
+`cad_measurement_component_basis_schema_id` on the build123d row or file
+manifest and call
+`shape_cad_handoff_manifest_gate(..., require_measurement_component_basis_schema=True)`.
+For ordinary build123d/OCCT mass-property rows, use
+`build123d_occt_volume_area_bbox_component_basis_v1`.  A stale scalar-volume
+component basis should fail even when the measurement convention and
+postprocess-row convention are still correct.
+
+Slot347 adds the Cubit solver-route handoff.  When build123d CAD rows request
+`mesh_route="cubit_hex_or_mixed_path"`, bind the downstream
+`cubit_mixed_solver_route_manifest_gate` with
+`shape_cubit_solver_route_handoff_gate(...)` and pass it into
+`shape_cad_handoff_manifest_gate(...)` as `cubit_solver_route_handoff`.  This
+keeps hex primary volume FEM, pyramid transition bridge, tet compatibility
+subregion, `tet_only_owner=netgen_tri_tet_path`, and
+`no_implicit_tetization=true` with the CAD package.  A stale route that silently
+tetizes pyramids fails before Cubit/NGSolve consumes the STEP or `.vol`.
+
+Slot251 adds the local submodel CAD preflight:
+`shape_submodel_cad_handoff_gate` binds a build123d local crop to its
+`recipe_id`, `parent_model_id`, `submodel_region_id`, `crop_box`, `export_id`,
+unit, STEP/measurement files, and the downstream boundary-handoff gate.  Use it
+before a local crop is meshed or exported: the local CAD bbox must sit inside
+the crop box, and the boundary handoff must point at the same submodel region.
+This is the build123d-side form of the zooming lesson: a good local volume is
+not enough when the parent model or inherited boundary contract is missing.
+Slot259 extends this handoff for Cubit mixed meshes: if the downstream boundary
+handoff reports `volume_kind_counts` containing a `pyramid`, pass the
+`shape_transition_role_metadata_gate` result as `transition_handoff`.  The CAD
+side must then prove that the transition row has `transition_kind="pyramid"`
+and connects `hex_region` to `tet_region`.  build123d still does not create the
+actual pyramid elements; it records the intent so Cubit can create and verify
+the mesh transition later.
+
+Slot267 extends the same bridge with surface-family intent.  If the downstream
+Cubit `.vol` gate reports `surface_kind_counts` such as `quad` and `triangle`,
+the build123d transition handoff may also carry
+`required_surface_kinds=("quad", "triangle")` or a transition-row
+`expected_surface_kinds` list.  This is still only CAD-side intent: build123d
+does not prove the mesh has quad/triangle faces.  Cubit/Coreform verifies the
+actual `.vol` surface families, while build123d keeps that expectation tied to
+the CAD crop, transition envelope, and STEP export.
+
+Slot275 extends the same bridge with material/block label intent.  If the
+downstream Cubit sidecar or boundary handoff reports material labels such as
+`hex_core`, `pyramid_transition`, and `tet_region`, the build123d transition
+rows should carry explicit `downstream_material_name` values and
+`shape_transition_role_metadata_gate` should be called with
+`expected_downstream_material_names=(...)`.  If a transition sidecar row is
+allowed to report zero volume, carry that exact label with
+`allowed_zero_downstream_material_names=(...)`.  This is the CAD-side version
+of the homogenization lesson: CAD body names, solver materials, and Cubit block
+labels can differ, so the mapping must be explicit before the submodel handoff
+accepts the package.
+
+Slot291 extends the bridge with Cubit meshing-scheme intent.  If the downstream
+Coreform/Cubit package will verify a scheme trace with
+`cubit_meshing_scheme_trace_gate`, the build123d CAD rows should first record
+their intended role-to-scheme mapping with
+`shape_cubit_meshing_scheme_intent_gate`: for example
+`hex_region -> map`, `mesh_transition -> tetmesh`, and
+`tet_region -> tetmesh`.  Also carry the downstream meshing trace id, required
+command fragments such as `imprint all`, `merge all`, and `export netgen`, and
+the expected export order.  This is still CAD-side intent only: Cubit owns
+volume ids, command digest, and actual `.vol` inventory, while build123d keeps
+the intended scheme contract tied to the STEP and measurement rows.
+
+Slot363 carries the Slot362 export-artifact rule into build123d.  When the
+downstream Cubit scheme trace already names an exported `.vol`, call
+`shape_cubit_meshing_scheme_intent_gate(...,
+require_downstream_export_output_artifact=True)` and pass the expected
+`export_output_artifact_id`, `export_output_digest`, and `export_output_path`.
+Then pass that result into the final `shape_cad_handoff_manifest_gate(...)` as
+`cubit_meshing_scheme_handoff`.  This rejects a fresh build123d STEP package
+that accidentally reuses an old Cubit `.vol` digest, even when the role-to-
+scheme mapping and command fragments still look correct.
+
+For high-order curvilinear hex or mixed-mesh work, run
+`shape_curvilinear_mesh_intent_gate(...)` before handing the CAD rows to the
+Cubit curvilinear mesh manifest (`cubit_curvilinear_handoff`).  build123d owns
+the CAD intent, `geometry_id`, role labels, and mass properties; Cubit owns
+order, curving, CAD projection error, Jacobian/quality evidence, and `.vol`
+export.  The row should say `role="hex_region"` and
+`mesh_route="cubit_hex_or_mixed_path"`.  If the Cubit curvilinear manifest is
+already available, the build123d gate also requires
+`projection_error_within_tolerance` and `negative_jacobian_count_zero` to be
+true.  Slot323 also lets this gate consume
+`cubit_mixed_order_series_inventory_gate`: when a Cubit order-series gate is
+attached, it must be `ok`, keep volume/surface topology invariant, keep
+`cubit_hex_or_mixed_path`, and include a non-curved first-order inventory even
+if later orders add `curvedelements`.  Do not let the tet-only Netgen education
+path enter this handoff by accident.
+
+Before treating a build123d CAD package as ready for Cubit/Coreform headless
+meshing, bind the CAD rows to the installed mesh-environment replay gate with
+`shape_mesh_environment_handoff_gate(...)`.  This is the build123d-side bridge
+to `cubit_headless_installation_route_gate`: build123d records volume, area,
+bbox, `geometry_id`, and `mesh_route`, while the Cubit gate records installed
+version, binary discovery, `-nographics -batch`, no-GUI-daemon policy, and
+whether a newer release note is only a watchlist.  Never claim a live mesh
+feature from a release-note version that is not installed and replayed.
+Slot227 extends this bridge with Cubit version-probe provenance: when the
+downstream environment gate records `license_status="ValidStudent"` and a
+synchronous `coreform_cubit.com -version` command, build123d should carry those
+fields through as downstream environment evidence.  They are not CAD evidence
+and should not be mixed into the volume/area/bbox pass condition.
+
+Slot355 carries the Slot354 console-binary rule into build123d handoff: the
+downstream environment gate must report `binary_path_is_console_com=True` and
+`version_probe_uses_recorded_binary=True` before a CAD package is treated as
+ready for Coreform meshing.  Reject `coreform_cubit.exe` GUI-launcher evidence,
+or a `.com -version` probe that was run against a different path, even when the
+build123d volume, area, and bbox rows are already clean.
+
+After the volume or mass-property crosscheck passes, run
+`shape_cad_route_source_contract_gate(...)` before promoting the package to the
+Cubit/Coreform hex or mixed-mesh lane.  The row should say that it was authored
+by build123d/OCCT (`authoring_source` or `source_kind`), carry a stable
+`geometry_id`, include volume/area/bbox, and route to
+`mesh_route="cubit_hex_or_mixed_path"`.  The external crosscheck summary should
+show both a Cubit/Coreform-style source and another external CAD source group.
+This gate is intentionally stricter than a pure volume check: a tet-only Netgen
+route can be valid for education, but it should not be silently reused as the
+Cubit hex/mixed solver-ready path.
 
 For multi-body STEP round trips, run `shape_name_identity_gate(...)` before
 trusting volume/area/bbox rows.  It compares the named-shape multiset and
@@ -1635,7 +1950,11 @@ solver handoff intent: one row with role `hex_region`, one with role
 `transition_kind` set to `"pyramid"` and `connects_roles` containing
 `["hex_region", "tet_region"]`.  This is a CAD-side contract only: Cubit later
 creates the actual pyramid transition elements and the `.vol` inventory gate
-checks that they survived export.
+checks that they survived export.  When a downstream mixed `.vol` contract
+also requires quad and triangle surface families, pass
+`required_surface_kinds=("quad", "triangle")` and record
+`expected_surface_kinds=["quad", "triangle"]` on the transition row so the CAD
+package and mesh package share the same surface-family intent.
 
 Continuous-loop slot107 (2026-06-29): a build123d coaxial annular sleeve was
 checked across analytic/build123d, build123d STEP reimport, and headless Cubit

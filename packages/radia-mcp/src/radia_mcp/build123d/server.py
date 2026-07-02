@@ -158,6 +158,131 @@ def build123d_volume_crosscheck(
 
 
 @mcp.tool()
+def build123d_volume_crosscheck_source_coverage_gate(
+    volume_summary_json: str,
+    required_sources_json: str = "",
+    max_allowed_volume_rel_error: float | None = None,
+) -> str:
+    """Require Cubit/external CAD source coverage after a volume crosscheck."""
+
+    try:
+        volume_summary = json.loads(volume_summary_json)
+        required_sources = (
+            None if not required_sources_json.strip()
+            else json.loads(required_sources_json)
+        )
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_volume_crosscheck_source_coverage_gate
+        kwargs = {}
+        if required_sources is not None:
+            kwargs["required_sources"] = required_sources
+        if max_allowed_volume_rel_error is not None:
+            kwargs["max_allowed_volume_rel_error"] = max_allowed_volume_rel_error
+        summary = shape_volume_crosscheck_source_coverage_gate(
+            volume_summary,
+            **kwargs,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "volume_crosscheck_source_coverage_gate",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+def build123d_volume_crosscheck_source_identity_gate(
+    volume_summary_json: str,
+    expected_measurement_methods_json: str = "",
+    expected_body_identity_keys_json: str = "",
+    expected_source_artifact_ids_json: str = "",
+    expected_parameter_set_artifact_ids_json: str = "",
+    expected_parameter_set_digests_json: str = "",
+    expected_parameter_set_paths_json: str = "",
+    expected_objective_observable_ids_json: str = "",
+    expected_objective_observable_families_json: str = "",
+) -> str:
+    """Require source identity metadata after an external CAD volume crosscheck.
+
+    Use this after ``build123d_volume_crosscheck`` when external rows came from
+    Cubit, CST, or another CAD importer and the validation claim depends on the
+    measurement method, body identity key, or source artifact id.
+    """
+
+    try:
+        volume_summary = json.loads(volume_summary_json)
+        expected_measurement_methods = (
+            None if not expected_measurement_methods_json.strip()
+            else json.loads(expected_measurement_methods_json)
+        )
+        expected_body_identity_keys = (
+            None if not expected_body_identity_keys_json.strip()
+            else json.loads(expected_body_identity_keys_json)
+        )
+        expected_source_artifact_ids = (
+            None if not expected_source_artifact_ids_json.strip()
+            else json.loads(expected_source_artifact_ids_json)
+        )
+        expected_parameter_set_artifact_ids = (
+            None if not expected_parameter_set_artifact_ids_json.strip()
+            else json.loads(expected_parameter_set_artifact_ids_json)
+        )
+        expected_parameter_set_digests = (
+            None if not expected_parameter_set_digests_json.strip()
+            else json.loads(expected_parameter_set_digests_json)
+        )
+        expected_parameter_set_paths = (
+            None if not expected_parameter_set_paths_json.strip()
+            else json.loads(expected_parameter_set_paths_json)
+        )
+        expected_objective_observable_ids = (
+            None if not expected_objective_observable_ids_json.strip()
+            else json.loads(expected_objective_observable_ids_json)
+        )
+        expected_objective_observable_families = (
+            None if not expected_objective_observable_families_json.strip()
+            else json.loads(expected_objective_observable_families_json)
+        )
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_volume_crosscheck_source_identity_gate
+        summary = shape_volume_crosscheck_source_identity_gate(
+            volume_summary,
+            expected_measurement_methods=expected_measurement_methods,
+            expected_body_identity_keys=expected_body_identity_keys,
+            expected_source_artifact_ids=expected_source_artifact_ids,
+            expected_parameter_set_artifact_ids=expected_parameter_set_artifact_ids,
+            expected_parameter_set_digests=expected_parameter_set_digests,
+            expected_parameter_set_paths=expected_parameter_set_paths,
+            expected_objective_observable_ids=expected_objective_observable_ids,
+            expected_objective_observable_families=expected_objective_observable_families,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "volume_crosscheck_source_identity_gate",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
 def build123d_mass_property_crosscheck(
     reference_rows_json: str,
     measured_sets_json: str,
@@ -194,6 +319,440 @@ def build123d_mass_property_crosscheck(
         return json.dumps({
             "status": "error",
             "stage": "mass_property_crosscheck",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+def build123d_cad_route_source_contract(
+    shape_rows_json: str,
+    external_crosscheck_summary_json: str,
+    required_source_groups_json: str = "",
+    expected_route: str = "cubit_hex_or_mixed_path",
+    expected_length_unit: str = "",
+    expected_area_unit: str = "",
+    expected_volume_unit: str = "",
+    required_metadata_fields_json: str = "",
+) -> str:
+    """Gate a build123d CAD package before Cubit hex/mixed route promotion.
+
+    ``shape_rows_json`` should contain build123d measurement rows enriched with
+    ``geometry_id``, ``authoring_source`` or ``source_kind``, and
+    ``mesh_route``.  ``external_crosscheck_summary_json`` is the JSON output of
+    ``build123d_volume_crosscheck`` or ``build123d_mass_property_crosscheck``.
+    Optionally pass ``required_source_groups_json`` as e.g.
+    ``[["cubit", "coreform_cubit"], ["external_cad", "cst_import"]]``.
+    Pass ``required_metadata_fields_json`` as e.g.
+    ``["recipe_id", "cad_kernel", "cad_kernel_version", "script_path", "export_id"]``
+    when solver-ready promotion must bind CAD values to authoring provenance.
+    """
+
+    try:
+        shape_rows = json.loads(shape_rows_json)
+        external_crosscheck_summary = json.loads(external_crosscheck_summary_json)
+        required_source_groups = (
+            None if not required_source_groups_json.strip()
+            else json.loads(required_source_groups_json)
+        )
+        required_metadata_fields = (
+            None if not required_metadata_fields_json.strip()
+            else json.loads(required_metadata_fields_json)
+        )
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_cad_route_source_contract_gate
+        kwargs = {"expected_route": expected_route}
+        if expected_length_unit.strip():
+            kwargs["expected_length_unit"] = expected_length_unit
+        if expected_area_unit.strip():
+            kwargs["expected_area_unit"] = expected_area_unit
+        if expected_volume_unit.strip():
+            kwargs["expected_volume_unit"] = expected_volume_unit
+        if required_source_groups is not None:
+            kwargs["required_source_groups"] = required_source_groups
+        if required_metadata_fields is not None:
+            kwargs["required_metadata_fields"] = required_metadata_fields
+        summary = shape_cad_route_source_contract_gate(
+            shape_rows,
+            external_crosscheck_summary,
+            **kwargs,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "cad_route_source_contract",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+def build123d_external_cad_volume_evidence_package(
+    shape_rows_json: str,
+    volume_summary_json: str,
+    required_sources_json: str = "",
+    expected_measurement_methods_json: str = "",
+    expected_body_identity_keys_json: str = "",
+    expected_source_artifact_ids_json: str = "",
+    expected_parameter_set_artifact_ids_json: str = "",
+    expected_parameter_set_digests_json: str = "",
+    expected_parameter_set_paths_json: str = "",
+    expected_objective_observable_ids_json: str = "",
+    expected_objective_observable_families_json: str = "",
+    expected_route: str = "cubit_hex_or_mixed_path",
+    expected_length_unit: str = "",
+    expected_area_unit: str = "",
+    expected_volume_unit: str = "",
+    required_metadata_fields_json: str = "",
+    max_allowed_volume_rel_error: float | None = None,
+) -> str:
+    """Bundle dual-source CAD volume evidence before reuse.
+
+    ``volume_summary_json`` is the output of ``build123d_volume_crosscheck``.
+    This package gate then requires source coverage, source identity metadata,
+    and a build123d route contract in one reusable JSON object.
+    """
+
+    try:
+        shape_rows = json.loads(shape_rows_json)
+        volume_summary = json.loads(volume_summary_json)
+        required_sources = (
+            None if not required_sources_json.strip()
+            else json.loads(required_sources_json)
+        )
+        expected_measurement_methods = (
+            None if not expected_measurement_methods_json.strip()
+            else json.loads(expected_measurement_methods_json)
+        )
+        expected_body_identity_keys = (
+            None if not expected_body_identity_keys_json.strip()
+            else json.loads(expected_body_identity_keys_json)
+        )
+        expected_source_artifact_ids = (
+            None if not expected_source_artifact_ids_json.strip()
+            else json.loads(expected_source_artifact_ids_json)
+        )
+        expected_parameter_set_artifact_ids = (
+            None if not expected_parameter_set_artifact_ids_json.strip()
+            else json.loads(expected_parameter_set_artifact_ids_json)
+        )
+        expected_parameter_set_digests = (
+            None if not expected_parameter_set_digests_json.strip()
+            else json.loads(expected_parameter_set_digests_json)
+        )
+        expected_parameter_set_paths = (
+            None if not expected_parameter_set_paths_json.strip()
+            else json.loads(expected_parameter_set_paths_json)
+        )
+        expected_objective_observable_ids = (
+            None if not expected_objective_observable_ids_json.strip()
+            else json.loads(expected_objective_observable_ids_json)
+        )
+        expected_objective_observable_families = (
+            None if not expected_objective_observable_families_json.strip()
+            else json.loads(expected_objective_observable_families_json)
+        )
+        required_metadata_fields = (
+            None if not required_metadata_fields_json.strip()
+            else json.loads(required_metadata_fields_json)
+        )
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_external_cad_volume_evidence_package_gate
+        kwargs = {"expected_route": expected_route}
+        if required_sources is not None:
+            kwargs["required_sources"] = required_sources
+        if max_allowed_volume_rel_error is not None:
+            kwargs["max_allowed_volume_rel_error"] = max_allowed_volume_rel_error
+        if expected_measurement_methods is not None:
+            kwargs["expected_measurement_methods"] = expected_measurement_methods
+        if expected_body_identity_keys is not None:
+            kwargs["expected_body_identity_keys"] = expected_body_identity_keys
+        if expected_source_artifact_ids is not None:
+            kwargs["expected_source_artifact_ids"] = expected_source_artifact_ids
+        if expected_parameter_set_artifact_ids is not None:
+            kwargs["expected_parameter_set_artifact_ids"] = expected_parameter_set_artifact_ids
+        if expected_parameter_set_digests is not None:
+            kwargs["expected_parameter_set_digests"] = expected_parameter_set_digests
+        if expected_parameter_set_paths is not None:
+            kwargs["expected_parameter_set_paths"] = expected_parameter_set_paths
+        if expected_objective_observable_ids is not None:
+            kwargs["expected_objective_observable_ids"] = expected_objective_observable_ids
+        if expected_objective_observable_families is not None:
+            kwargs["expected_objective_observable_families"] = expected_objective_observable_families
+        if expected_length_unit.strip():
+            kwargs["expected_length_unit"] = expected_length_unit
+        if expected_area_unit.strip():
+            kwargs["expected_area_unit"] = expected_area_unit
+        if expected_volume_unit.strip():
+            kwargs["expected_volume_unit"] = expected_volume_unit
+        if required_metadata_fields is not None:
+            kwargs["required_metadata_fields"] = required_metadata_fields
+        summary = shape_external_cad_volume_evidence_package_gate(
+            shape_rows,
+            volume_summary,
+            **kwargs,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "external_cad_volume_evidence_package",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+def build123d_cubit_solver_route_handoff(
+    shape_rows_json: str,
+    solver_route_gate_json: str,
+    geometry_id_key: str = "geometry_id",
+    expected_route: str = "cubit_hex_or_mixed_path",
+    expected_solver_route_package_id: str = "",
+    expected_solver_route_convention_schema_id: str = "",
+    require_solver_route_convention_schema: bool = False,
+    require_no_implicit_tetization: bool = True,
+) -> str:
+    """Bind build123d CAD rows to a Cubit mixed solver-route manifest gate."""
+
+    try:
+        shape_rows = json.loads(shape_rows_json)
+        solver_route_gate = json.loads(solver_route_gate_json)
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_cubit_solver_route_handoff_gate
+        kwargs = {
+            "geometry_id_key": geometry_id_key,
+            "expected_route": expected_route,
+            "require_no_implicit_tetization": require_no_implicit_tetization,
+        }
+        if expected_solver_route_package_id.strip():
+            kwargs["expected_solver_route_package_id"] = expected_solver_route_package_id
+        if expected_solver_route_convention_schema_id.strip():
+            kwargs["expected_solver_route_convention_schema_id"] = expected_solver_route_convention_schema_id
+        if require_solver_route_convention_schema:
+            kwargs["require_solver_route_convention_schema"] = True
+        summary = shape_cubit_solver_route_handoff_gate(
+            shape_rows,
+            solver_route_gate,
+            **kwargs,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "cubit_solver_route_handoff",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+def build123d_cubit_quality_ledger_handoff(
+    shape_rows_json: str,
+    quality_ledger_gate_json: str,
+    geometry_id_key: str = "geometry_id",
+    expected_quality_artifact_id: str = "",
+    expected_quality_digest: str = "",
+    expected_metric_set_id: str = "",
+    expected_export_id: str = "",
+    expected_mesh_artifact_id: str = "",
+    expected_mesh_digest: str = "",
+    expected_route: str = "cubit_hex_or_mixed_path",
+    min_scaled_jacobian_threshold: float = 0.2,
+    require_hex_or_mixed_route: bool = True,
+) -> str:
+    """Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate."""
+
+    try:
+        shape_rows = json.loads(shape_rows_json)
+        quality_ledger_gate = json.loads(quality_ledger_gate_json)
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_cubit_quality_ledger_handoff_gate
+        kwargs = {
+            "geometry_id_key": geometry_id_key,
+            "expected_route": expected_route,
+            "min_scaled_jacobian_threshold": min_scaled_jacobian_threshold,
+            "require_hex_or_mixed_route": require_hex_or_mixed_route,
+        }
+        if expected_quality_artifact_id.strip():
+            kwargs["expected_quality_artifact_id"] = expected_quality_artifact_id
+        if expected_quality_digest.strip():
+            kwargs["expected_quality_digest"] = expected_quality_digest
+        if expected_metric_set_id.strip():
+            kwargs["expected_metric_set_id"] = expected_metric_set_id
+        if expected_export_id.strip():
+            kwargs["expected_export_id"] = expected_export_id
+        if expected_mesh_artifact_id.strip():
+            kwargs["expected_mesh_artifact_id"] = expected_mesh_artifact_id
+        if expected_mesh_digest.strip():
+            kwargs["expected_mesh_digest"] = expected_mesh_digest
+        summary = shape_cubit_quality_ledger_handoff_gate(
+            shape_rows,
+            quality_ledger_gate,
+            **kwargs,
+        )
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "cubit_quality_ledger_handoff",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+def build123d_cad_handoff_manifest(
+    shape_rows_json: str,
+    file_manifest_json: str,
+    external_volume_summary_json: str = "",
+    cubit_export_handoff_json: str = "",
+    cubit_quality_handoff_json: str = "",
+    cubit_quality_ledger_handoff_json: str = "",
+    cubit_solver_route_handoff_json: str = "",
+    required_file_kinds_json: str = "",
+    expected_geometry_ids_json: str = "",
+    expected_cad_output_artifact_id: str = "",
+    expected_cad_output_digest: str = "",
+    require_cad_output_artifact: bool = False,
+    expected_cad_observable_id: str = "",
+    expected_cad_observable_family: str = "",
+    require_cad_observable: bool = False,
+    expected_length_unit: str = "",
+    expected_area_unit: str = "",
+    expected_volume_unit: str = "",
+    expected_measurement_convention: str = "",
+    expected_measurement_postprocess_row_convention_schema_id: str = "",
+    expected_measurement_component_basis_schema_id: str = "",
+    require_measurement_postprocess_row_convention_schema: bool = False,
+    require_measurement_component_basis_schema: bool = False,
+) -> str:
+    """Run the final build123d CAD handoff manifest gate from JSON inputs."""
+
+    try:
+        shape_rows = json.loads(shape_rows_json)
+        file_manifest = json.loads(file_manifest_json)
+        external_volume_summary = (
+            None if not external_volume_summary_json.strip()
+            else json.loads(external_volume_summary_json)
+        )
+        cubit_export_handoff = (
+            None if not cubit_export_handoff_json.strip()
+            else json.loads(cubit_export_handoff_json)
+        )
+        cubit_quality_handoff = (
+            None if not cubit_quality_handoff_json.strip()
+            else json.loads(cubit_quality_handoff_json)
+        )
+        cubit_quality_ledger_handoff = (
+            None if not cubit_quality_ledger_handoff_json.strip()
+            else json.loads(cubit_quality_ledger_handoff_json)
+        )
+        cubit_solver_route_handoff = (
+            None if not cubit_solver_route_handoff_json.strip()
+            else json.loads(cubit_solver_route_handoff_json)
+        )
+        required_file_kinds = (
+            None if not required_file_kinds_json.strip()
+            else json.loads(required_file_kinds_json)
+        )
+        expected_geometry_ids = (
+            None if not expected_geometry_ids_json.strip()
+            else json.loads(expected_geometry_ids_json)
+        )
+    except json.JSONDecodeError as e:
+        return json.dumps({
+            "status": "error",
+            "stage": "parse_json",
+            "error": f"{type(e).__name__}: {e}",
+        }, indent=2)
+
+    try:
+        from .modeling import shape_cad_handoff_manifest_gate
+        kwargs = {
+            "file_manifest": file_manifest,
+            "require_cad_output_artifact": require_cad_output_artifact,
+            "require_cad_observable": require_cad_observable,
+            "require_measurement_postprocess_row_convention_schema": (
+                require_measurement_postprocess_row_convention_schema
+            ),
+            "require_measurement_component_basis_schema": (
+                require_measurement_component_basis_schema
+            ),
+        }
+        if external_volume_summary is not None:
+            kwargs["external_volume_summary"] = external_volume_summary
+        if cubit_export_handoff is not None:
+            kwargs["cubit_export_handoff"] = cubit_export_handoff
+        if cubit_quality_handoff is not None:
+            kwargs["cubit_quality_handoff"] = cubit_quality_handoff
+        if cubit_quality_ledger_handoff is not None:
+            kwargs["cubit_quality_ledger_handoff"] = cubit_quality_ledger_handoff
+        if cubit_solver_route_handoff is not None:
+            kwargs["cubit_solver_route_handoff"] = cubit_solver_route_handoff
+        if required_file_kinds is not None:
+            kwargs["required_file_kinds"] = required_file_kinds
+        if expected_geometry_ids is not None:
+            kwargs["expected_geometry_ids"] = expected_geometry_ids
+        if expected_cad_output_artifact_id.strip():
+            kwargs["expected_cad_output_artifact_id"] = expected_cad_output_artifact_id
+        if expected_cad_output_digest.strip():
+            kwargs["expected_cad_output_digest"] = expected_cad_output_digest
+        if expected_cad_observable_id.strip():
+            kwargs["expected_cad_observable_id"] = expected_cad_observable_id
+        if expected_cad_observable_family.strip():
+            kwargs["expected_cad_observable_family"] = expected_cad_observable_family
+        if expected_length_unit.strip():
+            kwargs["expected_length_unit"] = expected_length_unit
+        if expected_area_unit.strip():
+            kwargs["expected_area_unit"] = expected_area_unit
+        if expected_volume_unit.strip():
+            kwargs["expected_volume_unit"] = expected_volume_unit
+        if expected_measurement_convention.strip():
+            kwargs["expected_measurement_convention"] = expected_measurement_convention
+        if expected_measurement_postprocess_row_convention_schema_id.strip():
+            kwargs["expected_measurement_postprocess_row_convention_schema_id"] = (
+                expected_measurement_postprocess_row_convention_schema_id
+            )
+        if expected_measurement_component_basis_schema_id.strip():
+            kwargs["expected_measurement_component_basis_schema_id"] = (
+                expected_measurement_component_basis_schema_id
+            )
+        summary = shape_cad_handoff_manifest_gate(shape_rows, **kwargs)
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "status": "error",
+            "stage": "cad_handoff_manifest",
             "error": f"{type(e).__name__}: {e}",
         }, indent=2)
 
