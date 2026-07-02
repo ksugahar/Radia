@@ -4,6 +4,10 @@ Independent verification for the "Dowell vs SIBC R_coil 12x discrepancy"
 seen on the 3turnCoil benchmark (memory project_peec_v4_44_0_lead_aware_chain):
 PEEC R_coil = 0.39 mOhm (Dowell formula in radia.analysis) vs BEM-A
 R_coil = 4.72 mOhm (SIBC via Re(Z_s) J^T M J in coil_inductance_ngsolve).
+[Historical note 2026-07-02: BEM-A has since been unified on the
+impedance-EFIE (Zs inside the saddle; R = Re(Z_s) J^H M J on the
+finite-impedance J).  On a uniformly-loaded straight wire the two
+coincide, so this canonical comparison is unchanged.]
 
 To remove the 3-turn helical / lead-bar / mesh / EFIE-saddle confounders,
 this script computes R_AC for a CANONICAL STRAIGHT WIRE of the same
