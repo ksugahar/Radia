@@ -1639,6 +1639,15 @@ belong in private operational logs, not in result-bearing CAD notebooks.  A
 stale summary version line must fail before a CAD row is promoted to Cubit
 mesh-ready evidence.
 
+Slot441 keeps Cubit headless teardown warnings separate from build123d CAD
+mass-property evidence.  If `cubit-smoke-test` exports a valid `.vol` and then
+reports a Cubit exit code 2 during teardown, do not treat the exit code alone as
+a build123d volume mismatch.  First check that the `.vol` parses and that the
+expected labels such as `source`, `sink`, `sibc`, `coil`, `workpiece`, and
+`air` survived.  Only then can the build123d CAD row proceed to the Cubit route
+handoff gates; if the file or labels are missing, the Cubit route is not
+solver-ready even when the original build123d volume row is correct.
+
 When the external CAD kernel also reports surface area or bounding boxes, use
 the stronger `shape_mass_property_crosscheck_summary(...)` or MCP tool
 `build123d_mass_property_crosscheck(...)`.  Keep `shape_volume_crosscheck_summary`
