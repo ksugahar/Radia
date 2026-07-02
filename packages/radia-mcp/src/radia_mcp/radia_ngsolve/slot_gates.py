@@ -180,21 +180,41 @@ def central_difference_periodic(values, spacing):
     ]
 
 
-def coenergy_torque_periodic_summary(theta_rad, coenergy_j, torque_nm, rtol=1.0e-6, atol=1.0e-9):
+def coenergy_torque_periodic_summary(
+    theta_rad,
+    coenergy_j,
+    torque_nm,
+    rtol=1.0e-6,
+    atol=1.0e-9,
+    near_zero_threshold=1.0e-12,
+    near_zero_abs_tolerance_schema_id="coenergy_torque_near_zero_abs_tolerance_v1",
+):
     """Check torque samples against ``T = dWprime/dtheta``.
 
     The samples must be equally spaced over one periodic cycle.  Near torque
     zero crossings the absolute tolerance is decisive; away from zero crossings
-    the relative tolerance is reported as well.
+    the relative tolerance is reported as well.  The near-zero schema id is
+    returned so source-tool table readers can store the same zero-crossing
+    policy next to their private export metadata without publishing provenance.
     """
 
     theta = [float(value) for value in theta_rad]
     w = [float(value) for value in coenergy_j]
     torque = [float(value) for value in torque_nm]
+    rel_tol = float(rtol)
+    abs_tol = float(atol)
+    near_zero_tol = float(near_zero_threshold)
+    schema_id = str(near_zero_abs_tolerance_schema_id).strip()
     if not (len(theta) == len(w) == len(torque)):
         raise ValueError("theta_rad, coenergy_j, and torque_nm must have the same length")
     if len(theta) < 3:
         raise ValueError("at least three samples are required")
+    if rel_tol < 0.0 or abs_tol < 0.0:
+        raise ValueError("rtol and atol must be non-negative")
+    if near_zero_tol < 0.0:
+        raise ValueError("near_zero_threshold must be non-negative")
+    if not schema_id:
+        raise ValueError("near_zero_abs_tolerance_schema_id must not be empty")
     steps = [theta[i + 1] - theta[i] for i in range(len(theta) - 1)]
     h = sum(steps) / len(steps)
     if any(abs(step - h) > max(1.0e-12, 1.0e-9 * abs(h)) for step in steps):
@@ -204,7 +224,7 @@ def coenergy_torque_periodic_summary(theta_rad, coenergy_j, torque_nm, rtol=1.0e
     for angle, ref, est in zip(theta, torque, estimated):
         abs_error = abs(est - ref)
         rel_error = abs_error / max(abs(est), abs(ref), 1.0e-300)
-        passed = abs_error <= float(atol) or rel_error <= float(rtol)
+        passed = abs_error <= abs_tol or rel_error <= rel_tol
         rows.append({
             "theta_rad": angle,
             "reference_torque_nm": ref,
@@ -213,15 +233,29 @@ def coenergy_torque_periodic_summary(theta_rad, coenergy_j, torque_nm, rtol=1.0e
             "rel_error": rel_error,
             "passed": passed,
         })
+    near_zero_rows = [
+        row for row in rows
+        if abs(row["reference_torque_nm"]) <= near_zero_tol
+    ]
+    near_zero_rows_pass_absolute = all(row["abs_error"] <= abs_tol for row in near_zero_rows)
+    checks = {
+        "periodic_derivative_rows_pass": all(row["passed"] for row in rows),
+        "near_zero_rows_use_absolute_tolerance": near_zero_rows_pass_absolute,
+    }
     return {
         "policy": "coenergy_torque_periodic_derivative_gate",
         "n_samples": len(rows),
-        "rtol": float(rtol),
-        "atol": float(atol),
+        "rtol": rel_tol,
+        "atol": abs_tol,
+        "near_zero_threshold_Nm": near_zero_tol,
+        "near_zero_abs_tolerance_schema_id": schema_id,
+        "near_zero_row_count": len(near_zero_rows),
+        "near_zero_rows_pass_absolute_tolerance": near_zero_rows_pass_absolute,
         "max_abs_error": max(row["abs_error"] for row in rows),
         "max_rel_error": max(row["rel_error"] for row in rows),
         "n_passed": sum(1 for row in rows if row["passed"]),
-        "status": "ok" if all(row["passed"] for row in rows) else "needs_attention",
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
         "rows": rows,
     }
 
