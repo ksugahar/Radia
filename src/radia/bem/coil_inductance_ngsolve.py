@@ -221,6 +221,24 @@ def compute_inductance_source_sink(
     # Optional progress log (default no-op).
     _log = log_fn if log_fn is not None else (lambda _t, _m: None)
 
+    # --- Parameter validation FIRST (before the expensive dense
+    #     LaplaceSL assembly): fail fast on a bad omega/Zs contract
+    #     instead of burning minutes of assembly first. ---
+    if omega > 0.0:
+        if Z_s_complex is None or Z_s_complex == 0:
+            raise ValueError(
+                "omega > 0 requires the complex Leontovich surface "
+                "impedance Z_s_complex = (1+1j)/(sigma*delta) "
+                f"(got omega={omega}, Z_s_complex={Z_s_complex!r}).  "
+                "For a pure vacuum-L solve pass omega=0.")
+    elif omega != 0.0:
+        # Negative or NaN omega must not silently degrade to the DC
+        # vacuum solve (a sign typo in --frequency would return R=0
+        # with Z_s_complex ignored).  Fail fast.
+        raise ValueError(
+            f"omega must be > 0 (AC impedance-EFIE) or exactly 0 "
+            f"(DC vacuum-L solve); got omega={omega!r}.")
+
     t_start = time.perf_counter()
 
     fes_J = HDivSurface(mesh, order=fes_order)
@@ -295,13 +313,8 @@ def compute_inductance_source_sink(
         #     (complex); the resistive Z_s M term penalises the singular
         #     edge/near-contact concentration that made the removed PEC
         #     post-hoc integral over-estimate R 3x on tightly-wound
-        #     coils. ---
-        if Z_s_complex is None or Z_s_complex == 0:
-            raise ValueError(
-                "omega > 0 requires the complex Leontovich surface "
-                "impedance Z_s_complex = (1+1j)/(sigma*delta) "
-                f"(got omega={omega}, Z_s_complex={Z_s_complex!r}).  "
-                "For a pure vacuum-L solve pass omega=0.")
+        #     coils.  (omega/Z_s_complex contract already validated at
+        #     the top of the function, before assembly.) ---
         # Mass matrix on HDivSurface (∫_S jt·jv dS) for the Z_s M block.
         bf_M = BilinearForm(fes_J)
         bf_M += jt.Trace() * jv.Trace() * ds
@@ -345,14 +358,9 @@ def compute_inductance_source_sink(
     else:
         # --- omega == 0: DC / vacuum-inductance solve (real saddle,
         #     R = 0).  The physical DC limit selected by frequency=0;
-        #     the AC surface impedance does not exist here. ---
-        if omega != 0.0:
-            # Negative or NaN omega must not silently degrade to the
-            # DC vacuum solve (a sign typo in --frequency would return
-            # R=0 with Z_s_complex ignored).  Fail fast.
-            raise ValueError(
-                f"omega must be > 0 (AC impedance-EFIE) or exactly 0 "
-                f"(DC vacuum-L solve); got omega={omega!r}.")
+        #     the AC surface impedance does not exist here.  (Negative
+        #     or NaN omega already rejected at the top of the
+        #     function.) ---
         _log("BEMA",
             f"DC vacuum-L saddle assembly: K is {_saddle_n}x{_saddle_n} "
             f"(~{(_saddle_n*_saddle_n*8)/1e9:.1f} GB), solver={solver}")
