@@ -14,6 +14,7 @@
 #include <memory>
 #include <stdexcept>
 #include <atomic>
+#include <functional>
 
 #ifdef HAVE_LAPACK
 #include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the RT0 mass for the MASS RIESZ precond
@@ -934,10 +935,10 @@ double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
 // The affine-coord monomial m(y) = prod_i l_i(y)^e_i  (l_i = alpha_i + beta_i . y, beta_i the host
 // barycentric gradient) is expanded as a PHYSICAL-coord polynomial A + B.y + y^T C y and contracted with the
 // exact moment potentials  INT 1/R, INT y'/R, INT y'(x)y'/R  (rad_hdiv PhiTet/TetMoment1 for cells,
-// TriPotential/TriMoment1/TriMoment2 for faces).  Validated to ~1e-14 vs brute (C:\temp\hdiv_ss\analytic_moment.py).
+// TriPotential/TriMoment1/TriMoment2 for faces).  Validated to ~1e-14 vs an independent brute-force prototype.
 // NOTE: a CELL (volume charge) only ever reaches degree p-1 <= 1 for order<=2, so TetMoment2 is not needed;
 // CURVED panels OR tet degree>=2 (order>=3 volume) use the Duffy singular-quadrature path instead (validated
-// in C:\temp\hdiv_ss\tet_duffy.py + tet_tri.py; Python fail-loud guards order>2 until that path is ported).
+// in the independent Duffy prototypes; Python fail-loud guards order>2 until that path is ported).
 double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
 {
     const int host = m_host[src];
@@ -1007,7 +1008,7 @@ double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
 // charge of degree>=3 needs degree-3 moments).  6-pt Gauss-Legendre on signed radial sub-tets (cell) / signed
 // sub-triangles (face) from x0 = closest point of the host to p; the Duffy Jacobian (u^2 for tet, u for tri)
 // regularizes the 1/r, and the SIGNED sub-simplices telescope to INT_host for any x0 (inside / on / outside).
-// Validated to ~1e-4 vs brute (C:\temp\hdiv_ss\tet_duffy.py / tet_tri.py / duffy_inner.py).
+// Validated to ~1e-4 vs independent Duffy/brute-force prototypes.
 double RadHACApKChargeGram::PhiAtHO_Duffy(int src, const double p[3]) const
 {
     static const double GL[6] = {0.03376524289842399, 0.16939530676686777, 0.38069040695840156,
@@ -1312,6 +1313,492 @@ double RadHACApKChargeGram::QuadDotFarLow(int a, int b) const
     return s * RAD_INV_FOUR_PI;
 }
 
+// ===================================================================== HEX RT1 mode (2026-07-02)
+// Direct Q2 isoparametric geometry + the numpy-validated eig(M^-1 N)<=1 quadrature scheme (see the header
+// ctor doc).  Reference tables: the unit hex [0,1]^3 with its Kuhn 6-sub-tet split (shared main diagonal
+// 0-6) and the unit quad [0,1]^2 with its 2-sub-tri split -- the SAME tables as the Python contract.
+// A future PYRAMID adds one more (ref sub-tet table + nodal map +
+// monomial set) row here -- no structural change.
+static const double HEXREF_V[8][3] = {{0,0,0},{1,0,0},{1,1,0},{0,1,0},{0,0,1},{1,0,1},{1,1,1},{0,1,1}};
+static const int    HEXREF_TETS[6][4] = {{0,1,2,6},{0,2,3,6},{0,3,7,6},{0,7,4,6},{0,4,5,6},{0,5,1,6}};
+static const double QUADREF_V[4][2] = {{0,0},{1,0},{1,1},{0,1}};
+static const int    QUADREF_TRIS[2][3] = {{0,1,2},{0,2,3}};
+
+static inline void HexLag3(double t, double v[3], double d[3])
+{
+    v[0] = 2.0*(t-0.5)*(t-1.0); v[1] = 4.0*t*(1.0-t); v[2] = 2.0*t*(t-0.5);
+    d[0] = 4.0*t-3.0;           d[1] = 4.0-8.0*t;     d[2] = 4.0*t-1.0;
+}
+
+void RadHACApKChargeGram::HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3])
+{
+    double vx[3], dx[3], vy[3], dy[3], vz[3], dz[3];
+    HexLag3(xi[0], vx, dx); HexLag3(xi[1], vy, dy); HexLag3(xi[2], vz, dz);
+    for (int k = 0; k < 3; ++k) { X[k] = 0.0; J[k][0] = J[k][1] = J[k][2] = 0.0; }
+    for (int iz = 0; iz < 3; ++iz)
+        for (int iy = 0; iy < 3; ++iy)
+            for (int ix = 0; ix < 3; ++ix) {
+                const double* nd = &nd27[3*(ix + 3*iy + 9*iz)];
+                const double s  = vx[ix]*vy[iy]*vz[iz];
+                const double gx = dx[ix]*vy[iy]*vz[iz];
+                const double gy = vx[ix]*dy[iy]*vz[iz];
+                const double gz = vx[ix]*vy[iy]*dz[iz];
+                for (int k = 0; k < 3; ++k) {
+                    X[k] += s*nd[k]; J[k][0] += gx*nd[k]; J[k][1] += gy*nd[k]; J[k][2] += gz*nd[k];
+                }
+            }
+}
+
+void RadHACApKChargeGram::QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2])
+{
+    double vu[3], du[3], vv[3], dv[3];
+    HexLag3(uv[0], vu, du); HexLag3(uv[1], vv, dv);
+    for (int k = 0; k < 3; ++k) { X[k] = 0.0; T[k][0] = T[k][1] = 0.0; }
+    for (int iv = 0; iv < 3; ++iv)
+        for (int iu = 0; iu < 3; ++iu) {
+            const double* nd = &nd9[3*(iu + 3*iv)];
+            const double s = vu[iu]*vv[iv];
+            for (int k = 0; k < 3; ++k) {
+                X[k] += s*nd[k]; T[k][0] += du[iu]*vv[iv]*nd[k]; T[k][1] += vu[iu]*dv[iv]*nd[k];
+            }
+        }
+}
+
+static inline double HexDet3(const double J[3][3])
+{
+    return J[0][0]*(J[1][1]*J[2][2]-J[1][2]*J[2][1]) - J[0][1]*(J[1][0]*J[2][2]-J[1][2]*J[2][0])
+         + J[0][2]*(J[1][0]*J[2][1]-J[1][1]*J[2][0]);
+}
+
+static inline double HexSurfJ(const double T[3][2])
+{
+    const double cx = T[1][0]*T[2][1] - T[2][0]*T[1][1];
+    const double cy = T[2][0]*T[0][1] - T[0][0]*T[2][1];
+    const double cz = T[0][0]*T[1][1] - T[1][0]*T[0][1];
+    return std::sqrt(cx*cx + cy*cy + cz*cz);
+}
+
+// Bary-rule scale factors: a rule whose weights sum to the UNIT-simplex measure (1/6 tet, 1/2 tri)
+// integrates over a ref sub-simplex of measure V_sub as  sum (W_q * 6 V_sub) g  /  sum (W_q * 2 A_sub) g.
+// For the Kuhn 6-tet / 2-tri splits both factors are exactly 1; computed generically (future pyramid rows).
+static inline double HexSubSixVref(int s)
+{
+    const int* tv = HEXREF_TETS[s];
+    double e[3][3];
+    for (int i = 0; i < 3; ++i)
+        for (int k = 0; k < 3; ++k) e[i][k] = HEXREF_V[tv[i+1]][k] - HEXREF_V[tv[0]][k];
+    return std::fabs(e[0][0]*(e[1][1]*e[2][2]-e[1][2]*e[2][1]) - e[0][1]*(e[1][0]*e[2][2]-e[1][2]*e[2][0])
+                     + e[0][2]*(e[1][0]*e[2][1]-e[1][1]*e[2][0]));
+}
+
+static inline double QuadSubTwoAref(int s)
+{
+    const int* tv = QUADREF_TRIS[s];
+    const double a1u = QUADREF_V[tv[1]][0]-QUADREF_V[tv[0]][0], a1v = QUADREF_V[tv[1]][1]-QUADREF_V[tv[0]][1];
+    const double a2u = QUADREF_V[tv[2]][0]-QUADREF_V[tv[0]][0], a2v = QUADREF_V[tv[2]][1]-QUADREF_V[tv[0]][1];
+    return std::fabs(a1u*a2v - a1v*a2u);
+}
+
+double RadHACApKChargeGram::HexMonoEval(int charge, const double xi[3]) const
+{
+    const int* e = &m_expo[(size_t)3*charge];       // Q1: e in {0,1} -> a plain conditional product
+    double v = 1.0;
+    if (e[0]) v *= xi[0];
+    if (e[1]) v *= xi[1];
+    if (e[2]) v *= xi[2];                            // face charges carry e[2] = 0
+    return v;
+}
+
+// Build a Duffy-graded barycentric rule on a (dim+1)-vertex ref sub-simplex from the 1D rule (gl,gw),
+// graded at LOCAL vertex `corner` (swap-permuted to Duffy vertex 0, matching the validated
+// _ref_duffy_corner / _graded_outer_bary).  Appends (bary[nv], w_ref) pairs; w_ref sums to the ref
+// simplex measure (1/6 tet, 1/2 tri).
+static void HexDuffyBary(int dim, int corner, const std::vector<double>& gl, const std::vector<double>& gw,
+                         std::vector<double>& bary_out, std::vector<double>& w_out)
+{
+    const int n = (int)gl.size();
+    const int nv = dim + 1;
+    int perm[4] = {0, 1, 2, 3};
+    perm[0] = corner; perm[corner] = 0;              // swap 0 <-> corner
+    if (dim == 3) {
+        for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j) for (int k = 0; k < n; ++k) {
+            const double u = gl[i], v = gl[j], w = gl[k];
+            const double a = u, b = v*(1.0-u), c = w*(1.0-u)*(1.0-v);
+            const double jac = (1.0-u)*(1.0-u)*(1.0-v);
+            double bstd[4] = {1.0-a-b-c, a, b, c};
+            double b4[4];
+            for (int t = 0; t < 4; ++t) b4[perm[t]] = bstd[t];
+            for (int t = 0; t < 4; ++t) bary_out.push_back(b4[t]);
+            w_out.push_back(gw[i]*gw[j]*gw[k]*jac);
+        }
+    } else {
+        for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j) {
+            const double u = gl[i], v = gl[j];
+            const double a = u, b = v*(1.0-u);
+            const double jac = 1.0-u;
+            double bstd[3] = {1.0-a-b, a, b};
+            double b3[3];
+            for (int t = 0; t < 3; ++t) b3[perm[t]] = bstd[t];
+            for (int t = 0; t < 3; ++t) bary_out.push_back(b3[t]);
+            w_out.push_back(gw[i]*gw[j]*jac);
+        }
+    }
+    (void)nv;
+}
+
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> hex_cell_nodes, std::vector<double> quad_face_nodes,
+    int n_el, int n_bf,
+    std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+    std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+    std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+    std::vector<double> gl_out, std::vector<double> gw_out,
+    std::vector<double> gl_in, std::vector<double> gw_in,
+    std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+    std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+    double near_grade, double far_inner_factor)
+    : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf),
+      m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
+      m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
+      m_symTriP(std::move(sym_tri_pts)), m_symTriW(std::move(sym_tri_w)),
+      m_glOut(std::move(gl_out)), m_gwOut(std::move(gw_out)),
+      m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
+      m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
+      m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
+      m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
+      m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
+{
+    m_n = (int)m_host.size();
+    m_build_id = NextChargeGramBuildId();
+    // ---- per-host sub-simplex physical geometry (corners, centroid, size) via the Q2 maps ----
+    m_cellSubV.assign((size_t)n_el*6*4*3, 0.0); m_cellSubC.assign((size_t)n_el*6*3, 0.0);
+    m_cellSubS.assign((size_t)n_el*6, 0.0);
+    for (int c = 0; c < n_el; ++c) {
+        const double* nd = &m_hexNodes[(size_t)c*81];
+        for (int s = 0; s < 6; ++s) {
+            double cen[3] = {0, 0, 0};
+            for (int i = 0; i < 4; ++i) {
+                const double* rv = HEXREF_V[HEXREF_TETS[s][i]];
+                double X[3], J[3][3];
+                const double xi[3] = {rv[0], rv[1], rv[2]};
+                HexQ2Map(nd, xi, X, J);
+                double* out = &m_cellSubV[(((size_t)c*6 + s)*4 + i)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+                cen[0] += 0.25*X[0]; cen[1] += 0.25*X[1]; cen[2] += 0.25*X[2];
+            }
+            double* pc = &m_cellSubC[((size_t)c*6 + s)*3];
+            pc[0] = cen[0]; pc[1] = cen[1]; pc[2] = cen[2];
+            double sz = 0.0;
+            for (int i = 0; i < 4; ++i) {
+                const double* v = &m_cellSubV[(((size_t)c*6 + s)*4 + i)*3];
+                const double dx = v[0]-cen[0], dy = v[1]-cen[1], dz = v[2]-cen[2];
+                sz = std::max(sz, std::sqrt(dx*dx + dy*dy + dz*dz));
+            }
+            m_cellSubS[(size_t)c*6 + s] = sz;
+        }
+    }
+    m_faceSubV.assign((size_t)n_bf*2*3*3, 0.0); m_faceSubC.assign((size_t)n_bf*2*3, 0.0);
+    m_faceSubS.assign((size_t)n_bf*2, 0.0);
+    for (int f = 0; f < n_bf; ++f) {
+        const double* nd = &m_quadNodes[(size_t)f*27];
+        for (int s = 0; s < 2; ++s) {
+            double cen[3] = {0, 0, 0};
+            for (int i = 0; i < 3; ++i) {
+                const double* rv = QUADREF_V[QUADREF_TRIS[s][i]];
+                double X[3], T[3][2];
+                const double uv[2] = {rv[0], rv[1]};
+                QuadQ2Map(nd, uv, X, T);
+                double* out = &m_faceSubV[(((size_t)f*2 + s)*3 + i)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+                cen[0] += X[0]/3.0; cen[1] += X[1]/3.0; cen[2] += X[2]/3.0;
+            }
+            double* pc = &m_faceSubC[((size_t)f*2 + s)*3];
+            pc[0] = cen[0]; pc[1] = cen[1]; pc[2] = cen[2];
+            double sz = 0.0;
+            for (int i = 0; i < 3; ++i) {
+                const double* v = &m_faceSubV[(((size_t)f*2 + s)*3 + i)*3];
+                const double dx = v[0]-cen[0], dy = v[1]-cen[1], dz = v[2]-cen[2];
+                sz = std::max(sz, std::sqrt(dx*dx + dy*dy + dz*dz));
+            }
+            m_faceSubS[(size_t)f*2 + s] = sz;
+        }
+    }
+    // ---- per-charge host centroid/size (cluster-tree points + the near_hosts test) ----
+    m_cent.assign((size_t)m_n*3, 0.0); m_size.assign((size_t)m_n, 0.0);
+    for (int a = 0; a < m_n; ++a) {
+        const int h = m_host[a];
+        double cen[3] = {0, 0, 0};
+        int ncorner;
+        double corners[8][3];
+        if (m_kind[a] == 0) {                       // hex corners of the 27-lattice: ix,iy,iz in {0,2}
+            ncorner = 8;
+            static const int cidx[8] = {0, 2, 6, 8, 18, 20, 24, 26};
+            for (int i = 0; i < 8; ++i) {
+                const double* nd = &m_hexNodes[(size_t)h*81 + 3*cidx[i]];
+                for (int k = 0; k < 3; ++k) corners[i][k] = nd[k];
+            }
+        } else {                                    // quad corners of the 9-lattice
+            ncorner = 4;
+            static const int cidx[4] = {0, 2, 6, 8};
+            for (int i = 0; i < 4; ++i) {
+                const double* nd = &m_quadNodes[(size_t)h*27 + 3*cidx[i]];
+                for (int k = 0; k < 3; ++k) corners[i][k] = nd[k];
+            }
+        }
+        for (int i = 0; i < ncorner; ++i)
+            for (int k = 0; k < 3; ++k) cen[k] += corners[i][k] / ncorner;
+        double sz = 0.0;
+        for (int i = 0; i < ncorner; ++i) {
+            const double dx = corners[i][0]-cen[0], dy = corners[i][1]-cen[1], dz = corners[i][2]-cen[2];
+            sz = std::max(sz, std::sqrt(dx*dx + dy*dy + dz*dz));
+        }
+        m_cent[3*a] = cen[0]; m_cent[3*a+1] = cen[1]; m_cent[3*a+2] = cen[2];
+        m_size[a] = sz;
+    }
+    // ---- prebuilt REGULAR outer clouds per charge (monomial folded) for far sub pairs ----
+    m_qp.resize(m_n); m_qw.resize(m_n);
+    for (int a = 0; a < m_n; ++a) {
+        const int h = m_host[a];
+        if (m_kind[a] == 0) {
+            const double* nd = &m_hexNodes[(size_t)h*81];
+            const int nq = (int)m_symTetW.size();
+            for (int s = 0; s < 6; ++s) {
+                const int* tv = HEXREF_TETS[s];
+                double e1[3], e2[3], e3[3];
+                for (int k = 0; k < 3; ++k) {
+                    e1[k] = HEXREF_V[tv[1]][k]-HEXREF_V[tv[0]][k];
+                    e2[k] = HEXREF_V[tv[2]][k]-HEXREF_V[tv[0]][k];
+                    e3[k] = HEXREF_V[tv[3]][k]-HEXREF_V[tv[0]][k];
+                }
+                const double six_vref = std::fabs(
+                    e1[0]*(e2[1]*e3[2]-e2[2]*e3[1]) - e1[1]*(e2[0]*e3[2]-e2[2]*e3[0])
+                    + e1[2]*(e2[0]*e3[1]-e2[1]*e3[0]));            // = 1 for the Kuhn split (generic anyway)
+                for (int q = 0; q < nq; ++q) {
+                    const double l1 = m_symTetP[3*q], l2 = m_symTetP[3*q+1], l3 = m_symTetP[3*q+2];
+                    const double l0 = 1.0-l1-l2-l3;
+                    double xi[3];
+                    for (int k = 0; k < 3; ++k)
+                        xi[k] = l0*HEXREF_V[tv[0]][k] + l1*HEXREF_V[tv[1]][k]
+                              + l2*HEXREF_V[tv[2]][k] + l3*HEXREF_V[tv[3]][k];
+                    double X[3], J[3][3];
+                    HexQ2Map(nd, xi, X, J);
+                    m_qp[a].push_back({X[0], X[1], X[2]});
+                    m_qw[a].push_back(m_symTetW[q]*six_vref*std::fabs(HexDet3(J))*HexMonoEval(a, xi));
+                }
+            }
+        } else {
+            const double* nd = &m_quadNodes[(size_t)h*27];
+            const int nq = (int)m_symTriW.size();
+            for (int s = 0; s < 2; ++s) {
+                const int* tv = QUADREF_TRIS[s];
+                const double a1u = QUADREF_V[tv[1]][0]-QUADREF_V[tv[0]][0], a1v = QUADREF_V[tv[1]][1]-QUADREF_V[tv[0]][1];
+                const double a2u = QUADREF_V[tv[2]][0]-QUADREF_V[tv[0]][0], a2v = QUADREF_V[tv[2]][1]-QUADREF_V[tv[0]][1];
+                const double two_aref = std::fabs(a1u*a2v - a1v*a2u);   // = 1 for the 2-tri split
+                for (int q = 0; q < nq; ++q) {
+                    const double l1 = m_symTriP[2*q], l2 = m_symTriP[2*q+1];
+                    const double l0 = 1.0-l1-l2;
+                    double uv[2];
+                    for (int k = 0; k < 2; ++k)
+                        uv[k] = l0*QUADREF_V[tv[0]][k] + l1*QUADREF_V[tv[1]][k] + l2*QUADREF_V[tv[2]][k];
+                    double X[3], T[3][2];
+                    QuadQ2Map(nd, uv, X, T);
+                    const double xi3[3] = {uv[0], uv[1], 0.0};
+                    m_qp[a].push_back({X[0], X[1], X[2]});
+                    m_qw[a].push_back(m_symTriW[q]*two_aref*HexSurfJ(T)*HexMonoEval(a, xi3));
+                }
+            }
+        }
+    }
+}
+
+// A materialized quadrature cloud on one sub-simplex: physical points, geometry weights (rule weight x
+// scale x |det J| -- everything EXCEPT the charge monomial), and the hex/quad REF coords (for the
+// per-charge monomial).  Cached per (kind, host, sub, corner/rule): the cloud depends only on geometry,
+// so it is reused across ALL outer points selecting the same grading corner AND all co-located charges
+// (the numpy-validated src_cache pattern; ~2 orders of magnitude fewer Q2-map evals on near pairs).
+struct HexQuadCloud { std::vector<double> pts, wgeo, xi; };
+
+// Materialize the cloud for sub-simplex `sub` of the host with nodes `nd` from a bary rule.  full_bary:
+// the rule stores nv coords/point (graded Duffy); else nv-1 lam coords (the fixed far/sym tables).
+static void HexBuildCloud(const double* nd, bool cell, int sub, const double* baryP, const double* baryW,
+                          int nq, bool full_bary, HexQuadCloud& out)
+{
+    const int* tv = cell ? HEXREF_TETS[sub] : QUADREF_TRIS[sub];
+    const int nv = cell ? 4 : 3;
+    const double scale = cell ? HexSubSixVref(sub) : QuadSubTwoAref(sub);
+    out.pts.resize((size_t)nq*3); out.wgeo.resize(nq); out.xi.resize((size_t)nq*3);
+    for (int q = 0; q < nq; ++q) {
+        double bary[4];
+        if (full_bary) {
+            for (int t = 0; t < nv; ++t) bary[t] = baryP[(size_t)nv*q + t];
+        } else {
+            double lsum = 0.0;
+            for (int t = 1; t < nv; ++t) { bary[t] = baryP[(size_t)(nv-1)*q + (t-1)]; lsum += bary[t]; }
+            bary[0] = 1.0 - lsum;
+        }
+        if (cell) {
+            double xi[3] = {0, 0, 0};
+            for (int t = 0; t < 4; ++t)
+                for (int k = 0; k < 3; ++k) xi[k] += bary[t]*HEXREF_V[tv[t]][k];
+            double X[3], J[3][3];
+            RadHACApKChargeGram::HexQ2Map(nd, xi, X, J);
+            for (int k = 0; k < 3; ++k) { out.pts[(size_t)3*q+k] = X[k]; out.xi[(size_t)3*q+k] = xi[k]; }
+            out.wgeo[q] = baryW[q]*scale*std::fabs(HexDet3(J));
+        } else {
+            double uv[2] = {0, 0};
+            for (int t = 0; t < 3; ++t)
+                for (int k = 0; k < 2; ++k) uv[k] += bary[t]*QUADREF_V[tv[t]][k];
+            double X[3], T[3][2];
+            RadHACApKChargeGram::QuadQ2Map(nd, uv, X, T);
+            out.pts[(size_t)3*q] = X[0]; out.pts[(size_t)3*q+1] = X[1]; out.pts[(size_t)3*q+2] = X[2];
+            out.xi[(size_t)3*q] = uv[0]; out.xi[(size_t)3*q+1] = uv[1]; out.xi[(size_t)3*q+2] = 0.0;
+            out.wgeo[q] = baryW[q]*scale*HexSurfJ(T);
+        }
+    }
+}
+
+// thread_local cloud-cache key (build_id-guarded like the QuadDot memo; see NextChargeGramBuildId).
+// kind(1b at 62) | outer(1b at 61) | graded(1b at 60) | host(<<8) | sub(<<2) | corner (far rule: corner=3
+// non-graded; graded inner/outer set bit 60, corner in 0..3).
+static inline long long HexCloudKey(int kind, bool outer, bool graded, int host, int sub, int corner)
+{
+    return ((long long)kind << 62) | ((long long)(outer ? 1 : 0) << 61) | ((long long)(graded ? 1 : 0) << 60)
+         | ((long long)host << 8) | ((long long)sub << 2) | (long long)corner;
+}
+
+static thread_local long long s_hex_cloud_owner = -1;
+static thread_local std::unordered_map<long long, HexQuadCloud> s_hex_cloud_cache;
+
+static const HexQuadCloud& HexGetCloud(long long build_id, long long key,
+                                       const std::function<void(HexQuadCloud&)>& make)
+{
+    if (s_hex_cloud_owner != build_id) { s_hex_cloud_cache.clear(); s_hex_cloud_owner = build_id; }
+    auto it = s_hex_cloud_cache.find(key);
+    if (it == s_hex_cloud_cache.end()) {
+        if (s_hex_cloud_cache.size() > 32768u) s_hex_cloud_cache.clear();
+        HexQuadCloud c;
+        make(c);
+        it = s_hex_cloud_cache.emplace(key, std::move(c)).first;
+    }
+    return it->second;
+}
+
+// INT over ONE sub-simplex of src's host of mono_src(xi)/|p-y| dy (no 1/4pi).  FAR field point -> the
+// cheap far rule; NEAR -> the fine corner-graded Duffy (validated inner_over_subsimplex).  Clouds cached
+// per (host, sub, corner) -- geometry only, monomial evaluated per charge from the cached ref coords.
+double RadHACApKChargeGram::PhiInnerHexSub(int src, int sub, const double p[3]) const
+{
+    const int h = m_host[src];
+    const bool cell = (m_kind[src] == 0);
+    const size_t sid = cell ? ((size_t)h*6 + sub) : ((size_t)h*2 + sub);
+    const double* cs = cell ? &m_cellSubC[sid*3] : &m_faceSubC[sid*3];
+    const double  sz = cell ? m_cellSubS[sid] : m_faceSubS[sid];
+    const double dxc = p[0]-cs[0], dyc = p[1]-cs[1], dzc = p[2]-cs[2];
+    const bool far_pt = std::sqrt(dxc*dxc + dyc*dyc + dzc*dzc) > m_far_inner_factor*sz;
+    const double* nd = cell ? &m_hexNodes[(size_t)h*81] : &m_quadNodes[(size_t)h*27];
+    const int nv = cell ? 4 : 3;
+
+    const HexQuadCloud* cl;
+    if (far_pt) {
+        cl = &HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, false, h, sub, 3),
+            [&](HexQuadCloud& c) {
+                if (cell) HexBuildCloud(nd, true, sub, m_farTetP.data(), m_farTetW.data(),
+                                        (int)m_farTetW.size(), false, c);
+                else      HexBuildCloud(nd, false, sub, m_farTriP.data(), m_farTriW.data(),
+                                        (int)m_farTriW.size(), false, c);
+            });
+    } else {
+        int corner = 0; double best = 1e300;
+        const double* subV = cell ? &m_cellSubV[sid*4*3] : &m_faceSubV[sid*3*3];
+        for (int i = 0; i < nv; ++i) {
+            const double dx = subV[3*i]-p[0], dy = subV[3*i+1]-p[1], dz = subV[3*i+2]-p[2];
+            const double d = dx*dx + dy*dy + dz*dz;
+            if (d < best) { best = d; corner = i; }
+        }
+        cl = &HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, true, h, sub, corner),
+            [&](HexQuadCloud& c) {
+                std::vector<double> gb, gwv;
+                HexDuffyBary(cell ? 3 : 2, corner, m_glIn, m_gwIn, gb, gwv);
+                HexBuildCloud(nd, cell, sub, gb.data(), gwv.data(), (int)gwv.size(), true, c);
+            });
+    }
+    double acc = 0.0;
+    const int nq = (int)cl->wgeo.size();
+    for (int q = 0; q < nq; ++q) {
+        const double dx = p[0]-cl->pts[3*q], dy = p[1]-cl->pts[3*q+1], dz = p[2]-cl->pts[3*q+2];
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r < 1e-300) continue;
+        acc += cl->wgeo[q]*HexMonoEval(src, &cl->xi[3*q])/r;
+    }
+    return acc;
+}
+
+// The validated pair-graded entry: per (target sub, source sub), the OUTER is graded toward the source
+// sub centroid when the sub pair is near (both-domains-graded = the eig<=1 lesson), else the prebuilt
+// regular symmetric outer slice; the INNER is PhiInnerHexSub.  Returns (1/4pi) INT_tgt INT_src.
+double RadHACApKChargeGram::QuadDotHex(int tgt, int src) const
+{
+    const int hT = m_host[tgt], hS = m_host[src];
+    const bool cellT = (m_kind[tgt] == 0), cellS = (m_kind[src] == 0);
+    const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
+    const double dxh = m_cent[3*tgt]-m_cent[3*src], dyh = m_cent[3*tgt+1]-m_cent[3*src+1],
+                 dzh = m_cent[3*tgt+2]-m_cent[3*src+2];
+    const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
+    const bool near_hosts = (m_kind[tgt] == m_kind[src] && hT == hS)
+                            || r_h <= m_near_grade*(m_size[tgt] + m_size[src]);
+    const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
+    const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    const int nvT = cellT ? 4 : 3;
+
+    double total = 0.0;
+    for (int sA = 0; sA < nsubT; ++sA) {
+        const size_t sidA = cellT ? ((size_t)hT*6 + sA) : ((size_t)hT*2 + sA);
+        const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
+        const double  szA = cellT ? m_cellSubS[sidA] : m_faceSubS[sidA];
+        const double* subVA = cellT ? &m_cellSubV[sidA*4*3] : &m_faceSubV[sidA*3*3];
+        for (int sB = 0; sB < nsubS; ++sB) {
+            const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
+            const double* cB = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
+            const double  szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
+            const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
+            const bool near_sub = near_hosts &&
+                std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
+            if (!near_sub) {
+                // regular symmetric outer: the prebuilt slice [sA*nqreg, (sA+1)*nqreg) of m_qp/m_qw
+                for (int q = 0; q < nqreg; ++q) {
+                    const int idx = sA*nqreg + q;
+                    const rad_hdiv::Vec3& P = m_qp[tgt][idx];
+                    const double pq[3] = {P[0], P[1], P[2]};
+                    total += m_qw[tgt][idx]*PhiInnerHexSub(src, sB, pq);
+                }
+            } else {
+                // graded outer toward the source sub centroid (corner of THIS target sub nearest cB),
+                // cloud cached per (host, sub, corner) -- monomial folded per charge from the ref coords
+                int corner = 0; double best = 1e300;
+                for (int i = 0; i < nvT; ++i) {
+                    const double ddx = subVA[3*i]-cB[0], ddy = subVA[3*i+1]-cB[1], ddz = subVA[3*i+2]-cB[2];
+                    const double d = ddx*ddx + ddy*ddy + ddz*ddz;
+                    if (d < best) { best = d; corner = i; }
+                }
+                const HexQuadCloud& oc = HexGetCloud(
+                    m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
+                    [&](HexQuadCloud& c) {
+                        std::vector<double> gb, gw;
+                        HexDuffyBary(cellT ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
+                        HexBuildCloud(ndT, cellT, sA, gb.data(), gw.data(), (int)gw.size(), true, c);
+                    });
+                const int nqo = (int)oc.wgeo.size();
+                for (int q = 0; q < nqo; ++q) {
+                    const double w = oc.wgeo[q]*HexMonoEval(tgt, &oc.xi[3*q]);
+                    const double pq[3] = {oc.pts[3*q], oc.pts[3*q+1], oc.pts[3*q+2]};
+                    total += w*PhiInnerHexSub(src, sB, pq);
+                }
+            }
+        }
+    }
+    return total*RAD_INV_FOUR_PI;
+}
+
 void RadHACApKChargeGram::ExtractCoordinates()
 {
     m_n_elem = m_n;
@@ -1321,6 +1808,12 @@ void RadHACApKChargeGram::ExtractCoordinates()
 
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
+    if (m_hexmode) {
+        // HEX RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
+        // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.
+        if (a == b) return QuadDotHex(a, a);
+        return 0.5*(QuadDotHex(a, b) + QuadDotHex(b, a));
+    }
     if (m_highorder) {
         // polynomial charges, symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
         // NEAR/FAR adaptive quadrature: a well-separated pair uses the cheap LOW-quad plain double-Gauss
