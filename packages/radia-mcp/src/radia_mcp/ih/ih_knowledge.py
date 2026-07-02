@@ -1534,12 +1534,22 @@ All EM solvers read a pre-meshed `.vol` (no auto air-mesh generation).
 INDUCTION_HEATING_PEEC_BEM_SIBC = """
 # PEEC (coil filament) + BEM-SIBC (workpiece) — production path for rotating WP
 
-## POLICY: BEM-A coil solver = impedance-EFIE (the SOLE AC formulation)
+## POLICY: BEM-A = impedance-EFIE, solved by COCR or HACApK-COCR
 
 **POLICY (2026-07-03, Sugahara):** the BEM-A coil solver
 (``--coil-solver bem-a``, ``radia.bem.coil_inductance_ngsolve``) uses the
-**impedance-EFIE** formulation and ONLY that.  The Leontovich surface
-impedance ``Z_s = (1+j)/(sigma*delta)`` sits INSIDE the saddle system::
+**impedance-EFIE** formulation and ONLY that, and it is solved by
+**COCR or HACApK-COCR** -- the two ``--coil-saddle-solver`` choices:
+
+- ``cocr``        : div-free loop reduction + complex-symmetric COCR, dense
+                    SL matvec (``auto`` picks this for large systems).
+- ``hacapk_cocr`` : the same COCR with the HACApKBEMManager-compressed
+                    O(N log N) SL matvec (accuracy ~3e-7; identical R/L).
+
+(Dense ``lu`` stays the small-N direct option; ``gmres`` / ``minres`` are kept
+only for comparison -- unpreconditioned GMRES stalls on the indefinite AC
+saddle.)  The Leontovich surface impedance ``Z_s = (1+j)/(sigma*delta)`` sits
+INSIDE the saddle system::
 
     [ jw*mu0*SL + Z_s*M   D^T ] [J]   [0]
     [ D                    0  ] [p] = [g]      (complex, omega > 0)
