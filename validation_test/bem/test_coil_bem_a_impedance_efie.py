@@ -297,7 +297,7 @@ def test_loop_cocr_matches_constrained_lu_on_small_complex_system():
     rhs[n_j:] = g_red
     J_lu = np.linalg.solve(K, rhs)[:n_j]
 
-    assert info["method"] == "loop_cocr[dense]"
+    assert info["method"] == "cocr[dense]"
     assert info["iterations"] < 80
     assert np.allclose(D_red @ J_loop, g_red, rtol=1.0e-10, atol=1.0e-10)
     assert np.allclose(J_loop, J_lu, rtol=1.0e-8, atol=1.0e-9)
@@ -323,6 +323,7 @@ def test_parameter_validation_fails_before_assembly():
                                        Z_s_complex=1 + 1j)
     with pytest.raises(ValueError, match="Unknown saddle-point solver"):
         compute_inductance_source_sink(None, solver="bicgstab")
-    with pytest.raises(ValueError, match="unknown loop matvec backend"):
-        compute_inductance_source_sink(None, solver="loop_cocr",
-                                       loop_matvec="fmm")
+    # The old "loop_cocr" solver name was renamed to cocr / hacapk_cocr;
+    # the old name must now be rejected as unknown.
+    with pytest.raises(ValueError, match="Unknown saddle-point solver"):
+        compute_inductance_source_sink(None, solver="loop_cocr")
