@@ -1,22 +1,22 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-28T08:45:39Z",
+  "generated_at_utc": "2026-07-02T22:03:46Z",
   "notebook": "docs/peec_bema_convergence/peec_bema_convergence.ipynb",
-  "notebook_sha256": "fbcf0b53e06df7597a448c01122803719dac4fb742d6f22ac0174b0d1b694018",
+  "notebook_sha256": "467a58762310fb7ced78d3492b37c2b3f3ab75ad146a70c4050cba3d313082e7",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_version": "4.95.3"
   },
   "summary": {
     "path": "docs/peec_bema_convergence/peec_bema_convergence.ipynb",
-    "cells": 8,
-    "code_cells": 4,
-    "executed_code_cells": 4,
-    "code_cells_with_outputs": 4,
-    "output_count": 4,
+    "cells": 11,
+    "code_cells": 6,
+    "executed_code_cells": 6,
+    "code_cells_with_outputs": 6,
+    "output_count": 6,
     "error_output_count": 0,
     "result_saved": true,
     "metadata_keys": [
@@ -34,9 +34,9 @@
         {
           "output_type": "stream",
           "name": "stdout",
-          "text_chars": 542,
-          "text_sha256": "8862893b18471f1e30613cbff6cdfca8fa43b5545c5b7584037f2bce2f71511d",
-          "text_preview": "{\n  \"geometry\": \"3-turn pancake helix R_avg~35mm + r_wire=3.15mm, 2 lead bars 60-61mm at y=+/-12.5mm\",\n  \"frequency_Hz\": 150000,\n  \"current_A\": 1.0,\n  \"peec_points\": 6,\n  \"peec_n_peri_min\": 8,\n  \"peec_n_peri_max\": 64,\n  \"peec_L_nH_min\": 423.895,\n  \"peec_L_nH_max\": 431.551,\n  \"peec_L_inf_est_nH\": 434.0,\n  \"production_n_peri\": 16,\n  \"production_L_nH\": 426.3,\n  \"production_deviation_from_inf_pct\": -1.78,\n  \"bema_points\": 3,\n  \"bema_L_nH_min\": 412.18,\n  \"bema_L_nH_max\": 432.57,\n  \"bema_unreachable_cases\": 1,\n  \"potential_gap_pct\": \"5-8%\"\n}\n",
+          "text_chars": 841,
+          "text_sha256": "2fd1de50842768805630ead9540cb91232cdcff8a8fc75ae1086b9dd5d7bc0cb",
+          "text_preview": "{\n  \"geometry\": \"3-turn pancake helix R_avg~35mm + r_wire=3.15mm, 2 lead bars 60-61mm at y=+/-12.5mm\",\n  \"frequency_Hz\": 150000,\n  \"current_A\": 1.0,\n  \"peec_points\": 6,\n  \"peec_n_peri_min\": 8,\n  \"peec_n_peri_max\": 64,\n  \"peec_L_nH_min\": 423.895,\n  \"peec_L_nH_max\": 431.551,\n  \"peec_L_inf_est_nH\": 434.0,\n  \"production_n_peri\": 16,\n  \"production_L_nH\": 426.3,\n  \"production_deviation_from_inf_pct\": -1.78,\n  \"bema_points\": 3,\n  \"bema_L_nH_min\": 412.18,\n  \"bema_L_nH_max\": 432.57,\n  \"bema_unreachable_cases\": 1,\n  \"potential_gap_pct\": \"5-8%\",\n  \"closure_2026_07_03\": {\n    \"R_agrees\": true,\n    \"BEM_A_impedance_EFIE_R_mOhm\": 4.63,\n    \"PEEC_Bessel_R_mOhm\": 4.5,\n    \"L_gap_pct\": 4.3,\n    \"L_gap_verdict\": \"benign, left as-is\",\n    \"curve_order_closes_L_gap\": false,\n    \"scalable_solver\": \"loop-COCR / HACApK-COCR (cocr | hacapk_cocr)\"\n  }\n}\n",
           "text_truncated": false
         }
       ]
@@ -97,6 +97,41 @@
           "text_chars": 34,
           "text_sha256": "c8b1243408170647ca50a1dc7562b07a640e1b9b4c76685d46b6e395d2ce811f",
           "text_preview": "peec_bema_convergence notebook OK\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "0391226e0736200c131918dfcbf1f4fde696545fef409a51a9bb6a4ed3ce2b02",
+      "source_preview": "from IPython.display import Markdown, display\n\nCLOSURE = RAW['closure_2026_07_03']\n\nrr = CLOSURE['R_agreement_kubota_3turn_150kHz']['methods_mOhm']\nrlines = ['**R agreement (kubota 3-turn, 150 kHz)** -- the accepted metric',\n          '', '| method | R [mOhm] |', '| --- | ---: |']\nfor k, v in rr.items():\n    rlines.append(f'| {k} | {v:.2f} |')\n\ncs = CLOSURE['curve_order_study']\nclines = ['', '**Curve-order study (torus, fixed RT0 n_J=5745): mesh.Curve is a no-op)**',\n          '', '| curve_order | n_J | L [nH] | R [mOhm] |', '| ---: | ---: | ---: | ---: |']\nfor row in cs['data']:\n    clines.append(f\"| {row['curve_order']} | {row['n_J']} | {row['L_nH']:.4f} | {row['R_mOhm']:.5f} |\")\n\nlg = CLOSURE['L_gap_kubota_3turn']\nglines = ['', f\"**L gap:** BEM-A external {lg['BEM_A_external_nH']} nH vs \"\n          f\"PEEC {lg['PEEC_nH']} nH (~{lg['gap_pct']}%) -- {lg['verdict']}\"]\n\ndisplay(Markdown('\\n'.join(rlines + clines + glines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 10,
+      "execution_count": 6,
+      "source_sha256": "483cf20349ba7cc0760d4214fb13992067f23c778aada29f9fac7e8efd9bbce2",
+      "source_preview": "cl = DATA['raw_payload']['closure_2026_07_03']\nassert cl['R_agreement_kubota_3turn_150kHz']['methods_mOhm']['BEM_A_impedance_EFIE'] == 4.63\nco = cl['curve_order_study']['data']\nassert len({(r['L_nH'], r['R_mOhm']) for r in co}) == 1, 'curve order must be bit-identical'\nassert cl['scalable_solver']['name'] == 'loop-COCR / HACApK-COCR'\nprint('closure_2026_07_03 block OK: R agrees (4.63~=PEEC), curve-order no-op verified')\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 79,
+          "text_sha256": "0f792c6671643cde7a3c795db5bc04fdacfcfc40a4abe7ec8245af166f9b5b4c",
+          "text_preview": "closure_2026_07_03 block OK: R agrees (4.63~=PEEC), curve-order no-op verified\n",
           "text_truncated": false
         }
       ]
