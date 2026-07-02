@@ -58,14 +58,15 @@ physics discrepancy for tightly-packed multi-turn coils.
 > correct tool / 15 mΩ is right" conclusion below as SUPERSEDED for
 > tightly-wound round-wire coils.
 >
-> **BEM-A FIX SHIPPED (opt-in): the impedance-EFIE.**  Putting Z_s into
+> **BEM-A FIX SHIPPED (default ON): the impedance-EFIE.**  Putting Z_s into
 > the saddle system ((1,1) = jωμ0 SL + Z_s M, complex) makes J the
 > finite-impedance current so it cannot over-concentrate; on the coil
 > this gives **4.63 mΩ** (vs the PEC path's 15.14), a 4th independent
 > method in the ~4.5-5 mΩ band, and reproduces Bessel on a smooth
-> wire.  Flag: `calc_inductance.py --bema-impedance-efie`
-> (`compute_inductance_source_sink(impedance_efie=True, omega,
-> Z_s_complex)`).  Golden:
+> wire.  The panel/CLI uses this path unconditionally for AC BEM-A;
+> the legacy PEC post-hoc comparison path was removed rather than kept
+> as a compatibility mode.
+> (`compute_inductance_source_sink(..., omega, Z_s_complex)`).  Golden:
 > `validation_test/bem/test_coil_bem_a_impedance_efie.py`.  See
 > VOLUME_PEEC_DESIGN.md "2026-07-02 outcome".
 
@@ -126,15 +127,17 @@ To get the self-only Bessel R/L for cross-checks: pass
 
 ---
 
-## TL;DR (current behaviour, 2026-05-19+)
+## TL;DR (current behaviour, 2026-07-02+)
 
 | Solver | What R actually is | Where computed |
 |---|---|---|
 | **PEEC** | **Full Bessel `Z_cyl(ω)`** for a round-wire bundle.  Per-filament `Zs_fil_k = n_peri · (Z_cyl(ω) − R_DC_per_m) · L_k` is added to the loop-bundle diagonal so the bundle impedance reaches `Z_cyl(ω) · L_filament` at all frequencies (R_DC at ω=0, SIBC asymptote at high ω). | [`calc_inductance.py:_solve_coil_peec`](../../src/radia/panels/calc_inductance.py#L93) → [`peec_bundle.solve_loop_bundle(..., Zs_fil=Zs_fil)`](../../src/radia/peec_bundle.py#L240) |
-| **BEM-A** | **AC SIBC**: `R = Re(Z_s) · J^T M J = (1/(σδ)) · ∫_S \|J\|^2 dS` where J is the perfect-conductor surface current from the real-valued EFIE saddle. | [`coil_inductance_ngsolve.py:218-226`](../../src/radia/bem/coil_inductance_ngsolve.py#L218-L226) |
+| **BEM-A** | **Impedance-EFIE SIBC** (sole formulation): `Z_s = (1+j)/(σδ)` sits inside the complex saddle `jωμ0·SL + Z_s·M`; `R = Re(Z_s)·(Jᴴ M J)` on the finite-impedance J, `L = μ0·(Jᴴ SL J)` (external).  The legacy PEC post-hoc `R = Re(Z_s)·JᵀMJ` was REMOVED (over-estimated ~3× on tightly-wound coils; see §2). | [`coil_inductance_ngsolve.py`](../../src/radia/bem/coil_inductance_ngsolve.py) `compute_inductance_source_sink` |
 
-For a round wire both solvers should now agree to within a few %
-across the full frequency range.  The remaining gap is mesh / quadrature.
+For a round wire both solvers agree to within a few % across the full
+frequency range, and on tightly-wound multi-turn coils they now agree
+too (kubota 3-turn: BEM-A 4.63 vs PEEC 4.48 mΩ).  The remaining gap
+is mesh / quadrature.
 
 ## TL;DR (historical, pre-2026-05-19, before the fix)
 
@@ -205,48 +208,59 @@ The 150 kHz value matches the high-skin analytic `R_AC ≈ R_DC·a/(2δ) ≈
 is the internal-inductance shrinking (`μ_0/(8π)` at DC → 0 at high
 ω, integrated over 0.78 m wire length ≈ 39 nH).
 
-## 2. BEM-A's R: AC SIBC on perfect-conductor J
+## 2. BEM-A's R: the impedance-EFIE (Z_s inside the saddle)
 
-BEM-A solves the **real-valued** EFIE saddle system on the coil
-surface ([`coil_inductance_ngsolve.py:202-211`](../../src/radia/bem/coil_inductance_ngsolve.py#L202-L211)):
+Since 2026-07-02 BEM-A solves the **complex impedance-EFIE** saddle
+on the coil surface (`coil_inductance_ngsolve.py`, sole formulation):
 
 ```
-[SL     D^T] [J]   [0]
-[D      0  ] [p] = [g]
+[jω μ0 SL + Z_s M   D^T] [J]   [0]
+[D                   0 ] [p] = [g]        (complex, ω > 0)
 ```
 
-`Z_s` does NOT appear in this matrix.  The recovered J is the
-**perfect-conductor surface current**.  The AC resistance is then
-computed post-hoc
-([line 218-226](../../src/radia/bem/coil_inductance_ngsolve.py#L218-L226)):
+with the complex Leontovich `Z_s = (1+j)/(σ δ)` in the (1,1) block.
+The recovered J is the **finite-impedance surface current** -- it does
+NOT over-concentrate at near-contact gaps or edges.  Then
 
 ```python
-R_coil = Re(Z_s) · J^T M J
-       = (1 / (σ δ)) · ∫_S |J|^2 dS
+R_coil = Re(Z_s) · (Jᴴ M J)          # Leontovich dissipation
+L_coil = μ0 · (Jᴴ SL J)              # EXTERNAL inductance (geometry)
 ```
 
-This is the standard Leontovich SIBC surface integral: dissipation
-density `½ Re(Z_s) |H_t|^2` (with `H_t = n × J`) integrated over the
-conductor surface.
+(the internal surface reactance `Im(Z_s)·(Jᴴ M J)/ω` regularizes J but
+is deliberately not folded into the reported L).  At `ω = 0` the solve
+reduces to the real vacuum saddle `[SL, D^T; D, 0]` with R = 0.
+
+**Historical (removed 2026-07-02)**: the original implementation
+solved the real perfect-conductor saddle (no `Z_s` in the matrix) and
+evaluated `R = Re(Z_s)·JᵀMJ` post-hoc from the PEC current.  On smooth
+geometry that agreed with the impedance-EFIE and with Bessel; on
+tightly-wound coils the PEC J concentrates singularly at near-contact
+turn gaps and edges (varying below δ, where the Leontovich integral
+breaks down) and over-estimated R ~3× (kubota 3-turn: 15.14 vs
+4.63 mΩ; a loss map put 71 % of the loss on 2 % of the area).  The
+path was deleted per the Discard-the-PoC / No-Fallbacks policies.
 
 In the **strong-skin limit** (`a / δ >> 1`) BEM-A recovers the round-
 wire Bessel asymptote to within mesh quadrature error.  In the
-**weak-skin limit** (`a / δ << 1`) BEM-A → 0 because `Re(Z_s) → 0` as
-`δ → ∞`; it does NOT pick up R_DC.
+**weak-skin limit** (`a / δ << 1`) the Leontovich SIBC itself loses
+validity and R → 0 as `δ → ∞`; BEM-A does NOT pick up R_DC (use PEEC
+or frequency=0 + analytic R_DC there).
 
-## 3. Why PEEC and BEM-A now agree
+## 3. Why PEEC and BEM-A agree
 
 PEEC's per-filament `Zs_fil_k = n_peri (Z_cyl(ω) − R_DC/m) L_k` gives
 a parallel-bundle self-impedance of `Z_cyl(ω) · L`.  The real part is
 the full Bessel AC resistance.
 
-BEM-A's `Re(Z_s) ∫|J|² dS = ρL/(δ·P)` is the high-skin asymptote of
-the same Bessel formula.
+BEM-A's `Re(Z_s) (Jᴴ M J)` on the impedance-EFIE current reproduces
+the same Bessel asymptote on smooth wires (0.16-0.5 % measured), and
+-- unlike the removed PEC path -- stays physical on tightly-wound
+coils: kubota 3-turn 4.63 mΩ vs perimeter PEEC 4.5 / volume PEEC 3.7 /
+analytic proximity 4.8 mΩ.
 
-In the high-skin limit (the IH regime, `a/δ ≥ 3`) the two formulas
-give the same R within mesh and `n_peri` discretisation error.  In
-the weak-skin / DC limit PEEC stays at R_DC (correct), BEM-A drops to
-0 (an artefact of SIBC ≠ DC).
+In the weak-skin / DC limit PEEC stays at R_DC (correct), BEM-A drops
+to 0 (Leontovich SIBC ≠ DC).
 
 ## 4. Empirical numbers on the 3-turn pancake coil
 
@@ -299,10 +313,13 @@ separate mesh / topology issue.
   ferromagnetic with `μ_r(H)` dependence, the per-filament Z_s should
   come from the ESIM cell solver, not the linear Bessel formula.
   Branch on a `--filament-impedance esim` flag (future).
-- **(Future) Complex-Z_s EFIE for BEM-A**: add `(Z_s / jω) · M` to
-  the saddle SL block so J redistributes under the full Leontovich
-  impedance.  Recovers the J-redistribution physics inside the BEM-A
-  formulation.  Effort: ~1 week.
+- **Complex-Z_s EFIE for BEM-A — SHIPPED 2026-07-02 and now the SOLE
+  formulation** (see §2): the shipped (1,1) block is
+  `jω μ0 SL + Z_s M` (equivalent to the `(Z_s/jω)·M` proposal up to
+  the overall `jω μ0` scaling), J redistributes under the full
+  Leontovich impedance, R = Re(Z_s)(Jᴴ M J), and L keeps the
+  external-inductance convention `μ0 (Jᴴ SL J)`.  The legacy PEC
+  post-hoc path was removed in the same change.
 
 ## What changed 2026-05-19
 

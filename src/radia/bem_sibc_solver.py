@@ -1086,6 +1086,18 @@ def compute_phi_inc_from_surface_J(obs_points, src_centroids, src_areas,
 
     centers = np.asarray(src_centroids, dtype=float)
     areas = np.asarray(src_areas, dtype=float)
+    if np.iscomplexobj(src_J_vecs):
+        # np.asarray(..., dtype=float) on a complex array silently
+        # discards the imaginary part (only a ComplexWarning).  The
+        # BEM-A impedance-EFIE coil current IS complex -- callers must
+        # bridge Re and Im in two separate calls and combine
+        # (phi = phi_re + 1j*phi_im), as calc_inductance does.  Fail
+        # fast per CLAUDE.md "No Fallbacks" instead of silently
+        # truncating the phasor.
+        raise TypeError(
+            "compute_phi_inc_from_surface_J is real-only but received a "
+            "complex src_J_vecs.  Call it separately on np.real(J) and "
+            "np.imag(J) and combine phi_re + 1j*phi_im.")
     J = np.asarray(src_J_vecs, dtype=float)
 
     INV_4PI = 1.0 / (4.0 * np.pi)

@@ -1,36 +1,41 @@
-"""Golden regression test for the BEM-A impedance-EFIE R formulation.
+"""Golden regression tests for the unified BEM-A impedance-EFIE.
 
-Background (2026-07-02): the default BEM-A R is computed post-hoc from
-the perfect-conductor (PEC) surface current, ``R = Re(Zs) * J^T M J``.
-That OVER-estimates R for tightly-wound / near-contact / faceted coils
-because the PEC current concentrates singularly at edges and
-near-touching surfaces, where the Leontovich SIBC (which assumes J
-smooth over the skin depth) breaks down.  On the kubota 3-turn coil the
-PEC path gives 15.14 mOhm, a loss map shows 71% of that loss sits on 2%
-of the surface area, and three independent methods (volume PEEC 3.7,
-perimeter PEEC 4.5, analytic proximity 4.8) put the physical R at
-~4.5-5 mOhm.
+Since 2026-07-02 the impedance-EFIE is the SOLE BEM-A formulation: the
+Leontovich surface impedance sits inside the saddle system,
 
-The fix (``--bema-impedance-efie``) puts Zs INTO the saddle system --
-the (1,1) block becomes ``j w mu0 SL + Zs M`` (complex) -- so J is the
-finite-impedance current and does NOT over-concentrate.  On the kubota
-coil it gives 4.63 mOhm (matching the physics); on smooth geometry
-(isolated straight wire) it reproduces the same Bessel R as the PEC
-path (validated in C:/temp/volpeec_proto/imp_efie.py:
-R_imp = R_pec = 0.3153 mOhm vs Bessel 0.3148).
+    [ jw*mu0*SL + Zs*M   D^T ] [J]   [0]
+    [ D                   0  ] [p] = [g]     (complex, omega > 0)
 
-This test locks the invariants on the self-contained gapped-torus
-fixture (shared with test_coil_bem_a_volume_vol.py):
-  * L is essentially unchanged (both PEC and impedance-EFIE L inside the
-    PEEC band) -- the reactance is dominated by the geometry, not Zs;
-  * R_impedance <= R_pec (the impedance-EFIE only ever REMOVES the
-    spurious over-concentration, never adds);
-  * both R are finite and positive.
+so J is the finite-impedance surface current; R = Re(Zs)*(J^H M J),
+L = mu0*(J^H SL J) (external inductance).  The historical PEC post-hoc
+path (real perfect-conductor saddle + R = Re(Zs)*J^T M J evaluated
+afterwards) was REMOVED: the PEC J concentrates singularly at
+near-contact gaps / edges where the Leontovich integral breaks down,
+over-estimating R ~3x on tightly-wound coils (kubota 3-turn pancake:
+PEC 15.14 mOhm vs impedance-EFIE 4.63 mOhm, the latter confirmed by
+volume PEEC 3.7 / perimeter PEEC 4.5 / analytic proximity 4.8).  On
+smooth geometry both agreed (isolated wire = Bessel to <1%), so the
+removal loses nothing.  See docs/peec/VOLUME_PEEC_DESIGN.md
+"2026-07-02 outcome".
 
-See docs/peec/VOLUME_PEEC_DESIGN.md "2026-07-02 outcome".
+These tests lock the unified path:
+
+1. ``test_impedance_efie_torus_absolute``: absolute R/L bands on the
+   self-contained gapped-torus fixture at 150 kHz and 7 kHz, plus the
+   mesh-robust physics lock R(150k)/R(7k) ~ sqrt(150/7) (strong-skin
+   Leontovich R ~ sqrt(f)), plus the omega=0 DC branch (R == 0, same
+   external L).  Reference values captured 2026-07-02 on LAB:
+   150 kHz R=1.0453 mOhm L=87.270 nH; 7 kHz R=0.2231 mOhm L=87.332 nH.
+2. ``test_impedance_efie_wire_bessel``: BEM-A on an isolated straight
+   round wire reproduces the closed-form Bessel AC resistance -- the
+   physics-anchored calibration that needs no captured numbers.
+3. ``test_minres_rejected_for_complex``: the AC saddle is complex and
+   scipy MINRES silently solves only its real part -- the library must
+   fail fast instead.
 """
 from __future__ import annotations
 
+import math
 import os
 import sys
 
@@ -42,7 +47,17 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 FIXTURE = os.path.join(HERE, "fixtures", "gapped_torus_2port.vol")
 MAKE_FIXTURE = os.path.join(HERE, "fixtures", "make_gapped_torus_2port.py")
 
+SIGMA_CU = 5.8e7
+MU_0 = 4e-7 * math.pi
+
+# PEEC cross-method band for the gapped-torus L (see
+# test_coil_bem_a_volume_vol.py; the .vol fixture is regenerated
+# per-machine so bands are deliberately generous).
 PEEC_BAND_NH = (80.0, 92.0)
+# Impedance-EFIE R bands captured 2026-07-02 (LAB), +-15% for
+# cross-machine mesh variation of the auto-generated fixture.
+R_BAND_150K_MOHM = (0.89, 1.20)    # captured 1.0453
+R_BAND_7K_MOHM = (0.19, 0.26)      # captured 0.2231
 
 
 def _have_ngsbem():
@@ -51,6 +66,11 @@ def _have_ngsbem():
         return True
     except Exception:
         return False
+
+
+def _zs(sigma, omega):
+    delta = math.sqrt(2.0 / (omega * MU_0 * sigma))
+    return (1.0 + 1.0j) / (sigma * delta)
 
 
 @pytest.fixture(scope="module")
@@ -68,59 +88,139 @@ def gapped_torus_vol():
     return FIXTURE
 
 
-def _args(vol, impedance_efie):
-    from argparse import Namespace
-    return Namespace(
-        coil_vol=vol,
-        coil_source_name="source",
-        coil_sink_name="sink",
-        coil_rwg_quad_degree=5,
-        coil_rwg_singular_nq=6,
-        coil_bem_solver="auto",
-        coil_aca_eps=1e-10,
-        coil_gmres_tol=1e-10,
-        coil_saddle_solver="auto",
-        coil_sigma=5.8e7,
-        frequency=150_000.0,
-        current=1.0,
-        n_threads=0,
-        bema_impedance_efie=impedance_efie,
-    )
+def _surface_mesh(volpath):
+    from ngsolve import Mesh
+    sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    mesh = Mesh(volpath)
+    if mesh.ne > 0:
+        mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
+    return mesh
 
 
 @pytest.mark.slow
-def test_impedance_efie_invariants(gapped_torus_vol):
-    """PEC vs impedance-EFIE on the gapped-torus volume .vol."""
+def test_impedance_efie_torus_absolute(gapped_torus_vol):
+    """Absolute R/L bands + sqrt(f) physics lock + DC branch."""
     if not _have_ngsbem():
         pytest.skip("ngsolve.bem not available")
+    from ngsolve import TaskManager
+    from radia.bem.coil_inductance_ngsolve import (
+        compute_inductance_source_sink)
 
+    mesh = _surface_mesh(gapped_torus_vol)
+
+    results = {}
+    with TaskManager():
+        for freq in (150e3, 7e3):
+            omega = 2 * math.pi * freq
+            results[freq] = compute_inductance_source_sink(
+                mesh, "source", "sink",
+                omega=omega, Z_s_complex=_zs(SIGMA_CU, omega))
+        dc = compute_inductance_source_sink(mesh, "source", "sink",
+                                            omega=0.0)
+
+    r150 = results[150e3]
+    r7 = results[7e3]
+
+    for tag, r in (("150k", r150), ("7k", r7), ("DC", dc)):
+        L_nH = float(r["L"]) * 1e9
+        lo, hi = PEEC_BAND_NH
+        assert lo <= L_nH <= hi, (
+            f"{tag}: external L={L_nH:.3f} nH outside PEEC band "
+            f"[{lo},{hi}] -- external-inductance convention regressed?")
+        assert float(r["residual"]) < 1e-9
+
+    R150 = float(r150["R"]) * 1e3
+    R7 = float(r7["R"]) * 1e3
+    assert R_BAND_150K_MOHM[0] <= R150 <= R_BAND_150K_MOHM[1], (
+        f"impedance-EFIE R(150kHz)={R150:.4f} mOhm outside "
+        f"{R_BAND_150K_MOHM} (captured 1.0453)")
+    assert R_BAND_7K_MOHM[0] <= R7 <= R_BAND_7K_MOHM[1], (
+        f"impedance-EFIE R(7kHz)={R7:.4f} mOhm outside "
+        f"{R_BAND_7K_MOHM} (captured 0.2231)")
+
+    # Strong-skin Leontovich scaling R ~ sqrt(f): mesh-independent
+    # physics lock (captured ratio 4.686 vs sqrt(150/7)=4.629, +1.2%).
+    ratio = R150 / R7
+    expect = math.sqrt(150.0 / 7.0)
+    assert abs(ratio / expect - 1.0) < 0.10, (
+        f"R(150k)/R(7k)={ratio:.3f} deviates >10% from sqrt(f) scaling "
+        f"{expect:.3f} -- Zs frequency dependence regressed?")
+
+    # DC branch: R == 0, external L consistent with AC (same geometry
+    # quantity; captured spread 87.27 vs 87.33 nH = 0.07%).
+    assert float(dc["R"]) == 0.0
+    assert abs(float(dc["L"]) / float(r150["L"]) - 1.0) < 0.02
+    # Im(J) GridFunction exists and is all-zero at DC.
+    import numpy as np
+    assert float(np.max(np.abs(
+        dc["gf_J_im"].vec.FV().NumPy()))) == 0.0
+
+
+@pytest.mark.slow
+def test_impedance_efie_wire_bessel():
+    """Isolated straight wire: BEM-A impedance-EFIE == Bessel R_ac.
+
+    Physics-anchored calibration (no captured mesh-dependent numbers):
+    a=3.15 mm Cu wire, L=60 mm, 150 kHz (a/delta=18.5).  The Leontovich
+    R of the impedance-EFIE current must match the closed-form Bessel
+    cylinder impedance within 3% (measured 0.5% at maxh=1.5 mm).
+    """
+    if not _have_ngsbem():
+        pytest.skip("ngsolve.bem not available")
+    try:
+        from netgen.occ import Cylinder, OCCGeometry, Pnt, Z
+    except Exception:
+        pytest.skip("netgen.occ not available")
+    from ngsolve import Mesh, TaskManager
+    from radia.bem.coil_inductance_ngsolve import (
+        compute_inductance_source_sink)
+    from radia.analytical_formulas.conductor_impedance import (
+        cylinder_ac_impedance)
+
+    a = 3.15e-3
+    Lw = 60e-3
+    freq = 150e3
+    omega = 2 * math.pi * freq
+
+    cyl = Cylinder(Pnt(0, 0, 0), Z, r=a, h=Lw)
+    for f in cyl.faces:
+        z = f.center[2]
+        f.name = ("source" if abs(z) < Lw * 0.25
+                  else "sink" if abs(z - Lw) < Lw * 0.25 else "wire")
+    cyl.name = "cond"
     sys.path.insert(0, os.path.join(ROOT, "src", "radia", "panels"))
-    from calc_inductance import _solve_coil_bem_a
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    with TaskManager():
+        mesh = Mesh(OCCGeometry(cyl).GenerateMesh(maxh=1.5e-3))
+        # compute_inductance_source_sink assumes a PURE SURFACE mesh
+        # (volume tets add saddle null modes the D[:-1,:] deflation
+        # cannot remove -> singular LU; same pathology the panel fixed
+        # in _build_bema_coil_mesh, see test_coil_bem_a_volume_vol.py).
+        mesh = _extract_surface_mesh_filtered(mesh, keep_label="")
+        res = compute_inductance_source_sink(
+            mesh, "source", "sink",
+            omega=omega, Z_s_complex=_zs(SIGMA_CU, omega))
 
-    pec = _solve_coil_bem_a(_args(gapped_torus_vol, impedance_efie=False))
-    imp = _solve_coil_bem_a(_args(gapped_torus_vol, impedance_efie=True))
+    R_bessel = cylinder_ac_impedance(a, SIGMA_CU, omega).real * Lw
+    R = float(res["R"])
+    assert abs(R / R_bessel - 1.0) < 0.03, (
+        f"impedance-EFIE wire R={R*1e3:.4f} mOhm vs Bessel "
+        f"{R_bessel*1e3:.4f} mOhm ({(R/R_bessel-1)*100:+.2f}%) -- "
+        f"the unified BEM-A no longer reproduces the closed-form "
+        f"self-skin resistance.")
 
-    L_pec = float(pec["L_coil"]) * 1e9
-    L_imp = float(imp["L_coil"]) * 1e9
-    R_pec = float(pec["R_coil"]) * 1e3
-    R_imp = float(imp["R_coil"]) * 1e3
 
-    lo, hi = PEEC_BAND_NH
-    assert lo <= L_pec <= hi, f"PEC L={L_pec:.3f} nH outside band [{lo},{hi}]"
-    assert lo <= L_imp <= hi, f"IMP L={L_imp:.3f} nH outside band [{lo},{hi}]"
+def test_minres_rejected_for_complex():
+    """scipy MINRES silently solves only Re() of a complex system --
+    the saddle helper must fail fast instead of returning garbage."""
+    import numpy as np
+    from radia.bem.coil_inductance_ngsolve import _solve_saddle
 
-    # Both resistances finite + positive.
-    assert R_pec > 0 and R_pec < 1e4, f"PEC R nonphysical: {R_pec}"
-    assert R_imp > 0 and R_imp < 1e4, f"IMP R nonphysical: {R_imp}"
-
-    # The impedance-EFIE only REMOVES the spurious PEC over-concentration:
-    # R_imp <= R_pec (small numerical slack).  It must never exceed PEC.
-    assert R_imp <= R_pec * 1.05, (
-        f"impedance-EFIE R={R_imp:.4f} mOhm exceeds PEC R={R_pec:.4f} mOhm "
-        f"-- the impedance-EFIE should only reduce over-concentration, "
-        f"never increase R.  Regression in the (1,1)=jw*mu0*SL+Zs*M block "
-        f"or the Z = Zs(J^H M J)+jw mu0(J^H SL J) extraction?")
-
-    # residual clean for both dense LU solves.
-    assert float(pec["bem_a_residual"]) < 1e-9
-    assert float(imp["bem_a_residual"]) < 1e-9
+    K = np.eye(4, dtype=complex) + 1j * np.eye(4)
+    rhs = np.ones(4, dtype=complex)
+    with pytest.raises(ValueError, match="MINRES"):
+        _solve_saddle(K, rhs, method="minres")
+    # Real systems keep MINRES (omega=0 vacuum-L path).
+    x, info = _solve_saddle(np.eye(4), np.ones(4), method="minres")
+    assert np.allclose(x, 1.0)

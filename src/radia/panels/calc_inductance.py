@@ -416,10 +416,16 @@ def _solve_coil_bem_a(args):
     rationale.
 
     Returns a dict with:
-      * L_coil [H], R_coil [Ω] at unit terminal current  (R is AC SIBC)
+      * L_coil [H] (external inductance), R_coil [Ω] at unit terminal
+        current.  R comes from the impedance-EFIE (Z_s inside the
+        saddle, J = finite-impedance current) -- the sole formulation
+        since 2026-07-02; the PEC post-hoc R was removed (it
+        over-estimated ~3x on tightly-wound coils).
       * source_type = "surface"
-      * coil_centroids (n_t, 3), coil_areas (n_t,), coil_J_per_tri (n_t, 3)
-        -- all REAL; multiply by complex args.current downstream as needed
+      * coil_centroids (n_t, 3), coil_areas (n_t,) -- real;
+        coil_J_per_tri (n_t, 3) -- COMPLEX per-triangle surface current
+        at unit terminal current (Im is all-zero for frequency=0).
+        Multiply by complex args.current downstream as needed.
       * coil_residual, coil_mesh_nv, coil_mesh_n_tris
     """
     from radia.bem.coil_inductance_ngsolve import (
@@ -451,40 +457,39 @@ def _solve_coil_bem_a(args):
             f"{args.coil_sink_name!r} sidesets in --coil-vol contain "
             f"surface elements (not just labelled but empty).")
 
+    # Complex Leontovich surface impedance for the impedance-EFIE
+    # (the sole AC formulation).  omega == 0 -> DC vacuum-L solve.
     delta_skin = math.sqrt(2.0 / (omega * MU_0 * args.coil_sigma)) \
                   if omega > 0 else 1.0
-    Z_s_coil_re = 1.0 / (args.coil_sigma * delta_skin) if omega > 0 else 0.0
-    # Full complex Leontovich surface impedance for the impedance-EFIE.
     Z_s_coil_complex = (1.0 + 1.0j) / (args.coil_sigma * delta_skin) \
-                        if omega > 0 else 0.0
-    use_imp_efie = bool(getattr(args, "bema_impedance_efie", True)) \
-                    and omega > 0
+                        if omega > 0 else None
 
     # Saddle-point solver selection.
-    #   "auto" (default):  LU at < ~10k tris (~25k saddle DOFs at HDivSurface
-    #                      RT0), MINRES above that (dense LU memory cost
-    #                      doubles with overwrite_a=False and explodes the
-    #                      runner -- see commit message of this change for
-    #                      the 14972-tri OOM trace).
+    #   "auto" (default):  LU below a tri-count threshold, Krylov above.
+    #       The AC impedance-EFIE saddle is COMPLEX (16 B/entry, 2x the
+    #       old real PEC saddle the historical 10k threshold was
+    #       calibrated on), so the AC LU cutoff is halved to 5000 tris;
+    #       the omega=0 real vacuum solve keeps 10000.  Above the
+    #       cutoff: GMRES for AC (complex-capable), MINRES for omega=0
+    #       -- scipy MINRES assumes a Hermitian operator and silently
+    #       returns a wrong solution on the complex-SYMMETRIC AC saddle,
+    #       so the library rejects it there (fail-fast).
     #   "lu"      dense LAPACK direct (overwrite_a=True, smallest memory
     #             for direct solve)
-    #   "minres"  Krylov for symmetric indefinite -- recommended above 10k
-    #             tris
-    #   "gmres"   Generic Krylov -- fallback if MINRES stalls.
+    #   "minres"  Krylov for REAL symmetric indefinite -- omega=0 ONLY
+    #   "gmres"   Generic complex-capable Krylov -- large AC systems
     saddle = args.coil_saddle_solver
     if saddle == "auto":
-        saddle = "lu" if len(coil_tris) < 10000 else "minres"
+        lu_cutoff = 5000 if omega > 0 else 10000
+        if len(coil_tris) < lu_cutoff:
+            saddle = "lu"
+        else:
+            saddle = "gmres" if omega > 0 else "minres"
     progress("BEMA",
-        f"ngsolve.bem solve (n_tris={len(coil_tris)}, "
-        f"fes_order=0, Z_s_re={Z_s_coil_re:.3e}, saddle={saddle}, "
-        f"R={'impedance-EFIE' if use_imp_efie else 'PEC post-hoc'})")
-    if use_imp_efie:
-        progress("BEMA",
-            "impedance-EFIE: Z_s in the saddle system -> J is the "
-            "finite-impedance current (no PEC edge/near-contact "
-            "over-concentration); avoids the ~3x SIBC-breakdown R "
-            "over-estimate on tightly-wound coils (see "
-            "docs/peec/VOLUME_PEEC_DESIGN.md).")
+        f"ngsolve.bem impedance-EFIE solve (n_tris={len(coil_tris)}, "
+        f"fes_order=0, "
+        f"Z_s={Z_s_coil_complex if omega > 0 else 'DC (vacuum L)'}, "
+        f"saddle={saddle})")
     t0 = time.perf_counter()
     res = compute_inductance_source_sink(
         coil_mesh,
@@ -492,11 +497,9 @@ def _solve_coil_bem_a(args):
         sink_label=args.coil_sink_name,
         fes_order=0,
         solver=saddle,
-        Z_s_re=Z_s_coil_re,
-        log_fn=progress,
-        impedance_efie=use_imp_efie,
         omega=omega,
         Z_s_complex=Z_s_coil_complex,
+        log_fn=progress,
     )
     t_solve = time.perf_counter() - t0
     if "error" in res:
@@ -519,10 +522,16 @@ def _solve_coil_bem_a(args):
         f"(SurfaceL2 P0), saddle_ndof={coil_saddle_ndof} "
         f"on {len(coil_tris)} triangles / {coil_mesh.nv} vertices")
 
-    # Per-triangle J_s vectors at centroids (workpiece bridge prep).
-    # NGSolve element-wise Integrate of gf_J components / element area.
-    coil_centroids, coil_areas, coil_J_per_tri = compute_centroids_areas_J(
+    # Per-triangle COMPLEX J_s vectors at centroids (workpiece bridge
+    # prep).  The impedance-EFIE current is complex; sample Re and Im
+    # GridFunctions separately and combine so the phi_inc / Telegen /
+    # qsurf bridges downstream see the full phasor (they already split
+    # Re/Im before calling the real-only compute_phi_inc_from_surface_J).
+    coil_centroids, coil_areas, coil_J_re = compute_centroids_areas_J(
         coil_mesh, res["gf_J"])
+    _, _, coil_J_im = compute_centroids_areas_J(
+        coil_mesh, res["gf_J_im"])
+    coil_J_per_tri = coil_J_re + 1j * coil_J_im
 
     return {
         "source_type": "surface",
@@ -1701,6 +1710,13 @@ def run_inductance(args):
     import radia  # noqa: F401  (DLL path setup for subprocess context)
     from ngsolve import TaskManager
 
+    # A sign typo in --frequency must not silently select the DC
+    # vacuum-L branch (R=0, Zs ignored) -- fail fast with the flag name.
+    if args.frequency < 0.0 or args.frequency != args.frequency:
+        return {"status": "error",
+                "error": f"--frequency must be >= 0 Hz (0 selects the "
+                          f"DC vacuum-L solve); got {args.frequency!r}"}
+
     # Validate workpiece args if --vol given
     if args.vol:
         if args.sigma <= 0.0:
@@ -1836,27 +1852,25 @@ def build_argparser():
                         help="HACApK GMRES tol for coil (bem-a, future)")
     parser.add_argument("--coil-saddle-solver", default="auto",
                         choices=["auto", "lu", "minres", "gmres"],
-                        help="Saddle-point solver for BEM-A: auto (LU < "
-                             "10000 tris, MINRES above), lu (dense LAPACK, "
-                             "overwrite_a=True), minres (Krylov symmetric "
-                             "indefinite), gmres (generic Krylov). "
-                             "Defaults to auto.")
-    parser.add_argument("--bema-impedance-efie",
-                        action=argparse.BooleanOptionalAction, default=True,
-                        help="BEM-A R formulation.  DEFAULT (on) is the "
-                             "impedance-EFIE: Zs is put INTO the saddle system "
-                             "(complex jw*mu0*SL+Zs*M) so J is the "
-                             "finite-impedance current and R is physical "
-                             "(kubota 3-turn coil = 4.63 mOhm, matches "
-                             "volume/perimeter PEEC).  --no-bema-impedance-efie "
-                             "reverts to the legacy post-hoc PEC integral "
-                             "R=Re(Zs) integral|J|^2 dS, which OVER-estimates R "
-                             "for tightly-wound / near-contact / faceted coils "
-                             "(perfect-conductor J concentrates singularly at "
-                             "edges/gaps where SIBC breaks down: same coil = "
-                             "15.1 mOhm) -- kept only for comparison/validation. "
-                             "Smooth geometry (isolated wire) is identical for "
-                             "both (=Bessel).")
+                        help="Saddle-point solver for the BEM-A "
+                             "impedance-EFIE: auto (LU below 5000 tris for "
+                             "AC / 10000 for frequency=0; above that GMRES "
+                             "for AC, MINRES for frequency=0), lu (dense "
+                             "LAPACK, overwrite_a=True), gmres "
+                             "(complex-capable Krylov), minres (REAL "
+                             "symmetric Krylov -- VALID ONLY for the "
+                             "frequency=0 vacuum-L solve; scipy MINRES "
+                             "assumes a Hermitian operator and silently "
+                             "returns a wrong solution on the "
+                             "complex-symmetric AC saddle, so it is "
+                             "rejected there). Defaults to auto.")
+    # NOTE (2026-07-02): the --bema-impedance-efie flag was REMOVED --
+    # BEM-A is unified on the impedance-EFIE (Zs inside the saddle,
+    # J = finite-impedance current).  The legacy post-hoc PEC integral
+    # R=Re(Zs) integral|J|^2 dS over-estimated R ~3x on tightly-wound /
+    # near-contact coils (kubota 3-turn: 15.1 mOhm vs the physical 4.63)
+    # and was deleted per the Discard-the-PoC / No-Fallbacks policies.
+    # Recover from git history if ever needed for a comparison study.
 
     # ----- Coil material -----
     parser.add_argument("--coil-sigma", type=float, default=5.8e7,

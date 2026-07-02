@@ -29,30 +29,33 @@ short version):
 - Solve `Z_loop = R_f + jω L_f` as complex linear system + port-constraint augmentation.
 - `R_coil = Re(V_port / I_port)`.
 
-**BEM-A** — perfect-conductor saddle + post-hoc dissipation:
-- Solve real EFIE saddle `[[SL, D^T], [D, 0]] [J; p] = [0; g]` (no Z_s in matrix; J is the perfect-conductor surface current).
-- `R_coil = Re(Z_s) · J^T M J` with `Re(Z_s) = 1/(σ δ_coil)`.  Implementation: [`coil_inductance_ngsolve.py:218-226`](../../src/radia/bem/coil_inductance_ngsolve.py#L218-L226).
+**BEM-A** — impedance-EFIE (Z_s inside the saddle; sole formulation
+since 2026-07-02):
+- Solve the COMPLEX saddle `[[jω μ0 SL + Z_s M, D^T], [D, 0]] [J; p] = [0; g]`
+  with `Z_s = (1+j)/(σ δ_coil)`; J is the finite-impedance surface
+  current.
+- `R_coil = Re(Z_s) · (Jᴴ M J)`, `L_coil = μ0 · (Jᴴ SL J)` (external).
+  Implementation: [`coil_inductance_ngsolve.py`](../../src/radia/bem/coil_inductance_ngsolve.py).
+- The historical perfect-conductor saddle + post-hoc
+  `R = Re(Z_s)·JᵀMJ` was REMOVED 2026-07-02: on tightly-wound coils
+  the PEC J concentrates singularly at near-contact gaps/edges and
+  over-estimated R ~3× (kubota 3-turn 15.14 vs 4.63 mΩ).
 
 ### 1.2 What each captures
 
-| Effect | PEEC | BEM-A |
+| Effect | PEEC | BEM-A (impedance-EFIE) |
 |---|---|---|
-| Ohmic loss in skin layer (`½ Re(Z_s) \|J\|²` integrated) | YES (via Dowell on each filament) | YES (post-multiply) |
-| Filament-internal skin amplification (`R_AC > R_DC` by Dowell factor) | YES | NO (J is treated as uniform over conductor cross-section) |
-| Inter-filament reactive current redistribution at high freq | YES (full complex L_f solve) | NO (J is computed at vanishing-resistance limit) |
-| Inter-filament resistive coupling | YES (Z_loop has off-diagonals via L_f imaginary at high freq) | NO |
+| Ohmic loss in skin layer (`½ Re(Z_s) \|J\|²` integrated) | YES (via Bessel/Dowell on each filament) | YES (Leontovich on the finite-impedance J) |
+| Azimuthal J redistribution around the cross-section (proximity) | Partial (perimeter filaments, ~1.2× ceiling) | YES (surface J resolves it) |
+| Suppression of the spurious PEC edge/near-contact singularity | n/a | YES (the resistive Z_s M term penalises it) |
+| Weak-skin / DC limit R → R_DC | YES | NO (Leontovich SIBC invalid; frequency=0 gives vacuum L, R=0) |
 
-The two formulae are **physically different** and converge to
-different limits:
-
-- **PEEC** converges, as `n_peri → ∞` and `nwinc, nhinc → ∞`, to a
-  filament-bundle limit that approximates the volumetric eddy-current
-  result.  For circular Cu at moderate `ξ` ~ 1-10 this limit agrees
-  with the full 3-D Maxwell solve to ~5 %.
-- **BEM-A** converges, as the surface mesh → fine, to the
-  "Leontovich-perturbed perfect-conductor" limit, which is a
-  **lower bound** on the true AC resistance.  The error scales as
-  `(δ/a)²` for the filament-bundle skin amplification term.
+The historical claim that BEM-A's limit is a "lower bound on the true
+AC resistance" was **wrong** for the removed PEC path: 2026-07-02
+showed it OVER-estimates ~3× on tightly-wound coils (SIBC breakdown at
+near-contact J singularities).  The shipped impedance-EFIE agrees with
+PEEC / volume PEEC / analytic proximity on those coils (4.63 vs
+4.5-4.8 mΩ) and with the Bessel closed form on smooth wires (<1 %).
 
 ### 1.3 Empirical data point: gapped-torus benchmark
 
@@ -64,32 +67,38 @@ gapped torus 1 turn + Cu, 50 kHz:
 |---|---|
 | PEEC (n_peri=16) | 0.233 |
 | FEM A-V volumetric (mesh-resolved coil skin) | 0.255 (computed as `2 × (P_coil - P_wp) / I²` from results.json sweep[1].fem_coilmesh: P_total = 1.27e-4, P_coil = 6.08e-5 → R_coil ≈ 0.243 mΩ) |
-| BEM-A (estimate — no production benchmark on the same coil) | likely 0.10-0.15 mΩ (lower bound) |
+| BEM-A impedance-EFIE (validation fixture, 7 kHz) | 0.223 mΩ (= Bessel R_ac at 7 kHz within ~7 %) |
 
 PEEC is **within ~10 %** of the volumetric FEM A-V reference for this
-geometry.  BEM-A's expected under-estimate of ~50 % (see
-[`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) § 5) is
-consistent with its theoretical lower-bound nature.
+geometry.  The historical "BEM-A likely 0.10-0.15 mΩ (lower bound)"
+estimate in earlier versions of this table described the removed PEC
+post-hoc path and was wrong in both value and direction; the shipped
+impedance-EFIE matches the Bessel/PEEC physics (see
+[`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) § 2-3).
 
-### 1.4 Proposed fix to align BEM-A with PEEC (v4.56+ roadmap)
+### 1.4 Complex Leontovich SIBC in the EFIE saddle — SHIPPED 2026-07-02
 
-Include the **full complex Leontovich SIBC** in the EFIE saddle:
-
-```
-[SL + (Z_s / jω) · M     D^T]  [J]   [0]
-[D                        0 ]  [p] = [g]
-```
-
-with `Z_s = (1+j) ρ / δ` (Dowell linear-SIBC) on the coil surface.  Then:
+The proposal below SHIPPED (and is now the sole BEM-A formulation):
 
 ```
-L_coil = Im(J^H Z_eq J) / ω    where Z_eq = jω μ_0 SL + Z_s M
-R_coil = Re(J^H Z_eq J)
+[jω μ0 SL + Z_s M     D^T]  [J]   [0]
+[D                     0 ]  [p] = [g]
 ```
 
-(Hermitian conjugates because J is now complex.)  Effort estimate:
-~1 week (assembler modification + golden tests).  Tracked as v4.56
-roadmap.
+with `Z_s = (1+j)/(σ δ)` on the coil surface.  The shipped extraction
+convention differs from the original proposal in one deliberate way:
+
+```
+R_coil = Re(Z_s) · (Jᴴ M J)          # Leontovich dissipation
+L_coil = μ0 · (Jᴴ SL J)              # EXTERNAL inductance
+```
+
+i.e. the internal surface reactance `Im(Z_s)·(Jᴴ M J)/ω` is NOT folded
+into L — it regularizes J inside the solve, but the reported L stays
+the pure geometry quantity every downstream consumer and golden
+expects (folding it in shifted L by +5.9 % on the 7 kHz gapped torus
+for no benefit to the R fix).  Golden:
+`validation_test/bem/test_coil_bem_a_impedance_efie.py`.
 
 ### 1.5 What this means for the IGTE paper
 

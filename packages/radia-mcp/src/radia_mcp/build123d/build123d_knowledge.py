@@ -1096,9 +1096,17 @@ geo = OCCGeometry("coil.step")
 mesh = Mesh(geo.GenerateMesh(maxh=2.0))
 
 from radia.bem.coil_inductance_ngsolve import compute_inductance_source_sink
+# Impedance-EFIE (the sole formulation since 2026-07-02): complex
+# Leontovich Zs inside the saddle -> J is the finite-impedance current
+# (the old PEC post-hoc R over-estimated ~3x on tightly-wound coils;
+# removed).  Pass omega=0 for a DC vacuum-L-only solve (R = 0).
+import math
+sigma, freq = 5.8e7, 50e3
+omega = 2 * math.pi * freq
+delta = math.sqrt(2.0 / (omega * 4e-7 * math.pi * sigma))
 res = compute_inductance_source_sink(
     mesh, source_label="source", sink_label="sink",
-    Z_s_re=1.0/(5.8e7 * 9.3e-5),  # optional AC SIBC at 50 kHz Cu
+    omega=omega, Z_s_complex=(1.0 + 1.0j) / (sigma * delta),
 )
 print("L =", res["L"], "H,  R =", res["R"], "Ω")
 ```
