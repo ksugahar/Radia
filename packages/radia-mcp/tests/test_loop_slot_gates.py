@@ -15,6 +15,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     coaxial_rc_duality_gate,
     coaxial_pm_force_gap_sweep_gate,
     cross_validation_artifact_to_mcp_feedback_gate,
+    source_native_seed_queue_gate,
     cst_abcd_cascade_solver_ready_manifest_gate,
     cst_export_manifest_solver_ready_gate,
     cst_result_export_package_gate,
@@ -3076,6 +3077,147 @@ def test_solver_result_artifact_provenance_timing_gate_records_versions_dates_an
     assert noisy_gate["checks"]["timing_stage_count_reasonable"] is False
     assert noisy_gate["timing_stage_count"] == 6
     assert len(noisy_gate["dominant_timing_stages"]) == 4
+
+
+def test_source_native_seed_queue_gate_separates_preflight_from_crossval_learning():
+    queue = {
+        "created_at": "2026-07-03T00:00:00Z",
+        "rounds": 2,
+        "total_slots": 4,
+        "rotation": ["COMSOL", "FEMM"],
+        "slots": [
+            {
+                "tool": "COMSOL",
+                "source_native_example": "public-example:acdc/coaxial-cable",
+                "source_type": "public_doc",
+                "lesson_axis": "coaxial EC/ES duality",
+                "intended_validation": "radia-ngsolve public analogue",
+                "lap": 1,
+                "slot_id": "seed-1",
+                "status": "queued_source_native_preflight",
+            },
+            {
+                "tool": "FEMM",
+                "source_native_example": "local-fixture:femm/examples/magnetostatic",
+                "source_type": "local_path",
+                "local_exists": True,
+                "lesson_axis": "magnetization sign convention",
+                "intended_validation": "public sign gate",
+                "lap": 1,
+                "slot_id": "seed-2",
+                "status": "queued_source_native_preflight",
+            },
+            {
+                "tool": "COMSOL",
+                "source_native_example": "public-example:acdc/current-carrying-wire",
+                "source_type": "public_doc",
+                "lesson_axis": "parallel-wire force sign",
+                "intended_validation": "analytic wire force gate",
+                "lap": 2,
+                "slot_id": "seed-3",
+                "status": "queued_source_native_preflight",
+            },
+            {
+                "tool": "FEMM",
+                "source_native_example": "upstream-example:femm/coilgun",
+                "source_type": "upstream_example",
+                "lesson_axis": "force/coenergy handoff",
+                "intended_validation": "public coenergy derivative gate",
+                "lap": 2,
+                "slot_id": "seed-4",
+                "status": "queued_source_native_preflight",
+            },
+        ],
+    }
+
+    gate = source_native_seed_queue_gate(
+        queue,
+        expected_tools=("COMSOL", "FEMM"),
+        expected_rounds=2,
+        expected_total_slots=4,
+        require_public_safe_sources=True,
+    )
+    assert gate["status"] == "ok"
+    assert gate["learning_stage"] == "queued_not_learned"
+    assert gate["checks"]["no_solver_or_learning_overclaim"] is True
+    assert gate["tool_counts"] == {"COMSOL": 2, "FEMM": 2}
+
+    overclaim = {**queue, "slots": [dict(slot) for slot in queue["slots"]]}
+    overclaim["slots"][0]["status"] = "verified_crossval_passed"
+    overclaim_gate = source_native_seed_queue_gate(overclaim)
+    assert overclaim_gate["status"] == "needs_attention"
+    assert overclaim_gate["checks"]["no_solver_or_learning_overclaim"] is False
+    assert overclaim_gate["solver_claim_slots"][0]["slot_id"] == "seed-1"
+
+    missing_field = {**queue, "slots": [dict(slot) for slot in queue["slots"]]}
+    missing_field["slots"][1]["lesson_axis"] = ""
+    missing_gate = source_native_seed_queue_gate(missing_field)
+    assert missing_gate["status"] == "needs_attention"
+    assert missing_gate["checks"]["required_slot_fields_present"] is False
+    assert missing_gate["missing_fields"][0]["missing"] == ["lesson_axis"]
+
+    private_source = {**queue, "slots": [dict(slot) for slot in queue["slots"]]}
+    private_source["slots"][0]["source_native_example"] = "internal://licensed/source"
+    private_gate = source_native_seed_queue_gate(
+        private_source,
+        require_public_safe_sources=True,
+    )
+    assert private_gate["status"] == "needs_attention"
+    assert private_gate["checks"]["public_safe_sources_when_required"] is False
+
+    feedback_artifact = {
+        "schema": "radia.crossval.v1",
+        "tool_slot": "radia-mcp",
+        "pass": True,
+        "created_at_utc": "2026-07-03T00:01:00Z",
+        "versions": {
+            "solver": "source-native seed queue gate v1",
+            "radia_mcp": "1.4.3",
+        },
+        "execution": {"run_date_utc": "2026-07-03T00:01:01Z"},
+        "result_artifact_id": "source_native_seed_queue_gate_20260703",
+        "result_output_schema_id": "source_native_seed_queue_gate_v1",
+        "result_output_columns": ["tool", "queued_slots", "gate_status"],
+        "result_output_units": {
+            "tool": "1",
+            "queued_slots": "1",
+            "gate_status": "1",
+        },
+        "timing_breakdown_s": {"queue_gate": 0.01, "feedback_gate": 0.01},
+        "learning_lanes": {"public": "verified", "source_tool": "verified"},
+        "public_lesson": (
+            "Source-native seed queues are replay material; radia-mcp may call "
+            "them learned only after a promoted result artifact passes feedback."
+        ),
+        "learning_targets": [
+            "radia-mcp: source_native_seed_queue_gate",
+            "radia_ngsolve.slot_gates",
+        ],
+        "verification": {
+            "public": "python -m pytest packages/radia-mcp/tests/test_loop_slot_gates.py -q -k source_native_seed_queue",
+            "commands": [
+                {
+                    "command": "python -m pytest packages/radia-mcp/tests/test_loop_slot_gates.py -q -k source_native_seed_queue",
+                    "result": "passed",
+                }
+            ],
+        },
+        "mcp_feedback": {
+            "public_summary": (
+                "Added a gate that accepts source-native loop seeds while "
+                "blocking solver-learning overclaims."
+            ),
+            "encoded_targets": ["radia-mcp: source_native_seed_queue_gate"],
+        },
+        "next_slot_allowed": True,
+    }
+    feedback_gate = cross_validation_artifact_to_mcp_feedback_gate(
+        feedback_artifact,
+        require_replayable_verification_commands=True,
+    )
+    assert feedback_gate["status"] == "ok"
+    assert feedback_gate["learning_stage"] == "learned"
+    assert feedback_gate["provenance_gate_status"] == "ok"
 
 
 def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_and_verification():

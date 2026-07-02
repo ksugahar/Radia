@@ -5774,6 +5774,267 @@ def solver_result_artifact_provenance_timing_gate(
     }
 
 
+def source_native_seed_queue_gate(
+    queue_artifact,
+    expected_tools=(),
+    expected_rounds=None,
+    expected_total_slots=None,
+    require_all_local_present=True,
+    require_public_safe_sources=False,
+    allow_verified_slots=False,
+):
+    """Gate source-native loop seed queues before calling them learned.
+
+    A source-native seed queue is useful learning material, but it is not a
+    solver result by itself.  This gate keeps that distinction explicit: queued
+    examples can be accepted as replay seeds while solver/cross-validation
+    claims must wait for a promoted result artifact.
+    """
+
+    if not isinstance(queue_artifact, dict):
+        raise ValueError("queue_artifact must be a mapping")
+
+    def as_int(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def clean_text(value):
+        return str(value or "").strip()
+
+    def list_tools(value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, (list, tuple, set)):
+            return [clean_text(item) for item in value if clean_text(item)]
+        return [clean_text(value)] if clean_text(value) else []
+
+    def looks_private_source(value):
+        text = clean_text(value)
+        if not text:
+            return False
+        normalized = text.replace("\\", "/").lower()
+        if len(text) >= 3 and text[1] == ":" and text[2] in ("\\", "/"):
+            return True
+        return any(
+            marker in normalized
+            for marker in (
+                "_crossval",
+                "internal://",
+                "private://",
+                "lab_private",
+                "unpublished",
+            )
+        )
+
+    valid_source_types = {
+        "local_path",
+        "local_project",
+        "public_url",
+        "public_doc",
+        "upstream_example",
+        "training_project",
+        "source_native",
+        "repository",
+        "manual_example",
+    }
+    required_slot_fields = (
+        "tool",
+        "source_native_example",
+        "source_type",
+        "lesson_axis",
+        "intended_validation",
+        "status",
+    )
+    solver_claim_tokens = (
+        "verified",
+        "learned",
+        "solver_pass",
+        "solver_verified",
+        "crossval_passed",
+        "validated",
+    )
+
+    slots = queue_artifact.get("slots")
+    if not isinstance(slots, list):
+        slots = []
+
+    expected_tool_names = list_tools(expected_tools)
+    actual_tools = []
+    tool_counts = {}
+    missing_fields = []
+    invalid_source_types = []
+    missing_local_sources = []
+    solver_claim_slots = []
+    private_source_slots = []
+    slot_ids = []
+    laps = []
+
+    for index, slot in enumerate(slots):
+        if not isinstance(slot, dict):
+            missing_fields.append(
+                {
+                    "index": index,
+                    "slot_id": "",
+                    "tool": "",
+                    "missing": list(required_slot_fields),
+                }
+            )
+            continue
+        tool = clean_text(slot.get("tool"))
+        actual_tools.append(tool)
+        if tool:
+            tool_counts[tool] = tool_counts.get(tool, 0) + 1
+        slot_id = clean_text(slot.get("slot_id") or slot.get("id") or index)
+        slot_ids.append(slot_id)
+        lap = as_int(slot.get("lap") or slot.get("round"))
+        if lap is not None:
+            laps.append(lap)
+
+        missing = [field for field in required_slot_fields if not clean_text(slot.get(field))]
+        if missing:
+            missing_fields.append(
+                {
+                    "index": index,
+                    "slot_id": slot_id,
+                    "tool": tool,
+                    "missing": missing,
+                }
+            )
+
+        source_type = clean_text(slot.get("source_type"))
+        if source_type and source_type not in valid_source_types:
+            invalid_source_types.append(
+                {
+                    "index": index,
+                    "slot_id": slot_id,
+                    "tool": tool,
+                    "source_type": source_type,
+                }
+            )
+
+        if (
+            bool(require_all_local_present)
+            and source_type in {"local_path", "local_project"}
+            and slot.get("local_exists") is False
+        ):
+            missing_local_sources.append(
+                {
+                    "index": index,
+                    "slot_id": slot_id,
+                    "tool": tool,
+                    "source_native_example": clean_text(slot.get("source_native_example")),
+                }
+            )
+
+        status_text = clean_text(slot.get("status")).lower()
+        if (
+            not bool(allow_verified_slots)
+            and any(token in status_text for token in solver_claim_tokens)
+        ):
+            solver_claim_slots.append(
+                {
+                    "index": index,
+                    "slot_id": slot_id,
+                    "tool": tool,
+                    "status": status_text,
+                }
+            )
+
+        if bool(require_public_safe_sources) and looks_private_source(
+            slot.get("source_native_example")
+        ):
+            private_source_slots.append(
+                {
+                    "index": index,
+                    "slot_id": slot_id,
+                    "tool": tool,
+                    "source_type": source_type,
+                }
+            )
+
+    expected_round_count = as_int(expected_rounds)
+    expected_slot_count = as_int(expected_total_slots)
+    declared_rounds = as_int(queue_artifact.get("rounds"))
+    declared_total_slots = as_int(queue_artifact.get("total_slots"))
+    actual_rounds = max(laps) if laps else 0
+    missing_expected_tools = [
+        tool for tool in expected_tool_names if tool not in set(actual_tools)
+    ]
+    unexpected_tools = [
+        tool for tool in sorted(set(actual_tools)) if expected_tool_names and tool not in expected_tool_names
+    ]
+    duplicate_slot_ids = sorted(
+        slot_id
+        for slot_id in set(slot_ids)
+        if slot_id and slot_ids.count(slot_id) > 1
+    )
+
+    checks = {
+        "created_at_recorded": bool(
+            clean_text(queue_artifact.get("created_at_utc"))
+            or clean_text(queue_artifact.get("created_at"))
+        ),
+        "slots_list_recorded": isinstance(queue_artifact.get("slots"), list),
+        "slots_nonempty": len(slots) > 0,
+        "declared_total_matches_slot_count": (
+            declared_total_slots is None or declared_total_slots == len(slots)
+        ),
+        "expected_total_matches_slot_count": (
+            expected_slot_count is None or expected_slot_count == len(slots)
+        ),
+        "declared_rounds_match_slots": (
+            declared_rounds is None or actual_rounds == 0 or declared_rounds == actual_rounds
+        ),
+        "expected_rounds_match_slots": (
+            expected_round_count is None
+            or actual_rounds == 0
+            or expected_round_count == actual_rounds
+        ),
+        "expected_tools_present": not missing_expected_tools,
+        "no_unexpected_tools": not unexpected_tools,
+        "required_slot_fields_present": not missing_fields,
+        "source_types_allowed": not invalid_source_types,
+        "local_sources_exist_when_required": not missing_local_sources,
+        "no_solver_or_learning_overclaim": not solver_claim_slots,
+        "public_safe_sources_when_required": not private_source_slots,
+        "slot_ids_unique_when_recorded": not duplicate_slot_ids,
+    }
+
+    ok = all(checks.values())
+    return {
+        "policy": "source_native_seed_queue_gate",
+        "status": "ok" if ok else "needs_attention",
+        "learning_stage": "queued_not_learned" if ok else "queue_needs_attention",
+        "slot_count": len(slots),
+        "declared_total_slots": declared_total_slots,
+        "expected_total_slots": expected_slot_count,
+        "declared_rounds": declared_rounds,
+        "actual_rounds": actual_rounds,
+        "expected_rounds": expected_round_count,
+        "expected_tools": expected_tool_names,
+        "actual_tools": sorted(set(actual_tools)),
+        "tool_counts": tool_counts,
+        "missing_expected_tools": missing_expected_tools,
+        "unexpected_tools": unexpected_tools,
+        "missing_fields": missing_fields,
+        "invalid_source_types": invalid_source_types,
+        "missing_local_sources": missing_local_sources,
+        "solver_claim_slots": solver_claim_slots,
+        "private_source_slots": private_source_slots,
+        "duplicate_slot_ids": duplicate_slot_ids,
+        "checks": checks,
+        "notes": [
+            "This gate verifies replay seeds, not solver results.",
+            "Keep seed queues in candidate/queued state until a result artifact passes the MCP feedback gate.",
+            "Use require_public_safe_sources=True only for scrubbed public artifacts; private loop queues may contain internal source paths.",
+        ],
+    }
+
+
 def cross_validation_artifact_to_mcp_feedback_gate(
     artifact,
     expected_public_status="verified",
