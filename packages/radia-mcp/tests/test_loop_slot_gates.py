@@ -149,6 +149,10 @@ def test_coenergy_torque_gate_uses_absolute_tolerance_at_zero_crossings():
 
     assert summary["status"] == "ok"
     assert summary["max_abs_error"] < 5.0e-4
+    assert summary["near_zero_abs_tolerance_schema_id"] == "coenergy_torque_near_zero_abs_tolerance_v1"
+    assert summary["near_zero_row_count"] >= 2
+    assert summary["near_zero_rows_pass_absolute_tolerance"] is True
+    assert summary["checks"]["near_zero_rows_use_absolute_tolerance"] is True
     zero_rows = [row for row in summary["rows"] if abs(row["reference_torque_nm"]) < 1.0e-12]
     assert zero_rows
     assert max(row["abs_error"] for row in zero_rows) < 1.0e-12
