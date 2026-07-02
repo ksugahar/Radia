@@ -360,6 +360,8 @@ def test_cubit_docs_route_tet_only_to_netgen_and_mixed_to_cubit():
     assert "Cubit meshing scheme traces" in routing
     assert "cubit_meshing_scheme_trace_gate" in routing
     assert "export netgen" in routing
+    assert "Headless Cubit smoke tests can export a valid `.vol` before teardown warns" in routing
+    assert "source`/`sink`/`sibc" in routing
     assert "hex-led and mixed hex+pyramid+tet lane" in pyramid
 
 
