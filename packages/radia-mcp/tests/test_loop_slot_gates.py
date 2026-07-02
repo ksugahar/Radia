@@ -14,6 +14,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     coenergy_torque_periodic_summary,
     coaxial_rc_duality_gate,
     coaxial_pm_force_gap_sweep_gate,
+    cross_validation_artifact_to_mcp_feedback_gate,
     cst_abcd_cascade_solver_ready_manifest_gate,
     cst_export_manifest_solver_ready_gate,
     cst_result_export_package_gate,
@@ -3075,6 +3076,80 @@ def test_solver_result_artifact_provenance_timing_gate_records_versions_dates_an
     assert noisy_gate["checks"]["timing_stage_count_reasonable"] is False
     assert noisy_gate["timing_stage_count"] == 6
     assert len(noisy_gate["dominant_timing_stages"]) == 4
+
+
+def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_and_verification():
+    artifact = {
+        "schema": "radia.crossval.v1",
+        "pass": True,
+        "created_at_utc": "2026-07-02T12:00:00Z",
+        "versions": {
+            "solver": "radia 4.95.2",
+            "radia_mcp": "0.82.0",
+        },
+        "execution": {"run_date_utc": "2026-07-02T12:00:01Z"},
+        "result_artifact_id": "vim_hdiv_mmmm_20260702",
+        "notebook": {
+            "notebook_source_artifact_id": "vim_hdiv_mmmm_panel_ipynb_v1",
+            "notebook_source_digest": "sha256:notebook-source-v1",
+            "notebook_source_path": "docs/vim_hdiv_mmmm_panel.ipynb",
+        },
+        "result_output_schema_id": "vim_demag_table_v1",
+        "result_output_columns": ["method", "dof", "wall_s", "rel_error"],
+        "result_output_units": {
+            "method": "1",
+            "dof": "1",
+            "wall_s": "s",
+            "rel_error": "1",
+        },
+        "timing_breakdown_s": {"solve": 2.5, "postprocess": 0.3},
+        "learning_lanes": {"public": "verified", "source_tool": "candidate"},
+        "public_lesson": "HDiv/MMMM comparison artifacts must record timing and the public solver convention.",
+        "learning_targets": ["radia-mcp", "radia_ngsolve.loop_learning"],
+        "verification": {"public": "pytest packages/radia-mcp/tests/test_loop_slot_gates.py"},
+    }
+
+    gate = cross_validation_artifact_to_mcp_feedback_gate(
+        artifact,
+        require_notebook_source=True,
+    )
+    assert gate["status"] == "ok"
+    assert gate["learning_stage"] == "learned"
+    assert gate["source_tool_lane_status"] == "candidate"
+    assert gate["result_artifact_id"] == "vim_hdiv_mmmm_20260702"
+    assert gate["notebook_source_artifact_id"] == "vim_hdiv_mmmm_panel_ipynb_v1"
+    assert gate["checks"]["public_lesson_recorded_when_required"] is True
+    assert gate["checks"]["public_learning_target_recorded_when_required"] is True
+    assert gate["checks"]["public_verification_recorded_when_required"] is True
+    assert gate["checks"]["notebook_source_digest_recorded_when_required"] is True
+    assert gate["provenance_gate_status"] == "ok"
+
+    missing_lesson = dict(artifact)
+    missing_lesson.pop("public_lesson")
+    missing_lesson["notes"] = []
+    missing_gate = cross_validation_artifact_to_mcp_feedback_gate(missing_lesson)
+    assert missing_gate["status"] == "needs_attention"
+    assert missing_gate["checks"]["public_lesson_recorded_when_required"] is False
+
+    missing_target = dict(artifact)
+    missing_target["learning_targets"] = ["private-tool-memory"]
+    target_gate = cross_validation_artifact_to_mcp_feedback_gate(missing_target)
+    assert target_gate["status"] == "needs_attention"
+    assert target_gate["checks"]["public_learning_target_recorded_when_required"] is False
+
+    missing_notebook_digest = {
+        **artifact,
+        "notebook": {
+            **artifact["notebook"],
+            "notebook_source_digest": "",
+        },
+    }
+    notebook_gate = cross_validation_artifact_to_mcp_feedback_gate(
+        missing_notebook_digest,
+        require_notebook_source=True,
+    )
+    assert notebook_gate["status"] == "needs_attention"
+    assert notebook_gate["checks"]["notebook_source_digest_recorded_when_required"] is False
 
 
 def test_owned_solver_model_tag_lifecycle_gate_requires_owned_cleanup_before_reuse():
