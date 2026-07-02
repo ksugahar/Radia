@@ -28,7 +28,16 @@
     "bema_L_nH_min": 412.18,
     "bema_L_nH_max": 432.57,
     "bema_unreachable_cases": 1,
-    "potential_gap_pct": "5-8%"
+    "potential_gap_pct": "5-8%",
+    "closure_2026_07_03": {
+      "R_agrees": true,
+      "BEM_A_impedance_EFIE_R_mOhm": 4.63,
+      "PEEC_Bessel_R_mOhm": 4.5,
+      "L_gap_pct": 4.3,
+      "L_gap_verdict": "benign, left as-is",
+      "curve_order_closes_L_gap": false,
+      "scalable_solver": "loop-COCR / HACApK-COCR (cocr | hacapk_cocr)"
+    }
   },
   "raw_payload": {
     "description": "Raw convergence data: PEEC n_peri sweep + BEM-A mesh sweep on 3turnCoil_work_coil.step (2026-05-13).",
@@ -168,7 +177,8 @@
         "PEEC_mOhm": 0.39,
         "BEM_A_mOhm": 4.72,
         "ratio": 12.1,
-        "note": "Mesh-independent. Points to formulation-level disagreement: PEEC uses Dowell analytical thin-skin formula for circular wire, BEM-A applies SIBC Robin BC on the surface with Z_s = 1/(sigma*delta). The two should agree in the thin-skin limit but diverge here."
+        "note": "Mesh-independent. Points to formulation-level disagreement: PEEC uses Dowell analytical thin-skin formula for circular wire, BEM-A applies SIBC Robin BC on the surface with Z_s = 1/(sigma*delta). The two should agree in the thin-skin limit but diverge here.",
+        "status_2026_07_03": "SUPERSEDED / RESOLVED. The 0.39 mOhm PEEC value here is the pre-2026-05-19 R_DC bug (Bessel skin not injected); with Bessel skin PEEC R = 4.5 mOhm. The 4.72 mOhm BEM-A value is the retired PEC path (mesh-divergent). With the impedance-EFIE, BEM-A R = 4.63 mOhm and the methods AGREE. See raw_payload.closure_2026_07_03."
       },
       "candidates_for_inductive_disagreement": [
         "(i) PEEC parallel-transport frame + finite n_peri perimeter discretization of round wire",
@@ -178,10 +188,74 @@
       ]
     },
     "todo": [
-      "Implement HACApK / FMM-accelerated path in coil_inductance_ngsolve.py::compute_inductance_source_sink to enable BEM-A above 10k tris.",
-      "Add block-diagonal preconditioner for MINRES (SL approx + Schur complement) to make iterative saddle-point solve viable on dense large matrices.",
-      "Investigate Dowell vs SIBC R-coil disparity: trace through the analytical derivations on a canonical straight round wire of length L, radius r, at 150 kHz; both methods should give identical R = L/(2*pi*r*sigma*delta) in the thin-skin limit.  If they disagree on this trivial geometry, the issue is a unit/normalization bug; if they agree, the 3turnCoil disagreement is due to curvature/junction effects."
-    ]
+      "[DONE 2026-07-03] BEM-A scalable path shipped: loop-COCR / HACApK-COCR (solver='cocr'|'hacapk_cocr'), ~24 mesh-independent iters, EXACT vs LU.",
+      "[RESOLVED 2026-07-03] R-coil disparity: impedance-EFIE unification -> BEM-A R = 4.63 mOhm ~= PEEC(Bessel) 4.5 / analytic 4.8; PEC path removed.",
+      "[OPEN, low priority] L gap (BEM-A external 411.6 vs PEEC 430 nH, ~4%) is benign and left as-is; if ever reconciled, use same-STEP geometry + h-refinement + FEM A-V truth (NOT curve order -- measured no-op)."
+    ],
+    "closure_2026_07_03": {
+      "date": "2026-07-03",
+      "accepted_by": "Sugahara",
+      "headline": "BEM-A unified on the impedance-EFIE; R now AGREES with PEEC (~4.5-5 mOhm band). The L gap is benign and curve order does NOT close it.",
+      "supersedes": "raw_payload.method_comparison.R_coil_disparity (the old '12x R disparity' was the pre-2026-05-19 PEEC R_DC bug [0.39 mOhm, Bessel skin not injected] against the mesh-divergent PEC BEM-A path; both are retired).",
+      "R_agreement_kubota_3turn_150kHz": {
+        "note": "R is the PRIMARY engineering metric and now agrees across methods. The old PEC BEM-A path (mesh-divergent SIBC breakdown, 2.90 coarse -> 15.14 fine) is REMOVED.",
+        "methods_mOhm": {
+          "BEM_A_PEC_removed": 15.14,
+          "BEM_A_impedance_EFIE": 4.63,
+          "PEEC_perimeter_Bessel": 4.5,
+          "analytic_round_wire_proximity": 4.8,
+          "volume_PEEC": 3.7
+        }
+      },
+      "L_gap_kubota_3turn": {
+        "BEM_A_external_nH": 411.6,
+        "PEEC_nH": 430.0,
+        "gap_pct": 4.3,
+        "verdict": "KNOWN BENIGN geometry/convention difference, LEFT AS-IS (not a defect).",
+        "why": "surface mesh != PEEC filament geometry (effective loop / leads / gap / centerline) + PEEC finite n_peri + external-L(BEM) vs bundle-L(PEEC) convention. 430 nH is PEEC's own approximation, not validated truth (FEM A-V 3-D reference still TBD)."
+      },
+      "curve_order_study": {
+        "question": "Does raising BEM-A geometry curve order move L toward PEEC 430 nH?",
+        "answer": "NO.",
+        "fixture": "gapped_torus_2port.vol, 150 kHz, HDivSurface RT0 (fes_order=0), fixed n_J=5745",
+        "provenance": "C:/temp/volpeec_proto/curveorder_L_sensitivity.py (2026-07-03)",
+        "data": [
+          {
+            "curve_order": 1,
+            "n_J": 5745,
+            "L_nH": 87.2702,
+            "R_mOhm": 1.04531
+          },
+          {
+            "curve_order": 2,
+            "n_J": 5745,
+            "L_nH": 87.2702,
+            "R_mOhm": 1.04531
+          },
+          {
+            "curve_order": 3,
+            "n_J": 5745,
+            "L_nH": 87.2702,
+            "R_mOhm": 1.04531
+          }
+        ],
+        "finding": "L and R are BIT-IDENTICAL across curve_order 1/2/3. mesh.Curve(p) is a NO-OP here because the in-memory _extract_surface_mesh_filtered surface has no CAD/curvedelements association (nothing to project the mid-side nodes onto). Even properly applied, curve order is not the lever: external L is loop-dominated (turn radius, enclosed area, N^2) and round-wire faceting enters L only logarithmically (ln(8R/a)) = sub-1%.",
+        "real_levers_if_L_ever_needs_reconciling": [
+          "match the SAME STEP geometry between BEM surface and PEEC filaments",
+          "h-refine the surface mesh (+ mesh-convergence check)",
+          "anchor to FEM A-V (calc_fem_coilmesh.py) or measurement"
+        ]
+      },
+      "scalable_solver": {
+        "name": "loop-COCR / HACApK-COCR",
+        "choices": [
+          "cocr        : div-free loop reduction + COCR, dense SL matvec",
+          "hacapk_cocr : same COCR, HACApKBEMManager O(N log N) SL matvec"
+        ],
+        "iterations": "~24 mesh-independent",
+        "note": "div-free loop reduction makes complex-symmetric COCR fit; EXACT vs dense LU (dR/dL < 0.01%). coil_inductance_ngsolve.compute_inductance_source_sink(solver='cocr'|'hacapk_cocr'); auto picks cocr for large N."
+      }
+    }
   },
-  "notebook_sha256": "fbcf0b53e06df7597a448c01122803719dac4fb742d6f22ac0174b0d1b694018"
+  "notebook_sha256": "467a58762310fb7ced78d3492b37c2b3f3ab75ad146a70c4050cba3d313082e7"
 }
