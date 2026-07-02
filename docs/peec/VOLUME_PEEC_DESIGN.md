@@ -1,7 +1,6 @@
 # Volume PEEC for Pancake Coils — Design Notes
 
-**Status (2026-07-02)**: PROTOTYPED in `C:\temp` (research per the
-"run in C:\temp" policy), NOT shipped — because it does NOT close the
+**Status (2026-07-02)**: prototyped locally, NOT shipped — because it does NOT close the
 gap, and the investigation indicates the gap most likely should NOT
 be closed (the PEEC ~4.5 mΩ is probably correct; BEM-A's 15 mΩ is the
 outlier).  See the "2026-07-02 outcome" section below.  Prior status
@@ -61,11 +60,15 @@ intrinsically modest):
 than compute R post-hoc from the PEC current, put the surface
 impedance INTO the saddle system so J is the *finite-impedance*
 current and cannot over-concentrate.  The (1,1) block becomes
-``j ω μ0 SL + Z_s M`` (complex); Z = Z_s (Jᴴ M J) + j ω μ0 (Jᴴ SL J),
-R = Re(Z), L = Im(Z)/ω.  Wired as
-``compute_inductance_source_sink(..., impedance_efie=True, omega,
-Z_s_complex)`` and the panel flag ``calc_inductance.py
---bema-impedance-efie``.  Validated:
+``j ω μ0 SL + Z_s M`` (complex).  The reported resistance is
+``R = Re(Z_s) (Jᴴ M J)`` using that finite-impedance current, while the
+reported inductance keeps the existing external-inductance convention
+``L = μ0 (Jᴴ SL J)`` (the internal surface-reactance term regularizes
+J but is not folded into the panel's L readout).  Wired as
+``compute_inductance_source_sink(..., omega, Z_s_complex)``.  The
+panel/CLI uses impedance-EFIE unconditionally for AC BEM-A; the legacy
+PEC post-hoc comparison path was removed rather than kept as a
+compatibility mode.  Validated:
 
   | geometry | PEC post-hoc R | impedance-EFIE R | truth |
   |---|---|---|---|
@@ -81,10 +84,11 @@ Z_s_complex)`` and the panel flag ``calc_inductance.py
   energy (JᴴSL J) but enormously to the loss (Jᴴ M J), so even a
   weak resistive penalty makes J avoid it.  Golden:
   ``validation_test/bem/test_coil_bem_a_impedance_efie.py`` (locks
-  R_imp ≤ R_pec + L unchanged on the gapped-torus fixture).  It is
-  **opt-in** (default off) pending a decision to flip the BEM-A R
-  default (the PEC path is a known ~3× over-estimate for tightly-wound
-  coils, so flipping is recommended).
+  absolute R/L bands, the ``sqrt(f)`` skin-effect scaling, the DC
+  branch, and the isolated-wire Bessel calibration).  The legacy PEC
+  post-hoc path is available only from git history for comparison
+  studies because it is a known ~3× over-estimate for tightly-wound
+  coils.
 
 **Recommendation**: keep perimeter PEEC (~4.5 mΩ) as the screening
 R; do NOT trust BEM-A R for tightly-wound multi-turn coils without a
@@ -118,7 +122,8 @@ lower bound; a proper volume PEEC would need a full 3-D PEEC MNA
 (nodes at each station, radial current exchange) — a much larger
 effort than the ~1 week estimated below, and not worth it while
 BEM-A already brackets from above and perimeter PEEC is near the
-true value.  Prototype: `C:\temp\volpeec_proto\`
+true value.  The prototype remains a local research artifact, not a
+repository dependency.
 (wire_bessel_clean.py, coil_volume_vec.py, two_wire_prox.py).
 
 What actually shipped in v4.57.0: **perimeter PEEC + proximity-iterative
