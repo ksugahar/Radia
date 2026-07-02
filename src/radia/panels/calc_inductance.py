@@ -775,7 +775,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         phi_inc = compute_phi_inc_from_filaments(
             obs, coil_data["paths"], coil_data["I_fil"])
     elif coil_data["source_type"] == "surface":
-        # Multiply real surface J by terminal current (complex if needed).
+        # Multiply the COMPLEX per-triangle surface J (impedance-EFIE
+        # phasor at unit current) by the terminal current; Re/Im are
+        # then bridged separately (compute_phi_inc_from_surface_J is
+        # real-only and raises on complex input).
         coil_J_complex = (complex(args.current)
                            * coil_data["coil_J_per_tri"]).astype(complex)
         phi_re = compute_phi_inc_from_surface_J(
