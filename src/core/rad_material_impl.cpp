@@ -51,6 +51,7 @@ void radTApplication::InvalidateMomentHK()
 	m_moment_hk_eps = 0.0;
 	m_moment_hk_leaf = 0;
 	m_moment_hk_eta = 0.0;
+	m_moment_hk_analytic = false;
 	m_moment_hk_localL.clear();
 	m_moment_hk_localL.shrink_to_fit();
 	m_moment_hk_diagK.clear();
@@ -1663,6 +1664,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		{
 			cacheValid = false;
 			m_cached_interact_key = 0;
+			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = 0;
 			m_cached_image_spec.clear();
 		}
@@ -1690,6 +1692,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 				// Cache is stale, need to rebuild
 				cacheValid = false;
 				m_cached_interact_key = 0;
+				InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 				m_cached_obj_key = 0;
 				m_cached_image_spec.clear();
 			}
@@ -1732,6 +1735,7 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 			// Cache the interaction key for future reuse
 			m_cached_interact_key = InteractElemKey;
+			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = ObjKey;
 			m_cached_image_spec = imageSpec;
 		}
@@ -1861,6 +1865,7 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 		{
 			cacheValid = false;
 			m_cached_interact_key = 0;
+			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = 0;
 			m_cached_image_spec.clear();
 		}
@@ -1877,6 +1882,7 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 				// Cache is stale, need to rebuild
 				cacheValid = false;
 				m_cached_interact_key = 0;
+				InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 				m_cached_obj_key = 0;
 				m_cached_image_spec.clear();
 			}
@@ -1910,6 +1916,7 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 
 			// Cache the interaction key for future reuse
 			m_cached_interact_key = InteractElemKey;
+			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = ObjKey;
 			m_cached_image_spec = imageSpec;
 		}

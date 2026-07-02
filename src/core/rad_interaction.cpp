@@ -126,8 +126,13 @@ std::atomic<int> RadIMAFieldContext::s_signX{1};
 std::atomic<int> RadIMAFieldContext::s_signY{1};
 std::atomic<int> RadIMAFieldContext::s_signZ{1};
 
-// Opt-in analytic moment kernel (closed-form triangle H + gradient vs 64pt Gauss); see rad_interaction.h
-std::atomic<bool> RadMomentKernelConfig::s_analyticKernel{false};
+// Analytic moment kernel (closed-form triangle H + gradient vs 64pt Gauss); see rad_interaction.h.
+// DEFAULT ON since 2026-07-02 (the deliberate flip d2efb88d deferred): the closed form is EXACT
+// (removes the Gauss quadrature error; Mathematica-verified symmetric/traceless to machine eps) AND
+// measured 1.5x faster on the dominant method-2 H-matrix build (mdx knob matrix: ctype 28k DOF
+// 2.97 -> 1.95 s, cube 24.6k DOF 2.76 -> 1.84 s).  Gauss stays selectable via
+// rad.SolverConfig(moment_analytic_kernel=False) for cross-checks.
+std::atomic<bool> RadMomentKernelConfig::s_analyticKernel{true};
 void RadSetMomentAnalyticKernel(bool on) { RadMomentKernelConfig::SetAnalytic(on); }
 bool RadGetMomentAnalyticKernel() { return RadMomentKernelConfig::UseAnalytic(); }
 
@@ -2220,7 +2225,7 @@ void radTInteraction::CentroidFieldGradFromFace(const double ce3[3], const doubl
 	// rank-2 gradient transform under the reflection automatically -- sgn only carries the BC charge sign.
 	auto accumQG = [&](const double Vq[4][3], bool withCenter, const double cen[3], double sgn)
 	{
-		if(RadMomentKernelConfig::UseAnalytic())          // opt-in: analytic closed-form triangle kernel (vs 64pt Gauss)
+		if(RadMomentKernelConfig::UseAnalytic())          // default analytic closed-form triangle kernel (vs 64pt Gauss)
 		{
 			const double* tri[2][3] = { {Vq[0], Vq[1], Vq[2]}, {Vq[0], Vq[2], Vq[3]} };  // fan-triangulate the (degenerate-)quad
 			for(int t = 0; t < 2; t++)
@@ -2491,7 +2496,7 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 			if(!fr.valid) continue;
 			double H[3], gH[6];
 			H[0] = H[1] = H[2] = 0.0; for(int k = 0; k < 6; k++) gH[k] = 0.0;
-			if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs precomputed 64 samples; same IMA + center handling)
+			if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs precomputed 64 samples; same IMA + center handling)
 			{
 				const double srcEC3[3] = {fr.srcEC.x, fr.srcEC.y, fr.srcEC.z};
 				CentroidFieldGradFromFace(ce3, fr.V, srcEC3, fr.srcElem == elemIdx, fr.area, H, gH);
@@ -2880,7 +2885,7 @@ void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const d
 		const MomentGeomFaceCache& src = col.face[f];
 		double H[3] = {0.0, 0.0, 0.0};
 		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-		if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs cached 64 samples)
+		if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs cached 64 samples)
 		{
 			CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, H, G);
 		}
@@ -2984,7 +2989,7 @@ void radTInteraction::MomentKernelMatVec6x6(const double* x, const double* chiPe
 				const MomentGeomFaceCache& src = col.face[f];
 				double H[3] = {0.0, 0.0, 0.0};
 				double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-				if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs cached 64 samples)
+				if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs cached 64 samples)
 				{
 					double Hu[3], Gu[6];
 					CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, Hu, Gu);
@@ -3212,7 +3217,7 @@ void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const d
 		const MomentGeomFaceCache& src = col.face[f];
 		double H[3] = {0.0, 0.0, 0.0};
 		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-		if(RadMomentKernelConfig::UseAnalytic())          // opt-in: closed-form triangle kernel (vs cached 64 samples)
+		if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs cached 64 samples)
 		{
 			CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, H, G);
 		}

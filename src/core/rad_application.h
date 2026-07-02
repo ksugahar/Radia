@@ -89,6 +89,7 @@ public:
 	double m_moment_hk_eps = 0.0;
 	int    m_moment_hk_leaf = 0;
 	double m_moment_hk_eta = 0.0;
+	bool   m_moment_hk_analytic = false;   // kernel flag K was built with (part of the validity key)
 	std::vector<double> m_moment_hk_localL;   // chi-free per-hex local moment 6x6 blocks
 	std::vector<double> m_moment_hk_diagK;    // chi-free per-hex self geometry 6x6 blocks
 	void InvalidateMomentHK();                // defined in rad_material_impl.cpp (complete type there)
@@ -527,6 +528,7 @@ inline int radTApplication::DeleteElement(int ElemKey)
 	{
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
+		InvalidateMomentHK();   // the cross-solve moment K cache points into the discarded interaction
 	}
 
 	if(SendingIsRequired) Send.Int(0);
