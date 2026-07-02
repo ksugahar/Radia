@@ -147,9 +147,19 @@ def test_impedance_efie_torus_absolute(gapped_torus_vol):
         f"{expect:.3f} -- Zs frequency dependence regressed?")
 
     # DC branch: R == 0, external L consistent with AC (same geometry
-    # quantity; captured spread 87.27 vs 87.33 nH = 0.07%).
+    # quantity; captured spread 87.27 vs 87.33 nH = 0.07%).  The 7 kHz
+    # comparison is the SENSITIVE convention lock: if the internal
+    # surface reactance Im(Zs)*(J^H M J)/omega ever gets folded back
+    # into L, L(7 kHz) shifts ~+5.9% (vs only ~+1.2% at 150 kHz where
+    # delta is small), so DC-vs-7k at 2% catches the regression that
+    # DC-vs-150k barely sees.
     assert float(dc["R"]) == 0.0
     assert abs(float(dc["L"]) / float(r150["L"]) - 1.0) < 0.02
+    assert abs(float(dc["L"]) / float(r7["L"]) - 1.0) < 0.02, (
+        f"DC L={float(dc['L'])*1e9:.3f} nH vs 7kHz L="
+        f"{float(r7['L'])*1e9:.3f} nH differ >2% -- was the internal "
+        f"surface reactance folded into L?  L must stay the EXTERNAL "
+        f"mu0*(J^H SL J) convention.")
     # Im(J) GridFunction exists and is all-zero at DC.
     import numpy as np
     assert float(np.max(np.abs(
@@ -211,8 +221,9 @@ def test_impedance_efie_wire_bessel():
 
 
 def test_minres_rejected_for_complex():
-    """scipy MINRES silently solves only Re() of a complex system --
-    the saddle helper must fail fast instead of returning garbage."""
+    """scipy MINRES assumes a Hermitian operator; the AC saddle is
+    complex-SYMMETRIC, so minres would silently return a wrong
+    solution -- the saddle helper must fail fast instead."""
     import numpy as np
     from radia.bem.coil_inductance_ngsolve import _solve_saddle
 
@@ -223,3 +234,44 @@ def test_minres_rejected_for_complex():
     # Real systems keep MINRES (omega=0 vacuum-L path).
     x, info = _solve_saddle(np.eye(4), np.ones(4), method="minres")
     assert np.allclose(x, 1.0)
+
+
+def test_gmres_complex_matches_lu():
+    """GMRES is the panel's auto choice for large AC saddles: lock that
+    the gmres path handles a COMPLEX-SYMMETRIC system correctly (same
+    answer as dense LU) on a small deterministic instance."""
+    import numpy as np
+    from radia.bem.coil_inductance_ngsolve import _solve_saddle
+
+    rng = np.random.default_rng(20260702)
+    n = 24
+    A = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+    K = A + A.T + 4.0 * n * np.eye(n)      # complex SYMMETRIC (K^T=K)
+    assert np.allclose(K, K.T)
+    rhs = rng.standard_normal(n) + 1j * rng.standard_normal(n)
+
+    x_lu, _ = _solve_saddle(K.copy(), rhs, method="lu")
+    x_gm, _ = _solve_saddle(K.copy(), rhs, method="gmres", tol=1e-12)
+    assert np.allclose(x_gm, x_lu, rtol=1e-6, atol=1e-9), (
+        "gmres on a complex-symmetric system diverged from the LU "
+        "reference -- complex dtype handling regressed?")
+
+
+def test_parameter_validation_fails_before_assembly():
+    """The omega/Z_s_complex contract is validated BEFORE the expensive
+    dense assembly: a bad call must raise instantly, even with
+    mesh=None (the mesh is not touched until after validation)."""
+    from radia.bem.coil_inductance_ngsolve import (
+        compute_inductance_source_sink)
+
+    # AC without the surface impedance -> instant ValueError.
+    with pytest.raises(ValueError, match="Z_s_complex"):
+        compute_inductance_source_sink(None, omega=2 * math.pi * 1e3)
+    # Negative omega must not silently select the DC vacuum branch.
+    with pytest.raises(ValueError, match="omega must be > 0"):
+        compute_inductance_source_sink(None, omega=-1.0,
+                                       Z_s_complex=1 + 1j)
+    # NaN omega likewise.
+    with pytest.raises(ValueError, match="omega must be > 0"):
+        compute_inductance_source_sink(None, omega=float("nan"),
+                                       Z_s_complex=1 + 1j)
