@@ -1,7 +1,8 @@
 # Analytic Closed-Form Moment Kernel (`moment_analytic_kernel`)
 
-Status: **opt-in, default OFF** (2026-06-26). Verified live + correct on method 0/1/2;
-all existing multipole-moment goldens unchanged with the flag off.
+Status: **default ON** (2026-07-02). Verified live + correct on method 0/1/2;
+the 64-point Gauss kernel remains available as an explicit cross-check path with
+`rad.SolverConfig(moment_analytic_kernel=False)`.
 
 ## What
 
@@ -10,13 +11,14 @@ The multipole-moment surface-charge kernel `CentroidFieldGradFromFace`
 centroid, the demag field `H[3]` and its gradient `gH[6]` (the quadrupole
 field-gradient = the Hessian of the single-layer potential `I0 = ∫_T 1/|r-r'| dS'`).
 
-- **Default**: a 64-point (8×8) Gauss bilinear-quad quadrature for both `H` and `gH`.
-- **Opt-in** (`rad.SolverConfig(moment_analytic_kernel=True)`): each face is
+- **Default** (`rad.SolverConfig(moment_analytic_kernel=True)`): each face is
   fan-triangulated and integrated with a **closed form**
   (`FieldGradFromChargedTriangleLocal`):
   - `H` = van Oosterom–Strackee (the existing `FieldFromChargedTriangleLocal`),
   - `gH` = the **Mathematica-verified symbolic gradient** of that `H`
     (`gH_ij = ∂H_i/∂obs_j`, the quadrupole field-gradient).
+- **Cross-check** (`rad.SolverConfig(moment_analytic_kernel=False)`): a 64-point
+  (8×8) Gauss bilinear-quad quadrature for both `H` and `gH`.
 
 The closed-form `gH` is assembled from **only the tangential (log-term) derivatives**
 plus tracelessness (`Gzz = -(Gxx+Gyy)`) and symmetry (`Gxz = ∂HH1/∂e3`,
@@ -58,23 +60,22 @@ precomputed 64-sample fast loop). The face corners are cached in
 | 2 (HACApK) | `MomentSystemBlock6x6` / `MomentSystemEntry` | yes |
 | mixed hex+wedge/pyramid | `MomentSystemBlockAny` | yes |
 
-Golden lock: [`tests/feec/test_moment_analytic_kernel.py`](../../tests/feec/test_moment_analytic_kernel.py)
+Golden lock: [`validation_test/feec/test_moment_analytic_kernel.py`](../../validation_test/feec/test_moment_analytic_kernel.py)
 asserts each path is **live** (changes the result vs Gauss — guards against a silent
 no-op), reproduces the Gauss physics (ext-B rel < 5e-3), gives the correct cube demag
-(`M_z ~ 3·H0`), and that the flag round-trips + defaults off + does not leak.
+(`M_z ~ 3·H0`), and that the flag round-trips + defaults on + does not leak.
 
 ## Performance (honest)
 
-LAB smoke timing (method-0/2 build, n×n×n hex, best of 3; **not** the authoritative
-benchmark — that is mdx-when-quiet) showed the analytic build is **~1.2–1.4× faster**
-than 64-pt Gauss. It is **not** the ~64× that "64× fewer evaluations/face" would
+LAB smoke timing (method-0/2 build, n×n×n hex, best of 3) showed the analytic build
+is **~1.2–1.4× faster** than 64-pt Gauss. The mdx knob matrix on 2026-07-02 measured
+the dominant method-2 H-matrix build at about **1.5× faster** (`ctype` 28k DOF:
+2.97 s → 1.95 s; compact cube 24.6k DOF: 2.76 s → 1.84 s). It is **not** the ~64×
+that "64× fewer evaluations/face" would
 suggest: the closed form is **transcendental-heavy** (per face ~3 `log` + 3 `atan` +
 6 `sqrt` + the rank-2 congruence transform), which offsets most of the fewer-points
 advantage, and the method-0 build is further diluted by the O(N³) LU.
 
 So the value is primarily **exactness** (the closed form removes the 64-pt Gauss
-quadrature error) plus a **modest** build speedup. The precise scaling (larger N, the
-HACApK path) is to be measured on mdx via a released build, not on LAB.
-
-The default flip (making the analytic kernel the default + re-locking goldens to the
-exact values) is a separate, deliberate decision gated on that benchmark.
+quadrature error) plus a **modest** build speedup. The default flip has landed; keep
+the Gauss path only as a deliberate cross-check / regression-diagnosis switch.
