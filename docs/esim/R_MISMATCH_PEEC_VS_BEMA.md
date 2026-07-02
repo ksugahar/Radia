@@ -36,6 +36,25 @@ algorithm-parameter ceiling**.  Investigated 2026-07-02:
   ``R_exclude_factor × wire_radius`` of an eval point are dropped
   to avoid double-counting the self-skin baked into Bessel):
   factor 1.0 gives 4.3 mΩ, factor 8.0 gives 3.7 mΩ.  Peak is 4.3 mΩ.
+- Shifted the eval point radially outward from the wire surface
+  by ``shift_factor × wire_radius``.  Motivated by an
+  independently-verified observation: at ``r = a`` exactly on the
+  discrete filament shell, Biot-Savart returns ``I/(4πa)`` --
+  precisely half of Ampere's ``I/(2πa)`` due to the surface-current
+  jump condition.  Naively this suggested a factor-2 miss in the
+  self-skin contribution.  Investigation:
+
+    * Calibrated on an isolated straight wire: ``shift_factor = 0.13``
+      gives ``R_from_H / R_bessel_analytic = 1.028`` (correct).
+    * At the calibrated ``shift_factor = 0.13`` on the 3-turn coil:
+      R = 4.55 mΩ, ratio 1.24× Bessel (same as the current
+      centroid-based iter, no improvement).
+    * At ``shift_factor = 0.05`` on the 3-turn coil: R = 11.98 mΩ
+      (looks close to 15) -- but the same shift on an isolated wire
+      gives ``R_from_H / R_bessel = 3.0`` (3x over-count).  The
+      "improvement" is an artefact of near-source singularity in the
+      Biot-Savart when eval is too close to the surface filaments;
+      it does not reflect real proximity physics.
 
 Root cause: at the wire surface the discrete-filament Biot-Savart
 sum from N line currents distributed around the perimeter yields
