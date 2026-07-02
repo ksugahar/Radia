@@ -2204,7 +2204,7 @@ def jmag_motor_table_column_metadata_gate(
     current_basis=None,
     torque_sign_convention=None,
 ):
-    """Check JMAG-style motor table column metadata before reading values."""
+    """Check motor table column metadata before reading values."""
 
     if not isinstance(metadata, dict):
         raise ValueError("metadata must be a dictionary")
