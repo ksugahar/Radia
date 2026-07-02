@@ -79,7 +79,6 @@ solver but NOT ground truth on a coarse mesh):
 |---|---|---|---|
 | Loops field-null on distorted hex | `ngsolve_loopfree_verify.py` | exact (charge-form field `3.7e-16`) | ✅ machine zero |
 | Loop/star (Hodge) split | `hdiv_loop_star_split.py` | exact (`ker Q` charge-free `~1e-16`) | ✅ |
-| **multipole-moment MMM MSC ↔ HDiv-VIM loop bridge** | `yano_hdiv_loop_bridge.py` | exact (collocation near-null `==` HDiv `ker(B)` `==` cell-graph cycle) | ✅ the multipole-moment MMM collocation matrix carries the SAME loops as a LATENT near-null: dim `== n_loop` (cycle count) on every grid; yano cond `~1e16` (HDiv `loop_res ~1e-16`); cond(`-N+I/χ`) `~μr` (loops regularized by `1/χ` → bite at high μr) while **star projection → `~40-65`, μr-INDEPENDENT** (the HDiv-VIM regime). The collocation-side reading of Problem A. |
 | Linear demag (sphere/cube → 1/3) | `hdiv_demag_solve` (`test_hdiv_vim_demag_solve.py`) | **ANALYTIC** 1/3 | ✅ `<0.5%` (C++ analytic charge Gram) |
 | Nonlinear (damped Newton) | `solve_nonlinear_newton` (`test_hdiv_vim_tet_newton.py`) | **ANALYTIC** sphere fixed point | ✅ `<2%` deep-saturation (C++ charge Gram) |
 | Nonlinear cross-check | `test_hdiv_vim_newton_vs_radia.py` | Radia MMM/MSC (`MatSatIsoTab`) | ✅ agree `<0.05%` (sphere) |
