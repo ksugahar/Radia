@@ -54,6 +54,16 @@
 #undef max
 #endif
 
+/* Symmetric-fill mode (opt-in, default OFF): when set, the leaf fill SKIPS every strictly-lower leaf
+ * (nstrtl > nstrtt) -- HACApK_matvec_sym_wrapper never reads them (it mirrors the upper triangle), so for
+ * a manager whose applies all route through the symmetric matvec (the HDiv charge Gram) their ACA/dense
+ * fill is pure waste (~half the build time and leaf memory).  A matrix built this way MUST only be applied
+ * through matvec_sym: the owning manager is responsible for routing plain matvec/matvec_transpose to it
+ * (RadHACApKChargeGram does).  Set around ONE build and reset after; not safe across CONCURRENT builds
+ * (builds are serial at the Radia API level -- BuildHMatrix stands up its own TaskManager region). */
+static volatile int g_sym_fill = 0;
+void cHACApK_set_sym_fill(int flag) { g_sym_fill = flag; }
+
 //***cHACApK_generate_frame_blrleaf
 void cHACApK_generate_frame_blrleaf(
   st_cHACApK_leafmtxp st_leafmtxp,
@@ -1092,6 +1102,10 @@ static void fill_one_leaf_block(int idx, void *data) {
   int nstrtl= st_lf[ip]->nstrtl;
   int nstrtt= st_lf[ip]->nstrtt;
   int ltmtx = st_lf[ip]->ltmtx;
+
+  /* Symmetric fill: strictly-lower leaves stay EMPTY (a1=a2=NULL, kt=0) -- matvec_sym skips
+   * nstrtl > nstrtt and mirrors the upper leaf, so their fill would never be read. */
+  if (g_sym_fill && nstrtl > nstrtt) { st_lf[ip]->kt = 0; return; }
 
   if(ltmtx==1) {
     /* Low-rank block: use ACA+ */

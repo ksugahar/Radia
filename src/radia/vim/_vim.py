@@ -424,23 +424,6 @@ def _ref_prod_gauss(n, dim):
     return np.array(P), np.array(W)
 
 
-def _far_tet_wv3():
-    """Williams-Wong-style degree-3 8-point tet rule (all-positive), barycentric lam1..3, weights sum 1/6 --
-    the cheap FAR inner rule for the hex Gram (1/r is smooth there, no grading needed)."""
-    from itertools import permutations
-    A, Bc = 0.32816330251638169, 0.10804724989842860
-
-    def orb(gen, w):
-        seen, P, W = set(), [], []
-        for pm in permutations(gen):
-            if pm not in seen:
-                seen.add(pm); P.append((pm[1], pm[2], pm[3])); W.append(w)
-        return P, W
-    P1, W1 = orb((A, A, A, 1 - 3 * A), 0.13621784253708736)
-    P2, W2 = orb((Bc, Bc, Bc, 1 - 3 * Bc), 0.11378215746291264)
-    return np.array(P1 + P2), np.array(W1 + W2) / 6.0
-
-
 def _charge_basis_hex(fes, cob_quad=3):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
     flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager.
@@ -506,17 +489,25 @@ def _charge_basis_hex(fes, cob_quad=3):
                 face_nodes=(np.concatenate([n.ravel() for n in face_nodes]).tolist() if face_nodes else []))
 
 
-def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=4.0,
+def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
                            eps=1e-12, leafsize=64, eta=2.0):
     """Pure-hex RT1 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glin_n = the 1D rule of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
     -- robust on distorted/curved hexes, where graded clouds left eig > 1 on the real cylinder mesh);
-    eig(M_mass^-1 N) <= 1 gated on box AND cylinder meshes; block-memo build (~59x vs naive per-entry)."""
+    eig(M_mass^-1 N) <= 1 gated on box AND cylinder meshes; block-memo build (~59x vs naive per-entry).
+    far_inner = the PER-OUTER-POINT radial reach: an outer point farther than far_inner*size from a source
+    sub-simplex integrates it with the cheap CACHED far cloud instead of the per-point radial rule.  1.5
+    keeps the radial exactly where the kernel peaks (self + the facing side of touching neighbours); the
+    2026-07-03 cost attribution measured the 4.0 shell as ~60%% of the whole build on the real cylinder
+    for <=1e-4 entry drift.  The far TET cloud is the SAME Keast-15 degree-5 rule as the outer (a degree-3
+    WV rule at reach 1.5 ate the flat-cylinder eig margin, 1.0005 -> 1.0044; Keast-15 restores 1.0006 for
+    +4%% build).  The build also skips the strictly-lower H-matrix leaves (symmetric fill -- every apply of
+    the Gram routes through the exactly-symmetric matvec, so they are never read)."""
     cb = _charge_basis_hex(fes)
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
-    ftp, ftw = _far_tet_wv3()
+    ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
     G = _rp._ChargeGramHMatrix(
         hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
         n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),

@@ -282,6 +282,19 @@ public:
 
     double GetInteractionMatrixElement(int a, int b) const override;
 
+    // SYMMETRIC-FILL build (2026-07-03): the charge Gram is symmetric BY CONSTRUCTION (every entry is the
+    // 0.5*(AB+BA)-symmetrized kernel), and every apply of it goes through the symmetric H-matvec, so the
+    // strictly-lower H-matrix leaves are never read -- matvec_sym mirrors the upper triangle.  This shadow
+    // of the (non-virtual) base build turns on cHACApK_set_sym_fill around the fill: the lower leaves stay
+    // EMPTY, saving ~half the build time (ACA sampling + dense-block entry fill + the per-thread block-memo
+    // rebuild of the mirror leaves) and ~half the leaf memory.  The UPPER leaves fill identically, so
+    // MatVecSym is bit-identical to a full build.  Plain MatVec / MatVecTranspose are ROUTED to MatVecSym
+    // (for the symmetric operator they are the same map; the base implementations would silently read the
+    // empty lower leaves -- the routing makes that failure mode unrepresentable).
+    bool BuildHMatrix(const RadHACApKParams& params = RadHACApKParams());
+    void MatVec(const std::vector<double>& x, std::vector<double>& y) { MatVecSym(x, y); }
+    void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y) { MatVecSym(x, y); }
+
     // M3 (the iterative-solve hot kernel in C++): solve the SPD HDiv-VIM linear material system
     //   ((1/chi) M_mass + B^T G B) m = rhs
     // by Jacobi-preconditioned conjugate gradients, with G applied as THIS charge-Gram H-matvec
