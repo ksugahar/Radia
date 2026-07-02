@@ -470,30 +470,38 @@ def _solve_coil_bem_a(args):
     #       old real PEC saddle the historical 10k threshold was
     #       calibrated on), so the AC LU cutoff is halved to 5000 tris;
     #       the omega=0 real vacuum solve keeps 10000.  Above the
-    #       cutoff: loop_cocr (div-free loop reduction + complex-
-    #       symmetric COCR, ~24 mesh-independent iters, exact vs LU) for
-    #       both AC and DC -- it replaces the historical GMRES-for-AC /
+    #       cutoff: cocr (div-free loop reduction + complex-symmetric
+    #       COCR, ~24 mesh-independent iters, exact vs LU) for both AC
+    #       and DC -- it replaces the historical GMRES-for-AC /
     #       MINRES-for-DC branch (GMRES stalled unpreconditioned on the
     #       indefinite AC saddle at ~1e5 matvecs).
-    #   "lu"      dense LAPACK direct (overwrite_a=True, smallest memory
-    #             for direct solve)
-    #   "loop_cocr" div-free loop reduction + COCR -- SCALABLE large-N
-    #             (SL matvec dense or HACApK, see --coil-loop-matvec)
-    #   "minres"  Krylov for REAL symmetric indefinite -- omega=0 ONLY
-    #   "gmres"   Generic complex-capable Krylov -- unpreconditioned,
-    #             stalls on large saddles (kept for comparison)
+    #   "lu"          dense LAPACK direct (overwrite_a=True, smallest
+    #                 memory for direct solve)
+    #   "cocr"        div-free loop reduction + COCR, dense SL matvec --
+    #                 SCALABLE large-N
+    #   "hacapk_cocr" same, HACApKBEMManager-compressed O(N log N) SL
+    #                 matvec (accuracy ~3e-7)
+    #   "minres"      Krylov for REAL symmetric indefinite -- omega=0 ONLY
+    #   "gmres"       Generic complex-capable Krylov -- unpreconditioned,
+    #                 stalls on large saddles (kept for comparison)
     saddle = args.coil_saddle_solver
     if saddle == "auto":
         lu_cutoff = 5000 if omega > 0 else 10000
-        if len(coil_tris) < lu_cutoff:
-            saddle = "lu"
-        else:
-            # Large systems -> loop-COCR: the div-free (loop) reduction
-            # gives a complex-symmetric operator COCR solves in ~24 mesh-
-            # independent iters (exact vs LU), replacing BOTH the O(N^3) LU
-            # and the unpreconditioned GMRES that stalled (~1e5 matvecs) on
-            # the indefinite AC saddle.  Valid for AC and DC.
-            saddle = "loop_cocr"
+        # Large systems -> COCR (div-free loop reduction + complex-symmetric
+        # COCR, ~24 mesh-independent iters, exact vs LU) instead of the O(N^3)
+        # LU or the unpreconditioned GMRES that stalled (~1e5 matvecs) on the
+        # indefinite AC saddle.  Dense SL matvec; hacapk_cocr is the HACApK
+        # opt-in.  Valid for AC and DC.
+        saddle = "lu" if len(coil_tris) < lu_cutoff else "cocr"
+    # The two user-facing COCR solvers map to the library loop-COCR path with
+    # the dense or HACApK-compressed SL matvec:
+    #   cocr        = div-free loop reduction + COCR, dense SL matvec
+    #   hacapk_cocr = same, HACApKBEMManager-compressed O(N log N) SL matvec
+    loop_mv = "dense"
+    if saddle == "cocr":
+        saddle, loop_mv = "loop_cocr", "dense"
+    elif saddle == "hacapk_cocr":
+        saddle, loop_mv = "loop_cocr", "hacapk"
     progress("BEMA",
         f"ngsolve.bem impedance-EFIE solve (n_tris={len(coil_tris)}, "
         f"fes_order=0, "
@@ -508,7 +516,7 @@ def _solve_coil_bem_a(args):
         solver=saddle,
         omega=omega,
         Z_s_complex=Z_s_coil_complex,
-        loop_matvec=args.coil_loop_matvec,
+        loop_matvec=loop_mv,
         log_fn=progress,
     )
     t_solve = time.perf_counter() - t0
@@ -1865,32 +1873,25 @@ def build_argparser():
                         help="HACApK GMRES tol for coil (bem-a, future)")
     parser.add_argument("--coil-saddle-solver", default="auto",
                         choices=["auto", "lu", "minres", "gmres",
-                                 "loop_cocr"],
+                                 "cocr", "hacapk_cocr"],
                         help="Saddle-point solver for the BEM-A "
                              "impedance-EFIE: auto (LU below 5000 tris for "
-                             "AC / 10000 for frequency=0; above that "
-                             "loop_cocr), lu (dense LAPACK, overwrite_a=True), "
-                             "loop_cocr (SCALABLE: div-free loop reduction + "
-                             "complex-symmetric COCR, ~24 mesh-independent "
-                             "iters, exact vs LU -- the recommended large-N "
-                             "solver; pick the SL matvec via "
-                             "--coil-loop-matvec), gmres (complex-capable "
-                             "Krylov -- unpreconditioned, stalls on large "
-                             "saddles), minres (REAL symmetric Krylov -- "
-                             "VALID ONLY for the frequency=0 vacuum-L solve; "
-                             "scipy MINRES assumes a Hermitian operator and "
-                             "silently returns a wrong solution on the "
-                             "complex-symmetric AC saddle, so it is "
-                             "rejected there). Defaults to auto.")
-    parser.add_argument("--coil-loop-matvec", default="dense",
-                        choices=["dense", "hacapk"],
-                        help="SL matvec backend for --coil-saddle-solver "
-                             "loop_cocr (ignored otherwise): dense (SL @ v, "
-                             "reuses the assembled dense SL -- default) or "
-                             "hacapk (HACApKBEMManager-compressed O(N log N) "
-                             "matvec, accuracy ~3e-7; RT0 / fes_order==0 "
-                             "only). Both give identical R/L. Defaults to "
-                             "dense.")
+                             "AC / 10000 for frequency=0; above that cocr), "
+                             "lu (dense LAPACK, overwrite_a=True), cocr "
+                             "(SCALABLE: div-free loop reduction + complex-"
+                             "symmetric COCR, ~24 mesh-independent iters, "
+                             "exact vs LU, dense SL matvec -- the recommended "
+                             "large-N solver), hacapk_cocr (the same COCR "
+                             "with the HACApKBEMManager-compressed O(N log N) "
+                             "SL matvec, accuracy ~3e-7, RT0 only; identical "
+                             "R/L), gmres (complex-capable Krylov -- "
+                             "unpreconditioned, stalls on large saddles), "
+                             "minres (REAL symmetric Krylov -- VALID ONLY for "
+                             "the frequency=0 vacuum-L solve; scipy MINRES "
+                             "assumes a Hermitian operator and silently "
+                             "returns a wrong solution on the complex-"
+                             "symmetric AC saddle, so it is rejected there). "
+                             "Defaults to auto.")
     # NOTE (2026-07-02): the --bema-impedance-efie flag was REMOVED --
     # BEM-A is unified on the impedance-EFIE (Zs inside the saddle,
     # J = finite-impedance current).  The legacy post-hoc PEC integral
