@@ -56,6 +56,13 @@ Decision + measurements, 2026_07_02:
   `rad.GetSolveStats()['linear_iterations'] > 0` (LU = 0) and a `hacapk_eps`
   sweep on an ELONGATED geometry must change the field (a compact cube is
   near-field dominated -> mostly dense blocks -> eps-insensitive).
+- Kernel default flip (2026_07_02, same day): the ANALYTIC closed-form moment
+  kernel (`moment_analytic_kernel`, d2efb88d) is now the DEFAULT -- exact
+  (removes the Gauss error) AND 1.5x faster on the dominant H-matrix build
+  (mdx knob matrix: ctype 28k DOF 2.97 -> 1.95 s, cube 24.6k 2.76 -> 1.84 s).
+  Gauss stays selectable via `moment_analytic_kernel=False` for cross-checks.
+  Knob-matrix negatives: `hacapk_eps=1e-3` shifts the field ~3% (keep 1e-4);
+  `hacapk_leaf` 16/64 is a wash vs 32.
 
 ## Engineering Benchmark Range
 
