@@ -15,6 +15,8 @@ Decision, 2026_06_28:
 - The live surface-charge soft-iron solver is the canonical collocation MMMM
   path: multipole-moment MMM with MSC face charges, HACApK matrix-vector
   acceleration, and two-sided loop/co-loop deflation for loop-heavy cases.
+  *(Superseded 2026_07_02: deflation / loop-free were REMOVED -- see "Coarse
+  Tier: HACApK-BiCGSTAB, Loop-Free Abandoned" below.)*
 - `demag_backend="yano"` must not remain as a compatibility alias.  Keeping it
   conflates the retired Yano-MSC path with live collocation MMMM and is a bug
   source.
@@ -23,6 +25,37 @@ Decision, 2026_06_28:
 - Galerkin MMMM is retired as a production branch because it duplicates the
   symmetric `B^T G B` direction already covered by HDiv-VIM while lacking
   nonlinear and image-symmetry coverage.
+
+## Coarse Tier: HACApK-BiCGSTAB, Loop-Free Abandoned
+
+Decision + measurements, 2026_07_02:
+
+- Collocation MMMM **gives up loop-free** (Sugahara): the internal M is
+  field-correct but loop-polluted, acceptable for the COARSE / optimization
+  tier.  Accurate + hysteresis work uses the loop-free HDiv-VIM (the PRIMARY
+  soft-iron method).  The two-sided loop/co-loop deflation and the moment
+  H-LU were REMOVED and must not come back (no-pivot H-LU is wrong AND slow
+  at compression < 1; `memory/collocation_loopfree_abandoned.md`).
+- `rad.Solve(..., method=2)` on PURE-HEX moment routes to **HACApK-BiCGSTAB,
+  matvec-only**: the chi-free geometry K is a `RadHACApKMomentSystem`
+  H-matrix, CACHED CROSS-SOLVE on `radTApplication` together with the chi-free
+  localL/diagK blocks (validity = interaction ptr + hacapk eps/leaf/eta +
+  bit-exact centroid compare).  tet/wedge/mixed method-2 -> dense moment LU.
+- mdx 3-way benchmark (2026_07_02,
+  `examples/vim/results_moment_solvers_mdx_20260702.json`, 27/27 cases,
+  mu_r = 200, eps = 1e-4): COLD solve -- cube 24.6k DOF: dense-K BiCGSTAB
+  33.7 s vs H-matrix 4.4 s (7.7x); C-yoke 14.9k DOF: 13.9 s vs 2.5 s (5.4x);
+  H-matrix alone reaches 48k DOF in 9.3 s / 2.5 GB.  WARM solve (the
+  optimization-inner-loop per-iteration cost, cross-solve cache hit): cube
+  24.6k DOF 4.0 s -> 0.062 s (65x); near-FLAT 0.03-0.11 s across all sizes.
+  Memory: C-yoke 14.9k DOF 3.8 GB (dense K) vs 0.6 GB (H).  Correctness:
+  method-2 external B matches the reference method to <= 5e-5 (the ACA eps);
+  iterations 51-55 on the C-yoke, N-independent (block Jacobi holds at
+  engineering mu_r).
+- Verification recipe for "is the H-matrix engaged?":
+  `rad.GetSolveStats()['linear_iterations'] > 0` (LU = 0) and a `hacapk_eps`
+  sweep on an ELONGATED geometry must change the field (a compact cube is
+  near-field dominated -> mostly dense blocks -> eps-insensitive).
 
 ## Engineering Benchmark Range
 
