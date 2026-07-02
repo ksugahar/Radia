@@ -148,6 +148,17 @@ The mdx result published on 2026-06-24 is
 `results_moment_storage_scaling_165600_mdx_20260624.json`: 165600 DOF, 13389.5 MB peak memory,
 830.75 s solve time, 1 BiCGSTAB iteration, and converged.
 
+The 3-way solver comparison (method 0 dense LU vs method 1 dense-K BiCGSTAB vs method 2
+HACApK-BiCGSTAB, the collocation-MMMM coarse tier of 2026-07-02) is
+`bench_moment_solvers.py`: per-case subprocess isolation (Benchmark Policy memory accuracy),
+compact-cube AND elongated-bar geometries (near-field vs ACA-compressible), cold + warm solve
+timing (the warm solve exposes the method-2 cross-solve K cache = the optimization-inner-loop
+per-iteration cost), and external-B cross-method correctness columns.
+
+```powershell
+python bench_moment_solvers.py --sweep        # writes results_moment_solvers.json
+```
+
 ## Detailed home
 
 The narrative + decisions live in the radia-mcp **`hdiv_vim`** MCP knowledge
