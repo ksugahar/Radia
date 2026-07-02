@@ -121,7 +121,7 @@ self-tested.
 **The de Rham complex `H1 →grad→ H(curl) →curl→ H(div) →div→ L2` is now verified
 symbolically** (both maps exact: `curl∘grad=0`, `div∘curl=0`, each image lands in
 the next space), and the **cohomology `H^1`** (global loops on multiply-connected
-bodies) is connected to the tree-cotree count `rad_hacapk.cpp::BuildLoopBasis` uses.
+bodies) is the tree-cotree cycle count. (The former collocation `BuildLoopBasis` loop code was REMOVED 2026-06-30 -- collocation MMMM gives up loop-free; loop-free is HDiv-VIM's domain. See memory `collocation_loopfree_abandoned`.)
 
 **What is settled at the `.wls` level** (the right gate BEFORE any C++): the FEEC VIM is
 **loop-mode-free by construction** (`vim_loopfree.wls`) — the field-null loops are exactly
