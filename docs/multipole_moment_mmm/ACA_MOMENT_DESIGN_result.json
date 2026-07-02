@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T02:30:28Z",
   "notebook": "docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb",
-  "notebook_sha256": "45ec1919b809ec6f5b64a0c3fa7423e5de25443d91bd350929b23aa46d6a1564",
+  "notebook_sha256": "ceef71402ebfb158e1c8cb614b18be3e743d0bf37b70de050550c730b8f06530",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

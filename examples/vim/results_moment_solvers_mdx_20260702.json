@@ -1,0 +1,2146 @@
+{
+  "timestamp": "2026-07-02T22:50:27.100839",
+  "hostname": "mdx",
+  "benchmark": "moment_solvers_lu_bicgstab_hacapk",
+  "problem": {
+    "hex_edge_m": 0.01,
+    "H0_A_per_m": 1000.0,
+    "mu_r": 200.0,
+    "bicg_tol": 1e-08,
+    "hacapk_eps": 0.0001,
+    "hacapk_leaf": 32,
+    "hacapk_eta": 2.0,
+    "cube_sides": [
+      4,
+      6,
+      8,
+      10,
+      12,
+      16,
+      20
+    ],
+    "bar_sides": [],
+    "ctype_sides": [
+      12,
+      18,
+      24,
+      30,
+      36
+    ],
+    "max_lu_dof": 8000,
+    "max_dense_dof": 26000,
+    "radia_version": "4.95.2",
+    "python_version": "3.12.10"
+  },
+  "results": [
+    {
+      "method": 0,
+      "geom": "cube",
+      "nside": 4,
+      "n_hex": 64,
+      "ndof": 384,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.14493049998418428,
+      "t_wall_solve2": 0.031161599996266887,
+      "t_setup": 0.008560000000000002,
+      "t_solve": 0.190701,
+      "t_setup_solve2": 0.0001229,
+      "t_solve_solve2": 0.0017850000000000001,
+      "iterations": 0,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.006433056783433466,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.006433056783433466,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.0001984241737568332,
+          3.190551740417759e-05,
+          0.0009941532059510292
+        ],
+        [
+          7.681873831325821e-14,
+          -4.742164103830239e-13,
+          0.0009288825152225412
+        ],
+        [
+          -1.593904992987171e-12,
+          -1.5939059684742325e-12,
+          0.0017936248400074405
+        ]
+      ],
+      "peak_memory_mb": 198.45703125,
+      "stats_solve1": {
+        "t_matrix_build": 0.0007364,
+        "t_linear_solve": 0.0953505,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0953505,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0041237,
+        "t_moment_system_build": 0.004436300000000001
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0008925000000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0008925000000000001,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 8.000000000000001e-07,
+        "t_moment_system_build": 0.0001221
+      }
+    },
+    {
+      "method": 1,
+      "geom": "cube",
+      "nside": 4,
+      "n_hex": 64,
+      "ndof": 384,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.06961579999187961,
+      "t_wall_solve2": 0.031117600010475144,
+      "t_setup": 0.023089400000000003,
+      "t_solve": 0.0212559,
+      "t_setup_solve2": 0.0060121,
+      "t_solve_solve2": 6.36e-05,
+      "iterations": 29,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.0064330546795573935,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.0064330546795573935,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019842417374260182,
+          3.1905517403319435e-05,
+          0.0009941532059411136
+        ],
+        [
+          6.841153990541311e-14,
+          -4.560768612712072e-13,
+          0.0009288825152201875
+        ],
+        [
+          -1.5865186138862618e-12,
+          -1.5865195291029557e-12,
+          0.0017936248399950281
+        ]
+      ],
+      "peak_memory_mb": 193.53515625,
+      "stats_solve1": {
+        "t_matrix_build": 0.0007333000000000001,
+        "t_linear_solve": 0.0212559,
+        "linear_iterations": 29.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.023089400000000003
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 6.36e-05,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0060121
+      },
+      "rel_vs_ref": 1.377976089389952e-11,
+      "ref_method": 0
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 4,
+      "n_hex": 64,
+      "ndof": 384,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.09706279999227263,
+      "t_wall_solve2": 0.02400809997925535,
+      "t_setup": 0.0370013,
+      "t_solve": 0.037954600000000005,
+      "t_setup_solve2": 0.0033918000000000004,
+      "t_solve_solve2": 7.630000000000001e-05,
+      "iterations": 32,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.006433054841481301,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.006433054841481301,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.000198424173759966,
+          3.1905517395653285e-05,
+          0.000994153205939284
+        ],
+        [
+          6.164861534531658e-14,
+          -4.577560082233463e-13,
+          0.0009288825152234832
+        ],
+        [
+          -1.5891217915154875e-12,
+          -1.5891225527079085e-12,
+          0.001793624840123788
+        ]
+      ],
+      "peak_memory_mb": 191.86328125,
+      "stats_solve1": {
+        "t_matrix_build": 0.00035130000000000003,
+        "t_linear_solve": 0.037954600000000005,
+        "linear_iterations": 32.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0370013
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 7.630000000000001e-05,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0033918000000000004
+      },
+      "rel_vs_ref": 5.2916291311345465e-11,
+      "ref_method": 0
+    },
+    {
+      "method": 0,
+      "geom": "cube",
+      "nside": 6,
+      "n_hex": 216,
+      "ndof": 1296,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.14076530002057552,
+      "t_wall_solve2": 0.051933699985966086,
+      "t_setup": 0.0639318,
+      "t_solve": 0.1339352,
+      "t_setup_solve2": 0.0014636,
+      "t_solve_solve2": 0.010674000000000001,
+      "iterations": 0,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.006846114464452086,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.006846114464452086,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019844052290310344,
+          3.1562632973166435e-05,
+          0.0009913635596928174
+        ],
+        [
+          5.715984103725985e-14,
+          -3.228645060803045e-13,
+          0.0009273757772311843
+        ],
+        [
+          -7.533731165053425e-13,
+          -7.533732677393206e-13,
+          0.0017894237804476746
+        ]
+      ],
+      "peak_memory_mb": 247.0546875,
+      "stats_solve1": {
+        "t_matrix_build": 0.006201600000000001,
+        "t_linear_solve": 0.0669676,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0669676,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0307849,
+        "t_moment_system_build": 0.0331469
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.005337000000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.005337000000000001,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 1.0000000000000002e-06,
+        "t_moment_system_build": 0.0014626
+      }
+    },
+    {
+      "method": 1,
+      "geom": "cube",
+      "nside": 6,
+      "n_hex": 216,
+      "ndof": 1296,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.13184100002399646,
+      "t_wall_solve2": 0.06226849998347461,
+      "t_setup": 0.041037500000000005,
+      "t_solve": 0.055425800000000004,
+      "t_setup_solve2": 0.0194163,
+      "t_solve_solve2": 0.0006224000000000001,
+      "iterations": 36,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.006846114491461587,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.006846114491461587,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.0001984405229049568,
+          3.1562632972817776e-05,
+          0.000991363559693402
+        ],
+        [
+          5.758949551333444e-14,
+          -3.234014201860036e-13,
+          0.0009273757772296432
+        ],
+        [
+          -7.516797937395097e-13,
+          -7.516798802386484e-13,
+          0.001789423780454914
+        ]
+      ],
+      "peak_memory_mb": 214.16015625,
+      "stats_solve1": {
+        "t_matrix_build": 0.0054783,
+        "t_linear_solve": 0.055425800000000004,
+        "linear_iterations": 36.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.041037500000000005
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0006224000000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0194163
+      },
+      "rel_vs_ref": 3.5721900534303616e-12,
+      "ref_method": 0
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 6,
+      "n_hex": 216,
+      "ndof": 1296,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.10369550000177696,
+      "t_wall_solve2": 0.023755199974402785,
+      "t_setup": 0.040328100000000006,
+      "t_solve": 0.0398509,
+      "t_setup_solve2": 0.0032014,
+      "t_solve_solve2": 0.0001366,
+      "iterations": 34,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.006846114515647577,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.006846114515647577,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019844052287322126,
+          3.156263296798984e-05,
+          0.0009913635597001461
+        ],
+        [
+          5.931802077785878e-14,
+          -3.254038908737312e-13,
+          0.0009273757772663465
+        ],
+        [
+          -7.422222541477026e-13,
+          -7.422222268028136e-13,
+          0.0017894237804081737
+        ]
+      ],
+      "peak_memory_mb": 208.5546875,
+      "stats_solve1": {
+        "t_matrix_build": 0.0008542000000000001,
+        "t_linear_solve": 0.0398509,
+        "linear_iterations": 34.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.040328100000000006
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0001366,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0032014
+      },
+      "rel_vs_ref": 2.8151025165711233e-11,
+      "ref_method": 0
+    },
+    {
+      "method": 0,
+      "geom": "cube",
+      "nside": 8,
+      "n_hex": 512,
+      "ndof": 3072,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.2878226999891922,
+      "t_wall_solve2": 0.08167270000558347,
+      "t_setup": 0.18240060000000002,
+      "t_solve": 0.21842260000000002,
+      "t_setup_solve2": 0.008856500000000002,
+      "t_solve_solve2": 0.056214,
+      "iterations": 0,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.007701340370109426,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.007701340370109426,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019860125862426433,
+          3.146762409258109e-05,
+          0.0009902284300782466
+        ],
+        [
+          4.3501633655488034e-14,
+          -2.3234153314718475e-13,
+          0.0009265438072079478
+        ],
+        [
+          -4.811956418047319e-13,
+          -4.811976519331047e-13,
+          0.0017882013860675496
+        ]
+      ],
+      "peak_memory_mb": 466.2421875,
+      "stats_solve1": {
+        "t_matrix_build": 0.023955200000000003,
+        "t_linear_solve": 0.10921130000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.10921130000000001,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.08411650000000001,
+        "t_moment_system_build": 0.0982841
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.028107,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.028107,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 1.4000000000000001e-06,
+        "t_moment_system_build": 0.008855100000000001
+      }
+    },
+    {
+      "method": 1,
+      "geom": "cube",
+      "nside": 8,
+      "n_hex": 512,
+      "ndof": 3072,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 1.4155781000154093,
+      "t_wall_solve2": 0.13997110002674162,
+      "t_setup": 0.1084307,
+      "t_solve": 1.2352964000000002,
+      "t_setup_solve2": 0.0756193,
+      "t_solve_solve2": 0.0046812,
+      "iterations": 48,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.007701340555565779,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.007701340555565779,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.000198601258615733,
+          3.1467624096107125e-05,
+          0.0009902284300817076
+        ],
+        [
+          4.3697674675736095e-14,
+          -2.3259932485622633e-13,
+          0.000926543807216924
+        ],
+        [
+          -4.812003857244334e-13,
+          -4.812022309463836e-13,
+          0.0017882013860642664
+        ]
+      ],
+      "peak_memory_mb": 349.66796875,
+      "stats_solve1": {
+        "t_matrix_build": 0.0227672,
+        "t_linear_solve": 1.2352964000000002,
+        "linear_iterations": 48.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.1084307
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0046812,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0756193
+      },
+      "rel_vs_ref": 6.095668368330133e-12,
+      "ref_method": 0
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 8,
+      "n_hex": 512,
+      "ndof": 3072,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.7468279000022449,
+      "t_wall_solve2": 0.0262644000176806,
+      "t_setup": 0.11645720000000001,
+      "t_solve": 0.4728183,
+      "t_setup_solve2": 0.0038407000000000003,
+      "t_solve_solve2": 0.0005455000000000001,
+      "iterations": 50,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.007701340248818376,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.007701340248818376,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019860125861959548,
+          3.1467624097863784e-05,
+          0.0009902284300781165
+        ],
+        [
+          4.436142051537881e-14,
+          -2.321453106880174e-13,
+          0.0009265438072126787
+        ],
+        [
+          -4.810958942067637e-13,
+          -4.810979729763885e-13,
+          0.001788201386059231
+        ]
+      ],
+      "peak_memory_mb": 276.1328125,
+      "stats_solve1": {
+        "t_matrix_build": 0.0016987,
+        "t_linear_solve": 0.4728183,
+        "linear_iterations": 50.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.11645720000000001
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0005455000000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0038407000000000003
+      },
+      "rel_vs_ref": 5.290410167712469e-12,
+      "ref_method": 0
+    },
+    {
+      "method": 0,
+      "geom": "cube",
+      "nside": 10,
+      "n_hex": 1000,
+      "ndof": 6000,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.7417291000019759,
+      "t_wall_solve2": 0.28122000000439584,
+      "t_setup": 0.6256386,
+      "t_solve": 0.3589274,
+      "t_setup_solve2": 0.0319841,
+      "t_solve_solve2": 0.22925020000000002,
+      "iterations": 0,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.008571218450063273,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.008571218450063273,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019874682714413094,
+          3.142629653667255e-05,
+          0.0009896097583338376
+        ],
+        [
+          3.449111728778717e-14,
+          -1.7824560837830897e-13,
+          0.0009260374497902424
+        ],
+        [
+          -3.44910876339292e-13,
+          -3.4491007566419956e-13,
+          0.0017876536670031829
+        ]
+      ],
+      "peak_memory_mb": 1223.28125,
+      "stats_solve1": {
+        "t_matrix_build": 0.0943303,
+        "t_linear_solve": 0.1794637,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.1794637,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.29006790000000005,
+        "t_moment_system_build": 0.3355707
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.11462510000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.11462510000000001,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 2.2e-06,
+        "t_moment_system_build": 0.0319819
+      }
+    },
+    {
+      "method": 1,
+      "geom": "cube",
+      "nside": 10,
+      "n_hex": 1000,
+      "ndof": 6000,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 1.852399700001115,
+      "t_wall_solve2": 0.32809150000684895,
+      "t_setup": 0.2611452,
+      "t_solve": 1.4572072,
+      "t_setup_solve2": 0.2420304,
+      "t_solve_solve2": 0.0293617,
+      "iterations": 40,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.008571218491145791,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.008571218491145791,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019874682714118253,
+          3.142629654114923e-05,
+          0.0009896097583354728
+        ],
+        [
+          3.444862556247911e-14,
+          -1.781901829390366e-13,
+          0.0009260374497929894
+        ],
+        [
+          -3.449108898722217e-13,
+          -3.449100444826552e-13,
+          0.0017876536670110301
+        ]
+      ],
+      "peak_memory_mb": 788.98828125,
+      "stats_solve1": {
+        "t_matrix_build": 0.07715670000000001,
+        "t_linear_solve": 1.4572072,
+        "linear_iterations": 40.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.2611452
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0293617,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.2420304
+      },
+      "rel_vs_ref": 4.451737834801362e-12,
+      "ref_method": 0
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 10,
+      "n_hex": 1000,
+      "ndof": 6000,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.7018435999925714,
+      "t_wall_solve2": 0.03877610000199638,
+      "t_setup": 0.37634080000000003,
+      "t_solve": 0.2925508,
+      "t_setup_solve2": 0.0033618000000000003,
+      "t_solve_solve2": 0.001843,
+      "iterations": 38,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.008571697704881295,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.008571697704881295,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.0001987456001973596,
+          3.1427610121322546e-05,
+          0.0009896087750927676
+        ],
+        [
+          7.365024618723767e-10,
+          8.202918178934969e-10,
+          0.0009260370219770822
+        ],
+        [
+          -2.751660750662298e-10,
+          -1.2048023055481386e-11,
+          0.001787653592270612
+        ]
+      ],
+      "peak_memory_mb": 418.09765625,
+      "stats_solve1": {
+        "t_matrix_build": 0.0031551,
+        "t_linear_solve": 0.2925508,
+        "linear_iterations": 38.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.37634080000000003
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.001843,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0033618000000000003
+      },
+      "rel_vs_ref": 1.0578963143257355e-06,
+      "ref_method": 0
+    },
+    {
+      "method": 1,
+      "geom": "cube",
+      "nside": 12,
+      "n_hex": 1728,
+      "ndof": 10368,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 6.41912589999265,
+      "t_wall_solve2": 0.8122558000031859,
+      "t_setup": 0.7141523000000001,
+      "t_solve": 5.410707400000001,
+      "t_setup_solve2": 0.6936610000000001,
+      "t_solve_solve2": 0.048060200000000004,
+      "iterations": 43,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.009381430798205727,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.009381430798205727,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019886007184583262,
+          3.1403729796093367e-05,
+          0.0009892227016223855
+        ],
+        [
+          2.825602002910657e-14,
+          -1.428859924419688e-13,
+          0.0009257025467864839
+        ],
+        [
+          -2.645729682102487e-13,
+          -2.645750379114154e-13,
+          0.0017873576503459347
+        ]
+      ],
+      "peak_memory_mb": 1971.76953125,
+      "stats_solve1": {
+        "t_matrix_build": 0.22424190000000002,
+        "t_linear_solve": 5.410707400000001,
+        "linear_iterations": 43.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.7141523000000001
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.048060200000000004,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.6936610000000001
+      }
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 12,
+      "n_hex": 1728,
+      "ndof": 10368,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 1.4720882999827154,
+      "t_wall_solve2": 0.03207829999155365,
+      "t_setup": 0.8345501000000001,
+      "t_solve": 0.5909138,
+      "t_setup_solve2": 0.0023635,
+      "t_solve_solve2": 0.0037900000000000004,
+      "iterations": 40,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.009381938756944187,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.009381938756944187,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019886073289658406,
+          3.140384717920366e-05,
+          0.000989219210918621
+        ],
+        [
+          -7.837699443825635e-10,
+          -1.3229385917536973e-09,
+          0.0009257024145340635
+        ],
+        [
+          -3.167736366119912e-09,
+          3.610150189278064e-09,
+          0.0017873576540707392
+        ]
+      ],
+      "peak_memory_mb": 636.26953125,
+      "stats_solve1": {
+        "t_matrix_build": 0.006320200000000001,
+        "t_linear_solve": 0.5909138,
+        "linear_iterations": 40.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.8345501000000001
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0037900000000000004,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0023635
+      },
+      "rel_vs_ref": 2.7406065141612363e-06,
+      "ref_method": 1
+    },
+    {
+      "method": 1,
+      "geom": "cube",
+      "nside": 16,
+      "n_hex": 4096,
+      "ndof": 24576,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 33.68348400000832,
+      "t_wall_solve2": 3.999913000006927,
+      "t_setup": 3.8585289,
+      "t_solve": 28.0311543,
+      "t_setup_solve2": 3.5055202000000003,
+      "t_solve_solve2": 0.2999926,
+      "iterations": 43,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.010858822417790922,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.010858822417790922,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019901465892856792,
+          3.138017624380659e-05,
+          0.00098877002984059
+        ],
+        [
+          2.037181843407977e-14,
+          -1.0023344587730153e-13,
+          0.0009252935913333189
+        ],
+        [
+          -1.7583812694121224e-13,
+          -1.758385096737422e-13,
+          0.0017870585048869888
+        ]
+      ],
+      "peak_memory_mb": 10079.75,
+      "stats_solve1": {
+        "t_matrix_build": 1.6015525000000002,
+        "t_linear_solve": 28.0311543,
+        "linear_iterations": 43.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 3.8585289
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.2999926,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 3.5055202000000003
+      }
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 16,
+      "n_hex": 4096,
+      "ndof": 24576,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 4.35734039999079,
+      "t_wall_solve2": 0.06232270001783036,
+      "t_setup": 2.2245950000000003,
+      "t_solve": 2.0589779,
+      "t_setup_solve2": 0.0031781,
+      "t_solve_solve2": 0.011947200000000002,
+      "iterations": 47,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.010860395764979637,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.010860395764979637,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019901805632002771,
+          3.1378051170333904e-05,
+          0.0009887618692412078
+        ],
+        [
+          -3.6207841361689715e-09,
+          1.941825261417132e-09,
+          0.0009252928939253789
+        ],
+        [
+          -2.4439223351859818e-09,
+          9.542437589304253e-10,
+          0.001787066208279186
+        ]
+      ],
+      "peak_memory_mb": 1787.66796875,
+      "stats_solve1": {
+        "t_matrix_build": 0.0120955,
+        "t_linear_solve": 2.0589779,
+        "linear_iterations": 47.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 2.2245950000000003
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.011947200000000002,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0031781
+      },
+      "rel_vs_ref": 5.727400565456767e-06,
+      "ref_method": 1
+    },
+    {
+      "method": 2,
+      "geom": "cube",
+      "nside": 20,
+      "n_hex": 8000,
+      "ndof": 48000,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 9.261048599990318,
+      "t_wall_solve2": 0.10893879999639466,
+      "t_setup": 5.298166800000001,
+      "t_solve": 3.8917970000000004,
+      "t_setup_solve2": 0.004601200000000001,
+      "t_solve_solve2": 0.042687800000000005,
+      "iterations": 50,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.012191434137919422,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.012191434137919422,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -0.00019911626888803588,
+          3.1373151529925644e-05,
+          0.0009885175944766421
+        ],
+        [
+          2.5656891587192676e-09,
+          1.8528305588068775e-09,
+          0.0009250497361480053
+        ],
+        [
+          6.402569466108736e-09,
+          -2.8793174666329245e-09,
+          0.001786922947277275
+        ]
+      ],
+      "peak_memory_mb": 3767.49609375,
+      "stats_solve1": {
+        "t_matrix_build": 0.022084200000000002,
+        "t_linear_solve": 3.8917970000000004,
+        "linear_iterations": 50.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 5.298166800000001
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.042687800000000005,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.004601200000000001
+      }
+    },
+    {
+      "method": 0,
+      "geom": "ctype",
+      "nside": 12,
+      "n_hex": 256,
+      "ndof": 1536,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.14166750002186745,
+      "t_wall_solve2": 0.046848900004988536,
+      "t_setup": 0.0630555,
+      "t_solve": 0.1261854,
+      "t_setup_solve2": 0.0018424000000000001,
+      "t_solve_solve2": 0.014727200000000001,
+      "iterations": 0,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.041533548329102506,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.041533548329102506,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -1.6362354395349122e-13,
+          0.0005518364044551574,
+          -1.6490642258584811e-18
+        ],
+        [
+          0.00027387585568101403,
+          0.0009348846593398506,
+          2.2950682897154202e-05
+        ],
+        [
+          3.353782259905971e-05,
+          0.00187008449837343,
+          0.00014701419357920534
+        ]
+      ],
+      "peak_memory_mb": 264.90234375,
+      "stats_solve1": {
+        "t_matrix_build": 0.007050600000000001,
+        "t_linear_solve": 0.0630927,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0630927,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0298331,
+        "t_moment_system_build": 0.0332224
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0073636000000000005,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0073636000000000005,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 9.000000000000001e-07,
+        "t_moment_system_build": 0.0018415
+      }
+    },
+    {
+      "method": 1,
+      "geom": "ctype",
+      "nside": 12,
+      "n_hex": 256,
+      "ndof": 1536,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.1623542000015732,
+      "t_wall_solve2": 0.07812049999483861,
+      "t_setup": 0.0451512,
+      "t_solve": 0.07333930000000001,
+      "t_setup_solve2": 0.0251958,
+      "t_solve_solve2": 0.0008752,
+      "iterations": 43,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.04153354910152432,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.04153354910152432,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -1.6630533869672104e-13,
+          0.0005518364044390142,
+          -1.6793389244211961e-18
+        ],
+        [
+          0.000273875855688972,
+          0.0009348846593369029,
+          2.2950682898342637e-05
+        ],
+        [
+          3.3537822591659394e-05,
+          0.0018700844983660706,
+          0.00014701419357158863
+        ]
+      ],
+      "peak_memory_mb": 226.38671875,
+      "stats_solve1": {
+        "t_matrix_build": 0.007452800000000001,
+        "t_linear_solve": 0.07333930000000001,
+        "linear_iterations": 43.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0451512
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0008752,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0251958
+      },
+      "rel_vs_ref": 1.031716955102834e-11,
+      "ref_method": 0
+    },
+    {
+      "method": 2,
+      "geom": "ctype",
+      "nside": 12,
+      "n_hex": 256,
+      "ndof": 1536,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.14495849999366328,
+      "t_wall_solve2": 0.03158159999293275,
+      "t_setup": 0.0514364,
+      "t_solve": 0.0702664,
+      "t_setup_solve2": 0.002179,
+      "t_solve_solve2": 0.0001362,
+      "iterations": 46,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.041533513120926124,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.041533513120926124,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          3.8775799486692145e-10,
+          0.0005518383795737622,
+          -1.652162242436789e-10
+        ],
+        [
+          0.00027387519915970384,
+          0.0009348845211836695,
+          2.294945107893598e-05
+        ],
+        [
+          3.354021880263612e-05,
+          0.0018700744180773958,
+          0.000147018675843373
+        ]
+      ],
+      "peak_memory_mb": 209.40234375,
+      "stats_solve1": {
+        "t_matrix_build": 0.000985,
+        "t_linear_solve": 0.0702664,
+        "linear_iterations": 46.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0514364
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0001362,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.002179
+      },
+      "rel_vs_ref": 5.287911147111443e-06,
+      "ref_method": 0
+    },
+    {
+      "method": 0,
+      "geom": "ctype",
+      "nside": 18,
+      "n_hex": 1104,
+      "ndof": 6624,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.9242627999919932,
+      "t_wall_solve2": 0.34375669999280944,
+      "t_setup": 0.6665554,
+      "t_solve": 0.6833428,
+      "t_setup_solve2": 0.05376480000000001,
+      "t_solve_solve2": 0.3215806,
+      "iterations": 0,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.03932696812299994,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.03932696812299994,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -1.8201509519167224e-13,
+          0.00046361130219500627,
+          7.216120892900019e-18
+        ],
+        [
+          0.00031557944904291507,
+          0.0009026318671406274,
+          2.6045307741576605e-05
+        ],
+        [
+          2.6190385786777732e-05,
+          0.001908867457795798,
+          0.00015384122980171658
+        ]
+      ],
+      "peak_memory_mb": 1452.6171875,
+      "stats_solve1": {
+        "t_matrix_build": 0.0950537,
+        "t_linear_solve": 0.3416714,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.3416714,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.3132722,
+        "t_moment_system_build": 0.3532832
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.1607903,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.1607903,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 2.5e-06,
+        "t_moment_system_build": 0.053762300000000006
+      }
+    },
+    {
+      "method": 1,
+      "geom": "ctype",
+      "nside": 18,
+      "n_hex": 1104,
+      "ndof": 6624,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 3.7510496000177227,
+      "t_wall_solve2": 0.359093999984907,
+      "t_setup": 0.31813640000000004,
+      "t_solve": 3.2909046,
+      "t_setup_solve2": 0.2698938,
+      "t_solve_solve2": 0.032548,
+      "iterations": 52,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.039326967088269084,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.039326967088269084,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -1.819302091746626e-13,
+          0.000463611302194961,
+          7.26529983872194e-18
+        ],
+        [
+          0.00031557944904243124,
+          0.0009026318671430659,
+          2.6045307741182796e-05
+        ],
+        [
+          2.6190385787532144e-05,
+          0.0019088674577885868,
+          0.00015384122979449473
+        ]
+      ],
+      "peak_memory_mb": 918.7421875,
+      "stats_solve1": {
+        "t_matrix_build": 0.0948533,
+        "t_linear_solve": 3.2909046,
+        "linear_iterations": 52.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.31813640000000004
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.032548,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.2698938
+      },
+      "rel_vs_ref": 4.811344178672195e-12,
+      "ref_method": 0
+    },
+    {
+      "method": 2,
+      "geom": "ctype",
+      "nside": 18,
+      "n_hex": 1104,
+      "ndof": 6624,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 0.5330937999824528,
+      "t_wall_solve2": 0.031178100005490705,
+      "t_setup": 0.38836220000000005,
+      "t_solve": 0.0991188,
+      "t_setup_solve2": 0.0039568,
+      "t_solve_solve2": 0.0010704,
+      "iterations": 51,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.03934304059493764,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.03934304059493764,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -2.3047706116077396e-08,
+          0.00046371324850535934,
+          -1.3229005243870467e-08
+        ],
+        [
+          0.00031556514259496835,
+          0.0009026481964505879,
+          2.6047060261402676e-05
+        ],
+        [
+          2.6187713857603148e-05,
+          0.0019088509010629408,
+          0.0001538340104331093
+        ]
+      ],
+      "peak_memory_mb": 327.72265625,
+      "stats_solve1": {
+        "t_matrix_build": 0.0036768,
+        "t_linear_solve": 0.0991188,
+        "linear_iterations": 51.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.38836220000000005
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0010704,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0039568
+      },
+      "rel_vs_ref": 4.9815899748835214e-05,
+      "ref_method": 0
+    },
+    {
+      "method": 1,
+      "geom": "ctype",
+      "nside": 24,
+      "n_hex": 2480,
+      "ndof": 14880,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 13.885946499998681,
+      "t_wall_solve2": 1.5780205000191927,
+      "t_setup": 1.3531223000000001,
+      "t_solve": 11.9738901,
+      "t_setup_solve2": 1.3564235,
+      "t_solve_solve2": 0.11796820000000001,
+      "iterations": 54,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.04436185393735964,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.04436185393735964,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          6.721695695314041e-13,
+          0.0004827510891583345,
+          -1.9574005207536892e-17
+        ],
+        [
+          0.0003063672690189649,
+          0.0009086842135123238,
+          2.5303928681870684e-05
+        ],
+        [
+          2.786419336380804e-05,
+          0.001900831997514653,
+          0.0001518026775772532
+        ]
+      ],
+      "peak_memory_mb": 3836.546875,
+      "stats_solve1": {
+        "t_matrix_build": 0.46136000000000005,
+        "t_linear_solve": 11.9738901,
+        "linear_iterations": 54.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 1.3531223000000001
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.11796820000000001,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 1.3564235
+      }
+    },
+    {
+      "method": 2,
+      "geom": "ctype",
+      "nside": 24,
+      "n_hex": 2480,
+      "ndof": 14880,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 2.5494916000170633,
+      "t_wall_solve2": 0.031173900002613664,
+      "t_setup": 1.2313653,
+      "t_solve": 1.2540245,
+      "t_setup_solve2": 0.0033699000000000003,
+      "t_solve_solve2": 0.0031152000000000003,
+      "iterations": 55,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.044387354030832715,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.044387354030832715,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -1.0532448721984853e-07,
+          0.0004833138312563815,
+          1.683694669521402e-08
+        ],
+        [
+          0.00030623289723717874,
+          0.0009088182626304296,
+          2.529253224398326e-05
+        ],
+        [
+          2.7868444814500884e-05,
+          0.0019006646127521867,
+          0.00015177419649882288
+        ]
+      ],
+      "peak_memory_mb": 612.296875,
+      "stats_solve1": {
+        "t_matrix_build": 0.0113691,
+        "t_linear_solve": 1.2540245,
+        "linear_iterations": 55.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 1.2313653
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0031152000000000003,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0033699000000000003
+      },
+      "rel_vs_ref": 0.0002864503113732597,
+      "ref_method": 1
+    },
+    {
+      "method": 2,
+      "geom": "ctype",
+      "nside": 30,
+      "n_hex": 4680,
+      "ndof": 28080,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 4.522021299984772,
+      "t_wall_solve2": 0.04672949999803677,
+      "t_setup": 2.5876081,
+      "t_solve": 1.8759857000000002,
+      "t_setup_solve2": 0.0040834,
+      "t_solve_solve2": 0.0087323,
+      "iterations": 55,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.048816396015748206,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.048816396015748206,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -2.3449538980697805e-07,
+          0.0004966635464366464,
+          1.5618439790164382e-08
+        ],
+        [
+          0.0003000853480467636,
+          0.0009131551351904935,
+          2.4798154775324063e-05
+        ],
+        [
+          2.8927420271484707e-05,
+          0.0018952958604264289,
+          0.0001504679176026285
+        ]
+      ],
+      "peak_memory_mb": 1331.0390625,
+      "stats_solve1": {
+        "t_matrix_build": 0.0138046,
+        "t_linear_solve": 1.8759857000000002,
+        "linear_iterations": 55.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 2.5876081
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.0087323,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0040834
+      }
+    },
+    {
+      "method": 2,
+      "geom": "ctype",
+      "nside": 36,
+      "n_hex": 7896,
+      "ndof": 47376,
+      "mu_r": 200.0,
+      "bicg_tol": 1e-08,
+      "hacapk_eps": 0.0001,
+      "hacapk_leaf": 32,
+      "hacapk_eta": 2.0,
+      "t_wall_solve1": 7.6866802999866195,
+      "t_wall_solve2": 0.07816420000744984,
+      "t_setup": 4.6219429000000005,
+      "t_solve": 2.9929867000000003,
+      "t_setup_solve2": 0.0030407000000000003,
+      "t_solve_solve2": 0.039670300000000006,
+      "iterations": 54,
+      "iterations_solve2": 0,
+      "nonl_iterations": 1,
+      "converged": true,
+      "solve_return_1": [
+        0.05265062659639297,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "solve_return_2": [
+        0.05265062659639297,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "num_threads": 38,
+      "B_probe": [
+        [
+          -3.119082699589637e-07,
+          0.0005055649946031993,
+          4.6824604175122835e-08
+        ],
+        [
+          0.000296028360906836,
+          0.0009161924288287408,
+          2.4593326065009662e-05
+        ],
+        [
+          2.9723286374308412e-05,
+          0.0018909683263849772,
+          0.00014943522560150274
+        ]
+      ],
+      "peak_memory_mb": 2471.3671875,
+      "stats_solve1": {
+        "t_matrix_build": 0.026046700000000002,
+        "t_linear_solve": 2.9929867000000003,
+        "linear_iterations": 54.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 4.6219429000000005
+      },
+      "stats_solve2": {
+        "t_matrix_build": 0.0,
+        "t_linear_solve": 0.039670300000000006,
+        "linear_iterations": 0.0,
+        "nonl_iterations": 1.0,
+        "taskmanager_enabled": 1.0,
+        "num_threads": 38.0,
+        "t_lu_decomp": 0.0,
+        "t_hmatrix_build": 0.0,
+        "t_moment_fieldgrad": 0.0,
+        "t_moment_system_build": 0.0030407000000000003
+      }
+    }
+  ]
+}
