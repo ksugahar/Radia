@@ -493,15 +493,8 @@ def _solve_coil_bem_a(args):
         # indefinite AC saddle.  Dense SL matvec; hacapk_cocr is the HACApK
         # opt-in.  Valid for AC and DC.
         saddle = "lu" if len(coil_tris) < lu_cutoff else "cocr"
-    # The two user-facing COCR solvers map to the library loop-COCR path with
-    # the dense or HACApK-compressed SL matvec:
-    #   cocr        = div-free loop reduction + COCR, dense SL matvec
-    #   hacapk_cocr = same, HACApKBEMManager-compressed O(N log N) SL matvec
-    loop_mv = "dense"
-    if saddle == "cocr":
-        saddle, loop_mv = "loop_cocr", "dense"
-    elif saddle == "hacapk_cocr":
-        saddle, loop_mv = "loop_cocr", "hacapk"
+    # cocr / hacapk_cocr are passed straight through: the library solver
+    # values are the same two names (dense vs HACApK-compressed SL matvec).
     progress("BEMA",
         f"ngsolve.bem impedance-EFIE solve (n_tris={len(coil_tris)}, "
         f"fes_order=0, "
@@ -516,7 +509,6 @@ def _solve_coil_bem_a(args):
         solver=saddle,
         omega=omega,
         Z_s_complex=Z_s_coil_complex,
-        loop_matvec=loop_mv,
         log_fn=progress,
     )
     t_solve = time.perf_counter() - t0

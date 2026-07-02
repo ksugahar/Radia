@@ -195,7 +195,8 @@ def _edge_midpoint_coords(mesh, n_J):
     if n_edges != n_J:
         raise ValueError(
             f"HACApK loop matvec needs fes_order==0 (RT0): got {n_edges} "
-            f"edges but n_J={n_J}.  Use loop_matvec='dense' for higher order.")
+            f"edges but n_J={n_J}.  Use solver='cocr' (dense matvec) for "
+            "higher order.")
     return coords
 
 
@@ -307,7 +308,7 @@ def _loop_cocr_solve(SL, M, D_red, g_red, omega, Z_s, matvec_backend,
     J = J_p + J_loop
     if not ac:
         J = J.real.copy()
-    info = {"method": f"loop_cocr[{matvec_backend}]",
+    info = {"method": f"cocr[{matvec_backend}]",
             "iterations": int(iters), "residual": 0.0,
             "matvec": matvec_backend}
     return J, info
@@ -316,7 +317,7 @@ def _loop_cocr_solve(SL, M, D_red, g_red, omega, Z_s, matvec_backend,
 def compute_inductance_source_sink(
         mesh, source_label="source", sink_label="sink",
         fes_order=0, solver="lu", omega=0.0, Z_s_complex=None,
-        loop_matvec="dense", log_fn=None):
+        log_fn=None):
     """Coil impedance via the ngsolve.bem impedance-EFIE saddle (SOLE formulation).
 
     For ``omega > 0`` this solves the **impedance-EFIE**: the Leontovich
@@ -366,14 +367,18 @@ def compute_inductance_source_sink(
         solver: saddle-point solver.
             - "lu" (dense direct, default): O(N^3) LU of the full complex
               saddle; best for small N (<~5000).
-            - "gmres": scipy GMRES on the dense saddle.
-            - "loop_cocr": SCALABLE path -- reduce the saddle to the
-              divergence-free (loop / stream-function) subspace and solve
-              the complex-symmetric ``Pi A11 Pi`` with COCR in ~24 MESH-
-              INDEPENDENT iterations (exact vs LU to <0.01 %).  Replaces the
-              O(N^3) LU with ~24 matvecs; pick ``loop_matvec`` for the SL
-              matvec backend.  This is the recommended solver for medium/large
-              coils.
+            - "cocr": SCALABLE path -- reduce the saddle to the divergence-
+              free (loop / stream-function) subspace and solve the complex-
+              symmetric ``Pi A11 Pi`` with COCR in ~24 MESH-INDEPENDENT
+              iterations (exact vs LU to <0.01 %), using the dense ``SL @ v``
+              matvec.  The recommended solver for medium/large coils.
+            - "hacapk_cocr": the same COCR, but the SL matvec is an
+              O(N log N) ``HACApKBEMManager``-compressed H-matrix (the
+              ``bem_sibc_solver`` pattern; MatVec accuracy ~3e-7, fes_order==0
+              only).  Identical R/L to "cocr"; cuts the per-iteration matvec
+              cost on larger meshes.
+            - "gmres": scipy GMRES on the dense saddle (unpreconditioned --
+              stalls on large saddles, kept for comparison).
             - "minres" is accepted only for the ``omega == 0`` real solve:
               scipy's MINRES silently discards the imaginary part of a complex
               system, so it is REJECTED for the AC impedance-EFIE (fail fast).
@@ -381,13 +386,6 @@ def compute_inductance_source_sink(
             solve (R = 0).
         Z_s_complex: complex Leontovich surface impedance
             ``Z_s = (1+j)/(σ δ)`` [Ohm/sq]; REQUIRED when ``omega > 0``.
-        loop_matvec: SL matvec backend for ``solver="loop_cocr"`` (ignored
-            otherwise).  "dense" (default): ``SL @ v`` reusing the already-
-            assembled dense SL (zero extra dependency).  "hacapk": compress
-            SL to an O(N log N) H-matrix via ``HACApKBEMManager`` (the
-            ``bem_sibc_solver`` pattern; MatVec accuracy ~3e-7, fes_order==0
-            only).  Both give the same R/L; "hacapk" cuts the per-iteration
-            matvec cost on larger meshes.
 
     Returns:
         dict with keys
@@ -415,14 +413,10 @@ def compute_inductance_source_sink(
     # --- Parameter validation FIRST (before the expensive dense
     #     LaplaceSL assembly): fail fast on a bad omega/Zs contract
     #     instead of burning minutes of assembly first. ---
-    if solver not in {"lu", "gmres", "minres", "loop_cocr"}:
+    if solver not in {"lu", "gmres", "minres", "cocr", "hacapk_cocr"}:
         raise ValueError(
             f"Unknown saddle-point solver: {solver!r}.  "
-            "Choices: lu, minres, gmres, loop_cocr.")
-    if solver == "loop_cocr" and loop_matvec not in {"dense", "hacapk"}:
-        raise ValueError(
-            f"unknown loop matvec backend {loop_matvec!r} "
-            "(choices: dense, hacapk)")
+            "Choices: lu, minres, gmres, cocr, hacapk_cocr.")
     if omega > 0.0:
         if Z_s_complex is None or Z_s_complex == 0:
             raise ValueError(
@@ -444,10 +438,10 @@ def compute_inductance_source_sink(
     fes_L2 = SurfaceL2(mesh, order=max(0, fes_order - 1))
     n_J = fes_J.ndof
     n_f = fes_L2.ndof
-    if solver == "loop_cocr" and loop_matvec == "hacapk" and fes_order != 0:
+    if solver == "hacapk_cocr" and fes_order != 0:
         raise ValueError(
-            "HACApK loop matvec currently requires fes_order==0 (RT0); "
-            "use loop_matvec='dense' for higher-order HDivSurface.")
+            "solver='hacapk_cocr' currently requires fes_order==0 (RT0); "
+            "use solver='cocr' (dense matvec) for higher-order HDivSurface.")
     _log("BEMA",
         f"FES built: n_J={n_J} (HDivSurface RT{fes_order}), "
         f"n_f={n_f} (SurfaceL2 P{max(0,fes_order-1)})")
@@ -523,17 +517,18 @@ def compute_inductance_source_sink(
         bf_M += jt.Trace() * jv.Trace() * ds
         bf_M.Assemble()
         M = _to_dense(bf_M.mat)
-        if solver == "loop_cocr":
+        if solver in ("cocr", "hacapk_cocr"):
             # Scalable path: reduce the saddle to the div-free (loop)
             # subspace and solve the complex-symmetric Pi A11 Pi with COCR
             # (~24 mesh-independent iters) instead of the O(N^3) dense LU.
+            mv = "hacapk" if solver == "hacapk_cocr" else "dense"
             coords = (_edge_midpoint_coords(mesh, n_J)
-                      if loop_matvec == "hacapk" else None)
+                      if mv == "hacapk" else None)
             _log("BEMA",
-                f"impedance-EFIE loop-COCR solve (div-free reduction, "
-                f"matvec={loop_matvec})")
+                f"impedance-EFIE {solver} solve (div-free reduction, "
+                f"matvec={mv})")
             J, solve_info = _loop_cocr_solve(
-                SL, M, D_red, g_red, omega, Z_s_complex, loop_matvec,
+                SL, M, D_red, g_red, omega, Z_s_complex, mv,
                 coords=coords, log_fn=_log)
         else:
             _log("BEMA",
@@ -578,14 +573,15 @@ def compute_inductance_source_sink(
         #     the AC surface impedance does not exist here.  (Negative
         #     or NaN omega already rejected at the top of the
         #     function.) ---
-        if solver == "loop_cocr":
+        if solver in ("cocr", "hacapk_cocr"):
+            mv = "hacapk" if solver == "hacapk_cocr" else "dense"
             coords = (_edge_midpoint_coords(mesh, n_J)
-                      if loop_matvec == "hacapk" else None)
+                      if mv == "hacapk" else None)
             _log("BEMA",
-                f"DC vacuum-L loop-COCR solve (div-free reduction, "
-                f"matvec={loop_matvec})")
+                f"DC vacuum-L {solver} solve (div-free reduction, "
+                f"matvec={mv})")
             J, solve_info = _loop_cocr_solve(
-                SL, None, D_red, g_red, 0.0, None, loop_matvec,
+                SL, None, D_red, g_red, 0.0, None, mv,
                 coords=coords, log_fn=_log)
         else:
             _log("BEMA",
