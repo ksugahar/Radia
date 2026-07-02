@@ -7,10 +7,15 @@ symbolic gradient (the quadrupole field-gradient).  ~64x fewer kernel evals/face
 The 64pt (8x8) Gauss bilinear-quad path remains selectable with
 rad.SolverConfig(moment_analytic_kernel=False) for cross-checks.
 
-WIRING (2026-06-26): the analytic path is wired into the matrix-BUILD paths -- method 0 (dense
-BuildCentroidFieldGrad) and method 2 (HACApK MomentSystemEntry), both delegating to the single analytic-
-capable CentroidFieldGradFromFace.  The method-1 matrix-free matvec + method-2 block-Jacobi precond still
-use the precomputed 64 Gauss samples (they would need the face corners cached) -- a documented follow-up.
+WIRING (2026-06-26, COMPLETED 2026-07-02 -- the "matvec/precond still Gauss" follow-up is DONE): all
+FIVE moment kernel paths delegate to the closed form when the flag is on (the face corners V4 are cached
+in MomentGeomFaceCache precisely for this): method 0 dense BuildCentroidFieldGrad, method 2 HACApK
+MomentSystemBlock6x6 (H-matrix entries AND the localL/diagK block-Jacobi blocks), method 1 matrix-free
+MomentKernelMatVec6x6, and the tet/wedge/mixed MomentSystemBlockAny.  With the default ON, collocation
+MMMM performs NO Gauss kernel evaluation anywhere (build / H-entries / matvec / precond): the outer side
+is the collocation point-match at the centroid (no test integral by construction) and the inner face
+integral is closed-form.  The 64 sample positions/weights P/W are still PLACED by PrecomputeMomentGeometry
+(pure position/weight arrays, no kernel evals) and are READ only by the opt-in Gauss branch.
 
 These tests lock that (a) the analytic path is actually LIVE (changes the result vs Gauss, not a no-op),
 (b) it reproduces the Gauss demag physics, (c) it produces the correct cube demag, and (d) the flag
