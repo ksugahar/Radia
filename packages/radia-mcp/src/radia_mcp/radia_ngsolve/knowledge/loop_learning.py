@@ -18,6 +18,7 @@ TOPICS = {
     "acoustic_impedance_power": "Acoustic impedance reflection, absorption, and boundary power",
     "rf_acoustic_passivity": "Acoustic/RF passivity and power-balance identities",
     "geometric_time_integration": "Energy-drift checks for geometric time integration teaching gates",
+    "artifact_feedback": "How cross-validation JSON and notebook/result artifacts become MCP knowledge",
     "mcp_closure": "How to decide whether an MCP server has actually learned",
 }
 
@@ -463,6 +464,51 @@ reducing the local truncation error.
 """
 
 
+ARTIFACT_FEEDBACK = r"""
+# Cross-validation and notebook artifact feedback
+
+Cross-validation JSON, executed notebooks, and result sidecars are not MCP
+knowledge until the distilled lesson can be retrieved or checked by the MCP
+server.
+
+Use this promotion sequence:
+
+1. Gate the result provenance: schema, run date, versions, result artifact id,
+   and the dominant `timing_breakdown_s` stages.
+2. Gate the output-table metadata: schema id, columns, units, independent axis,
+   row convention, physics convention, component basis, and output artifact.
+3. If a notebook produced or consumed the result, bind the notebook source:
+   `notebook_source_artifact_id`, `notebook_source_digest`, and
+   `notebook_source_path`.
+4. Distill one public-safe lesson: the physical identity, API/file-format
+   contract, or failure mode that should shape the next MCP answer.
+5. Record the MCP target: knowledge topic, helper, lint, validation gate, or
+   notebook/panel policy that was updated.
+6. Record focused verification: pytest, policy lint, notebook execution, or a
+   solver-free gate that passed after the MCP update.
+7. Set `learning_lanes.public` to `verified` only after steps 4-6 exist.
+
+Use `cross_validation_artifact_to_mcp_feedback_gate` as the final feedback
+check.  It composes with `solver_result_artifact_provenance_timing_gate` and
+keeps a hard line between collected evidence and learned MCP knowledge.
+
+Recommended artifact fields:
+
+* `public_lesson` or `mcp_feedback.public_summary`
+* `learning_targets` containing a public MCP target such as `radia-mcp`
+* `verification.public` with the focused command/result
+* `result_artifact_id` or `notebook_result_artifact_id`
+* `notebook_source_artifact_id`, `notebook_source_digest`,
+  `notebook_source_path` when a notebook is involved
+* `versions`, `created_at_utc`, `execution.run_date_utc`,
+  `timing_breakdown_s`, and output schema/columns/units
+
+If these fields are absent, say the artifact is collected or distilled, not
+learned.  This is the mechanical rule that turns validation archives into
+MCP behavior.
+"""
+
+
 MCP_CLOSURE = r"""
 # MCP closure rule
 
@@ -520,6 +566,7 @@ _TOPIC_TEXT = {
     "acoustic_impedance_power": ACOUSTIC_IMPEDANCE_POWER,
     "rf_acoustic_passivity": RF_ACOUSTIC_PASSIVITY,
     "geometric_time_integration": GEOMETRIC_TIME_INTEGRATION,
+    "artifact_feedback": ARTIFACT_FEEDBACK,
     "mcp_closure": MCP_CLOSURE,
 }
 
