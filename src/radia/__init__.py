@@ -206,7 +206,12 @@ def set_demag_backend(name):
     surface-charge MSC; "hdiv" = FEEC HDiv-VIM; "auto"/None = API-split default
     (mesh-less -> collocation MMMM, soft_iron_from_mesh(tet) -> HDiv-VIM RT1,
     soft_iron_from_mesh(hex/wedge) -> collocation MMMM).  The choice is consulted
-    by rad.Solve.  Returns the effective backend string."""
+    by rad.Solve.
+
+    Positioning (2026-06-30, Sugahara): HDiv-VIM is the PRIMARY accurate soft-iron
+    method (loop-free by construction); collocation MMMM is the COARSE / fast tier for
+    optimization inner loops + mesh-less quick passes (loop-polluted internal M, but
+    field-correct -- loops are field-null).  Returns the effective backend string."""
     global _demag_backend
     if name in (None, "auto"):
         _demag_backend = None
