@@ -175,14 +175,15 @@ public:
 };
 
 //-------------------------------------------------------------------------
-// RadMomentKernelConfig: opt-in switch for the multipole-moment surface-charge kernel.
-//   OFF (default): CentroidFieldGradFromFace integrates each face with a 64pt (8x8) Gauss
-//                  bilinear-quad quadrature for both the field H and the gradient gH.
-//   ON           : each face is fan-triangulated and integrated with the analytic closed form
-//                  (FieldGradFromChargedTriangleLocal) -- H = van Oosterom-Strackee, gH = its
-//                  Mathematica-verified symbolic gradient (the quadrupole field-gradient).
-//                  ~64x fewer kernel evals/face; EXACT for planar faces (a small flat-triangulation
-//                  modeling diff only on non-planar quads).  Default OFF so all goldens are unchanged.
+// RadMomentKernelConfig: switch for the multipole-moment surface-charge kernel.
+//   ON (default): each face is fan-triangulated and integrated with the analytic closed form
+//                 (FieldGradFromChargedTriangleLocal) -- H = van Oosterom-Strackee, gH = its
+//                 Mathematica-verified symbolic gradient (the quadrupole field-gradient).
+//                 ~64x fewer kernel evals/face; EXACT for planar faces (a small flat-triangulation
+//                 modeling diff only on non-planar quads).
+//   OFF        : CentroidFieldGradFromFace integrates each face with a 64pt (8x8) Gauss
+//                bilinear-quad quadrature for both the field H and the gradient gH; retained
+//                as an explicit cross-check path via SolverConfig(moment_analytic_kernel=false).
 //-------------------------------------------------------------------------
 class RadMomentKernelConfig {
 public:
