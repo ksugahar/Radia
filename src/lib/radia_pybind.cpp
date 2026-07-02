@@ -957,35 +957,6 @@ py::tuple GetInteractMatrix(int intrc_handle) {
 }
 
 /**
- * @brief Get the surface-charge MSC cell-graph cycle (loop) basis as a numpy array
- * @param intrc_handle Interaction handle from BuildMatrix
- * @return Tuple (L as 2D numpy array (dof x nLoop), nLoop)
- */
-py::tuple GetLoopBasis(int intrc_handle) {
-    int nLoop = 0, dof = 0;
-    int err = RadGetLoopBasis(nullptr, &nLoop, &dof, intrc_handle);
-    check_error(err);
-    if (dof <= 0) {
-        throw std::runtime_error("No interaction matrix built");
-    }
-    int ncol = nLoop > 0 ? nLoop : 0;
-    py::array_t<double> result({dof, ncol});
-    if (nLoop > 0) {
-        std::vector<double> data((size_t)dof * (size_t)nLoop);
-        err = RadGetLoopBasis(data.data(), &nLoop, &dof, intrc_handle);
-        check_error(err);
-        auto r = result.mutable_unchecked<2>();
-        // L is ROW-MAJOR: L[d * nLoop + c]
-        for (int i = 0; i < dof; i++) {
-            for (int c = 0; c < nLoop; c++) {
-                r(i, c) = data[(size_t)i * (size_t)nLoop + (size_t)c];
-            }
-        }
-    }
-    return py::make_tuple(result, nLoop);
-}
-
-/**
  * @brief Get per-DOF hex face geometry as a numpy array
  * @param intrc_handle Interaction handle from BuildMatrix
  * @return numpy array (dof x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz] per DOF
@@ -1782,14 +1753,6 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 void RadSetMomentAnalyticKernel(bool on);
 bool RadGetMomentAnalyticKernel();
 
-// co-loop projection toggle (defined in src/core/rad_c_interface.cpp)
-void RadSetColoopProject(bool v);
-bool RadGetColoopProject();
-
-// loop-growth-suppression deflation toggle (defined in src/core/rad_c_interface.cpp)
-void RadSetLoopDeflate(bool v);
-bool RadGetLoopDeflate();
-
 namespace radia_solver_ext {
 
 py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_method, const std::string& image = "") {
@@ -2076,14 +2039,6 @@ void SolverConfig(py::kwargs kwargs) {
         SetNewtonMethod(kwargs["newton_method"].cast<bool>());
     }
 
-    if (kwargs.contains("coloop_project")) {
-        ::RadSetColoopProject(kwargs["coloop_project"].cast<bool>());
-    }
-
-    if (kwargs.contains("loop_deflate")) {
-        ::RadSetLoopDeflate(kwargs["loop_deflate"].cast<bool>());
-    }
-
     if (kwargs.contains("newton_damping") || kwargs.contains("newton_damping_max_iter") || kwargs.contains("newton_damping_min_omega")) {
         bool enabled = kwargs.contains("newton_damping") ? kwargs["newton_damping"].cast<bool>() : true;
         int max_iter = kwargs.contains("newton_damping_max_iter") ? kwargs["newton_damping_max_iter"].cast<int>() : 5;
@@ -2126,8 +2081,6 @@ py::dict GetSolverConfig() {
     config["moment_gmres_restart"] = GetMomentGMRESRestart();
     config["moment_anderson_depth"] = GetMomentAndersonDepth();
     config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
-    config["coloop_project"] = ::RadGetColoopProject();
-    config["loop_deflate"] = ::RadGetLoopDeflate();
 
     // Relaxation parameter
     { double relax = 0.0;
@@ -4021,25 +3974,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Tuple (matrix, dof) where matrix is (dof x dof) numpy array
           )pbdoc");
 
-    m.def("GetLoopBasis", &radia_solver::GetLoopBasis,
-          py::arg("intrc_handle"),
-          R"pbdoc(
-              Get the historical surface-charge MSC cell-graph cycle (loop) basis L of an interaction matrix.
-
-              The loops are the field-null subspace of the retired EIEM2 surface-charge
-              collocation operator N (== HDiv ker(B), the cell/internal-face cycle space).
-              Runtime deflation/gauge machinery was removed; current surface-charge soft
-              iron uses multipole-moment MMM, and HDiv-VIM is the loop-free FEEC complement.  Built
-              geometry-only (no SVD): face-center matching -> cell adjacency -> fundamental cycles.
-
-              Args:
-                  intrc_handle: Interaction handle from BuildMatrix()
-
-              Returns:
-                  Tuple (L, nLoop) where L is a (dof x nLoop) numpy array whose columns
-                  span ker(N) (verify ||N @ L|| ~ 0).
-          )pbdoc");
-
     m.def("GetFaceGeom", &radia_solver::GetFaceGeom,
           py::arg("intrc_handle"),
           R"pbdoc(
@@ -4064,8 +3998,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
           R"pbdoc(
               Per moment-element centroid demag field + gradient functionals -- the kernel of the
               parameter-free surface-charge MSC moment formulation (replaces the eval-point alpha and
-              the finite-difference conditioning noise; see examples/vim/
-              multipole_moment_analytic_selfterm.py).
+              the finite-difference conditioning noise).
 
               For each moment element, the demag field H and gradient gradH at the element
               CENTROID as linear functionals of every source DOF charge:

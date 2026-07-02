@@ -1051,39 +1051,6 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 			return 0;  // Memory allocation failed
 	}
 
-	// ---- co-loop projection setup (default OFF; rad.m_coloop_project) ----
-	// Build the field-null loop basis Q (BuildLoopBasis: ROW-MAJOR totalDOF x nLoop) and the LU
-	// factor of the (SPD) loop Gram G = Q^T Q ONCE (geometry-only).  Each outer iteration the
-	// moment iterate is then projected onto the co-loop subspace
-	//     FlatMagn <- FlatMagn - Q (Q^T Q)^-1 Q^T FlatMagn
-	// removing the field-null loop circulation.  Loops are field-null (H unchanged), so this only
-	// changes the |M| the B-input (B = mu0(H+M)) constitutive law reads -> removes loop-driven
-	// spurious saturation in B-input hysteresis (play/energy) solves.  NO-OP for H-input materials.
-	std::vector<double> coloopQ, coloopGLU;
-	std::vector<int> coloopIpiv;
-	int coloopNLoop = 0;
-	if(rad.m_coloop_project && IntrctPtr != nullptr)
-	{
-		IntrctPtr->BuildLoopBasis(coloopQ, coloopNLoop);
-		if(coloopNLoop > 0 && (long long)coloopQ.size() == (long long)ctx.totalDOF * (long long)coloopNLoop)
-		{
-			coloopGLU.assign((size_t)coloopNLoop * (size_t)coloopNLoop, 0.0);
-			for(int a = 0; a < coloopNLoop; a++)
-				for(int b = 0; b < coloopNLoop; b++)
-				{
-					double s = 0.0;
-					for(int d = 0; d < ctx.totalDOF; d++)
-						s += coloopQ[(size_t)d * coloopNLoop + a] * coloopQ[(size_t)d * coloopNLoop + b];
-					coloopGLU[(size_t)a * coloopNLoop + b] = s;
-				}
-			coloopIpiv.assign((size_t)coloopNLoop, 0);
-			int ncl = coloopNLoop, infocl = 0;
-			dgetrf_(&ncl, &ncl, coloopGLU.data(), &ncl, coloopIpiv.data(), &infocl);
-			if(infocl != 0) coloopNLoop = 0;  // factorization failed -> disable (fail safe: no-op)
-		}
-		else coloopNLoop = 0;  // no loops / size mismatch -> no projection
-	}
-
 	int iterCount = 0;
 	double MisfitE2 = 1.0e30;
 
@@ -1113,61 +1080,6 @@ int radTIterativeRelaxMeth::AutoRelax_Unified(double PrecOnMagnetiz, int MaxIter
 
 		// Update element magnetization and compute actual H field from the RAW solver iterate (FlatMagn)
 		ComputeActualHFieldFromSigma(ctx, IntrctPtr);
-
-		// ---- co-loop projection for the CONSTITUTIVE update ONLY (default OFF; rad.m_coloop_project) ----
-		// Leave the solver iterate (FlatMagn) RAW so the linear solve keeps the field-null loop gauge and
-		// converges normally (projecting the iterate itself FOUGHT the solver -> worse convergence; see memory).
-		// Recompute the per-element M (weighted-LS dipole) and H = M/chi from the LOOP-FREE sigma and overwrite
-		// ONLY poly->Magn + NewFieldArray (what UpdateChiAndCheckConvergence reads), so the chi update sees the
-		// loop-free magnetisation -> removes loop-driven spurious saturation (B-input B=mu0(H+M)) without
-		// disturbing the solver.  FlatMagn / poly->Sigma stay raw; next ComputeActualHFieldFromSigma resets these.
-		if(coloopNLoop > 0)
-		{
-			std::vector<double> tcl((size_t)coloopNLoop, 0.0);
-			for(int a = 0; a < coloopNLoop; a++)
-			{
-				double s = 0.0;
-				for(int d = 0; d < ctx.totalDOF; d++)
-					s += coloopQ[(size_t)d * coloopNLoop + a] * ctx.FlatMagn[d];
-				tcl[a] = s;
-			}
-			int ncl = coloopNLoop, nrhscl = 1, infocl = 0; char transcl = 'N';
-			dgetrs_(&transcl, &ncl, &nrhscl, coloopGLU.data(), &ncl, coloopIpiv.data(), tcl.data(), &ncl, &infocl);
-			if(infocl == 0)
-			{
-				std::vector<double> sigma_lf(ctx.FlatMagn, ctx.FlatMagn + ctx.totalDOF);  // loop-free COPY; FlatMagn untouched
-				for(int d = 0; d < ctx.totalDOF; d++)
-				{
-					double corr = 0.0;
-					for(int a = 0; a < coloopNLoop; a++)
-						corr += coloopQ[(size_t)d * coloopNLoop + a] * tcl[a];
-					sigma_lf[d] -= corr;
-				}
-				for(int elem = 0; elem < ctx.AmOfMainElem; elem++)
-				{
-					int dofe = IntrctPtr->GetElementDOF(elem);
-					if(dofe < 4) continue;  // tets carry no loops (sigma_lf == FlatMagn there); 6/5-DOF only
-					int offe = IntrctPtr->GetElementDOFOffset(elem);
-					radTPolyhedron* polye = ctx.polyCache[elem];
-					if(!(polye && polye->Use6DOF_MSC && IntrctPtr->NewFieldArray != nullptr)) continue;
-					double Mx=0.0,My=0.0,Mz=0.0, wx=0.0,wy=0.0,wz=0.0;
-					for(int f = 0; f < dofe; f++)
-					{
-						double sig = sigma_lf[offe + f];
-						TVector3d& nf = polye->FaceNormal[f];
-						Mx += sig*nf.x; My += sig*nf.y; Mz += sig*nf.z;
-						wx += nf.x*nf.x; wy += nf.y*nf.y; wz += nf.z*nf.z;
-					}
-					if(wx > 1.0e-10) polye->Magn.x = Mx/wx;
-					if(wy > 1.0e-10) polye->Magn.y = My/wy;
-					if(wz > 1.0e-10) polye->Magn.z = Mz/wz;
-					double chie = ctx.CurrentChiArray[elem]; if(chie < 1.0e-6) chie = 1.0e-6;
-					IntrctPtr->NewFieldArray[elem].x = polye->Magn.x/chie;
-					IntrctPtr->NewFieldArray[elem].y = polye->Magn.y/chie;
-					IntrctPtr->NewFieldArray[elem].z = polye->Magn.z/chie;
-				}
-			}
-		}
 
 		// Update chi and check convergence
 		double rel_change = UpdateChiAndCheckConvergence(ctx, IntrctPtr);
@@ -2493,18 +2405,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 	}
 	}  // end else (pure-MMM dense path; the moment path above already filled SystemMatrix + RHS)
 
-	// ---- loop-free KKT / Schur setup (method-0 DIRECT LU; rad.m_loop_deflate, default OFF) ----
-	// Build the field-null loop basis Q (BuildLoopBasis, ROW-MAJOR totalDOF x nLoop) so the LU solve
-	// below enforces Q^T x = 0 EXACTLY via a Schur complement, using the EXACT dense A^-1.  Unlike ANY
-	// iterative solver, the dense LU handles the loop near-null space of A (A q = (1/chi) q) without
-	// divergence -- the whole reason the method-1 (BiCGSTAB/GMRES) loop-free routes failed.
-	std::vector<double> kktQ; int kktNLoop = 0;
-	if(rad.m_loop_deflate && IntrctPtr != nullptr)
-	{
-		IntrctPtr->BuildLoopBasis(kktQ, kktNLoop);
-		if(!(kktNLoop > 0 && (long long)kktQ.size() == (long long)totalDOF * (long long)kktNLoop)) kktNLoop = 0;
-	}
-
 	// Solve using LAPACK LU (dgesv solves A*x = b in-place)
 	auto t_lu_start = std::chrono::high_resolution_clock::now();
 #ifdef HAVE_LAPACK
@@ -2534,42 +2434,6 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 			dgesv_(&totalDOF, &nrhs, SystemMatrix.data(), &totalDOF, ipiv.data(), RHS.data(), &totalDOF, &info);
 		}
 		if(info != 0) return -1;  // Singular matrix
-		if(kktNLoop > 0)
-		{
-			// LOOP-FREE by ORTHOGONAL projection of x0 onto the co-loop space:
-			//   x = x0 - Q (Q^T Q)^-1 Q^T x0  ->  Q^T x = 0.  The removed part is in col(Q) = field-null, so the
-			// EXTERNAL field is preserved EXACTLY -- unlike the A-weighted KKT correction A^-1 Q l (A^-1 Q lies
-			// OUTSIDE col(Q) because the loops are not eigenvectors of the NON-SYMMETRIC multipole-moment (MMMM)
-			// operator A = BuildMomentSystemCore -- the moment-matching system, not a Galerkin one -- so the KKT
-			// correction shifts the field ~0.8%).  method-0 (direct) post-solve projection is nonlinear-safe (no
-			// iterative warm-start to fight, unlike the method-1 iterate-projection that diverged).
-			std::vector<double> G((size_t)kktNLoop * (size_t)kktNLoop, 0.0), c((size_t)kktNLoop, 0.0);
-			for(int a = 0; a < kktNLoop; a++)
-			{
-				for(int b2 = 0; b2 < kktNLoop; b2++)
-				{
-					double s = 0.0;
-					for(int d = 0; d < totalDOF; d++) s += kktQ[(size_t)d * kktNLoop + a] * kktQ[(size_t)d * kktNLoop + b2];
-					G[(size_t)a + (size_t)b2 * (size_t)kktNLoop] = s;
-				}
-				double s = 0.0;
-				for(int d = 0; d < totalDOF; d++) s += kktQ[(size_t)d * kktNLoop + a] * RHS[(size_t)d];
-				c[(size_t)a] = s;
-			}
-			std::vector<int> gIpiv((size_t)kktNLoop, 0);
-			int nl = kktNLoop, oneI = 1, infoG = 0; char trN = 'N';
-			dgetrf_(&nl, &nl, G.data(), &nl, gIpiv.data(), &infoG);
-			if(infoG == 0)
-			{
-				dgetrs_(&trN, &nl, &oneI, G.data(), &nl, gIpiv.data(), c.data(), &nl, &infoG);
-				for(int d = 0; d < totalDOF; d++)
-				{
-					double s = 0.0;
-					for(int a = 0; a < kktNLoop; a++) s += kktQ[(size_t)d * kktNLoop + a] * c[(size_t)a];
-					RHS[(size_t)d] -= s;
-				}
-			}
-		}
 #else
 	// Fallback: transpose to row-major and use SolveLU_Flat
 	// Each (i,j) pair touched once (j>i); safe to parallelize over outer i.
@@ -3206,16 +3070,6 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 
 			const double bicg_tol = rad.m_bicg_tol;
 			const int bicg_max_iter = 10000;
-
-			// Loop-free (rad.m_loop_deflate) is supported ONLY by the DIRECT method-0 (dense LU) KKT/Schur
-			// path: the field-null loops are the near-null space of A, which an iterative solver
-			// (BiCGSTAB/GMRES) cannot resolve (A^-1 Q diverges).  Fail loud rather than silently returning
-			// a loop-polluted solve.
-			if(rad.m_loop_deflate)
-			{
-				fprintf(stderr, "Radia::Solve> loop_deflate (loop-free) requires method=0 (direct LU); the method-1 iterative solver cannot resolve the loop near-null space of A.\n");
-				return -4;
-			}
 
 			auto t_bicg_start = std::chrono::high_resolution_clock::now();
 			radia::bicgstab::Result result;

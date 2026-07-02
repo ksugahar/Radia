@@ -134,7 +134,6 @@ void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
-int GetLoopBasis(int, double*, int*, int*);
 int GetFaceGeom(int, double*, int*);
 int GetCentroidFieldGrad(int, double*, int*, int*);
 int BuildMomentSystem(int, double, const double*, double*, double*, int*);
@@ -1424,13 +1423,6 @@ int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
 
 //-------------------------------------------------------------------------
 
-int GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF)
-{
-	return rad.GetLoopBasis(InteractElemKey, pL, pNLoop, pDOF);
-}
-
-//-------------------------------------------------------------------------
-
 int GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
 {
 	return rad.GetFaceGeom(InteractElemKey, pG, pDOF);
@@ -1629,29 +1621,6 @@ void SetNewtonMethod(bool use_newton)
 bool GetNewtonMethod()
 {
 	return rad.m_use_newton;
-}
-
-// co-loop projection toggle (free functions; called directly from the pybind SolverConfig,
-// same pattern as RadSetMomentAnalyticKernel).  Default OFF.
-void RadSetColoopProject(bool v)
-{
-	rad.m_coloop_project = v;
-}
-
-bool RadGetColoopProject()
-{
-	return rad.m_coloop_project;
-}
-
-// loop-growth-suppression deflation toggle (free functions; same pattern).  Default OFF.
-void RadSetLoopDeflate(bool v)
-{
-	rad.m_loop_deflate = v;
-}
-
-bool RadGetLoopDeflate()
-{
-	return rad.m_loop_deflate;
 }
 
 void SetNewtonDamping(bool enabled, int max_iter, double min_omega)
