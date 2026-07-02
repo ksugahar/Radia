@@ -2139,160 +2139,10 @@ void radTInteraction::PrecomputeHexaGeometry()
 }
 
 //=========================================================================
-// BuildLoopBasis: cell-graph cycle (loop) basis of the surface-charge MSC operator.
-//
-// The loops are the field-null subspace of the retired EIEM2 surface-charge
-// collocation operator N (== the HDiv ker(B) cell/internal-face cycle space).
-// Runtime deflation/gauge machinery was removed; the basis remains as a
-// historical geometry probe and for comparisons with the loop-free HDiv-VIM.
-//
-// Construction is geometry-only (no dense SVD): match internal faces by
-// coincident face centers -> cell-adjacency graph -> spanning forest ->
-// fundamental cycles.  Each internal face shared by hex a (DOF dA) and hex b
-// (DOF dB) contributes +c to dA and -c to dB along the cycle (the field-null
-// "+q / -q on the same physical face" convention).  Output Lflat is ROW-MAJOR
-// (m_totalDOF rows x nLoop cols): Lflat[d * nLoop + col].  nLoop = the cell-graph
-// cycle count = nInternalFaces - (nHex - nComponents).
-//=========================================================================
-
-void radTInteraction::BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const
-{
-	Lflat.clear(); nLoop = 0;
-	int nHex = (int)m_hexaElemIndices.size();
-	if(nHex == 0) return;
-
-	// 1) face center + area + DOF index for every hex face (DOF f of hex h = offset + f)
-	struct FaceRec { double cx, cy, cz, area; int hex, dof; };
-	std::vector<FaceRec> faces; faces.reserve((size_t)nHex * 6);
-	double scale = 0.0;
-	for(int h = 0; h < nHex; h++)
-	{
-		int elemIdx = m_hexaElemIndices[h];
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || poly->AmOfFaces != 6) continue;
-		int off = m_elemDOFOffset[elemIdx];
-		for(int f = 0; f < 6; f++)
-		{
-			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-			radTPolygon* pgn = hpt.PgnHndl.rep;
-			radTrans* tr = hpt.TransHndl.rep;
-			if(!pgn || !tr) continue;
-			const radTVect2dVect& v2d = pgn->EdgePointsVector;
-			if(v2d.size() < 4) continue;
-			TVector3d V4[4];
-			for(int v = 0; v < 4; v++)
-				V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-			// quad area via two triangles (V0V1V2 + V0V2V3)
-			double area = 0.0;
-			for(int t = 0; t < 2; t++)
-			{
-				const TVector3d& A = V4[0]; const TVector3d& B = V4[t + 1]; const TVector3d& C = V4[t + 2];
-				double ux = B.x - A.x, uy = B.y - A.y, uz = B.z - A.z;
-				double wx = C.x - A.x, wy = C.y - A.y, wz = C.z - A.z;
-				double rx = uy * wz - uz * wy, ry = uz * wx - ux * wz, rz = ux * wy - uy * wx;
-				area += 0.5 * std::sqrt(rx * rx + ry * ry + rz * rz);
-			}
-			FaceRec fr;
-			fr.cx = 0.25 * (V4[0].x + V4[1].x + V4[2].x + V4[3].x);
-			fr.cy = 0.25 * (V4[0].y + V4[1].y + V4[2].y + V4[3].y);
-			fr.cz = 0.25 * (V4[0].z + V4[1].z + V4[2].z + V4[3].z);
-			fr.area = (area > 0 ? area : 1.0);
-			fr.hex = h; fr.dof = off + f;
-			faces.push_back(fr);
-			scale = std::max(scale, std::fabs(fr.cx) + std::fabs(fr.cy) + std::fabs(fr.cz));
-		}
-	}
-	double tol = 1e-9 * (scale > 0 ? scale : 1.0);
-
-	// 2) match coincident face centers -> internal edges (conforming mesh: shared centers coincide).
-	// Bucket per spatial-hash key as a VECTOR (not a single int) and match against ALL members by
-	// distance, always registering the face.  The previous single-bucket map dropped any face whose
-	// XOR hash COLLIDED with an unrelated earlier face (it found the wrong face, failed the distance
-	// check, and never registered itself, so its true partner never matched) -- that silently
-	// undercounted the internal faces and hence the cycle (loop) basis by exactly the collision count.
-	struct Edge { int hexA, dofA, hexB, dofB; double areaA, areaB; };
-	std::vector<Edge> edges;
-	std::unordered_map<long long, std::vector<int> > buckets;   // spatial-hash key -> all face indices
-	for(int i = 0; i < (int)faces.size(); i++)
-	{
-		long long kx = (long long)std::llround(faces[i].cx / tol);
-		long long ky = (long long)std::llround(faces[i].cy / tol);
-		long long kz = (long long)std::llround(faces[i].cz / tol);
-		long long key = (kx * 73856093LL) ^ (ky * 19349663LL) ^ (kz * 83492791LL);
-		std::vector<int>& bucket = buckets[key];
-		for(size_t b = 0; b < bucket.size(); b++)
-		{
-			int j = bucket[b];
-			double d = std::fabs(faces[i].cx - faces[j].cx) + std::fabs(faces[i].cy - faces[j].cy)
-			         + std::fabs(faces[i].cz - faces[j].cz);
-			if(d <= 10.0 * tol && faces[i].hex != faces[j].hex)
-			{
-				Edge e; e.hexA = faces[j].hex; e.dofA = faces[j].dof; e.areaA = faces[j].area;
-				e.hexB = faces[i].hex; e.dofB = faces[i].dof; e.areaB = faces[i].area;
-				edges.push_back(e);
-			}
-		}
-		bucket.push_back(i);
-	}
-	int nInternal = (int)edges.size();
-	if(nInternal == 0) return;
-
-	// 3) spanning forest (BFS) with parent edge; non-tree edges close fundamental cycles
-	std::vector<std::vector<std::pair<int,int> > > adj(nHex);   // hex -> (neighbor, edgeIdx)
-	for(int e = 0; e < nInternal; e++)
-	{
-		adj[edges[e].hexA].push_back(std::make_pair(edges[e].hexB, e));
-		adj[edges[e].hexB].push_back(std::make_pair(edges[e].hexA, e));
-	}
-	std::vector<int> parentNode(nHex, -1), parentEdge(nHex, -1);
-	std::vector<char> visited(nHex, 0), treeEdge(nInternal, 0);
-	for(int s = 0; s < nHex; s++)
-	{
-		if(visited[s]) continue;
-		visited[s] = 1; std::vector<int> q; q.push_back(s); size_t qi = 0;
-		while(qi < q.size())
-		{
-			int u = q[qi++];
-			for(size_t a = 0; a < adj[u].size(); a++)
-			{
-				int v = adj[u][a].first, eidx = adj[u][a].second;
-				if(!visited[v]) { visited[v] = 1; parentNode[v] = u; parentEdge[v] = eidx; treeEdge[eidx] = 1; q.push_back(v); }
-			}
-		}
-	}
-	std::vector<int> nonTree;
-	for(int e = 0; e < nInternal; e++) if(!treeEdge[e]) nonTree.push_back(e);
-	nLoop = (int)nonTree.size();
-	if(nLoop == 0) return;
-
-	// 4) assemble L: fundamental cycle = non-tree edge + tree paths of its two endpoints
-	Lflat.assign((size_t)m_totalDOF * nLoop, 0.0);
-	for(int c = 0; c < nLoop; c++)
-	{
-		int e = nonTree[c];
-		std::map<int,int> coeff;     // edgeIdx -> integer cycle coefficient
-		int x = edges[e].hexA; while(parentNode[x] != -1) { coeff[parentEdge[x]] += 1; x = parentNode[x]; }
-		x = edges[e].hexB;     while(parentNode[x] != -1) { coeff[parentEdge[x]] -= 1; x = parentNode[x]; }
-		coeff[e] += 1;
-		for(std::map<int,int>::iterator it = coeff.begin(); it != coeff.end(); ++it)
-		{
-			if(it->second == 0) continue;
-			const Edge& ee = edges[it->first];
-			// integer coefficient = FLUX along the cycle; charge DENSITY sigma = flux / face area
-			// (the field-null condition needs Sum_f area*sigma = 0 per cell -> use flux, not density;
-			//  on a cube all areas are equal so 1/area is a constant, but on a distorted hex it matters).
-			double q = (double)it->second;
-			Lflat[(size_t)ee.dofA * nLoop + c] += q / ee.areaA;
-			Lflat[(size_t)ee.dofB * nLoop + c] -= q / ee.areaB;
-		}
-	}
-}
-
-//=========================================================================
 // BuildFaceGeom: per-DOF hex face geometry in the matrix DOF order.
 // Row-major (m_totalDOF x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz].
-// Mirrors the DOF<->face mapping of BuildLoopBasis (DOF = m_elemDOFOffset[elem] + f), so the rows
-// align 1:1 with GetInteractMatrix.  Lets Python form the div(B)=0 constraint (Sum_f area_f*sigma_f
+// DOF<->face mapping (DOF = m_elemDOFOffset[elem] + f) aligns the rows 1:1 with
+// GetInteractMatrix.  Lets Python form the div(B)=0 constraint (Sum_f area_f*sigma_f
 // = 0 per element), the uniform-field RHS (n.H), and the dipole moment (Sum_f sigma_f*area_f*(c_f-c_e)).
 //=========================================================================
 
@@ -2321,7 +2171,7 @@ void radTInteraction::BuildFaceGeom(std::vector<double>& Gflat) const
 			TVector3d V4[4];
 			for(int v = 0; v < 4; v++)
 				V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-			// quad area via two triangles (V0V1V2 + V0V2V3) -- same as BuildLoopBasis
+			// quad area via two triangles (V0V1V2 + V0V2V3)
 			double area = 0.0;
 			for(int t = 0; t < 2; t++)
 			{
@@ -2560,8 +2410,7 @@ void radTInteraction::CollectMomentElems(std::vector<int>& out) const
 //=========================================================================
 // BuildCentroidFieldGrad: per moment element demag field H and gradient gradH at the element CENTROID, as linear
 // functionals of each source DOF charge -- the kernel of the parameter-free moment formulation (the fix
-// for the eval-point alpha + the finite-difference conditioning noise; validated in
-// examples/vim/multipole_moment_analytic_selfterm.py).
+// for the eval-point alpha + the finite-difference conditioning noise).
 //   SELF face (same element): bare charged-face field, no center charge.  The centroid is interior, at
 //     finite distance from every face, so the integrand is smooth -> exact by Gauss quadrature, and it is
 //     patch-test exact (single cube -> demag N=1/3).

@@ -519,9 +519,6 @@ public:
 	//-------------------------------------------------------------------------
 	void PrecomputeHexaGeometry();  // Pre-compute face triangles/normals/eval points
 	void PrecomputeHexaTriangleData();  // Pre-compute triangle local coordinate systems
-	// Cell-graph cycle (loop) basis = field-null subspace of the surface-charge MSC operator (== HDiv ker(B)).
-	// Geometry-only (no SVD); Lflat is ROW-MAJOR (m_totalDOF x nLoop): Lflat[d*nLoop+col].  See .cpp.
-	void BuildLoopBasis(std::vector<double>& Lflat, int& nLoop) const;
 	// Per-DOF hex face geometry in the matrix DOF order (for div(B)=0 / RHS / moment studies in Python).
 	// Gflat is ROW-MAJOR (m_totalDOF x 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz].
 	// Non-hex DOFs (tet/wedge/pyramid) get elem_local=-1 and zeros.  See .cpp.
