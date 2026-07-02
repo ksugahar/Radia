@@ -6035,6 +6035,190 @@ def source_native_seed_queue_gate(
     }
 
 
+def computed_reference_crossval_rows_gate(
+    artifact,
+    rows=None,
+    require_pass=True,
+    max_global_rel_error=None,
+    rel_error_atol=1.0e-12,
+):
+    """Check actual computed/reference cross-validation rows.
+
+    The feedback gate verifies provenance and MCP closure.  This row gate checks
+    the numerical table itself: every row must expose a computed value, a
+    reference value, a tolerance, and a relative error that is within tolerance.
+    """
+
+    if rows is None:
+        if not isinstance(artifact, dict):
+            raise ValueError("artifact must be a mapping when rows is omitted")
+        candidates = []
+        for key in ("rows", "table", "checks"):
+            value = artifact.get(key)
+            if isinstance(value, list):
+                candidates.extend(value)
+        results = artifact.get("results")
+        if isinstance(results, list):
+            for result in results:
+                if not isinstance(result, dict):
+                    continue
+                case_name = str(result.get("name") or result.get("case") or "").strip()
+                for check in result.get("checks", []):
+                    if isinstance(check, dict):
+                        row = dict(check)
+                        if case_name and not row.get("case"):
+                            row["case"] = case_name
+                        candidates.append(row)
+        rows = candidates
+
+    if rows is None:
+        rows = []
+    if not isinstance(rows, list):
+        raise ValueError("rows must be a list")
+
+    def as_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def calc_rel(value, reference):
+        return abs(value - reference) / max(abs(reference), 1.0e-300)
+
+    required_fields = ("quantity", "computed", "reference", "tolerance")
+    normalized_rows = []
+    missing_fields = []
+    nonnumeric_rows = []
+    rel_error_mismatch_rows = []
+    tolerance_fail_rows = []
+    pass_flag_fail_rows = []
+
+    for index, raw in enumerate(rows):
+        if not isinstance(raw, dict):
+            missing_fields.append(
+                {
+                    "index": index,
+                    "case": "",
+                    "quantity": "",
+                    "missing": list(required_fields),
+                }
+            )
+            continue
+        case_name = str(raw.get("case") or "").strip()
+        quantity = str(raw.get("quantity") or raw.get("name") or "").strip()
+        missing = [field for field in required_fields if field not in raw or raw.get(field) in (None, "")]
+        if missing:
+            missing_fields.append(
+                {
+                    "index": index,
+                    "case": case_name,
+                    "quantity": quantity,
+                    "missing": missing,
+                }
+            )
+            continue
+
+        computed = as_float(raw.get("computed"))
+        reference = as_float(raw.get("reference"))
+        tolerance = as_float(raw.get("tolerance"))
+        recorded_rel = as_float(raw.get("rel_error"))
+        if computed is None or reference is None or tolerance is None:
+            nonnumeric_rows.append(
+                {
+                    "index": index,
+                    "case": case_name,
+                    "quantity": quantity,
+                    "computed": raw.get("computed"),
+                    "reference": raw.get("reference"),
+                    "tolerance": raw.get("tolerance"),
+                }
+            )
+            continue
+
+        computed_rel = calc_rel(computed, reference)
+        effective_rel = computed_rel if recorded_rel is None else recorded_rel
+        if recorded_rel is not None:
+            mismatch = abs(recorded_rel - computed_rel)
+            if mismatch > float(rel_error_atol) * max(1.0, abs(computed_rel)):
+                rel_error_mismatch_rows.append(
+                    {
+                        "index": index,
+                        "case": case_name,
+                        "quantity": quantity,
+                        "recorded_rel_error": recorded_rel,
+                        "computed_rel_error": computed_rel,
+                    }
+                )
+        row_pass = bool(raw.get("pass")) if "pass" in raw else effective_rel <= tolerance
+        if effective_rel > tolerance:
+            tolerance_fail_rows.append(
+                {
+                    "index": index,
+                    "case": case_name,
+                    "quantity": quantity,
+                    "rel_error": effective_rel,
+                    "tolerance": tolerance,
+                }
+            )
+        if bool(require_pass) and not row_pass:
+            pass_flag_fail_rows.append(
+                {
+                    "index": index,
+                    "case": case_name,
+                    "quantity": quantity,
+                    "pass": raw.get("pass"),
+                }
+            )
+        normalized_rows.append(
+            {
+                "index": index,
+                "case": case_name,
+                "quantity": quantity,
+                "computed": computed,
+                "reference": reference,
+                "rel_error": effective_rel,
+                "computed_rel_error": computed_rel,
+                "tolerance": tolerance,
+                "pass": row_pass,
+            }
+        )
+
+    max_rel = max((row["rel_error"] for row in normalized_rows), default=None)
+    global_limit = as_float(max_global_rel_error)
+    checks = {
+        "rows_recorded": len(rows) > 0,
+        "required_fields_present": not missing_fields,
+        "numeric_values_recorded": not nonnumeric_rows,
+        "rel_error_matches_computed_reference": not rel_error_mismatch_rows,
+        "row_errors_within_tolerance": not tolerance_fail_rows,
+        "pass_flags_true_when_required": not pass_flag_fail_rows,
+        "max_global_rel_error_within_limit": (
+            global_limit is None
+            or max_rel is not None
+            and max_rel <= global_limit
+        ),
+    }
+    return {
+        "policy": "computed_reference_crossval_rows_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "row_count": len(rows),
+        "valid_row_count": len(normalized_rows),
+        "max_rel_error": max_rel,
+        "max_global_rel_error": global_limit,
+        "missing_fields": missing_fields,
+        "nonnumeric_rows": nonnumeric_rows,
+        "rel_error_mismatch_rows": rel_error_mismatch_rows,
+        "tolerance_fail_rows": tolerance_fail_rows,
+        "pass_flag_fail_rows": pass_flag_fail_rows,
+        "rows": normalized_rows,
+        "checks": checks,
+        "notes": [
+            "Use this after a real solver run has produced computed/reference rows.",
+            "Pair this row gate with the artifact feedback gate so numerical validity and MCP closure are both checked.",
+        ],
+    }
+
+
 def cross_validation_artifact_to_mcp_feedback_gate(
     artifact,
     expected_public_status="verified",
