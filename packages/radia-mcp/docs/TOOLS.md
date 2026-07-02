@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **568 tools** across 43 MCP servers.
+Total: **575 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 31 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 38 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -115,9 +115,14 @@ Module: `radia_mcp.build123d.server`
 |---|---|
 | `build123d_api` | Search the bundled build123d API reference (auto-generated from |
 | `build123d_ask` | One-shot search across every build123d knowledge surface. |
+| `build123d_cad_handoff_manifest` | Run the final build123d CAD handoff manifest gate from JSON inputs. |
+| `build123d_cad_route_source_contract` | Gate a build123d CAD package before Cubit hex/mixed route promotion. |
+| `build123d_cubit_quality_ledger_handoff` | Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate. |
+| `build123d_cubit_solver_route_handoff` | Bind build123d CAD rows to a Cubit mixed solver-route manifest gate. |
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
 | `build123d_examples` | Search build123d + **bd_warehouse** + **GitHub Issues** (unioned). |
 | `build123d_examples_refresh` | Force-refresh all build123d sources from GitHub + YouTube. |
+| `build123d_external_cad_volume_evidence_package` | Bundle dual-source CAD volume evidence before reuse. |
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
@@ -130,6 +135,8 @@ Module: `radia_mcp.build123d.server`
 | `build123d_try_race` | Race N build123d script variants in parallel subprocesses, |
 | `build123d_usage` | Get build123d CAD modeling documentation for CAE workflows. |
 | `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
+| `build123d_volume_crosscheck_source_coverage_gate` | Require Cubit/external CAD source coverage after a volume crosscheck. |
+| `build123d_volume_crosscheck_source_identity_gate` | Require source identity metadata after an external CAD volume crosscheck. |
 | `build123d_web_docs` | Fetch live build123d documentation (readthedocs) and grep for `query`. |
 | `cadquery_to_cubit_hex` | End-to-end: cadquery script → STEP → Cubit `cubit_mesh_auto` |
 | `execute_build123d` | Execute a build123d Python script and return geometry information. |
