@@ -59,9 +59,29 @@ intrinsically modest):
 
 **Recommendation**: keep perimeter PEEC (~4.5 mΩ) as the screening
 R; do NOT trust BEM-A R for tightly-wound multi-turn coils without a
-mesh-convergence check; the decisive ground-truth arbiter remains the
-**4-terminal Kelvin re-measurement** (the 2-terminal LCR hi-tester
-~15 mΩ almost certainly includes contact/lead resistance).  Volume
+mesh-convergence check.
+
+**The 2-terminal LCR ~15 mΩ is ALSO not a trustworthy arbiter** — and
+not only because of contact/lead resistance.  At 150 kHz this coil is
+reactance-dominated: `ωL = 2π·150k·430n ≈ 0.405 Ω`, so R is the small
+real part of an impedance ~30–90× larger in the imaginary part
+(**Q = ωL/R ≈ 27 at R=15 mΩ … 90 at R=4.5 mΩ**).  Then
+`dR ≈ ωL·dδ` → a **1° loss-angle (phase) error = ~7 mΩ error in R**,
+and distinguishing 4.5 vs 15 mΩ needs ~1.5° phase accuracy (or a
+dissipation factor D = R/ωL of 0.011 vs 0.037 resolved to ±0.002),
+which is at/below a bench LCR meter's floor at 150 kHz.  So **"BEM-A
+matches the measurement" is most likely a coincidence of two
+independent upward biases** (BEM SIBC-breakdown + LCR phase/contact
+error) landing near 15 mΩ for different reasons — NOT mutual
+validation.  The best current estimate is the first-principles
+~4.5–5 mΩ; there is no solid experimental anchor yet.
+
+**Phase-independent ground-truth routes** (in preference order):
+(1) **DC 4-terminal R_dc** (robust, ~0.35 mΩ) × the simulated
+`R_ac/R_dc ≈ 10–13`; (2) **calorimetric** loss at a known current
+(no phase dependence — the gold standard for high-Q loss);
+(3) **resonance/Q-bandwidth** method; all with open/short/load
+compensation + a known ~5 mΩ reference-resistor check.  Volume
 PEEC via the constant-current parallel-filament bundle also mildly
 UNDER-counts the coil's along-length-varying proximity (conical
 helix → nearest-neighbour direction rotates), so its 3.7 mΩ is a
