@@ -19,6 +19,7 @@ TOPICS = {
     "rf_acoustic_passivity": "Acoustic/RF passivity and power-balance identities",
     "geometric_time_integration": "Energy-drift checks for geometric time integration teaching gates",
     "source_native_seed_queue": "How to start multi-tool loop slots from source-native examples without leaking provenance",
+    "autonomous_basic_learning": "How to process a full source-native queue into basic learning rows and solver-ready follow-ups",
     "artifact_feedback": "How cross-validation JSON and notebook/result artifacts become MCP knowledge",
     "mcp_closure": "How to decide whether an MCP server has actually learned",
 }
@@ -502,6 +503,42 @@ queue be useful immediately as a review ledger while keeping the word
 """
 
 
+AUTONOMOUS_BASIC_LEARNING = r"""
+# Autonomous basic learning pass
+
+Use an autonomous basic-learning pass when a source-native queue is large
+enough that manual per-slot review becomes the bottleneck.  The pass should
+process every queued slot and leave a concrete machine-readable record for
+each one:
+
+* `lesson_family`: mesh/geometry, FEM/BEM, force/torque, RF/acoustic,
+  optimization, thermal/eddy, session/API, source-MCP policy, or general
+  source-native.
+* `source_present` and `required_fields_present`: the seed is usable before
+  solver-ready promotion begins.
+* one lightweight `computed/reference/tolerance/pass` row per slot, using a
+  public analogue when possible and a metadata-contract row for session/API or
+  policy slots.
+* `learning_lanes.public`: verified only when the public analogue row and
+  queue gates pass.
+* `learning_lanes.source_tool`: candidate for commercial/private source-tool
+  lanes until the owning MCP or converter receives a focused edit and test.
+* `next_action`: the solver-ready or private-MCP follow-up produced by the
+  autonomous pass.
+
+This makes a 160-slot queue actionable without pretending all 160 commercial
+or live solvers have run.  The basic pass answers "is every slot classified,
+checked, and ready for the next stage?"  Heavy source-tool execution remains a
+separate solver-ready queue.
+
+In radia-mcp, the public helper is
+`loop_autolearn.build_autonomous_basic_learning_artifact`; the validation CLI
+is `validation/loop_learning/autonomous_basic_learning.py`.  Pair its output
+with the computed/reference row gate, `source_native_seed_queue_gate`, and the
+MCP feedback artifact gate.
+"""
+
+
 ARTIFACT_FEEDBACK = r"""
 # Cross-validation and notebook artifact feedback
 
@@ -605,6 +642,7 @@ _TOPIC_TEXT = {
     "rf_acoustic_passivity": RF_ACOUSTIC_PASSIVITY,
     "geometric_time_integration": GEOMETRIC_TIME_INTEGRATION,
     "source_native_seed_queue": SOURCE_NATIVE_SEED_QUEUE,
+    "autonomous_basic_learning": AUTONOMOUS_BASIC_LEARNING,
     "artifact_feedback": ARTIFACT_FEEDBACK,
     "mcp_closure": MCP_CLOSURE,
 }
