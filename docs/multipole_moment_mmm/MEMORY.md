@@ -64,6 +64,32 @@ Decision + measurements, 2026_07_02:
   Knob-matrix negatives: `hacapk_eps=1e-3` shifts the field ~3% (keep 1e-4);
   `hacapk_leaf` 16/64 is a wash vs 32.
 
+Speed review round 3, 2026_07_03 (verdict: sufficiently optimized -- CLOSED,
+no code change):
+
+- WARM re-solve runs **0 BiCGSTAB iterations** (`iterations_solve2 = 0` in all
+  12 mdx method-2 cases): the flat magnetization array persists on the CACHED
+  interaction across `rad.Solve` calls (ResetM does not clear it), so the
+  Krylov start vector is the previous solution and the initial-residual check
+  passes immediately.  Warm cost = one verification H-matvec + O(N) overhead
+  (LAB 16.5k DOF: 0.030 s; ObjBckg python-callback RHS measured 0.1-0.4 ms).
+- The mdx bench used tol 1e-10; at the PRODUCTION default `bicgstab_tol=1e-4`
+  cold iterations drop ~50 -> ~14, so a cold solve is ~72% H-build / ~27%
+  Krylov (LAB 16.5k DOF: 2.8 s = 2.03 + 0.76).  Cold is BUILD-bounded; the
+  per-entry cost is already the analytic closed form and the sampled-entry
+  count is HACApK's (as-is policy) -- no material lever left.
+- Rejected micro-levers: skip Gauss face-sample fill when analytic (compute
+  ~ms; fixed-size embedded arrays free no memory; conditional cache content
+  would re-create the `cross-solve-cache-config-flag-key-and-lifecycle`
+  hazard); GMRES default (stays opt-in); ObjBckg callback batching
+  (negligible); dense-K cross-solve cache for methods 0/1 (redundant with
+  method 2).  High-mu_r coarse-space preconditioning stays deprioritized (see
+  "Engineering Benchmark Range" below -- the 3-mode coarse correction already
+  failed it empirically).
+- Timing-noise lesson (LAB): a probe row showing 14 iters SLOWER than 54 iters
+  was CPU contention (load jumped 5% -> 57% mid-run), not code -- re-run
+  timing anomalies on a quiet machine before believing them.
+
 ## Engineering Benchmark Range
 
 Decision, 2026_06_26:
