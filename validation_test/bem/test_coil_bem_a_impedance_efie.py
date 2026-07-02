@@ -257,6 +257,52 @@ def test_gmres_complex_matches_lu():
         "reference -- complex dtype handling regressed?")
 
 
+def test_loop_cocr_matches_constrained_lu_on_small_complex_system():
+    """The loop-reduced COCR path must match the full impedance-EFIE saddle
+    solve on a deterministic complex-symmetric toy system."""
+    import numpy as np
+    from radia.bem.coil_inductance_ngsolve import MU_0, _loop_cocr_solve
+
+    rng = np.random.default_rng(20260703)
+    n_j = 7
+    n_c = 3
+    a = rng.standard_normal((n_j, n_j))
+    SL = a @ a.T + 2.0 * np.eye(n_j)
+    m = rng.standard_normal((n_j, n_j))
+    M = m @ m.T + np.eye(n_j)
+    D_red = rng.standard_normal((n_c, n_j))
+    # Make row rank deterministic.
+    D_red[:, :n_c] += 3.0 * np.eye(n_c)
+    g_red = rng.standard_normal(n_c)
+    omega = 2.0 * np.pi * 1.0e3
+    Z_s = 0.25 + 0.25j
+
+    J_loop, info = _loop_cocr_solve(
+        SL,
+        M,
+        D_red,
+        g_red,
+        omega,
+        Z_s,
+        "dense",
+        tol=1.0e-11,
+        maxiter=200,
+    )
+    A11 = 1j * omega * MU_0 * SL + Z_s * M
+    K = np.block([
+        [A11, D_red.T.astype(complex)],
+        [D_red.astype(complex), np.zeros((n_c, n_c), dtype=complex)],
+    ])
+    rhs = np.zeros(n_j + n_c, dtype=complex)
+    rhs[n_j:] = g_red
+    J_lu = np.linalg.solve(K, rhs)[:n_j]
+
+    assert info["method"] == "loop_cocr[dense]"
+    assert info["iterations"] < 80
+    assert np.allclose(D_red @ J_loop, g_red, rtol=1.0e-10, atol=1.0e-10)
+    assert np.allclose(J_loop, J_lu, rtol=1.0e-8, atol=1.0e-9)
+
+
 def test_parameter_validation_fails_before_assembly():
     """The omega/Z_s_complex contract is validated BEFORE the expensive
     dense assembly: a bad call must raise instantly, even with
@@ -275,3 +321,8 @@ def test_parameter_validation_fails_before_assembly():
     with pytest.raises(ValueError, match="omega must be > 0"):
         compute_inductance_source_sink(None, omega=float("nan"),
                                        Z_s_complex=1 + 1j)
+    with pytest.raises(ValueError, match="Unknown saddle-point solver"):
+        compute_inductance_source_sink(None, solver="bicgstab")
+    with pytest.raises(ValueError, match="unknown loop matvec backend"):
+        compute_inductance_source_sink(None, solver="loop_cocr",
+                                       loop_matvec="fmm")
