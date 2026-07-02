@@ -116,6 +116,9 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "shape_mesh_environment_handoff_gate" in doc
     assert "sanitized `version_probe_summary`" in doc
     assert "stale summary version line" in doc
+    assert "Slot441 keeps Cubit headless teardown warnings separate" in doc
+    assert "do not treat the exit code alone as\na build123d volume mismatch" in doc
+    assert "source`, `sink`, `sibc`, `coil`, `workpiece`, and\n`air" in doc
     assert "shape_mass_property_crosscheck_summary" in doc
     assert "build123d_mass_property_crosscheck" in doc
     assert "Slot211 tightens that bridge" in doc
