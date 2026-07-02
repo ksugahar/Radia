@@ -22,6 +22,27 @@ converged BEM-A run of the SAME 3-turn coil geometry, BEM-A returns
 the measurement without leads.  The gap is a real PEEC vs BEM-A
 physics discrepancy for tightly-packed multi-turn coils.
 
+> **FOLLOW-UP 2026-07-02 (volume-PEEC + proximity-physics probe --
+> the discrepancy now points the OTHER way; see
+> [`VOLUME_PEEC_DESIGN.md`](../peec/VOLUME_PEEC_DESIGN.md)
+> "2026-07-02 outcome").**  A cross-section-averaged **volume PEEC**
+> (validated: reproduces Bessel on an isolated wire) CONVERGES to
+> **~3.7 mΩ** on this coil (n_angular 16→48: 3.40/3.53/3.59/3.63),
+> NOT toward 15.  Round-wire proximity is intrinsically modest:
+> analytic `2a²/s² ≈ 0.29`/neighbour and a numeric 2-wire bundle
+> 1.21× at the coil's 2 mm gap → a 3-turn coil caps at ~1.4–1.7× →
+> **~4.5–5 mΩ**.  Three methods agree (volume 3.7, perimeter 4.5,
+> analytic 4.8); **BEM-A 15.1 (4.48×) is the 3× OUTLIER** and 4.48×
+> is unphysical for round wires at these gaps.  BEM-A self-skin IS
+> calibrated (isolated wire = Bessel to 0.5 %, mesh-stable), so the
+> coil figure is suspected to be a perfect-conductor J
+> over-concentration at the near-contact turn gaps (`Re(Zs)·∫|J|²dS`
+> mesh-sensitive; this doc's own 2.90→15.14 refinement jump).  The
+> 2-terminal LCR ~15 mΩ likely includes contact/lead R.  **Ground
+> truth still needs the 4-terminal Kelvin re-measurement.**  Until
+> then, treat the "BEM-A is the correct tool / 15 mΩ is right"
+> conclusion below as UNDER REVIEW.
+
 The structural ceiling of perimeter PEEC + proximity iteration is
 ~1.2× the self-skin value and is a **formulation ceiling, not an
 algorithm-parameter ceiling**.  Investigated 2026-07-02:
