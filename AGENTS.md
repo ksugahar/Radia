@@ -59,6 +59,43 @@ cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit
 
 ---
 
+## Repository Layering & Development Policy
+
+Radia is a layered CAE stack.  When choosing where new work belongs, preserve
+these boundaries instead of turning the repository into one generic solver or
+one generic GUI.
+
+| Layer | Canonical role |
+|-------|----------------|
+| Differential geometry | de Rham-complex concepts via NGSolve / Mathematica, with Radia collocation formulations kept compatible with that language. |
+| Analysis methods | FEM / BEM through NGSolve and ngsolve.bem; Radia-owned magnetic moment, multipole moment, PEEC, and source-provider methods. |
+| Linear algebra | Reuse proven solvers and compression tools such as shifted ICCG, AMS, ACA / TSVD, HACApK, BiCGSTAB, and BDDC. |
+| Physical methods | Primary development focus: ESIM / SIBC, reduced potentials, Kelvin transforms, CLN, stream functions, and related open-region physics. |
+| Application examples | Induction heating, MagLev, electromagnets, printed circuit boards, motors, and similar concrete engineering workflows. |
+| Interfaces | Application-level notebook / Cubit panels and MCP servers; no generic catch-all GUI layer. |
+
+**Policy**:
+- Follow NGSolve's Python API design wherever possible.  If NGSolve already has
+  the right abstraction, extend around it instead of inventing a parallel Radia
+  vocabulary.
+- Expose Radia C++ functionality to Python with pybind11 and keep the Python
+  surface idiomatic for NGSolve / NumPy users.
+- Do not reinvent wheels.  Use public ecosystem components for CAD, FEM, BEM,
+  meshing, visualization, and linear algebra whenever they are fit for purpose;
+  implement only the missing Radia-specific electromagnetic / multiphysics
+  pieces.
+- Focus repository effort on the physical-method layer rather than on generic
+  infrastructure.
+- For an important model, prefer two or more independent analysis routes when
+  feasible, so cross-validation is possible without relying on one formulation.
+- GUI surfaces belong to application workflows only.  Reusable capability should
+  stay in Python APIs, CLI tools, notebooks, validation tests, and MCP servers.
+- MCP servers are part of the development loop: they encode executable
+  knowledge, support autonomous validation / self-learning, and should reflect
+  the same layer boundaries as the source tree.
+
+---
+
 ## Critical Policies
 
 ### Self-Driving Loop Discipline (2026-06-24)
