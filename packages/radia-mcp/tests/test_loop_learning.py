@@ -19,6 +19,7 @@ def test_loop_learning_topics_cover_current_loop_lessons():
         "rf_acoustic_passivity",
         "source_native_seed_queue",
         "autonomous_basic_learning",
+        "em_force_target",
         "artifact_feedback",
         "mcp_closure",
     }.issubset(TOPICS)
@@ -116,6 +117,14 @@ def test_loop_learning_topics_cover_current_loop_lessons():
     assert "source-tool" in autonomous
     assert "solver-ready queue" in autonomous
     assert "build_autonomous_basic_learning_artifact" in autonomous
+
+    em_force = get_loop_learning_documentation("em_force_target")
+    assert "force_torque_motor" in em_force
+    assert "parallel-wire Lorentz force" in em_force
+    assert "magnetic air-gap pressure" in em_force
+    assert "IPM dq torque" in em_force
+    assert "build_em_force_target_artifact" in em_force
+    assert "not as a claim" in em_force
 
     artifact_feedback = get_loop_learning_documentation("artifact_feedback")
     assert "cross_validation_artifact_to_mcp_feedback_gate" in artifact_feedback
