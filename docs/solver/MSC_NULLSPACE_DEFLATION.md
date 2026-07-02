@@ -11,6 +11,8 @@ gone and **MMMM is the official MMM H-matrix route**, so the loop-deflation
 exploration has no forward value to ship. This note is retained as the theory
 record only; the inline `Script: *.py` references below are historical.
 
+**UPDATE 2026-06-30:** the last remaining collocation loop-free CODE -- the `BuildLoopBasis` builder, the `GetLoopBasis` API, and the (later re-added) `loop_deflate` (method-0 orthogonal projection) and `coloop_project` (B-input-hysteresis co-loop projection) -- was ALSO removed. **Collocation MMMM GIVES UP loop-free** (PI decision, Sugahara): it stays the field-correct fast method (dense LU / matrix-free BiCGSTAB, loop-polluted internal M accepted; loops are field-null so the external field is exact), and the loop-free / hysteresis-clean need is HDiv-VIM's (loop-free by construction). The de-risk that closed this (H-LU is dead: accurate only at compression=1 / <=3072 DOF, wrong+slow beyond) is recorded in memory `collocation_loopfree_abandoned`. All `RadHACApKMSCManager::BuildLoopBasis`, `SetDeflateNullspace`, and `SetLoopProjection` references below are historical theory only -- the code no longer exists.
+
 > **Status (updated 2026-06-23): the RUNTIME loop-mode handling once described here
 > -- matrix-free deflation (`SetHACApKDeflation` / `SetDeflateNullspace`), the
 > alpha-free loop-star gauge (`SolveLoopStar`, the `A_SS = S^T A S` star block),

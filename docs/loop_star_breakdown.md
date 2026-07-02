@@ -272,5 +272,5 @@ meshes — where `μ_min` drops below `1/χ`) would still need the H-ILU fallbac
 
 *See also:* `examples/vim/` (the HDiv-type loop/star split, loops field-null
 on distorted hexes), `src/core/rad_hacapk.cpp` (`BuildLoopBasis` /
-`SolveLoopStar`, the de-Rham-exact loop basis + H-ILU `A_SS` solve),
+`SolveLoopStar` -- REMOVED 2026-06-30; collocation MMMM gives up loop-free, loop-free is HDiv-VIM's, see memory `collocation_loopfree_abandoned`),
 `docs/HMATRIX_EVALUATION.md` (HACApK ACA⁺).
