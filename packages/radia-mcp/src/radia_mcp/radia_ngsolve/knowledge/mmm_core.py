@@ -703,6 +703,36 @@ is now the DEFAULT (was opt-in `moment_analytic_kernel=True`).  It is EXACT
 `hacapk_eps=1e-3` shifts the field ~3% (too coarse even for the coarse tier --
 keep 1e-4); `hacapk_leaf` 16/64 vs 32 is a wash.
 
+SPEED REVIEW CLOSED (2026-07-03, round 3 -- verdict: sufficiently optimized, no
+code-level lever left within policy).  Two profile facts NOT visible from the
+benchmark JSON alone:
+- WARM re-solve runs 0 BiCGSTAB iterations (`iterations_solve2 = 0` in the mdx
+  JSON, all 12 method-2 cases).  The flat magnetization array persists on the
+  CACHED interaction across `rad.Solve` calls (ResetM does not clear it), so the
+  Krylov start vector IS the previous solution and the initial-residual check
+  passes immediately.  Warm cost = ONE verification H-matvec + O(N) overhead
+  (LAB 16.5k DOF: 0.030 s; the ObjBckg python-callback RHS is 0.1-0.4 ms --
+  negligible).  This is why an optimization inner loop is near-flat 0.03-0.11 s
+  to 48k DOF: the cache skips the build AND the warm start skips the iterations.
+- The mdx bench ran a TIGHT tol (1e-10).  At the PRODUCTION default
+  `bicgstab_tol=1e-4` the cold iteration count drops ~50 -> ~14, so a cold solve
+  is ~72% H-matrix build / ~27% Krylov (LAB 16.5k DOF: 2.8 s = 2.03 build +
+  0.76 solve).  Cold is therefore BUILD-bounded: the per-entry cost is already
+  the analytic closed form and the sampled-entry count is HACApK's ACA choice
+  (policy: use HACApK as-is) -- no material cold lever remains.
+Reviewed and REJECTED micro-levers: skip the 64-pt Gauss face-sample fill when
+analytic is on (compute ~ms; the samples live in FIXED-SIZE embedded arrays so
+no memory is freed, and conditional cache content would re-create the
+config-flag-cache hazard of bug_patterns
+`cross-solve-cache-config-flag-key-and-lifecycle`); GMRES as default (matvec
+count ~-30% at tight tol but restart-stagnation risk; stays opt-in
+`moment_krylov_solver=1`); batching the ObjBckg python callback (measured
+negligible); a dense-K cross-solve cache for methods 0/1 (redundant -- method 2
+is the repeated-solve tier).  The one big remaining lever -- iteration-count
+reduction at very high mu_r via a coarse-space preconditioner -- stays
+deprioritized: iterations are already N-independent and modest at engineering
+mu_r, and the deflation machinery it would resemble was deliberately removed.
+
 ### Properties (verified)
 
 - dof = sum of per-element DOF (tet/RecMag 3, wedge/pyramid 5, hex 6). A 32-hex block
