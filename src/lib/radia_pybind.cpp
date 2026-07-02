@@ -3552,14 +3552,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("sym_tet_pts"), py::arg("sym_tet_w"), py::arg("sym_tri_pts"), py::arg("sym_tri_w"),
              py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
-             py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 4.0,
+             py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 1.5,
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "HEX RT1 mode: Q1 monomial charges (8/hex volume + 4/quad-face surface) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
              "[n_bf*27] = 9-node lattice, both from GetTrafo at the reference lattice, so ONE path covers "
              "flat AND curved (mesh.Curve(2)) hexes.  Quadrature = the numpy-validated eig<=1 scheme: "
              "near sub pairs -> both-domains-graded Duffy (gl_out/gl_in 1D rules); far -> the regular "
-             "symmetric rules (sym_* = Keast-15/Dunavant-7) + cheap far inner (far_*).")
+             "symmetric rules (sym_* = Keast-15/Dunavant-7) + cheap far inner (far_*); the radial "
+             "near/self inner fires only within far_inner_factor*size of a source sub (per outer point).  "
+             "The H-matrix build is SYMMETRIC-FILL: strictly-lower leaves are skipped (all applies route "
+             "through matvec_sym; plain matvec/matvec_transpose are routed to it).")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
         .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
