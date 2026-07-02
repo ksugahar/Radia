@@ -19,6 +19,8 @@ zeroes its interior B. Put the body directly in the surrounding air;
 extra material region is required.
 """
 import math
+import re
+from datetime import datetime, timezone
 
 from ngsolve import (CoefficientFunction, InnerProduct, sqrt, dx, ds, Integrate,
                      IfPos, specialcf, Conj, x, y, z)
@@ -29,6 +31,21 @@ MU0 = 4.0e-7 * math.pi
 EPS0 = 8.8541878128e-12
 C0 = 299792458.0
 ETA0 = MU0 * C0
+
+
+def _parse_utc_like_datetime(value):
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _float_vector(values, name):
@@ -66,6 +83,15 @@ def _phasor_average_factor(amplitude):
     if amplitude == "rms":
         return 1.0
     raise ValueError("amplitude must be 'peak' or 'rms'")
+
+
+def _metadata_truthy(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "y", "ok", "loaded", "solved", "pass", "passed"}
 
 
 def maxwell_stress_tensor_air(B, mu=MU0):
@@ -922,6 +948,2071 @@ def parallel_wire_virtual_work_force_summary(
         "radial_force_abs_error_N_per_m": radial_abs_error,
         "force_rel_error": vector_abs_error / reference_force,
         "interaction": pair["interaction"],
+    }
+
+
+def parallel_wire_force_result_package_gate(
+    row,
+    *,
+    expected_model_id=None,
+    expected_operating_point_id=None,
+    expected_artifact_id=None,
+    expected_result_set_id=None,
+    expected_parameter_set_artifact_id=None,
+    expected_parameter_set_digest=None,
+    expected_parameter_set_path=None,
+    expected_model_input_artifact_id=None,
+    expected_model_input_digest=None,
+    expected_model_input_path=None,
+    expected_solution_artifact_id=None,
+    expected_block_label_artifact_id=None,
+    expected_source_tool=None,
+    expected_source_group_id=None,
+    expected_target_group_id=None,
+    expected_source_center_xy_m=None,
+    expected_target_center_xy_m=None,
+    expected_source_region=None,
+    expected_target_region=None,
+    expected_source_material=None,
+    expected_target_material=None,
+    expected_postprocess_trace_id=None,
+    expected_postprocess_command_digest=None,
+    expected_postprocess_output_artifact_id=None,
+    expected_postprocess_output_digest=None,
+    expected_postprocess_output_schema_id=None,
+    expected_postprocess_output_columns=None,
+    expected_postprocess_output_units=None,
+    expected_postprocess_row_convention_schema_id=None,
+    expected_postprocess_script_artifact_id=None,
+    expected_postprocess_script_digest=None,
+    expected_postprocess_script_path=None,
+    expected_force_observable_id=None,
+    expected_force_observable_family=None,
+    expected_force_convention_schema_id=None,
+    expected_force_component_basis_schema_id=None,
+    expected_force_unit_basis_schema_id=None,
+    expected_objective_observable_id=None,
+    expected_objective_observable_family=None,
+    expected_force_component_frame=None,
+    expected_radial_projection_axis=None,
+    expected_force_sign_convention=None,
+    expected_force_extraction_method=None,
+    expected_block_integral_types=None,
+    expected_current_source_artifact_id=None,
+    expected_current_definition_method=None,
+    expected_problem_type=None,
+    expected_length_unit=None,
+    expected_frequency_hz=None,
+    expected_solver_precision=None,
+    max_solver_precision=None,
+    expected_min_angle_deg=None,
+    expected_created_at_utc=None,
+    expected_run_timestamp_utc=None,
+    expected_solver_version=None,
+    expected_radia_mcp_version=None,
+    max_created_run_skew_s=None,
+    min_timing_sections=4,
+    require_solution_loaded=False,
+    require_selection_clear=False,
+    require_postprocess_command_trace=False,
+    require_postprocess_output_artifact=False,
+    require_postprocess_output_schema=False,
+    require_postprocess_row_convention_schema=False,
+    require_postprocess_script_artifact=False,
+    require_force_convention_schema=False,
+    require_force_component_basis_schema=False,
+    require_force_unit_basis_schema=False,
+    require_model_input_artifact=False,
+    require_parameter_set_artifact=False,
+    require_execution_metadata=False,
+    require_timing_breakdown=False,
+    rtol=1.0e-6,
+):
+    """Check a two-parallel-wire force row against Ampere's force law.
+
+    This is the result-package form used when a FEMM, NGSolve, or notebook
+    postprocess table reports a two-wire force.  The row must say which model
+    and operating point it came from, record SI units per length, identify the
+    result artifact/table, and preserve the sign convention.  Like currents
+    attract: for a positive scalar separation the force on wire 2 points
+    toward wire 1.
+    """
+
+    data = dict(row)
+    tol = float(rtol)
+    if tol < 0.0:
+        raise ValueError("rtol must be >= 0")
+
+    def _normalize_problem_type(value):
+        text = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "planar_2d": "planar",
+            "2d_planar": "planar",
+            "axi": "axisymmetric",
+            "axisym": "axisymmetric",
+            "axisymmetric_2d": "axisymmetric",
+        }
+        return aliases.get(text, text)
+
+    def _normalize_length_unit(value):
+        text = str(value).strip().lower().replace(" ", "").replace("_", "")
+        aliases = {
+            "m": "meters",
+            "meter": "meters",
+            "meters": "meters",
+            "metre": "meters",
+            "metres": "meters",
+            "mm": "millimeters",
+            "millimeter": "millimeters",
+            "millimeters": "millimeters",
+            "millimetre": "millimeters",
+            "millimetres": "millimeters",
+            "cm": "centimeters",
+            "centimeter": "centimeters",
+            "centimeters": "centimeters",
+            "centimetre": "centimeters",
+            "centimetres": "centimeters",
+            "inch": "inches",
+            "inches": "inches",
+            "in": "inches",
+        }
+        return aliases.get(text, text)
+
+    def _normalize_method(value):
+        return str(value).strip().lower().replace("-", "_").replace(" ", "_")
+
+    def _xy_pair(value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, dict):
+            if "x" in value and "y" in value:
+                return (float(value["x"]), float(value["y"]))
+            if "X" in value and "Y" in value:
+                return (float(value["X"]), float(value["Y"]))
+        pair = list(value) if not isinstance(value, str) else [
+            item for item in re.split(r"[,;\s]+", value.strip()) if item
+        ]
+        if len(pair) != 2:
+            raise ValueError("wire center coordinates must contain exactly two values")
+        return (float(pair[0]), float(pair[1]))
+
+    model_id = str(data.get("model_id", "")).strip()
+    operating_point_id = str(data.get("operating_point_id", "")).strip()
+    artifact_id = str(data.get("artifact_id", data.get("case_artifact_id", ""))).strip()
+    result_set_id = str(
+        data.get("result_set_id", data.get("table_id", data.get("run_id", "")))
+    ).strip()
+    parameter_set_artifact_id = str(
+        data.get(
+            "parameter_set_artifact_id",
+            data.get(
+                "design_parameter_set_artifact_id",
+                data.get(
+                    "force_parameter_set_artifact_id",
+                    data.get("operating_point_parameter_set_artifact_id", ""),
+                ),
+            ),
+        )
+    ).strip()
+    parameter_set_digest = str(
+        data.get(
+            "parameter_set_digest",
+            data.get(
+                "parameter_set_sha256",
+                data.get(
+                    "design_parameter_set_digest",
+                    data.get("force_parameter_set_digest", ""),
+                ),
+            ),
+        )
+    ).strip()
+    parameter_set_path = str(
+        data.get(
+            "parameter_set_path",
+            data.get(
+                "parameter_set_file",
+                data.get(
+                    "design_parameter_set_path",
+                    data.get("force_parameter_set_path", ""),
+                ),
+            ),
+        )
+    ).strip()
+    model_input_artifact_id = str(
+        data.get(
+            "model_input_artifact_id",
+            data.get(
+                "fem_artifact_id",
+                data.get("input_model_artifact_id", data.get("model_artifact_id", "")),
+            ),
+        )
+    ).strip()
+    model_input_digest = str(
+        data.get(
+            "model_input_digest",
+            data.get(
+                "fem_digest",
+                data.get("input_model_digest", data.get("model_digest", "")),
+            ),
+        )
+    ).strip()
+    model_input_path = str(
+        data.get(
+            "model_input_path",
+            data.get(
+                "fem_path",
+                data.get("input_model_path", data.get("model_path", "")),
+            ),
+        )
+    ).strip()
+    solution_artifact_id = str(
+        data.get(
+            "solution_artifact_id",
+            data.get("ans_artifact_id", data.get("loaded_solution_artifact_id", "")),
+        )
+    ).strip()
+    block_label_artifact_id = str(
+        data.get(
+            "block_label_artifact_id",
+            data.get(
+                "block_labels_artifact_id",
+                data.get("source_contract_artifact_id", ""),
+            ),
+        )
+    ).strip()
+    solution_loaded_raw = data.get(
+        "solution_loaded",
+        data.get("postprocessor_solution_loaded", data.get("mo_solution_loaded")),
+    )
+    solution_loaded_recorded = solution_loaded_raw not in (None, "")
+    solution_loaded = _metadata_truthy(solution_loaded_raw)
+    source_tool = str(data.get("source_tool", "")).strip()
+    source_function = str(data.get("source_function", "")).strip()
+    source_group_id = str(
+        data.get(
+            "source_group_id",
+            data.get("current_group_id", data.get("wire1_group_id", "")),
+        )
+    ).strip()
+    target_group_id = str(
+        data.get(
+            "target_group_id",
+            data.get(
+                "force_group_id",
+                data.get("block_integral_group_id", data.get("wire2_group_id", "")),
+            ),
+        )
+    ).strip()
+    source_center_xy_m = _xy_pair(
+        data.get(
+            "source_center_xy_m",
+            data.get("wire1_center_xy_m", data.get("source_center_m")),
+        )
+    )
+    target_center_xy_m = _xy_pair(
+        data.get(
+            "target_center_xy_m",
+            data.get("wire2_center_xy_m", data.get("target_center_m")),
+        )
+    )
+    selection_function = str(
+        data.get("selection_function", data.get("block_integral_selection", ""))
+    ).strip()
+    selection_lower = selection_function.lower()
+    postprocess_trace_id = str(
+        data.get(
+            "postprocess_trace_id",
+            data.get("postprocess_command_trace_id", data.get("command_trace_id", "")),
+        )
+    ).strip()
+    postprocess_command_digest = str(
+        data.get(
+            "postprocess_command_digest",
+            data.get("command_trace_sha256", data.get("selection_command_digest", "")),
+        )
+    ).strip()
+    postprocess_output_artifact_id = str(
+        data.get(
+            "postprocess_output_artifact_id",
+            data.get(
+                "postprocess_table_artifact_id",
+                data.get("postprocess_result_artifact_id", data.get("output_artifact_id", "")),
+            ),
+        )
+    ).strip()
+    postprocess_output_digest = str(
+        data.get(
+            "postprocess_output_digest",
+            data.get(
+                "postprocess_output_sha256",
+                data.get("postprocess_table_sha256", data.get("output_digest", "")),
+            ),
+        )
+    ).strip()
+    postprocess_output_path = str(
+        data.get(
+            "postprocess_output_path",
+            data.get("postprocess_table_path", data.get("result_table_path", "")),
+        )
+    ).strip()
+    postprocess_output_schema_id = str(
+        data.get(
+            "postprocess_output_schema_id",
+            data.get(
+                "postprocess_table_schema_id",
+                data.get("force_table_schema_id", data.get("output_schema_id", "")),
+            ),
+        )
+    ).strip()
+    postprocess_row_convention_schema_id = str(
+        data.get(
+            "postprocess_row_convention_schema_id",
+            data.get(
+                "postprocess_convention_schema_id",
+                data.get(
+                    "force_postprocess_convention_schema_id",
+                    data.get("row_convention_schema_id", ""),
+                ),
+            ),
+        )
+    ).strip()
+
+    def _normalize_output_columns(value):
+        if value in (None, ""):
+            return []
+        if isinstance(value, str):
+            return [item.strip() for item in re.split(r"[,;\s]+", value) if item.strip()]
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    def _normalize_output_units(value):
+        if value in (None, ""):
+            return {}
+        if isinstance(value, dict):
+            return {
+                str(key).strip(): str(val).strip()
+                for key, val in value.items()
+                if str(key).strip()
+            }
+        rows = list(value)
+        return {
+            str(index): str(val).strip()
+            for index, val in enumerate(rows)
+            if str(val).strip()
+        }
+
+    postprocess_output_columns = _normalize_output_columns(
+        data.get(
+            "postprocess_output_columns",
+            data.get(
+                "postprocess_table_columns",
+                data.get("force_table_columns", data.get("output_columns", data.get("columns"))),
+            ),
+        )
+    )
+    postprocess_output_units = _normalize_output_units(
+        data.get(
+            "postprocess_output_units",
+            data.get(
+                "postprocess_table_units",
+                data.get("force_table_units", data.get("output_units", data.get("column_units"))),
+            ),
+        )
+    )
+    postprocess_script_artifact_id = str(
+        data.get(
+            "postprocess_script_artifact_id",
+            data.get(
+                "postprocess_script_id",
+                data.get("script_artifact_id", data.get("postprocess_file_artifact_id", "")),
+            ),
+        )
+    ).strip()
+    postprocess_script_digest = str(
+        data.get(
+            "postprocess_script_digest",
+            data.get(
+                "postprocess_script_sha256",
+                data.get("script_digest", data.get("script_sha256", data.get("postprocess_file_digest", ""))),
+            ),
+        )
+    ).strip()
+    postprocess_script_path = str(
+        data.get(
+            "postprocess_script_path",
+            data.get("postprocess_script_file", data.get("script_path", data.get("postprocess_file_path", ""))),
+        )
+    ).strip()
+    force_observable_id = str(
+        data.get(
+            "force_observable_id",
+            data.get("force_integral_observable_id", data.get("observable_id", "")),
+        )
+    ).strip()
+    force_observable_family = str(
+        data.get(
+            "force_observable_family",
+            data.get("force_integral_family", data.get("observable_family", "")),
+        )
+    ).strip()
+    force_convention_schema_id = str(
+        data.get(
+            "force_convention_schema_id",
+            data.get(
+                "force_physics_convention_schema_id",
+                data.get(
+                    "source_material_convention_schema_id",
+                    data.get("physics_convention_schema_id", ""),
+                ),
+            ),
+        )
+    ).strip()
+    force_component_basis_schema_id = str(
+        data.get(
+            "force_component_basis_schema_id",
+            data.get(
+                "component_basis_schema_id",
+                data.get(
+                    "force_component_convention_schema_id",
+                    data.get("force_component_row_convention_schema_id", ""),
+                ),
+            ),
+        )
+    ).strip()
+    force_unit_basis_schema_id = str(
+        data.get(
+            "force_unit_basis_schema_id",
+            data.get(
+                "unit_basis_schema_id",
+                data.get(
+                    "femm_force_unit_basis_schema_id",
+                    data.get("planar_force_unit_basis_schema_id", ""),
+                ),
+            ),
+        )
+    ).strip()
+    objective_observable_id = str(
+        data.get(
+            "objective_observable_id",
+            data.get(
+                "force_objective_observable_id",
+                data.get("objective_id", data.get("objective_function_id", "")),
+            ),
+        )
+    ).strip()
+    objective_observable_family = str(
+        data.get(
+            "objective_observable_family",
+            data.get(
+                "force_objective_observable_family",
+                data.get("objective_family", data.get("objective_kind", "")),
+            ),
+        )
+    ).strip()
+    command_sequence_source = data.get(
+        "postprocess_commands",
+        data.get("postprocess_command_sequence", data.get("command_sequence")),
+    )
+    if command_sequence_source is None:
+        postprocess_commands = []
+    elif isinstance(command_sequence_source, str):
+        postprocess_commands = [
+            item.strip()
+            for item in command_sequence_source.replace("\n", ";").split(";")
+            if item.strip()
+        ]
+    else:
+        postprocess_commands = [str(item).strip() for item in command_sequence_source if str(item).strip()]
+    command_trace_text = "; ".join(postprocess_commands).lower()
+    source_region = str(
+        data.get(
+            "source_region",
+            data.get("source_region_name", data.get("wire1_region", "")),
+        )
+    ).strip()
+    target_region = str(
+        data.get(
+            "target_region",
+            data.get("target_region_name", data.get("wire2_region", "")),
+        )
+    ).strip()
+    source_material = str(
+        data.get(
+            "source_material",
+            data.get("source_material_name", data.get("wire1_material", "")),
+        )
+    ).strip()
+    target_material = str(
+        data.get(
+            "target_material",
+            data.get("target_material_name", data.get("wire2_material", "")),
+        )
+    ).strip()
+    force_component_frame = str(
+        data.get("force_component_frame", data.get("component_frame", ""))
+    ).strip()
+    radial_projection_axis = str(
+        data.get(
+            "radial_projection_axis",
+            data.get("radial_axis", data.get("projection_axis", "")),
+        )
+    ).strip()
+    force_sign_convention = str(
+        data.get(
+            "force_sign_convention",
+            data.get("sign_convention", data.get("radial_force_sign_convention", "")),
+        )
+    ).strip()
+    force_extraction_method = str(
+        data.get(
+            "force_extraction_method",
+            data.get(
+                "extraction_method",
+                data.get("postprocess_method", data.get("force_method", "")),
+            ),
+        )
+    ).strip()
+    force_extraction_method_normalized = (
+        _normalize_method(force_extraction_method) if force_extraction_method else ""
+    )
+    current_source_artifact_id = str(
+        data.get(
+            "current_source_artifact_id",
+            data.get(
+                "current_snapshot_artifact_id",
+                data.get("current_definition_artifact_id", data.get("current_artifact_id", "")),
+            ),
+        )
+    ).strip()
+    current_definition_method = str(
+        data.get(
+            "current_definition_method",
+            data.get("current_method", data.get("current_kind", "")),
+        )
+    ).strip()
+    current_definition_method_normalized = (
+        _normalize_method(current_definition_method) if current_definition_method else ""
+    )
+    block_integral_source = data.get(
+        "block_integral_types",
+        data.get("block_integral_type", data.get("integral_types")),
+    )
+    if block_integral_source is None:
+        block_integral_text = f"{selection_function} {source_function}"
+        block_integral_types = [
+            int(match)
+            for match in re.findall(r"blockintegral\s*\(\s*(\d+)\s*\)", block_integral_text, flags=re.I)
+        ]
+    elif isinstance(block_integral_source, (list, tuple, set)):
+        block_integral_types = [int(value) for value in block_integral_source]
+    else:
+        block_integral_types = [
+            int(value)
+            for value in re.findall(r"\d+", str(block_integral_source))
+        ]
+    units = str(data.get("force_units", data.get("unit", ""))).strip()
+    units_compact = units.lower().replace(" ", "")
+    raw_basis = str(data.get("force_unit_basis", data.get("unit_basis", ""))).strip()
+    basis_key = raw_basis.lower().replace("-", "_").replace(" ", "_").replace("/", "_")
+    if not basis_key:
+        if "n/m" in units_compact or "n_per_m" in units_compact:
+            force_unit_basis = "per_length"
+        elif units_compact == "n":
+            force_unit_basis = "depth_integrated"
+        else:
+            force_unit_basis = ""
+    elif basis_key in {
+        "per_length",
+        "per_unit_length",
+        "per_depth",
+        "per_unit_depth",
+        "force_per_length",
+        "n_per_m",
+    }:
+        force_unit_basis = "per_length"
+    elif basis_key in {
+        "depth_integrated",
+        "depth_integrated_total",
+        "total_depth_integrated",
+        "total_force",
+        "total",
+        "n",
+    }:
+        force_unit_basis = "depth_integrated"
+    else:
+        force_unit_basis = raw_basis
+    planar_depth_source = data.get(
+        "problem_depth_m",
+        data.get("planar_depth_m", data.get("femm_problem_depth_m", data.get("depth_m"))),
+    )
+    planar_depth_m = None
+    if planar_depth_source not in (None, ""):
+        planar_depth_m = float(planar_depth_source)
+    if "separation_xy_m" in data:
+        separation = data["separation_xy_m"]
+    else:
+        separation = data.get("separation_m")
+    problem_type = str(
+        data.get(
+            "problem_type",
+            data.get("femm_problem_type", data.get("analysis_type", "")),
+        )
+    ).strip()
+    problem_type_normalized = _normalize_problem_type(problem_type) if problem_type else ""
+    length_unit = str(
+        data.get(
+            "length_unit",
+            data.get("length_units", data.get("problem_length_unit", data.get("femm_length_unit", ""))),
+        )
+    ).strip()
+    length_unit_normalized = _normalize_length_unit(length_unit) if length_unit else ""
+    frequency_source = data.get(
+        "frequency_hz",
+        data.get("problem_frequency_hz", data.get("femm_frequency_hz", data.get("freq_hz"))),
+    )
+    frequency_hz = None
+    if frequency_source not in (None, ""):
+        frequency_hz = float(frequency_source)
+    solver_precision_source = data.get(
+        "solver_precision",
+        data.get(
+            "problem_precision",
+            data.get("femm_solver_precision", data.get("mi_probdef_precision")),
+        ),
+    )
+    solver_precision = None
+    if solver_precision_source not in (None, ""):
+        solver_precision = float(solver_precision_source)
+    min_angle_source = data.get(
+        "min_angle_deg",
+        data.get(
+            "minangle_deg",
+            data.get("triangle_min_angle_deg", data.get("femm_minangle_deg")),
+        ),
+    )
+    min_angle_deg = None
+    if min_angle_source not in (None, ""):
+        min_angle_deg = float(min_angle_source)
+    created_at_utc = str(
+        data.get(
+            "created_at_utc",
+            data.get("artifact_created_at_utc", data.get("created_at", "")),
+        )
+    ).strip()
+    run_timestamp_utc = str(
+        data.get(
+            "run_timestamp_utc",
+            data.get(
+                "executed_at_utc",
+                data.get("run_date_utc", data.get("date_utc", data.get("run_date", ""))),
+            ),
+        )
+    ).strip()
+    solver_version = str(
+        data.get(
+            "solver_version",
+            data.get("femm_version", data.get("source_tool_version", "")),
+        )
+    ).strip()
+    radia_mcp_version = str(
+        data.get(
+            "radia_mcp_version",
+            data.get("radia_ngsolve_version", data.get("mcp_server_version", "")),
+        )
+    ).strip()
+    run_duration_source = data.get(
+        "run_duration_s",
+        data.get("elapsed_s", data.get("runtime_s", data.get("wall_time_s"))),
+    )
+    run_duration_s = None
+    if run_duration_source not in (None, ""):
+        run_duration_s = float(run_duration_source)
+
+    def _timing_duration(value):
+        if isinstance(value, dict):
+            for key in ("duration_s", "elapsed_s", "runtime_s", "seconds", "s"):
+                if value.get(key) not in (None, ""):
+                    return float(value[key])
+            return None
+        if value in (None, ""):
+            return None
+        return float(value)
+
+    def _timing_rows(value):
+        if value in (None, ""):
+            return []
+        rows = []
+        if isinstance(value, dict):
+            iterable = value.items()
+        else:
+            iterable = enumerate(value)
+        for key, entry in iterable:
+            if isinstance(entry, dict):
+                name = str(
+                    entry.get(
+                        "name",
+                        entry.get("stage", entry.get("phase", entry.get("label", key))),
+                    )
+                ).strip()
+                duration = _timing_duration(entry)
+            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                name = str(entry[0]).strip()
+                duration = _timing_duration(entry[1])
+            else:
+                name = str(key).strip()
+                duration = _timing_duration(entry)
+            if name and duration is not None:
+                rows.append({"name": name, "duration_s": duration})
+        return rows
+
+    timing_breakdown_rows = _timing_rows(
+        data.get(
+            "timing_breakdown_s",
+            data.get("timing_breakdown", data.get("timing_breakdown_rows", data.get("timings"))),
+        )
+    )
+    timing_durations = [row["duration_s"] for row in timing_breakdown_rows]
+    timing_total_s = sum(timing_durations) if timing_durations else None
+    timing_sections_min = int(min_timing_sections or 0)
+    top_durations = timing_durations[: max(timing_sections_min, 1)]
+    timing_top_sections_descending = all(
+        top_durations[index] >= top_durations[index + 1]
+        for index in range(len(top_durations) - 1)
+    )
+    analytic = parallel_wire_lorentz_force_summary(
+        data.get("current1_A"),
+        data.get("current2_A"),
+        separation,
+    )
+    expected_vector = analytic["force_on_wire2_N_per_m"]
+    expected_radial = -analytic["signed_ampere_force_per_length_N_per_m"]
+
+    measured_vector = data.get("force_on_wire2_N_per_m")
+    measured_radial = data.get("radial_force_on_wire2_N_per_m")
+    vector_error = math.nan
+    radial_error = math.nan
+    vector_ok = True
+    radial_ok = True
+    reference_force = max(analytic["force_magnitude_per_length_N_per_m"], 1.0e-300)
+    if measured_vector is not None:
+        vector = [float(value) for value in measured_vector]
+        if len(vector) != 2:
+            raise ValueError("force_on_wire2_N_per_m must have length 2")
+        vector_error = math.hypot(
+            vector[0] - expected_vector[0],
+            vector[1] - expected_vector[1],
+        )
+        vector_ok = vector_error <= tol * reference_force
+    if measured_radial is not None:
+        radial = float(measured_radial)
+        radial_error = abs(radial - expected_radial)
+        radial_ok = radial_error <= tol * reference_force
+    interaction = str(data.get("interaction", "")).strip().lower()
+    expected_model = None if expected_model_id is None else str(expected_model_id).strip()
+    expected_op = (
+        None if expected_operating_point_id is None else str(expected_operating_point_id).strip()
+    )
+    expected_artifact = (
+        None if expected_artifact_id is None else str(expected_artifact_id).strip()
+    )
+    expected_result_set = (
+        None if expected_result_set_id is None else str(expected_result_set_id).strip()
+    )
+    expected_parameter_set_artifact = (
+        None
+        if expected_parameter_set_artifact_id is None
+        else str(expected_parameter_set_artifact_id).strip()
+    )
+    expected_parameter_set_digest_text = (
+        None
+        if expected_parameter_set_digest is None
+        else str(expected_parameter_set_digest).strip()
+    )
+    expected_parameter_set_path_text = (
+        None
+        if expected_parameter_set_path is None
+        else str(expected_parameter_set_path).strip()
+    )
+    expected_model_input_artifact = (
+        None
+        if expected_model_input_artifact_id is None
+        else str(expected_model_input_artifact_id).strip()
+    )
+    expected_model_input_digest_text = (
+        None
+        if expected_model_input_digest is None
+        else str(expected_model_input_digest).strip()
+    )
+    expected_model_input_path_text = (
+        None
+        if expected_model_input_path is None
+        else str(expected_model_input_path).strip()
+    )
+    expected_solution_artifact = (
+        None
+        if expected_solution_artifact_id is None
+        else str(expected_solution_artifact_id).strip()
+    )
+    expected_block_label_artifact = (
+        None
+        if expected_block_label_artifact_id is None
+        else str(expected_block_label_artifact_id).strip()
+    )
+    expected_tool = None if expected_source_tool is None else str(expected_source_tool).strip()
+    expected_source_group = (
+        None if expected_source_group_id is None else str(expected_source_group_id).strip()
+    )
+    expected_target_group = (
+        None if expected_target_group_id is None else str(expected_target_group_id).strip()
+    )
+    expected_source_center = _xy_pair(expected_source_center_xy_m)
+    expected_target_center = _xy_pair(expected_target_center_xy_m)
+    expected_source_region_text = (
+        None if expected_source_region is None else str(expected_source_region).strip()
+    )
+    expected_target_region_text = (
+        None if expected_target_region is None else str(expected_target_region).strip()
+    )
+    expected_source_material_text = (
+        None if expected_source_material is None else str(expected_source_material).strip()
+    )
+    expected_target_material_text = (
+        None if expected_target_material is None else str(expected_target_material).strip()
+    )
+    expected_trace_id = (
+        None if expected_postprocess_trace_id is None else str(expected_postprocess_trace_id).strip()
+    )
+    expected_command_digest = (
+        None
+        if expected_postprocess_command_digest is None
+        else str(expected_postprocess_command_digest).strip()
+    )
+    expected_output_artifact = (
+        None
+        if expected_postprocess_output_artifact_id is None
+        else str(expected_postprocess_output_artifact_id).strip()
+    )
+    expected_output_digest = (
+        None
+        if expected_postprocess_output_digest is None
+        else str(expected_postprocess_output_digest).strip()
+    )
+    expected_output_schema_id = (
+        None
+        if expected_postprocess_output_schema_id is None
+        else str(expected_postprocess_output_schema_id).strip()
+    )
+    expected_output_columns = (
+        None
+        if expected_postprocess_output_columns is None
+        else _normalize_output_columns(expected_postprocess_output_columns)
+    )
+    expected_output_units = (
+        None
+        if expected_postprocess_output_units is None
+        else _normalize_output_units(expected_postprocess_output_units)
+    )
+    expected_postprocess_row_convention_schema = (
+        None
+        if expected_postprocess_row_convention_schema_id is None
+        else str(expected_postprocess_row_convention_schema_id).strip()
+    )
+    expected_script_artifact = (
+        None
+        if expected_postprocess_script_artifact_id is None
+        else str(expected_postprocess_script_artifact_id).strip()
+    )
+    expected_script_digest = (
+        None
+        if expected_postprocess_script_digest is None
+        else str(expected_postprocess_script_digest).strip()
+    )
+    expected_script_path = (
+        None
+        if expected_postprocess_script_path is None
+        else str(expected_postprocess_script_path).strip()
+    )
+    expected_observable_id = (
+        None if expected_force_observable_id is None else str(expected_force_observable_id).strip()
+    )
+    expected_observable_family = (
+        None if expected_force_observable_family is None else str(expected_force_observable_family).strip()
+    )
+    expected_force_convention_schema = (
+        None
+        if expected_force_convention_schema_id is None
+        else str(expected_force_convention_schema_id).strip()
+    )
+    expected_force_component_basis_schema = (
+        None
+        if expected_force_component_basis_schema_id is None
+        else str(expected_force_component_basis_schema_id).strip()
+    )
+    expected_force_unit_basis_schema = (
+        None
+        if expected_force_unit_basis_schema_id is None
+        else str(expected_force_unit_basis_schema_id).strip()
+    )
+    expected_objective_id = (
+        None
+        if expected_objective_observable_id is None
+        else str(expected_objective_observable_id).strip()
+    )
+    expected_objective_family = (
+        None
+        if expected_objective_observable_family is None
+        else str(expected_objective_observable_family).strip()
+    )
+    expected_component_frame = (
+        None if expected_force_component_frame is None else str(expected_force_component_frame).strip()
+    )
+    expected_projection_axis = (
+        None if expected_radial_projection_axis is None else str(expected_radial_projection_axis).strip()
+    )
+    expected_sign_convention = (
+        None if expected_force_sign_convention is None else str(expected_force_sign_convention).strip()
+    )
+    expected_extraction_method = (
+        None
+        if expected_force_extraction_method is None
+        else _normalize_method(expected_force_extraction_method)
+    )
+    expected_integral_types = (
+        None
+        if expected_block_integral_types is None
+        else sorted(int(value) for value in expected_block_integral_types)
+    )
+    expected_current_artifact = (
+        None
+        if expected_current_source_artifact_id is None
+        else str(expected_current_source_artifact_id).strip()
+    )
+    expected_current_method = (
+        None
+        if expected_current_definition_method is None
+        else _normalize_method(expected_current_definition_method)
+    )
+    expected_problem = (
+        None if expected_problem_type is None else _normalize_problem_type(expected_problem_type)
+    )
+    expected_length = (
+        None if expected_length_unit is None else _normalize_length_unit(expected_length_unit)
+    )
+    expected_frequency = (
+        None if expected_frequency_hz is None else float(expected_frequency_hz)
+    )
+    expected_precision = (
+        None if expected_solver_precision is None else float(expected_solver_precision)
+    )
+    max_precision = None if max_solver_precision is None else float(max_solver_precision)
+    expected_min_angle = (
+        None if expected_min_angle_deg is None else float(expected_min_angle_deg)
+    )
+    expected_created_at = (
+        None
+        if expected_created_at_utc is None
+        else str(expected_created_at_utc).strip()
+    )
+    expected_run_timestamp = (
+        None
+        if expected_run_timestamp_utc is None
+        else str(expected_run_timestamp_utc).strip()
+    )
+    expected_solver_version_text = (
+        None if expected_solver_version is None else str(expected_solver_version).strip()
+    )
+    expected_radia_mcp_version_text = (
+        None if expected_radia_mcp_version is None else str(expected_radia_mcp_version).strip()
+    )
+    frequency_tolerance = (
+        None
+        if expected_frequency is None
+        else max(1.0e-12, tol * max(abs(expected_frequency), 1.0))
+    )
+    precision_tolerance = (
+        None
+        if expected_precision is None
+        else max(1.0e-18, tol * max(abs(expected_precision), 1.0))
+    )
+    min_angle_tolerance = (
+        None
+        if expected_min_angle is None
+        else max(1.0e-12, tol * max(abs(expected_min_angle), 1.0))
+    )
+    max_created_run_skew = (
+        None if max_created_run_skew_s is None else float(max_created_run_skew_s)
+    )
+    created_at_dt = _parse_utc_like_datetime(created_at_utc)
+    run_timestamp_dt = _parse_utc_like_datetime(run_timestamp_utc)
+    created_run_skew_s = None
+    if created_at_dt is not None and run_timestamp_dt is not None:
+        created_run_skew_s = abs((created_at_dt - run_timestamp_dt).total_seconds())
+    separation_float = float(analytic["separation_m"])
+    center_distance_m = None
+    center_distance_error_m = None
+    center_tolerance_m = max(1.0e-12, tol * max(abs(separation_float), 1.0))
+    if source_center_xy_m is not None and target_center_xy_m is not None:
+        dx = target_center_xy_m[0] - source_center_xy_m[0]
+        dy = target_center_xy_m[1] - source_center_xy_m[1]
+        center_distance_m = math.hypot(dx, dy)
+        center_distance_error_m = abs(center_distance_m - separation_float)
+
+    def _center_matches(actual, expected):
+        if expected is None:
+            return True
+        if actual is None:
+            return False
+        return (
+            abs(actual[0] - expected[0]) <= center_tolerance_m
+            and abs(actual[1] - expected[1]) <= center_tolerance_m
+        )
+
+    solution_loaded_required = bool(require_solution_loaded)
+    selection_clear_required = bool(require_selection_clear)
+    trace_required = bool(require_postprocess_command_trace)
+    execution_metadata_required = (
+        bool(require_execution_metadata)
+        or expected_created_at is not None
+        or expected_run_timestamp is not None
+        or expected_solver_version_text is not None
+        or expected_radia_mcp_version_text is not None
+        or max_created_run_skew is not None
+    )
+    created_at_required = expected_created_at is not None or max_created_run_skew is not None
+    timing_breakdown_required = bool(require_timing_breakdown)
+    parameter_set_artifact_required = (
+        bool(require_parameter_set_artifact)
+        or expected_parameter_set_artifact is not None
+        or expected_parameter_set_digest_text is not None
+        or expected_parameter_set_path_text is not None
+    )
+    parameter_set_digest_required = (
+        bool(require_parameter_set_artifact)
+        or expected_parameter_set_digest_text is not None
+    )
+    parameter_set_path_required = (
+        bool(require_parameter_set_artifact)
+        or expected_parameter_set_path_text is not None
+    )
+    output_artifact_required = (
+        bool(require_postprocess_output_artifact)
+        or expected_output_artifact is not None
+        or expected_output_digest is not None
+    )
+    output_schema_required = (
+        bool(require_postprocess_output_schema)
+        or expected_output_schema_id is not None
+        or expected_output_columns is not None
+        or expected_output_units is not None
+    )
+    postprocess_row_convention_schema_required = (
+        bool(require_postprocess_row_convention_schema)
+        or expected_postprocess_row_convention_schema is not None
+    )
+    force_convention_schema_required = (
+        bool(require_force_convention_schema)
+        or expected_force_convention_schema is not None
+    )
+    force_component_basis_schema_required = (
+        bool(require_force_component_basis_schema)
+        or expected_force_component_basis_schema is not None
+    )
+    force_unit_basis_schema_required = (
+        bool(require_force_unit_basis_schema)
+        or expected_force_unit_basis_schema is not None
+    )
+    script_artifact_required = (
+        bool(require_postprocess_script_artifact)
+        or expected_script_artifact is not None
+        or expected_script_digest is not None
+        or expected_script_path is not None
+    )
+    script_digest_required = (
+        bool(require_postprocess_script_artifact)
+        or expected_script_digest is not None
+    )
+    script_path_required = (
+        bool(require_postprocess_script_artifact)
+        or expected_script_path is not None
+    )
+    model_input_artifact_required = (
+        bool(require_model_input_artifact)
+        or expected_model_input_artifact is not None
+        or expected_model_input_digest_text is not None
+        or expected_model_input_path_text is not None
+    )
+    model_input_digest_required = (
+        bool(require_model_input_artifact)
+        or expected_model_input_digest_text is not None
+    )
+    model_input_path_required = (
+        bool(require_model_input_artifact)
+        or expected_model_input_path_text is not None
+    )
+    output_digest_required = bool(require_postprocess_output_artifact) or expected_output_digest is not None
+    trace_id_required = trace_required or expected_trace_id is not None
+    command_digest_required = trace_required or expected_command_digest is not None
+    source_group_required = expected_source_group is not None
+    target_group_required = expected_target_group is not None
+    current_artifact_required = expected_current_artifact is not None
+    current_method_required = expected_current_method is not None
+    selection_mentions_target_group = True
+    if expected_target_group is not None:
+        pattern = rf"(?<![A-Za-z0-9_]){re.escape(expected_target_group)}(?![A-Za-z0-9_])"
+        selection_mentions_target_group = bool(
+            selection_function and re.search(pattern, selection_function)
+        )
+    clear_index = selection_lower.find("mo_clearblock")
+    select_index = selection_lower.find("mo_groupselectblock")
+    selection_clear_before_select = (
+        clear_index >= 0
+        and select_index >= 0
+        and clear_index < select_index
+    )
+    trace_clear_index = command_trace_text.find("mo_clearblock")
+    trace_select_index = command_trace_text.find("mo_groupselectblock")
+    trace_integral18_index = command_trace_text.find("mo_blockintegral(18")
+    trace_integral19_index = command_trace_text.find("mo_blockintegral(19")
+    trace_has_clear_select_force_xy = (
+        trace_clear_index >= 0
+        and trace_select_index >= 0
+        and trace_integral18_index >= 0
+        and trace_integral19_index >= 0
+        and trace_clear_index < trace_select_index
+        and trace_select_index < min(trace_integral18_index, trace_integral19_index)
+    )
+    trace_mentions_target_group = True
+    if expected_target_group is not None and postprocess_commands:
+        trace_mentions_target_group = bool(
+            re.search(pattern, command_trace_text)
+        )
+    has_force_measurement = measured_vector is not None or measured_radial is not None
+    femm_source = source_tool.lower().startswith("femm")
+    radial_axis_text = radial_projection_axis.lower()
+    weighted_stress_extraction = "weighted_stress" in force_extraction_method_normalized
+    checks = {
+        "model_id_recorded": bool(model_id),
+        "operating_point_id_recorded": bool(operating_point_id),
+        "artifact_id_recorded": expected_artifact is None or bool(artifact_id),
+        "result_set_id_recorded": expected_result_set is None or bool(result_set_id),
+        "parameter_set_artifact_id_recorded": not parameter_set_artifact_required
+        or bool(parameter_set_artifact_id),
+        "parameter_set_digest_recorded": not parameter_set_digest_required
+        or bool(parameter_set_digest),
+        "parameter_set_path_recorded": not parameter_set_path_required
+        or bool(parameter_set_path),
+        "model_input_artifact_id_recorded": not model_input_artifact_required
+        or bool(model_input_artifact_id),
+        "model_input_digest_recorded": not model_input_digest_required
+        or bool(model_input_digest),
+        "model_input_path_recorded": not model_input_path_required
+        or bool(model_input_path),
+        "solution_artifact_id_recorded": expected_solution_artifact is None
+        or bool(solution_artifact_id),
+        "block_label_artifact_id_recorded": expected_block_label_artifact is None
+        or bool(block_label_artifact_id),
+        "expected_model_id_matches": expected_model is None or model_id == expected_model,
+        "expected_operating_point_id_matches": expected_op is None or operating_point_id == expected_op,
+        "expected_artifact_id_matches": expected_artifact is None or artifact_id == expected_artifact,
+        "expected_result_set_id_matches": expected_result_set is None
+        or result_set_id == expected_result_set,
+        "expected_parameter_set_artifact_id_matches": (
+            expected_parameter_set_artifact is None
+            or parameter_set_artifact_id == expected_parameter_set_artifact
+        ),
+        "expected_parameter_set_digest_matches": (
+            expected_parameter_set_digest_text is None
+            or parameter_set_digest == expected_parameter_set_digest_text
+        ),
+        "expected_parameter_set_path_matches": (
+            expected_parameter_set_path_text is None
+            or parameter_set_path == expected_parameter_set_path_text
+        ),
+        "expected_model_input_artifact_id_matches": (
+            expected_model_input_artifact is None
+            or model_input_artifact_id == expected_model_input_artifact
+        ),
+        "expected_model_input_digest_matches": (
+            expected_model_input_digest_text is None
+            or model_input_digest == expected_model_input_digest_text
+        ),
+        "expected_model_input_path_matches": (
+            expected_model_input_path_text is None
+            or model_input_path == expected_model_input_path_text
+        ),
+        "expected_solution_artifact_id_matches": expected_solution_artifact is None
+        or solution_artifact_id == expected_solution_artifact,
+        "expected_block_label_artifact_id_matches": expected_block_label_artifact is None
+        or block_label_artifact_id == expected_block_label_artifact,
+        "solution_loaded_recorded": not solution_loaded_required or solution_loaded_recorded,
+        "solution_loaded_before_postprocess": not solution_loaded_required or solution_loaded,
+        "source_group_id_recorded": not source_group_required or bool(source_group_id),
+        "target_group_id_recorded": not target_group_required or bool(target_group_id),
+        "expected_source_group_id_matches": expected_source_group is None
+        or source_group_id == expected_source_group,
+        "expected_target_group_id_matches": expected_target_group is None
+        or target_group_id == expected_target_group,
+        "source_center_xy_recorded_when_expected": expected_source_center is None
+        or source_center_xy_m is not None,
+        "target_center_xy_recorded_when_expected": expected_target_center is None
+        or target_center_xy_m is not None,
+        "expected_source_center_xy_matches": _center_matches(source_center_xy_m, expected_source_center),
+        "expected_target_center_xy_matches": _center_matches(target_center_xy_m, expected_target_center),
+        "wire_center_separation_matches_separation_m": (
+            center_distance_error_m is None
+            or center_distance_error_m <= center_tolerance_m
+        ),
+        "source_region_recorded": expected_source_region_text is None or bool(source_region),
+        "target_region_recorded": expected_target_region_text is None or bool(target_region),
+        "source_material_recorded": expected_source_material_text is None or bool(source_material),
+        "target_material_recorded": expected_target_material_text is None or bool(target_material),
+        "expected_source_region_matches": expected_source_region_text is None
+        or source_region == expected_source_region_text,
+        "expected_target_region_matches": expected_target_region_text is None
+        or target_region == expected_target_region_text,
+        "expected_source_material_matches": expected_source_material_text is None
+        or source_material == expected_source_material_text,
+        "expected_target_material_matches": expected_target_material_text is None
+        or target_material == expected_target_material_text,
+        "postprocess_trace_id_recorded": not trace_id_required
+        or bool(postprocess_trace_id),
+        "expected_postprocess_trace_id_matches": expected_trace_id is None
+        or postprocess_trace_id == expected_trace_id,
+        "postprocess_command_digest_recorded": not command_digest_required
+        or bool(postprocess_command_digest),
+        "expected_postprocess_command_digest_matches": expected_command_digest is None
+        or postprocess_command_digest == expected_command_digest,
+        "postprocess_output_artifact_id_recorded": not output_artifact_required
+        or bool(postprocess_output_artifact_id),
+        "expected_postprocess_output_artifact_id_matches": expected_output_artifact is None
+        or postprocess_output_artifact_id == expected_output_artifact,
+        "postprocess_output_digest_recorded": not output_digest_required
+        or bool(postprocess_output_digest),
+        "expected_postprocess_output_digest_matches": expected_output_digest is None
+        or postprocess_output_digest == expected_output_digest,
+        "postprocess_output_schema_id_recorded": not output_schema_required
+        or bool(postprocess_output_schema_id),
+        "expected_postprocess_output_schema_id_matches": expected_output_schema_id is None
+        or postprocess_output_schema_id == expected_output_schema_id,
+        "postprocess_output_columns_recorded": not output_schema_required
+        or bool(postprocess_output_columns),
+        "expected_postprocess_output_columns_match": expected_output_columns is None
+        or postprocess_output_columns == expected_output_columns,
+        "postprocess_output_units_recorded": not output_schema_required
+        or bool(postprocess_output_units),
+        "expected_postprocess_output_units_match": expected_output_units is None
+        or postprocess_output_units == expected_output_units,
+        "postprocess_row_convention_schema_id_recorded": (
+            not postprocess_row_convention_schema_required
+            or bool(postprocess_row_convention_schema_id)
+        ),
+        "expected_postprocess_row_convention_schema_id_matches": (
+            expected_postprocess_row_convention_schema is None
+            or postprocess_row_convention_schema_id == expected_postprocess_row_convention_schema
+        ),
+        "postprocess_script_artifact_id_recorded": not script_artifact_required
+        or bool(postprocess_script_artifact_id),
+        "postprocess_script_digest_recorded": not script_digest_required
+        or bool(postprocess_script_digest),
+        "postprocess_script_path_recorded": not script_path_required
+        or bool(postprocess_script_path),
+        "expected_postprocess_script_artifact_id_matches": expected_script_artifact is None
+        or postprocess_script_artifact_id == expected_script_artifact,
+        "expected_postprocess_script_digest_matches": expected_script_digest is None
+        or postprocess_script_digest == expected_script_digest,
+        "expected_postprocess_script_path_matches": expected_script_path is None
+        or postprocess_script_path == expected_script_path,
+        "force_observable_id_recorded": expected_observable_id is None
+        or bool(force_observable_id),
+        "expected_force_observable_id_matches": expected_observable_id is None
+        or force_observable_id == expected_observable_id,
+        "force_observable_family_recorded": expected_observable_family is None
+        or bool(force_observable_family),
+        "expected_force_observable_family_matches": expected_observable_family is None
+        or force_observable_family == expected_observable_family,
+        "force_convention_schema_id_recorded": not force_convention_schema_required
+        or bool(force_convention_schema_id),
+        "expected_force_convention_schema_id_matches": (
+            expected_force_convention_schema is None
+            or force_convention_schema_id == expected_force_convention_schema
+        ),
+        "force_component_basis_schema_id_recorded": not force_component_basis_schema_required
+        or bool(force_component_basis_schema_id),
+        "expected_force_component_basis_schema_id_matches": (
+            expected_force_component_basis_schema is None
+            or force_component_basis_schema_id == expected_force_component_basis_schema
+        ),
+        "force_unit_basis_schema_id_recorded": not force_unit_basis_schema_required
+        or bool(force_unit_basis_schema_id),
+        "expected_force_unit_basis_schema_id_matches": (
+            expected_force_unit_basis_schema is None
+            or force_unit_basis_schema_id == expected_force_unit_basis_schema
+        ),
+        "objective_observable_id_recorded": expected_objective_id is None
+        or bool(objective_observable_id),
+        "expected_objective_observable_id_matches": expected_objective_id is None
+        or objective_observable_id == expected_objective_id,
+        "objective_observable_family_recorded": expected_objective_family is None
+        or bool(objective_observable_family),
+        "expected_objective_observable_family_matches": expected_objective_family is None
+        or objective_observable_family == expected_objective_family,
+        "force_component_frame_recorded_when_expected": expected_component_frame is None
+        or bool(force_component_frame),
+        "expected_force_component_frame_matches": expected_component_frame is None
+        or force_component_frame == expected_component_frame,
+        "radial_projection_axis_recorded_when_expected": expected_projection_axis is None
+        or bool(radial_projection_axis),
+        "expected_radial_projection_axis_matches": expected_projection_axis is None
+        or radial_projection_axis == expected_projection_axis,
+        "force_sign_convention_recorded_when_expected": expected_sign_convention is None
+        or bool(force_sign_convention),
+        "expected_force_sign_convention_matches": expected_sign_convention is None
+        or force_sign_convention == expected_sign_convention,
+        "force_extraction_method_recorded_when_expected": expected_extraction_method is None
+        or bool(force_extraction_method_normalized),
+        "expected_force_extraction_method_matches": expected_extraction_method is None
+        or force_extraction_method_normalized == expected_extraction_method,
+        "current_source_artifact_id_recorded_when_expected": not current_artifact_required
+        or bool(current_source_artifact_id),
+        "expected_current_source_artifact_id_matches": expected_current_artifact is None
+        or current_source_artifact_id == expected_current_artifact,
+        "current_definition_method_recorded_when_expected": not current_method_required
+        or bool(current_definition_method_normalized),
+        "expected_current_definition_method_matches": expected_current_method is None
+        or current_definition_method_normalized == expected_current_method,
+        "weighted_stress_extraction_uses_force_xy_integrals": (
+            not weighted_stress_extraction or set(block_integral_types) == {18, 19}
+        ),
+        "postprocess_commands_recorded": not trace_required or bool(postprocess_commands),
+        "postprocess_commands_clear_select_force_xy": (
+            not trace_required or trace_has_clear_select_force_xy
+        ),
+        "postprocess_commands_mention_target_group": trace_mentions_target_group,
+        "source_target_groups_distinct": not (source_group_id and target_group_id)
+        or source_group_id != target_group_id,
+        "selection_function_recorded": not target_group_required or bool(selection_function),
+        "selection_mentions_target_group": selection_mentions_target_group,
+        "selection_clear_before_groupselect": (
+            not selection_clear_required or selection_clear_before_select
+        ),
+        "source_tool_recorded": bool(source_tool),
+        "expected_source_tool_matches": expected_tool is None or source_tool == expected_tool,
+        "source_function_recorded": bool(source_function),
+        "force_component_frame_recorded": not femm_source or bool(force_component_frame),
+        "radial_projection_axis_recorded": not femm_source
+        or measured_radial is None
+        or bool(radial_projection_axis),
+        "radial_projection_axis_names_wire_pair": not femm_source
+        or measured_radial is None
+        or (
+            ("wire1" in radial_axis_text and "wire2" in radial_axis_text)
+            or "separation" in radial_axis_text
+        ),
+        "force_units_are_per_length": "n/m" in units_compact or "n_per_m" in units_compact,
+        "force_unit_basis_is_per_length": force_unit_basis == "per_length",
+        "depth_integrated_force_not_used_for_per_length_gate": force_unit_basis != "depth_integrated",
+        "femm_planar_depth_recorded": not femm_source or planar_depth_m is not None,
+        "femm_planar_depth_positive": planar_depth_m is None or planar_depth_m > 0.0,
+        "problem_type_recorded": expected_problem is None or bool(problem_type_normalized),
+        "expected_problem_type_matches": expected_problem is None
+        or problem_type_normalized == expected_problem,
+        "length_unit_recorded": expected_length is None or bool(length_unit_normalized),
+        "expected_length_unit_matches": expected_length is None
+        or length_unit_normalized == expected_length,
+        "frequency_hz_recorded": expected_frequency is None or frequency_hz is not None,
+        "expected_frequency_hz_matches": expected_frequency is None
+        or (
+            frequency_hz is not None
+            and abs(frequency_hz - expected_frequency) <= frequency_tolerance
+        ),
+        "solver_precision_recorded": (
+            expected_precision is None and max_precision is None
+        )
+        or solver_precision is not None,
+        "expected_solver_precision_matches": expected_precision is None
+        or (
+            solver_precision is not None
+            and abs(solver_precision - expected_precision) <= precision_tolerance
+        ),
+        "solver_precision_within_max": max_precision is None
+        or (solver_precision is not None and solver_precision <= max_precision),
+        "min_angle_deg_recorded": expected_min_angle is None or min_angle_deg is not None,
+        "expected_min_angle_deg_matches": expected_min_angle is None
+        or (
+            min_angle_deg is not None
+            and abs(min_angle_deg - expected_min_angle) <= min_angle_tolerance
+        ),
+        "min_angle_deg_positive": min_angle_deg is None or min_angle_deg > 0.0,
+        "created_at_utc_recorded": not created_at_required or bool(created_at_utc),
+        "created_at_utc_parseable": not created_at_utc or created_at_dt is not None,
+        "expected_created_at_utc_matches": expected_created_at is None
+        or created_at_utc == expected_created_at,
+        "run_timestamp_utc_recorded": not execution_metadata_required
+        or bool(run_timestamp_utc),
+        "run_timestamp_utc_parseable": not run_timestamp_utc
+        or run_timestamp_dt is not None,
+        "expected_run_timestamp_utc_matches": expected_run_timestamp is None
+        or run_timestamp_utc == expected_run_timestamp,
+        "created_run_timestamp_skew_within_limit": max_created_run_skew is None
+        or (
+            created_run_skew_s is not None
+            and created_run_skew_s <= max_created_run_skew
+        ),
+        "solver_version_recorded": not execution_metadata_required
+        or bool(solver_version),
+        "expected_solver_version_matches": expected_solver_version_text is None
+        or solver_version == expected_solver_version_text,
+        "radia_mcp_version_recorded": not execution_metadata_required
+        or bool(radia_mcp_version),
+        "expected_radia_mcp_version_matches": expected_radia_mcp_version_text is None
+        or radia_mcp_version == expected_radia_mcp_version_text,
+        "run_duration_s_recorded": not (
+            execution_metadata_required or timing_breakdown_required
+        )
+        or run_duration_s is not None,
+        "run_duration_s_positive": run_duration_s is None or run_duration_s > 0.0,
+        "timing_breakdown_recorded": not timing_breakdown_required
+        or bool(timing_breakdown_rows),
+        "timing_breakdown_has_required_sections": not timing_breakdown_required
+        or len(timing_breakdown_rows) >= timing_sections_min,
+        "timing_breakdown_sections_named": not timing_breakdown_required
+        or all(bool(row["name"]) for row in timing_breakdown_rows),
+        "timing_breakdown_values_nonnegative": not timing_breakdown_required
+        or all(value >= 0.0 for value in timing_durations),
+        "timing_breakdown_top_sections_descending": not timing_breakdown_required
+        or timing_top_sections_descending,
+        "timing_breakdown_total_within_run_duration": (
+            run_duration_s is None
+            or timing_total_s is None
+            or timing_total_s <= run_duration_s * (1.0 + tol) + 1.0e-12
+        ),
+        "force_measurement_present": has_force_measurement,
+        "vector_force_matches_ampere": vector_ok,
+        "radial_force_matches_ampere": radial_ok,
+        "interaction_matches_current_sign": not interaction
+        or interaction == analytic["interaction"],
+    }
+    if expected_integral_types is not None or block_integral_types:
+        sorted_integral_types = sorted(block_integral_types)
+        checks["block_integral_types_recorded"] = bool(sorted_integral_types)
+        checks["block_integral_types_match_expected"] = (
+            expected_integral_types is None
+            or sorted_integral_types == expected_integral_types
+        )
+        checks["block_integral_types_are_force_xy"] = set(sorted_integral_types) == {18, 19}
+        checks["block_integral_types_exclude_torque"] = 22 not in sorted_integral_types
+    else:
+        sorted_integral_types = []
+    return {
+        "policy": "parallel_wire_force_result_package_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "model_id": model_id,
+        "operating_point_id": operating_point_id,
+        "artifact_id": artifact_id,
+        "result_set_id": result_set_id,
+        "parameter_set_artifact_id": parameter_set_artifact_id,
+        "parameter_set_digest": parameter_set_digest,
+        "parameter_set_path": parameter_set_path,
+        "model_input_artifact_id": model_input_artifact_id,
+        "model_input_digest": model_input_digest,
+        "model_input_path": model_input_path,
+        "solution_artifact_id": solution_artifact_id,
+        "block_label_artifact_id": block_label_artifact_id,
+        "source_group_id": source_group_id,
+        "target_group_id": target_group_id,
+        "source_center_xy_m": list(source_center_xy_m) if source_center_xy_m is not None else None,
+        "target_center_xy_m": list(target_center_xy_m) if target_center_xy_m is not None else None,
+        "expected_source_center_xy_m": list(expected_source_center) if expected_source_center is not None else None,
+        "expected_target_center_xy_m": list(expected_target_center) if expected_target_center is not None else None,
+        "center_distance_m": center_distance_m,
+        "center_distance_error_m": center_distance_error_m,
+        "source_region": source_region,
+        "target_region": target_region,
+        "source_material": source_material,
+        "target_material": target_material,
+        "postprocess_trace_id": postprocess_trace_id,
+        "postprocess_command_digest": postprocess_command_digest,
+        "postprocess_output_artifact_id": postprocess_output_artifact_id,
+        "postprocess_output_digest": postprocess_output_digest,
+        "postprocess_output_path": postprocess_output_path,
+        "postprocess_output_schema_id": postprocess_output_schema_id,
+        "postprocess_output_columns": postprocess_output_columns,
+        "postprocess_output_units": postprocess_output_units,
+        "postprocess_row_convention_schema_id": postprocess_row_convention_schema_id,
+        "postprocess_script_artifact_id": postprocess_script_artifact_id,
+        "postprocess_script_digest": postprocess_script_digest,
+        "postprocess_script_path": postprocess_script_path,
+        "force_observable_id": force_observable_id,
+        "force_observable_family": force_observable_family,
+        "force_convention_schema_id": force_convention_schema_id,
+        "force_component_basis_schema_id": force_component_basis_schema_id,
+        "force_unit_basis_schema_id": force_unit_basis_schema_id,
+        "objective_observable_id": objective_observable_id,
+        "objective_observable_family": objective_observable_family,
+        "postprocess_commands": postprocess_commands,
+        "expected_artifact_id": expected_artifact,
+        "expected_result_set_id": expected_result_set,
+        "expected_parameter_set_artifact_id": expected_parameter_set_artifact,
+        "expected_parameter_set_digest": expected_parameter_set_digest_text,
+        "expected_parameter_set_path": expected_parameter_set_path_text,
+        "expected_model_input_artifact_id": expected_model_input_artifact,
+        "expected_model_input_digest": expected_model_input_digest_text,
+        "expected_model_input_path": expected_model_input_path_text,
+        "expected_solution_artifact_id": expected_solution_artifact,
+        "expected_block_label_artifact_id": expected_block_label_artifact,
+        "solution_loaded": solution_loaded if solution_loaded_recorded else None,
+        "solution_loaded_required": solution_loaded_required,
+        "expected_source_tool": expected_tool,
+        "expected_source_group_id": expected_source_group,
+        "expected_target_group_id": expected_target_group,
+        "expected_source_region": expected_source_region_text,
+        "expected_target_region": expected_target_region_text,
+        "expected_source_material": expected_source_material_text,
+        "expected_target_material": expected_target_material_text,
+        "expected_postprocess_trace_id": expected_trace_id,
+        "expected_postprocess_command_digest": expected_command_digest,
+        "expected_postprocess_output_artifact_id": expected_output_artifact,
+        "expected_postprocess_output_digest": expected_output_digest,
+        "expected_postprocess_output_schema_id": expected_output_schema_id,
+        "expected_postprocess_output_columns": expected_output_columns,
+        "expected_postprocess_output_units": expected_output_units,
+        "expected_postprocess_row_convention_schema_id": expected_postprocess_row_convention_schema,
+        "expected_postprocess_script_artifact_id": expected_script_artifact,
+        "expected_postprocess_script_digest": expected_script_digest,
+        "expected_postprocess_script_path": expected_script_path,
+        "expected_force_observable_id": expected_observable_id,
+        "expected_force_observable_family": expected_observable_family,
+        "expected_force_convention_schema_id": expected_force_convention_schema,
+        "expected_force_component_basis_schema_id": expected_force_component_basis_schema,
+        "expected_force_unit_basis_schema_id": expected_force_unit_basis_schema,
+        "expected_objective_observable_id": expected_objective_id,
+        "expected_objective_observable_family": expected_objective_family,
+        "expected_force_component_frame": expected_component_frame,
+        "expected_radial_projection_axis": expected_projection_axis,
+        "expected_force_sign_convention": expected_sign_convention,
+        "force_extraction_method": force_extraction_method_normalized or None,
+        "raw_force_extraction_method": force_extraction_method,
+        "expected_force_extraction_method": expected_extraction_method,
+        "current_source_artifact_id": current_source_artifact_id,
+        "current_definition_method": current_definition_method_normalized or None,
+        "raw_current_definition_method": current_definition_method,
+        "expected_current_source_artifact_id": expected_current_artifact,
+        "expected_current_definition_method": expected_current_method,
+        "selection_function": selection_function,
+        "force_component_frame": force_component_frame,
+        "radial_projection_axis": radial_projection_axis,
+        "force_sign_convention": force_sign_convention,
+        "block_integral_types": sorted_integral_types,
+        "expected_block_integral_types": expected_integral_types,
+        "selection_clear_required": selection_clear_required,
+        "postprocess_command_trace_required": trace_required,
+        "postprocess_output_artifact_required": output_artifact_required,
+        "postprocess_output_schema_required": output_schema_required,
+        "postprocess_row_convention_schema_required": postprocess_row_convention_schema_required,
+        "postprocess_script_artifact_required": script_artifact_required,
+        "force_convention_schema_required": force_convention_schema_required,
+        "force_component_basis_schema_required": force_component_basis_schema_required,
+        "force_unit_basis_schema_required": force_unit_basis_schema_required,
+        "parameter_set_artifact_required": parameter_set_artifact_required,
+        "model_input_artifact_required": model_input_artifact_required,
+        "source_tool": source_tool,
+        "source_function": source_function,
+        "force_units": units,
+        "force_unit_basis": force_unit_basis,
+        "problem_depth_m": planar_depth_m,
+        "problem_type": problem_type_normalized,
+        "raw_problem_type": problem_type,
+        "expected_problem_type": expected_problem,
+        "length_unit": length_unit_normalized,
+        "raw_length_unit": length_unit,
+        "expected_length_unit": expected_length,
+        "frequency_hz": frequency_hz,
+        "expected_frequency_hz": expected_frequency,
+        "solver_precision": solver_precision,
+        "expected_solver_precision": expected_precision,
+        "max_solver_precision": max_precision,
+        "min_angle_deg": min_angle_deg,
+        "expected_min_angle_deg": expected_min_angle,
+        "created_at_utc": created_at_utc,
+        "expected_created_at_utc": expected_created_at,
+        "run_timestamp_utc": run_timestamp_utc,
+        "expected_run_timestamp_utc": expected_run_timestamp,
+        "created_run_timestamp_skew_s": created_run_skew_s,
+        "max_created_run_skew_s": max_created_run_skew,
+        "solver_version": solver_version,
+        "expected_solver_version": expected_solver_version_text,
+        "radia_mcp_version": radia_mcp_version,
+        "expected_radia_mcp_version": expected_radia_mcp_version_text,
+        "run_duration_s": run_duration_s,
+        "timing_breakdown_s": timing_breakdown_rows,
+        "timing_total_s": timing_total_s,
+        "min_timing_sections": timing_sections_min,
+        "execution_metadata_required": execution_metadata_required,
+        "timing_breakdown_required": timing_breakdown_required,
+        "analytic": analytic,
+        "expected_force_on_wire2_N_per_m": expected_vector,
+        "expected_radial_force_on_wire2_N_per_m": expected_radial,
+        "vector_force_abs_error_N_per_m": vector_error,
+        "radial_force_abs_error_N_per_m": radial_error,
+        "rtol": tol,
+        "checks": checks,
+        "notes": [
+            "Use this before comparing FEMM block-integral force rows with radia-ngsolve force rows.",
+            "The sign convention is radial separation increasing away from wire 1; like currents give negative radial force on wire 2.",
+            "Store force per unit length for 2D planar wire benchmarks, not total force unless depth is explicit.",
+            "For FEMM planar rows, archive the mi_probdef problem depth but keep this gate on the N/m comparison basis.",
+            "Bind the force unit-basis schema separately from the force component basis so per-length N/m rows, stored problem depth, and depth-integrated total-force rows cannot be silently interchanged.",
+            "For FEMM planar magnetic force rows, keep mo_blockintegral(18/19) separate from torque mo_blockintegral(22).",
+            "Record the force extraction method, e.g. weighted_stress_block_integral_xy, so N/m force rows are not confused with Lorentz, contour, gap-harmonic, or torque-derived observables.",
+            "Bind mo_blockintegral(18/19) rows to a named force observable id and family so weighted-stress block-force evidence is not confused with Lorentz, contour, or torque postprocessing.",
+            "Bind recovered rows to artifact_id and result_set_id so stale tables from another run cannot pass by value alone.",
+            "Bind force rows to the current-source artifact and current-definition method so correct force values are not joined to a stale current table or RMS/peak convention.",
+            "Bind optimization/notebook force rows to the parameter-set artifact id/digest/path and objective observable id/family so a correct force value is not reused for a stale design point or scalar objective.",
+            "Bind FEMM solver rows to the input .fem model artifact id/digest/path so a copied .ans or force table cannot be joined to a stale geometry/source definition.",
+            "For FEMM solver-ready rows, bind the loaded .ans solution artifact and require mi_loadsolution()/postprocessor-loaded state before block integrals.",
+            "Archive mi_probdef/mo_getprobleminfo problem_type, length_unit, and frequency_hz so planar-static N/m rows are not mixed with axisymmetric, mm-scaled, or AC runs.",
+            "Archive mi_probdef precision and Triangle minangle so force rows from coarse solver or mesh settings do not pass by value alone.",
+            "Archive the FEMM block-label/source-contract artifact plus source/target region and material names so a correct force value from the right numeric group cannot be joined to stale block labels.",
+            "Archive the vector component frame and radial projection axis before comparing scalar radial forces.",
+            "When promoting FEMM force rows, match the expected component frame and projection axis explicitly so local/global or wire1/wire2 sign-convention drift cannot pass by value alone.",
+            "Bind the force component-basis schema separately from the physics convention so Fx/Fy ordering, global-vs-local basis, and radial projection basis cannot silently drift while values remain plausible.",
+            "For FEMM rows promoted to solver-ready evidence, require mo_clearblock() before mo_groupselectblock(<target>) so stale block selections cannot leak into the force integral.",
+            "For repeatable FEMM postprocessing, archive the command trace id, digest, and replay command sequence that cleared selection, selected the target group, and called mo_blockintegral(18/19).",
+            "Bind the postprocess command trace to the CSV/JSON output artifact id and digest so a correct replay script cannot be joined to a stale exported result table.",
+            "Bind the postprocess output schema id, columns, and column units so a correct output file cannot be read through a stale force-table layout.",
+            "For notebook/crossval reuse, archive run_timestamp_utc, solver_version, radia_mcp_version, run_duration_s, and the top timing_breakdown_s sections in the result JSON.",
+            "When created_at_utc is available, keep it close to run_timestamp_utc so a copied result artifact is not mistaken for a freshly executed force row.",
+        ],
+    }
+
+
+def magnetic_field_probe_result_package_gate(
+    row,
+    *,
+    expected_model_id=None,
+    expected_operating_point_id=None,
+    expected_artifact_id=None,
+    expected_solution_artifact_id=None,
+    expected_solution_digest=None,
+    expected_solution_path=None,
+    expected_source_tool=None,
+    expected_probe_id=None,
+    expected_probe_point_xy_m=None,
+    expected_problem_length_unit=None,
+    expected_probe_point_input_unit=None,
+    expected_coordinate_scale_to_m=None,
+    expected_field_component_frame=None,
+    expected_field_units=None,
+    expected_field_probe_method=None,
+    expected_postprocess_trace_id=None,
+    expected_postprocess_command_digest=None,
+    expected_probe_output_artifact_id=None,
+    expected_probe_output_digest=None,
+    require_solution_artifact=False,
+    require_solution_loaded=False,
+    require_postprocess_command_trace=False,
+    require_probe_output_artifact=False,
+    require_probe_coordinate_scale=False,
+    point_atol_m=1.0e-9,
+):
+    """Check a point magnetic-field probe result row before solver comparison.
+
+    This is the small result-package gate for FEMM ``mo_getb(px, py)`` rows,
+    NGSolve point samples, or notebook-exported B-field probes.  It does not
+    judge the field value against physics; it prevents a plausible Bx/By value
+    from travelling with a stale solution, wrong probe point, wrong component
+    frame, or stale output table.
+    """
+
+    data = dict(row)
+    point_tol = float(point_atol_m)
+    if point_tol < 0.0:
+        raise ValueError("point_atol_m must be >= 0")
+
+    def _normalize_label(value):
+        return str(value).strip().lower().replace("-", "_").replace(" ", "_")
+
+    def _point(value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, dict):
+            if "x" in value and "y" in value:
+                return (float(value["x"]), float(value["y"]))
+            if "X" in value and "Y" in value:
+                return (float(value["X"]), float(value["Y"]))
+        parts = list(value) if not isinstance(value, str) else [
+            item for item in re.split(r"[,;\s]+", value.strip()) if item
+        ]
+        if len(parts) == 3 and abs(float(parts[2])) <= point_tol:
+            parts = parts[:2]
+        if len(parts) != 2:
+            raise ValueError("field probe point must contain x/y or x/y/z with z=0")
+        return (float(parts[0]), float(parts[1]))
+
+    def _field_vector():
+        for key in ("B_T", "b_T", "field_T", "magnetic_flux_density_T"):
+            if key in data and data[key] is not None:
+                values = list(data[key])
+                if len(values) == 3 and abs(float(values[2])) <= 1.0e-300:
+                    values = values[:2]
+                if len(values) != 2:
+                    raise ValueError("field vector must contain two planar components")
+                return (float(values[0]), float(values[1]))
+        bx = data.get("Bx_T", data.get("bx_T", data.get("B_x_T")))
+        by = data.get("By_T", data.get("by_T", data.get("B_y_T")))
+        if bx is None or by is None:
+            return None
+        return (float(bx), float(by))
+
+    model_id = str(data.get("model_id", "")).strip()
+    operating_point_id = str(data.get("operating_point_id", "")).strip()
+    artifact_id = str(data.get("artifact_id", data.get("case_artifact_id", ""))).strip()
+    solution_artifact_id = str(
+        data.get(
+            "solution_artifact_id",
+            data.get("ans_artifact_id", data.get("loaded_solution_artifact_id", "")),
+        )
+    ).strip()
+    solution_digest = str(
+        data.get(
+            "solution_digest",
+            data.get(
+                "solution_sha256",
+                data.get("ans_digest", data.get("ans_sha256", data.get("loaded_solution_digest", ""))),
+            ),
+        )
+    ).strip()
+    solution_path = str(
+        data.get(
+            "solution_path",
+            data.get("ans_path", data.get("loaded_solution_path", "")),
+        )
+    ).strip()
+    solution_loaded_raw = data.get(
+        "solution_loaded",
+        data.get("postprocessor_solution_loaded", data.get("mo_solution_loaded")),
+    )
+    solution_loaded_recorded = solution_loaded_raw not in (None, "")
+    solution_loaded = _metadata_truthy(solution_loaded_raw)
+    source_tool = str(data.get("source_tool", "")).strip()
+    source_function = str(data.get("source_function", data.get("probe_function", ""))).strip()
+    probe_id = str(
+        data.get("field_probe_id", data.get("probe_id", data.get("observable_id", "")))
+    ).strip()
+    probe_point = _point(
+        data.get(
+            "probe_point_xy_m",
+            data.get(
+                "field_probe_point_xy_m",
+                data.get("sample_point_xy_m", data.get("field_probe_point_xyz_m")),
+            ),
+        )
+    )
+    problem_length_unit = str(
+        data.get("problem_length_unit", data.get("length_unit", data.get("femm_length_unit", "")))
+    ).strip()
+    probe_point_input = _point(
+        data.get(
+            "probe_point_input_xy",
+            data.get("probe_point_xy_native", data.get("mo_getb_input_xy")),
+        )
+    )
+    probe_point_input_unit = str(
+        data.get(
+            "probe_point_input_unit",
+            data.get("probe_coordinate_unit", data.get("mo_getb_coordinate_unit", "")),
+        )
+    ).strip()
+    coordinate_scale_raw = data.get(
+        "coordinate_scale_to_m",
+        data.get("length_unit_scale_to_m", data.get("probe_coordinate_scale_to_m")),
+    )
+    coordinate_scale_to_m = None if coordinate_scale_raw in (None, "") else float(coordinate_scale_raw)
+    field_vector = _field_vector()
+    field_units = str(
+        data.get("field_units", data.get("B_units", data.get("unit", "")))
+    ).strip()
+    component_frame = str(
+        data.get("field_component_frame", data.get("component_frame", ""))
+    ).strip()
+    probe_method = str(
+        data.get("field_probe_method", data.get("probe_method", data.get("postprocess_method", "")))
+    ).strip()
+    probe_method_normalized = _normalize_label(probe_method) if probe_method else ""
+    postprocess_trace_id = str(
+        data.get(
+            "postprocess_trace_id",
+            data.get("postprocess_command_trace_id", data.get("command_trace_id", "")),
+        )
+    ).strip()
+    postprocess_command_digest = str(
+        data.get(
+            "postprocess_command_digest",
+            data.get("command_trace_sha256", data.get("probe_command_digest", "")),
+        )
+    ).strip()
+    probe_output_artifact_id = str(
+        data.get(
+            "field_probe_output_artifact_id",
+            data.get("probe_output_artifact_id", data.get("output_artifact_id", "")),
+        )
+    ).strip()
+    probe_output_digest = str(
+        data.get(
+            "field_probe_output_digest",
+            data.get("probe_output_sha256", data.get("output_digest", "")),
+        )
+    ).strip()
+    probe_output_path = str(
+        data.get(
+            "field_probe_output_path",
+            data.get("probe_output_path", data.get("output_path", "")),
+        )
+    ).strip()
+    command_sequence_source = data.get(
+        "postprocess_commands",
+        data.get("postprocess_command_sequence", data.get("command_sequence")),
+    )
+    if command_sequence_source is None:
+        postprocess_commands = []
+    elif isinstance(command_sequence_source, str):
+        postprocess_commands = [
+            item.strip()
+            for item in command_sequence_source.replace("\n", ";").split(";")
+            if item.strip()
+        ]
+    else:
+        postprocess_commands = [str(item).strip() for item in command_sequence_source if str(item).strip()]
+    command_text = f"{source_function}; {'; '.join(postprocess_commands)}".lower()
+
+    expected_model = None if expected_model_id is None else str(expected_model_id).strip()
+    expected_op = (
+        None if expected_operating_point_id is None else str(expected_operating_point_id).strip()
+    )
+    expected_artifact = (
+        None if expected_artifact_id is None else str(expected_artifact_id).strip()
+    )
+    expected_solution = (
+        None if expected_solution_artifact_id is None else str(expected_solution_artifact_id).strip()
+    )
+    expected_solution_hash = (
+        None if expected_solution_digest is None else str(expected_solution_digest).strip()
+    )
+    expected_solution_file = (
+        None if expected_solution_path is None else str(expected_solution_path).strip()
+    )
+    expected_tool = None if expected_source_tool is None else str(expected_source_tool).strip()
+    expected_probe = None if expected_probe_id is None else str(expected_probe_id).strip()
+    expected_point = _point(expected_probe_point_xy_m)
+    expected_length_unit = (
+        None if expected_problem_length_unit is None else str(expected_problem_length_unit).strip()
+    )
+    expected_input_unit = (
+        None if expected_probe_point_input_unit is None else str(expected_probe_point_input_unit).strip()
+    )
+    expected_scale = (
+        None if expected_coordinate_scale_to_m is None else float(expected_coordinate_scale_to_m)
+    )
+    expected_frame = (
+        None if expected_field_component_frame is None else str(expected_field_component_frame).strip()
+    )
+    expected_units = None if expected_field_units is None else str(expected_field_units).strip()
+    expected_method = (
+        None if expected_field_probe_method is None else _normalize_label(expected_field_probe_method)
+    )
+    expected_trace = (
+        None if expected_postprocess_trace_id is None else str(expected_postprocess_trace_id).strip()
+    )
+    expected_command_digest = (
+        None
+        if expected_postprocess_command_digest is None
+        else str(expected_postprocess_command_digest).strip()
+    )
+    expected_output_artifact = (
+        None
+        if expected_probe_output_artifact_id is None
+        else str(expected_probe_output_artifact_id).strip()
+    )
+    expected_output_digest = (
+        None if expected_probe_output_digest is None else str(expected_probe_output_digest).strip()
+    )
+
+    field_finite = (
+        field_vector is not None
+        and all(math.isfinite(value) for value in field_vector)
+    )
+    point_matches = True
+    if expected_point is not None:
+        point_matches = (
+            probe_point is not None
+            and all(abs(actual - expected) <= point_tol for actual, expected in zip(probe_point, expected_point))
+        )
+    trace_required = bool(require_postprocess_command_trace)
+    output_required = bool(require_probe_output_artifact or expected_output_artifact or expected_output_digest)
+    solution_artifact_required = bool(
+        require_solution_artifact
+        or expected_solution is not None
+        or expected_solution_hash is not None
+        or expected_solution_file is not None
+    )
+    solution_required = bool(require_solution_loaded)
+    coordinate_scale_required = bool(
+        require_probe_coordinate_scale
+        or expected_length_unit is not None
+        or expected_input_unit is not None
+        or expected_scale is not None
+    )
+    scale_matches = True
+    if expected_scale is not None:
+        scale_matches = (
+            coordinate_scale_to_m is not None
+            and math.isclose(coordinate_scale_to_m, expected_scale, rel_tol=1.0e-12, abs_tol=point_tol)
+        )
+    input_scale_matches = True
+    if coordinate_scale_required:
+        input_scale_matches = (
+            probe_point is not None
+            and probe_point_input is not None
+            and coordinate_scale_to_m is not None
+            and all(
+                abs(actual * coordinate_scale_to_m - expected) <= point_tol
+                for actual, expected in zip(probe_point_input, probe_point)
+            )
+        )
+    checks = {
+        "model_id_recorded": expected_model is None or bool(model_id),
+        "expected_model_id_matches": expected_model is None or model_id == expected_model,
+        "operating_point_id_recorded": expected_op is None or bool(operating_point_id),
+        "expected_operating_point_id_matches": expected_op is None or operating_point_id == expected_op,
+        "artifact_id_recorded": expected_artifact is None or bool(artifact_id),
+        "expected_artifact_id_matches": expected_artifact is None or artifact_id == expected_artifact,
+        "solution_artifact_id_recorded": expected_solution is None or bool(solution_artifact_id),
+        "solution_artifact_id_recorded_when_required": (
+            not solution_artifact_required or bool(solution_artifact_id)
+        ),
+        "expected_solution_artifact_id_matches": expected_solution is None or solution_artifact_id == expected_solution,
+        "solution_digest_recorded_when_required": (
+            not solution_artifact_required or bool(solution_digest)
+        ),
+        "expected_solution_digest_matches": (
+            expected_solution_hash is None or solution_digest == expected_solution_hash
+        ),
+        "solution_path_recorded_when_required": (
+            not solution_artifact_required or bool(solution_path)
+        ),
+        "expected_solution_path_matches": (
+            expected_solution_file is None or solution_path == expected_solution_file
+        ),
+        "solution_loaded_recorded_when_required": not solution_required or solution_loaded_recorded,
+        "solution_loaded_true_when_required": not solution_required or solution_loaded,
+        "source_tool_recorded": bool(source_tool),
+        "expected_source_tool_matches": expected_tool is None or source_tool == expected_tool,
+        "source_function_recorded": bool(source_function),
+        "probe_id_recorded": expected_probe is None or bool(probe_id),
+        "expected_probe_id_matches": expected_probe is None or probe_id == expected_probe,
+        "probe_point_recorded": expected_point is None or probe_point is not None,
+        "expected_probe_point_xy_matches": point_matches,
+        "problem_length_unit_recorded": not coordinate_scale_required or bool(problem_length_unit),
+        "expected_problem_length_unit_matches": (
+            expected_length_unit is None
+            or problem_length_unit.lower() == expected_length_unit.lower()
+        ),
+        "probe_point_input_xy_recorded": not coordinate_scale_required or probe_point_input is not None,
+        "probe_point_input_unit_recorded": not coordinate_scale_required or bool(probe_point_input_unit),
+        "expected_probe_point_input_unit_matches": (
+            expected_input_unit is None
+            or probe_point_input_unit.lower() == expected_input_unit.lower()
+        ),
+        "coordinate_scale_to_m_recorded": not coordinate_scale_required or coordinate_scale_to_m is not None,
+        "expected_coordinate_scale_to_m_matches": scale_matches,
+        "probe_point_input_scale_matches_probe_point_xy_m": input_scale_matches,
+        "field_vector_present": field_vector is not None,
+        "field_vector_finite": field_finite,
+        "field_units_recorded_when_expected": expected_units is None or bool(field_units),
+        "expected_field_units_matches": expected_units is None or field_units == expected_units,
+        "component_frame_recorded_when_expected": expected_frame is None or bool(component_frame),
+        "expected_field_component_frame_matches": expected_frame is None or component_frame == expected_frame,
+        "probe_method_recorded_when_expected": expected_method is None or bool(probe_method_normalized),
+        "expected_field_probe_method_matches": expected_method is None or probe_method_normalized == expected_method,
+        "postprocess_trace_id_recorded": not trace_required or bool(postprocess_trace_id),
+        "expected_postprocess_trace_id_matches": expected_trace is None or postprocess_trace_id == expected_trace,
+        "postprocess_command_digest_recorded": not trace_required or bool(postprocess_command_digest),
+        "expected_postprocess_command_digest_matches": (
+            expected_command_digest is None or postprocess_command_digest == expected_command_digest
+        ),
+        "postprocess_commands_recorded": not trace_required or bool(postprocess_commands),
+        "postprocess_commands_include_mo_getb": not trace_required or "mo_getb" in command_text,
+        "probe_output_artifact_id_recorded": not output_required or bool(probe_output_artifact_id),
+        "expected_probe_output_artifact_id_matches": (
+            expected_output_artifact is None or probe_output_artifact_id == expected_output_artifact
+        ),
+        "probe_output_digest_recorded": not output_required or bool(probe_output_digest),
+        "expected_probe_output_digest_matches": (
+            expected_output_digest is None or probe_output_digest == expected_output_digest
+        ),
+        "probe_output_path_recorded": not output_required or bool(probe_output_path),
+    }
+    return {
+        "policy": "magnetic_field_probe_result_package_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "model_id": model_id,
+        "operating_point_id": operating_point_id,
+        "artifact_id": artifact_id,
+        "solution_artifact_id": solution_artifact_id,
+        "solution_digest": solution_digest or None,
+        "solution_path": solution_path or None,
+        "solution_loaded": solution_loaded if solution_loaded_recorded else None,
+        "source_tool": source_tool,
+        "source_function": source_function,
+        "field_probe_id": probe_id,
+        "probe_point_xy_m": list(probe_point) if probe_point is not None else None,
+        "expected_probe_point_xy_m": list(expected_point) if expected_point is not None else None,
+        "problem_length_unit": problem_length_unit,
+        "probe_point_input_xy": list(probe_point_input) if probe_point_input is not None else None,
+        "probe_point_input_unit": probe_point_input_unit,
+        "coordinate_scale_to_m": coordinate_scale_to_m,
+        "B_T": list(field_vector) if field_vector is not None else None,
+        "field_units": field_units,
+        "field_component_frame": component_frame,
+        "field_probe_method": probe_method_normalized or None,
+        "raw_field_probe_method": probe_method,
+        "postprocess_trace_id": postprocess_trace_id,
+        "postprocess_command_digest": postprocess_command_digest,
+        "postprocess_commands": postprocess_commands,
+        "probe_output_artifact_id": probe_output_artifact_id,
+        "probe_output_digest": probe_output_digest,
+        "probe_output_path": probe_output_path,
+        "expected_model_id": expected_model,
+        "expected_operating_point_id": expected_op,
+        "expected_artifact_id": expected_artifact,
+        "expected_solution_artifact_id": expected_solution,
+        "expected_solution_digest": expected_solution_hash,
+        "expected_solution_path": expected_solution_file,
+        "expected_source_tool": expected_tool,
+        "expected_probe_id": expected_probe,
+        "expected_problem_length_unit": expected_length_unit,
+        "expected_probe_point_input_unit": expected_input_unit,
+        "expected_coordinate_scale_to_m": expected_scale,
+        "expected_field_component_frame": expected_frame,
+        "expected_field_units": expected_units,
+        "expected_field_probe_method": expected_method,
+        "expected_postprocess_trace_id": expected_trace,
+        "expected_postprocess_command_digest": expected_command_digest,
+        "expected_probe_output_artifact_id": expected_output_artifact,
+        "expected_probe_output_digest": expected_output_digest,
+        "solution_loaded_required": solution_required,
+        "solution_artifact_required": solution_artifact_required,
+        "postprocess_command_trace_required": trace_required,
+        "probe_output_artifact_required": output_required,
+        "probe_coordinate_scale_required": coordinate_scale_required,
+        "point_atol_m": point_tol,
+        "checks": checks,
+        "notes": [
+            "Use this before comparing FEMM mo_getb, NGSolve, or notebook B-field probe rows.",
+            "Bind point B samples to the loaded solution artifact and probe point; value agreement alone is not reusable evidence.",
+            "For FEMM .ans reuse, bind solution artifact id, digest, and path before trusting point B rows.",
+            "For FEMM, record mi_loadsolution state and a postprocess command trace containing mo_getb(px, py).",
+            "When comparing across solvers, record FEMM problem length units, the raw mo_getb input coordinate, and the scale used to express probe_point_xy_m in meters.",
+        ],
     }
 
 

@@ -388,6 +388,138 @@ def test_fem_bem_trace_view_preserves_one_based_connectivity():
     assert view["policy"] == "netgen_vol_tri_tet_only_shared_one_based_nodes"
 
 
+def test_fem_bem_trace_package_handoff_keeps_matlab_views_together():
+    mesh = parse_netgen_tri_tet_vol(TET_VOL, source="slot152_unit_tet.vol")
+    package = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot152_export_A",
+    )
+
+    assert package["status"] == "ok"
+    assert package["policy"] == "netgen_vol_first_order_fem_bem_trace_package_handoff"
+    assert package["mesh_id"] == "unit_tet_fem_bem"
+    assert package["export_id"] == "slot152_export_A"
+    assert package["source_path"] == "slot152_unit_tet.vol"
+    assert package["bem_kernel_family"] == "laplace_single_layer"
+    assert package["bem_kernel_strategy"] == "direct_laplace_1_over_4pi_r"
+    assert package["bem_kernel_manifest_id"] == ""
+    assert package["assembly_rule_id"] == "first_order_tet_h1_trace_tri_p1_bem_teaching_v1"
+    assert package["quadrature_rule_id"] == "tri_p1_exact_mass_regular_kernel_teaching_v1"
+    assert all(package["checks"].values())
+    assert package["trace_matrix"]["cols"] == package["inventory"]["trace_node_ids"]
+    assert package["topology_counts"] == {
+        "h1_nodes": 4,
+        "hcurl_edges": 6,
+        "scalar_bem_nodes": 4,
+        "rwg_edges": 6,
+    }
+
+    missing_source = parse_netgen_tri_tet_vol(TET_VOL).fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot152_export_A",
+    )
+    assert missing_source["status"] == "needs_attention"
+    assert missing_source["checks"]["source_path_recorded"] is False
+
+    low_frequency_kernel = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot328_export_low_frequency_kernel",
+        bem_kernel_manifest_id="lf_helmholtz_k1e-9_expm1_taylor_v1",
+        bem_kernel_family="helmholtz_single_layer",
+        bem_kernel_strategy="laplace_plus_expm1_taylor_correction",
+        kernel_time_convention="exp(+i*k*r) MATLAB teaching convention",
+        expected_bem_kernel_manifest_id="lf_helmholtz_k1e-9_expm1_taylor_v1",
+        expected_bem_kernel_family="helmholtz_single_layer",
+        expected_bem_kernel_strategy="laplace_plus_expm1_taylor_correction",
+        expected_kernel_time_convention="exp(+i*k*r) MATLAB teaching convention",
+        expected_assembly_rule_id="first_order_tet_h1_trace_tri_p1_bem_teaching_v1",
+        expected_quadrature_rule_id="tri_p1_exact_mass_regular_kernel_teaching_v1",
+    )
+    assert low_frequency_kernel["status"] == "ok"
+    assert low_frequency_kernel["checks"]["bem_kernel_manifest_id_recorded_when_expected"] is True
+    assert low_frequency_kernel["checks"]["bem_kernel_manifest_id_matches_expected"] is True
+    assert low_frequency_kernel["checks"]["bem_kernel_family_matches_expected"] is True
+    assert low_frequency_kernel["checks"]["bem_kernel_strategy_matches_expected"] is True
+    assert low_frequency_kernel["checks"]["kernel_time_convention_matches_expected"] is True
+    assert low_frequency_kernel["checks"]["assembly_rule_id_matches_expected"] is True
+    assert low_frequency_kernel["checks"]["quadrature_rule_id_matches_expected"] is True
+
+    normal_flux_package = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot360_export_normal_flux",
+        normal_flux_artifact_id="slot360_unit_tet_normal_flux_sign_report_v1",
+        normal_flux_digest="sha256:unit-tet-normal-flux-sign-report-v1",
+        normal_flux_convention="outward_from_volume",
+        expected_normal_flux_artifact_id="slot360_unit_tet_normal_flux_sign_report_v1",
+        expected_normal_flux_digest="sha256:unit-tet-normal-flux-sign-report-v1",
+        expected_normal_flux_convention="outward_from_volume",
+        require_normal_flux_artifact=True,
+    )
+    assert normal_flux_package["status"] == "ok"
+    assert normal_flux_package["normal_flux_artifact_id"] == "slot360_unit_tet_normal_flux_sign_report_v1"
+    assert normal_flux_package["normal_flux_digest"] == "sha256:unit-tet-normal-flux-sign-report-v1"
+    assert normal_flux_package["normal_flux_convention"] == "outward_from_volume"
+    assert normal_flux_package["checks"]["normal_flux_artifact_id_matches_expected"] is True
+    assert normal_flux_package["checks"]["normal_flux_digest_matches_expected"] is True
+    assert normal_flux_package["checks"]["normal_flux_convention_matches_expected"] is True
+
+    stale_normal_flux_digest = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot360_export_normal_flux",
+        normal_flux_artifact_id="slot360_unit_tet_normal_flux_sign_report_v1",
+        normal_flux_digest="sha256:old-normal-flux-sign-report",
+        normal_flux_convention="outward_from_volume",
+        expected_normal_flux_artifact_id="slot360_unit_tet_normal_flux_sign_report_v1",
+        expected_normal_flux_digest="sha256:unit-tet-normal-flux-sign-report-v1",
+        expected_normal_flux_convention="outward_from_volume",
+        require_normal_flux_artifact=True,
+    )
+    assert stale_normal_flux_digest["status"] == "needs_attention"
+    assert stale_normal_flux_digest["checks"]["normal_flux_artifact_id_matches_expected"] is True
+    assert stale_normal_flux_digest["checks"]["normal_flux_digest_matches_expected"] is False
+
+    missing_normal_flux_artifact = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot360_export_normal_flux",
+        normal_flux_convention="outward_from_volume",
+        require_normal_flux_artifact=True,
+    )
+    assert missing_normal_flux_artifact["status"] == "needs_attention"
+    assert missing_normal_flux_artifact["checks"]["normal_flux_artifact_id_recorded_when_required"] is False
+    assert missing_normal_flux_artifact["checks"]["normal_flux_digest_recorded_when_required"] is False
+
+    stale_kernel_manifest = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot328_export_low_frequency_kernel",
+        bem_kernel_manifest_id="old_direct_helmholtz_manifest",
+        bem_kernel_family="helmholtz_single_layer",
+        bem_kernel_strategy="laplace_plus_expm1_taylor_correction",
+        kernel_time_convention="exp(+i*k*r) MATLAB teaching convention",
+        expected_bem_kernel_manifest_id="lf_helmholtz_k1e-9_expm1_taylor_v1",
+        expected_bem_kernel_family="helmholtz_single_layer",
+        expected_bem_kernel_strategy="laplace_plus_expm1_taylor_correction",
+        expected_kernel_time_convention="exp(+i*k*r) MATLAB teaching convention",
+    )
+    assert stale_kernel_manifest["status"] == "needs_attention"
+    assert stale_kernel_manifest["checks"]["bem_kernel_manifest_id_matches_expected"] is False
+
+    missing_kernel_manifest = mesh.fem_bem_trace_package_handoff(
+        mesh_id="unit_tet_fem_bem",
+        export_id="slot328_export_low_frequency_kernel",
+        bem_kernel_family="helmholtz_single_layer",
+        bem_kernel_strategy="laplace_plus_expm1_taylor_correction",
+        kernel_time_convention="exp(+i*k*r) MATLAB teaching convention",
+        expected_bem_kernel_manifest_id="lf_helmholtz_k1e-9_expm1_taylor_v1",
+    )
+    assert missing_kernel_manifest["status"] == "needs_attention"
+    assert missing_kernel_manifest["checks"]["bem_kernel_manifest_id_recorded_when_expected"] is False
+
+    with pytest.raises(ValueError, match="mesh_id"):
+        mesh.fem_bem_trace_package_handoff(mesh_id="", export_id="slot152_export_A")
+    with pytest.raises(ValueError, match="export_id"):
+        mesh.fem_bem_trace_package_handoff(mesh_id="unit_tet_fem_bem", export_id="")
+
+
 def test_trace_node_ids_by_boundary_number():
     mesh = parse_netgen_tri_tet_vol(TET_VOL_FOUR_BOUNDARIES)
 
