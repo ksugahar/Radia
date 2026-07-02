@@ -1093,7 +1093,11 @@ coil.faces().sort_by(Axis.Z)[0].label = "source"   # bottom cap
 coil.faces().sort_by(Axis.Z)[-1].label = "sink"    # top cap
 export_step(coil, "coil.step")
 geo = OCCGeometry("coil.step")
-mesh = Mesh(geo.GenerateMesh(maxh=2.0))
+# CRITICAL: generate a SURFACE-ONLY mesh (volume tets make the BEM-A
+# saddle LU singular):
+from netgen.meshing import MeshingParameters, MeshingStep
+mesh = Mesh(geo.GenerateMesh(MeshingParameters(
+    maxh=2.0, perfstepsend=MeshingStep.MESHSURFACE)))
 
 from radia.bem.coil_inductance_ngsolve import compute_inductance_source_sink
 # Impedance-EFIE (the sole formulation since 2026-07-02): complex

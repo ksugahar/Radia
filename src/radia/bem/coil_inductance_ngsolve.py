@@ -174,7 +174,13 @@ def compute_inductance_source_sink(
     ``omega=0`` (frequency=0), not a fallback.
 
     Args:
-        mesh: NGSolve Mesh (volume mesh with boundary, or surface-only).
+        mesh: NGSolve Mesh -- must be a PURE SURFACE mesh (no volume
+            elements).  A volume mesh's internal tets add saddle null
+            modes the D[:-1,:] deflation cannot remove and the LU
+            reports a singular matrix; extract the boundary first, as
+            the panel does via
+            ``surface_mesh_extract._extract_surface_mesh_filtered``
+            (see validation_test/bem/test_coil_bem_a_volume_vol.py).
         source_label, sink_label: BND labels for current injection /
             extraction faces.  Set in the OCC face.name = "source"/"sink"
             BEFORE meshing, or rely on the panel's smallest-2-PLANE

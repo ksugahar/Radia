@@ -17,8 +17,8 @@ Public docs/notebooks:
     figures/results.
 
 Sources:
-  - W:\\31_Go-Tech\\10_誘導加熱の解析\\2025_09_20_toymodel_Gmsh\\NGSolve
-    (K. Sugahara's production induction heating simulations)
+  - Internal production induction-heating toymodel notes
+    (K. Sugahara's production simulations; machine-local path omitted)
   - https://docu.ngsolve.org/latest/i-tutorials/
   - https://forum.ngsolve.org/
 """
@@ -1309,7 +1309,7 @@ FEM-ESIM + Kelvin combines the best: no skin mesh, exact open BC, nonlinear BH.
 
 ## Reference: Go-Tech Toymodel (FEM-full, production code)
 
-Source: `W:\\31_Go-Tech\\10_誘導加熱の解析\\2025_09_20_toymodel_Gmsh\\NGSolve`
+Source: internal production Go-Tech toymodel notes (machine-local path omitted).
 
 ### A-Phi Formulation (3D, frequency domain)
 
@@ -1844,8 +1844,8 @@ gfu.vec.data = complex(scale) * gfu.vec
    as integral of J.grad(psi_n) over coil, scale gfu by I_total/I_out.
 
 ## Reference: existing A-V implementation
-`W:/31_Go-Tech/10_誘導加熱の解析/.../toymodel+lead_EddyCurent_APhi_bddc_CG_node.ipynb`
-by K. Sugahara. Production code pattern for A-V + BDDC+CG (non-Kelvin outer).
+Internal A-V implementation notebook by K. Sugahara (machine-local path
+omitted). Production code pattern for A-V + BDDC+CG (non-Kelvin outer).
 """
 
 INDUCTION_HEATING_FAILED_APPROACHES = """
@@ -1911,9 +1911,12 @@ production-useful.
 `I_k/I_avg` (AC redistribution) at each panel. Feed modulated complex J
 into `compute_phi_inc_from_surface_J`.
 
-**Why it fails**: `compute_phi_inc_from_surface_J` casts complex J_vecs to
-real (`np.asarray(src_J_vecs, dtype=float)`), discarding phase. Modulation
-is destroyed.
+**Why it fails**: `compute_phi_inc_from_surface_J` is real-only.  It
+historically cast complex J_vecs to real silently (discarding phase --
+the modulation was destroyed); since 2026-07-02 it raises TypeError on
+complex input instead.  Callers must bridge Re and Im in two separate
+calls and combine `phi_re + 1j*phi_im` (as calc_inductance does for the
+complex impedance-EFIE coil current).
 
 **Resolution**: Direct filament -> `compute_phi_inc_from_filaments` is
 simpler and already handles complex currents correctly. This IS the PEEC+BEM
