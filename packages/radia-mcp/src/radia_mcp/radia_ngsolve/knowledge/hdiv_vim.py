@@ -19,6 +19,8 @@ charge-Coulomb Gram construction is expensive.  The production surface-charge pa
 Mathematica-derived multipole-moment MMM rows: cheaper local moment functionals for 3-DOF MMM and 5/6-DOF
 MSC, with HDiv retained as the higher-order and de-Rham-exact complement.
 
+PRIMARY (decision 2026-06-30, Sugahara -- SUPERSEDES the 2026-06-24 positioning above): HDiv-VIM is now the PRIMARY (本命) accurate soft-iron demag method, and collocation MMMM is DEMOTED to the COARSE / fast tier (optimization inner loops, mesh-less quick passes). The 2026-06-24 'production uses the multipole-moment MMM rows' framing is REVERSED: collocation MMMM gave up loop-free (its loop-free implementation was removed 2026-06-30) -- field-correct (loops field-null) but loop-polluted internal M, acceptable for coarse/optimization but NOT accurate/hysteresis; HDiv-VIM is loop-free BY CONSTRUCTION (loops = ker(B)), so it is the primary accurate route. Use HDiv-VIM (tet mesh) for production/accurate + hysteresis; collocation MMMM (hex/mesh-less) for fast coarse passes. Memory: collocation_loopfree_abandoned.
+
 CURRENT API (2026-06-23 -- the dense Python Gram path was REMOVED): the C++ `_ChargeGramHMatrix` kernel
 is the SOLE demag operator (N v = B^T (H.matvec(B v)); EXACT analytic near AND far; tet via
 cell_verts/face_verts, hex/wedge via the polytope triangle soup), and folds IMA (image charges /
