@@ -244,6 +244,40 @@ public:
                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
                         std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el);
+
+    // HEX RT1 mode (2026-07-02): the RT1-hex (HDiv(hexmesh, order=1)) charge Gram -- Q1 monomial charges
+    // (volume: xi^i eta^j zeta^k, (i,j,k) in {0,1}^3, 8/hex, the L2(order=1) test space -- NOT the tet's
+    // order p-1; surface: u^i v^j, (i,j) in {0,1}^2, 4/quad face) over the DIRECT Q2 isoparametric geometry:
+    // hex_cell_nodes [n_el*81] = 27-node triquadratic lattice (n = ix + 3*iy + 9*iz, ref (ix/2,iy/2,iz/2)),
+    // quad_face_nodes [n_bf*27] = 9-node biquadratic lattice (n = iu + 3*iv), both extracted via GetTrafo at
+    // the reference lattice -> ONE code path for FLAT (trilinear subset of Q2, machine-exact incl. distorted)
+    // and CURVED (mesh.Curve(2)) hexes.  Quadrature follows the numpy-validated eig(M^-1 N)<=1 scheme
+    // (independent prototype eig 0.998): per (target sub-simplex, source sub-simplex) pair
+    // of the ref-hex 6-sub-tet / ref-quad 2-sub-tri decomposition,
+    //   OUTER: near/self sub pair (|cA-cB| <= near_grade*(sA+sB), hosts near) -> a Duffy-graded product rule
+    //          (gl_out/gw_out, graded toward the source sub centroid; BOTH domains graded is the key eig<=1
+    //          lesson); far sub pair -> the regular symmetric rule (sym_tet_* = Keast-15 / sym_tri_* =
+    //          Dunavant-7, bary pts + weights summing to the ref simplex measure 1/6 / 1/2).
+    //   INNER: field point far from the source sub (> far_inner_factor*size) -> the cheap far rule
+    //          (far_tet_*/far_tri_*); else the FINE corner-graded Duffy (gl_in/gw_in, graded toward the
+    //          source-sub vertex nearest the field point) -- effectively exact.
+    // All rules are consumed as tables (Python owns the constants).  A future PYRAMID transition element
+    // (NGSolve HDiv-pyramid, tet/hex coupling) slots in as one more (ref-domain sub-tet table + nodal
+    // lattice map + monomial set) row -- no structural change.
+    RadHACApKChargeGram(std::vector<double> hex_cell_nodes, std::vector<double> quad_face_nodes,
+                        int n_el, int n_bf,
+                        std::vector<int> charge_host, std::vector<int> charge_kind,
+                        std::vector<int> charge_expo,
+                        std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+                        std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> gl_out, std::vector<double> gw_out,
+                        std::vector<double> gl_in, std::vector<double> gw_in,
+                        std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+                        std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                        double near_grade, double far_inner_factor);
+    // Q2 lattice geometry maps (PUBLIC static utilities: the file-local cloud builder uses them too).
+    static void HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3]);
+    static void QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2]);
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -370,6 +404,26 @@ private:
     bool m_curved_face = false;
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 6>>> m_srcCurvedTris;  // [n] curved-face P2 sub-tri nodes
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 10>>> m_srcCurvedTets; // [n] curved-cell P2 sub-tet nodes
+
+    // HEX RT1 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
+    // the HEX/QUAD REFERENCE frame (evaluated directly at ref coords -- no physical->ref inverse), geometry +
+    // measure come from the Q2 lattice maps.  m_qp/m_qw hold the prebuilt REGULAR outer clouds (monomial
+    // folded), used for far sub pairs; graded outer clouds are built on the fly in QuadDotHex.
+    bool m_hexmode = false;
+    int  m_hex_n_bf = 0;
+    std::vector<double> m_hexNodes, m_quadNodes;        // [n_el*81] 27-node Q2 hex, [n_bf*27] 9-node Q2 quad
+    std::vector<double> m_symTetP, m_symTetW;           // regular outer tet rule (bary lam1..3; W sums 1/6)
+    std::vector<double> m_symTriP, m_symTriW;           // regular outer tri rule (bary lam1..2; W sums 1/2)
+    std::vector<double> m_glOut, m_gwOut;               // 1D [0,1] Gauss -> graded OUTER Duffy (near/self subs)
+    std::vector<double> m_glIn, m_gwIn;                 // 1D [0,1] Gauss -> fine graded INNER Duffy
+    std::vector<double> m_farTetP, m_farTetW;           // cheap FAR inner tet rule (bary; W sums 1/6)
+    std::vector<double> m_farTriP, m_farTriW;           // cheap FAR inner tri rule (bary; W sums 1/2)
+    double m_near_grade = 1.5, m_far_inner_factor = 4.0;
+    std::vector<double> m_cellSubC, m_cellSubS, m_cellSubV;  // [n_el*6*3] sub-tet centroids, [n_el*6] sizes, [n_el*6*4*3] phys corners
+    std::vector<double> m_faceSubC, m_faceSubS, m_faceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3] (sub-tri)
+    double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1 monomial (i,j,k in {0,1})
+    double PhiInnerHexSub(int src, int sub, const double p[3]) const;  // INT_{src host's sub-simplex} mono_src(xi)/|p-y| dy
+    double QuadDotHex(int tgt, int src) const;          // pair-graded outer x graded inner (the validated scheme)
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
