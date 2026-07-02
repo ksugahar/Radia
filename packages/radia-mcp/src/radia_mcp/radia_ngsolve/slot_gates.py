@@ -5774,6 +5774,248 @@ def solver_result_artifact_provenance_timing_gate(
     }
 
 
+def cross_validation_artifact_to_mcp_feedback_gate(
+    artifact,
+    expected_public_status="verified",
+    require_pass=True,
+    require_public_lesson=True,
+    require_learning_target=True,
+    require_verification=True,
+    require_result_provenance=True,
+    require_result_artifact=True,
+    require_notebook_source=False,
+    require_result_output_schema=True,
+    required_versions=("solver", "radia_mcp"),
+    min_timing_stages=1,
+    max_timing_stages=4,
+):
+    """Check that a cross-validation or notebook result was fed back to MCP.
+
+    This gate sits above the result provenance/table gates.  It answers a
+    workflow question: did the artifact become durable MCP knowledge, or was it
+    merely collected as a JSON/notebook output?
+    """
+
+    if not isinstance(artifact, dict):
+        raise ValueError("artifact must be a mapping")
+
+    def first_from(records, names, default=""):
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            for name in names:
+                value = record.get(name)
+                if value is not None and str(value).strip():
+                    return value
+        return default
+
+    def string_list(value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            if "," in text or ";" in text:
+                return [
+                    item.strip()
+                    for item in text.replace(";", ",").split(",")
+                    if item.strip()
+                ]
+            return [text]
+        if isinstance(value, (list, tuple, set)):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return [str(value).strip()] if str(value).strip() else []
+
+    def rank_status(value):
+        text = str(value or "").strip().lower()
+        ranks = {
+            "": -1,
+            "none": 0,
+            "candidate": 1,
+            "collected": 1,
+            "distilled": 1,
+            "encoded": 2,
+            "verified": 3,
+            "learned": 3,
+        }
+        return ranks.get(text, -1), text
+
+    learning_lanes = artifact.get("learning_lanes", {})
+    if not isinstance(learning_lanes, dict):
+        learning_lanes = {}
+    verification = artifact.get("verification", {})
+    if not isinstance(verification, dict):
+        verification = {}
+    mcp_feedback = artifact.get("mcp_feedback", {})
+    if not isinstance(mcp_feedback, dict):
+        mcp_feedback = {}
+
+    public_status = learning_lanes.get(
+        "public",
+        learning_lanes.get("open", learning_lanes.get("radia_mcp", "")),
+    )
+    source_tool_status = learning_lanes.get(
+        "source_tool",
+        learning_lanes.get("source", learning_lanes.get("private", "")),
+    )
+    public_rank, public_status_text = rank_status(public_status)
+    expected_public_rank, expected_public_status_text = rank_status(expected_public_status)
+
+    learning_targets = [
+        *string_list(artifact.get("learning_targets")),
+        *string_list(mcp_feedback.get("encoded_targets")),
+        *string_list(mcp_feedback.get("knowledge_topics")),
+    ]
+    public_target_recorded = any(
+        "radia-mcp" in target.lower()
+        or "radia_ngsolve" in target.lower()
+        or "radia-ngsolve" in target.lower()
+        for target in learning_targets
+    )
+    public_verification = first_from(
+        (verification, mcp_feedback),
+        (
+            "public",
+            "open",
+            "radia_mcp",
+            "radia-mcp",
+            "radia_ngsolve",
+            "radia-ngsolve",
+            "test",
+            "tests",
+        ),
+    )
+    public_lesson = first_from(
+        (artifact, mcp_feedback),
+        (
+            "public_lesson",
+            "public_summary",
+            "teaching_note",
+            "knowledge_note",
+            "lesson",
+        ),
+    )
+    if not public_lesson:
+        notes = artifact.get("notes", [])
+        note_list = string_list(notes)
+        public_lesson = note_list[0] if note_list else ""
+
+    execution = artifact.get("execution", {})
+    if not isinstance(execution, dict):
+        execution = {}
+    result_block = artifact.get("result", {})
+    if not isinstance(result_block, dict):
+        result_block = {}
+    notebook_block = artifact.get("notebook", {})
+    if not isinstance(notebook_block, dict):
+        notebook_block = {}
+    result_records = (artifact, execution, result_block, notebook_block)
+    result_artifact_id = first_from(
+        result_records,
+        (
+            "result_artifact_id",
+            "execution_result_artifact_id",
+            "notebook_result_artifact_id",
+            "run_result_artifact_id",
+        ),
+    )
+    notebook_source_artifact_id = first_from(
+        result_records,
+        (
+            "notebook_source_artifact_id",
+            "notebook_artifact_id",
+            "notebook_id",
+            "source_notebook_artifact_id",
+        ),
+    )
+    notebook_source_digest = first_from(
+        result_records,
+        (
+            "notebook_source_digest",
+            "notebook_digest",
+            "source_notebook_digest",
+        ),
+    )
+    notebook_source_path = first_from(
+        result_records,
+        (
+            "notebook_source_path",
+            "notebook_path",
+            "source_notebook_path",
+        ),
+    )
+
+    provenance_gate = solver_result_artifact_provenance_timing_gate(
+        artifact,
+        required_versions=required_versions,
+        min_timing_stages=min_timing_stages,
+        max_timing_stages=max_timing_stages,
+        require_run_date=True,
+        require_result_output_schema=require_result_output_schema,
+    )
+
+    checks = {
+        "pass_recorded_true_when_required": (
+            not bool(require_pass) or artifact.get("pass") is True
+        ),
+        "public_lane_status_at_expected_level": (
+            expected_public_rank < 0 or public_rank >= expected_public_rank
+        ),
+        "public_lesson_recorded_when_required": (
+            not bool(require_public_lesson) or bool(str(public_lesson).strip())
+        ),
+        "public_learning_target_recorded_when_required": (
+            not bool(require_learning_target) or public_target_recorded
+        ),
+        "public_verification_recorded_when_required": (
+            not bool(require_verification) or bool(str(public_verification).strip())
+        ),
+        "result_provenance_gate_ok_when_required": (
+            not bool(require_result_provenance) or provenance_gate["status"] == "ok"
+        ),
+        "result_artifact_id_recorded_when_required": (
+            not bool(require_result_artifact) or bool(str(result_artifact_id).strip())
+        ),
+        "notebook_source_artifact_id_recorded_when_required": (
+            not bool(require_notebook_source) or bool(str(notebook_source_artifact_id).strip())
+        ),
+        "notebook_source_digest_recorded_when_required": (
+            not bool(require_notebook_source) or bool(str(notebook_source_digest).strip())
+        ),
+        "notebook_source_path_recorded_when_required": (
+            not bool(require_notebook_source) or bool(str(notebook_source_path).strip())
+        ),
+    }
+
+    learned = all(checks.values())
+    return {
+        "policy": "cross_validation_artifact_to_mcp_feedback_gate",
+        "status": "ok" if learned else "needs_attention",
+        "learning_stage": "learned" if learned else "collected_or_encoded",
+        "expected_public_status": expected_public_status_text,
+        "public_lane_status": public_status_text,
+        "source_tool_lane_status": str(source_tool_status or "").strip().lower(),
+        "public_lesson": str(public_lesson or ""),
+        "learning_targets": learning_targets,
+        "public_verification": str(public_verification or ""),
+        "result_artifact_id": str(result_artifact_id or ""),
+        "notebook_source_artifact_id": str(notebook_source_artifact_id or ""),
+        "notebook_source_digest": str(notebook_source_digest or ""),
+        "notebook_source_path": str(notebook_source_path or ""),
+        "provenance_gate_status": provenance_gate["status"],
+        "provenance_gate_policy": provenance_gate["policy"],
+        "dominant_timing_stages": provenance_gate.get("dominant_timing_stages", []),
+        "checks": checks,
+        "notes": [
+            "Use this after a JSON, notebook, or cross-validation result exists.",
+            "The artifact is learned only after a public-safe lesson, MCP target, and focused verification are recorded.",
+            "Pair this feedback gate with the solver/result provenance and table metadata gates before notebook reuse.",
+            "Keep private source-tool provenance in the owning private lane; public radia-mcp records only the scrubbed lesson and gate.",
+        ],
+    }
+
+
 def solver_result_table_metadata_gate(
     metadata,
     required_columns=(),
