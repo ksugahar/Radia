@@ -1560,17 +1560,18 @@ volume PEEC 3.7 / perimeter PEEC 4.5 / analytic proximity 4.8).  On smooth
 geometry both agreed (isolated straight wire = closed-form Bessel to <1%),
 so the removal loses nothing.
 
-**Scalable solver = loop-COCR** (``--coil-saddle-solver loop_cocr``, and
-``auto`` selects it for large systems: > 5000 tris AC / 10000 DC).  It
-reduces the saddle to the divergence-free (loop / stream-function) subspace
-via the sparse projector onto ker(D), giving the complex-symmetric operator
+**Scalable solver = COCR** (two ``--coil-saddle-solver`` choices: ``cocr``
+[dense SL matvec] and ``hacapk_cocr`` [HACApK-compressed SL matvec]; ``auto``
+selects ``cocr`` for large systems: > 5000 tris AC / 10000 DC).  It reduces
+the saddle to the divergence-free (loop / stream-function) subspace via the
+sparse projector onto ker(D), giving the complex-symmetric operator
 ``Pi A11 Pi`` that COCR (Sogabe-Zhang, UNCONJUGATED inner products) solves in
 ~24 MESH-INDEPENDENT iterations -- EXACT vs the dense LU (dR/dL < 0.01% on the
 gapped torus) and replacing BOTH the O(N^3) LU and the unpreconditioned GMRES
-that stalled (~1e5 matvecs) on the indefinite AC saddle.  The SL matvec is
-dense (default) or HACApK-compressed (``--coil-loop-matvec hacapk``,
-O(N log N), matvec accuracy ~3e-7, the bem_sibc_solver HACApKBEMManager
-pattern); both give identical R/L.  COCR does NOT fit the raw saddle
+that stalled (~1e5 matvecs) on the indefinite AC saddle.  ``hacapk_cocr`` uses
+the HACApKBEMManager-compressed O(N log N) SL matvec (accuracy ~3e-7, the
+bem_sibc_solver pattern); ``cocr`` and ``hacapk_cocr`` give identical R/L.
+COCR does NOT fit the raw saddle
 (structural breakdown -- rhs = [0; g] lives in the constraint block so the
 initial r^T A r = 0) nor the Schur complement (diverges); the div-free
 reduction is what makes it fit.
