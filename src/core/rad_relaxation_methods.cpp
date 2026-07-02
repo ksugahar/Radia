@@ -2963,6 +2963,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 					&& rad.m_moment_hk_eps == rad.m_hacapk_eps
 					&& rad.m_moment_hk_leaf == rad.m_hacapk_leaf_size
 					&& rad.m_moment_hk_eta == rad.m_hacapk_eta
+					&& rad.m_moment_hk_analytic == RadMomentKernelConfig::UseAnalytic()
 					&& (int)rad.m_moment_hk_localL.size() == nHex * 36
 					&& (int)rad.m_moment_hk_diagK.size() == nHex * 36
 					&& rad.m_moment_hk->GeometryMatches();
@@ -2986,6 +2987,7 @@ int radTRelaxationMethNo_1::SolveLinearStep(NonlinearContext& ctx, int iterCount
 					rad.m_moment_hk_eps = rad.m_hacapk_eps;
 					rad.m_moment_hk_leaf = rad.m_hacapk_leaf_size;
 					rad.m_moment_hk_eta = rad.m_hacapk_eta;
+					rad.m_moment_hk_analytic = RadMomentKernelConfig::UseAnalytic();   // kernel flag baked into K
 					rad.m_moment_hk_localL.assign((size_t)nHex * 36, 0.0);
 					rad.m_moment_hk_diagK.assign((size_t)nHex * 36, 0.0);
 					std::vector<double> zeroChi((size_t)nHex, 0.0);

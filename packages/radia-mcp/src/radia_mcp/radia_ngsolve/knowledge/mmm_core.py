@@ -694,6 +694,15 @@ Solver selection guidance: method 0 (dense LU) <= ~8k DOF reference solves;
 method 1 (dense-K BiCGSTAB) small/medium one-shot solves; method 2
 (HACApK-BiCGSTAB) large N AND any repeated-solve / optimization workload.
 
+KERNEL DEFAULT (2026-07-02 flip): the ANALYTIC closed-form triangle moment kernel
+is now the DEFAULT (was opt-in `moment_analytic_kernel=True`).  It is EXACT
+(removes the 64-pt Gauss quadrature error; Mathematica-verified) and measured
+1.5x faster on the dominant method-2 H-matrix build (mdx: ctype 28k DOF
+2.97 -> 1.95 s).  Gauss stays selectable for cross-checks:
+`rad.SolverConfig(moment_analytic_kernel=False)`.  Knob-matrix findings (mdx):
+`hacapk_eps=1e-3` shifts the field ~3% (too coarse even for the coarse tier --
+keep 1e-4); `hacapk_leaf` 16/64 vs 32 is a wash.
+
 ### Properties (verified)
 
 - dof = sum of per-element DOF (tet/RecMag 3, wedge/pyramid 5, hex 6). A 32-hex block

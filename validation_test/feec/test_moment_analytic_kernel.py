@@ -1,10 +1,11 @@
-"""Golden lock for the opt-in analytic closed-form moment kernel (moment_analytic_kernel, 2026-06-26).
+"""Golden lock for the analytic closed-form moment kernel (moment_analytic_kernel, 2026-06-26).
 
 The multipole-moment surface-charge kernel computes, per source face, the demag field H and field-gradient
-gH at a target centroid.  Default: a 64pt (8x8) Gauss bilinear-quad quadrature.  Opt-in
-(rad.SolverConfig(moment_analytic_kernel=True)): each face is fan-triangulated and integrated with the
+gH at a target centroid.  Default since 2026-07-02: each face is fan-triangulated and integrated with the
 CLOSED FORM (FieldGradFromChargedTriangleLocal) -- H = van Oosterom-Strackee, gH = its Mathematica-verified
 symbolic gradient (the quadrupole field-gradient).  ~64x fewer kernel evals/face; EXACT for planar faces.
+The 64pt (8x8) Gauss bilinear-quad path remains selectable with
+rad.SolverConfig(moment_analytic_kernel=False) for cross-checks.
 
 WIRING (2026-06-26): the analytic path is wired into the matrix-BUILD paths -- method 0 (dense
 BuildCentroidFieldGrad) and method 2 (HACApK MomentSystemEntry), both delegating to the single analytic-
@@ -13,7 +14,7 @@ use the precomputed 64 Gauss samples (they would need the face corners cached) -
 
 These tests lock that (a) the analytic path is actually LIVE (changes the result vs Gauss, not a no-op),
 (b) it reproduces the Gauss demag physics, (c) it produces the correct cube demag, and (d) the flag
-round-trips + defaults off + does not leak.  Derivation + verification (gH rel ~ Gauss accuracy, symmetric
+round-trips + defaults on + does not leak.  Derivation + verification (gH rel ~ Gauss accuracy, symmetric
 + traceless to machine eps; planar quad exact): docs/multipole_moment_mmm/quadrupole_hessian_derivation.wls
 + quad_split_validation.wls.  Self-contained (mesh-less ObjHexahedron + MatLin), no NGSolve, fast.
 """
@@ -29,7 +30,7 @@ H0 = 1000.0
 def _clean():
     rad.UtiDelAll(); rad.set_demag_backend("auto")
     yield
-    rad.SolverConfig(moment_analytic_kernel=False)   # never leak the global kernel flag to other goldens
+    rad.SolverConfig(moment_analytic_kernel=True)   # restore the DEFAULT (analytic, 2026-07-02 flip); never leak Gauss to other goldens
     rad.set_demag_backend("auto"); rad.UtiDelAll()
 
 
@@ -103,10 +104,12 @@ def test_analytic_kernel_cube_demag_physical():
     assert abs(M[0]) < 0.05 * H0 and abs(M[1]) < 0.05 * H0, f"analytic cube transverse M not ~0: {M[:2]}"
 
 
-def test_analytic_kernel_config_roundtrip_and_default_off():
-    """The moment_analytic_kernel flag round-trips through SolverConfig/GetSolverConfig and defaults OFF."""
-    assert rad.GetSolverConfig()["moment_analytic_kernel"] is False     # default off
-    rad.SolverConfig(moment_analytic_kernel=True)
-    assert rad.GetSolverConfig()["moment_analytic_kernel"] is True
+def test_analytic_kernel_config_roundtrip_and_default_on():
+    """The moment_analytic_kernel flag round-trips through SolverConfig/GetSolverConfig and defaults ON
+    (the 2026-07-02 deliberate flip: exact closed form + 1.5x faster method-2 H-matrix build; Gauss stays
+    selectable via moment_analytic_kernel=False for cross-checks)."""
+    assert rad.GetSolverConfig()["moment_analytic_kernel"] is True      # default on (2026-07-02)
     rad.SolverConfig(moment_analytic_kernel=False)
     assert rad.GetSolverConfig()["moment_analytic_kernel"] is False
+    rad.SolverConfig(moment_analytic_kernel=True)
+    assert rad.GetSolverConfig()["moment_analytic_kernel"] is True

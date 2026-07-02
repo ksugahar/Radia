@@ -148,6 +148,8 @@ def run_case(args):
     rad.SolverConfig(bicgstab_tol=args.bicg_tol,
                      hacapk_eps=args.hacapk_eps, hacapk_leaf=args.hacapk_leaf,
                      hacapk_eta=args.hacapk_eta)
+    if args.moment_kernel != "default":   # omit -> library default (analytic since 2026-07-02)
+        rad.SolverConfig(moment_analytic_kernel=(args.moment_kernel == "analytic"))
 
     cont, n_hex, extents, _centered = build_model(args.geom, args.nside, args.mu_r)
     ndof = 6 * n_hex
@@ -158,6 +160,7 @@ def run_case(args):
         "n_hex": n_hex, "ndof": ndof, "mu_r": args.mu_r,
         "bicg_tol": args.bicg_tol, "hacapk_eps": args.hacapk_eps,
         "hacapk_leaf": args.hacapk_leaf, "hacapk_eta": args.hacapk_eta,
+        "moment_kernel": args.moment_kernel,
     }
 
     def one_solve():
@@ -235,6 +238,8 @@ def sweep(args):
                "--mu-r", str(args.mu_r), "--bicg-tol", str(args.bicg_tol),
                "--hacapk-eps", str(args.hacapk_eps), "--hacapk-leaf", str(args.hacapk_leaf),
                "--hacapk-eta", str(args.hacapk_eta)]
+        if args.moment_kernel != "default":
+            cmd += ["--moment-kernel", args.moment_kernel]
         print(f"[{i+1}/{len(plan)}] method={method} {geom} nside={ns} (ndof={ndof}) ...", flush=True)
         t0 = time.perf_counter()
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=args.case_timeout)
@@ -317,6 +322,9 @@ def build_argparser():
     ap.add_argument("--hacapk-eps", type=float, default=1e-4)
     ap.add_argument("--hacapk-leaf", type=int, default=32)
     ap.add_argument("--hacapk-eta", type=float, default=2.0)
+    ap.add_argument("--moment-kernel", choices=("default", "analytic", "gauss"), default="default",
+                    help="face kernel: 'default' follows the library (analytic since 2026-07-02); "
+                         "'gauss' forces the 64-sample quadrature for cross-checks")
     ap.add_argument("--cube-sides", type=int, nargs="*", default=None)
     ap.add_argument("--bar-sides", type=int, nargs="*", default=None)
     ap.add_argument("--ctype-sides", type=int, nargs="*", default=None)
