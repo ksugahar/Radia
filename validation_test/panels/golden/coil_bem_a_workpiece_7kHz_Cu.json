@@ -1,61 +1,62 @@
 {
-  "description": "Golden reference for calc_coil_bem_a_workpiece.py (BEM-A coil + scalar BEM-SIBC workpiece, 1-way forward).",
-  "rationale": "Locks the BEM-A-driven counterpart to peec_bem_coarse_7kHz_Cu on the same physical setup (gapped torus R=30mm a=3mm gap=5deg + Cu cylinder workpiece, 7 kHz).  Stage 2 of the panel-promotion ladder for calc_coil_bem_a_workpiece (CLAUDE.md Panel Design Workflow Policy).  If this test fails the BEM-A surface-current to scalar-BIE bridge has regressed (compute_phi_inc_from_surface_J or _delta_L_telegen_phiB_from_surface_J).",
-  "sample": {
-    "coil_step": "src/radia/panels/samples/ih_peec_inductance_coil.step",
-    "vol": "src/radia/panels/samples/ih_peec_bem_coarse.vol",
-    "comment": "Coil STEP: gapped torus R=30mm a=3mm gap=5deg, ASCII STEP coords in metres.  Workpiece .vol: Cu cylinder R=25mm H=25mm meshed via Cubit + export netgen, sibc sideset on the wp-cavity boundary (workpiece-as-hole convention).  Same physical setup as peec_bem_coarse_7kHz_Cu.json, just different coil solver."
-  },
-  "physics": {
-    "coil": "gapped torus R=30mm a=3mm gap=5deg, Cu sigma=5.8e7, mu_r=1",
-    "workpiece": "cylinder R=25mm H=25mm, Cu sigma=5.8e7, mu_r=1",
-    "frequency_Hz": 7000,
-    "current_A": 1.0,
-    "coil_maxh_m": 0.005,
-    "coil_rwg_quad_degree": 5,
-    "coil_rwg_singular_nq": 6,
-    "h1_order": 1,
-    "wp_bem_backend": "hacapk",
-    "wp_aca_eps": 1e-10
-  },
-  "reference_2d_axisym_sibc": {
-    "P_W": 6.63e-5,
-    "note": "Same 2D SIBC reference as peec_bem_coarse_7kHz_Cu.json.  BEM-A 1-way value below is wp skin only (-7% vs 2D) -- mesh + 3D-vs-2D + thin-skin all contribute."
-  },
-  "reference_peec_bem": {
-    "L_coil_nH": 88.57,
-    "P_wp_W": 6.48e-5,
-    "H_t_rms_Am": 27.55,
-    "note": "Cross-method check: PEEC+BEM coarse (peec_bem_coarse_7kHz_Cu.json) on the same setup.  BEM-A L matches PEEC L to ~1.5% (mesh limit), P_wp to ~5%."
-  },
-  "expected": {
-    "L_coil_nH": 89.90,
-    "R_coil_mOhm": 0.237,
-    "delta_L_nH": -45.15,
-    "delta_R_mOhm": 0.043,
-    "L_total_nH": 44.76,
-    "R_total_mOhm": 0.280,
-    "P_wp_W": 6.14e-5,
-    "H_t_rms_A_per_m": 26.82,
-    "wp_dissipation_R_mOhm": 0.123,
-    "tolerance_L_coil_pct": 5.0,
-    "tolerance_R_coil_pct": 10.0,
-    "tolerance_delta_L_pct": 10.0,
-    "tolerance_P_pct": 15.0,
-    "tolerance_Ht_rms_pct": 10.0,
-    "input_kind_coil": "STEP",
-    "input_kind_wp": "VOL"
-  },
-  "regression_guard": {
-    "min_L_coil_nH": 80.0,
-    "max_L_coil_nH": 100.0,
-    "min_P_wp_W": 4.0e-5,
-    "max_P_wp_W": 9.0e-5,
-    "min_H_t_rms": 20.0,
-    "max_H_t_rms": 35.0,
-    "comment": "Hard band around BEM-A converged values (maxh=0.005, ~690 coil tris).  If L_coil exceeds 100 nH or drops below 80 nH, the BEM-A SS Galerkin / source-sink classifier has regressed.  If P_wp leaves the band the surface-current-to-phi_inc bridge (compute_phi_inc_from_surface_J on Re/Im of complex coil J) has regressed."
-  },
-  "captured_at": "2026-05-02",
-  "captured_commit": "Stage-2 of calc_coil_bem_a_workpiece promotion",
-  "source_of_truth": "calc_coil_bem_a_workpiece.py --coil-maxh 0.005 (run 2026-05-02)"
+ "description": "Golden reference for calc_coil_bem_a_workpiece.py (BEM-A coil + scalar BEM-SIBC workpiece, 1-way forward).",
+ "rationale": "Locks the BEM-A-driven counterpart to peec_bem_coarse_7kHz_Cu on the same physical setup (gapped torus R=30mm a=3mm gap=5deg + Cu cylinder workpiece, 7 kHz).  Stage 2 of the panel-promotion ladder for calc_coil_bem_a_workpiece (CLAUDE.md Panel Design Workflow Policy).  If this test fails the BEM-A surface-current to scalar-BIE bridge has regressed (compute_phi_inc_from_surface_J or _delta_L_telegen_phiB_from_surface_J).",
+ "sample": {
+  "coil_step": "src/radia/panels/samples/ih_peec_inductance_coil.step",
+  "vol": "src/radia/panels/samples/ih_peec_bem_coarse.vol",
+  "comment": "Coil STEP: gapped torus R=30mm a=3mm gap=5deg, ASCII STEP coords in metres.  Workpiece .vol: Cu cylinder R=25mm H=25mm meshed via Cubit + export netgen, sibc sideset on the wp-cavity boundary (workpiece-as-hole convention).  Same physical setup as peec_bem_coarse_7kHz_Cu.json, just different coil solver."
+ },
+ "physics": {
+  "coil": "gapped torus R=30mm a=3mm gap=5deg, Cu sigma=5.8e7, mu_r=1",
+  "workpiece": "cylinder R=25mm H=25mm, Cu sigma=5.8e7, mu_r=1",
+  "frequency_Hz": 7000,
+  "current_A": 1.0,
+  "coil_maxh_m": 0.005,
+  "coil_rwg_quad_degree": 5,
+  "coil_rwg_singular_nq": 6,
+  "h1_order": 1,
+  "wp_bem_backend": "hacapk",
+  "wp_aca_eps": 1e-10
+ },
+ "reference_2d_axisym_sibc": {
+  "P_W": 6.63e-05,
+  "note": "Same 2D SIBC reference as peec_bem_coarse_7kHz_Cu.json.  BEM-A 1-way value below is wp skin only (-7% vs 2D) -- mesh + 3D-vs-2D + thin-skin all contribute."
+ },
+ "reference_peec_bem": {
+  "L_coil_nH": 88.57,
+  "P_wp_W": 6.48e-05,
+  "H_t_rms_Am": 27.55,
+  "note": "Cross-method check: PEEC+BEM coarse (peec_bem_coarse_7kHz_Cu.json) on the same setup.  BEM-A L matches PEEC L to ~1.5% (mesh limit), P_wp to ~5%."
+ },
+ "expected": {
+  "L_coil_nH": 89.9,
+  "R_coil_mOhm": 0.237,
+  "delta_L_nH": -45.15,
+  "delta_R_mOhm": 0.043,
+  "L_total_nH": 44.76,
+  "R_total_mOhm": 0.28,
+  "P_wp_W": 6.14e-05,
+  "H_t_rms_A_per_m": 26.82,
+  "wp_dissipation_R_mOhm": 0.123,
+  "tolerance_L_coil_pct": 5.0,
+  "tolerance_R_coil_pct": 10.0,
+  "tolerance_delta_L_pct": 10.0,
+  "tolerance_P_pct": 15.0,
+  "tolerance_Ht_rms_pct": 10.0,
+  "input_kind_coil": "STEP",
+  "input_kind_wp": "VOL"
+ },
+ "regression_guard": {
+  "min_L_coil_nH": 80.0,
+  "max_L_coil_nH": 100.0,
+  "min_P_wp_W": 4e-05,
+  "max_P_wp_W": 9e-05,
+  "min_H_t_rms": 20.0,
+  "max_H_t_rms": 35.0,
+  "comment": "Hard band around BEM-A converged values (maxh=0.005, ~690 coil tris).  If L_coil exceeds 100 nH or drops below 80 nH, the BEM-A SS Galerkin / source-sink classifier has regressed.  If P_wp leaves the band the surface-current-to-phi_inc bridge (compute_phi_inc_from_surface_J on Re/Im of complex coil J) has regressed."
+ },
+ "captured_at": "2026-05-02",
+ "captured_commit": "Stage-2 of calc_coil_bem_a_workpiece promotion",
+ "source_of_truth": "calc_coil_bem_a_workpiece.py --coil-maxh 0.005 (run 2026-05-02)",
+ "note_2026_07_02_impedance_efie_unification": "BEM-A was unified on the impedance-EFIE (Zs inside the saddle; the legacy PEC post-hoc R path was REMOVED).  Effect on this single-turn gapped torus at 7 kHz, measured on the validation fixture (gapped_torus_2port.vol): R_coil scales by 0.983 (PEC 0.2268 -> impedance-EFIE 0.2231 mOhm), i.e. expected.R_coil_mOhm 0.237 -> ~0.233, well inside the 10% tolerance; L is UNCHANGED (external-inductance convention L = mu0*J^H SL J, measured L_imp/L_pec = 1.0008).  The weak-coupling bridge now receives the genuinely COMPLEX per-triangle coil J (Re+Im sampled from gf_J / gf_J_im); at 7 kHz Im(J) is small so P_wp / H_t_rms stay inside their 15%/10% tolerances.  The asserted quantities (L_coil, P_wp, H_t_rms + regression_guard bands) did not need recapture; the R_coil_mOhm / delta_R / R_total fields in 'expected' are documentation-only (never asserted) and predate the unification by -1.7%."
 }
