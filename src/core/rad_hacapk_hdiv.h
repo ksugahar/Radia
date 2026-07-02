@@ -410,6 +410,9 @@ private:
     // measure come from the Q2 lattice maps.  m_qp/m_qw hold the prebuilt REGULAR outer clouds (monomial
     // folded), used for far sub pairs; graded outer clouds are built on the fly in QuadDotHex.
     bool m_hexmode = false;
+    bool m_hex_curved = false;      // Q2 lattice deviates from the trilinear corner interp (ctor-detected):
+                                    // curved hexes keep the graded-Duffy self inner (PhiTet subtraction is
+                                    // the straight-sub-tet identity)
     int  m_hex_n_bf = 0;
     std::vector<double> m_hexNodes, m_quadNodes;        // [n_el*81] 27-node Q2 hex, [n_bf*27] 9-node Q2 quad
     std::vector<double> m_symTetP, m_symTetW;           // regular outer tet rule (bary lam1..3; W sums 1/6)
@@ -434,6 +437,15 @@ private:
     std::vector<std::vector<int>> m_faceCharges;         // [n_bf] global charge indices per boundary face
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
+    // SELF-host inner by SINGULARITY SUBTRACTION -- the tet path's PhiAtHO technique reused for hex:
+    //   INT_sub m(y)/|p-y| dy = m(xiT)*Phi_sub(p) + INT_sub (m(y)-m(xiT))/|p-y| dy,
+    // Phi_sub = the EXACT constant-charge potential (rad_hdiv::PhiTet / TriPotential -- the same kernels the
+    // tet Gram uses), remainder BOUNDED -> a cheap regular symmetric rule replaces the glin^3 graded Duffy.
+    // xiT = the outer point's OWN hex/quad ref coords (self host => same ref frame, no Q2 inverse needed).
+    // The OUTER grading is NOT relaxed by this (it is required by the Q1 charge degree, independent of how
+    // the inner is computed) -- callers keep the graded outer.  FLAT hexes only (m_hex_curved gates it).
+    void PhiInnerHexSelfSubVec(int kindS, int hS, int subB, const double p[3], const double xiT[3],
+                               const std::vector<int>& srcG, double* inn) const;
     std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS) const;  // directed [nT*nS] block, INV4PI folded
     const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS) const;  // thread_local block cache
 

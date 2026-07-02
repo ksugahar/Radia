@@ -1419,8 +1419,15 @@ static void HexDuffyBary(int dim, int corner, const std::vector<double>& gl, con
 {
     const int n = (int)gl.size();
     const int nv = dim + 1;
+    // The Duffy APEX -- the node-accumulating, jac->0, singularity-RESOLVING vertex -- is barycentric
+    // index 1 (bary = (L0, a, b, c) with a = u -> 1 at the apex; L0 = (1-u)(1-v)(1-w) -> 0 there), NOT
+    // index 0.  Swap 1 <-> corner so the rule actually grades at the requested vertex.  (The old swap
+    // 0 <-> corner graded at vertex 1 for every corner except corner==1 (then vertex 0) -- a latent
+    // off-by-one inherited from the numpy prototype's mislabeled bary_std comment, MASKED by the
+    // 1000-pt glin^3 inner density; exposed by the linearized-subtraction identity, whose a2-term
+    // requires the remainder rule to resolve 1/|A dxi| at the graded corner -> face-self eig ~1e12.)
     int perm[4] = {0, 1, 2, 3};
-    perm[0] = corner; perm[corner] = 0;              // swap 0 <-> corner
+    perm[1] = corner; perm[corner] = 1;              // swap 1 <-> corner (apex -> corner)
     if (dim == 3) {
         for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j) for (int k = 0; k < n; ++k) {
             const double u = gl[i], v = gl[j], w = gl[k];
@@ -1564,6 +1571,32 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexLocalOf[a] = (int)grp.size();
         grp.push_back(a);
     }
+    // ---- flat/curved detection: does the 27-node Q2 lattice equal the TRILINEAR interp of the 8 corners? ----
+    // (a genuinely mesh.Curve(2)'d hex deviates.)  Gates the flat-only PhiTet self-block subtraction.
+    {
+        static const int cidx[8] = {0, 2, 6, 8, 18, 20, 24, 26};   // corner nodes (ix,iy,iz in {0,2})
+        double maxdev = 0.0, maxsz = 1e-300;
+        for (int c = 0; c < n_el; ++c) {
+            const double* nd = &m_hexNodes[(size_t)c*81];
+            const double* cor[8];
+            for (int i = 0; i < 8; ++i) cor[i] = &nd[3*cidx[i]];
+            if (!m_cellCharges[c].empty()) maxsz = std::max(maxsz, m_size[m_cellCharges[c][0]]);
+            for (int iz = 0; iz < 3; ++iz) for (int iy = 0; iy < 3; ++iy) for (int ix = 0; ix < 3; ++ix) {
+                const double a = ix*0.5, b = iy*0.5, cc = iz*0.5;
+                double tl[3] = {0, 0, 0};
+                for (int i = 0; i < 8; ++i) {
+                    const double rx = (i & 1), ry = (i >> 1) & 1, rz = (i >> 2) & 1;
+                    const double N = (rx ? a : 1-a)*(ry ? b : 1-b)*(rz ? cc : 1-cc);
+                    for (int k = 0; k < 3; ++k) tl[k] += N*cor[i][k];
+                }
+                const double* act = &nd[3*(ix + 3*iy + 9*iz)];
+                const double dv = std::sqrt((tl[0]-act[0])*(tl[0]-act[0]) + (tl[1]-act[1])*(tl[1]-act[1])
+                                          + (tl[2]-act[2])*(tl[2]-act[2]));
+                if (dv > maxdev) maxdev = dv;
+            }
+        }
+        m_hex_curved = (maxdev > 1e-9*maxsz);
+    }
     // ---- prebuilt REGULAR outer clouds per charge (monomial folded) for far sub pairs ----
     m_qp.resize(m_n); m_qw.resize(m_n);
     for (int a = 0; a < m_n; ++a) {
@@ -1625,7 +1658,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
 // per-charge monomial).  Cached per (kind, host, sub, corner/rule): the cloud depends only on geometry,
 // so it is reused across ALL outer points selecting the same grading corner AND all co-located charges
 // (the numpy-validated src_cache pattern; ~2 orders of magnitude fewer Q2-map evals on near pairs).
-struct HexQuadCloud { std::vector<double> pts, wgeo, xi; };
+struct HexQuadCloud { std::vector<double> pts, wgeo, xi, wref; };   // wref = rule weight x scale (NO |detJ|)
 
 // Materialize the cloud for sub-simplex `sub` of the host with nodes `nd` from a bary rule.  full_bary:
 // the rule stores nv coords/point (graded Duffy); else nv-1 lam coords (the fixed far/sym tables).
@@ -1635,7 +1668,7 @@ static void HexBuildCloud(const double* nd, bool cell, int sub, const double* ba
     const int* tv = cell ? HEXREF_TETS[sub] : QUADREF_TRIS[sub];
     const int nv = cell ? 4 : 3;
     const double scale = cell ? HexSubSixVref(sub) : QuadSubTwoAref(sub);
-    out.pts.resize((size_t)nq*3); out.wgeo.resize(nq); out.xi.resize((size_t)nq*3);
+    out.pts.resize((size_t)nq*3); out.wgeo.resize(nq); out.xi.resize((size_t)nq*3); out.wref.resize(nq);
     for (int q = 0; q < nq; ++q) {
         double bary[4];
         if (full_bary) {
@@ -1645,6 +1678,7 @@ static void HexBuildCloud(const double* nd, bool cell, int sub, const double* ba
             for (int t = 1; t < nv; ++t) { bary[t] = baryP[(size_t)(nv-1)*q + (t-1)]; lsum += bary[t]; }
             bary[0] = 1.0 - lsum;
         }
+        out.wref[q] = baryW[q]*scale;                        // REF-frame weight (no Jacobian)
         if (cell) {
             double xi[3] = {0, 0, 0};
             for (int t = 0; t < 4; ++t)
@@ -1652,7 +1686,7 @@ static void HexBuildCloud(const double* nd, bool cell, int sub, const double* ba
             double X[3], J[3][3];
             RadHACApKChargeGram::HexQ2Map(nd, xi, X, J);
             for (int k = 0; k < 3; ++k) { out.pts[(size_t)3*q+k] = X[k]; out.xi[(size_t)3*q+k] = xi[k]; }
-            out.wgeo[q] = baryW[q]*scale*std::fabs(HexDet3(J));
+            out.wgeo[q] = out.wref[q]*std::fabs(HexDet3(J));
         } else {
             double uv[2] = {0, 0};
             for (int t = 0; t < 3; ++t)
@@ -1661,7 +1695,7 @@ static void HexBuildCloud(const double* nd, bool cell, int sub, const double* ba
             RadHACApKChargeGram::QuadQ2Map(nd, uv, X, T);
             out.pts[(size_t)3*q] = X[0]; out.pts[(size_t)3*q+1] = X[1]; out.pts[(size_t)3*q+2] = X[2];
             out.xi[(size_t)3*q] = uv[0]; out.xi[(size_t)3*q+1] = uv[1]; out.xi[(size_t)3*q+2] = 0.0;
-            out.wgeo[q] = baryW[q]*scale*HexSurfJ(T);
+            out.wgeo[q] = out.wref[q]*HexSurfJ(T);
         }
     }
 }
@@ -1859,6 +1893,103 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
     }
 }
 
+// SELF-host inner by LINEARIZED-MAP SINGULARITY SUBTRACTION -- the tet path's PhiAtHO technique
+// (rad_hacapk_hdiv.cpp:1111) generalized to the Q2-mapped hex sub-simplex.  Pull the integral back to the
+// REF sub-simplex T:  INT_D m(y)/|p-y| dy = INT_T g(xi)/|p-X(xi)| dxi,  g = m*J.  Subtract the TANGENT-map
+// term  g(xiT)/|A(xi-xiT)|  (A = DX(xiT), the Jacobian at the singular point):
+//   = m(xiT)*PhiTet({p + A(v_i - xiT)}, p)  +  INT_T [ g(xi)/|p-X(xi)| - g(xiT)/|A(xi-xiT)| ] dxi,
+// where {p + A(v_i - xiT)} is the TANGENT sub-simplex (the affine image of T under the linearization at
+// xiT) and rad_hdiv::PhiTet / TriPotential -- the SAME kernels the tet Gram uses -- carry the whole 1/r
+// singularity ANALYTICALLY.  For an AFFINE hex A(xi-xiT) == X(xi)-p exactly, so this reduces to the plain
+// straight-tet subtraction; for TRILINEAR/CURVED hexes the mismatch is pushed to second order (the plain
+// straight-tet variant left a first-order domain mismatch -> distorted eig 1.0005 > 1).  The remainder is
+// BOUNDED; the glOut-graded Duffy (216 pts on cells, toward the corner nearest p -- the same cloud as the
+// graded OUTER, shared cache key) integrates it (a 15-pt regular rule leaves ~1% -> eig 1.009).  xiT = the
+// outer point's OWN ref coords in the SHARED self host (no Q2 inverse -- why this is self-host-only).
+// NOTE this replaces the INNER only -- the caller's OUTER grading is unchanged (required by the Q1 charge
+// degree; measured: exact inner + regular outer plateaus at eig 1.088 > 1).
+void RadHACApKChargeGram::PhiInnerHexSelfSubVec(int kindS, int hS, int subB, const double p[3],
+                                                const double xiT[3], const std::vector<int>& srcG,
+                                                double* inn) const
+{
+    const bool cell = (kindS == 0);
+    const size_t sid = cell ? ((size_t)hS*6 + subB) : ((size_t)hS*2 + subB);
+    const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
+    const int nv = cell ? 4 : 3;
+
+    // tangent map at xiT: A (cells) / T (faces) + the Jacobian Jp there; tangent sub-simplex + its exact
+    // constant-charge potential at p (PhiTet / TriPotential of the LINEARIZED image).
+    double Acell[3][3], Tface[3][2], Xp[3], Jp, Phi;
+    if (cell) {
+        HexQ2Map(nd, xiT, Xp, Acell);
+        Jp = std::fabs(HexDet3(Acell));
+        const int* tv = HEXREF_TETS[subB];
+        double V[4][3];
+        for (int i = 0; i < 4; ++i) {
+            const double d0 = HEXREF_V[tv[i]][0]-xiT[0], d1 = HEXREF_V[tv[i]][1]-xiT[1],
+                         d2 = HEXREF_V[tv[i]][2]-xiT[2];
+            for (int k = 0; k < 3; ++k)
+                V[i][k] = p[k] + Acell[k][0]*d0 + Acell[k][1]*d1 + Acell[k][2]*d2;
+        }
+        Phi = rad_hdiv::PhiTet(V, p);
+    } else {
+        const double uv[2] = {xiT[0], xiT[1]};
+        QuadQ2Map(nd, uv, Xp, Tface);
+        Jp = HexSurfJ(Tface);
+        const int* tv = QUADREF_TRIS[subB];
+        double V[3][3];
+        for (int i = 0; i < 3; ++i) {
+            const double du = QUADREF_V[tv[i]][0]-xiT[0], dv = QUADREF_V[tv[i]][1]-xiT[1];
+            for (int k = 0; k < 3; ++k) V[i][k] = p[k] + Tface[k][0]*du + Tface[k][1]*dv;
+        }
+        Phi = rad_hdiv::TriPotential(V, p);
+    }
+
+    // remainder cloud: glOut-graded Duffy toward the corner nearest p (shared with the graded OUTER cache)
+    int corner = 0; double best = 1e300;
+    const double* subV = cell ? &m_cellSubV[sid*4*3] : &m_faceSubV[sid*3*3];
+    for (int i = 0; i < nv; ++i) {
+        const double dx = subV[3*i]-p[0], dy = subV[3*i+1]-p[1], dz = subV[3*i+2]-p[2];
+        const double d = dx*dx + dy*dy + dz*dz;
+        if (d < best) { best = d; corner = i; }
+    }
+    const HexQuadCloud& cl = HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, true, true, hS, subB, corner),
+        [&](HexQuadCloud& c) {
+            std::vector<double> gb, gw;
+            HexDuffyBary(cell ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
+            HexBuildCloud(nd, cell, subB, gb.data(), gw.data(), (int)gw.size(), true, c);
+        });
+    const int nS = (int)srcG.size();
+    double cls[8];                                          // <= 8 cell monomials / 4 face monomials per host
+    for (int ls = 0; ls < nS; ++ls) cls[ls] = HexMonoEval(srcG[ls], xiT);
+    const int nq = (int)cl.wgeo.size();
+    for (int q = 0; q < nq; ++q) {
+        const double dx = p[0]-cl.pts[3*q], dy = p[1]-cl.pts[3*q+1], dz = p[2]-cl.pts[3*q+2];
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        const double* xi = &cl.xi[3*q];
+        // linearized distance |A (xi - xiT)| in the tangent frame
+        double rl;
+        if (cell) {
+            const double d0 = xi[0]-xiT[0], d1 = xi[1]-xiT[1], d2 = xi[2]-xiT[2];
+            const double u0 = Acell[0][0]*d0 + Acell[0][1]*d1 + Acell[0][2]*d2;
+            const double u1 = Acell[1][0]*d0 + Acell[1][1]*d1 + Acell[1][2]*d2;
+            const double u2 = Acell[2][0]*d0 + Acell[2][1]*d1 + Acell[2][2]*d2;
+            rl = std::sqrt(u0*u0 + u1*u1 + u2*u2);
+        } else {
+            const double du = xi[0]-xiT[0], dv = xi[1]-xiT[1];
+            const double u0 = Tface[0][0]*du + Tface[0][1]*dv;
+            const double u1 = Tface[1][0]*du + Tface[1][1]*dv;
+            const double u2 = Tface[2][0]*du + Tface[2][1]*dv;
+            rl = std::sqrt(u0*u0 + u1*u1 + u2*u2);
+        }
+        if (r < 1e-300 || rl < 1e-300) continue;            // xi == xiT: the Phi term already carries it
+        const double a1 = cl.wgeo[q]/r;                     // true pulled-back integrand weight (g = m*J)
+        const double a2 = cl.wref[q]*Jp/rl;                 // tangent-map subtracted weight (g(xiT)/|A dxi|)
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += a1*HexMonoEval(srcG[ls], xi) - a2*cls[ls];
+    }
+    for (int ls = 0; ls < nS; ++ls) inn[ls] += cls[ls]*Phi;
+}
+
 // The whole DIRECTED host-pair block (target host (kindT,hT) outer x source host (kindS,hS) inner) for every
 // local charge pair, computed in ONE pass.  All near/far/grading decisions are host+sub geometric (identical
 // across the block), so this is bit-identical to calling QuadDotHex(a,b) for each (a in tgt host, b in src
@@ -1879,6 +2010,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
     const bool near_hosts = (kindT == kindS && hT == hS)
                             || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
+    // SELF host pair on a FLAT hex: the INNER switches to the tet-style PhiTet subtraction (exact singular
+    // part + cheap regular remainder).  The OUTER grading below is UNCHANGED -- it is required by the Q1
+    // charge degree regardless of how the inner is computed (exact inner + regular outer -> eig 1.088 > 1).
+    const bool self_sub = (kindT == kindS && hT == hS) && !m_hex_curved;
     const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
     const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
@@ -1922,7 +2057,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
                 const double* xiT = &oc->xi[3*q];
                 for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
-                PhiInnerHexSubVec(kindS, hS, sB, pq, srcG, inn.data());     // shares sqrt over source locals
+                if (self_sub) PhiInnerHexSelfSubVec(kindS, hS, sB, pq, xiT, srcG, inn.data());  // PhiTet subtraction
+                else          PhiInnerHexSubVec(kindS, hS, sB, pq, srcG, inn.data());           // graded/far Duffy
                 const double wg = oc->wgeo[q];
                 for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
                 for (int lt = 0; lt < nT; ++lt) {
