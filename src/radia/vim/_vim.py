@@ -442,21 +442,30 @@ def _far_tet_wv3():
 
 
 def _charge_basis_hex(fes, cob_quad=3):
-    """HEX analogue of `_charge_basis_curved`: charge map B in REF-frame Q1 monomials + 27/9-node Q2 geometry
-    nodes (via GetTrafo -> flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager."""
+    """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
+    flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager.
+
+    PIOLA-EXACT charge model (the warped-hex correctness fix): on a mapped hex the TRUE volume charge is
+    rho(x) = q_ref(xi)/J(xi) with q_ref = -div_ref(u_ref) in Q1(xi) (and sigma = (u.n)_ref(u,v)/Js on faces)
+    -- the 1/J is the Piola transform, NOT representable by ref-frame polynomials.  Projecting rho onto
+    ref-Q1 (the old model) is not Coulomb-orthogonal, so the projected charge's self-energy can EXCEED the
+    true one -> the demag spectrum leaked above 1 by O(warp^2) on strongly distorted hexes (real cylinder
+    mesh eig ~1.01 converged; affine boxes were exact because J = const there, and the tet path is immune
+    because tets are affine).  The fix represents the charge EXACTLY: B extracts the ref-frame Q1
+    coefficients of q_ref via  INT (-div u) phi dx == INT (-div_ref u_ref) phi dxi  (the J's cancel), solved
+    with the REF-measure L2 mass; the C++ Gram then integrates  INT INT m_a(xi) m_b(eta)/|X(xi)-X(eta)|
+    dxi deta  with NO Jacobian factors (they cancel against the two 1/J densities)."""
     mesh = fes.mesh
     assert fes.globalorder == 1, "RT1-hex is HDiv order-1 only"
     nn = ng.specialcf.normal(mesh.dim)
-    L2v = ng.L2(mesh, order=1)               # HEX GOTCHA: div(HDiv-hex order1) is Q1 -> L2 order 1, NOT p-1
+    L2v = ng.L2(mesh, order=1)               # HEX GOTCHA: div_ref(HDiv-hex order1) is Q1 -> L2 order 1
     L2b = ng.SurfaceL2(mesh, order=1)
     u = fes.TrialFunction()
     bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
     bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
-    mv = ng.BilinearForm(L2v); mv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; mv.Assemble()
-    mb = ng.BilinearForm(L2b); mb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; mb.Assemble()
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
-    Bv_d = _blockdiag_density_map(_csr(mv), _csr(bv), L2v, ng.VOL, mesh)
-    Bb_d = _blockdiag_density_map(_csr(mb), _csr(bb), L2b, ng.BND, mesh)
+    Bv = _csr(bv)                            # REF-measure moments of q_ref (the physical J cancels)
+    Bb = _csr(bb)
     M_mass = _csr(mh)
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
@@ -471,16 +480,24 @@ def _charge_basis_hex(fes, cob_quad=3):
     for c, e in enumerate(vels):
         tr = mesh.GetTrafo(e)
         cell_nodes.append(np.array([list(tr(ip).point) for ip in ir_hex]))
-        Sv = sp.csr_matrix(_change_of_basis_ref(L2v.GetFE(e), _MONS_HEX, rhp, rhw, dim=3))
-        blk = Sv @ Bv_d[list(L2v.GetDofNrs(e)), :]
+        fe = L2v.GetFE(e)
+        Phi = np.array([fe.CalcShape(*pt) for pt in rhp])            # (nq, nphi) ref shapes
+        Mref = (Phi * rhw[:, None]).T @ Phi                          # INT_ref phi phi dxi (exact, Q1 shapes)
+        rows = np.linalg.solve(Mref, Bv[list(L2v.GetDofNrs(e)), :].toarray())
+        Sv = _change_of_basis_ref(fe, _MONS_HEX, rhp, rhw, dim=3)
+        blk = sp.csr_matrix(Sv @ rows)
         for a, (i, j, k) in enumerate(_MONS_HEX):
             Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
     n_el = len(vels)
     for f, e in enumerate(bels):
         tr = mesh.GetTrafo(e)
         face_nodes.append(np.array([list(tr(ip).point) for ip in ir_quad]))
-        Ss = sp.csr_matrix(_change_of_basis_ref(L2b.GetFE(e), _MONS_QUAD, rqp, rqw, dim=2))
-        blk = Ss @ Bb_d[list(L2b.GetDofNrs(e)), :]
+        fe = L2b.GetFE(e)
+        Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in rqp])
+        Mref = (Phi * rqw[:, None]).T @ Phi
+        rows = np.linalg.solve(Mref, Bb[list(L2b.GetDofNrs(e)), :].toarray())
+        Ss = _change_of_basis_ref(fe, _MONS_QUAD, rqp, rqw, dim=2)
+        blk = sp.csr_matrix(Ss @ rows)
         for a, (i, j) in enumerate(_MONS_QUAD):
             Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
     B = sp.vstack(Brows).tocsr()
@@ -489,12 +506,13 @@ def _charge_basis_hex(fes, cob_quad=3):
                 face_nodes=(np.concatenate([n.ravel() for n in face_nodes]).tolist() if face_nodes else []))
 
 
-def _build_charge_gram_hex(fes, glout_n=6, glin_n=10, near_grade=0.6, far_inner=4.0,
+def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=4.0,
                            eps=1e-12, leafsize=64, eta=2.0):
     """Pure-hex RT1 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
-    mesh for curved).  eig(M_mass^-1 N)<=1 GATED at (near_grade=0.6, eps=1e-12, eta=2.0, leaf=64); the C++
-    block-memo build is ~59x cheaper than the naive per-entry callback (memory: block memo + near_grade)."""
+    mesh for curved).  glin_n = the 1D rule of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
+    -- robust on distorted/curved hexes, where graded clouds left eig > 1 on the real cylinder mesh);
+    eig(M_mass^-1 N) <= 1 gated on box AND cylinder meshes; block-memo build (~59x vs naive per-entry)."""
     cb = _charge_basis_hex(fes)
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
