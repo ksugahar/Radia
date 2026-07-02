@@ -664,15 +664,35 @@ entry-by-entry matrix kept for diagnostics/regression.
 
 Collocation-MMMM COARSE tier (2026-07-02): a `rad.Solve(..., method=2)` request on
 a PURE-HEX moment object runs HACApK-BiCGSTAB -- the chi-free geometry coupling K
-is built once as a `RadHACApKMomentSystem` H-matrix (O(N log N) matvec, reused
-across the nonlinear Picard loop) and the matvec applies
-`y = L_local x + diag_row(chi) (K x)`.  MATVEC-ONLY: no H-LU, no deflation, no
-loop-free (the internal M is field-correct but loop-polluted -- acceptable for the
-coarse / optimization tier; accurate + hysteresis work uses the loop-free
-HDiv-VIM).  Tune with `rad.SolverConfig(hacapk_eps=, hacapk_leaf=, hacapk_eta=)`;
-tet/wedge/mixed method-2 fall back to the dense moment LU (hex-only H-matrix).
-NOTE: a compact cube is near-field dominated (mostly-dense H-matrix); ACA
-compression pays off on elongated / well-separated geometry.
+is built once as a `RadHACApKMomentSystem` H-matrix (O(N log N) matvec) and the
+matvec applies `y = L_local x + diag_row(chi) (K x)`.  MATVEC-ONLY: no H-LU, no
+deflation, no loop-free (the internal M is field-correct but loop-polluted --
+acceptable for the coarse / optimization tier; accurate + hysteresis work uses the
+loop-free HDiv-VIM).  Tune with `rad.SolverConfig(hacapk_eps=, hacapk_leaf=,
+hacapk_eta=)`; tet/wedge/mixed method-2 fall back to the dense moment LU (hex-only
+H-matrix).  NOTE: a compact cube is near-field dominated (mostly-dense H-matrix);
+ACA compression pays off on elongated / well-separated geometry.
+
+CROSS-SOLVE CACHE (2026-07-02): K + the chi-free localL/diagK blocks are cached on
+`radTApplication` ACROSS `rad.Solve` calls (validity = interaction pointer +
+hacapk eps/leaf/eta + bit-exact centroid compare, ABA-safe), so an OPTIMIZATION
+INNER LOOP re-Solving the same geometry (source / material changes only) skips the
+whole geometry build -- only the 6x6 block-Jacobi assemble + BiCGSTAB run per
+solve.  Invalidated on `UtiDelAll` and on any key mismatch.
+
+MEASURED (mdx, 38 threads, mu_r=200, eps=1e-4; 3-way benchmark
+`examples/vim/bench_moment_solvers.py` -> `results_moment_solvers_mdx_20260702.json`,
+27/27 cases):
+- COLD solve: cube 24.6k DOF dense-K BiCGSTAB 33.7 s vs H-matrix 4.4 s (7.7x);
+  C-yoke 14.9k DOF 13.9 s vs 2.5 s (5.4x); H-matrix alone: 48k DOF in 9.3 s / 2.5 GB.
+- WARM solve (optimization-loop per-iteration cost, cache hit): cube 24.6k DOF
+  4.0 s -> 0.062 s (65x); near-FLAT 0.03-0.11 s across all sizes to 48k DOF.
+- Memory: C-yoke 14.9k DOF 3.8 GB (dense K) vs 0.6 GB (H-matrix).
+- Correctness: method-2 external B == reference to <= 5e-5 (the ACA eps);
+  C-yoke iterations 51-55, N-independent (block Jacobi holds at engineering mu_r).
+Solver selection guidance: method 0 (dense LU) <= ~8k DOF reference solves;
+method 1 (dense-K BiCGSTAB) small/medium one-shot solves; method 2
+(HACApK-BiCGSTAB) large N AND any repeated-solve / optimization workload.
 
 ### Properties (verified)
 

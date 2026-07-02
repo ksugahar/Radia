@@ -294,7 +294,7 @@ def sweep(args):
         row = {c["method"]: c for c in results if (c.get("geom"), c.get("nside")) == key and c.get("converged")}
         def w(m, f):
             return f"{row[m][f]:9.3f}" if m in row else "        -"
-        rel2 = f"{row[2].get('rel_vs_ref', 0.0):9.2e}" if 2 in row else "        -"
+        rel2 = f"{row[2]['rel_vs_ref']:9.2e}" if 2 in row and "rel_vs_ref" in row[2] else "        -"
         if key[0] == "cube":
             ndof = 6 * key[1] ** 3
         elif key[0] == "bar":
