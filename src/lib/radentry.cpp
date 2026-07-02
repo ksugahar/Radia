@@ -87,7 +87,6 @@ void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
 int HMatrixDensify(int, double*, int*);
-int GetLoopBasis(int, double*, int*, int*);
 int GetFaceGeom(int, double*, int*);
 int GetCentroidFieldGrad(int, double*, int*, int*);
 int BuildMomentSystem(int, double, const double*, double*, double*, int*);
@@ -1339,15 +1338,6 @@ int CALL RadUtiDataGet(char* pcData, const char typeData[3], long key) //OC04102
 int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey)
 {
 	int result = GetInteractMatrix(InteractElemKey, pMatrix, pDOF);
-	if(result == 0) return ioBuffer.OutErrorStatus();
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadGetLoopBasis(double* pL, int* pNLoop, int* pDOF, int InteractElemKey)
-{
-	int result = GetLoopBasis(InteractElemKey, pL, pNLoop, pDOF);
 	if(result == 0) return ioBuffer.OutErrorStatus();
 	return 0;
 }

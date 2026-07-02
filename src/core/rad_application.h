@@ -90,26 +90,6 @@ public:
 	// Can be set via Python API: rad.SolverConfig(newton_method=True/False)
 	bool m_use_newton;
 
-	// co-loop projection (default OFF, backward compatible).  When true, the moment-method
-	// nonlinear iteration projects the moment iterate onto the co-loop (loop-free) subspace
-	// each outer step: FlatMagn <- FlatMagn - Q (Q^T Q)^-1 Q^T FlatMagn, Q = field-null loop
-	// basis (radTInteraction::BuildLoopBasis).  The loops are field-null, so the field/H is
-	// unchanged; the magnetisation |M| the B-input (B = mu0(H+M)) constitutive law reads is
-	// the loop-free one -> removes the loop-driven spurious saturation that slows B-input
-	// hysteresis (play/energy) solves.  NO-OP for H-input materials (chi from |H|).
-	// Set via Python: rad.SolverConfig(coloop_project=True/False).
-	bool m_coloop_project;
-
-	// loop-growth-suppression DEFLATION (default OFF, backward compatible).  When true, the
-	// collocation-MMMM linear BiCGSTAB solves the co-loop-projected system  P A P x = P b
-	// (P = I - Q(Q^T Q)^-1 Q^T, Q = field-null loop basis from radTInteraction::BuildLoopBasis),
-	// keeping the solution in the co-loop subspace so the field-null loop circulation NEVER enters
-	// the solution -- loop-free at ANY bicgstab_tol (decouples co-loop accuracy from loop
-	// suppression, unlike loose-tol early-stopping).  Distinct from m_coloop_project (which projects
-	// only the CONSTITUTIVE M, post-solve, for B-input hysteresis); this deflates the LINEAR SOLVE
-	// itself, for ANY BH.  Set via Python: rad.SolverConfig(loop_deflate=True/False).
-	bool m_loop_deflate;
-
 	// Newton line search damping parameters
 	// Enables adaptive backtracking line search to improve nonlinear convergence
 	// Can be configured via Python API: rad.SolverConfig(newton_damping=True, ...)
@@ -205,8 +185,6 @@ public:
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
-		m_coloop_project = false; // Default: no co-loop projection (backward compatible)
-		m_loop_deflate = false;   // Default: no loop deflation in the linear solve (backward compatible)
 
 		// Newton line search damping init
 		m_newton_damping_enabled = true;  // Default: enabled when Newton is active
@@ -388,7 +366,6 @@ public:
 	void ShowInteractMatrix(int InteractElemKey);
 	int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF);
 	int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF);  // Densify actual HACApK ACA+ operator (validation)
-	int GetLoopBasis(int InteractElemKey, double* pL, int* pNLoop, int* pDOF);  // surface-charge MSC cell-graph cycle (loop) basis
 	int GetFaceGeom(int InteractElemKey, double* pG, int* pDOF);  // per-DOF hex face geometry (area/centroid/normal/elem-center)
 	int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF);  // per moment-element centroid demag field+gradient functionals
 	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // multipole-moment MMM system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)

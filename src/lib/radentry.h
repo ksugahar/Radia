@@ -388,18 +388,6 @@ EXP int CALL RadBuildMatrix(int* n, int ElemKey, const char* image);
 */
 EXP int CALL RadGetInteractMatrix(double* pMatrix, int* pDOF, int InteractElemKey);
 
-/** Gets the surface-charge MSC cell-graph cycle (loop) basis L of the interaction operator.
-The loops are the field-null subspace (== HDiv ker(B)); deflating them makes the high-mu_r
-solve bounded + mu_r-independent.  Two-call pattern: pass pL=nullptr to read back nLoop+DOF,
-allocate DOF*nLoop doubles, then call again to fill (ROW-MAJOR, L[d*nLoop+col]).
-@param pL [out] flat L array (DOF x nLoop, row-major), or nullptr to query size
-@param pNLoop [out] number of loop (cycle) basis vectors
-@param pDOF [out] number of DOF (L has DOF rows)
-@param InteractElemKey [in] interaction handle from BuildMatrix
-@return integer error code
-*/
-EXP int CALL RadGetLoopBasis(double* pL, int* pNLoop, int* pDOF, int InteractElemKey);
-
 /** Gets per-DOF hex face geometry in the matrix DOF order (for div(B)=0 / RHS / moment studies).
 Two-call pattern: pass pG=nullptr to read back DOF, allocate DOF*11 doubles, then call again to fill.
 Each DOF row (ROW-MAJOR, stride 11): [elem_local, area, cx,cy,cz, nx,ny,nz(outward), ecx,ecy,ecz];

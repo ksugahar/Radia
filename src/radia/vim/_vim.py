@@ -71,12 +71,12 @@ def _tri_ref(o):
 # charge-Gram quadrature ONLY (near + default far, both degree 5).  Same polynomial degree, 1.80x/1.29x
 # FEWER points.  Valid because the INNER integral is carried by the exact analytic PhiTet/TriPotential, so the
 # outer integrand is C^{1,alpha} (smooth) even on self/face/edge/vertex-adjacent pairs -- a symmetric rule does
-# NOT need the Duffy point-clustering.  VALIDATED (C:\temp\symquad_*.py, 2026-07-02): degree-5 exact to 1e-17;
-# on the charge-Gram it reproduces demag to <=7e-6, leaves the transverse leak IDENTICAL, and PRESERVES PSD
+# NOT need the Duffy point-clustering.  The in-repo validation lock checks degree-5 exactness to 1e-17;
+# on the charge-Gram it reproduces demag to <=7e-6, leaves the transverse leak identical, and preserves PSD
 # (min eig ~0, unchanged from product-27) while building the Gram ~1.5-1.8x faster (grows with N).  The
-# fully-double-ANALYTIC route was surveyed (research agent) and rejected: no tractable closed form for the
-# dominant tet-tet Galerkin double integral -- the symmetric outer rule is the real, cheap lever.  See memory
-# hdiv-vim-gram-build-near-factor (b).  Only the degree-5 pair (quad==3: linear RT1 near + default far_quad=3)
+# fully-double-ANALYTIC route was surveyed and rejected: no tractable closed form for the
+# dominant tet-tet Galerkin double integral -- the symmetric outer rule is the real, cheap lever.  Only the
+# degree-5 pair (quad==3: linear RT1 near + default far_quad=3)
 # is tabulated; nonlinear (quad=4), curved, inner-subtraction, and any other order fall back to the product
 # rule.  The change-of-basis quadrature stays on _tet_ref/_tri_ref (S is exact at either rule -> bit-identical).
 def _sym_orbit(bary, ncoord):
@@ -394,7 +394,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     mesh.Curve(curve_order) geometry -- curved charge map B (reference-frame change-of-basis) + the C++ curved
     Duffy Gram (curve_gauss = the inner Gauss-Legendre pts/dim, ~8 -> Duffy ~1e-4).  curve_order helps
     near-surface FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the demag FACTOR (which is
-    curving-insensitive on a sphere, ~3e-5; see memory hdiv-vim-sauter-schwab-cg piece-3 de-risk).  Only P2
+    curving-insensitive on a sphere, ~3e-5 in the de-risk sweep).  Only P2
     (curve_order=2) is wired; the mesh MUST already be mesh.Curve(2)'d by the caller.
 
     NEAR/FAR adaptive quadrature (order>0, the DEFAULT build speedup -- accuracy-preserving + golden-locked):
