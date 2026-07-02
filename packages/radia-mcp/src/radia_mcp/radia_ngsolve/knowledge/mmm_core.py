@@ -790,7 +790,7 @@ An earlier C++ effort added runtime loop handling to the MSC/MMM solver:
 matrix-free deflation via the BuildLoopBasis cycle basis, an alpha-free loop-star gauge (SolveLoopStar:
 the reduced A_SS = S^T A S star block with an H-LU preconditioner), and a
 post-solve Helmholtz-Hodge loop projection (SetLoopProjection). ALL of these
-were REMOVED on 2026-06-09. The BuildLoopBasis builder + the GetLoopBasis API (and a later re-added loop_deflate method-0 orthogonal projection + coloop_project B-input-hysteresis projection) were REMOVED 2026-06-30: collocation MMMM GIVES UP loop-free (it stays field-correct via dense LU / matrix-free BiCGSTAB; loops are field-null so the external field is exact). Loop-free is HDiv-VIM's domain. Memory: collocation_loopfree_abandoned.
+were REMOVED on 2026-06-09. The BuildLoopBasis builder + the GetLoopBasis API (and a later re-added loop_deflate method-0 orthogonal projection + coloop_project B-input-hysteresis projection) were REMOVED 2026-06-30: collocation MMMM GIVES UP loop-free (it stays field-correct via dense LU / matrix-free BiCGSTAB; loops are field-null so the external field is exact). Loop-free is HDiv-VIM's domain. Memory: collocation_loopfree_abandoned. POSITIONING (2026-06-30): collocation MMMM is the COARSE / fast tier (optimization inner loops, mesh-less quick passes); HDiv-VIM (tet RT1, loop-free by construction) is the PRIMARY accurate soft-iron demag method.
 
 HDiv-VIM remains the loop-free FEEC complement: the H(div) RT0 demag operator N = B^T G B builds the
 charge map B (rho = -div M on L2, sigma = M.n on SurfaceL2) so the loop space is
