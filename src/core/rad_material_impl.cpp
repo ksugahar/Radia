@@ -1730,19 +1730,20 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		// wedge/pyramid (5 DOF), and hex (6 DOF).  Solver method:
 		//   - method 0 (LU)       -> dense direct moment solve.
 		//   - method 1 (BiCGSTAB) -> matrix-free moment BiCGSTAB + element-block Jacobi (4/5/6 DOF).
-		//   - method 2 (HACApK request) -> compatibility request that routes through the dense LU/Picard
-		//     moment driver.  Method 2 no longer connects MMMM to HACApK; dense moment LU is the canonical
-		//     collocation MMMM path.
+		//   - method 2 (HACApK)   -> COARSE-tier HACApK-BiCGSTAB (Sugahara 2026-07-02): PURE-HEX moment
+		//     routes to the matrix-free moment BiCGSTAB (method 1) with the chi-free geometry K built as a
+		//     RadHACApKMomentSystem H-matrix (O(N log N) matvec); loop-free abandoned (field-correct,
+		//     loop-polluted internal M -- coarse/optimization tier).  tet/wedge/mixed method-2 -> dense LU.
 		// PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
 		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed
 		// 3-DOF RecMag dipole + 4-6 DOF MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
 		// EIEM2 surface-charge collocation kernel was fully removed in Phase 3b.
 		{
-			// multipole-moment MMM is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes pure
-			// tet/hex/wedge/pyramid to the LU/Picard moment driver.  MMMM does NOT connect to HACApK, so a
-			// method-2 (HACApK) request on an all-moment object is rerouted to the dense LU moment driver;
-			// mixed 3-DOF dipole + MSC is rejected fail-loud (Error204), since no production case mixes
-			// surface-charge + dipole soft iron.
+			// multipole-moment MMM is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes
+			// tet/wedge/pyramid to the LU/Picard moment driver; a method-2 (HACApK) request on a PURE-HEX moment
+			// object routes to the matrix-free BiCGSTAB moment driver with an H-matrix geometry K (collocation
+			// MMMM coarse tier, loop-free abandoned).  Mixed 3-DOF dipole + MSC is rejected fail-loud (Error204),
+			// since no production case mixes surface-charge + dipole soft iron.
 			radThg hgMom;
 			if(ValidateElemKey(InteractElemKey, hgMom))
 			{
@@ -1750,15 +1751,31 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 				if(pIntrMom != 0)
 				{
 					int neMom = pIntrMom->GetAmOfMainElem();
-					bool allMoment = (neMom > 0);
+					bool allMoment = (neMom > 0), allHex6 = (neMom > 0);
 					for(int iEl = 0; iEl < neMom; iEl++)
 					{
 						int dd = pIntrMom->GetElementDOF(iEl);
 						if(dd != 6 && dd != 5 && dd != 4) allMoment = false;   // moment = tet(4) + wedge/pyramid(5) + hex(6)
+						if(dd != 6) allHex6 = false;                            // pure-hex 6-DOF (moment H-matrix is hex-only)
 					}
-					// MMMM does NOT connect to HACApK (Sugahara 2026-06-28): method-2 moment -> dense LU.
+					// Collocation-MMMM COARSE tier (Sugahara 2026-07-02): a method-2 (HACApK) request on a
+					// PURE-HEX moment object routes to the matrix-free BiCGSTAB moment driver (method 1) with a
+					// chi-free geometry K built as a RadHACApKMomentSystem H-matrix (O(N log N) matvec) -- loop-free
+					// abandoned (field-correct, loop-polluted internal M; coarse/optimization tier only).
+					// tet/wedge/mixed method-2 stay on the dense moment LU (the moment H-matrix is hex-only).
+					m_moment_use_hmatrix = false;
 					if(allMoment && MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
-						MethNo = RadSolverMethod::LU;
+					{
+						if(allHex6)
+						{
+							m_moment_use_hmatrix = true;          // method-1 pureHexMatrixFree builds K as an H-matrix
+							MethNo = RadSolverMethod::BICGSTAB;    // route to the matrix-free moment BiCGSTAB driver
+						}
+						else
+						{
+							MethNo = RadSolverMethod::LU;          // tet/wedge/mixed -> dense moment LU
+						}
+					}
 				}
 			}
 		}
