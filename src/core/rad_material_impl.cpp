@@ -37,6 +37,26 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
+// Free the cross-Solve collocation-MMMM coarse-tier cache (the chi-free geometry-K H-matrix +
+// the chi-free per-hex localL/diagK blocks).  Called from Initialize() (ctor / UtiDelAll / error
+// cleanup; NSDMI null init makes the first call safe) and on a cache miss before rebuilding.
+// Defined here (not inline in rad_application.h) because RadHACApKMomentSystem is complete here.
+void radTApplication::InvalidateMomentHK()
+{
+	if(m_moment_hk)
+	{
+		delete m_moment_hk;
+		m_moment_hk = nullptr;
+	}
+	m_moment_hk_eps = 0.0;
+	m_moment_hk_leaf = 0;
+	m_moment_hk_eta = 0.0;
+	m_moment_hk_localL.clear();
+	m_moment_hk_localL.shrink_to_fit();
+	m_moment_hk_diagK.clear();
+	m_moment_hk_diagK.shrink_to_fit();
+}
+
 int radTApplication::SetLinearMaterial(double* KsiArray, long lenKsiArray, double* RemMagnArray, long lenRemMagnArray)
 {
 	radTMaterial* MaterPtr = nullptr;
