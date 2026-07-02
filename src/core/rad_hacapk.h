@@ -359,6 +359,12 @@ public:
 
     radTInteraction* GetInteraction() const { return m_interaction; }
 
+    // Cross-Solve cache validity: TRUE iff the interaction's CURRENT hex centroids are bit-identical
+    // to the coordinates this H-matrix was built on (same extraction code path -> exact compare is
+    // correct).  Guards the radTApplication-level cache against pointer reuse (ABA) after the cached
+    // interaction was deleted and a different geometry landed at the same address.  O(nHex) doubles.
+    bool GeometryMatches() const;
+
     // K[i][j] on demand (the chi-free geometry entry; rows 6h+t, cols = face DOF).
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
     // 6x6 geometry block unit behind the scalar HACApK callback.
