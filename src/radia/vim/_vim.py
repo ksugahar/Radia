@@ -393,6 +393,125 @@ def _charge_basis_curved(fes, quad):
                 n_el=len(vels))
 
 
+# ----------------------------------------------------------- HEX RT1 (pure-hex HDiv order-1) charge basis ---
+# The hex volume charge = -div(HDiv-hex order-1) lives in L2(order=1) = Q1 trilinear (8 modes/hex) -- the "hex
+# gotcha" (NOT the tet's P0; testing div against only P0 pollutes ker(N) -> the demag solve blows up ~24x).
+# Geometry = 27-node triquadratic (Q2) lattice via GetTrafo -> ONE code path for FLAT (trilinear subset of Q2,
+# exact) AND CURVED (mesh.Curve(2)) hexes.  Face charge = SurfaceL2(order=1) bilinear (4/quad-face).  The C++
+# RadHACApKChargeGram hex mode decomposes each hex into 6 sub-tets (quad face -> 2 sub-tris) as an INTEGRATION
+# device and does the both-domains-graded Duffy singular quadrature that keeps eig(M_mass^-1 N) <= 1.  See
+# the de-risk + block-memo perf fix in memory hdiv-tet-hex-coupling-pyramid-gated.
+_MONS_HEX = [(i, j, k) for k in (0, 1) for j in (0, 1) for i in (0, 1)]      # 8 Q1 monomials, x-fastest
+_MONS_QUAD = [(i, j) for j in (0, 1) for i in (0, 1)]                        # 4 Q1 monomials
+_Q2_LATTICE_3D = [(ix / 2.0, iy / 2.0, iz / 2.0)
+                  for iz in range(3) for iy in range(3) for ix in range(3)]  # n = ix + 3*iy + 9*iz
+_Q2_LATTICE_2D = [(iu / 2.0, iv / 2.0) for iv in range(3) for iu in range(3)]  # n = iu + 3*iv
+
+
+def _ref_prod_gauss(n, dim):
+    """Product Gauss rule on the reference hex [0,1]^dim (for the Q1 change-of-basis projection)."""
+    g, gw = _g01(n)
+    P, W = [], []
+    if dim == 3:
+        for a, wa in zip(g, gw):
+            for b, wb in zip(g, gw):
+                for c, wc in zip(g, gw):
+                    P.append((a, b, c)); W.append(wa * wb * wc)
+    else:
+        for a, wa in zip(g, gw):
+            for b, wb in zip(g, gw):
+                P.append((a, b)); W.append(wa * wb)
+    return np.array(P), np.array(W)
+
+
+def _far_tet_wv3():
+    """Williams-Wong-style degree-3 8-point tet rule (all-positive), barycentric lam1..3, weights sum 1/6 --
+    the cheap FAR inner rule for the hex Gram (1/r is smooth there, no grading needed)."""
+    from itertools import permutations
+    A, Bc = 0.32816330251638169, 0.10804724989842860
+
+    def orb(gen, w):
+        seen, P, W = set(), [], []
+        for pm in permutations(gen):
+            if pm not in seen:
+                seen.add(pm); P.append((pm[1], pm[2], pm[3])); W.append(w)
+        return P, W
+    P1, W1 = orb((A, A, A, 1 - 3 * A), 0.13621784253708736)
+    P2, W2 = orb((Bc, Bc, Bc, 1 - 3 * Bc), 0.11378215746291264)
+    return np.array(P1 + P2), np.array(W1 + W2) / 6.0
+
+
+def _charge_basis_hex(fes, cob_quad=3):
+    """HEX analogue of `_charge_basis_curved`: charge map B in REF-frame Q1 monomials + 27/9-node Q2 geometry
+    nodes (via GetTrafo -> flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager."""
+    mesh = fes.mesh
+    assert fes.globalorder == 1, "RT1-hex is HDiv order-1 only"
+    nn = ng.specialcf.normal(mesh.dim)
+    L2v = ng.L2(mesh, order=1)               # HEX GOTCHA: div(HDiv-hex order1) is Q1 -> L2 order 1, NOT p-1
+    L2b = ng.SurfaceL2(mesh, order=1)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
+    mv = ng.BilinearForm(L2v); mv += L2v.TrialFunction() * L2v.TestFunction() * ng.dx; mv.Assemble()
+    mb = ng.BilinearForm(L2b); mb += L2b.TrialFunction() * L2b.TestFunction() * ng.ds; mb.Assemble()
+    mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
+    Bv_d = _blockdiag_density_map(_csr(mv), _csr(bv), L2v, ng.VOL, mesh)
+    Bb_d = _blockdiag_density_map(_csr(mb), _csr(bb), L2b, ng.BND, mesh)
+    M_mass = _csr(mh)
+
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    rhp, rhw = _ref_prod_gauss(cob_quad, 3)
+    rqp, rqw = _ref_prod_gauss(cob_quad, 2)
+    ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
+    ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
+
+    Brows, host, kind, expo = [], [], [], []
+    cell_nodes, face_nodes = [], []
+    for c, e in enumerate(vels):
+        tr = mesh.GetTrafo(e)
+        cell_nodes.append(np.array([list(tr(ip).point) for ip in ir_hex]))
+        Sv = sp.csr_matrix(_change_of_basis_ref(L2v.GetFE(e), _MONS_HEX, rhp, rhw, dim=3))
+        blk = Sv @ Bv_d[list(L2v.GetDofNrs(e)), :]
+        for a, (i, j, k) in enumerate(_MONS_HEX):
+            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+    n_el = len(vels)
+    for f, e in enumerate(bels):
+        tr = mesh.GetTrafo(e)
+        face_nodes.append(np.array([list(tr(ip).point) for ip in ir_quad]))
+        Ss = sp.csr_matrix(_change_of_basis_ref(L2b.GetFE(e), _MONS_QUAD, rqp, rqw, dim=2))
+        blk = Ss @ Bb_d[list(L2b.GetDofNrs(e)), :]
+        for a, (i, j) in enumerate(_MONS_QUAD):
+            Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+    B = sp.vstack(Brows).tocsr()
+    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
+                cell_nodes=np.concatenate([n.ravel() for n in cell_nodes]).tolist(),
+                face_nodes=(np.concatenate([n.ravel() for n in face_nodes]).tolist() if face_nodes else []))
+
+
+def _build_charge_gram_hex(fes, glout_n=6, glin_n=10, near_grade=0.6, far_inner=4.0,
+                           eps=1e-12, leafsize=64, eta=2.0):
+    """Pure-hex RT1 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
+    share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
+    mesh for curved).  eig(M_mass^-1 N)<=1 GATED at (near_grade=0.6, eps=1e-12, eta=2.0, leaf=64); the C++
+    block-memo build is ~59x cheaper than the naive per-entry callback (memory: block memo + near_grade)."""
+    cb = _charge_basis_hex(fes)
+    glo, gwo = _g01(glout_n)
+    gli, gwi = _g01(glin_n)
+    ftp, ftw = _far_tet_wv3()
+    G = _rp._ChargeGramHMatrix(
+        hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
+        n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),
+        charge_host=list(cb["host"]), charge_kind=list(cb["kind"]), charge_expo=list(cb["expo"]),
+        sym_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), sym_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
+        sym_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), sym_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        gl_out=glo.tolist(), gw_out=gwo.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
+        far_tet_pts=ftp.ravel().tolist(), far_tet_w=ftw.tolist(),
+        far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+    return cb["B"], G, cb["M_mass"]
+
+
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
@@ -423,10 +542,17 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
-    if not all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
+    _vtypes = set(len(el.vertices) for el in mesh.Elements(ng.VOL))
+    if _vtypes == {8}:
+        # PURE-HEX RT1: the hex-mode charge Gram (Q1 volume charge + Q2 geometry; FLAT or Curve(2) one path).
+        # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
+        # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
+        return _build_charge_gram_hex(fes, eta=eta)
+    if _vtypes != {4}:
         raise ValueError(
-            "build_charge_gram: HDiv-VIM is TET-only -- hex/wedge/pyramid soft-iron demag uses the "
-            "collocation MMMM backend, not the HDiv-VIM charge Gram.")
+            "build_charge_gram: HDiv-VIM is TET (tri-face) or pure-HEX (quad-face) -- a MIXED tet+hex mesh "
+            "needs HDiv-pyramid transition elements (NGSolve 6.2.2604 does NOT implement them yet), and "
+            "wedge/pyramid soft-iron demag uses the collocation MMMM backend, not the HDiv-VIM charge Gram.")
     pv = max(p - 1, 0)
     # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
     # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs

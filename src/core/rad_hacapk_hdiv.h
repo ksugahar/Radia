@@ -424,6 +424,18 @@ private:
     double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1 monomial (i,j,k in {0,1})
     double PhiInnerHexSub(int src, int sub, const double p[3]) const;  // INT_{src host's sub-simplex} mono_src(xi)/|p-y| dy
     double QuadDotHex(int tgt, int src) const;          // pair-graded outer x graded inner (the validated scheme)
+    // BLOCK-MEMO (the 64x co-location win): the near/far/grading decisions depend ONLY on host+sub geometry
+    // (all co-located charges of a (kind,host) share m_cent/m_size), so the WHOLE directed host-pair block is
+    // computed in ONE pass -- the 1/r sqrt is shared across all nT*nS monomial combos (the numpy-proto
+    // block += wq*outer(Phia,inn) structure).  Bit-identical to per-entry QuadDotHex; ~64x fewer sqrt on near
+    // hex-hex blocks.  m_hexLocalOf / m_cellCharges / m_faceCharges are the (kind,host)->local reverse maps.
+    std::vector<int> m_hexLocalOf;                       // [n] local index of charge within its (kind,host) group
+    std::vector<std::vector<int>> m_cellCharges;         // [n_el] global charge indices per cell (local order)
+    std::vector<std::vector<int>> m_faceCharges;         // [n_bf] global charge indices per boundary face
+    void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
+                           const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
+    std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS) const;  // directed [nT*nS] block, INV4PI folded
+    const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS) const;  // thread_local block cache
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
