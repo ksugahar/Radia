@@ -57,6 +57,35 @@ intrinsically modest):
   on the 634-face coil.stp > 15 min/level; a 2-wire BEM-A hit a
   singular EFIE saddle on disconnected / busbar conductors.)
 
+**BEM-A FIX IMPLEMENTED (2026-07-02): the impedance-EFIE.**  Rather
+than compute R post-hoc from the PEC current, put the surface
+impedance INTO the saddle system so J is the *finite-impedance*
+current and cannot over-concentrate.  The (1,1) block becomes
+``j ω μ0 SL + Z_s M`` (complex); Z = Z_s (Jᴴ M J) + j ω μ0 (Jᴴ SL J),
+R = Re(Z), L = Im(Z)/ω.  Wired as
+``compute_inductance_source_sink(..., impedance_efie=True, omega,
+Z_s_complex)`` and the panel flag ``calc_inductance.py
+--bema-impedance-efie``.  Validated:
+
+  | geometry | PEC post-hoc R | impedance-EFIE R | truth |
+  |---|---|---|---|
+  | isolated straight wire (smooth) | 0.3153 mΩ | 0.3153 mΩ | Bessel 0.3148 |
+  | kubota 3-turn coil | 15.14 mΩ | **4.63 mΩ** | ~4.5-5 (3 methods) |
+
+  On smooth geometry the two agree (nothing to fix); on the coil the
+  impedance-EFIE removes the singular over-concentration and lands
+  in the physical band — a **4th independent method** agreeing with
+  volume/perimeter PEEC + analytic proximity.  Why the small
+  resistive term (~1/Q of the reactance at Q≈27-90) moves R 3×: the
+  singular concentration contributes almost nothing to the magnetic
+  energy (JᴴSL J) but enormously to the loss (Jᴴ M J), so even a
+  weak resistive penalty makes J avoid it.  Golden:
+  ``validation_test/bem/test_coil_bem_a_impedance_efie.py`` (locks
+  R_imp ≤ R_pec + L unchanged on the gapped-torus fixture).  It is
+  **opt-in** (default off) pending a decision to flip the BEM-A R
+  default (the PEC path is a known ~3× over-estimate for tightly-wound
+  coils, so flipping is recommended).
+
 **Recommendation**: keep perimeter PEEC (~4.5 mΩ) as the screening
 R; do NOT trust BEM-A R for tightly-wound multi-turn coils without a
 mesh-convergence check.

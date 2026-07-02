@@ -454,6 +454,11 @@ def _solve_coil_bem_a(args):
     delta_skin = math.sqrt(2.0 / (omega * MU_0 * args.coil_sigma)) \
                   if omega > 0 else 1.0
     Z_s_coil_re = 1.0 / (args.coil_sigma * delta_skin) if omega > 0 else 0.0
+    # Full complex Leontovich surface impedance for the impedance-EFIE.
+    Z_s_coil_complex = (1.0 + 1.0j) / (args.coil_sigma * delta_skin) \
+                        if omega > 0 else 0.0
+    use_imp_efie = bool(getattr(args, "bema_impedance_efie", False)) \
+                    and omega > 0
 
     # Saddle-point solver selection.
     #   "auto" (default):  LU at < ~10k tris (~25k saddle DOFs at HDivSurface
@@ -471,7 +476,15 @@ def _solve_coil_bem_a(args):
         saddle = "lu" if len(coil_tris) < 10000 else "minres"
     progress("BEMA",
         f"ngsolve.bem solve (n_tris={len(coil_tris)}, "
-        f"fes_order=0, Z_s_re={Z_s_coil_re:.3e}, saddle={saddle})")
+        f"fes_order=0, Z_s_re={Z_s_coil_re:.3e}, saddle={saddle}, "
+        f"R={'impedance-EFIE' if use_imp_efie else 'PEC post-hoc'})")
+    if use_imp_efie:
+        progress("BEMA",
+            "impedance-EFIE: Z_s in the saddle system -> J is the "
+            "finite-impedance current (no PEC edge/near-contact "
+            "over-concentration); avoids the ~3x SIBC-breakdown R "
+            "over-estimate on tightly-wound coils (see "
+            "docs/peec/VOLUME_PEEC_DESIGN.md).")
     t0 = time.perf_counter()
     res = compute_inductance_source_sink(
         coil_mesh,
@@ -481,6 +494,9 @@ def _solve_coil_bem_a(args):
         solver=saddle,
         Z_s_re=Z_s_coil_re,
         log_fn=progress,
+        impedance_efie=use_imp_efie,
+        omega=omega,
+        Z_s_complex=Z_s_coil_complex,
     )
     t_solve = time.perf_counter() - t0
     if "error" in res:
@@ -1825,6 +1841,21 @@ def build_argparser():
                              "overwrite_a=True), minres (Krylov symmetric "
                              "indefinite), gmres (generic Krylov). "
                              "Defaults to auto.")
+    parser.add_argument("--bema-impedance-efie",
+                        action=argparse.BooleanOptionalAction, default=False,
+                        help="BEM-A R formulation.  Default (off) computes R "
+                             "post-hoc from the perfect-conductor current, "
+                             "R=Re(Zs) integral|J|^2 dS, which OVER-estimates "
+                             "R for tightly-wound / near-contact / faceted "
+                             "coils (perfect-conductor J concentrates "
+                             "singularly at edges/gaps where SIBC breaks "
+                             "down: kubota 3-turn coil = 15.1 mOhm vs the "
+                             "physical ~4.6).  On (--bema-impedance-efie) puts "
+                             "Zs INTO the saddle system (complex "
+                             "jw*mu0*SL+Zs*M) so J is the finite-impedance "
+                             "current and R is physical (4.63 mOhm on that "
+                             "coil, matches volume/perimeter PEEC). Smooth "
+                             "geometry (isolated wire) is unchanged (=Bessel).")
 
     # ----- Coil material -----
     parser.add_argument("--coil-sigma", type=float, default=5.8e7,
