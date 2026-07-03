@@ -40,7 +40,7 @@ def mn_edge_cloud(mesh, M_elem, ngauss=4):
     """
     if mesh.dim != 2:
         raise ValueError("planar_charges: mesh.dim must be 2 (got %d)" % mesh.dim)
-    M_elem = np.asarray(M_elem, float)
+    M_elem = np.asarray(M_elem)                    # keep dtype (real, or complex phasor for eddy)
     pts = np.array([list(mesh[v].point)[:2] for v in mesh.vertices])
     tg, wg = _gauss01(ngauss)
     Xs, Qs = [], []
@@ -61,7 +61,7 @@ def mn_edge_cloud(mesh, M_elem, ngauss=4):
             mid = 0.5 * (P0 + P1)
             if nout @ (mid - c) < 0:
                 nout = -nout
-            lam = float(Mk @ nout)            # uniform line-charge density on this edge
+            lam = Mk @ nout                   # uniform line-charge density (real, or complex phasor)
             X = P0[None, :] + tg[:, None] * (P1 - P0)[None, :]     # (ngauss, 2)
             Xs.append(X)
             Qs.append(lam * L * wg)
@@ -95,3 +95,45 @@ def maxwell_torque(mesh, M_elem, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440
     torque = mu0 A (M x H0); Rc must enclose the body and lie in air."""
     Xq, Q = mn_edge_cloud(mesh, M_elem, ngauss)
     return maxwell_torque_cloud(Xq, Q, Rc, H_ext=H_ext, center=center, n=n)
+
+
+# ---- out-of-plane vector potential A_z (for the reduced-FEM eddy / maglev coupling) --------------
+
+def charge_az(Xq, Q, P):
+    """A_z at points P (n,2) from a point-charge cloud: A_z = mu0/(2pi) sum Q atan2(dy,dx).  C++."""
+    P = np.ascontiguousarray(np.asarray(P, float).reshape(-1, 2))
+    return _rp.PlanarChargeAz(np.ascontiguousarray(Xq, float), np.ascontiguousarray(Q, float), P)
+
+
+def vector_potential_az(mesh, M_elem, P, ngauss=4):
+    """Out-of-plane vector potential A_z (in air) at points P (n,2) of the magnetization M_elem.
+    BRANCH-CUT CAVEAT (atan2): valid where the eval set sees the body from one side."""
+    Xq, Q = mn_edge_cloud(mesh, M_elem, ngauss)
+    return charge_az(Xq, Q, P)
+
+
+# ---- COMPLEX (eddy-current phasor) field + TIME-AVERAGED torque (IM / maglev) --------------------
+
+def field_complex(Xq, Qc, P):
+    """Complex H at P from a COMPLEX point-charge cloud (phasors): the log-grad kernel is linear, so
+    H = Field(Re Q) + 1j Field(Im Q).  Two real C++ calls."""
+    Qc = np.asarray(Qc)
+    Hr = charge_field(Xq, np.ascontiguousarray(Qc.real, float), P)
+    Hi = charge_field(Xq, np.ascontiguousarray(Qc.imag, float), P)
+    return Hr + 1j * Hi
+
+
+def maxwell_torque_complex(mesh, M_elem, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440, ngauss=4):
+    """TIME-AVERAGED Maxwell torque per unit length for COMPLEX phasor magnetization M_elem (nEl,2)
+    and complex uniform applied H_ext, on a circle Rc in air:
+        <T> = mu0 Rc^2 (2 pi / n) sum_i (1/2) Re( H_r conj(H_phi) ),  H = H_body + H_ext.
+    (The C++ real MaxwellTorqueCircle is the M_elem-real, H_ext-real special case.)"""
+    Xq, Qc = mn_edge_cloud(mesh, M_elem, ngauss)                  # complex M -> complex Q
+    phi = np.linspace(0.0, 2 * np.pi, n, endpoint=False)
+    P = np.stack([center[0] + Rc * np.cos(phi), center[1] + Rc * np.sin(phi)], axis=1)
+    H = field_complex(Xq, Qc, P) + np.asarray(H_ext, complex)[None, :]
+    er = np.stack([np.cos(phi), np.sin(phi)], axis=1)
+    et = np.stack([-np.sin(phi), np.cos(phi)], axis=1)
+    Hr = (H * er).sum(axis=1)
+    Ht = (H * et).sum(axis=1)
+    return MU0 * Rc * Rc * (2 * np.pi / n) * 0.5 * float(np.real(Hr * np.conj(Ht)).sum())

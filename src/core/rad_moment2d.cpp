@@ -100,52 +100,82 @@ static void ResidualModes(int nE, const double* Lf, const double d[][2],
 	}
 }
 
-//--- dense LU solve A x = b (A row-major n*n, b length n overwritten with x).
-static int DenseSolve(std::vector<double>& A, std::vector<double>& b, int n)
+//--- dense LU solve A X = B, factoring A ONCE for nrhs right-hand sides.
+//    A row-major n*n; B COLUMN-MAJOR n*nrhs (B[col*n+row]) overwritten with X.
+static int DenseSolve(std::vector<double>& A, std::vector<double>& B, int n, int nrhs)
 {
 #ifdef HAVE_LAPACK
 	std::vector<double> Acol(n * n);
 	for(int i = 0; i < n; i++) for(int j = 0; j < n; j++) Acol[j * n + i] = A[i * n + j];
-	std::vector<int> ipiv(n); int nrhs = 1, info = 0;
+	std::vector<int> ipiv(n); int info = 0;
 	{
 		ngcore::SuspendTaskManager stm;
 		radia::MKLThreadGuard mkl_guard(radia::GetNumThreads());
-		dgesv_(&n, &nrhs, Acol.data(), &n, ipiv.data(), b.data(), &n, &info);
+		dgesv_(&n, &nrhs, Acol.data(), &n, ipiv.data(), B.data(), &n, &info);
 	}
 	return (info == 0) ? 0 : -1;
 #else
-	// Gaussian elimination with partial pivoting (fallback)
+	// Gaussian elimination with partial pivoting (factor A once, then all B columns)
 	for(int k = 0; k < n - 1; k++){
 		int piv = k; double best = std::fabs(A[k * n + k]);
 		for(int i = k + 1; i < n; i++){ double v = std::fabs(A[i * n + k]); if(v > best){ best = v; piv = i; } }
 		if(best < 1e-300) return -1;
-		if(piv != k){ for(int j = 0; j < n; j++) std::swap(A[k * n + j], A[piv * n + j]); std::swap(b[k], b[piv]); }
+		if(piv != k){
+			for(int j = 0; j < n; j++) std::swap(A[k * n + j], A[piv * n + j]);
+			for(int r = 0; r < nrhs; r++) std::swap(B[(size_t)r * n + k], B[(size_t)r * n + piv]);
+		}
 		for(int i = k + 1; i < n; i++){
 			double m = A[i * n + k] / A[k * n + k];
 			for(int j = k; j < n; j++) A[i * n + j] -= m * A[k * n + j];
-			b[i] -= m * b[k];
+			for(int r = 0; r < nrhs; r++) B[(size_t)r * n + i] -= m * B[(size_t)r * n + k];
 		}
 	}
-	for(int i = n - 1; i >= 0; i--){
-		double s = b[i]; for(int j = i + 1; j < n; j++) s -= A[i * n + j] * b[j];
-		b[i] = s / A[i * n + i];
-	}
+	for(int r = 0; r < nrhs; r++)
+		for(int i = n - 1; i >= 0; i--){
+			double s = B[(size_t)r * n + i];
+			for(int j = i + 1; j < n; j++) s -= A[i * n + j] * B[(size_t)r * n + j];
+			B[(size_t)r * n + i] = s / A[i * n + i];
+		}
 	return 0;
 #endif
 }
 
-int SolveLinear(int nElem, const int* voff, const double* vxy,
-                const double* chi, const double* Hext, double* Mout)
+// Recover per-element M = (1/A) sum_f sigma_f L_f (mid_f - c) from a solution column.
+static void RecoverM(int nElem, const std::vector<int>& dofOff, const std::vector<int>& nEd,
+                     const std::vector<double>& cx, const std::vector<double>& cy,
+                     const std::vector<double>& area, const std::vector<double>& eL,
+                     const std::vector<double>& eMx, const std::vector<double>& eMy,
+                     const double* sol, double* Mout)
+{
+	for(int k = 0; k < nElem; k++){
+		int nE = nEd[k], o = dofOff[k]; double mx = 0, my = 0;
+		for(int f = 0; f < nE; f++){
+			double s = sol[o + f];
+			mx += s * eL[o + f] * (eMx[o + f] - cx[k]);
+			my += s * eL[o + f] * (eMy[o + f] - cy[k]);
+		}
+		Mout[2 * k] = mx / area[k]; Mout[2 * k + 1] = my / area[k];
+	}
+}
+
+// Assemble the dense row-major 2D moment matrix A (Hext-INDEPENDENT -- geometry + chi only, so a
+// multi-RHS angle sweep factors A ONCE) plus the per-element geometry needed to build RHS vectors
+// and recover M.  Returns nDOF (>0) on success or a negative error code.
+static int AssembleMomentA(int nElem, const int* voff, const double* vxy, const double* chi,
+                           std::vector<double>& A, std::vector<int>& dofOff, std::vector<int>& nEd,
+                           std::vector<double>& cx, std::vector<double>& cy, std::vector<double>& area,
+                           std::vector<double>& eL, std::vector<double>& eMx, std::vector<double>& eMy)
 {
 	if(nElem <= 0) return -1;
 
 	// ---- per-element geometry (CCW-forced) + flat global-edge table ----
-	std::vector<double> cx(nElem), cy(nElem), area(nElem);
-	std::vector<int> nEd(nElem), dofOff(nElem + 1, 0);
+	cx.assign(nElem, 0); cy.assign(nElem, 0); area.assign(nElem, 0);
+	nEd.assign(nElem, 0); dofOff.assign(nElem + 1, 0);
 	// per-element vertex coords (CCW), stored packed for the 2nd-moment tensor
 	std::vector<std::vector<double> > VX(nElem), VY(nElem);
-	// global edge geometry
-	std::vector<double> eP0x, eP0y, eTx, eTy, eNx, eNy, eL, eMx, eMy;
+	// global edge geometry (eP0/eT/eN local to the assembly; eL/eMx/eMy also feed RHS + recovery)
+	std::vector<double> eP0x, eP0y, eTx, eTy, eNx, eNy;
+	eL.clear(); eMx.clear(); eMy.clear();
 
 	for(int k = 0; k < nElem; k++){
 		int nv = voff[k + 1] - voff[k];
@@ -176,8 +206,8 @@ int SolveLinear(int nElem, const int* voff, const double* vxy,
 	}
 	int nDOF = dofOff[nElem];
 
-	// ---- assemble dense system A (row-major) + rhs ----
-	std::vector<double> A((size_t)nDOF * nDOF, 0.0), rhs(nDOF, 0.0);
+	// ---- assemble dense system A (row-major); the RHS is built per solve (A is Hext-independent) ----
+	A.assign((size_t)nDOF * nDOF, 0.0);
 	std::vector<double> Fx(nDOF), Fy(nDOF);                     // field at ck from each edge
 	std::vector<double> G00(nDOF), G01(nDOF), G11(nDOF);        // Hessian (sym) at ck from each edge
 	int row = 0;
@@ -201,8 +231,7 @@ int SolveLinear(int nElem, const int* voff, const double* vxy,
 			}
 			const std::vector<double>& Fc = (comp == 0 ? Fx : Fy);
 			for(int g = 0; g < nDOF; g++) A[(size_t)row * nDOF + g] += -chik * Ak * Fc[g];
-			rhs[row] = chik * Ak * Hext[2 * k + comp];
-			row++;
+			row++;   // dipole-row RHS (chi*Ak*Hext) is set by the caller (Hext-independent A)
 		}
 		// ---- quad rows (nE-3) ----
 		if(nE > 3){
@@ -247,26 +276,51 @@ int SolveLinear(int nElem, const int* voff, const double* vxy,
 					double contr = Txx * (M2xx - M2yy) + 2.0 * Txy * M2xy;
 					A[(size_t)row * nDOF + g] += -chik * contr;
 				}
-				rhs[row] = 0.0;
-				row++;
+				row++;   // quad-row RHS is 0
 			}
 		}
 	}
 
-	// ---- solve ----
-	std::vector<double> sol = rhs;
-	if(DenseSolve(A, sol, nDOF) != 0) return -3;
+	return nDOF;
+}
 
-	// ---- recover per-element M = (1/A) sum_f sigma_f L_f (mid_f - c) ----
+int SolveLinear(int nElem, const int* voff, const double* vxy,
+                const double* chi, const double* Hext, double* Mout)
+{
+	std::vector<double> A, cx, cy, area, eL, eMx, eMy;
+	std::vector<int> dofOff, nEd;
+	int nDOF = AssembleMomentA(nElem, voff, vxy, chi, A, dofOff, nEd, cx, cy, area, eL, eMx, eMy);
+	if(nDOF < 0) return nDOF;
+	std::vector<double> B(nDOF, 0.0);
 	for(int k = 0; k < nElem; k++){
-		int nE = nEd[k], o = dofOff[k]; double ck[2] = { cx[k], cy[k] }; double mx = 0, my = 0;
-		for(int f = 0; f < nE; f++){
-			double s = sol[o + f];
-			mx += s * eL[o + f] * (eMx[o + f] - ck[0]);
-			my += s * eL[o + f] * (eMy[o + f] - ck[1]);
-		}
-		Mout[2 * k] = mx / area[k]; Mout[2 * k + 1] = my / area[k];
+		int o = dofOff[k];
+		B[o + 1] = chi[k] * area[k] * Hext[2 * k];
+		B[o + 2] = chi[k] * area[k] * Hext[2 * k + 1];
 	}
+	if(DenseSolve(A, B, nDOF, 1) != 0) return -3;
+	RecoverM(nElem, dofOff, nEd, cx, cy, area, eL, eMx, eMy, B.data(), Mout);
+	return 0;
+}
+
+int SolveMulti(int nElem, const int* voff, const double* vxy, const double* chi,
+               int nRHS, const double* HextMulti, double* MoutMulti)
+{
+	if(nRHS <= 0) return -1;
+	std::vector<double> A, cx, cy, area, eL, eMx, eMy;
+	std::vector<int> dofOff, nEd;
+	// A is factored ONCE; the nRHS applied fields differ only in the RHS (e.g. a rotation sweep).
+	int nDOF = AssembleMomentA(nElem, voff, vxy, chi, A, dofOff, nEd, cx, cy, area, eL, eMx, eMy);
+	if(nDOF < 0) return nDOF;
+	std::vector<double> B((size_t)nDOF * nRHS, 0.0);         // column-major (nDOF x nRHS)
+	for(int r = 0; r < nRHS; r++) for(int k = 0; k < nElem; k++){
+		int o = dofOff[k];
+		B[(size_t)r * nDOF + o + 1] = chi[k] * area[k] * HextMulti[((size_t)r * nElem + k) * 2];
+		B[(size_t)r * nDOF + o + 2] = chi[k] * area[k] * HextMulti[((size_t)r * nElem + k) * 2 + 1];
+	}
+	if(DenseSolve(A, B, nDOF, nRHS) != 0) return -3;
+	for(int r = 0; r < nRHS; r++)
+		RecoverM(nElem, dofOff, nEd, cx, cy, area, eL, eMx, eMy,
+		         B.data() + (size_t)r * nDOF, MoutMulti + (size_t)r * nElem * 2);
 	return 0;
 }
 

@@ -217,15 +217,30 @@ def torque_angle_sweep(mesh, H0, angles_rad, Rc, *, mu_r=None, bh_table=None, ce
     torque about ``center`` on the circle Rc is returned.
 
     Returns dict: angles (rad), torque (nAng,), M_avg (nAng,2).  (LINEAR: mu_r; NONLINEAR: bh_table.)
-    NOTE: the system is currently rebuilt+refactored per angle (dense LU); a factor-once /
-    back-substitution sweep is a follow-up optimization (the moment matrix is angle-independent for
-    a linear material -- only the RHS rotates)."""
+    For a LINEAR material the moment matrix is angle-INDEPENDENT (only the RHS rotates), so it is
+    assembled + LU-factored ONCE and back-substituted for all angles (C++ Moment2DSolveMulti).
+    NONLINEAR (bh_table) re-solves per angle (chi varies -> the matrix changes)."""
     angles = np.asarray(angles_rad, float)
     T = np.zeros(len(angles))
     Mavg = np.zeros((len(angles), 2))
-    for i, th in enumerate(angles):
+    if mu_r is not None and bh_table is None:
+        # LINEAR: factor ONCE, solve all angles
+        verts, offsets, _, areas = _extract_geometry(mesh)
+        nEl = len(areas)
+        chi = np.full(nEl, mu_r - 1.0)
+        Hmulti = np.zeros((len(angles), nEl, 2))
+        Hmulti[:, :, 0] = (H0 * np.cos(angles))[:, None]
+        Hmulti[:, :, 1] = (H0 * np.sin(angles))[:, None]
+        Mmulti = _rp.Moment2DSolveMulti(verts, offsets, chi, Hmulti)      # (nAng, nEl, 2)
+        w = areas / areas.sum()
+        for i, th in enumerate(angles):
+            H_ext = (H0 * np.cos(th), H0 * np.sin(th))
+            T[i] = maxwell_torque(mesh, Mmulti[i], Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
+            Mavg[i] = (float(w @ Mmulti[i, :, 0]), float(w @ Mmulti[i, :, 1]))
+        return {"angles": angles, "torque": T, "M_avg": Mavg, "factored_once": True}
+    for i, th in enumerate(angles):                                       # NONLINEAR: per angle
         H_ext = (H0 * np.cos(th), H0 * np.sin(th))
         r = solve_planar_demag(mesh, mu_r=mu_r, bh_table=bh_table, H_ext=H_ext, **solve_kw)
         T[i] = maxwell_torque(mesh, r["M"], Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
         Mavg[i] = r["M_avg"]
-    return {"angles": angles, "torque": T, "M_avg": Mavg}
+    return {"angles": angles, "torque": T, "M_avg": Mavg, "factored_once": False}

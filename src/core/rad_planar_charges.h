@@ -28,6 +28,14 @@ namespace rad_planar_charges {
 void Field(int nq, const double* Xq, const double* Q,
            int nP, const double* P, double* Hout);
 
+// Out-of-plane vector potential A_z at nP points from the same cloud (for the reduced-FEM eddy /
+// maglev coupling): A_z = (mu0 / 2 pi) sum_a Q_a atan2(P_y-X_y, P_x-X_x).  (dA_z/dy = mu0 H_x,
+// -dA_z/dx = mu0 H_y.)  BRANCH-CUT CAVEAT: the atan2 form has a cut along the -x ray of every
+// charge -- valid when the eval set sees the charges from ONE side (as in radia.vim._vim2d.Az_at);
+// for points SURROUNDING the body use the polar-integrated single-valued construction.
+void FieldAz(int nq, const double* Xq, const double* Q,
+             int nP, const double* P, double* Azout);
+
 // Maxwell-stress torque per unit length about (cx,cy) on a circle of radius Rc
 // in air.  The TOTAL field on the circle is the cloud (body) field PLUS the
 // UNIFORM applied field (hextx,hexty): a uniform field's self-torque integrates

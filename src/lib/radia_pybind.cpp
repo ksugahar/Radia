@@ -3071,6 +3071,36 @@ py::array_t<double> Moment2DSolveLinear(
         throw std::runtime_error("Moment2DSolveLinear: solver failed (code " + std::to_string(rc) + ")");
     return M;
 }
+
+// Factor-once multi-RHS solve: HextMulti (nRHS, nElem, 2) -> M (nRHS, nElem, 2).  The moment matrix
+// is Hext-independent, so it is assembled + LU-factored ONCE and back-substituted for all nRHS
+// (e.g. a rotation sweep -- only the applied field rotates).
+py::array_t<double> Moment2DSolveMulti(
+        py::array_t<double, py::array::c_style | py::array::forcecast> verts,
+        py::array_t<int,    py::array::c_style | py::array::forcecast> offsets,
+        py::array_t<double, py::array::c_style | py::array::forcecast> chi,
+        py::array_t<double, py::array::c_style | py::array::forcecast> HextMulti) {
+    auto vbuf = verts.request(); auto obuf = offsets.request();
+    auto cbuf = chi.request();   auto hbuf = HextMulti.request();
+    if (obuf.ndim != 1 || obuf.shape[0] < 2)
+        throw std::runtime_error("Moment2DSolveMulti: offsets must be (nElem+1,)");
+    int nElem = static_cast<int>(obuf.shape[0]) - 1;
+    if (cbuf.ndim != 1 || cbuf.shape[0] != nElem)
+        throw std::runtime_error("Moment2DSolveMulti: chi must be (nElem,)");
+    if (hbuf.ndim != 3 || hbuf.shape[1] != nElem || hbuf.shape[2] != 2)
+        throw std::runtime_error("Moment2DSolveMulti: HextMulti must be (nRHS, nElem, 2)");
+    int nRHS = static_cast<int>(hbuf.shape[0]);
+    py::array_t<double> M({nRHS, nElem, 2});
+    double* mp = static_cast<double*>(M.request().ptr);
+    int rc;
+    { py::gil_scoped_release rel;
+      rc = rad_moment2d::SolveMulti(nElem, static_cast<int*>(obuf.ptr), static_cast<double*>(vbuf.ptr),
+                                    static_cast<double*>(cbuf.ptr), nRHS,
+                                    static_cast<double*>(hbuf.ptr), mp); }
+    if (rc != 0)
+        throw std::runtime_error("Moment2DSolveMulti: solver failed (code " + std::to_string(rc) + ")");
+    return M;
+}
 } // namespace radia_moment2d
 
 // ============================================================================
@@ -3095,6 +3125,25 @@ py::array_t<double> PlanarChargeField(
       rad_planar_charges::Field(nq, static_cast<double*>(xb.ptr), static_cast<double*>(qb.ptr),
                                 nP, static_cast<double*>(pb.ptr), hp); }
     return H;
+}
+
+// Out-of-plane vector potential A_z from a 2D point-charge cloud.  Xq (nq,2), Q (nq,), P (nP,2) -> Az (nP,)
+py::array_t<double> PlanarChargeAz(
+        py::array_t<double, py::array::c_style | py::array::forcecast> Xq,
+        py::array_t<double, py::array::c_style | py::array::forcecast> Q,
+        py::array_t<double, py::array::c_style | py::array::forcecast> P) {
+    auto xb = Xq.request(); auto qb = Q.request(); auto pb = P.request();
+    if (xb.ndim != 2 || xb.shape[1] != 2) throw std::runtime_error("PlanarChargeAz: Xq must be (nq,2)");
+    if (qb.ndim != 1 || qb.shape[0] != xb.shape[0]) throw std::runtime_error("PlanarChargeAz: Q must be (nq,)");
+    if (pb.ndim != 2 || pb.shape[1] != 2) throw std::runtime_error("PlanarChargeAz: P must be (nP,2)");
+    int nq = static_cast<int>(xb.shape[0]);
+    int nP = static_cast<int>(pb.shape[0]);
+    py::array_t<double> Az(nP);
+    double* ap = static_cast<double*>(Az.request().ptr);
+    { py::gil_scoped_release rel;
+      rad_planar_charges::FieldAz(nq, static_cast<double*>(xb.ptr), static_cast<double*>(qb.ptr),
+                                  nP, static_cast<double*>(pb.ptr), ap); }
+    return Az;
 }
 
 // Maxwell-stress torque per unit length on a circle in air (body cloud + uniform applied Hext).
@@ -4134,12 +4183,32 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   M: (nElem, 2) float64 -- per-element magnetization
           )pbdoc");
 
+    m.def("Moment2DSolveMulti", &radia_moment2d::Moment2DSolveMulti,
+          py::arg("verts"), py::arg("offsets"), py::arg("chi"), py::arg("HextMulti"),
+          R"pbdoc(
+              Factor-once multi-RHS 2D planar MMMM solve: the moment matrix is
+              Hext-independent, so it is assembled + LU-factored ONCE and back-
+              substituted for all nRHS applied fields (e.g. a rotation sweep).
+
+              Args:  verts (nVert,2), offsets (nElem+1,) int32, chi (nElem,),
+                     HextMulti (nRHS, nElem, 2) float64
+              Returns: M (nRHS, nElem, 2) float64
+          )pbdoc");
+
     m.def("PlanarChargeField", &radia_planar_charges::PlanarChargeField,
           py::arg("Xq"), py::arg("Q"), py::arg("P"),
           R"pbdoc(
               2D planar exterior field H at points P from a point-charge cloud
               (kernel -ln(r)/(2 pi)).  Shared by MMMM and HDiv-VIM.
               Args:  Xq (nq,2), Q (nq,), P (nP,2) float64 -> H (nP,2) float64
+          )pbdoc");
+
+    m.def("PlanarChargeAz", &radia_planar_charges::PlanarChargeAz,
+          py::arg("Xq"), py::arg("Q"), py::arg("P"),
+          R"pbdoc(
+              2D planar out-of-plane vector potential A_z at points P from a
+              point-charge cloud: A_z = mu0/(2 pi) sum_a Q_a atan2(dy, dx).
+              Args:  Xq (nq,2), Q (nq,), P (nP,2) float64 -> Az (nP,) float64
           )pbdoc");
 
     m.def("PlanarMaxwellTorqueCircle", &radia_planar_charges::PlanarMaxwellTorqueCircle,
