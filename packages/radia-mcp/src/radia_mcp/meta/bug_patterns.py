@@ -952,6 +952,172 @@ PATTERNS: list[dict] = [
                     "src/core/rad_relaxation_methods.cpp",
                     "src/core/rad_transform_impl.cpp"],
     },
+    {
+        "id": "ngsolve-gettrafo-first-touch-garbage",
+        "title": "NGSolve scalar tr(ip).point occasionally returns uninitialized memory on the "
+                 "first process-wide extraction",
+        "topics": ["ngsolve", "flaky", "hdiv-vim", "validation"],
+        "severity": "high",
+        "first_seen": "2026-07-03",
+        "last_seen": "2026-07-03",
+        "what": "The hex-RT1 affine wiring golden flaked (~2-8% of FRESH processes, bursty and "
+                "machine-load-sensitive): the demag spectrum blew up to eig 1.9..9.9 while "
+                "B/M_mass stayed bit-exact.  Single coordinates of a few lattice points came "
+                "back as ~1e-310 denormals -- uninitialized memory from the scalar "
+                "`mesh.GetTrafo(el)(ip).point` path (the SIMD mapped-rule Assemble path is "
+                "unaffected).  Under heavy load the corruption window outlasted 8 back-to-back "
+                "re-evaluations.",
+        "root_cause": "NGSolve's scalar element-transformation evaluation can return "
+                      "uninitialized coordinates on the first touch in a process; exact "
+                      "upstream mechanism not yet isolated (likely the 0xc0000374 flake "
+                      "sibling).  Any geometry extraction that trusts a single evaluation "
+                      "silently poisons downstream quadrature.",
+        "detection": "src/radia/vim/_vim.py::_trafo_lattice_nodes DETERMINISM CONTRACT: "
+                     "re-evaluate until two CONSECUTIVE evaluations agree bit-for-bit and are "
+                     "finite (max 16 tries with a 2 ms decorrelation sleep), else RAISE.  The "
+                     "hex wiring golden also asserts the per-instance Gram state canary "
+                     "(G.hex_state_check()).",
+        "prevention": "Never trust a single scalar GetTrafo lattice evaluation for committed "
+                      "geometry: route every extraction through _trafo_lattice_nodes (or an "
+                      "equivalent two-consecutive-bit-identical contract).  Prefer assembled "
+                      "(SIMD mapped-rule) quantities where possible.  See memory "
+                      "ngsolve-gettrafo-first-touch-garbage for the full forensic chain.",
+        "related": ["src/radia/vim/_vim.py",
+                    "validation_test/feec/test_hdiv_vim_hex_rt1_wiring.py"],
+    },
+    {
+        "id": "fem-reference-coil-polygon-current-deficit",
+        "title": "FEM-reference coil disks meshed as inscribed polygons carry ~5% too little "
+                 "current -- refinement ladders do NOT reveal it",
+        "topics": ["validation", "ngsolve", "geometry", "mesh-export"],
+        "severity": "high",
+        "first_seen": "2026-07-03",
+        "last_seen": "2026-07-03",
+        "what": "A VIM-vs-FEM motor torque comparison sat at ~10% with BOTH sides perfectly "
+                "mesh-converged.  The FEM reference represented coil wires as J-disks "
+                "(J = I / (pi r^2)); netgen meshed each circle as an inscribed ~12-gon, so the "
+                "integrated current was I * A_polygon / A_circle = -4.9%.  Torque (quadratic in "
+                "drive) was off -9.7%.",
+        "root_cause": "The disk boundary segment count comes from curvature heuristics, not "
+                      "from the volume maxh being refined -- so h-refinement ladders leave the "
+                      "polygon deficit CONSTANT and both sides look converged while disagreeing."
+                      "  An uncurved mesh integrates J over the polygon, not the circle.",
+        "detection": "The DRIVE-EQUIVALENCE probe: rerun the FEM box with the iron/scatterer "
+                     "REMOVED (pure air, linear) and compare grad A at interior probe points "
+                     "against the analytic source field.  A UNIFORM percentage deficit at every "
+                     "probe = source-amplitude bug; position-dependent deviation = boundary "
+                     "truncation.  Demonstrated executable: "
+                     "docs/electric_machine/em_reference_audit.ipynb.",
+        "prevention": "In ANY FEM reference with coil disks: mesh.Curve(order) ALWAYS, and "
+                      "normalize J_k = I_k / Integrate(1, definedon=Materials(coil_k)) by the "
+                      "MEASURED area so INT J dA == I_k exactly regardless of meshing (see "
+                      "docs/electric_machine/planar_vim_motor_helpers.py::fem_reference_bar).  "
+                      "Same failure class as the Mesh Export Consistency Check policy (mesh vs "
+                      "CAD volume).",
+        "related": ["docs/electric_machine/planar_vim_motor_helpers.py",
+                    "docs/electric_machine/em_reference_audit.ipynb",
+                    "memory/fem_reference_coil_polygon_deficit.md"],
+    },
+    {
+        "id": "truncation-ladder-frozen-edge",
+        "title": "A truncation-convergence ladder that never moves ONE boundary edge converges "
+                 "to the wrong answer (2D log tails make it worse)",
+        "topics": ["validation", "ngsolve", "open-boundary"],
+        "severity": "high",
+        "first_seen": "2026-07-03",
+        "last_seen": "2026-07-03",
+        "what": "A reduced eddy solve's collar Dirichlet ladder 'converged' (18.94 -> 18.75 -> "
+                "18.74 W/m) while the true plate loss was ~12.2: every ladder step enlarged the "
+                "SIDES and BOTTOM but the TOP edge stayed frozen at y=0.1 (squeezed under the "
+                "source wires), forcing A_r = 0 exactly where the plate's reaction lobe reaches "
+                "toward the coil (+55% loss).  Separately, an 8x8 all-in-one box biased the same "
+                "loss -15%: the 2D coil-pair potential decays only ~1/r, so its value at the box "
+                "boundary was the same order as at the plate.",
+        "root_cause": "Anisotropic truncation: convergence in the moved edges says nothing "
+                      "about the frozen edge.  In 2D the log/1-r tails put the far boundary "
+                      "much further away than 3D intuition suggests.  (The frozen top came from "
+                      "a FALSE constraint -- in the reduced split A_s enters only through the "
+                      "sigma*(A_r+A_s) conductor term, so the collar MAY extend past the "
+                      "sources/iron: the air region never evaluates A_s.)",
+        "detection": "Move EVERY edge in the ladder (one edge per step if needed).  The "
+                     "COIL-ONLY (no-iron) split test separates eddy-machinery error from "
+                     "constitutive error; an independent closed form (thick-plate SIBC "
+                     "loss/area = R_s |H_t|^2 / 2) arbitrates.  A magnetostatic twin lesson: a "
+                     "finite outer Dirichlet reflects a scattered 2D dipole and suppresses beta "
+                     "by exactly 1/(1 + beta/(B0 R^2)) -- closed-form-matched in "
+                     "docs/electric_machine/em_reference_audit.ipynb.",
+        "prevention": "Truncation ladders must scale ALL boundary edges; budget 2D boundaries "
+                      "by the log/1-r tail, not 3D decay.  For pure-harmonic exteriors use the "
+                      "exact open condition instead (n=1: dA/dr + A/R = 2 B0 cos(theta) Robin).",
+        "related": ["docs/electric_machine/em_reference_audit.ipynb",
+                    "memory/hdiv_vim_tri_quad_motor.md"],
+    },
+    {
+        "id": "conjugate-potential-sign-branch-cut",
+        "title": "2D conjugate potential A_z from magnetic charges: the -mu0 sign inverts the "
+                 "coupling channel, and the atan2 formula's per-charge branch cuts poison "
+                 "SURROUNDING evaluation sets",
+        "topics": ["validation", "hdiv-vim", "hodge", "magnetization"],
+        "severity": "high",
+        "first_seen": "2026-07-03",
+        "last_seen": "2026-07-03",
+        "what": "Two distinct incidents in the iron->conductor A_s channel of the planar "
+                "VIM<->FEM coupling: (1) the conjugate potential was coded as "
+                "-mu0 q/(2 pi) atan2(dy,dx) -- the iron appeared to SHIELD the plate (loss "
+                "12.4 -> 6.7 W/m) when it actually CONCENTRATES field onto it (12.4 -> 19.6, "
+                "matching the FEM); the wrong sign produced 'same magnitude, opposite sign' "
+                "contributions on the two sides of the comparison.  (2) with the correct sign, "
+                "a bar ring SURROUNDING a rotor core crossed the -x branch ray of every charge "
+                "(the atan2 cut), giving a flat ~43% torque error at every slip.",
+        "root_cause": "The correct pair for a 2D charge q is (psi, A) = (-q/(2 pi) ln r, "
+                      "+mu0 q/(2 pi) atan2(dy, dx)): dA/dy = mu0 H_x and -dA/dx = mu0 H_y.  As "
+                      "a FORMULA the atan2 sum is discontinuous across each charge's -x ray "
+                      "even though the total field A is single-valued (zero total charge); "
+                      "evaluation sets that see the charges from ONE side (e.g. strictly below) "
+                      "are safe, sets that SURROUND the body are not.",
+        "detection": "Permanent startup gate: B(grad A_z) == mu0 * H_at by central differences "
+                     "at a few exterior points (catches any sign/derivative error in the "
+                     "A-channel).  The polar closure assert (going 2 pi around must return to "
+                     "the anchor, Gauss/zero-total-charge) catches cut crossings.",
+        "prevention": "Use radia.vim PlanarDemagBody.Az_at only for one-sided evaluation sets "
+                      "(docstring caveat); for surrounding rings build the SINGLE-VALUED polar "
+                      "construction dA/dphi = mu0 r H_r anchored on the cut-free +x axis "
+                      "(docs/electric_machine/planar_vim_motor_helpers.py::"
+                      "Az_iron_polar_voxel).  Never ship an A-channel without the gradient "
+                      "consistency gate.",
+        "related": ["src/radia/vim/_vim2d.py",
+                    "docs/electric_machine/planar_vim_motor_helpers.py",
+                    "docs/electric_machine/em_reference_audit.ipynb"],
+    },
+    {
+        "id": "reference-secant-picard-oscillation",
+        "title": "Per-element secant-nu Picard for a nonlinear FEM REFERENCE oscillates at deep "
+                 "saturation -- use the closed-form nu(B) inversion + exact Newton instead",
+        "topics": ["validation", "ngsolve", "solve", "nonlinear"],
+        "severity": "medium",
+        "first_seen": "2026-07-03",
+        "last_seen": "2026-07-03",
+        "what": "The all-in-one nonlinear A_z FEM reference for the salient-bar motor case "
+                "never converged at deep saturation: per-element secant nu updates oscillated "
+                "(dA plateaued at ~0.1 for 80..300 iterations; relax 0.5 and 0.3, and an "
+                "unsafeguarded Anderson, all failed) -- corner elements kept swinging across "
+                "the BH knee.  Comparing against the UNCONVERGED reference produced a plausible "
+                "but wrong ~10% 'disagreement'.",
+        "root_cause": "The successive-substitution nu(|B|) map loses contractivity when "
+                      "element fields straddle the knee (nu spans 4 orders of magnitude inside "
+                      "the body); per-element averaging amplifies the swing at corners.",
+        "detection": "FAIL-LOUD the reference: raise when the Picard/nu residual has not "
+                     "converged rather than returning the last iterate (never compare against "
+                     "an unconverged reference).",
+        "prevention": "When the constitutive law admits a closed-form B->H inversion (the "
+                      "saturating law does: k H^2 + (1 + chi0 - k B/mu0) H - B/mu0 = 0), write "
+                      "nu(|grad A|) as an exact CoefficientFunction and use "
+                      "ngsolve.solvers.Newton on the semilinear form -- quadratic convergence, "
+                      "6-9 iterations from a cold start at deep saturation "
+                      "(docs/electric_machine/planar_vim_motor_helpers.py::fem_reference_bar).",
+        "related": ["docs/electric_machine/planar_vim_motor_helpers.py",
+                    "docs/electric_machine/em_reference_audit.ipynb"],
+    },
 ]
 
 

@@ -902,6 +902,11 @@ def hdiv_vim(topic: str = "overview") -> str:
             "symmetry"       - 1/2, 1/4, 1/8 models: loops automatic (ker B) + image-method demag value
             "cross_method"   - the demag tensor cross-validated by 3 independent discretizations
                                (FEEC surface-charge VIM == volume-FE A-formulation == BEM == Osborn)
+            "reference_audit"- HOW TO DEBUG a disagreement with a FEM cross-validation reference:
+                               the audit ladder (solution scalar -> evaluator invariance ->
+                               drive-equivalence probe -> split tests -> closed-form arbiter) +
+                               the reference-side trap catalog (coil-polygon current deficit,
+                               frozen-edge truncation, conjugate-potential sign/branch cuts, ...)
             "status"         - done / open summary
             "all"            - everything
     """
