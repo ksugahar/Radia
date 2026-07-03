@@ -5,6 +5,8 @@ SHOWCASE NOTEBOOK: docs/hdiv_vim/polynomial_charge_field.ipynb -- the order>=2 c
 VALIDATION CORPUS: validation_test/feec plus validation_test/feec/vim_legacy.
 The old VIM prototype source tree is retired; public docs carry the maintained
 references and result-bearing showcase notebooks, while source history stays in git.
+Heavy validation/timing runs are mdx-idle canonical; LAB runs are acceptable for
+fast migration smoke/import checks and must be labelled as such.
 
 The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative/complement to the canonical multipole-moment MMM MSC
 kernel: a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
