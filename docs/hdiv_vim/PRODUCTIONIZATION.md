@@ -53,6 +53,20 @@ learn an external (B, G, M) triple).  Executed evidence + fresh build timings:
 Open: curved-hex max eig 1.0078 (halved from 1.0166; self/touching curved quadrature), wedge,
 2D nonlinear, Sauter-Schwab 6D (negative so far).
 
+Progress (2026-07-04): **the 2D planar layer is PRODUCTION** -- `radia.vim._vim2d`
+(`PlanarDemagBody` + `solve_planar_demag` + `maxwell_torque_circle`; `hdiv_demag_solve`
+dispatches `mesh.dim == 2`; golden `validation_test/feec/test_hdiv_vim_2d_solve.py`), with the
+executed machine showcase `docs/electric_machine/planar_vim_motor.ipynb` (nonlinear deep
+saturation, rotation sweep with the Gram built once, salient-bar torque vs exact-Newton FEM
+0.58%, rotating-cylinder induction vs Bessel 0.19%, mini cage IM 0.57%) and the reference-audit
+methodology notebook `em_reference_audit.ipynb`.  **WEDGE design is settled by probe** (see
+memory `hdiv-vim-tri-quad-motor`): HDiv(prism, order=1) has 27 dofs/element; the volume charge
+space is tri-P1 (x) z-P1 = {1, x, y, z, xz, yz} -- SIX monomials per cell (the div-image rank is
+6 into the 6-dim prism L2(order=1)); the face traces are tri = P1 (3) and quad = Q1 (4), so the
+EXISTING C++ tet-face and hex-face charge machinery covers all wedge faces; the 18-node
+(P2-tri x 3 z-levels) geometry lattice evaluates via GetTrafo.  The C++ port (ref-wedge sub-tet
+tables + WedgeSiteRad quadrature + goldens) is the named next increment and is mechanical.
+
 ## Definition of done — the parity gate (M0)
 
 HDiv-VIM is production-sealed **only when** it is at-least-as-good on the full case matrix the shipped MSC

@@ -1,0 +1,180 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-07-03T17:19:11Z",
+  "notebook": "docs/electric_machine/em_reference_audit.ipynb",
+  "notebook_sha256": "a357c05ba73b1d2bc46139412a5de32ee9205206eb9b6d87400b984ba6731fb5",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.5"
+  },
+  "summary": {
+    "path": "docs/electric_machine/em_reference_audit.ipynb",
+    "cells": 12,
+    "code_cells": 6,
+    "executed_code_cells": 6,
+    "code_cells_with_outputs": 6,
+    "output_count": 10,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "2abefa1962c95f7a8cd396ec65cf1124b56aad0f2146719bcc6a0f3cb4bd83c2",
+      "source_preview": "import json, platform\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport ngsolve as ng\nfrom netgen.occ import WorkPlane, OCCGeometry, Glue\nimport radia\nfrom radia.vim import PlanarDemagBody\nimport planar_vim_motor_helpers as H\n\nMU0 = 4e-7*np.pi\nRESULTS = {\"radia_version\": radia.__version__, \"platform\": platform.platform()}\nprint(\"radia\", radia.__version__)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 13,
+          "text_sha256": "d3994ba00e52b867418eaece05e649065c39c1423b96af4cb6b74a116c635ed7",
+          "text_preview": "radia 4.95.5\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "483ce7a98d63c1c8dbc8336b2614c252263e6efa3602236d11298de5d3de2e29",
+      "source_preview": "# (i) the deficit itself: measured disk area vs pi r^2, uncurved vs curved\nr_disk = H.WIRE_R\ndisk = WorkPlane().Circle(0.3, 0.2, r_disk).Face()\ndisk.faces.name = \"disk\"\nbox = WorkPlane().RectangleC(2, 2).Face()\nair = box - WorkPlane().Circle(0.3, 0.2, r_disk).Face()\nair.faces.name = \"air\"\nmesh = ng.Mesh(OCCGeometry(Glue([air, disk]), dim=2).GenerateMesh(maxh=0.2))\nwith ng.TaskManager():\n    A_uncurved = ng.Integrate(ng.CoefficientFunction(1.0), mesh, definedon=mesh.Materials(\"disk\"))\n    mesh.Curve(3)\n    A_curved = ng.Integrate(ng.CoefficientFunction(1.0), mesh, definedon=mesh.Materials(\"disk\"))\nA_exact = np.pi*r_disk**2\nd_unc = A_uncurved/A_exact - 1\nd_cur = A_curved/A_exact - 1\nprint(f\"disk area deficit: uncurved {d_unc:+.2%}   after mesh.Curve(3) {d_cur:+.2%}\")\nRESULTS[\"D1_area_deficit\"] = {\"uncurved\": d_unc, \"curved\": d_cur}\nassert d_unc < -0.02 and abs(d_cur) < 2e-3\n\n# (ii) the drive-equivalence probe on the 6-coil stator (no rotor): uncurved + pi r^2 J\n#      shows a UNIFORM ~-5",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 64,
+          "text_sha256": "786de6914c5a07b8cc869695754c2e6e5f64d75b535ccbd3fda8aa69b41316f8",
+          "text_preview": "disk area deficit: uncurved -5.37%   after mesh.Curve(3) +0.02%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 129,
+          "text_sha256": "f20b76188d738beaf1994384ab76b784fc2b388199ad08bcafa556023a4a1b37",
+          "text_preview": "drive-equivalence probe: uncurved + pi r^2 J -> 4.92% (UNIFORM across probes: spread 0.02%) ;  curved + measured-area J -> 0.41%\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "b2107bb3864a23815780925c084502c5da66ba17408fd0d4d5dd2ae60ca33f4e",
+      "source_preview": "wp = WorkPlane().Circle(0, 0, 0.06).Face()\nmesh = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=0.015))\nwith ng.TaskManager():\n    body = PlanarDemagBody(mesh)\n    m = body.solve_linear(999.0, body.project(ng.CoefficientFunction((0.0, -H.H0_IM))))\n\n# (i) the gradient gate at exterior points\nh = 1e-6\ngate = []\nfor p in [(0.1, 0.02), (-0.08, 0.09), (0.0, -0.12)]:\n    p = np.array(p)\n    Bx = (body.Az_at(np.array([p + (0, h)]), m)[0] - body.Az_at(np.array([p - (0, h)]), m)[0])/(2*h)\n    By = -(body.Az_at(np.array([p + (h, 0)]), m)[0] - body.Az_at(np.array([p - (h, 0)]), m)[0])/(2*h)\n    Hm = MU0*body.H_at(np.array([p]), m)[0]\n    gate.append(np.hypot(Bx - Hm[0], By - Hm[1])/np.linalg.norm(Hm))\nprint(f\"gradient gate B(grad Az) == mu0 H_at: max rel {max(gate):.2e}\")\nRESULTS[\"D2_gradient_gate\"] = float(max(gate))\nassert max(gate) < 1e-5\n\n# (ii) Az along a SURROUNDING circle: the atan2 formula vs the polar construction\nRring = 0.10\nphi = np.linspace(0, 2*np.pi, 721)\nP = np.stack([Rring*np.",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 123,
+          "text_sha256": "a121da3a8daf903aa0948b4cecfbfb81c5eeebb4ddc0928899704d3587fb9229",
+          "text_preview": "gradient gate B(grad Az) == mu0 H_at: max rel 1.02e-10\natan2 formula: largest jump 72.0% of scale;  polar closure 4.02e-15\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "4e2317574d7ddd9e7997bea4c3f75a0b582d59e5781c49629a38ead933a61186",
+          "text_plain_preview": "<Figure size 560x320 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 35168,
+              "sha256": "2f126cd50c16c45fc607865a85d8f81f86ce59e6919a5ba2e930074c869afea3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "f0b23f8d5d5fe0a5d204a8ec872202ffe45a8b01fb595ab1847376243a965785",
+      "source_preview": "a_ir, mu_r, B0 = 0.06, 1000.0, 0.05\nchi = mu_r - 1.0\nM_cm = chi*(B0/MU0)/(1.0 + chi/2.0)\nbeta_open = MU0*M_cm*a_ir**2/2.0\n\ndef solve_beta(REXT, robin):\n    iron = WorkPlane().Circle(0, 0, a_ir).Face()\n    iron.faces.name = \"iron\"\n    outer = WorkPlane().Circle(0, 0, REXT).Face()\n    outer.edges.name = \"outer\"\n    air = outer - WorkPlane().Circle(0, 0, a_ir).Face()\n    air.faces.name = \"air\"\n    mesh = ng.Mesh(OCCGeometry(Glue([iron, air]), dim=2).GenerateMesh(maxh=REXT/16))\n    mesh.Curve(4)\n    fes = ng.H1(mesh, order=4, dirichlet=(\"\" if robin else \"outer\"))\n    u, v = fes.TnT()\n    nu = mesh.MaterialCF({\"iron\": 1.0/(MU0*mu_r)}, default=1.0/MU0)\n    a = ng.BilinearForm(fes)\n    a += nu*ng.grad(u)*ng.grad(v)*ng.dx\n    if robin:\n        a += (1.0/MU0)/REXT*u*v*ng.ds(definedon=mesh.Boundaries(\"outer\"))\n    a.Assemble()\n    gfA = ng.GridFunction(fes)\n    if robin:\n        f = ng.LinearForm(fes)\n        f += (1.0/MU0)*2.0*B0*ng.cos(ng.atan2(ng.y, ng.x))*v*ng.ds(\n            definedon=mesh.",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 188,
+          "text_sha256": "5bb244c7159d57bc683ca1f2453e065320450aa7f56e4603872a3e179cfc8f47",
+          "text_preview": "Dirichlet R=0.2: beta=1.648349e-04  image formula=1.648349e-04  (match 0.00%;  vs open -8.2%)\nDirichlet R=0.4: beta=1.756941e-04  image formula=1.756951e-04  (match 0.00%;  vs open -2.2%)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 77,
+          "text_sha256": "6a289d8a89f181883b0995031ccf642d02c143d694bc065c7913df12eef93df6",
+          "text_preview": "Robin    R=0.2: beta=1.796404e-04  vs open closed form 1.796404e-04  (0.00%)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "59a2ee9a3cf44e04b2110872affd67d25ff7b263a167ffb1f81e04edfdee00b7",
+      "source_preview": "with ng.TaskManager():\n    hist, ndof = H.fem_reference_bar_secant(45.0, nouter=40)\n    T, _, it_newton = H.fem_reference_bar(45.0)\nprint(f\"secant Picard: after {len(hist)} iterations dA = {hist[-1]:.2e}  (PLATEAU -- unconverged)\")\nprint(f\"exact Newton : converged in {it_newton} iterations (torque {T:.1f} N m/m, ndof {ndof})\")\nRESULTS[\"D4\"] = {\"secant_final_dA\": float(hist[-1]), \"newton_iters\": int(it_newton)}\nassert hist[-1] > 1e-3 and it_newton <= 15\nfig, ax = plt.subplots(figsize=(5.4, 3.2))\nax.semilogy(hist, \"o-\", ms=3, label=\"per-element secant Picard (relax 0.3)\")\nax.axhline(1e-8, color=\"k\", ls=\":\", lw=0.8)\nax.set_xlabel(\"iteration\"); ax.set_ylabel(\"relative dA per iteration\")\nax.grid(alpha=0.3, which=\"both\"); ax.legend(); fig.tight_layout(); display(fig); plt.close(fig)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 150,
+          "text_sha256": "e5bc544a1b72dc285a7b6e0acd2d5db73bb33c4a962997481b709c1503054b69",
+          "text_preview": "secant Picard: after 40 iterations dA = 1.65e-02  (PLATEAU -- unconverged)\nexact Newton : converged in 9 iterations (torque -4230.3 N m/m, ndof 6737)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "fbf72c1650dc42cd6d440b1dd379ed563068feb2cf20560317161d32cbdda586",
+          "text_plain_preview": "<Figure size 540x320 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 23432,
+              "sha256": "88f969d87763eb8d8542eb0c2f2dbd9d2e2de427210626f69c89011e9e35d7dc"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 6,
+      "source_sha256": "674b4060de62aff451d524e4f6acfcb9c6195f62deffbca00ea73225ba2b3b3b",
+      "source_preview": "print(json.dumps(RESULTS, indent=1, default=float)[:2500])",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1005,
+          "text_sha256": "27483ae8a25bf07a47d80449a4d44af0db99404545f8153506ecb12bb44683d2",
+          "text_preview": "{\n \"radia_version\": \"4.95.5\",\n \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n \"D1_area_deficit\": {\n  \"uncurved\": -0.053707702264697565,\n  \"curved\": 0.0001781371699443035\n },\n \"D1_drive_probe\": {\n  \"bad_mean\": 0.04916421437048195,\n  \"bad_spread\": 0.00015926167937542056,\n  \"fixed_max\": 0.004139914347217726\n },\n \"D2_gradient_gate\": 1.0214045694774622e-10,\n \"D2_ring\": {\n  \"atan2_jump\": 0.720419911764476,\n  \"polar_closure\": 4.0249170952912156e-15\n },\n \"D3_image\": [\n  {\n   \"REXT\": 0.2,\n   \"bc\": \"Dirichlet\",\n   \"beta\": 0.0001648348791998912,\n   \"image_formula\": 0.00016483486263761446,\n   \"rel_vs_image\": 1.0047799649770742e-07\n  },\n  {\n   \"REXT\": 0.4,\n   \"bc\": \"Dirichlet\",\n   \"beta\": 0.00017569408674849543,\n   \"image_formula\": 0.00017569511787020233,\n   \"rel_vs_image\": 5.868812516805878e-06\n  },\n  {\n   \"REXT\": 0.2,\n   \"bc\": \"Robin-open\",\n   \"beta\": 0.00017964037779660938,\n   \"rel_vs_open\": 1.010699922201069e-07\n  }\n ],\n \"D4\": {\n  \"secant_final_dA\": 0.016505845873573247,\n  \"newton_iters\": 9\n }\n}\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
