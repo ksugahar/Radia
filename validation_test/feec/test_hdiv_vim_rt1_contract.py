@@ -1,15 +1,20 @@
 """Golden: the HDiv-VIM TET / RT1-only CONTRACT (Sugahara 2026-06-29).
 
-HDiv-VIM is repositioned as the SOLE high-order tet element of the soft-iron demag stack: HDiv order=1
-(RT1), tetrahedra only.  Everything else routes to the collocation MMMM backend.  RT0 is retired (per-
-element INACCURATE -- the demag factor is right ~1/3 but the per-element M leaks; RT1 is what fixes it);
-RT2+ is retired (no per-element gain over RT1, slower); hex/wedge, pm_M mixing, IMA image symmetry,
-the 'gauss' point Gram and the 'hlu' system-A solver are all retired from HDiv-VIM.
+HDiv-VIM is the RT1 (HDiv order=1) high-order element of the soft-iron demag stack, on a pure-TET or
+pure-HEX mesh.  RT0 is retired (per-element INACCURATE -- the demag factor is right ~1/3 but the
+per-element M leaks; RT1 is what fixes it); RT2+ is retired (no per-element gain over RT1, slower);
+wedge / pyramid / mixed meshes, pm_M mixing, IMA image symmetry, the 'gauss' point Gram and the 'hlu'
+system-A solver are all retired from / not in HDiv-VIM -> the collocation MMMM backend.
 
-This single test LOCKS the fail-loud retirement (No-Fallbacks: the raise IS the feature -- it tells the
-user exactly which backend to use instead) + the RT1 happy path + the rad.Solve 'auto' split that routes
-a non-tet mesh-backed iron to collocation MMMM (so hex soft iron still solves, just not via HDiv-VIM).
-It replaces the per-feature golden tests for the retired paths (gauss / hlu / pm / image / hex_wedge).
+HEX was UNLOCKED 2026-07-04: the wired hex RT1 charge Gram + the Gram-agnostic energy-Newton already
+solve it, so the tet-only guard was relaxed to pure-TET-OR-pure-HEX.  rad.Solve's 'auto' split STILL
+routes a HEX mesh-backed iron to collocation MMMM by DEFAULT (KEEP-BOTH; MMMM = coarse tier), but an
+explicit demag_backend='hdiv' -- and a direct hdiv_demag_solve(hexmesh, ...) call -- now solve pure hex.
+The per-element hex correctness lock lives in test_hdiv_vim_hex_public_solve.py.
+
+This test LOCKS the fail-loud retirement (No-Fallbacks: the raise IS the feature -- it names the backend to
+use instead) + the RT1 happy path + the rad.Solve 'auto' split.  It replaces the per-feature golden tests
+for the retired paths (gauss / hlu / pm / image / wedge).
 
 NGSolve + Netgen required.  See memory/hdiv_vim_tet_rt1_only.md.
 """
@@ -110,8 +115,10 @@ def test_operator_and_gram_are_rt1_tet_only():
 
 # ---------------------------------------------------------------- non-tet -> collocation MMMM
 def test_hex_soft_iron_auto_routes_to_collocation_mmmm():
-    """A HEX mesh-backed soft iron is NOT HDiv-VIM scope: rad.Solve 'auto' routes it to collocation MMMM
-    (it solves -- a tuple result), and an explicit demag_backend='hdiv' on the hex iron fails loud."""
+    """rad.Solve 'auto' routes a HEX mesh-backed soft iron to collocation MMMM by DEFAULT (KEEP-BOTH;
+    MMMM = coarse tier) -- it solves, returning the C++ tuple.  (Explicit demag_backend='hdiv' on hex now
+    SOLVES via the wired hex RT1 Gram; that + the per-element correctness are locked in
+    test_hdiv_vim_hex_public_solve.py, kept out of this contract test to avoid a heavy/flaky hex build.)"""
     from ngsolve.meshes import MakeStructured3DMesh
     rad.UtiDelAll()
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
@@ -122,16 +129,22 @@ def test_hex_soft_iron_auto_routes_to_collocation_mmmm():
     top = rad.ObjCnt([iron, src])
     res = rad.Solve(top, 1e-4, 1000, 0)                          # auto -> hex -> collocation MMMM (C++)
     assert isinstance(res, tuple), type(res)                     # C++ collocation MMMM returns a tuple
-    with pytest.raises(ValueError, match="TET"):
-        rad.Solve(top, 1e-4, 1000, 0, demag_backend="hdiv")     # explicit hdiv on hex -> fail loud
     rad.UtiDelAll()
 
 
-def test_hdiv_demag_solve_rejects_hex_mesh_directly():
-    """Calling hdiv_demag_solve on a non-tet mesh fails loud (TET-only), naming collocation MMMM."""
+def test_hdiv_demag_solve_rejects_wedge_mesh_directly():
+    """hdiv_demag_solve now accepts pure-tet AND pure-hex; a wedge/prism (6-vertex) mesh -- neither -- fails
+    loud toward collocation MMMM.  (Pure hex is ACCEPTED: test_hdiv_vim_hex_public_solve.py.)"""
     from ngsolve.meshes import MakeStructured3DMesh
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
+    try:
+        with ng.TaskManager():
+            prism = MakeStructured3DMesh(prism=True, nx=1, ny=1, nz=1, mapping=mp)
+    except TypeError:
+        pytest.skip("this NGSolve MakeStructured3DMesh has no prism= kwarg")
+    verts = {len(el.vertices) for el in prism.Elements(ng.VOL)}
+    if verts in ({4}, {8}):
+        pytest.skip(f"prism mesh degenerated to {verts}")
     with ng.TaskManager():
-        hexm = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2, mapping=mp)
-        with pytest.raises(ValueError, match="TET"):
-            hdiv_demag_solve(hexm, mu_r=100.0, H_ext=_HEXT)
+        with pytest.raises(ValueError, match="collocation MMMM"):
+            hdiv_demag_solve(prism, mu_r=100.0, H_ext=_HEXT)
