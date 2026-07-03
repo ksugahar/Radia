@@ -2,9 +2,9 @@
 
 SHOWCASE NOTEBOOK: docs/hdiv_vim/hdiv_curved_showcase.ipynb -- curved-geometry accuracy win: stray-field ~30-40x, nonlinear ~23x, beats shipped solver.
 SHOWCASE NOTEBOOK: docs/hdiv_vim/polynomial_charge_field.ipynb -- the order>=2 charge-field kernel (H = -grad phi_M from rho=-div M + sigma=M.n), executed: degree-0/1/2 closed forms + arbitrary-degree assembler + affine-hex + curved tri/tet, each validated live vs Gauss/Duffy to machine precision (drop-rho = 90-230% error; uniform sphere -> -M/3).
-VALIDATION CORPUS: examples/vim plus validation_test/feec.  Do not mirror the
-full source corpus into docs; public docs carry the maintained references and
-result-bearing showcase notebooks, while source history stays in git.
+VALIDATION CORPUS: validation_test/feec plus validation_test/feec/vim_legacy.
+The old VIM prototype source tree is retired; public docs carry the maintained
+references and result-bearing showcase notebooks, while source history stays in git.
 
 The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative/complement to the canonical multipole-moment MMM MSC
 kernel: a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
@@ -81,7 +81,7 @@ operator is the SYMMETRIC Galerkin form
   bounded in [0,1] (basis-invariant physics).  Solved by MINRES / Jacobi-PCG (mu_r-independent).
 
 ## Origin
-NGSolve FEEC prototype (examples/vim/hdiv_demag_quad_self.py) -> productionised into the Radia
+NGSolve FEEC prototype -> productionised into the Radia
 C++ core.  This is the "de-Rham fix" research line: loops field-null by construction on distorted
 hexes AND tets.
 """
@@ -127,7 +127,7 @@ production entry; read the removed names below as the research history behind th
 - `_hdiv_tri_potential(V,r)` / `_hdiv_phi_tet(V,P)` -- analytic Wilton/phi_tet charge-Gram potentials (M2)
 
 ## Python (unstructured tet ingest -- the real-geometry path)
-- **examples/vim/hdiv_demag_tet.py** -- NGSolve HDiv(order=0) tet ingest.  Element-AGNOSTIC
+- **radia.vim.build_demag** -- NGSolve HDiv tet ingest.  Element-AGNOSTIC
   extraction: B = -div(u) [vol charge] + u.Trace().n [surface charge]; M_mass = HDiv mass.  Only the
   Gram self-energy geometry is element-specific -> tet/tri barycentric sub-points (c_tet~1.776 /
   c_tri~2.888).  `build_demag(mesh,nsub)` -> N (dense, monopole off-diag + sub-point self), M_mass, B,
@@ -213,10 +213,10 @@ damped Newton-Raphson with the CONSISTENT TENSOR tangent SOLVES it -- fast (4-11
 (rel 1e-4 to 1e-6 vs the analytic uniform sphere) at every saturation level.  This is the Newton
 counterpart of Radia's existing MMM/MSC newton_damping=True path: the OUTER Newton machinery (tangent
 susceptibility + line-search damping) is SHARED; only the demag operator N = B^T G B differs.
-Implemented as solve_nonlinear_newton (examples/vim/hdiv_demag_tet_nonlinear.py), golden-locked in
+Implemented as `radia.vim.solve_nonlinear_newton`, golden-locked in
 tests/feec/test_hdiv_vim_tet_newton.py (3 tests, feec suite 50/50).
 
-## DONE + golden-tested (examples/vim/hdiv_demag_tet_nonlinear.py, tests/feec/test_hdiv_vim_tet_nonlinear.py)
+## DONE + golden-tested (radia.vim nonlinear API, tests/feec/test_hdiv_vim_tet_nonlinear.py)
 - **Applied-field formulation RESOLVED (verify-first)**: the eigenvalue framing A_eig = (1/chi)M_mass
   - N is NOT the applied-field system.  The physical applied-field weak form is
         A+ m = M_mass h_ext ,   A+ = (1/chi) M_mass + N        (PLUS N)
@@ -349,7 +349,7 @@ isotropic 1/3.  Golden: tests/feec/test_hdiv_vim_ellipsoid.py.  (Remaining #3 op
 rad.MatSatIsoTab steel TABLE -- needs table-based M(H)/M'(H) in the Newton -- and a C-yoke.)
 
 ## SCALABLE nonlinear (production #2) -- DONE (2026-06-07, golden-locked)
-solve_nonlinear_newton_scalable (examples/vim/hdiv_demag_tet_nonlinear.py) replaces the dense
+`solve_nonlinear_newton_scalable` replaces the dense
 O(N^3)/O(N^2) demag of the dense Newton with the C++ HACApK charge-Gram H-matrix
 (radia._radia_pybind._ChargeGramHMatrix, O(N log N) apply) + a sparse near-correction, and solves each
 Newton step ITERATIVELY (GMRES, M_mass-preconditioned) -- NO dense factorization anywhere:
@@ -409,7 +409,8 @@ poles = most of them) this is a large accuracy-per-DOF advantage, ORTHOGONAL to 
 high-order win, and unavailable to flat multipole-moment MMM MSC (which needs many more elements to resolve a curve).
 FOUNDATION confirmed (HDiv + mesh.Curve assembles; B and M_mass are NGSolve curved-aware).
 
-CURVED SAMPLING BUILT + the win MEASURED vs TRUTH (2026-06-08, examples/vim/hdiv_demag_curved.py,
+CURVED SAMPLING BUILT + the win MEASURED vs TRUTH (2026-06-08,
+validation_test/feec/vim_legacy/hdiv_demag_curved.py,
 golden tests/feec/test_hdiv_vim_curved.py):
   - Reusable primitive _trafo_sample(mesh, i_bnd, xi, eta, center) -> curved position / surface |J| /
     OUTWARD normal-z, via mesh.GetTrafo (same pattern as bem/sibc_hacapk.py::_trafo_eval; works on a
@@ -427,7 +428,7 @@ golden tests/feec/test_hdiv_vim_curved.py):
     the PROPER Gram the demag factor DOES discriminate + p-CONVERGES (next bullet).  So for the crude
     elementary method use the external field; the demag factor needs the proper single-layer Gram.
   - PROPER curved + HIGH-ORDER demag Gram = SOLVED by ngsolve.bem (2026-06-08, the architectural unlock,
-    examples/vim/hdiv_demag_bem_singlelayer.py + golden test_hdiv_vim_bem_demag.py): the surface
+    validation_test/feec/vim_legacy/hdiv_demag_bem_singlelayer.py + golden test_hdiv_vim_bem_demag.py): the surface
     demag Gram (uniform M -> pure surface charge sigma=M.n) IS the Laplace SINGLE-LAYER V; NGSolve
     6.2.2604 ngsolve.bem ships it high-order + CURVED-aware + FMM-accelerated.  `V =
     SingleLayerPotentialOperator(SurfaceL2(mesh,order=p), intorder=...)`; demag D_z = <sigma,V sigma>/V_vol
@@ -477,7 +478,7 @@ important honest finding that redirects where to expect the curved payoff.
 - CONCLUSION: curved is a real flat-multipole-moment MMM-impossible CAPABILITY, but its accuracy benefit on the
   MAGNETIZATION (the primary solve output) is modest; the benefit is large on FIELD outputs.  Do NOT
   claim a dramatic curved-nonlinear magnetization win.
-- (A) THE FIELD WIN -- BUILT + validated (examples/vim/hdiv_curved_nonlinear_field.py, golden
+- (A) THE FIELD WIN -- BUILT + validated (validation_test/feec/vim_legacy/hdiv_curved_nonlinear_field.py, golden
   test_hdiv_vim_curved_nonlinear_field.py): the external H field of a nonlinear soft-iron sphere
   (M_s=29982 A/m from the fixed point at H_ext=1e4) reconstructed from the curved-aware surface charge
   H(r)=(1/4pi) INT sigma (r-r')/|r-r'|^3, sigma=M.n, vs the ANALYTIC dipole (m=M V).  At 5 external
@@ -488,8 +489,8 @@ important honest finding that redirects where to expect the curved payoff.
   exact with curved -- the genuine curved x nonlinear payoff is HERE, on the field.
 
 ## (B) HEAD-TO-HEAD vs the SHIPPED Radia solver -- accuracy-per-resolution (2026-06-08)
-The FIRST quantitative head-to-head of HDiv-VIM (curved) vs the PRODUCTION code (examples/vim/
-compare_curved_vs_radia_field.py, golden test_curved_vs_radia_field.py).  Shipped Radia (rad.Fld on a
+The FIRST quantitative head-to-head of HDiv-VIM (curved) vs the PRODUCTION code
+(validation_test/feec/vim_legacy/compare_curved_vs_radia_field.py, golden test_curved_vs_radia_field.py).  Shipped Radia (rad.Fld on a
 flat-tet uniform-M sphere built via netgen_mesh_to_radia) vs HDiv-VIM curved surface-charge field, both
 vs the ANALYTIC dipole.  Max external-field relative error:
     h=0.6:  Radia FLAT 114 tets  8.92%  |  HDiv CURVED 120 tris  0.386%
@@ -514,8 +515,8 @@ cohomology bookkeeping.  VERIFIED (golden test_hdiv_vim_symmetry_loops.py): a sp
 ||N.loop||/||N|| ~ 4e-16 (machine zero) on EVERY reduced mesh.  => the "loop-jokyo (loop removal) is
 metsuky-doi / mendokusai" problem is ELIMINATED -- ker(B) handles the cut topology for free.
 SCOPE (honest 2-part split): (1) the LOOP machinery on cut meshes = automatic (verified here).  (2) the
-demag VALUE of a symmetry MODEL = the IMAGE method -- NOW BUILT + verified (examples/vim/
-hdiv_demag_symmetry_image.py, golden test_hdiv_vim_symmetry_image.py).  Only the REAL surface (spherical
+demag VALUE of a symmetry MODEL = the IMAGE method -- retired from the HDiv-VIM public lane;
+collocation MMMM owns reduced image/symmetry models.  Only the REAL surface (spherical
 cap) carries sigma = M.n = n_z; the flat cut faces are symmetry planes (no real charge).  Reflecting the
 cap charge over the reduction planes -- sign = (-1)^(#z-reflections), since sigma = n_z flips under a
 z-mirror (the IMA sign rule: field-PARALLEL mirror x=0/y=0 keeps sign, field-PERPENDICULAR z=0 flips it)
@@ -535,7 +536,7 @@ The gate before symmetry models: confirm nonlinear + C-yoke + distorted-mesh are
   with wilton_surface.  solve_nonlinear_newton now RAISES on non-convergence (require_convergence=True
   default) with a message pointing at analytic_gram -- NO silent wrong result (this trap previously made
   the C-yoke look "mesh-dependent / non-converging" when it was just the wrong Gram).
-- C-YOKE VERIFIED (examples/vim/hdiv_cyoke_nonlinear.py, golden test_hdiv_vim_cyoke_nonlinear.py):
+- C-YOKE VERIFIED (validation_test/feec/vim_legacy/hdiv_cyoke_nonlinear.py, golden test_hdiv_vim_cyoke_nonlinear.py):
   non-convex reentrant-corner C-yoke, nonlinear (chi0=1000/Msat=1e6/H0=2e5), analytic_gram -> converges
   in 6 Newton iters, volume-avg M_z MESH-STABLE (572062/576970/580981 over maxh 0.020/0.016/0.013) and
   matches shipped Radia MMM (same flat mesh / M-H law / applied field) to <1% at EVERY mesh
@@ -736,7 +737,7 @@ DONE + golden-locked (feec 85/85):
   #3  bug-fixed exact Gram via near-field correction -> demag -> analytic 1/3
   NONLINEAR  damped Newton-Raphson (consistent tensor tangent + near-corr + line search + Picard
              warmstart) -- robust + fast at deep saturation where per-element Picard/Hantila failed
-             (examples/vim/hdiv_demag_tet_nonlinear.py::solve_nonlinear_newton,
+             (`radia.vim.solve_nonlinear_newton`,
              tests/feec/test_hdiv_vim_tet_newton.py, +the scalar-Picard moderate-drive foundation).
              CROSS-VALIDATED vs Radia MMM/MSC (rad.Solve+MatSatIsoTab) to <0.05% at saturation
              (tests/feec/test_hdiv_vim_newton_vs_radia.py).
@@ -768,7 +769,7 @@ DONE + golden-locked (feec 85/85):
              "~4%@0.02 / 13%@0.03 / not-golden-locked" was the WRONG (surface-only wilton_surface) Gram
              that does NOT converge for non-uniform M -- now FAIL-LOUD (solve_nonlinear_newton raises,
              pointing at analytic_gram).  GOTCHA kept: compare the volume-averaged Mz (not point-sample).
-             examples/vim/hdiv_cyoke_nonlinear.py, golden test_hdiv_vim_cyoke_nonlinear.py.
+             validation_test/feec/vim_legacy/hdiv_cyoke_nonlinear.py, golden test_hdiv_vim_cyoke_nonlinear.py.
   CURVED+HO  curved + high-order demag via the ngsolve.bem Laplace single-layer: sphere/spheroid/triaxial
              EXACT vs analytic; field accuracy-per-DOF ~10-30x vs the shipped flat Radia solver
              (compare_curved_vs_radia_field.py).  See topic "curved".

@@ -11,8 +11,9 @@
  * no direct factorization is needed (a symmetric H-LDL^T was prototyped and removed 2026-06-08).
  *
  * This first increment builds the structured-hex RT0 topology + charge map B + a DENSE Coulomb
- * Gram G + assembles N, by hand (no NGSolve), validated against the NGSolve prototype golden
- * (examples/vim/hdiv_demag_quad_self.json: regular 3x3x3 -> ndof=108, n_loop=28).  Later
+ * Gram G + assembles N, by hand (no NGSolve), validated against the retired NGSolve prototype
+ * golden recorded in docs/hdiv_vim/vim_examples_retirement_results.json
+ * (regular 3x3x3 -> ndof=108, n_loop=28).  Later
  * phases swap the dense G for a HACApK symmetric H-matrix (rad_hacapk_hdiv, reusing the Wilton
  * 1/r face integral in rad_poly_analytical.cpp) and add the sparse HDiv mass M_mass.
  *

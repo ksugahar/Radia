@@ -112,8 +112,9 @@ Two ways to restore exactly field-null loops on distorted elements:
   construction**: the contravariant **Piola** map preserves *both* the
   divergence and the normal trace, so the loops stay field-null under *any*
   distortion. This is the discrete **de Rham** analogue of RWG's exactly
-  solenoidal loops. (Verified to machine precision on distorted hexes —
-  `examples/vim/`.)
+  solenoidal loops. (Verified to machine precision on distorted hexes; the
+  retired VIM prototype inventory is recorded in
+  `docs/hdiv_vim/vim_examples_retirement.ipynb`.)
 
 Either way, the H-matrix acceleration is unchanged: the demag operator is the
 same dense `1/r` (Laplace) integral operator, so it is compressed by **HACApK**
@@ -222,7 +223,7 @@ lightest that works — Jacobi where the evidence below allows):
 
 ### Evidence so far (favours Jacobi for `μ_r ≤ 1e4`)
 
-`examples/vim/demag_spectrum_jacobi.py` measures the demag operator's spectrum
+The retired demag-spectrum Jacobi prototype measured the demag operator's spectrum
 with Radia's **exact** `ObjRecMag` field on a compact body (3×3×3 cube grid,
 constant-M = an *all-star*, loop-free operator):
 
@@ -270,7 +271,7 @@ meshes — where `μ_min` drops below `1/χ`) would still need the H-ILU fallbac
 
 ---
 
-*See also:* `examples/vim/` (the HDiv-type loop/star split, loops field-null
-on distorted hexes), `src/core/rad_hacapk.cpp` (`BuildLoopBasis` /
+*See also:* `docs/hdiv_vim/vim_examples_retirement.ipynb` (retired HDiv-type
+loop/star prototype inventory), `src/core/rad_hacapk.cpp` (`BuildLoopBasis` /
 `SolveLoopStar` -- REMOVED 2026-06-30; collocation MMMM gives up loop-free, loop-free is HDiv-VIM's, see memory `collocation_loopfree_abandoned`),
 `docs/HMATRIX_EVALUATION.md` (HACApK ACA⁺).

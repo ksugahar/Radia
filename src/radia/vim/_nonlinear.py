@@ -24,7 +24,7 @@ import scipy.sparse as sp
 import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
-from radia.vim import _core as tet   # M1: core promoted to radia.vim (was examples/vim)
+from radia.vim import _core as tet   # M1: core promoted to radia.vim from the retired prototype.
 
 
 def _bf_to_csr(bf):

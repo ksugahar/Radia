@@ -19,7 +19,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 rad = pytest.importorskip("radia")          # the C++ Gram H-matrix lives in radia._radia_pybind
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 from radia.vim import _nonlinear as nl  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402

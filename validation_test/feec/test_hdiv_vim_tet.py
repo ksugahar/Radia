@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import numpy as np  # noqa: E402
 from radia.vim import hdiv_demag_solve  # noqa: E402
 

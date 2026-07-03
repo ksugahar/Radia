@@ -189,8 +189,8 @@ def test_method2_nonlinear_matches_method0():
     compact block of nonlinear soft iron (MatSatIsoTab) is driven past the knee along its long (y) axis;
     both methods run the SAME Picard outer loop (chi(H) recomputed per element each iteration), differing
     only in the linear solver, so the EXTERNAL B must match tightly AND both must take the same (>1) number
-    of nonlinear iterations.  (Rigorous saturation sweep: examples/vim/verify_moment_nonlinear.py; storage
-    scaling: examples/vim/bench_moment_storage_scaling.py.)"""
+    of nonlinear iterations.  (Rigorous saturation sweep: validation_test/feec/vim_legacy/verify_moment_nonlinear.py; storage
+    scaling: validation_test/feec/vim_legacy/bench_moment_storage_scaling.py.)"""
     MU0 = 4e-7 * np.pi; L = 0.01
     BH = [[0.0, 0.0], [200.0, 0.75], [500.0, 1.30], [1200.0, 1.70],
           [4000.0, 1.95], [20000.0, 2.08], [100000.0, 2.15]]
@@ -374,7 +374,7 @@ def test_moment_nonlinear_picard_matches_linear_in_linear_regime():
     from ctx.CurrentChiArray each step.  Locked robustly WITHOUT saturation-extrapolation tuning: at a field
     weak enough that the operating point stays on the curve's FIRST (linear) segment, MatSatIsoTab(curve)
     must give the same M as MatLin(mu_r = curve's initial slope).  This exercises the nonlinear Picard
-    plumbing of the moment branch.  Saturation itself is cross-checked in examples/vim/verify_moment_nonlinear.py
+    plumbing of the moment branch.  Saturation itself is cross-checked in validation_test/feec/vim_legacy/verify_moment_nonlinear.py
     (C-yoke driven to 94% of Msat, moment vs EIEM2 external B within 2.5e-4)."""
     L, H_app = 0.01, 1.0                                   # tiny field -> internal H stays in segment 1 (H<200)
     mu_r0 = 0.75 / (MU0 * 200.0)                           # initial slope of the B-H curve = relative permeability

@@ -15,10 +15,14 @@ but the charge-Coulomb Gram integrals dominate matrix construction.  Multipole-m
 that full Galerkin symmetry and instead uses Mathematica-derived moment rows, so the 3-DOF and
 surface-charge MMM systems keep cheap local element functionals and scalable H-matrix matvecs.
 
-This is the canonical technical reference. The runnable examples + their numbers live in
-[`examples/vim/README.md`](../../examples/vim/README.md) (a protected validation corpus — ~25
-`validation_test/feec` goldens import those scripts directly); the decision/narrative record is
-the radia-mcp `hdiv_vim` knowledge (MCP tool `mcp__radia-ngsolve__hdiv_vim`).
+This is the canonical technical reference. The runnable legacy corpus that the
+FEEC goldens still import now lives under
+[`validation_test/feec/vim_legacy`](../../validation_test/feec/vim_legacy);
+the retired source-tree prototype inventory is recorded in
+[`vim_examples_retirement.ipynb`](vim_examples_retirement.ipynb) with
+[`vim_examples_retirement_results.json`](vim_examples_retirement_results.json).
+The decision/narrative record is the radia-mcp `hdiv_vim` knowledge (MCP tool
+`mcp__radia-ngsolve__hdiv_vim`).
 
 **Executed showcase notebooks** (code + embedded results + `_result.json` sidecars, this directory):
 [`hdiv_curved_showcase.ipynb`](hdiv_curved_showcase.ipynb) (curved P2 tet win),
@@ -174,7 +178,9 @@ showcase notebooks above.
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
 | RT1 / tet-only public contract | `hdiv_demag_solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py` |
 
-All under `examples/vim/` and `validation_test/feec/` (the FEEC suite is split out of lightweight CI).
+The live executable checks are under `validation_test/feec/`; the legacy helper
+scripts imported by those checks are under `validation_test/feec/vim_legacy/`
+after the prototype retirement.
 
 ## 9. Research plan — the eddy-current VIM (future directions)
 

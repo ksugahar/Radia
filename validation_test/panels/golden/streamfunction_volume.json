@@ -1,5 +1,5 @@
 {
-  "_comment": "Golden band for radia-streamfunction Volume-3D mode (foliated-Clebsch volume stream function). Locked to fixtures/streamfunction_volume_tube.vol (R0=0.05 R1=0.10 ZL=0.10 maxh=0.03, ne=1005). Reproduces examples/vim/foliated_solenoid_wires.py. Regenerate the fixture with fixtures/generate_streamfunction_volume_tube.py.",
+  "_comment": "Golden band for radia-streamfunction Volume-3D mode (foliated-Clebsch volume stream function). Locked to fixtures/streamfunction_volume_tube.vol (R0=0.05 R1=0.10 ZL=0.10 maxh=0.03, ne=1005). Reproduces validation_test/feec/vim_legacy/foliated_solenoid_wires.py. Regenerate the fixture with fixtures/generate_streamfunction_volume_tube.py.",
   "ne": 1005,
   "ndof": 2027,
   "n_targets": 9,

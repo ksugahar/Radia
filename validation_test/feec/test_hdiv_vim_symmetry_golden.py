@@ -4,7 +4,7 @@ Locks the structural foundation of the HDiv-type VIM (the symmetric alternative 
 MSC kernel): on a structured nx*ny*nz hex grid (RT0 faces), the demag operator N = B^T G B is
   (1) SYMMETRIC (Galerkin energy form) -- ||N - N^T||/||N|| ~ machine eps, and
   (2) loops are FIELD-NULL BY CONSTRUCTION (loops = ker B; B.loop = 0 => N.loop = 0).
-Golden values come from the NGSolve prototype (examples/vim/hdiv_demag_quad_self.json):
+Golden values come from the NGSolve prototype (validation_test/feec/vim_legacy/hdiv_demag_quad_self.json):
 regular 3x3x3 -> ndof=108, n_loop=28, asym~1e-16, loop_res~1e-16.  The C++ hand-enumerated topology
 (rad_hdiv_vim, no NGSolve) reproduces these exactly (verified standalone before integration).
 """
@@ -65,7 +65,7 @@ def test_hdiv_vim_demag_factors_physical():
     the demag factors and must be PHYSICAL -- positive semi-definite (>= -1e-6; a negative demag
     factor is unphysical) and all <= 1.  The accurate sub-point Gram makes N PSD and drives the
     uniform mode to the true cube 1/3 (uniform M_z demag -> 0.32 -> 1/3 with nsub, validated in
-    examples/vim/hdiv_vim_accurate_g.py).  Also catches the surface-charge SIGN bug (M.n must
+    validation_test/feec/vim_legacy/hdiv_vim_accurate_g.py).  Also catches the surface-charge SIGN bug (M.n must
     use the OUTWARD normal; the global-normal bug gave demag factors up to 19.5) -- which the
     symmetry/loop-nullity structural tests do NOT catch (a row sign-flip in B preserves ker B +
     N's symmetry)."""

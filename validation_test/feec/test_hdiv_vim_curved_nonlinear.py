@@ -28,7 +28,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("ngsolve.bem")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import hdiv_demag_bem_singlelayer as bem  # noqa: E402
 from radia.vim import _nonlinear as nl     # noqa: E402
 

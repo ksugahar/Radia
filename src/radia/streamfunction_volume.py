@@ -19,13 +19,13 @@ least-norm problem, solved by the existing kernel-agnostic
 current is the volume ``grad(phi_j) x grad(mu)`` instead of a surface
 ``n x grad``.
 
-This module is the SHIPPED home of the pipeline validated in
-``examples/vim/foliated_clebsch_solenoid.py`` (Stage A) and
-``foliated_solenoid_wires.py`` (Stage B).  The headless panel backend
+This module is the SHIPPED home of the pipeline validated by
+``validation_test/feec/vim_legacy/foliated_clebsch_solenoid.py`` (Stage A) and
+``validation_test/feec/vim_legacy/foliated_solenoid_wires.py`` (Stage B).  The headless panel backend
 ``radia.panels.calc_streamfunction_volume`` wraps ``design_volume_coil`` here.
 
 Domain of validity (the honest frontier; see
-``examples/vim/README_streamfunction_cohomology.md``): clean equal-current
+``docs/stream_function/examples_catalog.ipynb`` and the VIM retirement ledger): clean equal-current
 extraction needs the zero-helicity, fixed-(radial)-foliation, closed-streamline
 regime.  A general target / arbitrary foliation hits the F1 (non-convex
 foliation choice), F2 (ill-posed Clebsch recovery) or F3 (nonzero-helicity

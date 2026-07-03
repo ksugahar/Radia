@@ -7,7 +7,7 @@ radia.stream_function (ACA+)+TSVD engine to reproduce a uniform-Bz solenoid:
   * independent Biot-Savart recompute from the solved lambda matches,
   * the current is divergence-free (weak div, current conservation).
 
-See examples/vim/foliated_clebsch_solenoid.py and streamfunction("clebsch_3d").
+See validation_test/feec/vim_legacy/foliated_clebsch_solenoid.py and streamfunction("clebsch_3d").
 """
 import os
 import sys
@@ -15,7 +15,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/vim"))
+                                "../../validation_test/feec/vim_legacy"))
 
 
 @pytest.fixture(scope="module")

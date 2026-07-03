@@ -9,7 +9,7 @@ whose Biot-Savart reproduces the target field:
   * TWO-CODEBASE agreement: the example's straight-segment Biot-Savart matches
     Radia's rad.ObjFlmCur + rad.Fld (so it cannot pass on a wrong formula).
 
-See examples/vim/foliated_solenoid_wires.py and streamfunction("clebsch_3d").
+See validation_test/feec/vim_legacy/foliated_solenoid_wires.py and streamfunction("clebsch_3d").
 """
 import os
 import sys
@@ -17,7 +17,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/vim"))
+                                "../../validation_test/feec/vim_legacy"))
 
 
 @pytest.fixture(scope="module")

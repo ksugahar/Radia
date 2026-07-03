@@ -75,7 +75,8 @@ def cube_mesh(n, L=0.02):
 
 def cyoke_pred(cx, cy, cz):
     """The OCC cyoke() as a voxel predicate: outer box minus inner cavity minus the +x gap opening (a
-    genuine non-convex, reentrant-corner C-yoke; the same shape as examples/vim hdiv_cyoke_nonlinear.py)."""
+    genuine non-convex, reentrant-corner C-yoke; the same shape as the retired
+    C-yoke nonlinear prototype inventoried in vim_examples_retirement_results.json)."""
     if not (abs(cx) <= 0.06 and abs(cy) <= 0.06 and abs(cz) <= 0.02):
         return False
     if abs(cx) <= 0.035 and abs(cy) <= 0.035:

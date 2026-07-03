@@ -1,6 +1,6 @@
 """Golden lock: axisymmetric flux-coordinate bidirectional map (Phase 2).
 
-Runs examples/vim/bidirectional_map_axisym.py and asserts:
+Runs validation_test/feec/vim_legacy/bidirectional_map_axisym.py and asserts:
 
   - FORWARD: the FEM recovers the analytic potential coordinates psi = r A_phi
     (Grad-Shafranov, current-free) and Phi (axisymmetric Laplace) to ~machine
@@ -17,7 +17,7 @@ import sys
 import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-EXDIR = os.path.join(HERE, "..", "..", "examples", "vim")
+EXDIR = os.path.join(HERE, "vim_legacy")
 
 
 @pytest.mark.slow

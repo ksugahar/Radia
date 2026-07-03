@@ -104,7 +104,8 @@ the slow-but-robust part, ~230 iters at deep saturation — do not confuse the t
 low-rank blocks grow 0 → 1780 and the H-matrix/dense memory ratio falls 1.00 → 0.37, with H-matrix
 memory growing ~N^1.6 (vs dense N²) — **sub-quadratic, trending O(N log N)**. This is BETTER than the
 compact MMM/MSC "materialize-fallback" caveat: the charge Gram is a cleaner far-field 1/r kernel, so
-ACA works on it. Benchmark: `examples/vim/hdiv_demag_hacapk_scaling.py` (+ `.json`). Honest scope:
+ACA works on it. Benchmark: retired HACApK scaling prototype (+ `.json`), inventoried
+in `vim_examples_retirement_results.json` and recoverable from git history. Honest scope:
 shown to n~3560 (build_demag's dense-G reference is O(N²) and caps N); the trend is clear + favorable;
 larger-N (10k+) confirmation needs a dense-G-free charge extraction — the remaining M0 scalability item.
 
@@ -120,7 +121,7 @@ real risk, not the matvec). The μr-independent C++ material solver for the head
 head-to-head: set up the C-type geometry for HDiv-VIM (mesh + charges) and time build + solve against
 these JSONs — the core M0 deliverable.
 
-**Build-time measured (2026-06-08, `examples/vim/hdiv_demag_buildtime_scaling.py` + .json).** The
+**Build-time measured (2026-06-08, retired build-time scaling prototype + .json).** The
 analytic charge-Gram H-matrix build (charges straight from a tet mesh, KELVIN-LESS — iron only, the 1/r
 Gram is the open boundary, no air/Kelvin): n_charge 281→7278 → t_build 0.19→24 s, compr 1.0→0.21,
 matvec 8.5 ms @ 7278 (O(N log N)). Build scales ~N^1.1–1.3 at large N → extrapolated to C-type scale
@@ -161,7 +162,7 @@ scalable Newton's BUILD is genuinely O(N log N) analytic-Gram + sparse FE assemb
 
 **HONEST CORRECTION (2026-06-09): the scalable nonlinear Newton is NOT yet mesh-robust — the "5–6 iters →
 clear win on SOLVE" above held only at COARSE mesh.** The first real C-yoke wall-clock head-to-head
-(`examples/vim/hdiv_cyoke_headtohead.py`) measured the SOLVE degrading sharply with refinement:
+(retired C-yoke head-to-head prototype) measured the SOLVE degrading sharply with refinement:
 iters 6 (h=0.008) → 27 (h=0.006) → 37 (h=0.005), with Mz appearing to "drift" 589k → 509k. A full
 instrumented diagnosis (per-iter ‖F‖/λ/Mavg trajectory) found:
   1. **The method + tangent are CORRECT** — once in the basin the Newton converges QUADRATICALLY
@@ -252,10 +253,10 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
 - **M0 — parity gate + speed-gap measurement** *(START HERE; mostly measurement, low risk).* The
   definition-of-done above + the honest speed number. Until M0, HDiv-VIM is a validated method but not a
   production-sealed backend.
-- **M1 — production module + public Radia API.** Move the validated solve out of `examples/vim/`
-  into `src/radia/` with a clean entry (e.g. `rad.hdiv_demag_solve(mesh, materials, source)`), driving
-  the existing C++ `_ChargeGramHMatrix` + the Newton. Golden-test against the examples' validated
-  numbers. Makes HDiv-VIM a usable Radia feature (first shippable step).
+- **M1 — DONE: production module + public Radia API.** The validated solve has moved out of
+  the prototype tree into `src/radia/vim` with `radia.vim.hdiv_demag_solve(...)`, driving the C++
+  charge-Gram/H-matrix kernels. Golden tests now use `validation_test/feec/` and the small
+  `validation_test/feec/vim_legacy/` corpus retained for runnable regression helpers.
 - **M2 — DONE (2026-06-08): accurate Gram in the C++ scalable path.** `RadHACApKChargeGram` gained an
   ANALYTIC mode so its entry is the exact Wilton/`phi_tet` charge Gram (was pure centroid-monopole),
   and the scalable nonlinear Newton was rewired onto it. Both sub-steps landed + golden-locked:

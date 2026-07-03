@@ -630,7 +630,7 @@ This **unifies the lab's two design lines**:
 
 - φ-side iron pole — the hodograph (`docs/clebsch_hodograph/demos/`).
 - A-side coil current — the stream function
-  (`src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py`,
+  (`src/radia/stream_function.py`, `validation_test/feec/vim_legacy/foliated_solenoid_wires.py`,
   verified against Radia to 3.4e-10).
 
 Multiply-connected / current-linking cases (a coil window) bring in the dual
@@ -800,4 +800,4 @@ coil = A-side), so the framework is one method, not two.
 | two planes co-baked into one pole (δ shim + ĝ chamfer) | `docs/clebsch_hodograph/demos/endpack_cobake.py` |
 | co-bake as a PRECISION tensor loft (OCC ThruSections) | `docs/clebsch_hodograph/demos/endpack_cobake_loft.py` |
 | saturating sector body (azimuthal L_eff robust, radial k fragile) | `docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.py` |
-| A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
+| A-side coil (stream function) | `src/radia/stream_function.py`, `validation_test/feec/vim_legacy/foliated_solenoid_wires.py` |
