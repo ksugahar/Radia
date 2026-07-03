@@ -3,9 +3,10 @@ solves with BOTH demag backends -- six-face surface-charge MSC and the FEEC HDiv
 set_demag_backend.  .vol is the SOLE Cubit<->NGSolve mesh interchange, so netgen owns the mesh
 orientation (no hand-built-mesh boundary-winding pitfalls).  This locks:
   (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a soft-iron container;
-  (2) a HEX .vol solves with the collocation MMMM backend (the surface-charge MSC, M_avg ~ the cube fixed
-      point), AND the HDiv-VIM backend REFUSES the hex .vol (fail loud) -- HDiv-VIM is tet/RT1-only
-      (2026-06-29), so the rad.Solve 'auto' split routes a non-tet mesh-backed iron to collocation MMMM.
+  (2) a HEX .vol solves with BOTH demag backends -- the collocation MMMM surface-charge MSC AND the FEEC
+      HDiv-VIM (hex unlocked 2026-07-04: the wired hex RT1 charge Gram + the shipped mass-Riesz CG) -- and
+      the two AGREE on M_avg_z (cross-method).  (The rad.Solve 'auto' DEFAULT still routes a hex iron to
+      collocation MMMM -- KEEP-BOTH; here each backend is selected explicitly via set_demag_backend.)
   (A tet .vol would solve with BOTH backends, but the cross-backend agreement on a tet body is gated by the
   collocation-MMMM-on-tet accuracy -- a separate concern -- so this test fixes the hex routing instead.)"""
 import math
@@ -49,7 +50,7 @@ def _solve_from_vol(path, backend):
         rad.set_demag_backend("auto")
 
 
-def test_vol_hex_collocation_solves_hdiv_fails_loud(tmp_path):
+def test_vol_hex_solves_both_backends(tmp_path):
     vol = tmp_path / "cube_hex.vol"
     _make_vol(vol)
 
@@ -59,6 +60,21 @@ def test_vol_hex_collocation_solves_hdiv_fails_loud(tmp_path):
     assert 2.5e3 < mz_collocation < 6.0e3, \
         f"collocation MMMM from hex .vol gave unphysical M_avg_z={mz_collocation:.1f}"
 
-    # HDiv-VIM is tet/RT1-only -> it REFUSES the hex .vol (No-Fallbacks: a clear error naming collocation MMMM).
-    with pytest.raises(ValueError, match="TET"):
-        _solve_from_vol(vol, "hdiv")
+    # HDiv-VIM ALSO solves the hex .vol now (hex unlocked 2026-07-04): set_demag_backend('hdiv') drives the
+    # wired hex RT1 charge Gram + the shipped mass-Riesz CG.  Retry the KNOWN bursty GetTrafo first-touch flake.
+    last = None
+    for _ in range(5):
+        try:
+            mz_hdiv = _solve_from_vol(vol, "hdiv")
+            break
+        except RuntimeError as e:
+            if "GetTrafo lattice evaluation unstable" in str(e):
+                last = e
+                continue
+            raise
+    else:
+        raise last
+    assert 2.5e3 < mz_hdiv < 6.0e3, f"HDiv from hex .vol gave unphysical M_avg_z={mz_hdiv:.1f}"
+    # cross-method agreement on the SAME hex .vol (generous coarse-mesh 3x3x3 band)
+    rel = abs(mz_hdiv - mz_collocation) / abs(mz_collocation)
+    assert rel < 0.05, f"hex .vol: HDiv {mz_hdiv:.1f} vs collocation MMMM {mz_collocation:.1f} rel {rel:.2e}"
