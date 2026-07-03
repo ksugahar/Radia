@@ -111,12 +111,10 @@ def H_wires_cf(W):
     return cf
 
 
-def fem_reference_bar(theta_deg, maxh_box=0.5, rotor_h=0.02, airin_h=0.04, order=2,
-                      nphi=1440):
-    """ALL-IN-ONE exact-Newton nonlinear A_z reference for Case A; returns (torque, ndof, iters).
+def _bar_case_setup(theta_deg, maxh_box=0.5, rotor_h=0.02, airin_h=0.04, order=2):
+    """Shared Case-A geometry + space + normalized coil source.
     Lessons baked in: coil disks are CURVED and J is normalized by the MEASURED disk area
-    (an inscribed-polygon disk under-carries I by ~5% -> torque -10%); torque via the Maxwell
-    circle at RC_A from point-sampled grad A."""
+    (an inscribed-polygon disk under-carries I by ~5% -> torque -10%)."""
     W = wire_pos(theta_deg)
     box = WorkPlane().RectangleC(8, 8).Face()
     box.edges.name = "outer"
@@ -141,10 +139,32 @@ def fem_reference_bar(theta_deg, maxh_box=0.5, rotor_h=0.02, airin_h=0.04, order
     mesh = ng.Mesh(OCCGeometry(geo, dim=2).GenerateMesh(maxh=maxh_box))
     mesh.Curve(3)
     fes = ng.H1(mesh, order=order, dirichlet="outer")
-    u, v = fes.TnT()
     coil_area = {k: ng.Integrate(ng.CoefficientFunction(1.0), mesh,
                                  definedon=mesh.Materials(f"coil{k}")) for k in range(NW)}
     Jcf = mesh.MaterialCF({f"coil{k}": I_K[k] / coil_area[k] for k in range(NW)}, default=0.0)
+    return mesh, fes, Jcf
+
+
+def _maxwell_torque_gradA(mesh, gfA, Rc=None, nphi=1440):
+    Rc = RC_A if Rc is None else Rc
+    acc = 0.0
+    for p in np.linspace(0, 2 * np.pi, nphi, endpoint=False):
+        x, y = Rc * np.cos(p), Rc * np.sin(p)
+        g = ng.grad(gfA)(mesh(x, y))
+        Bx, By = g[1], -g[0]
+        Br = Bx * np.cos(p) + By * np.sin(p)
+        Bp = -Bx * np.sin(p) + By * np.cos(p)
+        acc += Br * Bp
+    return Rc * Rc / MU0 * (2 * np.pi / nphi) * acc
+
+
+def fem_reference_bar(theta_deg, maxh_box=0.5, rotor_h=0.02, airin_h=0.04, order=2,
+                      nphi=1440):
+    """ALL-IN-ONE exact-Newton nonlinear A_z reference for Case A; returns (torque, ndof, iters).
+    The closed-form nu(B) inversion makes this a true Newton (quadratic, 6-9 iters cold-start
+    at deep saturation); torque via the Maxwell circle at RC_A from point-sampled grad A."""
+    mesh, fes, Jcf = _bar_case_setup(theta_deg, maxh_box, rotor_h, airin_h, order)
+    u, v = fes.TnT()
     nu_rot, _ = _nu_rotor_cf(ng.grad(u))
     ind = mesh.MaterialCF({"rotor": 1.0}, default=0.0)
     nu_tot = ind * nu_rot + (1.0 - ind) * (1.0 / MU0)
@@ -156,15 +176,55 @@ def fem_reference_bar(theta_deg, maxh_box=0.5, rotor_h=0.02, airin_h=0.04, order
     status, iters = (ret if isinstance(ret, tuple) else (ret, -1))
     if status != 0:
         raise RuntimeError(f"Case-A FEM Newton not converged at theta={theta_deg}")
-    acc = 0.0
-    for p in np.linspace(0, 2 * np.pi, nphi, endpoint=False):
-        x, y = RC_A * np.cos(p), RC_A * np.sin(p)
-        g = ng.grad(gfA)(mesh(x, y))
-        Bx, By = g[1], -g[0]
-        Br = Bx * np.cos(p) + By * np.sin(p)
-        Bp = -Bx * np.sin(p) + By * np.cos(p)
-        acc += Br * Bp
-    return RC_A * RC_A / MU0 * (2 * np.pi / nphi) * acc, fes.ndof, iters
+    return _maxwell_torque_gradA(mesh, gfA, nphi=nphi), fes.ndof, iters
+
+
+def fem_reference_bar_secant(theta_deg, nouter=60, relax=0.3, maxh_box=0.5, rotor_h=0.02,
+                             airin_h=0.04, order=2):
+    """The DELIBERATELY-KEPT failure mode for the reference-audit demonstration: the
+    per-element secant-nu Picard on the same Case-A problem.  At knee-level drive the corner
+    elements swing across the BH knee and the iteration PLATEAUS (dA ~ 0.1) -- returns the
+    residual history instead of raising, so the plateau can be shown next to the exact Newton.
+    Do NOT use this as a reference; see bug pattern `reference-secant-picard-oscillation`."""
+    mesh, fes, Jcf = _bar_case_setup(theta_deg, maxh_box, rotor_h, airin_h, order)
+    u, v = fes.TnT()
+    fes0 = ng.L2(mesh, order=0)
+    gfnu = ng.GridFunction(fes0)
+    areas = ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True)
+    areas = np.array([areas[k] for k in range(mesh.ne)])
+    el2dof = np.zeros(mesh.ne, dtype=int)
+    is_rotor = np.zeros(mesh.ne, dtype=bool)
+    for el in mesh.Elements(ng.VOL):
+        el2dof[el.nr] = fes0.GetDofNrs(el)[0]
+        is_rotor[el.nr] = mesh[el].mat == "rotor"
+    H_TAB = np.concatenate([[0.0], np.logspace(0, 7.5, 400)])
+    B_TAB = MU0 * (H_TAB + CHI0 * H_TAB / (1.0 + CHI0 * H_TAB / MSAT))
+    NU_TAB = np.empty_like(H_TAB)
+    NU_TAB[1:] = H_TAB[1:] / B_TAB[1:]
+    NU_TAB[0] = 1.0 / (MU0 * (1.0 + CHI0))
+    f = ng.LinearForm(fes)
+    f += Jcf * v * ng.dx
+    f.Assemble()
+    nu_e = np.full(mesh.ne, 1.0 / MU0)
+    nu_e[is_rotor] = NU_TAB[0]
+    gfA = ng.GridFunction(fes)
+    hist = []
+    for _ in range(nouter):
+        gfnu.vec.FV().NumPy()[el2dof] = nu_e
+        a = ng.BilinearForm(fes)
+        a += gfnu * ng.grad(u) * ng.grad(v) * ng.dx
+        a.Assemble()
+        Aold = gfA.vec.FV().NumPy().copy()
+        gfA.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+        dA = np.linalg.norm(gfA.vec.FV().NumPy() - Aold) / max(
+            np.linalg.norm(gfA.vec.FV().NumPy()), 1e-300)
+        hist.append(dA)
+        Bint = ng.Integrate(ng.Norm(ng.grad(gfA)), mesh, element_wise=True)
+        Bel = np.array([Bint[k] for k in range(mesh.ne)]) / areas
+        nu_new = nu_e.copy()
+        nu_new[is_rotor] = np.interp(Bel[is_rotor], B_TAB, NU_TAB)
+        nu_e = np.exp((1 - relax) * np.log(nu_e) + relax * np.log(nu_new))
+    return np.array(hist), fes.ndof
 
 
 # =====================================================================================
