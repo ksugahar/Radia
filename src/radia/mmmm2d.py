@@ -166,12 +166,15 @@ def _per_region_law(mesh, bh_dict):
     return M_of_h, chi_sec, chi0_e
 
 
-def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *,
+def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None,
                        nl_tol=1e-6, nl_maxit=300, nl_damp=0.6, chi_floor=1e-12):
     """Single-region planar soft-iron demag solve (the C++ 2D moment core + this driver).
 
-    EXACTLY ONE of ``mu_r`` (linear) or ``bh_table`` (nonlinear [[H,B],...]) must be given.
-    ``H_ext`` is a 2-tuple (uniform) or a 2-component NGSolve CoefficientFunction.
+    EXACTLY ONE of ``mu_r`` (linear) or ``bh_table`` (nonlinear [[H,B],...]) must be given (scalar
+    or {region: value} dict).  ``H_ext`` is a 2-tuple (uniform) or a 2-component NGSolve
+    CoefficientFunction.  ``magnets`` is an optional list of PERMANENT-MAGNET bodies
+    [(pm_mesh, M_fixed), ...] whose (RIGID) field is added at the iron centroids as an extra source
+    -- the shared magnet_field routine (a hard PM does not demagnetize -> one-way, no iteration).
 
     Returns dict: M (nElem,2), M_avg (2,), demag_factors (Dx,Dy), iters, residual, ndof (edge DOF),
     n_el, nonlinear (bool), linear_solver='dense-2d-cpp'.
@@ -185,6 +188,9 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *,
     nElem = len(areas)
     ndof = int(offsets[-1])
     Hc = _eval_Hext(H_ext, centroids, mesh)
+    if magnets:                                          # add the permanent-magnet source field
+        from radia.planar_charges import magnet_field
+        Hc = Hc + magnet_field(magnets, centroids)
 
     if mu_r is not None:
         # LINEAR: uniform (scalar mu_r) or per-region ({region: mu_r} dict, multi-grade soft iron)
