@@ -81,6 +81,14 @@ TOPICS: dict[str, str] = {
         "antenna for 76-77 GHz ACC radar, EBG substrate antennas, "
         "absorbers, beam-steering, EMC shielding, motor magnetic "
         "materials.",
+    "acoustic_sonic_crystal":
+        "Acoustic metamaterials / sonic crystals: Bloch band gaps need "
+        "confinement or transverse periodicity (a sparse free-space "
+        "chain has NONE - verified 4 ways); unit-cell + duct-transmission "
+        "methodology with empty-lattice and port gates; FEM/BEM "
+        "validation discipline (invisibility null gate, Anderson "
+        "fluid-sphere series, irregular frequencies, CHIEF vs "
+        "Burton-Miller).",
     "all":
         "Concatenated dump of every topic above.",
 }
@@ -1183,6 +1191,145 @@ patches.
 """
 
 
+ACOUSTIC_SONIC_CRYSTAL = r"""
+# Acoustic metamaterials / sonic crystals: band gaps and validation discipline
+
+The acoustic counterpart of the EM metamaterial family: a *sonic
+crystal* is a periodic array of scatterers in a fluid (air/water)
+engineered for stop bands, negative effective density/modulus, lensing
+or absorption; *phononic crystals* are the elastic-wave siblings. The
+same homogenization mathematics as `effective_medium` applies (cell
+problems -> effective parameters), and the same unit-cell discipline as
+EM band-gap design.
+
+## The load-bearing finding: confinement is NOT optional
+
+A sparse FREE-SPACE chain of strong scatterers does NOT develop a Bragg
+stop band at k d = pi. Verified four independent ways on a chain of
+sound-soft spheres (R/d = 0.2, five periods): Foldy monopole multiple
+scattering, a Galerkin BEM, a second independent BEM implementation, and
+a volume FEM with a radiation ABC all agree that the insertion loss is a
+FLAT broadband plateau (sub-wavelength attenuation: a sound-soft sphere
+keeps scattering length ~ R down to k -> 0) with no feature at the Bragg
+wavenumber. In open 3D the energy leaks sideways; the 1D interference
+mechanism never accumulates.
+
+The band gap appears the moment the SAME scatterer chain is CONFINED:
+in a rigid duct (cross-section a x a, single-mode below the transverse
+cutoff pi/a) the Bloch band structure of the unit cell and the
+transmission through a finite N-cell crystal show the full
+stop / pass / stop structure, aligned quantitatively:
+
+- below band 1: soft (pressure-release) inclusions cut off the
+  long-wavelength plane mode entirely (T ~ 1e-4),
+- inside band 1: a passband (finite-crystal transmission with
+  Fabry-Perot ripple),
+- inside the Bragg gap above band 1: T drops by ~2 orders of magnitude.
+
+Locally resonant variants (concentric C-shaped shells) push the gap far
+below the Bragg frequency: Elford, Chalmers, Kusmartsev, Sambles,
+"Matryoshka locally resonant sonic crystal", J. Acoust. Soc. Am. 130,
+2746 (2011).
+
+## Methodology (tool-agnostic recipe)
+
+1. **Unit cell (Bloch)**: Helmholtz eigenproblem on one cell, Floquet
+   phase-periodic BC exp(-i q d) on the lattice faces, Dirichlet (soft)
+   or Neumann (rigid) inclusion, complex FE space. GATE before physics:
+   the EMPTY cell's bands must reproduce the analytic duct dispersion
+   k = sqrt((m1^2+m2^2) pi^2/a^2 + ((q d + 2 pi n)/d)^2)
+   exactly (measured 2e-4 with order-2 FEM) - this catches
+   phase-convention errors AND boundary-classification bugs (a
+   misclassified face silently turns the duct into a Dirichlet cavity;
+   classify faces geometrically, e.g. by whether the face center lies on
+   a wall plane, never by area thresholds).
+2. **Finite crystal (transmission)**: duct of N cells + pads, one-way
+   port Robin conditions (inlet dp/dn - i k p = -2 i k for a unit
+   incident plane mode, outlet dp/dn - i k p = 0), exact below the
+   transverse cutoff. GATE: the EMPTY duct must be transparent
+   (|T - 1| < 1e-2 measured at order 2). Transmission dips must sit
+   INSIDE the Bloch gap.
+3. **Effective medium**: for sub-wavelength cells the chain/crystal
+   behaves as a modified compressibility/density medium - the cell
+   problem is the same mathematics as the EM `effective_medium` topic
+   and the eddy-current lamination homogenization used in motor
+   modeling.
+
+## Multiple-scattering reference (analytic class)
+
+Foldy (1945): self-consistent point-monopole system. For sound-soft
+spheres the exact monopole coefficient is f = -j_0(kR)/h_0(kR); exciting
+fields solve (I - f H) E = p_inc with H_ij = h_0(k |x_i - x_j|). Its
+validity envelope is LOW-k only (the neglected l >= 1 single-sphere
+terms grow from ~4% at kR = 0.18 to ~47% at kR = 0.9): MEASURE the
+envelope against the exact single-sphere series and lock the degradation
+itself, never assume the model.
+
+## BEM validation discipline for scatterer-level acoustic solvers
+
+- **Kernel conventions are measured, never assumed.** Unit-sphere
+  eigenvalues pin everything: V[Y_l] = i k j_l(k) h_l(k),
+  K[Y_l] = 1/2 + i k^2 j_l(k) h_l'(k) (outward-normal PV convention);
+  the imaginary signs distinguish e^{+ikr} from e^{-ikr}, and an
+  operator must match a trusted reference far better than its
+  conjugate.
+- **The exterior Dirichlet EXACT gate**: boundary data from an interior
+  point source must be reproduced at every exterior point (uniqueness +
+  radiation condition) - zero series truncation, pure discretization
+  error. Generalizes verbatim to multi-body (source inside any one
+  scatterer).
+- **Transmission (penetrable) solvers**: the acoustic INVISIBILITY null
+  gate - set k1 = k0 and rho1 = rho0 and the scatterer must vanish;
+  the residual is the pure discretization null error and must CONVERGE
+  under refinement. Real contrast is gated by the Anderson (1950)
+  fluid-sphere partial-wave series; solve its per-mode 2x2 transmission
+  match by ANALYTIC elimination through the interior log-derivative
+  (k1/rho1) j_l'(x1)/j_l(x1) - the naive 2x2 is catastrophically
+  ill-conditioned at high l (h_l huge, j_l tiny) and quietly pollutes
+  the invisible case. Size the series term count on the FARTHEST
+  evaluation point (k r_max), not the scatterer radius.
+- **Irregular frequencies**: the first-kind single-layer equation and
+  the total-field double-layer (rigid) equation are singular at the
+  interior Dirichlet eigenvalues of the surface (unit sphere: first at
+  kR = pi). The discrete condition number can look BENIGN (the faceted
+  eigenvalue shifts) while the solution is ~100% wrong - only analytic
+  gates catch it. Classic fixes: CHIEF (Schenck 1968; append interior
+  null-field rows at a few jittered interior points, least squares -
+  restores regular-k accuracy) for teaching, Burton-Miller (1971;
+  combined-field, needs the hypersingular operator) for production.
+- **FEM/BEM coupling needs no ABC**: the BIE row IS the exact radiation
+  condition. A volume-FEM leg with a first-order Sommerfeld ABC on a
+  sphere at kR ~ 6-12 sits ~4-8% from the BEM answer at exterior
+  probes - useful as a methods-diverse cross-check, with the ABC error
+  quantified rather than argued.
+
+## Cross-links
+
+- `effective_medium` - the EM homogenization sibling (same cell-problem
+  mathematics).
+- `radia_mcp.radia_ngsolve` - periodic FE spaces (Bloch phases), BEM.
+- `radia_mcp.ih` - ESIM 1D cell problems (effective surface impedance:
+  the same "solve a cell, extract an effective parameter" pattern).
+- `radia_mcp.motor` - Hollaus lamination homogenization.
+
+## References
+
+- L. L. Foldy, "The multiple scattering of waves", Phys. Rev. 67, 107
+  (1945).
+- V. C. Anderson, "Sound scattering from a fluid sphere", J. Acoust.
+  Soc. Am. 22, 426 (1950).
+- H. A. Schenck, "Improved integral formulation for acoustic radiation
+  problems" (CHIEF), J. Acoust. Soc. Am. 44, 41 (1968).
+- A. J. Burton, G. F. Miller, "The application of integral equation
+  methods to the numerical solution of some exterior boundary-value
+  problems", Proc. R. Soc. Lond. A 323, 201 (1971).
+- D. P. Elford et al., "Matryoshka locally resonant sonic crystal",
+  J. Acoust. Soc. Am. 130, 2746 (2011).
+- P. A. Martin, "Multiple Scattering: Interaction of Time-Harmonic
+  Waves with N Obstacles", Cambridge Univ. Press (2006).
+"""
+
+
 # ============================================================
 # Dispatcher
 # ============================================================
@@ -1224,6 +1371,10 @@ def get_knowledge(topic: str = "overview") -> str:
     if t in ("applications_automotive", "automotive", "applications",
              "toyota", "ev_motor"):
         return APPLICATIONS_AUTOMOTIVE
+    if t in ("acoustic_sonic_crystal", "acoustic", "acoustic_metamaterial",
+             "sonic_crystal", "phononic", "phononic_crystal", "band_gap",
+             "bloch", "chief", "burton_miller"):
+        return ACOUSTIC_SONIC_CRYSTAL
     if t == "all":
         return "\n\n".join([
             OVERVIEW,
@@ -1237,6 +1388,7 @@ def get_knowledge(topic: str = "overview") -> str:
             GYRATOR_LH_LINE,
             PERFECT_LENS_EVANESCENT,
             APPLICATIONS_AUTOMOTIVE,
+            ACOUSTIC_SONIC_CRYSTAL,
         ])
     return (
         f"Unknown topic '{topic}'. Available topics: "

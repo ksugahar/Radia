@@ -28,6 +28,8 @@ class MotorValidationLane:
 
     lane_id: str
     label: str
+    support_status: str
+    support_note: str
     radia_path: str
     best_for: tuple[str, ...]
     observable_families: tuple[str, ...]
@@ -57,13 +59,20 @@ COMMON_REQUIRED_FIELDS = (
 LANES: dict[str, MotorValidationLane] = {
     "hdiv_vim_reduced_fem": MotorValidationLane(
         lane_id="hdiv_vim_reduced_fem",
-        label="HDiv-VIM + reduced FEM",
-        radia_path="radia.vim / HDiv source-field reduction plus reduced FEM checks",
+        label="HDiv-VIM + reduced FEM (experimental RFC)",
+        support_status="experimental_rfc",
+        support_note=(
+            "This is a new research coupling idea, not the historical "
+            "radia-motor supported path. Treat HDiv-VIM rotor plus reduced-FEM "
+            "stator as a design proposal until an interface operator, reduced "
+            "basis, and regression artifact are implemented."
+        ),
+        radia_path="proposed radia.vim HDiv rotor source-field lane plus fixed-stator reduced FEM",
         best_for=(
             "passive pickup flux and signed flux-linkage sweeps",
             "permanent-magnet demagnetizing-field anchors",
             "source-field / surface-current intuition",
-            "fast reduced FEM sanity checks before a heavier AGE solve",
+            "researching whether a rotor VIM source can drive a compact fixed-stator reduced FEM response",
         ),
         observable_families=(
             "pickup_flux",
@@ -74,6 +83,8 @@ LANES: dict[str, MotorValidationLane] = {
         ),
         required_fields=COMMON_REQUIRED_FIELDS
         + (
+            "coupling_design_status",
+            "interface_operator_contract",
             "reduced_fem_contract",
             "vim_operator_contract",
         ),
@@ -103,6 +114,11 @@ LANES: dict[str, MotorValidationLane] = {
     "ngsolve_age": MotorValidationLane(
         lane_id="ngsolve_age",
         label="NGSolve+AGE",
+        support_status="supported_validation_path",
+        support_note=(
+            "This is the current radia-motor supported validation path for "
+            "2D rotating-machine finite-element studies."
+        ),
         radia_path="radia-ngsolve air-gap element finite-element motor path",
         best_for=(
             "air-gap field and Maxwell-stress torque",
@@ -161,12 +177,14 @@ OVERVIEW = """\
 
 radia-motor should keep two independent cross-validation lanes:
 
-- `hdiv_vim_reduced_fem`: HDiv-VIM plus reduced FEM.  This is the fast
-  integral/reduced lane for pickup flux, demagnetizing field, flux-linkage
-  sign, and source-field intuition.
-- `ngsolve_age`: NGSolve+AGE.  This is the finite-element air-gap machine
-  lane for torque, dq quantities, cogging, eddy/slip, hysteresis, and nonlinear
-  machine studies.
+- `ngsolve_age`: NGSolve+AGE.  This is the current supported radia-motor
+  finite-element air-gap machine lane for torque, dq quantities, cogging,
+  eddy/slip, hysteresis, and nonlinear machine studies.
+- `hdiv_vim_reduced_fem`: HDiv-VIM plus reduced FEM.  This is an experimental
+  RFC lane.  The idea of using HDiv-VIM for the rotor and a reduced FEM model
+  for the fixed stator is new and intentionally unusual; do not describe it as
+  supported until a coupling/interface operator and reduced-basis regression
+  pass.
 
 Private product, lab-local, open-source, analytic, and stored-regression
 comparisons can all be reference sources.  The public MCP learning artifact
@@ -225,14 +243,17 @@ cross-validation directory and mark `artifact_feedback.status = candidate`.
 RUNBOOK = """\
 # Dual-lane motor validation runbook
 
-For an HDiv-VIM + reduced FEM slot:
+For an HDiv-VIM + reduced FEM research slot:
 
 ```powershell
 python -m pytest tests\\test_loop_slot_gates.py -k hdiv
 ```
 
-Then attach the private/local solver comparison as an artifact with
-`motor_validation_lane = "hdiv_vim_reduced_fem"`.
+Then attach the private/local comparison as a research artifact with
+`motor_validation_lane = "hdiv_vim_reduced_fem"` and
+`coupling_design_status = "experimental_rfc"`.  Passing this metadata gate
+means the idea is organized for learning; it does not mean radia-motor already
+supports the coupled solver.
 
 For an NGSolve+AGE slot:
 
@@ -260,6 +281,8 @@ def _lane_lines(lane: MotorValidationLane) -> list[str]:
         f"## `{lane.lane_id}`: {lane.label}",
         "",
         f"- radia path: {lane.radia_path}",
+        f"- support status: `{lane.support_status}`",
+        f"- support note: {lane.support_note}",
         "- best for:",
         *[f"  - {item}" for item in lane.best_for],
         "- observable families:",
@@ -315,6 +338,8 @@ def lane_template(lane_id: str = "all") -> dict[str, Any]:
         "schema_version": "radia-motor-validation-artifact/v1",
         "motor_validation_lane": lane.lane_id,
         "label": lane.label,
+        "support_status": lane.support_status,
+        "support_note": lane.support_note,
         "reference_source_class": "product_local_reference | opensource_reference | analytic_reference | stored_regression",
         "observable_family": list(lane.observable_families),
         "required_fields": list(lane.required_fields),
@@ -415,10 +440,18 @@ def validate_motor_validation_artifact(
             errors.append("artifact_feedback.public_lesson is required")
 
     result_status = "pass" if not errors else "fail"
+    support_status = LANES[lane_id].support_status if lane_id in LANES else "unknown"
+    validated_solver_path = (
+        result_status == "pass"
+        and status_value == "pass"
+        and support_status == "supported_validation_path"
+    )
     return {
         "schema_version": "radia-motor-validation-artifact-gate/v1",
         "status": result_status,
         "lane": lane_id,
+        "support_status": support_status,
+        "validated_solver_path": validated_solver_path,
         "accepted_for_mcp_learning": result_status == "pass" and status_value == "pass",
         "errors": errors,
         "warnings": warnings,
@@ -433,6 +466,8 @@ def format_artifact_gate_result(result: Mapping[str, Any]) -> str:
         f"- schema: `{result.get('schema_version', '')}`",
         f"- status: `{result.get('status', '')}`",
         f"- lane: `{result.get('lane', '')}`",
+        f"- support status: `{result.get('support_status', '')}`",
+        f"- validated solver path: `{result.get('validated_solver_path', False)}`",
         f"- accepted for MCP learning: `{result.get('accepted_for_mcp_learning', False)}`",
     ]
     errors = list(result.get("errors", ()))
