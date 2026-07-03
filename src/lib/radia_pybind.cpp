@@ -93,6 +93,7 @@ extern "C" {
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
+#include "rad_moment2d.h"        // 2D planar collocation MMMM (log-kernel tri/quad)
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
@@ -3032,6 +3033,46 @@ std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const st
 } // namespace radia_hdivvim
 
 // ============================================================================
+// 2D planar collocation MMMM (log-kernel tri/quad) -- rad_moment2d
+// ============================================================================
+namespace radia_moment2d {
+// Solve the LINEAR 2D planar MMMM demag problem on a cross-section mesh.
+//   verts   (nVert, 2) float64  -- concatenated element vertices (any winding)
+//   offsets (nElem+1,) int32    -- element -> vertex-start offsets
+//   chi     (nElem,)  float64   -- per-element susceptibility (mu_r - 1)
+//   Hext    (nElem, 2) float64  -- per-element applied field at the centroid
+// Returns M (nElem, 2) float64 -- per-element magnetization.
+py::array_t<double> Moment2DSolveLinear(
+        py::array_t<double, py::array::c_style | py::array::forcecast> verts,
+        py::array_t<int,    py::array::c_style | py::array::forcecast> offsets,
+        py::array_t<double, py::array::c_style | py::array::forcecast> chi,
+        py::array_t<double, py::array::c_style | py::array::forcecast> Hext) {
+    auto vbuf = verts.request(); auto obuf = offsets.request();
+    auto cbuf = chi.request();   auto hbuf = Hext.request();
+    if (obuf.ndim != 1 || obuf.shape[0] < 2)
+        throw std::runtime_error("Moment2DSolveLinear: offsets must be (nElem+1,)");
+    int nElem = static_cast<int>(obuf.shape[0]) - 1;
+    if (cbuf.ndim != 1 || cbuf.shape[0] != nElem)
+        throw std::runtime_error("Moment2DSolveLinear: chi must be (nElem,)");
+    if (hbuf.ndim != 2 || hbuf.shape[0] != nElem || hbuf.shape[1] != 2)
+        throw std::runtime_error("Moment2DSolveLinear: Hext must be (nElem, 2)");
+    if (vbuf.ndim != 2 || vbuf.shape[1] != 2)
+        throw std::runtime_error("Moment2DSolveLinear: verts must be (nVert, 2)");
+    const double* vxy = static_cast<double*>(vbuf.ptr);
+    const int*    voff = static_cast<int*>(obuf.ptr);
+    const double* chip = static_cast<double*>(cbuf.ptr);
+    const double* hp   = static_cast<double*>(hbuf.ptr);
+    py::array_t<double> M({nElem, 2});
+    double* mp = static_cast<double*>(M.request().ptr);
+    int rc;
+    { py::gil_scoped_release rel; rc = rad_moment2d::SolveLinear(nElem, voff, vxy, chip, hp, mp); }
+    if (rc != 0)
+        throw std::runtime_error("Moment2DSolveLinear: solver failed (code " + std::to_string(rc) + ")");
+    return M;
+}
+} // namespace radia_moment2d
+
+// ============================================================================
 // Module Definition
 // ============================================================================
 
@@ -4033,6 +4074,22 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   - Small (<500 elements): method=0 (LU)
                   - Medium (500-5000): method=1 (BiCGSTAB)
                   - Large (>5000): method=2 (HACApK)
+          )pbdoc");
+
+    m.def("Moment2DSolveLinear", &radia_moment2d::Moment2DSolveLinear,
+          py::arg("verts"), py::arg("offsets"), py::arg("chi"), py::arg("Hext"),
+          R"pbdoc(
+              Solve the LINEAR 2D planar collocation MMMM demag problem on a
+              cross-section mesh of triangles / quadrilaterals (log kernel).
+
+              Args:
+                  verts:   (nVert, 2) float64 -- concatenated element vertices
+                  offsets: (nElem+1,) int32   -- element -> vertex-start offsets
+                  chi:     (nElem,)  float64  -- per-element susceptibility (mu_r-1)
+                  Hext:    (nElem, 2) float64 -- applied field at each centroid
+
+              Returns:
+                  M: (nElem, 2) float64 -- per-element magnetization
           )pbdoc");
 
     m.def("BuildMatrix", &radia_solver::BuildMatrix,
