@@ -653,6 +653,17 @@ _STATUS = r"""
     (160 -> 5632 charges: 1.1 -> 57 s on LAB), all 2D closed-form gates, and the production
     hdiv_demag_solve one-call on a tet sphere.  Goldens: validation_test/feec/
     test_hdiv_vim_hex_rt1_wiring.py + test_hdiv_vim_2d_wiring.py.
+  * 2D PRODUCTION LAYER + MACHINE SHOWCASE (2026-07-03 night): radia.vim._vim2d SHIPPED
+    (PlanarDemagBody dense layer, scalar-chi Picard + safeguarded Anderson(1) nonlinear solve,
+    charge-cloud H_at/Az_at, maxwell_torque_circle real/complex-time-averaged;
+    hdiv_demag_solve dispatches mesh.dim==2; golden test_hdiv_vim_2d_solve.py).  EXECUTED machine
+    showcase docs/electric_machine/planar_vim_motor.ipynb: disk deep-saturation vs the analytic
+    fixed point (3e-4..3e-6), ellipse reluctance torque 3-way (N built ONCE, 27 ms/angle,
+    no remesh), salient-bar motor vs exact-Newton FEM (mean 0.58%), rotating-cylinder induction
+    vs the Bessel closed form (0.19%; mu_r=10 conductor 0.23%), mini CAGE induction machine
+    (VIM core + reduced-FEM bars, stagger-until-converged) vs an all-in-one FEM (0.57%).
+    The cage split (laminated core = VIM, bars = reduced FEM) is the architecture fit; a
+    NONLINEAR solid-iron rotor needs the eddy-current VIM direction (README section 9).
 
 [API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
 `skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /

@@ -1,0 +1,358 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-07-03T14:00:45Z",
+  "notebook": "docs/electric_machine/planar_vim_motor.ipynb",
+  "notebook_sha256": "10321df14dfd186319453ba353bae2e3b1a9191919335d66de2b544b063dce6b",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.5"
+  },
+  "summary": {
+    "path": "docs/electric_machine/planar_vim_motor.ipynb",
+    "cells": 14,
+    "code_cells": 7,
+    "executed_code_cells": 7,
+    "code_cells_with_outputs": 7,
+    "output_count": 29,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "73d6672aa9ce02e6658f51055bd3b804832b60ad34cecad2ad54ae71865ee023",
+      "source_preview": "import json, platform, time\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport ngsolve as ng\nfrom netgen.occ import WorkPlane, OCCGeometry\nimport radia\nfrom radia.vim import hdiv_demag_solve, PlanarDemagBody, maxwell_torque_circle\nimport planar_vim_motor_helpers as H\n\nRESULTS = {\"radia_version\": radia.__version__, \"platform\": platform.platform()}\nprint(\"radia\", radia.__version__, \"| numpy\", np.__version__)",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 27,
+          "text_sha256": "47af502626bc65096739e59fe50eae283acd1ae56777c7d02d0e7bde02378eea",
+          "text_preview": "radia 4.95.5 | numpy 2.4.6\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "2a5b969d42c49334e99d351c41dd52679419eaf205c9781cf612d0213dd68415",
+      "source_preview": "wp = WorkPlane().Circle(0, 0, 1.0).Face()\nmesh_disk = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=0.3))\ntab = H.bh_table()\nrows = []\nfor H0 in (1e3, 1e4, 1e5, 1e6):\n    with ng.TaskManager():\n        res = hdiv_demag_solve(mesh_disk, None, ng.CoefficientFunction((H0, 0.0)), bh_table=tab)\n    Mref = H.fixed_point_disk(H0)\n    rel = abs(res[\"M_avg\"][0] - Mref) / Mref\n    rows.append({\"H0\": H0, \"M_vim\": res[\"M_avg\"][0], \"M_ref\": Mref, \"rel\": rel,\n                 \"iters\": res[\"iters\"], \"M_over_Msat\": res[\"M_avg\"][0] / H.MSAT})\n    print(f\"H0={H0:8.0e}: M={res['M_avg'][0]:12.1f}  ref={Mref:12.1f}  rel={rel:.2e}\"\n          f\"  M/Msat={res['M_avg'][0]/H.MSAT:.3f}  picard={res['iters']}\")\n    assert rel < 1e-3\nRESULTS[\"disk_deep_saturation\"] = rows",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 84,
+          "text_sha256": "92413b34476406e312cef672d33bb8f297082fce20c62c76354f83033c8a297f",
+          "text_preview": "H0=   1e+03: M=      1996.6  ref=      1996.0  rel=3.01e-04  M/Msat=0.002  picard=4\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 84,
+          "text_sha256": "534af71346d0d606484797f62cc4f3c131cd51312d4c82538a166145556bc89a",
+          "text_preview": "H0=   1e+04: M=     19965.4  ref=     19959.4  rel=3.01e-04  M/Msat=0.017  picard=6\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 85,
+          "text_sha256": "49007c9b7ad9aaa00e22543be8efc73d055c8f746071bad4c35730f5c59e61b5",
+          "text_preview": "H0=   1e+05: M=    199581.2  ref=    199521.4  rel=3.00e-04  M/Msat=0.166  picard=10\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 85,
+          "text_sha256": "6a339c870292a16303a3af8017a77e8f40597a83798823534ebe010f5c6bc6ea",
+          "text_preview": "H0=   1e+06: M=   1196423.0  ref=   1196426.7  rel=3.08e-06  M/Msat=0.997  picard=10\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "5ad6073051f91a6b914b3d830527e43d95e53b339bf23a7232056c857522d6dd",
+      "source_preview": "a_el, b_el = 0.2, 0.1\nNa, Nb = b_el/(a_el+b_el), a_el/(a_el+b_el)\narea = np.pi*a_el*b_el\nchi, H0 = 1000.0, 1e5\nwp = WorkPlane().Ellipse(a_el, b_el).Face()\nmesh_el = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=b_el/3))\nwith ng.TaskManager():\n    t0 = time.perf_counter()\n    body = PlanarDemagBody(mesh_el)\n    t_build = time.perf_counter() - t0\nangles = np.arange(0.0, 91.0, 15.0)\nrows, t_ang = [], []\nfor th in angles:\n    Ha, Hb = H0*np.cos(np.radians(th)), H0*np.sin(np.radians(th))\n    with ng.TaskManager():\n        t0 = time.perf_counter()\n        m = body.solve_linear(chi, body.project(ng.CoefficientFunction((Ha, Hb))))\n        t_ang.append(time.perf_counter() - t0)\n    Ma, Mb = chi*Ha/(1+chi*Na), chi*Hb/(1+chi*Nb)\n    T_ref = H.MU0*area*(Ma*Hb - Mb*Ha)\n    Mx, My = body.M_avg(m)\n    T_vol = H.MU0*area*(Mx*Hb - My*Ha)\n    def H_tot(P, Ha=Ha, Hb=Hb, m=m):\n        Hf = body.H_at(P, m); Hf[:, 0] += Ha; Hf[:, 1] += Hb\n        return Hf\n    T_mx = maxwell_torque_circle(H_tot, 0.3)\n   ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 138,
+          "text_sha256": "8d5291b52f00aa8dfd4bf3b534e7f96e5623fe15880b52ac1c6652cba1e94d6e",
+          "text_preview": "N built once: 0.31 s;  per-angle solve: 27 ms  (no rebuild, no remesh)\n3-way torque agreement: volume 0.68%, Maxwell circle 1.49% of Tmax\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "36bc23288c98b9cadf70168d3e0f86d0cd4e0c4b1a3590e14dc90a9f60f26890",
+          "text_plain_preview": "<Figure size 540x340 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 33332,
+              "sha256": "f8075b46e6f33fca5e5ed2eecca1e0dbc671d33fe94d3fa5e6ecaefd1078e1ec"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "0950e3b75be2acb6c80946b9dd210e934d5d9335c8f7c6ab776a093e273612a4",
+      "source_preview": "wp = WorkPlane().RectangleC(H.A_BAR, H.B_BAR).Face()\nmesh_bar = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=0.02))\nwith ng.TaskManager():\n    body = PlanarDemagBody(mesh_bar)\nangles = np.arange(0.0, 91.0, 15.0)\nrows = []\nfor th in angles:\n    W = H.wire_pos(th)\n    with ng.TaskManager():\n        m, chi_e, itn, res_nl = body.solve_nonlinear(H.M_of_h, H.chi_sec,\n                                                     body.project(H.H_wires_cf(W)))\n    def H_tot(P, W=W, m=m):\n        return body.H_at(P, m) + H.H_wires_np(P, W)\n    T_vim = maxwell_torque_circle(H_tot, H.RC_A)\n    with ng.TaskManager():\n        T_fem, ndof, it_newton = H.fem_reference_bar(th)\n    rows.append({\"theta\": th, \"T_vim\": T_vim, \"T_fem\": T_fem, \"picard\": itn,\n                 \"newton\": it_newton})\n    print(f\"th={th:5.1f}: T_vim={T_vim:9.2f}  T_fem={T_fem:9.2f}  N m/m\"\n          f\"  (picard {itn}, newton {it_newton}, fem ndof {ndof})\")\nTv = np.array([r[\"T_vim\"] for r in rows]); Tf = np.array([r[\"T_fem\"] for r in ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 88,
+          "text_sha256": "ec78fe6b9af41903ff90178e54c5799bf7b31f8a5f7ab836882ea8ac43ef29ba",
+          "text_preview": "th=  0.0: T_vim=    11.89  T_fem=   -25.53  N m/m  (picard 68, newton 9, fem ndof 6669)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 88,
+          "text_sha256": "737ed81ea156a7ec0d0c7d14c8a7902187ed93351709e78c61caf1d7a01ca1a2",
+          "text_preview": "th= 15.0: T_vim= -1807.26  T_fem= -1801.83  N m/m  (picard 50, newton 9, fem ndof 6645)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 88,
+          "text_sha256": "a309f75bcf4bc428d81087b84053299b58beaafd5c169a7566adbda938c4937f",
+          "text_preview": "th= 30.0: T_vim= -3473.00  T_fem= -3498.29  N m/m  (picard 54, newton 9, fem ndof 6773)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 88,
+          "text_sha256": "428fa9af70d2d0b1b51c200cc6e073ca68fa4089cbc0f4bbcd218a526b8df64f",
+          "text_preview": "th= 45.0: T_vim= -4243.98  T_fem= -4230.31  N m/m  (picard 44, newton 9, fem ndof 6737)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 88,
+          "text_sha256": "c711eb3877d015e02b996b37a0bcdf6a5661560cd8e3263d79f9bea2ce9f415b",
+          "text_preview": "th= 60.0: T_vim= -3509.55  T_fem= -3538.32  N m/m  (picard 42, newton 8, fem ndof 6825)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 88,
+          "text_sha256": "436e20df3b7812bbd63c407492fad8467319a3f526d5d5365b2af8c056eebc5b",
+          "text_preview": "th= 75.0: T_vim= -1774.88  T_fem= -1782.80  N m/m  (picard 39, newton 8, fem ndof 6645)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 132,
+          "text_sha256": "507ad1d76bbfe8c21460bef4f5388197b6ff72a609fc76b91688e548cd5be51b",
+          "text_preview": "th= 90.0: T_vim=    -0.34  T_fem=    53.98  N m/m  (picard 40, newton 7, fem ndof 6681)\ntorque-angle: mean 0.58%  max 1.28% of Tmax\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "36bc23288c98b9cadf70168d3e0f86d0cd4e0c4b1a3590e14dc90a9f60f26890",
+          "text_plain_preview": "<Figure size 540x340 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 33644,
+              "sha256": "aa91ece82e2d8d95ddd1d6efbf1a4fa4ce655407ad663606d60f30d4b80917a5"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "48b6177665505dec1010071e8681d121a37bbf59c1ac45e813ef42b5ce6799f7",
+      "source_preview": "omegas = np.array([0.3, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0])\nrows = []\nfor w in omegas:\n    Ta = H.cylinder_analytic_T(w)\n    delta = np.sqrt(2.0/(H.MU0*H.SIGMA_CYL*w))\n    with ng.TaskManager():\n        Tn = H.cylinder_reduced_T(w, maxh_cond=min(0.004, delta/3))\n    rows.append({\"omega\": w, \"T_analytic\": Ta, \"T_reduced\": Tn})\n    print(f\"w={w:7.1f}: T_analytic={Ta:9.4f}  T_reduced={Tn:9.4f}  N m/m\")\nTmax = max(abs(r[\"T_analytic\"]) for r in rows)\nerrs = [abs(r[\"T_reduced\"]-r[\"T_analytic\"])/Tmax for r in rows]\nwith ng.TaskManager():\n    Ta10 = H.cylinder_analytic_T(10.0, mu_r=10.0)\n    Tn10 = H.cylinder_reduced_T(10.0, mu_r=10.0)\nprint(f\"torque-slip: max rel {max(errs):.2%};  mu_r=10 point: analytic {Ta10:.2f} vs \"\n      f\"reduced {Tn10:.2f} ({abs(Tn10-Ta10)/abs(Ta10):.2%})\")\nassert max(errs) < 0.02 and abs(Tn10-Ta10)/abs(Ta10) < 0.03\nRESULTS[\"rotating_cylinder\"] = {\"rows\": rows, \"max_rel\": max(errs),\n                                \"mu_r10\": {\"analytic\": Ta10, \"reduced\": Tn10}}\nfig, ax",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "51e3b40dda45a40df67d2e9c643f4fdb9f2872c1a6f4d3a3b21a32657635f2f8",
+          "text_preview": "w=    0.3: T_analytic=   2.0606  T_reduced=   2.0588  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "a204f3334ad31d9c734715611751cd1174d12f2ac94323b3d05989238131f89e",
+          "text_preview": "w=    1.0: T_analytic=   6.8344  T_reduced=   6.8285  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "555e9c90f64bab88aad366c58dc8582f31f9ac63aa66967b61abaed85c58c764",
+          "text_preview": "w=    3.0: T_analytic=  19.6393  T_reduced=  19.6257  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "72fd8a8fd6c4ba7c5e68f54bdc226311cf29abf5b5f4f9cece8747f309dfcbb4",
+          "text_preview": "w=   10.0: T_analytic=  44.5779  T_reduced=  44.5953  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "b434d7930b0f2082c464f9c3bcb0af471c3818aa2006ba28785ad6ed2d1e26ff",
+          "text_preview": "w=   30.0: T_analytic=  39.5354  T_reduced=  39.6199  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "3187fdd30af5500374485d4ccb2c4bbcdbb2b04fdee7e244ace2c82352320fee",
+          "text_preview": "w=  100.0: T_analytic=  23.7370  T_reduced=  23.8139  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 60,
+          "text_sha256": "b4582821554ae1af187add837ca898bf5f2ee8b29c4388b3a77633797c216bc1",
+          "text_preview": "w=  300.0: T_analytic=  14.4278  T_reduced=  14.4861  N m/m\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 84,
+          "text_sha256": "9643c90af8c5107d73eff0c9be42cc3cd44771ba4c5ab817fdd54d8e3fd0d1d6",
+          "text_preview": "torque-slip: max rel 0.19%;  mu_r=10 point: analytic 51.78 vs reduced 51.66 (0.23%)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "36bc23288c98b9cadf70168d3e0f86d0cd4e0c4b1a3590e14dc90a9f60f26890",
+          "text_plain_preview": "<Figure size 540x340 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 32752,
+              "sha256": "66c32f38ced5f4dfbd3b38fd41c1638b4348dc176879b47a1abcd3c238db2e57"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 6,
+      "source_sha256": "34e5f60aaf4a38f2e4a837f5f1e510a0b95f005f6693b3b21c63f1dc65212c90",
+      "source_preview": "wp = WorkPlane().Circle(0, 0, H.R_CORE).Face()\nmesh_core = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=H.R_CORE/4))\nwith ng.TaskManager():\n    core = PlanarDemagBody(mesh_core)\nslips = np.array([3.0, 10.0, 30.0])\nrows = []\nfor w in slips:\n    with ng.TaskManager():\n        T_c, hist = H.cage_coupled_slip(core, w)\n        T_f, loss_f, ndof = H.cage_allinone_slip(w)\n    rel = abs(T_c - T_f)/abs(T_f)\n    rows.append({\"omega\": w, \"T_coupled\": T_c, \"T_allinone\": T_f, \"rel\": rel,\n                 \"staggers\": len(hist), \"dM_final\": hist[-1][\"dM\"]})\n    print(f\"slip w={w:5.1f}: T_coupled={T_c:9.4f}  T_allinone={T_f:9.4f}  N m/m\"\n          f\"  rel={rel:6.2%}  ({len(hist)} staggers, dM={hist[-1]['dM']:.1e})\")\nTmax = max(abs(r[\"T_allinone\"]) for r in rows)\nmrel = max(abs(r[\"T_coupled\"]-r[\"T_allinone\"])/Tmax for r in rows)\nprint(f\"cage torque-slip: max rel {mrel:.2%} of Tmax\")\nassert mrel < 0.05\nRESULTS[\"mini_cage\"] = {\"rows\": rows, \"max_rel\": mrel}\nfig, ax = plt.subplots(figsize=(5.4, 3.4))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 101,
+          "text_sha256": "6ea25c3a0e8bc0d95a14ab6e65fc0ac7c25e4fe52d9c25f447429145b4ab4e9c",
+          "text_preview": "slip w=  3.0: T_coupled=   8.6198  T_allinone=   8.6926  N m/m  rel= 0.84%  (8 staggers, dM=3.8e-04)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 101,
+          "text_sha256": "193ed02cd15558949b8d40df5244da4006a3be768f86ae7a0af7aee519a97406",
+          "text_preview": "slip w= 10.0: T_coupled=  28.0728  T_allinone=  28.2878  N m/m  rel= 0.76%  (8 staggers, dM=4.7e-04)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 141,
+          "text_sha256": "258d8fe6d10471e5783f39a92777307f1bf32f7e46e95776f59f01ede923867a",
+          "text_preview": "slip w= 30.0: T_coupled=  70.0711  T_allinone=  70.4718  N m/m  rel= 0.57%  (8 staggers, dM=2.6e-04)\ncage torque-slip: max rel 0.57% of Tmax\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "36bc23288c98b9cadf70168d3e0f86d0cd4e0c4b1a3590e14dc90a9f60f26890",
+          "text_plain_preview": "<Figure size 540x340 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 33208,
+              "sha256": "41d3df2f3dd3d7ee9b130df79dfd3dca28b95361104c3c9fc113f3125be3c43f"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 13,
+      "execution_count": 7,
+      "source_sha256": "897c1e4761ea4c82ed9f48a8dbc4c45f7743254c0ab3d6b5ee72108dd2b72ed3",
+      "source_preview": "print(json.dumps({k: v for k, v in RESULTS.items() if k != \"rows\"}, indent=1,\n                 default=lambda o: float(o) if hasattr(o, \"item\") else str(o))[:3000])",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 3001,
+          "text_sha256": "37ff42beaee8c861c586b0d74e953ca35475390a72b638361d1a2290eb385c18",
+          "text_preview": "{\n \"radia_version\": \"4.95.5\",\n \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n \"disk_deep_saturation\": [\n  {\n   \"H0\": 1000.0,\n   \"M_vim\": 1996.6012840799206,\n   \"M_ref\": 1996.0013462089573,\n   \"rel\": 0.00030056987291251293,\n   \"iters\": 4,\n   \"M_over_Msat\": 0.0016638344033999338\n  },\n  {\n   \"H0\": 10000.0,\n   \"M_vim\": 19965.404061155117,\n   \"M_ref\": 19959.405994480112,\n   \"rel\": 0.00030051328564908433,\n   \"iters\": 6,\n   \"M_over_Msat\": 0.016637836717629265\n  },\n  {\n   \"H0\": 100000.0,\n   \"M_vim\": 199581.19917032152,\n   \"M_ref\": 199521.3777725824,\n   \"rel\": 0.00029982450205059567,\n   \"iters\": 10,\n   \"M_over_Msat\": 0.16631766597526793\n  },\n  {\n   \"H0\": 1000000.0,\n   \"M_vim\": 1196422.9916173543,\n   \"M_ref\": 1196426.6807211721,\n   \"rel\": 3.083434929398576e-06,\n   \"iters\": 10,\n   \"M_over_Msat\": 0.9970191596811286\n  }\n ],\n \"ellipse_torque\": {\n  \"rows\": [\n   {\n    \"theta\": 0.0,\n    \"T_ref\": 0.0,\n    \"T_vol\": -0.20103183774216157,\n    \"T_mx\": -0.19938928274595336\n   },\n   {\n    \"theta\": 15.0,\n    \"T_ref\": 294.7603838834776,\n    \"T_vol\": 292.58087532144543,\n    \"T_mx\": 290.1903078175639\n   },\n   {\n    \"theta\": 30.0,\n    \"T_ref\": 510.5399609446897,\n    \"T_vol\": 506.96597321746043,\n    \"T_mx\": 502.8237462868184\n   },\n   {\n    \"theta\": 45.0,\n    \"T_ref\": 589.5207677669555,\n    \"T_vol\": 585.509947999799,\n    \"T_mx\": 580.7259680033286\n   },\n   {\n    \"theta\": 60.0,\n    \"T_ref\": 510.5399609446897,\n    \"T_vol\": 507.16700505520276,\n    \"T_mx\": 503.0231355695648\n   },\n   {\n    \"theta\": 75.0,\n    \"T_ref\": 294.7603838834777,\n    \"T_vol\": 292.92907267835386,\n    \"T_mx\": 290.53566018576475\n   },\n   {\n    \"theta\": 90.0,\n    \"T_ref\": 7.219547212766918e-14,\n    \"T_vol\": 0.20103183774224673,\n    \"T_mx\": 0.19938928274625456\n   }\n  ],\n  \"t_build_s\": 0.3116958999999042,\n  \"t_per_angle_ms\": 26.60657142847153,\n  \"max_rel_volume\": 0.006803525823778953,\n  \"max_rel_maxwell\": 0.014918557995744049\n },\n \"salient_bar_motor\": {\n  \"rows\": [\n   {\n    \"theta\": 0.0,\n    \"T_vim\": 11.892291416446183,\n    \"T_fem\": -25.526285544671335,\n    \"picard\": 68,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 15.0,\n    \"T_vim\": -1807.2593056142016,\n    \"T_fem\": -1801.8284781226935,\n    \"picard\": 50,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 30.0,\n    \"T_vim\": -3472.996109832021,\n    \"T_fem\": -3498.293288216497,\n    \"picard\": 54,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 45.0,\n    \"T_vim\": -4243.980481167261,\n    \"T_fem\": -4230.309627142192,\n    \"picard\": 44,\n    \"newton\": 9\n   },\n   {\n    \"theta\": 60.0,\n    \"T_vim\": -3509.5494960861024,\n    \"T_fem\": -3538.321188349239,\n    \"picard\": 42,\n    \"newton\": 8\n   },\n   {\n    \"theta\": 75.0,\n    \"T_vim\": -1774.876177372022,\n    \"T_fem\": -1782.8002470235506,\n    \"picard\": 39,\n    \"newton\": 8\n   },\n   {\n    \"theta\": 90.0,\n    \"T_vim\": -0.3399388898629774,\n    \"T_fem\": 53.97931766457515,\n    \"picard\": 40,\n    \"newton\": 7\n   }\n  ],\n  \"mean_rel\": 0.0058365351328409235,\n  \"max_rel\": 0.012840491912440412\n },\n \"rotating_cylinder\": {\n  \"rows\": [\n   {\n    \"omega\": 0.3,\n    \"T_analytic\"\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
