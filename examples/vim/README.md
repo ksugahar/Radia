@@ -6,6 +6,13 @@ operator whose magnetization "loops" are **field-null by construction**, complem
 canonical **multipole-moment MMM** surface-charge backend with FEEC, curved/high-order geometry, and
 symmetry-model capabilities.
 
+> **This directory is a protected validation corpus** — ~25 goldens in `validation_test/feec/`
+> import these scripts directly (Validation-Class Examples Promotion Lane). The **rendered
+> showcase layer** lives in [`docs/hdiv_vim/`](../../docs/hdiv_vim/README.md): executed notebooks
+> with embedded results + JSON sidecars (`hdiv_curved_showcase.ipynb`,
+> `polynomial_charge_field.ipynb`, `hex_rt1_and_2d_showcase.ipynb` — the 2026-07-03 hex RT1 +
+> 2D planar status).
+
 > **Sibling research line in this directory:** a separate set of examples builds a **3D
 > stream-function + cohomology COIL-DESIGN method** (Clebsch / vector-T potentials on the same
 > FEEC de Rham complex, ACA+TSVD inverse, wire extraction, and an honest map of the
