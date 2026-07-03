@@ -3145,6 +3145,20 @@ digest): `sweep_heatmap.png` は commit されていたが、その
 
 ### Benchmark Policy
 
+**POLICY (mdx = 静音計算ホスト、他ジョブ終了後にのみ走らせる、2026-07-04)**: `mdx` は
+研究室の **計算用・静音マシン**。壁時計 / タイミング計測および重い計算ジョブは mdx で走らせるが、
+**他のプロセス（別の計算ジョブ・build・CI・pytest・他ユーザ / codex の計算）が終わってから**＝
+mdx が **アイドルのときだけ** 開始する。実行中の別ジョブと **並走させない** — 並走は mdx の
+"静音で再現可能" という唯一の価値を壊し、かつ他人のジョブを汚染する。
+- **開始前に必ず mdx の稼働状況を確認**する：`ssh mdx pwsh` で `Get-Process python` の本数 /
+  CPU 負荷 / build・CI の有無を見る。重いジョブが走っていれば **待つ**（横入りしない）。
+- mdx が塞がっているとき：**正しさ照合 (correctness / smoke — 数値が一致するか・収束するか) は
+  LAB で可**（LAB は codex 競合下でも一致確認は問題ない）。**タイミング計測は mdx がアイドルに
+  なるまで延期**する。LAB のタイミングは codex の並列 build / pytest に汚染されて無意味
+  （crash / hang / SIGKILL / noise）なので信用しない。
+- これは codex↔claude の **共有ポリシー**（AGENTS.md の Benchmark Policy にも同文を置く）。
+  背景と過去インシデントは memory `benchmark_on_mdx_quiet_machine.md`。
+
 **POLICY**: 全てのベンチマークスクリプト (`bench_*.py`) は JSON 形式の結果ファイルを出力すること。
 
 **実行ルール**:
