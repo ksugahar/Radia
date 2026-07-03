@@ -1797,6 +1797,15 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
         out.emplace_back("faceSiteRad", s);
     }
     add("cellSiteX", m_cellSiteX); add("faceSiteX", m_faceSiteX);
+    // 2D planar mode arrays (empty in the hex mode and vice versa)
+    add("d2CellNodes", m_d2CellNodes); add("d2EdgeNodes", m_d2EdgeNodes);
+    addi("d2CellType", m_d2CellType);
+    add("d2SymTriP", m_d2SymTriP); add("d2SymTriW", m_d2SymTriW);
+    add("d2GlE", m_d2GlE); add("d2GwE", m_d2GwE);
+    add("d2FarTriP", m_d2FarTriP); add("d2FarTriW", m_d2FarTriW);
+    add("d2CellSubC", m_d2CellSubC); add("d2CellSubS", m_d2CellSubS);
+    add("d2EdgeC", m_d2EdgeC); add("d2EdgeS", m_d2EdgeS);
+    add("d2CellSiteX", m_d2CellSiteX); add("d2EdgeSiteX", m_d2EdgeSiteX);
     return out;
 }
 
@@ -2197,9 +2206,381 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
     auto it = s_hex_block_cache.find(key);
     if (it == s_hex_block_cache.end()) {
         if (s_hex_block_cache.size() > 200000u) s_hex_block_cache.clear();
-        it = s_hex_block_cache.emplace(key, QuadBlockHex(kindT, hT, kindS, hS)).first;
+        it = s_hex_block_cache.emplace(key, m_d2 ? QuadBlock2D(kindT, hT, kindS, hS)
+                                                 : QuadBlockHex(kindT, hT, kindS, hS)).first;
     }
     return it->second;
+}
+
+// ===================================================================== 2D PLANAR mode (2026-07-03)
+// Motor cross-section layer (memory hdiv-vim-tri-quad-motor): kernel -ln(r)/(2pi), charges = -div M on
+// tri/quad cells + M.n on boundary edges, Piola-exact REF measures, regular symmetric outer (the log
+// kernel's single-layer potentials are continuous -- numpy-validated that NO graded outer is needed),
+// radial-cone inner for near/self, cheap far cloud otherwise.  See the header ctor doc.
+static const double D2_TRIREF_V[3][2] = {{1, 0}, {0, 1}, {0, 0}};   // NGSolve trig reference
+
+static inline double D2MonoCell(const int* e, const double xi[2])
+{
+    double v = 1.0;
+    if (e[0]) v *= xi[0];
+    if (e[1]) v *= xi[1];
+    return v;
+}
+
+void RadHACApKChargeGram::Tri6Map(const double* nd12, const double xi[2], double X[2])
+{
+    const double l0 = xi[0], l1 = xi[1], l2 = 1.0 - xi[0] - xi[1];
+    const double s[6] = {l0*(2*l0 - 1), l1*(2*l1 - 1), l2*(2*l2 - 1), 4*l0*l1, 4*l1*l2, 4*l2*l0};
+    X[0] = X[1] = 0.0;
+    for (int k = 0; k < 6; ++k) { X[0] += s[k]*nd12[2*k]; X[1] += s[k]*nd12[2*k + 1]; }
+}
+
+void RadHACApKChargeGram::Quad9Map(const double* nd18, const double xi[2], double X[2])
+{
+    double vx[3], dx[3], vy[3], dy[3];
+    HexLag3(xi[0], vx, dx); HexLag3(xi[1], vy, dy);
+    X[0] = X[1] = 0.0;
+    for (int j = 0; j < 3; ++j)
+        for (int i = 0; i < 3; ++i) {
+            const double s = vx[i]*vy[j];
+            const double* nd = &nd18[2*(i + 3*j)];
+            X[0] += s*nd[0]; X[1] += s*nd[1];
+        }
+}
+
+void RadHACApKChargeGram::Edge3Map(const double* nd6, double t, double X[2])
+{
+    double v[3], d[3];
+    HexLag3(t, v, d);
+    X[0] = v[0]*nd6[0] + v[1]*nd6[2] + v[2]*nd6[4];
+    X[1] = v[0]*nd6[1] + v[1]*nd6[3] + v[2]*nd6[5];
+}
+
+// sub-tri ref vertices of cell host h, sub s (tri: itself; quad: 2 sub-tris of [0,1]^2)
+static void D2SubTri(int cell_type, int s, double V[3][2])
+{
+    if (cell_type == 0) {
+        for (int i = 0; i < 3; ++i) { V[i][0] = D2_TRIREF_V[i][0]; V[i][1] = D2_TRIREF_V[i][1]; }
+    } else {
+        const int* tv = QUADREF_TRIS[s];
+        for (int i = 0; i < 3; ++i) { V[i][0] = QUADREF_V[tv[i]][0]; V[i][1] = QUADREF_V[tv[i]][1]; }
+    }
+}
+
+// anchor site k (0-6) of a ref sub-tri: corners, edge mids ((0,1),(1,2),(2,0)), centroid
+static void D2SiteRef(const double V[3][2], int k, double x0[2])
+{
+    if (k < 3)      { x0[0] = V[k][0]; x0[1] = V[k][1]; }
+    else if (k < 6) {
+        const int a = k - 3, b = (k - 2) % 3;
+        x0[0] = 0.5*(V[a][0] + V[b][0]); x0[1] = 0.5*(V[a][1] + V[b][1]);
+    } else          { x0[0] = (V[0][0]+V[1][0]+V[2][0])/3.0; x0[1] = (V[0][1]+V[1][1]+V[2][1])/3.0; }
+}
+
+RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
+    std::vector<double> cell_nodes9, std::vector<int> cell_type, std::vector<double> edge_nodes3,
+    int n_el, int n_be,
+    std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+    std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+    std::vector<double> gl_edge, std::vector<double> gw_edge,
+    std::vector<double> gl_in, std::vector<double> gw_in,
+    std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+    double near_grade, double far_inner_factor)
+    : m_n_el(n_el),
+      m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
+      m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
+      m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
+{
+    m_d2 = true;
+    m_d2_n_be = n_be;
+    m_d2CellNodes = std::move(cell_nodes9);
+    m_d2CellType  = std::move(cell_type);
+    m_d2EdgeNodes = std::move(edge_nodes3);
+    m_d2SymTriP = std::move(sym_tri_pts); m_d2SymTriW = std::move(sym_tri_w);
+    m_d2GlE = std::move(gl_edge); m_d2GwE = std::move(gw_edge);
+    m_d2FarTriP = std::move(far_tri_pts); m_d2FarTriW = std::move(far_tri_w);
+    m_n = (int)m_host.size();
+    m_build_id = NextChargeGramBuildId();
+    // ---- per-sub geometry: centroid/size (near test) + mapped anchor sites ----
+    m_d2CellSubC.assign((size_t)n_el*2*2, 0.0); m_d2CellSubS.assign((size_t)n_el*2, 0.0);
+    m_d2CellSiteX.assign((size_t)n_el*2*7*2, 0.0);
+    for (int c = 0; c < n_el; ++c) {
+        const double* nd = &m_d2CellNodes[(size_t)c*18];
+        const int ct = m_d2CellType[c];
+        const int nsub = (ct == 1) ? 2 : 1;
+        for (int s = 0; s < nsub; ++s) {
+            double V[3][2];
+            D2SubTri(ct, s, V);
+            double cen[2] = {0, 0}, P[3][2];
+            for (int i = 0; i < 3; ++i) {
+                if (ct == 0) Tri6Map(nd, V[i], P[i]); else Quad9Map(nd, V[i], P[i]);
+                cen[0] += P[i][0]/3.0; cen[1] += P[i][1]/3.0;
+            }
+            double* pc = &m_d2CellSubC[((size_t)c*2 + s)*2];
+            pc[0] = cen[0]; pc[1] = cen[1];
+            double sz = 0.0;
+            for (int i = 0; i < 3; ++i) {
+                const double dx = P[i][0]-cen[0], dy = P[i][1]-cen[1];
+                sz = std::max(sz, std::sqrt(dx*dx + dy*dy));
+            }
+            m_d2CellSubS[(size_t)c*2 + s] = sz;
+            for (int k = 0; k < 7; ++k) {
+                double x0[2], X[2];
+                D2SiteRef(V, k, x0);
+                if (ct == 0) Tri6Map(nd, x0, X); else Quad9Map(nd, x0, X);
+                double* out = &m_d2CellSiteX[(((size_t)c*2 + s)*7 + k)*2];
+                out[0] = X[0]; out[1] = X[1];
+            }
+        }
+    }
+    m_d2EdgeC.assign((size_t)n_be*2, 0.0); m_d2EdgeS.assign((size_t)n_be, 0.0);
+    m_d2EdgeSiteX.assign((size_t)n_be*3*2, 0.0);
+    for (int f = 0; f < n_be; ++f) {
+        const double* nd = &m_d2EdgeNodes[(size_t)f*6];
+        double P0[2], P1[2], Pm[2];
+        Edge3Map(nd, 0.0, P0); Edge3Map(nd, 1.0, P1); Edge3Map(nd, 0.5, Pm);
+        m_d2EdgeC[(size_t)f*2] = Pm[0]; m_d2EdgeC[(size_t)f*2 + 1] = Pm[1];
+        const double dx = P1[0]-P0[0], dy = P1[1]-P0[1];
+        m_d2EdgeS[f] = 0.5*std::sqrt(dx*dx + dy*dy);
+        double* sx = &m_d2EdgeSiteX[(size_t)f*3*2];
+        sx[0] = P0[0]; sx[1] = P0[1]; sx[2] = P1[0]; sx[3] = P1[1]; sx[4] = Pm[0]; sx[5] = Pm[1];
+    }
+    // ---- per-charge centroid/size (cluster-tree points; z = 0) + (kind,host) reverse maps ----
+    m_cent.assign((size_t)m_n*3, 0.0); m_size.assign((size_t)m_n, 0.0);
+    for (int a = 0; a < m_n; ++a) {
+        const int h = m_host[a];
+        if (m_kind[a] == 0) {
+            const int ct = m_d2CellType[h];
+            const int nsub = (ct == 1) ? 2 : 1;
+            double cen[2] = {0, 0}, sz = 0.0;
+            for (int s = 0; s < nsub; ++s) {
+                cen[0] += m_d2CellSubC[((size_t)h*2 + s)*2] / nsub;
+                cen[1] += m_d2CellSubC[((size_t)h*2 + s)*2 + 1] / nsub;
+            }
+            for (int s = 0; s < nsub; ++s) {
+                const double dx = m_d2CellSubC[((size_t)h*2 + s)*2] - cen[0];
+                const double dy = m_d2CellSubC[((size_t)h*2 + s)*2 + 1] - cen[1];
+                sz = std::max(sz, m_d2CellSubS[(size_t)h*2 + s] + std::sqrt(dx*dx + dy*dy));
+            }
+            m_cent[3*a] = cen[0]; m_cent[3*a + 1] = cen[1]; m_size[a] = sz;
+        } else {
+            m_cent[3*a] = m_d2EdgeC[(size_t)h*2]; m_cent[3*a + 1] = m_d2EdgeC[(size_t)h*2 + 1];
+            m_size[a] = m_d2EdgeS[h];
+        }
+    }
+    m_hexLocalOf.assign((size_t)m_n, 0);
+    m_cellCharges.assign((size_t)n_el, {}); m_faceCharges.assign((size_t)n_be, {});
+    for (int a = 0; a < m_n; ++a) {
+        std::vector<int>& grp = (m_kind[a] == 0) ? m_cellCharges[m_host[a]] : m_faceCharges[m_host[a]];
+        m_hexLocalOf[a] = (int)grp.size();
+        grp.push_back(a);
+    }
+    m_hex_state_sum = HexStateChecksum();   // instance-integrity canary (shared with the hex mode)
+}
+
+// 2D inner: INT over sub subB of source (kindS,hS) of m_b(eta)*(-ln|p-X(eta)|) d(ref eta).
+void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const double p[2],
+                                        const double* xiT, const std::vector<int>& srcG,
+                                        double* inn) const
+{
+    const int nS = (int)srcG.size();
+    const int nR = (int)m_glIn.size();
+    const double* GL = m_glIn.data();
+    const double* GW = m_gwIn.data();
+    if (kindS == 0) {
+        const int ct = m_d2CellType[hS];
+        const double* nd = &m_d2CellNodes[(size_t)hS*18];
+        double V[3][2];
+        D2SubTri(ct, subB, V);
+        const double* cs = &m_d2CellSubC[((size_t)hS*2 + subB)*2];
+        const double sz = m_d2CellSubS[(size_t)hS*2 + subB];
+        const double dxc = p[0]-cs[0], dyc = p[1]-cs[1];
+        if (std::sqrt(dxc*dxc + dyc*dyc) > m_far_inner_factor*sz) {
+            // FAR: smooth -ln(r), the fixed bary tri rule mapped on the fly (2D is cheap)
+            const int nq = (int)m_d2FarTriW.size();
+            for (int q = 0; q < nq; ++q) {
+                const double l1 = m_d2FarTriP[2*q], l2 = m_d2FarTriP[2*q + 1];
+                const double xi[2] = {V[0][0] + l1*(V[1][0]-V[0][0]) + l2*(V[2][0]-V[0][0]),
+                                      V[0][1] + l1*(V[1][1]-V[0][1]) + l2*(V[2][1]-V[0][1])};
+                double X[2];
+                if (ct == 0) Tri6Map(nd, xi, X); else Quad9Map(nd, xi, X);
+                const double dx = p[0]-X[0], dy = p[1]-X[1];
+                const double r = std::sqrt(dx*dx + dy*dy);
+                if (r < 1e-300) continue;
+                const double e1u = V[1][0]-V[0][0], e1v = V[1][1]-V[0][1];
+                const double e2u = V[2][0]-V[0][0], e2v = V[2][1]-V[0][1];
+                const double sc = std::fabs(e1u*e2v - e1v*e2u);          // 2*A_sub(ref); rule W sums 1/2
+                const double g = 2.0*m_d2FarTriW[q]*0.5*sc*(-std::log(r));
+                for (int ls = 0; ls < nS; ++ls) {
+                    const int* e = &m_expo[(size_t)3*srcG[ls]];
+                    inn[ls] += g*D2MonoCell(e, xi);
+                }
+            }
+            return;
+        }
+        // NEAR/SELF: signed radial cones from the anchor (xiT on the self host, nearest site else)
+        double x0[2];
+        if (xiT) {
+            const double xr[2] = {xiT[0], xiT[1]};
+            ClosestPointTri2D(V, xr, x0);
+        } else {
+            const double* sx = &m_d2CellSiteX[(((size_t)hS*2 + subB)*7)*2];
+            int best = 0; double bd = 1e300;
+            for (int k = 0; k < 7; ++k) {
+                const double dx = p[0]-sx[2*k], dy = p[1]-sx[2*k + 1];
+                const double d = dx*dx + dy*dy;
+                if (d < bd) { bd = d; best = k; }
+            }
+            D2SiteRef(V, best, x0);
+        }
+        for (int kf = 0; kf < 3; ++kf) {
+            const double* A = V[kf]; const double* B = V[(kf + 1) % 3];
+            const double ea[2] = {A[0]-x0[0], A[1]-x0[1]};
+            const double eb[2] = {B[0]-x0[0], B[1]-x0[1]};
+            const double s2 = ea[0]*eb[1] - ea[1]*eb[0];
+            if (std::fabs(s2) < 1e-14) continue;
+            for (int a2 = 0; a2 < nR; ++a2) { const double u = GL[a2];
+                for (int b2 = 0; b2 < nR; ++b2) { const double v = GL[b2];
+                    const double xi[2] = {x0[0] + u*(ea[0] + v*(eb[0]-ea[0])),
+                                          x0[1] + u*(ea[1] + v*(eb[1]-ea[1]))};
+                    double X[2];
+                    if (ct == 0) Tri6Map(nd, xi, X); else Quad9Map(nd, xi, X);
+                    const double dx = p[0]-X[0], dy = p[1]-X[1];
+                    const double r = std::sqrt(dx*dx + dy*dy);
+                    if (r < 1e-300) continue;
+                    const double wq = GW[a2]*GW[b2]*(u*s2)*(-std::log(r));
+                    for (int ls = 0; ls < nS; ++ls) {
+                        const int* e = &m_expo[(size_t)3*srcG[ls]];
+                        inn[ls] += wq*D2MonoCell(e, xi);
+                    }
+                }
+            }
+        }
+        return;
+    }
+    // EDGE source: INT_0^1 t^e * (-ln|p-X(t)|) dt.  SELF (xiT set): the log singularity sits at the
+    // OUTER point's own parameter t* -- split [0,t*] + [t*,1] and grade each piece INTO t* (s = t* -/+
+    // len*g^2 turns the integrand into the smooth u*ln(u) class).  Near non-self: grade toward the
+    // nearest endpoint (the projection of p); far: plain Gauss.
+    const double* nd = &m_d2EdgeNodes[(size_t)hS*6];
+    const double* ec = &m_d2EdgeC[(size_t)hS*2];
+    const double es = m_d2EdgeS[hS];
+    const double dxc = p[0]-ec[0], dyc = p[1]-ec[1];
+    const bool far_pt = !xiT && std::sqrt(dxc*dxc + dyc*dyc) > m_far_inner_factor*es;
+    const int nq = (int)m_d2GwE.size();
+    auto accum = [&](double t, double w) {
+        double X[2];
+        Edge3Map(nd, t, X);
+        const double dx = p[0]-X[0], dy = p[1]-X[1];
+        const double r = std::sqrt(dx*dx + dy*dy);
+        if (r < 1e-300) return;
+        const double g2 = w*(-std::log(r));
+        for (int ls = 0; ls < nS; ++ls) {
+            const int* e = &m_expo[(size_t)3*srcG[ls]];
+            inn[ls] += g2*(e[0] ? t : 1.0);
+        }
+    };
+    if (far_pt) {
+        for (int q = 0; q < nq; ++q) accum(m_d2GlE[q], m_d2GwE[q]);
+        return;
+    }
+    // NEAR/SELF: split-grade around the kernel peak's parameter ts -- xiT[0] on the self edge (exact),
+    // else the PROJECTION of p onto the (quadratic) edge: chord initial guess + a short Newton on
+    // (X(t)-p).X'(t) = 0.  Grading toward an ENDPOINT instead (the first implementation) mis-resolves
+    // every near pair whose peak is interior (cell outer points facing their own boundary edge) -- that
+    // overestimate is exactly what leaked eig > 1 on the structured quad mesh.
+    double ts;
+    if (xiT) {
+        ts = std::min(1.0, std::max(0.0, xiT[0]));
+    } else {
+        double P0[2], P1[2];
+        Edge3Map(nd, 0.0, P0); Edge3Map(nd, 1.0, P1);
+        const double du = P1[0]-P0[0], dv = P1[1]-P0[1];
+        const double L2 = du*du + dv*dv;
+        ts = (L2 > 1e-300) ? ((p[0]-P0[0])*du + (p[1]-P0[1])*dv)/L2 : 0.5;
+        ts = std::min(1.0, std::max(0.0, ts));
+        for (int it = 0; it < 3; ++it) {                   // Newton polish on the quadratic map
+            double v[3], d[3];
+            HexLag3(ts, v, d);
+            const double X0 = v[0]*nd[0] + v[1]*nd[2] + v[2]*nd[4];
+            const double X1 = v[0]*nd[1] + v[1]*nd[3] + v[2]*nd[5];
+            const double T0 = d[0]*nd[0] + d[1]*nd[2] + d[2]*nd[4];
+            const double T1 = d[0]*nd[1] + d[1]*nd[3] + d[2]*nd[5];
+            const double g1 = (X0-p[0])*T0 + (X1-p[1])*T1;  // d/dt |X-p|^2 / 2
+            const double h2 = T0*T0 + T1*T1;                // + curvature term dropped (small, quadratic map)
+            if (h2 < 1e-300) break;
+            ts = std::min(1.0, std::max(0.0, ts - g1/h2));
+        }
+    }
+    for (int side = 0; side < 2; ++side) {
+        const double len = side ? (1.0 - ts) : ts;
+        if (len < 1e-14) continue;
+        for (int q = 0; q < nq; ++q) {
+            const double g = m_d2GlE[q];
+            const double t = side ? (ts + len*g*g) : (ts - len*g*g);
+            accum(t, 2.0*g*m_d2GwE[q]*len);
+        }
+    }
+}
+
+// Whole DIRECTED 2D host-pair block (target outer x source inner), 1/(2pi) folded.  Regular symmetric
+// outer everywhere (numpy-validated: the log kernel needs no graded outer); the SELF host pair passes the
+// outer point's own ref coords as the inner anchor.
+std::vector<double> RadHACApKChargeGram::QuadBlock2D(int kindT, int hT, int kindS, int hS) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const bool self_pair = (kindT == kindS && hT == hS);
+    const int nsubS = (kindS == 0) ? ((m_d2CellType[hS] == 1) ? 2 : 1) : 1;
+    std::vector<double> inn(nS);
+    auto accumulate = [&](const double xiA[2], double wg, const double Xp[2]) {
+        for (int sB = 0; sB < nsubS; ++sB) {
+            for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+            PhiInner2DVec(kindS, hS, sB, Xp, self_pair ? xiA : nullptr, srcG, inn.data());
+            for (int lt = 0; lt < nT; ++lt) {
+                const int* e = &m_expo[(size_t)3*tgtG[lt]];
+                const double ma = (kindT == 0) ? D2MonoCell(e, xiA) : (e[0] ? xiA[0] : 1.0);
+                double* row = &blk[(size_t)lt*nS];
+                for (int ls = 0; ls < nS; ++ls) row[ls] += wg*ma*inn[ls];
+            }
+        }
+    };
+    if (kindT == 0) {
+        const int ct = m_d2CellType[hT];
+        const double* nd = &m_d2CellNodes[(size_t)hT*18];
+        const int nsubT = (ct == 1) ? 2 : 1;
+        const int nq = (int)m_d2SymTriW.size();
+        for (int sA = 0; sA < nsubT; ++sA) {
+            double V[3][2];
+            D2SubTri(ct, sA, V);
+            const double e1u = V[1][0]-V[0][0], e1v = V[1][1]-V[0][1];
+            const double e2u = V[2][0]-V[0][0], e2v = V[2][1]-V[0][1];
+            const double sc = std::fabs(e1u*e2v - e1v*e2u);            // 2*A_sub(ref)
+            for (int q = 0; q < nq; ++q) {
+                const double l1 = m_d2SymTriP[2*q], l2 = m_d2SymTriP[2*q + 1];
+                const double xiA[2] = {V[0][0] + l1*e1u + l2*e2u, V[0][1] + l1*e1v + l2*e2v};
+                double Xp[2];
+                if (ct == 0) Tri6Map(nd, xiA, Xp); else Quad9Map(nd, xiA, Xp);
+                accumulate(xiA, m_d2SymTriW[q]*sc, Xp);                // W sums 1/2 -> x sc = ref area
+            }
+        }
+    } else {
+        const double* nd = &m_d2EdgeNodes[(size_t)hT*6];
+        const int nq = (int)m_d2GwE.size();
+        for (int q = 0; q < nq; ++q) {
+            const double t = m_d2GlE[q];
+            const double xiA[2] = {t, 0.0};
+            double Xp[2];
+            Edge3Map(nd, t, Xp);
+            accumulate(xiA, m_d2GwE[q], Xp);
+        }
+    }
+    const double INV2PI = 1.0/(2.0*3.14159265358979323846);
+    for (double& v : blk) v *= INV2PI;
+    return blk;
 }
 
 void RadHACApKChargeGram::ExtractCoordinates()
@@ -2229,6 +2610,16 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
     if (a < 0 || a >= m_n || b < 0 || b >= m_n)
         throw std::out_of_range("ChargeGram entry index out of range: a=" + std::to_string(a)
                                 + " b=" + std::to_string(b) + " n=" + std::to_string(m_n));
+    if (m_d2) {
+        // 2D planar mode: served block-wise like the hex mode, symmetrized 0.5*(AB + BA).
+        const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
+        const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
+        const std::vector<double>& bAB = GetHexBlock(kA, hA, kB, hB);
+        const std::vector<double>& bBA = GetHexBlock(kB, hB, kA, hA);
+        const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
+        const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
+        return 0.5*(bAB[(size_t)la*nB + lb] + bBA[(size_t)lb*nA + la]);
+    }
     if (m_hexmode) {
         // HEX RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
         // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.

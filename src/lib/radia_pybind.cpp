@@ -3563,6 +3563,47 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "near/self inner fires only within far_inner_factor*size of a source sub (per outer point).  "
              "The H-matrix build is SYMMETRIC-FILL: strictly-lower leaves are skipped (all applies route "
              "through matvec_sym; plain matvec/matvec_transpose are routed to it).")
+        .def(py::init([](int dim2, std::vector<double> cell_nodes9, std::vector<int> cell_type,
+                         std::vector<double> edge_nodes3, int n_el, int n_be,
+                         std::vector<int> charge_host, std::vector<int> charge_kind,
+                         std::vector<int> charge_expo,
+                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                         std::vector<double> gl_edge, std::vector<double> gw_edge,
+                         std::vector<double> gl_in, std::vector<double> gw_in,
+                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                         double near_grade, double far_inner_factor,
+                         double eps, int leaf, double eta, bool build) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(new RadHACApKChargeGram(
+                     dim2, std::move(cell_nodes9), std::move(cell_type), std::move(edge_nodes3),
+                     n_el, n_be,
+                     std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                     std::move(sym_tri_pts), std::move(sym_tri_w),
+                     std::move(gl_edge), std::move(gw_edge), std::move(gl_in), std::move(gw_in),
+                     std::move(far_tri_pts), std::move(far_tri_w),
+                     near_grade, far_inner_factor));
+                 if (build) {
+                     RadHACApKParams p;
+                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("2D charge Gram H-matrix build failed");
+                 }
+                 return mgr;
+             }),
+             py::arg("dim2"), py::arg("cell_nodes9"), py::arg("cell_type"), py::arg("edge_nodes3"),
+             py::arg("n_el"), py::arg("n_be"),
+             py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
+             py::arg("sym_tri_pts"), py::arg("sym_tri_w"),
+             py::arg("gl_edge"), py::arg("gw_edge"), py::arg("gl_in"), py::arg("gw_in"),
+             py::arg("far_tri_pts"), py::arg("far_tri_w"),
+             py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
+             py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
+             "2D PLANAR mode (motor cross-sections; memory hdiv-vim-tri-quad-motor): charges rho = -div M "
+             "on tri/quad cells (tri P0, quad Q1 -- the 2D hex-gotcha twin) + sigma = M.n on boundary "
+             "EDGES (P1), Piola-exact REF measures, kernel -ln(r)/(2pi) (the ln-scale shift is killed by "
+             "the zero-total-charge dof columns).  Geometry = P2 lattices via GetTrafo (tri 6-node in "
+             "9-node slots, quad 9-node, edge 3-node; cell_type 0=tri 1=quad) -> flat + curved one path.  "
+             "Regular symmetric outer everywhere (the log kernel needs NO graded outer -- numpy-validated); "
+             "radial-cone inner for near/self, cheap far cloud otherwise.  Gates: eig(M^-1 N) in [0,1]; "
+             "disk demag == 1/2 exact; ellipse a:b -> b/(a+b); 2D Clausius-Mossotti chi/(1+chi/2).")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
         .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
