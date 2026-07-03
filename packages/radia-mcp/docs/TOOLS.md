@@ -364,12 +364,12 @@ Module: `radia_mcp.motor.server`
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
-| `motor_triple_check_artifact_gate` | Validate a combined ELF-seeded, HDiv-VIM/reduced-FEM, and NGSolve+AGE artifact. |
+| `motor_triple_check_artifact_gate` | Validate a combined ELF-seeded AGE, MMMM, and HDiv-VIM/RFEM artifact. |
 | `motor_triple_check_plan` | Plan an ELF-seeded radia-motor triple check. |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
 | `motor_validation_artifact_gate` | Check whether a motor cross-validation artifact can train radia-motor. |
 | `motor_validation_lane_template` | Return the JSON artifact template for a motor validation lane. |
-| `motor_validation_lanes` | Dual-lane cross-validation policy for radia-motor. |
+| `motor_validation_lanes` | Cross-validation lane policy for radia-motor. |
 | `motor_validation_router` | Route a motor prompt to a public deck, MMM quick check, and NGSolve AGE validation. |
 
 ## `mcp-server-accelerator`

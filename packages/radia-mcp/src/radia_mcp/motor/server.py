@@ -386,17 +386,17 @@ def motor_age_validation_plan(goal: str) -> str:
 @mcp.tool()
 def motor_validation_lanes(topic: str = "overview") -> str:
     """
-    Dual-lane cross-validation policy for radia-motor.
+    Cross-validation lane policy for radia-motor.
 
     Use this before promoting a private product, lab-local, open-source,
     stored-regression, or analytic comparison into radia-motor knowledge.
-    It keeps the fast HDiv-VIM + reduced FEM lane separate from the
-    NGSolve+AGE finite-element lane, so cross-validation artifacts train the
-    correct solver path.
+    It keeps the supported NGSolve+AGE finite-element lane, supported coarse
+    MMMM lane, and experimental HDiv-VIM + reduced FEM RFC lane separate, so
+    cross-validation artifacts train the correct solver path.
 
     Args:
         topic: One of:
-            "overview"          - why the two radia lanes are independent
+            "overview"          - why the radia lanes are independent
             "lane_matrix"       - lane -> observable/metric/promotion table
             "source_policy"     - public-safe handling of private references
             "promotion_policy"  - artifact-to-MCP learning rules
@@ -412,7 +412,8 @@ def motor_validation_lane_template(lane_id: str = "all") -> str:
     Return the JSON artifact template for a motor validation lane.
 
     Args:
-        lane_id: "hdiv_vim_reduced_fem", "ngsolve_age", or "all".
+        lane_id: "ngsolve_age", "mmmm2d_coarse",
+            "hdiv_vim_reduced_fem", or "all".
     """
     return json.dumps(lane_template(lane_id), indent=2, sort_keys=True)
 
@@ -425,7 +426,7 @@ def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") 
     Args:
         artifact_json: JSON object text containing the cross-validation summary.
         expected_lane: Optional lane id to enforce:
-            "hdiv_vim_reduced_fem" or "ngsolve_age".
+            "ngsolve_age", "mmmm2d_coarse", or "hdiv_vim_reduced_fem".
     """
     result = validate_motor_validation_artifact(artifact_json, expected_lane)
     return format_artifact_gate_result(result)
@@ -437,9 +438,10 @@ def motor_triple_check_plan(goal: str) -> str:
     Plan an ELF-seeded radia-motor triple check.
 
     The plan uses the public ELF/MAGIC MCP surface for motor examples, the
-    supported `ngsolve_age` lane, and the experimental
-    `hdiv_vim_reduced_fem` RFC lane.  The HDiv/reduced-FEM lane is not treated
-    as a supported solver path until its coupling contract is implemented.
+    supported `ngsolve_age` lane, the supported coarse `mmmm2d_coarse` lane,
+    and the experimental `hdiv_vim_reduced_fem` RFC lane.  The
+    HDiv/reduced-FEM lane is not treated as a supported solver path until its
+    coupling contract is implemented.
 
     Args:
         goal: Natural-language motor goal, e.g.
@@ -451,7 +453,7 @@ def motor_triple_check_plan(goal: str) -> str:
 @mcp.tool()
 def motor_triple_check_artifact_gate(artifact_json: str) -> str:
     """
-    Validate a combined ELF-seeded, HDiv-VIM/reduced-FEM, and NGSolve+AGE artifact.
+    Validate a combined ELF-seeded AGE, MMMM, and HDiv-VIM/RFEM artifact.
 
     Args:
         artifact_json: JSON object text with schema
@@ -675,15 +677,19 @@ def main():
         assert "gold_age_invariant" in motor_age_quality("publication_policy")
         assert "tests/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
         assert "HDiv-VIM" in motor_validation_lanes("lane_matrix")
+        assert "2D collocation MMMM" in motor_validation_lanes("lane_matrix")
         assert "NGSolve+AGE" in motor_validation_lanes("overview")
         assert "product_local_reference" in motor_validation_lanes("source_policy")
         triple_plan = motor_triple_check_plan("IPM hairpin motor flux linkage and MTPA")
         print(f"  motor_triple_check_plan('IPM ...'): {len(triple_plan)} chars")
         assert "elf_motor_hybrid_router" in triple_plan
         assert "hdiv_vim_reduced_fem" in triple_plan
+        assert "mmmm2d_coarse" in triple_plan
         assert "ngsolve_age" in triple_plan
         lane_tpl = motor_validation_lane_template("hdiv_vim_reduced_fem")
         assert "vim_operator_contract" in lane_tpl
+        mmmm_lane_tpl = motor_validation_lane_template("mmmm2d_coarse")
+        assert "mmmm2d_contract" in mmmm_lane_tpl
         hdiv_selftest_artifact = {
             "schema_version": "radia-motor-validation-artifact/v1",
             "timestamp_utc": "2026-07-03T00:00:00Z",
@@ -728,6 +734,33 @@ def main():
             "age_gate_ids": ["age_rotation_torque"],
             "pytest_targets": ["tests/test_airgap_machine_rotation.py"],
         }
+        mmmm_selftest_artifact = {
+            "schema_version": "radia-motor-validation-artifact/v1",
+            "timestamp_utc": "2026-07-04T00:00:00Z",
+            "radia_version": "selftest",
+            "motor_validation_lane": "mmmm2d_coarse",
+            "reference_source_class": "analytic_reference",
+            "observable_family": "torque",
+            "case_count": 1,
+            "status": "pass",
+            "tolerances": {"torque_relative_error": 1.0e-2},
+            "metrics": {"torque_relative_error": 1.0e-4},
+            "timing_breakdown_s": {"solve": 0.01},
+            "artifact_feedback": {
+                "status": "candidate",
+                "public_lesson": "MMMM coarse torque lane selftest artifact is complete.",
+            },
+            "mmmm2d_contract": {
+                "solver": "radia.mmmm2d",
+                "material_input": "per-region dict",
+                "sweep": "factor-once torque_angle_sweep",
+            },
+            "region_material_contract": {
+                "regions": ["inner", "outer"],
+                "missing_region_policy": "raise",
+            },
+            "pytest_targets": ["validation_test/feec/test_moment2d_perregion.py"],
+        }
         triple_gate = motor_triple_check_artifact_gate(
             json.dumps(
                 {
@@ -741,11 +774,12 @@ def main():
                     },
                     "lane_artifacts": {
                         "hdiv_vim_reduced_fem": hdiv_selftest_artifact,
+                        "mmmm2d_coarse": mmmm_selftest_artifact,
                         "ngsolve_age": age_selftest_artifact,
                     },
                     "mcp_feedback": {
                         "public_status": "verified",
-                        "public_summary": "Both radia motor lanes have complete metadata.",
+                        "public_summary": "AGE, MMMM, and HDiv RFC metadata are complete.",
                         "learning_targets": ["radia_mcp.motor.triple_check_knowledge"],
                         "verification": ["selftest"],
                     },
@@ -753,6 +787,7 @@ def main():
             )
         )
         assert "accepted for MCP learning: `True`" in triple_gate
+        assert "validated supported solver check: `True`" in triple_gate
         assert "validated dual solver check: `False`" in triple_gate
         gate = motor_validation_artifact_gate(
             json.dumps(
@@ -761,6 +796,11 @@ def main():
             "ngsolve_age",
         )
         assert "accepted for MCP learning: `True`" in gate
+        mmmm_gate = motor_validation_artifact_gate(
+            json.dumps(mmmm_selftest_artifact),
+            "mmmm2d_coarse",
+        )
+        assert "validated coarse path: `True`" in mmmm_gate
         age_plan = motor_age_validation_plan("IPM hairpin MTPA field weakening")
         print(f"  motor_age_validation_plan('IPM ...'): {len(age_plan)} chars")
         assert "dq_control_layer" in age_plan

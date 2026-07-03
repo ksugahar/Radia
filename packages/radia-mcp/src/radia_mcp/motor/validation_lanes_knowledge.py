@@ -247,7 +247,7 @@ Private product, lab-local, open-source, analytic, and stored-regression
 comparisons can all be reference sources.  The public MCP learning artifact
 must still say which radia lane was exercised, which observable family was
 checked, what metrics/tolerances were used, and which public-safe knowledge
-target was updated.  Do not merge the two lanes into one vague "motor passed"
+target was updated.  Do not merge the lanes into one vague "motor passed"
 result.
 """
 
@@ -298,7 +298,7 @@ cross-validation directory and mark `artifact_feedback.status = candidate`.
 
 
 RUNBOOK = """\
-# Dual-lane motor validation runbook
+# Motor validation lane runbook
 
 For a 2D MMMM coarse motor slot:
 
@@ -368,14 +368,14 @@ def _lane_lines(lane: MotorValidationLane) -> list[str]:
 
 
 def format_motor_validation_lanes(topic: str = "overview") -> str:
-    """Return Markdown documentation for the dual-lane motor contract."""
+    """Return Markdown documentation for the motor validation-lane contract."""
     t = topic.strip().lower()
     if t == "all":
         parts = [SECTIONS[key] for key in SECTIONS]
         parts.append(format_motor_validation_lanes("lane_matrix"))
         return "\n\n---\n\n".join(parts)
     if t == "lane_matrix":
-        lines: list[str] = ["# Dual-lane matrix", ""]
+        lines: list[str] = ["# Motor validation lane matrix", ""]
         for lane in LANES.values():
             lines.extend(_lane_lines(lane))
             lines.append("")
@@ -513,12 +513,19 @@ def validate_motor_validation_artifact(
         and status_value == "pass"
         and support_status == "supported_validation_path"
     )
+    validated_coarse_path = (
+        result_status == "pass"
+        and status_value == "pass"
+        and support_status == "supported_coarse_path"
+    )
     return {
         "schema_version": "radia-motor-validation-artifact-gate/v1",
         "status": result_status,
         "lane": lane_id,
         "support_status": support_status,
         "validated_solver_path": validated_solver_path,
+        "validated_coarse_path": validated_coarse_path,
+        "validated_supported_path": validated_solver_path or validated_coarse_path,
         "accepted_for_mcp_learning": result_status == "pass" and status_value == "pass",
         "errors": errors,
         "warnings": warnings,
@@ -535,6 +542,8 @@ def format_artifact_gate_result(result: Mapping[str, Any]) -> str:
         f"- lane: `{result.get('lane', '')}`",
         f"- support status: `{result.get('support_status', '')}`",
         f"- validated solver path: `{result.get('validated_solver_path', False)}`",
+        f"- validated coarse path: `{result.get('validated_coarse_path', False)}`",
+        f"- validated supported path: `{result.get('validated_supported_path', False)}`",
         f"- accepted for MCP learning: `{result.get('accepted_for_mcp_learning', False)}`",
     ]
     errors = list(result.get("errors", ()))
