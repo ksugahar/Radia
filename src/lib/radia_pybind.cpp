@@ -94,6 +94,7 @@ extern "C" {
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_moment2d.h"        // 2D planar collocation MMMM (log-kernel tri/quad)
+#include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
@@ -3073,6 +3074,47 @@ py::array_t<double> Moment2DSolveLinear(
 } // namespace radia_moment2d
 
 // ============================================================================
+// Shared 2D planar exterior field + Maxwell torque -- rad_planar_charges
+// (method-agnostic: MMMM and HDiv-VIM both feed a charge cloud)
+// ============================================================================
+namespace radia_planar_charges {
+// H at observation points from a 2D point-charge cloud.  Xq (nq,2), Q (nq,), P (nP,2) -> H (nP,2)
+py::array_t<double> PlanarChargeField(
+        py::array_t<double, py::array::c_style | py::array::forcecast> Xq,
+        py::array_t<double, py::array::c_style | py::array::forcecast> Q,
+        py::array_t<double, py::array::c_style | py::array::forcecast> P) {
+    auto xb = Xq.request(); auto qb = Q.request(); auto pb = P.request();
+    if (xb.ndim != 2 || xb.shape[1] != 2) throw std::runtime_error("PlanarChargeField: Xq must be (nq,2)");
+    if (qb.ndim != 1 || qb.shape[0] != xb.shape[0]) throw std::runtime_error("PlanarChargeField: Q must be (nq,)");
+    if (pb.ndim != 2 || pb.shape[1] != 2) throw std::runtime_error("PlanarChargeField: P must be (nP,2)");
+    int nq = static_cast<int>(xb.shape[0]);
+    int nP = static_cast<int>(pb.shape[0]);
+    py::array_t<double> H({nP, 2});
+    double* hp = static_cast<double*>(H.request().ptr);
+    { py::gil_scoped_release rel;
+      rad_planar_charges::Field(nq, static_cast<double*>(xb.ptr), static_cast<double*>(qb.ptr),
+                                nP, static_cast<double*>(pb.ptr), hp); }
+    return H;
+}
+
+// Maxwell-stress torque per unit length on a circle in air (body cloud + uniform applied Hext).
+double PlanarMaxwellTorqueCircle(
+        py::array_t<double, py::array::c_style | py::array::forcecast> Xq,
+        py::array_t<double, py::array::c_style | py::array::forcecast> Q,
+        double Rc, double cx, double cy, int n, double hextx, double hexty) {
+    auto xb = Xq.request(); auto qb = Q.request();
+    if (xb.ndim != 2 || xb.shape[1] != 2) throw std::runtime_error("PlanarMaxwellTorqueCircle: Xq must be (nq,2)");
+    if (qb.ndim != 1 || qb.shape[0] != xb.shape[0]) throw std::runtime_error("PlanarMaxwellTorqueCircle: Q must be (nq,)");
+    int nq = static_cast<int>(xb.shape[0]);
+    double T;
+    { py::gil_scoped_release rel;
+      T = rad_planar_charges::MaxwellTorqueCircle(nq, static_cast<double*>(xb.ptr),
+                                                  static_cast<double*>(qb.ptr), Rc, cx, cy, n, hextx, hexty); }
+    return T;
+}
+} // namespace radia_planar_charges
+
+// ============================================================================
 // Module Definition
 // ============================================================================
 
@@ -4090,6 +4132,24 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   M: (nElem, 2) float64 -- per-element magnetization
+          )pbdoc");
+
+    m.def("PlanarChargeField", &radia_planar_charges::PlanarChargeField,
+          py::arg("Xq"), py::arg("Q"), py::arg("P"),
+          R"pbdoc(
+              2D planar exterior field H at points P from a point-charge cloud
+              (kernel -ln(r)/(2 pi)).  Shared by MMMM and HDiv-VIM.
+              Args:  Xq (nq,2), Q (nq,), P (nP,2) float64 -> H (nP,2) float64
+          )pbdoc");
+
+    m.def("PlanarMaxwellTorqueCircle", &radia_planar_charges::PlanarMaxwellTorqueCircle,
+          py::arg("Xq"), py::arg("Q"), py::arg("Rc"),
+          py::arg("cx") = 0.0, py::arg("cy") = 0.0, py::arg("n") = 1440,
+          py::arg("hextx") = 0.0, py::arg("hexty") = 0.0,
+          R"pbdoc(
+              Maxwell-stress torque per unit length about (cx,cy) on a circle of
+              radius Rc in air, from a 2D point-charge cloud + uniform applied
+              field (hextx,hexty): T = mu0 Rc^2 oint H_r H_phi dphi (n points).
           )pbdoc");
 
     m.def("BuildMatrix", &radia_solver::BuildMatrix,
