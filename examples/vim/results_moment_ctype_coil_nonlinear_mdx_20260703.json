@@ -1,0 +1,195 @@
+{
+  "timestamp": "2026-07-03T20:20:41.833977",
+  "hostname": "mdx",
+  "benchmark": "moment_ctype_coil_nonlinear_gap_field",
+  "problem": {
+    "sides": [
+      24,
+      42,
+      60
+    ],
+    "NI_A": 8000.0,
+    "chi0": 2000.0,
+    "Msat_A_per_m": 1273239.5447351628,
+    "BH_points": 81,
+    "gap_probes": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.02,
+        0.0,
+        0.0
+      ]
+    ],
+    "method": 2,
+    "prec": 0.001,
+    "geometry": "parity fixture cross-section (test_ctype_nonlinear_parity.py), voxelized hex",
+    "parity_reference": "tet 2715 MMM/HDiv gap-centre |B| ~ 0.098 T (agree 0.32%)",
+    "radia_version": "4.95.5",
+    "python_version": "3.12.10",
+    "solver_config": {
+      "bicgstab_tol": 0.0001,
+      "moment_krylov": "bicgstab",
+      "moment_gmres_restart": 40,
+      "moment_anderson_depth": 1,
+      "moment_analytic_kernel": true,
+      "relax_param": 0.0,
+      "keep_magnetization": false,
+      "newton_method": false,
+      "newton_damping": true,
+      "newton_damping_max_iter": 5,
+      "newton_damping_min_omega": 0.01,
+      "b_input_newton": false,
+      "b_input_hantila": false,
+      "hantila_alpha": 0.0,
+      "hantila_relax": 0.0
+    }
+  },
+  "results": {
+    "nonlinear": [
+      {
+        "nside": 24,
+        "n_hex": 1840,
+        "ndof": 11040,
+        "material": "bh",
+        "NI_A": 8000.0,
+        "method": 2,
+        "prec": 0.001,
+        "t_setup": 0.6288817,
+        "t_solve": 7.000417800000001,
+        "t_wall": 7.930969999986701,
+        "iterations": 538,
+        "nonl_iterations": 16,
+        "converged": true,
+        "max_abs_M": 1270111.0897668262,
+        "B_bore_T": [
+          -1.303939605094951e-06,
+          0.0977412608813711,
+          6.628941183507407e-07
+        ],
+        "B_bore_mag_T": 0.09774126089231676,
+        "B_gapopen_T": [
+          3.712714166599337e-07,
+          0.06820244954819274,
+          3.617803539980415e-07
+        ],
+        "B_gapopen_mag_T": 0.06820244955016282,
+        "B_ext_T": [
+          -0.007344762365555924,
+          -0.03384243008487438,
+          -0.006701503637928846
+        ],
+        "peak_memory_mb": 534.87109375,
+        "num_threads": 38
+      },
+      {
+        "nside": 42,
+        "n_hex": 9828,
+        "ndof": 58968,
+        "material": "bh",
+        "NI_A": 8000.0,
+        "method": 2,
+        "prec": 0.001,
+        "t_setup": 4.628026400000001,
+        "t_solve": 50.432383200000004,
+        "t_wall": 55.75274259998696,
+        "iterations": 637,
+        "nonl_iterations": 34,
+        "converged": true,
+        "max_abs_M": 1267240.6121493112,
+        "B_bore_T": [
+          -4.345296390122416e-06,
+          0.10119844573474598,
+          -1.0698013261519875e-05
+        ],
+        "B_bore_mag_T": 0.10119844639349666,
+        "B_gapopen_T": [
+          -1.6308510609971995e-06,
+          0.0686710818306147,
+          -1.0954187213089864e-05
+        ],
+        "B_gapopen_mag_T": 0.06867108272366813,
+        "B_ext_T": [
+          -0.008514289545398563,
+          -0.03465700636241864,
+          -0.006827741148200674
+        ],
+        "peak_memory_mb": 3779.21875,
+        "num_threads": 38
+      },
+      {
+        "nside": 60,
+        "n_hex": 27360,
+        "ndof": 164160,
+        "material": "bh",
+        "NI_A": 8000.0,
+        "method": 2,
+        "prec": 0.001,
+        "t_setup": 32.7578766,
+        "t_solve": 117.53112430000003,
+        "t_wall": 151.18055650003953,
+        "iterations": 594,
+        "nonl_iterations": 17,
+        "converged": true,
+        "max_abs_M": 1267099.0564718782,
+        "B_bore_T": [
+          0.00012942404922646722,
+          0.09339982221490263,
+          -6.189361564353501e-07
+        ],
+        "B_bore_mag_T": 0.09339991188830438,
+        "B_gapopen_T": [
+          4.102435501652263e-05,
+          0.06304350728090072,
+          -3.4513442377287827e-06
+        ],
+        "B_gapopen_mag_T": 0.06304352072327864,
+        "B_ext_T": [
+          -0.007906818719524169,
+          -0.03326079982426599,
+          -0.0065753705162002705
+        ],
+        "peak_memory_mb": 13544.08203125,
+        "num_threads": 38
+      }
+    ],
+    "linear_reference": {
+      "nside": 60,
+      "n_hex": 27360,
+      "ndof": 164160,
+      "material": "linear",
+      "NI_A": 8000.0,
+      "method": 2,
+      "prec": 0.001,
+      "t_setup": 36.439416200000004,
+      "t_solve": 6.6713693,
+      "t_wall": 43.31445140001597,
+      "iterations": 30,
+      "nonl_iterations": 1,
+      "converged": true,
+      "max_abs_M": 3568412.8136335425,
+      "B_bore_T": [
+        0.000205908356382402,
+        0.13361096470465986,
+        6.230177814824928e-06
+      ],
+      "B_bore_mag_T": 0.13361112351288798,
+      "B_gapopen_T": [
+        6.757717253125016e-05,
+        0.09348807405008011,
+        -2.693541380226894e-07
+      ],
+      "B_gapopen_mag_T": 0.09348809847429812,
+      "B_ext_T": [
+        -0.011640400623569858,
+        -0.04996024364216904,
+        -0.009907190268849694
+      ],
+      "peak_memory_mb": 13544.08203125,
+      "num_threads": 38
+    }
+  }
+}

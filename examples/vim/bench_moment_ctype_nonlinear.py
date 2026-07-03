@@ -121,7 +121,9 @@ def main():
     ap.add_argument("--h0", type=float, default=0.0, help="drive H0 [A/m]; 0 = self-calibrate to the BH knee")
     ap.add_argument("--calib-levels", type=float, nargs="*",
                     default=[2000.0, 5000.0, 10000.0, 20000.0, 40000.0])
-    ap.add_argument("--prec", type=float, default=1e-6, help="nonlinear tolerance on magnetization")
+    ap.add_argument("--prec", type=float, default=1e-3,
+                    help="nonlinear tolerance on magnetization (max|dB|/B_sat per Picard step); "
+                         "1e-3 = the lab engineering standard (yano-era practice, Picard suffices)")
     ap.add_argument("--max-iter", type=int, default=300)
     ap.add_argument("--method", type=int, default=2, choices=(0, 1, 2))
     ap.add_argument("--json-out", default=None)
