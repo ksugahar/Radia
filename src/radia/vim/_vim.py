@@ -422,7 +422,7 @@ def _ref_prod_gauss(n, dim):
     return np.array(P), np.array(W)
 
 
-def _trafo_lattice_nodes(mesh, e, ir, max_tries=8):
+def _trafo_lattice_nodes(mesh, e, ir, max_tries=16):
     """GetTrafo lattice extraction with a DETERMINISM CONTRACT (2026-07-03): evaluate the element's
     lattice until two CONSECUTIVE evaluations agree bit-for-bit (and are finite), fail LOUD otherwise.
 
@@ -430,17 +430,21 @@ def _trafo_lattice_nodes(mesh, e, ir, max_tries=8):
     single coordinates of a few lattice points) on the FIRST process-wide basis extraction -- caught in
     the wild at ~2-8%% of fresh processes (load-sensitive) on the affine wiring golden, poisoning the
     Gram geometry while B/M_mass (assembled via the SIMD mapped-rule path) stay bit-exact.  The
-    corruption window can persist across several re-evaluations (a 60-run validation saw one element
-    stay unstable for 4 consecutive tries), so the contract retries generously; two consecutive
-    bit-identical finite evaluations are accepted, anything else raises -- nothing is silently
-    accepted.  See memory ngsolve-gettrafo-first-touch-garbage."""
+    corruption window can persist across several re-evaluations AND is bursty under heavy machine
+    load (one loaded-machine run saw an element stay unstable for 8 consecutive back-to-back tries),
+    so the contract retries generously WITH a short decorrelation sleep after each mismatch; two
+    consecutive bit-identical finite evaluations are accepted, anything else raises -- nothing is
+    silently accepted.  See memory ngsolve-gettrafo-first-touch-garbage."""
+    import time as _time
     prev = None
-    for _ in range(max_tries):
+    for k in range(max_tries):
         tr = mesh.GetTrafo(e)
         cur = np.array([list(tr(ip).point) for ip in ir])
         if prev is not None and np.array_equal(prev, cur) and np.all(np.isfinite(cur)):
             return cur
         prev = cur
+        if k >= 1:
+            _time.sleep(0.002)      # decorrelate the bursty corruption window
     raise RuntimeError(
         f"GetTrafo lattice evaluation unstable for element {e} after {max_tries} tries "
         "(NGSolve scalar trafo path returned differing node coordinates -- do not trust this mesh "

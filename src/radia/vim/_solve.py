@@ -482,6 +482,25 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
             "HDiv-VIM (RT1) does not handle IMA mirror symmetry (image).  Use the collocation MMMM backend "
             "(rad.Solve(..., demag_backend='collocation_mmmm', image=...)) for reduced (1/2, 1/4, 1/8) "
             "symmetric models.")
+    if mesh.dim == 2:
+        # ---- PLANAR (2D motor cross-section) branch: the dense planar layer (_vim2d) ----
+        # The 2D layer supports the core single-region surface: mu_r (linear) / bh_table
+        # (nonlinear) + H_ext.  The 3D-only knobs must stay at their defaults -- fail loud.
+        if gram_backend != "analytic":
+            raise ValueError("hdiv_demag_solve (2D): gram_backend must be 'analytic' -- the planar "
+                             "layer has one Gram (the C++ 2D log-kernel charge Gram)")
+        if linear_solver != "auto":
+            raise ValueError("hdiv_demag_solve (2D): linear_solver must be 'auto' (the planar layer "
+                             "is dense; got %r)" % (linear_solver,))
+        for _nm, _val in (("gram_eps", gram_eps), ("near_factor", near_factor),
+                          ("far_quad", far_quad), ("ho_far_factor", ho_far_factor),
+                          ("curve_order", curve_order)):
+            if _val is not None:
+                raise ValueError("hdiv_demag_solve (2D): %s is a 3D knob; the 2D Gram parameters "
+                                 "are fixed by its own gates (got %r)" % (_nm, _val))
+        from ._vim2d import solve_planar_demag
+        return solve_planar_demag(mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, eta=eta,
+                                  nl_tol=nl_tol, nl_maxit=nl_maxit)
     if not all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
         raise ValueError(
             "HDiv-VIM is TET-only.  hex / wedge / pyramid soft-iron demag uses the collocation MMMM backend; "

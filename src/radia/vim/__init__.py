@@ -44,6 +44,11 @@ from ._nonlinear import (  # noqa: F401
 )
 from ._vim import DemagOperator, build_charge_gram, build_charge_gauss  # noqa: F401  (ngsolve.bem-style operator + .mat)
 from ._solve import hdiv_demag_solve  # noqa: F401  (M1 production entry: linear soft-iron demag solve)
+from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; hdiv_demag_solve dispatches here)
+    PlanarDemagBody,
+    maxwell_torque_circle,
+    solve_planar_demag,
+)
 from ._radsolve import soft_iron_from_mesh, soft_iron_from_vol  # noqa: F401  (.vol/mesh -> both-backend iron)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
     reconstruct_field,
@@ -84,6 +89,7 @@ __all__ = [
     "build_demag", "tri_potential", "build_near_correction", "C_TRI",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable",
     "DemagOperator", "build_charge_gram", "build_charge_gauss", "hdiv_demag_solve",
+    "PlanarDemagBody", "maxwell_torque_circle", "solve_planar_demag",
     "soft_iron_from_mesh", "soft_iron_from_vol",
     "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
