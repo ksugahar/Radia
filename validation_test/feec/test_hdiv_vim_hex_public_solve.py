@@ -115,3 +115,32 @@ def test_hdiv_demag_solve_wedge_fails_loud():
     with pytest.raises(ValueError, match="collocation MMMM"):
         with ng.TaskManager():
             hdiv_demag_solve(mesh, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))
+
+
+def test_rad_solve_demag_backend_hdiv_on_hex():
+    """The wrapper path: rad.Solve(demag_backend='hdiv') on a HEX soft_iron routes through _solve_via_hdiv
+    -> hdiv_demag_solve and SOLVES (no TET-only raise), writing per-element M back to the iron handles."""
+    rad.UtiDelAll()
+    with ng.TaskManager():
+        iron = soft_iron_from_mesh(_cube(4), mu_r=MU_R)
+    src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
+    top = rad.ObjCnt([iron, src])
+    last = None
+    for _ in range(5):
+        try:
+            with ng.TaskManager():
+                rad.Solve(top, 1e-6, 3000, 0, demag_backend="hdiv")    # explicit hdiv on hex -> now solves
+            break
+        except RuntimeError as e:
+            if "GetTrafo lattice evaluation unstable" in str(e):
+                last = e
+                continue
+            raise
+    else:
+        raise last
+    M = np.array([m for (_c, m) in rad.ObjM(iron)], float)             # hdiv-solved M written back via ObjSetM
+    assert M.shape[0] == 64, f"expected 64 hex, got {M.shape[0]}"
+    mz = float(M[:, 2].mean())
+    assert mz > 1e2, f"hdiv-solved hex Mz not substantial: {mz}"       # mu_r=100, H0=1000 -> Mz ~3400
+    assert abs(float(M[:, 0].mean())) < 1e-2 * mz and abs(float(M[:, 1].mean())) < 1e-2 * mz
+    rad.UtiDelAll()
