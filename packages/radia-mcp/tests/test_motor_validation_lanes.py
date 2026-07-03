@@ -38,6 +38,12 @@ def _base_artifact(lane: str, observable: str) -> dict:
     }
     if lane == "hdiv_vim_reduced_fem":
         data["metrics"] = {"max_abs_relative_error": 1.0e-3}
+        data["coupling_design_status"] = "experimental_rfc"
+        data["interface_operator_contract"] = {
+            "rotor_side": "HDiv-VIM source field",
+            "stator_side": "fixed-stator reduced FEM",
+            "status": "design-only test fixture",
+        }
         data["reduced_fem_contract"] = {"basis": "P1", "quantity": observable}
         data["vim_operator_contract"] = {"space": "HDiv", "quantity": observable}
     else:
@@ -60,8 +66,11 @@ def test_lane_templates_expose_required_artifact_contracts():
     age = lane_template("ngsolve_age")
     assert "vim_operator_contract" in hdiv["required_fields"]
     assert "reduced_fem_contract" in hdiv["required_fields"]
+    assert "interface_operator_contract" in hdiv["required_fields"]
+    assert hdiv["support_status"] == "experimental_rfc"
     assert "age_gate_ids" in age["required_fields"]
     assert "pytest_targets" in age["required_fields"]
+    assert age["support_status"] == "supported_validation_path"
 
 
 def test_hdiv_vim_artifact_gate_accepts_pickup_flux_contract():
@@ -69,6 +78,8 @@ def test_hdiv_vim_artifact_gate_accepts_pickup_flux_contract():
     result = validate_motor_validation_artifact(artifact, "hdiv_vim_reduced_fem")
     assert result["status"] == "pass"
     assert result["accepted_for_mcp_learning"] is True
+    assert result["support_status"] == "experimental_rfc"
+    assert result["validated_solver_path"] is False
     text = format_artifact_gate_result(result)
     assert "accepted for MCP learning: `True`" in text
 
@@ -78,6 +89,7 @@ def test_ngsolve_age_artifact_gate_accepts_torque_contract_json():
     result = validate_motor_validation_artifact(json.dumps(artifact), "ngsolve_age")
     assert result["status"] == "pass"
     assert result["accepted_for_mcp_learning"] is True
+    assert result["validated_solver_path"] is True
 
 
 def test_artifact_gate_rejects_mixed_lane_observable():

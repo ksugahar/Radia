@@ -63,6 +63,7 @@ def metamaterial(topic: str = "overview") -> str:
             "gyrator_lh_line"              - Active LH TL (lab thesis)
             "perfect_lens_evanescent"      - Pendry vs Bergamin caveat
             "applications_automotive"      - Toyota CRDL roadmap
+            "acoustic_sonic_crystal"       - Sonic crystals / band gaps
             "all"                          - Everything
 
         Use the `metamaterial_topics` tool to list authoritative

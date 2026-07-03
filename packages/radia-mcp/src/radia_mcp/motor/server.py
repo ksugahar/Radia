@@ -40,6 +40,12 @@ from .validation_lanes_knowledge import (
     lane_template,
     validate_motor_validation_artifact,
 )
+from .triple_check_knowledge import (
+    format_motor_triple_check_plan,
+    format_triple_check_gate_result,
+    route_motor_triple_check,
+    validate_motor_triple_check_artifact,
+)
 from .simple_mmm_2d import (
     MmmQuickInput,
     evaluate_mmm_quick_check,
@@ -426,6 +432,36 @@ def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") 
 
 
 @mcp.tool()
+def motor_triple_check_plan(goal: str) -> str:
+    """
+    Plan an ELF-seeded radia-motor triple check.
+
+    The plan uses the public ELF/MAGIC MCP surface for motor examples, the
+    supported `ngsolve_age` lane, and the experimental
+    `hdiv_vim_reduced_fem` RFC lane.  The HDiv/reduced-FEM lane is not treated
+    as a supported solver path until its coupling contract is implemented.
+
+    Args:
+        goal: Natural-language motor goal, e.g.
+            "IPM hairpin motor flux linkage and MTPA".
+    """
+    return format_motor_triple_check_plan(route_motor_triple_check(goal))
+
+
+@mcp.tool()
+def motor_triple_check_artifact_gate(artifact_json: str) -> str:
+    """
+    Validate a combined ELF-seeded, HDiv-VIM/reduced-FEM, and NGSolve+AGE artifact.
+
+    Args:
+        artifact_json: JSON object text with schema
+            `radia-motor-triple-check-artifact/v1`.
+    """
+    result = validate_motor_triple_check_artifact(artifact_json)
+    return format_triple_check_gate_result(result)
+
+
+@mcp.tool()
 def motor_mmm_quick_check(
     motor_type: str = "spm",
     pole_pairs: int = 4,
@@ -641,29 +677,86 @@ def main():
         assert "HDiv-VIM" in motor_validation_lanes("lane_matrix")
         assert "NGSolve+AGE" in motor_validation_lanes("overview")
         assert "product_local_reference" in motor_validation_lanes("source_policy")
+        triple_plan = motor_triple_check_plan("IPM hairpin motor flux linkage and MTPA")
+        print(f"  motor_triple_check_plan('IPM ...'): {len(triple_plan)} chars")
+        assert "elf_motor_hybrid_router" in triple_plan
+        assert "hdiv_vim_reduced_fem" in triple_plan
+        assert "ngsolve_age" in triple_plan
         lane_tpl = motor_validation_lane_template("hdiv_vim_reduced_fem")
         assert "vim_operator_contract" in lane_tpl
-        gate = motor_validation_artifact_gate(
+        hdiv_selftest_artifact = {
+            "schema_version": "radia-motor-validation-artifact/v1",
+            "timestamp_utc": "2026-07-03T00:00:00Z",
+            "radia_version": "selftest",
+            "motor_validation_lane": "hdiv_vim_reduced_fem",
+            "reference_source_class": "analytic_reference",
+            "observable_family": "pickup_flux",
+            "case_count": 1,
+            "status": "pass",
+            "tolerances": {"max_abs_relative_error": 1.0e-2},
+            "metrics": {"max_abs_relative_error": 1.0e-4},
+            "timing_breakdown_s": {"solve": 0.01},
+            "artifact_feedback": {
+                "status": "candidate",
+                "public_lesson": "HDiv-VIM lane selftest artifact is complete.",
+            },
+            "coupling_design_status": "experimental_rfc",
+            "interface_operator_contract": {
+                "rotor_side": "HDiv-VIM source field",
+                "stator_side": "fixed-stator reduced FEM",
+                "status": "design-only selftest",
+            },
+            "reduced_fem_contract": {"basis": "P1", "observable": "pickup_flux"},
+            "vim_operator_contract": {"space": "HDiv", "observable": "pickup_flux"},
+        }
+        age_selftest_artifact = {
+            "schema_version": "radia-motor-validation-artifact/v1",
+            "timestamp_utc": "2026-07-03T00:00:00Z",
+            "radia_version": "selftest",
+            "motor_validation_lane": "ngsolve_age",
+            "reference_source_class": "analytic_reference",
+            "observable_family": "torque",
+            "case_count": 1,
+            "status": "pass",
+            "tolerances": {"torque_relative_error": 1.0e-2},
+            "metrics": {"torque_relative_error": 1.0e-4},
+            "timing_breakdown_s": {"solve": 0.01},
+            "artifact_feedback": {
+                "status": "candidate",
+                "public_lesson": "AGE torque lane selftest artifact is complete.",
+            },
+            "age_gate_ids": ["age_rotation_torque"],
+            "pytest_targets": ["tests/test_airgap_machine_rotation.py"],
+        }
+        triple_gate = motor_triple_check_artifact_gate(
             json.dumps(
                 {
-                    "schema_version": "radia-motor-validation-artifact/v1",
-                    "timestamp_utc": "2026-07-03T00:00:00Z",
-                    "radia_version": "selftest",
-                    "motor_validation_lane": "ngsolve_age",
-                    "reference_source_class": "analytic_reference",
-                    "observable_family": "torque",
-                    "case_count": 1,
-                    "status": "pass",
-                    "tolerances": {"torque_relative_error": 1.0e-2},
-                    "metrics": {"torque_relative_error": 1.0e-4},
-                    "timing_breakdown_s": {"solve": 0.01},
-                    "artifact_feedback": {
-                        "status": "candidate",
-                        "public_lesson": "AGE torque lane selftest artifact is complete.",
+                    "schema_version": "radia-motor-triple-check-artifact/v1",
+                    "goal": "selftest",
+                    "source_mcp_seed": {
+                        "source_mcp_calls": ["elf_motor_hybrid_router('selftest')"],
+                        "representative_public_decks": [
+                            "application/motor/spm_surface_pm_10/spm001/spm001.mai"
+                        ],
                     },
-                    "age_gate_ids": ["age_rotation_torque"],
-                    "pytest_targets": ["tests/test_airgap_machine_rotation.py"],
+                    "lane_artifacts": {
+                        "hdiv_vim_reduced_fem": hdiv_selftest_artifact,
+                        "ngsolve_age": age_selftest_artifact,
+                    },
+                    "mcp_feedback": {
+                        "public_status": "verified",
+                        "public_summary": "Both radia motor lanes have complete metadata.",
+                        "learning_targets": ["radia_mcp.motor.triple_check_knowledge"],
+                        "verification": ["selftest"],
+                    },
                 }
+            )
+        )
+        assert "accepted for MCP learning: `True`" in triple_gate
+        assert "validated dual solver check: `False`" in triple_gate
+        gate = motor_validation_artifact_gate(
+            json.dumps(
+                age_selftest_artifact
             ),
             "ngsolve_age",
         )

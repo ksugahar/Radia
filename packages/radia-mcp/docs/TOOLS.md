@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **578 tools** across 43 MCP servers.
+Total: **580 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **578 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 20 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 22 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
@@ -364,6 +364,8 @@ Module: `radia_mcp.motor.server`
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
+| `motor_triple_check_artifact_gate` | Validate a combined ELF-seeded, HDiv-VIM/reduced-FEM, and NGSolve+AGE artifact. |
+| `motor_triple_check_plan` | Plan an ELF-seeded radia-motor triple check. |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
 | `motor_validation_artifact_gate` | Check whether a motor cross-validation artifact can train radia-motor. |
 | `motor_validation_lane_template` | Return the JSON artifact template for a motor validation lane. |
@@ -547,7 +549,7 @@ Module: `radia_mcp.metamaterial.server`
 | `metamaterial` | Electromagnetic metamaterial knowledge. |
 | `metamaterial_bibliography` | Search the metamaterial bibliography catalog of cited PDFs. |
 | `metamaterial_status` | (no description) |
-| `metamaterial_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 12 topics. |
+| `metamaterial_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
 
 ## `mcp-server-nmr-mri`
 
