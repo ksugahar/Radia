@@ -46,6 +46,15 @@ double MaxwellTorqueCircle(int nq, const double* Xq, const double* Q,
                            double Rc, double cx, double cy, int n,
                            double hextx, double hexty);
 
+// Maxwell-stress FORCE per unit length on a circle of radius Rc in air.  Fout[2] = (Fx, Fy):
+//   F_i = mu0 Rc (2 pi / n) sum [ H_r H_i - 1/2 |H|^2 n_i ],  H = H_body(cloud) + H_ext(uniform).
+// A UNIFORM applied field gives ZERO net force (force needs a field gradient / a second body); the
+// useful case is a cloud CONCATENATING more than one body with the circle enclosing ONE of them
+// (maglev / actuator: the force on body A in the field of body B).
+void MaxwellForceCircle(int nq, const double* Xq, const double* Q,
+                        double Rc, double cx, double cy, int n,
+                        double hextx, double hexty, double* Fout);
+
 } // namespace rad_planar_charges
 
 #endif
