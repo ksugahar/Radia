@@ -626,6 +626,62 @@ per-element tensor tangent + the iterative GMRES tangent solve; (3) optionally a
 Hantila for the factor-once speed-up at the knee (Newton already gives correctness).
 """
 
+_REFERENCE_AUDIT = r"""
+# Reference audit -- how to debug a disagreement with a FEM cross-validation reference
+
+Distilled from the 2026-07-03 planar-VIM motor/eddy/induction campaign: EIGHT bugs were found and
+every one was in the REFERENCE or the coupling layer -- ZERO in the shipped charge Gram.  When an
+integral-method result disagrees with a FEM reference, audit in THIS order (cheapest, most
+discriminating first); executable demonstrations of each diagnostic live in
+docs/electric_machine/em_reference_audit.ipynb.
+
+## The audit ladder
+
+1. SOLUTION-LEVEL SCALAR first (e.g. volume-average M), not the derived observable (torque,
+   loss): it separates "the solutions differ" from "the postprocessing differs".
+2. EVALUATOR INVARIANCE: a Maxwell-stress torque must be independent of the circle radius (in
+   air); a loss must be independent of the integration rule.  Sweep the free parameter.
+3. DRIVE-EQUIVALENCE probe: rerun the FEM box with the scatterer REMOVED (pure air, linear) and
+   compare grad A at interior probes against the analytic source field.  A UNIFORM percentage
+   deficit at every probe = a source-amplitude bug (see coil-polygon below); position-dependent
+   deviation = boundary truncation.
+4. SPLIT TESTS: coil-only (no iron) isolates the eddy machinery from the constitutive treatment;
+   a no-scatterer self-test of a coupling channel must return ~0.
+5. INDEPENDENT CLOSED-FORM ARBITER whenever one exists (radia.analytical_formulas is the
+   catalog): thick-plate SIBC loss/area = R_s |H_t|^2 / 2 arbitrated a 55% two-sided dispute;
+   the finite-Dirichlet dipole-image formula matched a "mystery" -8.2% exactly.
+6. Only after 1-5 exonerate the reference, suspect the method under test.
+
+## The reference-side traps (each is a bug_patterns entry)
+
+* COIL-DISK POLYGON CURRENT DEFICIT (`fem-reference-coil-polygon-current-deficit`): an uncurved
+  J-disk is an inscribed polygon carrying ~5% too little current; h-ladders do NOT reveal it.
+  Always mesh.Curve + normalize J by the MEASURED disk area.
+* FROZEN-EDGE TRUNCATION LADDER (`truncation-ladder-frozen-edge`): a convergence ladder that
+  never moves one boundary edge converges to the wrong answer; 2D log/1-r tails need far
+  boundaries on the SOURCE side too.  For pure-harmonic exteriors use the exact open Robin
+  (n=1: dA/dr + A/R = 2 B0 cos(theta)); a finite Dirichlet suppresses a scattered 2D dipole by
+  exactly 1/(1 + beta/(B0 R^2)).
+* CONJUGATE-POTENTIAL SIGN + BRANCH CUTS (`conjugate-potential-sign-branch-cut`): the 2D pair is
+  (psi, A) = (-q/(2pi) ln r, +mu0 q/(2pi) atan2); gate every A-channel with
+  B(grad A) == mu0 H by central differences; surrounding evaluation rings need the single-valued
+  polar construction (dA/dphi = mu0 r H_r, +x-axis anchor, Gauss closure asserted).
+* REFERENCE NONLINEARITY (`reference-secant-picard-oscillation`): per-element secant-nu Picard
+  oscillates at deep saturation near corners; use the closed-form nu(B) inversion +
+  ngsolve.solvers.Newton (quadratic, 6-9 iters) and FAIL-LOUD on non-convergence -- never
+  compare against an unconverged reference.
+* SCALAR GEOMETRY EXTRACTION (`ngsolve-gettrafo-first-touch-garbage`): route every scalar
+  GetTrafo lattice read through the determinism contract (_trafo_lattice_nodes).
+
+## Analytic anchors that carried this campaign
+
+Disk demag D = 1/2 exact + the uniform fixed point M = Mof(H0 - D M) (odd law, bracket
+[0, H0/D]); ellipse thirds + the 2-axis SECANT-BISECTION fixed point (a plain damped M-iteration
+diverges for chi*N >> 1 -- iterate the scalar secant chi instead); 2D Clausius-Mossotti
+M/H0 = chi/(1 + chi/2); rotating-cylinder induction torque via boundary-matched Bessel
+(T = 2 pi H0 Re(beta), radius-independence analytic); the scattered-dipole beta = mu0 M a^2 / 2.
+"""
+
 _STATUS = r"""
 # Status summary
 
@@ -872,6 +928,7 @@ _SECTIONS = {
     "curved": _CURVED,
     "symmetry": _SYMMETRY,
     "cross_method": _CROSS_METHOD,
+    "reference_audit": _REFERENCE_AUDIT,
     "status": _STATUS,
 }
 
@@ -883,7 +940,7 @@ def get_hdiv_vim_documentation(topic: str = "overview") -> str:
         return "\n\n".join(_SECTIONS[k] for k in
                            ("overview", "implementation", "scaling",
                             "verification", "nonlinear", "curved", "symmetry",
-                            "cross_method", "status"))
+                            "cross_method", "reference_audit", "status"))
     if t in _SECTIONS:
         return _SECTIONS[t]
     return (f"Unknown topic '{topic}'. Options: " + ", ".join(_SECTIONS.keys()) + ", all.\n\n"
