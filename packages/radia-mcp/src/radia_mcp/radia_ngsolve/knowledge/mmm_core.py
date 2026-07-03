@@ -1126,12 +1126,65 @@ double-click launches GMSH with the file (verified end-to-end). The reusable
 `PayloadV41` emitter lives in `radia.gmsh_post_export`.
 """
 
+PLANAR_2D = r"""
+## MMMM 2D planar (motor cross-section) + the SHARED planar postprocessing layer (2026-07-04)
+
+**radia.mmmm2d** -- the 2D planar (per-unit-length) collocation MMMM: the twin of the 2D HDiv-VIM
+(radia.vim._vim2d) and the 2D analog of the 3D moment method.  A cross-section mesh of triangles /
+quadrilaterals; each element carries ONE uniform line-charge DOF per EDGE; M = chi H is imposed on
+the field MOMENTS about the centroid = 1 monopole + 2 dipole + (nEdge-3) quadrupole rows (triangle =
+2D simplex, NO quad row; quad = 1).  Kernel = 2D Laplace G = -ln(r)/(2 pi); the segment field +
+Hessian are CLOSED FORM and the eval point is always an interior centroid (singularity-free).
+
+Numerical core is C++ (src/core/rad_moment2d.cpp: SegField/SegGrad + AssembleMomentA + dense LAPACK):
+  * rad._radia_pybind.Moment2DSolveLinear(verts, offsets, chi, Hext) -> M (nElem,2)
+  * rad._radia_pybind.Moment2DSolveMulti(verts, offsets, chi, HextMulti) -> M (nRHS,nElem,2)
+    -- FACTOR-ONCE: the moment matrix is Hext-INDEPENDENT, so a rotation/angle sweep LU-factors A
+    ONCE and back-substitutes all nRHS (only the RHS rotates).
+Python driver radia.mmmm2d: solve_planar_demag(mesh, mu_r=|bh_table=, H_ext=) [scalar OR a
+{region_name: value} DICT for a multi-grade / rotor+stator body -- per-element chi/law from el.mat,
+missing region RAISES]; demag_factors(mesh, chi); torque_angle_sweep(...) [linear -> factor-once].
+Nonlinear = scalar-chi Picard + safeguarded Anderson(1) (the 2D twin of the C++ tet SolveNonlinearPicard).
+
+**SHARED planar postprocessing = radia.planar_charges (method-AGNOSTIC, C++ src/core/rad_planar_charges.cpp).**
+The exterior field of a solved planar body is the field of its magnetization = the M.n equivalent bound
+charge on the element edges (log kernel).  Keyed on (mesh, per-element M) -- so BOTH radia.mmmm2d AND
+radia.vim._vim2d use the SAME routine (both solve for a per-element M):
+  * charge_field / PlanarChargeField  -- H from a 2D point-charge cloud (obs-parallel)
+  * charge_az   / PlanarChargeAz      -- out-of-plane A_z = mu0/2pi sum Q atan2(dy,dx) (reduced-FEM eddy/maglev)
+  * maxwell_torque / PlanarMaxwellTorqueCircle -- T = mu0 Rc^2 oint H_r H_phi on a circle in air; the
+    TOTAL field = body cloud + UNIFORM applied Hext, so the uniform-field cross term is the reluctance
+    torque mu0 A (M x H0).  Verified == mu0 A (M_avg x H0) to <3%.
+  * field_complex / maxwell_torque_complex -- COMPLEX (eddy phasor) field + TIME-AVERAGED torque
+    <T> = mu0 Rc^2 (2pi/n) sum 0.5 Re(H_r conj H_phi) (induction machine / maglev lane).
+_vim2d.H_at / Az_at DELEGATE to charge_field / charge_az (feeding their own native quadrature cloud
+-- identical numbers, shared C++ hot loop).
+
+**Validated** (validation_test/feec/test_moment2d_*.py): disk demag 1/2, ellipse 2:1 -> 1/3,2/3
+(tri AND quad), chi-sweep, quad==triangulated, nonlinear demag-limited, C++==numpy PoC to 6.9e-15;
+Maxwell torque 3-way; factor-once == per-angle; B = curl A finite-diff; complex == real phasor;
+per-region uniform-dict == scalar + heterogeneous + missing-region-raises.
+
+**Bug baked into the C++** (write it into any 2D re-derivation): the segment normal field uses
+principal `atan((L-x)/y)+atan(x/y)` -- NOT `atan2`.  The eval point is an INTERIOR centroid (y<0 vs
+the OUTWARD normal); atan2 jumps by +-pi there (boundary points y>0 hide it) -> the disk demag gate
+diverges mesh-unstably.  The M.n dipole-layer center-charge correction is a NO-OP on the solution
+(the monopole row forces sum sigma_f L_f = 0 per element) -- affects only conditioning.
+
+**FOLLOW-UPS (not yet done):** large-N above dense LU (matrix-free BiCGSTAB saves memory; an H-matrix
+for time -- 2D moment is a FEW-element method so this is low priority); a docs/electric_machine
+MMMM-2D showcase notebook (twin of planar_vim_motor.ipynb); fixed-M permanent-magnet source regions;
+AGE-FEM-lane head-to-head bench.
+"""
+
+
 SECTIONS = {
     "build_msc_mmm": BUILD_MSC_MMM,
     "matrix_structure": MATRIX_STRUCTURE,
     "eigenvalue_nullspace": EIGENVALUE_NULLSPACE,
     "multipole_modes": MULTIPOLE_MODES,
     "multipole_modes_viz": MULTIPOLE_MODES_VIZ,
+    "planar_2d": PLANAR_2D,
     "chubar_1998": CHUBAR_1998,
     "takahashi_2007_aca": TAKAHASHI_2007_ACA,
     "pradhan_2007": PRADHAN_2007,
