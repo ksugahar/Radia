@@ -547,10 +547,10 @@ Use an EM force target pass after an autonomous basic-learning artifact has
 classified loop slots.  The pass selects `force_torque_motor` slots and gives
 each slot one solver-independent public row before live/source-tool execution:
 
-* FEMM-like conductor-force slots: signed parallel-wire Lorentz force.
-* COMSOL-like actuator slots: magnetic air-gap pressure / reluctance force.
-* JMAG-like motor slots: IPM dq torque split into magnet and reluctance terms.
-* ELF/MAGIC-like PM/BEM slots: force-gap sweep with a fourth-power far-field
+* Conductor-force slots: signed parallel-wire Lorentz force.
+* Magnetic-actuator slots: magnetic air-gap pressure / reluctance force.
+* Motor-torque slots: IPM dq torque split into magnet and reluctance terms.
+* PM/BEM force slots: force-gap sweep with a fourth-power far-field
   invariant.
 
 The public lane is learned only when the analytic rows pass
@@ -562,8 +562,8 @@ MCP/converter or live workflow gets its own focused edit and verification.
 In radia-mcp, use
 `em_force_target.build_em_force_target_artifact` or the validation CLI
 `validation/force/electromagnetic_force_target.py`.  Treat its output as the
-solver-ready queue for heavier FEMM/JMAG/ELF/COMSOL force slots, not as a claim
-that those solvers have executed.
+solver-ready queue for heavier source-tool force slots, not as a claim that
+those solvers have executed.
 """
 
 
