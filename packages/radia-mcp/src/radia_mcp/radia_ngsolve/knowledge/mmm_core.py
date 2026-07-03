@@ -694,6 +694,33 @@ Solver selection guidance: method 0 (dense LU) <= ~8k DOF reference solves;
 method 1 (dense-K BiCGSTAB) small/medium one-shot solves; method 2
 (HACApK-BiCGSTAB) large N AND any repeated-solve / optimization workload.
 
+MAX-SCALE SWEEP (mdx, 2026-07-03, radia 4.95.5, 57 GB RAM / 38 threads;
+`examples/vim/results_moment_solvers_mdx_20260703.json`, cube mu_r=200, tol 1e-8,
+each method to its wall):
+- method 0 (dense moment LU): max 24,576 DoF (N=16: 14.0 s cold, peak 17 GB -- the
+  LU path holds ~3.5x the matrix, so 48k DoF needs ~66 GB and dies on 57 GB RAM).
+- method 1 (dense-K BiCGSTAB): max 48,000 DoF (115 s cold, 37.7 GB ~ 2x matrix;
+  63.9k DoF -> "Failed to create Interaction Matrix" alloc death).
+- method 2 (HACApK-BiCGSTAB): 196,608 DoF CLEAN -- 64.9 s cold / 0.66 s warm,
+  21.2 GB, 50 iters (N-independent), rel-vs-dense 7.3e-6 at 48k (= ACA eps level).
+- WARNING: 384,000 DoF (64,000 hexes) currently returns a SILENT M=0 non-solve
+  (no exception, all solve stats zero, B == pure background after 268 s) --
+  suspected int32 overflow around nHex^2 > 2^31.  Treat >200k DoF as BROKEN until
+  the fail-loud fix lands; the honest method-2 ceiling today is ~197k DoF.
+
+CTYPE NONLINEAR AT 165k DoF (same mdx run;
+`examples/vim/bench_moment_ctype_nonlinear.py` +
+`results_moment_ctype_nonlinear_mdx_20260703.json`): voxelized C-yoke nside=54 =
+27,720 hex = 166,320 DoF, MatSatIsoTab 13-pt steel curve (knee ~1.2 T),
+SELF-CALIBRATED uniform y-drive H0 = 40 kA/m (max|M| = 1.36e6 A/m = partial
+saturation), method 2 with the Anderson default: converged in 85 Picard outer
+(1122 BiCGSTAB total), 27.5 s H-build + 206.8 s solve = 237.6 s wall, 11.9 GB.
+GAP-CENTER |B| = 12.94 mT.  Linear reference (mu_r = 796 initial slope, same
+drive): |B_gap| = 11.65 mT in 54.5 s -> nl/lin = 1.111 (under a UNIFORM-field
+drive, saturation redistributes M along the arms and slightly RAISES the gap
+field; the linear model's local max|M| = 2.44e6 A/m is unphysical).  Deep
+partial saturation cost 85 safeguarded-Anderson Picard iterations, no divergence.
+
 KERNEL DEFAULT (2026-07-02 flip): the ANALYTIC closed-form triangle moment kernel
 is now the DEFAULT (was opt-in `moment_analytic_kernel=True`).  It is EXACT
 (removes the 64-pt Gauss quadrature error; Mathematica-verified) and measured
