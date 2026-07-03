@@ -43,18 +43,22 @@ def _rect(hx, hy, maxh, quad):
     return ng.Mesh(geo.GenerateMesh(maxh=maxh, quad_dominated=quad))
 
 
-def test_disk_demag_half():
-    """Circle: Dx = Dy = 1/2 (both axes), tiny cross-coupling."""
+@pytest.mark.parametrize("quad", [False, True], ids=["tri", "quad"])
+def test_disk_demag_half(quad):
+    """Circle: Dx = Dy = 1/2 (both axes) -- for a triangle mesh AND a quad-dominated mesh (the quad
+    element carries the (nEdge-3)=1 quadrupole row)."""
     with ng.TaskManager():
-        Dx, Dy = m2.demag_factors(_disk(0.08), chi=3.0)
+        Dx, Dy = m2.demag_factors(_disk(0.08, quad=quad), chi=3.0)
     assert abs(Dx - 0.5) < 2e-3, Dx
     assert abs(Dy - 0.5) < 2e-3, Dy
 
 
-def test_ellipse_2to1_demag():
-    """Ellipse a=2 (x), b=1 (y): Dx = 1/3, Dy = 2/3, sum = 1 -- the anisotropy discriminator."""
+@pytest.mark.parametrize("quad", [False, True], ids=["tri", "quad"])
+def test_ellipse_2to1_demag(quad):
+    """Ellipse a=2 (x), b=1 (y): Dx = 1/3, Dy = 2/3, sum = 1 -- the anisotropy discriminator, on a
+    triangle mesh AND a quad-dominated mesh (locks the quad-element quadrupole row on anisotropy)."""
     with ng.TaskManager():
-        Dx, Dy = m2.demag_factors(_ellipse(2.0, 1.0, 0.07), chi=3.0)
+        Dx, Dy = m2.demag_factors(_ellipse(2.0, 1.0, 0.07, quad=quad), chi=3.0)
     assert abs(Dx - 1.0 / 3.0) < 3e-3, Dx
     assert abs(Dy - 2.0 / 3.0) < 3e-3, Dy
     assert abs((Dx + Dy) - 1.0) < 1e-3, Dx + Dy
