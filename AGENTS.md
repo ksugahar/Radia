@@ -127,6 +127,12 @@ surface.  If the example already has `validation_*.py`, `validate_*.py`,
 `validation_test` / protected-validation-corpus material; add a docs notebook
 only as the synchronized showcase layer.
 
+Heavy `validation_test/` runs are mdx-first.  Use LAB for fast import/path
+smoke checks and small correctness probes while migrating files, but run
+solver-heavy sweeps, timing claims, and research-grade validation on `mdx`
+when it is idle (see Benchmark Policy).  Record whether a number is LAB smoke
+or mdx validation so docs/MCP do not overclaim timing or robustness.
+
 ### Examples Triage: Delete / src API / validation_test / docs (2026-06-28)
 
 **POLICY**: `examples/` is a temporary teaching/research tier, not an archive
