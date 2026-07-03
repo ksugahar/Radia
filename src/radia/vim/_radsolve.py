@@ -15,14 +15,15 @@ material getter), so this bridge keeps a registry populated at build time by
 magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 ``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
 
-Element types: HDiv-VIM is TET / RT1 only (Sugahara 2026-06-29).  A TET mesh-backed iron
-dispatches to the HDiv-VIM (:func:`hdiv_demag_solve`, order=1); a HEX / WEDGE mesh-backed
-iron is routed by rad.Solve's 'auto' split to the collocation MMMM backend (the C++
-surface-charge solve on the built ObjHexahedron / ObjWedge elements), since the HDiv-VIM
-charge Gram is tet-only.  ``is_tet_registered`` makes that split; an explicit
-``demag_backend='hdiv'`` on a non-tet iron fails loud (:func:`hdiv_demag_solve` raises).
-The per-element write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge, so tet
-(HDiv-VIM) and hex/wedge (collocation MMMM) both round-trip ``ObjSetM`` / ``rad.Fld``.
+Element types: HDiv-VIM is RT1 (HDiv order 1) on a pure-TET or pure-HEX mesh (hex unlocked
+2026-07-04 -- the wired hex RT1 charge Gram + the Gram-agnostic energy-Newton).  rad.Solve's
+'auto' split dispatches a TET iron to the HDiv-VIM (:func:`hdiv_demag_solve`, order=1) and, by
+DEFAULT, routes a HEX mesh-backed iron to the collocation MMMM backend (the C++ surface-charge
+solve on the built ObjHexahedron elements -- KEEP-BOTH, MMMM = coarse tier).  ``is_tet_registered``
+makes that DEFAULT split; an explicit ``demag_backend='hdiv'`` now ALSO solves a pure-HEX iron via
+:func:`hdiv_demag_solve` (only wedge / pyramid / mixed fail loud there).  The per-element write-back
+container is ObjTetrahedron / ObjHexahedron / ObjWedge, so tet + hex (either backend) and wedge
+(collocation MMMM) all round-trip ``ObjSetM`` / ``rad.Fld``.
 """
 import radia as rad
 
@@ -52,10 +53,10 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     HDiv-VIM on the registered mesh).  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
 
-    TET, HEX, and WEDGE meshes all build a container; the demag backend then differs by
-    element type: a TET iron solves with the HDiv-VIM (the default 'auto'/'hdiv', order=1),
-    a HEX / WEDGE iron solves with collocation MMMM (rad.Solve's 'auto' split routes a
-    non-tet iron there -- the HDiv-VIM charge Gram is tet-only).  Either way the per-element
+    TET, HEX, and WEDGE meshes all build a container.  The 'auto' backend keeps the
+    conservative split: TET -> HDiv-VIM (order=1) and HEX/WEDGE -> collocation MMMM.
+    An explicit ``demag_backend='hdiv'`` also solves a pure-HEX mesh; WEDGE / mixed
+    meshes still fail loud toward collocation MMMM.  Either way the per-element
     ObjTetrahedron / ObjHexahedron / ObjWedge round-trips ``ObjSetM`` + ``rad.Fld``.
     """
     from radia.netgen_mesh_import import netgen_mesh_to_radia
@@ -83,9 +84,10 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
     ``ngmesh.Save``).  Loading via NGSolve lets netgen own the mesh topology + face orientation,
     which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
     breaks the HDiv surface charge).  Both backends then read the SAME mesh: a TET iron's default/'hdiv'
-    path solves on the registered mesh (FEEC HDiv-VIM, order=1); a HEX/WEDGE iron (or any iron under
-    set_demag_backend('collocation_mmmm')) solves the built ObjHexahedron/Tetrahedron/Wedge elements
-    (canonical collocation MMMM -- HDiv-VIM is tet-only, so the 'auto' split sends non-tet there).
+    path solves on the registered mesh (FEEC HDiv-VIM, order=1); a HEX iron uses collocation MMMM under
+    the default 'auto' split but can be forced through HDiv-VIM with ``demag_backend='hdiv'``; a WEDGE
+    iron (or any iron under set_demag_backend('collocation_mmmm')) solves the built
+    ObjHexahedron/Tetrahedron/Wedge elements with canonical collocation MMMM.
     Exactly one of ``mu_r`` (linear) or ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
     (Caller opens ``with ng.TaskManager():``.)
     """
@@ -97,9 +99,9 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
 
 def is_registered(top):
     """True if ``top`` (a rad.Solve object handle) IS, or CONTAINS, a soft-iron body registered via
-    soft_iron_from_mesh.  Used by radia.Solve to route mesh-backed TET soft iron to the FEEC HDiv-VIM
-    (RT1), route mesh-backed HEX/WEDGE soft iron to collocation MMMM via the 'auto' split, and leave
-    everything else (mesh-less MSC/MMM, PM) on the C++ solve.  Read-only, never raises."""
+    soft_iron_from_mesh.  Used by radia.Solve to find a mesh-backed soft iron, route the default
+    'auto' split (TET -> HDiv-VIM, HEX/WEDGE -> collocation MMMM), and leave everything else
+    (mesh-less MSC/MMM, PM) on the C++ solve.  Read-only, never raises."""
     if top in _DEMAG_REGISTRY:
         return True
     members = _KNOWN_CONTAINER_MEMBERS.get(top, [])
@@ -107,10 +109,10 @@ def is_registered(top):
 
 
 def is_tet_registered(top):
-    """True if ``top``'s registered soft-iron mesh is ALL-TETRAHEDRA -- the HDiv-VIM (tet/RT1) scope.
-    False for a non-tet (hex/wedge) mesh-backed iron -- rad.Solve's 'auto' split then routes it to the
-    collocation MMMM backend (HDiv-VIM is tet-only) -- or if ``top`` is not registered.  Read-only, never
-    raises (used by the rad.Solve wrapper to decide auto -> HDiv-VIM vs auto -> collocation MMMM)."""
+    """True if ``top``'s registered soft-iron mesh is ALL-TETRAHEDRA -- the conservative 'auto'
+    eligibility for HDiv-VIM.  False for a non-tet (hex/wedge) mesh-backed iron, so rad.Solve's
+    'auto' split routes it to collocation MMMM.  Explicit ``demag_backend='hdiv'`` is handled
+    separately and accepts pure HEX.  Read-only, never raises."""
     import ngsolve as ng
     iron = top if top in _DEMAG_REGISTRY else None
     if iron is None:
