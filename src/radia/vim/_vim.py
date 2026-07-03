@@ -548,6 +548,129 @@ def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1
     return cb["B"], G, cb["M_mass"]
 
 
+# 2D PLANAR (motor cross-section) layer -- ref lattices handed to GetTrafo (order matches the C++ maps:
+# Tri6Map quadratic barycentric v0,v1,v2,m01,m12,m20; Quad9Map lag3 x-fastest; Edge3Map ends+mid).
+_TRI6_LAT = [(1, 0), (0, 1), (0, 0), (0.5, 0.5), (0, 0.5), (0.5, 0)]
+_QUAD9_LAT = [(i/2, j/2) for j in range(3) for i in range(3)]
+_EDGE3_LAT = [0.0, 0.5, 1.0]
+_MONS_TRI2D = [(0, 0)]                                   # div(HDiv order-1 tri) is P0 (probed 2026-07-03)
+_MONS_QUAD2D = [(0, 0), (1, 0), (0, 1), (1, 1)]          # div(HDiv order-1 quad) is Q1 (the hex-gotcha twin)
+_MONS_EDGE2D = [(0,), (1,)]                              # (u.n)_ref on an edge is P1
+
+
+def _charge_basis_2d(fes, cob_quad=3):
+    """2D analogue of `_charge_basis_hex` (motor cross-sections; memory hdiv-vim-tri-quad-motor): charge
+    map B + P2 lattice geometry for tri/quad cells and boundary edges, all in the NGSolve REF frame with
+    the Piola-exact extraction (the dimension-independent J-cancellation identity).  Kernel side is the
+    2D log Gram (C++ dim2 mode).  CALLER wraps TaskManager."""
+    mesh = fes.mesh
+    assert fes.globalorder == 1, "2D HDiv-VIM is HDiv order-1 only"
+    nn2 = ng.specialcf.normal(2)
+    L2v = ng.L2(mesh, order=1)                # Q1-capable: covers quad Q1; the tri P0 monomial sits inside
+    Sb2 = ng.SurfaceL2(mesh, order=1)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=Sb2); bb += (u.Trace() * nn2) * Sb2.TestFunction() * ng.ds; bb.Assemble()
+    mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
+    Bv = _csr(bv); Bb = _csr(bb); M_mass = _csr(mh)
+
+    g, gw = _g01(cob_quad)
+    tp = np.array([[uu, vv*(1 - uu)] for uu in g for vv in g])            # Duffy on the NGSolve tri ref
+    tw = np.array([wu*wv*(1 - uu) for uu, wu in zip(g, gw) for vv, wv in zip(g, gw)])
+    qp = np.array([[uu, vv] for uu in g for vv in g])
+    qw = np.array([wu*wv for _, wu in zip(g, gw) for _, wv in zip(g, gw)])
+    ep = g.reshape(-1, 1); ew = gw
+
+    ir_tri6 = ng.IntegrationRule([(p[0], p[1], 0) for p in _TRI6_LAT], [1.0]*6)
+    ir_quad9 = ng.IntegrationRule([(p[0], p[1], 0) for p in _QUAD9_LAT], [1.0]*9)
+    ir_edge3 = ng.IntegrationRule([(t, 0, 0) for t in _EDGE3_LAT], [1.0]*3)
+
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    Brows, host, kind, expo = [], [], [], []
+    cell_nodes9, cell_type, edge_nodes3 = [], [], []
+    for c, e in enumerate(vels):
+        quad = len(mesh[e].vertices) == 4
+        nodes = _trafo_lattice_nodes(mesh, e, ir_quad9 if quad else ir_tri6)[:, :2]
+        slot = np.zeros((9, 2))
+        slot[:nodes.shape[0]] = nodes
+        cell_nodes9.append(slot); cell_type.append(1 if quad else 0)
+        fe = L2v.GetFE(e)
+        rp, rw = (qp, qw) if quad else (tp, tw)
+        Phi = np.array([fe.CalcShape(pt[0], pt[1], 0.0) for pt in rp])
+        Mref = (Phi * rw[:, None]).T @ Phi
+        rows = np.linalg.solve(Mref, Bv[list(L2v.GetDofNrs(e)), :].toarray())
+        mons = _MONS_QUAD2D if quad else _MONS_TRI2D
+        Sv = _change_of_basis_ref(fe, mons, rp, rw, dim=2)
+        blk = Sv @ rows
+        for a, (mi, mj) in enumerate(mons):
+            Brows.append(sp.csr_matrix(blk[a])); host.append(c); kind.append(0); expo += [mi, mj, 0]
+    for f, e in enumerate(bels):
+        edge_nodes3.append(_trafo_lattice_nodes(mesh, e, ir_edge3)[:, :2])
+        fe = Sb2.GetFE(e)
+        Phi = np.array([fe.CalcShape(t[0], 0.0, 0.0) for t in ep])
+        Mref = (Phi * ew[:, None]).T @ Phi
+        rows = np.linalg.solve(Mref, Bb[list(Sb2.GetDofNrs(e)), :].toarray())
+        # dim=1 change of basis (S = M_mono^-1 C), mirroring _change_of_basis_ref
+        Mm = np.array([[np.sum(ew * ep[:, 0]**(mi + mj)) for (mj,) in _MONS_EDGE2D] for (mi,) in _MONS_EDGE2D])
+        Cm = np.array([[np.sum(ew * (ep[:, 0]**mi) * Phi[:, k]) for k in range(Phi.shape[1])]
+                       for (mi,) in _MONS_EDGE2D])
+        Se = np.linalg.solve(Mm, Cm)
+        blk = Se @ rows
+        for a, (mi,) in enumerate(_MONS_EDGE2D):
+            Brows.append(sp.csr_matrix(blk[a])); host.append(f); kind.append(1); expo += [mi, 0, 0]
+    B = sp.vstack(Brows).tocsr()
+    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo,
+                n_el=len(vels), n_be=len(bels),
+                cell_nodes9=np.concatenate([n.ravel() for n in cell_nodes9]).tolist(),
+                cell_type=cell_type,
+                edge_nodes3=np.concatenate([n.ravel() for n in edge_nodes3]).tolist())
+
+
+def _prod_tri01(n):
+    """product-Gauss bary rule on the unit simplex (lam1 = u, lam2 = v(1-u); W sums 1/2)."""
+    g, gw = _g01(n)
+    P, W = [], []
+    for u, wu in zip(g, gw):
+        for v, wv in zip(g, gw):
+            P.append((u, v*(1 - u))); W.append(wu*wv*(1 - u))
+    return np.array(P), np.array(W)
+
+
+def _build_charge_gram_2d(fes, outer_n=4, glin_n=8, gledge_n=12, near_grade=0.6, far_inner=1.5,
+                          eps=1e-12, leafsize=64, eta=2.0):
+    """2D planar charge Gram via the C++ dim2 _ChargeGramHMatrix (kernel -ln(r)/(2pi)).  Regular
+    (ungraded) outer everywhere -- but it MUST be the PRODUCT-GAUSS rule (outer_n^2/sub-tri), NOT a
+    sparse symmetric rule: the outer integrand m_a(xi)*Phi_b(X(xi)) has C1 kinks where the source charge
+    lives, and Dunavant-7's coherent misintegration of those kinks -- amplified through the div-scaled
+    charge map (|q| ~ 1/h, components cancel) -- leaked the quad-mesh demag spectrum to eig 1.072 while
+    every INDIVIDUAL entry looked fine at ~3e-5 (measured 2026-07-03; product-Gauss 4/6/8 all give
+    0.9993).  Inner: radial cones split-graded at the kernel peak (glin_n per dim; edges split-grade at
+    the projection parameter -- endpoint grading had the same coherent-overestimate disease), far cloud
+    otherwise.  Gates: eig in [0,1] on tri/quad/distorted/disk/ellipse; disk demag 0.50000; ellipse
+    0.3344/0.6656 vs 1/3, 2/3; 2D Clausius-Mossotti solve to 2-3e-4."""
+    cb = _charge_basis_2d(fes)
+    otp, otw = _prod_tri01(outer_n)
+    gli, gwi = _g01(glin_n)
+    gle, gwe = _g01(gledge_n)
+    G = _rp._ChargeGramHMatrix(
+        dim2=2,
+        cell_nodes9=cb["cell_nodes9"], cell_type=list(cb["cell_type"]), edge_nodes3=cb["edge_nodes3"],
+        n_el=int(cb["n_el"]), n_be=int(cb["n_be"]),
+        charge_host=list(cb["host"]), charge_kind=list(cb["kind"]), charge_expo=list(cb["expo"]),
+        sym_tri_pts=otp.ravel().tolist(), sym_tri_w=otw.tolist(),
+        gl_edge=gle.tolist(), gw_edge=gwe.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
+        far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+    chk = G.hex_state_check()
+    if chk["ctor"] != chk["now"]:
+        raise RuntimeError(
+            "2D charge Gram instance state was corrupted between construction and use "
+            f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption "
+            "(0xc0000374 class) -- do NOT trust this Gram; rerun, and report the incident.")
+    return cb["B"], G, cb["M_mass"]
+
+
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
@@ -578,6 +701,9 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
+    if mesh.dim == 2:
+        # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
+        return _build_charge_gram_2d(fes, eta=eta)
     _vtypes = set(len(el.vertices) for el in mesh.Elements(ng.VOL))
     if _vtypes == {8}:
         # PURE-HEX RT1: the hex-mode charge Gram (Q1 volume charge + Q2 geometry; FLAT or Curve(2) one path).

@@ -277,6 +277,32 @@ public:
                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
                         double near_grade, double far_inner_factor);
+
+    // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
+    // charges rho = -div M on 2D cells (TRI: P0, 1 monomial -- probed; QUAD: Q1, 4 monomials -- the 2D
+    // twin of the hex gotcha) + sigma = M.n on boundary EDGES (P1, 2 monomials), all in the NGSolve REF
+    // frame with the Piola-exact extraction (the dimension-independent J-cancellation identity).  Kernel
+    // = the 2D Laplace Green's function -ln(r)/(2*pi); the ln-scale shift is killed because every HDiv
+    // dof's total charge is zero (divergence theorem), so N = B^T G B is scale-invariant.  Geometry =
+    // P2 lattices via GetTrafo (tri 6-node, quad 9-node, edge 3-node; cells stored in 9-node slots with
+    // cell_type 0=tri/1=quad) -> ONE path flat/curved, mirroring the hex-RT1 architecture.  Quadrature
+    // (numpy-validated, C:\temp\vim2d_proto.py): REGULAR symmetric outer everywhere (the log kernel's
+    // single-layer potentials are continuous, so NO graded outer is needed -- simpler than 3D); inner =
+    // signed radial cones from the nearest anchor SITE for near field points, cheap far cloud otherwise.
+    // Gates: eig(M^-1 N) in [0,1]; DISK demag == 1/2 exact; ellipse a:b -> N=b/(a+b); 2D Clausius-
+    // Mossotti M = chi H/(1+chi/2).  The 2D-mode flag is the FIRST argument (dim2 tag) to keep the
+    // overload set unambiguous.
+    RadHACApKChargeGram(int dim2_tag,
+                        std::vector<double> cell_nodes9, std::vector<int> cell_type,
+                        std::vector<double> edge_nodes3,
+                        int n_el, int n_be,
+                        std::vector<int> charge_host, std::vector<int> charge_kind,
+                        std::vector<int> charge_expo,
+                        std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> gl_edge, std::vector<double> gw_edge,
+                        std::vector<double> gl_in, std::vector<double> gw_in,
+                        std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                        double near_grade, double far_inner_factor);
     // Q2 lattice geometry maps (PUBLIC static utilities: the file-local cloud builder uses them too).
     static void HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3]);
     static void QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2]);
@@ -497,6 +523,31 @@ private:
     double m_hex_state_sum = 0.0;
     std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS) const;  // directed [nT*nS] block, INV4PI folded
     const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS) const;  // thread_local block cache
+
+    // ---- 2D PLANAR mode (see the dim2 ctor doc) ----
+    bool m_d2 = false;
+    int  m_d2_n_be = 0;
+    std::vector<double> m_d2CellNodes;   // [n_el*18] 9-node lattice slots x 2D (tri fills the first 6)
+    std::vector<int>    m_d2CellType;    // [n_el] 0=tri, 1=quad
+    std::vector<double> m_d2EdgeNodes;   // [n_be*6]  3-node lattice x 2D
+    std::vector<double> m_d2SymTriP, m_d2SymTriW;   // OUTER tri rule (bary lam1..2; W sums 1/2)
+    std::vector<double> m_d2GlE, m_d2GwE;           // 1D [0,1] edge outer rule
+    std::vector<double> m_d2FarTriP, m_d2FarTriW;   // cheap FAR inner tri rule (bary; W sums 1/2)
+    // per-sub geometry (cells: up to 2 sub-tris; edges: 1) -- centroid/size for the near test + anchor
+    // SITES (tri sub: 3 corners + 3 edge mids + centroid = 7; edge: 2 ends + mid = 3), mapped positions.
+    std::vector<double> m_d2CellSubC, m_d2CellSubS;   // [n_el*2*2], [n_el*2]
+    std::vector<double> m_d2EdgeC, m_d2EdgeS;         // [n_be*2],   [n_be]
+    std::vector<double> m_d2CellSiteX;                // [n_el*2*7*2]
+    std::vector<double> m_d2EdgeSiteX;                // [n_be*3*2]
+    static void Tri6Map(const double* nd12, const double xi[2], double X[2]);
+    static void Quad9Map(const double* nd18, const double xi[2], double X[2]);
+    static void Edge3Map(const double* nd6, double t, double X[2]);
+    // inner INT over sub subB of source (kindS,hS) of m_b(eta)*(-ln|p-X(eta)|) d(ref eta): radial cones
+    // from the anchor (xiT = the outer point's own ref coords on the SELF host; else the nearest SITE)
+    // for near field points, the cached-rule far cloud otherwise.
+    void PhiInner2DVec(int kindS, int hS, int subB, const double p[2], const double* xiT,
+                       const std::vector<int>& srcG, double* inn) const;
+    std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS) const;  // directed block, 1/(2pi) folded
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;
