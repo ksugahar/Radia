@@ -1,0 +1,117 @@
+"""Public-API gate: the production entry `radia.vim.hdiv_demag_solve` now solves a PURE-HEX order-1 mesh
+(LINEAR + NONLINEAR), not only tet.
+
+The hex RT1 charge Gram was wired at `build_charge_gram(HDiv(hexmesh, order=1))` (golden
+test_hdiv_vim_hex_rt1_wiring), and `_solve_highorder`'s linear (symmetric mass-Riesz CG) and nonlinear
+(all-C++ energy-Newton) paths are Gram-AGNOSTIC -- so hex flows through the same production code as tet.
+Reviewed + the tet-only guard relaxed 2026-07-04: pure-tet OR pure-hex order-1 is accepted; wedge / pyramid /
+mixed still fail loud -> collocation MMMM.  The 'auto' dispatch default is UNCHANGED (a mesh-backed hex iron
+still routes to collocation MMMM -- KEEP-BOTH, MMMM = coarse tier); pure-hex HDiv-VIM is reached by calling
+this entry directly (or demag_backend='hdiv').
+
+This locks:
+  * hex LINEAR: exact cube demag 1/3, transverse ~0, and agreement with collocation MMMM on the SAME mesh;
+  * hex NONLINEAR (BH table): converges (bounded iters) and agrees with collocation MMMM;
+  * wedge/mixed: fail loud with the collocation-MMMM message.
+
+The known bursty NGSolve GetTrafo first-touch flake in the hex-charge extraction (memory
+ngsolve-gettrafo-first-touch-garbage) is retried (the determinism contract fail-LOUD raises; rerun is the
+documented remedy) so the gate is CI-robust.
+"""
+import math
+
+import numpy as np
+import pytest
+
+pytest.importorskip("ngsolve")
+import radia as rad  # noqa: E402
+import ngsolve as ng  # noqa: E402
+from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
+
+from radia.vim import hdiv_demag_solve, soft_iron_from_mesh  # noqa: E402
+
+pytestmark = pytest.mark.slow
+
+MU0 = 4.0e-7 * math.pi
+L = 0.02
+H0 = 1000.0
+MU_R = 100.0
+_mp = lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), L * (z - 0.5))
+
+# saturating BH table (chi0 = 2000) both backends consume
+_CHI0, _MSAT = 2000.0, 1.6 / MU0
+_Hs = np.concatenate([[0.0], np.logspace(-1, 7, 80)])
+_Ms = _CHI0 * _Hs / (1.0 + _CHI0 * _Hs / _MSAT)
+BH = [[float(h), float(b)] for h, b in zip(_Hs, MU0 * (_Hs + _Ms))]
+
+
+def _cube(n):
+    return MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=n, mapping=_mp)
+
+
+def _hdiv_hex_retry(mesh, **kw):
+    """hdiv_demag_solve with retries on the KNOWN bursty GetTrafo first-touch flake (fail-loud, rerun is the
+    documented remedy).  Each attempt re-draws the hex-charge extraction."""
+    last = None
+    for _ in range(5):
+        try:
+            with ng.TaskManager():
+                return hdiv_demag_solve(mesh, **kw)
+        except RuntimeError as e:
+            if "GetTrafo lattice evaluation unstable" in str(e):
+                last = e
+                continue
+            raise
+    raise last
+
+
+def _collocation_mz(n, nonlinear):
+    """Volume-average M_z of the SAME hex cube via the collocation MMMM backend (cross-method reference)."""
+    rad.UtiDelAll()
+    with ng.TaskManager():
+        core = soft_iron_from_mesh(_cube(n), mu_r=MU_R)
+    if nonlinear:
+        rad.MatApl(core, rad.MatSatIsoTab(BH))
+    bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
+    rad.Solve(rad.ObjCnt([core, bkg]), 1e-6, 3000, 0, demag_backend="collocation_mmmm")
+    mz = float(np.mean([m[2] for (_c, m) in rad.ObjM(core)]))
+    rad.UtiDelAll()
+    return mz
+
+
+def test_hdiv_demag_solve_hex_linear():
+    """hdiv_demag_solve on a pure-hex cube: exact demag 1/3, transverse ~0, agrees with collocation MMMM."""
+    res = _hdiv_hex_retry(_cube(6), mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))
+    assert res["nonlinear"] is False
+    assert abs(res["demag"] - 1.0 / 3.0) < 5e-3, f"hex cube demag {res['demag']} off 1/3"
+    mz = res["M_avg"][2]
+    assert abs(res["M_avg"][0]) < 1e-2 * mz and abs(res["M_avg"][1]) < 1e-2 * mz, "transverse M not ~0"
+    assert res["iters"] < 100, f"hex linear CG not mesh-robust: {res['iters']}"
+    mz_c = _collocation_mz(6, False)
+    rel = abs(mz - mz_c) / abs(mz_c)
+    assert rel < 0.03, f"hex HDiv Mz {mz:.1f} vs collocation MMMM {mz_c:.1f} rel {rel:.2e}"
+
+
+def test_hdiv_demag_solve_hex_nonlinear():
+    """hdiv_demag_solve on a pure-hex cube with a BH table: energy-Newton converges, agrees with MMMM."""
+    res = _hdiv_hex_retry(_cube(6), bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
+    assert res["nonlinear"] is True
+    assert res["iters"] < 100, f"hex energy-Newton not bounded: {res['iters']}"
+    mz = res["M_avg"][2]
+    mz_c = _collocation_mz(6, True)
+    rel = abs(mz - mz_c) / abs(mz_c)
+    assert rel < 0.03, f"hex HDiv nonlinear Mz {mz:.1f} vs collocation MMMM {mz_c:.1f} rel {rel:.2e}"
+
+
+def test_hdiv_demag_solve_wedge_fails_loud():
+    """A prism/wedge (6-vertex) mesh is neither pure-tet nor pure-hex -> fail loud toward collocation MMMM."""
+    try:
+        mesh = MakeStructured3DMesh(prism=True, nx=1, ny=1, nz=1, mapping=_mp)
+    except TypeError:
+        pytest.skip("this NGSolve MakeStructured3DMesh has no prism= kwarg")
+    verts = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
+    if verts == {4} or verts == {8}:
+        pytest.skip(f"prism mesh degenerated to {verts}; no non-tet/non-hex element to test")
+    with pytest.raises(ValueError, match="collocation MMMM"):
+        with ng.TaskManager():
+            hdiv_demag_solve(mesh, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))

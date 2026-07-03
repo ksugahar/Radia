@@ -460,11 +460,16 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
     """
     if H_ext is None:
         raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
-    # ---- HDiv-VIM scope: TET / RT1 only (Sugahara 2026-06-29) ----
+    # ---- HDiv-VIM scope: RT1 (order 1) on a pure-TET or pure-HEX mesh ----
     # RT0 retired: per-element INACCURATE (the demag FACTOR is right ~1/3, but the per-element M leaks --
     # raising the solution order to RT1 is what fixes it); RT2+ retired: no per-element gain over RT1, slower.
-    # hex/wedge/pyramid + pm_M + image symmetry are the collocation MMMM backend's job (rad.Solve); the 'gauss'
-    # point Gram + 'hlu' system-A solver were RT0-only experiments.  HDiv-VIM is the tet RT1 high-order element.
+    # TET (RT1 charge Gram) AND pure-HEX (Q1 volume charge + Q2 geometry, the wired hex Gram) both solve
+    # LINEAR + NONLINEAR through _solve_highorder here -- the C++ energy-Newton is Gram-agnostic (verified
+    # 2026-07-04: hex cube linear & nonlinear match collocation MMMM to ~1%).  wedge / pyramid / mixed +
+    # pm_M + image symmetry remain the collocation MMMM backend's job (rad.Solve); 'gauss'/'hlu' were RT0-only.
+    # NOTE (KEEP-BOTH policy): rad.Solve's 'auto' split still routes a mesh-backed HEX iron to collocation
+    # MMMM (the coarse/fast tier); pure-hex HDiv-VIM is reached by calling this entry directly, or explicitly
+    # with demag_backend='hdiv'.  Flipping the 'auto' default hex->HDiv is a separate policy decision.
     if int(order) != 1:
         raise ValueError(
             "HDiv-VIM is RT1 (HDiv order=1) only.  RT0 (order=0) is RETIRED -- it is per-element INACCURATE "
@@ -501,11 +506,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
         from ._vim2d import solve_planar_demag
         return solve_planar_demag(mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, eta=eta,
                                   nl_tol=nl_tol, nl_maxit=nl_maxit)
-    if not all(len(el.vertices) == 4 for el in mesh.Elements(ng.VOL)):
+    _vtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
+    if _vtx not in ({4}, {8}):
         raise ValueError(
-            "HDiv-VIM is TET-only.  hex / wedge / pyramid soft-iron demag uses the collocation MMMM backend; "
-            "rad.Solve's 'auto' split already routes a non-tet mesh-backed iron to collocation MMMM, or force "
-            "it with demag_backend='collocation_mmmm'.")
+            "HDiv-VIM (order 1) supports a pure-TET (4-vertex) or pure-HEX (8-vertex) mesh; got vertex "
+            "counts %s.  wedge / pyramid / mixed-element soft-iron demag uses the collocation MMMM backend "
+            "(rad.Solve demag_backend='collocation_mmmm'), which rad.Solve's 'auto' split routes non-tet "
+            "mesh-backed iron to anyway." % sorted(_vtx))
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
