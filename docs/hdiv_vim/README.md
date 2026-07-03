@@ -154,8 +154,13 @@ showcase notebooks above.
 1. **Curved-hex eigenvalue 1.0078** — the curved cylinder's demag spectrum still slightly exceeds
    the [0,1] bound (halved from 1.0166 by the site anchors); remaining self/touching curved
    quadrature refinement.
-2. **Nonlinear hex** — the energy-Newton solver must learn to take an external (B, G, M) triple;
-   nonlinear is currently tet-only.  **2D nonlinear** iron likewise.
+2. **Hex public API — DONE (2026-07-04).**  `hdiv_demag_solve(hexmesh, mu_r=/bh_table=)` and
+   `rad.Solve(demag_backend='hdiv')` now solve a pure-hex mesh **LINEAR + NONLINEAR** (the C++
+   energy-Newton was already Gram-agnostic — it takes the hex `(H, B, M_mass)` unchanged), matching
+   collocation MMMM to ~1% (golden `test_hdiv_vim_hex_public_solve.py`).  The `auto` default still
+   routes a mesh-backed hex iron to collocation MMMM (KEEP-BOTH; flipping that default is item 3).
+   The legacy `solve_nonlinear_newton_scalable` (`tet.build_demag` head-to-head path) stays tet-only.
+   **2D nonlinear** iron is the 2D planar layer's own track.
 3. **Wedge** elements (extruded motor stacks) + the hex auto-dispatch policy (when a hex mesh
    defaults to HDiv-VIM vs collocation MMMM).
 4. **VIM ↔ reduced-FEM weak coupling** — 2D skeleton verified in research (stagger converges in 3
@@ -176,7 +181,7 @@ showcase notebooks above.
 | Curved geometry / field win | `hdiv_demag_curved.py`, `hdiv_curved_nonlinear_field.py` | `test_hdiv_vim_curved{,_nonlinear,_nonlinear_field}.py` |
 | Head-to-head vs shipped Radia | `compare_curved_vs_radia_field.py` | `test_curved_vs_radia_field.py` |
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
-| RT1 / tet-only public contract | `hdiv_demag_solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py` |
+| RT1 pure-TET / pure-HEX public contract | `hdiv_demag_solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py`, `test_hdiv_vim_hex_public_solve.py` |
 
 The live executable checks are under `validation_test/feec/`; the legacy helper
 scripts imported by those checks are under `validation_test/feec/vim_legacy/`
