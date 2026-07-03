@@ -81,6 +81,18 @@ def exterior_field(mesh, M_elem, P, ngauss=4):
     return charge_field(Xq, Q, P)
 
 
+def magnet_field(magnets, P, ngauss=4):
+    """Combined H at P (n,2) of a list of PERMANENT-MAGNET bodies [(mesh, M_fixed), ...] (each a
+    RIGID / fixed magnetization) -- the source a soft-iron body reacts to.  SHARED: both MMMM
+    (radia.mmmm2d) and the HDiv-VIM add magnet_field(magnets, iron_centroids) to their applied
+    field (a hard PM does not demagnetize, so this is a one-way source; no iteration)."""
+    P = np.ascontiguousarray(np.asarray(P, float).reshape(-1, 2))
+    H = np.zeros((len(P), 2))
+    for mesh, M in magnets:
+        H = H + exterior_field(mesh, M, P, ngauss=ngauss)
+    return H
+
+
 def maxwell_torque_cloud(Xq, Q, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440):
     """Maxwell torque per unit length on a circle Rc in air from a cloud + uniform applied H_ext."""
     return _rp.PlanarMaxwellTorqueCircle(np.ascontiguousarray(Xq, float),
