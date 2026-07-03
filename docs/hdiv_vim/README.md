@@ -24,7 +24,9 @@ the radia-mcp `hdiv_vim` knowledge (MCP tool `mcp__radia-ngsolve__hdiv_vim`).
 [`hdiv_curved_showcase.ipynb`](hdiv_curved_showcase.ipynb) (curved P2 tet win),
 [`polynomial_charge_field.ipynb`](polynomial_charge_field.ipynb) (RT1 polynomial charges),
 [`hex_rt1_and_2d_showcase.ipynb`](hex_rt1_and_2d_showcase.ipynb) (2026-07-03: hex RT1 + H-matrix
-build timing + 2D planar closed-form gates + the production `hdiv_demag_solve` one-call).
+build timing + 2D planar closed-form gates + the production `hdiv_demag_solve` one-call), and
+[`hex_vs_mmmm_crossvalidation.ipynb`](hex_vs_mmmm_crossvalidation.ipynb) (2026-07-04: HDiv-VIM hex
+RT1 vs collocation-MMMM hex on the same cube and C-yoke meshes).
 
 ---
 

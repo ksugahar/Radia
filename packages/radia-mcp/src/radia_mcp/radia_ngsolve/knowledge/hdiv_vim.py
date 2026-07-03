@@ -872,7 +872,8 @@ analytic alone, because three different discretizations cannot share the same bu
    charge) computing the same N.
 3. **BEM surface-charge (boundary integral)** -- the same surface-charge sigma = M.n as (1) but solved
    by a boundary-element method; this is RADIA'S OWN formulation family (surface charge / single layer),
-   so it is the most direct cousin.  (The 3D cube / C-yoke head-to-head is the next cross-method block.)
+   so it is the most direct cousin.  The 3D cube / C-yoke head-to-head vs the collocation MMMM surface-charge
+   element is the VERIFIED block below.
 
 ## VERIFIED (volume-FE leg, axisymmetric -- bodies of revolution)
 An independent A-formulation volume-FE solve (axisymmetric: sphere / prolate / oblate spheroid)
@@ -910,6 +911,38 @@ where the H(div)-type VIM earns its keep over a tabulated factor -- it returns t
 demag OPERATOR (and, with curved/high-order elements, resolves the edge charge that a flat low-order
 method smears).  So the demag-factor cross-method check (ellipsoid, exact) validates the operator's
 average; the non-ellipsoidal cylinder is where the operator's spatial detail matters.
+
+## VERIFIED (3D cube + C-yoke head-to-head -- HDiv-VIM hex RT1 vs collocation MMMM hex, 2026-07-04)
+The promised "next cross-method block": the two INDEPENDENT hex soft-iron demag backends solved on the SAME
+structured hex mesh and compared ORDER-INDEPENDENTLY -- volume-average M, plus the IRON's external B at probe
+points via the SAME rad.Fld kernel (the engineering quantity, vector difference).  HDiv-hex = the wired hex
+RT1 charge Gram (build_charge_gram(HDiv(hexmesh, order=1))) + the shipped mass-Riesz CG
+(_solve_linear_mass_riesz_cpp); MMMM-hex = rad.Solve(demag_backend='collocation_mmmm') on the
+soft_iron_from_mesh ObjHexahedron.  mu_r = 100.
+
+    CUBE (uniform +z; cube demag is EXACT 1/3):
+      n^3 hex     dMz(HDiv vs MMMM)   HDiv demag   dB_ext(max)
+      4^3 = 64        1.67 %             0.3328       9.14 %
+      6^3 = 216       0.97 %             0.3330       4.41 %
+      8^3 = 512       0.67 %             0.3331       2.89 %
+      10^3 = 1000     0.50 %             0.3331       1.95 %
+    C-YOKE (voxelized OCC cyoke(), in-plane +y; NON-convex, reentrant, NON-uniform M):
+      h[mm]  hex      dMy               dB_ext(max)
+      8      435      0.58 %             2.91 %
+      6      1064     0.40 %             1.58 %
+
+=> sub-% agreement on the volume-average M at moderate resolution, and BOTH the M gap AND the external-B gap
+shrink MONOTONICALLY under refinement -- the surface-charge (MMMM) and H(div)-flux (HDiv) discretizations
+approach the SAME continuum field.  HDiv pins the exact cube demag 1/3; its +N mass-Riesz CG iteration count
+is mesh-robust (cube 23, C-yoke 34, ~constant).  This is the 3D SURFACE-charge-vs-flux head-to-head that legs
+(1)+(2) above left open.
+ARCHITECTURE NOTE: the hex RT1 Gram is wired at build_charge_gram, but the public hdiv_demag_solve GUARDS
+non-tet (production 'auto' routes a hex iron -> collocation MMMM); this head-to-head drives the wired hex Gram
+with the shipped linear solver, i.e. the real HDiv-hex solve minus the guard (flipping the public entry to
+expose hex is a pending policy decision -- KEEP-BOTH, MMMM stays the coarse tier).  Executed, result-saving
+showcase: docs/hdiv_vim/hex_vs_mmmm_crossvalidation.ipynb (+ hex_vs_mmmm_helpers.py +
+hex_vs_mmmm_crossvalidation_result.json).  LAB radia 4.95.5; wall-clock timing deferred to mdx-idle
+(Benchmark Policy: mdx = quiet compute host, run only after other jobs finish).
 
 ## WHY THIS IS THE RIGHT VALIDATION
 analytic-only agreement can hide a shared analytic-mapping error; agreement of a SURFACE-charge FEEC

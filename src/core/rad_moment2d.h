@@ -16,7 +16,7 @@
 // evaluation point is always an element centroid (interior -> never on an
 // edge -> singularity-free), so no analytic self-term is needed.
 //
-// Reference (formulation validated in a numpy PoC, C:\temp\mmmm2d):
+// Reference (formulation validated in an independent numpy PoC):
 //   disk demag 1/2, ellipse 2:1 -> 1/3, 2/3, chi-sweep chi/(1+chi/2).
 //-------------------------------------------------------------------------
 #ifndef __RAD_MOMENT2D_H
