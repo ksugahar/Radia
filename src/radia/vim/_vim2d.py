@@ -243,15 +243,15 @@ class PlanarDemagBody:
         return tuple(out)
 
     def H_at(self, P, m):
-        """Exterior H of the body's charges at P [n,2] (branch-free; valid outside the body)."""
+        """Exterior H of the body's charges at P [n,2] (branch-free; valid outside the body).
+
+        Delegates the point-charge-cloud field to the SHARED C++ kernel
+        (radia.planar_charges.charge_field) -- the SAME routine the collocation MMMM uses
+        (radia.mmmm2d); this HDiv-VIM feeds its own native quadrature cloud (self._Xq, q=B@m)."""
+        from radia.planar_charges import charge_field
         q = self.B @ m
         Q = np.concatenate([q[a] * self._wq[a] for a in range(len(self._wq))])
-        dx = P[:, 0, None] - self._Xq[None, :, 0]
-        dy = P[:, 1, None] - self._Xq[None, :, 1]
-        r2 = dx * dx + dy * dy
-        Hx = (Q[None, :] * dx / r2).sum(axis=1) / (2 * np.pi)
-        Hy = (Q[None, :] * dy / r2).sum(axis=1) / (2 * np.pi)
-        return np.stack([Hx, Hy], axis=1)
+        return charge_field(self._Xq, Q, np.asarray(P, float))
 
     def Az_at(self, P, m):
         """Exterior A_z of the body's charges: A = +mu0 q/(2 pi) atan2(dy, dx) summed over the
@@ -263,12 +263,13 @@ class PlanarDemagBody:
         above / to the +x side of the body).  For points that SURROUND the body (e.g. a bar ring
         around a rotor core) use the polar-integrated single-valued construction
         (dA/dphi = mu0 r H_r anchored on the cut-free +x axis; closure over 2 pi is exact by
-        Gauss/zero-total-charge) -- see docs/electric_machine's helper module."""
+        Gauss/zero-total-charge) -- see docs/electric_machine's helper module.
+
+        Delegates the atan2 A_z sum to the SHARED C++ kernel (radia.planar_charges.charge_az)."""
+        from radia.planar_charges import charge_az
         q = self.B @ m
         Q = np.concatenate([q[a] * self._wq[a] for a in range(len(self._wq))])
-        dx = P[:, 0, None] - self._Xq[None, :, 0]
-        dy = P[:, 1, None] - self._Xq[None, :, 1]
-        return MU0 / (2 * np.pi) * (Q[None, :] * np.arctan2(dy, dx)).sum(axis=1)
+        return charge_az(self._Xq, Q, np.asarray(P, float))
 
 
 def maxwell_torque_circle(H_total_at, Rc, n=1440, center=(0.0, 0.0)):
