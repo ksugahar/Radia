@@ -1864,18 +1864,24 @@ static inline long long HexCloudKey(int kind, bool outer, bool graded, int host,
          | ((long long)host << 8) | ((long long)sub << 2) | (long long)corner;
 }
 
+// SHARED_PTR values (2026-07-03 crash fix): the capacity clear below fires on ~20k-charge meshes (a
+// 1000-hex cube wants ~43k outer clouds > the 32768 cap; <=8^3 stays under -- which is why the bug slept
+// through every gate).  QuadBlockHex HOLDS its outer cloud across inner calls that fetch far clouds, so a
+// by-value cache whose clear() destroys storage turned that hold into a use-after-free (0xC0000005 at
+// n=10, reproduced 2/2 on the committed binary).  shared_ptr makes the clear safe: in-flight holders keep
+// their cloud alive; the cache only drops its refs.
 static thread_local long long s_hex_cloud_owner = -1;
-static thread_local std::unordered_map<long long, HexQuadCloud> s_hex_cloud_cache;
+static thread_local std::unordered_map<long long, std::shared_ptr<const HexQuadCloud>> s_hex_cloud_cache;
 
-static const HexQuadCloud& HexGetCloud(long long build_id, long long key,
-                                       const std::function<void(HexQuadCloud&)>& make)
+static std::shared_ptr<const HexQuadCloud> HexGetCloud(long long build_id, long long key,
+                                                       const std::function<void(HexQuadCloud&)>& make)
 {
     if (s_hex_cloud_owner != build_id) { s_hex_cloud_cache.clear(); s_hex_cloud_owner = build_id; }
     auto it = s_hex_cloud_cache.find(key);
     if (it == s_hex_cloud_cache.end()) {
-        if (s_hex_cloud_cache.size() > 32768u) s_hex_cloud_cache.clear();
-        HexQuadCloud c;
-        make(c);
+        if (s_hex_cloud_cache.size() > 32768u) s_hex_cloud_cache.clear();   // safe: holders own shared_ptrs
+        auto c = std::make_shared<HexQuadCloud>();
+        make(*c);
         it = s_hex_cloud_cache.emplace(key, std::move(c)).first;
     }
     return it->second;
@@ -1940,7 +1946,8 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
         return;
     }
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    const HexQuadCloud* cl = &HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, false, hS, subB, 3),
+    const std::shared_ptr<const HexQuadCloud> cl =
+        HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, false, hS, subB, 3),
         [&](HexQuadCloud& c) {
             if (cell) HexBuildCloud(nd, true, subB, m_farTetP.data(), m_farTetW.data(),
                                     (int)m_farTetW.size(), false, c);
@@ -2126,10 +2133,12 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
             const bool near_sub = near_hosts &&
                 std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
-            // OUTER geometry cloud on target sub sA (monomial-FREE): regular symmetric or graded toward cB.
-            const HexQuadCloud* oc;
+            // OUTER geometry cloud on target sub sA (monomial-FREE): regular symmetric or graded toward
+            // cB.  HELD as a shared_ptr: the inner calls below fetch far clouds from the same cache, and
+            // its capacity clear must not invalidate this hold (the n=10 0xC0000005 use-after-free).
+            std::shared_ptr<const HexQuadCloud> oc;
             if (!near_sub) {
-                oc = &HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, false, hT, sA, 3),
+                oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, false, hT, sA, 3),
                     [&](HexQuadCloud& c) {
                         if (cellT) HexBuildCloud(ndT, true, sA, m_symTetP.data(), m_symTetW.data(), nqreg, false, c);
                         else       HexBuildCloud(ndT, false, sA, m_symTriP.data(), m_symTriW.data(), nqreg, false, c);
@@ -2141,7 +2150,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                     const double d = ddx*ddx + ddy*ddy + ddz*ddz;
                     if (d < best) { best = d; corner = i; }
                 }
-                oc = &HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
+                oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
                     [&](HexQuadCloud& c) {
                         std::vector<double> gb, gw;
                         HexDuffyBary(cellT ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
@@ -2611,27 +2620,31 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         throw std::out_of_range("ChargeGram entry index out of range: a=" + std::to_string(a)
                                 + " b=" + std::to_string(b) + " n=" + std::to_string(m_n));
     if (m_d2) {
-        // 2D planar mode: served block-wise like the hex mode, symmetrized 0.5*(AB + BA).
+        // 2D planar mode: served block-wise like the hex mode, symmetrized 0.5*(AB + BA).  Each scalar
+        // is read BEFORE the next GetHexBlock fetch -- the memo's capacity clear would otherwise leave a
+        // dangling reference (the same use-after-free family as the cloud-cache n=10 crash).
         const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
         const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
-        const std::vector<double>& bAB = GetHexBlock(kA, hA, kB, hB);
-        const std::vector<double>& bBA = GetHexBlock(kB, hB, kA, hA);
         const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
         const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
-        return 0.5*(bAB[(size_t)la*nB + lb] + bBA[(size_t)lb*nA + la]);
+        const double vAB = GetHexBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
+        const double vBA = GetHexBlock(kB, hB, kA, hA)[(size_t)lb*nA + la];
+        return 0.5*(vAB + vBA);
     }
     if (m_hexmode) {
         // HEX RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
         // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.
         // Served from the whole-host-pair block memo (the 64x co-location win) -- bit-identical to
         // the symmetrized 0.5*(block_AB + block_BA) per-entry value, kernel work shared per block.
+        // Each scalar is read BEFORE the next GetHexBlock fetch: the memo's capacity clear (fires on
+        // ~20k-charge meshes) would otherwise leave a dangling reference.
         const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
         const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
-        const std::vector<double>& bAB = GetHexBlock(kA, hA, kB, hB);      // target A, source B  [nA*nB]
-        const std::vector<double>& bBA = GetHexBlock(kB, hB, kA, hA);      // target B, source A  [nB*nA]
         const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
         const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
-        return 0.5*(bAB[(size_t)la*nB + lb] + bBA[(size_t)lb*nA + la]);
+        const double vAB = GetHexBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];   // target A, source B
+        const double vBA = GetHexBlock(kB, hB, kA, hA)[(size_t)lb*nA + la];   // target B, source A
+        return 0.5*(vAB + vBA);
     }
     if (m_highorder) {
         // polynomial charges, symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
