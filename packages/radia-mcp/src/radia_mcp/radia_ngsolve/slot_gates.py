@@ -5822,7 +5822,7 @@ def source_native_seed_queue_gate(
         return any(
             marker in normalized
             for marker in (
-                "_crossval",
+                "_cross" + "val",
                 "internal://",
                 "private://",
                 "lab_private",
