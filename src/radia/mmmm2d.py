@@ -191,3 +191,41 @@ def demag_factors(mesh, chi=1.0):
     LINEAR solves).  For an ellipse a(x):b(y) the exact values are b/(a+b), a/(a+b)."""
     verts, offsets, _, areas = _extract_geometry(mesh)
     return _demag_factors(verts, offsets, areas, chi + 1.0)
+
+
+# ---- exterior field / Maxwell torque -- delegate to the SHARED planar_charges layer (the same
+#      routine the HDiv-VIM uses): given the solved per-element M, the exterior field is the field
+#      of that magnetization (M.n equivalent charges, C++ log kernel). --------------------------
+
+def exterior_field(mesh, M_elem, P, ngauss=4):
+    """Exterior H (in air) at points P (n,2) of the solved magnetization M_elem on ``mesh``."""
+    from radia.planar_charges import exterior_field as _ef
+    return _ef(mesh, M_elem, P, ngauss=ngauss)
+
+
+def maxwell_torque(mesh, M_elem, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440, ngauss=4):
+    """Maxwell-stress torque per unit length on a circle Rc (in air, enclosing the body) for the
+    solved magnetization M_elem in a UNIFORM applied field H_ext.  Reluctance torque = mu0 A (M x H0)."""
+    from radia.planar_charges import maxwell_torque as _mt
+    return _mt(mesh, M_elem, Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
+
+
+def torque_angle_sweep(mesh, H0, angles_rad, Rc, *, mu_r=None, bh_table=None, center=(0.0, 0.0),
+                       n=1440, ngauss=4, **solve_kw):
+    """Reluctance-torque-vs-angle sweep -- the planar-motor headline.  For each applied-field angle
+    ``theta`` the body is re-solved with H_ext = H0 (cos theta, sin theta) and the Maxwell-stress
+    torque about ``center`` on the circle Rc is returned.
+
+    Returns dict: angles (rad), torque (nAng,), M_avg (nAng,2).  (LINEAR: mu_r; NONLINEAR: bh_table.)
+    NOTE: the system is currently rebuilt+refactored per angle (dense LU); a factor-once /
+    back-substitution sweep is a follow-up optimization (the moment matrix is angle-independent for
+    a linear material -- only the RHS rotates)."""
+    angles = np.asarray(angles_rad, float)
+    T = np.zeros(len(angles))
+    Mavg = np.zeros((len(angles), 2))
+    for i, th in enumerate(angles):
+        H_ext = (H0 * np.cos(th), H0 * np.sin(th))
+        r = solve_planar_demag(mesh, mu_r=mu_r, bh_table=bh_table, H_ext=H_ext, **solve_kw)
+        T[i] = maxwell_torque(mesh, r["M"], Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
+        Mavg[i] = r["M_avg"]
+    return {"angles": angles, "torque": T, "M_avg": Mavg}

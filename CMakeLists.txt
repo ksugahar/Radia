@@ -207,6 +207,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_c_interface.cpp           # C-style interface functions
 	${CORE_DIR}/rad_interaction.cpp           # Magnetic interaction between objects
 	${CORE_DIR}/rad_moment2d.cpp              # 2D planar collocation MMMM (log-kernel tri/quad)
+	${CORE_DIR}/rad_planar_charges.cpp        # Shared 2D planar exterior field + Maxwell torque
 	${CORE_DIR}/rad_io_buffer.cpp             # I/O buffer (errors and warnings)
 	${CORE_DIR}/rad_math_methods.cpp          # Mathematical/numerical methods
 	${CORE_DIR}/rad_material_def.cpp          # Material relaxation auxiliary
