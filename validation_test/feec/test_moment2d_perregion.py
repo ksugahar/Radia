@@ -42,6 +42,22 @@ def test_uniform_dict_matches_scalar():
     assert np.allclose(rd["M"], rs["M"], rtol=1e-10, atol=1e-8)
 
 
+def test_uniform_dict_torque_sweep_matches_scalar():
+    """The factor-once torque sweep must accept per-region mu_r dicts, too."""
+    angles = np.deg2rad([15.0, 40.0, 80.0])
+    with ng.TaskManager():
+        mesh = _two_region_mesh()
+        rs = m2.torque_angle_sweep(mesh, 1000.0, angles, Rc=3.0, mu_r=5.0, n=360)
+        rd = m2.torque_angle_sweep(
+            mesh, 1000.0, angles, Rc=3.0,
+            mu_r={"inner": 5.0, "outer": 5.0}, n=360,
+        )
+    assert rs["factored_once"] and rd["factored_once"]
+    assert rd["per_region"] and not rs["per_region"]
+    assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-10, atol=1e-8)
+    assert np.allclose(rd["torque"], rs["torque"], rtol=1e-10, atol=1e-12)
+
+
 def test_heterogeneous_regions():
     """A high-permeability inner disk magnetizes much more strongly than a near-air outer ring."""
     with ng.TaskManager():

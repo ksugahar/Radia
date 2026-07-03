@@ -302,7 +302,12 @@ def torque_angle_sweep(mesh, H0, angles_rad, Rc, *, mu_r=None, bh_table=None, ce
         # LINEAR: factor ONCE, solve all angles
         verts, offsets, _, areas = _extract_geometry(mesh)
         nEl = len(areas)
-        chi = np.full(nEl, mu_r - 1.0)
+        if isinstance(mu_r, dict):
+            chi = _per_region_chi(mesh, mu_r)
+        else:
+            if not mu_r > 1.0:
+                raise ValueError("torque_angle_sweep: mu_r must be > 1 (got %r)" % (mu_r,))
+            chi = np.full(nEl, mu_r - 1.0)
         Hmulti = np.zeros((len(angles), nEl, 2))
         Hmulti[:, :, 0] = (H0 * np.cos(angles))[:, None]
         Hmulti[:, :, 1] = (H0 * np.sin(angles))[:, None]
@@ -312,10 +317,12 @@ def torque_angle_sweep(mesh, H0, angles_rad, Rc, *, mu_r=None, bh_table=None, ce
             H_ext = (H0 * np.cos(th), H0 * np.sin(th))
             T[i] = maxwell_torque(mesh, Mmulti[i], Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
             Mavg[i] = (float(w @ Mmulti[i, :, 0]), float(w @ Mmulti[i, :, 1]))
-        return {"angles": angles, "torque": T, "M_avg": Mavg, "factored_once": True}
+        return {"angles": angles, "torque": T, "M_avg": Mavg,
+                "factored_once": True, "per_region": isinstance(mu_r, dict)}
     for i, th in enumerate(angles):                                       # NONLINEAR: per angle
         H_ext = (H0 * np.cos(th), H0 * np.sin(th))
         r = solve_planar_demag(mesh, mu_r=mu_r, bh_table=bh_table, H_ext=H_ext, **solve_kw)
         T[i] = maxwell_torque(mesh, r["M"], Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
         Mavg[i] = r["M_avg"]
-    return {"angles": angles, "torque": T, "M_avg": Mavg, "factored_once": False}
+    return {"angles": angles, "torque": T, "M_avg": Mavg,
+            "factored_once": False, "per_region": isinstance(bh_table, dict)}
