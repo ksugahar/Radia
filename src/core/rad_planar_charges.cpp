@@ -66,4 +66,29 @@ double MaxwellTorqueCircle(int nq, const double* Xq, const double* Q,
 	return MU0 * Rc * Rc * (TWO_PI / n) * acc;
 }
 
+void MaxwellForceCircle(int nq, const double* Xq, const double* Q,
+                        double Rc, double cx, double cy, int n,
+                        double hextx, double hexty, double* Fout)
+{
+	if(n < 8) n = 8;
+	std::vector<double> P(2 * n), H(2 * n);
+	for(int i = 0; i < n; i++){
+		double phi = TWO_PI * i / n;
+		P[2 * i] = cx + Rc * std::cos(phi);
+		P[2 * i + 1] = cy + Rc * std::sin(phi);
+	}
+	Field(nq, Xq, Q, n, P.data(), H.data());
+	double fx = 0.0, fy = 0.0;
+	for(int i = 0; i < n; i++){
+		double phi = TWO_PI * i / n, c = std::cos(phi), s = std::sin(phi);
+		double Hx = H[2 * i] + hextx, Hy = H[2 * i + 1] + hexty;
+		double Hr = Hx * c + Hy * s;             // radial = H . n
+		double H2 = Hx * Hx + Hy * Hy;
+		fx += Hr * Hx - 0.5 * H2 * c;            // T . n , x-component
+		fy += Hr * Hy - 0.5 * H2 * s;
+	}
+	Fout[0] = MU0 * Rc * (TWO_PI / n) * fx;
+	Fout[1] = MU0 * Rc * (TWO_PI / n) * fy;
+}
+
 } // namespace rad_planar_charges

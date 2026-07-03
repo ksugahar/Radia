@@ -285,6 +285,21 @@ def maxwell_torque(mesh, M_elem, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440
     return _mt(mesh, M_elem, Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
 
 
+def maxwell_force(mesh, M_elem, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440, ngauss=4):
+    """Maxwell-stress force per unit length (Fx,Fy) on a circle Rc (air, enclosing the body).  A
+    uniform field exerts ZERO net force (only torque); use force_between for the maglev/actuator
+    inter-body force.  Delegates to the SHARED planar_charges layer (same as the HDiv-VIM)."""
+    from radia.planar_charges import maxwell_force as _mf
+    return _mf(mesh, M_elem, Rc, H_ext=H_ext, center=center, n=n, ngauss=ngauss)
+
+
+def force_between(bodies, Rc, center, n=1440, ngauss=4):
+    """Inter-body force per unit length on the body enclosed by (Rc, center).  ``bodies`` = list of
+    (mesh, M_elem) -- e.g. a levitation magnet + an iron rail.  Shared layer; method-agnostic."""
+    from radia.planar_charges import force_between as _fb
+    return _fb(bodies, Rc, center, n=n, ngauss=ngauss)
+
+
 def torque_angle_sweep(mesh, H0, angles_rad, Rc, *, mu_r=None, bh_table=None, center=(0.0, 0.0),
                        n=1440, ngauss=4, **solve_kw):
     """Reluctance-torque-vs-angle sweep -- the planar-motor headline.  For each applied-field angle

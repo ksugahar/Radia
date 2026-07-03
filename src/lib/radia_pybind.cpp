@@ -3163,6 +3163,23 @@ double PlanarMaxwellTorqueCircle(
                                                   static_cast<double*>(qb.ptr), Rc, cx, cy, n, hextx, hexty); }
     return T;
 }
+
+// Maxwell-stress FORCE per unit length on a circle in air (body cloud + uniform applied Hext) -> (Fx,Fy).
+py::array_t<double> PlanarMaxwellForceCircle(
+        py::array_t<double, py::array::c_style | py::array::forcecast> Xq,
+        py::array_t<double, py::array::c_style | py::array::forcecast> Q,
+        double Rc, double cx, double cy, int n, double hextx, double hexty) {
+    auto xb = Xq.request(); auto qb = Q.request();
+    if (xb.ndim != 2 || xb.shape[1] != 2) throw std::runtime_error("PlanarMaxwellForceCircle: Xq must be (nq,2)");
+    if (qb.ndim != 1 || qb.shape[0] != xb.shape[0]) throw std::runtime_error("PlanarMaxwellForceCircle: Q must be (nq,)");
+    int nq = static_cast<int>(xb.shape[0]);
+    py::array_t<double> F(2);
+    double* fp = static_cast<double*>(F.request().ptr);
+    { py::gil_scoped_release rel;
+      rad_planar_charges::MaxwellForceCircle(nq, static_cast<double*>(xb.ptr), static_cast<double*>(qb.ptr),
+                                             Rc, cx, cy, n, hextx, hexty, fp); }
+    return F;
+}
 } // namespace radia_planar_charges
 
 // ============================================================================
@@ -4221,6 +4238,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Maxwell-stress torque per unit length about (cx,cy) on a circle of
               radius Rc in air, from a 2D point-charge cloud + uniform applied
               field (hextx,hexty): T = mu0 Rc^2 oint H_r H_phi dphi (n points).
+          )pbdoc");
+
+    m.def("PlanarMaxwellForceCircle", &radia_planar_charges::PlanarMaxwellForceCircle,
+          py::arg("Xq"), py::arg("Q"), py::arg("Rc"),
+          py::arg("cx") = 0.0, py::arg("cy") = 0.0, py::arg("n") = 1440,
+          py::arg("hextx") = 0.0, py::arg("hexty") = 0.0,
+          R"pbdoc(
+              Maxwell-stress FORCE per unit length on a circle of radius Rc in air,
+              from a 2D point-charge cloud + uniform applied field: Fout (2,) =
+              mu0 Rc oint [H_r H - 1/2 |H|^2 n] dphi.  A uniform field gives ~0 net
+              force; concatenate multiple bodies' clouds for the maglev inter-body force.
           )pbdoc");
 
     m.def("BuildMatrix", &radia_solver::BuildMatrix,
