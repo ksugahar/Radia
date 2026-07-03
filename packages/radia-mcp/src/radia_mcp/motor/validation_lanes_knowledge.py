@@ -1,12 +1,14 @@
-"""Public-safe dual-lane validation contract for radia-motor.
+"""Public-safe validation-lane contract for radia-motor.
 
-radia-motor has two useful motor-validation paths that should not be
-collapsed into one score:
+radia-motor has several motor-validation paths that should not be collapsed
+into one score:
 
-* HDiv-VIM + reduced FEM for fast integral / reduced pickup-flux and
-  demagnetizing-field anchors.
 * NGSolve+AGE for the finite-element air-gap machine path: torque, dq,
   eddy, and nonlinear machine quantities.
+* 2D collocation MMMM for fast planar per-region soft-iron and torque-sweep
+  checks.
+* HDiv-VIM + reduced FEM as an experimental RFC for future rotor/source-field
+  plus fixed-stator reduced response coupling.
 
 This module gives MCP clients a small contract for naming the lane, checking
 artifact metadata, and deciding which radia-motor knowledge should be updated
@@ -57,60 +59,6 @@ COMMON_REQUIRED_FIELDS = (
 
 
 LANES: dict[str, MotorValidationLane] = {
-    "hdiv_vim_reduced_fem": MotorValidationLane(
-        lane_id="hdiv_vim_reduced_fem",
-        label="HDiv-VIM + reduced FEM (experimental RFC)",
-        support_status="experimental_rfc",
-        support_note=(
-            "This is a new research coupling idea, not the historical "
-            "radia-motor supported path. Treat HDiv-VIM rotor plus reduced-FEM "
-            "stator as a design proposal until an interface operator, reduced "
-            "basis, and regression artifact are implemented."
-        ),
-        radia_path="proposed radia.vim HDiv rotor source-field lane plus fixed-stator reduced FEM",
-        best_for=(
-            "passive pickup flux and signed flux-linkage sweeps",
-            "permanent-magnet demagnetizing-field anchors",
-            "source-field / surface-current intuition",
-            "researching whether a rotor VIM source can drive a compact fixed-stator reduced FEM response",
-        ),
-        observable_families=(
-            "pickup_flux",
-            "flux_linkage",
-            "demag_field",
-            "coenergy",
-            "force_or_torque_trend",
-        ),
-        required_fields=COMMON_REQUIRED_FIELDS
-        + (
-            "coupling_design_status",
-            "interface_operator_contract",
-            "reduced_fem_contract",
-            "vim_operator_contract",
-        ),
-        required_metrics=(
-            "signed_agreement_count",
-            "mean_abs_relative_error",
-            "rms_abs_relative_error",
-            "max_abs_relative_error",
-        ),
-        public_evidence=(
-            "analytic sign/scale checks",
-            "stored public-safe regression artifacts",
-            "reduced FEM consistency checks",
-        ),
-        private_reference_sources=(
-            "product local reference",
-            "lab-local finite-element reference",
-            "open-source reference",
-            "stored regression reference",
-        ),
-        promotion_targets=(
-            "radia_mcp.motor.validation_lanes_knowledge",
-            "radia_mcp.motor.simple_mmm_2d prompt triage text",
-            "radia_mcp.radia_ngsolve force / flux recipes when applicable",
-        ),
-    ),
     "ngsolve_age": MotorValidationLane(
         lane_id="ngsolve_age",
         label="NGSolve+AGE",
@@ -169,17 +117,126 @@ LANES: dict[str, MotorValidationLane] = {
             "radia_mcp.radia_ngsolve AGE / force recipes",
         ),
     ),
+    "mmmm2d_coarse": MotorValidationLane(
+        lane_id="mmmm2d_coarse",
+        label="2D collocation MMMM coarse motor lane",
+        support_status="supported_coarse_path",
+        support_note=(
+            "This is now a verified coarse/reduced radia path for planar "
+            "multi-region soft-iron MMMM checks. It supports per-region "
+            "mu_r/BH inputs and factor-once torque sweeps, but it is not the "
+            "full AGE rotating-machine finite-element path."
+        ),
+        radia_path="radia.mmmm2d dense 2D collocation moment solver",
+        best_for=(
+            "fast planar soft-iron sanity checks before AGE",
+            "multi-grade rotor/stator region experiments",
+            "factor-once torque-angle sweeps for reduced motor studies",
+            "coarse optimization loops where internal loop pollution is acceptable",
+        ),
+        observable_families=(
+            "torque",
+            "coenergy",
+            "force_or_torque_trend",
+            "per_region_magnetization",
+            "demag_field",
+        ),
+        required_fields=COMMON_REQUIRED_FIELDS
+        + (
+            "mmmm2d_contract",
+            "region_material_contract",
+            "pytest_targets",
+        ),
+        required_metrics=(
+            "torque_relative_error",
+            "m_avg_relative_error",
+            "region_magnetization_ratio",
+            "quantity_specific_residual",
+        ),
+        public_evidence=(
+            "validation_test/feec/test_moment2d_perregion.py",
+        ),
+        private_reference_sources=(
+            "product local reference",
+            "lab-local finite-element reference",
+            "open-source reference",
+            "stored regression reference",
+        ),
+        promotion_targets=(
+            "radia_mcp.motor.validation_lanes_knowledge",
+            "radia_mcp.motor.triple_check_knowledge",
+            "radia_mcp.radia_ngsolve knowledge/mmm_core.py",
+        ),
+    ),
+    "hdiv_vim_reduced_fem": MotorValidationLane(
+        lane_id="hdiv_vim_reduced_fem",
+        label="HDiv-VIM + reduced FEM (experimental RFC)",
+        support_status="experimental_rfc",
+        support_note=(
+            "This is a new research coupling idea, not the historical "
+            "radia-motor supported path. Treat HDiv-VIM rotor plus reduced-FEM "
+            "stator as a design proposal until an interface operator, reduced "
+            "basis, and regression artifact are implemented."
+        ),
+        radia_path="proposed radia.vim HDiv rotor source-field lane plus fixed-stator reduced FEM",
+        best_for=(
+            "passive pickup flux and signed flux-linkage sweeps",
+            "permanent-magnet demagnetizing-field anchors",
+            "source-field / surface-current intuition",
+            "researching whether a rotor VIM source can drive a compact fixed-stator reduced FEM response",
+        ),
+        observable_families=(
+            "pickup_flux",
+            "flux_linkage",
+            "demag_field",
+            "coenergy",
+            "force_or_torque_trend",
+        ),
+        required_fields=COMMON_REQUIRED_FIELDS
+        + (
+            "coupling_design_status",
+            "interface_operator_contract",
+            "reduced_fem_contract",
+            "vim_operator_contract",
+        ),
+        required_metrics=(
+            "signed_agreement_count",
+            "mean_abs_relative_error",
+            "rms_abs_relative_error",
+            "max_abs_relative_error",
+        ),
+        public_evidence=(
+            "analytic sign/scale checks",
+            "stored public-safe regression artifacts",
+            "reduced FEM consistency checks",
+        ),
+        private_reference_sources=(
+            "product local reference",
+            "lab-local finite-element reference",
+            "open-source reference",
+            "stored regression reference",
+        ),
+        promotion_targets=(
+            "radia_mcp.motor.validation_lanes_knowledge",
+            "radia_mcp.motor.simple_mmm_2d prompt triage text",
+            "radia_mcp.radia_ngsolve force / flux recipes when applicable",
+        ),
+    ),
 }
 
 
 OVERVIEW = """\
-# radia-motor dual validation lanes
+# radia-motor validation lanes
 
-radia-motor should keep two independent cross-validation lanes:
+radia-motor should keep independent cross-validation lanes:
 
 - `ngsolve_age`: NGSolve+AGE.  This is the current supported radia-motor
   finite-element air-gap machine lane for torque, dq quantities, cogging,
   eddy/slip, hysteresis, and nonlinear machine studies.
+- `mmmm2d_coarse`: 2D collocation MMMM.  This is a supported coarse/reduced
+  lane for planar multi-region soft iron, per-region material dictionaries,
+  and factor-once torque sweeps.  It is useful before AGE and for optimization
+  triage, but it is not the full AGE moving-air-gap path.
 - `hdiv_vim_reduced_fem`: HDiv-VIM plus reduced FEM.  This is an experimental
   RFC lane.  The idea of using HDiv-VIM for the rotor and a reduced FEM model
   for the fixed stator is new and intentionally unusual; do not describe it as
@@ -222,7 +279,7 @@ PROMOTION_POLICY = """\
 
 Each motor cross-validation slot should end with three decisions:
 
-1. `which_lane`: `hdiv_vim_reduced_fem` or `ngsolve_age`.
+1. `which_lane`: `ngsolve_age`, `mmmm2d_coarse`, or `hdiv_vim_reduced_fem`.
 2. `which_observable`: one lane-supported observable family.
 3. `which_promotion`: the exact public-safe knowledge or recipe that improved.
 
@@ -242,6 +299,16 @@ cross-validation directory and mark `artifact_feedback.status = candidate`.
 
 RUNBOOK = """\
 # Dual-lane motor validation runbook
+
+For a 2D MMMM coarse motor slot:
+
+```powershell
+python -m pytest validation_test\\feec\\test_moment2d_perregion.py -q
+```
+
+Then attach the comparison as `motor_validation_lane = "mmmm2d_coarse"` with
+`mmmm2d_contract`, `region_material_contract`, and the pytest target. This lane
+can be used as a verified coarse/reduced path, not as a replacement for AGE.
 
 For an HDiv-VIM + reduced FEM research slot:
 
