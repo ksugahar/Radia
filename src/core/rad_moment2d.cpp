@@ -2,7 +2,7 @@
 // rad_moment2d.cpp -- 2D planar collocation MMMM (see rad_moment2d.h).
 //
 // Faithful 2D port of the 3D moment kernel (rad_interaction.cpp).  Validated
-// against a numpy PoC (C:\temp\mmmm2d): disk demag 1/2, ellipse 2:1 -> 1/3,2/3,
+// against an independent numpy PoC: disk demag 1/2, ellipse 2:1 -> 1/3,2/3,
 // linear chi-sweep chi/(1+chi/2).
 //-------------------------------------------------------------------------
 #include "rad_moment2d.h"
