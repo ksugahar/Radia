@@ -39,6 +39,20 @@ HDiv-VIM.  `rad.Solve` keeps the engineering workflow: tet mesh-backed iron rout
 loud on non-tet meshes.  This makes the HDiv side small enough to productionize honestly, while the
 collocation MMMM backend owns the broad element/symmetry/mixed-source cases.
 
+Progress (2026-07-03): **two shipped layers re-widen the 2026-06-29 TET-only scope at the
+operator level.**  (a) The pure-hex RT1 charge Gram — Piola-exact Q1 volume + quad-face charges on
+the 27-node Q2 geometry, H-matrix build with symmetric leaf fill + static-site radial inner
+quadrature (~10x vs the bring-up build on the cylinder benches: 166/164 s -> 18.9/16.3 s
+flat/curved); the ~20k-charge use-after-free crash is fixed (commit `20e6e9e2`).  (b) The 2D planar
+tri/quad log-kernel Gram for motor cross-sections (commit `a9999dd7`, closed-form gated: disk demag
+1/2 exact, ellipse thirds, 2D Clausius-Mossotti 2-3e-4).  Both auto-route through
+`build_charge_gram`; the `rad.Solve` engineering dispatch for hex REMAINS with collocation MMMM
+until the dispatch-flip decision (open), and nonlinear remains tet-only (the energy-Newton must
+learn an external (B, G, M) triple).  Executed evidence + fresh build timings:
+[`hex_rt1_and_2d_showcase.ipynb`](hex_rt1_and_2d_showcase.ipynb) (+ `_result.json` sidecar).
+Open: curved-hex max eig 1.0078 (halved from 1.0166; self/touching curved quadrature), wedge,
+2D nonlinear, Sauter-Schwab 6D (negative so far).
+
 ## Definition of done — the parity gate (M0)
 
 HDiv-VIM is production-sealed **only when** it is at-least-as-good on the full case matrix the shipped MSC

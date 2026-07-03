@@ -629,6 +629,31 @@ Hantila for the factor-once speed-up at the knee (Newton already gives correctne
 _STATUS = r"""
 # Status summary
 
+[UPDATE 2026-07-03 -- hex RT1 + 2D planar SHIPPED; HDiv-VIM is the PRIMARY accurate route]
+  * ROLE (Sugahara 2026-06-30): HDiv-VIM = the primary ACCURATE soft-iron demag route (loop-free by
+    construction, ~6 mesh/mu_r-independent Newton iters); collocation MMMM = the COARSE/fast tier.
+  * PURE-HEX RT1 charge Gram SHIPPED: Q1 volume charges (div(HDiv order-1) on a hex is Q1, NOT P0)
+    + quad-face surface charges, extracted PIOLA-EXACTLY on the 27-node Q2 geometry; flat + curved.
+    H-matrix build got symmetric leaf fill + far-inner Keast-15 + STATIC-SITE radial inner quadrature
+    (~10x day total: cylinder benches 166/164 s -> 18.9/16.3 s flat/curved; goldens 223 s -> 10.5 s).
+    The ~20k-charge use-after-free crash (thread_local cache capacity-clear while references were
+    held) is FIXED (commit 20e6e9e2).  Curved-hex open item: cylinder max eig 1.0078 (> the [0,1]
+    bound; halved from 1.0166) -- self/touching curved quadrature refinement pending.  `rad.Solve`
+    hex dispatch STILL routes to collocation MMMM (dispatch-flip = open policy decision); reach the
+    hex Gram via `radia.vim._vim.build_charge_gram(HDiv(hexmesh, order=1))`.
+  * 2D PLANAR tri/quad Gram SHIPPED (commit a9999dd7, motor cross-sections): log kernel -ln(r)/2pi,
+    charges = -div M on cells (P0 tri / Q1 quad -- the 2D twin of the hex gotcha) + M.n on boundary
+    edges.  Closed-form gated: disk demag 1/2 EXACT (0.50000), ellipse 2:1 -> 0.33438/0.66562,
+    2D Clausius-Mossotti M/H0 = chi/(1+chi/2) to 2-3e-4.  Same build_charge_gram auto-routing.
+    Quadrature lessons locked in the golden: the outer MUST be product-Gauss (Dunavant-7 leaked the
+    quad spectrum to 1.072 while entries agreed to 3e-5); the edge inner split-grades at the
+    kernel-peak PARAMETER.  Nonlinear is tet-only for now (2D/hex nonlinear = open; wedge = open).
+  * EXECUTED SHOWCASE: docs/hdiv_vim/hex_rt1_and_2d_showcase.ipynb (+ _result.json sidecar) -- hex
+    spectrum/cube-1/3 gates incl. a genuine-warp real-mesh hex, fresh H-matrix build timings
+    (160 -> 5632 charges: 1.1 -> 57 s on LAB), all 2D closed-form gates, and the production
+    hdiv_demag_solve one-call on a tet sphere.  Goldens: validation_test/feec/
+    test_hdiv_vim_hex_rt1_wiring.py + test_hdiv_vim_2d_wiring.py.
+
 [API UPDATE 2026-06-23] The dense Python Gram path -- the `analytic_gram=` / `wilton_surface=` /
 `skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
 `wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section

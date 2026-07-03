@@ -3,10 +3,12 @@
 **One sentence:** the magnetization "loop" modes that break the constant-M MMM/MSC integral
 equation on distorted meshes (see [`../loop_star_breakdown.md`](../loop_star_breakdown.md)) are
 **field-null by construction** when the magnetization lives in NGSolve's H(div) (RT) finite-element
-space — so the **HDiv-type VIM** complements the canonical **multipole-moment MMM** MSC backend with a
-de-Rham-exact operator for **tetrahedral RT1 soft-iron demag**, including curved P2 tetrahedral
-geometry.  Non-tet bodies, symmetry-reduced image models, and permanent-magnet mixing are intentionally
-routed to the collocation MMMM backend.
+space — so the **HDiv-type VIM** is the **primary accurate soft-iron demag route** (decision
+2026-06-30; collocation MMMM is the coarse/fast tier), with a de-Rham-exact operator for **RT1 demag
+on tetrahedra (flat + curved P2) and pure-hex meshes (flat + curved Q2, Piola-exact charges,
+H-matrix build)**, plus a **2D planar tri/quad layer** (log kernel, motor cross-sections).
+Permanent-magnet regions mix directly into `hdiv_demag_solve` (`pm_M=`); wedge/mixed-element bodies
+and symmetry-reduced image models remain routed to the collocation MMMM backend.
 
 The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix and high-order extensibility,
 but the charge-Coulomb Gram integrals dominate matrix construction.  Multipole-moment MMM gives up
@@ -14,8 +16,15 @@ that full Galerkin symmetry and instead uses Mathematica-derived moment rows, so
 surface-charge MMM systems keep cheap local element functionals and scalable H-matrix matvecs.
 
 This is the canonical technical reference. The runnable examples + their numbers live in
-[`examples/vim/README.md`](../../examples/vim/README.md); the decision/narrative record is
+[`examples/vim/README.md`](../../examples/vim/README.md) (a protected validation corpus — ~25
+`validation_test/feec` goldens import those scripts directly); the decision/narrative record is
 the radia-mcp `hdiv_vim` knowledge (MCP tool `mcp__radia-ngsolve__hdiv_vim`).
+
+**Executed showcase notebooks** (code + embedded results + `_result.json` sidecars, this directory):
+[`hdiv_curved_showcase.ipynb`](hdiv_curved_showcase.ipynb) (curved P2 tet win),
+[`polynomial_charge_field.ipynb`](polynomial_charge_field.ipynb) (RT1 polynomial charges),
+[`hex_rt1_and_2d_showcase.ipynb`](hex_rt1_and_2d_showcase.ipynb) (2026-07-03: hex RT1 + H-matrix
+build timing + 2D planar closed-form gates + the production `hdiv_demag_solve` one-call).
 
 ---
 
@@ -72,6 +81,9 @@ What each number is measured against, precisely:
 | Curved + high-order demag | **ANALYTIC** | curved+o2 exact; flat floored |
 | Curved field vs shipped Radia (flat) | **ANALYTIC** dipole | accuracy-per-DOF **~10–30×** |
 | Curved × nonlinear field | **ANALYTIC** dipole | flat `~9%` → curved `<0.4%` (~23×) |
+| Pure-hex RT1 (affine / distorted / real-warp hex) | physical bound + cube 1/3 | eig ∈ [0,1] incl. the worst real Cubit cylinder hex (pre-Piola leaked to 1.0105); `hex_rt1_and_2d_showcase.ipynb` |
+| Curved hex cylinder (Q2 geometry) | **ANALYTIC** moment (volume capture) | moment err 0.13%; max eig 1.0078 — the one documented bound violation, open item |
+| 2D disk / ellipse / Clausius–Mossotti | **ANALYTIC** closed forms | disk demag 1/2 exact (0.50000); ellipse 2:1 → 0.33438/0.66562; CM `2–3e-4` |
 | Symmetry models 1/2, 1/4, 1/8 | retired from HDiv-VIM | use collocation MMMM for reduced image/symmetry models |
 
 **Reference rules:** sphere / spheroid / ellipsoid / dipole are validated vs **analytic truth** (real
@@ -93,10 +105,11 @@ in **6 Newton iters** and matches Radia to `<1%`.
 
 ## 5. Symmetry models (1/2, 1/4, 1/8)
 
-Image / IMA symmetry is retired from HDiv-VIM.  HDiv-VIM is now the tet/RT1 soft-iron path; reduced
-symmetry models, hex/wedge bodies, and permanent-magnet mixing are the responsibility of collocation
-MMMM.  This keeps the public HDiv contract small and fail-loud instead of carrying experimental image
-rules in the Galerkin path.
+Image / IMA symmetry is retired from HDiv-VIM.  Reduced symmetry / image models and wedge /
+mixed-element bodies are the responsibility of collocation MMMM.  This keeps the public HDiv
+contract small and fail-loud instead of carrying experimental image rules in the Galerkin path.
+(Pure-hex meshes are **no longer** in that exclusion — the hex RT1 charge Gram shipped 2026-07;
+permanent-magnet mixing is native via `hdiv_demag_solve(pm_M=...)`.)
 
 ## 6. HDiv-type vs multipole-moment MMM
 
@@ -107,23 +120,44 @@ rules in the Galerkin path.
 | Distorted-mesh μr-independence | ✓ (hand-crafted) | ✓ **by construction** (`4e-16`) |
 | Symmetry 1/4, 1/8 | ✓ (loop-star / image handling) | retired; use collocation MMMM |
 | **Curved tetrahedral geometry** | ✗ (flat elements) | ✓ RT1 + curved P2 tet geometry |
-| Hand-crafted elements | required | **not needed for tet RT1** (de-Rham-exact) |
+| **Pure-hex meshes** | ✓ (its native element; coarse/fast tier) | ✓ RT1, Piola-exact charges, flat + curved Q2, H-matrix build |
+| **2D planar tri/quad (motor cross-sections)** | ✗ | ✓ log-kernel Gram, closed-form gated |
+| Wedge / mixed-element bodies | ✓ | not yet (open) |
+| Hand-crafted elements | required | **not needed** (de-Rham-exact) |
 
 ## 7. Honest status & open work
 
-> **The concrete milestone roadmap for production HDiv-VIM is [PRODUCTIONIZATION.md](PRODUCTIONIZATION.md)**
-> — current C++/Python inventory, the parity-gate definition-of-done (incl. the unmeasured speed gap),
-> and milestones M0 (parity + speed measurement) -> M5 (production seal).
+> **The milestone record for production HDiv-VIM is [PRODUCTIONIZATION.md](PRODUCTIONIZATION.md)**
+> — C++/Python inventory, the parity-gate definition-of-done, milestones M0–M5, and the dated
+> progress log (latest: 2026-07-03 — hex RT1 + 2D layers shipped; build speed measured).
 
-The HDiv-type VIM is a **validated research prototype** (Python + NGSolve) with a quantified
-accuracy-per-DOF win over the shipped flat solver on curved problems, and parity on the flat cases. The
-remaining lift to make it a **production backend alongside multipole-moment MMM MSC**:
+**Status 2026-07-03: the HDiv-type VIM is a production C++ backend**, not a Python prototype — the
+analytic charge Gram is an all-C++ HACApK H-matrix (symmetric leaf fill + static-site radial inner
+quadrature, ~10× vs the bring-up build on the cylinder benchmarks), the linear solve is the
+symmetric mass-Riesz CG, the nonlinear tet path is the all-C++ energy-Newton (deep-saturation
+robust), and the 2026-06-30 role decision makes it the **primary accurate soft-iron route**
+(collocation MMMM = coarse/fast tier).  Shipped and golden-locked: tet RT1 flat + curved P2
+(linear/nonlinear/PM-mixed/per-region/holed bodies), pure-hex RT1 flat + curved Q2 (Piola-exact
+charges; the ~20k-charge use-after-free is fixed, commit `20e6e9e2`), and the 2D planar tri/quad
+layer (commit `a9999dd7`).  Evidence: `validation_test/feec/` (40+ HDiv goldens) + the executed
+showcase notebooks above.
 
-1. **C++ productionization** — keep the live analytic charge Gram + RT1 Newton path behind a Radia API
-   and measure it honestly against collocation MMMM.  The retired Gauss-point and H-LU paths are not
-   part of the public HDiv-VIM contract.
-2. **Curved nonlinear volume charge** — `ngsolve.bem` is boundary-only, so non-uniform nonlinear on
-   curved cells still needs the Newtonian volume potential (`phi_tet`) on curved geometry.
+**Open work** (honest list, tracked in memory `hdiv-tet-hex-coupling-pyramid-gated` /
+`hdiv-vim-tri-quad-motor`):
+
+1. **Curved-hex eigenvalue 1.0078** — the curved cylinder's demag spectrum still slightly exceeds
+   the [0,1] bound (halved from 1.0166 by the site anchors); remaining self/touching curved
+   quadrature refinement.
+2. **Nonlinear hex** — the energy-Newton solver must learn to take an external (B, G, M) triple;
+   nonlinear is currently tet-only.  **2D nonlinear** iron likewise.
+3. **Wedge** elements (extruded motor stacks) + the hex auto-dispatch policy (when a hex mesh
+   defaults to HDiv-VIM vs collocation MMMM).
+4. **VIM ↔ reduced-FEM weak coupling** — 2D skeleton verified in research (stagger converges in 3
+   iterations; plate loss within 7.8% of an all-in-one FEM reference), not yet promoted; then the
+   motor/AGE comparison bench.
+5. The Sauter–Schwab 6D inner quadrature is a **negative result** so far (prototype plateaus at
+   2e-3; needs a rigorous per-shuffle CPS second transform).  The retired Gauss-point and H-LU
+   paths remain outside the public contract.
 
 ## 8. Code map
 

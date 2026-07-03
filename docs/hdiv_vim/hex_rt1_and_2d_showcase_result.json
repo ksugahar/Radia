@@ -1,0 +1,203 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-07-03T03:15:43Z",
+  "notebook": "docs/hdiv_vim/hex_rt1_and_2d_showcase.ipynb",
+  "notebook_sha256": "8607acb67c15219e2b9985639f9168dab4a5444628396993d84240d32abd73d1",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.5"
+  },
+  "summary": {
+    "path": "docs/hdiv_vim/hex_rt1_and_2d_showcase.ipynb",
+    "cells": 14,
+    "code_cells": 7,
+    "executed_code_cells": 7,
+    "code_cells_with_outputs": 7,
+    "output_count": 13,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "e1712ca3945c44ef239c5f38a44a28f9110b10114d4e2b9fa6f9a18290018131",
+      "source_preview": "import json, platform, time\nimport numpy as np\nimport scipy.linalg as sla\nimport ngsolve as ng\nfrom ngsolve.meshes import MakeStructured2DMesh, MakeStructured3DMesh\nfrom netgen.occ import WorkPlane, OCCGeometry\nfrom netgen.csg import CSGeometry, Sphere, Pnt\nimport radia\nfrom radia.vim._vim import build_charge_gram\nfrom radia.vim import hdiv_demag_solve\n\nRESULTS = {\n    \"radia_version\": radia.__version__,\n    \"numpy_version\": np.__version__,\n    \"platform\": platform.platform(),\n}\nprint(\"radia\", radia.__version__, \"| numpy\", np.__version__, \"|\", platform.platform())\n\n\n# Materialize N = B^T G B column-by-column through the symmetric H-matrix matvec.\ndef materialize_N(B, G):\n    n = B.shape[1]\n    N = np.zeros((n, n))\n    e = np.zeros(n)\n    for j in range(n):\n        e[j] = 1.0\n        N[:, j] = B.T @ np.asarray(G.matvec_sym((B @ e).tolist()), float)\n        e[j] = 0.0\n    return 0.5 * (N + N.T)\n\n\n# Shared spectrum + axis-demag gate (call inside a TaskManager region).\ndef gate(fes):\n    B",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 63,
+          "text_sha256": "9d1386e253e51743bb35ba6441cf361da98f5322008359a081d9e94ff3eed263",
+          "text_preview": "radia 4.95.5 | numpy 2.4.6 | Windows-2022Server-10.0.20348-SP0\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "4a611b5bdcc83dde7dd59be63a07e3a3d96e0ddbc9a933364bddc4a438288576",
+      "source_preview": "rows = []\nfor name, mapping in [\n    (\"affine\", lambda x, y, z: (0.02 * x, 0.02 * y, 0.02 * z)),\n    (\"distorted\", lambda x, y, z: (0.02 * (x + 0.15 * y * z),\n                                   0.02 * (y + 0.10 * x * z),\n                                   0.02 * (z + 0.12 * x * y))),\n]:\n    mesh = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3, mapping=mapping)\n    with ng.TaskManager():\n        fes = ng.HDiv(mesh, order=1)\n        w, D, _, _ = gate(fes)\n    assert w.min() > -1e-8, f\"{name}: N not PSD\"\n    assert 0.99 < w.max() < 1.005, f\"{name}: spectrum escaped [0,1]: {w.max():.6f}\"\n    assert 0.31 < D[2] < 0.35, f\"{name}: cube demag {D[2]:.4f} off 1/3\"\n    rows.append({\"mesh\": name, \"ndof\": fes.ndof, \"eig_min\": float(w.min()),\n                 \"eig_max\": float(w.max()), \"D_z\": D[2]})\n    print(f\"{name:10s} ndof={fes.ndof:5d}  eig(M^-1 N) in [{w.min():+.1e}, {w.max():.6f}]  \"\n          f\"D_z={D[2]:.5f}  (cube exact: 1/3)\")\nRESULTS[\"hex_rt1_3x3x3\"] = rows",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 91,
+          "text_sha256": "22a32a0d0315f5f10ce7a41fa67c297ce7c22088398a3acab033cf1ae391e83b",
+          "text_preview": "affine     ndof=  756  eig(M^-1 N) in [-1.0e-15, 0.999017]  D_z=0.33271  (cube exact: 1/3)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 91,
+          "text_sha256": "d80deda63e51fb05aa7056f0b5542dbe0c0d9db6c2c41529ce27b903c9d2a7fa",
+          "text_preview": "distorted  ndof=  756  eig(M^-1 N) in [-8.8e-16, 0.997762]  D_z=0.33287  (cube exact: 1/3)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "3fd4cfc65f946171c73b0127f7ef8416afcbe45f62f4be2be304ee331332b050",
+      "source_preview": "WORST_CYL_HEX_CORNERS = np.array([  # x-fastest corner order (ix + 2*iy + 4*iz)\n    (-0.5, 1e-16, 0.5),\n    (-0.4619397662556434, 0.1913417161825449, 0.5),\n    (-0.3799374424886703, -5.15188134101e-05, 0.5),\n    (-0.3135968748399616, 0.0996211631527812, 0.5),\n    (-0.5, -1e-16, 0.3),\n    (-0.461939766255643, 0.1913417161825455, 0.3),\n    (-0.3799374424886702, -5.151881341e-05, 0.2999999999999999),\n    (-0.3135968748399616, 0.0996211631527814, 0.2999999999999999),\n])\n\n\ndef trilerp(x, y, z):\n    out = np.zeros(3)\n    for i in range(8):\n        rx, ry, rz = i & 1, (i >> 1) & 1, (i >> 2) & 1\n        out += ((x if rx else 1 - x) * (y if ry else 1 - y) * (z if rz else 1 - z)\n                * WORST_CYL_HEX_CORNERS[i])\n    return tuple(out)\n\n\nmesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1, mapping=trilerp)\nwith ng.TaskManager():\n    fes = ng.HDiv(mesh, order=1)\n    w, D, _, _ = gate(fes)\nassert w.min() > -1e-8 and w.max() < 1.005\nprint(f\"warped real hex: eig(M^-1 N) in [{w.min():+.1",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 92,
+          "text_sha256": "d5a065e5f0e89b8201e037ff373924a3920c1ac46e290fd0329d53c454c0be00",
+          "text_preview": "warped real hex: eig(M^-1 N) in [-3.6e-16, 0.838341]  (pre-Piola model converged to 1.0105)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "a18611cc41dba071271af1c4d007a3dbf85fee2f9009a20e4ff139d886656954",
+      "source_preview": "import matplotlib.pyplot as plt\n\nscal = []\nfor n in (2, 4, 6, 8):\n    mesh = MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=n,\n                                mapping=lambda x, y, z: (0.02 * x, 0.02 * y, 0.02 * z))\n    with ng.TaskManager():\n        fes = ng.HDiv(mesh, order=1)\n        t0 = time.perf_counter()\n        B, G, M_mass = build_charge_gram(fes)\n        dt = time.perf_counter() - t0\n    nq = int(G.ndof())\n    scal.append({\"n\": n, \"hexes\": n ** 3, \"charges\": nq, \"build_s\": round(dt, 3)})\n    print(f\"n={n}: {n**3:4d} hexes, {nq:6d} charges  ->  H-matrix Gram build {dt:8.3f} s\")\nRESULTS[\"hex_gram_build_scaling\"] = scal\n\nfig, ax = plt.subplots(figsize=(5.2, 3.4))\nq = [s[\"charges\"] for s in scal]\nt = [s[\"build_s\"] for s in scal]\nax.loglog(q, t, \"o-\", label=\"measured build\")\nref = [t[-1] * (x / q[-1]) * np.log(x) / np.log(q[-1]) for x in q]\nax.loglog(q, ref, \"--\", label=\"O(N log N) guide\")\nax.set_xlabel(\"charges N\")\nax.set_ylabel(\"Gram build time [s]\")\nax.grid(True, which=\"both\", ",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "5ef948937e215318489c56ce282a8bb3bb60470cb5c0b8a70697a0ed0065cbb5",
+          "text_preview": "n=2:    8 hexes,    160 charges  ->  H-matrix Gram build    1.129 s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "bb4868f3a2e8785b5f99ed47c45c3c29d73377e981f4c72ce3183b422a1cdc42",
+          "text_preview": "n=4:   64 hexes,    896 charges  ->  H-matrix Gram build    6.002 s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "64ae6de136893017c9c76054f21f39f40b927f946197afb51cb5ed07e62f2072",
+          "text_preview": "n=6:  216 hexes,   2592 charges  ->  H-matrix Gram build   20.773 s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 68,
+          "text_sha256": "94ca2f42c5bd72bd2567fe288b70a1d21b83413fe297778f9f0939b6a7494fa5",
+          "text_preview": "n=8:  512 hexes,   5632 charges  ->  H-matrix Gram build   57.021 s\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "0346c3a6c2de10d246ed5a94392827c03cb2a649a83ff71a616c86d217151cd9",
+          "text_plain_preview": "<Figure size 520x340 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 33448,
+              "sha256": "b17373cb6c9952bd1da8c957829c55bf5ce6a6cd6ef0a84b4c022d234809c672"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "8f14ace0a8dc940c46c6d66f089f2cb2d4df7f42e7b3f6990097ea6c1db769fb",
+      "source_preview": "# disk: demag 1/2 exact + Clausius-Mossotti solve\nwp = WorkPlane().Circle(0, 0, 1.0).Face()\nmesh = ng.Mesh(OCCGeometry(wp, dim=2).GenerateMesh(maxh=0.3))\nwith ng.TaskManager():\n    fes = ng.HDiv(mesh, order=1)\n    w, D, N, Md = gate(fes)\n    gf = ng.GridFunction(fes)\n    gf.Set(ng.CoefficientFunction((1.0, 0.0)))\n    mux = gf.vec.FV().NumPy().copy()\nassert w.max() < 1.005 and abs(D[0] - 0.5) < 2e-3 and abs(D[1] - 0.5) < 2e-3\nprint(f\"disk   : ndof={fes.ndof:4d}  eig_max={w.max():.6f}  D=({D[0]:.5f}, {D[1]:.5f})  exact 1/2\")\ncm = []\nfor chi in (10.0, 999.0):\n    A = Md / chi + N\n    m = np.linalg.solve(A, Md @ mux)\n    Mavg = float(mux @ (Md @ m)) / float(mux @ (Md @ mux))\n    ref = chi / (1.0 + chi / 2.0)\n    rel = abs(Mavg - ref) / ref\n    assert rel < 3e-3\n    cm.append({\"chi\": chi, \"M_over_H0\": Mavg, \"cm2d_exact\": ref, \"rel_err\": rel})\n    print(f\"         chi={chi:6.0f}: M/H0 = {Mavg:.6f}  vs 2D Clausius-Mossotti {ref:.6f}  (rel {rel:.1e})\")\nRESULTS[\"disk_2d\"] = {\"ndof\": fes.ndof, \"",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 319,
+          "text_sha256": "7832f521fbee57abb68a92e266f6419557423a721eaba939def19fb4f303b371",
+          "text_preview": "disk   : ndof= 216  eig_max=0.999965  D=(0.50000, 0.50000)  exact 1/2\n         chi=    10: M/H0 = 1.666949  vs 2D Clausius-Mossotti 1.666667  (rel 1.7e-04)\n         chi=   999: M/H0 = 1.996604  vs 2D Clausius-Mossotti 1.996004  (rel 3.0e-04)\nellipse: ndof= 334  eig_max=0.999966  D=(0.33438, 0.66562)  exact (1/3, 2/3)\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 79,
+          "text_sha256": "1d9390fbe583ed3054176c1d0d22dcf4213ae32873ce05e694e100452622163c",
+          "text_preview": "dist-quad square: ndof=  84  eig in [-5.7e-16, 0.999284]  D=(0.50001, 0.50001)\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 11,
+      "execution_count": 6,
+      "source_sha256": "a7ee628e96d947dca3749467f8941c3380dcad2c8ecdf806299b10318641b108",
+      "source_preview": "g = CSGeometry()\ng.Add(Sphere(Pnt(0, 0, 0), 1.0))\nwith ng.TaskManager():\n    mesh = ng.Mesh(g.GenerateMesh(maxh=0.45))\nH0 = 1000.0  # A/m, +z\nmu_r = 1000.0\nwith ng.TaskManager():\n    res = hdiv_demag_solve(mesh, mu_r, ng.CoefficientFunction((0, 0, H0)))\nchi = mu_r - 1.0\nD = res[\"demag\"]\nMz = res[\"M_avg\"][2]\nM_selfD = chi / (1.0 + chi * D) * H0\nM_exact = chi / (1.0 + chi / 3.0) * H0\nprint(f\"sphere mu_r={mu_r:.0f}: n_el={res['n_el']}  linear_solver={res['linear_solver']}\")\nprint(f\"  demag D  = {D:.5f}  (exact 1/3)\")\nprint(f\"  Mz_avg   = {Mz:.2f} A/m ; chi/(1+chi*D)*H0 = {M_selfD:.2f} ; chi/(1+chi/3)*H0 = {M_exact:.2f}\")\nassert abs(D - 1 / 3) < 5e-3\nassert abs(Mz - M_selfD) / M_selfD < 2e-3\nRESULTS[\"tet_one_call_sphere\"] = {\"n_el\": int(res[\"n_el\"]), \"demag\": float(D),\n                                  \"Mz_avg\": float(Mz),\n                                  \"linear_solver\": str(res[\"linear_solver\"])}",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 173,
+          "text_sha256": "8f87239c281a85ca14694364014fe9b706ad63add026c9c4a324b6bd5ab7c8ce",
+          "text_preview": "sphere mu_r=1000: n_el=158  linear_solver=mass-riesz-cg\n  demag D  = 0.33347  (exact 1/3)\n  Mz_avg   = 2993.70 A/m ; chi/(1+chi*D)*H0 = 2989.79 ; chi/(1+chi/3)*H0 = 2991.02\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 13,
+      "execution_count": 7,
+      "source_sha256": "81441d7b56cfbbe08cefd25de1e1faf1825c55bab4c2eaa6fb90946e6dd26774",
+      "source_preview": "print(json.dumps(RESULTS, indent=1))",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 1736,
+          "text_sha256": "a7d5837ad0da2f7d706c0748097a8ea8e408ca5faa527e46a7dbd4c80f8d16c7",
+          "text_preview": "{\n \"radia_version\": \"4.95.5\",\n \"numpy_version\": \"2.4.6\",\n \"platform\": \"Windows-2022Server-10.0.20348-SP0\",\n \"hex_rt1_3x3x3\": [\n  {\n   \"mesh\": \"affine\",\n   \"ndof\": 756,\n   \"eig_min\": -1.0457544424431133e-15,\n   \"eig_max\": 0.9990166926461084,\n   \"D_z\": 0.33271288675921823\n  },\n  {\n   \"mesh\": \"distorted\",\n   \"ndof\": 756,\n   \"eig_min\": -8.811778183262682e-16,\n   \"eig_max\": 0.9977619888042581,\n   \"D_z\": 0.3328748184465225\n  }\n ],\n \"hex_worst_warp\": {\n  \"eig_min\": -3.648720104587529e-16,\n  \"eig_max\": 0.8383411143596173\n },\n \"hex_gram_build_scaling\": [\n  {\n   \"n\": 2,\n   \"hexes\": 8,\n   \"charges\": 160,\n   \"build_s\": 1.129\n  },\n  {\n   \"n\": 4,\n   \"hexes\": 64,\n   \"charges\": 896,\n   \"build_s\": 6.002\n  },\n  {\n   \"n\": 6,\n   \"hexes\": 216,\n   \"charges\": 2592,\n   \"build_s\": 20.773\n  },\n  {\n   \"n\": 8,\n   \"hexes\": 512,\n   \"charges\": 5632,\n   \"build_s\": 57.021\n  }\n ],\n \"disk_2d\": {\n  \"ndof\": 216,\n  \"eig_max\": 0.9999645769597206,\n  \"D\": [\n   0.5000020481402715,\n   0.5000020997947036\n  ],\n  \"clausius_mossotti\": [\n   {\n    \"chi\": 10.0,\n    \"M_over_H0\": 1.6669487925842736,\n    \"cm2d_exact\": 1.6666666666666667,\n    \"rel_err\": 0.00016927555056414078\n   },\n   {\n    \"chi\": 999.0,\n    \"M_over_H0\": 1.9966039409848595,\n    \"cm2d_exact\": 1.996003996003996,\n    \"rel_err\": 0.00030057303595817795\n   }\n  ]\n },\n \"ellipse_2d\": {\n  \"ndof\": 334,\n  \"eig_max\": 0.9999662535245025,\n  \"D\": [\n   0.33438359870384543,\n   0.6656200554184846\n  ]\n },\n \"distorted_quad_2d\": {\n  \"ndof\": 84,\n  \"eig_min\": -5.747603522350016e-16,\n  \"eig_max\": 0.9992839515486286,\n  \"D\": [\n   0.5000051418897744,\n   0.5000051485022954\n  ]\n },\n \"tet_one_call_sphere\": {\n  \"n_el\": 158,\n  \"demag\": 0.3334702814299622,\n  \"Mz_avg\": 2993.698126303147,\n  \"linear_solver\": \"mass-riesz-cg\"\n }\n}\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
