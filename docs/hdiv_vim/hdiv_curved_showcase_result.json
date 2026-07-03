@@ -1,14 +1,14 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:30:27Z",
+  "generated_at_utc": "2026-07-03T20:22:08Z",
   "notebook": "docs/hdiv_vim/hdiv_curved_showcase.ipynb",
-  "notebook_sha256": "0dd8619268d8fac72aa5be113d25bf2f3797e44642cab0d3391139ccf2ad4078",
+  "notebook_sha256": "418be29aa82dd8d04ca916111acab833f0895431bf0f86768ce5c381e9746238",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_version": "4.95.5"
   },
   "summary": {
     "path": "docs/hdiv_vim/hdiv_curved_showcase.ipynb",

@@ -16,7 +16,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 pytest.importorskip("radia")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import compare_curved_vs_radia_field as cmp  # noqa: E402
 
 

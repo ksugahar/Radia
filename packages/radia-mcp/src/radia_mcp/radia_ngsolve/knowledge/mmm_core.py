@@ -680,8 +680,9 @@ INNER LOOP re-Solving the same geometry (source / material changes only) skips t
 whole geometry build -- only the 6x6 block-Jacobi assemble + BiCGSTAB run per
 solve.  Invalidated on `UtiDelAll` and on any key mismatch.
 
-MEASURED (mdx, 38 threads, mu_r=200, eps=1e-4; 3-way benchmark
-`examples/vim/bench_moment_solvers.py` -> `results_moment_solvers_mdx_20260702.json`,
+MEASURED (mdx, 38 threads, mu_r=200, eps=1e-4; retired 3-way benchmark
+`results_moment_solvers_mdx_20260702.json`,
+inventoried in `docs/hdiv_vim/vim_examples_retirement_results.json`,
 27/27 cases):
 - COLD solve: cube 24.6k DOF dense-K BiCGSTAB 33.7 s vs H-matrix 4.4 s (7.7x);
   C-yoke 14.9k DOF 13.9 s vs 2.5 s (5.4x); H-matrix alone: 48k DOF in 9.3 s / 2.5 GB.
@@ -695,7 +696,7 @@ method 1 (dense-K BiCGSTAB) small/medium one-shot solves; method 2
 (HACApK-BiCGSTAB) large N AND any repeated-solve / optimization workload.
 
 MAX-SCALE SWEEP (mdx, 2026-07-03, radia 4.95.5, 57 GB RAM / 38 threads;
-`examples/vim/results_moment_solvers_mdx_20260703.json`, cube mu_r=200, tol 1e-8,
+retired result `results_moment_solvers_mdx_20260703.json`, cube mu_r=200, tol 1e-8,
 each method to its wall):
 - method 0 (dense moment LU): max 24,576 DoF (N=16: 14.0 s cold, peak 17 GB -- the
   LU path holds ~3.5x the matrix, so 48k DoF needs ~66 GB and dies on 57 GB RAM).
@@ -708,8 +709,7 @@ each method to its wall):
   suspected int32 overflow around nHex^2 > 2^31.  Treat >200k DoF as BROKEN until
   the fail-loud fix lands; the honest method-2 ceiling today is ~197k DoF.
 
-CTYPE NONLINEAR AT 165k DoF (same mdx run;
-`examples/vim/bench_moment_ctype_nonlinear.py` +
+CTYPE NONLINEAR AT 165k DoF (same mdx run; retired nonlinear C-type benchmark +
 `results_moment_ctype_nonlinear_mdx_20260703.json`): voxelized C-yoke nside=54 =
 27,720 hex = 166,320 DoF, MatSatIsoTab 13-pt steel curve (knee ~1.2 T),
 SELF-CALIBRATED uniform y-drive H0 = 40 kA/m (max|M| = 1.36e6 A/m = partial
@@ -950,8 +950,8 @@ makes loops ker(B), is the right consolidation.)
 MULTIPOLE_MODES = """\
 ## What field does the 6-DoF MSC element create? (multipole modes + conditioning)
 
-(Sugahara-lab study 2026-06-22. Numerics: `examples/vim/multipole_moment_svd_multipole.py`
-(SVD/eig + multipole projection) and `examples/vim/multipole_moment_aspect_ratio.py`
+(Sugahara-lab study 2026-06-22. Numerics: retired VIM prototype inventory
+(SVD/eig + multipole projection and aspect-ratio sweep)
 (iteration vs aspect ratio). Symbolic proof:
 `packages/radia-mcp/src/radia_mcp/mathematica/basis_functions/six_face_charge_multipole.wls`.)
 
@@ -1066,7 +1066,7 @@ an irregular tet -- principal-axis dipoles, NOT x/y/z and NOT a "moment basis".
 
 **API caveat (2026-06-26):** `rad.GetInteractMatrix` now returns ALL ZEROS for the
 face-charge MSC elements (hex/pyramid/wedge), so
-the lab `examples/vim/multipole_moment_svd_multipole.py` SVD-of-N path is STALE for them
+the lab SVD-of-N prototype path is STALE for them
 (it still works for the 3-DOF tet demag tensor). For hex/pyramid/wedge field eigenmodes,
 build a field-energy Gram `G_ij = <H_i, H_j>` (H_i = field of unit charge on face i, via
 the van Oosterom-Strackee analytic kernel) and `eig()` that instead.

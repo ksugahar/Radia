@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
 

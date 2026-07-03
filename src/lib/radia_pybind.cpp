@@ -433,7 +433,8 @@ int ObjWedge(py::list vertices, py::array_t<double> magnetization) {
  * Square-base pyramid: 1 quadrilateral base + 4 triangular sides.
  * 5 faces total -> 5 surface-charge DOF for the multipole-moment MMM MSC method.  The single quadrupole row is
  * the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2-type mode for a symmetric pyramid -- DISTINCT
- * from the wedge's axial mode; both are derived/verified in examples/vim/eigenmode_quadrupole_derivation.wls),
+ * from the wedge's axial mode; both were derived in the retired VIM prototype inventory
+ * recorded by docs/hdiv_vim/vim_examples_retirement.ipynb),
  * so the pyramid solves through the same moment path as hex (6) and wedge (5) with no extra kernel.
  *
  * Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
@@ -1008,7 +1009,8 @@ py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
 }
 
 // Multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
-// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> multipole-moment MMM upgrade (vs examples/vim prototype).
+// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> multipole-moment MMM upgrade
+// against the retired Python prototype inventory recorded in docs/hdiv_vim/vim_examples_retirement.ipynb.
 py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, double hz) {
     double Happ[3] = {hx, hy, hz};
     int dof = 0;
@@ -4318,7 +4320,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per moment
               element: 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched
               to chi*{H,gradH}(centroid) via GetCentroidFieldGrad.  Step-1 verification of the
-              EIEM2 -> multipole-moment MMM upgrade (matches examples/vim/multipole_moment_iter_scaling.py::build).
+              EIEM2 -> multipole-moment MMM upgrade (matches the retired Python prototype
+              inventory recorded in docs/hdiv_vim/vim_examples_retirement.ipynb).
 
               Returns: (A, rhs, dof) -- A is (dof, dof), rhs is (dof,).
           )pbdoc");

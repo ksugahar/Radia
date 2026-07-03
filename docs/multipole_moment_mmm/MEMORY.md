@@ -41,8 +41,9 @@ Decision + measurements, 2026_07_02:
   H-matrix, CACHED CROSS-SOLVE on `radTApplication` together with the chi-free
   localL/diagK blocks (validity = interaction ptr + hacapk eps/leaf/eta +
   bit-exact centroid compare).  tet/wedge/mixed method-2 -> dense moment LU.
-- mdx 3-way benchmark (2026_07_02,
-  `examples/vim/results_moment_solvers_mdx_20260702.json`, 27/27 cases,
+- mdx 3-way benchmark (2026_07_02, retired
+  `results_moment_solvers_mdx_20260702.json`, inventoried in
+  `docs/hdiv_vim/vim_examples_retirement_results.json`, 27/27 cases,
   mu_r = 200, eps = 1e-4): COLD solve -- cube 24.6k DOF: dense-K BiCGSTAB
   33.7 s vs H-matrix 4.4 s (7.7x); C-yoke 14.9k DOF: 13.9 s vs 2.5 s (5.4x);
   H-matrix alone reaches 48k DOF in 9.3 s / 2.5 GB.  WARM solve (the

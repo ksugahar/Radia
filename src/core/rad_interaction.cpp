@@ -2556,8 +2556,8 @@ void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nH
 //=========================================================================
 // BuildMomentSystemCore: the parameter-free multipole-moment MMM system matrix A and RHS for PER-ELEMENT linear
 // susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the element centroid) -- the
-// C++ port of examples/vim/multipole_moment_iter_scaling.py::build, generalized for the solve (coil/source fields
-// are not uniform).  Per moment element (tet 4 DOF, wedge/pyramid 5 DOF, hex 6 DOF):
+// C++ port of the retired multipole-moment Python prototype, generalized for the solve
+// (coil/source fields are not uniform).  Per moment element (tet 4 DOF, wedge/pyramid 5 DOF, hex 6 DOF):
 //   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Hext_k
 //   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
 //   2 quad rows   : (local diagonal-quadrupole moment of sigma) - chi*(Dvec . gradH(centroid)) . sigma = 0

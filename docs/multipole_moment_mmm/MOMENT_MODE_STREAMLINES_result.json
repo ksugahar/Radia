@@ -1,14 +1,14 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-27T02:34:15Z",
+  "generated_at_utc": "2026-07-03T20:23:04Z",
   "notebook": "docs/multipole_moment_mmm/MOMENT_MODE_STREAMLINES.ipynb",
-  "notebook_sha256": "aad14802c6a9fd6eee692577ba34b6487efd9cec4d88786dc68392aa3609c96c",
+  "notebook_sha256": "b846e006fbeb4ecdd0c2c3ebdbd2e7edd1e655f685ebd546ff60fc462a050240",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_version": "4.95.5"
   },
   "summary": {
     "path": "docs/multipole_moment_mmm/MOMENT_MODE_STREAMLINES.ipynb",

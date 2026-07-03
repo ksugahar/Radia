@@ -565,7 +565,7 @@ public:
 	// 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched to chi*{H,gradH}(centroid)
 	// (global field/grad from BuildCentroidFieldGrad, local moments from the element geometry).  Rows 2-norm
 	// normalized.  A row-major (dof x dof), rhs length dof.  Uniform linear chi + uniform applied field Happ
-	// (Step-1 verification path vs examples/vim moment prototype; hex/wedge/pyramid).
+	// (Step-1 verification path vs the retired moment prototype inventory; hex/wedge/pyramid).
 	void BuildMomentSystem(double chi, const double Happ[3], std::vector<double>& A, std::vector<double>& rhs) const;  // uniform-field wrapper
 	// Per-element chi + per-element external field (at moment-element centroid, HextPerHex[h*3+k]); A column = face DOF
 	// so dgesv's solution is sigma in DOF order.  The solve path uses this (coil sources are not uniform).

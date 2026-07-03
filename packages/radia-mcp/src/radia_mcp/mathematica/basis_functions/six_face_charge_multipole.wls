@@ -4,7 +4,7 @@
 (*
   six_face_charge_multipole.wls -- WHAT FIELD does the 6-DoF MSC (yano) hexahedron element create?
   The symbolic counterpart of the numerical SVD / eigenmode analysis
-  (examples/vim/multipole_moment_svd_multipole.py).  Cleanly, for an ARBITRARY (sheared)
+  (retired VIM prototype inventory).  Cleanly, for an ARBITRARY (sheared)
   hexahedron and for ALL shear s at once, the 6 uniform face charges produce a field whose
   INDEPENDENT multipole content is exactly
 

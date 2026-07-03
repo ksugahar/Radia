@@ -3,7 +3,7 @@
 A square-base pyramid has 5 faces (1 quad base + 4 triangles) -> 5 surface-charge DOF, the same count as
 the wedge.  Its single quadrupole moment row is the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2
 type mode for a symmetric pyramid -- DISTINCT from the wedge's axial mode; both derived in
-examples/vim/eigenmode_quadrupole_derivation.wls).  So the pyramid solves through the SAME moment kernel as
+validation_test/feec/vim_legacy/eigenmode_quadrupole_derivation.wls).  So the pyramid solves through the SAME moment kernel as
 hex (6) and wedge (5) with no element-specific code -- the eigenmode closure is what makes that possible.
 
 Locks:

@@ -5,7 +5,8 @@ operator N = B^T G B whose loop modes are field-null by construction (de Rham), 
 convergence with no hand-crafted loop-star.
 
 This is the PRODUCTION home (productionization milestone M1): the validated core was promoted here from
-examples/vim.  Canonical docs: docs/hdiv_vim/README.md; roadmap: docs/hdiv_vim/PRODUCTIONIZATION.md.
+the retired Python prototype inventory.  Canonical docs: docs/hdiv_vim/README.md; roadmap:
+docs/hdiv_vim/PRODUCTIONIZATION.md; retirement ledger: docs/hdiv_vim/vim_examples_retirement.ipynb.
 
 Public API (validated solve primitives):
   build_demag(mesh, nsub=4)

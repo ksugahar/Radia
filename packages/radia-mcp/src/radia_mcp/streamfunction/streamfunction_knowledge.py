@@ -710,29 +710,30 @@ IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11
 --------------------------------------------------------------------------------
   Phase 0  record the unification (memory/clebsch_cohomology_streamfunction_
            unification.md) -- DONE.
-  Phase 1  2D bidirectional map (Tampere) -- DONE: examples/vim/
+  Phase 1  2D bidirectional map (Tampere) -- DONE: validation_test/feec/vim_legacy/
            bidirectional_map_2d.py + tests/feec/test_bidirectional_map_2d.py (5).
            w=zeta^2: forward A,phi 1e-15; orthogonality 2.6e-14; Jacobian
            det=|B||H| 1.6e-16; inverse x,y harmonic in (A,phi) 1.6e-8; round-trip
            6e-8.  Pure NGSolve, no Gmsh.
-  #2       vector-T convex inverse (general form) -- DONE: examples/vim/
+  #2       vector-T convex inverse (general form) -- DONE: validation_test/feec/vim_legacy/
            vector_t_inverse.py + tests/feec/test_vector_t_inverse.py (5).
            J=curl T (HCurl), ACA+TSVD min-norm: convex fit 6e-16; div J=5.7e-16;
            GAUGE T=grad(chi)->field 2.2e-20, TSVD truncates (k_aca=9<=M<<ndof=3360).
-  Phase 3  foliated-Clebsch ACA+TSVD solenoid -- DONE: examples/vim/
-           foliated_clebsch_solenoid.py + tests/feec/test_foliated_clebsch_solenoid.py
+  Phase 3  foliated-Clebsch ACA+TSVD solenoid -- DONE:
+           validation_test/feec/vim_legacy/foliated_clebsch_solenoid.py +
+           validation_test/feec/test_foliated_clebsch_solenoid.py
            (4).  mu=r fixed -> J linear in lambda -> radia.stream_function
            aca_tsvd UNCHANGED; uniform Bz to 3.3e-5, weak div J 8.5e-6.
   Phase 2  axisym 3D probe (psi,phi) flux coords in (r,z) -- the 2D map covers
            the meridian case; not separately built.
   STAGE B  WIRE EXTRACTION (continuous volume current -> windable wires) -- the
            BUILDABLE part DONE:
-    B1     helicity diagnostic -- examples/vim/helicity_diagnostic.py +
-           tests/feec/test_helicity_diagnostic.py (4).  H_rel=|int T.curlT|/
+    B1     helicity diagnostic -- validation_test/feec/vim_legacy/helicity_diagnostic.py +
+           validation_test/feec/test_helicity_diagnostic.py (4).  H_rel=|int T.curlT|/
            (||T|| ||curlT||) in [0,1]: axial 9e-5, ABC/Beltrami 1.000.  Gates
            whether a clean Clebsch/level-set extraction is even possible.
-    B2     wire extractor -- examples/vim/foliated_solenoid_wires.py +
-           tests/feec/test_foliated_solenoid_wires.py (5).  Foliated solenoid
+    B2     wire extractor -- validation_test/feec/vim_legacy/foliated_solenoid_wires.py +
+           validation_test/feec/test_foliated_solenoid_wires.py (5).  Foliated solenoid
            lambda -> per-cylinder equal-Delta-lambda contours -> 59 equal-current
            wires (I=dlam*dmu) -> Biot-Savart reproduces uniform Bz to 4.7%, AGREES
            WITH RADIA rad.ObjFlmCur+rad.Fld to 3.4e-10 (two-codebase invariant).

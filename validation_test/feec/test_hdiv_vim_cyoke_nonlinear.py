@@ -15,7 +15,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 pytest.importorskip("radia")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "examples", "vim"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import hdiv_cyoke_nonlinear as cy  # noqa: E402
 
 

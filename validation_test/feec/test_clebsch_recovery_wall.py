@@ -14,7 +14,7 @@ On KNOWN Clebsch currents (ground truth available) the textbook recovery recipe
             the recovery conditioning ~ 1/|J|^2 blows up like 1/r^4 toward the
             null (log-log slope ~ -4); the lambda-solve is singular ON the null.
 
-See examples/vim/clebsch_recovery_wall.py and streamfunction("clebsch_3d").
+See validation_test/feec/vim_legacy/clebsch_recovery_wall.py and streamfunction("clebsch_3d").
 """
 import os
 import sys
@@ -22,7 +22,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__),
-                                "../../examples/vim"))
+                                "../../validation_test/feec/vim_legacy"))
 
 
 @pytest.fixture(scope="module")
