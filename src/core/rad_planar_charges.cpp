@@ -31,6 +31,18 @@ void Field(int nq, const double* Xq, const double* Q,
 	});
 }
 
+void FieldAz(int nq, const double* Xq, const double* Q,
+             int nP, const double* P, double* Azout)
+{
+	ngcore::ParallelFor(ngcore::IntRange(nP), [&](int i){
+		double px = P[2 * i], py = P[2 * i + 1];
+		double az = 0.0;
+		for(int a = 0; a < nq; a++)
+			az += Q[a] * std::atan2(py - Xq[2 * a + 1], px - Xq[2 * a]);
+		Azout[i] = MU0 / TWO_PI * az;
+	});
+}
+
 double MaxwellTorqueCircle(int nq, const double* Xq, const double* Q,
                            double Rc, double cx, double cy, int n,
                            double hextx, double hexty)

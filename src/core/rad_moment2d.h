@@ -39,6 +39,14 @@ namespace rad_moment2d {
 int SolveLinear(int nElem, const int* voff, const double* vxy,
                 const double* chi, const double* Hext, double* Mout);
 
+// Solve the LINEAR problem for nRHS applied fields sharing the SAME geometry + chi (the moment
+// matrix is Hext-independent, so it is assembled + LU-factored ONCE and back-substituted for all
+// nRHS -- e.g. a rotation / angle sweep where only the applied field rotates).
+//   HextMulti[nRHS*nElem*2]  RHS r, element k, comp c at [(r*nElem+k)*2+c]
+//   MoutMulti[nRHS*nElem*2]  OUT: same layout, per-RHS per-element magnetization
+int SolveMulti(int nElem, const int* voff, const double* vxy, const double* chi,
+               int nRHS, const double* HextMulti, double* MoutMulti);
+
 } // namespace rad_moment2d
 
 #endif
