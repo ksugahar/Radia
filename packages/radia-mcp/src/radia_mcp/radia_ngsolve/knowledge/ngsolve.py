@@ -960,15 +960,58 @@ remain an export path for later 3D fields, but the teaching visualization
 should be readable `.m` code first.
 
 For the bounded-domain FEM visualization, show the outer spherical truncation
-as Radia's high-order impedance / absorbing-boundary lane, not as the Kelvin
-transform.  The teaching picture is: cylindrical drum body + struck top
-membrane at z=0 + outgoing pressure wave + full spherical high-order
-impedance boundary.  The report GIF should be axis-equal, and the boundary
-should appear as a full sphere/circle in the cut plane, not a hemisphere.
-The lower half-space is intentionally quiet in this first rung: it is a
-one-sided baffled top-head radiation model, not a two-headed drum or shell
-acoustic model.  Keep the exact implementation name as an aliasable label
-until the production Radia boundary name is finalized.
+as Radia's high-order impedance / absorbing-boundary lane, never as a Kelvin
+boundary.  For acoustic waves, Kelvin boundary language is not allowed:
+use BEM, Sommerfeld, spherical DtN, or high-order impedance boundary terms.
+The teaching picture is: cylindrical drum body + struck top membrane at z=0
++ outgoing pressure wave + full spherical high-order impedance boundary.  The
+report GIF should be axis-equal, and the boundary should appear as a full
+sphere/circle in the cut plane, not a hemisphere.  The first rung is a
+one-sided baffled top-head radiation model.  The real-drum FEM/BEM rung then
+adds bottom membrane, cylindrical shell, internal cavity pressure, side
+leakage, and lower-half radiation; this is the intended demo for explaining
+FEM/BEM coupling before moving to a full .vol P1 FEM + P1 BEM model.  Be
+precise about the transient: the current MATLAB drum demo is a reduced FEM
+ODE integrated by ode45, with exterior air pressure reconstructed from causal
+retarded boundary potentials.  The BEM layer must not split the observation
+field by source direction: top, bottom, and side boundary sources are all
+evaluated at every exterior air observation point with the same retarded
+Green kernel, then superposed.  A top source may wrap to the side/lower field
+and a side source may radiate upward/downward; direction-only painting is a
+visualization bug, not FEM/BEM coupling.  Its GIF should color-map only propagating air
+pressure outside the drum; internal cavity pressure is a coupling state, not
+an air-field color patch.  Be precise about dimensionality: the drum GIF is a
+3D axisymmetric physical picture rendered on an r-z slice.  Disk and side
+sources are integrated over azimuth, so it is not a 2D Cartesian wave cartoon,
+but it is not yet a full 3D `.vol` P1 volume-FEM/P1 surface-BEM drum mesh.
+
+The next genuine time-domain lane is not a periodic sine-wave animation:
+read the Netgen `.vol` tri/tet mesh, assemble H1/P1 volume FEM plus boundary
+P1 BEM, solve the frequency-domain Helmholtz FEM/BEM system over many
+frequency bins, multiply by a real pulse spectrum, enforce Hermitian symmetry,
+and inverse FFT to obtain a real pressure time history.  In the MATLAB
+teaching repo this is the role of `volFemBemIfftResponse`.  It is still not convolution-quadrature TD-BEM,
+but it is the readable frequency-sweep/iFFT route toward the full P1
+volume-FEM/P1 surface-BEM transient solver.
+
+The first convolution-quadrature TD-BEM rung is the `.vol` boundary P1 BEM
+path: sample the BDF generating function `delta(zeta)`, evaluate
+Laplace-domain retarded single-layer matrices `V(s)` at
+`s = delta(zeta)/dt` with `Re(s)>0`, solve `V(s) qhat = ghat`, and
+FFT-recover the boundary density and exterior pressure.  In the MATLAB
+teaching repo this is `volTdBemConvolutionQuadrature`.  It is real Lubich CQ
+TD-BEM for the exterior Dirichlet single-layer problem; coupled volume-FEM CQ
+is the next step.
+
+The production-form volume-FEM/interior coupled CQ rung is
+`volFemBemCoupledConvolutionQuadrature`: use `.vol` tetrahedra as H1/P1
+interior wave FEM, `.vol` boundary triangles as P1 exterior BEM, then solve
+`[A+(s/c1)^2 M, -T'Mb; (1/2 Mb-K(s))*T, V(s)] [u_hat; q_hat] = [F_hat; 0]`
+at every CQ Laplace point.  A volume source pulse drives the interior and
+the BEM flux density radiates through the exterior representation
+`-S(s)q + D(s)Tu`.  This is the Calderon/Johnson-Nedelec coupled CQ system
+with the retarded double-layer `K(s)`.  Keep the old single-layer row only as
+a `SingleLayerTeaching` regression contrast.
 
 ## Curve-only high-order .vol geometry
 
