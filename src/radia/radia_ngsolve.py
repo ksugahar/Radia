@@ -88,15 +88,22 @@ def create_voxel_cf(radia_obj, field_type='b', mesh=None, bbox=None,
 
 
 def prepare_cache_hmatrix(cf, points, eps=1e-6):
-    """Pre-cache a RadiaField CoefficientFunction at `points` via the O(N log N) HACApK
-    ``_FieldEvalHMatrix`` (instead of the direct O(N_pts*N_src) rad.Fld inside ``cf.PrepareCache``), so a
-    subsequent ``gf.Set(cf)`` hits the cache.  This is the path-B (magnet-container field -> GridFunction)
-    acceleration for the RadiaField CF workflow; pass the FES integration points as `points`.
+    """Pre-cache a RadiaField CoefficientFunction at `points` via the HACApK ``_FieldEvalHMatrix`` (instead
+    of the direct O(N_pts*N_src) rad.Fld inside ``cf.PrepareCache``), so a subsequent ``gf.Set(cf)`` hits
+    the cache.  This is the path-B (magnet-container field -> GridFunction) acceleration for the RadiaField
+    CF workflow; pass the FES integration points as `points`.
+
+    ONLY worthwhile for a FAR field map: the mesh whose integration `points` these are must stand OFF from
+    the magnetized body (a stray-field / coupling region at distance).  There the H-matrix beats direct
+    above N_pts*N_src ~ 1500 and matches it to `eps`.  If the mesh HUGS or contains the body (integration
+    points interleaved with the source), the symmetric embed's admissible blocks become a checkerboard
+    (obs-obs=0, src-src=0) that ACA cannot compress -> BOTH slower than direct AND silently ~4-9% wrong;
+    use plain ``cf.PrepareCache`` (direct) there.  mdx crossover data: validation_test/hacapk/benchmarks/.
 
     cf     : a ``radia.RadiaField(obj, 'b'|'a')`` CoefficientFunction (flat container, no per-object
-             transform; 'h'/'phi' are not yet in the H-matrix -> use cf.PrepareCache for those).
+             transform; 'h'/'phi' are not in the H-matrix -> use cf.PrepareCache for those).
     points : (N,3) array-like of global evaluation points (the FES integration points gf.Set will use).
-    eps    : ACA tolerance.
+    eps    : ACA tolerance (only meaningful in the far regime above).
 
     CALLER wraps in ``with ngsolve.TaskManager():`` -- the H-matrix build/matvec parallelise under it.
     """

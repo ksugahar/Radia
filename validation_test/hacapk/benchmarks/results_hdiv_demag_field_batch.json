@@ -1,0 +1,111 @@
+{
+  "timestamp": "2026-07-04T19:06:46.728295",
+  "hostname": "mdx",
+  "benchmark": "hdiv_demag_field_batch_scaling",
+  "problem": {
+    "cores": 38,
+    "geometry": "unit sphere tet, HDiv order 1, uniform Mz, obs=centroids",
+    "radia_version": "4.95.5",
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  },
+  "results": [
+    {
+      "maxh": 0.5,
+      "NE": 107,
+      "NB": 112,
+      "N_src": 219,
+      "N_obs": 107,
+      "nthreads": 38,
+      "pairs": 23433,
+      "t_total": 0.15444139996543527,
+      "t_pack": 0.13228920003166422,
+      "t_cpp_batch": 0.010988100024405867,
+      "cpp_ns_per_pair": 468.9156328428228
+    },
+    {
+      "maxh": 0.38,
+      "NE": 249,
+      "NB": 210,
+      "N_src": 459,
+      "N_obs": 249,
+      "nthreads": 38,
+      "pairs": 114291,
+      "t_total": 0.2167893000296317,
+      "t_pack": 0.18917919998057187,
+      "t_cpp_batch": 0.029680299980100244,
+      "cpp_ns_per_pair": 259.6906141349734
+    },
+    {
+      "maxh": 0.3,
+      "NE": 422,
+      "NB": 308,
+      "N_src": 730,
+      "N_obs": 422,
+      "nthreads": 38,
+      "pairs": 308060,
+      "t_total": 0.4455870999954641,
+      "t_pack": 0.37420630000997335,
+      "t_cpp_batch": 0.06863150000572205,
+      "cpp_ns_per_pair": 222.78614557463496
+    },
+    {
+      "maxh": 0.24,
+      "NE": 1056,
+      "NB": 484,
+      "N_src": 1540,
+      "N_obs": 1056,
+      "nthreads": 38,
+      "pairs": 1626240,
+      "t_total": 0.9725021999911405,
+      "t_pack": 0.6912005000049248,
+      "t_cpp_batch": 0.2869325000210665,
+      "cpp_ns_per_pair": 176.4392094777318
+    },
+    {
+      "maxh": 0.2,
+      "NE": 1709,
+      "NB": 722,
+      "N_src": 2431,
+      "N_obs": 1709,
+      "nthreads": 38,
+      "pairs": 4154579,
+      "t_total": 1.845393800002057,
+      "t_pack": 0.880527000001166,
+      "t_cpp_batch": 0.6977222000132315,
+      "cpp_ns_per_pair": 167.9405301989038
+    }
+  ],
+  "cpp_thread_scaling": [
+    {
+      "nthreads": 1,
+      "t_cpp_batch": 4.969087799952831,
+      "N_src": 1540,
+      "N_obs": 1056
+    },
+    {
+      "nthreads": 2,
+      "t_cpp_batch": 2.9534037999692373,
+      "N_src": 1540,
+      "N_obs": 1056
+    },
+    {
+      "nthreads": 4,
+      "t_cpp_batch": 1.5660377999884076,
+      "N_src": 1540,
+      "N_obs": 1056
+    },
+    {
+      "nthreads": 8,
+      "t_cpp_batch": 0.876893300039228,
+      "N_src": 1540,
+      "N_obs": 1056
+    },
+    {
+      "nthreads": 38,
+      "t_cpp_batch": 0.27360010001575574,
+      "N_src": 1540,
+      "N_obs": 1056
+    }
+  ]
+}
