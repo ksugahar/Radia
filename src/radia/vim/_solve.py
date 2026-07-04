@@ -512,12 +512,12 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
             "planar layer only; in 3D place PMs as direct-M collocation MMMM elements or fold their "
             "field into H_ext.")
     _vtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
-    if _vtx not in ({4}, {8}):
+    if _vtx not in ({4}, {8}, {6}):
         raise ValueError(
-            "HDiv-VIM (order 1) supports a pure-TET (4-vertex) or pure-HEX (8-vertex) mesh; got vertex "
-            "counts %s.  wedge / pyramid / mixed-element soft-iron demag uses the collocation MMMM backend "
-            "(rad.Solve demag_backend='collocation_mmmm'), which rad.Solve's 'auto' split routes non-tet "
-            "mesh-backed iron to anyway." % sorted(_vtx))
+            "HDiv-VIM (order 1) supports a pure-TET (4-vertex), pure-HEX (8-vertex), or pure-WEDGE/prism "
+            "(6-vertex) mesh; got vertex counts %s.  pyramid / MIXED-element soft-iron demag uses the "
+            "collocation MMMM backend (rad.Solve demag_backend='collocation_mmmm'), which rad.Solve's "
+            "'auto' split routes non-tet mesh-backed iron to anyway." % sorted(_vtx))
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))

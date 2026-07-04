@@ -1395,6 +1395,69 @@ void RadHACApKChargeGram::QuadQ2MapX(const double* nd9, const double uv[2], doub
         }
 }
 
+// ============================================ WEDGE (PRISM) RT1 geometry (2026-07-04) ===================
+// Prism ref domain: (u,v) in the triangle {u>=0, v>=0, u+v<=1}, w in [0,1].  Corners 0-2 = bottom tri at
+// z=0, 3-5 = top tri at z=1.  The 3-sub-tet split tiles the prism (each 6*vol_ref = 1; total 3*(1/6) =
+// 1/2 = the prism ref volume).  A tri FACE ref = the same triangle (Tri6 corner order (1,0),(0,1),(0,0),
+// matching TriSurfMap / D2_TRIREF); its single sub-tri IS the whole ref tri (2*area_ref = 1).
+static const double WEDGEREF_V[6][3]  = {{0,0,0},{1,0,0},{0,1,0},{0,0,1},{1,0,1},{0,1,1}};
+static const int    WEDGEREF_TETS[3][4] = {{0,1,2,5},{0,1,5,4},{0,4,5,3}};
+static const double WTRIREF_V[3][2]   = {{1,0},{0,1},{0,0}};   // tri-face ref (Tri6 corner order)
+
+// tri-P2 shape functions (barycentric quadratic; l0=u, l1=v, l2=1-u-v -- IDENTICAL to Tri6Map so the
+// 18-node prism lattice node n = t + 6*iz uses the same (u,v) node layout as _TRI6_LAT on the Python side).
+static inline void TriP2Shape(double u, double v, double s[6])
+{
+    const double l0 = u, l1 = v, l2 = 1.0 - u - v;
+    s[0] = l0*(2*l0 - 1); s[1] = l1*(2*l1 - 1); s[2] = l2*(2*l2 - 1);
+    s[3] = 4*l0*l1;       s[4] = 4*l1*l2;       s[5] = 4*l2*l0;
+}
+
+// 18-node prism map (tri-P2 (x) z-P2): node n = t + 6*iz, t = tri node 0..5, iz = z level 0..2.  Values-
+// only (the Piola charge model never needs |det J|).
+void RadHACApKChargeGram::WedgeQ2MapX(const double* nd18, const double xi[3], double X[3])
+{
+    double st[6]; TriP2Shape(xi[0], xi[1], st);
+    double vz[3], dz[3]; HexLag3(xi[2], vz, dz);
+    X[0] = X[1] = X[2] = 0.0;
+    for (int iz = 0; iz < 3; ++iz)
+        for (int t = 0; t < 6; ++t) {
+            const double s = st[t]*vz[iz];
+            const double* nd = &nd18[3*(t + 6*iz)];
+            X[0] += s*nd[0]; X[1] += s*nd[1]; X[2] += s*nd[2];
+        }
+}
+
+// 6-node quadratic surface-triangle map (a boundary tri cap lives in 3D): nd18 = 6 nodes x 3D.
+void RadHACApKChargeGram::TriSurfMap(const double* nd18, const double uv[2], double X[3])
+{
+    double st[6]; TriP2Shape(uv[0], uv[1], st);
+    X[0] = X[1] = X[2] = 0.0;
+    for (int t = 0; t < 6; ++t) { X[0] += st[t]*nd18[3*t]; X[1] += st[t]*nd18[3*t+1]; X[2] += st[t]*nd18[3*t+2]; }
+}
+
+// 6*vol of the ref sub-tet s (WEDGEREF); 2*area of the whole tri-face ref (both = 1 for these splits, but
+// computed generically for a future pyramid row).
+static inline double WedgeSubSixVref(int s)
+{
+    const int* tv = WEDGEREF_TETS[s];
+    double e[3][3];
+    for (int i = 0; i < 3; ++i)
+        for (int k = 0; k < 3; ++k) e[i][k] = WEDGEREF_V[tv[i+1]][k] - WEDGEREF_V[tv[0]][k];
+    return std::fabs(e[0][0]*(e[1][1]*e[2][2]-e[1][2]*e[2][1]) - e[0][1]*(e[1][0]*e[2][2]-e[1][2]*e[2][0])
+                     + e[0][2]*(e[1][0]*e[2][1]-e[1][1]*e[2][0]));
+}
+static inline double WTriSubTwoAref()
+{
+    const double a1u = WTRIREF_V[1][0]-WTRIREF_V[0][0], a1v = WTRIREF_V[1][1]-WTRIREF_V[0][1];
+    const double a2u = WTRIREF_V[2][0]-WTRIREF_V[0][0], a2v = WTRIREF_V[2][1]-WTRIREF_V[0][1];
+    return std::fabs(a1u*a2v - a1v*a2u);
+}
+
+// Forward decl: the wedge ctor (below) uses this file-static face-ref helper whose definition lives with
+// the wedge compute block further down.
+static void WFaceSubTriRef(int face_type, int s, double V[3][2]);
+
 // Radial-cone face table of the ref sub-tet (vertex i's opposite face, oriented so the signed 6-vol D of
 // (x0, b1, b2, b3) sums the tet exactly from any interior anchor) -- shared by the SELF radial and the
 // static-SITE table generator.
@@ -1609,6 +1672,138 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
 }
 
+// WEDGE (PRISM) RT1 ctor -- mirror of the hex ctor with 3-sub-tet prism cells + mixed tri/quad faces (see
+// the header doc).  Reuses the hex-mode quadrature-table + block-serving members; fills only the wedge
+// geometry.  Initializer list is in member DECLARATION order (m_n_el, the shared quad tables, the wedge
+// nodes, then m_host/m_kind/m_expo) to avoid -Wreorder.
+RadHACApKChargeGram::RadHACApKChargeGram(
+    std::vector<double> wedge_cell_nodes, std::vector<double> face_nodes, std::vector<int> face_type,
+    int n_el, int n_bf,
+    std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+    std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+    std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+    std::vector<double> gl_out, std::vector<double> gw_out,
+    std::vector<double> gl_in, std::vector<double> gw_in,
+    std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+    std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+    double near_grade, double far_inner_factor)
+    : m_n_el(n_el),
+      m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
+      m_symTriP(std::move(sym_tri_pts)), m_symTriW(std::move(sym_tri_w)),
+      m_glOut(std::move(gl_out)), m_gwOut(std::move(gw_out)),
+      m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
+      m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
+      m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
+      m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
+      m_wedgemode(true), m_wedge_n_bf(n_bf),
+      m_wCellNodes(std::move(wedge_cell_nodes)), m_wFaceNodes(std::move(face_nodes)),
+      m_wFaceType(std::move(face_type)),
+      m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
+{
+    m_n = (int)m_host.size();
+    m_build_id = NextChargeGramBuildId();
+    // ---- cell sub-tet physical geometry (3 sub-tets per prism) ----
+    m_wCellSubV.assign((size_t)n_el*3*4*3, 0.0); m_wCellSubC.assign((size_t)n_el*3*3, 0.0);
+    m_wCellSubS.assign((size_t)n_el*3, 0.0);
+    for (int c = 0; c < n_el; ++c) {
+        const double* nd = &m_wCellNodes[(size_t)c*54];
+        for (int s = 0; s < 3; ++s) {
+            double cen[3] = {0, 0, 0};
+            for (int i = 0; i < 4; ++i) {
+                const double* rv = WEDGEREF_V[WEDGEREF_TETS[s][i]];
+                double X[3]; const double xi[3] = {rv[0], rv[1], rv[2]};
+                WedgeQ2MapX(nd, xi, X);
+                double* out = &m_wCellSubV[(((size_t)c*3 + s)*4 + i)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+                cen[0] += 0.25*X[0]; cen[1] += 0.25*X[1]; cen[2] += 0.25*X[2];
+            }
+            double* pc = &m_wCellSubC[((size_t)c*3 + s)*3];
+            pc[0] = cen[0]; pc[1] = cen[1]; pc[2] = cen[2];
+            double sz = 0.0;
+            for (int i = 0; i < 4; ++i) {
+                const double* v = &m_wCellSubV[(((size_t)c*3 + s)*4 + i)*3];
+                const double dx = v[0]-cen[0], dy = v[1]-cen[1], dz = v[2]-cen[2];
+                sz = std::max(sz, std::sqrt(dx*dx + dy*dy + dz*dz));
+            }
+            m_wCellSubS[(size_t)c*3 + s] = sz;
+        }
+    }
+    // ---- face sub-tri physical geometry (tri: 1 sub-tri; quad: 2 sub-tris) ----
+    m_wFaceSubV.assign((size_t)n_bf*2*3*3, 0.0); m_wFaceSubC.assign((size_t)n_bf*2*3, 0.0);
+    m_wFaceSubS.assign((size_t)n_bf*2, 0.0);
+    for (int f = 0; f < n_bf; ++f) {
+        const int ft = m_wFaceType[f];
+        const int nsub = (ft == 0) ? 1 : 2;
+        const double* nd = &m_wFaceNodes[(size_t)f*27];
+        for (int s = 0; s < nsub; ++s) {
+            double Vr[3][2]; WFaceSubTriRef(ft, s, Vr);
+            double cen[3] = {0, 0, 0};
+            for (int i = 0; i < 3; ++i) {
+                double X[3];
+                if (ft == 0) TriSurfMap(nd, Vr[i], X); else QuadQ2MapX(nd, Vr[i], X);
+                double* out = &m_wFaceSubV[(((size_t)f*2 + s)*3 + i)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+                cen[0] += X[0]/3.0; cen[1] += X[1]/3.0; cen[2] += X[2]/3.0;
+            }
+            double* pc = &m_wFaceSubC[((size_t)f*2 + s)*3];
+            pc[0] = cen[0]; pc[1] = cen[1]; pc[2] = cen[2];
+            double sz = 0.0;
+            for (int i = 0; i < 3; ++i) {
+                const double* v = &m_wFaceSubV[(((size_t)f*2 + s)*3 + i)*3];
+                const double dx = v[0]-cen[0], dy = v[1]-cen[1], dz = v[2]-cen[2];
+                sz = std::max(sz, std::sqrt(dx*dx + dy*dy + dz*dz));
+            }
+            m_wFaceSubS[(size_t)f*2 + s] = sz;
+        }
+    }
+    // ---- per-charge host centroid/size (cluster-tree points + the near_hosts test) ----
+    m_cent.assign((size_t)m_n*3, 0.0); m_size.assign((size_t)m_n, 0.0);
+    for (int a = 0; a < m_n; ++a) {
+        const int h = m_host[a];
+        double cen[3] = {0, 0, 0};
+        int ncorner; double corners[8][3];
+        if (m_kind[a] == 0) {                       // 6 prism corners: tri nodes 0,1,2 at iz=0 (n=0,1,2) and iz=2 (n=12,13,14)
+            ncorner = 6;
+            static const int cidx[6] = {0, 1, 2, 12, 13, 14};
+            for (int i = 0; i < 6; ++i) {
+                const double* nd = &m_wCellNodes[(size_t)h*54 + 3*cidx[i]];
+                for (int k = 0; k < 3; ++k) corners[i][k] = nd[k];
+            }
+        } else if (m_wFaceType[h] == 0) {           // tri face: 3 corners = tri nodes 0,1,2
+            ncorner = 3;
+            static const int cidx[3] = {0, 1, 2};
+            for (int i = 0; i < 3; ++i) {
+                const double* nd = &m_wFaceNodes[(size_t)h*27 + 3*cidx[i]];
+                for (int k = 0; k < 3; ++k) corners[i][k] = nd[k];
+            }
+        } else {                                    // quad face: 4 corners of the 9-lattice
+            ncorner = 4;
+            static const int cidx[4] = {0, 2, 6, 8};
+            for (int i = 0; i < 4; ++i) {
+                const double* nd = &m_wFaceNodes[(size_t)h*27 + 3*cidx[i]];
+                for (int k = 0; k < 3; ++k) corners[i][k] = nd[k];
+            }
+        }
+        for (int i = 0; i < ncorner; ++i) for (int k = 0; k < 3; ++k) cen[k] += corners[i][k] / ncorner;
+        double sz = 0.0;
+        for (int i = 0; i < ncorner; ++i) {
+            const double dx = corners[i][0]-cen[0], dy = corners[i][1]-cen[1], dz = corners[i][2]-cen[2];
+            sz = std::max(sz, std::sqrt(dx*dx + dy*dy + dz*dz));
+        }
+        m_cent[3*a] = cen[0]; m_cent[3*a+1] = cen[1]; m_cent[3*a+2] = cen[2];
+        m_size[a] = sz;
+    }
+    // ---- (kind,host)->local reverse maps ----
+    m_hexLocalOf.assign((size_t)m_n, 0);
+    m_cellCharges.assign((size_t)n_el, {}); m_faceCharges.assign((size_t)n_bf, {});
+    for (int a = 0; a < m_n; ++a) {
+        std::vector<int>& grp = (m_kind[a] == 0) ? m_cellCharges[m_host[a]] : m_faceCharges[m_host[a]];
+        m_hexLocalOf[a] = (int)grp.size();
+        grp.push_back(a);
+    }
+    BuildWedgeSiteTables();
+}
+
 // Ref coords of anchor site k of cell sub-tet s (hex-ref frame): 0-3 corners, 4-9 edge midpoints
 // ((0,1),(0,2),(0,3),(1,2),(1,3),(2,3)), 10-13 face centers (HEXTET_FC order), 14 centroid.
 static void HexSiteRef(int s, int k, double x0[3])
@@ -1806,6 +2001,18 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
     add("d2CellSubC", m_d2CellSubC); add("d2CellSubS", m_d2CellSubS);
     add("d2EdgeC", m_d2EdgeC); add("d2EdgeS", m_d2EdgeS);
     add("d2CellSiteX", m_d2CellSiteX); add("d2EdgeSiteX", m_d2EdgeSiteX);
+    // WEDGE (PRISM) mode arrays (empty in the hex/2D modes and vice versa -> the hex checksum is unchanged)
+    add("wCellNodes", m_wCellNodes); add("wFaceNodes", m_wFaceNodes); addi("wFaceType", m_wFaceType);
+    add("wCellSubC", m_wCellSubC); add("wCellSubS", m_wCellSubS); add("wCellSubV", m_wCellSubV);
+    add("wFaceSubC", m_wFaceSubC); add("wFaceSubS", m_wFaceSubS); add("wFaceSubV", m_wFaceSubV);
+    {
+        double s = 0.0;
+        for (const HexSiteRad& R : m_wCellSiteRad)     { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        for (const HexSiteRad& R : m_wFaceSiteRadTri)  { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        for (const HexSiteRad& R : m_wFaceSiteRadQuad) { s += R.nq; for (double x : R.S) s += x; for (double x : R.M) s += x; for (double x : R.w) s += x; }
+        out.emplace_back("wSiteRad", s);
+    }
+    add("wCellSiteX", m_wCellSiteX); add("wFaceSiteX", m_wFaceSiteX);
     return out;
 }
 
@@ -2215,8 +2422,10 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
     auto it = s_hex_block_cache.find(key);
     if (it == s_hex_block_cache.end()) {
         if (s_hex_block_cache.size() > 200000u) s_hex_block_cache.clear();
-        it = s_hex_block_cache.emplace(key, m_d2 ? QuadBlock2D(kindT, hT, kindS, hS)
-                                                 : QuadBlockHex(kindT, hT, kindS, hS)).first;
+        it = s_hex_block_cache.emplace(key,
+                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS)
+                 : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS)
+                 :               QuadBlockHex(kindT, hT, kindS, hS)).first;
     }
     return it->second;
 }
@@ -2612,6 +2821,417 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     return ok;
 }
 
+// ============================================ WEDGE (PRISM) RT1 compute (2026-07-04) ===================
+// A faithful mirror of the hex-mode compute path (BuildHexSiteTables / PhiInnerHex{Site,Sub,Radial}Vec /
+// QuadBlockHex) with two structural changes: (1) the CELL is a prism -> 3 sub-tets (WEDGEREF_TETS), 18-node
+// map (WedgeQ2MapX); (2) the boundary FACE is MIXED -> a per-face type (m_wFaceType) selects tri (1 sub-tri,
+// 6-node TriSurfMap) vs quad (2 sub-tris, 9-node QuadQ2MapX -- reused from hex).  The block memo, cloud
+// cache (HexQuadCloud / HexGetCloud), leaf helpers (HexMonoEval, HexDuffyBary, ClosestPointTet /
+// ClosestPointTri2D, the HexSiteRad struct), and the whole solver surface are shared verbatim, so the
+// golden hex path is byte-for-byte untouched.
+
+// ref sub-tri vertices of face host of type `face_type`, sub `s` (tri: the whole ref tri; quad: 2 sub-tris)
+static void WFaceSubTriRef(int face_type, int s, double V[3][2])
+{
+    if (face_type == 0) {
+        for (int i = 0; i < 3; ++i) { V[i][0] = WTRIREF_V[i][0]; V[i][1] = WTRIREF_V[i][1]; }
+    } else {
+        const int* tv = QUADREF_TRIS[s];
+        for (int i = 0; i < 3; ++i) { V[i][0] = QUADREF_V[tv[i]][0]; V[i][1] = QUADREF_V[tv[i]][1]; }
+    }
+}
+
+// Materialize a quadrature cloud on sub-simplex `sub` of a wedge host (mirror of HexBuildCloud): cell ->
+// WEDGEREF_TETS + WedgeQ2MapX (18-node); face -> WFaceSubTriRef + (tri: TriSurfMap 6-node / quad: QuadQ2MapX
+// 9-node).  wgeo = ruleW * ref-measure scale (Piola: no |det J|).
+static void WedgeBuildCloud(const double* nd, int kind, int face_type, int sub,
+                            const double* baryP, const double* baryW, int nq, bool full_bary,
+                            HexQuadCloud& out)
+{
+    const bool cell = (kind == 0);
+    out.pts.resize((size_t)nq*3); out.wgeo.resize(nq); out.xi.resize((size_t)nq*3);
+    if (cell) {
+        const int* tv = WEDGEREF_TETS[sub];
+        const double scale = WedgeSubSixVref(sub);
+        for (int q = 0; q < nq; ++q) {
+            double bary[4];
+            if (full_bary) { for (int t = 0; t < 4; ++t) bary[t] = baryP[(size_t)4*q + t]; }
+            else { double ls = 0.0; for (int t = 1; t < 4; ++t) { bary[t] = baryP[(size_t)3*q + (t-1)]; ls += bary[t]; } bary[0] = 1.0 - ls; }
+            double xi[3] = {0, 0, 0};
+            for (int t = 0; t < 4; ++t) for (int k = 0; k < 3; ++k) xi[k] += bary[t]*WEDGEREF_V[tv[t]][k];
+            double X[3]; RadHACApKChargeGram::WedgeQ2MapX(nd, xi, X);
+            for (int k = 0; k < 3; ++k) { out.pts[(size_t)3*q+k] = X[k]; out.xi[(size_t)3*q+k] = xi[k]; }
+            out.wgeo[q] = baryW[q]*scale;
+        }
+    } else {
+        double V[3][2]; WFaceSubTriRef(face_type, sub, V);
+        const double scale = (face_type == 0) ? WTriSubTwoAref() : QuadSubTwoAref(sub);
+        for (int q = 0; q < nq; ++q) {
+            double bary[3];
+            if (full_bary) { for (int t = 0; t < 3; ++t) bary[t] = baryP[(size_t)3*q + t]; }
+            else { double ls = 0.0; for (int t = 1; t < 3; ++t) { bary[t] = baryP[(size_t)2*q + (t-1)]; ls += bary[t]; } bary[0] = 1.0 - ls; }
+            double uv[2] = {0, 0};
+            for (int t = 0; t < 3; ++t) for (int k = 0; k < 2; ++k) uv[k] += bary[t]*V[t][k];
+            double X[3];
+            if (face_type == 0) RadHACApKChargeGram::TriSurfMap(nd, uv, X);
+            else                RadHACApKChargeGram::QuadQ2MapX(nd, uv, X);
+            out.pts[(size_t)3*q] = X[0]; out.pts[(size_t)3*q+1] = X[1]; out.pts[(size_t)3*q+2] = X[2];
+            out.xi[(size_t)3*q] = uv[0]; out.xi[(size_t)3*q+1] = uv[1]; out.xi[(size_t)3*q+2] = 0.0;
+            out.wgeo[q] = baryW[q]*scale;
+        }
+    }
+}
+
+// Ref coords of anchor site k of cell sub-tet s (WEDGE ref frame): 0-3 corners, 4-9 edge mids, 10-13 face
+// centers (HEXTET_FC order), 14 centroid -- identical layout to HexSiteRef.
+static void WedgeCellSiteRef(int s, int k, double x0[3])
+{
+    const int* tv = WEDGEREF_TETS[s];
+    double V[4][3];
+    for (int i = 0; i < 4; ++i) for (int d = 0; d < 3; ++d) V[i][d] = WEDGEREF_V[tv[i]][d];
+    static const int E[6][2] = {{0,1},{0,2},{0,3},{1,2},{1,3},{2,3}};
+    if (k < 4)       for (int d = 0; d < 3; ++d) x0[d] = V[k][d];
+    else if (k < 10) for (int d = 0; d < 3; ++d) x0[d] = 0.5*(V[E[k-4][0]][d] + V[E[k-4][1]][d]);
+    else if (k < 14) { const int* f = HEXTET_FC[k-10]; for (int d = 0; d < 3; ++d) x0[d] = (V[f[0]][d]+V[f[1]][d]+V[f[2]][d])/3.0; }
+    else             for (int d = 0; d < 3; ++d) x0[d] = 0.25*(V[0][d]+V[1][d]+V[2][d]+V[3][d]);
+}
+
+// Ref uv coords of anchor site k of a face sub-tri with explicit verts V: 0-2 corners, 3-5 edge mids, 6 centroid.
+static void WTriSiteRef(const double V[3][2], int k, double u0[2])
+{
+    if (k < 3)      for (int d = 0; d < 2; ++d) u0[d] = V[k][d];
+    else if (k < 6) for (int d = 0; d < 2; ++d) u0[d] = 0.5*(V[k-3][d] + V[(k-2)%3][d]);
+    else            for (int d = 0; d < 2; ++d) u0[d] = (V[0][d]+V[1][d]+V[2][d])/3.0;
+}
+
+// Build the host-INDEPENDENT static-site radial tables for the wedge (mirror of BuildHexSiteTables): cell
+// 3 sub-tets x 15 sites (18-wide shape S, 8-wide Q1 monomial M); tri-face 1 sub-tri x 7 sites (6-wide S,
+// 4-wide M); quad-face 2 sub-tris x 7 sites (9-wide S, 4-wide M).  Plus the per-host mapped site positions.
+void RadHACApKChargeGram::BuildWedgeSiteTables()
+{
+    const int nR = (int)m_glIn.size();
+    const double* GL = m_glIn.data();
+    const double* GW = m_gwIn.data();
+    // ---- cell site tables (3 sub-tets) ----
+    m_wCellSiteRad.assign(3*15, HexSiteRad());
+    for (int s = 0; s < 3; ++s) {
+        const int* tv = WEDGEREF_TETS[s];
+        double V[4][3];
+        for (int i = 0; i < 4; ++i) for (int d = 0; d < 3; ++d) V[i][d] = WEDGEREF_V[tv[i]][d];
+        double E0[3], E1[3], E2[3];
+        for (int d = 0; d < 3; ++d) { E0[d] = V[1][d]-V[0][d]; E1[d] = V[2][d]-V[0][d]; E2[d] = V[3][d]-V[0][d]; }
+        const double hv = E0[0]*(E1[1]*E2[2]-E1[2]*E2[1]) - E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])
+                        + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
+        const double sgnT = (hv >= 0.0) ? 1.0 : -1.0;
+        for (int k = 0; k < 15; ++k) {
+            HexSiteRad& R = m_wCellSiteRad[(size_t)s*15 + k];
+            double x0[3]; WedgeCellSiteRef(s, k, x0);
+            for (int f = 0; f < 4; ++f) {
+                const double* b1 = V[HEXTET_FC[f][0]]; const double* b2 = V[HEXTET_FC[f][1]]; const double* b3 = V[HEXTET_FC[f][2]];
+                double d1[3], d2[3], d3[3], e21[3], e32[3];
+                for (int d = 0; d < 3; ++d) { d1[d] = b1[d]-x0[d]; d2[d] = b2[d]-x0[d]; d3[d] = b3[d]-x0[d]; e21[d] = b2[d]-b1[d]; e32[d] = b3[d]-b2[d]; }
+                const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
+                const double D = d1[0]*cr[0] + d1[1]*cr[1] + d1[2]*cr[2];
+                if (std::fabs(D) < 1e-12) continue;
+                for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                    for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                        for (int c = 0; c < nR; ++c) { const double w = GL[c];
+                            double y[3];
+                            for (int d = 0; d < 3; ++d) y[d] = x0[d] + u*(d1[d] + v*(e21[d] + w*e32[d]));
+                            R.w.push_back(sgnT*GW[a]*GW[b]*GW[c]*(u*u*v*D));
+                            double st[6], vz[3], dz[3]; TriP2Shape(y[0], y[1], st); HexLag3(y[2], vz, dz);
+                            for (int iz = 0; iz < 3; ++iz) for (int t = 0; t < 6; ++t) R.S.push_back(st[t]*vz[iz]);
+                            const double m1 = y[0], m2 = y[1], m4 = y[2];   // Q1 monomials, idx = e0+2e1+4e2
+                            R.M.push_back(1.0);   R.M.push_back(m1);    R.M.push_back(m2);    R.M.push_back(m1*m2);
+                            R.M.push_back(m4);    R.M.push_back(m1*m4); R.M.push_back(m2*m4); R.M.push_back(m1*m2*m4);
+                        }
+                    }
+                }
+            }
+            R.nq = (int)R.w.size();
+        }
+    }
+    // ---- face site tables: tri (1 sub-tri, 6-wide S) + quad (2 sub-tris, 9-wide S) ----
+    auto build_face = [&](std::vector<HexSiteRad>& tab, int nsub, int face_type) {
+        tab.assign((size_t)nsub*7, HexSiteRad());
+        for (int s = 0; s < nsub; ++s) {
+            double V[3][2]; WFaceSubTriRef(face_type, s, V);
+            for (int k = 0; k < 7; ++k) {
+                HexSiteRad& R = tab[(size_t)s*7 + k];
+                double u0[2]; WTriSiteRef(V, k, u0);
+                for (int kf = 0; kf < 3; ++kf) {
+                    const double* A = V[kf]; const double* B = V[(kf+1)%3];
+                    const double ea[2] = {A[0]-u0[0], A[1]-u0[1]};
+                    const double eb[2] = {B[0]-u0[0], B[1]-u0[1]};
+                    const double s2 = ea[0]*eb[1] - ea[1]*eb[0];
+                    if (std::fabs(s2) < 1e-12) continue;
+                    for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                        for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                            const double yu = u0[0] + u*(ea[0] + v*(eb[0]-ea[0]));
+                            const double yv = u0[1] + u*(ea[1] + v*(eb[1]-ea[1]));
+                            R.w.push_back(GW[a]*GW[b]*(u*s2));
+                            if (face_type == 0) { double st[6]; TriP2Shape(yu, yv, st); for (int t = 0; t < 6; ++t) R.S.push_back(st[t]); }
+                            else { double vu[3], duu[3], vv[3], dvu[3]; HexLag3(yu, vu, duu); HexLag3(yv, vv, dvu);
+                                   for (int iv = 0; iv < 3; ++iv) for (int iu = 0; iu < 3; ++iu) R.S.push_back(vu[iu]*vv[iv]); }
+                            R.M.push_back(1.0); R.M.push_back(yu); R.M.push_back(yv); R.M.push_back(yu*yv);
+                        }
+                    }
+                }
+                R.nq = (int)R.w.size();
+            }
+        }
+    };
+    build_face(m_wFaceSiteRadTri, 1, 0);
+    build_face(m_wFaceSiteRadQuad, 2, 1);
+    // ---- mapped site positions per host (nearest-site pick is a physical distance test) ----
+    m_wCellSiteX.assign((size_t)m_n_el*3*15*3, 0.0);
+    for (int c = 0; c < m_n_el; ++c) {
+        const double* nd = &m_wCellNodes[(size_t)c*54];
+        for (int s = 0; s < 3; ++s)
+            for (int k = 0; k < 15; ++k) {
+                double x0[3], X[3]; WedgeCellSiteRef(s, k, x0); WedgeQ2MapX(nd, x0, X);
+                double* out = &m_wCellSiteX[(((size_t)c*3 + s)*15 + k)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+            }
+    }
+    m_wFaceSiteX.assign((size_t)m_wedge_n_bf*2*7*3, 0.0);
+    for (int f = 0; f < m_wedge_n_bf; ++f) {
+        const int ft = m_wFaceType[f];
+        const int nsub = (ft == 0) ? 1 : 2;
+        const double* nd = &m_wFaceNodes[(size_t)f*27];
+        for (int s = 0; s < nsub; ++s) {
+            double V[3][2]; WFaceSubTriRef(ft, s, V);
+            for (int k = 0; k < 7; ++k) {
+                double u0[2], X[3]; WTriSiteRef(V, k, u0);
+                if (ft == 0) TriSurfMap(nd, u0, X); else QuadQ2MapX(nd, u0, X);
+                double* out = &m_wFaceSiteX[(((size_t)f*2 + s)*7 + k)*3];
+                out[0] = X[0]; out[1] = X[1]; out[2] = X[2];
+            }
+        }
+    }
+    m_hex_state_sum = HexStateChecksum();
+}
+
+// NON-SELF near inner (static-SITE radial): mirror of PhiInnerHexSiteVec with the mixed-face S/M widths.
+void RadHACApKChargeGram::PhiInnerWedgeSiteVec(int kindS, int hS, int subB, const double p[3],
+                                               const std::vector<int>& srcG, double* inn) const
+{
+    const bool cell = (kindS == 0);
+    const int ft = cell ? -1 : m_wFaceType[hS];
+    const double* sx = cell ? &m_wCellSiteX[(((size_t)hS*3 + subB)*15)*3]
+                            : &m_wFaceSiteX[(((size_t)hS*2 + subB)*7)*3];
+    const int nsite = cell ? 15 : 7;
+    int best = 0; double bd = 1e300;
+    for (int k = 0; k < nsite; ++k) {
+        const double dx = p[0]-sx[3*k], dy = p[1]-sx[3*k+1], dz = p[2]-sx[3*k+2];
+        const double d = dx*dx + dy*dy + dz*dz;
+        if (d < bd) { bd = d; best = k; }
+    }
+    const HexSiteRad& R = cell ? m_wCellSiteRad[(size_t)subB*15 + best]
+                               : (ft == 0 ? m_wFaceSiteRadTri[(size_t)best]
+                                          : m_wFaceSiteRadQuad[(size_t)subB*7 + best]);
+    const double* nd = cell ? &m_wCellNodes[(size_t)hS*54] : &m_wFaceNodes[(size_t)hS*27];
+    const int nn = cell ? 18 : (ft == 0 ? 6 : 9);
+    const int nm = cell ? 8 : 4;
+    const int nS = (int)srcG.size();
+    int col[8];
+    for (int ls = 0; ls < nS; ++ls) { const int* e = &m_expo[(size_t)3*srcG[ls]]; col[ls] = e[0] + 2*e[1] + (cell ? 4*e[2] : 0); }
+    for (int q = 0; q < R.nq; ++q) {
+        const double* Sq = &R.S[(size_t)q*nn];
+        double X0 = 0.0, X1 = 0.0, X2 = 0.0;
+        for (int n2 = 0; n2 < nn; ++n2) { const double s = Sq[n2]; const double* v = &nd[3*n2]; X0 += s*v[0]; X1 += s*v[1]; X2 += s*v[2]; }
+        const double dx = p[0]-X0, dy = p[1]-X1, dz = p[2]-X2;
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r < 1e-300) continue;
+        const double g = R.w[q]/r;
+        const double* Mq = &R.M[(size_t)q*nm];
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += g*Mq[col[ls]];
+    }
+}
+
+// Far field point -> cheap cached far cloud; else -> the static-site radial.  Mirror of PhiInnerHexSubVec.
+void RadHACApKChargeGram::PhiInnerWedgeSubVec(int kindS, int hS, int subB, const double p[3],
+                                              const std::vector<int>& srcG, double* inn) const
+{
+    const bool cell = (kindS == 0);
+    const int ft = cell ? -1 : m_wFaceType[hS];
+    const size_t sid = cell ? ((size_t)hS*3 + subB) : ((size_t)hS*2 + subB);
+    const double* cs = cell ? &m_wCellSubC[sid*3] : &m_wFaceSubC[sid*3];
+    const double  sz = cell ? m_wCellSubS[sid] : m_wFaceSubS[sid];
+    const double dxc = p[0]-cs[0], dyc = p[1]-cs[1], dzc = p[2]-cs[2];
+    const bool far_pt = std::sqrt(dxc*dxc + dyc*dyc + dzc*dzc) > m_far_inner_factor*sz;
+    if (!far_pt) { PhiInnerWedgeSiteVec(kindS, hS, subB, p, srcG, inn); return; }
+    const double* nd = cell ? &m_wCellNodes[(size_t)hS*54] : &m_wFaceNodes[(size_t)hS*27];
+    const std::shared_ptr<const HexQuadCloud> cl =
+        HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, false, hS, subB, 3),
+        [&](HexQuadCloud& c) {
+            if (cell) WedgeBuildCloud(nd, 0, -1, subB, m_farTetP.data(), m_farTetW.data(), (int)m_farTetW.size(), false, c);
+            else      WedgeBuildCloud(nd, 1, ft, subB, m_farTriP.data(), m_farTriW.data(), (int)m_farTriW.size(), false, c);
+        });
+    const int nq = (int)cl->wgeo.size();
+    const int nS = (int)srcG.size();
+    for (int q = 0; q < nq; ++q) {
+        const double dx = p[0]-cl->pts[3*q], dy = p[1]-cl->pts[3*q+1], dz = p[2]-cl->pts[3*q+2];
+        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (r < 1e-300) continue;
+        const double gr = cl->wgeo[q]/r;
+        const double* xi = &cl->xi[3*q];
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += gr*HexMonoEval(srcG[ls], xi);
+    }
+}
+
+// SELF inner: the exact-anchor (xiT) REF-frame radial decomposition.  Mirror of PhiInnerHexRadialVec.
+void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, const double p[3],
+                                                 const double* xiT, const std::vector<int>& srcG,
+                                                 double* inn) const
+{
+    if (!xiT) throw std::logic_error("PhiInnerWedgeRadialVec: xiT required (SELF-only)");
+    const bool cell = (kindS == 0);
+    const int ft = cell ? -1 : m_wFaceType[hS];
+    const double* nd = cell ? &m_wCellNodes[(size_t)hS*54] : &m_wFaceNodes[(size_t)hS*27];
+    const int nR = (int)m_glIn.size();
+    const double* GL = m_glIn.data();
+    const double* GW = m_gwIn.data();
+    const int nS = (int)srcG.size();
+    double acc[8];
+    for (int ls = 0; ls < nS; ++ls) acc[ls] = 0.0;
+    if (cell) {
+        const int* tv = WEDGEREF_TETS[subB];
+        double V[4][3];
+        for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) V[i][k] = WEDGEREF_V[tv[i]][k];
+        const double xr[3] = {xiT[0], xiT[1], xiT[2]};
+        double x0[3]; rad_hdiv::ClosestPointTet(V, xr, x0);
+        double E0[3], E1[3], E2[3];
+        for (int k = 0; k < 3; ++k) { E0[k] = V[1][k]-V[0][k]; E1[k] = V[2][k]-V[0][k]; E2[k] = V[3][k]-V[0][k]; }
+        const double hv = E0[0]*(E1[1]*E2[2]-E1[2]*E2[1]) - E0[1]*(E1[0]*E2[2]-E1[2]*E2[0])
+                        + E0[2]*(E1[0]*E2[1]-E1[1]*E2[0]);
+        const double sgnT = (hv >= 0.0) ? 1.0 : -1.0;
+        for (int f = 0; f < 4; ++f) {
+            const double* b1 = V[HEXTET_FC[f][0]]; const double* b2 = V[HEXTET_FC[f][1]]; const double* b3 = V[HEXTET_FC[f][2]];
+            double d1[3], d2[3], d3[3], e21[3], e32[3];
+            for (int k = 0; k < 3; ++k) { d1[k] = b1[k]-x0[k]; d2[k] = b2[k]-x0[k]; d3[k] = b3[k]-x0[k]; e21[k] = b2[k]-b1[k]; e32[k] = b3[k]-b2[k]; }
+            const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
+            const double D = d1[0]*cr[0] + d1[1]*cr[1] + d1[2]*cr[2];
+            if (std::fabs(D) < 1e-300) continue;
+            for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                    for (int c = 0; c < nR; ++c) { const double w = GL[c];
+                        double y[3];
+                        for (int k = 0; k < 3; ++k) y[k] = x0[k] + u*(d1[k] + v*(e21[k] + w*e32[k]));
+                        double X[3]; WedgeQ2MapX(nd, y, X);
+                        const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                        const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                        if (r < 1e-300) continue;
+                        const double wq = GW[a]*GW[b]*GW[c]*(u*u*v*D)/r;
+                        for (int ls = 0; ls < nS; ++ls) acc[ls] += wq*HexMonoEval(srcG[ls], y);
+                    }
+                }
+            }
+        }
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += sgnT*acc[ls];
+    } else {
+        double V2[3][2]; WFaceSubTriRef(ft, subB, V2);
+        const double ur[2] = {xiT[0], xiT[1]};
+        double u0[2]; ClosestPointTri2D(V2, ur, u0);
+        for (int kf = 0; kf < 3; ++kf) {
+            const double* A = V2[kf]; const double* B = V2[(kf+1)%3];
+            const double ea[2] = {A[0]-u0[0], A[1]-u0[1]};
+            const double eb[2] = {B[0]-u0[0], B[1]-u0[1]};
+            const double s2 = ea[0]*eb[1] - ea[1]*eb[0];
+            if (std::fabs(s2) < 1e-300) continue;
+            for (int a = 0; a < nR; ++a) { const double u = GL[a];
+                for (int b = 0; b < nR; ++b) { const double v = GL[b];
+                    const double yuv[2] = {u0[0] + u*(ea[0] + v*(eb[0]-ea[0])), u0[1] + u*(ea[1] + v*(eb[1]-ea[1]))};
+                    double X[3];
+                    if (ft == 0) TriSurfMap(nd, yuv, X); else QuadQ2MapX(nd, yuv, X);
+                    const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                    const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                    if (r < 1e-300) continue;
+                    const double wq = GW[a]*GW[b]*(u*s2)/r;
+                    const double y3[3] = {yuv[0], yuv[1], 0.0};
+                    for (int ls = 0; ls < nS; ++ls) acc[ls] += wq*HexMonoEval(srcG[ls], y3);
+                }
+            }
+        }
+        for (int ls = 0; ls < nS; ++ls) inn[ls] += acc[ls];
+    }
+}
+
+// Directed host-pair block (mirror of QuadBlockHex) with mixed-face sub counts / node strides.
+std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int kindS, int hS) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+    const bool cellT = (kindT == 0), cellS = (kindS == 0);
+    const int ftT = cellT ? -1 : m_wFaceType[hT];
+    const int ftS = cellS ? -1 : m_wFaceType[hS];
+    const int nsubT = cellT ? 3 : (ftT == 0 ? 1 : 2);
+    const int nsubS = cellS ? 3 : (ftS == 0 ? 1 : 2);
+    const int rt = tgtG[0], rs = srcG[0];
+    const double dxh = m_cent[3*rt]-m_cent[3*rs], dyh = m_cent[3*rt+1]-m_cent[3*rs+1], dzh = m_cent[3*rt+2]-m_cent[3*rs+2];
+    const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
+    const bool near_hosts = (kindT == kindS && hT == hS) || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
+    const bool self_pair = (kindT == kindS && hT == hS);
+    const double* ndT = cellT ? &m_wCellNodes[(size_t)hT*54] : &m_wFaceNodes[(size_t)hT*27];
+    const int nvT = cellT ? 4 : 3;
+    std::vector<double> inn(nS), owt(nT);
+    for (int sA = 0; sA < nsubT; ++sA) {
+        const size_t sidA = cellT ? ((size_t)hT*3 + sA) : ((size_t)hT*2 + sA);
+        const double szA = cellT ? m_wCellSubS[sidA] : m_wFaceSubS[sidA];
+        const double* subVA = cellT ? &m_wCellSubV[sidA*4*3] : &m_wFaceSubV[sidA*3*3];
+        const double* cA = cellT ? &m_wCellSubC[sidA*3] : &m_wFaceSubC[sidA*3];
+        for (int sB = 0; sB < nsubS; ++sB) {
+            const size_t sidB = cellS ? ((size_t)hS*3 + sB) : ((size_t)hS*2 + sB);
+            const double* cB = cellS ? &m_wCellSubC[sidB*3] : &m_wFaceSubC[sidB*3];
+            const double szB = cellS ? m_wCellSubS[sidB] : m_wFaceSubS[sidB];
+            const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
+            const bool near_sub = near_hosts && std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
+            std::shared_ptr<const HexQuadCloud> oc;
+            if (!near_sub) {
+                const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
+                oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, false, hT, sA, 3),
+                    [&](HexQuadCloud& c) {
+                        if (cellT) WedgeBuildCloud(ndT, 0, -1, sA, m_symTetP.data(), m_symTetW.data(), nqreg, false, c);
+                        else       WedgeBuildCloud(ndT, 1, ftT, sA, m_symTriP.data(), m_symTriW.data(), nqreg, false, c);
+                    });
+            } else {
+                int corner = 0; double best = 1e300;
+                for (int i = 0; i < nvT; ++i) {
+                    const double ddx = subVA[3*i]-cB[0], ddy = subVA[3*i+1]-cB[1], ddz = subVA[3*i+2]-cB[2];
+                    const double d = ddx*ddx + ddy*ddy + ddz*ddz;
+                    if (d < best) { best = d; corner = i; }
+                }
+                oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
+                    [&](HexQuadCloud& c) {
+                        std::vector<double> gb, gw;
+                        HexDuffyBary(cellT ? 3 : 2, corner, m_glOut, m_gwOut, gb, gw);
+                        WedgeBuildCloud(ndT, cellT ? 0 : 1, ftT, sA, gb.data(), gw.data(), (int)gw.size(), true, c);
+                    });
+            }
+            const int nqo = (int)oc->wgeo.size();
+            for (int q = 0; q < nqo; ++q) {
+                const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
+                const double* xiT = &oc->xi[3*q];
+                for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+                if (self_pair) PhiInnerWedgeRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data());
+                else           PhiInnerWedgeSubVec(kindS, hS, sB, pq, srcG, inn.data());
+                const double wg = oc->wgeo[q];
+                for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
+                for (int lt = 0; lt < nT; ++lt) {
+                    const double wl = owt[lt];
+                    double* row = &blk[(size_t)lt*nS];
+                    for (int ls = 0; ls < nS; ++ls) row[ls] += wl*inn[ls];
+                }
+            }
+        }
+    }
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
+    return blk;
+}
+
 double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
 {
     // Fail-loud bounds guard (2026-07-03 flake hunt): a HACApK-side index bug (1-based lod handling /
@@ -2631,9 +3251,10 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const double vBA = GetHexBlock(kB, hB, kA, hA)[(size_t)lb*nA + la];
         return 0.5*(vAB + vBA);
     }
-    if (m_hexmode) {
-        // HEX RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
+    if (m_hexmode || m_wedgemode) {
+        // HEX / WEDGE RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
         // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.
+        // The wedge mode shares this block-serving path verbatim (GetHexBlock -> QuadBlockWedge dispatch).
         // Served from the whole-host-pair block memo (the 64x co-location win) -- bit-identical to
         // the symmetrized 0.5*(block_AB + block_BA) per-entry value, kernel work shared per block.
         // Each scalar is read BEFORE the next GetHexBlock fetch: the memo's capacity clear (fires on
