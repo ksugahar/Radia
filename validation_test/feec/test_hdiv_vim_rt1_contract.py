@@ -132,19 +132,23 @@ def test_hex_soft_iron_auto_routes_to_collocation_mmmm():
     rad.UtiDelAll()
 
 
-def test_hdiv_demag_solve_rejects_wedge_mesh_directly():
-    """hdiv_demag_solve now accepts pure-tet AND pure-hex; a wedge/prism (6-vertex) mesh -- neither -- fails
-    loud toward collocation MMMM.  (Pure hex is ACCEPTED: test_hdiv_vim_hex_public_solve.py.)"""
+def test_hdiv_demag_solve_accepts_wedge_mesh_directly():
+    """hdiv_demag_solve now accepts pure-tet, pure-hex, AND pure-WEDGE/prism (6-vertex) via the C++
+    wedge-mode charge Gram (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated).  A prism-meshed cube
+    solves and returns the ~1/3 cube demag factor (the C++ wedge Gram is eig(M_mass^-1 N) in [0,1]:
+    0.992/0.998 @ n=2/3 in the de-risk).  A MIXED / pyramid mesh still routes to collocation MMMM."""
     from ngsolve.meshes import MakeStructured3DMesh
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
     try:
         with ng.TaskManager():
-            prism = MakeStructured3DMesh(prism=True, nx=1, ny=1, nz=1, mapping=mp)
+            prism = MakeStructured3DMesh(prism=True, nx=2, ny=2, nz=2, mapping=mp)
     except TypeError:
         pytest.skip("this NGSolve MakeStructured3DMesh has no prism= kwarg")
     verts = {len(el.vertices) for el in prism.Elements(ng.VOL)}
-    if verts in ({4}, {8}):
-        pytest.skip(f"prism mesh degenerated to {verts}")
+    if verts != {6}:
+        pytest.skip(f"prism mesh did not produce pure wedges (got {sorted(verts)})")
     with ng.TaskManager():
-        with pytest.raises(ValueError, match="collocation MMMM"):
-            hdiv_demag_solve(prism, mu_r=100.0, H_ext=_HEXT)
+        out = hdiv_demag_solve(prism, mu_r=100.0, H_ext=_HEXT)
+    # cube demag factor ~ 1/3 (geometric, mu-independent); the C++ wedge Gram is PSD + eig<=1
+    assert 0.30 <= out["demag"] <= 0.36, out["demag"]
+    assert out["n_el"] == 16 and out["nonlinear"] is False

@@ -304,6 +304,32 @@ public:
                         std::vector<double> gl_in, std::vector<double> gw_in,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
                         double near_grade, double far_inner_factor);
+
+    // WEDGE (PRISM) RT1 mode (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated): the RT1-prism
+    // (HDiv(prismmesh, order=1)) charge Gram.  Volume charge = L2(prism,order=1) = tri-P1 (x) z-P1 =
+    // {1,x,y,z,xz,yz} (6/prism -- a SUBSET of the hex's 8 Q1 monomials, exactly the prism div-image; the
+    // "hex gotcha" prism twin) over the 18-node tri-P2 (x) z-P2 lattice (WedgeQ2Map: node n = t + 6*iz,
+    // t = the Tri6 node 0..5, iz = the z level 0..2).  Boundary faces are MIXED (2 tri caps + 3 quad
+    // sides per prism): a tri face -> SurfaceL2 P1 (3 monomials, TriSurfMap 6-node, 1 sub-tri), a quad
+    // face -> SurfaceL2 Q1 (4 monomials, QuadQ2Map 9-node reused from the hex mode, 2 sub-tris).  Faces
+    // are stored in 9-node slots (a tri fills the first 6) + a per-face type array (0=tri/1=quad),
+    // mirroring the 2D mode's mixed-cell storage.  The cell 3-sub-tet decomposition (WEDGEREF_TETS) + the
+    // per-face-type 1/2 sub-tri decomposition drive the SAME both-domains-graded Duffy singular quadrature
+    // as the hex mode (numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3, demag_z ~ 1/3).
+    // Served through the hex block memo / GetHexBlock dispatch (m_wedgemode -> QuadBlockWedge); the leaf
+    // helpers (HexMonoEval, HexDuffyBary, the HexSiteRad tables, HexGetCloud / HexQuadCloud) are shared,
+    // so the golden hex path is byte-for-byte untouched.  Arg 3 (vector<int> face_type) disambiguates the
+    // overload from the hex ctor (whose arg 3 is int n_el).
+    RadHACApKChargeGram(std::vector<double> wedge_cell_nodes, std::vector<double> face_nodes,
+                        std::vector<int> face_type, int n_el, int n_bf,
+                        std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                        std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+                        std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> gl_out, std::vector<double> gw_out,
+                        std::vector<double> gl_in, std::vector<double> gw_in,
+                        std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+                        std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                        double near_grade, double far_inner_factor);
     // Q2 lattice geometry maps (PUBLIC static utilities: the file-local cloud builder uses them too).
     static void HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3]);
     static void QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2]);
@@ -311,6 +337,10 @@ public:
     // so the self radial loop needs only X -- ~4x less shape work per point than the full map.
     static void HexQ2MapX(const double* nd27, const double xi[3], double X[3]);
     static void QuadQ2MapX(const double* nd9, const double uv[2], double X[3]);
+    // WEDGE geometry maps: prism 18-node tri-P2 (x) z-P2 (WedgeQ2MapX), surface tri 6-node P2 (TriSurfMap,
+    // 3D X since a boundary face lives in space).  Values-only (the Piola charge model never uses |det J|).
+    static void WedgeQ2MapX(const double* nd18, const double xi[3], double X[3]);
+    static void TriSurfMap(const double* nd18, const double uv[2], double X[3]);   // nd18 = 6 nodes x 3D
     ~RadHACApKChargeGram() override {}
 
     double GetInteractionMatrixElement(int a, int b) const override;
@@ -549,6 +579,31 @@ private:
     void PhiInner2DVec(int kindS, int hS, int subB, const double p[2], const double* xiT,
                        const std::vector<int>& srcG, double* inn) const;
     std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS) const;  // directed block, 1/(2pi) folded
+
+    // ---- WEDGE (PRISM) RT1 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
+    // (m_symTetP/W, m_symTriP/W, m_glOut/gwOut, m_glIn/gwIn, m_farTetP/W, m_farTriP/W, m_near_grade,
+    // m_far_inner_factor) and the block-serving infra (m_hexLocalOf, m_cellCharges, m_faceCharges,
+    // m_cent, m_size) verbatim; only the geometry (prism cells + mixed tri/quad faces) is wedge-specific.
+    bool m_wedgemode = false;
+    int  m_wedge_n_bf = 0;
+    std::vector<double> m_wCellNodes;    // [n_el*54]  18-node tri-P2 (x) z-P2 prism lattice (n = t + 6*iz)
+    std::vector<double> m_wFaceNodes;    // [n_bf*27]  9-node slots x 3D (a tri face fills the first 6 = 18)
+    std::vector<int>    m_wFaceType;     // [n_bf] 0=tri (1 sub-tri, 6-node), 1=quad (2 sub-tris, 9-node)
+    std::vector<double> m_wCellSubC, m_wCellSubS, m_wCellSubV;  // [n_el*3*3], [n_el*3], [n_el*3*4*3]  (3 sub-tets)
+    std::vector<double> m_wFaceSubC, m_wFaceSubS, m_wFaceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3]  (tri uses sub 0)
+    std::vector<HexSiteRad> m_wCellSiteRad;     // [3*15]  per (sub-tet, site) ref-space radial tables
+    std::vector<HexSiteRad> m_wFaceSiteRadTri;  // [1*7]   tri face: 1 sub-tri x 7 sites
+    std::vector<HexSiteRad> m_wFaceSiteRadQuad; // [2*7]   quad face: 2 sub-tris x 7 sites
+    std::vector<double> m_wCellSiteX;           // [n_el*3*15*3]  mapped site positions (nearest-site pick)
+    std::vector<double> m_wFaceSiteX;           // [n_bf*2*7*3]   (tri face uses sub 0 only)
+    void BuildWedgeSiteTables();                // ctor helper (fills the six members above)
+    void PhiInnerWedgeSiteVec(int kindS, int hS, int subB, const double p[3],
+                              const std::vector<int>& srcG, double* inn) const;   // non-self near: static-site radial
+    void PhiInnerWedgeSubVec(int kindS, int hS, int subB, const double p[3],
+                             const std::vector<int>& srcG, double* inn) const;    // far cloud / -> site radial
+    void PhiInnerWedgeRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
+                                const std::vector<int>& srcG, double* inn) const; // SELF exact-anchor radial
+    std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS) const;
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;

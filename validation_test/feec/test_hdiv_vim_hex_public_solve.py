@@ -103,18 +103,25 @@ def test_hdiv_demag_solve_hex_nonlinear():
     assert rel < 0.03, f"hex HDiv nonlinear Mz {mz:.1f} vs collocation MMMM {mz_c:.1f} rel {rel:.2e}"
 
 
-def test_hdiv_demag_solve_wedge_fails_loud():
-    """A prism/wedge (6-vertex) mesh is neither pure-tet nor pure-hex -> fail loud toward collocation MMMM."""
+def test_hdiv_demag_solve_wedge_linear():
+    """A prism/wedge (6-vertex) mesh now SOLVES via the C++ wedge-mode charge Gram (2026-07-04, memory
+    hdiv-tet-hex-coupling-pyramid-gated).  Cross-method + cross-mesh check: the prism-cube HDiv-VIM
+    volume-average M_z matches the SAME-size HEX-cube collocation MMMM reference (both discretize the same
+    cube -> ~1/3 demag -> the same converged M_z, up to discretization/method).  The C++ wedge Gram is
+    eig(M_mass^-1 N) in [0,1] (0.992/0.998 @ n=2/3 in the de-risk)."""
     try:
-        mesh = MakeStructured3DMesh(prism=True, nx=1, ny=1, nz=1, mapping=_mp)
+        mesh = MakeStructured3DMesh(prism=True, nx=2, ny=2, nz=2, mapping=_mp)
     except TypeError:
         pytest.skip("this NGSolve MakeStructured3DMesh has no prism= kwarg")
     verts = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
-    if verts == {4} or verts == {8}:
-        pytest.skip(f"prism mesh degenerated to {verts}; no non-tet/non-hex element to test")
-    with pytest.raises(ValueError, match="collocation MMMM"):
-        with ng.TaskManager():
-            hdiv_demag_solve(mesh, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))
+    if verts != {6}:
+        pytest.skip(f"prism mesh did not produce pure wedges (got {sorted(verts)})")
+    res = _hdiv_hex_retry(mesh, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))   # H field, A/m
+    mz = res["M_avg"][2]
+    mz_c = _collocation_mz(2, False)                              # hex-cube collocation MMMM reference
+    rel = abs(mz - mz_c) / abs(mz_c)
+    assert rel < 0.06, f"wedge HDiv linear Mz {mz:.1f} vs hex collocation MMMM {mz_c:.1f} rel {rel:.2e}"
+    assert res["nonlinear"] is False
 
 
 def test_rad_solve_demag_backend_hdiv_on_hex():

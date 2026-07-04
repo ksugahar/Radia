@@ -675,6 +675,124 @@ def _build_charge_gram_2d(fes, outer_n=4, glin_n=8, gledge_n=12, near_grade=0.6,
     return cb["B"], G, cb["M_mass"]
 
 
+# WEDGE (PRISM) RT1 (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated): the prism div-image is
+# L2(prism,order=1) = tri-P1 (x) z-P1 = {1,x,y,z,xz,yz} (6/prism, a SUBSET of the hex's 8 Q1 monomials);
+# boundary faces are MIXED tri (SurfaceL2 P1, 3) + quad (SurfaceL2 Q1, 4).  Geometry = the 18-node tri-P2
+# (x) z-P2 lattice (n = t + 6*iz, t = _TRI6_LAT node) via GetTrafo -> flat + curved ONE path.
+_MONS_WEDGE = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (0, 1, 1)]   # tri-P1 (x) z-P1
+_MONS_TRI3D = [(0, 0), (1, 0), (0, 1)]                                             # SurfaceL2(order1) on a tri = P1
+_WEDGE_Q2_LATTICE = [(_TRI6_LAT[t][0], _TRI6_LAT[t][1], iz / 2.0) for iz in range(3) for t in range(6)]
+
+
+def _prism_cob_quad(nz=3):
+    """Ref-prism change-of-basis quadrature: SYM5 tri (u,v) x nz-pt Gauss (w).  Exact for the degree<=4
+    prism-L2-shape x monomial products (the prism L2 order-1 shapes and _MONS_WEDGE are both tri-degree<=1
+    (x) z-degree<=1)."""
+    tp, tw = np.asarray(_SYM5_TRI[0]), np.asarray(_SYM5_TRI[1])
+    gz, gwz = _g01(nz)
+    P, W = [], []
+    for (tu, tv), twt in zip(tp, tw):
+        for z, wz in zip(gz, gwz):
+            P.append((tu, tv, z)); W.append(twt * wz)
+    return np.array(P), np.array(W)
+
+
+def _charge_basis_wedge(fes):
+    """WEDGE (prism) analogue of `_charge_basis_hex`: charge map B + 18-node prism cell nodes + MIXED
+    tri(6-node)/quad(9-node) face nodes (packed in 27-double 9-node slots, a tri fills the first 6) + a
+    per-face type array, all via GetTrafo (flat + curved ONE path).  fes = HDiv(prismmesh, order=1).
+    CALLER wraps TaskManager.  Piola-exact charge model, exactly as the hex path (the J's cancel)."""
+    mesh = fes.mesh
+    assert fes.globalorder == 1, "RT1-wedge is HDiv order-1 only"
+    nn = ng.specialcf.normal(mesh.dim)
+    L2v = ng.L2(mesh, order=1)               # div_ref(HDiv-prism order1) = tri-P1 (x) z-P1 = 6 monomials
+    L2b = ng.SurfaceL2(mesh, order=1)        # tri face P1 (3) / quad face Q1 (4)
+    u = fes.TrialFunction()
+    bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
+    bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
+    mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
+    Bv = _csr(bv); Bb = _csr(bb); M_mass = _csr(mh)
+
+    vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
+    bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
+    php, phw = _prism_cob_quad()                                  # prism ref change-of-basis quadrature
+    qp2, qw2 = _ref_prod_gauss(3, 2)                             # quad-face ref quadrature ([0,1]^2)
+    tp2, tw2 = np.asarray(_SYM5_TRI[0]), np.asarray(_SYM5_TRI[1])  # tri-face ref quadrature (ref tri)
+    ir_wedge = ng.IntegrationRule(_WEDGE_Q2_LATTICE, [1.0] * 18)
+    ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
+    ir_tri = ng.IntegrationRule(_TRI6_LAT, [1.0] * 6)
+
+    Brows, host, kind, expo = [], [], [], []
+    cell_nodes, face_nodes, face_type = [], [], []
+    for c, e in enumerate(vels):
+        cell_nodes.append(_trafo_lattice_nodes(mesh, e, ir_wedge))    # (18, 3)
+        fe = L2v.GetFE(e)
+        Phi = np.array([fe.CalcShape(*pt) for pt in php])
+        Mref = (Phi * phw[:, None]).T @ Phi
+        rows = np.linalg.solve(Mref, Bv[list(L2v.GetDofNrs(e)), :].toarray())
+        Sv = _change_of_basis_ref(fe, _MONS_WEDGE, php, phw, dim=3)
+        blk = sp.csr_matrix(Sv @ rows)
+        for a, (i, j, k) in enumerate(_MONS_WEDGE):
+            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+    n_el = len(vels)
+    for f, e in enumerate(bels):
+        if len(list(mesh[e].vertices)) == 3:                          # TRI face -> 6-node, P1, 1 sub-tri
+            nd = _trafo_lattice_nodes(mesh, e, ir_tri)                # (6, 3)
+            slot = np.zeros((9, 3)); slot[:6] = nd
+            face_nodes.append(slot); face_type.append(0)
+            fe = L2b.GetFE(e)
+            Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in tp2])
+            Mref = (Phi * tw2[:, None]).T @ Phi
+            rows = np.linalg.solve(Mref, Bb[list(L2b.GetDofNrs(e)), :].toarray())
+            Ss = _change_of_basis_ref(fe, _MONS_TRI3D, tp2, tw2, dim=2)
+            blk = sp.csr_matrix(Ss @ rows)
+            for a, (i, j) in enumerate(_MONS_TRI3D):
+                Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+        else:                                                         # QUAD face -> 9-node, Q1, 2 sub-tris
+            face_nodes.append(_trafo_lattice_nodes(mesh, e, ir_quad)) # (9, 3)
+            face_type.append(1)
+            fe = L2b.GetFE(e)
+            Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in qp2])
+            Mref = (Phi * qw2[:, None]).T @ Phi
+            rows = np.linalg.solve(Mref, Bb[list(L2b.GetDofNrs(e)), :].toarray())
+            Ss = _change_of_basis_ref(fe, _MONS_QUAD, qp2, qw2, dim=2)
+            blk = sp.csr_matrix(Ss @ rows)
+            for a, (i, j) in enumerate(_MONS_QUAD):
+                Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+    B = sp.vstack(Brows).tocsr()
+    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
+                cell_nodes=np.concatenate([n.ravel() for n in cell_nodes]).tolist(),
+                face_nodes=np.concatenate([n.ravel() for n in face_nodes]).tolist(),
+                face_type=face_type)
+
+
+def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
+                             eps=1e-12, leafsize=64, eta=2.0):
+    """Pure-prism RT1 charge Gram via the wedge-mode C++ _ChargeGramHMatrix (mirror of _build_charge_gram_hex;
+    FLAT + Curve(2) share ONE path).  numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3;
+    demag_z ~ 1/3.  The wedge mode shares the hex block memo / symmetric-fill build, so the golden hex path
+    is byte-for-byte untouched."""
+    cb = _charge_basis_wedge(fes)
+    glo, gwo = _g01(glout_n); gli, gwi = _g01(glin_n)
+    G = _rp._ChargeGramHMatrix(
+        wedge_cell_nodes=cb["cell_nodes"], face_nodes=cb["face_nodes"], face_type=list(cb["face_type"]),
+        n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),
+        charge_host=list(cb["host"]), charge_kind=list(cb["kind"]), charge_expo=list(cb["expo"]),
+        sym_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), sym_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
+        sym_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), sym_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        gl_out=glo.tolist(), gw_out=gwo.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
+        far_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), far_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
+        far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+    chk = G.hex_state_check()
+    if chk["ctor"] != chk["now"]:
+        raise RuntimeError(
+            "wedge charge Gram instance state was corrupted between construction and use "
+            f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption (0xc0000374 class) -- "
+            "do NOT trust this Gram; rerun, and report the incident.")
+    return cb["B"], G, cb["M_mass"]
+
+
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
@@ -714,11 +832,17 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
         return _build_charge_gram_hex(fes, eta=eta)
+    if _vtypes == {6}:
+        # PURE-WEDGE (PRISM) RT1: the wedge-mode charge Gram (6-monomial volume charge + mixed tri/quad-face
+        # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
+        # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
+        return _build_charge_gram_wedge(fes, eta=eta)
     if _vtypes != {4}:
         raise ValueError(
-            "build_charge_gram: HDiv-VIM is TET (tri-face) or pure-HEX (quad-face) -- a MIXED tet+hex mesh "
-            "needs HDiv-pyramid transition elements (NGSolve 6.2.2604 does NOT implement them yet), and "
-            "wedge/pyramid soft-iron demag uses the collocation MMMM backend, not the HDiv-VIM charge Gram.")
+            "build_charge_gram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
+            "(6-vertex) -- a MIXED-element mesh (e.g. tet+hex) needs HDiv-pyramid transition elements "
+            "(NGSolve 6.2.2604 does NOT implement them yet); pyramid / mixed soft-iron demag uses the "
+            "collocation MMMM backend, not the HDiv-VIM charge Gram.  Got vertex counts %s." % sorted(_vtypes))
     pv = max(p - 1, 0)
     # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
     # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs

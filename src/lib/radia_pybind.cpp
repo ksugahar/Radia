@@ -3714,6 +3714,51 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "near/self inner fires only within far_inner_factor*size of a source sub (per outer point).  "
              "The H-matrix build is SYMMETRIC-FILL: strictly-lower leaves are skipped (all applies route "
              "through matvec_sym; plain matvec/matvec_transpose are routed to it).")
+        .def(py::init([](std::vector<double> wedge_cell_nodes, std::vector<double> face_nodes,
+                         std::vector<int> face_type, int n_el, int n_bf,
+                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
+                         std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
+                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                         std::vector<double> gl_out, std::vector<double> gw_out,
+                         std::vector<double> gl_in, std::vector<double> gw_in,
+                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
+                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                         double near_grade, double far_inner_factor,
+                         double eps, int leaf, double eta, bool build) {
+                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
+                     new RadHACApKChargeGram(std::move(wedge_cell_nodes), std::move(face_nodes),
+                                             std::move(face_type), n_el, n_bf,
+                                             std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                                             std::move(sym_tet_pts), std::move(sym_tet_w),
+                                             std::move(sym_tri_pts), std::move(sym_tri_w),
+                                             std::move(gl_out), std::move(gw_out),
+                                             std::move(gl_in), std::move(gw_in),
+                                             std::move(far_tet_pts), std::move(far_tet_w),
+                                             std::move(far_tri_pts), std::move(far_tri_w),
+                                             near_grade, far_inner_factor));
+                 if (build) {
+                     RadHACApKParams p;
+                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("wedge RT1 charge Gram H-matrix build failed");
+                 }
+                 return mgr;
+             }),
+             py::arg("wedge_cell_nodes"), py::arg("face_nodes"), py::arg("face_type"),
+             py::arg("n_el"), py::arg("n_bf"),
+             py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
+             py::arg("sym_tet_pts"), py::arg("sym_tet_w"), py::arg("sym_tri_pts"), py::arg("sym_tri_w"),
+             py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
+             py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
+             py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
+             py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
+             "WEDGE (PRISM) RT1 mode: L2(prism,order=1) volume charges (6/prism = {1,x,y,z,xz,yz}, the "
+             "prism div-image = a subset of the hex's 8 Q1 monomials) + SurfaceL2 face charges (tri P1 3, "
+             "quad Q1 4) on the direct 18-node tri-P2(x)z-P2 (wedge_cell_nodes [n_el*54]) + mixed-face "
+             "(face_nodes [n_bf*27] 9-node slots, a tri fills the first 6; face_type [n_bf] 0=tri/1=quad) "
+             "isoparametric geometry via GetTrafo -> ONE path flat + curved.  Quadrature = the hex-mode "
+             "both-domains-graded Duffy scheme on the 3-sub-tet / mixed 1-2 sub-tri decomposition "
+             "(numpy de-risk eig(M^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3; demag_z ~ 1/3).  Shares the "
+             "hex block memo / symmetric-fill build; the golden hex path is byte-for-byte untouched.")
         .def(py::init([](int dim2, std::vector<double> cell_nodes9, std::vector<int> cell_type,
                          std::vector<double> edge_nodes3, int n_el, int n_be,
                          std::vector<int> charge_host, std::vector<int> charge_kind,
