@@ -209,16 +209,22 @@ def _mmmm_iron_solve(iron_mesh, mu_r=None, bh_table=None, pm=None,
     def solve(H):
         Hs = np.ascontiguousarray(H[soft_ids]) + H_pm                     # applied + eddy + PM (complex)
         chi = state["chi"]
+        res = np.inf
         for _ in range(nl_maxit):
             Mc = _lin(Hs, np.maximum(chi, chi_floor))
             Mmag = np.sqrt(np.abs(Mc[:, 0]) ** 2 + np.abs(Mc[:, 1]) ** 2)  # |M phasor| (== |M| at DC)
             nH = np.maximum(Mmag / np.maximum(chi, chi_floor), 1e-300)     # |H_local| = |M|/chi
             chi_star = np.maximum(M_of_h(nH) / nH, chi_floor)
             r = chi_star - chi
-            if np.linalg.norm(r) / max(np.linalg.norm(chi_star), 1e-300) < nl_tol:
+            res = np.linalg.norm(r) / max(np.linalg.norm(chi_star), 1e-300)
+            if res < nl_tol:
                 chi = chi_star
                 break
             chi = np.maximum(chi + nl_damp * r, chi_floor)
+        else:                                                             # FAIL LOUD (No-Fallbacks)
+            raise RuntimeError(
+                "planar_eddy: nonlinear effective-chi Picard NOT converged (res=%.2e after %d iters "
+                "-- returning M would be a silent wrong result)" % (res, nl_maxit))
         state["chi"] = chi
         return _assemble(Mc)
     return solve

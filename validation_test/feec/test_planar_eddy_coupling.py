@@ -246,3 +246,14 @@ def test_nonlinear_low_drive_recovers_linear():
         r_lin = pe.couple_mmmm(iron, fem, sigma=SIGMA, freq=freq, mu_r=1.0 + chi0, B0=B0)
     rel = abs(r_nl["M_avg"][0] - r_lin["M_avg"][0]) / abs(r_lin["M_avg"][0])
     assert rel < 1e-3, (r_nl["M_avg"][0], r_lin["M_avg"][0], rel)            # nonlinear -> linear chi0
+
+
+def test_nonlinear_picard_fail_loud():
+    """The nonlinear effective-chi Picard FAILS LOUD on non-convergence (No-Fallbacks -- never a
+    silent unconverged M).  Force it with nl_maxit=1 + a tight tol under a strong saturating drive."""
+    with ng.TaskManager():
+        iron = _disk_mesh((0.0, 0.0), maxh=A / 6)
+        solve = pe._mmmm_iron_solve(iron, bh_table=BH, nl_maxit=1, nl_tol=1e-14)
+        H = np.tile([1e6, 0.0], (iron.ne, 1)).astype(complex)   # deep-saturating -> chi0 far from chi*
+        with pytest.raises(RuntimeError, match="NOT converged"):
+            solve(H)
