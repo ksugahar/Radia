@@ -257,3 +257,31 @@ def test_nonlinear_picard_fail_loud():
         H = np.tile([1e6, 0.0], (iron.ne, 1)).astype(complex)   # deep-saturating -> chi0 far from chi*
         with pytest.raises(RuntimeError, match="NOT converged"):
             solve(H)
+
+
+# ---- per-region (multi-grade) nonlinear iron + eddy ---------------------------------------------
+BH_SOFT = [[0.0, 0.0], [150.0, 0.60], [600.0, 1.30], [2500.0, 1.75], [20000.0, 2.05]]   # softer grade
+
+
+def _two_grade_rotor(maxh):
+    """A concentric two-grade iron rotor (at the module A scale, inside the fem air box): inner disk
+    'iron_b' (0..0.5a) + outer annulus 'iron_a' (0.5a..a)."""
+    geo = SplineGeometry()
+    geo.AddCircle((-1.6 * A, 0), r=A, leftdomain=1, rightdomain=0, bc="ao")
+    geo.AddCircle((-1.6 * A, 0), r=0.5 * A, leftdomain=2, rightdomain=1, bc="bo")
+    geo.SetMaterial(1, "iron_a"); geo.SetMaterial(2, "iron_b")
+    return ng.Mesh(geo.GenerateMesh(maxh=maxh))
+
+
+def test_per_region_nonlinear_sigma_to_zero():
+    """couple(bh_table={grade: table}) at sigma->0 == the standalone per-region DC nonlinear demag."""
+    B0 = 0.7
+    bh = {"iron_a": BH, "iron_b": BH_SOFT}
+    with ng.TaskManager():
+        rotor = _two_grade_rotor(maxh=A / 7)
+        fem = _cond_air_mesh((1.6 * A, 0.0), maxh_c=A / 6)
+        res = pe.couple_mmmm(rotor, fem, sigma=1.0, freq=1e-3, bh_table=bh, B0=B0)   # ~no eddy
+        pure = m2.solve_planar_demag(rotor, bh_table=bh, H_ext=(B0 / MU0, 0.0))
+    rel = abs(res["M_avg"][0].real - pure["M_avg"][0]) / abs(pure["M_avg"][0])
+    assert rel < 2e-3, (res["M_avg"][0], pure["M_avg"][0], rel)
+    assert abs(res["M_avg"][0].imag) < 2e-3 * abs(res["M_avg"][0].real)      # eddy phase ~0

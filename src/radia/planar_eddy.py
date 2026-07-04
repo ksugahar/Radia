@@ -199,12 +199,19 @@ def _mmmm_iron_solve(iron_mesh, mu_r=None, bh_table=None, pm=None,
             return _assemble(_lin(np.ascontiguousarray(H[soft_ids]) + H_pm, chi))
         return solve
 
-    # NONLINEAR: scalar bh_table, effective-chi Picard (warm-started via closure state)
+    # NONLINEAR: scalar OR per-region ({region: [[H,B],..]}) bh_table, effective-chi Picard
+    # (warm-started via closure state)
     if isinstance(bh_table, dict):
-        raise NotImplementedError("planar_eddy: per-region bh_table not yet wired; use a scalar table")
-    from radia.mmmm2d import _law_from_table
-    M_of_h, _chi_sec, chi0 = _law_from_table(bh_table)
-    state = {"chi": np.full(len(soft_ids), chi0)}
+        if pm:
+            raise NotImplementedError("planar_eddy: pm + per-region bh_table not yet wired; use a "
+                                      "scalar bh_table with pm, or a per-region bh_table without pm")
+        from radia.mmmm2d import _per_region_law
+        M_of_h, _chi_sec, chi0 = _per_region_law(iron_mesh, bh_table)     # per-element (soft = all)
+        state = {"chi": np.array(chi0, float)}
+    else:
+        from radia.mmmm2d import _law_from_table
+        M_of_h, _chi_sec, chi0 = _law_from_table(bh_table)
+        state = {"chi": np.full(len(soft_ids), chi0)}
 
     def solve(H):
         Hs = np.ascontiguousarray(H[soft_ids]) + H_pm                     # applied + eddy + PM (complex)
