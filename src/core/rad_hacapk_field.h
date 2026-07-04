@@ -9,9 +9,10 @@
 *
 *                 The field at N_obs observation points from N_src source
 *                 elements is  field[obs] = sum_src G(obs,src) . M[src],  with
-*                 G_ab(obs,src) = a-component of B at obs from src carrying
-*                 unit magnetization in direction b (B is LINEAR in M, so this
-*                 is the exact response, NOT a dipole approximation).
+*                 G_ab(obs,src) = a-component of the field (B flux density, or A
+*                 vector potential) at obs from src carrying unit magnetization
+*                 in direction b (the field is LINEAR in M, so this is the exact
+*                 response, NOT a dipole approximation).
 *
 *                 RadHACApKBase is SQUARE-ONLY (one coordinate set, one
 *                 cluster tree, m_ndof x m_ndof).  An obs x src field operator
@@ -51,6 +52,7 @@
 
 #include <vector>
 #include <mutex>
+#include <string>
 
 class radTg3dRelax;
 
@@ -58,7 +60,8 @@ class radTg3dRelax;
  * RadHACApKFieldEval: embed-in-square H-matrix for rad.Fld-style field
  * evaluation.  Sources are the leaf magnetic elements of a Radia container
  * (resolved from a container handle); observation points are supplied as a
- * flat [x,y,z, ...] array.  B-field only, uniform 3-DOF.
+ * flat [x,y,z, ...] array.  field_type "b" (flux density B, Tesla) or "a" (vector potential A, T*m --
+ * the analytic open-boundary source term for A-formulation eddy-current FEM coupling).  Uniform 3-DOF.
  *
  * Usage (Python, via the _FieldEvalHMatrix pybind):
  *   G  = _FieldEvalHMatrix(container_handle, obs_points, eps=...)
@@ -75,11 +78,17 @@ class RadHACApKFieldEval : public RadHACApKBase {
 public:
     // container_handle : a Radia object (magnet / container of magnets).
     // obs_points       : flat [x0,y0,z0, x1,y1,z1, ...], length 3*N_obs.
-    RadHACApKFieldEval(int container_handle, std::vector<double> obs_points);
+    // field_type       : "b" (magnetic flux density, Tesla) or "a" (vector potential, T*m).
+    //                    A is the source term for A-formulation eddy-current FEM coupling -- the
+    //                    analytic open-boundary A supplied by the integral representation (HDiv gives
+    //                    B and would need a curl-inverse to recover A).
+    RadHACApKFieldEval(int container_handle, std::vector<double> obs_points,
+                       const std::string& field_type = "b");
     ~RadHACApKFieldEval() override {}
 
     int NObs() const { return m_nObs; }
     int NSrc() const { return m_nSrc; }
+    bool IsAField() const { return m_isA; }   // true => vector potential A, false => flux density B
 
     // Internal normalisation: the H-matrix stores entries scaled to O(1) (the raw B-response is
     // O(mu0*H) ~ 1e-13 for far obs, and HACApK's ACA stopping tolerance is effectively ABSOLUTE, so
@@ -105,7 +114,7 @@ protected:
     int  GetUniformNFFC() const override { return 3; }
 
 private:
-    // 3x3 field-response of source s at observation point o (B per unit M).
+    // 3x3 field-response of source s at observation point o (B or A per unit M).
     // Serialised on m_fieldMutex (B_genComp reads elem->Magn, which we set to
     // a unit vector and restore -- a mutation the parallel HACApK fill must
     // not race on).  Row-major G[a*3+b], a=obs component, b=src component.
@@ -117,7 +126,9 @@ private:
     std::vector<double> m_obs;               // 3*N_obs observation coordinates
     std::vector<radTg3dRelax*> m_src;        // N_src source leaves (NOT owned)
     std::vector<double> m_srcM;              // 3*N_src actual magnetization
-    double m_scale;                          // O(1) normalisation (max sampled |raw entry|); Tesla = scale * stored
+    bool m_isA;                              // true => A (vector potential, T*m); false => B (Tesla)
+    double m_physScale;                      // per-field-type factor to physical units (B: mu0; A: 1)
+    double m_scale;                          // O(1) normalisation (max sampled |raw entry|); physical = scale * stored
     mutable std::mutex m_fieldMutex;         // serialises the Magn-set + B_genComp
 };
 

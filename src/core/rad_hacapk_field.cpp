@@ -32,12 +32,27 @@ extern radTApplication rad;
 
 //-------------------------------------------------------------------------
 
-RadHACApKFieldEval::RadHACApKFieldEval(int container_handle, std::vector<double> obs_points)
-    : m_handle(container_handle), m_nObs(0), m_nSrc(0), m_obs(std::move(obs_points)), m_scale(1.0)
+RadHACApKFieldEval::RadHACApKFieldEval(int container_handle, std::vector<double> obs_points,
+                                       const std::string& field_type)
+    : m_handle(container_handle), m_nObs(0), m_nSrc(0), m_obs(std::move(obs_points)),
+      m_isA(false), m_physScale(RadConst::MU_0), m_scale(1.0)
 {
     if (m_obs.size() % 3 != 0)
         throw std::runtime_error("RadHACApKFieldEval: obs_points length must be a multiple of 3");
     m_nObs = (int)(m_obs.size() / 3);
+
+    // Field-type -> which component of the leaf B_genComp we read and how it maps to physical units:
+    //   "b" (flux density, Tesla): leaf stores the PRE-mu0 H_total in Field.B -> multiply by mu0.
+    //   "a" (vector potential, T*m): leaf stores the PHYSICAL A in Field.A (RadVectorPotentialFrom-
+    //        TriangleFaceGlobal already carries the mu0/4pi factor) -> unit scale.
+    if (field_type == "b" || field_type == "B") {
+        m_isA = false; m_physScale = RadConst::MU_0;
+    } else if (field_type == "a" || field_type == "A") {
+        m_isA = true;  m_physScale = 1.0;
+    } else {
+        throw std::runtime_error("RadHACApKFieldEval: field_type must be \"b\" (flux density) or "
+                                 "\"a\" (vector potential); got \"" + field_type + "\"");
+    }
 }
 
 //-------------------------------------------------------------------------
@@ -167,17 +182,20 @@ void RadHACApKFieldEval::Compute3x3(int o, int s, double* G) const
             src->Magn = unitM;
 
             radTFieldKey FieldKey;
-            FieldKey.B_ = true;
+            if (m_isA) FieldKey.A_ = true; else FieldKey.B_ = true;
             radTField Field(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
             Field.P = obs;
             src->B_genComp(&Field);
 
-            // Leaf B_comp stores the PRE-mu0 quantity in Field.B (H_total in A/m outside; H_total+M
-            // inside) -- radTg3d::B_genComp does NOT scale it; rad.Fld applies mu0 at the top level.
-            // Multiply here so the H-matrix field is Tesla, bit-consistent with rad.Fld('b').
-            G[0 * 3 + b] = RadConst::MU_0 * Field.B.x;   // a = 0 (Bx)
-            G[1 * 3 + b] = RadConst::MU_0 * Field.B.y;   // a = 1 (By)
-            G[2 * 3 + b] = RadConst::MU_0 * Field.B.z;   // a = 2 (Bz)
+            // B: leaf stores the PRE-mu0 quantity in Field.B (H_total in A/m outside; H_total+M inside);
+            //    radTg3d::B_genComp does NOT scale it (rad.Fld applies mu0 at the top level) -> * mu0.
+            // A: leaf stores the PHYSICAL A in Field.A (mu0/4pi already baked into the face integral) -> * 1.
+            // m_physScale carries this per-field-type factor so the H-matrix field is bit-consistent with
+            // rad.Fld('b') / rad.Fld('a').
+            const TVector3d& resp = m_isA ? Field.A : Field.B;
+            G[0 * 3 + b] = m_physScale * resp.x;   // a = 0 (Bx / Ax)
+            G[1 * 3 + b] = m_physScale * resp.y;   // a = 1 (By / Ay)
+            G[2 * 3 + b] = m_physScale * resp.z;   // a = 2 (Bz / Az)
         }
     } catch (...) {
         src->Magn = saveM;
