@@ -847,18 +847,41 @@ Reference: https://github.com/Weggler/docu-ngsbem/blob/main/demos/Maxwell_DtN_St
 """
 
 NGSOLVE_BEM_VOL_50 = """
-# .vol visualization and NGSolve.BEM 50-case comparison lane
+# .vol double-click, NGSolve.BEM comparison, and vibro-acoustic teaching lane
 
 ## Best .vol visualization skill
 
-Use Netgen's native GUI as the first-choice human viewer for `.vol`.  The
-format is Netgen's own mesh handoff, so it is the most faithful place to inspect
-surface triangles, tetrahedra, material labels, and boundary names before a
-solver or cross-validation run.
+Use Netgen's native GUI as the first-choice human viewer for `.vol`, but do not
+assume that a raw Windows file association to `netgen.exe "%1"` actually loads
+the mesh.  On Windows that path can open a blank Netgen GUI because the startup
+route does not necessarily call the native Tcl mesh loader.
+
+The robust double-click skill is to associate `.vol` and `.sol` with the Radia
+viewer wrapper:
+
+```powershell
+radia-vol-viewer --register
+```
+
+or to install an equivalent Netgen startup hook that performs the same sequence:
+
+```tcl
+Ng_LoadMesh "mesh.vol"
+set selectvisual mesh
+Ng_SetVisParameters
+redraw
+Ng_ReadStatus
+```
+
+For `.sol`, remember that NGSolve GridFunction `.sol` files are mesh-free
+coefficient dumps.  A double-click handler must find or receive the companion
+`.vol`, infer or know the matching finite-element space/order, load the
+GridFunction, then switch Netgen to solution visual mode.
 
 Keep the split explicit:
 
-1. Human inspection: open the solver-facing `.vol` in Netgen.
+1. Human inspection: open the solver-facing `.vol` in Netgen through the
+   loader-aware handler, not through an untested raw association.
 2. LLM/headless preflight: summarize counts, labels, bounding box, orientation,
    and a source digest before running a solver.
 3. Result visualization: use Gmsh/VTK-style output for fields; do not treat a
@@ -870,7 +893,7 @@ form the BEM view.  radia-ngsolve/NGSolve.BEM should read the same `.vol` so
 node order, boundary labels, and surface orientation become part of the
 validation contract.
 
-## 50-case BEM-first milestone
+## 50-case BEM-first milestone and 100-case catalog
 
 Fifty examples are a sensible first milestone before promoting the full
 100-case catalog.  Use the BEM-heavy half:
@@ -880,6 +903,19 @@ Fifty examples are a sensible first milestone before promoting the full
 - GYP-051..060: acoustic low-frequency stability checks.
 - GYP-061..070: acoustic Helmholtz P1 BEM.
 - GYP-091..100: NGSolve.BEM reference and convention checks.
+
+The full 100-case MATLAB acoustic FEM/BEM catalog is:
+
+- GYP-001..010: `.vol` mesh/topology, including negative quad/hex rejection.
+- GYP-011..020: H1 P1 tetra FEM.
+- GYP-021..030: HCurl/Nedelec edge FEM.
+- GYP-031..040: Laplace P1 BEM dense operators.
+- GYP-041..050: readable Laplace H-matrix blocks.
+- GYP-051..060: acoustic low-frequency kernels.
+- GYP-061..070: Helmholtz/acoustic BEM.
+- GYP-071..080: scalar FEM/BEM coupling.
+- GYP-081..090: RWG/HCurl trace maps.
+- GYP-091..100: NGSolve/NGSolve.BEM reference smoke gates.
 
 This is a cross-code validation ladder, not a promise that every case has a new
 closed-form solution.  Keep the analytic anchors that remain useful -- sphere
@@ -902,6 +938,33 @@ A result may teach radia-mcp only after four gates pass:
 
 Do not call a cross-code artifact "analytic"; call it a stored reference unless
 it is truly backed by a closed-form or manufactured exact identity.
+
+## Vibro-acoustic drum example
+
+The next high-value FEM/BEM example should feel like a struck drum: a baffled
+circular membrane or thin elastic plate whose structural FEM mode supplies
+normal velocity on the radiating face, while acoustic P1 BEM supplies the
+exterior Helmholtz radiation condition.  Gate it by radiation impedance,
+acoustic power balance, and far-field directivity, then compare the same
+`.vol`/surface labels against NGSolve.BEM.  This is a better teaching example
+than another sphere-only smoke test because students can see the chain:
+"hit membrane -> structural mode -> radiated pressure -> sound power".
+
+For the first time-domain visualization, keep it in MATLAB rather than Gmsh:
+use a step-force structural modal response plus the causal Rayleigh
+retarded-potential integral, then draw r-z pressure snapshots with a MATLAB
+figure.  Gmsh/VTK can remain an export path for later 3D fields, but the
+teaching visualization should be readable `.m` code first.
+
+## Curve-only high-order .vol geometry
+
+Curve-only high-order geometry is useful, but it should be optional and
+isolated.  Keep solution unknowns first order (H1 P1 FEM, P1 BEM surface
+unknowns) and use high-order `.vol` data only for curved surface geometry,
+normals, Jacobians, and quadrature.  A small adapter such as
+`CurvedBoundaryView` keeps readability: the default `.vol` parser can continue
+to fail loudly on high-order records unless `EnableCurvedGeometry=true` (or the
+Python equivalent) is explicitly requested.
 """
 
 NGSOLVE_MESH = """
@@ -7687,9 +7750,17 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "preconditioners": NGSOLVE_PRECONDITIONERS,
         "bem": NGSOLVE_BEM,
         "ngsolve_bem_50": NGSOLVE_BEM_VOL_50,
+        "ngsolve_bem_100": NGSOLVE_BEM_VOL_50,
         "bem_50": NGSOLVE_BEM_VOL_50,
+        "bem_100": NGSOLVE_BEM_VOL_50,
         "vol_bem_50": NGSOLVE_BEM_VOL_50,
         "vol_visualization": NGSOLVE_BEM_VOL_50,
+        "vol_double_click": NGSOLVE_BEM_VOL_50,
+        "sol_double_click": NGSOLVE_BEM_VOL_50,
+        "vibroacoustic_drum": NGSOLVE_BEM_VOL_50,
+        "drum": NGSOLVE_BEM_VOL_50,
+        "curved_vol_geometry": NGSOLVE_BEM_VOL_50,
+        "curved_vol": NGSOLVE_BEM_VOL_50,
         "mesh": NGSOLVE_MESH,
         "nonlinear": NGSOLVE_NONLINEAR,
         "pitfalls": NGSOLVE_PITFALLS,

@@ -150,6 +150,33 @@ class TestNgsolveKnowledge:
         _assert_contains_any(body, ["Netgen", ".vol", "50-case", "NGSolve.BEM"],
                              label="ngsolve ngsolve_bem_50")
         assert "Do not call a cross-code artifact \"analytic\"" in body
+        assert "radia-vol-viewer --register" in body
+        assert "Ng_LoadMesh" in body
+        assert "mesh-free" in body
+        assert "GYP-001..010" in body
+        assert "struck drum" in body
+
+    def test_vol_double_click_alias(self):
+        body = get_ngsolve_documentation("vol_double_click")
+        _assert_substantial(body, min_chars=1000)
+        assert "raw Windows file association" in body
+        assert "solution visual mode" in body
+
+    def test_vibroacoustic_drum_alias(self):
+        body = get_ngsolve_documentation("vibroacoustic_drum")
+        _assert_substantial(body, min_chars=1000)
+        assert "baffled" in body
+        assert "normal velocity" in body
+        assert "radiation impedance" in body
+        assert "MATLAB rather than Gmsh" in body
+        assert "r-z pressure snapshots" in body
+
+    def test_curved_vol_geometry_alias(self):
+        body = get_ngsolve_documentation("curved_vol_geometry")
+        _assert_substantial(body, min_chars=1000)
+        assert "Curve-only high-order geometry" in body
+        assert "CurvedBoundaryView" in body
+        assert "EnableCurvedGeometry=true" in body
 
 
 # ---------------------------------------------------------------------------
