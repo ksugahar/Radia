@@ -176,6 +176,8 @@ class TestNgsolveKnowledge:
         assert "struck top" in body
         assert "axis-equal" in body
         assert "not a hemisphere" in body
+        assert "lower half-space is intentionally quiet" in body
+        assert "one-sided baffled top-head" in body
         assert "r-z pressure snapshots" in body
 
     def test_curved_vol_geometry_alias(self):
