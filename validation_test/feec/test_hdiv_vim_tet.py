@@ -23,7 +23,7 @@ pytest.importorskip("netgen.csg")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import numpy as np  # noqa: E402
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt, OrthoBrick  # noqa: E402
@@ -42,7 +42,7 @@ def _sphere(h):
 
 def _demag(mesh):
     with ng.TaskManager():
-        return hdiv_demag_solve(mesh, mu_r=1000.0, H_ext=_HEXT)["demag"]
+        return Solve(mesh, mu_r=1000.0, H_ext=_HEXT)["demag"]
 
 
 def test_tet_demag_symmetry_and_loop_null():

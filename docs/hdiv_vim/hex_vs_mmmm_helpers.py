@@ -3,9 +3,9 @@ collocation-MMMM hex, on the SAME structured hex mesh.
 
 Two INDEPENDENT hex soft-iron demag backends are cross-validated:
   * collocation MMMM (six-face surface charge) via the public rad.Solve(demag_backend='collocation_mmmm')
-    on the ObjHexahedron iron built by radia.vim.soft_iron_from_mesh.
-  * HDiv-VIM RT1: the hex RT1 charge Gram IS wired at radia.vim._vim.build_charge_gram(HDiv(hexmesh,
-    order=1)), but the public entry radia.vim.hdiv_demag_solve deliberately GUARDS non-tet (production
+    on the ObjHexahedron iron built by radia.vim.MeshSoftIron.
+  * HDiv-VIM RT1: the hex RT1 charge Gram IS wired at radia.vim.ChargeGram(HDiv(hexmesh,
+    order=1)), but the public entry radia.vim.Solve deliberately GUARDS non-tet (production
     'auto' routes hex -> collocation MMMM).  So we drive the wired hex Gram with the SHIPPED production
     linear solver radia.vim._solve._solve_linear_mass_riesz_cpp (the mode-agnostic symmetric mass-Riesz
     CG that the tet _solve_highorder uses) -- i.e. the real HDiv-VIM hex solve, minus the guard.
@@ -33,7 +33,7 @@ _FACES = {(-1, 0, 0): (0, 4, 7, 3), (1, 0, 0): (1, 2, 6, 5), (0, -1, 0): (0, 1, 
 
 def build_voxel_hex_mesh(iron_pred, x0, y0, z0, h, nx, ny, nz):
     """Genuine structured-hex NGSolve mesh of a voxel predicate on cell CENTERS.  Verified: Integrate(1)
-    == n_iron*h^3, positive Jacobians, HDiv(order=1) + soft_iron_from_mesh + build_charge_gram all accept it."""
+    == n_iron*h^3, positive Jacobians, HDiv(order=1) + MeshSoftIron + ChargeGram all accept it."""
     keep = np.zeros((nx, ny, nz), bool)
     for i in range(nx):
         for j in range(ny):
@@ -92,17 +92,17 @@ def cyoke_mesh(h):
 
 
 def hdiv_hex_solve(mesh, mu_r, H_vec, retries=4):
-    """HDiv-VIM hex RT1: wired hex charge Gram (build_charge_gram) + the SHIPPED production symmetric
+    """HDiv-VIM hex RT1: wired hex charge Gram (ChargeGram) + the SHIPPED production symmetric
     mass-Riesz CG (_solve_linear_mass_riesz_cpp).  Retries the build on the known GetTrafo first-touch
     flake (fail-loud in the determinism contract).  Returns per-element M, volume-avg M, demag factor."""
-    from radia.vim._vim import build_charge_gram
+    from radia.vim import ChargeGram
     from radia.vim._solve import _solve_linear_mass_riesz_cpp
     n_el = mesh.GetNE(ng.VOL)
     last = None
     for _ in range(max(1, retries)):
         try:
             fes = ng.HDiv(mesh, order=1)
-            B, G, M_mass = build_charge_gram(fes)          # hex auto-branch (Q1 vol charge + Q2 geometry)
+            B, G, M_mass = ChargeGram(fes)          # hex auto-branch (Q1 vol charge + Q2 geometry)
             break
         except RuntimeError as e:
             if "GetTrafo lattice evaluation unstable" in str(e):
@@ -133,12 +133,12 @@ def hdiv_hex_solve(mesh, mu_r, H_vec, retries=4):
 
 
 def mmmm_hex_solve(mesh, mu_r, H_vec, probe):
-    """collocation MMMM hex: soft_iron_from_mesh -> ObjHexahedron, rad.Solve(collocation_mmmm), then the
+    """collocation MMMM hex: MeshSoftIron -> ObjHexahedron, rad.Solve(collocation_mmmm), then the
     iron reaction B at probe points via rad.Fld.  Applied field via ObjBckg B = mu0*H_vec."""
     import radia as rad
-    from radia.vim import soft_iron_from_mesh
+    from radia.vim import MeshSoftIron
     rad.UtiDelAll()
-    core = soft_iron_from_mesh(mesh, mu_r=float(mu_r))
+    core = MeshSoftIron(mesh, mu_r=float(mu_r))
     bkg = rad.ObjBckg(lambda p: [MU0 * H_vec[0], MU0 * H_vec[1], MU0 * H_vec[2]])
     rad.Solve(rad.ObjCnt([core, bkg]), 1e-6, 3000, 0, demag_backend="collocation_mmmm")   # LU
     M_el = np.array([m for (_c, m) in rad.ObjM(core)], float)

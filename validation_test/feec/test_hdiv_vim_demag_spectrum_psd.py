@@ -20,7 +20,7 @@ import scipy.sparse as sp        # noqa: E402
 import scipy.linalg as sla       # noqa: E402
 import ngsolve as ng             # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt   # noqa: E402
-from radia.vim._vim import build_charge_gram    # noqa: E402
+from radia.vim import ChargeGram    # noqa: E402
 
 
 def _dense_N(B, G):
@@ -40,7 +40,7 @@ def test_highorder_demag_spectrum_in_unit_interval(p):
     mesh = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.8))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=p)
-        B, G, M_mass = build_charge_gram(fes, ho_far_factor=float("inf"))   # exact Gram
+        B, G, M_mass = ChargeGram(fes, ho_far_factor=float("inf"))   # exact Gram
         N = _dense_N(B, G)
         ev = sla.eigh(N, sp.csr_matrix(M_mass).toarray(), eigvals_only=True)
     # a true demag spectrum is in [0,1]; allow a small PSD/quadrature margin
@@ -60,7 +60,7 @@ def test_rt1_material_solve_is_consistent_fixed_point():
     chi = mu_r - 1.0
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes, ho_far_factor=float("inf"))
+        B, G, M_mass = ChargeGram(fes, ho_far_factor=float("inf"))
         N = _dense_N(B, G)
         Md = sp.csr_matrix(M_mass).toarray()
         gfH = ng.GridFunction(fes); gfH.Set(ng.CoefficientFunction((0, 0, H0)))

@@ -1,6 +1,6 @@
 """Golden: the PRODUCTION vim wiring of the pure-hex RT1 charge Gram.
 
-`radia.vim._vim.build_charge_gram(HDiv(hexmesh, order=1))` must route to the hex-mode C++
+`radia.vim.ChargeGram(HDiv(hexmesh, order=1))` must route to the hex-mode C++
 `_ChargeGramHMatrix` (Q1 volume charge on the L2-order-1 space + 27-node Q2 geometry) and produce a demag
 operator N = B^T G B whose generalized spectrum vs the HDiv mass is inside the physical bound [0, 1] (max
 ~0.998 on a structured cube), with a cube demag factor ~1/3.
@@ -22,7 +22,7 @@ ng = pytest.importorskip("ngsolve")
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 import scipy.linalg as sla  # noqa: E402
 
-from radia.vim._vim import build_charge_gram  # noqa: E402
+from radia.vim import ChargeGram  # noqa: E402
 
 
 def _materialize_N(B, G):
@@ -49,7 +49,7 @@ def test_hex_rt1_wiring_spectrum_in_bound(name, mapping):
     mesh = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3, mapping=mapping)
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes)          # <-- production wiring, auto hex branch
+        B, G, M_mass = ChargeGram(fes)          # <-- production wiring, auto hex branch
         N = _materialize_N(B, G)
         w = sla.eigh(N, M_mass.toarray(), eigvals_only=True)
         # cube demag factor via the uniform-Mz Rayleigh quotient
@@ -79,7 +79,7 @@ def test_pure_hex_routes_to_hex_branch():
                                 mapping=lambda x, y, z: (0.02 * x, 0.02 * y, 0.02 * z))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes)
+        B, G, M_mass = ChargeGram(fes)
         # 1 hex -> 8 Q1 volume charges + 6 faces * 4 = 24 surface charges = 32 charges; ndof = HDiv order-1 dofs
         assert B.shape[0] == 8 + 6 * 4
         assert G.ndof() == B.shape[0]
@@ -116,7 +116,7 @@ def test_hex_rt1_strongly_warped_real_hex_spectrum():
     mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1, mapping=trilerp)
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes)
+        B, G, M_mass = ChargeGram(fes)
         N = _materialize_N(B, G)
         w = sla.eigh(N, M_mass.toarray(), eigvals_only=True)
     assert w.min() > -1e-8, f"warped hex: N not PSD (min eig {w.min():.2e})"

@@ -27,7 +27,7 @@ CURRENT API (2026-06-23 -- the dense Python Gram path was REMOVED): the C++ `_Ch
 is the SOLE demag operator (N v = B^T (H.matvec(B v)); EXACT analytic near AND far; tet via
 cell_verts/face_verts, hex/wedge via the polytope triangle soup), and folds IMA (image charges /
 symmetry models) IN via image_masks / image_signs.  Production entry:
-`radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` (linear or nonlinear, no Gram
+`radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, image=)` (linear or nonlinear, no Gram
 switch); `build_demag(mesh, nsub)` returns only SPARSE pieces (charge map B + HDiv mass + geometry),
 NO dense N/G.  Several sections below describe the OLD dense-Python call options (`analytic_gram=`,
 `wilton_surface=`, `skip_dense_gram=`, `build_near_correction`, the monopole+near-correction split) --
@@ -95,7 +95,7 @@ _IMPLEMENTATION = r"""
 `skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
 `wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
 -- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
-is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+is now the SOLE demag operator and `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
 production entry; read the removed names below as the research history behind the always-exact C++ Gram.
 
 ## C++ core
@@ -144,7 +144,7 @@ _SCALING = r"""
 `skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
 `wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
 -- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
-is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+is now the SOLE demag operator and `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
 production entry; read the removed names below as the research history behind the always-exact C++ Gram.
 
 The scalable Gram is the standard H-matrix split:
@@ -193,7 +193,7 @@ _VERIFICATION = r"""
 `skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
 `wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
 -- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
-is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+is now the SOLE demag operator and `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
 production entry; read the removed names below as the research history behind the always-exact C++ Gram.
 The dense-only tests named below (test_hdiv_vim_tet_hmatrix / tet_nearcorr) were deleted; the structural
 goldens (symmetry_golden, solve) now build N from the C++ kernel (conftest.hdiv_vim_dense_N_and_loops).
@@ -223,7 +223,7 @@ _NONLINEAR = r"""
 `wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
 -- was REMOVED.  The nonlinear solve now ALWAYS uses the exact C++ `_ChargeGramHMatrix` (analytic near AND
 far -- so the "needs analytic_gram for div M != 0" trap is GONE, the volume Gram is always exact); the
-production entry is `radia.vim.hdiv_demag_solve(mesh, bh_table=, H_ext=, image=)` (and
+production entry is `radia.vim.Solve(mesh, bh_table=, H_ext=, image=)` (and
 `solve_nonlinear_newton(mesh, chi0, Msat, H0, ...)`), with NO Gram kwarg.  Read the removed names below as
 the research history behind the always-exact C++ charge Gram.
 
@@ -741,7 +741,7 @@ _STATUS = r"""
   * 2D PLANAR tri/quad Gram SHIPPED (commit a9999dd7, motor cross-sections): log kernel -ln(r)/2pi,
     charges = -div M on cells (P0 tri / Q1 quad -- the 2D twin of the hex gotcha) + M.n on boundary
     edges.  Closed-form gated: disk demag 1/2 EXACT (0.50000), ellipse 2:1 -> 0.33438/0.66562,
-    2D Clausius-Mossotti M/H0 = chi/(1+chi/2) to 2-3e-4.  Same build_charge_gram auto-routing.
+    2D Clausius-Mossotti M/H0 = chi/(1+chi/2) to 2-3e-4.  Same ChargeGram auto-routing.
     Quadrature lessons locked in the golden: the outer MUST be product-Gauss (Dunavant-7 leaked the
     quad spectrum to 1.072 while entries agreed to 3e-5); the edge inner split-grades at the
     kernel-peak PARAMETER.  2D nonlinear remains a separate planar layer; 3D nonlinear uses the same
@@ -749,12 +749,12 @@ _STATUS = r"""
   * EXECUTED SHOWCASE: docs/hdiv_vim/hex_rt1_and_2d_showcase.ipynb (+ _result.json sidecar) -- hex
     spectrum/cube-1/3 gates incl. a genuine-warp real-mesh hex, fresh H-matrix build timings
     (160 -> 5632 charges: 1.1 -> 57 s on LAB), all 2D closed-form gates, and the production
-    hdiv_demag_solve one-call on a tet sphere.  Goldens: validation_test/feec/
+    Solve one-call on a tet sphere.  Goldens: validation_test/feec/
     test_hdiv_vim_hex_rt1_wiring.py + test_hdiv_vim_wedge_spectrum.py + test_hdiv_vim_2d_wiring.py.
   * 2D PRODUCTION LAYER + MACHINE SHOWCASE (2026-07-03 night): radia.vim._vim2d SHIPPED
     (PlanarDemagBody dense layer, scalar-chi Picard + safeguarded Anderson(1) nonlinear solve,
     charge-cloud H_at/Az_at, maxwell_torque_circle real/complex-time-averaged;
-    hdiv_demag_solve dispatches mesh.dim==2; golden test_hdiv_vim_2d_solve.py).  EXECUTED machine
+    Solve dispatches mesh.dim==2; golden test_hdiv_vim_2d_solve.py).  EXECUTED machine
     showcase docs/electric_machine/planar_vim_motor.ipynb: disk deep-saturation vs the analytic
     fixed point (3e-4..3e-6), ellipse reluctance torque 3-way (N built ONCE, 27 ms/angle,
     no remesh), salient-bar motor vs exact-Newton FEM (mean 0.58%), rotating-cylinder induction
@@ -767,7 +767,7 @@ _STATUS = r"""
 `skip_dense_gram=` kwargs, `build_near_correction`, the dense `analytic_charge_gram` /
 `wilton_surface_block` / `phi_tet` builders, and the monopole+near-correction split named in this section
 -- was REMOVED.  The C++ `_ChargeGramHMatrix` (exact analytic near AND far, IMA via image_masks/image_signs)
-is now the SOLE demag operator and `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
+is now the SOLE demag operator and `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, image=)` the
 production entry; read the removed names below as the research history behind the always-exact C++ Gram.
 
 ## Snapshot (2026-06-08, historical -- see the API UPDATE above for current call signatures)
@@ -958,9 +958,9 @@ average; the non-ellipsoidal cylinder is where the operator's spatial detail mat
 The promised "next cross-method block": the two INDEPENDENT hex soft-iron demag backends solved on the SAME
 structured hex mesh and compared ORDER-INDEPENDENTLY -- volume-average M, plus the IRON's external B at probe
 points via the SAME rad.Fld kernel (the engineering quantity, vector difference).  HDiv-hex = the wired hex
-RT1 charge Gram (build_charge_gram(HDiv(hexmesh, order=1))) + the shipped mass-Riesz CG
+RT1 charge Gram (ChargeGram(HDiv(hexmesh, order=1))) + the shipped mass-Riesz CG
 (_solve_linear_mass_riesz_cpp); MMMM-hex = rad.Solve(demag_backend='collocation_mmmm') on the
-soft_iron_from_mesh ObjHexahedron.  mu_r = 100.
+MeshSoftIron ObjHexahedron.  mu_r = 100.
 
     CUBE (uniform +z; cube demag is EXACT 1/3):
       n^3 hex     dMz(HDiv vs MMMM)   HDiv demag   dB_ext(max)
@@ -979,7 +979,7 @@ approach the SAME continuum field.  HDiv pins the exact cube demag 1/3; its +N m
 is mesh-robust (cube 23, C-yoke 34, ~constant).  This is the 3D SURFACE-charge-vs-flux head-to-head that legs
 (1)+(2) above left open.
 ARCHITECTURE NOTE: this head-to-head predates the final dispatch flip, but its conclusion is now production:
-the hex RT1 Gram is wired at build_charge_gram, public hdiv_demag_solve accepts pure hex, and rad.Solve(auto)
+the hex RT1 Gram is wired at ChargeGram, public Solve accepts pure hex, and rad.Solve(auto)
 routes mesh-backed pure HEX/WEDGE soft iron to HDiv-VIM.  KEEP-BOTH still holds: collocation MMMM remains the
 coarse tier and the forced `demag_backend='collocation_mmmm'` cross-check.  Executed, result-saving
 showcase: docs/hdiv_vim/hex_vs_mmmm_crossvalidation.ipynb (+ hex_vs_mmmm_helpers.py +

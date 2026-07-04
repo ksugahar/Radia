@@ -16,7 +16,7 @@ import scipy.sparse as sp        # noqa: E402
 import scipy.linalg as sla       # noqa: E402
 import ngsolve as ng             # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh   # noqa: E402
-from radia.vim._vim import build_charge_gram        # noqa: E402
+from radia.vim import ChargeGram        # noqa: E402
 
 _L = 0.02
 _MP = lambda x, y, z: (_L * (x - 0.5), _L * (y - 0.5), _L * (z - 0.5))   # noqa: E731
@@ -48,7 +48,7 @@ def test_wedge_demag_spectrum_in_unit_interval(n):
     mesh = _prism_cube(n)
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes)
+        B, G, M_mass = ChargeGram(fes)
         N = _dense_N(B, G)
         ev = sla.eigh(N, sp.csr_matrix(M_mass).toarray(), eigvals_only=True)
     assert ev.min() > -1e-6, f"n={n}: wedge demag operator not PSD (min eig {ev.min():.3e})"
@@ -61,7 +61,7 @@ def test_wedge_cube_demag_factor_is_one_third():
     mesh = _prism_cube(3)
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes)
+        B, G, M_mass = ChargeGram(fes)
         N = _dense_N(B, G)
         Md = sp.csr_matrix(M_mass).toarray()
         gfu = ng.GridFunction(fes); gfu.Set(ng.CoefficientFunction((0, 0, 1)))

@@ -48,8 +48,8 @@ def test_hex_image_half_reproduces_full():
     """hex half (x in [0,A]) + image='+x' == full cube."""
     rad.UtiDelAll()
     with ng.TaskManager():
-        full = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=HCF)
-        half = vim.hdiv_demag_solve(_box(0.0, A, -A, A, -A, A, 2, 4, 4), mu_r=MU_R, H_ext=HCF, image='+x')
+        full = vim.Solve(_box(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=HCF)
+        half = vim.Solve(_box(0.0, A, -A, A, -A, A, 2, 4, 4), mu_r=MU_R, H_ext=HCF, image='+x')
     rel = _rel(half["M_avg"], full["M_avg"])
     assert rel < TOL, f"hex 1/2 image='+x' M_avg rel {rel:.2e} vs full (Mz {half['M_avg'][2]:.1f} != {full['M_avg'][2]:.1f})"
     assert abs(half["demag"] - full["demag"]) < 1e-3, f"hex 1/2 demag {half['demag']:.5f} != full {full['demag']:.5f}"
@@ -61,8 +61,8 @@ def test_hex_image_quarter_reproduces_full():
     """hex quarter (x,y in [0,A]) + image='+x+y' == full cube (multi-image fold: 3 masks)."""
     rad.UtiDelAll()
     with ng.TaskManager():
-        full = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=HCF)
-        quarter = vim.hdiv_demag_solve(_box(0.0, A, 0.0, A, -A, A, 2, 2, 4), mu_r=MU_R, H_ext=HCF, image='+x+y')
+        full = vim.Solve(_box(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=HCF)
+        quarter = vim.Solve(_box(0.0, A, 0.0, A, -A, A, 2, 2, 4), mu_r=MU_R, H_ext=HCF, image='+x+y')
     rel = _rel(quarter["M_avg"], full["M_avg"])
     assert rel < TOL, f"hex 1/4 image='+x+y' M_avg rel {rel:.2e} vs full"
     assert abs(quarter["demag"] - full["demag"]) < 1e-3, f"hex 1/4 demag {quarter['demag']:.5f} != full {full['demag']:.5f}"
@@ -74,9 +74,9 @@ def test_wedge_image_half_reproduces_full():
     """wedge (prism) half (x in [0,A]) + image='+x' == full cube."""
     rad.UtiDelAll()
     with ng.TaskManager():
-        full = vim.hdiv_demag_solve(_box(-A, A, -A, A, -A, A, 3, 3, 3, hexes=False, prism=True),
+        full = vim.Solve(_box(-A, A, -A, A, -A, A, 3, 3, 3, hexes=False, prism=True),
                                     mu_r=MU_R, H_ext=HCF)
-        half = vim.hdiv_demag_solve(_box(0.0, A, -A, A, -A, A, 2, 3, 3, hexes=False, prism=True),
+        half = vim.Solve(_box(0.0, A, -A, A, -A, A, 2, 3, 3, hexes=False, prism=True),
                                     mu_r=MU_R, H_ext=HCF, image='+x')
     rel = _rel(half["M_avg"], full["M_avg"])
     assert rel < TOL, f"wedge 1/2 image='+x' M_avg rel {rel:.2e} vs full (Mz {half['M_avg'][2]:.1f} != {full['M_avg'][2]:.1f})"
@@ -93,7 +93,7 @@ def test_radsolve_auto_hex_uses_hdiv_with_image():
     rad.set_demag_backend("auto")
     rad.UtiDelAll()
     with ng.TaskManager():
-        iron = vim.soft_iron_from_mesh(_box(0.0, A, -A, A, -A, A, 2, 4, 4), mu_r=MU_R)
+        iron = vim.MeshSoftIron(_box(0.0, A, -A, A, -A, A, 2, 4, 4), mu_r=MU_R)
         assert _radsolve.is_hdiv_eligible(iron)          # mesh-backed hex -> HDiv-eligible (the flip)
         bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
         res = rad.Solve(rad.ObjCnt([iron, bkg]), 1e-6, 2000, 0, image='+x')

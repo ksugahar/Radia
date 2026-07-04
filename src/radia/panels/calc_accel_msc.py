@@ -190,7 +190,7 @@ def solve_msc(coil_script="", vol_file="",
         relax: Under-relaxation (0=full step)
         msh_output: Optional GMSH .msh output path
         demag_backend: only 'hdiv' is exposed by this panel
-            (the FEEC HDiv-VIM via radia.vim.soft_iron_from_mesh + rad.Solve).
+            (the FEEC HDiv-VIM via radia.vim.MeshSoftIron + rad.Solve).
             The 'hdiv' backend is KELVIN-LESS and iron-only: the .vol must
             contain ONLY the 'yoke' volume material (no air / kelvin elements),
             and IMA symmetry is not supported there yet (both -> fail-loud).
@@ -303,10 +303,10 @@ def solve_msc(coil_script="", vol_file="",
                          "symmetry models, or run the full tet HDiv-VIM model with --ima empty."}
     import radia.vim as _vim
     if is_linear:
-        iron = _vim.soft_iron_from_mesh(mesh, mu_r=float(mu_r))
+        iron = _vim.MeshSoftIron(mesh, mu_r=float(mu_r))
         _log(f"MAT:linear mu_r={mu_r} (HDiv-VIM)")
     else:
-        iron = _vim.soft_iron_from_mesh(mesh, bh_table=bh_data)
+        iron = _vim.MeshSoftIron(mesh, bh_table=bh_data)
         _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
     model = rad.ObjCnt([iron, coil_container])
     _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM RT1/tet), tol={tol}, maxiter={max_iter}")
@@ -314,7 +314,7 @@ def solve_msc(coil_script="", vol_file="",
     with _TM():
         res = rad.Solve(model, tol, max_iter, solver, demag_backend="hdiv")
     t_solve = time.perf_counter() - t_solve_start
-    # the HDiv dispatch returns the hdiv_demag_solve dict (raises on non-convergence)
+    # the HDiv dispatch returns the radia.vim.Solve dict (raises on non-convergence)
     n_iter = int(res.get("iters", 0)) if isinstance(res, dict) else 0
     n_dof = int(res.get("ndof", n_dof)) if isinstance(res, dict) else n_dof
     M_avg = [float(c) for c in res["M_avg"]] if isinstance(res, dict) else [0.0, 0.0, 0.0]

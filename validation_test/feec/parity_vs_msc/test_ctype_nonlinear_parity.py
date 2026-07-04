@@ -1,5 +1,5 @@
 """M0 nonlinear parity gate (productionization, docs/hdiv_vim/PRODUCTIONIZATION.md): the HDiv-VIM
-production entry `radia.vim.hdiv_demag_solve` (NONLINEAR, COIL source) vs the shipped six-face surface-charge MSC/MMM
+production entry `radia.vim.Solve` (NONLINEAR, COIL source) vs the shipped six-face surface-charge MSC/MMM
 (`rad.Solve`) on a coil-driven C-type electromagnet, evaluated by the ENGINEERING quantity -- the
 GAP-CENTRE flux density B.
 
@@ -47,7 +47,7 @@ import radia as rad  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt as OPnt  # noqa: E402
 
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 from radia import netgen_mesh_import as nmi  # noqa: E402
 
 MU0 = 4e-7 * math.pi
@@ -98,7 +98,7 @@ def test_ctype_coil_nonlinear_gap_field():
     rad.UtiDelAll()
     coil = _coil()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, bh_table=BH, H_ext=rad.RadiaField(coil, 'h'))
+        res = Solve(mesh, bh_table=BH, H_ext=rad.RadiaField(coil, 'h'))
     M_el = res["M"]
     coil2 = _coil()
     iron_hdiv = nmi.netgen_mesh_to_radia(
@@ -139,7 +139,7 @@ def test_ctype_coil_nonlinear_sharp_bh_newton():
     rad.UtiDelAll()
     coil = _coil()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, bh_table=SHARP_BH, H_ext=rad.RadiaField(coil, 'h'))
+        res = Solve(mesh, bh_table=SHARP_BH, H_ext=rad.RadiaField(coil, 'h'))
     M_el = res["M"]
     coil2 = _coil()
     iron = nmi.netgen_mesh_to_radia(

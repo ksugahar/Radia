@@ -13,11 +13,11 @@ hard **definition-of-done** (the parity gate).
 | Charge map B + HDiv mass | C++ kernels support the live RT1 charge/mass path; old structured-hex diagnostics are not public HDiv-VIM scope | unstructured **tet RT1** extraction through NGSolve |
 | Coulomb Gram G | **`_ChargeGramHMatrix` analytic charge Gram is the live scalable demag operator** for tet RT1, including curved P2 geometry. | dense Python / Gauss-point experiments are historical/reference-only |
 | Scalable Gram H-matrix | **`_ChargeGramHMatrix`** analytic tet modes; `_ChargeGaussHMatrix` is retired from the public backend | NGSolve extraction supplies sparse B/Mass/geometry only |
-| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)**; public `hdiv_demag_solve(..., linear_solver="auto")` uses the C++ CG path for scalar uniform linear materials. The old `linear_solver="hlu"` system-A experiment is retired from HDiv-VIM. | scipy GMRES remains for nonlinear and per-region orchestration |
-| Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0-Dscal*M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `hdiv_demag_solve` damped Newton uses the C++ Gram H-matvec |
+| Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)**; public `Solve(..., linear_solver="auto")` uses the C++ CG path for scalar uniform linear materials. The old `linear_solver="hlu"` system-A experiment is retired from HDiv-VIM. | scipy GMRES remains for nonlinear and per-region orchestration |
+| Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0-Dscal*M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `Solve` damped Newton uses the C++ Gram H-matvec |
 | Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
 | Symmetry image method | retired from HDiv-VIM | use collocation MMMM for image/symmetry reduced models |
-| **Public Radia API** | `radia.vim.hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=, order=1)` and `rad.Solve(demag_backend='hdiv')` on tet mesh-backed iron | `build_demag` returns sparse B/Mass/geometry for diagnostics |
+| **Public Radia API** | `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, order=1)` and `rad.Solve(demag_backend='hdiv')` on tet mesh-backed iron | `build_demag` returns sparse B/Mass/geometry for diagnostics |
 
 TaskManager is the threading substrate.  The shared HACApK build path and the long C++ HDiv solve loops
 stand up/reuse an NGSolve `RegionTaskManager`; direct Python/NGSolve assembly and diagnostic `.matvec()`
@@ -46,7 +46,7 @@ quadrature (~10x vs the bring-up build on the cylinder benches: 166/164 s -> 18.
 flat/curved); the ~20k-charge use-after-free crash is fixed (commit `20e6e9e2`).  (b) The 2D planar
 tri/quad log-kernel Gram for motor cross-sections (commit `a9999dd7`, closed-form gated: disk demag
 1/2 exact, ellipse thirds, 2D Clausius-Mossotti 2-3e-4).  Both auto-route through
-`build_charge_gram`; the `rad.Solve` engineering dispatch for hex REMAINS with collocation MMMM
+`ChargeGram`; the `rad.Solve` engineering dispatch for hex REMAINS with collocation MMMM
 until the dispatch-flip decision (open), and nonlinear remains tet-only (the energy-Newton must
 learn an external (B, G, M) triple).  Executed evidence + fresh build timings:
 [`hex_rt1_and_2d_showcase.ipynb`](hex_rt1_and_2d_showcase.ipynb) (+ `_result.json` sidecar).
@@ -54,7 +54,7 @@ Open: curved-hex max eig 1.0078 (halved from 1.0166; self/touching curved quadra
 2D nonlinear, Sauter-Schwab 6D (negative so far).
 
 Progress (2026-07-04): **the 2D planar layer is PRODUCTION** -- `radia.vim._vim2d`
-(`PlanarDemagBody` + `solve_planar_demag` + `maxwell_torque_circle`; `hdiv_demag_solve`
+(`PlanarDemagBody` + `PlanarSolve` + `maxwell_torque_circle`; `Solve`
 dispatches `mesh.dim == 2`; golden `validation_test/feec/test_hdiv_vim_2d_solve.py`), with the
 executed machine showcase `docs/electric_machine/planar_vim_motor.ipynb` (nonlinear deep
 saturation, rotation sweep with the Gram built once, salient-bar torque vs exact-Newton FEM
@@ -254,7 +254,7 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
   definition-of-done above + the honest speed number. Until M0, HDiv-VIM is a validated method but not a
   production-sealed backend.
 - **M1 — DONE: production module + public Radia API.** The validated solve has moved out of
-  the prototype tree into `src/radia/vim` with `radia.vim.hdiv_demag_solve(...)`, driving the C++
+  the prototype tree into `src/radia/vim` with `radia.vim.Solve(...)`, driving the C++
   charge-Gram/H-matrix kernels. Golden tests now use `validation_test/feec/` and the small
   `validation_test/feec/vim_legacy/` corpus retained for runnable regression helpers.
 - **M2 — DONE (2026-06-08): accurate Gram in the C++ scalable path.** `RadHACApKChargeGram` gained an
@@ -307,7 +307,7 @@ ndof toward the 165600 scale.** The head-to-head JSON is honest at the measured 
   > `Symmetric H-LDL^T` section of `cHACApK_harith.{c,h}` (1188 + 119 lines), the `_hldlt_self_test*` +
   > `factor_solve_hldlt` pybind, `tests/feec/test_hldlt_*.py` (feec 94 → 81), the hldlt examples.
   - **RETIRED (2026-06-29) — explicit system-A H-LU path.**
-    `hdiv_demag_solve(..., linear_solver="hlu")` is no longer public HDiv-VIM scope.  The HACApK H-LU /
+    `Solve(..., linear_solver="hlu")` is no longer public HDiv-VIM scope.  The HACApK H-LU /
     H-ILU subsystem can be reused later as a preconditioner, but the shipped HDiv-VIM contract exposes the
     RT1 analytic-Gram solve only.
   > The old **H-LDL^T** path remains deleted.  **H-LU / H-ILU remain the live `cHACApK_hlu_*`

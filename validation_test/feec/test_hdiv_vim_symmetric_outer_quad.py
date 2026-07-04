@@ -25,7 +25,8 @@ import ngsolve as ng  # noqa: E402
 from netgen.occ import Sphere, OCCGeometry, Pnt  # noqa: E402
 
 import radia.vim._vim as V  # noqa: E402
-from radia.vim._vim import (build_charge_gram, _tet_ref, _tri_ref, _tet_ref_sym5,  # noqa: E402
+from radia.vim import ChargeGram  # noqa: E402
+from radia.vim._vim import (_tet_ref, _tri_ref, _tet_ref_sym5,  # noqa: E402
                             _tri_ref_sym5, _outer_tet, _outer_tri)
 
 
@@ -64,7 +65,7 @@ def test_outer_rule_dispatch():
 
 
 def _demag_and_psd(fes):
-    B, G, _M = build_charge_gram(fes)
+    B, G, _M = ChargeGram(fes)
     n = fes.ndof
     N = np.zeros((n, n))
     e = np.zeros(n)
@@ -109,15 +110,15 @@ def test_symmetric_nonlinear_matches_product(monkeypatch):
     iterations than product-64, well under 100, drives M -> Msat at deep saturation, and matches demag -- across
     a moderate drive and deep saturation.  A regression that under-resolves the energy Hessian (the 195-vs-<100
     iter blowup the degree-3 product-27 rule caused) fails here."""
-    from radia.vim import hdiv_demag_solve
+    from radia.vim import Solve
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.6))
     for H0, deep in ((5000.0, False), (3e6, True)):
         Hext = ng.CoefficientFunction((0, 0, H0))
         with ng.TaskManager():
-            r_sym = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=1)        # default = symmetric
+            r_sym = Solve(mesh, bh_table=_BH, H_ext=Hext, order=1)        # default = symmetric
             monkeypatch.setattr(V, "_outer_tet", _tet_ref)                            # force product-64
             monkeypatch.setattr(V, "_outer_tri", _tri_ref)
-            r_prod = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=1)
+            r_prod = Solve(mesh, bh_table=_BH, H_ext=Hext, order=1)
             monkeypatch.undo()
         assert r_sym["iters"] < 100, f"H0={H0}: symmetric nonlinear iters {r_sym['iters']} >= 100"
         assert r_sym["iters"] <= r_prod["iters"] + 5, (

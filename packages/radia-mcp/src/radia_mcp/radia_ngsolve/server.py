@@ -885,7 +885,7 @@ def hdiv_vim(topic: str = "overview") -> str:
     Newton; cube & C-yoke <1-3% vs shipped Radia in ~6 iters), distorted-mesh mu_r-independence,
     CURVED + high-order (demag exact; field accuracy-per-DOF ~10-30x vs flat Radia), and SYMMETRY
     models 1/2,1/4,1/8 (loops automatic + image-method demag).  Production entry
-    radia.vim.hdiv_demag_solve; the C++ _ChargeGramHMatrix kernel is the SOLE demag operator (the
+    radia.vim.Solve; the C++ _ChargeGramHMatrix kernel is the SOLE demag operator (the
     dense Python Gram path + the analytic_gram/wilton_surface kwargs were REMOVED 2026-06-23).
     TaskManager is assumed: shared HACApK build paths and long C++ solve loops stand up or reuse
     NGSolve RegionTaskManager; direct diagnostic `.matvec()` calls plus Python/NGSolve assembly

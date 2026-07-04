@@ -1,24 +1,24 @@
 """Bridge: dispatch ``rad.Solve`` with ``demag_backend='hdiv'`` to the FEEC HDiv-VIM.
 
 ``rad.Solve`` operates on a Radia CONTAINER of polyhedra; the HDiv-VIM
-(:func:`radia.vim.hdiv_demag_solve`) operates on an NGSolve MESH.  A soft-iron
+(:func:`radia.vim.Solve`) operates on an NGSolve MESH.  A soft-iron
 container's ``mu_r`` (applied via ``MatApl``) and its source NGSolve mesh are NOT
 recoverable from a Radia container handle (Radia exposes no per-element vertex /
 material getter), so this bridge keeps a registry populated at build time by
-:func:`soft_iron_from_mesh`:
+:func:`radia.vim.MeshSoftIron`:
 
     {iron_container -> dict(mesh, mu_r, bh_table, handles)}
 
 ``rad.Solve(cont, demag_backend='hdiv')`` then looks up the registered iron in
 ``cont``, builds the applied field ``H_ext`` from the remaining (source) members
-(``rad.RadiaField(.., 'h')``), runs ``hdiv_demag_solve``, and writes the per-element
+(``rad.RadiaField(.., 'h')``), runs ``radia.vim.Solve``, and writes the per-element
 magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 ``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
 
 Element types: HDiv-VIM is RT1 (HDiv order 1) on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
 radia's OFFICIAL soft-iron demag route (CLAUDE.md DIRECTION 2026-07-04).  rad.Solve's 'auto' split
 (:func:`is_hdiv_eligible`) dispatches a mesh-backed TET / HEX / WEDGE iron to the HDiv-VIM
-(:func:`hdiv_demag_solve`, order=1), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
+(:func:`radia.vim.Solve`, order=1), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
 reflected-block QuadBlockHex/Wedge(mask); validated 2026-07-04 -- a reduced 1/2,1/4,1/8 model reproduces
 the full model to ~1e-4).  A MIXED / pyramid mesh-backed iron (not yet HDiv-covered), and any iron under
 set_demag_backend('collocation_mmmm'), route to the collocation MMMM gated bridge.  The per-element
@@ -151,24 +151,24 @@ def _find_registered_iron(top):
     if not irons:
         raise NotImplementedError(
             "demag_backend='hdiv': rad.Solve received no HDiv-registered soft-iron body.  Build the "
-            "iron via radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) so rad.Solve can dispatch "
-            "the FEEC HDiv-VIM, or call radia.vim.hdiv_demag_solve(mesh, ...) directly.")
+            "iron via radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=) so rad.Solve can dispatch "
+            "the FEEC HDiv-VIM, or call radia.vim.Solve(mesh, ...) directly.")
     raise NotImplementedError(
         "demag_backend='hdiv': multiple HDiv-registered iron bodies in one rad.Solve container is not "
-        "supported yet -- solve them separately or call radia.vim.hdiv_demag_solve directly.")
+        "supported yet -- solve them separately or call radia.vim.Solve directly.")
 
 
 def dispatch(top, *solve_args, **solve_kwargs):
     """``rad.Solve(demag_backend='hdiv')`` handler.  Solves the registered iron's demag with the
-    FEEC HDiv-VIM, writes per-element M back via ``ObjSetM``, and returns the hdiv_demag_solve
+    FEEC HDiv-VIM, writes per-element M back via ``ObjSetM``, and returns the ``radia.vim.Solve``
     result dict (note: a richer return than the legacy C++ rad.Solve tuple).  The legacy
     ``solve_args`` (prec, maxiter, method) are not used by the HDiv path."""
     import ngsolve
-    from ._solve import hdiv_demag_solve
+    from . import Solve
 
     # IMA mirror symmetry is WIRED in HDiv-VIM for the FLAT pure-TET / pure-HEX / pure-WEDGE paths (tet
     # QuadDotRefl + hex/wedge reflected-block).  Parse the image argument (kwarg or legacy 4th positional)
-    # and pass it to hdiv_demag_solve, which folds the mirror charges (or fails loud for the still-unwired
+    # and pass it to Solve, which folds the mirror charges (or fails loud for the still-unwired
     # curved / mixed / pyramid cases).
     image = solve_kwargs.pop("image", None)
     if image is None and len(solve_args) >= 4 and solve_args[3]:
@@ -186,7 +186,7 @@ def dispatch(top, *solve_args, **solve_kwargs):
     else:
         H_ext = ngsolve.CoefficientFunction((0.0, 0.0, 0.0))
 
-    res = hdiv_demag_solve(mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"], image=image)
+    res = Solve(mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"], image=image)
 
     M = res["M"]
     handles = reg["handles"]

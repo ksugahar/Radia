@@ -18,7 +18,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Ellipsoid, Pnt, Vec  # noqa: E402
 
@@ -35,7 +35,7 @@ def test_prolate_spheroid_demag_factor():
     geo.Add(Ellipsoid(Pnt(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0), Vec(0, 0, c)))
     with ng.TaskManager():
         mesh = ng.Mesh(geo.GenerateMesh(maxh=0.6))
-        Dw = hdiv_demag_solve(mesh, mu_r=1000.0, H_ext=ng.CoefficientFunction((0, 0, 1.0)))["demag"]
+        Dw = Solve(mesh, mu_r=1000.0, H_ext=ng.CoefficientFunction((0, 0, 1.0)))["demag"]
     Na = _prolate_Nz_analytic(c)
     assert 0.15 < Na < 0.20, f"analytic prolate N_z sanity: {Na:.4f}"
     assert abs(Dw - Na) < 1.5e-2 * Na, f"prolate N_z {Dw:.4f} not within 1.5% of analytic {Na:.4f}"

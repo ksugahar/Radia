@@ -1,6 +1,6 @@
 """Reference and coupling helpers for the planar HDiv-VIM motor showcase notebook.
 
-The SOLVER lives in radia.vim (PlanarDemagBody / solve_planar_demag / maxwell_torque_circle --
+The SOLVER lives in radia.vim (PlanarDemagBody / PlanarSolve / maxwell_torque_circle --
 the promoted 2D layer); this module holds the APPLICATION-side pieces the showcase compares
 against and couples with:
 

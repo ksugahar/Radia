@@ -8,30 +8,39 @@ This is the PRODUCTION home (productionization milestone M1): the validated core
 the retired Python prototype inventory.  Canonical docs: docs/hdiv_vim/README.md; roadmap:
 docs/hdiv_vim/PRODUCTIONIZATION.md; retirement ledger: docs/hdiv_vim/vim_examples_retirement.ipynb.
 
-Public API (validated solve primitives):
+Public API (NGSolve-aligned validated solve primitives):
+  Solve(mesh, mu_r=/bh_table=, H_ext=..)
+      -> the production one-call HDiv-VIM demag solve.  This is the preferred method-level entry,
+         matching the NGSolve convention that solve/operator objects use short CamelCase names inside
+         their owning namespace.
+  DemagOperator(HDiv(mesh, order=1), intorder=, eps=, gram_backend=)
+      -> an ngsolve.bem-style operator.  `.mat` is the H-matrix-backed NGSolve BaseMatrix
+         N = B^T G B, which composes with NGSolve solvers / BlockMatrix exactly like ngsolve.bem's
+         SingleLayerPotentialOperator.  `.DemagFactor(M_cf)` -> the demag factor (~1/3).
+  ChargeGram(HDiv(mesh, order=1), ...)
+      -> (B, G, M_mass), the charge map, charge-Gram H-matrix, and HDiv mass used by DemagOperator.
+  MeshSoftIron(mesh, mu_r=/bh_table=) / VolSoftIron(path, mu_r=/bh_table=)
+      -> method-layer constructors for mesh-backed Radia soft iron.  For ordinary user code prefer the
+         user-intent API `rad.SoftIron(geometry, mu_r=...).solve(...)`.
+  PlanarSolve(...) and PlanarDemagBody(...)
+      -> the 2D planar tri/quad layer.
+
+Lower-level diagnostics:
   build_demag(mesh, nsub=4)
       -> dict(M_mass, B, cell_verts, face_verts, poly, ...): the SPARSE pieces + the C++ charge-Gram
          geometry.  There is NO dense N: the C++ `_ChargeGramHMatrix` kernel IS the demag operator
-         (N v = B^T (H.matvec(B v))) and folds IMA in via image_masks/image_signs (see hdiv_demag_solve).
+         (N v = B^T (H.matvec(B v))) and folds IMA in via image_masks/image_signs (see Solve).
          The dense Python charge-Gram path (the O(N^2) Gram, the SVD loop basis, the analytic / image /
          Wilton dense Gram builders) was REMOVED.
-  hdiv_demag_solve(mesh, mu_r=/bh_table=, H_ext=..) -> the production demag solve (C++ charge Gram).
   solve_nonlinear_newton(mesh, chi0, Msat, H0, bh_table=..., require_convergence=True)
       -> (M_avg, n_iter, D): damped Newton on the C++ scalable charge-Gram operator (fail-loud).
   Gram building block: tri_potential (the exact flat-triangle potential).
 
-  ngsolve.bem-STYLE API (._vim): DemagOperator(fes, intorder=, eps=, gram_backend=) -- construct from an
-      HDiv FESpace (the order comes from the fes); `.mat` is the H-matrix-backed NGSolve BaseMatrix
-      N = B^T G B, which composes with NGSolve's solvers / BlockMatrix exactly like ngsolve.bem's
-      SingleLayerPotentialOperator.  order=0 (RT0) and order=p go through ONE call.  `.DemagFactor(M_cf)`
-      -> the demag factor (~1/3).  gram_backend="analytic" (default, exact analytic Gram) or "gauss"
-      (the Gauss POINT operator build_charge_gauss: P^T K_point P + sparse near correction -- the cheap-1/r
-      far field + analytic only on O(N) near pairs, for the high-order / curved regime where the analytic
-      per-pair build O((3p)^6) dominates; qpts / gauss_near_factor control accuracy, ~1e-4 at p<=2).
-
 NOTE: importing this package imports `radia` (the C++ core).  The NGSolve-side HDiv-VIM solve itself does
 not require the C++ core, but the production home is the radia package.
 """
+import inspect as _inspect
+
 from . import _core, _nonlinear  # noqa: F401
 from ._core import (  # noqa: F401
     build_demag,
@@ -43,14 +52,21 @@ from ._nonlinear import (  # noqa: F401
     solve_nonlinear_newton,
     solve_nonlinear_newton_scalable,
 )
-from ._vim import DemagOperator, build_charge_gram, build_charge_gauss  # noqa: F401  (ngsolve.bem-style operator + .mat)
-from ._solve import hdiv_demag_solve  # noqa: F401  (M1 production entry: linear soft-iron demag solve)
+from ._vim import (  # noqa: F401  (ngsolve.bem-style operator + .mat)
+    DemagOperator,
+    build_charge_gram as _build_charge_gram,
+    build_charge_gauss as _build_charge_gauss,
+)
+from ._solve import hdiv_demag_solve as _hdiv_demag_solve  # noqa: F401  (production demag solve)
 from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; hdiv_demag_solve dispatches here)
     PlanarDemagBody,
     maxwell_torque_circle,
-    solve_planar_demag,
+    solve_planar_demag as _solve_planar_demag,
 )
-from ._radsolve import soft_iron_from_mesh, soft_iron_from_vol  # noqa: F401  (.vol/mesh -> both-backend iron)
+from ._radsolve import (  # noqa: F401  (.vol/mesh -> both-backend iron)
+    soft_iron_from_mesh as _soft_iron_from_mesh,
+    soft_iron_from_vol as _soft_iron_from_vol,
+)
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
     reconstruct_field,
@@ -87,12 +103,81 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
     saturating_tangent,               # (M_of_H, dM_of_H) for the saturating isotropic law (rank-1 tangent)
 )
 
+
+def Solve(*args, **kwargs):
+    """NGSolve-style production HDiv-VIM one-call solve.
+    """
+    return _hdiv_demag_solve(*args, **kwargs)
+
+
+def ChargeGram(*args, **kwargs):
+    """NGSolve-style charge-Gram builder for an HDiv finite element space.
+
+    Returns ``(B, G, M_mass)``.
+    """
+    return _build_charge_gram(*args, **kwargs)
+
+
+def ChargeGramGauss(*args, **kwargs):
+    """Retired Gauss point-operator charge Gram entry.
+
+    Kept only so diagnostics fail through the same fail-loud path as the
+    internal Gauss builder.
+    """
+    return _build_charge_gauss(*args, **kwargs)
+
+
+def MeshSoftIron(*args, **kwargs):
+    """Build a mesh-backed Radia soft iron container from an NGSolve mesh.
+
+    User-facing workflows should usually use ``rad.SoftIron(mesh, ...)``.
+    """
+    return _soft_iron_from_mesh(*args, **kwargs)
+
+
+def VolSoftIron(*args, **kwargs):
+    """Build a mesh-backed Radia soft iron container from a Netgen ``.vol`` file.
+
+    User-facing workflows should usually use ``rad.SoftIron(path, ...)``.
+    """
+    return _soft_iron_from_vol(*args, **kwargs)
+
+
+def PlanarSolve(*args, **kwargs):
+    """NGSolve-style alias for the 2D planar HDiv-VIM solve."""
+    return _solve_planar_demag(*args, **kwargs)
+
+
+def SolveNonlinearNewton(*args, **kwargs):
+    """NGSolve-style alias for the nonlinear Newton diagnostic solve."""
+    return solve_nonlinear_newton(*args, **kwargs)
+
+
+def SolveNonlinearNewtonScalable(*args, **kwargs):
+    """NGSolve-style alias for the scalable nonlinear Newton diagnostic solve."""
+    return solve_nonlinear_newton_scalable(*args, **kwargs)
+
+
+for _new, _old in [
+    (Solve, _hdiv_demag_solve),
+    (ChargeGram, _build_charge_gram),
+    (ChargeGramGauss, _build_charge_gauss),
+    (MeshSoftIron, _soft_iron_from_mesh),
+    (VolSoftIron, _soft_iron_from_vol),
+    (PlanarSolve, _solve_planar_demag),
+    (SolveNonlinearNewton, solve_nonlinear_newton),
+    (SolveNonlinearNewtonScalable, solve_nonlinear_newton_scalable),
+]:
+    _new.__signature__ = _inspect.signature(_old)
+
 __all__ = [
     "build_demag", "tri_potential", "build_near_correction", "C_TRI",
+    "Solve", "DemagOperator", "ChargeGram", "ChargeGramGauss",
+    "MeshSoftIron", "VolSoftIron", "PlanarSolve",
+    "SolveNonlinearNewton", "SolveNonlinearNewtonScalable",
     "solve_nonlinear_newton", "solve_nonlinear_newton_scalable",
-    "DemagOperator", "build_charge_gram", "build_charge_gauss", "hdiv_demag_solve",
-    "PlanarDemagBody", "maxwell_torque_circle", "solve_planar_demag",
-    "soft_iron_from_mesh", "soft_iron_from_vol", "soft_iron_box", "soft_iron_hex",
+    "PlanarDemagBody", "maxwell_torque_circle",
+    "soft_iron_box", "soft_iron_hex",
     "magnet_box", "magnet_hex",
     "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",

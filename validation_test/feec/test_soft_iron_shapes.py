@@ -124,8 +124,8 @@ def test_hex_antisymmetric_image_plane_fails_loud():
     with ng.TaskManager():
         half = _hexbox(0.0, A, -A, A, -A, A, 2, 4, 4)
         with pytest.raises(NotImplementedError, match="ANTISYMMETRIC"):
-            vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=Hz, image='-z')     # z perpendicular to Hz -> '-'
-        r = vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=Hz, image='+x')     # x parallel to Hz -> '+' (OK)
+            vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='-z')     # z perpendicular to Hz -> '-'
+        r = vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='+x')     # x parallel to Hz -> '+' (OK)
         assert "demag" in r
     rad.UtiDelAll()
 
@@ -136,7 +136,7 @@ def test_image_masks_numpy_robust():
     rad.UtiDelAll()
     with ng.TaskManager():
         fes = ng.HDiv(_hexbox(0.0, A, 0.0, A, 0.0, A, 2, 2, 2), order=1)
-        vim.build_charge_gram(fes, image_masks=np.array([1]), image_signs=np.array([1.0]))  # must not raise
+        vim.ChargeGram(fes, image_masks=np.array([1]), image_signs=np.array([1.0]))  # must not raise
     rad.UtiDelAll()
 
 

@@ -14,7 +14,7 @@ pytest.importorskip("netgen")
 from netgen.geom2d import SplineGeometry
 
 import radia.mmmm2d as m2
-from radia.vim import hdiv_demag_solve
+from radia.vim import Solve
 
 MU0 = 4e-7 * np.pi
 A = 1.0
@@ -32,7 +32,7 @@ def test_hdiv_vim_magnets_matches_mmmm():
     with ng.TaskManager():
         iron_h = _disk(iron_c); mag_h = _disk(mag_c)
         Mm_h = np.tile([MREM, 0.0], (mag_h.ne, 1))
-        rH = hdiv_demag_solve(iron_h, 200.0, ng.CoefficientFunction((0.0, 0.0)),
+        rH = Solve(iron_h, 200.0, ng.CoefficientFunction((0.0, 0.0)),
                               magnets=[(mag_h, Mm_h)])
         iron_m = _disk(iron_c); mag_m = _disk(mag_c)
         Mm_m = np.tile([MREM, 0.0], (mag_m.ne, 1))
@@ -47,7 +47,7 @@ def test_hdiv_vim_no_source_gives_zero():
     """No applied field and no magnet -> the soft iron is unmagnetised."""
     with ng.TaskManager():
         iron = _disk(0.0)
-        r = hdiv_demag_solve(iron, 200.0, ng.CoefficientFunction((0.0, 0.0)))
+        r = Solve(iron, 200.0, ng.CoefficientFunction((0.0, 0.0)))
     assert np.linalg.norm(r["M_avg"]) < 1e-3 * MREM, r["M_avg"]
 
 
@@ -58,5 +58,5 @@ def test_hdiv_vim_magnets_3d_rejected():
     with ng.TaskManager():
         m3 = ng.Mesh(OCCGeometry(Box((0, 0, 0), (1, 1, 1))).GenerateMesh(maxh=0.5))
         with pytest.raises(NotImplementedError):
-            hdiv_demag_solve(m3, 100.0, ng.CoefficientFunction((1.0, 0.0, 0.0)),
+            Solve(m3, 100.0, ng.CoefficientFunction((1.0, 0.0, 0.0)),
                              magnets=[(m3, np.zeros((m3.ne, 2)))])

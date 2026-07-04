@@ -6,7 +6,7 @@ case: non-convex with reentrant corners, and the nonlinear M is genuinely NON-un
 volume charge), so it exercises the FULL operator (surface AND volume Gram).
 
 KEY (a trap worth stating): a NON-uniform-M nonlinear problem needs the full volume Gram (div M != 0 ->
-volume charge).  The production C++ analytic charge Gram (radia.vim.hdiv_demag_solve, exact near AND far)
+volume charge).  The production C++ analytic charge Gram (radia.vim.Solve, exact near AND far)
 supplies it, so the C-yoke nonlinear converges; Newton fails LOUD on non-convergence (No-Fallbacks).
 
 The C-yoke nonlinear (C++ analytic charge Gram):

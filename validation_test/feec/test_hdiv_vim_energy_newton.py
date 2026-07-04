@@ -16,7 +16,7 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 from netgen.occ import Sphere, Pnt, OCCGeometry          # noqa: E402
-from radia.vim import hdiv_demag_solve                    # noqa: E402
+from radia.vim import Solve                    # noqa: E402
 
 # realistic soft-iron BH table (mu_r ~ 4000 at low H, saturating ~2.2 T)
 _H = np.array([0, 50, 100, 200, 500, 1e3, 2e3, 5e3, 1e4, 3e4, 1e5, 3e5, 1e6])
@@ -39,7 +39,7 @@ def test_default_nonlinear_is_energy_newton_cpp():
     for H0 in (500.0, 5000.0):                            # moderate (linear-ish) and into the knee
         Hext = ng.CoefficientFunction((0, 0, H0))
         with ng.TaskManager():
-            re = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=Hext, order=1)
+            re = Solve(mesh, bh_table=_BH, H_ext=Hext, order=1)
         assert re["linear_solver"] == "energy-newton-cpp", re["linear_solver"]
         assert re["nonlinear"] is True
         assert re["iters"] < 100
@@ -52,7 +52,7 @@ def test_energy_newton_deep_saturation():
     + settled acceptance handle the M-form limit cycle)."""
     mesh = _sphere()
     with ng.TaskManager():
-        r = hdiv_demag_solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, 3e6)), order=1)
+        r = Solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, 3e6)), order=1)
     assert r["linear_solver"] == "energy-newton-cpp"
     # at deep drive M_avg -> Msat (the table's saturation; demag-independent there).  The soft hard-saturation
     # barrier permits a small (<~1%) overshoot of the uniform Msat at the discrete/volume-average level.
