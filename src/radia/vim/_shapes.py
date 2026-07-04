@@ -81,3 +81,52 @@ def soft_iron_hex(vertices, mu_r=None, bh_table=None, nsub=4, material_filter=No
     mesh = _structured_hex_mesh(tri, nsub)
     return soft_iron_from_mesh(mesh, mu_r=mu_r, bh_table=bh_table,
                                material_filter=material_filter, verbose=verbose)
+
+
+# --------------------------------------------------------------------------------------------------
+# PERMANENT-MAGNET shape constructors (the "Magnet(...)" half of the intent-based user layer).
+#
+# A uniform permanent magnet is a FIXED-M body whose field is EXACT analytically (surface-current /
+# surface-charge closed form) -- it needs NO mesh and NO demag solve, unlike soft iron.  So these
+# constructors return a SINGLE Radia element (not a subdivided mesh): rad.ObjRecMag for an axis-aligned
+# box, rad.ObjHexahedron for a general hexahedron.  They exist for API SYMMETRY with soft_iron_box/hex
+# and for the composition below.
+#
+# PM + SOFT IRON: the FEEC HDiv-VIM is a SOFT-IRON demag solver and does not mix fixed-M magnets (pm_M
+# raises).  A permanent magnet is instead a SOURCE: place the magnet element alongside a soft_iron_box in
+# one container and rad.Solve auto-routes the (registered) iron to the HDiv-VIM with the magnet's field as
+# the applied H_ext --
+#     iron = radia.vim.soft_iron_box(center=..., size=..., mu_r=1000)
+#     mag  = radia.vim.magnet_box(center=..., size=..., M=(0, 0, Br/MU0))
+#     res  = rad.Solve(rad.ObjCnt([iron, mag]))     # HDiv-VIM solves the iron in the magnet's field
+# (Br/MU0 converts a remanence Br [T] to the magnetization M [A/m]; MU0 = 4e-7*pi.)
+
+
+def magnet_box(center, size, M):
+    """Axis-aligned uniform PERMANENT-MAGNET box (fixed magnetization ``M`` in A/m) -- analytic, no
+    mesh/solve.  center = (cx,cy,cz), size = (sx,sy,sz) in METERS (the box spans ``center +- size/2``).
+    Returns a single ``rad.ObjRecMag`` (exact surface-current field).  Compose with soft_iron_box in a
+    container so the magnet drives the iron as a fixed-M source (see the module note)."""
+    import radia as rad
+    c = [float(v) for v in center]
+    s = [float(v) for v in size]
+    m = [float(v) for v in M]
+    if len(c) != 3 or len(s) != 3 or len(m) != 3:
+        raise ValueError("magnet_box: center, size, M must each be length-3 (got %r, %r, %r)" % (center, size, M))
+    if min(s) <= 0.0:
+        raise ValueError("magnet_box: size must be positive in every dimension (got %r)" % (size,))
+    return rad.ObjRecMag(c, s, m)
+
+
+def magnet_hex(vertices, M):
+    """General (8-vertex) uniform PERMANENT-MAGNET hexahedron (fixed ``M`` in A/m) -- analytic, no
+    mesh/solve.  vertices = 8 corners in the ``rad.ObjHexahedron`` CHEXA order, in METERS.  Returns a
+    single ``rad.ObjHexahedron`` (exact surface-charge field)."""
+    import radia as rad
+    V = np.asarray(vertices, float)
+    if V.shape != (8, 3):
+        raise ValueError("magnet_hex: vertices must be 8x3 (CHEXA order); got shape %r" % (V.shape,))
+    m = [float(v) for v in M]
+    if len(m) != 3:
+        raise ValueError("magnet_hex: M must be length-3 (A/m); got %r" % (M,))
+    return rad.ObjHexahedron([[float(c) for c in v] for v in V], m)

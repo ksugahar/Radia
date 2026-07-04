@@ -51,7 +51,7 @@ from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; hdiv_
     solve_planar_demag,
 )
 from ._radsolve import soft_iron_from_mesh, soft_iron_from_vol  # noqa: F401  (.vol/mesh -> both-backend iron)
-from ._shapes import soft_iron_box, soft_iron_hex  # noqa: F401  (mesh-less-SHAPE intent constructors -> HDiv-VIM)
+from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
     reconstruct_field,
     reconstruct_field_polynomial,  # Step 1: EXTERNAL polynomial-charge field (tet + hex)
@@ -93,6 +93,7 @@ __all__ = [
     "DemagOperator", "build_charge_gram", "build_charge_gauss", "hdiv_demag_solve",
     "PlanarDemagBody", "maxwell_torque_circle", "solve_planar_demag",
     "soft_iron_from_mesh", "soft_iron_from_vol", "soft_iron_box", "soft_iron_hex",
+    "magnet_box", "magnet_hex",
     "reconstruct_field", "reconstruct_field_polynomial",
     "reconstruct_field_internal", "flat_triangle_charge_field", "tet_self_volume_field",
     "triangle_potential_const", "triangle_potential_moment", "tet_newtonian_potential",

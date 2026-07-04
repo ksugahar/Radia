@@ -303,7 +303,15 @@ if "Solve" in globals():
             # collocation MMMM gated bridge.  An explicit demag_backend='hdiv' on an unsupported mesh falls
             # through to dispatch and fails loud there.
             if backend is None and not _radsolve.is_hdiv_eligible(top):
-                return _cpp_Solve(*args, **kwargs)          # auto + mixed/pyramid -> collocation MMMM (bridge)
+                if _radsolve.registered_iron_count(top) > 1:
+                    # No-Fallbacks: a MULTI-iron container makes is_hdiv_eligible False (its len!=1 guard);
+                    # do NOT silently demote it to collocation MMMM -- fail loud (the HDiv-VIM does not yet
+                    # solve multiple registered irons; the user expected HDiv per the mesh-backed flip).
+                    raise ValueError(
+                        "rad.Solve(auto): multiple mesh-backed soft irons in one container are not supported "
+                        "by the HDiv-VIM yet -- solve each iron separately, or pass "
+                        "demag_backend='collocation_mmmm' to force the collocation MMMM path explicitly.")
+                return _cpp_Solve(*args, **kwargs)          # auto + single mixed/pyramid -> collocation MMMM (bridge)
             return _radsolve.dispatch(*args, **kwargs)      # auto tet/hex/wedge / explicit hdiv -> FEEC HDiv-VIM
         if backend == "hdiv":
             raise ValueError(

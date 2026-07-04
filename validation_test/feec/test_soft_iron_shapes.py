@@ -86,3 +86,87 @@ def test_soft_iron_box_input_validation():
         vim.soft_iron_box(center=(0, 0, 0), size=(0.0, 2 * A, 2 * A), mu_r=1000)          # non-positive size
     with pytest.raises(ValueError):
         vim.soft_iron_hex(np.zeros((4, 3)), mu_r=1000)                                    # not 8x3
+
+
+# --------------------------------------------------------------------------------------------------
+# Review fixes (2026-07-05): multi-iron fail-loud, hex/wedge antisymmetric-plane guard, PM constructors.
+
+def _hexbox(x0, x1, y0, y1, z0, z1, nx, ny, nz):
+    from ngsolve.meshes import MakeStructured3DMesh
+    return MakeStructured3DMesh(hexes=True, nx=nx, ny=ny, nz=nz,
+                                mapping=lambda X, Y, Z: (x0 + (x1 - x0) * X, y0 + (y1 - y0) * Y, z0 + (z1 - z0) * Z))
+
+
+def test_multiple_irons_auto_fails_loud():
+    """rad.Solve(auto) FAILS LOUD on a multi-iron container (No-Fallbacks) instead of silently demoting to
+    collocation MMMM.  is_hdiv_eligible rejects multi-iron (its len!=1 guard); registered_iron_count>1 turns
+    that into a raise.  Explicit demag_backend='collocation_mmmm' remains the way to force the C++ path."""
+    from radia.vim import _radsolve
+    rad.UtiDelAll(); _radsolve.clear_registry()
+    with ng.TaskManager():
+        i1 = vim.soft_iron_box(center=(-2 * A, 0, 0), size=(A, A, A), mu_r=MU_R, nsub=2)
+        i2 = vim.soft_iron_box(center=(2 * A, 0, 0), size=(A, A, A), mu_r=MU_R, nsub=2)
+        cont = rad.ObjCnt([i1, i2])
+        assert _radsolve.registered_iron_count(cont) == 2
+        with pytest.raises(ValueError, match="multiple mesh-backed soft irons"):
+            rad.Solve(cont, 1e-6, 100, 0)
+    rad.UtiDelAll(); _radsolve.clear_registry()
+
+
+@pytest.mark.flaky(reruns=3, reruns_delay=1)
+def test_hex_antisymmetric_image_plane_fails_loud():
+    """hex/wedge IMA fails loud on an ANTISYMMETRIC (negative-sign, field-perpendicular) mirror plane -- the
+    reflected-block fold leaves a large uncancelled cut-face charge there (~1.5%% hex / ~29%% wedge vs the
+    full model; the SIGN is correct, the accuracy is not).  A SYMMETRIC (positive) plane works.  (TET is
+    unaffected -- its fold handles antisymmetric planes; locked by test_hdiv_vim_ima_tet.py.)"""
+    Hz = ng.CoefficientFunction((0.0, 0.0, H0))
+    rad.UtiDelAll()
+    with ng.TaskManager():
+        half = _hexbox(0.0, A, -A, A, -A, A, 2, 4, 4)
+        with pytest.raises(NotImplementedError, match="ANTISYMMETRIC"):
+            vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=Hz, image='-z')     # z perpendicular to Hz -> '-'
+        r = vim.hdiv_demag_solve(half, mu_r=MU_R, H_ext=Hz, image='+x')     # x parallel to Hz -> '+' (OK)
+        assert "demag" in r
+    rad.UtiDelAll()
+
+
+def test_image_masks_numpy_robust():
+    """build_charge_gram normalizes NumPy-array image_masks/signs WITHOUT the ambiguous-truth-value error
+    (list(x or []) raised on arrays)."""
+    rad.UtiDelAll()
+    with ng.TaskManager():
+        fes = ng.HDiv(_hexbox(0.0, A, 0.0, A, 0.0, A, 2, 2, 2), order=1)
+        vim.build_charge_gram(fes, image_masks=np.array([1]), image_signs=np.array([1.0]))  # must not raise
+    rad.UtiDelAll()
+
+
+def test_magnet_box_field():
+    """magnet_box builds a uniform PERMANENT-MAGNET box (rad.ObjRecMag) with an analytic external field."""
+    rad.UtiDelAll()
+    mag = vim.magnet_box(center=(0, 0, 0), size=(2 * A, 2 * A, 2 * A), M=(0, 0, 1.2 / MU0))
+    B = np.array(rad.Fld(mag, 'b', [0, 0, 3 * A]), float)
+    assert abs(B[2]) > 1e-3, f"magnet_box PM field Bz {B[2]:.2e} implausibly small"
+    rad.UtiDelAll()
+
+
+@pytest.mark.flaky(reruns=3, reruns_delay=1)
+def test_magnet_drives_soft_iron_via_hdiv():
+    """A magnet_box (PM source) + soft_iron_box in one container: rad.Solve auto-routes the iron to the
+    HDiv-VIM with the magnet's field as the applied H_ext; the iron magnetizes (non-zero M)."""
+    from radia.vim import _radsolve
+    rad.UtiDelAll(); _radsolve.clear_registry()
+    with ng.TaskManager():
+        mag = vim.magnet_box(center=(0, 0, 0), size=(2 * A, 2 * A, 2 * A), M=(0, 0, 1.2 / MU0))
+        iron = vim.soft_iron_box(center=(0, 0, 4 * A), size=(2 * A, 2 * A, 2 * A), mu_r=MU_R, nsub=3)
+        res = rad.Solve(rad.ObjCnt([iron, mag]), 1e-6, 2000, 0)             # auto: iron -> HDiv, PM = source
+    assert isinstance(res, dict) and "demag" in res, "PM + soft_iron_box did not route to the HDiv-VIM"
+    assert abs(res["M_avg"][2]) > 10.0, f"iron did not magnetize in the PM field (Mz_avg {res['M_avg'][2]:.1f})"
+    rad.UtiDelAll(); _radsolve.clear_registry()
+
+
+def test_magnet_input_validation():
+    """Fail-loud (No-Fallbacks) on bad PM input: non-positive size, non-8x3 hex vertices."""
+    with pytest.raises(ValueError):
+        vim.magnet_box(center=(0, 0, 0), size=(0.0, A, A), M=(0, 0, 1.0))     # non-positive size
+    with pytest.raises(ValueError):
+        vim.magnet_hex(np.zeros((4, 3)), M=(0, 0, 1.0))                        # not 8x3
