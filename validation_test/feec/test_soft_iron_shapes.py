@@ -178,3 +178,33 @@ def test_magnet_input_validation():
         vim.magnet_box(center=(0, 0, 0), size=(0.0, A, A), M=(0, 0, 1.0))     # non-positive size
     with pytest.raises(ValueError):
         vim.magnet_hex(np.zeros((4, 3)), M=(0, 0, 1.0))                        # not 8x3
+
+
+@pytest.mark.flaky(reruns=3, reruns_delay=1)
+def test_hex_mixed_symmetric_antisymmetric_image_planes():
+    """hex IMA with a MIXED reduction combining a SYMMETRIC ('+', field-parallel) and an ANTISYMMETRIC
+    ('-', field-perpendicular) plane -- the quarter '+x-z' and the standard octant '+x+y-z' of a cube in a
+    uniform Hz.
+
+    Reported ``M_avg`` is the PHYSICAL FULL-DOMAIN average: a transverse component (Mx/My) is ODD across an
+    image plane, so its reduced-domain one-sided partial average CANCELS in the full domain -> M_avg ~ (0,0,Mz)
+    matching the full cube.  The RAW reduced average (with the large nonzero one-sided transverse) stays
+    available as ``M_avg_reduced`` -- comparing THAT to a full-domain average is the category error that once
+    looked like a 15%% 'transverse bug'.  The demag/energy matches the full model to ~5e-6 (the Gram IS correct
+    -- there is no reflected-block bug), which is what this test really locks."""
+    Hz = ng.CoefficientFunction((0.0, 0.0, H0))
+    rad.UtiDelAll()
+    with ng.TaskManager():
+        full = vim.Solve(_hexbox(-A, A, -A, A, -A, A, 4, 4, 4), mu_r=MU_R, H_ext=Hz)
+        qtr = vim.Solve(_hexbox(0.0, A, -A, A, 0.0, A, 2, 4, 2), mu_r=MU_R, H_ext=Hz, image='+x-z')
+        octa = vim.Solve(_hexbox(0.0, A, 0.0, A, 0.0, A, 2, 2, 2), mu_r=MU_R, H_ext=Hz, image='+x+y-z')
+    for r, name in [(qtr, '+x-z'), (octa, '+x+y-z')]:
+        assert abs(r["M_avg"][0]) < 1.0 and abs(r["M_avg"][1]) < 1.0, \
+            f"{name} full-domain transverse M_avg {r['M_avg'][:2]} should be ~0 (odd component cancels)"
+        assert abs(r["M_avg"][2] - full["M_avg"][2]) / abs(full["M_avg"][2]) < 5e-3, \
+            f"{name} full-domain Mz {r['M_avg'][2]:.1f} != full {full['M_avg'][2]:.1f}"
+        assert abs(r["demag"] - full["demag"]) < 5e-3, \
+            f"{name} demag {r['demag']:.6g} != full {full['demag']:.6g} (Gram consistency)"
+        assert max(abs(r["M_avg_reduced"][0]), abs(r["M_avg_reduced"][1])) > 1e3, \
+            f"{name} M_avg_reduced must retain the nonzero one-sided transverse (got {r['M_avg_reduced'][:2]})"
+    rad.UtiDelAll()

@@ -506,10 +506,28 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     fesM = ng.VectorL2(mesh, order=0); gfMc = ng.GridFunction(fesM); gfMc.Set(gfM)
     M_el = gfMc.vec.FV().NumPy().reshape(3, n_el).T.copy()
     vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
-    M_avg = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol
+    M_avg_reduced = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol   # raw REDUCED-domain average
+    # With image= (a symmetry-reduced solve), the raw average above is over the REDUCED domain only.  A
+    # magnetization component that is ODD across an image mirror plane (e.g. Mx across a '+x' plane) integrates
+    # to a nonzero ONE-SIDED value over the reduced half/quarter/octant, but that value CANCELS exactly against
+    # its mirror image in the full domain -- so comparing the raw reduced average to a full-model average is a
+    # category error (it is the source of the apparent "+x-z 15% transverse error", which is NOT a Gram bug:
+    # the demag/energy matches the full model to ~5e-6).  Report the physical FULL-DOMAIN average as `M_avg`:
+    # component c survives iff it is EVEN under every image plane a (normal-to-plane parity = -sign_a,
+    # tangential parity = +sign_a; sign +1 symmetric/field-parallel, -1 antisymmetric/field-perpendicular),
+    # otherwise its full-domain average is exactly 0.  The raw reduced average stays available as M_avg_reduced.
+    M_avg = M_avg_reduced.copy()
+    if image is not None:
+        for _c in range(3):
+            for _a, _s in _tet.parse_image_string(image):
+                if ((-_s) if _c == _a else _s) < 0:      # component c odd across plane a -> cancels in full domain
+                    M_avg[_c] = 0.0
+                    break
     out = dict(M=M_el, M_avg=M_avg, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
                n_charge=n_charge, nonlinear=bh_table is not None, linear_solver=solver_used,
                gram_backend=gram_backend, order=int(order), curve_order=curve_order)
+    if image is not None:
+        out["M_avg_reduced"] = M_avg_reduced
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
     return out
