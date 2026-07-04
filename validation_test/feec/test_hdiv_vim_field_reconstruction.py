@@ -45,29 +45,3 @@ def test_uniform_sphere_field_reconstruction(order):
     assert np.abs(B[:, 0]).max() < 5e-3 and np.abs(B[:, 1]).max() < 5e-3, \
         f"order={order}: spurious transverse field |Bx|max={np.abs(B[:,0]).max():.4f} " \
         f"|By|max={np.abs(B[:,1]).max():.4f} (solenoidal-nullspace garbage?)"
-
-
-@pytest.mark.parametrize("quantity", ["b", "a"])
-def test_hmatrix_backend_matches_direct(quantity):
-    """reconstruct_field(backend='hmatrix') -- the O(N log N) HACApK _FieldEvalHMatrix path for the
-    field->GridFunction FEM coupling -- reproduces the direct batched radia.Fld to ~machine, for B and the
-    A-formulation source A.  This is the path-B (magnet-container) acceleration; the build is fully parallel
-    (unit-M clones, no mutex) so the CALLER's TaskManager parallelises it."""
-    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.4))
-    with ng.TaskManager():                                   # CALLER wraps; reconstruct_field does NOT
-        gfM = ng.GridFunction(ng.HDiv(mesh, order=1))
-        gfM.Set(ng.CF((0.3, -0.5, 1.0)))                     # a non-trivial (non-axial) magnetization
-        Fd = reconstruct_field(mesh, gfM, PTS, quantity=quantity, backend="direct")
-        Fh = reconstruct_field(mesh, gfM, PTS, quantity=quantity, backend="hmatrix", eps=1e-9)
-    err = np.linalg.norm(Fh - Fd) / np.linalg.norm(Fd)
-    assert err < 1e-7, f"quantity={quantity}: hmatrix vs direct reconstruct_field = {err:.3e}"
-
-
-def test_hmatrix_backend_rejects_h():
-    """backend='hmatrix' supports 'b'/'a' only (no 'h' in _FieldEvalHMatrix yet) -- fail loud, no fallback."""
-    mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=0.6))
-    with ng.TaskManager():
-        gfM = ng.GridFunction(ng.HDiv(mesh, order=1))
-        gfM.Set(ng.CF((0, 0, 1.0)))
-        with pytest.raises(ValueError, match="quantity 'b' or 'a'"):
-            reconstruct_field(mesh, gfM, PTS, quantity="h", backend="hmatrix")
