@@ -93,6 +93,35 @@ def magnet_field(magnets, P, ngauss=4):
     return H
 
 
+def field_cf(Xq, Q):
+    """The 2D charge-cloud H field as an NGSolve CoefficientFunction (the CF twin of charge_field):
+        H(x,y) = (1/2 pi) sum_q Q_q (r - r_q) / |r - r_q|^2.
+    For the HDiv-VIM, whose applied field is projected onto H(div) from a CF (unlike MMMM, which
+    evaluates H at centroids as numpy).  A big sum over charges -- keep the cloud modest."""
+    Xq = np.ascontiguousarray(np.asarray(Xq, float).reshape(-1, 2))
+    Q = np.asarray(Q, float).ravel()
+    Hx = ng.CF(0.0)
+    Hy = ng.CF(0.0)
+    inv2pi = 1.0 / (2.0 * np.pi)
+    for i in range(len(Q)):
+        dx = ng.x - float(Xq[i, 0])
+        dy = ng.y - float(Xq[i, 1])
+        c = float(Q[i]) * inv2pi / (dx * dx + dy * dy)
+        Hx = Hx + c * dx
+        Hy = Hy + c * dy
+    return ng.CF((Hx, Hy))
+
+
+def magnet_field_cf(magnets, ngauss=4):
+    """Combined H CoefficientFunction of PERMANENT-MAGNET bodies [(mesh, M_fixed), ...] -- the CF
+    the HDiv-VIM adds to its applied field (same rigid source MMMM's magnet_field gives as numpy)."""
+    Xs, Qs = [], []
+    for mesh, M in magnets:
+        X, Q = mn_edge_cloud(mesh, M, ngauss)
+        Xs.append(X); Qs.append(Q)
+    return field_cf(np.vstack(Xs), np.concatenate(Qs))
+
+
 def maxwell_torque_cloud(Xq, Q, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440):
     """Maxwell torque per unit length on a circle Rc in air from a cloud + uniform applied H_ext."""
     return _rp.PlanarMaxwellTorqueCircle(np.ascontiguousarray(Xq, float),
