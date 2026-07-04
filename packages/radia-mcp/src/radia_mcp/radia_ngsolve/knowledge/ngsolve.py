@@ -953,8 +953,11 @@ than another sphere-only smoke test because students can see the chain:
 For the first time-domain visualization, keep it in MATLAB rather than Gmsh:
 use a step-force structural modal response plus the causal Rayleigh
 retarded-potential integral, then draw r-z pressure snapshots with a MATLAB
-figure.  Gmsh/VTK can remain an export path for later 3D fields, but the
-teaching visualization should be readable `.m` code first.
+figure or an animated GIF written directly from the pressure array.  The GIF
+path is a good default artifact for reports because it is browser-viewable,
+headless-friendly, and still backed by readable `.m` code.  Gmsh/VTK can
+remain an export path for later 3D fields, but the teaching visualization
+should be readable `.m` code first.
 
 ## Curve-only high-order .vol geometry
 

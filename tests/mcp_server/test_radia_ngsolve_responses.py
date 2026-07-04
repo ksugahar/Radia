@@ -169,6 +169,8 @@ class TestNgsolveKnowledge:
         assert "normal velocity" in body
         assert "radiation impedance" in body
         assert "MATLAB rather than Gmsh" in body
+        assert "animated GIF" in body
+        assert "headless-friendly" in body
         assert "r-z pressure snapshots" in body
 
     def test_curved_vol_geometry_alias(self):
