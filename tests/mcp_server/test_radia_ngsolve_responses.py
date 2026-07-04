@@ -144,6 +144,13 @@ class TestNgsolveKnowledge:
     def test_unknown_topic(self):
         _assert_unknown_topic_graceful(get_ngsolve_documentation)
 
+    def test_ngsolve_bem_50_vol_visualization_topic(self):
+        body = get_ngsolve_documentation("ngsolve_bem_50")
+        _assert_substantial(body, min_chars=1000)
+        _assert_contains_any(body, ["Netgen", ".vol", "50-case", "NGSolve.BEM"],
+                             label="ngsolve ngsolve_bem_50")
+        assert "Do not call a cross-code artifact \"analytic\"" in body
+
 
 # ---------------------------------------------------------------------------
 # radia
