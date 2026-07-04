@@ -213,3 +213,36 @@ def test_pm_eddy_unified_rotor():
     rel = abs(M_iron[0] - M_mono[0]) / abs(M_mono[0])
     assert rel < 1e-2, (M_iron[0], M_mono[0], rel)           # PM magnetises iron + drives eddy
     assert abs(M_iron[0].imag) > 1e-3 * abs(M_iron[0].real)  # eddy induces a real phase lag
+
+
+# ---- nonlinear soft iron + eddy (effective-chi AC) ----------------------------------------------
+BH = [[0.0, 0.0], [200.0, 0.30], [800.0, 1.20], [3000.0, 1.70], [20000.0, 2.00]]   # saturating iron
+
+
+def test_nonlinear_sigma_to_zero_recovers_dc_demag():
+    """couple(bh_table) at sigma->0 collapses to the standalone DC nonlinear MMMM demag (same law)."""
+    B0 = 0.6
+    with ng.TaskManager():
+        iron = _disk_mesh((-1.6 * A, 0.0), maxh=A / 8)
+        fem = _cond_air_mesh((1.6 * A, 0.0), maxh_c=A / 6)
+        res = pe.couple_mmmm(iron, fem, sigma=1.0, freq=1e-3, bh_table=BH, B0=B0)   # ~no eddy
+        pure = m2.solve_planar_demag(iron, bh_table=BH, H_ext=(B0 / MU0, 0.0))
+    rel = abs(res["M_avg"][0].real - pure["M_avg"][0]) / abs(pure["M_avg"][0])
+    assert rel < 2e-3, (res["M_avg"][0], pure["M_avg"][0], rel)
+    assert abs(res["M_avg"][0].imag) < 2e-3 * abs(res["M_avg"][0].real)      # eddy phase ~0
+
+
+def test_nonlinear_low_drive_recovers_linear():
+    """At a low drive the saturating iron stays in its initial-permeability (chi0) linear regime."""
+    from radia.mmmm2d import _hm_arrays
+    _, _, chi0 = _hm_arrays(BH)
+    delta = A / 1.0
+    freq = (2.0 / (MU0 * SIGMA * delta ** 2)) / (2 * np.pi)
+    B0 = 5e-5                                                 # H_app = B0/mu0 ~ 40 A/m << 200 (knee)
+    with ng.TaskManager():
+        iron = _disk_mesh((-1.6 * A, 0.0), maxh=A / 7)
+        fem = _cond_air_mesh((1.6 * A, 0.0), maxh_c=min(A / 6, delta / 3))
+        r_nl = pe.couple_mmmm(iron, fem, sigma=SIGMA, freq=freq, bh_table=BH, B0=B0)
+        r_lin = pe.couple_mmmm(iron, fem, sigma=SIGMA, freq=freq, mu_r=1.0 + chi0, B0=B0)
+    rel = abs(r_nl["M_avg"][0] - r_lin["M_avg"][0]) / abs(r_lin["M_avg"][0])
+    assert rel < 1e-3, (r_nl["M_avg"][0], r_lin["M_avg"][0], rel)            # nonlinear -> linear chi0
