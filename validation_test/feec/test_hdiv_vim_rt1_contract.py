@@ -1,20 +1,20 @@
-"""Golden: the HDiv-VIM TET / RT1-only CONTRACT (Sugahara 2026-06-29).
+"""Golden: the HDiv-VIM RT1 production CONTRACT (Sugahara 2026-07-04).
 
-HDiv-VIM is the RT1 (HDiv order=1) high-order element of the soft-iron demag stack, on a pure-TET or
-pure-HEX mesh.  RT0 is retired (per-element INACCURATE -- the demag factor is right ~1/3 but the
-per-element M leaks; RT1 is what fixes it); RT2+ is retired (no per-element gain over RT1, slower);
-wedge / pyramid / mixed meshes, pm_M mixing, IMA image symmetry, the 'gauss' point Gram and the 'hlu'
-system-A solver are all retired from / not in HDiv-VIM -> the collocation MMMM backend.
+HDiv-VIM is the RT1 (HDiv order=1) high-order element of the soft-iron demag stack, on a pure-TET,
+pure-HEX, or pure-WEDGE mesh.  RT0 is retired (per-element INACCURATE -- the demag factor is right ~1/3
+but the per-element M leaks; RT1 is what fixes it); RT2+ is retired (no per-element gain over RT1, slower).
+Pyramid / mixed meshes, pm_M mixing,
+curved IMA, the 'gauss' point Gram and the 'hlu' system-A solver are retired from / not in HDiv-VIM ->
+the collocation MMMM backend.
 
-HEX was UNLOCKED 2026-07-04: the wired hex RT1 charge Gram + the Gram-agnostic energy-Newton already
-solve it, so the tet-only guard was relaxed to pure-TET-OR-pure-HEX.  rad.Solve's 'auto' split STILL
-routes a HEX mesh-backed iron to collocation MMMM by DEFAULT (KEEP-BOTH; MMMM = coarse tier), but an
-explicit demag_backend='hdiv' -- and a direct hdiv_demag_solve(hexmesh, ...) call -- now solve pure hex.
-The per-element hex correctness lock lives in test_hdiv_vim_hex_public_solve.py.
+HEX/WEDGE were UNLOCKED 2026-07-04: the wired RT1 charge Grams + the Gram-agnostic solve path already
+solve them, so the auto guard is now pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
+lock lives in test_hdiv_vim_hex_public_solve.py; wedge spectrum/cube locks live in
+test_hdiv_vim_wedge_spectrum.py.
 
 This test LOCKS the fail-loud retirement (No-Fallbacks: the raise IS the feature -- it names the backend to
 use instead) + the RT1 happy path + the rad.Solve 'auto' split.  It replaces the per-feature golden tests
-for the retired paths (gauss / hlu / pm / image / wedge).
+for the retired paths (gauss / hlu / pm / curved image).
 
 NGSolve + Netgen required.  See memory/hdiv_vim_tet_rt1_only.md.
 """
@@ -81,12 +81,12 @@ def test_pm_mixing_retired():
             hdiv_demag_solve(mesh, mu_r=100.0, H_ext=_HEXT, pm_M={"default": [0, 0, 1.0]})
 
 
-def test_image_symmetry_retired():
-    """IMA mirror symmetry (image) is retired -- reduced models use collocation MMMM."""
+def test_curved_image_symmetry_retired():
+    """Curved IMA is not wired -- reduced curved models use collocation MMMM."""
     mesh = _sphere()
     with pytest.raises(NotImplementedError):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, mu_r=100.0, H_ext=_HEXT, image="+x")
+            hdiv_demag_solve(mesh, mu_r=100.0, H_ext=_HEXT, image="+x", curve_order=2)
 
 
 def test_gauss_and_hlu_backends_retired():
@@ -100,7 +100,7 @@ def test_gauss_and_hlu_backends_retired():
             hdiv_demag_solve(mesh, mu_r=100.0, H_ext=_HEXT, linear_solver="hlu")
 
 
-def test_operator_and_gram_are_rt1_tet_only():
+def test_operator_and_gram_are_rt1_only():
     """The ngsolve.bem-style DemagOperator + build_charge_gram reject order!=1 (RT0/RT2 retired)."""
     mesh = _sphere()
     with ng.TaskManager():
@@ -113,22 +113,23 @@ def test_operator_and_gram_are_rt1_tet_only():
     assert 0.31 < D < 0.345, D
 
 
-# ---------------------------------------------------------------- non-tet -> collocation MMMM
-def test_hex_soft_iron_auto_routes_to_collocation_mmmm():
-    """rad.Solve 'auto' routes a HEX mesh-backed soft iron to collocation MMMM by DEFAULT (KEEP-BOTH;
-    MMMM = coarse tier) -- it solves, returning the C++ tuple.  (Explicit demag_backend='hdiv' on hex now
-    SOLVES via the wired hex RT1 Gram; that + the per-element correctness are locked in
-    test_hdiv_vim_hex_public_solve.py, kept out of this contract test to avoid a heavy/flaky hex build.)"""
+# ---------------------------------------------------------------- pure HEX/WEDGE -> HDiv-VIM eligibility
+def test_hex_soft_iron_auto_is_hdiv_eligible():
+    """rad.Solve 'auto' now routes a HEX mesh-backed soft iron to HDiv-VIM.
+
+    Keep this contract cheap: test the read-only dispatch predicate here; the actual solve is locked in
+    test_hdiv_vim_hex_public_solve.py.
+    """
     from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim import _radsolve
+
     rad.UtiDelAll()
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
     with ng.TaskManager():
         hexm = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3, mapping=mp)
     iron = soft_iron_from_mesh(hexm, mu_r=1000.0)
-    src = rad.ObjBckg(lambda p: [0, 0, 0.1])
-    top = rad.ObjCnt([iron, src])
-    res = rad.Solve(top, 1e-4, 1000, 0)                          # auto -> hex -> collocation MMMM (C++)
-    assert isinstance(res, tuple), type(res)                     # C++ collocation MMMM returns a tuple
+    top = rad.ObjCnt([iron])
+    assert _radsolve.is_hdiv_eligible(top)
     rad.UtiDelAll()
 
 

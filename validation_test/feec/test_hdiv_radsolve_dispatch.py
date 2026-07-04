@@ -6,9 +6,9 @@ radia.vim._radsolve.dispatch): a soft-iron container built from an NGSolve mesh,
 via rad.Solve(demag_backend='hdiv'), reproduces a direct radia.vim.hdiv_demag_solve to
 machine precision and writes the per-element M back so rad.ObjM/rad.Fld reflect it.
 
-With hdiv wired in, rad.Solve keeps a working soft-iron demag path: a TET iron solves via the HDiv-VIM
-(RT1), and a HEX / WEDGE iron is routed by the 'auto' split to the collocation MMMM backend (HDiv-VIM is
-tet/RT1-only, 2026-06-29 -- an explicit demag_backend='hdiv' on a non-tet iron fails loud).
+With hdiv wired in, rad.Solve keeps a working soft-iron demag path: pure TET / HEX / WEDGE soft irons
+solve via HDiv-VIM (RT1) in the 'auto' split, while mixed / pyramid mesh-backed irons still route to the
+collocation MMMM bridge.
 """
 import math
 
@@ -59,9 +59,9 @@ def test_radsolve_hdiv_equals_direct():
     rad.UtiDelAll()
 
 
-# (test_radsolve_hdiv_image_passed_through removed 2026-06-29: IMA image symmetry is retired from HDiv-VIM
-#  (and the mesh was hex) -- reduced symmetric models use collocation MMMM.  Retirement locked by
-#  test_hdiv_vim_rt1_contract.py; the hex->collocation MMMM auto-route by its hex test.)
+# (test_radsolve_hdiv_image_passed_through removed 2026-06-29 because the old case mixed several concerns.
+#  Flat pure-TET / HEX / WEDGE IMA is now locked by the dedicated IMA and charge-Gram tests; curved / mixed /
+#  pyramid reduced models still fail loud toward collocation MMMM.)
 
 
 def test_meshless_hex_soft_iron_not_registered_uses_collocation_mmmm():

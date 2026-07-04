@@ -515,7 +515,7 @@ def _charge_basis_hex(fes, cob_quad=3):
 
 
 def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
-                           eps=1e-12, leafsize=64, eta=2.0):
+                           eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None):
     """Pure-hex RT1 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glin_n = the 1D rule of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
@@ -542,7 +542,9 @@ def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1
         gl_out=glo.tolist(), gw_out=gwo.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
         far_tet_pts=ftp.ravel().tolist(), far_tet_w=ftw.tolist(),
         far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
-        near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+        near_grade=near_grade, far_inner_factor=far_inner,
+        image_masks=list(image_masks or []), image_signs=list(image_signs or []),
+        eps=eps, leaf=leafsize, eta=eta)
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
         raise RuntimeError(
@@ -767,7 +769,7 @@ def _charge_basis_wedge(fes):
 
 
 def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
-                             eps=1e-12, leafsize=64, eta=2.0):
+                             eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None):
     """Pure-prism RT1 charge Gram via the wedge-mode C++ _ChargeGramHMatrix (mirror of _build_charge_gram_hex;
     FLAT + Curve(2) share ONE path).  numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3;
     demag_z ~ 1/3.  The wedge mode shares the hex block memo / symmetric-fill build, so the golden hex path
@@ -783,7 +785,9 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
         gl_out=glo.tolist(), gw_out=gwo.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
         far_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), far_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
         far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
-        near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+        near_grade=near_grade, far_inner_factor=far_inner,
+        image_masks=list(image_masks or []), image_signs=list(image_signs or []),
+        eps=eps, leaf=leafsize, eta=eta)
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
         raise RuntimeError(
@@ -824,15 +828,22 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
+    image_masks = list(image_masks or [])
+    image_signs = list(image_signs or [])
+    if len(image_masks) != len(image_signs):
+        raise ValueError("build_charge_gram: image_masks and image_signs must have the same length")
     if image_masks:
-        # IMA (mirror-image charge folding) is wired for the FLAT pure-TET highorder Gram only (the C++
-        # m_highorder branch folds QuadDotRefl->PhiInner).  Fail loud otherwise (No-Fallbacks) rather than
-        # silently drop the image on the 2D / hex / wedge / curved paths.
+        # IMA (mirror-image charge folding): wired for the FLAT pure-TET (C++ m_highorder QuadDotRefl->PhiInner)
+        # AND pure-HEX / pure-WEDGE (the QuadBlockHex/Wedge(mask) reflected block) RT1 Grams.  Fail loud on the
+        # still-unwired 2D-planar + CURVED reduced models (No-Fallbacks) rather than silently drop the image.
         _ivt = {len(el.vertices) for el in mesh.Elements(ng.VOL)} if mesh.dim == 3 else None
-        if mesh.dim != 3 or _ivt != {4} or curve_order is not None:
+        _curved = (curve_order is not None) or (mesh.dim == 3 and mesh.GetCurveOrder() >= 2)
+        if mesh.dim != 3 or _ivt not in ({4}, {8}, {6}) or _curved:
             raise ValueError(
-                "build_charge_gram: image_masks (IMA) is wired for the flat pure-TET RT1 Gram only "
-                "(got dim=%s, vtypes=%s, curve_order=%r)." % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
+                "build_charge_gram: image_masks (IMA) is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
+                "RT1 Gram only; 2D-planar and CURVED reduced models use collocation MMMM (rad.Solve "
+                "demag_backend='collocation_mmmm', image=...).  (got dim=%s, vtypes=%s, curve_order=%r)."
+                % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
         # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
         return _build_charge_gram_2d(fes, eta=eta)
@@ -841,12 +852,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         # PURE-HEX RT1: the hex-mode charge Gram (Q1 volume charge + Q2 geometry; FLAT or Curve(2) one path).
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
-        return _build_charge_gram_hex(fes, eta=eta)
+        return _build_charge_gram_hex(fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) RT1: the wedge-mode charge Gram (6-monomial volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
         # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
-        return _build_charge_gram_wedge(fes, eta=eta)
+        return _build_charge_gram_wedge(fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
     if _vtypes != {4}:
         raise ValueError(
             "build_charge_gram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "

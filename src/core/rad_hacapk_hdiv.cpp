@@ -250,6 +250,9 @@ static const double RAD_DUN5[7][4] = {
     {0.1012865073, 0.1012865073, 0.7974269853, 0.1259391805},
 };
 
+static void ValidateImageVectors(const std::vector<int>& image_masks,
+                                 const std::vector<double>& image_signs);
+
 RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> centroids,
                                          std::vector<double> measures,
                                          std::vector<double> self_energy)
@@ -267,6 +270,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
       m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts)),
       m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     const int n_bf = (int)(m_faceV.size() / 9);
     m_n = n_el + n_bf;
     m_cent.assign((size_t)m_n * 3, 0.0);
@@ -371,6 +375,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     : m_n_el(n_el), m_analytic(true), m_near_factor(near_factor), m_far_quad(far_quad), m_polytope(true),
       m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     const int n_cell = n_el;
     const int n_bf   = (int)face_meas.size();
     m_n = n_cell + n_bf;
@@ -552,6 +557,15 @@ static long long NextChargeGramBuildId()
     return s_id.fetch_add(1) + 1;
 }
 
+static void ValidateImageVectors(const std::vector<int>& image_masks,
+                                 const std::vector<double>& image_signs)
+{
+    if (image_masks.size() != image_signs.size()) {
+        throw std::invalid_argument(
+            "ChargeGram image_masks and image_signs must have the same length");
+    }
+}
+
 // HIGH-ORDER constructor: polynomial charges (monomial basis per host).  See the header for the contract.
 RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
@@ -569,6 +583,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     const int n_cell = n_el;
     const int n_bf   = (int)(m_faceV.size() / 9);
     m_n = (int)m_host.size();                       // number of polynomial CHARGES (the H-matrix dofs)
@@ -1566,7 +1581,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> gl_in, std::vector<double> gw_in,
     std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
     std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
-    double near_grade, double far_inner_factor)
+    double near_grade, double far_inner_factor,
+    std::vector<int> image_masks, std::vector<double> image_signs)
     : m_n_el(n_el), m_hexmode(true), m_hex_n_bf(n_bf),
       m_hexNodes(std::move(hex_cell_nodes)), m_quadNodes(std::move(quad_face_nodes)),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
@@ -1576,8 +1592,10 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
       m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();
     // ---- per-host sub-simplex physical geometry (corners, centroid, size) via the Q2 maps ----
@@ -1690,7 +1708,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> gl_in, std::vector<double> gw_in,
     std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
     std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
-    double near_grade, double far_inner_factor)
+    double near_grade, double far_inner_factor,
+    std::vector<int> image_masks, std::vector<double> image_signs)
     : m_n_el(n_el),
       m_symTetP(std::move(sym_tet_pts)), m_symTetW(std::move(sym_tet_w)),
       m_symTriP(std::move(sym_tri_pts)), m_symTriW(std::move(sym_tri_w)),
@@ -1699,11 +1718,13 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_farTetP(std::move(far_tet_pts)), m_farTetW(std::move(far_tet_w)),
       m_farTriP(std::move(far_tri_pts)), m_farTriW(std::move(far_tri_w)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs)),
       m_wedgemode(true), m_wedge_n_bf(n_bf),
       m_wCellNodes(std::move(wedge_cell_nodes)), m_wFaceNodes(std::move(face_nodes)),
       m_wFaceType(std::move(face_type)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();
     // ---- cell sub-tet physical geometry (3 sub-tets per prism) ----
@@ -2309,7 +2330,7 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
 // across the block), so the per-entry value is served from ONE block computation -- the expensive kernel
 // work on each (outer pt, inner pt) is shared across all nT*nS monomial combos.  Returns [nT*nS]
 // row-major, INV4PI folded.
-std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kindS, int hS) const
+std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kindS, int hS, int mask) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -2318,16 +2339,24 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     if (nT == 0 || nS == 0) return blk;
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
+    // IMA (mask>0): couple the TARGET host with the source host REFLECTED on the 3-bit axis mask.  By the
+    // reflection isometry |R(x)-y| = |x-R(y)|, the image block = INT_target m_t(x) Phi_source(R(x)) dx:
+    // reflect the source-side geometry driving the near/far grading, reflect the outer eval point before the
+    // source-potential eval, and never treat the pair as SELF.  mask==0 => reflpt identity => byte-identical.
+    auto reflpt = [mask](const double* v, double* o){
+        o[0] = (mask & 1) ? -v[0] : v[0]; o[1] = (mask & 2) ? -v[1] : v[1]; o[2] = (mask & 4) ? -v[2] : v[2];
+    };
     const int rt = tgtG[0], rs = srcG[0];      // representative charges (host-level cent/size)
-    const double dxh = m_cent[3*rt]-m_cent[3*rs], dyh = m_cent[3*rt+1]-m_cent[3*rs+1],
-                 dzh = m_cent[3*rt+2]-m_cent[3*rs+2];
+    double rsc[3]; reflpt(&m_cent[3*rs], rsc);
+    const double dxh = m_cent[3*rt]-rsc[0], dyh = m_cent[3*rt+1]-rsc[1],
+                 dzh = m_cent[3*rt+2]-rsc[2];
     const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
-    const bool near_hosts = (kindT == kindS && hT == hS)
+    const bool near_hosts = (mask == 0 && kindT == kindS && hT == hS)
                             || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
     // SELF host pair: the inner takes the RADIAL decomposition with the EXACT anchor xiT (the outer
     // point's own ref coords -- no Newton).  The OUTER grading below is UNCHANGED -- it is required by the
     // Q1 charge degree regardless of how the inner is computed (exact inner + regular outer -> eig 1.088).
-    const bool self_pair = (kindT == kindS && hT == hS);
+    const bool self_pair = (mask == 0 && kindT == kindS && hT == hS);   // an image is never SELF
     const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
     const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
@@ -2338,7 +2367,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
         const double* subVA = cellT ? &m_cellSubV[sidA*4*3] : &m_faceSubV[sidA*3*3];
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*6 + sB) : ((size_t)hS*2 + sB);
-            const double* cB = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
+            const double* cB0 = cellS ? &m_cellSubC[sidB*3] : &m_faceSubC[sidB*3];
+            double cB[3]; reflpt(cB0, cB);   // reflected source sub-centroid drives near/far + Duffy corner (mask>0)
             const double szB = cellS ? m_cellSubS[sidB] : m_faceSubS[sidB];
             const double* cA = cellT ? &m_cellSubC[sidA*3] : &m_faceSubC[sidA*3];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
@@ -2373,8 +2403,9 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                 const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
                 const double* xiT = &oc->xi[3*q];
                 for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+                double peval[3]; reflpt(pq, peval);                                             // reflect for the (image) source eval
                 if (self_pair) PhiInnerHexRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data());  // radial, exact anchor
-                else           PhiInnerHexSubVec(kindS, hS, sB, pq, srcG, inn.data());          // far cloud / radial
+                else           PhiInnerHexSubVec(kindS, hS, sB, peval, srcG, inn.data());       // far cloud / radial (peval==pq if mask==0)
 
                 const double wg = oc->wgeo[q];
                 for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
@@ -2397,9 +2428,10 @@ struct HexBlockKey {
     int hT;
     int kindS;
     int hS;
+    int mask;                                          // IMA image mask (0 = direct block)
     bool operator==(const HexBlockKey& o) const
     {
-        return kindT == o.kindT && hT == o.hT && kindS == o.kindS && hS == o.hS;
+        return kindT == o.kindT && hT == o.hT && kindS == o.kindS && hS == o.hS && mask == o.mask;
     }
 };
 
@@ -2411,7 +2443,7 @@ struct HexBlockKeyHash {
             h ^= static_cast<std::size_t>(static_cast<unsigned int>(v));
             h *= 1099511628211ull;
         };
-        mix(k.kindT); mix(k.hT); mix(k.kindS); mix(k.hS);
+        mix(k.kindT); mix(k.hT); mix(k.kindS); mix(k.hS); mix(k.mask);
         return h;
     }
 };
@@ -2419,17 +2451,17 @@ struct HexBlockKeyHash {
 static thread_local long long s_hex_block_owner = -1;
 static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_hex_block_cache;
 
-const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS) const
+const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int mask) const
 {
     if (s_hex_block_owner != m_build_id) { s_hex_block_cache.clear(); s_hex_block_owner = m_build_id; }
-    const HexBlockKey key{kindT, hT, kindS, hS};
+    const HexBlockKey key{kindT, hT, kindS, hS, mask};
     auto it = s_hex_block_cache.find(key);
     if (it == s_hex_block_cache.end()) {
         if (s_hex_block_cache.size() > 200000u) s_hex_block_cache.clear();
         it = s_hex_block_cache.emplace(key,
-                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS)
-                 : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS)
-                 :               QuadBlockHex(kindT, hT, kindS, hS)).first;
+                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS)            // 2D image unsupported (mask==0 guaranteed)
+                 : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, mask)
+                 :               QuadBlockHex(kindT, hT, kindS, hS, mask)).first;
     }
     return it->second;
 }
@@ -3162,7 +3194,7 @@ void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, co
 }
 
 // Directed host-pair block (mirror of QuadBlockHex) with mixed-face sub counts / node strides.
-std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int kindS, int hS) const
+std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int kindS, int hS, int mask) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
@@ -3174,11 +3206,17 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
     const int ftS = cellS ? -1 : m_wFaceType[hS];
     const int nsubT = cellT ? 3 : (ftT == 0 ? 1 : 2);
     const int nsubS = cellS ? 3 : (ftS == 0 ? 1 : 2);
+    // IMA (mask>0): see QuadBlockHex -- couple the TARGET host with the REFLECTED source host (reflect the
+    // grading geometry + the outer eval point, never SELF).  mask==0 => identity => byte-identical direct block.
+    auto reflpt = [mask](const double* v, double* o){
+        o[0] = (mask & 1) ? -v[0] : v[0]; o[1] = (mask & 2) ? -v[1] : v[1]; o[2] = (mask & 4) ? -v[2] : v[2];
+    };
     const int rt = tgtG[0], rs = srcG[0];
-    const double dxh = m_cent[3*rt]-m_cent[3*rs], dyh = m_cent[3*rt+1]-m_cent[3*rs+1], dzh = m_cent[3*rt+2]-m_cent[3*rs+2];
+    double rsc[3]; reflpt(&m_cent[3*rs], rsc);
+    const double dxh = m_cent[3*rt]-rsc[0], dyh = m_cent[3*rt+1]-rsc[1], dzh = m_cent[3*rt+2]-rsc[2];
     const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
-    const bool near_hosts = (kindT == kindS && hT == hS) || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
-    const bool self_pair = (kindT == kindS && hT == hS);
+    const bool self_pair = (mask == 0 && kindT == kindS && hT == hS);   // an image is never SELF
+    const bool near_hosts = self_pair || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
     const double* ndT = cellT ? &m_wCellNodes[(size_t)hT*54] : &m_wFaceNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
     std::vector<double> inn(nS), owt(nT);
@@ -3189,7 +3227,8 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
         const double* cA = cellT ? &m_wCellSubC[sidA*3] : &m_wFaceSubC[sidA*3];
         for (int sB = 0; sB < nsubS; ++sB) {
             const size_t sidB = cellS ? ((size_t)hS*3 + sB) : ((size_t)hS*2 + sB);
-            const double* cB = cellS ? &m_wCellSubC[sidB*3] : &m_wFaceSubC[sidB*3];
+            const double* cB0 = cellS ? &m_wCellSubC[sidB*3] : &m_wFaceSubC[sidB*3];
+            double cB[3]; reflpt(cB0, cB);   // reflected source sub-centroid (mask>0)
             const double szB = cellS ? m_wCellSubS[sidB] : m_wFaceSubS[sidB];
             const double dx = cA[0]-cB[0], dy = cA[1]-cB[1], dz = cA[2]-cB[2];
             const bool near_sub = near_hosts && std::sqrt(dx*dx + dy*dy + dz*dz) <= m_near_grade*(szA + szB);
@@ -3220,8 +3259,9 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
                 const double pq[3] = {oc->pts[3*q], oc->pts[3*q+1], oc->pts[3*q+2]};
                 const double* xiT = &oc->xi[3*q];
                 for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
+                double peval[3]; reflpt(pq, peval);                                             // reflect for the (image) source eval
                 if (self_pair) PhiInnerWedgeRadialVec(kindS, hS, sB, pq, xiT, srcG, inn.data());
-                else           PhiInnerWedgeSubVec(kindS, hS, sB, pq, srcG, inn.data());
+                else           PhiInnerWedgeSubVec(kindS, hS, sB, peval, srcG, inn.data());      // peval==pq if mask==0
                 const double wg = oc->wgeo[q];
                 for (int lt = 0; lt < nT; ++lt) owt[lt] = wg*HexMonoEval(tgtG[lt], xiT);
                 for (int lt = 0; lt < nT; ++lt) {
@@ -3269,7 +3309,18 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
         const double vAB = GetHexBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];   // target A, source B
         const double vBA = GetHexBlock(kB, hB, kA, hA)[(size_t)lb*nA + la];   // target B, source A
-        return 0.5*(vAB + vBA);
+        double base = 0.5*(vAB + vBA);
+        // IMA: fold in the mirror-image blocks (the source host REFLECTED on each image mask) so a reduced
+        // (1/2,1/4,1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
+        // Read each block scalar into a double BEFORE the next GetHexBlock fetch (the memo's capacity clear would
+        // otherwise dangle the returned reference -- the same use-after-free family as the direct vAB/vBA above).
+        for (size_t i = 0; i < m_image_masks.size(); ++i) {
+            const int msk = m_image_masks[i];
+            const double rAB = GetHexBlock(kA, hA, kB, hB, msk)[(size_t)la*nB + lb];
+            const double rBA = GetHexBlock(kB, hB, kA, hA, msk)[(size_t)lb*nA + la];
+            base += m_image_signs[i] * 0.5 * (rAB + rBA);
+        }
+        return base;
     }
     if (m_highorder) {
         // polynomial charges, symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
