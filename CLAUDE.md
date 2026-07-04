@@ -1419,7 +1419,15 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 - MMM: volume integral equation for magnetization, solved element-by-element
 - MSC: surface charge on element faces, solved via solid angle kernel
 
-**KEEP BOTH (decision 2026-06-19): yano-type MSC AND the FEEC HDiv-VIM are both kept.**  The earlier
+**DIRECTION (decision 2026-07-04, Sugahara): Radia's OFFICIAL soft-iron demag method is HDiv-VIM ONLY; collocation MMMM is a GATED BRIDGE that will leave Radia for ELF_MAGIC.**  End-state TARGET: the `radia` wheel ships **HDiv-VIM as the SOLE soft-iron demag route** (tet AND hex/wedge/pyramid AND mesh-less), and **collocation MMMM is removed from Radia and lives only in ELF_MAGIC** (the LAB-private Fortran, where it continues as research -> SA-26-0xx; memory [[radia_hdiv_only_mmmm_to_fortran]], [[mmmm_in_elf_magic_port]]).  This SUPERSEDES the "KEEP BOTH" / "PRIMARY-COARSE both-kept" framing below -- that framing now describes the **CURRENT BRIDGE state, not the destination**.
+
+**GATED -- do NOT remove MMMM from Radia yet.**  Removal is blocked until every soft-iron input class has a production HDiv-VIM backend: TODAY the `set_demag_backend` auto split still routes **mesh-backed HEX/WEDGE and mesh-less soft iron to collocation MMMM** (HDiv is dispatch-tet-only), so removing MMMM now would leave hex/wedge/mesh-less demag with no backend.  Two remaining gate pieces (both in codex's active dispatch/backend area -- coordinate, do NOT unilaterally edit `src/radia/__init__.py` backend / `vim/_radsolve.py` / `vim/_solve.py` dispatch):
+1. **hex/wedge dispatch flip** -- route mesh-backed hex/wedge soft iron to HDiv-VIM.  The hex/wedge HDiv C++ EXISTS and matches MMMM to ~1% (`vim/_solve.py`); remaining work = flip the auto-dispatch + production goldens.
+2. **mesh-less -> auto-mesh -> HDiv** (decision 2026-07-04) -- a mesh-LESS soft iron (`ObjHexahedron`/`ObjWedge` built directly, no NGSolve mesh) is internally STRUCTURE-MESHED (`MakeStructured3DMesh` / OCC) and solved on HDiv-VIM, KEEPING the mesh-less API (NOT dropped; the API-compat auto-mesh path replaces the mesh-less MMMM route).
+
+Once BOTH land + are production-validated, collocation MMMM is deleted from Radia (the moment path, `set_demag_backend("collocation_mmmm")`, the C++ moment kernels) -> ELF_MAGIC.  Until then MMMM stays as the hex/wedge/mesh-less bridge exactly as described below.  (This does NOT touch tet **MMM** or permanent magnets -- those are separate C++ paths, not the collocation-MMMM moment route.)
+
+**KEEP BOTH (decision 2026-06-19 -- now the BRIDGE state, see DIRECTION above): yano-type MSC AND the FEEC HDiv-VIM are both kept.**  The earlier
 "drop yano-type" plan was CANCELLED -- measured that yano-MSC reaches the converged field with FEWER
 hex elements than HDiv RT0 (yano-MSC = 6 surface-charge DOF/hex, higher per-element order; HDiv RT0 =
 1 flux DOF/face, lowest order).  The two are COMPLEMENTARY: **yano-MSC for per-element accuracy on hex;
