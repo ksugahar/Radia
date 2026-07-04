@@ -151,6 +151,30 @@ planar_charges kernel (N[i,j] = field at centroid i from a unit magnetisation on
 HDiv-users), cheap because 2D moment is few-element.  The same assembled N enables a well-conditioned
 NEWTON for nonlinear / hysteresis (incremental chi, avoiding the descending-branch negative-secant-chi
 that breaks a Picard) -- the path for 2D hysteresis.
+
+EMBEDDED PM (design B) on the same shared solver: solve_anisotropic_demag(..., pm={region:[Mx,My]})
+-- an anisotropic iron rotor with embedded rigid magnets (partition soft/hard, solve the soft
+subsystem with the PM source).  This gives BOTH planar layers design-B without touching either
+method's own solver, and combines anisotropic chi + PM (a combo neither scalar method had).
+""",
+    "hysteresis": """\
+# 2D play-hysteresis demag -- radia.planar_hysteresis + planar_materials.PlayHysteresis
+
+`PlayHysteresis(eta, w)` is a Prandtl-Ishlinskii scalar play operator (K thresholds eta / weights w;
+M = sum_k w_k clip(p_k, H-eta_k, H+eta_k)) with an INCREMENTAL susceptibility dM/dH = sum_k w_k
+1[|H-p_k|>eta_k] that is >= 0 EVERYWHERE (even on the descending branch).  State is external/functional
+(n_site, K).  eta->0 reduces to the linear anhysteretic chi = sum w_k.
+
+`solve_hysteresis_demag(mesh, play, H_ext_seq)` steps the applied-field sequence quasi-statically; each
+step solves the demag fixed point M = play(H0 + N M) by NEWTON on the SHARED direct-N demag operator
+(planar_aniso.demag_operator).  The >= 0 incremental chi keeps the Jacobian I - diag(chi_inc) N
+well-conditioned -- a SECANT-chi Picard would see NEGATIVE chi near coercivity and break (this is why
+hysteresis needs Newton-on-N, not the scalar-chi Picard the anhysteretic path uses).  UNIAXIAL (x-axis;
+M_y=0 by symmetry) is the first model.  Method-agnostic (shared kernel), Newton fails loud.
+
+Gates: play tangent == finite-diff; anhysteretic limit (eta=0) == linear demag chi/(1+chi/2); the full
+N-Newton disk loop == the independent scalar reference M = play(H_ext - D M), D=1/2 (~1e-4); 2nd-cycle
+closure + nonzero remanence.
 """,
 }
 

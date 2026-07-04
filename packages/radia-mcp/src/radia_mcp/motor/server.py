@@ -140,6 +140,8 @@ def motor_planar_coupling(topic: str = "overview") -> str:
             "eddy_coupling" - staggered MMMM/HDiv-VIM <-> reduced-Az eddy FEM (maglev/IM/ECB)
             "pm_motor"      - permanent magnets: design A (magnets=) / B (pm=) / unified rotor
             "nonlinear"     - nonlinear soft iron + eddy (effective-chi AC)
+            "anisotropic"   - GO-steel tensor chi (planar_aniso, direct-N) + embedded PM design-B
+            "hysteresis"    - 2D play-hysteresis demag (planar_hysteresis, direct-N + Newton)
             "api"           - API quick reference
             "validation"    - the gated validation ladder
             "all"           - everything
