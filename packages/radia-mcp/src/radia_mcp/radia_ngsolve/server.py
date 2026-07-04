@@ -581,11 +581,13 @@ def urn(topic: str = "all") -> str:
     (avg ~22.8% lower NRMSE on NASA battery + TDK ferrite datasets).
 
     Use to turn a frequency-domain absorbing-BC / dispersive-layer response into
-    a stable broadband time-domain model.  Run the fit with the urn_fit tool.
+    a stable broadband time-domain model.  For transient FEM/BEM or Maxwell
+    solvers, topic="cq" explains the URN H(s) -> convolution-quadrature bridge.
+    Run the fit with the urn_fit tool.
     Ref: Sugahara & Sato, IEEE Access 2026; impl docs/universal_relaxation_network.
 
     Args:
-        topic: all | overview | method | api | timedomain | application
+        topic: all | overview | method | api | timedomain | cq | application
     """
     return get_urn_documentation(topic)
 
