@@ -87,6 +87,36 @@ def create_voxel_cf(radia_obj, field_type='b', mesh=None, bbox=None,
         return CF(tuple(cfs))
 
 
+def prepare_cache_hmatrix(cf, points, eps=1e-6):
+    """Pre-cache a RadiaField CoefficientFunction at `points` via the O(N log N) HACApK
+    ``_FieldEvalHMatrix`` (instead of the direct O(N_pts*N_src) rad.Fld inside ``cf.PrepareCache``), so a
+    subsequent ``gf.Set(cf)`` hits the cache.  This is the path-B (magnet-container field -> GridFunction)
+    acceleration for the RadiaField CF workflow; pass the FES integration points as `points`.
+
+    cf     : a ``radia.RadiaField(obj, 'b'|'a')`` CoefficientFunction (flat container, no per-object
+             transform; 'h'/'phi' are not yet in the H-matrix -> use cf.PrepareCache for those).
+    points : (N,3) array-like of global evaluation points (the FES integration points gf.Set will use).
+    eps    : ACA tolerance.
+
+    CALLER wraps in ``with ngsolve.TaskManager():`` -- the H-matrix build/matvec parallelise under it.
+    """
+    import numpy as np
+    import radia._radia_pybind as _rp
+
+    ft = cf.field_type
+    if ft not in ("b", "a"):
+        raise ValueError("prepare_cache_hmatrix: field_type must be 'b' or 'a' (got %r); use "
+                         "cf.PrepareCache for 'h'/'phi'." % ft)
+    if getattr(cf, "use_transform", False):
+        raise ValueError("prepare_cache_hmatrix: the H-matrix supports a FLAT global-coordinate container "
+                         "only (cf.use_transform is True); use cf.PrepareCache.")
+    pts = np.asarray(points, float).reshape(-1, 3)
+    G = _rp._FieldEvalHMatrix(cf.radia_obj, pts.reshape(-1).tolist(), eps=eps, field_type=ft)
+    x = [0.0] * (3 * G.n_obs()) + list(G.src_magnetization())
+    vals = np.asarray(G.matvec(x), float)[:3 * G.n_obs()].reshape(-1, 3)
+    cf.PrepareCacheFromValues(pts, vals)
+
+
 # Backward compatibility: ``from radia_ngsolve import RadiaField``
 # now returns the C++ CoefficientFunction from _radia_pybind.pyd.
 try:
