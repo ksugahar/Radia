@@ -47,30 +47,34 @@ def _geometry(n_src=3, n_obs=4, obs_lo=5.0, seed=0):
     return cont, obs
 
 
-@pytest.fixture(scope="module")
-def result():
+@pytest.fixture(scope="module", params=["b", "a"], ids=["B_flux_density", "A_vector_potential"])
+def result(request):
+    """Runs for both field_type='b' (flux density, Tesla) and 'a' (vector potential, T*m -- the A-form
+    eddy-current FEM coupling source term)."""
+    ft = request.param
     rad.UtiDelAll()
     cont, obs = _geometry()
     n_obs = len(obs)
-    Bdir = np.asarray(rad.Fld(cont, 'b', obs.tolist()), float).reshape(n_obs, 3)   # ground truth FIRST
+    Fdir = np.asarray(rad.Fld(cont, ft, obs.tolist()), float).reshape(n_obs, 3)   # ground truth FIRST
 
     obs_flat = obs.reshape(-1).tolist()
     # exact entry-matrix (uncompressed) at a tight eps -> kernel bit-consistency
-    Gx = _rp._FieldEvalHMatrix(cont, obs_flat, eps=1e-10, leaf=_LEAF, eta=2.0)
+    Gx = _rp._FieldEvalHMatrix(cont, obs_flat, eps=1e-10, leaf=_LEAF, eta=2.0, field_type=ft)
     ndof, no, ns = Gx.ndof(), Gx.n_obs(), Gx.n_src()
     x = np.array([0.0] * (3 * no) + list(Gx.src_magnetization()))
     D = np.array([[Gx.entry(i, j) for j in range(ndof)] for i in range(ndof)])
-    B_entry = (D @ x)[:3 * no].reshape(no, 3)
-    err_entry = float(np.linalg.norm(B_entry - Bdir) / np.linalg.norm(Bdir))
+    F_entry = (D @ x)[:3 * no].reshape(no, 3)
+    err_entry = float(np.linalg.norm(F_entry - Fdir) / np.linalg.norm(Fdir))
 
     # compressed matvec error vs direct rad.Fld, per eps
     errs = {}
     for eps in _EPS_SWEEP:
-        G = _rp._FieldEvalHMatrix(cont, obs_flat, eps=eps, leaf=_LEAF, eta=2.0)
+        G = _rp._FieldEvalHMatrix(cont, obs_flat, eps=eps, leaf=_LEAF, eta=2.0, field_type=ft)
         y = np.asarray(G.matvec(x.tolist()), float)[:3 * no].reshape(no, 3)
-        errs[eps] = float(np.linalg.norm(y - Bdir) / np.linalg.norm(Bdir))
+        errs[eps] = float(np.linalg.norm(y - Fdir) / np.linalg.norm(Fdir))
 
-    info = dict(ndof=ndof, n_obs=no, n_src=ns, n_elem=no + ns, err_entry=err_entry, errs=errs)
+    info = dict(field_type=ft, is_a=Gx.is_a_field(), ndof=ndof, n_obs=no, n_src=ns, n_elem=no + ns,
+                err_entry=err_entry, errs=errs)
     rad.UtiDelAll()
     return info
 
@@ -80,12 +84,15 @@ def test_multi_cluster_regime(result):
     dense block and 'compression' is vacuously exact, hiding the fine-tree fill / normalisation contract."""
     assert result["ndof"] == 3 * result["n_elem"], "ndof must be 3*(n_obs + n_src) (uniform 3-DOF embed)"
     assert result["n_elem"] > 4 * _LEAF, f"n_elem={result['n_elem']} not >> leaf={_LEAF} (need multi-cluster)"
+    assert result["is_a"] == (result["field_type"] == "a"), "is_a_field() disagrees with field_type"
 
 
 def test_kernel_bit_consistency(result):
-    """The EXACT entry-matrix applied to M reproduces direct rad.Fld('b') to ~machine (the field kernel is
-    bit-consistent with B_genComp; mu0 scaling + per-element superposition are correct)."""
-    assert result["err_entry"] < 1e-10, f"entry-matrix vs direct rad.Fld = {result['err_entry']:.3e}"
+    """The EXACT entry-matrix applied to M reproduces direct rad.Fld(field_type) to ~machine (the kernel is
+    bit-consistent with B_genComp; the per-field-type unit scaling -- mu0 for B, unity for the already-
+    physical A -- and per-element superposition are correct)."""
+    assert result["err_entry"] < 1e-10, \
+        f"entry-matrix vs direct rad.Fld('{result['field_type']}') = {result['err_entry']:.3e}"
 
 
 def test_compression_accuracy_tracks_eps(result):
