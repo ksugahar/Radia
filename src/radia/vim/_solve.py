@@ -1,7 +1,7 @@
 """radia.vim._solve -- consolidated production demag-solve entry (productionization M1).
 
-`hdiv_demag_solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r), and
-`hdiv_demag_solve(mesh, bh_table=.., H_ext=..)`       -- NONLINEAR soft iron (real BH table),
+`vim.Solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r), and
+`vim.Solve(mesh, bh_table=.., H_ext=..)`       -- NONLINEAR soft iron (real BH table),
 
 the FEEC/HDiv counterpart to the multipole-moment MMM MSC hex/wedge/pyramid soft-iron demag in `rad.Solve`.
 Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g. a coil's
@@ -128,7 +128,7 @@ def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, 
                          near_factor, far_quad, ho_far_factor):
     """Resolve the charge-Gram BUILD defaults (ACA eps + near/far split) in ONE place.
 
-    Single source of truth -- was inline + duplicated in hdiv_demag_solve (order=0) and _solve_highorder
+    Single source of truth -- was inline + duplicated in vim.Solve (order=0) and _solve_highorder
     (order>0).  `gram_eps` / `far_quad` apply to both paths; `near_factor` is RT0-only and
     `ho_far_factor` is high-order-only.  Wrong-order knobs fail loud instead of being silently remapped.
 
@@ -151,7 +151,7 @@ def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, 
     """
     if int(order) == 0:
         if ho_far_factor is not None:
-            raise ValueError("hdiv_demag_solve: ho_far_factor is an order>0 (high-order) parameter; "
+            raise ValueError("vim.Solve: ho_far_factor is an order>0 (high-order) parameter; "
                              "at order=0 (RT0) use near_factor for the near/far split")
         fast_uniform = uniform_linear and linear_solver in ("auto", "cpp-cg", "gmres")
         fast_build = gram_backend == "analytic" and linear_solver != "hlu"
@@ -161,7 +161,7 @@ def _resolve_gram_params(*, order, gram_backend, linear_solver, uniform_linear, 
             "far_quad": far_quad if far_quad is not None else (4 if fast_build else 0),
         }
     if near_factor is not None:
-        raise ValueError("hdiv_demag_solve: near_factor is an order=0 (RT0) parameter; at order>0 "
+        raise ValueError("vim.Solve: near_factor is an order=0 (RT0) parameter; at order>0 "
                          "(high-order) use ho_far_factor for the near/far separation threshold")
     return {
         "eps": gram_eps if gram_eps is not None else 1e-10,
@@ -195,7 +195,7 @@ def _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit):
     iters = int(res["iters"])
     if iters >= int(maxit):                      # fail-loud (No-Fallbacks): never return a non-converged M
         raise RuntimeError(
-            "hdiv_demag_solve (symmetric mass-riesz CG): did NOT converge in %d iters (n_face=%d).  The "
+            "vim.Solve (symmetric mass-riesz CG): did NOT converge in %d iters (n_face=%d).  The "
             "operator is the EXACTLY-symmetric SPD +N system, so CG should converge -- a non-convergence "
             "here means an ill-conditioned material/mesh.  Tighten gram_eps or raise maxit; cross-check "
             "with linear_solver='gmres' (mass-Riesz GMRES) to isolate.  (Large-scale demag is the MMMM "
@@ -226,7 +226,7 @@ def _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmr
                          callback=lambda _x: it.__setitem__("n", it["n"] + 1),
                          callback_type="pr_norm", **{_GMRES_TOL: float(tol)})
     if info != 0:                                # fail-loud (No-Fallbacks): never return a non-converged M
-        raise RuntimeError("hdiv_demag_solve (mass-riesz GMRES): did NOT converge (info=%d, n_face=%d, "
+        raise RuntimeError("vim.Solve (mass-riesz GMRES): did NOT converge (info=%d, n_face=%d, "
                            "iters=%d). Tighten gram_eps or raise maxit; for very large meshes use the MMMM "
                            "route (large-scale demag is not HDiv-VIM's role)." % (info, n_face, it["n"]))
     return np.asarray(m, float), it["n"]
@@ -252,7 +252,7 @@ def _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit):
     iters = int(res["iters"])
     if iters >= int(maxit):                      # fail-loud (No-Fallbacks)
         raise RuntimeError(
-            "hdiv_demag_solve (per-region symmetric mass-riesz CG): did NOT converge in %d iters "
+            "vim.Solve (per-region symmetric mass-riesz CG): did NOT converge in %d iters "
             "(n_face=%d).  The (M_{1/chi} + N) operator is SPD, so a non-convergence means an ill-"
             "conditioned material/mesh; tighten gram_eps or raise maxit, or cross-check with "
             "linear_solver='gmres' (the form-1 GMRES)." % (maxit, n_face))
@@ -294,7 +294,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
     """
     if H_ext is None:
-        raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
+        raise ValueError("vim.Solve: H_ext (applied-field CoefficientFunction) is required")
     # ---- HDiv-VIM scope: RT1 (order 1) on a pure-TET, pure-HEX, or pure-WEDGE mesh ----
     # RT0 retired: per-element INACCURATE (the demag FACTOR is right ~1/3, but the per-element M leaks --
     # raising the solution order to RT1 is what fixes it); RT2+ retired: no per-element gain over RT1, slower.
@@ -319,29 +319,29 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     if mesh.dim == 2:
         if image is not None:
             raise NotImplementedError(
-                "hdiv_demag_solve (2D): the planar HDiv-VIM layer does not support IMA image symmetry; "
+                "vim.Solve (2D): the planar HDiv-VIM layer does not support IMA image symmetry; "
                 "use a full (un-reduced) 2D model.")
         # ---- PLANAR (2D motor cross-section) branch: the dense planar layer (_vim2d) ----
         # The 2D layer supports the core single-region surface: mu_r (linear) / bh_table
         # (nonlinear) + H_ext.  The 3D-only knobs must stay at their defaults -- fail loud.
         if gram_backend != "analytic":
-            raise ValueError("hdiv_demag_solve (2D): gram_backend must be 'analytic' -- the planar "
+            raise ValueError("vim.Solve (2D): gram_backend must be 'analytic' -- the planar "
                              "layer has one Gram (the C++ 2D log-kernel charge Gram)")
         if linear_solver != "auto":
-            raise ValueError("hdiv_demag_solve (2D): linear_solver must be 'auto' (the planar layer "
+            raise ValueError("vim.Solve (2D): linear_solver must be 'auto' (the planar layer "
                              "is dense; got %r)" % (linear_solver,))
         for _nm, _val in (("gram_eps", gram_eps), ("near_factor", near_factor),
                           ("far_quad", far_quad), ("ho_far_factor", ho_far_factor),
                           ("curve_order", curve_order)):
             if _val is not None:
-                raise ValueError("hdiv_demag_solve (2D): %s is a 3D knob; the 2D Gram parameters "
+                raise ValueError("vim.Solve (2D): %s is a 3D knob; the 2D Gram parameters "
                                  "are fixed by its own gates (got %r)" % (_nm, _val))
         from ._vim2d import solve_planar_demag
         return solve_planar_demag(mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
                                   eta=eta, nl_tol=nl_tol, nl_maxit=nl_maxit)
     if magnets is not None:
         raise NotImplementedError(
-            "hdiv_demag_solve: magnets= (separate-body permanent-magnet source) is wired for the 2D "
+            "vim.Solve: magnets= (separate-body permanent-magnet source) is wired for the 2D "
             "planar layer only; in 3D place PMs as direct-M collocation MMMM elements or fold their "
             "field into H_ext.")
     _vtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
@@ -352,17 +352,17 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
             "collocation MMMM backend (rad.Solve demag_backend='collocation_mmmm'), which rad.Solve's "
             "'auto' split uses for unsupported mesh-backed iron." % sorted(_vtx))
     if linear_solver not in _LINEAR_SOLVERS:
-        raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
+        raise ValueError("vim.Solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
     if gram_backend not in _GRAM_BACKENDS:
-        raise ValueError("hdiv_demag_solve: gram_backend must be one of %s (got %r)"
+        raise ValueError("vim.Solve: gram_backend must be one of %s (got %r)"
                          % (sorted(_GRAM_BACKENDS), gram_backend))
     if pm_M is None:
         if (mu_r is None) == (bh_table is None):
-            raise ValueError("hdiv_demag_solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
+            raise ValueError("vim.Solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
     else:
         if (mu_r is not None) and (bh_table is not None):
-            raise ValueError("hdiv_demag_solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
+            raise ValueError("vim.Solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
                              "bh_table (nonlinear), not both")
 
     # AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved geometry as
@@ -396,7 +396,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
     (no 2x/4x blow-up).  Supports the LINEAR (uniform-scalar OR per-region dict) mu_r case via the SAME
     all-C++ symmetric mass-Riesz CG as the RT0 path; the not-yet-wired order>0 combos fail loud (No-Fallbacks).
-    The CALLER opens `with ng.TaskManager():` (same contract as hdiv_demag_solve)."""
+    The CALLER opens `with ng.TaskManager():` (same contract as vim.Solve)."""
     # IMA mirror symmetry: WIRED for the FLAT pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
     # pure-WEDGE (the C++ QuadBlockHex/Wedge(mask) reflected block) paths -- the Gram folds the mirror-image
     # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  CURVED (curve_order) +
@@ -405,12 +405,12 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     if image is not None:
         if curve_order is not None:
             raise NotImplementedError(
-                "hdiv_demag_solve: IMA image symmetry is not yet wired for the CURVED (curve_order) "
+                "vim.Solve: IMA image symmetry is not yet wired for the CURVED (curve_order) "
                 "HDiv-VIM path -- use a flat tet/hex/wedge mesh, or collocation MMMM (rad.Solve).")
         _ivtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
         if _ivtx not in ({4}, {8}, {6}):
             raise NotImplementedError(
-                "hdiv_demag_solve: IMA image symmetry is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
+                "vim.Solve: IMA image symmetry is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
                 "RT1 Gram; MIXED / pyramid reduced models use collocation MMMM (rad.Solve "
                 "demag_backend='collocation_mmmm', image=...).  Got vertex counts %s." % sorted(_ivtx))
         _planes = _tet.parse_image_string(image)
@@ -422,15 +422,15 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             image_masks.append(int(sum(1 << a for a in axes)))
             image_signs.append(float(sign))
     if pm_M is not None:
-        raise NotImplementedError("hdiv_demag_solve: PM-mixed (pm_M) is not yet wired at order>0 (use order=0)")
+        raise NotImplementedError("vim.Solve: PM-mixed (pm_M) is not yet wired at order>0 (use order=0)")
     # flat (non-curved) order>0 NONLINEAR is now WIRED: the symmetric energy-Newton (_solve_nonlinear_energy_cpp)
     # is Gram-AGNOSTIC (it consumes only H.matvec + H.solve_linear_material_mass_riesz), so it runs on the flat
     # high-order Gram exactly as on the RT0 / curved Gram.  VERIFIED: flat RT1 nonlinear on a tet sphere matches
     # the RT0 nonlinear solve to ~7e-4 (golden: test_hdiv_vim_curved_solve_nonlinear::test_flat_rt1_nonlinear_*).
     if linear_solver == "hlu":
-        raise NotImplementedError("hdiv_demag_solve: linear_solver='hlu' is RT0-only (order=0)")
+        raise NotImplementedError("vim.Solve: linear_solver='hlu' is RT0-only (order=0)")
     if gram_backend == "gauss":
-        raise NotImplementedError("hdiv_demag_solve: gram_backend='gauss' is not yet wired at order>0")
+        raise NotImplementedError("vim.Solve: gram_backend='gauss' is not yet wired at order>0")
     if int(order) > 2:
         # order<=2 uses the EXACT analytic-moment charge potential (machine precision).  For order>=3 the C++
         # Gram falls back to the Duffy singular quadrature (PhiInner -> PhiAtHO_Duffy), which is ~1e-3 accurate
@@ -440,7 +440,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         # (the analytic moments extended with TetMoment2 / degree-3 surface moments), not the Duffy.  Fail loud
         # (No-Fallbacks) until that lands.  [[hdiv-vim-sauter-schwab-cg]]
         raise NotImplementedError(
-            "hdiv_demag_solve: order>2 material solve is not yet production-clean -- order<=2 is exact "
+            "vim.Solve: order>2 material solve is not yet production-clean -- order<=2 is exact "
             "(analytic moments); the order>=3 Duffy quadrature is only ~1e-3 and the ill-conditioned "
             "high-degree basis makes the demag spectrum leave [0,1]. Use order in {0,1,2}.")
     # Gram-build defaults resolved in ONE place (_resolve_gram_params; rationale in its docstring).
@@ -457,7 +457,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         # helps NEAR-SURFACE FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the volume-
         # averaged demag FACTOR (curving-insensitive ~3e-5 on a sphere; [[hdiv-vim-sauter-schwab-cg]] de-risk).
         if int(curve_order) != 2:
-            raise NotImplementedError("hdiv_demag_solve: only curve_order=2 (isoparametric P2) is wired.")
+            raise NotImplementedError("vim.Solve: only curve_order=2 (isoparametric P2) is wired.")
         mesh.Curve(int(curve_order))
         fes = ng.HDiv(mesh, order=order)
         B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
@@ -494,7 +494,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     else:                                                       # uniform-scalar linear
         chi = float(mu_r) - 1.0
         if chi <= 0.0:
-            raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
+            raise ValueError("vim.Solve: mu_r must be > 1 (got %r)" % (mu_r,))
         if linear_solver == "gmres":
             m, iters = _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmres_restart)
             solver_used = "mass-riesz-gmres"
@@ -526,11 +526,11 @@ def _build_chi_mass(mesh, fes, mu_r, Mm, n_face):
         mats = list(mesh.GetMaterials())
         missing = sorted(set(mats) - set(mu_r))
         if missing:
-            raise ValueError("hdiv_demag_solve: mu_r dict missing region(s) %s; mesh materials are %s"
+            raise ValueError("vim.Solve: mu_r dict missing region(s) %s; mesh materials are %s"
                              % (missing, mats))
         bad = {r: mu_r[r] for r in mats if float(mu_r[r]) <= 1.0}
         if bad:
-            raise ValueError("hdiv_demag_solve: every region mu_r must be > 1 (got %s)" % bad)
+            raise ValueError("vim.Solve: every region mu_r must be > 1 (got %s)" % bad)
         chi_cf = mesh.MaterialCF({r: float(mu_r[r]) - 1.0 for r in mats})
         u, v = fes.TnT()
         a = ng.BilinearForm(fes); a += chi_cf * u * v * ng.dx; a.Assemble()
@@ -538,7 +538,7 @@ def _build_chi_mass(mesh, fes, mu_r, Mm, n_face):
         return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))), shape=(n_face, n_face))
     chi = float(mu_r) - 1.0
     if chi <= 0.0:
-        raise ValueError("hdiv_demag_solve: mu_r must be > 1 (got %r)" % (mu_r,))
+        raise ValueError("vim.Solve: mu_r must be > 1 (got %r)" % (mu_r,))
     return chi * Mm
 
 
@@ -549,11 +549,11 @@ def _build_invchi_mass(mesh, fes, mu_r, n_face):
     mats = list(mesh.GetMaterials())
     missing = sorted(set(mats) - set(mu_r))
     if missing:
-        raise ValueError("hdiv_demag_solve: mu_r dict missing region(s) %s; mesh materials are %s"
+        raise ValueError("vim.Solve: mu_r dict missing region(s) %s; mesh materials are %s"
                          % (missing, mats))
     bad = {r: mu_r[r] for r in mats if float(mu_r[r]) <= 1.0}
     if bad:
-        raise ValueError("hdiv_demag_solve: every region mu_r must be > 1 (got %s)" % bad)
+        raise ValueError("vim.Solve: every region mu_r must be > 1 (got %s)" % bad)
     invchi_cf = mesh.MaterialCF({r: 1.0 / (float(mu_r[r]) - 1.0) for r in mats})
     u, v = fes.TnT()
     a = ng.BilinearForm(fes); a += invchi_cf * u * v * ng.dx; a.Assemble()
@@ -575,7 +575,7 @@ def _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face):
     pm_regions = set(pm_M)
     missing_pm = sorted(pm_regions - set(mats))
     if missing_pm:
-        raise ValueError("hdiv_demag_solve: pm_M region(s) %s not in mesh materials %s" % (missing_pm, mats))
+        raise ValueError("vim.Solve: pm_M region(s) %s not in mesh materials %s" % (missing_pm, mats))
     if mu_r is None:
         iron_mu = {}
     elif isinstance(mu_r, dict):
@@ -585,14 +585,14 @@ def _build_mixed_pm(mesh, fes, mu_r, pm_M, Mm, n_face):
     iron_regions = set(iron_mu)
     overlap = sorted(iron_regions & pm_regions)
     if overlap:
-        raise ValueError("hdiv_demag_solve: region(s) %s are both iron (mu_r) and PM (pm_M)" % overlap)
+        raise ValueError("vim.Solve: region(s) %s are both iron (mu_r) and PM (pm_M)" % overlap)
     unspec = sorted(set(mats) - iron_regions - pm_regions)
     if unspec:
-        raise ValueError("hdiv_demag_solve: region(s) %s are neither iron (mu_r) nor PM (pm_M); "
+        raise ValueError("vim.Solve: region(s) %s are neither iron (mu_r) nor PM (pm_M); "
                          "mesh materials are %s" % (unspec, mats))
     bad = {r: iron_mu[r] for r in iron_regions if iron_mu[r] <= 1.0}
     if bad:
-        raise ValueError("hdiv_demag_solve: every iron mu_r must be > 1 (got %s)" % bad)
+        raise ValueError("vim.Solve: every iron mu_r must be > 1 (got %s)" % bad)
     _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions)
     u, v = fes.TnT()
     chi_cf = mesh.MaterialCF({r: (iron_mu[r] - 1.0 if r in iron_regions else 0.0) for r in mats})
@@ -626,7 +626,7 @@ def _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions):
     n_shared = sum(1 for s in cls.values() if "pm" in s and "iron" in s)
     if n_shared:
         raise NotImplementedError(
-            "hdiv_demag_solve: a permanent-magnet region directly TOUCHES a soft-iron region "
+            "vim.Solve: a permanent-magnet region directly TOUCHES a soft-iron region "
             "(%d shared RT0 facets).  The conforming HDiv field cannot represent the magnetization "
             "discontinuity across a PM-iron boundary, so the result would DIVERGE under refinement "
             "(~20%% external-field error vs rad.Solve).  Separate the PM and iron with an air gap "
@@ -656,7 +656,7 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=None):
     if pm_M:
         missing_pm = sorted(pm_regions - set(mats))
         if missing_pm:
-            raise ValueError("hdiv_demag_solve: pm_M region(s) %s not in mesh materials %s" % (missing_pm, mats))
+            raise ValueError("vim.Solve: pm_M region(s) %s not in mesh materials %s" % (missing_pm, mats))
 
     # ---- iron regions + per-region/single BH constitutive ----
     if isinstance(bh_table, dict):
@@ -664,7 +664,7 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=None):
         if not pm_M:
             missing = sorted(set(mats) - iron_regions)
             if missing:
-                raise ValueError("hdiv_demag_solve: bh_table dict missing region(s) %s; mesh materials are %s"
+                raise ValueError("vim.Solve: bh_table dict missing region(s) %s; mesh materials are %s"
                                  % (missing, mats))
         region_names = list(bh_table)
         name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
@@ -673,7 +673,7 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=None):
         for nm in region_names:
             arr = np.asarray(bh_table[nm], float)
             if arr.ndim != 2 or arr.shape[1] != 2:
-                raise ValueError("hdiv_demag_solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
+                raise ValueError("vim.Solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
             _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
             region_funcs.append((Bpch, Bder, Hmax, Mmax))
             chi0_by_name[nm] = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
@@ -691,7 +691,7 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=None):
         iron_regions = set(mats) - pm_regions
         arr = np.asarray(bh_table, float)
         if arr.ndim != 2 or arr.shape[1] != 2:
-            raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
+            raise ValueError("vim.Solve: bh_table must be [[H,B], ...] (A/m, T)")
         _Mof, Bpch, Bder, Hmax, Mmax = _bh_table_funcs(arr[:, 0], arr[:, 1])
         chi0 = max(float(Bder(0.0)) / _MU0 - 1.0, 1.0)
 
@@ -712,10 +712,10 @@ def _build_nl_constit(mesh, fes, bh_table, Mm, n_face, pm_M=None):
     # ---- PM + nonlinear iron: classify XOR, reject touching, build mixed constitutive + b_pm ----
     overlap = sorted(iron_regions & pm_regions)
     if overlap:
-        raise ValueError("hdiv_demag_solve: region(s) %s are both iron (bh_table) and PM (pm_M)" % overlap)
+        raise ValueError("vim.Solve: region(s) %s are both iron (bh_table) and PM (pm_M)" % overlap)
     unspec = sorted(set(mats) - iron_regions - pm_regions)
     if unspec:
-        raise ValueError("hdiv_demag_solve: region(s) %s are neither iron (bh_table) nor PM (pm_M); "
+        raise ValueError("vim.Solve: region(s) %s are neither iron (bh_table) nor PM (pm_M); "
                          "mesh materials are %s" % (unspec, mats))
     _check_pm_iron_not_touching(mesh, fes, pm_regions, iron_regions)
     _ZERO3 = ng.CoefficientFunction((0.0,) * 9, dims=(3, 3))
@@ -764,7 +764,7 @@ def _solve_linear(Mm, M_chi, N_apply, Mfac, Mprec, n_face, h_ext, tol, maxit, gm
                          callback=lambda _x: it.__setitem__("n", it["n"] + 1),
                          callback_type="pr_norm", **{_GMRES_TOL: tol})
     if info != 0:
-        raise RuntimeError("hdiv_demag_solve (linear): form-1 GMRES did not converge (info=%d, "
+        raise RuntimeError("vim.Solve (linear): form-1 GMRES did not converge (info=%d, "
                            "n_face=%d, iters=%d)" % (info, n_face, it["n"]))
     return m, it["n"]
 
@@ -846,7 +846,7 @@ def _solve_nonlinear(mesh, bh_table, h_ext, Mm, N_apply, Mfac, Mprec,
             lam *= 0.5
         m = m + lam * dm
     if not converged:
-        raise RuntimeError("hdiv_demag_solve (nonlinear Newton): did NOT converge -- rel=%.2e > "
+        raise RuntimeError("vim.Solve (nonlinear Newton): did NOT converge -- rel=%.2e > "
                            "nl_tol=%.1e after %d iters (returning M would be a silent wrong result)"
                            % (rel, nl_tol, nit))
     return m, nit
@@ -895,7 +895,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
         mats = list(mesh.GetMaterials())
         missing = sorted(set(mats) - set(bh_table))
         if missing:
-            raise ValueError("hdiv_demag_solve: bh_table dict missing region(s) %s; mesh materials are %s"
+            raise ValueError("vim.Solve: bh_table dict missing region(s) %s; mesh materials are %s"
                              % (missing, mats))
         region_names = list(bh_table)
         name_to_ridx = {nm: k for k, nm in enumerate(region_names)}
@@ -903,7 +903,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
         for nm in region_names:
             arr = np.asarray(bh_table[nm], float)
             if arr.ndim != 2 or arr.shape[1] != 2:
-                raise ValueError("hdiv_demag_solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
+                raise ValueError("vim.Solve: bh_table[%r] must be [[H,B], ...] (A/m, T)" % (nm,))
             f, w, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1]); region_fields.append(f); region_wco.append(w)
         elem_region = np.array([name_to_ridx[mesh[ng.ElementId(ng.VOL, i)].mat] for i in range(mesh.ne)],
                                dtype=int)
@@ -925,7 +925,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
     else:
         arr = np.asarray(bh_table, float)
         if arr.ndim != 2 or arr.shape[1] != 2:
-            raise ValueError("hdiv_demag_solve: bh_table must be [[H,B], ...] (A/m, T)")
+            raise ValueError("vim.Solve: bh_table must be [[H,B], ...] (A/m, T)")
         fields, wco, _ = _bh_inverse_funcs(arr[:, 0], arr[:, 1])
 
         def _reluct(g):
@@ -963,7 +963,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
             1.0, list(map(float, rhs)), cg_tol, int(cg_maxit))
         it = int(res["iters"])
         if it >= int(cg_maxit):
-            raise RuntimeError("hdiv_demag_solve (energy-Newton inner W-CG): did NOT converge in %d iters "
+            raise RuntimeError("vim.Solve (energy-Newton inner W-CG): did NOT converge in %d iters "
                                "(n_face=%d); the (W_tan + N) operator is SPD, so this means an ill-"
                                "conditioned tangent/mesh -- tighten gram_eps or raise maxit." % (cg_maxit, n_face))
         return np.asarray(res["m"], float), it
@@ -1006,7 +1006,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
             converged = True; m = mbest; break               # best-energy iterate (M is at achievable precision)
     if not converged:
         m = mbest
-        raise RuntimeError("hdiv_demag_solve (energy-Newton): did NOT converge -- rel step=%.2e (tol %.1e), "
+        raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- rel step=%.2e (tol %.1e), "
                            "%d settled iters after %d (returning M would be a silent wrong result).  For an "
                            "extreme-saturation / ill-conditioned case, cross-check with linear_solver='gmres' "
                            "(the forward H-form Newton)." % (rel_step, nl_tol, settled, nit))

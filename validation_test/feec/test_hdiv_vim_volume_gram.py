@@ -5,7 +5,7 @@ For NON-uniform M (nonlinear, div M != 0) the VOLUME-involving Gram blocks (cell
 and a crude centroid-monopole leaves a residual.  The production C++ analytic charge Gram (PhiTet /
 TriPotential, exact) closes it while keeping the linear demag factor exact (-> 1/3 on sphere AND cube).
 The dense Python Gram path was removed, so the demag factor is taken through the production
-hdiv_demag_solve (the C++ charge-Gram H-matrix).
+vim.Solve (the C++ charge-Gram H-matrix).
 """
 import pytest
 

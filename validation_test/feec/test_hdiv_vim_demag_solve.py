@@ -132,7 +132,7 @@ def test_requires_exactly_one_material_spec():
 
 
 def test_nonlinear_sphere_vs_analytic_fixed_point():
-    """NONLINEAR hdiv_demag_solve (uniform field + a real BH table) reproduces the analytic uniform-sphere
+    """NONLINEAR vim.Solve (uniform field + a real BH table) reproduces the analytic uniform-sphere
     fixed point M = Mof(H0 - D M) (D = demag factor ~ 1/3) on the saturating sphere."""
     chi0, Msat, H0 = 1000.0, 1.0e6, 2.0e5
     Hs = np.concatenate([[0.0], np.logspace(-1, 7, 60)])

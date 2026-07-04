@@ -1,5 +1,5 @@
 """Golden: the PROMOTED planar (2D) HDiv-VIM solve layer (radia.vim._vim2d, dispatched by
-hdiv_demag_solve on mesh.dim == 2).
+vim.Solve on mesh.dim == 2).
 
 Locks (the research-layer gates promoted to production, see memory hdiv-vim-tri-quad-motor):
   (1) LINEAR disk: Solve(mesh2d, mu_r) volume-average M matches the 2D

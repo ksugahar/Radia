@@ -11,7 +11,7 @@ problem sizes justify (motor cross-sections are ndof ~ 1e2..1e4):
   from the charge quadrature clouds, and volume-average magnetization.
 * ``maxwell_torque_circle`` -- Maxwell-stress torque on a circle in air (real fields, or complex
   phasors -> the TIME-AVERAGED torque).
-* ``solve_planar_demag`` -- the ``hdiv_demag_solve`` 2D dispatch target (one-call solve).
+* ``vim.PlanarSolve`` -- the ``vim.Solve`` 2D dispatch target (one-call solve).
 
 Validation lineage (2026-07-03, distilled from the planar HDiv-VIM research layer; details in
 memory ``hdiv-vim-tri-quad-motor``): disk deep-saturation vs the analytic fixed point
@@ -294,7 +294,7 @@ def maxwell_torque_circle(H_total_at, Rc, n=1440, center=(0.0, 0.0)):
 
 def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, eta=2.0,
                        nl_tol=1e-6, nl_maxit=300, ndof_cap=20000):
-    """The ``hdiv_demag_solve`` 2D dispatch target: single-region planar soft-iron demag solve.
+    """The ``vim.PlanarSolve`` / ``vim.Solve`` 2D dispatch target: single-region planar soft-iron demag solve.
 
     ``magnets`` is an optional list of SEPARATE-body PERMANENT MAGNETS [(pm_mesh, M_fixed), ...]
     whose RIGID field (the SHARED planar_charges.magnet_field_cf, the CF twin of what MMMM adds at
@@ -309,13 +309,13 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
     built ONCE, a rigid rotation of the body is only a new H_ext).  The caller wraps TaskManager.
     """
     if H_ext is None:
-        raise ValueError("solve_planar_demag: H_ext (2-component CoefficientFunction) is required")
+        raise ValueError("vim.PlanarSolve: H_ext (2-component CoefficientFunction) is required")
     if (mu_r is None) == (bh_table is None):
-        raise ValueError("solve_planar_demag: provide EXACTLY ONE of mu_r (linear) or bh_table "
+        raise ValueError("vim.PlanarSolve: provide EXACTLY ONE of mu_r (linear) or bh_table "
                          "(nonlinear)")
     if isinstance(mu_r, dict) or isinstance(bh_table, dict):
         raise NotImplementedError(
-            "solve_planar_demag: per-region (dict) materials are not wired for the 2D layer yet; "
+            "vim.PlanarSolve: per-region (dict) materials are not wired for the 2D layer yet; "
             "the first increment is a single soft-iron region")
     if magnets:
         from radia.planar_charges import magnet_field_cf
@@ -324,7 +324,7 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
     mu_ext = body.project(H_ext)
     if mu_r is not None:
         if not mu_r > 1.0:
-            raise ValueError("solve_planar_demag: mu_r must be > 1 (got %r)" % (mu_r,))
+            raise ValueError("vim.PlanarSolve: mu_r must be > 1 (got %r)" % (mu_r,))
         m = body.solve_linear(mu_r - 1.0, mu_ext)
         iters, res, nonlinear = 1, 0.0, False
     else:

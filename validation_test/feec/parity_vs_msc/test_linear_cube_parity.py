@@ -40,7 +40,7 @@ MU_R = 100.0
 
 def _collocation_mmmm_cube_Mz(n):
     """Volume-average M_z of the soft-iron cube via the six-face surface-charge MSC (n x n x n hexes).  The cube is a
-    MakeStructured3DMesh hex mesh -> soft_iron_from_mesh (the canonical .vol/mesh ingestion); demag_backend
+    MakeStructured3DMesh hex mesh -> vim.MeshSoftIron (the canonical .vol/mesh ingestion); demag_backend
     ='collocation_mmmm' forces the MSC solve on the built ObjHexahedron elements.  Applied field via ObjBckg B = mu0 H0
     (the free-space source field whose H is H0)."""
     rad.UtiDelAll()

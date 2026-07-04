@@ -66,7 +66,8 @@ field (shared `exterior_field` / `magnet_field`) is added to the applied field t
 to.  Two placements:
 
 - **design A (separate body)** -- `solve_planar_demag(iron, mu_r=, magnets=[(pm_mesh, M_fixed)])`
-  (MMMM) or `hdiv_demag_solve(iron, mu_r, H_ext, magnets=[...])` (HDiv-VIM).  The PM is a SEPARATE mesh.
+  (MMMM) or `radia.vim.PlanarSolve(iron, mu_r, H_ext, magnets=[...])` / `radia.vim.Solve(...)`
+  (HDiv-VIM).  The PM is a SEPARATE mesh.
 - **design B (embedded region)** -- `solve_planar_demag(mesh, mu_r={"iron": ..}, pm={"pm": [Mx,My]})`
   (MMMM): a PM SEGMENT is a REGION of the SAME mesh as the iron (a real PM-motor rotor: magnets
   embedded in the iron).  The mesh is partitioned soft/hard; only the soft subsystem is solved =

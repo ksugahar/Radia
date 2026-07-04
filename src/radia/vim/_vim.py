@@ -237,7 +237,7 @@ def _blockdiag_density_map(M, Bx, fes_dg, vorb, mesh):
 
 def _charge_basis(fes, quad):
     """Shared geometry + monomial charge-density map for the order-p HDiv-VIM charge operators
-    (build_charge_gram's analytic Gram AND build_charge_gauss's point operator): returns B (CSR
+    (vim.ChargeGram's analytic Gram AND vim.ChargeGramGauss's point operator): returns B (CSR
     n_charge x ndof), M_mass (CSR), the per-charge (host, kind, flat expo) in the cell_verts reference
     frame, and the host vertex geometry.  `quad` only sets the change-of-basis quadrature (exact for the
     polynomial degree).  CALLER wraps in TaskManager.  Charge order = [cell monomials..., face monomials...]
@@ -826,14 +826,14 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     p = fes.globalorder
     if p != 1:
         raise ValueError(
-            "build_charge_gram: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
+            "vim.ChargeGram: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
             "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
     image_masks = [] if image_masks is None else list(image_masks)   # robust for NumPy arrays (truth-value)
     image_signs = [] if image_signs is None else list(image_signs)
     if len(image_masks) != len(image_signs):
-        raise ValueError("build_charge_gram: image_masks and image_signs must have the same length")
+        raise ValueError("vim.ChargeGram: image_masks and image_signs must have the same length")
     if image_masks:
         # IMA (mirror-image charge folding): wired for the FLAT pure-TET (C++ m_highorder QuadDotRefl->PhiInner)
         # AND pure-HEX / pure-WEDGE (the QuadBlockHex/Wedge(mask) reflected block) RT1 Grams.  Fail loud on the
@@ -842,7 +842,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         _curved = (curve_order is not None) or (mesh.dim == 3 and mesh.GetCurveOrder() >= 2)
         if mesh.dim != 3 or _ivt not in ({4}, {8}, {6}) or _curved:
             raise ValueError(
-                "build_charge_gram: image_masks (IMA) is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
+                "vim.ChargeGram: image_masks (IMA) is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
                 "RT1 Gram only; 2D-planar and CURVED reduced models use collocation MMMM (rad.Solve "
                 "demag_backend='collocation_mmmm', image=...).  (got dim=%s, vtypes=%s, curve_order=%r)."
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
@@ -862,7 +862,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         return _build_charge_gram_wedge(fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
     if _vtypes != {4}:
         raise ValueError(
-            "build_charge_gram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
+            "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
             "(6-vertex) -- a MIXED-element mesh (e.g. tet+hex) needs HDiv-pyramid transition elements "
             "(NGSolve 6.2.2604 does NOT implement them yet); pyramid / mixed soft-iron demag uses the "
             "collocation MMMM backend, not the HDiv-VIM charge Gram.  Got vertex counts %s." % sorted(_vtypes))
@@ -898,7 +898,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         # curved-Duffy charge Gram.  Only P2 is wired (the C++ CurvedTet/TriPotential are P2); the mesh must
         # already be mesh.Curve(2)'d (the caller does it, per the NGSolve convention).
         if int(curve_order) != 2:
-            raise NotImplementedError("build_charge_gram: only curve_order=2 (isoparametric P2) is wired "
+            raise NotImplementedError("vim.ChargeGram: only curve_order=2 (isoparametric P2) is wired "
                                       "(the C++ CurvedTet/TriPotential are P2); got %r." % (curve_order,))
         cbk = _charge_basis_curved(fes, quad)
         rtp, rtw = _tet_ref(quad); rsp, rsw = _tri_ref(quad)
@@ -1010,9 +1010,9 @@ def _gauss_point_cloud(cb, qpts):
 
 def build_charge_gauss(fes, qpts=3, near_factor=1.0, eps=1e-5, leafsize=64, eta=2.0):
     """High-order HDiv-VIM charge Gram as a GAUSS POINT operator (G ~= P^T K_point P + sparse near
-    correction) -- the scalable alternative to build_charge_gram's analytic Gram for high order, where the
+    correction) -- the scalable alternative to vim.ChargeGram's analytic Gram for high order, where the
     analytic per-pair entry cost O((3p)^6) explodes.  Returns (B, G_gauss, M_mass) with the SAME B / M_mass
-    as build_charge_gram (so N = B^T G_gauss B is the same demag operator, validated to ~1e-4 at p<=2).
+    as vim.ChargeGram (so N = B^T G_gauss B is the same demag operator, validated to ~1e-4 at p<=2).
 
     The point H-matrix carries the FAR field (cheap 1/r); the sparse near correction (pairs within
     near_factor*(size_a+size_b)) restores the exact analytic entry via a build=False oracle.  qpts = the
@@ -1020,8 +1020,8 @@ def build_charge_gauss(fes, qpts=3, near_factor=1.0, eps=1e-5, leafsize=64, eta=
     CALLER wraps in TaskManager."""
     from scipy.spatial import cKDTree
     raise NotImplementedError(
-        "build_charge_gauss is RETIRED: the Gauss point-operator charge Gram was an RT0 build-speed "
-        "experiment.  HDiv-VIM (RT1, tet) uses the analytic charge Gram (build_charge_gram).")
+        "vim.ChargeGramGauss is RETIRED: the Gauss point-operator charge Gram was an RT0 build-speed "
+        "experiment.  HDiv-VIM (RT1, tet) uses the analytic charge Gram (vim.ChargeGram).")
     p = fes.globalorder
     quad = max(3 * p, 4)
     cb = _charge_basis(fes, quad)
@@ -1124,9 +1124,9 @@ class DemagOperator:
     wraps construction + DemagFactor in `with TaskManager():`.
 
     gram_backend selects the charge-Gram H-matrix:
-      "analytic" (default) -- the exact analytic charge Gram (build_charge_gram); the per-pair entry cost is
+      "analytic" (default) -- the exact analytic charge Gram (vim.ChargeGram); the per-pair entry cost is
         O((3p)^6) at order p (the singular outer x inner subtraction quadrature), so the BUILD explodes with p.
-      "gauss" -- the Gauss POINT operator (build_charge_gauss): G ~= P^T K_point P + sparse near correction,
+      "gauss" -- the Gauss POINT operator (vim.ChargeGramGauss): G ~= P^T K_point P + sparse near correction,
         the cheap-1/r point H-matrix carrying the far field, the analytic entry used ONLY on the O(N) near
         pairs.  Validated to match "analytic" demag to ~1e-4 at p<=2 (qpts/gauss_near_factor control the
         accuracy).  Aimed at the high-order / curved regime where the analytic build is the bottleneck.

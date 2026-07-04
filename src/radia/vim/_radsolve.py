@@ -60,7 +60,7 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     """
     from radia.netgen_mesh_import import netgen_mesh_to_radia
     if (mu_r is None) == (bh_table is None):
-        raise ValueError("soft_iron_from_mesh: give exactly one of mu_r (linear) or bh_table (nonlinear)")
+        raise ValueError("vim.MeshSoftIron: give exactly one of mu_r (linear) or bh_table (nonlinear)")
     handles = netgen_mesh_to_radia(mesh, material={'magnetization': [0.0, 0.0, 0.0]},
                                    combine=False, verbose=verbose, material_filter=material_filter,
                                    allow_hex=True, allow_wedge=True)
@@ -97,7 +97,7 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
 
 def is_registered(top):
     """True if ``top`` (a rad.Solve object handle) IS, or CONTAINS, a soft-iron body registered via
-    soft_iron_from_mesh.  Used by radia.Solve to find a mesh-backed soft iron, route the default
+    ``vim.MeshSoftIron``.  Used by radia.Solve to find a mesh-backed soft iron, route the default
     'auto' split (pure TET/HEX/WEDGE -> HDiv-VIM, mixed/pyramid -> collocation MMMM bridge), and leave everything else
     (mesh-less MSC/MMM, PM) on the C++ solve.  Read-only, never raises."""
     if top in _DEMAG_REGISTRY:

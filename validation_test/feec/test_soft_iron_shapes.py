@@ -2,7 +2,7 @@
 
 Item (b) of the HDiv-only gate (CLAUDE.md DIRECTION 2026-07-04): the mesh-less soft-iron capability is KEPT
 via intent constructors that STRUCTURE-MESH a simple shape (subdivided structured hex mesh) and register it
-through soft_iron_from_mesh, so rad.Solve auto-routes it to the FEEC HDiv-VIM (RT1) -- the API-compatible
+through vim.MeshSoftIron, so rad.Solve auto-routes it to the FEEC HDiv-VIM (RT1) -- the API-compatible
 replacement for the legacy ObjHexahedron + MatApl(MatLin) mesh-less collocation-MMMM route.  The returned
 container IS the sub-mesh, so rad.Fld reflects the resolved per-sub-element M (no write-back plumbing).
 

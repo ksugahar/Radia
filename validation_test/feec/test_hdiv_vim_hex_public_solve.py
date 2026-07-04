@@ -49,7 +49,7 @@ def _cube(n):
 
 
 def _hdiv_hex_retry(mesh, **kw):
-    """hdiv_demag_solve with retries on the KNOWN bursty GetTrafo first-touch flake (fail-loud, rerun is the
+    """vim.Solve with retries on the KNOWN bursty GetTrafo first-touch flake (fail-loud, rerun is the
     documented remedy).  Each attempt re-draws the hex-charge extraction."""
     last = None
     for _ in range(5):
@@ -78,8 +78,8 @@ def _collocation_mz(n, nonlinear):
     return mz
 
 
-def test_hdiv_demag_solve_hex_linear():
-    """hdiv_demag_solve on a pure-hex cube: exact demag 1/3, transverse ~0, agrees with collocation MMMM."""
+def test_vim_solve_hex_linear():
+    """vim.Solve on a pure-hex cube: exact demag 1/3, transverse ~0, agrees with collocation MMMM."""
     res = _hdiv_hex_retry(_cube(6), mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))
     assert res["nonlinear"] is False
     assert abs(res["demag"] - 1.0 / 3.0) < 5e-3, f"hex cube demag {res['demag']} off 1/3"
@@ -91,8 +91,8 @@ def test_hdiv_demag_solve_hex_linear():
     assert rel < 0.03, f"hex HDiv Mz {mz:.1f} vs collocation MMMM {mz_c:.1f} rel {rel:.2e}"
 
 
-def test_hdiv_demag_solve_hex_nonlinear():
-    """hdiv_demag_solve on a pure-hex cube with a BH table: energy-Newton converges, agrees with MMMM."""
+def test_vim_solve_hex_nonlinear():
+    """vim.Solve on a pure-hex cube with a BH table: energy-Newton converges, agrees with MMMM."""
     res = _hdiv_hex_retry(_cube(6), bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
     assert res["nonlinear"] is True
     assert res["iters"] < 100, f"hex energy-Newton not bounded: {res['iters']}"
@@ -102,7 +102,7 @@ def test_hdiv_demag_solve_hex_nonlinear():
     assert rel < 0.03, f"hex HDiv nonlinear Mz {mz:.1f} vs collocation MMMM {mz_c:.1f} rel {rel:.2e}"
 
 
-def test_hdiv_demag_solve_wedge_linear():
+def test_vim_solve_wedge_linear():
     """A prism/wedge (6-vertex) mesh now SOLVES via the C++ wedge-mode charge Gram (2026-07-04, memory
     hdiv-tet-hex-coupling-pyramid-gated).  Cross-method + cross-mesh check: the prism-cube HDiv-VIM
     volume-average M_z matches the SAME-size HEX-cube collocation MMMM reference (both discretize the same
@@ -125,7 +125,7 @@ def test_hdiv_demag_solve_wedge_linear():
 
 def test_rad_solve_demag_backend_hdiv_on_hex():
     """The wrapper path: rad.Solve(demag_backend='hdiv') on a HEX soft_iron routes through _solve_via_hdiv
-    -> hdiv_demag_solve and SOLVES (no TET-only raise), writing per-element M back to the iron handles."""
+    -> vim.Solve and SOLVES (no TET-only raise), writing per-element M back to the iron handles."""
     rad.UtiDelAll()
     with ng.TaskManager():
         iron = MeshSoftIron(_cube(4), mu_r=MU_R)
@@ -153,7 +153,7 @@ def test_rad_solve_demag_backend_hdiv_on_hex():
 
 
 def test_rad_solve_auto_on_hex_uses_hdiv():
-    """The wrapper path with the production default: rad.Solve(auto) on HEX soft_iron_from_mesh returns the
+    """The wrapper path with the production default: rad.Solve(auto) on HEX MeshSoftIron returns the
     HDiv-VIM result dict and writes per-element M back."""
     rad.UtiDelAll()
     rad.set_demag_backend("auto")

@@ -87,7 +87,7 @@ def test_matvec_sym_symmetry_bilinear_probe():
 
 
 def test_default_solve_is_symmetric_cg():
-    """The default hdiv_demag_solve uses the symmetric mass-Riesz CG (the symmetric-HACApK matvec) and
+    """The default vim.Solve uses the symmetric mass-Riesz CG (the symmetric-HACApK matvec) and
     matches the GMRES cross-check on the uniform-field cube."""
     H_ext = ng.CoefficientFunction((0, 0, 1000.0))
     with ng.TaskManager():

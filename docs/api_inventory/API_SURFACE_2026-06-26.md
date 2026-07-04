@@ -37,7 +37,7 @@ authoritative delta. Re-run the `api-inventory` skill to refresh.
 
 The radia surface is overwhelmingly **method-keep**: it exists to provide what NGSolve cannot -- analytic open-boundary field (rad.Fld), MMM/MSC + yano-MSC, HDiv-VIM (the sole VIM), axifem Henrotte basis, DtN/FEM-Kelvin open boundary, PEEC, BEM, sparsesolv preconditioners, CLN/PRIMA MOR, the analytical_formulas reference layer, stream-function coil design, and the maglev/ECB application. Mass deletion is the wrong frame.
 
-The real reduction is **demotion, not deletion**. The 2-layer API target is already partly built: `SoftIron(...).solve(...).field(...)` over `.vol -> soft_iron_from_mesh` hides `ObjHexahedron` exactly as the policy wants. The work is to keep the element/coil primitives + containers + mesh->element bridges as INTERNAL C++/representation and un-pybind their hand-built-mesh user surface behind SoftIron / Magnet / CoilBuilder.
+The real reduction is **demotion, not deletion**. The 2-layer API target is already partly built: `SoftIron(...).solve(...).field(...)` over `.vol -> vim.VolSoftIron` / `vim.MeshSoftIron` hides `ObjHexahedron` exactly as the policy wants. The work is to keep the element/coil primitives + containers + mesh->element bridges as INTERNAL C++/representation and un-pybind their hand-built-mesh user surface behind SoftIron / Magnet / CoilBuilder.
 
 Genuine **plumbing-delete** is small and clean: the `Trf*` transform algebra (delegate to OCC/.vol), a few mesh-generation helpers (`create_hex_mesh_grid`, `create_sphere/box_mesh`), and visualization/CAD-kernel glue (`GmshPostExport`, `vol_sol_viewer`, `kelvin_geometry`, `step_mesh_builder`, `_b3d_shim`). **deprecated-drop** is also small and safe: the `MatMagFixed/Linear/Curve` no-op trio, `esim_vtk_export` (already de-exported), and the already-removed `CndLoop/CplMag/FldVTS/Rwg/beam_tracking` shells.
 
@@ -108,7 +108,7 @@ One hard constraint: **HACApK is under active development by another agent -- do
 | Hysteresis I/O + fit | hysteresis_io.build_shape_functions, convert_play_to_energy | ~9 | play-operator identification | material-method support |
 | Coil-from-CAD extraction | coil_from_cad.extract_centerline, build_peec_from_path | ~20 | STEP->centerline/filament method | OCC kernel delegated; STEP-only policy |
 | Coil topology classifier | coil_topology.extract_coil_topology, detect_cap_faces | ~6 | cap-aware spine reasoning | -- |
-| radia.vim package | build_demag, hdiv_demag_solve, DemagOperator, soft_iron_from_mesh/_from_vol | ~40 | FEEC HDiv-VIM, the sole VIM | C++ rad_hdiv_vim.cpp |
+| radia.vim package | build_demag, Solve, DemagOperator, ChargeGram, MeshSoftIron/VolSoftIron | ~40 | FEEC HDiv-VIM, the sole VIM | C++ rad_hdiv_vim.cpp |
 | radia.bem package | sibc_hacapk, coil_inductance_ngsolve | ~8 | HACApK Galerkin BEM (+ ngsolve.bem wrap) | sibc_hacapk HACApK = do-not-touch |
 | radia.open_boundary | eddy_dtn, cauer_ladder, kelvin_fem_radial_dtn, steklov_spectrum | ~18 | exact DtN open boundary + Cauer ladder | DtN/FEM-Kelvin core |
 | radia.maglev | mixed_galerkin.alpha, ecb.lorentz, simulink.export | ~20 | levitation/ECB application method | radia.<domain> |
@@ -125,7 +125,7 @@ One hard constraint: **HACApK is under active development by another agent -- do
 |---|---|---|---|---|
 | Geometry primitives | ObjHexahedron, ObjTetrahedron, ObjWedge, ObjRecMag, ObjMltExt*, ObjCylMag | ~11 | internal element repr behind SoftIron/Magnet | un-pybind hand-built-mesh surface; keep as C++ repr |
 | Container/introspection | ObjCnt, ObjM, ObjSetM, ObjDpl, ObjGeoVol, ObjDegFre | ~10 | assembly glue tied to the proprietary repr | demote once intent objects own assembly |
-| mesh->element bridge | netgen_mesh_to_radia, create_radia_hexahedron/tetrahedron/wedge | ~8 | internal .vol->element conversion | keep behind soft_iron_from_mesh; un-expose create_radia_* |
+| mesh->element bridge | netgen_mesh_to_radia, create_radia_hexahedron/tetrahedron/wedge | ~8 | internal .vol->element conversion | keep behind vim.MeshSoftIron/VolSoftIron; un-expose create_radia_* |
 | Round-body builders | round_bodies.cyl_mag/sphere_mag | 3 | faceted-primitive shape helper | prefer analytical_magnet (exact) or .vol |
 | Coil parallel geometry | CoilBlock, CoilArc, CoilLoop, CoilRacetrack, CoilAssembly | 5 | overlaps CoilBuilder | demote behind CoilBuilder/CoilSpec |
 | Coil profiles | RectProfile, CircleProfile, AnnularProfile, PolygonProfile | 6 | supporting representation | demote to CoilBuilder-facing |
@@ -188,7 +188,7 @@ Constraint for ALL phases: **do NOT touch HACApK** -- `src/ext/HACApK/`, `src/co
 
 ### Phase 3 -- un-pybind the primitive/container layer behind intent objects
 - Introduce/confirm `Magnet(...)` as the PM intent twin of `SoftIron`.
-- Make `SoftIron` / `Magnet` / `CoilBuilder` + `.vol -> soft_iron_from_mesh/_from_vol` the ONLY documented geometry path; demote `ObjHexahedron/Tetrahedron/Wedge/RecMag/...`, `ObjCnt/ObjM/ObjSetM`, and `netgen_mesh_to_radia`/`create_radia_*` to internal representation (un-pybind gradually -- CoilBuilder/panels/examples migrate first, then remove).
+- Make `SoftIron` / `Magnet` / `CoilBuilder` + `.vol -> vim.VolSoftIron` / `mesh -> vim.MeshSoftIron` the ONLY documented geometry path; demote `ObjHexahedron/Tetrahedron/Wedge/RecMag/...`, `ObjCnt/ObjM/ObjSetM`, and `netgen_mesh_to_radia`/`create_radia_*` to internal representation (un-pybind gradually -- CoilBuilder/panels/examples migrate first, then remove).
 
 ### Phase 4 -- tidy debug/self-test surface (coordinate with owners)
 - Move `HMatrixDensify`, `GetInteractMatrix`, moment-system probes, and the `*SelfTest*`/`_TestPEECHACApKSanity` entries off the shipped pybind surface into tests/ -- but the HLU/HACApK ones are owned by the active-dev agent; hand off rather than edit.

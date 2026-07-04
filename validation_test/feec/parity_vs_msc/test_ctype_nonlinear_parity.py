@@ -7,7 +7,7 @@ C-yoke iron (thin in z, with a gap/bore) driven by a rectangular current loop EN
 Both solvers use the SAME iron mesh + SAME coil + SAME MatSatIsoTab BH table, and the gap B is then
 evaluated with the SAME field kernel (radia.Fld) -- only the magnetization M differs:
   Radia reference:  rad.Solve(iron tets [MMM] + coil) -> solved M ; B_gap = rad.Fld(iron+coil,'b',gap)
-  HDiv:  hdiv_demag_solve -> per-element M ; Radia iron rebuilt from that M (no solve) ;
+  HDiv:  vim.Solve -> per-element M ; Radia iron rebuilt from that M (no solve) ;
          B_gap = rad.Fld(iron_hdivM + coil,'b',gap)
 HDiv applied field = the coil's Biot-Savart H (rad.RadiaField(coil,'h')); KELVIN-LESS (iron-only mesh).
 
