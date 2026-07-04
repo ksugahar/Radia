@@ -136,14 +136,23 @@ def couple(iron_mesh, iron_solve, fem_mesh, sigma, freq, *, applied_Az_cf, H_app
     return {"M": M, "M_avg": M_avg, "iters": it, "hist": hist, "gfu": gfu, "fes": fes, "n_el": nEl}
 
 
-def _mmmm_iron_solve(iron_mesh, mu_r, pm=None):
-    """Build a linear-MMMM complex iron_solve callback (chi real -> M = solve(Re H)+j solve(Im H)).
+def _mmmm_iron_solve(iron_mesh, mu_r=None, bh_table=None, pm=None,
+                     nl_tol=1e-6, nl_maxit=200, nl_damp=0.6, chi_floor=1e-12):
+    """Build a MMMM complex iron_solve callback for the staggered eddy coupling.
+
+    * LINEAR (``mu_r`` scalar or {region: mu_r}): chi real -> M = solve(Re H) + j solve(Im H).
+    * NONLINEAR (``bh_table`` [[H,B],...]): amplitude-based EFFECTIVE-chi Picard -- 1st-harmonic AC
+      approximation: chi_eff = M(|H|)/|H| with |H| the PHASOR MAGNITUDE sqrt(|Hx|^2+|Hy|^2) (which
+      reduces to |H| for a real/DC field, so the sigma->0 limit recovers the DC nonlinear demag).
+      The chi state warm-starts across staggered calls.  (Captures amplitude-dependent saturation,
+      NOT harmonic generation -- that needs time stepping.)
 
     With ``pm`` = {region: [Mx,My]} the mesh is a PM-motor / ECB rotor: those regions are RIGID
-    permanent magnets (fixed REAL M, treated as an in-phase phasor source at the analysis frequency).
-    Their field magnetises the soft iron (added to the soft drive) AND, because the returned M carries
-    the fixed PM elements, drives the conductor eddy through iron_field_cf.  Only the soft subsystem is
-    solved; design B (embedded PM) == design A on a partitioned mesh (fields superpose)."""
+    permanent magnets (fixed REAL M, an in-phase phasor source at omega).  Their field magnetises the
+    soft iron (added to the soft drive) AND, because the returned M carries the fixed PM elements,
+    drives the conductor eddy through iron_field_cf.  Only the soft subsystem is solved."""
+    if (mu_r is None) == (bh_table is None):
+        raise ValueError("planar_eddy: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
     verts, offsets, centroids, areas = _extract_geometry(iron_mesh)
     nEl = len(areas)
     mats = _element_materials(iron_mesh)
@@ -165,32 +174,64 @@ def _mmmm_iron_solve(iron_mesh, mu_r, pm=None):
         soft_ids = np.arange(nEl)
         hard_ids = np.empty(0, int)
         verts_s, offsets_s, M_hard, H_pm, mats_s = verts, offsets, None, 0.0, mats
-    if isinstance(mu_r, dict):
-        chi = _region_chi_for(mats_s, mu_r)
-    else:
-        if not mu_r > 1.0:
-            raise ValueError("planar_eddy: mu_r must be > 1 (got %r)" % (mu_r,))
-        chi = np.full(len(soft_ids), mu_r - 1.0)
 
-    def solve(H):
-        Hs = np.ascontiguousarray(H[soft_ids]) + H_pm                     # applied + eddy + PM
+    def _lin(Hs, chi):
         Mr = _rp.Moment2DSolveLinear(verts_s, offsets_s, chi, np.ascontiguousarray(Hs.real, float))
         Mi = _rp.Moment2DSolveLinear(verts_s, offsets_s, chi, np.ascontiguousarray(Hs.imag, float))
+        return Mr + 1j * Mi
+
+    def _assemble(Mc):
         M = np.zeros((nEl, 2), complex)
-        M[soft_ids] = Mr + 1j * Mi
+        M[soft_ids] = Mc
         if pm:
             M[hard_ids] = M_hard[hard_ids]
         return M
+
+    if mu_r is not None:                                                  # LINEAR
+        if isinstance(mu_r, dict):
+            chi = _region_chi_for(mats_s, mu_r)
+        else:
+            if not mu_r > 1.0:
+                raise ValueError("planar_eddy: mu_r must be > 1 (got %r)" % (mu_r,))
+            chi = np.full(len(soft_ids), mu_r - 1.0)
+
+        def solve(H):
+            return _assemble(_lin(np.ascontiguousarray(H[soft_ids]) + H_pm, chi))
+        return solve
+
+    # NONLINEAR: scalar bh_table, effective-chi Picard (warm-started via closure state)
+    if isinstance(bh_table, dict):
+        raise NotImplementedError("planar_eddy: per-region bh_table not yet wired; use a scalar table")
+    from radia.mmmm2d import _law_from_table
+    M_of_h, _chi_sec, chi0 = _law_from_table(bh_table)
+    state = {"chi": np.full(len(soft_ids), chi0)}
+
+    def solve(H):
+        Hs = np.ascontiguousarray(H[soft_ids]) + H_pm                     # applied + eddy + PM (complex)
+        chi = state["chi"]
+        for _ in range(nl_maxit):
+            Mc = _lin(Hs, np.maximum(chi, chi_floor))
+            Mmag = np.sqrt(np.abs(Mc[:, 0]) ** 2 + np.abs(Mc[:, 1]) ** 2)  # |M phasor| (== |M| at DC)
+            nH = np.maximum(Mmag / np.maximum(chi, chi_floor), 1e-300)     # |H_local| = |M|/chi
+            chi_star = np.maximum(M_of_h(nH) / nH, chi_floor)
+            r = chi_star - chi
+            if np.linalg.norm(r) / max(np.linalg.norm(chi_star), 1e-300) < nl_tol:
+                chi = chi_star
+                break
+            chi = np.maximum(chi + nl_damp * r, chi_floor)
+        state["chi"] = chi
+        return _assemble(Mc)
     return solve
 
 
-def couple_mmmm(iron_mesh, mu_r, fem_mesh, sigma, freq, *, B0=1.0, pm=None, order=4, tol=1e-6,
-                maxit=40, ngauss=2, conductor="conductor"):
-    """Convenience: couple a LINEAR-MMMM soft-iron body (optionally a PM-motor / ECB rotor with
-    embedded PM regions ``pm={region: [Mx,My]}``) to the eddy FEM under a uniform applied field
-    B0 x-hat (A0 = B0 y).  ``mu_r`` scalar or {region: mu_r} dict (soft iron only).  Returns couple()."""
+def couple_mmmm(iron_mesh, fem_mesh, sigma, freq, *, mu_r=None, bh_table=None, pm=None, B0=1.0,
+                order=4, tol=1e-6, maxit=40, ngauss=2, conductor="conductor"):
+    """Convenience: couple a MMMM soft-iron body to the eddy FEM under a uniform applied field
+    B0 x-hat (A0 = B0 y).  Soft-iron law: EXACTLY ONE of ``mu_r`` (scalar or {region: mu_r} dict,
+    LINEAR) or ``bh_table`` ([[H,B],...], NONLINEAR effective-chi).  ``pm={region: [Mx,My]}`` adds
+    embedded rigid permanent magnets (PM-motor / eddy-current-brake rotor).  Returns couple()."""
     _, _, centroids, _ = _extract_geometry(iron_mesh)
     H_app = np.tile([B0 / MU0, 0.0], (len(centroids), 1)).astype(complex)
-    return couple(iron_mesh, _mmmm_iron_solve(iron_mesh, mu_r, pm=pm), fem_mesh, sigma, freq,
-                  applied_Az_cf=B0 * y, H_app=H_app, order=order, tol=tol, maxit=maxit,
-                  ngauss=ngauss, conductor=conductor)
+    solve = _mmmm_iron_solve(iron_mesh, mu_r=mu_r, bh_table=bh_table, pm=pm)
+    return couple(iron_mesh, solve, fem_mesh, sigma, freq, applied_Az_cf=B0 * y, H_app=H_app,
+                  order=order, tol=tol, maxit=maxit, ngauss=ngauss, conductor=conductor)
