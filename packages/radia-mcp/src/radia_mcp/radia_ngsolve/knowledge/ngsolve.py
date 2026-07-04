@@ -846,6 +846,64 @@ V_0 = LaplaceSL(rho_trial*ds) * rho_test*ds
 Reference: https://github.com/Weggler/docu-ngsbem/blob/main/demos/Maxwell_DtN_Stabilized.ipynb
 """
 
+NGSOLVE_BEM_VOL_50 = """
+# .vol visualization and NGSolve.BEM 50-case comparison lane
+
+## Best .vol visualization skill
+
+Use Netgen's native GUI as the first-choice human viewer for `.vol`.  The
+format is Netgen's own mesh handoff, so it is the most faithful place to inspect
+surface triangles, tetrahedra, material labels, and boundary names before a
+solver or cross-validation run.
+
+Keep the split explicit:
+
+1. Human inspection: open the solver-facing `.vol` in Netgen.
+2. LLM/headless preflight: summarize counts, labels, bounding box, orientation,
+   and a source digest before running a solver.
+3. Result visualization: use Gmsh/VTK-style output for fields; do not treat a
+   visualization export as the solver mesh unless the converter contract says so.
+
+For the MATLAB acoustic FEM/BEM teaching lane, the same first-order Netgen
+`.vol` is read twice: volume tetrahedra form the FEM view and boundary triangles
+form the BEM view.  radia-ngsolve/NGSolve.BEM should read the same `.vol` so
+node order, boundary labels, and surface orientation become part of the
+validation contract.
+
+## 50-case BEM-first milestone
+
+Fifty examples are a sensible first milestone before promoting the full
+100-case catalog.  Use the BEM-heavy half:
+
+- GYP-031..040: Laplace P1 BEM, dense assembly.
+- GYP-041..050: Laplace P1 BEM, H-matrix/compression behavior.
+- GYP-051..060: acoustic low-frequency stability checks.
+- GYP-061..070: acoustic Helmholtz P1 BEM.
+- GYP-091..100: NGSolve.BEM reference and convention checks.
+
+This is a cross-code validation ladder, not a promise that every case has a new
+closed-form solution.  Keep the analytic anchors that remain useful -- sphere
+and ball references, Laplace capacity, point-source reproduction, reciprocity,
+symmetry, and convergence identities -- but promote the rest as measured
+reference artifacts only after versions, dates, timing breakdowns, schema ids,
+and convention ids are stored.
+
+## Promotion rule
+
+A result may teach radia-mcp only after four gates pass:
+
+1. `.vol` mesh summary agrees with the intended tri/tet first-order contract.
+2. The NGSolve.BEM operator convention gate passes (`.Trace()` where required,
+   sign/kappa convention measured rather than assumed).
+3. MATLAB/Gypsilab-style result and radia-ngsolve/NGSolve.BEM reference agree
+   inside a documented tolerance or show a useful convergence trend.
+4. The result manifest is self-contained enough to rerun: tool versions, run
+   date, timing breakdown, input digest, output schema, and convention id.
+
+Do not call a cross-code artifact "analytic"; call it a stored reference unless
+it is truly backed by a closed-form or manufactured exact identity.
+"""
+
 NGSOLVE_MESH = """
 # Mesh Generation in NGSolve (Netgen + OCC)
 
@@ -7628,6 +7686,10 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "solvers": NGSOLVE_SOLVERS,
         "preconditioners": NGSOLVE_PRECONDITIONERS,
         "bem": NGSOLVE_BEM,
+        "ngsolve_bem_50": NGSOLVE_BEM_VOL_50,
+        "bem_50": NGSOLVE_BEM_VOL_50,
+        "vol_bem_50": NGSOLVE_BEM_VOL_50,
+        "vol_visualization": NGSOLVE_BEM_VOL_50,
         "mesh": NGSOLVE_MESH,
         "nonlinear": NGSOLVE_NONLINEAR,
         "pitfalls": NGSOLVE_PITFALLS,

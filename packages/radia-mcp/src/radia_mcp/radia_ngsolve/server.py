@@ -469,6 +469,7 @@ def ngsolve_usage(topic: str = "all") -> str:
             "solvers"          - Direct & iterative solver selection guide
             "preconditioners"  - BDDC, multigrid, Jacobi, AMG configuration
             "bem"              - Boundary element method (ngsolve.bem, LaplaceSL, FEM-BEM coupling)
+            "ngsolve_bem_50"    - .vol visualization + 50-case NGSolve.BEM/MATLAB comparison lane
             "mesh"             - Mesh generation (OCC geometry, STEP import, surface mesh)
             "nonlinear"        - Newton's method for nonlinear problems
             "pitfalls"         - Common mistakes and how to avoid them (40 items)
