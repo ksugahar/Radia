@@ -33,7 +33,7 @@ S:\Radia\01_GitHub\
         check.py          # check-vol CLI + check_consistency() API
         radia_cubit_mesh.pyd  # C++ pybind11 module (bundled)
   tests/                  # Radia tests + tests/mcp/
-  examples/
+  examples/               # retired; do not add new files
   docs/
   Build.ps1               # MSVC + MKL build
   install_full.py          # One-command full setup
@@ -111,18 +111,21 @@ and ask only where the decision is genuinely the user's.
 
 Do not force long-running or solver-heavy validation problems into `tests/`.
 Keep CI tests small and fast enough to catch regressions, but still run heavier
-research examples when they teach something new. Put those problems under
-`examples/<topic>/` (or an explicitly named validation example), write JSON/plots
-next to the script, and record the actual run numbers in the internal `_crossval`
-notes. A validation-class example may be too slow for pytest and still be
-mandatory learning material.
+research validation when it teaches something new.  New development trials and
+scratch scripts live under `C:\temp`, not in the tracked source tree.  Once a
+trial becomes worth keeping, promote it to `validation_test/<topic>/`, a
+result-bearing `docs/<topic>/*.ipynb`, a notebook-local `docs/<topic>/*.py`
+helper, or `src/` according to the classification below.  A panel is the final
+operating surface promoted from a mature docs notebook/workbench, not a scratch
+destination.  A validation-class problem may be too slow for pytest and still
+be mandatory learning material.
 
 When a validation-class example is being promoted, the executable verification
 lane is the repository's actual `validation_test/` directory, not `docs/`
 (and not a differently named `tests_validation/` tree).  A result-bearing
 `docs/<topic>/*.ipynb` may render the theory,
 tables, and plots for humans, but it does not replace the runnable validation
-surface.  If the example already has `validation_*.py`, `validate_*.py`,
+surface.  If historical material has `validation_*.py`, `validate_*.py`,
 `*_summary.json`, or references from `validation_test/`, classify it first as
 `validation_test` / protected-validation-corpus material; add a docs notebook
 only as the synchronized showcase layer.
@@ -133,16 +136,18 @@ solver-heavy sweeps, timing claims, and research-grade validation on `mdx`
 when it is idle (see Benchmark Policy).  Record whether a number is LAB smoke
 or mdx validation so docs/MCP do not overclaim timing or robustness.
 
-### Examples Triage: Delete / src API / validation_test / docs (2026-06-28)
+### Retired Examples / Promotion Triage (2026-06-28, updated 2026-07-04)
 
-**POLICY**: `examples/` is a temporary teaching/research tier, not an archive
-for every intermediate attempt.  When cleaning it, classify each script before
-moving or deleting:
+**POLICY**: `examples/` is retired and must not be recreated.  It is neither a
+scratch area nor a teaching tier.  New development experiments run in `C:\temp`;
+tracked work enters the repository only after promotion into one of the durable
+lanes below.  Historical `examples/` references are migration blockers.
 
 | Class | Destination | Rule |
 |-------|-------------|------|
-| Development-in-progress / superseded / failed iteration | delete after distilling | Preserve the lesson in `memory/<topic>.md` or a short docs note, then remove the dead source. Git history is the archive. |
+| Development-in-progress / superseded / failed iteration | keep in `C:\temp` until distilled, then delete | Preserve the lesson in `memory/<topic>.md` or a short docs note when it matters. Git history and `C:\temp` are the scratch/archive path, not `examples/`. |
 | Reusable computation, parser, mesh reader, solver helper, formula, or API surface | `src/` | Promote to a named public or internal API and add focused tests. Do not keep it as a loose example helper. |
+| Fast implementation regression or minimal fixture | `tests/` | Keep small enough for CI / developer feedback. |
 | Important numerical verification, benchmark, golden lock, convergence sweep, or regression corpus | `validation_test/<topic>/` plus optional docs notebook | The executable check lives in `validation_test/`; docs may render theory, tables, plots, and summary JSON for humans. |
 | User-facing explanation, tutorial, or method showcase | `docs/<topic>/*.ipynb` | Notebook must be result-saving and synchronized with adjacent JSON. Integrate Markdown explanation, executable cells, and results. |
 | Notebook-only subroutine / local renderer / catalog helper | `docs/<topic>/*.py` | Allowed only when tightly coupled to the notebook. If another topic, panel, MCP server, or validation uses it, promote to `src/` instead. |
@@ -151,9 +156,9 @@ moving or deleting:
 The migration order is strict: inventory and reference search first; create or
 refresh the docs/JSON layer if the result is user-facing; move reusable or
 validation code to `src/` or `validation_test/`; update docs/MCP/panel
-references; then delete from `examples/`.  Never leave two live copies of the
-same implementation in `examples/` and `src/` after the API promotion is
-complete.
+references; then delete the historical source.  Never leave two live copies of
+the same implementation after API promotion is complete, and never add new
+long-lived references to `examples/`.
 
 `protected_*` / "保護参照あり" is a temporary blocker, not a destination.
 If a docs notebook, validation test, panel sample, MCP knowledge file, or
@@ -218,9 +223,10 @@ repository's knowledge; leaving the dead branch in the tree does not.
 deletes protected data, assets, or fixtures):
 
 - **Golden test fixtures** under `tests/**/fixtures/` and golden-band lock files
-  are protected (per "Sample Promotion Ladder"). Distinct tier artifacts of one
-  geometry (a `tests/` fixture vs an `examples/` demo vs a `panels/samples/`
-  `.jou`) are SEPARATE canonical artifacts, not duplicate snapshots — keep all.
+  are protected (per the promotion ladder). Distinct tier artifacts of one
+  geometry (a `tests/` fixture vs a `docs/` result notebook vs a
+  `panels/samples/` `.jou`) are SEPARATE canonical artifacts, not duplicate
+  snapshots — keep all.
 - A **single, explicitly-named frozen reference baseline** (e.g. a
   `panels/samples/*` loft baseline kept deliberately for regression comparison)
   is a protected canonical artifact, not cruft — keep it even though a newer
@@ -231,12 +237,13 @@ deletes protected data, assets, or fixtures):
   NEVER iteration snapshots. Removing such data would make the figure
   non-regenerable; do not delete it under this policy.
 - **Tracked mesh definitions and mesh-gen assets** — mesh files
-  (`.bdf`/`.nas`/`.msh`/`.vtk`), tracked pre-generated meshes under
-  `examples/**/gmsh_models/*.msh`, Cubit `.jou` journals, and
+  (`.bdf`/`.nas`/`.msh`/`.vtk`), Cubit `.jou` journals, and
   **mesh-generation scripts** — are protected by "Mesh File Preservation" and
   are NEVER deleted by this policy, even when a `_v2`/`_old` name makes them look
-  like an iteration. A file that is BOTH a `_v2`-named snapshot AND a protected
-  asset is governed by the preservation policy, not this one.
+  like an iteration. Historical tracked meshes formerly under `examples/` should
+  be migrated to their owning `docs/`, `validation_test/`, or `panels/` lane. A
+  file that is BOTH a `_v2`-named snapshot AND a protected asset is governed by
+  the preservation policy, not this one.
 - **LAB-local, non-committed authoring references** (e.g. a `.nb` kept beside its
   canonical `.wls`) are out of scope — this policy governs the TRACKED source
   tree only.
@@ -281,10 +288,10 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 ### File Placement Policy
 
-**POLICY**: Generated output files (`.png`, `.msh`, `.vtu`, `.vol`) must be placed **next to their corresponding `.py` script**.
-- Example outputs belong in `examples/<category>/` alongside their script
+**POLICY**: Development scratch outputs belong in `C:\temp`.  Committed output
+files (`.png`, `.msh`, `.vtu`, `.vol`, JSON sidecars) must be placed next to
+their owning `tests/`, `validation_test/`, `docs/`, or `panels/` driver.
 - Do NOT place generated files at the repository root
-- `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
 - Build output goes to `build*/` or `dist/` (both gitignored)
 - `docs/<topic>/` MAY contain `.py` helper modules that a result-bearing
   `*.ipynb` imports, especially when the same helper is also useful to
@@ -305,56 +312,41 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
   belongs in `src/`. Existing `src/radia/panels/` paths remain legacy during the
   staged migration and need compatibility shims/tests before deletion.
 
-### Sample Promotion Ladder: tests → examples → panels (2026-05-02)
+### Promotion Ladder: C:\temp → tests / validation_test / docs / panels (2026-07-04)
 
-**POLICY**: Every sample lives in exactly ONE of three tiers.  The tiers
-have distinct purposes and a strict promotion ladder:
+**POLICY**: New exploratory scripts start outside the repository in `C:\temp`.
+`examples/` is retired forever.  A file enters the source tree only when it has
+a durable role:
 
-| Tier | Purpose (intent) | Audience | Ships in wheel? |
+| Lane | Purpose (intent) | Audience | Ships in wheel? |
 |------|------------------|----------|-----------------|
-| `tests/**/fixtures/` | **実装の基本機能の確認** — golden test fixture, machine-readable, minimal. | CI / Codex / developer | No |
-| `examples/<topic>/` | **研究的側面も含む例題の提供** — research-oriented demonstration, exploratory geometry, README-backed. | researchers, contributors | No (gitignored outputs OK) |
-| `src/radia/panels/samples/` | **工学的実問題を動く形で提供** — engineering real-problem solution, runs end-to-end through the panel. | end users (Cubit panel Browse dialog) | Yes (package-data) |
+| `tests/**` | **実装の基本機能の確認** — fast regression, fixture, API contract, CI-friendly. | CI / Codex / developer | No |
+| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, mdx-first for large runs. | developer / agent / research validation | No |
+| `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
+| `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
+| `src/` | Reusable API, parser, formula, solver helper, computation kernel. | package users / panels / validation / MCP | Yes |
+| `panels/` or legacy `src/radia/panels/` | Final engineering operating surface promoted from a mature docs notebook/workbench. | end users | Yes when packaged |
 
-**Promotion gates** (each is a hard gate; no skipping):
+**Promotion gates**:
 
-- **tests/ → examples/**: golden test for the geometry passes
-  (`tests/panels/test_*_golden.py` JSON inside hard band) AND a
-  human-readable `README.md` is added that explains the physics /
-  research question / expected ballpark numbers AND the example runs
-  standalone (`python <example>.py` without the panel UI).
-- **examples/ → panels/samples/**: the example runs end-to-end through
-  the **panel UI** (Layer 3, Cubit `play <sample>.jou` → `radia_export`
-  → panel Run button) on the actual engineering geometry — not a toy
-  proxy.  Sample listed in `pyproject.toml` package-data.  Wheel
-  manifest audit (`deploy` skill, L0) clean.
+- **C:\temp → tests/**: the behavior is small, deterministic, and useful for
+  fast regression.
+- **C:\temp → validation_test/**: the run is a numerical validation,
+  benchmark, convergence sweep, golden lock, or regression corpus; heavy runs
+  are executed on mdx when idle and labelled as mdx validation.
+- **C:\temp → docs/**: the result teaches a method or workflow to humans; the
+  notebook must be executed, output-bearing, Markdown-integrated, and paired
+  with synchronized JSON.
+- **C:\temp → src/**: the code is reusable by more than one notebook,
+  validation path, panel, or MCP topic.
+- **docs/ → panels/**: once a result-bearing docs notebook/workbench has become
+  an engineering operating surface, promote it to `panels/` with a validated
+  CLI/workbench path and panel golden.  Do not promote directly from scratch.
 
-**Why three tiers, not two**: a sample that locks numerical correctness
-(tests) is a different artifact from a sample that teaches a research
-concept (examples) which is again different from a sample that solves
-an engineer's actual problem on the panel (panels).  Conflating them
-either ships incomplete work to end users (panels = examples) or
-buries production-ready engineering examples in tests/.
-
-**Concrete consequences**:
-
-- A new geometry STARTS at `tests/**/fixtures/` with a golden lock.
-  Promote up only after the next-tier gate is met.
-- Demoting (panels → examples → tests) is allowed: e.g. an engineering
-  sample that turns out to need rework can move back to `examples/`
-  while the issue is investigated, with the wheel package-data line
-  removed in the same commit.
-- Same geometry MAY exist at multiple tiers if the artifacts differ in
-  scope (a minimal fixture in tests/, a richer commented version in
-  examples/, a panel-friendly .jou in panels/samples/).  Each lives
-  separately and is maintained separately.
-- A sample at `panels/samples/` MUST also have a passing golden test
-  in `tests/panels/test_*_golden.py` — the upper tier inherits the
-  correctness gate of the lower.
-
-**Why end users can't tell broken samples from user error**: they try
-the sample, it fails, and the panel looks broken.  One broken sample
-discredits the whole panel.  The tier discipline above prevents this.
+Same geometry may exist in multiple lanes only when the artifacts have distinct
+roles: e.g. a minimal fixture in `tests/`, a heavy truth run in
+`validation_test/`, a human-facing result notebook in `docs/`, and a packaged
+panel sample in `panels/`.  No lane points back to `examples/`.
 
 ### Panel Design Workflow Policy (2026-04-23, updated 2026-06-26)
 
@@ -604,9 +596,12 @@ the knowledge to ALL three layers BEFORE moving on:
 
 1. **`memory/<topic>.md` + `MEMORY.md` index entry** -- the lesson is
    useless if the next conversation re-discovers it from scratch.
-2. **`examples/.../README.md`** mark the validated sample as
-   **VERIFIED** with the specific check (e.g. "VERIFIED p=2: slaved=8914
-   DOFs, ratio=1.0") so future contributors know the sample is golden,
+2. **Owning durable artifact** -- record the validated result where it now
+   lives: `validation_test/<topic>/` JSON/README for executable truth,
+   result-bearing `docs/<topic>/*.ipynb` plus synchronized JSON for
+   user-facing explanation, or MCP knowledge for agent-operational rules.
+   Include the specific checked value (e.g. "VERIFIED p=2: slaved=8914
+   DOFs, ratio=1.0") so future contributors know the result is golden,
    not "should work".
 3. **`AGENTS.md`** if the lesson is a method (e.g. "always check FES
    first") that applies to future debugging.
@@ -642,11 +637,11 @@ LAB-private mcp-server packages have been retired.
 - If the topic is generally useful for FEM/BEM/Kelvin/.vol pipeline — `radia_ngsolve`
 - If the topic only makes sense in a specific application context (induction heating, accelerator magnets, PCB) — that application's subpackage
 
-**New research topics**: in flight WIP can live in `examples/` or
-`docs/research/` (`.gitignored` for LAB-only) until stable. Promotion
-into a `radia_mcp.<topic>` subpackage requires: feature committed +
-deploy-verified + golden-tested + knowledge stops referencing
-unpublished files. There is **no longer** a separate
+**New research topics**: in-flight WIP lives in `C:\temp` until stable.
+Promotion into a `radia_mcp.<topic>` subpackage requires: feature committed,
+promoted to its durable lane (`src/`, `validation_test/`, `docs/`, or
+`panels/`), deploy-verified, golden-tested, and knowledge stops referencing
+unpublished scratch files. There is **no longer** a separate
 `S:\mcp-server\mcp-server-*\` tree — promote directly into the
 public subpackage when ready.
 
@@ -2263,12 +2258,15 @@ B = rad.Fld(assembly, 'b', [0, 0, 0.1])
 ### Python Script Path Import
 
 ```python
-# From examples/: use ../../src/radia
-# From tests/: use ../src/radia
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+# Prefer installed/editable package imports.  Only add a repo-local src path
+# for tests/validation/docs helpers that must run before installation.
+from pathlib import Path
+repo = next(p for p in Path(__file__).resolve().parents if (p / "src" / "radia").exists())
+sys.path.insert(0, str(repo / "src"))
 ```
 
-Import from `src/radia` package (not build directories).
+Import from the `radia` package or the repo-local `src` tree (not build
+directories).  Do not add new `examples/` import patterns.
 
 ### Script Naming Convention
 
@@ -2658,7 +2656,9 @@ side.
 
 ## Universal Relaxation Network (URN)
 
-All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
+URN material now lives under `docs/universal_relaxation_network/` for the
+showcase / paper / result artifacts and `src/radia/urn/` for reusable API code.
+Do not recreate `examples/universal_relaxation_network/`.
 
 **Policy**:
 - Synthetic data MUST be clearly marked as synthetic

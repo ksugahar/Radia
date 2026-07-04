@@ -35,7 +35,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 ## Examples Migration
 
-- [examples_classification/examples_classification.ipynb](examples_classification/examples_classification.ipynb) - Result-bearing ledger for the current `examples/` inventory, now empty after the VIM retirement; synchronized with `examples_classification_results.json`. `examples/` references are treated as migration blockers, not long-lived public links.
+- [examples_classification/examples_classification.ipynb](examples_classification/examples_classification.ipynb) - Result-bearing retired-examples ledger, now empty after the VIM retirement; synchronized with `examples_classification_results.json`. `examples/` is retired permanently: references are migration blockers, not long-lived public links.
 - [jou_translation_bench/README.md](jou_translation_bench/README.md) - Docs-owned `.jou` to build123d translation benchmark record for MCP knowledge quality; fixtures and report were promoted from the old examples tree.
 
 ## Multipole-Moment MMM

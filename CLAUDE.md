@@ -35,9 +35,9 @@ S:\Radia\01_GitHub\
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
   src/radia/axifem.pyd  # CORE METHOD (not a package): axisymmetric FE
                           # (Henrotte basis), ships in the radia wheel.
-                          # examples/axifem/ (+ research/), tests/axifem/.
+                          # docs/axifem/ (+ validation_test/), tests/axifem/.
   src/radia/hdiv_vim/     # CORE METHOD (not a package): FEEC HDiv-VIM
-                          # (C++ src/core/rad_hdiv_vim.cpp). examples/vim/.
+                          # (C++ src/core/rad_hdiv_vim.cpp). docs/vim/.
                           # This is the SOLE VIM (the radia_vim Galerkin
                           # prototype was deleted 2026-06-14 as unnecessary).
   src/radia/levitation/   # radia.levitation -- APPLICATION domain (NOT a
@@ -47,11 +47,11 @@ S:\Radia\01_GitHub\
                           # as radia.ih / the electromagnet panel; ships
                           # inside the radia wheel.  Knowledge lives in
                           # radia_mcp.maglev.  Absorbs 100% of CLN scope
-                          # (axifem/CLN incl.) under examples/levitation/.
+                          # (axifem/CLN incl.) under docs/levitation/
+                          # and validation_test/ as durable promoted lanes.
   tests/                  # Radia tests + tests/mcp/
-  examples/
-    levitation/           # radia.levitation examples + research_cln/ corpus
-                          # + IGTE 2026 paper (papers/)
+  examples/               # retired; do not add new files
+  validation_test/         # heavier validation, mdx-first for large runs
   docs/
   Build.ps1               # MSVC + MKL build
   install_full.py          # One-command full setup
@@ -95,11 +95,11 @@ now holds only the two genuine PyPI packages above.
 **Core solver methods inside `radia`** (NOT standalone packages -- they ship in the
 `radia` wheel):
 
-| Method | Code (ships in radia wheel) | Examples / Tests |
+| Method | Code (ships in radia wheel) | Docs / Validation / Tests |
 |--------|------------------------------|------------------|
-| **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `examples/hantila_solver/`, `docs/smco_magnet_array/` (notebook) |
-| **Axisymmetric FE** (Henrotte basis) | `radia.axifem` (`src/radia/axifem.pyd`) | `examples/axifem/` (+ `research/`), `tests/axifem/` |
-| **FEEC HDiv-VIM** (the VIM) | `radia.vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `examples/vim/` |
+| **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `docs/smco_magnet_array/` (notebook), tests / validation lanes as needed |
+| **Axisymmetric FE** (Henrotte basis) | `radia.axifem` (`src/radia/axifem.pyd`) | `docs/axifem/`, `validation_test/axifem/`, `tests/axifem/` |
+| **FEEC HDiv-VIM** (the VIM) | `radia.vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `docs/vim/`, `validation_test/vim/`, tests |
 | **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. The historical research act scripts are archived in `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb` + `kelvin_dtn_spectrum_archive_results.json`; reusable pieces promote into `src/radia/open_boundary` (like `hdiv_vim` did). **Two write-up tracks (2026-06-15):** Track A = this DtN+Kelvin core (the SA/Hachinohe paper: DtN-spectrum datasheet, sparse Kelvin open boundary, Sommerfeld isomorphism/surrogate, the directly-assembled material-aware DtN matrix, FEM-condensed≠BEM); Track B = its use as the **stream-function coil-design** kernel with iron (SEPARATE paper, see the Stream-function domain row + `HANDOFF_sommerfeld_dtn_kelvin_streamfunction.md`). | `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb`, `packages/radia-mcp/tests/test_dtn_*` |
 | **PEEC** (Partial Element Equivalent Circuit) | `peec_matrices.pyd` (`src/core/rad_peec_matrices.*` + `src/lib/rad_peec_matrices_api.cpp`) + `radia.peec_topology` / `peec_coupled` / `peec_msc_schur` / `fasthenry_parser` -- filament/panel (FastImp-style) L,R,C,M circuit extraction, SIBC/ESIM surface impedance, PRIMA/Lanczos MOR. A **core** integral-equation / circuit-extraction method (same rank as MMM/MSC), consumed by the PCB and IH application domains; **never** a `radia-peec` package. | `docs/peec_integration/demos/`, PEEC `tests/` suite |
 | **BEM** (boundary integral / surface IE) | `radia.bem` (`sibc_hacapk` = HACApK-backed Laplace-kernel Galerkin BEM; `coil_inductance_ngsolve` = `ngsolve.bem` Weggler-EFIE integration, the `--coil-solver bem-a` path) + the top-level `radia.bem_sibc_solver` helper. A **core** surface-integral-equation solver (HACApK ACA backend ships in the radia wheel), consumed by the PCB and IH domains; **never** a `radia-bem` package. | `docs/peec_integration/demos/ngsbem_peec_demo/`, BEM `tests/` |
@@ -120,10 +120,10 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 |--------|------|-----------|-------|
 | Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`, and a `radia_heat.py` panel) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
 | Electromagnet | `radia_em.py` panel + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_msc.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
-| **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `examples/levitation/` (research_cln/ corpus + IGTE 2026 paper). radia-cln is NOT a separate package. |
+| **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `docs/levitation/`, `validation_test/levitation/`, and the IGTE 2026 paper. radia-cln is NOT a separate package. |
 | Motor | `radia_motor.py` panel + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
 | PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
-| Stream-function | `radia_streamfunction.py` panel + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** `examples/kelvin_transformation/DtN_spectrum/HANDOFF_sommerfeld_dtn_kelvin_streamfunction.md` (+ `PATHWAY_streamfunction_with_iron.md`; act-script source archived in `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`). Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
+| Stream-function | `radia_streamfunction.py` panel + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** use the promoted docs/MCP artifacts (`docs/kelvin/`, `docs/stream_function/`, and `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`), not historical `examples/` paths. Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
 
 **Installation**:
 ```bash
@@ -246,9 +246,10 @@ on the tree is not.
 deletes protected data, assets, or fixtures):
 
 - **Golden test fixtures** under `tests/**/fixtures/` and golden-band lock files
-  are protected (per "Sample Promotion Ladder"). Distinct tier artifacts of one
-  geometry (a `tests/` fixture vs an `examples/` demo vs a `panels/samples/`
-  `.jou`) are SEPARATE canonical artifacts, not duplicate snapshots — keep all.
+  are protected (per the promotion ladder). Distinct tier artifacts of one
+  geometry (a `tests/` fixture vs a `docs/` result notebook vs a
+  `panels/samples/` `.jou`) are SEPARATE canonical artifacts, not duplicate
+  snapshots — keep all.
 - A **single, explicitly-named frozen reference baseline** (e.g. a
   `panels/samples/*` loft baseline kept deliberately for regression comparison)
   is a protected canonical artifact, not cruft — keep it even though a newer
@@ -259,12 +260,13 @@ deletes protected data, assets, or fixtures):
   the incident that policy exists to prevent (the figure becomes
   non-regenerable).
 - **Tracked mesh definitions and mesh-gen assets** — mesh files
-  (`.bdf`/`.nas`/`.msh`/`.vtk`), tracked pre-generated meshes under
-  `examples/**/gmsh_models/*.msh`, Cubit `.jou` journals, and
+  (`.bdf`/`.nas`/`.msh`/`.vtk`), Cubit `.jou` journals, and
   **mesh-generation scripts** — are protected by "Mesh File Preservation" and
   are NEVER deleted by this policy, even when a `_v2`/`_old` name makes them look
-  like an iteration. A file that is BOTH a `_v2`-named snapshot AND a protected
-  asset is governed by the preservation policy, not this one.
+  like an iteration. Historical tracked meshes formerly under `examples/` should
+  be migrated to their owning `docs/`, `validation_test/`, or `panels/` lane. A
+  file that is BOTH a `_v2`-named snapshot AND a protected asset is governed by
+  the preservation policy, not this one.
 - **LAB-local, non-committed authoring references** (e.g. a `.nb` kept beside its
   canonical `.wls`) are out of scope — this policy governs the TRACKED source
   tree only.
@@ -274,8 +276,8 @@ template, or mistaken for the live path, producing wrong numbers nobody can
 trace (the same failure class as silent fallbacks). The lesson, by contrast,
 compounds when it lives in `memory/` where the next session reads it before
 re-deriving the dead end. A clean tree where every tracked file is the canonical
-one — with the rationale for each removed branch preserved in memory — is the
-bonsai actually being tended.
+one, with the rationale for each removed branch preserved in memory, is the
+repository actually being tended.
 
 ### Discard the PoC Once the C++ Port Is Verified (2026-06-27)
 
@@ -357,8 +359,9 @@ the nullspace *theory* it produced is kept in `docs/solver/MSC_NULLSPACE_DEFLATI
 the *lesson* in `memory/`, and nothing else. **Decision rule for new research:**
 run it in `C:\temp`; promote to `docs/ipynb` (knowledge) or `src/` (API) only when
 it has crossed that bar; otherwise distill to `memory/` and leave the tracked tree
-clean. This is the research-lifecycle complement to the "Sample Promotion Ladder"
-(tests → examples → panels) and "No Development Cruft" policies above.
+clean. This is the research-lifecycle complement to the "Promotion Ladder:
+C:\temp -> tests / validation_test / docs / panels" and "No Development Cruft"
+policies above.
 
 ### Validation-Class Examples Promotion Lane (2026-06-27)
 
@@ -371,11 +374,43 @@ surface outside normal CI.
 
 A result-bearing `docs/<topic>/*.ipynb` may still be the human-facing showcase:
 theory + code + saved plots/tables + adjacent synchronized JSON.  But it is the
-rendered explanation, not a substitute for the validation executable.  If an
-`examples/<topic>` item has `validation_*.py`, `validate_*.py`,
-`*_summary.json`, or references from `validation_test/`, classify it first as
-`validation_test` / protected-validation-corpus material; add or refresh docs
-only as the synchronized showcase layer.
+rendered explanation, not a substitute for the validation executable.  If
+historical material has `validation_*.py`, `validate_*.py`, `*_summary.json`, or
+references from `validation_test/`, classify it first as `validation_test` /
+protected-validation-corpus material; add or refresh docs only as the
+synchronized showcase layer.
+
+### Retired Examples / Promotion Triage (2026-07-04)
+
+**POLICY**: `examples/` is retired and must not be recreated.  It is neither a
+scratch area nor a teaching tier.  New development experiments run in `C:\temp`;
+tracked work enters the repository only after promotion into one of the durable
+lanes below.  Historical `examples/` references are migration blockers.
+
+| Class | Destination | Rule |
+|-------|-------------|------|
+| Development-in-progress / superseded / failed iteration | keep in `C:\temp` until distilled, then delete | Preserve the lesson in `memory/<topic>.md` or a short docs note when it matters. Git history and `C:\temp` are the scratch/archive path, not `examples/`. |
+| Reusable computation, parser, mesh reader, solver helper, formula, or API surface | `src/` | Promote to a named public or internal API and add focused tests. Do not keep it as a loose example helper. |
+| Fast implementation regression or minimal fixture | `tests/` | Keep small enough for CI / developer feedback. |
+| Important numerical verification, benchmark, golden lock, convergence sweep, or regression corpus | `validation_test/<topic>/` plus optional docs notebook | The executable check lives in `validation_test/`; docs may render theory, tables, plots, and summary JSON for humans. |
+| User-facing explanation, tutorial, or method showcase | `docs/<topic>/*.ipynb` | Notebook must be result-saving and synchronized with adjacent JSON. Integrate Markdown explanation, executable cells, and results. |
+| Notebook-only subroutine / local renderer / catalog helper | `docs/<topic>/*.py` | Allowed only when tightly coupled to the notebook. If another topic, panel, MCP server, or validation uses it, promote to `src/` instead. |
+| Mesh/CAD/journal/result assets | keep until owning script/notebook is migrated | Mesh definitions, Cubit `.jou`, tracked `.msh`, figures, and JSON results are protected by preservation/reproducibility policy. |
+
+The migration order is strict: inventory and reference search first; create or
+refresh the docs/JSON layer if the result is user-facing; move reusable or
+validation code to `src/` or `validation_test/`; update docs/MCP/panel
+references; then delete the historical source.  Never leave two live copies of
+the same implementation after API promotion is complete, and never add new
+long-lived references to `examples/`.
+
+`protected_*` / "保護参照あり" is a temporary blocker, not a destination.  If a
+docs notebook, validation test, panel sample, MCP knowledge file, or README
+still references `examples/<topic>`, record the blocker and the
+`target_after_unblock` (`docs`, `src`, `validation_test`, or distill-delete),
+then migrate the reference.  Public docs may refer to other `docs/` artifacts,
+and code may refer to `src/` APIs, but new long-lived references to `examples/`
+should not be introduced.
 
 ### Documentation Format: Markdown for Dev Docs, ipynb for Method/Implementation Explanations (2026-06-27)
 
@@ -392,7 +427,7 @@ only as the synchronized showcase layer.
   visible on open. A method/implementation explanation is only trustworthy when it
   **runs and shows its result** -- a static `.md` that merely asserts how something
   works is weaker than a notebook that demonstrates it (ties to "self-contained
-  ipynb shows results" + the examples -> docs/ipynb promotion program).
+  ipynb shows results" + the retired-examples promotion program).
 
 **Discriminator** (when a doc has both math and code): is the document's PURPOSE to
 explain *how the method/implementation works* (-> `.ipynb`, make it run) or to
@@ -416,8 +451,9 @@ or `DESIGN` note that derives equations but ships no runnable demonstration stay
 - Do NOT mass-convert existing `.md`: convert an existing method/implementation
   `.md` to `.ipynb` opportunistically (when you touch it, or when it would clearly
   benefit from being runnable). Pure dev docs stay `.md`.
-- The public showcase / examples-consolidation program already follows this: methods
-  land as executed `docs/<topic>/*.ipynb`; the surrounding plans/policies are `.md`.
+- The public showcase / retired-examples consolidation program follows this:
+  methods land as executed `docs/<topic>/*.ipynb`; the surrounding
+  plans/policies are `.md`.
 
 ### Green's Function: Laplace Kernel Only (MQS/Darwin)
 
@@ -467,8 +503,8 @@ with any `.nb` kept only LAB-local as an authoring reference.
 
 **Home**: general-purpose Mathematica `.wls` lives in
 `packages/radia-mcp/src/radia_mcp/mathematica/` (per the MCP Knowledge
-Placement Policy), not buried in an application directory (e.g.
-`examples/CLN/`).
+Placement Policy), not buried in an application scratch directory or retired
+`examples/` path.
 
 **Reference example**: the NGSolve high-order FEM shape functions
 (`mathematica/basis_functions/recursive_pol.wls`, `h1.wls`, …) — clean,
@@ -506,79 +542,73 @@ the **ship/release coupling** that previously forced lockstep releases.
 
 ### File Placement Policy
 
-**POLICY**: Generated output files (`.png`, `.msh`, `.vtu`, `.vol`) must be placed **next to their corresponding `.py` script**.
-- Example outputs belong in `examples/<category>/` alongside their script
+**POLICY**: Development scratch outputs belong in `C:\temp`.  Committed output
+files (`.png`, `.msh`, `.vtu`, `.vol`, JSON sidecars) must be placed next to
+their owning `tests/`, `validation_test/`, `docs/`, or `panels/` driver.
 - Do NOT place generated files at the repository root
-- `.msh` files in `examples/**/gmsh_models/` are tracked (pre-generated mesh definitions)
 - Build output goes to `build*/` or `dist/` (both gitignored)
 - `docs/<topic>/` MAY contain `.py` **helper modules** that the topic's `*.ipynb`
   imports (and that `radia_mcp` may import for mcp-server integration). This is
   ENCOURAGED over duplicating the same logic inline in every notebook: factor the
-  shared compute/plot helper into a `docs/<topic>/*.py`, import it from the notebook
-  AND from the relevant `radia_mcp.<domain>` knowledge so the two stay in sync.
-  (A promoted showcase notebook may still embed a short demo verbatim; the helper-
-  module pattern is for logic shared by the notebook and the MCP server.)
-- Panel operating surfaces are moving toward repo-root `panels/`. New/migrated
-  panel-only scripts, samples, and notebooks should target `panels/`; reusable
-  computation belongs in `src/`. Existing `src/radia/panels/` paths are legacy
-  compatibility during staged migration and must not be deleted until package-data,
-  validation paths, and panel/MCP knowledge are updated and tested.
+  shared compute/plot helper into a `docs/<topic>/*.py`, import it from the
+  notebook AND from the relevant `radia_mcp.<domain>` knowledge so the two stay
+  in sync.  Reusable behavior should be promoted to a `src/` API instead.
+- Every `docs/<topic>/*.ipynb` method/showcase notebook must be result-saving:
+  execute it before committing so code-cell outputs, figures, and tables are
+  embedded. Main computed values should also be written to adjacent JSON with
+  `generated_at_utc` and version/runtime keys such as `radia_version`,
+  `python_version`, `platform`, or `versions`. The JSON is the durable debug
+  record; the notebook is the human-facing rendered view. The JSON and notebook
+  must be synchronized in the same change: after rerunning or editing notebook
+  outputs, refresh the JSON sidecar so its recorded `notebook_sha256` matches
+  the committed result-bearing `.ipynb`.
+- Panel operating surfaces are moving toward repo-root `panels/`. New or
+  migrated panel-only assets should target `panels/`; reusable computation
+  belongs in `src/`. Existing `src/radia/panels/` paths remain legacy during the
+  staged migration and need compatibility shims/tests before deletion.
 
-### Sample Promotion Ladder: tests → examples → panels (2026-05-02)
+### Promotion Ladder: C:\temp → tests / validation_test / docs / panels (2026-07-04)
 
-**POLICY**: Every sample lives in exactly ONE of three tiers.  The tiers
-have distinct purposes and a strict promotion ladder:
+**POLICY**: New exploratory scripts start outside the repository in `C:\temp`.
+`examples/` is retired forever.  A file enters the source tree only when it has
+a durable role:
 
-| Tier | Purpose (intent) | Audience | Ships in wheel? |
+| Lane | Purpose (intent) | Audience | Ships in wheel? |
 |------|------------------|----------|-----------------|
-| `tests/**/fixtures/` | **実装の基本機能の確認** — golden test fixture, machine-readable, minimal. | CI / Claude / developer | No |
-| `examples/<topic>/` | **研究的側面も含む例題の提供** — research-oriented demonstration, exploratory geometry, README-backed. | researchers, contributors | No (gitignored outputs OK) |
-| `src/radia/panels/samples/` | **工学的実問題を動く形で提供** — engineering real-problem solution, runs end-to-end through the panel. | end users (Cubit panel Browse dialog) | Yes (package-data) |
+| `tests/**` | **実装の基本機能の確認** — fast regression, fixture, API contract, CI-friendly. | CI / Claude / developer | No |
+| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, mdx-first for large runs. | developer / agent / research validation | No |
+| `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
+| `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
+| `src/` | Reusable API, parser, formula, solver helper, computation kernel. | package users / panels / validation / MCP | Yes |
+| `panels/` or legacy `src/radia/panels/` | Final engineering operating surface promoted from a mature docs notebook/workbench. | end users | Yes when packaged |
 
-**Promotion gates** (each is a hard gate; no skipping):
+**Promotion gates**:
 
-- **tests/ → examples/**: golden test for the geometry passes
-  (`tests/panels/test_*_golden.py` JSON inside hard band) AND a
-  human-readable `README.md` is added that explains the physics /
-  research question / expected ballpark numbers AND the example runs
-  standalone (`python <example>.py` without the panel UI).
-- **examples/ → panels/samples/**: the example runs end-to-end through
-  the **panel UI** (Layer 3, Cubit `play <sample>.jou` → `export`
-  → panel Run button) on the actual engineering geometry — not a toy
-  proxy.  Sample listed in `pyproject.toml` package-data.  Wheel
-  manifest audit (`deploy` skill, L0) clean.
+- **C:\temp → tests/**: the behavior is small, deterministic, and useful for
+  fast regression.
+- **C:\temp → validation_test/**: the run is a numerical validation,
+  benchmark, convergence sweep, golden lock, or regression corpus; heavy runs
+  are executed on mdx when idle and labelled as mdx validation.
+- **C:\temp → docs/**: the result teaches a method or workflow to humans; the
+  notebook must be executed, output-bearing, Markdown-integrated, and paired
+  with synchronized JSON.
+- **C:\temp → src/**: the code is reusable by more than one notebook,
+  validation path, panel, or MCP topic.
+- **docs/ → panels/**: once a result-bearing docs notebook/workbench has become
+  an engineering operating surface, promote it to `panels/` with a validated
+  CLI/workbench path and panel golden.  Do not promote directly from scratch.
 
-**Why three tiers, not two**: a sample that locks numerical correctness
-(tests) is a different artifact from a sample that teaches a research
-concept (examples) which is again different from a sample that solves
-an engineer's actual problem on the panel (panels).  Conflating them
-either ships incomplete work to end users (panels = examples) or
-buries production-ready engineering examples in tests/.
+Same geometry may exist in multiple lanes only when the artifacts have distinct
+roles: e.g. a minimal fixture in `tests/`, a heavy truth run in
+`validation_test/`, a human-facing result notebook in `docs/`, and a packaged
+panel sample in `panels/`.  No lane points back to `examples/`.
 
-**Concrete consequences**:
-
-- A new geometry STARTS at `tests/**/fixtures/` with a golden lock.
-  Promote up only after the next-tier gate is met.
-- Demoting (panels → examples → tests) is allowed: e.g. an engineering
-  sample that turns out to need rework can move back to `examples/`
-  while the issue is investigated, with the wheel package-data line
-  removed in the same commit.
-- Same geometry MAY exist at multiple tiers if the artifacts differ in
-  scope (a minimal fixture in tests/, a richer commented version in
-  examples/, a panel-friendly .jou in panels/samples/).  Each lives
-  separately and is maintained separately.
-- A sample at `panels/samples/` MUST also have a passing golden test
-  in `tests/panels/test_*_golden.py` — the upper tier inherits the
-  correctness gate of the lower.
-
-**Why end users can't tell broken samples from user error**: they try
-the sample, it fails, and the panel looks broken.  One broken sample
-discredits the whole panel.  The tier discipline above prevents this.
-
-### Panel Design Workflow Policy (2026-04-23)
+### Panel Design Workflow Policy (2026-04-23, updated 2026-07-04)
 
 **POLICY**: Panels are built in **three strict stages**, each gated by
-validation of the previous stage.  Do NOT jump straight to PySide.
+validation of the previous stage.  Panels are the final engineering operating
+surface promoted from a mature docs notebook/workbench; do not jump directly
+from scratch code into a panel.
 
 **Stage 1 — Enumerate the app-specific variables.**
 Write down every knob the user of this specific application might want
@@ -592,6 +622,9 @@ to change.  This is a list, not code.  Pin the solver-specific variables
 Turn the Stage-1 list into an argparse-driven Python script.
 Computation only, no GUI.  JSON on stdout.  The solver switch **must**
 also be a CLI flag so the same script can drive any supported backend.
+The CLI arguments are the canonical settings surface; the notebook panel
+should map those arguments into a small `DesignSpec` dataclass instead
+of inventing a second configuration language.
 
 Stage 2 is validated by running the panel mode end-to-end against its
 *sample* input (see "Panel Samples Quality Policy") and comparing the
@@ -606,18 +639,19 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — panel surface (target layout `panels/`, legacy PySide
-`radia_ih.py` / `radia_em.py` / ... under `src/radia/`).**
-Wrap the **validated** Stage-2 script with a panel surface.  New/migrated
-panel assets target repo-root `panels/`; existing PySide adapters under
-`src/radia/` remain legacy compatibility while desktop workflows still need
-them.  The panel launches the CLI via `subprocess.Popen` (per the 4-Layer
-Architecture) and is forbidden from re-implementing any computation.  Stage 3
-ships only after Stage 2 passes its golden test.
+**Stage 3 — notebook panel (target layout `panels/notebooks/*.ipynb`, legacy
+`src/radia/panels/notebooks/*.ipynb` during staged migration).**
+Wrap the **validated** Stage-2 script with a lightweight notebook workbench
+(`radia.<mode>_design` + `radia.<mode>_notebook`).  The panel notebook is the
+promoted operating surface: CLI arguments become editable settings,
+`DesignSpec(...)` cells hold persistent initial values, and the workbench
+launches the CLI in the background with timeout, cancel, `run.log`, and
+`result.json` artifacts.  It is forbidden from re-implementing computation.
 
-Only Stage-3-ready panels go into `panel_registry.json` and the
-`radia_*.py` auto-discovery under `src/radia/`.  Stage-2-only panels
-live as CLI scripts and wait for the Stage-3 promotion gate.
+Only Stage-3-ready panels go into the notebook manifest / panel registry.
+Stage-2-only modes live as CLI scripts and wait for the docs/workbench-to-panel
+promotion gate.  Legacy PySide adapters under `src/radia/` are compatibility
+only; new production panel work should land in the notebook workbench path.
 
 **Why**:
 - Forces the hard thinking about *what is changeable* before any widget
@@ -625,16 +659,16 @@ live as CLI scripts and wait for the Stage-3 promotion gate.
 - The solver switch being a Stage-2 argument means we catch
   solver-specific bugs with the same sample + golden test; the panel
   UI does not hide them.
-- Stage-3 promotion requires a passing golden — stops the historical
-  failure mode of shipping a panel whose Run button produces a wrong
-  number that nobody notices until a user publishes it.
+- Stage-3 promotion requires a passing golden and a thin notebook workbench —
+  stops the historical failure mode of shipping a panel whose Run button
+  produces a wrong number that nobody notices until a user publishes it.
 
 Related:
 - "Panel Samples Quality Policy" above — Stage 2's validation relies
   on trustworthy samples.
-- "Cubit Panel Architecture" below (§ 4-Layer) — Stage 3 corresponds
-  to Layer 3 (PySide6 window), Stage 2 corresponds to Layer 4 (headless
-  calc_*.py).
+- "Cubit Panel Architecture" below (§ 4-Layer) — Stage 3 corresponds to the
+  notebook panel / legacy Layer 3 compatibility surface, while Stage 2
+  corresponds to Layer 4 (headless `calc_*.py`).
 
 ### Verify-First Policy: FES inspection before physics solve (2026-04-25)
 
@@ -768,9 +802,12 @@ the knowledge to ALL three layers BEFORE moving on:
 
 1. **`memory/<topic>.md` + `MEMORY.md` index entry** -- the lesson is
    useless if the next conversation re-discovers it from scratch.
-2. **`examples/.../README.md`** mark the validated sample as
-   **VERIFIED** with the specific check (e.g. "VERIFIED p=2: slaved=8914
-   DOFs, ratio=1.0") so future contributors know the sample is golden,
+2. **Owning durable artifact** -- record the validated result where it now
+   lives: `validation_test/<topic>/` JSON/README for executable truth,
+   result-bearing `docs/<topic>/*.ipynb` plus synchronized JSON for
+   user-facing explanation, or MCP knowledge for agent-operational rules.
+   Include the specific checked value (e.g. "VERIFIED p=2: slaved=8914
+   DOFs, ratio=1.0") so future contributors know the result is golden,
    not "should work".
 3. **`CLAUDE.md`** if the lesson is a method (e.g. "always check FES
    first") that applies to future debugging.
@@ -806,11 +843,11 @@ LAB-private mcp-server packages have been retired.
 - If the topic is generally useful for FEM/BEM/Kelvin/.vol pipeline — `radia_ngsolve`
 - If the topic only makes sense in a specific application context (induction heating, accelerator magnets, PCB) — that application's subpackage
 
-**New research topics**: in flight WIP can live in `examples/` or
-`docs/research/` (`.gitignored` for LAB-only) until stable. Promotion
-into a `radia_mcp.<topic>` subpackage requires: feature committed +
-deploy-verified + golden-tested + knowledge stops referencing
-unpublished files. There is **no longer** a separate
+**New research topics**: in-flight WIP lives in `C:\temp` until stable.
+Promotion into a `radia_mcp.<topic>` subpackage requires: feature committed,
+promoted to its durable lane (`src/`, `validation_test/`, `docs/`, or
+`panels/`), deploy-verified, golden-tested, and knowledge stops referencing
+unpublished scratch files. There is **no longer** a separate
 `S:\mcp-server\mcp-server-*\` tree — promote directly into the
 public subpackage when ready.
 
@@ -1498,8 +1535,9 @@ KEPT as internal kernels even as their direct user-facing pybind surface shrinks
   re-APIed.  Built on NGSolve mesh/geometry where possible.
 - **Internal layer (shrinking pybind surface → C++-internal):** the proprietary
   field kernels, demag solvers, and element primitives (`ObjHexahedron`…).  Move
-  builders to C++ and un-pybind the primitives **gradually** (CoilBuilder /
-  panels / examples depend on them today — demote first, remove after migration).
+  builders to C++ and un-pybind the primitives **gradually** (CoilBuilder,
+  panels, docs notebooks, validation lanes, or tests may depend on them today —
+  demote first, remove after migration).
 
 **Unify yano-MSC + HDiv-VIM under ONE soft-iron path** (already mostly done): the
 SAME `.vol` → mesh → element container → `rad.Fld`, with the demag backend a
@@ -1805,7 +1843,7 @@ Helper functions / solver classes / library modules that perform
 NGSolve operations (`.Assemble()`, `.Inverse(...)`, `mesh.Curve(p)`,
 `Integrate()`, `GridFunction.Set(...)`) MUST NOT include `with
 TaskManager():` internally.  The **caller** (a `calc_*.py` panel
-script, an `examples/**.py` driver, a test, or a notebook cell) is
+script, a `validation_test/**.py` driver, a test, or a notebook cell) is
 the one that opens the `with TaskManager():` context once and lets
 all helper calls inside the region run in parallel.
 
@@ -1820,7 +1858,8 @@ all helper calls inside the region run in parallel.
    parallelism intent at the call site, not buried inside a helper
    they have to chase.
 3. **Single audit point**: the parallel-correctness audit becomes
-   "grep `with TaskManager():` in `calc_*.py` and `examples/**.py`".
+   "grep `with TaskManager():` in `calc_*.py`, `validation_test/**.py`,
+   `tests/**.py`, and docs notebook helpers".
    No need to chase helper modules.
 4. **Removes silent double-wrap noise**: `with TaskManager(): with
    TaskManager(): ...` is a no-op for the inner context (NGSolve
@@ -1839,7 +1878,8 @@ all helper calls inside the region run in parallel.
   `rad_equivalence_source.cpp`) are NOT helpers in this sense —
   they are leaf parallel kernels and naturally honour the caller's
   TaskManager context via the runtime.
-- `examples/**.py` follow the same rule as callers: every script
+- `validation_test/**.py`, `tests/**.py`, docs notebook helpers, and panel
+  `calc_*.py` follow the same rule as callers: every script
   that does `.Assemble()` / `.Inverse(inverse=...)` / `mesh.Curve(p)`
   MUST wrap in `with TaskManager():`.
 
@@ -1871,18 +1911,21 @@ python tools/audit_taskmanager.py
 The audit checks:
 1. Helper modules (anything in `src/radia/` except `panels/calc_*.py`)
    have ZERO `with TaskManager():`.
-2. Caller modules (`panels/calc_*.py`, `examples/**.py`) that
+2. Caller modules (`panels/calc_*.py`, `validation_test/**.py`,
+   `tests/**.py`, docs notebook helpers) that
    contain `.Assemble()` / `.Inverse(.*inverse=` / `mesh.Curve(`
    DO have `with TaskManager():` at the top of the containing
    function.
 
-Run after editing any solver helper or example.  The check is
+Run after editing any solver helper, validation driver, panel calc script, or
+docs notebook helper.  The check is
 fast (~1 s repo-wide); add to pre-commit if desired.
 
 **Migration note (2026-05-27)**: The 7 helpers under `src/radia/`
 that originally had internal `with TaskManager():` were converted
-to no-internal-wrap.  `examples/**.py` callers were swept to add
-the caller-side wrap.  See `taskmanager('helper_vs_caller')` in
+to no-internal-wrap.  Historical example callers were swept to add
+the caller-side wrap before promotion/deletion.  See
+`taskmanager('helper_vs_caller')` in
 the radia-mcp MCP knowledge for the full policy + audit history.
 
 ### TaskManager-Only Policy: Align with NGSolve, No Alternatives (2026-05-27)
@@ -3090,12 +3133,15 @@ B = rad.Fld(assembly, 'b', [0, 0, 0.1])
 ### Python Script Path Import
 
 ```python
-# From examples/: use ../../src/radia
-# From tests/: use ../src/radia
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../src/radia'))
+# Prefer installed/editable package imports.  Only add a repo-local src path
+# for tests/validation/docs helpers that must run before installation.
+from pathlib import Path
+repo = next(p for p in Path(__file__).resolve().parents if (p / "src" / "radia").exists())
+sys.path.insert(0, str(repo / "src"))
 ```
 
-Import from `src/radia` package (not build directories).
+Import from the `radia` package or the repo-local `src` tree (not build
+directories).  Do not add new `examples/` import patterns.
 
 ### Script Naming Convention
 
@@ -3283,8 +3329,11 @@ IH uses Biot-Savart from filaments (PEEC path) or volume mesh coil (FEM path).
 
 No sidesets needed. No source/sink labels.
 
-**BEM (legacy)**: BEM solver modules are in `examples/induction_heating/bem_reference/`
-for research reference. BEM knowledge is in `mcp-server-radia-ngsolve` (ngsbem_inductance topic).
+**BEM (legacy)**: reusable BEM solver modules live in `src/radia` as
+`radia.bem_inductance`, `radia.bem_coupled_solver`, and `radia.ngsbem_*`.
+Executable reference scripts and sweep results live under
+`validation_test/induction_heating/bem_reference/`. BEM knowledge is in
+`mcp-server-radia-ngsolve` (ngsbem_inductance topic).
 
 **References**:
 - Djordjevic & Notaros, "Double higher order MoM", IEEE TAP 2004 (geometry/basis independence)
@@ -3701,7 +3750,9 @@ GMSH GUI:
 
 ## Universal Relaxation Network (URN)
 
-All URN examples, data, and scripts in `examples/universal_relaxation_network/`.
+URN material now lives under `docs/universal_relaxation_network/` for the
+showcase / paper / result artifacts and `src/radia/urn/` for reusable API code.
+Do not recreate `examples/universal_relaxation_network/`.
 
 **Policy**:
 - Synthetic data MUST be clearly marked as synthetic

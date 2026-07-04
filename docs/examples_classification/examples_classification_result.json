@@ -1,14 +1,14 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-07-03T20:22:08Z",
+  "generated_at_utc": "2026-07-04T05:37:44Z",
   "notebook": "docs/examples_classification/examples_classification.ipynb",
-  "notebook_sha256": "70db49b22178bd7396cbc0c0bd9df20984d05aaf61e994594eaab6c7f397f984",
+  "notebook_sha256": "f30b88cd37f5db0acf50b0217f912ae2edaeb321d3caefe397e9a31d6b7b1647",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
     "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.5"
+    "radia_version": "4.95.2"
   },
   "summary": {
     "path": "docs/examples_classification/examples_classification.ipynb",
@@ -36,9 +36,9 @@
           "data_keys": [
             "text/plain"
           ],
-          "text_plain_chars": 717,
-          "text_plain_sha256": "c06bb4d63f9fd9771ff4e7a839a945bd27ec5727307de45fbe181cc1e32c65d0",
-          "text_plain_preview": "{'total_examples_files': 0,\n 'tracked_examples_files': 0,\n 'total_python_files': 0,\n 'topics': 0,\n 'empty_topics': [],\n 'route_counts': {},\n 'topic_recommendation_counts': {},\n 'protected_validation_reference_files': 0,\n 'validation_test_candidates': 0,\n 'validation_benchmark_candidates': 0,\n 'src_api_candidates': 0,\n 'docs_notebook_candidates': 0,\n 'distill_delete_reviews': 0,\n 'agentic_review_count': 0,\n 'topics_with_examples_reference_debt': 0,\n 'examples_reference_policy': 'examples/ references are migration blockers; current examples/ inventory is empty.',\n 'docs_quality_next_topics': [],\n 'latest_worktree_tracked_existing_files': 0,\n 'latest_worktree_tracked_python_files': 0,\n 'migration_log_count': 1}",
+          "text_plain_chars": 732,
+          "text_plain_sha256": "1d2bf11b72caa256af242390a17d00934c1837f7e3ab83740bb6c293cbac033e",
+          "text_plain_preview": "{'total_examples_files': 0,\n 'tracked_examples_files': 0,\n 'total_python_files': 0,\n 'topics': 0,\n 'empty_topics': [],\n 'route_counts': {},\n 'topic_recommendation_counts': {},\n 'protected_validation_reference_files': 0,\n 'validation_test_candidates': 0,\n 'validation_benchmark_candidates': 0,\n 'src_api_candidates': 0,\n 'docs_notebook_candidates': 0,\n 'distill_delete_reviews': 0,\n 'agentic_review_count': 0,\n 'topics_with_examples_reference_debt': 0,\n 'examples_reference_policy': 'examples/ references are migration blockers; examples/ is retired and current inventory is empty.',\n 'docs_quality_next_topics': [],\n 'latest_worktree_tracked_existing_files': 0,\n 'latest_worktree_tracked_python_files': 0,\n 'migration_log_count': 1}",
           "text_plain_truncated": false
         }
       ]
