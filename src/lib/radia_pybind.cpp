@@ -3608,6 +3608,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          double ho_far_factor,
                          std::vector<double> ref_tet_pts_in, std::vector<double> ref_tet_w_in,
                          std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in,
+                         std::vector<int> image_masks, std::vector<double> image_signs,
                          double eps, int leaf, double eta, bool build) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el,
@@ -3617,7 +3618,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                              std::move(ref_tet_pts_lo), std::move(ref_tet_w_lo),
                                              std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
                                              std::move(ref_tet_pts_in), std::move(ref_tet_w_in),
-                                             std::move(ref_tri_pts_in), std::move(ref_tri_w_in)));
+                                             std::move(ref_tri_pts_in), std::move(ref_tri_w_in),
+                                             std::move(image_masks), std::move(image_signs)));
                  if (build) {
                      RadHACApKParams p;
                      p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
@@ -3635,6 +3637,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("ho_far_factor") = 1e30,
              py::arg("ref_tet_pts_in") = std::vector<double>{}, py::arg("ref_tet_w_in") = std::vector<double>{},
              py::arg("ref_tri_pts_in") = std::vector<double>{}, py::arg("ref_tri_w_in") = std::vector<double>{},
+             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "HIGH-ORDER (order-p) mode: POLYNOMIAL charges (monomial basis per host). charge_host[c]/"
              "charge_kind[c] (0=cell,1=face)/charge_expo[3c] define each charge; ref_tet_pts[nqt*3]/ref_tet_w "

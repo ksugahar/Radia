@@ -794,7 +794,8 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
 
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
-                      inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False):
+                      inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
+                      image_masks=None, image_signs=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager.
@@ -823,6 +824,15 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
+    if image_masks:
+        # IMA (mirror-image charge folding) is wired for the FLAT pure-TET highorder Gram only (the C++
+        # m_highorder branch folds QuadDotRefl->PhiInner).  Fail loud otherwise (No-Fallbacks) rather than
+        # silently drop the image on the 2D / hex / wedge / curved paths.
+        _ivt = {len(el.vertices) for el in mesh.Elements(ng.VOL)} if mesh.dim == 3 else None
+        if mesh.dim != 3 or _ivt != {4} or curve_order is not None:
+            raise ValueError(
+                "build_charge_gram: image_masks (IMA) is wired for the flat pure-TET RT1 Gram only "
+                "(got dim=%s, vtypes=%s, curve_order=%r)." % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
         # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
         return _build_charge_gram_2d(fes, eta=eta)
@@ -929,6 +939,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             rsp_in, rsw_in = _tri_ref(iq)
             kw.update(ref_tet_pts_in=rtp_in.ravel().tolist(), ref_tet_w_in=rtw_in.tolist(),
                       ref_tri_pts_in=rsp_in.ravel().tolist(), ref_tri_w_in=rsw_in.tolist())
+        if image_masks:                                    # IMA (flat pure-tet): fold mirror-image charges
+            kw.update(image_masks=list(image_masks), image_signs=list(image_signs))
         G = _rp._ChargeGramHMatrix(**kw)
     return B, G, M_mass
 

@@ -482,12 +482,16 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
             "HDiv-VIM (RT1) is a SOFT-IRON (linear / nonlinear) demag solver and does not mix permanent "
             "magnets (pm_M).  Place permanent magnets as direct-M elements solved by collocation MMMM "
             "(rad.Solve), or as an applied-field source folded into H_ext.")
-    if image is not None:
-        raise NotImplementedError(
-            "HDiv-VIM (RT1) does not handle IMA mirror symmetry (image).  Use the collocation MMMM backend "
-            "(rad.Solve(..., demag_backend='collocation_mmmm', image=...)) for reduced (1/2, 1/4, 1/8) "
-            "symmetric models.")
+    # IMA mirror symmetry (image=) is now WIRED for the pure-TET FLAT RT1 path (2026-07-04) -- the C++
+    # highorder charge Gram folds the mirror-image charge interactions (QuadDotRefl->PhiInner) so a reduced
+    # (1/2, 1/4, 1/8) model reproduces the full model.  The still-unwired cases fail loud DOWNSTREAM:
+    # 2D planar (below), and hex/wedge / curved tet (in _solve_highorder).  hex/wedge reduced models use
+    # collocation MMMM (rad.Solve demag_backend='collocation_mmmm', image=...) until their IMA lands.
     if mesh.dim == 2:
+        if image is not None:
+            raise NotImplementedError(
+                "hdiv_demag_solve (2D): the planar HDiv-VIM layer does not support IMA image symmetry; "
+                "use a full (un-reduced) 2D model.")
         # ---- PLANAR (2D motor cross-section) branch: the dense planar layer (_vim2d) ----
         # The 2D layer supports the core single-region surface: mu_r (linear) / bh_table
         # (nonlinear) + H_ext.  The 3D-only knobs must stay at their defaults -- fail loud.
@@ -745,8 +749,23 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     (no 2x/4x blow-up).  Supports the LINEAR (uniform-scalar OR per-region dict) mu_r case via the SAME
     all-C++ symmetric mass-Riesz CG as the RT0 path; the not-yet-wired order>0 combos fail loud (No-Fallbacks).
     The CALLER opens `with ng.TaskManager():` (same contract as hdiv_demag_solve)."""
+    # IMA mirror symmetry: WIRED for the pure-TET FLAT path (the C++ highorder Gram folds the mirror-image
+    # charge interactions; validated 1/2,1/4,1/8 == full).  Curved tet + hex/wedge fail loud (not yet wired).
+    image_masks, image_signs = [], []
     if image is not None:
-        raise NotImplementedError("hdiv_demag_solve: image symmetry is not yet wired at order>0 (use order=0)")
+        if curve_order is not None:
+            raise NotImplementedError(
+                "hdiv_demag_solve: IMA image symmetry is not yet wired for the CURVED (curve_order) "
+                "HDiv-VIM path -- use a flat tet mesh, or collocation MMMM (rad.Solve).")
+        _ivtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
+        if _ivtx != {4}:
+            raise NotImplementedError(
+                "hdiv_demag_solve: IMA image symmetry is wired for pure-TET RT1 only; hex/wedge reduced "
+                "models use collocation MMMM (rad.Solve demag_backend='collocation_mmmm', image=...).  "
+                "Got vertex counts %s." % sorted(_ivtx))
+        for axes, sign in _tet.image_group(_tet.parse_image_string(image)):
+            image_masks.append(int(sum(1 << a for a in axes)))
+            image_signs.append(float(sign))
     if pm_M is not None:
         raise NotImplementedError("hdiv_demag_solve: PM-mixed (pm_M) is not yet wired at order>0 (use order=0)")
     # flat (non-curved) order>0 NONLINEAR is now WIRED: the symmetric energy-Newton (_solve_nonlinear_energy_cpp)
@@ -793,7 +812,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         fes = ng.HDiv(mesh, order=order)
         B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
                                          far_quad=eff_far, ho_far_factor=eff_hofar,
-                                         nonlinear=bh_table is not None)
+                                         nonlinear=bh_table is not None,
+                                         image_masks=image_masks, image_signs=image_signs)
     Mm = sp.csr_matrix(M_mass); B = sp.csr_matrix(B)
     n_face = fes.ndof; n_el = mesh.GetNE(ng.VOL); n_charge = B.shape[0]
     gfH = ng.GridFunction(fes); gfH.Set(H_ext); h_ext = gfH.vec.FV().NumPy().copy()
