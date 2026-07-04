@@ -414,21 +414,10 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
                 "RT1 Gram; MIXED / pyramid reduced models use collocation MMMM (rad.Solve "
                 "demag_backend='collocation_mmmm', image=...).  Got vertex counts %s." % sorted(_ivtx))
         _planes = _tet.parse_image_string(image)
-        # HEX/WEDGE ANTISYMMETRIC-plane guard (No-Fallbacks, 2026-07-05): the hex/wedge reflected-block IMA
-        # is validated ONLY for SYMMETRIC (positive-sign, field-PARALLEL) mirror planes.  An ANTISYMMETRIC
-        # (negative-sign, field-PERPENDICULAR) plane leaves a LARGE cut-face charge (sigma = M.n on the cut
-        # is ~|M| when M is perpendicular to the plane) whose near-singular cancellation the reflected-block
-        # fold does NOT yet resolve accurately (measured ~1.5% hex / ~29% wedge vs the full model, while the
-        # sign itself is correct -- '-z' beats '+z' 1.5% vs 49%).  TET is unaffected (its fold reproduces the
-        # full model for '-z' too).  Fail loud rather than return a silently-wrong M.
-        if _ivtx != {4} and any(s < 0 for (_ax, s) in _planes):
-            raise NotImplementedError(
-                "hdiv_demag_solve: hex/wedge IMA is validated only for SYMMETRIC (positive-sign, field-"
-                "PARALLEL) mirror planes; the ANTISYMMETRIC (negative-sign, field-PERPENDICULAR) plane(s) in "
-                "image=%r leave a large uncancelled cut-face charge that the reflected-block fold does not "
-                "yet resolve accurately (~1.5%% hex / ~29%% wedge).  Use a symmetric-only reduction, the full "
-                "(un-reduced) model, or collocation MMMM (rad.Solve demag_backend='collocation_mmmm', "
-                "image=...).  (TET handles antisymmetric planes fine.)" % (image,))
+        # (2026-07-05) hex/wedge IMA now handles ANTISYMMETRIC (negative-sign, field-PERPENDICULAR) planes too:
+        # the on-plane cut-face self-term is computed with the EXACT self-radial in the reflected block (the
+        # QuadBlockHex/Wedge "R(host)==host -> self_pair" fix), so the large perpendicular cut-face charge
+        # cancels exactly for sign -1 instead of the earlier ~1.5% hex / ~29% wedge quadrature residual.
         for axes, sign in _tet.image_group(_planes):
             image_masks.append(int(sum(1 << a for a in axes)))
             image_signs.append(float(sign))

@@ -89,7 +89,7 @@ def test_soft_iron_box_input_validation():
 
 
 # --------------------------------------------------------------------------------------------------
-# Review fixes (2026-07-05): multi-iron fail-loud, hex/wedge antisymmetric-plane guard, PM constructors.
+# Review fixes (2026-07-05): multi-iron fail-loud, hex/wedge antisymmetric-plane IMA, PM constructors.
 
 def _hexbox(x0, x1, y0, y1, z0, z1, nx, ny, nz):
     from ngsolve.meshes import MakeStructured3DMesh
@@ -114,19 +114,27 @@ def test_multiple_irons_auto_fails_loud():
 
 
 @pytest.mark.flaky(reruns=3, reruns_delay=1)
-def test_hex_antisymmetric_image_plane_fails_loud():
-    """hex/wedge IMA fails loud on an ANTISYMMETRIC (negative-sign, field-perpendicular) mirror plane -- the
-    reflected-block fold leaves a large uncancelled cut-face charge there (~1.5%% hex / ~29%% wedge vs the
-    full model; the SIGN is correct, the accuracy is not).  A SYMMETRIC (positive) plane works.  (TET is
-    unaffected -- its fold handles antisymmetric planes; locked by test_hdiv_vim_ima_tet.py.)"""
+def test_hex_antisymmetric_image_plane_matches_full_cube():
+    """hex IMA supports an ANTISYMMETRIC (negative-sign, field-perpendicular) mirror plane.
+
+    The reduced z>=0 half-cube with ``image='-z'`` should reproduce the explicit full cube.  This locks the
+    C++ reflected-block self-pair fix: an on-plane cut-face host reflected onto itself must use the same exact
+    self-radial quadrature as the direct self term, so the large perpendicular cut-face charge cancels.
+    """
     Hz = ng.CoefficientFunction((0.0, 0.0, H0))
     rad.UtiDelAll()
     with ng.TaskManager():
-        half = _hexbox(0.0, A, -A, A, -A, A, 2, 4, 4)
-        with pytest.raises(NotImplementedError, match="ANTISYMMETRIC"):
-            vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='-z')     # z perpendicular to Hz -> '-'
-        r = vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='+x')     # x parallel to Hz -> '+' (OK)
-        assert "demag" in r
+        full = _hexbox(-A, A, -A, A, -A, A, 2, 2, 2)
+        half = _hexbox(-A, A, -A, A, 0.0, A, 2, 2, 1)
+        r_full = vim.Solve(full, mu_r=MU_R, H_ext=Hz)
+        r_half = vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='-z')     # z perpendicular to Hz -> '-'
+        r_sym = vim.Solve(half, mu_r=MU_R, H_ext=Hz, image='+x')      # x parallel to Hz -> '+' (still OK)
+    rel_mz = abs(r_half["M_avg"][2] - r_full["M_avg"][2]) / max(abs(r_full["M_avg"][2]), 1e-30)
+    assert rel_mz < 5e-3, \
+        f"hex half image='-z' Mz {r_half['M_avg'][2]:.6g} != full {r_full['M_avg'][2]:.6g} (rel {rel_mz:.2e})"
+    assert abs(r_half["demag"] - r_full["demag"]) < 5e-3, \
+        f"hex half image='-z' demag {r_half['demag']:.6g} != full {r_full['demag']:.6g}"
+    assert "demag" in r_sym
     rad.UtiDelAll()
 
 
