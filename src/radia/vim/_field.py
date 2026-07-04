@@ -15,31 +15,22 @@ import numpy as np
 import ngsolve as ng
 
 
-def reconstruct_field(mesh, gfM, points, quantity="b", units="m", backend="direct", eps=1e-6):
-    """Magnetic field at `points` from a solved HDiv-VIM magnetization gfM, via the exact analytic field of
-    the per-element M (radia.Fld).  CALLER wraps in TaskManager when combining with other NGSolve work
-    (both backends parallelise the field eval under the caller's TaskManager; this HELPER does not wrap).
+def reconstruct_field(mesh, gfM, points, quantity="b", units="m"):
+    """Magnetic field at `points` from a solved HDiv-VIM magnetization gfM, via the EXACT analytic field of
+    the per-element M (radia.Fld -- one batched ComputeFieldBatch, TaskManager-parallel over points).
+    CALLER wraps in TaskManager when combining with other NGSolve work (this HELPER does not wrap).
+
+    rad.Fld is the direct analytic open-boundary field (radia's crown jewel) -- it does NOT go through
+    HACApK.  (An H-matrix rad.Fld was prototyped and REMOVED 2026-07-04: the mdx crossover showed it only
+    wins for a far-separated field map and is a silent ~4-9% footgun for near/co-located points, the
+    common coupling case; see memory radfld_hmatrix_derisk.md.)
 
     mesh     : the NGSolve tet mesh gfM lives on (the magnetized body, e.g. steel-only).
     gfM      : HDiv GridFunction (any order) holding the solved magnetization M(x) [A/m].
     points   : (N,3) array-like of query points (same length units as the mesh).
     quantity : 'b' (Tesla, = MU0*(H_demag + M) inside the body), 'h' (A/m, the demag/stray H), or 'a'
-               (T*m, vector potential -- the A-formulation FEM-coupling source; backend='hmatrix' only).
-    backend  : 'direct'  -> one batched radia.Fld (ComputeFieldBatch, TaskManager-parallel over points,
-                            O(N_obs*N_src)); the drop-in exact evaluator (the DEFAULT -- always safe).
-               'hmatrix' -> the embed-in-square HACApK _FieldEvalHMatrix (ACA), quantity 'b'/'a' only,
-                            build fully parallel (unit-M clones, no mutex).  ONLY for a FAR field map --
-                            the query `points` must be well SEPARATED from the magnetized body (stray
-                            field at distance, particle trajectories, a stand-off coupling region).  There
-                            it beats 'direct' above N_obs*N_src ~ 1500 (crossover; the win grows as direct
-                            is O(N^2)) and matches it to the ACA tolerance `eps`.  For `points` interleaved
-                            with / inside the body (the near, co-located case) it is BOTH slower than
-                            'direct' AND silently ~4-9% wrong: the symmetric embed puts co-located obs+src
-                            in one cluster, whose admissible blocks have a checkerboard zero pattern
-                            (obs-obs=0, src-src=0) that ACA cannot compress (tightening eps does not fix
-                            it).  Use 'direct' for near/internal points.  (mdx crossover data:
-                            validation_test/hacapk/benchmarks/.)
-    eps      : ACA tolerance when backend='hmatrix' (only meaningful in the far regime above).
+               (T*m, vector potential -- the A-formulation FEM-coupling source).
+    units    : mesh length units passed to netgen_mesh_to_radia.
     returns  : (N,3) ndarray of the field FROM THE MAGNETIZATION.  Add any SOURCE/coil field separately --
                radia.Fld here is the magnetization's contribution only.
 
@@ -59,17 +50,6 @@ def reconstruct_field(mesh, gfM, points, quantity="b", units="m", backend="direc
     cont = netgen_mesh_to_radia(mesh, material=lambda i: {"magnetization": Mel[i]},
                                 units=units, verbose=False)
     pts = np.asarray(points, float).reshape(-1, 3)
-
-    if backend == "hmatrix":
-        if quantity.lower() not in ("b", "a"):
-            raise ValueError("reconstruct_field(backend='hmatrix') supports quantity 'b' or 'a' only "
-                             "(got %r); use backend='direct' for 'h'." % quantity)
-        import radia._radia_pybind as _rp
-        G = _rp._FieldEvalHMatrix(cont, pts.reshape(-1).tolist(), eps=eps, field_type=quantity.lower())
-        x = [0.0] * (3 * G.n_obs()) + list(G.src_magnetization())
-        return np.asarray(G.matvec(x), float)[:3 * G.n_obs()].reshape(-1, 3)
-    if backend != "direct":
-        raise ValueError("reconstruct_field: backend must be 'direct' or 'hmatrix' (got %r)" % backend)
     return np.asarray(rad.Fld(cont, quantity, pts.tolist()), float).reshape(-1, 3)   # batched, parallel
 
 

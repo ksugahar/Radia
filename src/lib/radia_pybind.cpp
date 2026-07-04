@@ -93,7 +93,6 @@ extern "C" {
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
-#include "rad_hacapk_field.h"    // HACApK embed-in-square H-matrix for rad.Fld field evaluation
 #include "rad_moment2d.h"        // 2D planar collocation MMMM (log-kernel tri/quad)
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
@@ -2407,31 +2406,6 @@ public:
 		use_cache_ = true;
 	}
 
-	// Populate the point cache from PRE-COMPUTED global field values (points (N,3), values (N,3);
-	// (N,1) for phi).  This is the H-matrix acceleration hook for gf.Set: the caller computes the field
-	// at the FES integration points once via the O(N log N) _FieldEvalHMatrix (radia_ngsolve.
-	// prepare_cache_hmatrix) instead of the direct O(N_pts*N_src) rad.Fld inside PrepareCache, then
-	// hands the values here.  Values are GLOBAL already (the H-matrix has no per-object transform ->
-	// flat container only); no transform_to_global is applied.
-	void PrepareCacheFromValues(py::array_t<double> points, py::array_t<double> values) {
-		py::gil_scoped_acquire acquire;
-		auto pts = points.unchecked<2>();
-		auto vals = values.unchecked<2>();
-		size_t npts = (size_t)pts.shape(0);
-		point_cache_.clear();
-		cache_hits_ = 0;
-		cache_misses_ = 0;
-		if (npts == 0) { use_cache_ = false; return; }
-		const bool scalar = (field_type == "phi");
-		for (size_t i = 0; i < npts; i++) {
-			uint64_t hash = hash_point(pts(i, 0), pts(i, 1), pts(i, 2));
-			point_cache_[hash] = { vals(i, 0),
-			                       scalar ? 0.0 : vals(i, 1),
-			                       scalar ? 0.0 : vals(i, 2) };
-		}
-		use_cache_ = true;
-	}
-
 	void ClearCache() {
 		point_cache_.clear();
 		use_cache_ = false;
@@ -3516,59 +3490,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Charges (cell rho + boundary-face sigma) extracted from ANY RT0 mesh (e.g. NGSolve tet
     // HDiv(0)); pass charge centroids/measures + the caller-computed diagonal self-energies.  The
     // demag operator N = B^T G B is applied as B^T (matvec(B m)) with B the sparse charge map.
-    // Embed-in-square H-matrix for rad.Fld-style field evaluation (rad_hacapk_field.h).
-    py::class_<RadHACApKFieldEval>(m, "_FieldEvalHMatrix")
-        .def(py::init([](int container_handle, std::vector<double> obs_points,
-                         double eps, int leaf, double eta, const std::string& field_type,
-                         const std::string& image) {
-                 auto mgr = std::unique_ptr<RadHACApKFieldEval>(
-                     new RadHACApKFieldEval(container_handle, std::move(obs_points), field_type, image));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("field-eval H-matrix build failed");
-                 return mgr;
-             }),
-             py::arg("container_handle"), py::arg("obs_points"),
-             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-             py::arg("field_type") = "b", py::arg("image") = "",
-             "Embed-in-square H-matrix for rad.Fld-style field evaluation: field[obs] = sum_src "
-             "G(obs,src).M[src] over the leaf magnets of `container_handle`, evaluated at the flat "
-             "obs_points [x0,y0,z0, ...].  field_type='b' -> B (flux density, Tesla, bit-consistent "
-             "with rad.Fld('b')); field_type='a' -> A (vector potential, T*m, rad.Fld('a')) -- the "
-             "analytic open-boundary A source term for A-formulation eddy-current FEM coupling.  "
-             "image='+x-z' (etc.) applies the IMA image method (rad.Solve(image=...) convention): a "
-             "reduced mirror-symmetry model (fundamental octant, mirror planes through the origin) "
-             "reproduces the full model's field via the 2^P-1 image reflections.  Reuses the square "
-             "HACApK ACA pipeline (SYMMETRIC embed A = [[0,K],[K^T,0]]; matvec [0;M] = [K M; 0]).  FLAT "
-             "global-coordinate container only (no ancestor-group transforms).  NOT dipole / NOT FMM.")
-        .def("ndof", [](RadHACApKFieldEval& s) { return s.GetNDOF(); })
-        .def("n_obs", [](RadHACApKFieldEval& s) { return s.NObs(); })
-        .def("n_src", [](RadHACApKFieldEval& s) { return s.NSrc(); })
-        .def("n_images", [](RadHACApKFieldEval& s) { return s.NImages(); },
-             "Number of IMA image reflections folded into the kernel (0 if image='').")
-        .def("is_a_field", [](RadHACApKFieldEval& s) { return s.IsAField(); },
-             "True if this evaluates the vector potential A (T*m); False for flux density B (Tesla).")
-        .def("src_magnetization", [](RadHACApKFieldEval& s) { return s.SrcMagnetization(); },
-             "Actual magnetization of every source element [Mx0,My0,Mz0, ...] -- the src-slot half "
-             "of the matvec vector x = [0]*(3*n_obs) + src_magnetization.")
-        .def("scale", [](RadHACApKFieldEval& s) { return s.Scale(); },
-             "Internal O(1) normalisation factor; entry()/matvec() already apply it (return Tesla).")
-        .def("matvec", [](RadHACApKFieldEval& s, const std::vector<double>& x) {
-                 std::vector<double> y((size_t)s.GetNDOF(), 0.0);
-                 s.MatVec(x, y);
-                 const double sc = s.Scale();               // stored normalised -> physical (Tesla)
-                 for (auto& v : y) v *= sc;
-                 return y;
-             }, py::arg("x"),
-             "A x (the O(N log N) embed H-matvec), in Tesla.  With x = [0]*(3*n_obs) + src_magnetization, "
-             "y[:3*n_obs] is the B-field at the observation points [Bx0,By0,Bz0, ...].")
-        .def("entry", [](RadHACApKFieldEval& s, int i, int j) {
-                 return s.GetInteractionMatrixElement(i, j) * s.Scale();   // normalised -> physical
-             }, py::arg("i"), py::arg("j"),
-             "EXACT (uncompressed, eps-independent) embed entry A[i,j] in Tesla: the field-response "
-             "G_ab(obs,src) in the obs-row x src-col block (and its transpose), 0 elsewhere.  Ground "
-             "truth for the ACA compression error.");
-
     py::class_<RadHACApKChargeGram>(m, "_ChargeGramHMatrix")
         .def(py::init([](std::vector<double> centroids, std::vector<double> measures,
                          std::vector<double> self_energy, double eps, int leaf, double eta) {
@@ -5837,10 +5758,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def("PrepareCache", &ngfem::RadiaFieldCF::PrepareCache,
              py::arg("points"),
              "Pre-cache field values at given points for fast gf.Set() (direct rad.Fld per point).")
-        .def("PrepareCacheFromValues", &ngfem::RadiaFieldCF::PrepareCacheFromValues,
-             py::arg("points"), py::arg("values"),
-             "Pre-cache PRE-COMPUTED global field values (points (N,3), values (N,3)/(N,1)) for fast "
-             "gf.Set() -- the H-matrix hook (see radia_ngsolve.prepare_cache_hmatrix).")
         .def("ClearCache", &ngfem::RadiaFieldCF::ClearCache,
              "Clear cached field values")
         .def("GetCacheStats", &ngfem::RadiaFieldCF::GetCacheStats,
