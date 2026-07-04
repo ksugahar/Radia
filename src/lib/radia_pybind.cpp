@@ -2407,6 +2407,31 @@ public:
 		use_cache_ = true;
 	}
 
+	// Populate the point cache from PRE-COMPUTED global field values (points (N,3), values (N,3);
+	// (N,1) for phi).  This is the H-matrix acceleration hook for gf.Set: the caller computes the field
+	// at the FES integration points once via the O(N log N) _FieldEvalHMatrix (radia_ngsolve.
+	// prepare_cache_hmatrix) instead of the direct O(N_pts*N_src) rad.Fld inside PrepareCache, then
+	// hands the values here.  Values are GLOBAL already (the H-matrix has no per-object transform ->
+	// flat container only); no transform_to_global is applied.
+	void PrepareCacheFromValues(py::array_t<double> points, py::array_t<double> values) {
+		py::gil_scoped_acquire acquire;
+		auto pts = points.unchecked<2>();
+		auto vals = values.unchecked<2>();
+		size_t npts = (size_t)pts.shape(0);
+		point_cache_.clear();
+		cache_hits_ = 0;
+		cache_misses_ = 0;
+		if (npts == 0) { use_cache_ = false; return; }
+		const bool scalar = (field_type == "phi");
+		for (size_t i = 0; i < npts; i++) {
+			uint64_t hash = hash_point(pts(i, 0), pts(i, 1), pts(i, 2));
+			point_cache_[hash] = { vals(i, 0),
+			                       scalar ? 0.0 : vals(i, 1),
+			                       scalar ? 0.0 : vals(i, 2) };
+		}
+		use_cache_ = true;
+	}
+
 	void ClearCache() {
 		point_cache_.clear();
 		use_cache_ = false;
@@ -5811,7 +5836,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def_readonly("precision", &ngfem::RadiaFieldCF::precision)
         .def("PrepareCache", &ngfem::RadiaFieldCF::PrepareCache,
              py::arg("points"),
-             "Pre-cache field values at given points for fast gf.Set()")
+             "Pre-cache field values at given points for fast gf.Set() (direct rad.Fld per point).")
+        .def("PrepareCacheFromValues", &ngfem::RadiaFieldCF::PrepareCacheFromValues,
+             py::arg("points"), py::arg("values"),
+             "Pre-cache PRE-COMPUTED global field values (points (N,3), values (N,3)/(N,1)) for fast "
+             "gf.Set() -- the H-matrix hook (see radia_ngsolve.prepare_cache_hmatrix).")
         .def("ClearCache", &ngfem::RadiaFieldCF::ClearCache,
              "Clear cached field values")
         .def("GetCacheStats", &ngfem::RadiaFieldCF::GetCacheStats,
