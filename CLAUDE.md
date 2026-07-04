@@ -3145,6 +3145,13 @@ digest): `sweep_heatmap.png` は commit されていたが、その
 
 ### Benchmark Policy
 
+**POLICY (MUST: 計算時間の測定は mdx で、2026-07-04 Sugahara)**: **壁時計 / タイミング /
+スケーラビリティ計測は `mdx`(静音計算ホスト)で行うことが MUST**。LAB での timing は codex の
+並列 build / pytest / 他計算に汚染され無意味なので、**論文・docs・意思決定に用いる時間データは LAB で
+測ってはならない**。LAB で許されるのは correctness / smoke(数値一致・収束確認)のみ。mdx が塞がって
+いれば timing はアイドルまで延期する(下記)。この MUST は benchmark script (`bench_*.py`) だけでなく、
+ad-hoc な timing 計測・scaling sweep・build-time 測定すべてに適用される。
+
 **POLICY (mdx = 静音計算ホスト、他ジョブ終了後にのみ走らせる、2026-07-04)**: `mdx` は
 研究室の **計算用・静音マシン**。壁時計 / タイミング計測および重い計算ジョブは mdx で走らせるが、
 **他のプロセス（別の計算ジョブ・build・CI・pytest・他ユーザ / codex の計算）が終わってから**＝
