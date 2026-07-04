@@ -82,13 +82,18 @@ public:
     //                    A is the source term for A-formulation eddy-current FEM coupling -- the
     //                    analytic open-boundary A supplied by the integral representation (HDiv gives
     //                    B and would need a curl-inverse to recover A).
+    // image : an IMA (image method) string like "+x-z" ("" = none).  A reduced mirror-symmetry model
+    //         (fundamental domain in the positive octant, mirror planes through the origin) reproduces
+    //         the field of the full model: field += sum over the 2^P-1 image reflections.  Same
+    //         convention as rad.Solve(image=...) (field PARALLEL to a mirror -> '+', PERPENDICULAR -> '-').
     RadHACApKFieldEval(int container_handle, std::vector<double> obs_points,
-                       const std::string& field_type = "b");
+                       const std::string& field_type = "b", const std::string& image = "");
     ~RadHACApKFieldEval() override {}
 
     int NObs() const { return m_nObs; }
     int NSrc() const { return m_nSrc; }
     bool IsAField() const { return m_isA; }   // true => vector potential A, false => flux density B
+    int NImages() const { return (int)m_imgAxmask.size(); }   // number of IMA image reflections (0 if none)
 
     // Internal normalisation: the H-matrix stores entries scaled to O(1) (the raw B-response is
     // O(mu0*H) ~ 1e-13 for far obs, and HACApK's ACA stopping tolerance is effectively ABSOLUTE, so
@@ -128,6 +133,8 @@ private:
     std::vector<double> m_srcM;              // 3*N_src actual magnetization
     bool m_isA;                              // true => A (vector potential, T*m); false => B (Tesla)
     double m_physScale;                      // per-field-type factor to physical units (B: mu0; A: 1)
+    std::vector<int> m_imgAxmask;            // IMA: per-image axis bitmask (bit0=x, bit1=y, bit2=z)
+    std::vector<double> m_imgSign;           // IMA: per-image field-eval sign (prod(plane signs) * (-1)^popcount)
     double m_scale;                          // O(1) normalisation (max sampled |raw entry|); physical = scale * stored
     mutable std::mutex m_fieldMutex;         // serialises the Magn-set + B_genComp
 };
