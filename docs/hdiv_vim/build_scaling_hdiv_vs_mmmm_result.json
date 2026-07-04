@@ -1,0 +1,11 @@
+{
+  "source_data": "build_scaling_mdx_data.json (measured on mdx)",
+  "hdiv_build_exponent": 1.23,
+  "parity_dof": "~34k HDiv DoF",
+  "conclusion": "HDiv-VIM's only weakness (the heavy singular-Gram matrix build) is neutralized by the HACApK charge-Gram at engineering scale: the build scales ~N^1.2 and becomes comparable to the moment method's build by ~34k DoF. This supports a TIERED role split (HDiv for large-scale/accurate/loop-free, MMMM for the fast small-N/coarse tier), NOT one method replacing the other.",
+  "generated_at_utc": "2026-07-04T05:20:49.965349+00:00",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "note": "notebook renders mdx-measured data; no timing run in-notebook (mdx-timing policy)",
+  "notebook_sha256": "29a1b8061e9876cbffa8ebeaf6e0f7b82d017345180055da08ec2ba0e9db927f"
+}

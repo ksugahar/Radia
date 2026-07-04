@@ -164,6 +164,26 @@ OPEN (production refinement, not yet done): the near correction is currently com
 exact-near could also use the analytic Wilton single-layer (rad_poly_analytical
 RadScalarPotentialFromTriangleFaceGlobal) + the volume-potential reduction INT_V 1/r =
 (1/2) SUM_faces d_face(x) * Wilton_face(x) (since lap(r)=2/r) -- exact, no nsub.
+
+## Matrix-BUILD scalability vs collocation MMMM -- HACApK makes the build near-linear (MEASURED mdx 2026-07-04)
+The HDiv-VIM's one COST weakness vs the collocation moment method is the singular face-face Coulomb Gram
+BUILD (the moment method's matrix entries are light point-to-face integrals).  The question that decides
+whether HDiv-VIM is a viable MAIN solver at scale: how far does HACApK accelerate the build?  Measured on
+mdx (radia 4.95.5, tet, unit cube mu_r=1000, HACApK eps=1e-4; isolated build times -- HDiv
+`hmat_stats.build_time`, MMMM `GetSolveStats.t_moment_system_build`):
+- **HDiv charge-Gram BUILD ~ n_charge^1.23 (NEAR-LINEAR = SCALABLE)** -- a dense face-face Gram would be
+  ~N^2; the charge-Gram H-matrix compression grows 0.98 -> 0.17 with N, which is WHY the build scales.
+- **HDiv build reaches PARITY with the MMMM build at ~34k DoF (~10k charges)**; below that MMMM build is
+  up to ~5x faster (H-matrix overhead + weak small-N compression).
+- **DECISION = tiered role split, NOT replacement**: HDiv-VIM main for large-scale (>=34k DoF) / accuracy
+  / loop-free / distorted; MMMM main for small-N (<10k) / optimization inner loops / coarse fast passes.
+  Quantitatively backs the KEEP-BOTH role split.
+- CAVEAT: this is TET (released HDiv-VIM is tet-only); the AUTHORITATIVE hex-vs-hex build-scaling (the
+  paper element; MMMM = 6-face hex) is PENDING the pure-hex HDiv-VIM reaching mdx.  MMMM GetSolveStats is
+  empty {} at large N (stats not recorded on the large-N method-2 path -- a small radia fix).  Data +
+  executed showcase: docs/hdiv_vim/build_scaling_mdx_data.json + build_scaling_hdiv_vs_mmmm.ipynb.
+  TIMING MUST BE ON mdx (CLAUDE.md Benchmark Policy: 計算時間の測定は mdx で MUST; LAB timing is
+  codex-contaminated + invalid for paper/docs/decisions).
 """
 
 _VERIFICATION = r"""

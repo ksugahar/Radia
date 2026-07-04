@@ -1,0 +1,24 @@
+{
+  "title": "HDiv-VIM (HACApK charge-Gram) vs collocation MMMM: matrix-BUILD scalability",
+  "measured_on": "mdx (quiet compute host -- timing MUST be on mdx per CLAUDE.md Benchmark Policy)",
+  "host": "mdx",
+  "radia_version": "4.95.5",
+  "num_threads": 38,
+  "element": "tet",
+  "element_note": "PRELIMINARY on TET: released radia 4.95.5 HDiv-VIM is TET-only; the AUTHORITATIVE hex-vs-hex build-scaling (the paper's element) is PENDING the pure-hex HDiv-VIM reaching mdx (release or push_pyds_to_mdx after the codex hex WIP settles). The HACApK build-scalability finding (compression -> near-linear build) is element-type-general (an H-matrix property), so the tet trend is expected to carry to hex.",
+  "problem": "unit cube, linear soft iron mu_r=1000, uniform H0=200 kA/m, HACApK eps=1e-4",
+  "hdiv_build_metric": "hmat_stats.build_time (the charge-Gram H-matrix construction, isolated)",
+  "mmmm_build_metric": "GetSolveStats t_moment_system_build + t_hmatrix_build (isolated); EMPTY {} at large N (radia stats not recorded on the large-N method-2 path -> mmmm_build=null there)",
+  "rows": [
+    {"ntet": 206,   "hdiv_ndof": 1434,  "n_charge": 602,   "hdiv_build_s": 0.131, "mmmm_build_s": 0.0247, "hdiv_over_mmmm": 5.3, "hmat_compression": 0.982},
+    {"ntet": 560,   "hdiv_ndof": 3858,  "n_charge": 1556,  "hdiv_build_s": 0.308, "mmmm_build_s": 0.068,  "hdiv_over_mmmm": 4.5, "hmat_compression": 0.783},
+    {"ntet": 1818,  "hdiv_ndof": 11673, "n_charge": 3348,  "hdiv_build_s": 1.243, "mmmm_build_s": 0.4956, "hdiv_over_mmmm": 2.5, "hmat_compression": 0.548},
+    {"ntet": 3568,  "hdiv_ndof": 22761, "n_charge": 6274,  "hdiv_build_s": 2.254, "mmmm_build_s": 2.0044, "hdiv_over_mmmm": 1.1, "hmat_compression": 0.376},
+    {"ntet": 5346,  "hdiv_ndof": 34392, "n_charge": 9978,  "hdiv_build_s": 3.814, "mmmm_build_s": 4.0132, "hdiv_over_mmmm": 1.0, "hmat_compression": 0.279},
+    {"ntet": 14181, "hdiv_ndof": 88707, "n_charge": 21423, "hdiv_build_s": 9.549, "mmmm_build_s": null,   "hdiv_over_mmmm": null, "hmat_compression": 0.165}
+  ],
+  "hdiv_build_exponent_vs_ncharge": 1.23,
+  "hdiv_build_exponent_note": "log-log fit hdiv_build_s ~ n_charge^1.23 over n_charge 602..21423 -- NEAR-LINEAR, i.e. the HACApK charge-Gram makes the build SCALABLE (a dense face-face Coulomb Gram would be ~N^2).",
+  "crossover": "HDiv build reaches PARITY with MMMM build at ~34k HDiv DoF (~10k charges, ntet~5346); below that MMMM build is up to ~5x faster (H-matrix overhead + weak compression at small N).",
+  "conclusion": "HDiv-VIM's only weakness (the heavy singular-Gram matrix build) is neutralized by the HACApK charge-Gram at engineering scale: the build scales ~N^1.2 and becomes comparable to the moment method's build by ~34k DoF. This supports a TIERED role split (HDiv for large-scale/accurate/loop-free, MMMM for the fast small-N/coarse tier), NOT one method replacing the other."
+}
