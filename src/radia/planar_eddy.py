@@ -35,8 +35,9 @@ from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, TaskManager,  #
                      grad, dx, x, y, atan2, CF)
 
 import radia._radia_pybind as _rp
-from radia.mmmm2d import _extract_geometry
-from radia.planar_charges import mn_edge_cloud
+from radia.mmmm2d import (_extract_geometry, _element_materials, _sub_geometry, _pm_hard_M,
+                          _region_chi_for)
+from radia.planar_charges import mn_edge_cloud, exterior_field
 
 MU0 = 4e-7 * np.pi
 
@@ -135,30 +136,61 @@ def couple(iron_mesh, iron_solve, fem_mesh, sigma, freq, *, applied_Az_cf, H_app
     return {"M": M, "M_avg": M_avg, "iters": it, "hist": hist, "gfu": gfu, "fes": fes, "n_el": nEl}
 
 
-def _mmmm_iron_solve(iron_mesh, mu_r):
-    """Build a linear-MMMM complex iron_solve callback (chi real -> M = solve(Re H)+j solve(Im H))."""
-    verts, offsets, _, areas = _extract_geometry(iron_mesh)
+def _mmmm_iron_solve(iron_mesh, mu_r, pm=None):
+    """Build a linear-MMMM complex iron_solve callback (chi real -> M = solve(Re H)+j solve(Im H)).
+
+    With ``pm`` = {region: [Mx,My]} the mesh is a PM-motor / ECB rotor: those regions are RIGID
+    permanent magnets (fixed REAL M, treated as an in-phase phasor source at the analysis frequency).
+    Their field magnetises the soft iron (added to the soft drive) AND, because the returned M carries
+    the fixed PM elements, drives the conductor eddy through iron_field_cf.  Only the soft subsystem is
+    solved; design B (embedded PM) == design A on a partitioned mesh (fields superpose)."""
+    verts, offsets, centroids, areas = _extract_geometry(iron_mesh)
+    nEl = len(areas)
+    mats = _element_materials(iron_mesh)
+    if pm:
+        hard = set(pm)
+        soft_ids = np.array([i for i, m in enumerate(mats) if m not in hard], int)
+        hard_ids = np.array([i for i, m in enumerate(mats) if m in hard], int)
+        if soft_ids.size == 0:
+            raise ValueError("planar_eddy: pm covers every region -- no soft iron to solve")
+        law_regions = set(mu_r) if isinstance(mu_r, dict) else set()
+        if hard & law_regions:
+            raise ValueError("planar_eddy: region(s) %s are BOTH pm and soft mu_r"
+                             % sorted(hard & law_regions))
+        verts_s, offsets_s = _sub_geometry(verts, offsets, soft_ids)
+        M_hard = _pm_hard_M(iron_mesh, pm, mats, nEl)
+        H_pm = exterior_field(iron_mesh, M_hard, centroids[soft_ids])     # PM field at soft (real)
+        mats_s = [mats[i] for i in soft_ids]
+    else:
+        soft_ids = np.arange(nEl)
+        hard_ids = np.empty(0, int)
+        verts_s, offsets_s, M_hard, H_pm, mats_s = verts, offsets, None, 0.0, mats
     if isinstance(mu_r, dict):
-        from radia.mmmm2d import _per_region_chi
-        chi = _per_region_chi(iron_mesh, mu_r)
+        chi = _region_chi_for(mats_s, mu_r)
     else:
         if not mu_r > 1.0:
             raise ValueError("planar_eddy: mu_r must be > 1 (got %r)" % (mu_r,))
-        chi = np.full(len(areas), mu_r - 1.0)
+        chi = np.full(len(soft_ids), mu_r - 1.0)
 
     def solve(H):
-        Mr = _rp.Moment2DSolveLinear(verts, offsets, chi, np.ascontiguousarray(H.real, float))
-        Mi = _rp.Moment2DSolveLinear(verts, offsets, chi, np.ascontiguousarray(H.imag, float))
-        return Mr + 1j * Mi
+        Hs = np.ascontiguousarray(H[soft_ids]) + H_pm                     # applied + eddy + PM
+        Mr = _rp.Moment2DSolveLinear(verts_s, offsets_s, chi, np.ascontiguousarray(Hs.real, float))
+        Mi = _rp.Moment2DSolveLinear(verts_s, offsets_s, chi, np.ascontiguousarray(Hs.imag, float))
+        M = np.zeros((nEl, 2), complex)
+        M[soft_ids] = Mr + 1j * Mi
+        if pm:
+            M[hard_ids] = M_hard[hard_ids]
+        return M
     return solve
 
 
-def couple_mmmm(iron_mesh, mu_r, fem_mesh, sigma, freq, *, B0=1.0, order=4, tol=1e-6, maxit=40,
-                ngauss=2, conductor="conductor"):
-    """Convenience: couple a LINEAR-MMMM soft-iron body to the eddy FEM under a uniform applied field
-    B0 x-hat (A0 = B0 y).  ``mu_r`` scalar or {region: mu_r} dict.  Returns the couple() dict."""
+def couple_mmmm(iron_mesh, mu_r, fem_mesh, sigma, freq, *, B0=1.0, pm=None, order=4, tol=1e-6,
+                maxit=40, ngauss=2, conductor="conductor"):
+    """Convenience: couple a LINEAR-MMMM soft-iron body (optionally a PM-motor / ECB rotor with
+    embedded PM regions ``pm={region: [Mx,My]}``) to the eddy FEM under a uniform applied field
+    B0 x-hat (A0 = B0 y).  ``mu_r`` scalar or {region: mu_r} dict (soft iron only).  Returns couple()."""
     _, _, centroids, _ = _extract_geometry(iron_mesh)
     H_app = np.tile([B0 / MU0, 0.0], (len(centroids), 1)).astype(complex)
-    return couple(iron_mesh, _mmmm_iron_solve(iron_mesh, mu_r), fem_mesh, sigma, freq,
+    return couple(iron_mesh, _mmmm_iron_solve(iron_mesh, mu_r, pm=pm), fem_mesh, sigma, freq,
                   applied_Az_cf=B0 * y, H_app=H_app, order=order, tol=tol, maxit=maxit,
                   ngauss=ngauss, conductor=conductor)
