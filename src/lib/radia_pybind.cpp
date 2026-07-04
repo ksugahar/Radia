@@ -93,6 +93,7 @@ extern "C" {
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
+#include "rad_hacapk_field.h"    // HACApK embed-in-square H-matrix for rad.Fld field evaluation
 #include "rad_moment2d.h"        // 2D planar collocation MMMM (log-kernel tri/quad)
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
@@ -3490,6 +3491,50 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Charges (cell rho + boundary-face sigma) extracted from ANY RT0 mesh (e.g. NGSolve tet
     // HDiv(0)); pass charge centroids/measures + the caller-computed diagonal self-energies.  The
     // demag operator N = B^T G B is applied as B^T (matvec(B m)) with B the sparse charge map.
+    // Embed-in-square H-matrix for rad.Fld-style field evaluation (rad_hacapk_field.h).
+    py::class_<RadHACApKFieldEval>(m, "_FieldEvalHMatrix")
+        .def(py::init([](int container_handle, std::vector<double> obs_points,
+                         double eps, int leaf, double eta) {
+                 auto mgr = std::unique_ptr<RadHACApKFieldEval>(
+                     new RadHACApKFieldEval(container_handle, std::move(obs_points)));
+                 RadHACApKParams p;
+                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
+                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("field-eval H-matrix build failed");
+                 return mgr;
+             }),
+             py::arg("container_handle"), py::arg("obs_points"),
+             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
+             "Embed-in-square H-matrix for rad.Fld-style B-field evaluation: field[obs] = sum_src "
+             "G(obs,src).M[src] over the leaf magnets of `container_handle`, evaluated at the flat "
+             "obs_points [x0,y0,z0, ...].  Reuses the square HACApK ACA pipeline (SYMMETRIC embed "
+             "A = [[0,K],[K^T,0]] on the combined [obs; src] DOF space; matvec [0;M] = [K M; 0]).  "
+             "FLAT global-coordinate container only (no "
+             "ancestor-group transforms).  NOT dipole / NOT FMM -- HACApK ACA on the exact field "
+             "kernel's far blocks.")
+        .def("ndof", [](RadHACApKFieldEval& s) { return s.GetNDOF(); })
+        .def("n_obs", [](RadHACApKFieldEval& s) { return s.NObs(); })
+        .def("n_src", [](RadHACApKFieldEval& s) { return s.NSrc(); })
+        .def("src_magnetization", [](RadHACApKFieldEval& s) { return s.SrcMagnetization(); },
+             "Actual magnetization of every source element [Mx0,My0,Mz0, ...] -- the src-slot half "
+             "of the matvec vector x = [0]*(3*n_obs) + src_magnetization.")
+        .def("scale", [](RadHACApKFieldEval& s) { return s.Scale(); },
+             "Internal O(1) normalisation factor; entry()/matvec() already apply it (return Tesla).")
+        .def("matvec", [](RadHACApKFieldEval& s, const std::vector<double>& x) {
+                 std::vector<double> y((size_t)s.GetNDOF(), 0.0);
+                 s.MatVec(x, y);
+                 const double sc = s.Scale();               // stored normalised -> physical (Tesla)
+                 for (auto& v : y) v *= sc;
+                 return y;
+             }, py::arg("x"),
+             "A x (the O(N log N) embed H-matvec), in Tesla.  With x = [0]*(3*n_obs) + src_magnetization, "
+             "y[:3*n_obs] is the B-field at the observation points [Bx0,By0,Bz0, ...].")
+        .def("entry", [](RadHACApKFieldEval& s, int i, int j) {
+                 return s.GetInteractionMatrixElement(i, j) * s.Scale();   // normalised -> physical
+             }, py::arg("i"), py::arg("j"),
+             "EXACT (uncompressed, eps-independent) embed entry A[i,j] in Tesla: the field-response "
+             "G_ab(obs,src) in the obs-row x src-col block (and its transpose), 0 elsewhere.  Ground "
+             "truth for the ACA compression error.");
+
     py::class_<RadHACApKChargeGram>(m, "_ChargeGramHMatrix")
         .def(py::init([](std::vector<double> centroids, std::vector<double> measures,
                          std::vector<double> self_energy, double eps, int leaf, double eta) {
