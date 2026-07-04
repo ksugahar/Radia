@@ -26,12 +26,20 @@ def reconstruct_field(mesh, gfM, points, quantity="b", units="m", backend="direc
     quantity : 'b' (Tesla, = MU0*(H_demag + M) inside the body), 'h' (A/m, the demag/stray H), or 'a'
                (T*m, vector potential -- the A-formulation FEM-coupling source; backend='hmatrix' only).
     backend  : 'direct'  -> one batched radia.Fld (ComputeFieldBatch, TaskManager-parallel over points,
-                            O(N_obs*N_src)); the drop-in exact evaluator.
-               'hmatrix' -> the embed-in-square HACApK _FieldEvalHMatrix (O(N log N) via ACA), for large
-                            N_obs*N_src (e.g. many FEM quadrature points).  quantity 'b'/'a' only; the
-                            build is now fully parallel (unit-M clones, no mutex).  Same field as 'direct'
-                            up to the ACA tolerance `eps`.
-    eps      : ACA tolerance when backend='hmatrix'.
+                            O(N_obs*N_src)); the drop-in exact evaluator (the DEFAULT -- always safe).
+               'hmatrix' -> the embed-in-square HACApK _FieldEvalHMatrix (ACA), quantity 'b'/'a' only,
+                            build fully parallel (unit-M clones, no mutex).  ONLY for a FAR field map --
+                            the query `points` must be well SEPARATED from the magnetized body (stray
+                            field at distance, particle trajectories, a stand-off coupling region).  There
+                            it beats 'direct' above N_obs*N_src ~ 1500 (crossover; the win grows as direct
+                            is O(N^2)) and matches it to the ACA tolerance `eps`.  For `points` interleaved
+                            with / inside the body (the near, co-located case) it is BOTH slower than
+                            'direct' AND silently ~4-9% wrong: the symmetric embed puts co-located obs+src
+                            in one cluster, whose admissible blocks have a checkerboard zero pattern
+                            (obs-obs=0, src-src=0) that ACA cannot compress (tightening eps does not fix
+                            it).  Use 'direct' for near/internal points.  (mdx crossover data:
+                            validation_test/hacapk/benchmarks/.)
+    eps      : ACA tolerance when backend='hmatrix' (only meaningful in the far regime above).
     returns  : (N,3) ndarray of the field FROM THE MAGNETIZATION.  Add any SOURCE/coil field separately --
                radia.Fld here is the magnetization's contribution only.
 
