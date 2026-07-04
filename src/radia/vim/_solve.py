@@ -424,7 +424,7 @@ def _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit):
     return np.asarray(res["m"], float), iters
 
 
-def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
+def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, magnets=None,
                      image=None, gram_eps=None, leaf=32, eta=2.0, near_factor=None, far_quad=None, tol=1e-8,
                      maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6, anderson_window=6,
                      linear_solver="auto", hlu_trunc_tol=1e-8,
@@ -504,8 +504,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None,
                 raise ValueError("hdiv_demag_solve (2D): %s is a 3D knob; the 2D Gram parameters "
                                  "are fixed by its own gates (got %r)" % (_nm, _val))
         from ._vim2d import solve_planar_demag
-        return solve_planar_demag(mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, eta=eta,
-                                  nl_tol=nl_tol, nl_maxit=nl_maxit)
+        return solve_planar_demag(mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
+                                  eta=eta, nl_tol=nl_tol, nl_maxit=nl_maxit)
+    if magnets is not None:
+        raise NotImplementedError(
+            "hdiv_demag_solve: magnets= (separate-body permanent-magnet source) is wired for the 2D "
+            "planar layer only; in 3D place PMs as direct-M collocation MMMM elements or fold their "
+            "field into H_ext.")
     _vtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
     if _vtx not in ({4}, {8}):
         raise ValueError(

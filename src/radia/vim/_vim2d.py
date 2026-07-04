@@ -322,9 +322,16 @@ def _law_from_table(bh_table):
     return M_of_h, chi_sec, chi0
 
 
-def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, eta=2.0,
+def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, eta=2.0,
                        nl_tol=1e-6, nl_maxit=300, ndof_cap=20000):
     """The ``hdiv_demag_solve`` 2D dispatch target: single-region planar soft-iron demag solve.
+
+    ``magnets`` is an optional list of SEPARATE-body PERMANENT MAGNETS [(pm_mesh, M_fixed), ...]
+    whose RIGID field (the SHARED planar_charges.magnet_field_cf, the CF twin of what MMMM adds at
+    its centroids) is added to the applied field before the H(div) projection -- a hard PM does not
+    demagnetize, so it is a one-way source (no iteration).  This is the HDiv-VIM twin of
+    radia.mmmm2d's ``magnets=`` (design A).  Embedded-PM regions (design B, ``pm=``) are not yet
+    wired here (they need a soft/hard partition of the PlanarDemagBody).
 
     Returns dict: M (n_el,2) per-element magnetization, M_avg (2,), demag_factors (Dx, Dy),
     iters, residual, ndof, n_el, n_charge, nonlinear (bool), linear_solver='dense-2d', and
@@ -340,6 +347,9 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, eta=2.0,
         raise NotImplementedError(
             "solve_planar_demag: per-region (dict) materials are not wired for the 2D layer yet; "
             "the first increment is a single soft-iron region")
+    if magnets:
+        from radia.planar_charges import magnet_field_cf
+        H_ext = H_ext + magnet_field_cf(magnets)             # rigid PM source (design A), shared CF
     body = PlanarDemagBody(mesh, eta=eta, ndof_cap=ndof_cap)
     mu_ext = body.project(H_ext)
     if mu_r is not None:
