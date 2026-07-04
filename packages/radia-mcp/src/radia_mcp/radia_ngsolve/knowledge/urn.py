@@ -138,6 +138,42 @@ run_ltspice_verification.py (actual LTspice), verify_timedomain_stability.py
 (URN vs VF stability).
 """
 
+URN_CQ = r"""
+# URN -> convolution quadrature (CQ)
+
+CQ is the clean bridge when the solver already has a frequency-domain acoustic,
+Maxwell, impedance-boundary, or material operator and we want a causal transient
+response without first hand-writing every auxiliary ODE.
+
+Contract:
+  1. Fit or identify a passive URN relaxation model from samples of H(j omega).
+  2. Expose the fitted model as a Laplace evaluator H(s), not just as a table.
+  3. Feed H(delta(zeta)/dt) to Lubich CQ (BDF1/BDF2 are the small teaching
+     defaults).
+  4. Apply the resulting weights by causal discrete convolution to the boundary
+     or material input history.
+
+Why this matters:
+  - A plain FFT/IFFT demo treats the sampled time signal as periodic.  For a
+    hammer/step-like transient this can create pre-hit wrap-around unless the
+    padding/windowing convention is explicit.
+  - CQ evaluates the same fitted frequency-domain object through the Laplace
+    variable and gives a causal time-domain operator for the chosen time step.
+  - Because the URN ladder is non-negative/passive, the CQ kernel inherits a
+    stable physical realization; this is the useful path for FEM/BEM acoustics
+    and time-domain Maxwell material kernels.
+
+Education artifact:
+  docs/universal_relaxation_network/cq_urn_bridge.ipynb
+  docs/universal_relaxation_network/cq_urn_bridge_results.json
+
+The result-bearing notebook fits a two-pole passive relaxation ladder on a
+candidate tau grid, builds BDF2 CQ weights, and compares the causal CQ response
+with a deliberately naive periodic IFFT contrast.  The point is not that IFFT is
+forbidden; the point is that CQ is the native transient operator once URN has
+identified a passive H(s).
+"""
+
 URN_APPLICATION = r"""
 # Using URN for open-boundary / dispersive-material time-domain models
 
@@ -166,17 +202,18 @@ _TOPICS = {
     "method": URN_METHOD,
     "api": URN_API,
     "timedomain": URN_TIMEDOMAIN,
+    "cq": URN_CQ,
     "application": URN_APPLICATION,
 }
 
 
 def get_urn_documentation(topic: str = "all") -> str:
     """Return URN knowledge text.  topic in
-    {all, overview, method, api, timedomain, application}."""
+    {all, overview, method, api, timedomain, cq, application}."""
     t = (topic or "all").strip().lower()
     if t == "all":
         return "\n".join(_TOPICS[k] for k in
-                         ["overview", "method", "api", "timedomain", "application"])
+                         ["overview", "method", "api", "timedomain", "cq", "application"])
     if t in _TOPICS:
         return _TOPICS[t]
     return (f"Unknown topic '{topic}'. Options: all, "

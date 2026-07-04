@@ -45,6 +45,9 @@ universal_relaxation_network/
   ablation_study.py               # Feature contribution analysis
   benchmark_urn_vs_skrf_vf.py     # scikit-rf Vector Fitting comparison
   run_ltspice_verification.py     # Actual LTspice simulation (PyLTSpice)
+  cq_urn_bridge.py                # Passive URN H(s) -> BDF2 CQ teaching artifact
+  cq_urn_bridge.ipynb             # Result-bearing CQ bridge notebook
+  cq_urn_bridge_results.json      # Machine-readable CQ bridge checks
 ```
 
 ## Quick Start
@@ -78,6 +81,22 @@ with open("battery_model.sp", "w") as f:
     f.write(netlist)
 print("SPICE netlist saved to battery_model.sp")
 ```
+
+## Convolution Quadrature Bridge
+
+`cq_urn_bridge.ipynb` records the compact path from an identified passive URN
+relaxation model to a causal time-domain operator:
+
+1. Fit a non-negative Debye ladder on a candidate relaxation-time grid.
+2. Expose the fit as a Laplace-domain evaluator `H(s)`.
+3. Generate BDF2 convolution-quadrature weights from `H(delta(zeta)/dt)`.
+4. Compare the causal CQ response with a deliberately naive periodic IFFT
+   contrast.
+
+The notebook writes `cq_urn_bridge_results.json` and embeds the executed figure.
+This is the educational contract for later acoustic FEM/BEM and time-domain
+Maxwell examples: replace only the scalar teaching `H(s)` with the solver's
+passive boundary/material/operator response.
 
 ## Data Sources
 

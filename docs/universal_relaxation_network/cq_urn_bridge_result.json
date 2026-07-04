@@ -1,0 +1,111 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-07-04T23:29:44Z",
+  "notebook": "docs/universal_relaxation_network/cq_urn_bridge.ipynb",
+  "notebook_sha256": "46f0cb87a7dbb5c251029ce0342b172cb8ea1bc4245503982cba10a327a46e61",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.3",
+    "radia_version": "4.95.5"
+  },
+  "summary": {
+    "path": "docs/universal_relaxation_network/cq_urn_bridge.ipynb",
+    "cells": 7,
+    "code_cells": 4,
+    "executed_code_cells": 4,
+    "code_cells_with_outputs": 4,
+    "output_count": 4,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "501c3379dc79e57c5eb7fcb55d90f28674bc2713d4560095b3ec8f9162f046b9",
+      "source_preview": "from pathlib import Path\nimport json\nimport sys\n\nrepo = Path.cwd()\nif not (repo / 'packages' / 'radia-mcp' / 'src').exists():\n    repo = Path(r'S:/Radia/01_GitHub')\nsys.path.insert(0, str(repo / 'docs' / 'universal_relaxation_network'))\n\nfrom cq_urn_bridge import build_artifact, plot_artifact\n\nout_dir = repo / 'docs' / 'universal_relaxation_network'\nartifact = build_artifact(out_dir)\nfig_path = plot_artifact(artifact)\nsummary = {\n    'pass': artifact['pass'],\n    'schema': artifact['schema'],\n    'generated_at_utc': artifact['generated_at_utc'],\n    'fit_relative_error': artifact['model']['fit']['relative_error'],\n    'active_count': artifact['model']['fit']['active_count'],\n    'cq_prehit_max_abs': artifact['cq']['prehit_max_abs'],\n    'ifft_prehit_max_abs': artifact['ifft_periodic_contrast']['prehit_max_abs'],\n    'figure': str(fig_path),\n}\nprint(json.dumps(summary, indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 297,
+          "text_sha256": "4a5c634a338739dcb726933c7cf806163d9a6ebcb45758b8c097efdcfdb4865f",
+          "text_preview": "{\n  \"pass\": true,\n  \"schema\": \"radia.cq_urn_bridge.v1\",\n  \"generated_at_utc\": \"2026-07-04T23:29:37Z\",\n  \"fit_relative_error\": 1.262655714417836e-16,\n  \"active_count\": 3,\n  \"cq_prehit_max_abs\": 0.0,\n  \"ifft_prehit_max_abs\": 0.7894211091435763,\n  \"figure\": \"C:\\\\temp\\\\cq_urn_bridge_waveforms.png\"\n}\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "8647f6d11f17a250181e6087fd480f7bfcc3433e323ca75c10eeda184801fe39",
+      "source_preview": "from IPython.display import Image, display\ndisplay(Image(filename=str(fig_path)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 35,
+          "text_plain_sha256": "4a50edebe8b763e269fb794c161e431bbec32c91640b567c1cb45d856e189375",
+          "text_plain_preview": "<IPython.core.display.Image object>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 83104,
+              "sha256": "d8560be6e501be961c124dbcfc957801500d12950516c7e0030a46e9ed881cf0"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "0b4251838b394cdb0be3239938b5c66f7ea75726b7e4eaa8d9b8b0c7810ae9bd",
+      "source_preview": "from IPython.display import Markdown, display\nfit = artifact['model']['fit']\nrows = [\n    ('fit relative error', f\"{fit['relative_error']:.3e}\"),\n    ('active passive components', str(fit['active_count'])),\n    ('minimum Re H(jw)', f\"{artifact['checks']['positive_real_frequency_axis_min']:.3e}\"),\n    ('CQ pre-hit max abs', f\"{artifact['cq']['prehit_max_abs']:.3e}\"),\n    ('periodic IFFT pre-hit max abs', f\"{artifact['ifft_periodic_contrast']['prehit_max_abs']:.3e}\"),\n]\nlines = ['| Check | Value |', '| --- | --- |']\nfor key, value in rows:\n    lines.append(f'| {key} | {value} |')\ndisplay(Markdown('\\n'.join(lines)))\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 6,
+      "execution_count": 4,
+      "source_sha256": "e3a09fd53c6707c53bf0f9a42da8d81062054bd91b3a18c617731fe4d067db76",
+      "source_preview": "assert artifact['pass'] is True\nprint(json.dumps(artifact['timing_breakdown_s'], indent=2, ensure_ascii=False))\n",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 191,
+          "text_sha256": "94740cf01ad96f17a3ac95429c6aa3de4302bbf32a4b6579e3f40cb98174d5a8",
+          "text_preview": "{\n  \"fit_nonnegative_debye\": 0.3519496000080835,\n  \"cq_weight_generation\": 0.00019530000281520188,\n  \"convolution_and_ifft_contrast\": 0.00012630000128410757,\n  \"total\": 0.35271730000386015\n}\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

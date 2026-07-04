@@ -79,6 +79,10 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 - [BEM_CLN.md](cln/BEM_CLN.md) - Multi-conductor BEM-CLN: per-element polarizability + integral-equation coupling for N-conductor clusters (Paper 2, IH workpiece + coils, paired transformer windings)
 - [CLN_3D_CUBOID.md](cln/CLN_3D_CUBOID.md) - 3D Cu cuboid benchmark: HCurl FEM + BEM Cauer 3-way validation
 
+## Transient Kernels
+
+- [universal_relaxation_network/cq_urn_bridge.ipynb](universal_relaxation_network/cq_urn_bridge.ipynb) - Result-bearing URN -> convolution-quadrature bridge: passive relaxation `H(s)`, BDF2 CQ weights, and a periodic IFFT contrast for acoustic FEM/BEM and Maxwell time-domain education.
+
 ## Analytical Reference Formulas
 
 - [analytical_formulas.md](analytical_formulas.md) - Closed-form formulas covering Wakao-Igarashi-Fujiwara-Kameari Part 1-9 (IEE Japan SA / RM technical meetings, 2002-2007). Group B + C: ellipsoid demag/torque, AC vector locus, magnetic shielding, 2D rectangular magnet, thin-plate eddy current, Fabri solenoid axial field, three-phase line (triangle / planar / helical), K(k) / E(k) Hastings approximations, Gauss-Legendre. Group D (Part 6/8/9 extensions): plate Joule dissipation, AC thin-shell shielding, magnetic-shell interior fields, planar surface impedance, full Bessel cylindrical-conductor AC impedance, Gauss-Patterson nested quadrature, cuboid average B. Source: [src/radia/analytical_formulas/](../src/radia/analytical_formulas/), tests: [tests/analytical_formulas/](../tests/analytical_formulas/), notebook: [docs/analytical_formulas/analytical_formulas.ipynb](analytical_formulas/analytical_formulas.ipynb).
