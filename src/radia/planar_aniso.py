@@ -30,7 +30,7 @@ import ngsolve as ng
 
 from radia.planar_charges import charge_field, _gauss01
 from radia.planar_materials import chi_tensor, region_ids, check_regions
-from radia.mmmm2d import _extract_geometry, _element_materials
+from radia.mmmm2d import _extract_geometry, _element_materials, _pm_hard_M
 
 MU0 = 4e-7 * np.pi
 
@@ -82,14 +82,15 @@ def demag_operator(mesh, centroids=None, ngauss=6):
     return N
 
 
-def _X_per_element(mesh, chi_par, chi_perp, easy_deg):
-    """(n,2,2) per-element susceptibility tensor.  Scalars -> uniform; dicts -> per material region."""
-    mats = _element_materials(mesh)
+def _X_from_mats(mats, chi_par, chi_perp, easy_deg):
+    """(n,2,2) per-element susceptibility from a per-element material-name list.  Scalars -> uniform;
+    dicts -> per region (each dict must cover the given ``mats`` -- the SOFT regions when PM is split off)."""
     n = len(mats)
     if isinstance(chi_par, dict) or isinstance(chi_perp, dict) or isinstance(easy_deg, dict):
-        cp = chi_par if isinstance(chi_par, dict) else {m: chi_par for m in set(mats)}
-        cq = chi_perp if isinstance(chi_perp, dict) else {m: chi_perp for m in set(mats)}
-        ea = easy_deg if isinstance(easy_deg, dict) else {m: easy_deg for m in set(mats)}
+        names = set(mats)
+        cp = chi_par if isinstance(chi_par, dict) else {m: chi_par for m in names}
+        cq = chi_perp if isinstance(chi_perp, dict) else {m: chi_perp for m in names}
+        ea = easy_deg if isinstance(easy_deg, dict) else {m: easy_deg for m in names}
         check_regions(mats, cp, "chi_par"); check_regions(mats, cq, "chi_perp")
         check_regions(mats, ea, "easy_deg")
         X = np.empty((n, 2, 2))
@@ -99,19 +100,63 @@ def _X_per_element(mesh, chi_par, chi_perp, easy_deg):
     return np.tile(chi_tensor(chi_par, chi_perp, easy_deg), (n, 1, 1))
 
 
-def solve_anisotropic_demag(mesh, chi_par, chi_perp, easy_deg=0.0, H0=(0.0, 0.0), ngauss=6):
+def _X_per_element(mesh, chi_par, chi_perp, easy_deg):
+    """(n,2,2) per-element susceptibility tensor over the whole mesh."""
+    return _X_from_mats(_element_materials(mesh), chi_par, chi_perp, easy_deg)
+
+
+def _blockdiag_X(X):
+    """(m,2,2) per-element tensors -> (2m,2m) block-diagonal."""
+    m = len(X)
+    Xbd = np.zeros((2 * m, 2 * m))
+    for k in range(m):
+        Xbd[2 * k:2 * k + 2, 2 * k:2 * k + 2] = X[k]
+    return Xbd
+
+
+def solve_anisotropic_demag(mesh, chi_par, chi_perp, easy_deg=0.0, H0=(0.0, 0.0), *, pm=None, ngauss=6):
     """Anisotropic linear soft-iron demag (M = X.H), X = uniaxial tensor (chi_par easy / chi_perp
     across, easy axis ``easy_deg`` from +x).  Scalars = uniform; {region: value} dicts = per grade.
-    ``H0`` is the uniform applied field (2,).  Returns dict: M (n,2), M_avg (2,), n_el, ndof(=2n)."""
+    ``H0`` is the uniform applied field (2,).
+
+    ``pm`` = {region: [Mx,My]} embeds RIGID permanent magnets (design B: an anisotropic PM-motor rotor
+    with magnets inside the iron).  Those regions are fixed sources; only the soft subsystem is solved
+    (the shared direct-N gives BOTH the MMMM and HDiv-VIM planar layers this anisotropic + PM capability).
+
+    Returns dict: M (n,2, ALL elements incl. PM), M_avg (2,), n_el, ndof, pm (bool)."""
     _, _, centroids, areas = _extract_geometry(mesh)
     n = len(areas)
-    X = _X_per_element(mesh, chi_par, chi_perp, easy_deg)
     N = demag_operator(mesh, centroids, ngauss)
-    Xbd = np.zeros((2 * n, 2 * n))
-    for k in range(n):
-        Xbd[2 * k:2 * k + 2, 2 * k:2 * k + 2] = X[k]
-    H0f = np.tile(np.asarray(H0, float), n)
-    M = np.linalg.solve(np.eye(2 * n) - Xbd @ N, Xbd @ H0f).reshape(n, 2)
+    H0v = np.asarray(H0, float)
+    if not pm:
+        X = _X_per_element(mesh, chi_par, chi_perp, easy_deg)
+        Xbd = _blockdiag_X(X)
+        M = np.linalg.solve(np.eye(2 * n) - Xbd @ N, Xbd @ np.tile(H0v, n)).reshape(n, 2)
+        w = areas / areas.sum()
+        return {"M": M, "M_avg": np.array([w @ M[:, 0], w @ M[:, 1]]), "n_el": n, "ndof": 2 * n,
+                "pm": False, "linear_solver": "dense-aniso-2d"}
+    # design B: soft (X) + hard (fixed-M PM) partition, solve the soft subsystem with the PM source
+    mats = _element_materials(mesh)
+    hard = set(pm)
+    for law in (chi_par, chi_perp, easy_deg):
+        if isinstance(law, dict) and (hard & set(law)):
+            raise ValueError("solve_anisotropic_demag: region(s) %s are BOTH pm and a soft chi law"
+                             % sorted(hard & set(law)))
+    soft_ids = np.array([i for i, m in enumerate(mats) if m not in hard], int)
+    hard_ids = np.array([i for i, m in enumerate(mats) if m in hard], int)
+    if soft_ids.size == 0:
+        raise ValueError("solve_anisotropic_demag: pm covers every region -- no soft iron to solve")
+    M_hard = _pm_hard_M(mesh, pm, mats, n)
+    Xsoft = _blockdiag_X(_X_from_mats([mats[i] for i in soft_ids], chi_par, chi_perp, easy_deg))
+    sdof = np.ravel([[2 * i, 2 * i + 1] for i in soft_ids])
+    hdof = np.ravel([[2 * i, 2 * i + 1] for i in hard_ids])
+    Nss = N[np.ix_(sdof, sdof)]
+    Nsh = N[np.ix_(sdof, hdof)]
+    rhs = Xsoft @ (np.tile(H0v, len(soft_ids)) + Nsh @ M_hard[hard_ids].ravel())
+    Msoft = np.linalg.solve(np.eye(2 * len(soft_ids)) - Xsoft @ Nss, rhs).reshape(-1, 2)
+    M = np.zeros((n, 2))
+    M[soft_ids] = Msoft
+    M[hard_ids] = M_hard[hard_ids]
     w = areas / areas.sum()
-    return {"M": M, "M_avg": np.array([w @ M[:, 0], w @ M[:, 1]]), "n_el": n, "ndof": 2 * n,
-            "linear_solver": "dense-aniso-2d"}
+    return {"M": M, "M_avg": np.array([w @ M[:, 0], w @ M[:, 1]]), "n_el": n, "ndof": 2 * len(soft_ids),
+            "pm": True, "linear_solver": "dense-aniso-2d"}

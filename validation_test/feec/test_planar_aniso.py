@@ -87,3 +87,42 @@ def test_bad_chi_fail_loud():
         d = _disk(0.3)
         with pytest.raises(ValueError):
             pa.solve_anisotropic_demag(d, chi_par=-1.0, chi_perp=10.0, H0=(1.0, 0.0))
+
+
+def _iron_pm_mesh(maxh=0.16):
+    """iron disk at x=+1.6 + PM disk at x=-1.6 (two regions, one mesh) -- design-B geometry."""
+    g = SplineGeometry()
+    g.AddCircle((1.6, 0.0), r=1.0, leftdomain=1, rightdomain=0, bc="ie")
+    g.AddCircle((-1.6, 0.0), r=1.0, leftdomain=2, rightdomain=0, bc="pe")
+    g.SetMaterial(1, "iron"); g.SetMaterial(2, "pm")
+    return ng.Mesh(g.GenerateMesh(maxh=maxh))
+
+
+def test_design_b_isotropic_matches_mmmm():
+    """pm= (embedded PM) in the ISOTROPIC limit (chi_par=chi_perp) == the validated mmmm2d design-B
+    (which itself matches a monolithic magnetostatic FEM) -- to the Gauss-N self-term accuracy."""
+    MREM, chi = 8.0e5, 199.0
+    with ng.TaskManager():
+        mesh = _iron_pm_mesh(0.16)
+        rA = pa.solve_anisotropic_demag(mesh, chi_par=chi, chi_perp=chi, H0=(0.0, 0.0),
+                                        pm={"pm": [MREM, 0.0]})
+        rM = m2.solve_planar_demag(mesh, mu_r={"iron": 1.0 + chi}, H_ext=(0.0, 0.0),
+                                   pm={"pm": [MREM, 0.0]})
+    iron_ids = np.array([i for i, m in enumerate(m2._element_materials(mesh)) if m == "iron"], int)
+    MA = rA["M"][iron_ids].mean(axis=0)
+    MM = rM["M"][iron_ids].mean(axis=0)
+    assert rA["pm"] is True and abs(MA[0] - MM[0]) / abs(MM[0]) < 3e-3, (MA, MM)
+
+
+def test_design_b_anisotropic_pm():
+    """An ANISOTROPIC iron rotor with an embedded PM: the iron magnetises (novel combo neither the
+    scalar MMMM design-B nor the HDiv-VIM had); PM stays pinned."""
+    MREM = 8.0e5
+    with ng.TaskManager():
+        mesh = _iron_pm_mesh(0.16)
+        r = pa.solve_anisotropic_demag(mesh, chi_par={"iron": 400.0}, chi_perp={"iron": 20.0},
+                                       easy_deg={"iron": 0.0}, H0=(0.0, 0.0), pm={"pm": [MREM, 0.0]})
+    pm_ids = np.array([i for i, m in enumerate(m2._element_materials(mesh)) if m == "pm"], int)
+    iron_ids = np.array([i for i, m in enumerate(m2._element_materials(mesh)) if m == "iron"], int)
+    assert np.allclose(r["M"][pm_ids], [MREM, 0.0])          # PM pinned
+    assert r["M"][iron_ids].mean(axis=0)[0] > 0              # iron magnetised toward the magnet
