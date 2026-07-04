@@ -124,9 +124,8 @@ def _check_regions(mats, provided, what):
                          % (sorted(missing), what, sorted(provided)))
 
 
-def _per_region_chi(mesh, mu_r_dict):
-    """Per-element chi from a {region_name: mu_r} dict (multi-grade soft iron)."""
-    mats = _element_materials(mesh)
+def _region_chi_for(mats, mu_r_dict):
+    """Per-element chi from a {region_name: mu_r} dict, given a materials LIST (soft subset OK)."""
     _check_regions(mats, mu_r_dict, "mu_r")
     chi = np.empty(len(mats))
     for name, ids in _region_ids(mats).items():
@@ -135,6 +134,39 @@ def _per_region_chi(mesh, mu_r_dict):
             raise ValueError("solve_planar_demag: mu_r[%r] must be > 1 (got %r)" % (name, mr))
         chi[ids] = mr - 1.0
     return chi
+
+
+def _per_region_chi(mesh, mu_r_dict):
+    """Per-element chi from a {region_name: mu_r} dict (multi-grade soft iron)."""
+    return _region_chi_for(_element_materials(mesh), mu_r_dict)
+
+
+def _sub_geometry(verts, offsets, ids):
+    """(verts, offsets) of an element SUBSET (element indices ids) -- soft/hard partition."""
+    blocks = [verts[offsets[i]:offsets[i + 1]] for i in ids]
+    vs = np.vstack(blocks) if blocks else np.zeros((0, 2))
+    offs = np.zeros(len(ids) + 1, np.int32)
+    for j, i in enumerate(ids):
+        offs[j + 1] = offs[j] + (offsets[i + 1] - offsets[i])
+    return np.ascontiguousarray(vs, np.float64), offs
+
+
+def _pm_hard_M(mesh, pm, mats, nElem):
+    """Full-length fixed magnetisation of the PERMANENT-MAGNET regions (uniform [Mx,My] per region,
+    or a per-element (nRegionElem, 2) array); soft regions stay 0.  pm regions must exist + be
+    disjoint from the soft-iron law regions (checked by the caller)."""
+    M = np.zeros((nElem, 2))
+    rid = _region_ids(mats)
+    for name, mv in pm.items():
+        if name not in rid:
+            raise ValueError("solve_planar_demag: pm region %r not in mesh; regions: %s"
+                             % (name, sorted(rid)))
+        mv = np.asarray(mv, float)
+        if mv.shape == (2,) or mv.shape == (len(rid[name]), 2):
+            M[rid[name]] = mv
+        else:
+            raise ValueError("solve_planar_demag: pm[%r] must be [Mx,My] or (nRegionElem,2)" % name)
+    return M
 
 
 def _per_region_law(mesh, bh_dict):
@@ -166,18 +198,25 @@ def _per_region_law(mesh, bh_dict):
     return M_of_h, chi_sec, chi0_e
 
 
-def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None,
+def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, pm=None,
                        nl_tol=1e-6, nl_maxit=300, nl_damp=0.6, chi_floor=1e-12):
-    """Single-region planar soft-iron demag solve (the C++ 2D moment core + this driver).
+    """Planar soft-iron demag solve, optionally with EMBEDDED permanent magnets (the C++ 2D moment
+    core + this driver).
 
-    EXACTLY ONE of ``mu_r`` (linear) or ``bh_table`` (nonlinear [[H,B],...]) must be given (scalar
-    or {region: value} dict).  ``H_ext`` is a 2-tuple (uniform) or a 2-component NGSolve
-    CoefficientFunction.  ``magnets`` is an optional list of PERMANENT-MAGNET bodies
-    [(pm_mesh, M_fixed), ...] whose (RIGID) field is added at the iron centroids as an extra source
-    -- the shared magnet_field routine (a hard PM does not demagnetize -> one-way, no iteration).
+    EXACTLY ONE of ``mu_r`` (linear) or ``bh_table`` (nonlinear [[H,B],...]) gives the SOFT-iron law
+    (scalar or {region: value} dict).  ``H_ext`` is a 2-tuple (uniform) or a 2-component NGSolve
+    CoefficientFunction.  Two ways to add permanent magnets:
 
-    Returns dict: M (nElem,2), M_avg (2,), demag_factors (Dx,Dy), iters, residual, ndof (edge DOF),
-    n_el, nonlinear (bool), linear_solver='dense-2d-cpp'.
+    * ``magnets`` -- a list of SEPARATE-body PMs [(pm_mesh, M_fixed), ...] (design A).
+    * ``pm``      -- {region_name: [Mx,My]} (or per-element (nRegionElem,2)): PM regions EMBEDDED in
+      the SAME mesh as the soft iron (design B, a real PM-motor rotor).  Those regions are RIGID
+      (fixed M); the remaining regions are the soft iron and need ``mu_r``/``bh_table``.
+
+    Both PM routes are one-way sources (a hard PM does not demagnetise): the shared exterior_field of
+    the fixed M is added to the applied field seen by the soft iron, then the soft iron is solved.
+
+    Returns dict: M (nElem,2, ALL elements incl. PM), M_avg (2,), demag_factors (Dx,Dy) or None,
+    iters, residual, ndof (soft edge DOF), n_el, nonlinear (bool), per_region, pm (bool).
     """
     if H_ext is None:
         raise ValueError("solve_planar_demag: H_ext is required")
@@ -186,37 +225,67 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
     per_region = isinstance(mu_r, dict) or isinstance(bh_table, dict)
     verts, offsets, centroids, areas = _extract_geometry(mesh)
     nElem = len(areas)
-    ndof = int(offsets[-1])
+    mats = _element_materials(mesh)
+
+    # ---- applied field at ALL centroids: uniform/CF + separate-body magnets + embedded PM regions --
     Hc = _eval_Hext(H_ext, centroids, mesh)
-    if magnets:                                          # add the permanent-magnet source field
+    if magnets:
         from radia.planar_charges import magnet_field
         Hc = Hc + magnet_field(magnets, centroids)
+    M_hard = None
+    if pm:
+        hard_set = set(pm)
+        law_regions = set(mu_r) if isinstance(mu_r, dict) else (
+            set(bh_table) if isinstance(bh_table, dict) else set())
+        clash = hard_set & law_regions
+        if clash:
+            raise ValueError("solve_planar_demag: region(s) %s are BOTH pm and soft law" % sorted(clash))
+        M_hard = _pm_hard_M(mesh, pm, mats, nElem)               # full-length fixed-M (PM regions)
+        from radia.planar_charges import exterior_field
+        Hc = Hc + exterior_field(mesh, M_hard, centroids)        # rigid PM field at every centroid
+
+    # ---- partition soft (solved) vs hard PM (fixed), extract the SOFT subsystem ----
+    if pm:
+        soft_ids = np.array([i for i, m in enumerate(mats) if m not in hard_set], int)
+        if soft_ids.size == 0:
+            raise ValueError("solve_planar_demag: pm covers every region -- no soft iron to solve")
+        verts_s, offsets_s = _sub_geometry(verts, offsets, soft_ids)
+    else:
+        soft_ids = np.arange(nElem)
+        verts_s, offsets_s = verts, offsets
+    Hc_s = np.ascontiguousarray(Hc[soft_ids])
+    mats_s = [mats[i] for i in soft_ids]
+    nSoft = len(soft_ids)
+    ndof = int(offsets_s[-1])
 
     if mu_r is not None:
-        # LINEAR: uniform (scalar mu_r) or per-region ({region: mu_r} dict, multi-grade soft iron)
+        # LINEAR soft iron: uniform (scalar) or per-region ({region: mu_r} dict)
         if isinstance(mu_r, dict):
-            chi = _per_region_chi(mesh, mu_r)
+            chi = _region_chi_for(mats_s, mu_r)
         else:
             if not mu_r > 1.0:
                 raise ValueError("solve_planar_demag: mu_r must be > 1 (got %r)" % (mu_r,))
-            chi = np.full(nElem, mu_r - 1.0)
-        M = _rp.Moment2DSolveLinear(verts, offsets, chi, Hc)
+            chi = np.full(nSoft, mu_r - 1.0)
+        M_soft = _rp.Moment2DSolveLinear(verts_s, offsets_s, chi, Hc_s)
         iters, res, nonlinear = 1, 0.0, False
     else:
-        # NONLINEAR: single table or per-region ({region: [[H,B],...]} dict)
+        # NONLINEAR soft iron: single table (per-region dict + pm is not yet wired)
         if isinstance(bh_table, dict):
+            if pm:
+                raise NotImplementedError("solve_planar_demag: pm + per-region bh_table not yet "
+                                          "supported; use a scalar bh_table or linear mu_r")
             M_of_h, chi_sec, chi0 = _per_region_law(mesh, bh_table)
-            chi = np.array(chi0, float)                          # per-element initial chi
+            chi = np.array(chi0, float)
         else:
             M_of_h, chi_sec, chi0 = _law_from_table(bh_table)
-            chi = np.full(nElem, chi0)
+            chi = np.full(nSoft, chi0)
         # scalar-chi Picard: linear solve with per-element chi, then H(c)=M/chi, update chi (secant)
         prev = None
         res = np.inf
-        M = None
+        M_soft = None
         for it in range(nl_maxit):
-            M = _rp.Moment2DSolveLinear(verts, offsets, np.maximum(chi, chi_floor), Hc)
-            He = M / np.maximum(chi, chi_floor)[:, None]          # H(c) = M/chi (dipole row is exact)
+            M_soft = _rp.Moment2DSolveLinear(verts_s, offsets_s, np.maximum(chi, chi_floor), Hc_s)
+            He = M_soft / np.maximum(chi, chi_floor)[:, None]    # H(c) = M/chi (dipole row is exact)
             nH = np.maximum(np.linalg.norm(He, axis=1), 1e-300)
             chi_star = np.maximum(M_of_h(nH) / nH, chi_floor)
             r = chi_star - chi
@@ -241,13 +310,20 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
                                % (res, nl_maxit))
         nonlinear = True
 
+    # ---- assemble the full-mesh M (soft solved + PM fixed) ----
+    M = np.zeros((nElem, 2))
+    M[soft_ids] = M_soft
+    if pm:
+        hard_ids = np.array([i for i, m in enumerate(mats) if m in hard_set], int)
+        M[hard_ids] = M_hard[hard_ids]
     Mavg = _M_avg(M, areas)
-    # demag factors are a single-body concept -> None for a heterogeneous (per-region) body
-    dfac = None if per_region else _demag_factors(verts, offsets, areas, mu_r)
+    # demag factors are a single homogeneous-body concept -> None for per-region or PM-containing
+    dfac = None if (per_region or pm) else _demag_factors(verts, offsets, areas, mu_r)
     return {
         "M": M, "M_avg": Mavg, "demag_factors": dfac,
         "iters": iters, "residual": float(res), "ndof": ndof, "n_el": nElem,
         "nonlinear": nonlinear, "linear_solver": "dense-2d-cpp", "per_region": per_region,
+        "pm": bool(pm),
     }
 
 
