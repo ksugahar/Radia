@@ -4,7 +4,7 @@
   "repo_root": "S:\\Radia\\01_GitHub",
   "policy": {
     "inventory_source": "current worktree examples/ file scan",
-    "examples_role": "temporary teaching/research tier, not an archive",
+    "examples_role": "retired; do not recreate; scratch work belongs in C:\\temp",
     "delete_after_docs_or_validation": true,
     "result_saved_notebook_required": true,
     "json_sidecar_required": true,
@@ -28,7 +28,7 @@
     "distill_delete_reviews": 0,
     "agentic_review_count": 0,
     "topics_with_examples_reference_debt": 0,
-    "examples_reference_policy": "examples/ references are migration blockers; current examples/ inventory is empty.",
+    "examples_reference_policy": "examples/ references are migration blockers; examples/ is retired and current inventory is empty.",
     "docs_quality_next_topics": [],
     "latest_worktree_tracked_existing_files": 0,
     "latest_worktree_tracked_python_files": 0,
