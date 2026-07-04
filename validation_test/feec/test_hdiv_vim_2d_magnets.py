@@ -1,5 +1,5 @@
 """Golden: the HDiv-VIM 2D planar layer adopts the SHARED separate-body permanent-magnet source
-(radia.vim._vim2d.solve_planar_demag magnets=, via the shared planar_charges.magnet_field_cf) --
+(radia.vim.PlanarSolve / vim.Solve magnets=, via the shared planar_charges.magnet_field_cf) --
 parity with radia.mmmm2d's magnets= (design A).
 
 A rigid PM disk magnetises a nearby soft-iron disk; the HDiv-VIM (RT1 charge Gram) and the
@@ -52,7 +52,7 @@ def test_hdiv_vim_no_source_gives_zero():
 
 
 def test_hdiv_vim_magnets_3d_rejected():
-    """magnets= is 2D-only in hdiv_demag_solve -- a 3D mesh must fail loud."""
+    """magnets= is 2D-only in vim.Solve -- a 3D mesh must fail loud."""
     pytest.importorskip("netgen.occ")
     from netgen.occ import Box, OCCGeometry
     with ng.TaskManager():

@@ -133,8 +133,8 @@ def test_hex_soft_iron_auto_is_hdiv_eligible():
     rad.UtiDelAll()
 
 
-def test_hdiv_demag_solve_accepts_wedge_mesh_directly():
-    """hdiv_demag_solve now accepts pure-tet, pure-hex, AND pure-WEDGE/prism (6-vertex) via the C++
+def test_vim_solve_accepts_wedge_mesh_directly():
+    """vim.Solve now accepts pure-tet, pure-hex, AND pure-WEDGE/prism (6-vertex) via the C++
     wedge-mode charge Gram (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated).  A prism-meshed cube
     solves and returns the ~1/3 cube demag factor (the C++ wedge Gram is eig(M_mass^-1 N) in [0,1]:
     0.992/0.998 @ n=2/3 in the de-risk).  A MIXED / pyramid mesh still routes to collocation MMMM."""

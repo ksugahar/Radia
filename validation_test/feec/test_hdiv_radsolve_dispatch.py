@@ -34,7 +34,7 @@ def _tet_cube_mesh(maxh=L / 6):
 
 
 def test_radsolve_hdiv_equals_direct():
-    """rad.Solve(demag_backend='hdiv') on a soft_iron_from_mesh container == direct hdiv_demag_solve
+    """rad.Solve(demag_backend='hdiv') on a MeshSoftIron container == direct vim.Solve
     (same mesh, same applied field) to machine precision, and writes M back onto the Radia elements."""
     rad.UtiDelAll()
     mesh = _tet_cube_mesh()
@@ -44,7 +44,7 @@ def test_radsolve_hdiv_equals_direct():
     iron = vim.MeshSoftIron(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])      # free-space B whose H is H0
     cont = rad.ObjCnt([iron, bkg])
-    # No set_demag_backend: a mesh-backed TET soft iron (soft_iron_from_mesh) auto-routes to HDiv-VIM RT1.
+    # No set_demag_backend: a mesh-backed TET soft iron (MeshSoftIron) auto-routes to HDiv-VIM RT1.
     with ng.TaskManager():
         res = rad.Solve(cont, 1e-6, 1000, 0)
 
@@ -65,7 +65,7 @@ def test_radsolve_hdiv_equals_direct():
 
 
 def test_meshless_hex_soft_iron_not_registered_uses_collocation_mmmm():
-    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via soft_iron_from_mesh) has
+    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via MeshSoftIron) has
     no mesh association, so rad.Solve does NOT route it to the HDiv-VIM -- it falls through to the C++
     solver, which now solves it with the six-face surface-charge MSC (the Error203 guard was removed 2026-06-19).
     The full surface-charge MSC physics (cube demag ~1/3) is locked by tests/test_demag_backend.py."""

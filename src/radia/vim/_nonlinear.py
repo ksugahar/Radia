@@ -212,7 +212,7 @@ def _bh_inverse_funcs(Harr, Barr):
             last = mval
     Hgrid, Mgrid = Hs[keep], Ms[keep]
     if len(Mgrid) < 2:
-        raise ValueError("hdiv_demag_solve: inverse BH table did not produce a monotone M(H) curve")
+        raise ValueError("vim.Solve: inverse BH table did not produce a monotone M(H) curve")
     Hof = PchipInterpolator(Mgrid, Hgrid)                     # |H| given |M|
     Wco_grid = np.concatenate([[0.0], np.cumsum(0.5 * (Hgrid[1:] + Hgrid[:-1]) * np.diff(Mgrid))])
     Wco = PchipInterpolator(Mgrid, Wco_grid)
@@ -469,7 +469,7 @@ def main():
     chi0, Msat = 1000.0, 1.0
     Mof = _bh_curve(chi0, Msat)
     # ---- damped Newton-Raphson on the C++ scalable charge-Gram operator (robust at ALL drive) ----
-    # solve_nonlinear_newton routes through the production hdiv_demag_solve (NGSolve work), so this CALLER
+    # solve_nonlinear_newton routes through the production vim.Solve (NGSolve work), so this CALLER
     # opens the TaskManager (CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT").
     print(f"Nonlinear HDiv-VIM sphere demag (chi0={chi0}, Msat={Msat}) -- damped Newton (C++ charge Gram):")
     print(f"{'H0':>8} {'Newton M':>10} {'newton it':>10} {'analytic(1/3)':>14} {'rel':>9}")

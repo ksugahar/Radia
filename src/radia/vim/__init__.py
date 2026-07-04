@@ -54,18 +54,18 @@ from ._nonlinear import (  # noqa: F401
 )
 from ._vim import (  # noqa: F401  (ngsolve.bem-style operator + .mat)
     DemagOperator,
-    build_charge_gram as _build_charge_gram,
-    build_charge_gauss as _build_charge_gauss,
+    build_charge_gram as _charge_gram_impl,
+    build_charge_gauss as _charge_gram_gauss_impl,
 )
-from ._solve import hdiv_demag_solve as _hdiv_demag_solve  # noqa: F401  (production demag solve)
-from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; hdiv_demag_solve dispatches here)
+from ._solve import hdiv_demag_solve as _solve_impl  # noqa: F401  (production demag solve)
+from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; vim.Solve dispatches here)
     PlanarDemagBody,
     maxwell_torque_circle,
     solve_planar_demag as _solve_planar_demag,
 )
 from ._radsolve import (  # noqa: F401  (.vol/mesh -> both-backend iron)
-    soft_iron_from_mesh as _soft_iron_from_mesh,
-    soft_iron_from_vol as _soft_iron_from_vol,
+    soft_iron_from_mesh as _mesh_soft_iron_impl,
+    soft_iron_from_vol as _vol_soft_iron_impl,
 )
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
@@ -107,7 +107,7 @@ from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
     """
-    return _hdiv_demag_solve(*args, **kwargs)
+    return _solve_impl(*args, **kwargs)
 
 
 def ChargeGram(*args, **kwargs):
@@ -115,7 +115,7 @@ def ChargeGram(*args, **kwargs):
 
     Returns ``(B, G, M_mass)``.
     """
-    return _build_charge_gram(*args, **kwargs)
+    return _charge_gram_impl(*args, **kwargs)
 
 
 def ChargeGramGauss(*args, **kwargs):
@@ -124,7 +124,7 @@ def ChargeGramGauss(*args, **kwargs):
     Kept only so diagnostics fail through the same fail-loud path as the
     internal Gauss builder.
     """
-    return _build_charge_gauss(*args, **kwargs)
+    return _charge_gram_gauss_impl(*args, **kwargs)
 
 
 def MeshSoftIron(*args, **kwargs):
@@ -132,7 +132,7 @@ def MeshSoftIron(*args, **kwargs):
 
     User-facing workflows should usually use ``rad.SoftIron(mesh, ...)``.
     """
-    return _soft_iron_from_mesh(*args, **kwargs)
+    return _mesh_soft_iron_impl(*args, **kwargs)
 
 
 def VolSoftIron(*args, **kwargs):
@@ -140,7 +140,7 @@ def VolSoftIron(*args, **kwargs):
 
     User-facing workflows should usually use ``rad.SoftIron(path, ...)``.
     """
-    return _soft_iron_from_vol(*args, **kwargs)
+    return _vol_soft_iron_impl(*args, **kwargs)
 
 
 def PlanarSolve(*args, **kwargs):
@@ -159,11 +159,11 @@ def SolveNonlinearNewtonScalable(*args, **kwargs):
 
 
 for _new, _old in [
-    (Solve, _hdiv_demag_solve),
-    (ChargeGram, _build_charge_gram),
-    (ChargeGramGauss, _build_charge_gauss),
-    (MeshSoftIron, _soft_iron_from_mesh),
-    (VolSoftIron, _soft_iron_from_vol),
+    (Solve, _solve_impl),
+    (ChargeGram, _charge_gram_impl),
+    (ChargeGramGauss, _charge_gram_gauss_impl),
+    (MeshSoftIron, _mesh_soft_iron_impl),
+    (VolSoftIron, _vol_soft_iron_impl),
     (PlanarSolve, _solve_planar_demag),
     (SolveNonlinearNewton, solve_nonlinear_newton),
     (SolveNonlinearNewtonScalable, solve_nonlinear_newton_scalable),
