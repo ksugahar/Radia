@@ -172,11 +172,40 @@ class TestNgsolveKnowledge:
         assert "animated GIF" in body
         assert "headless-friendly" in body
         assert "high-order impedance" in body
-        assert "not as the Kelvin" in body
+        assert "never as a Kelvin" in body
+        assert "Kelvin boundary language is not allowed" in body
         assert "struck top" in body
         assert "axis-equal" in body
         assert "not a hemisphere" in body
-        assert "lower half-space is intentionally quiet" in body
+        assert "real-drum FEM/BEM" in body
+        assert "lower-half radiation" in body
+        assert "reduced FEM" in body
+        assert "ode45" in body
+        assert "retarded boundary" in body
+        assert "must not split the observation" in body
+        assert "every exterior air observation point" in body
+        assert "direction-only painting is a" in body
+        assert "color-map only propagating air" in body
+        assert "3D axisymmetric" in body
+        assert "r-z slice" in body
+        assert "not yet a full 3D" in body
+        assert "volFemBemIfftResponse" in body
+        assert "frequency-domain Helmholtz FEM/BEM" in body
+        assert "inverse FFT" in body
+        assert "not a periodic sine-wave animation" in body
+        assert "not convolution-quadrature TD-BEM" in body
+        assert "volTdBemConvolutionQuadrature" in body
+        assert "BDF generating function" in body
+        assert "Laplace-domain retarded single-layer" in body
+        assert "real Lubich CQ" in body
+        assert "volFemBemCoupledConvolutionQuadrature" in body
+        assert "H1/P1" in body
+        assert "interior wave FEM" in body
+        assert "(1/2 Mb-K(s))*T" in body
+        assert "-S(s)q + D(s)Tu" in body
+        assert "Calderon/Johnson-Nedelec coupled CQ" in body
+        assert "retarded double-layer `K(s)`" in body
+        assert "SingleLayerTeaching" in body
         assert "one-sided baffled top-head" in body
         assert "r-z pressure snapshots" in body
 
