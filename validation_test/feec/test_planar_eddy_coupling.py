@@ -142,3 +142,74 @@ def test_sigma_to_zero_recovers_magnetostatic_demag():
     assert abs(res["M_avg"][0].real - pure["M_avg"][0]) / abs(pure["M_avg"][0]) < 1e-3, \
         (res["M_avg"][0], pure["M_avg"][0])
     assert abs(res["M_avg"][0].imag) < 1e-3 * abs(res["M_avg"][0].real)      # eddy phase ~0
+
+
+# ---- unified PM + soft-iron + eddy rotor (PM-motor / eddy-current brake) -------------------------
+MREM = 8.0e5
+C_ROT, C_COND = (-2.0 * A, 0.0), (2.0 * A, 0.0)
+
+
+def _rotor_mesh(maxh):
+    """PM core (0..0.5a) inside a soft-iron annulus (0.5a..a) -- a real PM+iron rotor, no air."""
+    geo = SplineGeometry()
+    geo.AddCircle(C_ROT, r=A, leftdomain=1, rightdomain=0, bc="iron_o")
+    geo.AddCircle(C_ROT, r=0.5 * A, leftdomain=2, rightdomain=1, bc="pm_o")
+    geo.SetMaterial(1, "iron"); geo.SetMaterial(2, "pm")
+    return ng.Mesh(geo.GenerateMesh(maxh=maxh))
+
+
+def _rotor_cond_air(maxh_body, maxh_c, maxh_a=R / 12):
+    geo = SplineGeometry()
+    geo.AddCircle((0, 0), r=R, leftdomain=1, rightdomain=0, bc="outer")
+    geo.AddCircle(C_ROT, r=A, leftdomain=2, rightdomain=1, bc="iron_o")
+    geo.AddCircle(C_ROT, r=0.5 * A, leftdomain=3, rightdomain=2, bc="pm_o")
+    geo.AddCircle(C_COND, r=A, leftdomain=4, rightdomain=1, bc="cond_ifc")
+    for i, m in enumerate(("air", "iron", "pm", "conductor"), start=1):
+        geo.SetMaterial(i, m)
+    geo.SetDomainMaxH(2, maxh_body); geo.SetDomainMaxH(3, maxh_body); geo.SetDomainMaxH(4, maxh_c)
+    return ng.Mesh(geo.GenerateMesh(maxh=maxh_a))
+
+
+def _monolithic_pm_ac(mesh, mu_r, sigma, freq, Mpm, B0=1.0, order=4):
+    """Monolithic AC+PM: int nu grad(A).grad(v) + j w sigma int_c A v = int_pm (Mx dv/dy - My dv/dx)."""
+    w = 2 * np.pi * freq
+    mesh.Curve(order)
+    nu = ng.CoefficientFunction([1.0 / (mu_r * MU0) if m == "iron" else 1.0 / MU0
+                                 for m in mesh.GetMaterials()])
+    sig = ng.CoefficientFunction([sigma if m == "conductor" else 0.0 for m in mesh.GetMaterials()])
+    fes = ng.H1(mesh, order=order, complex=True, dirichlet="outer")
+    u, v = fes.TnT()
+    af = ng.BilinearForm(fes, symmetric=True)
+    af += nu * ng.grad(u) * ng.grad(v) * ng.dx
+    af += 1j * w * sig * u * v * ng.dx
+    af.Assemble()
+    gfu = ng.GridFunction(fes)
+    gfu.Set(B0 * ng.y, definedon=mesh.Boundaries("outer"))
+    lf = ng.LinearForm(fes)
+    lf += (Mpm[0] * ng.grad(v)[1] - Mpm[1] * ng.grad(v)[0]) * ng.dx("pm")
+    lf.Assemble()
+    r = lf.vec.CreateVector(); r.data = lf.vec - af.mat * gfu.vec
+    gfu.vec.data += af.mat.Inverse(fes.FreeDofs(), inverse="pardiso") * r
+    return gfu, mesh
+
+
+def test_pm_eddy_unified_rotor():
+    """A PM+iron rotor coupled to a conductor eddy (couple_mmmm pm=) == monolithic AC+PM FEM."""
+    mu_r = 100.0
+    delta = A / 1.5
+    freq = (2.0 / (MU0 * SIGMA * delta ** 2)) / (2 * np.pi)
+    with ng.TaskManager():
+        fm = _rotor_cond_air(maxh_body=A / 8, maxh_c=min(A / 6, delta / 3))
+        gfu_m, fm = _monolithic_pm_ac(fm, mu_r, SIGMA, freq, [MREM, 0.0])
+        M_mono = (mu_r - 1.0) / (mu_r * MU0) * np.array([_avg(gfu_m, fm, "iron", "x"),
+                                                         _avg(gfu_m, fm, "iron", "y")])
+        rot = _rotor_mesh(maxh=A / 8)
+        fem = _cond_air_mesh(C_COND, maxh_c=min(A / 6, delta / 3))
+        res = pe.couple_mmmm(rot, mu_r=mu_r, fem_mesh=fem, sigma=SIGMA, freq=freq,
+                             pm={"pm": [MREM, 0.0]})
+    soft = np.array([i for i, m in enumerate(m2._element_materials(rot)) if m == "iron"], int)
+    M_iron = res["M"][soft].mean(axis=0)
+    assert res["iters"] <= 12, res["hist"]
+    rel = abs(M_iron[0] - M_mono[0]) / abs(M_mono[0])
+    assert rel < 1e-2, (M_iron[0], M_mono[0], rel)           # PM magnetises iron + drives eddy
+    assert abs(M_iron[0].imag) > 1e-3 * abs(M_iron[0].real)  # eddy induces a real phase lag
