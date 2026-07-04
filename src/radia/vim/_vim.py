@@ -543,7 +543,8 @@ def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1
         far_tet_pts=ftp.ravel().tolist(), far_tet_w=ftw.tolist(),
         far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
         near_grade=near_grade, far_inner_factor=far_inner,
-        image_masks=list(image_masks or []), image_signs=list(image_signs or []),
+        image_masks=([] if image_masks is None else list(image_masks)),
+        image_signs=([] if image_signs is None else list(image_signs)),
         eps=eps, leaf=leafsize, eta=eta)
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
@@ -786,7 +787,8 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
         far_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), far_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
         far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
         near_grade=near_grade, far_inner_factor=far_inner,
-        image_masks=list(image_masks or []), image_signs=list(image_signs or []),
+        image_masks=([] if image_masks is None else list(image_masks)),
+        image_signs=([] if image_signs is None else list(image_signs)),
         eps=eps, leaf=leafsize, eta=eta)
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
@@ -828,8 +830,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
-    image_masks = list(image_masks or [])
-    image_signs = list(image_signs or [])
+    image_masks = [] if image_masks is None else list(image_masks)   # robust for NumPy arrays (truth-value)
+    image_signs = [] if image_signs is None else list(image_signs)
     if len(image_masks) != len(image_signs):
         raise ValueError("build_charge_gram: image_masks and image_signs must have the same length")
     if image_masks:

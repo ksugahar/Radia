@@ -128,6 +128,15 @@ def is_hdiv_eligible(top):
         return False
 
 
+def registered_iron_count(top):
+    """Number of HDiv-registered soft-iron bodies inside ``top`` (0, 1, or >1).  rad.Solve's 'auto' split
+    uses this to FAIL LOUD on a MULTI-iron container -- which is_hdiv_eligible rejects (its len!=1 guard) --
+    instead of SILENTLY demoting it to collocation MMMM (a No-Fallbacks violation).  Read-only, never raises."""
+    if top in _DEMAG_REGISTRY:
+        return 1
+    return sum(1 for m in _KNOWN_CONTAINER_MEMBERS.get(top, []) if m in _DEMAG_REGISTRY)
+
+
 def _find_registered_iron(top):
     """Return (iron_handle, [source_handles]) for a top-level rad.Solve object: the registered
     iron container plus the other (source) members.  ``top`` may be the iron handle itself or an
