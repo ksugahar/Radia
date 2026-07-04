@@ -54,10 +54,14 @@ registration.
 
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
-export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 (lab standard)
+export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 raw display data
 export jmag_nastran "model.bdf" order 2 overwrite                # Nastran BDF
 export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
+
+For Radia post-processing, `.geo` is the standard launch artifact: it merges the
+`.msh v4.1` data and carries display options. Associate/open `.geo` for normal
+review; treat `.msh` as optional raw mesh/data inspection.
 
 The `export netgen` command additionally accepts Kelvin / symmetry
 options (see below). The other formats do not consume Kelvin.

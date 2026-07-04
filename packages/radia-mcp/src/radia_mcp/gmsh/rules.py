@@ -131,7 +131,7 @@ def _has_numsubedges_companion(filepath: str) -> bool:
 
 
 def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: pip gmsh package should not be used (standalone exe only)."""
+    """HIGH: gmsh Python API should not enter computation scripts."""
     findings = []
     for i, line in enumerate(lines, 1):
         stripped = line.split("#")[0].strip()
@@ -144,9 +144,11 @@ def check_pip_gmsh_import(filepath: str, lines: List[str]) -> List[Dict]:
                 "severity": "HIGH",
                 "rule": "pip-gmsh-import",
                 "message": (
-                    "GMSH Python package (pip install gmsh) should not be used. "
-                    "Radia uses standalone gmsh.exe for visualization. "
-                    "For mesh input to NGSolve, use .vol files (export netgen)."
+                    "Do not use the gmsh Python API in Radia computation or "
+                    "mesh-generation scripts. The canonical viewer launcher is "
+                    "`gmsh` on PATH (Python wrapper is OK for launch/inspection). "
+                    "For mesh input to NGSolve, use .vol files (export netgen); "
+                    "for post-processing, emit .msh v4.1 plus a .geo launch file."
                 ),
             })
     return findings

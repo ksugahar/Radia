@@ -42,8 +42,8 @@ GMSH GUI:
 
 ## Output Format
 - Default: .msh v4.1 (GMSH visualization)
-- Optional: .msh v4.1 (large-scale, structured Physical Groups)
-- `GmshPostExport.write()` defaults to v2.2
+- `GmshPostExport.write()` and `vol2msh()` emit .msh v4.1
+- Post-processing launch artifact: `case.geo` that merges the .msh/.step data
 """
 
 GMSH_OVERVIEW = """
@@ -58,9 +58,16 @@ CAD engine and post-processor. Version 4.15.2 (March 2026).
 - **Citation**: Geuzaine & Remacle, IJNME 79(11), pp. 1309-1331, 2009
 
 ## Installation (Radia project)
-GMSH is installed as a standalone executable (not pip).
-- Lab machines: `C:\\gmsh.exe`
-- .msh files are associated with gmsh.exe via registry
+The canonical launcher is `gmsh` on PATH. On current LAB installs this is the
+Python wrapper `C:\\Program Files\\Python312\\Scripts\\gmsh.bat`, backed by the
+`gmsh` Python package (`gmsh.py`) at version 4.15.2. Do not hard-code
+`C:\\gmsh.exe`; use `gmsh` / `shutil.which("gmsh")` / the registered file
+association.
+- `.geo` is the primary file association for Radia post-processing launch
+- `.msh` association is optional raw mesh/data inspection; do not make it the
+  user-facing post-processing contract
+- Python scripts may import `gmsh` for post-processing inspection, but Radia
+  computation scripts must not use `gmsh.model.*` for geometry or mesh creation
 
 ## Modules
 1. **Geometry** - CAD kernel (built-in or OpenCASCADE)
@@ -112,6 +119,7 @@ gmsh file.geo -3 -format msh22 -save_all  # MSH v2.2 output
 gmsh field.msh                          # View field data
 gmsh -merge file1.msh -merge file2.msh  # Multiple data files
 gmsh display.geo                        # .geo with Merge + options
+gmsh display.geo                        # auto-loads display.geo.opt if present
 ```
 
 ## Useful Combinations
@@ -360,6 +368,19 @@ model.msh.opt    <- automatically loaded when model.msh is opened
 
 GMSH searches for `<filename>.opt` in the same directory as `<filename>`.
 This works for any file type: `.msh.opt`, `.geo.opt`, `.step.opt`, etc.
+
+Radia post-processing should prefer `case.geo` as the launch target. Keep
+`case.msh` as the raw mesh/field container, and attach durable display state to
+`case.geo` either inline or through the exact sidecar `case.geo.opt`.
+
+Important naming detail: `Gmsh` appends `.opt` to the exact filename that is
+opened. Opening `case.msh` looks for `case.msh.opt`; opening `case.geo` looks
+for `case.geo.opt`. A sidecar named only `case.opt` is not an auto-load
+contract for either file. For double-click workflows, artifact writers should
+emit `case.geo.opt` next to `case.geo`, or copy the critical options into the
+`.geo` itself. A launcher may mirror old `case.opt` sidecars to `case.geo.opt`
+for backward compatibility, but the durable contract is the exact auto-load
+name.
 
 ## Generating a .msh.opt File
 
@@ -655,8 +676,16 @@ GMSH_GEO_SCRIPTING = """
 # GMSH .geo Scripting Language
 
 ## Purpose in Radia
-.geo files are used as **companion files** for display settings when
-opening .msh results. They are NOT used for mesh generation.
+.geo files are the **standard Radia post-processing launch artifact**.
+Post-processing exporters should write a `case.geo` recipe next to the `.msh`
+created by Radia's existing exporters (`GmshPostExport.write()`, `vol2msh()`,
+or combined .msh writers). The `.geo` file should `Merge` the raw `.msh`,
+`.step`, and field files, then carry the display policy needed for Explorer
+double-click, LLM/headless review, and reproducible screenshots. The raw `.msh`
+remains the mesh/field data container; the user-facing Open GMSH target is
+`case.geo`.
+
+They are NOT used for mesh generation.
 
 ## Companion .geo File Pattern
 ```
@@ -674,6 +703,34 @@ Mesh.SurfaceEdges = 0;
 View[0].IntervalsType = 2;  // Continuous
 View[0].ShowScale = 1;
 View[0].VectorType = 4;     // 3D arrows
+```
+
+## .geo + .opt Launch Contract
+
+Do not rely on a plain `display.opt` being auto-loaded when a user double-clicks
+`display.geo`. Gmsh auto-loads `display.geo.opt` for `display.geo`, not
+`display.opt`. For reproducible lab artifacts, use one of these two contracts:
+
+1. Put all critical display options directly in the `.geo` file after the
+   `Merge` lines. This is the safest double-click path.
+2. If you also keep a plain `display.opt` sidecar, the artifact writer should
+   emit the exact auto-load twin `display.geo.opt` at the same time.
+
+For clipped acoustic/FEM-BEM fields, the `.geo` should contain the clip options
+itself if it is meant to be opened from Explorer:
+
+```
+Merge "field.msh";
+Mesh.Clip = 0;       // keep mesh/surface geometry whole
+General.Clip0A = 0;
+General.Clip0B = -1;  // visible side y < 0 for the lab convention
+General.Clip0C = 0;
+General.Clip0D = 0;
+General.ClipOnlyVolume = 1;  // keep separate surface/drum geometry whole
+General.ClipWholeElements = 0;
+View[0].Visible = 1;
+View[0].Clip = 1;   // clip the post-processing acoustic pressure view
+View[1].Visible = 0;
 ```
 
 ## Multi-File Overlay
@@ -809,8 +866,7 @@ from radia.gmsh_post_export import GmshPostExport
 post = GmshPostExport(mesh, boundary=True)  # BND from volume mesh
 post.add_field("|J|", node_J, ncomp=1)      # per-vertex scalar
 post.add_vector_field("J", gf_J)            # vector field
-post.write("results.msh")                   # default v2.2
-post.write("results.msh", version="4.1")    # optional v4.1
+post.write("results.msh")                   # v4.1 lab standard
 ```
 
 ## Supported Triangle Orders
@@ -856,13 +912,33 @@ The mesh generator owns the mesh. GMSH owns the view.
 
 ```
 Netgen/Cubit -> tri/tet or hex mesh -> NGSolve/Radia validation
-             -> optional GMSH .msh/.pos display files -> standalone GMSH
+             -> GMSH .msh/.pos data + .geo launch recipe -> standalone GMSH
 ```
 
-For simple tri/tet display examples, it is OK to write a GMSH v2.2 ASCII
-`.msh` from an existing NGSolve mesh. That is a **mesh export**, not GMSH
-mesh generation. Keep the script free of `import gmsh` and `gmsh.model.*`;
-write `.vol` for the solver path and `.msh`/`.pos`/`.geo` only for display.
+For display examples, write a GMSH v4.1 `.msh` from the existing Radia/Cubit
+exporters. That is a **mesh export**, not GMSH mesh generation. Keep the script
+free of `import gmsh` and `gmsh.model.*`; write `.vol` for the solver path and
+`.msh`/`.pos`/`.geo` only for display. Historical v2.2 snippets are legacy
+references, not the preferred Radia output.
+For post-processing, `case.geo` is the standard artifact to open in GMSH; it
+should `Merge` the exported data and contain the critical display options or
+the exact `case.geo.opt` twin.
+
+### .vol and GMSH
+
+Do not plan a Radia workflow around GMSH directly opening Netgen `.vol` files,
+and do not add a GMSH-side `.vol` reader/plugin for normal Radia operation.
+Radia already owns the `.msh` output path: use `GmshPostExport.write()` for an
+NGSolve mesh with fields, `vol2msh()` for `.vol` plus field payloads, and
+combined v4.1 writers for multi-mesh post-processing. Cubit-side mesh display
+uses `export gmsh "case.msh" order N` / `cubit_mesh_export.export_Gmsh_ver4`.
+On the lab GMSH 4.15.2 package, opening existing `.vol` files fails as a syntax
+parse of a GMSH script, so `.vol` is not a portable GMSH input contract. The
+supported path is:
+
+```
+Netgen/Cubit .vol -> NGSolve/Radia reads the mesh -> existing Radia .msh exporter -> case.geo
+```
 
 Reference workflow:
 `docs/visualization/MESH_GUIDE.md`, plus `docs/visualization/_gmsh_display.geo`
@@ -984,7 +1060,9 @@ By default, only elements in Physical Groups are saved.
 
 ## 5. .msh v2.2 vs v4.1 Confusion
 **Problem**: .msh v2.2 vs v4.1 confusion when viewing in GMSH.
-**Fix**: Cubit exports v2.2 by default. Use `Mesh.MshFileVersion = 2.2` in GMSH settings if needed.
+**Fix**: Radia, `GmshPostExport`, `vol2msh`, and `cubit-mesh-export` standardize
+on `.msh v4.1`. Treat v2.2 snippets as legacy reference material only; do not
+downgrade new Radia post-processing output to v2.2.
 
 ## 6. NodeData Field Not Displayed
 **Problem**: .msh file has NodeData section but no view appears.
@@ -997,11 +1075,43 @@ Check numComponents (1, 3, or 9).
 Use `Merge "file.step"; Merge "field.msh";` in .geo.
 
 ## 8. gmsh.bat vs gmsh.exe
-**Problem**: `pip install gmsh` creates gmsh.bat (Python wrapper).
-**Fix**: Radia uses standalone gmsh.exe (`C:\\gmsh.exe`).
-The Python gmsh package is NOT installed.
+**Problem**: A script assumes `C:\\gmsh.exe` and fails even though `gmsh` works
+from the shell.
+**Fix**: The Python-wrapper launcher (`gmsh.bat` backed by `gmsh.py`) is the
+canonical current install. Resolve `gmsh` through PATH or `shutil.which("gmsh")`
+instead of hard-coding an executable path.
 
-## 9. GMSH window appears "invisible" -- it's on an off-screen monitor
+## 9. .geo Opens but the .opt Settings Are Missing
+**Problem**: A user double-clicks `display.geo` and sees default colors,
+missing clip planes, wrong view visibility, or no y<0 cut even though
+`display.opt` exists next to it.
+
+**Cause**: Gmsh auto-loads an option file by appending `.opt` to the exact file
+being opened. `display.geo` can auto-load `display.geo.opt`, but not
+`display.opt`. Likewise `field.msh` can auto-load `field.msh.opt`, but not
+`field.opt`.
+
+**Fix**: For Explorer/double-click artifacts, either put the critical options
+directly in `display.geo`, or write the exact Gmsh sidecar
+`display.geo.opt` alongside it. For post-processing NodeData fields, remember
+that `Mesh.Clip` clips mesh entities while `View[0].Clip` clips the displayed
+field view. Use `Mesh.Clip = 0` plus `View[0].Clip = 1` when the geometry/drum
+surface must remain whole but the acoustic pressure view should show a y<0
+section. Keep `General.ClipOnlyVolume`, view visibility, colormap, and scale
+settings in the `.geo` if the artifact must be portable without a sidecar.
+Use a split viewer contract for CAE artifacts: `case.geo` is the post-processing
+display recipe and should have `case.geo.opt`; `case.msh` is the raw mesh/data
+inspection entry point and should have `case.msh.opt` with post views hidden and
+mesh faces/edges visible. Radia post-processing exporters should therefore emit
+`.geo` by default. A plain `case.opt` is only a compatibility mirror, not the
+Explorer auto-load contract for either file.
+Avoid relying on UserChoice; use HKLM/HKCR ProgID class associations that invoke
+the `gmsh` command when Windows Explorer double-click behavior matters. Register
+`.geo` as the primary Radia post-processing launch association. Keep `.msh`
+association optional for raw mesh/data inspection only; panels and docs should
+open `case.geo`.
+
+## 10. GMSH window appears "invisible" -- it's on an off-screen monitor
 
 **Symptom**: After running a viewer script (e.g. `python view_*_gmsh.py` or
 `open_gmsh.py file.msh`), the user reports "GMSHが見えない" / "GMSH is
