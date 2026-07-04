@@ -72,12 +72,15 @@ field magnetises the iron AND drives the conductor eddy.  Gated vs a monolithic 
     "nonlinear": """\
 # Nonlinear soft iron + eddy (effective-chi AC)
 
-`couple_mmmm(..., bh_table=[[H,B],..])`: nonlinear soft iron in the staggered eddy coupling via an
-amplitude-based EFFECTIVE-chi Picard -- the 1st-harmonic AC approximation:
+`couple_mmmm(..., bh_table=[[H,B],..])` (scalar) or `bh_table={grade: [[H,B],..]}` (per-region,
+multi-grade rotor -- NO pm): nonlinear soft iron in the staggered eddy coupling via an amplitude-based
+EFFECTIVE-chi Picard -- the 1st-harmonic AC approximation:
     chi_eff = M(|H|) / |H|,   |H| = sqrt(|Hx|^2 + |Hy|^2)  (the PHASOR magnitude).
 |H| reduces to |H| for a real / DC field, so the sigma->0 limit recovers the DC nonlinear demag.
 It captures amplitude-dependent saturation, NOT harmonic generation (that needs time stepping).  The
-chi state warm-starts across staggered calls.
+chi state warm-starts across staggered calls.  FAIL-LOUD: a non-converged Picard raises (No-Fallbacks),
+never a silent unconverged M.  (pm + per-region bh_table is not yet wired -- scalar table with pm, or
+per-region table without pm.)
 
 Gates: sigma->0 recovers the standalone DC nonlinear MMMM demag (2e-3); a low drive recovers the
 linear chi0 result (1e-3).  DC nonlinear demag itself: MMMM/HDiv scalar-chi Picard + safeguarded
