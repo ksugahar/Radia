@@ -238,6 +238,22 @@ susceptibility + line-search damping) is SHARED; only the demag operator N = B^T
 Implemented as `radia.vim.solve_nonlinear_newton`, golden-locked in
 tests/feec/test_hdiv_vim_tet_newton.py (3 tests, feec suite 50/50).
 
+## ENGINEERING SOLVER POLICY (Sugahara 2026-07-04, at the HDiv-VIM dev close) -- memory feedback-nonlinear-tol-1e3-engineering
+The nonlinear iteration STANDARD (shared with the moment/MMMM path):
+- **tol <= 1e-3** on max|dB|/B_sat per iteration -- do NOT set it TIGHTER for an engineering run (the
+  observable carries ~0.5-1% mesh/discretization error, so 1e-6 is ~3 decades of pure waste = ~2x the
+  Picard iterations); use 1e-6 ONLY to match a validation fixture, and say so in the run metadata.
+- **Newton is NOT mandatory.** A SAFEGUARDED Picard -- Picard + **Anderson(1)** (the moment path's default:
+  accept the accelerated iterate only when the residual drops) -- is the accepted solver at 1e-3.  Do NOT
+  reach for Newton merely to cure a "slow" over-tight (1e-6) run; the correct tolerance fixes that.
+- **HONEST CAVEAT (measured):** PLAIN scalar / unsafeguarded Picard DIVERGES at DEEP SATURATION
+  (descending-branch steep slope; relax_param=0.3 does NOT rescue) -- this is exactly the "per-element
+  Picard FAILED at deep saturation" failure the DAMPED-NEWTON headline above was built to solve.  So
+  "Picard is fine" means Picard + Anderson(1), NOT naive Picard.  The shipped C++ energy-Newton (deep-sat
+  robust) STAYS -- "Newton non-mandatory" is PERMISSIVE (safeguarded Picard is an accepted alternative),
+  NOT "remove the working Newton".  Governs go-forward DEFAULTS: Picard(+Anderson(1)) at tol 1e-3 first;
+  Newton is the tool for genuinely stiff deep-saturation per-element accuracy, not a reflex.
+
 ## DONE + golden-tested (radia.vim nonlinear API, tests/feec/test_hdiv_vim_tet_nonlinear.py)
 - **Applied-field formulation RESOLVED (verify-first)**: the eigenvalue framing A_eig = (1/chi)M_mass
   - N is NOT the applied-field system.  The physical applied-field weak form is
