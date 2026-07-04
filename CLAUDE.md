@@ -2126,36 +2126,38 @@ robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
   ```
 - LAB 上で `pip install --upgrade <Sugahara-lab-package>` は **禁止** — editable を
   silently 上書きして dev loop を破壊する (2026-04-28 incident、2026-05-19 再発)。
-- Upgrade route は **100号機 / mdx 側** (PyPI consumer)。 LAB は release 後に
-  metadata 同期のため `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。
+- Upgrade route は **mdx / hibino 側** (PyPI consumer)。 LAB と 100号機 は release 後も
+  metadata 同期のため `pip install -e <path> --no-deps --no-cache-dir` で editable を維持する。
 - CI/CD 環境 (e.g. `C:\actions-runner\_work\Radia\Radia\...`) は別管理 (NETWORK
   SERVICE 所有)。 LAB の editable pointer がそちらに drift していたら戻す。
 
-**POLICY (2026-05-02 update)**: **2-tier 配布**: LAB は editable (NAS source、developer
-loop)、100号機 と mdx は両方 PyPI install (`pip install radia[cubit] radia-mcp` +
-`cubit-plugin-install --all-users`). リリース wheel + Cubit plugin の end-to-end
-検証点を 100号機 と mdx の 2 マシンで二重化。mdx editable は 2026-05-02 に retire
-(`tools/push_pyds_to_mdx.py` は branch-test 用にのみ残置).
+**POLICY (2026-06-25 update)**: **QUD 配布**: LAB と 100号機 は editable
+(NAS source、developer/user feedback loop)、mdx と hibino は PyPI install。
+mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
+のみでよく、`radia-mcp` は不要。hibino は PyPI 経由の MCP consumer として
+`radia-mcp` も入れる。
 
-**2 ステージ配布モデル (2026-05-02 simplified)**:
+**QUD 配布モデル (2026-06-25)**:
 
 | Stage | マシン | install 形態 | 目的 |
 |-------|--------|-----------|------|
 | 1 | LAB | `pip install -e .` + `pip install -e packages/cubit-mesh-export` + `pip install -e packages/radia-mcp` | 開発者ループ。最速フィードバック (NAS source 直接編集) |
-| 2 | 100号機 / mdx | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` (regular-file deploy) | PyPI wheel + Cubit plugin の end-to-end 検証点。100号機 = 21 ユーザの本番、mdx = 別マシンでの cross-machine consistency probe (release-triple Phase 9). Stage-2 が両機で通るまで release OK を宣言しない。 |
+| 1 | 100号機 | `pip install -e \\192.168.11.100\work\00_CAE\Radia\01_GitHub` + `pip install -e ...\packages\cubit-mesh-export` + `pip install -e ...\packages\radia-mcp` | 共有ユーザ環境も editable。radia と MCP の学習/修正が即反映される |
+| 2 | mdx | `pip install radia / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` | PyPI wheel + Cubit plugin の compute verification。`radia-mcp` は不要 |
+| 2 | hibino | `pip install radia / radia-mcp / cubit-mesh-export` (PyPI) + `cubit-plugin-install --all-users` | PyPI 経由の MCP consumer verification |
 
-**変更点 (2026-05-02)**:
-- 旧: LAB editable / 100号機 PyPI / mdx editable (3-tier).
-- 新: LAB editable / 100号機 + mdx 両方 PyPI (2-tier).
-- 理由: mdx editable は (a) gh CLI 不在で `download_binaries.sh` 不可, (b) legacy site-packages shadow の手動削除が必要, (c) `.pyd` を base64-over-ssh で push する `tools/push_pyds_to_mdx.py` が必須, など落とし穴が多い割に PyPI 検証の代替価値が小さかった。100号機 と同じ "PyPI が動くか" の純粋な検証点に統一。
+**変更点 (2026-06-25)**:
+- 旧: LAB editable / 100号機 + mdx 両方 PyPI (2-tier).
+- 新: LAB + 100号機 editable / mdx + hibino PyPI (QUD).
+- mdx は `radia-mcp` 不要。hibino を PyPI 経由の MCP consumer として追加。
 
-**LAB のみ editable な 4 パッケージ**:
-- `radia` (LAB: `S:\Radia\01_GitHub`)
-- `cubit-mesh-export` (LAB: `S:\Radia\01_GitHub\packages\cubit-mesh-export`)
-- `radia-mcp` (LAB: `S:\Radia\01_GitHub\packages\radia-mcp`)
+**LAB / 100号機 editable パッケージ**:
+- `radia` (LAB: `S:\Radia\01_GitHub`, 100号機: `\\192.168.11.100\work\00_CAE\Radia\01_GitHub`)
+- `cubit-mesh-export` (`packages\cubit-mesh-export`)
+- `radia-mcp` (`packages\radia-mcp`)
 - `mcp-server-document` (LAB: `S:\mcp-server`) -- LAB-private (PyPI 配布なし)
 
-LAB で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意 (2026-04-28 incident)。release 後の LAB 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **100号機 / mdx 用** (PyPI から通常通り upgrade).
+LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意。release 後の LAB / 100号機 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx / hibino 用** (PyPI から通常通り upgrade).
 
 **POLICY (2026-05-27 追加): release 後の LAB editable 再確認**
 
@@ -2175,7 +2177,7 @@ default」原則を実運用で守るチェック。
 
 **再発するため、release 後の確認を policy 化**。
 
-**チェック手順** (release-triple Phase 8 / Phase 9 の直後に流す):
+**チェック手順** (release-qud Phase 8 / Phase 9 の直後に流す):
 
 ```powershell
 # 4 パッケージ全部の editable pointer が LAB source を指しているか確認
@@ -2206,36 +2208,35 @@ pip show <pkg> | Select-String "Editable project location"
 ```
 
 **自動化候補** (TODO): `tools/verify_lab_editable.py` を作って
-`release-triple done` から呼び出し、drift があれば exit non-zero。
+`release-qud done` から呼び出し、drift があれば exit non-zero。
 今は手動チェックで運用。
 
 **Drift する原因** (analysis):
 
 1. **CI runner と LAB が同じ NAS source を共有**: `\\192.168.11.100\work\00_CAE\Radia\01_GitHub` を `S:\` で参照 (LAB) または UNC で参照 (CI runner)。CI が editable install を走らせると、CI 側の pip metadata が LAB の Python の site-packages にも書き戻されるケースがある (NAS-mounted Python env でない限り通常起こらないが、`pip install -e .` を CI で実行すると `.egg-info` 等が source tree に書かれ、その後の `pip show` 解決順序を狂わせる)。
 2. **`pip install --upgrade <lab-pkg>` を LAB で実行**: editable 上書き。**禁止**。
-3. **release-triple Phase 8 の `pip install --force-reinstall`**: 100号機 / mdx で実行されるべきコマンドを誤って LAB shell で実行。
+3. **release-qud Phase 8 の PyPI install command**: mdx / hibino で実行されるべきコマンドを誤って LAB / 100号機 shell で実行。
 
 **予防策**:
 
 - LAB shell では決して `pip install <lab-pkg>` (non-editable) / `pip install --upgrade <lab-pkg>` を打たない
-- release-triple skill の deploy commands は SSH で 100号機 / mdx の shell で実行する (LAB shell では実行しない)
+- release-qud skill の deploy commands は対象マシンの tier に従って実行する。LAB / 100号機は editable、mdx / hibino は PyPI。
 - 不安な場合は release 直後に上記チェック手順を流す
 
-**100号機 / mdx 全ユーザー PyPI install**: `C:\Program Files\Python312`
-の machine-wide site-packages に PyPI install。リリース毎に admin が
+**mdx / hibino 全ユーザー PyPI install**: `C:\Program Files\Python312`
+の machine-wide site-packages に PyPI install。mdx は
+`pip install --upgrade radia==X.Y.Z cubit-mesh-export==X.Y.Z`、hibino は
 `pip install --upgrade radia==X.Y.Z radia-mcp==X.Y.Z cubit-mesh-export==X.Y.Z`
 + `cubit-plugin-install --all-users` を実行。
 
-**100号機 / mdx Cubit plugin (regular file)**:
-- `<Cubit>\bin\plugins\cubit_mesh_export.ccm` (regular file from PyPI wheel; the Qt5 `.ccl` was removed in radia 4.80.0)
-- `<Cubit>\bin\plugins\cubit_mesh_curver.cp312-win_amd64.pyd` (regular file from PyPI wheel)
+**mdx / hibino Cubit plugin (regular file)**:
+- `<Cubit>\bin\radia_cubit.ccl` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` (regular file from PyPI wheel)
 
-LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるが、100号機 / mdx の
-PyPI install には反映されない**。C++ 変更を 100号機 / mdx で試すには PyPI release を
-切るのが正規ルート。緊急時のみ `tools/push_pyds_to_mdx.py` (mdx) や
-`pip install --force-reinstall --no-cache-dir //192.168.11.100/work/00_CAE/Radia/01_GitHub`
-(100号機 NAS source override) を使う。通常運用は **PyPI release → 100号機 / mdx で
-`pip install --upgrade`**。
+LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるため、LAB / 100号機
+editable には反映される**。mdx / hibino の PyPI install には反映されないので、C++/plugin
+変更を mdx / hibino で試すには PyPI release を切るのが正規ルート。
 
 ### CI Testing Policy
 
