@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **580 tools** across 43 MCP servers.
+Total: **581 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **580 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 22 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 23 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
@@ -362,6 +362,7 @@ Module: `radia_mcp.motor.server`
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
 | `motor_mmm_quick_check` | First-order 2D MMM/BEM-like motor quick check. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
+| `motor_planar_coupling` | 2D PLANAR machine modelling in radia: MMMM / HDiv-VIM soft-iron demag + the SHARED |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
 | `motor_triple_check_artifact_gate` | Validate a combined ELF-seeded AGE, MMMM, and HDiv-VIM/RFEM artifact. |
