@@ -961,10 +961,12 @@ should be readable `.m` code first.
 
 For the bounded-domain FEM visualization, show the outer spherical truncation
 as Radia's high-order impedance / absorbing-boundary lane, not as the Kelvin
-transform.  The teaching picture is: cylindrical drum frame + membrane +
-outgoing pressure wave + spherical high-order impedance boundary.  Keep the
-exact implementation name as an aliasable label until the production Radia
-boundary name is finalized.
+transform.  The teaching picture is: cylindrical drum body + struck top
+membrane at z=0 + outgoing pressure wave + full spherical high-order
+impedance boundary.  The report GIF should be axis-equal, and the boundary
+should appear as a full sphere/circle in the cut plane, not a hemisphere.
+Keep the exact implementation name as an aliasable label until the production
+Radia boundary name is finalized.
 
 ## Curve-only high-order .vol geometry
 
