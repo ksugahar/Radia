@@ -2356,7 +2356,20 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     // SELF host pair: the inner takes the RADIAL decomposition with the EXACT anchor xiT (the outer
     // point's own ref coords -- no Newton).  The OUTER grading below is UNCHANGED -- it is required by the
     // Q1 charge degree regardless of how the inner is computed (exact inner + regular outer -> eig 1.088).
-    const bool self_pair = (mask == 0 && kindT == kindS && hT == hS);   // an image is never SELF
+    // self_pair: the (reflected) source host coincides with the target host -> use the EXACT self-radial.
+    // mask==0 is always self for hT==hS.  mask>0 is self ONLY when the host is INVARIANT under the reflection
+    // (lies ON the mirror plane, R(host)==host -- e.g. a z=0 cut FACE reflected across z=0 is itself).  Then
+    // the reflected self-term EXACTLY equals the direct self-term (same exact radial quadrature), so the LARGE
+    // on-plane cut-face charge (sigma = M.n ~ |M| when M is perpendicular to the plane) CANCELS exactly for
+    // sign -1, instead of leaving a quadrature-mismatch residual (the ~1.5% hex / ~29% wedge antisymmetric-
+    // plane error, 2026-07-05: direct self used the exact radial, reflected self used the ~1e-3 site-radial).
+    // An OFF-plane self host (a z>0 cell) reflects to a genuine image elsewhere -> NOT self.
+    bool self_pair = (kindT == kindS && hT == hS);
+    if (self_pair && mask != 0) {
+        double rc_[3]; reflpt(&m_cent[3*rt], rc_);
+        const double d_ = std::abs(rc_[0]-m_cent[3*rt]) + std::abs(rc_[1]-m_cent[3*rt+1]) + std::abs(rc_[2]-m_cent[3*rt+2]);
+        self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // R(host)==host <=> host lies on the mirror plane
+    }
     const int nqreg = cellT ? (int)m_symTetW.size() : (int)m_symTriW.size();
     const double* ndT = cellT ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
@@ -3215,7 +3228,20 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
     double rsc[3]; reflpt(&m_cent[3*rs], rsc);
     const double dxh = m_cent[3*rt]-rsc[0], dyh = m_cent[3*rt+1]-rsc[1], dzh = m_cent[3*rt+2]-rsc[2];
     const double r_h = std::sqrt(dxh*dxh + dyh*dyh + dzh*dzh);
-    const bool self_pair = (mask == 0 && kindT == kindS && hT == hS);   // an image is never SELF
+    // self_pair: the (reflected) source host coincides with the target host -> use the EXACT self-radial.
+    // mask==0 is always self for hT==hS.  mask>0 is self ONLY when the host is INVARIANT under the reflection
+    // (lies ON the mirror plane, R(host)==host -- e.g. a z=0 cut FACE reflected across z=0 is itself).  Then
+    // the reflected self-term EXACTLY equals the direct self-term (same exact radial quadrature), so the LARGE
+    // on-plane cut-face charge (sigma = M.n ~ |M| when M is perpendicular to the plane) CANCELS exactly for
+    // sign -1, instead of leaving a quadrature-mismatch residual (the ~1.5% hex / ~29% wedge antisymmetric-
+    // plane error, 2026-07-05: direct self used the exact radial, reflected self used the ~1e-3 site-radial).
+    // An OFF-plane self host (a z>0 cell) reflects to a genuine image elsewhere -> NOT self.
+    bool self_pair = (kindT == kindS && hT == hS);
+    if (self_pair && mask != 0) {
+        double rc_[3]; reflpt(&m_cent[3*rt], rc_);
+        const double d_ = std::abs(rc_[0]-m_cent[3*rt]) + std::abs(rc_[1]-m_cent[3*rt+1]) + std::abs(rc_[2]-m_cent[3*rt+2]);
+        self_pair = (d_ < 1e-6 * m_size[rt] + 1e-12);   // R(host)==host <=> host lies on the mirror plane
+    }
     const bool near_hosts = self_pair || r_h <= m_near_grade*(m_size[rt] + m_size[rs]);
     const double* ndT = cellT ? &m_wCellNodes[(size_t)hT*54] : &m_wFaceNodes[(size_t)hT*27];
     const int nvT = cellT ? 4 : 3;
