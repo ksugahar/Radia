@@ -117,6 +117,53 @@ def per_region_law(mats, bh_dict):
 
 # ---- anisotropic linear susceptibility (GO / oriented laminations) -------------------------------
 
+class PlayHysteresis:
+    """Prandtl-Ishlinskii scalar play-hysteresis operator (shared by both planar demag solvers).
+
+    K play operators with thresholds ``eta`` (increasing) and weights ``w``: for input h (the signed
+    field along the hysteresis axis) and committed play state p, the trial state is
+    p_k' = clip(p_k, h - eta_k, h + eta_k) and M = sum_k w_k p_k'.  The INCREMENTAL susceptibility
+    dM/dh = sum_k w_k * 1[|h - p_k| > eta_k] is always >= 0 (even on the descending branch), which is
+    exactly what lets a NEWTON demag solve stay well-conditioned where a secant-chi Picard breaks.
+
+    STATE IS EXTERNAL (functional): the solver holds p (n_site, K) and threads it, so the operator is
+    reusable/immutable.  eta=0 (all thresholds) reduces to the linear anhysteretic chi = sum w_k.
+
+        play = PlayHysteresis(eta=[0.1,0.3,0.6], w=[3,2,1])
+        p = play.fresh_state(n);  M = play.M(H, p);  chi = play.chi_inc(H, p);  p = play.advance(H, p)
+    """
+    def __init__(self, eta, w):
+        self.eta = np.asarray(eta, float)
+        self.w = np.asarray(w, float)
+        if self.eta.shape != self.w.shape or self.eta.ndim != 1 or len(self.eta) < 1:
+            raise ValueError("PlayHysteresis: eta, w must be equal-length 1D arrays")
+        if np.any(self.eta < 0) or np.any(np.diff(self.eta) < 0):
+            raise ValueError("PlayHysteresis: eta must be >= 0 and non-decreasing")
+        if np.any(self.w < 0):
+            raise ValueError("PlayHysteresis: weights w must be >= 0 (monotone loop)")
+        self.chi0 = float(self.w.sum())               # anhysteretic initial susceptibility
+
+    def fresh_state(self, n):
+        return np.zeros((int(n), len(self.eta)))
+
+    def _trial(self, H, p):
+        H = np.asarray(H, float)
+        return np.minimum(np.maximum(p, H[:, None] - self.eta[None, :]), H[:, None] + self.eta[None, :])
+
+    def M(self, H, p):
+        """Magnetisation at signed field H (n,) given committed state p (n,K) -- does NOT advance."""
+        return self._trial(H, p) @ self.w
+
+    def chi_inc(self, H, p):
+        """Incremental susceptibility dM/dH (n,), >= 0 everywhere."""
+        H = np.asarray(H, float)
+        return (np.abs(H[:, None] - p) > self.eta[None, :]) @ self.w
+
+    def advance(self, H, p):
+        """Return the committed play state after applying field H (n,)."""
+        return self._trial(H, p)
+
+
 def chi_tensor(chi_par, chi_perp, easy_deg=0.0):
     """2x2 susceptibility tensor X for a uniaxially-anisotropic linear material: susceptibility
     ``chi_par`` along the easy axis (angle ``easy_deg`` from +x) and ``chi_perp`` across it, so
