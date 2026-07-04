@@ -562,9 +562,11 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> ref_tri_pts_lo, std::vector<double> ref_tri_w_lo,
     double ho_far_factor,
     std::vector<double> ref_tet_pts_in, std::vector<double> ref_tet_w_in,
-    std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in)
+    std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in,
+    std::vector<int> image_masks, std::vector<double> image_signs)
     : m_n_el(n_el), m_highorder(true), m_ho_far_factor(ho_far_factor),
       m_cellV(std::move(cell_verts)), m_faceV(std::move(face_verts)),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
     const int n_cell = n_el;
@@ -1258,7 +1260,9 @@ double RadHACApKChargeGram::QuadDotRefl(int tgt, int src, int mask) const
         if (mask & 1) p[0] = -p[0];
         if (mask & 2) p[1] = -p[1];
         if (mask & 4) p[2] = -p[2];
-        s += W[k] * PhiAt(src, p);
+        // m_highorder: the monomial-charge inner potential (host-agnostic potential-at-p, PhiAtHO_*);
+        // m_analytic/polytope: the constant-charge PhiAt.  Mirror-image charge -> reflected eval point.
+        s += W[k] * (m_highorder ? PhiInner(src, p) : PhiAt(src, p));
     }
     return s * RAD_INV_FOUR_PI;
 }
@@ -3274,16 +3278,24 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         // unnecessary; NEAR/self pairs keep the full QuadDot.  This is NOT a monopole far (zero-mean modes
         // have zero monopole) -- it is just a lower quadrature order where the integrand is smooth.
         // m_ho_far_factor = 1e30 (no LOW rule supplied) => every pair NEAR => original all-high-quad path.
-        if (a == b) return QuadDot(a, a);                        // self: always the full high-quad subtraction
-        if (m_ho_far_factor < 1e29) {
-            const double dx = m_cent[3*a]     - m_cent[3*b];
-            const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
-            const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
-            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r > m_ho_far_factor * (m_size[a] + m_size[b]))
-                return 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));   // FAR: cheap low-quad plain double-Gauss
+        double base;
+        if (a == b) {
+            base = QuadDot(a, a);                                // self: always the full high-quad subtraction
+        } else if (m_ho_far_factor < 1e29 &&
+                   [&]{ const double dx = m_cent[3*a]-m_cent[3*b], dy = m_cent[3*a+1]-m_cent[3*b+1],
+                                     dz = m_cent[3*a+2]-m_cent[3*b+2];
+                        return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]); }()) {
+            base = 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));   // FAR: cheap low-quad plain double-Gauss
+        } else {
+            base = 0.5 * (QuadDot(a, b) + QuadDot(b, a));         // NEAR: full high-quad subtraction
         }
-        return 0.5 * (QuadDot(a, b) + QuadDot(b, a));            // NEAR: full high-quad subtraction
+        // IMA: fold in the mirror-image charge interactions (QuadDotRefl uses PhiInner in this mode) so a
+        // reduced (1/2, 1/4, 1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i *
+        // 0.5*(refl(a,b)+refl(b,a)).  Empty image => plain highorder.
+        for (size_t i = 0; i < m_image_masks.size(); ++i)
+            base += m_image_signs[i] * 0.5 *
+                    (QuadDotRefl(a, b, m_image_masks[i]) + QuadDotRefl(b, a, m_image_masks[i]));
+        return base;
     }
     if (m_analytic) {
         // Diagonal = the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).

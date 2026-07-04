@@ -209,7 +209,8 @@ public:
                         std::vector<double> ref_tri_pts_lo = {}, std::vector<double> ref_tri_w_lo = {},
                         double ho_far_factor = 1e30,
                         std::vector<double> ref_tet_pts_in = {}, std::vector<double> ref_tet_w_in = {},
-                        std::vector<double> ref_tri_pts_in = {}, std::vector<double> ref_tri_w_in = {});
+                        std::vector<double> ref_tri_pts_in = {}, std::vector<double> ref_tri_w_in = {},
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // CURVED HIGH-ORDER mode (isoparametric P2, curve_order=2): the same monomial-charge Gram as the flat HO
     // mode above, but on a CURVED (mesh.Curve(2)) geometry -- the boundary surface charge sigma=M.n and the
