@@ -959,6 +959,13 @@ headless-friendly, and still backed by readable `.m` code.  Gmsh/VTK can
 remain an export path for later 3D fields, but the teaching visualization
 should be readable `.m` code first.
 
+For the bounded-domain FEM visualization, show the outer spherical truncation
+as Radia's high-order impedance / absorbing-boundary lane, not as the Kelvin
+transform.  The teaching picture is: cylindrical drum frame + membrane +
+outgoing pressure wave + spherical high-order impedance boundary.  Keep the
+exact implementation name as an aliasable label until the production Radia
+boundary name is finalized.
+
 ## Curve-only high-order .vol geometry
 
 Curve-only high-order geometry is useful, but it should be optional and
