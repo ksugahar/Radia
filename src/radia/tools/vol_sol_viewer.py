@@ -47,10 +47,13 @@ Restore default Netgen association:
     python tools/vol_sol_viewer.py --unregister
 
 Policy note:
-    For notebook-panel input/output, .vol and .sol should double-click
-    into the plain Netgen viewer (`netgen.exe "%1"`).  This helper is
-    retained for cases that explicitly need Radia's .sol companion-mesh
-    inference, not as the default notebook IO association.
+    A raw Windows association to `netgen.exe "%1"` can open a blank GUI
+    because it may not call Netgen's native mesh-loader path.  For robust
+    double-click use either this helper (`radia-vol-viewer --register`) or
+    an equivalent Netgen startup hook that runs `Ng_LoadMesh`, selects
+    mesh/solution visual mode, redraws, and reads status.  `.sol` always
+    needs the companion `.vol` because NGSolve GridFunction `.sol` files do
+    not contain a mesh.
 """
 
 import sys
