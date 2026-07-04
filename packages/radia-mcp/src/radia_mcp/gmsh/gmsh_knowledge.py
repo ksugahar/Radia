@@ -122,6 +122,20 @@ gmsh display.geo                        # .geo with Merge + options
 gmsh display.geo                        # auto-loads display.geo.opt if present
 ```
 
+## Windows PowerShell `-string` quoting
+When passing a Gmsh script snippet with a Windows path through PowerShell,
+prefer single quotes inside the Gmsh snippet:
+
+```powershell
+gmsh display.geo -string "Print 'W:/path/frame.png'; Exit;"
+```
+
+Do not pass backslash-escaped double quotes such as `\"W:/path/frame.png\"`
+through `gmsh.bat`; the wrapper can leave Gmsh seeing an unquoted `W:` token,
+which fails as `Unknown variable 'W'`. `Print` also needs a graphical
+OpenGL/FLTK context to create PNG/JPEG images; for unattended animation export,
+use the Python API path in the `animation` topic.
+
 ## Useful Combinations
 ```bash
 # Open .msh with curved elements properly displayed
@@ -433,6 +447,15 @@ General.ScaleZ = 4.0;
 General.TranslationX = 0;
 General.TranslationY = 0;
 
+// --- Z-up x-z plane post view ---
+// Useful for acoustic/BEM post artifacts with an x-z pressure plane
+// and a 3-D drum/body surface. Z points upward in the corner axis triad.
+General.Trackball = 0;
+General.RotationX = -68;
+General.RotationY = 0;
+General.RotationZ = 0;
+General.RotationCenterGravity = 1;
+
 // --- Hide entities by physical group tag ---
 Hide { Volume{5, 6}; }  // hide air_gap (5) and air (6)
 
@@ -463,6 +486,11 @@ Mesh.Color.Zero = {255,120,0};
 Mesh.Color.One  = {204,38,38};
 // ... up to Nineteen
 ```
+
+For a strict front-on x-z view along the y-axis, use
+`General.RotationX = -90`, but 3-D bodies will look flatter. Keep the same
+camera in `case.msh.opt` for raw mesh inspection, or users will see a different
+orientation after opening the raw `.msh`.
 
 ## Hide / Show Commands
 
@@ -1416,6 +1444,59 @@ gmsh.option.setNumber("Mesh.NumSubEdges", 4)
 gmsh.fltk.run()
 gmsh.finalize()
 ```
+
+## Programmatic PNG/GIF Export
+
+Gmsh can export post-processing animation frames reliably through the Python
+API when an FLTK/OpenGL context is initialized. A plain command-line
+`Print 'frame.png'` can parse correctly but still fail with
+`requires a graphical interface context`.
+
+Use this pattern for `.geo` artifacts that merge a time-stepped `.msh` and
+auto-load `case.geo.opt`:
+
+```python
+from pathlib import Path
+import gmsh
+from PIL import Image
+
+geo = Path("case.geo")
+out_gif = Path("case_zup.gif")
+frames = []
+
+gmsh.initialize(["-noconfig"])
+gmsh.option.setNumber("General.GraphicsWidth", 800)
+gmsh.option.setNumber("General.GraphicsHeight", 800)
+gmsh.open(str(geo))             # auto-loads case.geo.opt
+gmsh.fltk.initialize()          # required graphics context
+
+for step in range(num_steps):
+    gmsh.option.setNumber("View[0].TimeStep", step)
+    gmsh.option.setNumber("View[1].TimeStep", step)
+    gmsh.fltk.update()
+    frame = Path("C:/temp") / f"frame_{step:03d}.png"
+    gmsh.write(str(frame))
+    frames.append(frame)
+
+gmsh.fltk.finalize()
+gmsh.finalize()
+
+images = [Image.open(p).convert("P", palette=Image.Palette.ADAPTIVE)
+          for p in frames]
+images[0].save(out_gif, save_all=True, append_images=images[1:],
+               duration=40, loop=0, disposal=2)
+```
+
+For multi-view animations, set `PostProcessing.Link = 1`, set each
+`View[i].TimeStep` explicitly, and keep `PostProcessing.AnimationCycle = 0`.
+`AnimationCycle = 1` cycles visible views instead of synchronizing them, which
+causes flicker when a pressure view and a displacement view are meant to be
+shown simultaneously.
+
+On Windows FLTK builds, the exported PNG width can be smaller than
+`General.GraphicsWidth` because the GUI sidebar consumes part of the window.
+If an exact 800x800 exported frame is required and `GraphicsWidth=800` produces
+600x800, set `General.GraphicsWidth=1000` and `General.GraphicsHeight=800`.
 
 ## Coordinate Transformation Pipeline (applied in order)
 
