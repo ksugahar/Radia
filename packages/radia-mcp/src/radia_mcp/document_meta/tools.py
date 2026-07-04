@@ -755,7 +755,7 @@ def _summarize_notebook_output(output: dict,
 def _runtime_versions() -> dict:
     versions = {
         "python_version": sys.version.split()[0],
-        "python_executable": sys.executable,
+        "python_executable_name": pathlib.Path(sys.executable).name,
         "platform": platform.platform(),
     }
     try:

@@ -10,6 +10,84 @@
 #include <map>
 #include <unordered_map>
 
+namespace {
+
+std::string replace_extension(const std::string &path, const std::string &ext)
+{
+  auto slash = path.find_last_of("/\\");
+  auto dot = path.find_last_of('.');
+  if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
+    return path + ext;
+  return path.substr(0, dot) + ext;
+}
+
+std::string basename_of(const std::string &path)
+{
+  auto sep = path.find_last_of("/\\");
+  if (sep == std::string::npos)
+    return path;
+  return path.substr(sep + 1);
+}
+
+void write_gmsh_display_options(std::ofstream &out)
+{
+  out << "General.Orthographic = 1;\n";
+  out << "General.Trackball = 0;\n";
+  out << "General.RotationX = -68;\n";
+  out << "General.RotationY = 0;\n";
+  out << "General.RotationZ = 0;\n";
+  out << "General.RotationCenterGravity = 1;\n";
+  out << "Mesh.NumSubEdges = 4;\n";
+  out << "Mesh.SurfaceFaces = 1;\n";
+  out << "Mesh.SurfaceEdges = 1;\n";
+  out << "Mesh.VolumeEdges = 0;\n";
+  out << "Mesh.VolumeFaces = 0;\n";
+  out << "Mesh.ColorCarousel = 2;\n";
+}
+
+bool write_gmsh_launch_companions(const std::string &msh_filename)
+{
+  const std::string msh_base = basename_of(msh_filename);
+  const std::string geo = replace_extension(msh_filename, ".geo");
+  const std::string geo_opt = geo + ".opt";
+  const std::string msh_opt = msh_filename + ".opt";
+
+  std::ofstream gf(u8_string_to_path(geo));
+  if (!gf.is_open()) {
+    PRINT_WARNING("GMSH companion: cannot write %s\n", geo.c_str());
+    return false;
+  }
+  gf << "// Auto-generated Radia GMSH launch companion for " << msh_base << "\n";
+  gf << "// Open this .geo for normal review; open .msh only for raw data inspection.\n";
+  gf << "Merge \"" << msh_base << "\";\n\n";
+  write_gmsh_display_options(gf);
+  gf.close();
+
+  std::ofstream go(u8_string_to_path(geo_opt));
+  if (go.is_open()) {
+    go << "// Auto-generated display options for " << basename_of(geo) << "\n";
+    write_gmsh_display_options(go);
+    go.close();
+  } else {
+    PRINT_WARNING("GMSH companion: cannot write %s\n", geo_opt.c_str());
+  }
+
+  std::ofstream mo(u8_string_to_path(msh_opt));
+  if (mo.is_open()) {
+    mo << "// Auto-generated raw mesh/data inspection options for " << msh_base << "\n";
+    write_gmsh_display_options(mo);
+    mo.close();
+  } else {
+    PRINT_WARNING("GMSH companion: cannot write %s\n", msh_opt.c_str());
+  }
+
+  PRINT_INFO("Companions: %s, %s, %s\n",
+             geo.c_str(), geo_opt.c_str(), msh_opt.c_str());
+  return true;
+}
+
+} // namespace
+
 ExportGmshCommand::ExportGmshCommand() {}
 ExportGmshCommand::~ExportGmshCommand() {}
 
@@ -41,6 +119,8 @@ std::vector<std::string> ExportGmshCommand::get_help()
     "Export mesh to Gmsh MSH v4.1 format (lab-wide standard).\n"
     "Block assignment is NOT required.\n"
     "Sidesets exported as surface elements. Nodesets as comments.\n\n"
+    "Writes filename.geo, filename.geo.opt, and filename.msh.opt.\n"
+    "Open the .geo file for normal Radia review; the .msh is raw data.\n\n"
     "Options:\n"
     "  order 1      1st-order elements (default)\n"
     "  order 2      2nd-order (edge mid-nodes)\n"
@@ -91,28 +171,8 @@ bool ExportGmshCommand::write_gmsh(const std::string &filename,
 
   bool ok = write_gmsh_v41(filename, mesh);
 
-  // Write companion .geo file for proper curved element display in GMSH GUI.
-  // Mesh.NumSubEdges=4 is required to render high-order curved surfaces
-  // (GMSH default=1 draws straight edges).
-  if (ok && order >= 2) {
-    std::string geo = filename.substr(0, filename.rfind('.')) + ".geo";
-    std::string msh_base = filename;
-    auto sep = msh_base.rfind('/');
-    auto sep2 = msh_base.rfind('\\');
-    if (sep2 != std::string::npos && (sep == std::string::npos || sep2 > sep))
-      sep = sep2;
-    if (sep != std::string::npos)
-      msh_base = msh_base.substr(sep + 1);
-
-    std::ofstream gf(geo);
-    if (gf.is_open()) {
-      gf << "// Auto-generated companion for " << msh_base << "\n";
-      gf << "Merge \"" << msh_base << "\";\n";
-      gf << "Mesh.NumSubEdges = 4;\n";
-      gf.close();
-      PRINT_INFO("Companion: %s\n", geo.c_str());
-    }
-  }
+  if (ok)
+    write_gmsh_launch_companions(filename);
 
   return ok;
 }

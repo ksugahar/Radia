@@ -140,6 +140,9 @@ class TestExportKnowledge:
         assert "standard file to open for Radia post-processing is `.geo`" in body
         assert "`.msh` association is optional raw mesh/data inspection" in body
         assert ".geo` companion" in body
+        assert "case.geo.opt" in body
+        assert "case.msh.opt" in body
+        assert "plain `case.opt` is not" in body
 
 
 # ---------------------------------------------------------------------------

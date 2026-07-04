@@ -35,6 +35,10 @@ if (-not (Test-Path $cmake)) {
     if ($pipCmake -and (Test-Path $pipCmake)) { $cmake = $pipCmake }
     else { throw "cmake.exe not found in VS install or on PATH" }
 }
+$ninja = & python -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+if (-not $ninja -or -not (Test-Path $ninja)) {
+    throw "ninja.exe not found on PATH or in the active Python environment."
+}
 
 # Auto-discover Cubit (was 2025.3, LAB now has 2025.12). Honors
 # CUBIT_INSTALL_DIR env override.
@@ -87,6 +91,7 @@ if (-not (Test-Path $buildCcm)) { New-Item -ItemType Directory -Path $buildCcm |
 Set-Location $buildCcm
 
 & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
+    "-DCMAKE_MAKE_PROGRAM=$ninja" `
     "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
 

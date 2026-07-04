@@ -19,3 +19,14 @@ def test_gmsh_knowledge_records_zup_geo_opt_and_animation_export():
     assert "gmsh.fltk.initialize()" in animation
     assert 'Path("C:/temp")' in animation
     assert "PostProcessing.AnimationCycle = 0" in animation
+    assert "gmsh_animation_export.ipynb" in animation
+    assert "writes GIF/MP4 movies" in animation
+
+
+def test_gmsh_knowledge_records_cubit_mesh_export_geo_companion_contract():
+    policy = get_gmsh_documentation("policy")
+
+    assert 'cubit-mesh-export` `export gmsh "case.msh"`' in policy
+    assert "case.geo.opt" in policy
+    assert "case.msh.opt" in policy
+    assert "A plain `case.opt` is not auto-loaded" in policy

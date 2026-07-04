@@ -39,6 +39,20 @@ def _reopen(path):
         gmsh.finalize()
 
 
+def _assert_launch_companions(msh_path):
+    geo_path = os.path.splitext(msh_path)[0] + ".geo"
+    geo_opt_path = geo_path + ".opt"
+    msh_opt_path = msh_path + ".opt"
+    for path in (geo_path, geo_opt_path, msh_opt_path):
+        assert os.path.exists(path), f"missing Gmsh launch companion: {path}"
+    with open(geo_path, "r", encoding="utf-8") as fh:
+        geo = fh.read()
+    assert f'Merge "{os.path.basename(msh_path)}";' in geo
+    assert "Mesh.NumSubEdges = 4;" in geo
+    assert "General.RotationX = -68;" in geo
+    return geo_path, geo_opt_path, msh_opt_path
+
+
 def test_highorder_hex_roundtrip():
     """A curved (order-2) structured HEX mesh exports as Hex27 (gmsh type 12)
     and gmsh re-reads it with the right node count + 2 field views."""
@@ -50,6 +64,7 @@ def test_highorder_hex_roundtrip():
     out = os.path.join(_TMP, "rt_hex_test.msh")
     post.write(out)
     assert os.path.exists(out)
+    _assert_launch_companions(out)
     named, vtypes, n_nodes, n_views = _reopen(out)
     assert 12 in vtypes, "expected Hex27 (type 12) in %s" % vtypes  # order-2 hex
     assert n_nodes == 343, "27 Hex27 share 343 nodes, got %d" % n_nodes
@@ -72,6 +87,7 @@ def test_per_material_physical_groups():
     post.add_scalar_field("phi", x + y + z)
     out = os.path.join(_TMP, "rt_2mat_test.msh")
     post.write(out)
+    _assert_launch_companions(out)
     named, vtypes, n_nodes, n_views = _reopen(out)
     assert {"sphere", "air"} <= named, "physical groups %s missing sphere/air" % named
     assert 11 in vtypes or 4 in vtypes, "expected tet (type 11/4) in %s" % vtypes
@@ -84,6 +100,7 @@ def test_mesh_only_roundtrip():
     post = GmshPostExport(mesh)
     out = os.path.join(_TMP, "rt_meshonly_test.msh")
     post.write_mesh(out)
+    _assert_launch_companions(out)
     named, vtypes, n_nodes, n_views = _reopen(out)
     assert 5 in vtypes, "expected Hex8 (type 5) in %s" % vtypes  # order-1 hex
     assert n_nodes == 27
