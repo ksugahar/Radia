@@ -285,165 +285,32 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	const TVector3d& elemCentroid)
 {
 	// =========================================================================
-	// Rewritten to use RadAnalyticalFieldFromPolygonCharge for correctness
-	// This ensures consistency with the working standard polygon method.
-	// Uses RadConst::INV_FOUR_PI for 1/(4*pi) factor.
-	// =========================================================================
-	const double EPS = 1.0e-15;
-
-	// Compute face edges
-	TVector3d e1 = V1 - V0;
-	TVector3d e2 = V2 - V0;
-
-	// Compute face normal from cross product (V1-V0) x (V2-V0)
-	TVector3d normal;
-	normal.x = e1.y * e2.z - e1.z * e2.y;
-	normal.y = e1.z * e2.x - e1.x * e2.z;
-	normal.z = e1.x * e2.y - e1.y * e2.x;
-
-	double normalLen = std::sqrt(normal.x*normal.x + normal.y*normal.y + normal.z*normal.z);
-	if(normalLen < EPS) {
-		return TVector3d(0., 0., 0.);  // Degenerate triangle
-	}
-
-	// Normalize to get CC (local Z-axis = face normal)
-	TVector3d CC;
-	CC.x = normal.x / normalLen;
-	CC.y = normal.y / normalLen;
-	CC.z = normal.z / normalLen;
-
-	// Surface charge density: sigma = M dot n
-	// Note: The sign of sigma will be corrected below based on normal direction
-	double sigma = M.x * CC.x + M.y * CC.y + M.z * CC.z;
-
-	// =========================================================================
-	// Outward normal check:
-	// Compute face center and check if normal points outward from element centroid
-	// If normal . (faceCenter - elemCentroid) < 0, the normal points inward
-	// In that case, we negate the surface charge (NOT the normal itself).
-	// The coordinate system stays as-is, but the charge sign is corrected.
-	// =========================================================================
-	TVector3d faceCenter;
-	faceCenter.x = (V0.x + V1.x + V2.x) / 3.0;
-	faceCenter.y = (V0.y + V1.y + V2.y) / 3.0;
-	faceCenter.z = (V0.z + V1.z + V2.z) / 3.0;
-
-	TVector3d outwardVec;
-	outwardVec.x = faceCenter.x - elemCentroid.x;
-	outwardVec.y = faceCenter.y - elemCentroid.y;
-	outwardVec.z = faceCenter.z - elemCentroid.z;
-
-	double dotProduct = CC.x * outwardVec.x + CC.y * outwardVec.y + CC.z * outwardVec.z;
-
-	// If normal points inward, negate the surface charge
-	// (do not flip the coordinate system)
-	if(dotProduct < 0.0) {
-		sigma = -sigma;
-	}
-	if(std::abs(sigma) < EPS) {
-		return TVector3d(0., 0., 0.);  // No surface charge
-	}
-
-	// =========================================================================
-	// Build local coordinate system using triple cross product method
+	// ALLOCATION-FREE path (2026-07-04): delegate to RadComputeTriangleFaceBasis (stack struct) +
+	// RadFieldFromTriangleFaceWithBasis (the ELF closed form the HACApK path already uses).
 	//
-	// Basis construction:
-	//   vert_rel(2) = v2 - v1 (edge from v1 to v2)
-	//   vert_rel(3) = v3 - v1 (edge from v1 to v3)
-	//   basis_a = vert_rel(3)
-	//   basis_b = vert_rel(3) - vert_rel(2) * 0.5
-	//   Then triple cross product to orthonormalize:
-	//     basis_c = basis_a x basis_b (normalized)
-	//     basis_a = basis_b x basis_c (normalized)
-	//     basis_b = basis_c x basis_a (normalized)
+	// The previous route through RadAnalyticalFieldFromPolygonCharge allocated EIGHT std::vectors per
+	// call (3 here: obs_points/field_result/XY; 5 there: DS/AM/SM/XD/YD) AND ran a NESTED
+	// ngcore::ParallelFor over a range of 1 -- and this function is called ~thousands of times PER
+	// observation point (6 faces x 2 tris x up to 3 M-dirs, per element, per point).  Under a
+	// multithreaded rad.Fld that meant tens of millions of heap allocations + nested tasks per second,
+	// serialising on the Windows CRT heap lock, so more threads made rad.Fld SLOWER than serial
+	// (mdx: 0.4x at 38 threads).  WithBasis is pure stack arithmetic (no alloc, no nested ParallelFor);
+	// HACApK uses it and scales ~18x.  The basis construction, local-2D projection, and edge parameters
+	// here are the SAME operations as before (RadComputeTriangleFaceBasis mirrors them), and
+	// basis.basis_c == the raw face normal (e2 x (e2-e1/2) = 1/2 e1 x e2, same unit vector), so
+	// sigma = (M . basis.basis_c) * charge_sign reproduces the previous sigma -> bit-equivalent field
+	// (verified vs the saved reference: hex/tet/wedge PM + soft-iron MSC solve).
 	// =========================================================================
-
-	// Formulation: basis_a = e2, basis_b = e2 - e1*0.5
-	TVector3d basis_a = e2;
-	TVector3d basis_b;
-	basis_b.x = e2.x - e1.x * 0.5;
-	basis_b.y = e2.y - e1.y * 0.5;
-	basis_b.z = e2.z - e1.z * 0.5;
-
-	// Triple cross product #1: basis_c = basis_a x basis_b (normalized)
-	TVector3d basis_c;
-	basis_c.x = basis_a.y * basis_b.z - basis_a.z * basis_b.y;
-	basis_c.y = basis_a.z * basis_b.x - basis_a.x * basis_b.z;
-	basis_c.z = basis_a.x * basis_b.y - basis_a.y * basis_b.x;
-	double cLen = std::sqrt(basis_c.x*basis_c.x + basis_c.y*basis_c.y + basis_c.z*basis_c.z);
-	if(cLen < EPS) {
+	RadTriangleFaceBasis basis;
+	RadComputeTriangleFaceBasis(V0, V1, V2, elemCentroid, basis);
+	if(!basis.valid) {
 		return TVector3d(0., 0., 0.);  // Degenerate triangle
 	}
-	basis_c.x /= cLen; basis_c.y /= cLen; basis_c.z /= cLen;
+	// Surface charge sigma = M . n with the inward/outward correction folded into charge_sign
+	// (n = basis.basis_c, the raw face normal up to the outward sign).
+	double sigma = (M.x*basis.basis_c.x + M.y*basis.basis_c.y + M.z*basis.basis_c.z) * basis.charge_sign;
 
-	// Triple cross product #2: basis_a = basis_b x basis_c (normalized)
-	TVector3d new_basis_a;
-	new_basis_a.x = basis_b.y * basis_c.z - basis_b.z * basis_c.y;
-	new_basis_a.y = basis_b.z * basis_c.x - basis_b.x * basis_c.z;
-	new_basis_a.z = basis_b.x * basis_c.y - basis_b.y * basis_c.x;
-	double aLen = std::sqrt(new_basis_a.x*new_basis_a.x + new_basis_a.y*new_basis_a.y + new_basis_a.z*new_basis_a.z);
-	if(aLen < EPS) {
-		return TVector3d(0., 0., 0.);  // Degenerate triangle
-	}
-	new_basis_a.x /= aLen; new_basis_a.y /= aLen; new_basis_a.z /= aLen;
-	basis_a = new_basis_a;
-
-	// Triple cross product #3: basis_b = basis_c x basis_a (normalized)
-	TVector3d new_basis_b;
-	new_basis_b.x = basis_c.y * basis_a.z - basis_c.z * basis_a.y;
-	new_basis_b.y = basis_c.z * basis_a.x - basis_c.x * basis_a.z;
-	new_basis_b.z = basis_c.x * basis_a.y - basis_c.y * basis_a.x;
-	double bLen = std::sqrt(new_basis_b.x*new_basis_b.x + new_basis_b.y*new_basis_b.y + new_basis_b.z*new_basis_b.z);
-	if(bLen < EPS) {
-		return TVector3d(0., 0., 0.);  // Degenerate triangle
-	}
-	new_basis_b.x /= bLen; new_basis_b.y /= bLen; new_basis_b.z /= bLen;
-	basis_b = new_basis_b;
-
-	// AA = local X-axis, BB = local Y-axis
-	TVector3d AA = basis_a;
-	TVector3d BB = basis_b;
-
-	// Reference point YY = V0 (first vertex)
-	TVector3d YY = V0;
-
-	// Convert triangle vertices to 2D local coordinates
-	TVector2d local_V0(0.0, 0.0);
-
-	TVector3d d1 = V1 - V0;
-	TVector2d local_V1(
-		d1.x*AA.x + d1.y*AA.y + d1.z*AA.z,
-		d1.x*BB.x + d1.y*BB.y + d1.z*BB.z
-	);
-
-	TVector3d d2 = V2 - V0;
-	TVector2d local_V2(
-		d2.x*AA.x + d2.y*AA.y + d2.z*AA.z,
-		d2.x*BB.x + d2.y*BB.y + d2.z*BB.z
-	);
-
-	// Prepare observation point and output vectors
-	std::vector<TVector3d> obs_points(1, obsPoint);
-	std::vector<TVector3d> field_result(1, TVector3d(0., 0., 0.));
-
-	// Weight: sigma / (4*pi)
-	double W = RadConst::INV_FOUR_PI * sigma;
-
-	// Create 2D vertex array for the triangle
-	std::vector<TVector2d> XY = {local_V0, local_V1, local_V2};
-
-	// Call the proven analytical formula
-	RadAnalyticalFieldFromPolygonCharge(
-		AA, BB, basis_c, YY,
-		XY,
-		obs_points,
-		field_result,
-		W,
-		1,   // Element index (for error reporting)
-		3    // Triangle has 3 vertices
-	);
-
-	return field_result[0];
+	return RadFieldFromTriangleFaceWithBasis(basis, sigma, obsPoint);
 }
 
 //-------------------------------------------------------------------------

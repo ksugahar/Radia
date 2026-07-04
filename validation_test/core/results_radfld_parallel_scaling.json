@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-07-04T20:18:39.144280",
+  "hostname": "mdx",
+  "benchmark": "radfld_batch_parallel_scaling",
+  "problem": {
+    "cores": 38,
+    "N_src": 216,
+    "N_obs": 8000,
+    "field": "b",
+    "geometry": "216 ObjHexahedron sources, 8000 far obs points",
+    "radia_version": "4.95.5",
+    "python_version": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "note": "bare = no caller TaskManager (exercises the RegionTaskManager self-wrap)"
+  },
+  "results": [
+    {
+      "nthreads": 1,
+      "t_bare": 2.939601299993228,
+      "t_wrapped": 2.9470896999700926,
+      "speedup_bare_vs_1t": 1.0
+    },
+    {
+      "nthreads": 2,
+      "t_bare": 1.8878386999713257,
+      "t_wrapped": 1.499998500046786,
+      "speedup_bare_vs_1t": 1.5571252459428222
+    },
+    {
+      "nthreads": 4,
+      "t_bare": 1.0156244999961928,
+      "t_wrapped": 1.022232500021346,
+      "speedup_bare_vs_1t": 2.894378089544165
+    },
+    {
+      "nthreads": 8,
+      "t_bare": 0.5317913999897428,
+      "t_wrapped": 0.522899400035385,
+      "speedup_bare_vs_1t": 5.527733806996366
+    },
+    {
+      "nthreads": 16,
+      "t_bare": 0.281120200001169,
+      "t_wrapped": 0.290601400018204,
+      "speedup_bare_vs_1t": 10.456741635716694
+    },
+    {
+      "nthreads": 38,
+      "t_bare": 0.21860150003340095,
+      "t_wrapped": 0.16242320003220811,
+      "speedup_bare_vs_1t": 13.447306169189485
+    }
+  ]
+}
