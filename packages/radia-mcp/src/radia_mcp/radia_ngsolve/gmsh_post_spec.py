@@ -50,12 +50,15 @@ If workpiece coupling is on, add:
   path (via _compute_ho_bnd_nodes or GetTrafo) must be exercised.
 - Volume mesh (air box) stays order 1 (no geometry to curve).
 
-## 4. Display Options (companion .msh.opt, NOT .geo)
+## 4. Display Options (.geo launch + exact .opt sidecars)
 
-Write ``<filename>.msh.opt`` next to the .msh file. GMSH auto-loads
-this when the .msh is opened (either by double-click or by the
-panel's Open GMSH button → ``gmsh.open(msh_path)``). No .geo
-needed anymore (single-file means no Merge directive).
+Write a ``case.geo`` launch recipe next to the .msh file. GMSH auto-loads
+``case.geo.opt`` when ``case.geo`` is opened. Also write ``case.msh.opt``
+for raw mesh/data inspection when a user intentionally opens the .msh
+directly. A plain ``case.opt`` is not the Explorer auto-load contract.
+
+The panel's Open GMSH button should open ``case.geo``. If an older panel
+passes ``case.msh``, the launcher should prefer the sibling ``case.geo``.
 
 The .opt MUST contain ALL of the following:
 
@@ -82,9 +85,9 @@ ArrowSizeMin = ArrowSizeMax = 20 is THE critical setting. Without
 it the arrows are ~3 px and invisible. This was the "kirei" knob
 from v3.6.1 (commit 5e0b69c).
 
-The Open GMSH button handler (``_open_gmsh`` in radia_gui_base.py)
-should call ``gmsh.open(msh_path)`` (NOT ``gmsh.merge(geo_path)``).
-GMSH auto-discovers the .opt file and applies the options.
+The Open GMSH button handler should call ``gmsh.open(geo_path)``.
+GMSH auto-discovers ``case.geo.opt`` and applies the options. Do not
+rely on ``case.opt`` or Windows ``UserChoice`` associations.
 
 ## 5. NodeData Requirements
 
@@ -122,7 +125,7 @@ Same requirements except:
 - v4.1 format
 - Single file (no Merge)
 - ArrowSizeMin = ArrowSizeMax = 20
-- No Mesh.Volumes in .geo
+- No Mesh.Volumes in .geo/.opt
 - No |B| or |J| scalar views
 - Coil surface MUST be curved (Tri6+)
 - B and J arrows MUST be visible at default zoom

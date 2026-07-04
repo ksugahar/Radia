@@ -403,12 +403,14 @@ class GmshPostExport:
         with open(filename, 'w', encoding='utf-8') as f:
             _emit_v41_msh(f, payload)
 
-        # Companion .msh.opt for high-order surface display
-        if is_surface and _detect_curve_order(self.mesh) >= 2:
-            # Per-view ncomp in the order GmshPostExport.add_field()
-            # was called -- avoids the "vectors come first" assumption.
-            view_ncomps = [nc for _, nc, _, _, _ in self._fields]
-            write_companion_opt(filename, view_ncomps=view_ncomps)
+        # Companion launch artifacts:
+        #   case.geo      -- user-facing Gmsh launch recipe
+        #   case.geo.opt  -- exact sidecar auto-loaded when case.geo opens
+        #   case.msh.opt  -- raw mesh/data inspection sidecar
+        # Per-view ncomp follows the order GmshPostExport.add_field() was
+        # called, avoiding the old "vectors come first" assumption.
+        view_ncomps = [nc for _, nc, _, _, _ in self._fields]
+        write_companion_opt(filename, view_ncomps=view_ncomps)
 
         n_fields = len(self._fields)
         mat_str = ', '.join(f'{m}({len(mat_elem_map.get(m, []))})' for m in mat_names)
@@ -892,13 +894,68 @@ def _build_vol_ho_generic(mesh, el, reordered, et_name, order,
     return conn
 
 
+def _gmsh_display_options_text(vector_indices, scalar_indices):
+    """Return the standard Gmsh display options shared by .geo and .opt."""
+    lines = [
+        "General.Orthographic = 1;",
+        "General.Trackball = 0;",
+        "General.RotationX = -68;",
+        "General.RotationY = 0;",
+        "General.RotationZ = 0;",
+        "General.RotationCenterGravity = 1;",
+        "Mesh.NumSubEdges = 4;",
+        "Mesh.VolumeEdges = 0;",
+        "Mesh.VolumeFaces = 0;",
+        "Mesh.SurfaceEdges = 0;",
+        "Mesh.SurfaceFaces = 1;",
+        "Mesh.Points = 0;",
+        "Mesh.Lines = 0;",
+        "Mesh.LineWidth = 1;",
+        "Mesh.ColorCarousel = 2;",
+    ]
+    for i in vector_indices:
+        lines.extend([
+            f"View[{i}].Visible = 1;",
+            f"View[{i}].VectorType = 4;",
+            f"View[{i}].ArrowSizeMin = 20;",
+            f"View[{i}].ArrowSizeMax = 20;",
+        ])
+    for idx in scalar_indices:
+        lines.extend([
+            f"View[{idx}].Visible = 1;",
+            f"View[{idx}].IntervalsType = 2;",
+            f"View[{idx}].ScaleType = 2;",
+            f"View[{idx}].ShowScale = 1;",
+            f"View[{idx}].NbIso = 20;",
+        ])
+    return "\n".join(lines) + "\n"
+
+
+def _geo_filename_for_msh(msh_filename):
+    import os
+    base, ext = os.path.splitext(msh_filename)
+    if ext.lower() == ".msh":
+        return base + ".geo"
+    return msh_filename + ".geo"
+
+
+def _relative_gmsh_merge_path(msh_filename, geo_filename):
+    import os
+    rel = os.path.relpath(
+        os.path.abspath(msh_filename),
+        os.path.dirname(os.path.abspath(geo_filename)) or ".",
+    )
+    return rel.replace("\\", "/")
+
+
 def write_companion_opt(msh_filename, n_vector_views=0,
                         n_scalar_views=0, view_ncomps=None):
-    """Write a .msh.opt file with display settings for GMSH.
+    """Write Gmsh launch companions for a .msh post-processing artifact.
 
-    GMSH auto-loads ``<file>.msh.opt`` when opening ``<file>.msh``.
-    This replaces the old companion .geo approach (no Merge needed,
-    no element-ID collision risk from multi-file Merge).
+    The Radia user-facing launch target is ``case.geo``. GMSH auto-loads
+    ``case.geo.opt`` when opening that file. ``case.msh.opt`` is kept as the
+    raw mesh/data inspection sidecar for users who intentionally open the
+    .msh directly.
 
     Settings follow the gmsh_post_spec (mandatory):
       - Mesh.NumSubEdges = 4      (render curved Tri6+ smoothly)
@@ -921,7 +978,8 @@ def write_companion_opt(msh_filename, n_vector_views=0,
        spot -- 2026-04-29 calc_peec_bem GUI bug).
 
     Args:
-        msh_filename: Path to the .msh file (the .opt is written next to it).
+        msh_filename: Path to the .msh file. The companions are written next
+            to it as ``case.geo``, ``case.geo.opt``, and ``case.msh.opt``.
         n_vector_views: legacy; vectors are View[0..n-1].
         n_scalar_views: legacy; scalars are View[n..n+m-1].
         view_ncomps: per-view component counts (preferred over the
@@ -929,9 +987,11 @@ def write_companion_opt(msh_filename, n_vector_views=0,
             indices in the .msh.
 
     Returns:
-        Path to the .msh.opt file.
+        Path to the .msh.opt file for backward compatibility. New callers
+        should open the generated ``case.geo``.
     """
     import os
+    msh_filename = os.fspath(msh_filename)
     # Resolve which view indices are vectors vs scalars.
     if view_ncomps is not None:
         vector_indices = [i for i, n in enumerate(view_ncomps)
@@ -943,38 +1003,26 @@ def write_companion_opt(msh_filename, n_vector_views=0,
         vector_indices = list(range(n_vector_views))
         scalar_indices = list(range(n_vector_views,
                                      n_vector_views + n_scalar_views))
+    options_text = _gmsh_display_options_text(vector_indices, scalar_indices)
+
     opt_filename = msh_filename + '.opt'
     with open(opt_filename, 'w', encoding='utf-8') as f:
         f.write('// Auto-generated display options (gmsh_post_spec)\n')
-        # Curved element rendering
-        f.write('Mesh.NumSubEdges = 4;\n')
-        # Hide air volume mesh
-        f.write('Mesh.VolumeEdges = 0;\n')
-        f.write('Mesh.VolumeFaces = 0;\n')
-        # Coil surface: smooth body, no edge lines
-        f.write('Mesh.SurfaceEdges = 0;\n')
-        f.write('Mesh.SurfaceFaces = 1;\n')
-        # Hide node markers and wireframe lines
-        f.write('Mesh.Points = 0;\n')
-        f.write('Mesh.Lines = 0;\n')
-        f.write('Mesh.LineWidth = 1;\n')
-        # Vector views: 3D arrows, fixed 20px (the kirei knob)
-        for i in vector_indices:
-            f.write(f'View[{i}].Visible = 1;\n')
-            f.write(f'View[{i}].VectorType = 4;\n')
-            f.write(f'View[{i}].ArrowSizeMin = 20;\n')
-            f.write(f'View[{i}].ArrowSizeMax = 20;\n')
-        # Scalar views: filled iso colormap with legend bar.
-        # Log scale (ScaleType = 2) so q heating density (usual range
-        # spans 2-5 decades from skin-depth local peak to far-side
-        # minimum) shows visible contrast instead of a uniform near-
-        # max band (2026-04-15: sugahara GUI feedback).
-        for idx in scalar_indices:
-            f.write(f'View[{idx}].Visible = 1;\n')
-            f.write(f'View[{idx}].IntervalsType = 2;\n')  # Filled
-            f.write(f'View[{idx}].ScaleType = 2;\n')  # 1=Linear 2=Log 3=Double-log
-            f.write(f'View[{idx}].ShowScale = 1;\n')
-            f.write(f'View[{idx}].NbIso = 20;\n')
+        f.write(options_text)
+
+    geo_filename = _geo_filename_for_msh(msh_filename)
+    merge_path = _relative_gmsh_merge_path(msh_filename, geo_filename)
+    with open(geo_filename, 'w', encoding='utf-8') as f:
+        f.write('// Auto-generated Radia Gmsh launch companion\n')
+        f.write('// Open this .geo for normal review; open .msh only for raw inspection.\n')
+        f.write(f'Merge "{merge_path}";\n\n')
+        f.write(options_text)
+
+    geo_opt_filename = geo_filename + '.opt'
+    with open(geo_opt_filename, 'w', encoding='utf-8') as f:
+        f.write('// Auto-generated display options for the .geo launch artifact\n')
+        f.write(options_text)
+
     return opt_filename
 
 
@@ -1007,8 +1055,8 @@ def vol2msh(output_msh, vol_path, fields, *, mesh_curve_order=1,
             render smoothly in GMSH.
         boundary: if True, export BND elements only (surface export
             from a volume mesh); matches GmshPostExport(boundary=...).
-        companion_opt: if True, also write ``<output_msh>.opt`` so
-            GMSH auto-loads sensible display defaults.
+    companion_opt: if True, also write ``case.geo``, ``case.geo.opt``, and
+        ``case.msh.opt``. Open ``case.geo`` for normal review.
 
     Returns the path to the .msh written.
     """
@@ -1185,7 +1233,7 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
                                                   (optional)
 
     Coil surface uses Tri6 (GMSH type 9) for curved rendering.
-    Writes companion .msh.opt with display options (replaces .geo).
+    Writes companion .geo/.geo.opt/.msh.opt display artifacts.
 
     Phase E.1 (2026-04-15): builds a PayloadV41 and emits via
     _emit_v41_msh (shared with GmshPostExport.write).
@@ -1252,7 +1300,7 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
 
     # Data fields. B on all volume nodes, J only on coil vertex IDs
     # (Tri6 mid-edge nodes are interpolated by GMSH). Scalar q last so
-    # companion .msh.opt assigns IntervalsType correctly.
+    # companion .geo/.geo.opt/.msh.opt assigns IntervalsType correctly.
     data_fields = [
         DataField(
             kind='$NodeData', name='B', ncomp=3,
@@ -1288,7 +1336,7 @@ def write_combined_msh_v41(filename, mesh_surf, J_nodes,
 
 
 def _write_companion_geo(msh_filename):
-    """Deprecated: use write_companion_opt() instead."""
+    """Backward-compatible alias that now writes .geo and exact .opt twins."""
     return write_companion_opt(msh_filename)
 
 
@@ -1722,7 +1770,7 @@ def convert_sol_to_msh(output_msh,
 
         Solve -> .vol + .sol (NGSolve native)
           -> convert_sol_to_msh()
-          -> .msh + .msh.opt (GMSH visualization)
+          -> .msh + .geo/.geo.opt/.msh.opt (GMSH visualization)
 
     Coil surface element order matches the mesh's curve order
     (Curve(2)->Tri6, Curve(3)->Tri10, Curve(4)->Tri15, Curve(5)->Tri21).

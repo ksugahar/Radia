@@ -44,6 +44,10 @@ GMSH GUI:
 - Default: .msh v4.1 (GMSH visualization)
 - `GmshPostExport.write()` and `vol2msh()` emit .msh v4.1
 - Post-processing launch artifact: `case.geo` that merges the .msh/.step data
+- Exact option sidecars: `case.geo.opt` for normal launch and `case.msh.opt`
+  for raw mesh/data inspection. A plain `case.opt` is not auto-loaded.
+- `cubit-mesh-export` `export gmsh "case.msh"` should attach `case.geo`,
+  `case.geo.opt`, and `case.msh.opt`; open `case.geo` for normal review.
 """
 
 GMSH_OVERVIEW = """
@@ -1231,6 +1235,14 @@ Runnable artifact-inspection notebook:
 `docs/gmsh_animation/gmsh_animation_result.json` (notebook-output sync).  The
 docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
 2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
+
+Runnable export notebook:
+`docs/gmsh_animation/gmsh_animation_export.ipynb`.  It opens the docs-local
+`animation.geo`, relies on `animation.geo.opt`, synchronizes all visible view
+time steps, exports PNG frames, writes GIF/MP4 movies, and records which
+companions (`.geo`, `.geo.opt`, `.msh.opt`) were used.  This is the small
+teaching example for students and the MCP regression reference for animation
+export behavior.
 
 ## .msh File Structure (v4.1 with time-stepped displacement)
 

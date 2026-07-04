@@ -37,6 +37,58 @@ def _quote_msh_string(text: str) -> str:
     return '"' + str(text).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def _write_gmsh_launch_companion(msh_path: Path) -> dict:
+    """Write case.geo, case.geo.opt, and case.msh.opt for Gmsh display.
+
+    Gmsh is a post-processing viewer in this pipeline. The raw .msh stores
+    mesh/data; the .geo is the user-facing launch recipe that merges it and
+    carries stable display defaults.
+    """
+    msh_path = Path(msh_path)
+    geo_path = msh_path.with_suffix(".geo")
+    geo_opt_path = Path(str(geo_path) + ".opt")
+    msh_opt_path = Path(str(msh_path) + ".opt")
+    options = "\n".join([
+        "General.Orthographic = 1;",
+        "General.Trackball = 0;",
+        "General.RotationX = -68;",
+        "General.RotationY = 0;",
+        "General.RotationZ = 0;",
+        "General.RotationCenterGravity = 1;",
+        "Mesh.NumSubEdges = 4;",
+        "Mesh.SurfaceFaces = 1;",
+        "Mesh.SurfaceEdges = 1;",
+        "Mesh.VolumeEdges = 0;",
+        "Mesh.VolumeFaces = 0;",
+        "Mesh.ColorCarousel = 2;",
+        "View[0].Visible = 1;",
+        "View[0].IntervalsType = 2;",
+        "View[0].ShowScale = 1;",
+    ]) + "\n"
+
+    geo_path.write_text(
+        "// Auto-generated build123d/Netgen Gmsh launch companion\n"
+        "// Open this .geo for normal review; open .msh only for raw inspection.\n"
+        f"Merge \"{msh_path.name}\";\n\n"
+        + options,
+        encoding="utf-8",
+    )
+    geo_opt_path.write_text(
+        "// Auto-generated display options for the .geo launch artifact\n"
+        + options,
+        encoding="utf-8",
+    )
+    msh_opt_path.write_text(
+        "// Auto-generated raw mesh/data inspection options\n" + options,
+        encoding="utf-8",
+    )
+    return {
+        "geo": str(geo_path),
+        "geo_opt": str(geo_opt_path),
+        "msh_opt": str(msh_opt_path),
+    }
+
+
 def _read_gmsh_nodes_elements(
     msh_path: Path,
 ) -> tuple[list[tuple[int, float, float, float]], list[dict]]:
@@ -330,12 +382,16 @@ def _stage_post(msh_path: Path, out_dir: Path, label: str) -> dict:
         elements,
         node_data=(f"{label}_dummy_scalar", values),
     )
+    companions = _write_gmsh_launch_companion(out_msh)
 
     value_list = list(values.values())
     return {
         "stage": "post",
         "ok": True,
         "msh_post": str(out_msh),
+        "geo": companions["geo"],
+        "geo_opt": companions["geo_opt"],
+        "msh_opt": companions["msh_opt"],
         "view_tag": 0,
         "post_backend": "msh_node_data_writer",
         "n_nodes": len(nodes),
@@ -520,6 +576,7 @@ def _stage_post_multi(msh_path: Path, region_names, out_dir: Path,
         ],
         element_data=(f"{label}_region_id", region_id_values),
     )
+    companions = _write_gmsh_launch_companion(out_msh)
 
     per_region = []
     for region_idx, (physical_tag, name) in enumerate(
@@ -544,6 +601,9 @@ def _stage_post_multi(msh_path: Path, region_names, out_dir: Path,
         "stage": "post",
         "ok": True,
         "msh_post": str(out_msh),
+        "geo": companions["geo"],
+        "geo_opt": companions["geo_opt"],
+        "msh_opt": companions["msh_opt"],
         "view_tag": 0,
         "post_backend": "msh_element_data_writer",
         "n_regions": len(volume_tags),

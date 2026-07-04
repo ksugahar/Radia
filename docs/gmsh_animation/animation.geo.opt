@@ -1,0 +1,24 @@
+// Auto-generated display options for animation.geo
+General.Orthographic = 1;
+General.Trackball = 0;
+General.RotationX = -68;
+General.RotationY = 0;
+General.RotationZ = 0;
+General.RotationCenterGravity = 1;
+General.SmallAxes = 1;
+General.BackgroundGradient = 0;
+Mesh.NumSubEdges = 4;
+Mesh.SurfaceFaces = 1;
+Mesh.SurfaceEdges = 0;
+Mesh.VolumeEdges = 0;
+Mesh.VolumeFaces = 0;
+View[0].VectorType = 5;
+View[0].DisplacementFactor = 1.0;
+View[0].ShowElement = 1;
+View[0].ShowScale = 0;
+View[0].IntervalsType = 2;
+View[0].DrawSkinOnly = 1;
+View[0].AdaptVisualizationGrid = 1;
+View[0].MaxRecursionLevel = 1;
+PostProcessing.Link = 1;
+PostProcessing.AnimationCycle = 0;

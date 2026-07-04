@@ -21,7 +21,7 @@ Path A is the recommended export path. Use `export netgen "mesh.vol" order N` fo
 | Command | Format | Max Order | Notes |
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
-| `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh) | 1-3 | Raw display data; open via `.geo` for Radia post |
+| `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
 | `export jmag_nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
 | `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
@@ -39,6 +39,7 @@ cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 
 # Gmsh v4.1 raw display data (Radia post launches the .geo companion)
 cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
+# -> mesh.msh + mesh.geo + mesh.geo.opt + mesh.msh.opt
 
 # Netgen .vol supports order 1-5
 cubit.cmd('export netgen "mesh.vol" order 5 overwrite')
@@ -123,8 +124,10 @@ export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 
 v4.1 is the only supported GMSH format. No block assignment required.
 For Radia post-processing, treat this `.msh` as raw mesh/data and open the
-generated or adjacent `.geo` launch recipe. Do not make `.msh` double-click the
-primary user-facing post-processing contract.
+generated `.geo` launch recipe. The command should attach `case.geo`,
+`case.geo.opt`, and `case.msh.opt`; a plain `case.opt` is not an Explorer
+auto-load contract. Do not make `.msh` double-click the primary user-facing
+post-processing contract.
 
 ## Supported Elements
 
@@ -164,8 +167,8 @@ v4.1 is the only supported GMSH format (v2.2 removed, lab-wide standard).
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
-| **Output** (Cubit ->) | **.msh v4.1 + .geo** | Mesh visualization/post launch | `export gmsh "mesh.msh" order N` + `.geo` recipe |
-| **Output** (NGSolve ->) | **.msh v4.1 + .geo** | Field visualization/post launch | `GmshPostExport.write()` + `.geo` recipe |
+| **Output** (Cubit ->) | **.msh v4.1 + .geo/.opt** | Mesh visualization/post launch | `export gmsh "mesh.msh" order N` + `.geo` recipe |
+| **Output** (NGSolve ->) | **.msh v4.1 + .geo/.opt** | Field visualization/post launch | `GmshPostExport.write()` + `.geo` recipe |
 
 The ONLY input format for NGSolve is `.vol`. `.msh` is output-only (Cubit mesh export or NGSolve field visualization).
 The standard file to open for Radia post-processing is `.geo`; `.msh` association is optional raw mesh/data inspection.
@@ -183,6 +186,11 @@ The standard file to open for Radia post-processing is `.geo`; `.msh` associatio
 - **`export gmsh "mesh.msh"`**: For Cubit mesh visualization data in GMSH (order 1-3)
 - **`GmshPostExport.write()`**: For NGSolve field result data in GMSH
 - **`.geo` companion**: Standard Radia post-processing launch artifact
+  with exact `case.geo.opt` sidecar
+- **`case.msh.opt` companion**: Raw mesh/data inspection sidecar when a
+  user intentionally opens the `.msh` directly
+- A plain `case.opt` is not auto-loaded when either `case.geo` or
+  `case.msh` is opened
 """
 
 EXPORT_CURVED = """
@@ -371,7 +379,7 @@ EXPORT_COMPARISON = """
 | Pyramid | Yes | Yes | Yes | Yes | degen hex | No |
 | Labels | block+sideset | block+sideset | block | block | block+sideset | block |
 | 2D mode | No | Yes | Yes | Yes | Yes (twod/axi) | No |
-| Companion | .vol.json | .geo launch recipe | - | - | - | d3 |
+| Companion | .vol.json | .geo + .geo.opt launch recipe | - | - | - | d3 |
 
 ## export netgen vs Gmsh for NGSolve
 

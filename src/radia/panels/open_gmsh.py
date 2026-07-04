@@ -3,7 +3,7 @@
 The IH/EM/PCB panels invoke this script as a detached subprocess after a
 Run completes successfully::
 
-    python open_gmsh.py <path-to-msh>
+    python open_gmsh.py <path-to-geo-or-msh>
 
 Why a separate script and not ``python -c "..."``?
 
@@ -16,8 +16,9 @@ Why a separate script and not ``python -c "..."``?
       debug log so the failure is visible to the user (and to Claude).
 
 The script is intentionally minimal: ``gmsh.initialize(['-noconfig'])``
-skips ``%APPDATA%\\gmsh-options`` so only the ``.msh.opt`` companion
-file controls display settings (VolumeFaces=1, VectorType=5, ...).
+skips ``%APPDATA%\\gmsh-options`` so only the exact companion option file
+controls display settings. Prefer ``case.geo`` + ``case.geo.opt`` for the
+normal launch path; ``case.msh`` + ``case.msh.opt`` is raw inspection.
 """
 
 from __future__ import annotations
@@ -50,15 +51,24 @@ def main(argv):
     panel_log, panel_log_exception = _import_panel_log()
 
     if len(argv) < 2:
-        panel_log("open_gmsh.py: missing .msh argument")
+        panel_log("open_gmsh.py: missing .geo/.msh argument")
         return 2
 
-    msh_path = argv[1]
-    panel_log(f"open_gmsh.py: msh={msh_path}")
+    input_path = argv[1]
+    panel_log(f"open_gmsh.py: input={input_path}")
 
-    if not os.path.isfile(msh_path):
-        panel_log(f"open_gmsh.py: ERROR file does not exist: {msh_path}")
+    if not os.path.isfile(input_path):
+        panel_log(f"open_gmsh.py: ERROR file does not exist: {input_path}")
         return 3
+
+    open_path = input_path
+    stem, ext = os.path.splitext(input_path)
+    sibling_merge_stem = stem if ext.lower() == ".msh" else ""
+    if ext.lower() == ".msh":
+        geo_path = stem + ".geo"
+        if os.path.isfile(geo_path):
+            open_path = geo_path
+            panel_log(f"open_gmsh.py: using geo companion={geo_path}")
 
     try:
         import gmsh
@@ -68,7 +78,7 @@ def main(argv):
 
     try:
         gmsh.initialize(["-noconfig"])
-        gmsh.open(msh_path)
+        gmsh.open(open_path)
         panel_log("open_gmsh.py: gmsh.open OK")
 
         # Auto-merge sibling overlay files written by calc_*.py:
@@ -80,19 +90,20 @@ def main(argv):
         # This lets a single Open GMSH click show all relevant overlays
         # (B field on bbox + filament currents + wp surface) in one
         # window without the user having to "File -> Merge..." manually.
-        stem, ext = os.path.splitext(msh_path)
-        merge_suffixes = ("_filaments.msh", "_wp_surface.msh",
-                          "_wp.msh", "_surface.msh")
-        for suffix in merge_suffixes:
-            sibling = stem + suffix
-            if os.path.isfile(sibling):
-                try:
-                    gmsh.merge(sibling)
-                    panel_log(f"open_gmsh.py: merged "
-                              f"{os.path.basename(sibling)}")
-                except Exception:
-                    panel_log_exception(
-                        f"open_gmsh.py: merge {os.path.basename(sibling)}")
+        if sibling_merge_stem or os.path.splitext(open_path)[1].lower() != ".geo":
+            stem = sibling_merge_stem or os.path.splitext(open_path)[0]
+            merge_suffixes = ("_filaments.msh", "_wp_surface.msh",
+                              "_wp.msh", "_surface.msh")
+            for suffix in merge_suffixes:
+                sibling = stem + suffix
+                if os.path.isfile(sibling):
+                    try:
+                        gmsh.merge(sibling)
+                        panel_log(f"open_gmsh.py: merged "
+                                  f"{os.path.basename(sibling)}")
+                    except Exception:
+                        panel_log_exception(
+                            f"open_gmsh.py: merge {os.path.basename(sibling)}")
 
         panel_log("open_gmsh.py: entering fltk.run")
         gmsh.fltk.run()

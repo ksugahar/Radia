@@ -18,6 +18,10 @@ if (-not (Test-Path $cmake)) {
     $pipCmake = & python -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
     if ($pipCmake -and (Test-Path $pipCmake)) { $cmake = $pipCmake } else { throw "cmake.exe not found" }
 }
+$ninja = & python -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+if (-not $ninja -or -not (Test-Path $ninja)) {
+    throw "ninja.exe not found on PATH or in the active Python environment."
+}
 
 # Auto-discover the latest Cubit install (was hardcoded 2025.3 until
 # 2026-05-25; LAB now has 2025.12 only). Override via CUBIT_INSTALL_DIR.
@@ -36,7 +40,7 @@ $src = 'S:\Radia\01_GitHub\src\cubit_plugin'
 $buildPyd = Join-Path $src "build-pyd"
 if (-not (Test-Path $buildPyd)) { New-Item -ItemType Directory -Path $buildPyd | Out-Null }
 Set-Location $buildPyd
-& $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
+& $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_MAKE_PROGRAM=$ninja" "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-pyd failed" }
 & $cmake --build . --config Release --target cubit_mesh_curver -j
 if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_curver failed" }
@@ -45,7 +49,7 @@ if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_curver failed" }
 $buildCcm = Join-Path $src "build-ccm"
 if (-not (Test-Path $buildCcm)) { New-Item -ItemType Directory -Path $buildCcm | Out-Null }
 Set-Location $buildCcm
-& $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
+& $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl "-DCMAKE_MAKE_PROGRAM=$ninja" "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
 & $cmake --build . --config Release --target cubit_mesh_export_ccm -j
 if ($LASTEXITCODE -ne 0) { throw "cmake build cubit_mesh_export_ccm failed" }
