@@ -22,6 +22,10 @@ import numpy as np
 import ngsolve as ng
 
 import radia._radia_pybind as _rp
+from radia.planar_materials import (                                    # SHARED with the HDiv-VIM
+    hm_arrays as _hm_arrays, law_from_table as _law_from_table, region_ids as _region_ids,
+    check_regions as _check_regions, per_region_chi as _region_chi_for,
+    per_region_law as _per_region_law_mats)
 
 MU0 = 4e-7 * np.pi
 
@@ -73,67 +77,9 @@ def _M_avg(M, areas):
     return np.array([float(w @ M[:, 0]), float(w @ M[:, 1])])
 
 
-def _law_from_table(bh_table):
-    """[[H,B],...] (A/m, T) -> (M_of_h, chi_sec, chi0) with saturation clamp beyond Hmax."""
-    H, M, chi0 = _hm_arrays(bh_table)
-
-    def M_of_h(h):
-        return np.interp(h, H, M)
-
-    def chi_sec(h):
-        h = np.asarray(h, float)
-        out = np.full_like(h, chi0)
-        big = h >= H[1]
-        out[big] = np.interp(h[big], H, M) / h[big]
-        return out
-    return M_of_h, chi_sec, chi0
-
-
-def _hm_arrays(bh_table):
-    """[[H,B],...] (A/m,T) -> (H, M, chi0), 0-anchored + validated (shared by single + per-region)."""
-    tab = np.asarray(bh_table, float)
-    if tab.ndim != 2 or tab.shape[1] != 2 or tab.shape[0] < 3:
-        raise ValueError("bh_table must be [[H, B], ...] (A/m, T) with >= 3 rows")
-    H, Bt = tab[:, 0].copy(), tab[:, 1].copy()
-    if H[0] != 0.0:
-        H = np.concatenate([[0.0], H]); Bt = np.concatenate([[0.0], Bt])
-    if np.any(np.diff(H) <= 0):
-        raise ValueError("bh_table H column must be strictly increasing")
-    M = Bt / MU0 - H
-    if np.any(M < -1e-9):
-        raise ValueError("bh_table implies negative magnetization (B < mu0 H) -- not a soft iron")
-    return H, M, M[1] / H[1]
-
-
 def _element_materials(mesh):
     """Per-element material name (same VOL element order as _extract_geometry)."""
     return [el.mat for el in mesh.Elements(ng.VOL)]
-
-
-def _region_ids(mats):
-    d = {}
-    for i, m in enumerate(mats):
-        d.setdefault(m, []).append(i)
-    return {k: np.asarray(v, int) for k, v in d.items()}
-
-
-def _check_regions(mats, provided, what):
-    missing = set(mats) - set(provided)
-    if missing:
-        raise ValueError("solve_planar_demag: mesh regions %s have no %s; provided: %s"
-                         % (sorted(missing), what, sorted(provided)))
-
-
-def _region_chi_for(mats, mu_r_dict):
-    """Per-element chi from a {region_name: mu_r} dict, given a materials LIST (soft subset OK)."""
-    _check_regions(mats, mu_r_dict, "mu_r")
-    chi = np.empty(len(mats))
-    for name, ids in _region_ids(mats).items():
-        mr = mu_r_dict[name]
-        if not mr > 1.0:
-            raise ValueError("solve_planar_demag: mu_r[%r] must be > 1 (got %r)" % (name, mr))
-        chi[ids] = mr - 1.0
-    return chi
 
 
 def _per_region_chi(mesh, mu_r_dict):
@@ -170,32 +116,8 @@ def _pm_hard_M(mesh, pm, mats, nElem):
 
 
 def _per_region_law(mesh, bh_dict):
-    """Per-element (M_of_h, chi_sec, chi0) from a {region_name: [[H,B],...]} dict."""
-    mats = _element_materials(mesh)
-    _check_regions(mats, bh_dict, "bh_table")
-    rid = _region_ids(mats)
-    law = {name: _hm_arrays(bh_dict[name]) for name in rid}
-    chi0_e = np.empty(len(mats))
-    for name, ids in rid.items():
-        chi0_e[ids] = law[name][2]
-
-    def M_of_h(h):
-        out = np.empty(len(mats))
-        for name, ids in rid.items():
-            H, M, _ = law[name]
-            out[ids] = np.interp(h[ids], H, M)
-        return out
-
-    def chi_sec(h):
-        out = np.empty(len(mats))
-        for name, ids in rid.items():
-            H, M, c0 = law[name]
-            hi = h[ids]; ci = np.full_like(hi, c0)
-            big = hi >= H[1]
-            ci[big] = np.interp(hi[big], H, M) / hi[big]
-            out[ids] = ci
-        return out
-    return M_of_h, chi_sec, chi0_e
+    """Per-element (M_of_h, chi_sec, chi0) from a {region_name: [[H,B],...]} dict (shared layer)."""
+    return _per_region_law_mats(_element_materials(mesh), bh_dict)
 
 
 def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, pm=None,

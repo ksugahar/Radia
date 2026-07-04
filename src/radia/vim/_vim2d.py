@@ -28,6 +28,7 @@ import numpy as np
 import ngsolve as ng
 
 from ._vim import build_charge_gram, _charge_basis_2d, _prod_tri01, _g01
+from radia.planar_materials import law_from_table as _law_from_table   # SHARED with the MMMM
 
 MU0 = 4e-7 * np.pi
 
@@ -289,37 +290,6 @@ def maxwell_torque_circle(H_total_at, Rc, n=1440, center=(0.0, 0.0)):
     else:
         acc = float((Hr * Ht).sum())
     return MU0 * Rc * Rc * (2 * np.pi / n) * acc
-
-
-def _law_from_table(bh_table):
-    """[[H, B], ...] (A/m, T) -> vectorized (M_of_h, chi_sec) with saturation clamp beyond Hmax
-    (the same physical mu_r -> 1 extension the tet path and MatSatIsoTab use)."""
-    tab = np.asarray(bh_table, float)
-    if tab.ndim != 2 or tab.shape[1] != 2 or tab.shape[0] < 3:
-        raise ValueError("bh_table must be [[H, B], ...] (A/m, T) with >= 3 rows")
-    H = tab[:, 0]
-    Bt = tab[:, 1]
-    if H[0] != 0.0:
-        H = np.concatenate([[0.0], H])
-        Bt = np.concatenate([[0.0], Bt])
-    if np.any(np.diff(H) <= 0):
-        raise ValueError("bh_table H column must be strictly increasing")
-    M = Bt / MU0 - H
-    if np.any(M < -1e-9):
-        raise ValueError("bh_table implies negative magnetization (B < mu0 H) -- not a soft iron")
-    chi0 = M[1] / H[1]
-
-    def M_of_h(h):
-        return np.interp(h, H, M)          # clamps at M[-1] beyond Hmax (saturation)
-
-    def chi_sec(h):
-        h = np.asarray(h, float)
-        out = np.empty_like(h)
-        small = h < H[1]
-        out[small] = chi0
-        out[~small] = np.interp(h[~small], H, M) / h[~small]
-        return out
-    return M_of_h, chi_sec, chi0
 
 
 def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, eta=2.0,
