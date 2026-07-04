@@ -9,7 +9,7 @@ TriPotential/TriMoment1/TriMoment2) is EXACT through the singularity for self/ad
 This locks the C++ adjacent tet-tet entry to an INDEPENDENT brute force (no shared formula) at ~1e-3 -- a
 band the old subtraction (~1.5e-2) would FAIL.  (NOTE: this is the ENTRY accuracy fix; the order-p MATERIAL
 SOLVE remains a separate open item -- the high-order demag OPERATOR N=B^T G B is invalid, eig escapes [0,1];
-see memory hdiv-highorder-material-solve-wrong.  So hdiv_demag_solve(order>0) stays fail-loud.)
+see memory hdiv-highorder-material-solve-wrong.  So Solve(order>0) stays fail-loud.)
 """
 import numpy as np
 import pytest

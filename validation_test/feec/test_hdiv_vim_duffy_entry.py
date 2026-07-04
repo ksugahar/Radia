@@ -11,7 +11,7 @@ multiplies by sign(host vol) to recover the physical absolute-volume charge inte
 
 NOTE: the Duffy is ~1e-3 accurate -- enough for curved-panel field evaluation, but NOT for the order>=3
 MATERIAL solve, where the ill-conditioned high-degree monomial basis (cond(B)^2 in N=B^T G B) amplifies the
-~1e-3 entry error so the demag spectrum escapes [0,1].  So hdiv_demag_solve(order>2) stays fail-loud; this
+~1e-3 entry error so the demag spectrum escapes [0,1].  So Solve(order>2) stays fail-loud; this
 test locks the Duffy ENTRY accuracy (the curved / future path), not an order>=3 material solve.
 See memory hdiv-vim-sauter-schwab-cg.
 """

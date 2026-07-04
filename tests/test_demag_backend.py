@@ -2,7 +2,7 @@
 
 Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
 solved by the canonical collocation MMMM demag; mesh-BACKED pure TET / HEX /
-WEDGE soft iron (radia.vim.soft_iron_from_mesh) is eligible for FEEC HDiv-VIM
+WEDGE soft iron (radia.vim.MeshSoftIron) is eligible for FEEC HDiv-VIM
 RT1; mixed / pyramid meshes stay on the collocation MMMM bridge.
 set_demag_backend("collocation_mmmm"|"hdiv") overrides; "auto"/None restores
 the split.  Tet (MMM) and permanent-magnet solves are unaffected.  The
@@ -96,11 +96,11 @@ def test_meshless_hex_soft_iron_solves_via_collocation_mmmm():
 
 
 def _mesh_backed_top(mesh, ng):
-    from radia.vim import soft_iron_from_mesh
+    from radia.vim import MeshSoftIron
 
     rad.UtiDelAll()
     with ng.TaskManager():
-        iron = soft_iron_from_mesh(mesh, mu_r=20.0)
+        iron = MeshSoftIron(mesh, mu_r=20.0)
     return rad.ObjCnt([iron])
 
 

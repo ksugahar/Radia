@@ -1,5 +1,5 @@
 """M0-linear parity gate (productionization, docs/hdiv_vim/PRODUCTIONIZATION.md): the HDiv-VIM
-production entry `radia.vim.hdiv_demag_solve` vs the shipped six-face surface-charge MSC (`rad.Solve`) on the SAME
+production entry `radia.vim.Solve` vs the shipped six-face surface-charge MSC (`rad.Solve`) on the SAME
 soft-iron body -- a cube under a uniform applied field.
 
 A cube's volume-averaged demag factor is exactly 1/3 (cubic symmetry, Dx=Dy=Dz, sum=1), but its M is
@@ -29,7 +29,7 @@ import radia as rad  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry  # noqa: E402
 
-from radia.vim import hdiv_demag_solve, soft_iron_from_mesh  # noqa: E402
+from radia.vim import Solve, MeshSoftIron  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 MU0 = 4.0e-7 * math.pi
@@ -47,7 +47,7 @@ def _collocation_mmmm_cube_Mz(n):
     with ng.TaskManager():
         mesh = MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=n,
                                     mapping=lambda x, y, z: (L * (x - 0.5), L * (y - 0.5), L * (z - 0.5)))
-        core = soft_iron_from_mesh(mesh, mu_r=MU_R)
+        core = MeshSoftIron(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     cont = rad.ObjCnt([core, bkg])
     rad.Solve(cont, 1e-6, 3000, 0, demag_backend="collocation_mmmm")      # force surface-charge MSC (LU) on the registered iron
@@ -60,7 +60,7 @@ def _hdiv_cube(maxh):
     geo = OCCGeometry(box)
     with ng.TaskManager():
         mesh = ng.Mesh(geo.GenerateMesh(maxh=maxh))
-        return hdiv_demag_solve(mesh, MU_R, ng.CoefficientFunction((0, 0, H0)))
+        return Solve(mesh, MU_R, ng.CoefficientFunction((0, 0, H0)))
 
 
 def test_collocation_mmmm_hdiv_cube_linear_parity():

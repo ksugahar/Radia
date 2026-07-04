@@ -1,6 +1,6 @@
 """Golden: the 2D PLANAR HDiv-VIM charge Gram (motor cross-section layer).
 
-`radia.vim._vim.build_charge_gram(HDiv(mesh2d, order=1))` must route to the C++ dim2 log-kernel Gram
+`radia.vim.ChargeGram(HDiv(mesh2d, order=1))` must route to the C++ dim2 log-kernel Gram
 (-ln(r)/2pi; charges = -div M on tri/quad cells + M.n on boundary edges, Piola-exact REF measures) and
 produce a demag operator N = B^T G B whose generalized spectrum vs the HDiv mass respects the 2D physical
 bound [0, 1], with the CLOSED-FORM anchors:
@@ -27,7 +27,7 @@ from ngsolve.meshes import MakeStructured2DMesh  # noqa: E402
 from netgen.occ import WorkPlane, OCCGeometry  # noqa: E402
 import scipy.linalg as sla  # noqa: E402
 
-from radia.vim._vim import build_charge_gram  # noqa: E402
+from radia.vim import ChargeGram  # noqa: E402
 
 
 def _materialize_N(B, G):
@@ -44,7 +44,7 @@ def _materialize_N(B, G):
 def _gate(mesh):
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=1)
-        B, G, M_mass = build_charge_gram(fes)
+        B, G, M_mass = ChargeGram(fes)
         N = _materialize_N(B, G)
         Md = M_mass.toarray()
         w = sla.eigh(N, Md, eigvals_only=True)

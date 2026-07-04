@@ -1,8 +1,8 @@
 """Golden: HDiv-VIM CURVED (isoparametric P2) tet NONLINEAR demag solve (curved-nonlinear increment 1).
 
-The curved tet charge Gram (build_charge_gram(curve_order=2), CurvedTri/TetPotential -- locked by
+The curved tet charge Gram (ChargeGram(curve_order=2), CurvedTri/TetPotential -- locked by
 test_hdiv_vim_curved_gram.py) is now wired to the symmetric energy-Newton nonlinear solver
-(_solve_nonlinear_energy_cpp): hdiv_demag_solve(mesh, bh_table=..., curve_order=2) lifts the former
+(_solve_nonlinear_energy_cpp): Solve(mesh, bh_table=..., curve_order=2) lifts the former
 order>0-nonlinear NotImplementedError for the CURVED path.  The FLAT order>0 nonlinear path is now wired too
 (verified, see test_flat_rt1_nonlinear_matches_rt0 below).  No new C++ -- the energy-Newton is Gram-AGNOSTIC
 (it consumes only H.matvec + H.solve_linear_material_mass_riesz, present on every high-order Gram object).
@@ -18,7 +18,7 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 from netgen.occ import Sphere, Pnt, OCCGeometry          # noqa: E402
-from radia.vim import hdiv_demag_solve                    # noqa: E402
+from radia.vim import Solve                    # noqa: E402
 from radia.vim import _nonlinear as nl                    # noqa: E402
 
 # analytic-ish soft iron (chi0=1000, Msat=1e6): synth a [[H,B]] table from the smooth M(H) curve
@@ -39,9 +39,9 @@ def test_curved_tet_nonlinear_runs_and_matches_analytic():
     H0 = 5000.0
     Man = nl._scalar_fixed_point(_Mof, 1.0 / 3.0, H0)
     with ng.TaskManager():
-        rc = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
+        rc = Solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
                               order=1, curve_order=2)
-        rf = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
+        rf = Solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
     assert rc["nonlinear"] is True
     assert rc["linear_solver"] == "energy-newton-cpp", rc["linear_solver"]
     assert rc["curve_order"] == 2
@@ -62,7 +62,7 @@ def test_flat_rt1_nonlinear_matches_analytic():
     H0 = 5000.0
     Man = nl._scalar_fixed_point(_Mof, 1.0 / 3.0, H0)
     with ng.TaskManager():
-        r1 = hdiv_demag_solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
+        r1 = Solve(_sphere(), bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)), order=1)
     assert r1["nonlinear"] is True
     assert r1["linear_solver"] == "energy-newton-cpp", r1["linear_solver"]
     assert r1["iters"] < 300, r1["iters"]

@@ -187,10 +187,10 @@ except ImportError:
 # DEFAULT = "auto" (API-split): the API you use selects the method.
 #   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> collocation MMMM (C++).
 #   - mesh-BACKED pure TET / HEX / WEDGE soft iron
-#     (radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM (RT1).
+#     (radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM (RT1).
 #   - mesh-BACKED mixed / pyramid soft iron -> collocation MMMM bridge.
 #   - tetrahedron (MMM) and permanent-magnet solves -> C++ solver (unchanged).
-# set_demag_backend("collocation_mmmm"|"hdiv") OVERRIDES the auto split (a soft_iron_from_mesh
+# set_demag_backend("collocation_mmmm"|"hdiv") OVERRIDES the auto split (a MeshSoftIron
 # container carries both representations, so either backend can solve it);
 # set_demag_backend("auto"/None) restores the split.
 # ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ _BACKEND_MISSING = object()
 def set_demag_backend(name):
     """Select the soft-iron demag backend.  "collocation_mmmm" = canonical collocation MMMM
     surface-charge MSC; "hdiv" = FEEC HDiv-VIM; "auto"/None = API-split default
-    (mesh-less -> collocation MMMM, soft_iron_from_mesh(pure tet/hex/wedge) -> HDiv-VIM RT1,
+    (mesh-less -> collocation MMMM, MeshSoftIron(pure tet/hex/wedge) -> HDiv-VIM RT1,
     mixed/pyramid mesh-backed iron -> collocation MMMM bridge).  The choice is consulted
     by rad.Solve.
 
@@ -257,7 +257,7 @@ if "ObjCnt" in globals():
 
         The underlying C++ ObjCntStuf helper is not safe to probe on arbitrary non-container handles, so
         the Solve wrapper uses this Python-side record when deciding whether a container includes a
-        soft_iron_from_mesh body.
+        MeshSoftIron body.
         """
         h = _cpp_ObjCnt(*args, **kwargs)
         members = args[0] if args else kwargs.get("objs", None)
@@ -275,7 +275,7 @@ if "Solve" in globals():
 
     def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: pick the soft-iron demag backend)
         """Radia relaxation solve with the API-split demag backend (see set_demag_backend):
-          - mesh-BACKED pure TET / HEX / WEDGE soft iron (radia.vim.soft_iron_from_mesh)
+          - mesh-BACKED pure TET / HEX / WEDGE soft iron (radia.vim.MeshSoftIron)
             -> FEEC HDiv-VIM (RT1, default),
             or collocation MMMM if demag_backend='collocation_mmmm';
           - mesh-BACKED mixed / pyramid soft iron -> collocation MMMM bridge in 'auto';
@@ -316,8 +316,8 @@ if "Solve" in globals():
         if backend == "hdiv":
             raise ValueError(
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "
-                "radia.vim.soft_iron_from_mesh(mesh, mu_r=/bh_table=); this body is mesh-less.  "
-                "Build it via soft_iron_from_mesh, or use demag_backend='collocation_mmmm' "
+                "radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=); this body is mesh-less.  "
+                "Build it via radia.vim.MeshSoftIron, or use demag_backend='collocation_mmmm' "
                 "for the mesh-less collocation MMMM path.")
         return _cpp_Solve(*args, **kwargs)                  # mesh-less -> collocation MMMM (or MMM/PM)
 
@@ -340,7 +340,7 @@ if "UtiDelAll" in globals():
 
     def UtiDelAll(*args, **kwargs):   # noqa: F811  (clears the HDiv mesh<->container registry too)
         """Delete all Radia objects.  Also clears the HDiv-VIM mesh<->container registry
-        (radia.vim.soft_iron_from_mesh), whose container handles are invalidated here."""
+        (radia.vim.MeshSoftIron), whose container handles are invalidated here."""
         try:
             from radia.vim import _radsolve
             _radsolve.clear_registry()

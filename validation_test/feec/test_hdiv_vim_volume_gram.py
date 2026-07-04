@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
 
@@ -27,7 +27,7 @@ def _demag(geo_kind):
         g.Add(OrthoBrick(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))); h = 0.3
     with ng.TaskManager():
         mesh = ng.Mesh(g.GenerateMesh(maxh=h))
-        return hdiv_demag_solve(mesh, mu_r=1000.0, H_ext=_HEXT)["demag"]
+        return Solve(mesh, mu_r=1000.0, H_ext=_HEXT)["demag"]
 
 
 def test_volume_gram_demag_sphere():

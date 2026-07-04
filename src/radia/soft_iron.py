@@ -38,14 +38,14 @@ class SoftIron:
     """
 
     def __init__(self, geometry, mu_r=None, bh_table=None, material_filter=None, verbose=False):
-        from radia.vim import soft_iron_from_mesh, soft_iron_from_vol
+        from radia.vim import MeshSoftIron, VolSoftIron
         if isinstance(geometry, (str, os.PathLike)):
-            self.container = soft_iron_from_vol(geometry, mu_r=mu_r, bh_table=bh_table,
-                                                material_filter=material_filter, verbose=verbose)
+            self.container = VolSoftIron(geometry, mu_r=mu_r, bh_table=bh_table,
+                                         material_filter=material_filter, verbose=verbose)
             self._geometry = os.fspath(geometry)
         else:
-            self.container = soft_iron_from_mesh(geometry, mu_r=mu_r, bh_table=bh_table,
-                                                 material_filter=material_filter, verbose=verbose)
+            self.container = MeshSoftIron(geometry, mu_r=mu_r, bh_table=bh_table,
+                                          material_filter=material_filter, verbose=verbose)
             self._geometry = "<ngsolve.Mesh>"
         self.mu_r = mu_r
         self.bh_table = bh_table

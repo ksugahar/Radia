@@ -17,7 +17,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 import ngsolve as ng                                       # noqa: E402
 from netgen.csg import CSGeometry, Sphere, OrthoBrick, Pnt  # noqa: E402
-from radia.vim._solve import hdiv_demag_solve              # noqa: E402
+from radia.vim import Solve              # noqa: E402
 
 _H0 = 1000.0
 
@@ -31,7 +31,7 @@ def _sphere(box_lo, maxh=0.45):
 
 def _demag(box_lo, image):
     with ng.TaskManager():
-        out = hdiv_demag_solve(_sphere(box_lo), mu_r=100.0,
+        out = Solve(_sphere(box_lo), mu_r=100.0,
                                H_ext=ng.CoefficientFunction((0, 0, _H0)), image=image)
     return out["demag"], out["n_el"]
 
@@ -60,5 +60,5 @@ def test_curved_ima_fails_loud():
     tetm = _sphere((0, -2, -2))
     with pytest.raises((ValueError, NotImplementedError), match="CURVED|curve"):
         with ng.TaskManager():
-            hdiv_demag_solve(tetm, mu_r=100.0, H_ext=ng.CoefficientFunction((0, 0, _H0)),
+            Solve(tetm, mu_r=100.0, H_ext=ng.CoefficientFunction((0, 0, _H0)),
                              image="+x", curve_order=2)

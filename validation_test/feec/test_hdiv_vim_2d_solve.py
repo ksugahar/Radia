@@ -2,7 +2,7 @@
 hdiv_demag_solve on mesh.dim == 2).
 
 Locks (the research-layer gates promoted to production, see memory hdiv-vim-tri-quad-motor):
-  (1) LINEAR disk: hdiv_demag_solve(mesh2d, mu_r) volume-average M matches the 2D
+  (1) LINEAR disk: Solve(mesh2d, mu_r) volume-average M matches the 2D
       Clausius-Mossotti relation M/H0 = chi / (1 + chi/2), demag factors (1/2, 1/2);
   (2) NONLINEAR disk via a saturating bh_table: deep-saturation sweep matches the analytic
       uniform fixed point M = Mof(H0 - M/2) (D = 1/2 exact) -- the scalar-chi Picard +
@@ -23,7 +23,7 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 from netgen.occ import WorkPlane, OCCGeometry  # noqa: E402
 
-from radia.vim import hdiv_demag_solve, maxwell_torque_circle  # noqa: E402
+from radia.vim import Solve, maxwell_torque_circle  # noqa: E402
 
 MU0 = 4e-7 * np.pi
 CHI0, MSAT = 1000.0, 1.2e6
@@ -60,7 +60,7 @@ def _fixed_point(H0, D=0.5):
 def test_2d_linear_disk_clausius_mossotti():
     mesh = _disk_mesh()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, 1000.0, ng.CoefficientFunction((1.0, 0.0)))
+        res = Solve(mesh, 1000.0, ng.CoefficientFunction((1.0, 0.0)))
     assert res["linear_solver"] == "dense-2d" and not res["nonlinear"]
     chi = 999.0
     ref = chi / (1.0 + chi / 2.0)
@@ -75,7 +75,7 @@ def test_2d_nonlinear_disk_deep_saturation(H0, tol):
     """Linear regime -> knee -> deep saturation (M/Msat ~ 0.997) vs the analytic fixed point."""
     mesh = _disk_mesh()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, None, ng.CoefficientFunction((H0, 0.0)),
+        res = Solve(mesh, None, ng.CoefficientFunction((H0, 0.0)),
                                bh_table=_bh_table())
     assert res["nonlinear"] and res["iters"] >= 1
     Mref = _fixed_point(H0)
@@ -96,7 +96,7 @@ def test_2d_ellipse_reluctance_torque_three_way():
         for th in (30.0, 60.0):
             Ha, Hb = H0 * np.cos(np.radians(th)), H0 * np.sin(np.radians(th))
             if body is None:
-                res = hdiv_demag_solve(mesh, chi + 1.0, ng.CoefficientFunction((Ha, Hb)))
+                res = Solve(mesh, chi + 1.0, ng.CoefficientFunction((Ha, Hb)))
                 body = res["body"]                       # N built ONCE; reuse for the sweep
                 m = res["m"]
             else:
@@ -124,10 +124,10 @@ def test_2d_fail_loud_contract():
     H = ng.CoefficientFunction((1.0, 0.0))
     with ng.TaskManager():
         with pytest.raises(ValueError, match="linear_solver"):
-            hdiv_demag_solve(mesh, 1000.0, H, linear_solver="cpp-cg")
+            Solve(mesh, 1000.0, H, linear_solver="cpp-cg")
         with pytest.raises(ValueError, match="3D knob"):
-            hdiv_demag_solve(mesh, 1000.0, H, gram_eps=1e-6)
+            Solve(mesh, 1000.0, H, gram_eps=1e-6)
         with pytest.raises(NotImplementedError, match="per-region"):
-            hdiv_demag_solve(mesh, {"default": 1000.0}, H)
+            Solve(mesh, {"default": 1000.0}, H)
         with pytest.raises(ValueError, match="EXACTLY ONE"):
-            hdiv_demag_solve(mesh, 1000.0, H, bh_table=_bh_table())
+            Solve(mesh, 1000.0, H, bh_table=_bh_table())

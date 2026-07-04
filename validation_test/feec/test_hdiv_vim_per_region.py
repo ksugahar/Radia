@@ -1,4 +1,4 @@
-"""Per-region LINEAR soft-iron materials for radia.vim.hdiv_demag_solve (mu_r as a dict
+"""Per-region LINEAR soft-iron materials for radia.vim.Solve (mu_r as a dict
 {material_name: mu_r}).  N = B^T G B is geometry-only (material-independent), so per-region soft iron
 enters ONLY through the chi-weighted HDiv mass M_chi = INT chi(x) u.v dx of the form-1 projected system
 A = M_mass + M_chi M_mass^-1 N (the same projected M = chi H statement the nonlinear path uses, so a
@@ -17,7 +17,7 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt, Glue  # noqa: E402
 
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 
 H0 = 1000.0
 HEXT = ng.CoefficientFunction((0.0, 0.0, H0))
@@ -55,9 +55,9 @@ def test_per_region_equal_mu_matches_scalar():
     + far_quad=4) while the dict GMRES path stays all-analytic, so force both to the exact all-analytic Gram."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
-        rd = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
+        rd = Solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
                               tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
-        rs = hdiv_demag_solve(mesh, mu_r=200.0, H_ext=HEXT,
+        rs = Solve(mesh, mu_r=200.0, H_ext=HEXT,
                               tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
     assert np.allclose(rd["M"], rs["M"], rtol=1e-8, atol=1e-5)
     assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-8, atol=1e-5)
@@ -70,7 +70,7 @@ def test_per_region_default_is_cpp_symmetric_cg():
     path's correctness is locked by test_per_region_equal_mu_matches_scalar.)"""
     mesh = _two_region_mesh()
     with ng.TaskManager():
-        cg = hdiv_demag_solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
+        cg = Solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,
                               tol=1e-11, gram_eps=1e-12, ho_far_factor=float("inf"))
     assert cg["linear_solver"] == "mass-riesz-cg"     # per-region RT1 = C++ symmetric CG
 
@@ -83,9 +83,9 @@ def test_per_region_different_mu_physics():
     |M|, not signed M_z, per region.)"""
     mesh = _two_region_mesh()
     with ng.TaskManager():
-        r = hdiv_demag_solve(mesh, mu_r={"lo": 50.0, "hi": 500.0}, H_ext=HEXT)
-        r_lo = hdiv_demag_solve(mesh, mu_r=50.0, H_ext=HEXT)
-        r_hi = hdiv_demag_solve(mesh, mu_r=500.0, H_ext=HEXT)
+        r = Solve(mesh, mu_r={"lo": 50.0, "hi": 500.0}, H_ext=HEXT)
+        r_lo = Solve(mesh, mu_r=50.0, H_ext=HEXT)
+        r_hi = Solve(mesh, mu_r=500.0, H_ext=HEXT)
     az_lo, az_hi = r_lo["M_avg"][2], r_hi["M_avg"][2]
     az = r["M_avg"][2]
     assert az_lo < az < az_hi                               # monotone: bounded by the two scalar runs
@@ -100,10 +100,10 @@ def test_per_region_fail_loud():
     mesh = _two_region_mesh()
     with pytest.raises(ValueError):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, mu_r={"lo": 100.0}, H_ext=HEXT)          # 'hi' missing
+            Solve(mesh, mu_r={"lo": 100.0}, H_ext=HEXT)          # 'hi' missing
     with pytest.raises(ValueError):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, mu_r={"lo": 100.0, "hi": 1.0}, H_ext=HEXT)   # mu_r <= 1
+            Solve(mesh, mu_r={"lo": 100.0, "hi": 1.0}, H_ext=HEXT)   # mu_r <= 1
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -134,8 +134,8 @@ def test_per_region_nl_equal_table_matches_single():
     the single-region path when every region shares one curve)."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
-        rd = hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_SOFT}, H_ext=HEXT_NL, nl_tol=1e-6)
-        rs = hdiv_demag_solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
+        rd = Solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_SOFT}, H_ext=HEXT_NL, nl_tol=1e-6)
+        rs = Solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
     assert rd["nonlinear"] and rs["nonlinear"]
     # RT1 (more charge DOF than RT0) -> the dict and single energy-Newton paths agree to ~1e-7 relative
     # (the Newton nl_tol=1e-6 + tiny PCHIP/quadrature path differences), not the old RT0 ~1e-9.
@@ -152,10 +152,10 @@ def test_per_region_nl_different_tables_physics():
     so the BH saturation is actually engaged (not a disguised linear solve)."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
-        r  = hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD}, H_ext=HEXT_NL, nl_tol=1e-6)
-        rs = hdiv_demag_solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
-        rh = hdiv_demag_solve(mesh, bh_table=BH_HARD, H_ext=HEXT_NL, nl_tol=1e-6)
-        rL = hdiv_demag_solve(mesh, mu_r=5001.0, H_ext=HEXT_NL)   # linear chi0 counterpart of the soft grade
+        r  = Solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD}, H_ext=HEXT_NL, nl_tol=1e-6)
+        rs = Solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
+        rh = Solve(mesh, bh_table=BH_HARD, H_ext=HEXT_NL, nl_tol=1e-6)
+        rL = Solve(mesh, mu_r=5001.0, H_ext=HEXT_NL)   # linear chi0 counterpart of the soft grade
     z, zs, zh, zL = r["M_avg"][2], rs["M_avg"][2], rh["M_avg"][2], rL["M_avg"][2]
     assert zh < z < zs                                    # bounded: harder grade -> less, softer -> more
     assert abs(z - zs) > 0.03 * abs(zs)                   # distinct from all-soft (measured ~11%)
@@ -168,7 +168,7 @@ def test_per_region_nl_fail_loud():
     mesh = _two_region_mesh()
     with pytest.raises(ValueError):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT}, H_ext=HEXT_NL)          # 'hi' missing
+            Solve(mesh, bh_table={"lo": BH_SOFT}, H_ext=HEXT_NL)          # 'hi' missing
     with pytest.raises(ValueError):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD[:, 0]}, H_ext=HEXT_NL)  # 1-col table
+            Solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_HARD[:, 0]}, H_ext=HEXT_NL)  # 1-col table

@@ -1,9 +1,9 @@
 """Gate-2: rad.Solve dispatches the FEEC HDiv-VIM backend (demag_backend='hdiv').
 
 Previously rad.Solve only ran the legacy six-face surface-charge MSC; selecting 'hdiv' raised
-NotImplementedError.  This locks the wiring (radia.vim.soft_iron_from_mesh +
+NotImplementedError.  This locks the wiring (radia.vim.MeshSoftIron +
 radia.vim._radsolve.dispatch): a soft-iron container built from an NGSolve mesh, solved
-via rad.Solve(demag_backend='hdiv'), reproduces a direct radia.vim.hdiv_demag_solve to
+via rad.Solve(demag_backend='hdiv'), reproduces a direct radia.vim.Solve to
 machine precision and writes the per-element M back so rad.ObjM/rad.Fld reflect it.
 
 With hdiv wired in, rad.Solve keeps a working soft-iron demag path: pure TET / HEX / WEDGE soft irons
@@ -39,9 +39,9 @@ def test_radsolve_hdiv_equals_direct():
     rad.UtiDelAll()
     mesh = _tet_cube_mesh()
     with ng.TaskManager():
-        direct = vim.hdiv_demag_solve(mesh, MU_R, ng.CoefficientFunction((0, 0, H0)))
+        direct = vim.Solve(mesh, MU_R, ng.CoefficientFunction((0, 0, H0)))
 
-    iron = vim.soft_iron_from_mesh(mesh, mu_r=MU_R)
+    iron = vim.MeshSoftIron(mesh, mu_r=MU_R)
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])      # free-space B whose H is H0
     cont = rad.ObjCnt([iron, bkg])
     # No set_demag_backend: a mesh-backed TET soft iron (soft_iron_from_mesh) auto-routes to HDiv-VIM RT1.

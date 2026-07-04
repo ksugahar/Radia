@@ -29,7 +29,7 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
 
-from radia.vim import build_charge_gram, DemagOperator  # noqa: E402
+from radia.vim import ChargeGram, DemagOperator  # noqa: E402
 
 
 def _box(lx, ly, lz, h):
@@ -39,8 +39,8 @@ def _box(lx, ly, lz, h):
 def _gram_matvec_reldiff(fes, c):
     """||G_split c - G_exact c|| / ||G_exact c||; G_split = the opt-in far split, G_exact = all high-quad.
     B is independent of ho_far_factor, so comparing G alone isolates the QuadDotFar entries."""
-    _, G_exact, _ = build_charge_gram(fes, ho_far_factor=float("inf"))
-    _, G_split, _ = build_charge_gram(fes, ho_far_factor=2.0, far_quad=3)
+    _, G_exact, _ = ChargeGram(fes, ho_far_factor=float("inf"))
+    _, G_split, _ = ChargeGram(fes, ho_far_factor=2.0, far_quad=3)
     y_exact = np.asarray(G_exact.matvec(c.tolist()))
     y_split = np.asarray(G_split.matvec(c.tolist()))
     return np.linalg.norm(y_split - y_exact) / np.linalg.norm(y_exact)
@@ -53,7 +53,7 @@ def test_far_split_fires_and_matches_exact_elongated(p):
     mesh = _box(6.0, 1.0, 1.0, 1.0)
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=p)
-        n_charge_probe, G_ex, _ = build_charge_gram(fes, ho_far_factor=float("inf"))
+        n_charge_probe, G_ex, _ = ChargeGram(fes, ho_far_factor=float("inf"))
         n_charge = n_charge_probe.shape[0]
         rng = np.random.default_rng(0)
         c = rng.standard_normal(n_charge)
@@ -78,7 +78,7 @@ def test_far_split_matches_exact_anisotropic_bar(p):
     mesh = _box(4.0, 0.1, 0.1, 1.0)
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=p)
-        Bm, _, _ = build_charge_gram(fes, ho_far_factor=float("inf"))
+        Bm, _, _ = ChargeGram(fes, ho_far_factor=float("inf"))
         rng = np.random.default_rng(1)
         c = rng.standard_normal(Bm.shape[0])
         reldiff = _gram_matvec_reldiff(fes, c)

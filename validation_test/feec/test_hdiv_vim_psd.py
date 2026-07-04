@@ -6,7 +6,7 @@ energy-minimisation solve slides down the spurious negative mode -> garbage high
 
 This guards a regression the demag-FACTOR golden could not catch: the factor only probes a couple of specific
 M, which happened to land on N's positive spectrum, so an under-integrated (non-PSD) Gram passed it.  Here we
-check the FULL spectrum.  The near/self quadrature floor in build_charge_gram is quad >= 3*p exactly so that N
+check the FULL spectrum.  The near/self quadrature floor in ChargeGram is quad >= 3*p exactly so that N
 stays PSD (quad=4,5 give min eig ~ -3.2e-4 at p=2 -- NON-PSD; quad>=6 PSD).
 
 NGSolve + Netgen required (importorskip).  N is formed densely on a small mesh and its symmetric-part spectrum
@@ -21,12 +21,12 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Sphere, OCCGeometry, Pnt  # noqa: E402
 
-from radia.vim._vim import build_charge_gram  # noqa: E402
+from radia.vim import ChargeGram  # noqa: E402
 
 
 def _N_dense(fes):
     """N = B^T G B as a dense symmetric matrix (default near/self quad = 3*p -> PSD)."""
-    B, G, _M = build_charge_gram(fes)                       # default intorder -> quad = max(3p, 4)
+    B, G, _M = ChargeGram(fes)                       # default intorder -> quad = max(3p, 4)
     n = fes.ndof
     N = np.zeros((n, n))
     e = np.zeros(n)

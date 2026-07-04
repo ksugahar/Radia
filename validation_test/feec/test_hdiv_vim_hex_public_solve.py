@@ -1,7 +1,7 @@
-"""Public-API gate: the production entry `radia.vim.hdiv_demag_solve` now solves a PURE-HEX order-1 mesh
+"""Public-API gate: the production entry `radia.vim.Solve` now solves a PURE-HEX order-1 mesh
 (LINEAR + NONLINEAR), not only tet.
 
-The hex RT1 charge Gram was wired at `build_charge_gram(HDiv(hexmesh, order=1))` (golden
+The hex RT1 charge Gram was wired at `ChargeGram(HDiv(hexmesh, order=1))` (golden
 test_hdiv_vim_hex_rt1_wiring), and `_solve_highorder`'s linear (symmetric mass-Riesz CG) and nonlinear
 (all-C++ energy-Newton) paths are Gram-AGNOSTIC -- so hex flows through the same production code as tet.
 Reviewed + the topology guard relaxed 2026-07-04: pure-tet, pure-hex, and pure-wedge order-1 meshes are
@@ -27,7 +27,7 @@ import radia as rad  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
-from radia.vim import hdiv_demag_solve, soft_iron_from_mesh  # noqa: E402
+from radia.vim import Solve, MeshSoftIron  # noqa: E402
 
 pytestmark = pytest.mark.slow
 
@@ -55,7 +55,7 @@ def _hdiv_hex_retry(mesh, **kw):
     for _ in range(5):
         try:
             with ng.TaskManager():
-                return hdiv_demag_solve(mesh, **kw)
+                return Solve(mesh, **kw)
         except RuntimeError as e:
             if "GetTrafo lattice evaluation unstable" in str(e):
                 last = e
@@ -68,7 +68,7 @@ def _collocation_mz(n, nonlinear):
     """Volume-average M_z of the SAME hex cube via the collocation MMMM backend (cross-method reference)."""
     rad.UtiDelAll()
     with ng.TaskManager():
-        core = soft_iron_from_mesh(_cube(n), mu_r=MU_R)
+        core = MeshSoftIron(_cube(n), mu_r=MU_R)
     if nonlinear:
         rad.MatApl(core, rad.MatSatIsoTab(BH))
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
@@ -128,7 +128,7 @@ def test_rad_solve_demag_backend_hdiv_on_hex():
     -> hdiv_demag_solve and SOLVES (no TET-only raise), writing per-element M back to the iron handles."""
     rad.UtiDelAll()
     with ng.TaskManager():
-        iron = soft_iron_from_mesh(_cube(4), mu_r=MU_R)
+        iron = MeshSoftIron(_cube(4), mu_r=MU_R)
     src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     top = rad.ObjCnt([iron, src])
     last = None
@@ -158,7 +158,7 @@ def test_rad_solve_auto_on_hex_uses_hdiv():
     rad.UtiDelAll()
     rad.set_demag_backend("auto")
     with ng.TaskManager():
-        iron = soft_iron_from_mesh(_cube(3), mu_r=MU_R)
+        iron = MeshSoftIron(_cube(3), mu_r=MU_R)
     src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     top = rad.ObjCnt([iron, src])
     last = None

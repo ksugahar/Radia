@@ -9,12 +9,12 @@ charge-Gram path was removed):
          N v = B^T (H.matvec(B v)); M_mass-preconditioned GMRES per Newton step + Armijo line search +
          scalar-chi Picard warmstart; FAILS LOUD on non-convergence (CLAUDE.md No-Fallbacks).
   solve_nonlinear_newton(mesh, chi0, Msat, H0, bh_table=..., ...)
-      -- thin wrapper over the production radia.vim.hdiv_demag_solve (the same C++ damped Newton), for
+      -- thin wrapper over the production radia.vim.Solve (the same C++ damped Newton), for
          either the analytic saturating curve (chi0, Msat) or an explicit [[H,B]] table.
 
 The constitutive-tangent helpers (_tensor_tangent_cfs, _table_tensor_tangent[_multi]) are the consistent
 TENSOR tangent dM/dH = chi_diff Hhat(x)Hhat + chi_sec (I - Hhat(x)Hhat) (the scalar chi_diff*I stalls at
-moderate drive); they are also consumed by _solve.hdiv_demag_solve.
+moderate drive); they are also consumed by _solve's production implementation.
 """
 from math import pi
 
@@ -285,7 +285,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     """NONLINEAR HDiv-VIM solve on a +z uniform applied field H0 -- the C++ scalable charge-Gram path.
 
     The dense Python charge-Gram Newton was REMOVED; this is a thin wrapper over the production
-    `radia.vim.hdiv_demag_solve` (the damped matrix-free Newton on the C++ analytic `_ChargeGramHMatrix`
+    `radia.vim.Solve` (the damped matrix-free Newton on the C++ analytic `_ChargeGramHMatrix`
     demag operator N v = B^T (H.matvec(B v))).  The constitutive law is either the analytic saturating
     curve (chi0, Msat) -- supplied to the C++ path as the equivalent [[H,B]] table -- or an explicit
     `bh_table = (Harr, Barr)` (the same data Radia's MatSatIsoTab consumes).
@@ -298,7 +298,7 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
     Returns (M_avg_z, n_newton_iter, D_used) on a +z drive.  The caller must open `with ng.TaskManager():`.
     """
     del near_correction, picard_warmstart, tol, require_convergence   # not used by the C++ path
-    from ._solve import hdiv_demag_solve
+    from . import Solve
     if bh_table is not None:
         Harr = np.asarray(bh_table[0], float)
         Barr = np.asarray(bh_table[1], float)
@@ -309,8 +309,8 @@ def solve_nonlinear_newton(mesh, chi0, Msat, H0, near_correction=True, nsub=4,
         Mof = _bh_curve(chi0, Msat)
         Barr = _MU0 * (Harr + np.array([Mof(h) for h in Harr]))
     BH = [[float(h), float(b)] for h, b in zip(Harr, Barr)]
-    res = hdiv_demag_solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
-                           nl_maxit=maxit)
+    res = Solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
+                nl_maxit=maxit)
     return float(res["M_avg"][2]), int(res["iters"]), float(res["demag"])
 
 

@@ -2,7 +2,7 @@
 solves with BOTH demag backends -- six-face surface-charge MSC and the FEEC HDiv-VIM -- selected by
 set_demag_backend.  .vol is the SOLE Cubit<->NGSolve mesh interchange, so netgen owns the mesh
 orientation (no hand-built-mesh boundary-winding pitfalls).  This locks:
-  (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a soft-iron container;
+  (1) radia.vim.VolSoftIron(path) round-trips a .vol into a soft-iron container;
   (2) a HEX .vol solves with BOTH demag backends -- the collocation MMMM surface-charge MSC AND the FEEC
       HDiv-VIM (hex unlocked 2026-07-04: the wired hex RT1 charge Gram + the shipped mass-Riesz CG) -- and
       the two AGREE on M_avg_z (cross-method).  The production rad.Solve 'auto' default now routes pure HEX
@@ -39,7 +39,7 @@ def _solve_from_vol(path, backend):
     rad.set_demag_backend(backend)
     try:
         with ng.TaskManager():
-            iron = vim.soft_iron_from_vol(path, mu_r=MU_R)        # <- .vol -> both-backend iron
+            iron = vim.VolSoftIron(path, mu_r=MU_R)        # <- .vol -> both-backend iron
             bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])      # uniform Bz = mu0*H0  (H = H0)
             res = rad.Solve(rad.ObjCnt([iron, bkg]), 1e-6, 2000, 0)
         if isinstance(res, dict) and "M_avg" in res:               # HDiv path returns the solve dict

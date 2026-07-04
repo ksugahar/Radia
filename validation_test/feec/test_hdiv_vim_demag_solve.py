@@ -1,4 +1,4 @@
-"""Golden test (productionization M1): radia.vim.hdiv_demag_solve -- the consolidated LINEAR
+"""Golden test (productionization M1): radia.vim.Solve -- the consolidated LINEAR
 soft-iron applied-field demag solve (the candidate six-face surface-charge replacement for rad.Solve).
 
 Locks:
@@ -18,7 +18,7 @@ pytest.importorskip("netgen.csg")
 import ngsolve as ng  # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt  # noqa: E402
 
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 
 
 def _sphere(h=0.45):
@@ -36,7 +36,7 @@ def test_sphere_linear_matches_analytic(mu_r):
     """Volume-average M == analytic chi/(1+chi D) H on the uniform-field sphere (dense path)."""
     mesh = _sphere()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, mu_r, _HEXT)
+        res = Solve(mesh, mu_r, _HEXT)
     assert res["linear_solver"] in {"cpp-hlu", "mass-riesz-cg", "mass-riesz-gmres"}  # default 'auto' = symmetric mass-riesz CG
     assert "hmat_stats" in res
     chi = mu_r - 1.0
@@ -53,7 +53,7 @@ def test_per_element_M_uniform_and_aligned():
     """Per-element M on the uniform-field sphere is ~uniform and dominated by +z."""
     mesh = _sphere()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, 100.0, _HEXT)
+        res = Solve(mesh, 100.0, _HEXT)
     M = res["M"]
     assert M.shape == (res["n_el"], 3)
     mz = M[:, 2]
@@ -71,9 +71,9 @@ def test_default_symmetric_cg_matches_gmres(mu_r):
     speed change, not an accuracy change)."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
-        auto = hdiv_demag_solve(mesh, mu_r, _HEXT)                          # default -> symmetric C++ CG
-        cg = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")    # explicit alias
-        gm = hdiv_demag_solve(mesh, mu_r, _HEXT, linear_solver="gmres")     # GMRES cross-check
+        auto = Solve(mesh, mu_r, _HEXT)                          # default -> symmetric C++ CG
+        cg = Solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")    # explicit alias
+        gm = Solve(mesh, mu_r, _HEXT, linear_solver="gmres")     # GMRES cross-check
     assert auto["linear_solver"] == "mass-riesz-cg"
     assert cg["linear_solver"] == "mass-riesz-cg"
     assert gm["linear_solver"] == "mass-riesz-gmres"
@@ -92,7 +92,7 @@ def test_fail_loud_on_nonmagnetic():
     mesh = _sphere()
     with pytest.raises(ValueError):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, 1.0, _HEXT)
+            Solve(mesh, 1.0, _HEXT)
 
 
 def test_rt1_linear_solve_is_physically_sane():
@@ -101,7 +101,7 @@ def test_rt1_linear_solve_is_physically_sane():
     spectrum reference (eig in [0,1] locked by test_hdiv_vim_demag_spectrum_psd)."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
-        r = hdiv_demag_solve(mesh, 100.0, _HEXT, order=1)
+        r = Solve(mesh, 100.0, _HEXT, order=1)
     assert r["order"] == 1
     assert abs(r["demag"] - 1.0 / 3.0) < 1e-2, f"RT1 demag {r['demag']:.4f} not ~1/3"
     assert r["M_avg"][2] > 0, f"RT1 M_avg_z {r['M_avg'][2]:.0f} should respond +z to the applied field"
@@ -118,7 +118,7 @@ def test_order_gt1_rt2_abolished():
     mesh = _sphere(h=0.7)
     with pytest.raises(ValueError, match="RT2"):
         with ng.TaskManager():
-            hdiv_demag_solve(mesh, 100.0, _HEXT, order=2)
+            Solve(mesh, 100.0, _HEXT, order=2)
 
 
 def test_requires_exactly_one_material_spec():
@@ -126,9 +126,9 @@ def test_requires_exactly_one_material_spec():
     mesh = _sphere()
     with ng.TaskManager():
         with pytest.raises(ValueError):                       # neither
-            hdiv_demag_solve(mesh, H_ext=_HEXT)
+            Solve(mesh, H_ext=_HEXT)
         with pytest.raises(ValueError):                       # both
-            hdiv_demag_solve(mesh, 100.0, _HEXT, bh_table=[[0.0, 0.0], [1e6, 2.0]])
+            Solve(mesh, 100.0, _HEXT, bh_table=[[0.0, 0.0], [1e6, 2.0]])
 
 
 def test_nonlinear_sphere_vs_analytic_fixed_point():
@@ -142,7 +142,7 @@ def test_nonlinear_sphere_vs_analytic_fixed_point():
     Mof = lambda H: chi0 * H / (1.0 + chi0 * abs(H) / Msat)   # noqa: E731 (the table's M(H))
     mesh = _sphere()
     with ng.TaskManager():
-        res = hdiv_demag_solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
+        res = Solve(mesh, bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
     assert res["nonlinear"] is True
     # analytic uniform-sphere fixed point with the solved demag factor D
     D = res["demag"]

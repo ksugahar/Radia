@@ -26,7 +26,7 @@ from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
 
 import radia._radia_pybind as rp  # noqa: E402
 from radia.vim._core import build_demag  # noqa: E402
-from radia.vim import hdiv_demag_solve  # noqa: E402
+from radia.vim import Solve  # noqa: E402
 
 
 def _gram(maxh=0.45, near_factor=2.0, far_quad=4):
@@ -92,8 +92,8 @@ def test_default_solve_is_symmetric_cg():
     H_ext = ng.CoefficientFunction((0, 0, 1000.0))
     with ng.TaskManager():
         mesh = ng.Mesh(OCCGeometry(Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))).GenerateMesh(maxh=0.4))
-        auto = hdiv_demag_solve(mesh, 200.0, H_ext)
-        gm = hdiv_demag_solve(mesh, 200.0, H_ext, linear_solver="gmres")
+        auto = Solve(mesh, 200.0, H_ext)
+        gm = Solve(mesh, 200.0, H_ext, linear_solver="gmres")
     assert auto["linear_solver"] == "mass-riesz-cg"
     assert gm["linear_solver"] == "mass-riesz-gmres"
     rel = abs(auto["M_avg"][2] - gm["M_avg"][2]) / abs(gm["M_avg"][2])

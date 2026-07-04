@@ -15,7 +15,7 @@ used to live under `examples/electric_machine`.
 | `em_reference_audit_result.json` | Sidecar for the audit notebook. |
 
 The solver behind `planar_vim_motor.ipynb` is the promoted 2D layer in `radia.vim`
-(`PlanarDemagBody` / `hdiv_demag_solve` on a 2D mesh / `maxwell_torque_circle`), golden-locked in
+(`PlanarDemagBody` / `Solve` on a 2D mesh / `maxwell_torque_circle`), golden-locked in
 `validation_test/feec/test_hdiv_vim_2d_solve.py`.
 
 The executable validation corpus is

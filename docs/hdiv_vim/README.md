@@ -7,7 +7,7 @@ space — so the **HDiv-type VIM** is the **primary accurate soft-iron demag rou
 2026-06-30; collocation MMMM is the coarse/fast tier), with a de-Rham-exact operator for **RT1 demag
 on tetrahedra (flat + curved P2) and pure-hex meshes (flat + curved Q2, Piola-exact charges,
 H-matrix build)**, plus a **2D planar tri/quad layer** (log kernel, motor cross-sections).
-Permanent-magnet regions mix directly into `hdiv_demag_solve` (`pm_M=`); wedge/mixed-element bodies
+Permanent-magnet regions mix directly into `Solve` (`pm_M=`); wedge/mixed-element bodies
 and symmetry-reduced image models remain routed to the collocation MMMM backend.
 
 The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix and high-order extensibility,
@@ -28,7 +28,7 @@ The decision/narrative record is the radia-mcp `hdiv_vim` knowledge (MCP tool
 [`hdiv_curved_showcase.ipynb`](hdiv_curved_showcase.ipynb) (curved P2 tet win),
 [`polynomial_charge_field.ipynb`](polynomial_charge_field.ipynb) (RT1 polynomial charges),
 [`hex_rt1_and_2d_showcase.ipynb`](hex_rt1_and_2d_showcase.ipynb) (2026-07-03: hex RT1 + H-matrix
-build timing + 2D planar closed-form gates + the production `hdiv_demag_solve` one-call), and
+build timing + 2D planar closed-form gates + the production `Solve` one-call), and
 [`hex_vs_mmmm_crossvalidation.ipynb`](hex_vs_mmmm_crossvalidation.ipynb) (2026-07-04: HDiv-VIM hex
 RT1 vs collocation-MMMM hex on the same cube and C-yoke meshes).
 
@@ -115,7 +115,7 @@ Image / IMA symmetry is retired from HDiv-VIM.  Reduced symmetry / image models 
 mixed-element bodies are the responsibility of collocation MMMM.  This keeps the public HDiv
 contract small and fail-loud instead of carrying experimental image rules in the Galerkin path.
 (Pure-hex meshes are **no longer** in that exclusion — the hex RT1 charge Gram shipped 2026-07;
-permanent-magnet mixing is native via `hdiv_demag_solve(pm_M=...)`.)
+permanent-magnet mixing is native via `Solve(pm_M=...)`.)
 
 ## 6. HDiv-type vs multipole-moment MMM
 
@@ -154,7 +154,7 @@ showcase notebooks above.
 1. **Curved-hex eigenvalue 1.0078** — the curved cylinder's demag spectrum still slightly exceeds
    the [0,1] bound (halved from 1.0166 by the site anchors); remaining self/touching curved
    quadrature refinement.
-2. **Hex public API — DONE (2026-07-04).**  `hdiv_demag_solve(hexmesh, mu_r=/bh_table=)` and
+2. **Hex public API — DONE (2026-07-04).**  `Solve(hexmesh, mu_r=/bh_table=)` and
    `rad.Solve(demag_backend='hdiv')` now solve a pure-hex mesh **LINEAR + NONLINEAR** (the C++
    energy-Newton was already Gram-agnostic — it takes the hex `(H, B, M_mass)` unchanged), matching
    collocation MMMM to ~1% (golden `test_hdiv_vim_hex_public_solve.py`).  The `auto` default still
@@ -187,7 +187,7 @@ showcase notebooks above.
 | Curved geometry / field win | `hdiv_demag_curved.py`, `hdiv_curved_nonlinear_field.py` | `test_hdiv_vim_curved{,_nonlinear,_nonlinear_field}.py` |
 | Head-to-head vs shipped Radia | `compare_curved_vs_radia_field.py` | `test_curved_vs_radia_field.py` |
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
-| RT1 pure-TET / pure-HEX public contract | `hdiv_demag_solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py`, `test_hdiv_vim_hex_public_solve.py` |
+| RT1 pure-TET / pure-HEX public contract | `Solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py`, `test_hdiv_vim_hex_public_solve.py` |
 
 The live executable checks are under `validation_test/feec/`; the legacy helper
 scripts imported by those checks are under `validation_test/feec/vim_legacy/`
