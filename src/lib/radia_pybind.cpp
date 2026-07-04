@@ -3494,9 +3494,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Embed-in-square H-matrix for rad.Fld-style field evaluation (rad_hacapk_field.h).
     py::class_<RadHACApKFieldEval>(m, "_FieldEvalHMatrix")
         .def(py::init([](int container_handle, std::vector<double> obs_points,
-                         double eps, int leaf, double eta, const std::string& field_type) {
+                         double eps, int leaf, double eta, const std::string& field_type,
+                         const std::string& image) {
                  auto mgr = std::unique_ptr<RadHACApKFieldEval>(
-                     new RadHACApKFieldEval(container_handle, std::move(obs_points), field_type));
+                     new RadHACApKFieldEval(container_handle, std::move(obs_points), field_type, image));
                  RadHACApKParams p;
                  p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
                  if (!mgr->BuildHMatrix(p)) throw std::runtime_error("field-eval H-matrix build failed");
@@ -3504,19 +3505,22 @@ PYBIND11_MODULE(_radia_pybind, m) {
              }),
              py::arg("container_handle"), py::arg("obs_points"),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-             py::arg("field_type") = "b",
+             py::arg("field_type") = "b", py::arg("image") = "",
              "Embed-in-square H-matrix for rad.Fld-style field evaluation: field[obs] = sum_src "
              "G(obs,src).M[src] over the leaf magnets of `container_handle`, evaluated at the flat "
              "obs_points [x0,y0,z0, ...].  field_type='b' -> B (flux density, Tesla, bit-consistent "
              "with rad.Fld('b')); field_type='a' -> A (vector potential, T*m, rad.Fld('a')) -- the "
-             "analytic open-boundary A source term for A-formulation eddy-current FEM coupling.  Reuses "
-             "the square HACApK ACA pipeline (SYMMETRIC embed A = [[0,K],[K^T,0]] on the combined "
-             "[obs; src] DOF space; matvec [0;M] = [K M; 0]).  FLAT global-coordinate container only (no "
-             "ancestor-group transforms).  NOT dipole / NOT FMM -- HACApK ACA on the exact field "
-             "kernel's far blocks.")
+             "analytic open-boundary A source term for A-formulation eddy-current FEM coupling.  "
+             "image='+x-z' (etc.) applies the IMA image method (rad.Solve(image=...) convention): a "
+             "reduced mirror-symmetry model (fundamental octant, mirror planes through the origin) "
+             "reproduces the full model's field via the 2^P-1 image reflections.  Reuses the square "
+             "HACApK ACA pipeline (SYMMETRIC embed A = [[0,K],[K^T,0]]; matvec [0;M] = [K M; 0]).  FLAT "
+             "global-coordinate container only (no ancestor-group transforms).  NOT dipole / NOT FMM.")
         .def("ndof", [](RadHACApKFieldEval& s) { return s.GetNDOF(); })
         .def("n_obs", [](RadHACApKFieldEval& s) { return s.NObs(); })
         .def("n_src", [](RadHACApKFieldEval& s) { return s.NSrc(); })
+        .def("n_images", [](RadHACApKFieldEval& s) { return s.NImages(); },
+             "Number of IMA image reflections folded into the kernel (0 if image='').")
         .def("is_a_field", [](RadHACApKFieldEval& s) { return s.IsAField(); },
              "True if this evaluates the vector potential A (T*m); False for flux density B (Tesla).")
         .def("src_magnetization", [](RadHACApKFieldEval& s) { return s.SrcMagnetization(); },

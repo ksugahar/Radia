@@ -109,3 +109,52 @@ def test_compression_is_real(result):
     ACA low-rank compression is actually happening on this multi-cluster H-matrix); tight eps is accurate."""
     assert result["errs"][1e-2] > 1e-5, f"loose-eps error {result['errs'][1e-2]:.3e} ~ machine (no compression?)"
     assert result["errs"][1e-8] < 1e-6, f"tight-eps error {result['errs'][1e-8]:.3e} should be near-exact"
+
+
+# ---------------------------------------------------------------------------------------------------------
+# IMA (image method): a reduced mirror-symmetry model reproduces the FULL model's field.
+# ---------------------------------------------------------------------------------------------------------
+_AX = {"x": 0, "y": 1, "z": 2}
+
+
+def _build_full_explicit(fund, image):
+    """Explicit full model: fundamental magnets + every image_group reflection as a REAL magnet.  position:
+    negate coords on the subset axes; magnetization: pseudovector mirror m'_j = m_j*(s if j==axis else -s)
+    composed over the subset.  For '+x' this is the true geometric mirror (physically symmetric), so a
+    kernel match GROUNDS the IMA convention non-circularly."""
+    planes = {_AX[image[i + 1]]: (1 if image[i] == "+" else -1) for i in range(0, len(image), 2)}
+    axes = list(planes)
+    objs = []
+    for pos, M in fund:
+        objs.append(rad.ObjRecMag([float(v) for v in pos], [_DIM, _DIM, _DIM], [float(v) for v in M]))
+        for mask in range(1, 1 << len(axes)):
+            ipos = np.asarray(pos, float).copy(); m = np.asarray(M, float).copy()
+            for k, a in enumerate(axes):
+                if mask & (1 << k):
+                    ipos[a] = -ipos[a]
+                    e = np.full(3, -planes[a], float); e[a] = planes[a]; m = m * e
+            objs.append(rad.ObjRecMag([float(v) for v in ipos], [_DIM, _DIM, _DIM], [float(v) for v in m]))
+    return rad.ObjCnt(objs)
+
+
+@pytest.mark.parametrize("field_type", ["b", "a"])
+@pytest.mark.parametrize("image", ["+x", "-x", "+x+y", "+x-z", "+x+y-z"])
+def test_ima_reproduces_full_model(field_type, image):
+    """The IMA kernel (reduced fundamental model + image string) reproduces rad.Fld on the EXPLICIT full
+    model to ~machine, for B and A across 1/2, 1/4, 1/8 symmetries.  B and A carry DIFFERENT image signs
+    (B: (-1)^popcount * prod(s); A: prod(s)) -- both are locked here."""
+    rad.UtiDelAll()
+    fund = [([0.20, 0.15, 0.25], [1e5, 2e5, 3e5]), ([0.30, 0.10, 0.20], [-2e5, 1e5, 0.5e5])]
+    fobjs = [rad.ObjRecMag([float(v) for v in p], [_DIM, _DIM, _DIM], [float(v) for v in m]) for p, m in fund]
+    fcont = rad.ObjCnt(fobjs)
+    full = _build_full_explicit(fund, image)
+    obs = np.array([[0.5, 0.4, 0.6], [0.7, -0.3, 0.5], [-0.4, 0.5, 0.8], [0.6, 0.6, -0.3]])
+    Ffull = np.asarray(rad.Fld(full, field_type, obs.tolist()), float).reshape(-1, 3)
+    G = _rp._FieldEvalHMatrix(fcont, obs.reshape(-1).tolist(), eps=1e-10, leaf=32, eta=2.0,
+                              field_type=field_type, image=image)
+    x = [0.0] * (3 * G.n_obs()) + list(G.src_magnetization())
+    Fh = np.asarray(G.matvec(x), float)[:3 * G.n_obs()].reshape(-1, 3)
+    err = np.linalg.norm(Fh - Ffull) / np.linalg.norm(Ffull)
+    assert G.n_images() == (1 << len(set(image[1::2]))) - 1, "wrong image count"
+    assert err < 1e-8, f"IMA {field_type} image={image}: hmat vs explicit full = {err:.3e}"
+    rad.UtiDelAll()

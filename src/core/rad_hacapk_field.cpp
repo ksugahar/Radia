@@ -25,6 +25,8 @@
 #include <string>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
+#include <utility>
 
 // Global Radia application (handle -> object resolution), same as
 // RadFieldUnified / the rest of the core.
@@ -32,8 +34,29 @@ extern radTApplication rad;
 
 //-------------------------------------------------------------------------
 
+// Parse an IMA image string ("+x-z", ...) into planes [(axis 0/1/2, sign +1/-1)] -- the rad.Solve
+// (image=) / _core.parse_image_string convention (field PARALLEL to a mirror -> '+', PERPENDICULAR -> '-').
+static void ParseImageString(const std::string& image, std::vector<std::pair<int, int>>& planes)
+{
+    std::string s;
+    for (char c : image) if (!std::isspace((unsigned char)c)) s += (char)std::tolower((unsigned char)c);
+    int axseen = 0;
+    for (size_t i = 0; i < s.size(); i += 2) {
+        if ((s[i] != '+' && s[i] != '-') || i + 1 >= s.size())
+            throw std::runtime_error("RadHACApKFieldEval: bad IMA image string \"" + image +
+                                     "\" (expected tokens like \"+x\",\"-z\")");
+        int ax = (s[i + 1] == 'x') ? 0 : (s[i + 1] == 'y') ? 1 : (s[i + 1] == 'z') ? 2 : -1;
+        if (ax < 0)
+            throw std::runtime_error("RadHACApKFieldEval: bad IMA axis in \"" + image + "\"");
+        if (axseen & (1 << ax))
+            throw std::runtime_error("RadHACApKFieldEval: IMA image string \"" + image + "\" repeats an axis");
+        axseen |= (1 << ax);
+        planes.emplace_back(ax, s[i] == '+' ? 1 : -1);
+    }
+}
+
 RadHACApKFieldEval::RadHACApKFieldEval(int container_handle, std::vector<double> obs_points,
-                                       const std::string& field_type)
+                                       const std::string& field_type, const std::string& image)
     : m_handle(container_handle), m_nObs(0), m_nSrc(0), m_obs(std::move(obs_points)),
       m_isA(false), m_physScale(RadConst::MU_0), m_scale(1.0)
 {
@@ -52,6 +75,27 @@ RadHACApKFieldEval::RadHACApKFieldEval(int container_handle, std::vector<double>
     } else {
         throw std::runtime_error("RadHACApKFieldEval: field_type must be \"b\" (flux density) or "
                                  "\"a\" (vector potential); got \"" + field_type + "\"");
+    }
+
+    // IMA: every NON-EMPTY subset of the mirror planes is one image (image_group).  In Compute3x3 an
+    // image contributes  c * R * field(R.obs)  where R = negate the field/point components on the subset
+    // axes (both B and A are polar under the reflection) and c is the per-image scalar sign below.
+    // The per-PLANE sign c depends on the field type (verified against an explicit full model, M'-image
+    // built by pseudovector mirror m'_j = m_j*(s if j==axis else -s)):
+    //   B (H, from the scalar magnetic potential; sigma' = -s*sigma):  c_plane = -s  -> composite (-1)^pc * prod(s)
+    //   A (vector potential, from the M x n surface current):          c_plane = +s  -> composite         prod(s)
+    // i.e. A drops the (-1)^popcount factor that B carries.
+    std::vector<std::pair<int, int>> planes;
+    ParseImageString(image, planes);
+    int P = (int)planes.size();
+    for (int mask = 1; mask < (1 << P); ++mask) {
+        int axmask = 0, sign = 1, pc = 0;
+        for (int k = 0; k < P; ++k)
+            if (mask & (1 << k)) { axmask |= (1 << planes[k].first); sign *= planes[k].second; ++pc; }
+        double fsign = (double)sign;                          // A: prod(plane signs)
+        if (!m_isA && (pc & 1)) fsign = -fsign;               // B: * (-1)^popcount
+        m_imgAxmask.push_back(axmask);
+        m_imgSign.push_back(fsign);
     }
 }
 
@@ -183,19 +227,41 @@ void RadHACApKFieldEval::Compute3x3(int o, int s, double* G) const
 
             radTFieldKey FieldKey;
             if (m_isA) FieldKey.A_ = true; else FieldKey.B_ = true;
-            radTField Field(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
-            Field.P = obs;
-            src->B_genComp(&Field);
 
+            // Original contribution at obs.
             // B: leaf stores the PRE-mu0 quantity in Field.B (H_total in A/m outside; H_total+M inside);
             //    radTg3d::B_genComp does NOT scale it (rad.Fld applies mu0 at the top level) -> * mu0.
             // A: leaf stores the PHYSICAL A in Field.A (mu0/4pi already baked into the face integral) -> * 1.
-            // m_physScale carries this per-field-type factor so the H-matrix field is bit-consistent with
-            // rad.Fld('b') / rad.Fld('a').
-            const TVector3d& resp = m_isA ? Field.A : Field.B;
-            G[0 * 3 + b] = m_physScale * resp.x;   // a = 0 (Bx / Ax)
-            G[1 * 3 + b] = m_physScale * resp.y;   // a = 1 (By / Ay)
-            G[2 * 3 + b] = m_physScale * resp.z;   // a = 2 (Bz / Az)
+            radTField Field(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
+            Field.P = obs;
+            src->B_genComp(&Field);
+            const TVector3d& r0 = m_isA ? Field.A : Field.B;
+            double gx = m_physScale * r0.x, gy = m_physScale * r0.y, gz = m_physScale * r0.z;
+
+            // IMA image contributions: field of the mirror image of src == c * R * field_orig(R.obs).
+            // Evaluate the SAME source (unit e_b) at the REFLECTED obs point (negate coords on the image
+            // axes), reflect the resulting POLAR field vector (negate its components on the image axes),
+            // and add with the image scalar sign c (m_imgSign).
+            for (size_t im = 0; im < m_imgAxmask.size(); ++im) {
+                const int am = m_imgAxmask[im];
+                TVector3d obsR = obs;
+                if (am & 1) obsR.x = -obsR.x;
+                if (am & 2) obsR.y = -obsR.y;
+                if (am & 4) obsR.z = -obsR.z;
+                radTField F2(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
+                F2.P = obsR;
+                src->B_genComp(&F2);
+                TVector3d f = m_isA ? F2.A : F2.B;
+                if (am & 1) f.x = -f.x;
+                if (am & 2) f.y = -f.y;
+                if (am & 4) f.z = -f.z;
+                const double c = m_imgSign[im] * m_physScale;
+                gx += c * f.x; gy += c * f.y; gz += c * f.z;
+            }
+
+            G[0 * 3 + b] = gx;   // a = 0 (Bx / Ax)
+            G[1 * 3 + b] = gy;   // a = 1 (By / Ay)
+            G[2 * 3 + b] = gz;   // a = 2 (Bz / Az)
         }
     } catch (...) {
         src->Magn = saveM;
