@@ -108,7 +108,8 @@ def test_rt1_linear_solve_is_physically_sane():
 
 
 # (test_order_gt0_unsupported_combos_fail_loud removed 2026-06-29: the retired-feature fail-loud guards
-#  (image / hlu / gauss / pm_M / non-tet) are now locked by test_hdiv_vim_rt1_contract.py.)
+#  (curved image / hlu / gauss / pm_M / unsupported topology) are now locked by
+#  test_hdiv_vim_rt1_contract.py.)
 
 
 def test_order_gt1_rt2_abolished():

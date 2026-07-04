@@ -5,8 +5,9 @@ orientation (no hand-built-mesh boundary-winding pitfalls).  This locks:
   (1) radia.vim.soft_iron_from_vol(path) round-trips a .vol into a soft-iron container;
   (2) a HEX .vol solves with BOTH demag backends -- the collocation MMMM surface-charge MSC AND the FEEC
       HDiv-VIM (hex unlocked 2026-07-04: the wired hex RT1 charge Gram + the shipped mass-Riesz CG) -- and
-      the two AGREE on M_avg_z (cross-method).  (The rad.Solve 'auto' DEFAULT still routes a hex iron to
-      collocation MMMM -- KEEP-BOTH; here each backend is selected explicitly via set_demag_backend.)
+      the two AGREE on M_avg_z (cross-method).  The production rad.Solve 'auto' default now routes pure HEX
+      mesh-backed irons to HDiv-VIM; this file still selects each backend explicitly to keep the comparison
+      unambiguous.
   (A tet .vol would solve with BOTH backends, but the cross-backend agreement on a tet body is gated by the
   collocation-MMMM-on-tet accuracy -- a separate concern -- so this test fixes the hex routing instead.)"""
 import math

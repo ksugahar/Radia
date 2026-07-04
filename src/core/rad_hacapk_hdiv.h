@@ -278,7 +278,8 @@ public:
                         std::vector<double> gl_in, std::vector<double> gw_in,
                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
-                        double near_grade, double far_inner_factor);
+                        double near_grade, double far_inner_factor,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
     // charges rho = -div M on 2D cells (TRI: P0, 1 monomial -- probed; QUAD: Q1, 4 monomials -- the 2D
@@ -330,7 +331,8 @@ public:
                         std::vector<double> gl_in, std::vector<double> gw_in,
                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
-                        double near_grade, double far_inner_factor);
+                        double near_grade, double far_inner_factor,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
     // Q2 lattice geometry maps (PUBLIC static utilities: the file-local cloud builder uses them too).
     static void HexQ2Map(const double* nd27, const double xi[3], double X[3], double J[3][3]);
     static void QuadQ2Map(const double* nd9, const double uv[2], double X[3], double T[3][2]);
@@ -553,8 +555,11 @@ public:
     const std::vector<double>& HexStoredFaceNodes() const { return m_quadNodes; }
 private:
     double m_hex_state_sum = 0.0;
-    std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS) const;  // directed [nT*nS] block, INV4PI folded
-    const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS) const;  // thread_local block cache
+    // mask (IMA): 0 = direct block; >0 = the mirror-image block (target host x the source host REFLECTED on
+    // the 3-bit axis mask), for the reduced-symmetry (1/2,1/4,1/8) image method.  Default 0 keeps the direct
+    // hex/wedge Gram byte-identical.
+    std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS, int mask = 0) const;  // directed [nT*nS] block, INV4PI folded
+    const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS, int mask = 0) const;  // thread_local block cache
 
     // ---- 2D PLANAR mode (see the dim2 ctor doc) ----
     bool m_d2 = false;
@@ -604,7 +609,7 @@ private:
                              const std::vector<int>& srcG, double* inn) const;    // far cloud / -> site radial
     void PhiInnerWedgeRadialVec(int kindS, int hS, int subB, const double p[3], const double* xiT,
                                 const std::vector<int>& srcG, double* inn) const; // SELF exact-anchor radial
-    std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS) const;
+    std::vector<double> QuadBlockWedge(int kindT, int hT, int kindS, int hS, int mask = 0) const;
 
     // HIGH-ORDER (polynomial-charge) mode
     bool m_highorder = false;

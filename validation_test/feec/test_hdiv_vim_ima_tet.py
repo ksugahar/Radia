@@ -6,8 +6,9 @@ The C++ highorder charge Gram folds the mirror-image charge interactions into ev
   G_IMA(a,b) = G(a,b) + sum_i sign_i * 0.5*(QuadDotRefl(a,b,mask_i) + QuadDotRefl(b,a,mask_i))
 with QuadDotRefl(tgt,src,mask) = the source's PhiInner potential at tgt's outer points reflected on the mask
 axes (mirror isometry).  Physics + reflection/sign convention validated against the existing RT0 analytic
-IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for the FLAT pure-TET RT1 path; hex/wedge
-and curved tet fail loud toward collocation MMMM (locked below).
+IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for the FLAT pure-TET RT1 path, and the
+HEX/WEDGE RT1 image-fold is locked separately by the low-level charge-Gram smoke tests.  Curved reduced
+models still fail loud toward collocation MMMM (locked below).
 """
 import numpy as np
 import pytest
@@ -53,16 +54,8 @@ def test_tet_reduced_without_image_is_wrong():
     assert D < 0.30, f"half-model no-image demag {D:.4f} should be well below 1/3"
 
 
-def test_hex_wedge_curved_ima_fail_loud():
-    """IMA is wired for the FLAT pure-TET path only; hex / wedge / curved-tet fail loud toward collocation
-    MMMM (No-Fallbacks -- never silently drop the image)."""
-    from ngsolve.meshes import MakeStructured3DMesh
-    mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
-    with ng.TaskManager():
-        hexm = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2, mapping=mp)
-    with pytest.raises((ValueError, NotImplementedError), match="TET"):
-        with ng.TaskManager():
-            hdiv_demag_solve(hexm, mu_r=100.0, H_ext=ng.CoefficientFunction((0, 0, _H0)), image="+x")
+def test_curved_ima_fails_loud():
+    """Curved reduced models are still not IMA-wired; never silently drop the image."""
     # curved tet + image also fails loud
     tetm = _sphere((0, -2, -2))
     with pytest.raises((ValueError, NotImplementedError), match="CURVED|curve"):

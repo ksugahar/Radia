@@ -295,16 +295,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     """
     if H_ext is None:
         raise ValueError("hdiv_demag_solve: H_ext (applied-field CoefficientFunction) is required")
-    # ---- HDiv-VIM scope: RT1 (order 1) on a pure-TET or pure-HEX mesh ----
+    # ---- HDiv-VIM scope: RT1 (order 1) on a pure-TET, pure-HEX, or pure-WEDGE mesh ----
     # RT0 retired: per-element INACCURATE (the demag FACTOR is right ~1/3, but the per-element M leaks --
     # raising the solution order to RT1 is what fixes it); RT2+ retired: no per-element gain over RT1, slower.
-    # TET (RT1 charge Gram) AND pure-HEX (Q1 volume charge + Q2 geometry, the wired hex Gram) both solve
-    # LINEAR + NONLINEAR through _solve_highorder here -- the C++ energy-Newton is Gram-agnostic (verified
-    # 2026-07-04: hex cube linear & nonlinear match collocation MMMM to ~1%).  wedge / pyramid / mixed +
-    # pm_M + image symmetry remain the collocation MMMM backend's job (rad.Solve); 'gauss'/'hlu' were RT0-only.
-    # NOTE (KEEP-BOTH policy): rad.Solve's 'auto' split still routes a mesh-backed HEX iron to collocation
-    # MMMM (the coarse/fast tier); pure-hex HDiv-VIM is reached by calling this entry directly, or explicitly
-    # with demag_backend='hdiv'.  Flipping the 'auto' default hex->HDiv is a separate policy decision.
+    # TET, pure-HEX (Q1 volume charge + Q2 geometry), and pure-WEDGE solve LINEAR + NONLINEAR through
+    # _solve_highorder here -- the C++ energy-Newton is Gram-agnostic (verified 2026-07-04: hex cube linear
+    # & nonlinear match collocation MMMM to ~1%).  Pyramid / mixed + pm_M remain the collocation MMMM
+    # backend's job (rad.Solve); curved IMA, 'gauss', and 'hlu' fail loud.
     if int(order) != 1:
         raise ValueError(
             "HDiv-VIM is RT1 (HDiv order=1) only.  RT0 (order=0) is RETIRED -- it is per-element INACCURATE "
@@ -317,11 +314,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
             "HDiv-VIM (RT1) is a SOFT-IRON (linear / nonlinear) demag solver and does not mix permanent "
             "magnets (pm_M).  Place permanent magnets as direct-M elements solved by collocation MMMM "
             "(rad.Solve), or as an applied-field source folded into H_ext.")
-    # IMA mirror symmetry (image=) is now WIRED for the pure-TET FLAT RT1 path (2026-07-04) -- the C++
-    # highorder charge Gram folds the mirror-image charge interactions (QuadDotRefl->PhiInner) so a reduced
-    # (1/2, 1/4, 1/8) model reproduces the full model.  The still-unwired cases fail loud DOWNSTREAM:
-    # 2D planar (below), and hex/wedge / curved tet (in _solve_highorder).  hex/wedge reduced models use
-    # collocation MMMM (rad.Solve demag_backend='collocation_mmmm', image=...) until their IMA lands.
+    # IMA mirror symmetry (image=) is wired for flat pure-TET / pure-HEX / pure-WEDGE RT1 (2026-07-04);
+    # reduced curved / mixed / pyramid cases fail loud downstream instead of silently dropping the image.
     if mesh.dim == 2:
         if image is not None:
             raise NotImplementedError(
@@ -356,7 +350,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
             "HDiv-VIM (order 1) supports a pure-TET (4-vertex), pure-HEX (8-vertex), or pure-WEDGE/prism "
             "(6-vertex) mesh; got vertex counts %s.  pyramid / MIXED-element soft-iron demag uses the "
             "collocation MMMM backend (rad.Solve demag_backend='collocation_mmmm'), which rad.Solve's "
-            "'auto' split routes non-tet mesh-backed iron to anyway." % sorted(_vtx))
+            "'auto' split uses for unsupported mesh-backed iron." % sorted(_vtx))
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("hdiv_demag_solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
@@ -403,20 +397,22 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     (no 2x/4x blow-up).  Supports the LINEAR (uniform-scalar OR per-region dict) mu_r case via the SAME
     all-C++ symmetric mass-Riesz CG as the RT0 path; the not-yet-wired order>0 combos fail loud (No-Fallbacks).
     The CALLER opens `with ng.TaskManager():` (same contract as hdiv_demag_solve)."""
-    # IMA mirror symmetry: WIRED for the pure-TET FLAT path (the C++ highorder Gram folds the mirror-image
-    # charge interactions; validated 1/2,1/4,1/8 == full).  Curved tet + hex/wedge fail loud (not yet wired).
+    # IMA mirror symmetry: WIRED for the FLAT pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
+    # pure-WEDGE (the C++ QuadBlockHex/Wedge(mask) reflected block) paths -- the Gram folds the mirror-image
+    # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  CURVED (curve_order) +
+    # MIXED / pyramid fail loud (not yet wired) -> collocation MMMM.
     image_masks, image_signs = [], []
     if image is not None:
         if curve_order is not None:
             raise NotImplementedError(
                 "hdiv_demag_solve: IMA image symmetry is not yet wired for the CURVED (curve_order) "
-                "HDiv-VIM path -- use a flat tet mesh, or collocation MMMM (rad.Solve).")
+                "HDiv-VIM path -- use a flat tet/hex/wedge mesh, or collocation MMMM (rad.Solve).")
         _ivtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
-        if _ivtx != {4}:
+        if _ivtx not in ({4}, {8}, {6}):
             raise NotImplementedError(
-                "hdiv_demag_solve: IMA image symmetry is wired for pure-TET RT1 only; hex/wedge reduced "
-                "models use collocation MMMM (rad.Solve demag_backend='collocation_mmmm', image=...).  "
-                "Got vertex counts %s." % sorted(_ivtx))
+                "hdiv_demag_solve: IMA image symmetry is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
+                "RT1 Gram; MIXED / pyramid reduced models use collocation MMMM (rad.Solve "
+                "demag_backend='collocation_mmmm', image=...).  Got vertex counts %s." % sorted(_ivtx))
         for axes, sign in _tet.image_group(_tet.parse_image_string(image)):
             image_masks.append(int(sum(1 << a for a in axes)))
             image_signs.append(float(sign))

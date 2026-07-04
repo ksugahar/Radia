@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 import radia._radia_pybind as _rp
 
 
@@ -22,7 +24,7 @@ def _unit_hex_q2_nodes() -> list[float]:
     return nodes
 
 
-def _make_hex_rt1_gram(*, build: bool):
+def _make_hex_rt1_gram(*, build: bool, image_masks=None, image_signs=None):
     return _rp._ChargeGramHMatrix(
         hex_cell_nodes=_unit_hex_q2_nodes(),
         quad_face_nodes=[],
@@ -45,6 +47,8 @@ def _make_hex_rt1_gram(*, build: bool):
         far_tri_w=[0.5],
         near_grade=1.5,
         far_inner_factor=4.0,
+        image_masks=list(image_masks or []),
+        image_signs=list(image_signs or []),
         eps=1e-6,
         leaf=4,
         eta=2.0,
@@ -71,3 +75,28 @@ def test_hex_rt1_hmatrix_matvec_matches_entry_oracle():
     assert gram.ndof() == 1
     assert len(y) == 1
     assert y[0] == entry
+
+
+def test_hex_rt1_image_fold_increases_positive_entry_and_matvec():
+    """IMA image folding is part of the HEX RT1 Gram constructor, not a Python-side postprocess.
+
+    On a unit hex with one positive volume-charge basis, a +x mirror adds a finite positive image
+    interaction on top of the direct self entry.  The built H-matrix matvec must see exactly the same folded
+    entry as the entry oracle.
+    """
+    direct = _make_hex_rt1_gram(build=False)
+    image_oracle = _make_hex_rt1_gram(build=False, image_masks=[1], image_signs=[1.0])
+    image = _make_hex_rt1_gram(build=True, image_masks=[1], image_signs=[1.0])
+
+    direct_entry = direct.entry(0, 0)
+    image_entry = image_oracle.entry(0, 0)
+    y = image.matvec_sym([1.0])
+
+    assert image_entry > direct_entry
+    assert len(y) == 1
+    assert y[0] == image_entry
+
+
+def test_hex_rt1_image_masks_and_signs_must_match():
+    with pytest.raises(ValueError, match="image_masks.*image_signs|image_signs.*image_masks"):
+        _make_hex_rt1_gram(build=False, image_masks=[1], image_signs=[])

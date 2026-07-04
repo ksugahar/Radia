@@ -167,6 +167,9 @@ class TestNgsolveKnowledge:
         _assert_substantial(body, min_chars=1000)
         assert "baffled" in body
         assert "normal velocity" in body
+        assert "drum structure is FEM" in body
+        assert "air radiation is" in body
+        assert "acoustic BEM" in body
         assert "radiation impedance" in body
         assert "MATLAB rather than Gmsh" in body
         assert "animated GIF" in body
@@ -181,6 +184,10 @@ class TestNgsolveKnowledge:
         assert "lower-half radiation" in body
         assert "reduced FEM" in body
         assert "ode45" in body
+        assert "damping ratios" in body
+        assert "not model" in body
+        assert "internal cavity-pressure oscillator" in body
+        assert "same modeling split can be implemented in NGSolve" in body
         assert "retarded boundary" in body
         assert "must not split the observation" in body
         assert "every exterior air observation point" in body
@@ -189,6 +196,7 @@ class TestNgsolveKnowledge:
         assert "3D axisymmetric" in body
         assert "r-z slice" in body
         assert "not yet a full 3D" in body
+        assert "structural-FEM/acoustic-BEM drum mesh" in body
         assert "volFemBemIfftResponse" in body
         assert "frequency-domain Helmholtz FEM/BEM" in body
         assert "inverse FFT" in body
@@ -206,6 +214,8 @@ class TestNgsolveKnowledge:
         assert "Calderon/Johnson-Nedelec coupled CQ" in body
         assert "retarded double-layer `K(s)`" in body
         assert "SingleLayerTeaching" in body
+        assert "writeVolFemBemCqGmsh3dArtifact" in body
+        assert "replace the interior acoustic volume FEM with structural membrane/shell FEM" in body
         assert "one-sided baffled top-head" in body
         assert "r-z pressure snapshots" in body
 

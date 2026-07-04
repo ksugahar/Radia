@@ -949,6 +949,9 @@ acoustic power balance, and far-field directivity, then compare the same
 `.vol`/surface labels against NGSolve.BEM.  This is a better teaching example
 than another sphere-only smoke test because students can see the chain:
 "hit membrane -> structural mode -> radiated pressure -> sound power".
+Standing split for drums: the drum structure is FEM, and the air radiation is
+acoustic BEM.  Do not turn the drum body into an acoustic volume-FEM problem
+unless the lesson is specifically an interior-air/cavity transmission problem.
 
 For the first time-domain visualization, keep it in MATLAB rather than Gmsh:
 use a step-force structural modal response plus the causal Rayleigh
@@ -968,31 +971,37 @@ The teaching picture is: cylindrical drum body + struck top membrane at z=0
 report GIF should be axis-equal, and the boundary should appear as a full
 sphere/circle in the cut plane, not a hemisphere.  The first rung is a
 one-sided baffled top-head radiation model.  The real-drum FEM/BEM rung then
-adds bottom membrane, cylindrical shell, internal cavity pressure, side
-leakage, and lower-half radiation; this is the intended demo for explaining
-FEM/BEM coupling before moving to a full .vol P1 FEM + P1 BEM model.  Be
-precise about the transient: the current MATLAB drum demo is a reduced FEM
-ODE integrated by ode45, with exterior air pressure reconstructed from causal
+adds bottom membrane, cylindrical shell side leakage, explicit damping ratios,
+and lower-half radiation; this is the intended demo for explaining FEM/BEM
+coupling before moving to a full structural-FEM/acoustic-BEM drum model.  Do not model
+this teaching drum as an internal cavity-pressure oscillator unless a true
+acoustic cavity mesh is present.  Be precise about the transient: the current
+MATLAB drum demo is a reduced FEM ODE integrated by ode45, with damped
+membrane/shell oscillators and exterior air pressure reconstructed from causal
 retarded boundary potentials.  The BEM layer must not split the observation
 field by source direction: top, bottom, and side boundary sources are all
 evaluated at every exterior air observation point with the same retarded
 Green kernel, then superposed.  A top source may wrap to the side/lower field
 and a side source may radiate upward/downward; direction-only painting is a
 visualization bug, not FEM/BEM coupling.  Its GIF should color-map only propagating air
-pressure outside the drum; internal cavity pressure is a coupling state, not
-an air-field color patch.  Be precise about dimensionality: the drum GIF is a
+pressure outside the drum; the interior air volume is geometric only, not a
+cavity pressure DOF.  The same modeling split can be implemented in NGSolve:
+membrane/shell FEM or modal damped oscillators provide Neumann data,
+ngsolve.bem supplies the exterior radiation operator, and time response comes
+from frequency sweeps with inverse FFT or from an externally assembled CQ loop
+over Laplace-domain BEM operators.  Be precise about dimensionality: the drum GIF is a
 3D axisymmetric physical picture rendered on an r-z slice.  Disk and side
 sources are integrated over azimuth, so it is not a 2D Cartesian wave cartoon,
-but it is not yet a full 3D `.vol` P1 volume-FEM/P1 surface-BEM drum mesh.
+but it is not yet a full 3D structural-FEM/acoustic-BEM drum mesh.
 
-The next genuine time-domain lane is not a periodic sine-wave animation:
+The parallel acoustic-volume teaching lane is not a periodic sine-wave animation:
 read the Netgen `.vol` tri/tet mesh, assemble H1/P1 volume FEM plus boundary
 P1 BEM, solve the frequency-domain Helmholtz FEM/BEM system over many
 frequency bins, multiply by a real pulse spectrum, enforce Hermitian symmetry,
 and inverse FFT to obtain a real pressure time history.  In the MATLAB
-teaching repo this is the role of `volFemBemIfftResponse`.  It is still not convolution-quadrature TD-BEM,
-but it is the readable frequency-sweep/iFFT route toward the full P1
-volume-FEM/P1 surface-BEM transient solver.
+teaching repo this is the role of `volFemBemIfftResponse`.  It is still not convolution-quadrature TD-BEM, but it is the readable frequency-sweep/iFFT
+route for acoustic transmission and interior-fluid examples, not the preferred
+drum structural model.
 
 The first convolution-quadrature TD-BEM rung is the `.vol` boundary P1 BEM
 path: sample the BDF generating function `delta(zeta)`, evaluate
@@ -1011,7 +1020,11 @@ at every CQ Laplace point.  A volume source pulse drives the interior and
 the BEM flux density radiates through the exterior representation
 `-S(s)q + D(s)Tu`.  This is the Calderon/Johnson-Nedelec coupled CQ system
 with the retarded double-layer `K(s)`.  Keep the old single-layer row only as
-a `SingleLayerTeaching` regression contrast.
+a `SingleLayerTeaching` regression contrast.  `writeVolFemBemCqGmsh3dArtifact`
+exports that acoustic-volume CQ result as Gmsh v4.1 NodeData and is useful for
+radia-acoustic artifact contracts.  For a drum, reuse the artifact contract but
+replace the interior acoustic volume FEM with structural membrane/shell FEM and
+use the BEM unknowns for exterior sound.
 
 ## Curve-only high-order .vol geometry
 

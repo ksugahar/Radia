@@ -3683,6 +3683,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                          std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
                          double near_grade, double far_inner_factor,
+                         std::vector<int> image_masks, std::vector<double> image_signs,
                          double eps, int leaf, double eta, bool build) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(hex_cell_nodes), std::move(quad_face_nodes), n_el, n_bf,
@@ -3693,7 +3694,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                              std::move(gl_in), std::move(gw_in),
                                              std::move(far_tet_pts), std::move(far_tet_w),
                                              std::move(far_tri_pts), std::move(far_tri_w),
-                                             near_grade, far_inner_factor));
+                                             near_grade, far_inner_factor,
+                                             std::move(image_masks), std::move(image_signs)));
                  if (build) {
                      RadHACApKParams p;
                      p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
@@ -3707,6 +3709,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
              py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 1.5,
+             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "HEX RT1 mode: Q1 monomial charges (8/hex volume + 4/quad-face surface) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
@@ -3727,6 +3730,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
                          std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
                          double near_grade, double far_inner_factor,
+                         std::vector<int> image_masks, std::vector<double> image_signs,
                          double eps, int leaf, double eta, bool build) {
                  auto mgr = std::unique_ptr<RadHACApKChargeGram>(
                      new RadHACApKChargeGram(std::move(wedge_cell_nodes), std::move(face_nodes),
@@ -3738,7 +3742,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                              std::move(gl_in), std::move(gw_in),
                                              std::move(far_tet_pts), std::move(far_tet_w),
                                              std::move(far_tri_pts), std::move(far_tri_w),
-                                             near_grade, far_inner_factor));
+                                             near_grade, far_inner_factor,
+                                             std::move(image_masks), std::move(image_signs)));
                  if (build) {
                      RadHACApKParams p;
                      p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
@@ -3753,6 +3758,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
              py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
+             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
              "WEDGE (PRISM) RT1 mode: L2(prism,order=1) volume charges (6/prism = {1,x,y,z,xz,yz}, the "
              "prism div-image = a subset of the hex's 8 Q1 monomials) + SurfaceL2 face charges (tri P1 3, "

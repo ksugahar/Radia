@@ -4,15 +4,14 @@
 The hex RT1 charge Gram was wired at `build_charge_gram(HDiv(hexmesh, order=1))` (golden
 test_hdiv_vim_hex_rt1_wiring), and `_solve_highorder`'s linear (symmetric mass-Riesz CG) and nonlinear
 (all-C++ energy-Newton) paths are Gram-AGNOSTIC -- so hex flows through the same production code as tet.
-Reviewed + the tet-only guard relaxed 2026-07-04: pure-tet OR pure-hex order-1 is accepted; wedge / pyramid /
-mixed still fail loud -> collocation MMMM.  The 'auto' dispatch default is UNCHANGED (a mesh-backed hex iron
-still routes to collocation MMMM -- KEEP-BOTH, MMMM = coarse tier); pure-hex HDiv-VIM is reached by calling
-this entry directly (or demag_backend='hdiv').
+Reviewed + the topology guard relaxed 2026-07-04: pure-tet, pure-hex, and pure-wedge order-1 meshes are
+accepted.  The 'auto' dispatch now routes mesh-backed pure HEX/WEDGE soft irons into HDiv-VIM as well;
+mixed / pyramid meshes still fail loud or route to the collocation MMMM bridge.
 
 This locks:
   * hex LINEAR: exact cube demag 1/3, transverse ~0, and agreement with collocation MMMM on the SAME mesh;
   * hex NONLINEAR (BH table): converges (bounded iters) and agrees with collocation MMMM;
-  * wedge/mixed: fail loud with the collocation-MMMM message.
+  * wedge: direct HDiv-VIM solve works; mixed / pyramid remain outside this path.
 
 The known bursty NGSolve GetTrafo first-touch flake in the hex-charge extraction (memory
 ngsolve-gettrafo-first-touch-garbage) is retried (the determinism contract fail-LOUD raises; rerun is the
@@ -151,3 +150,36 @@ def test_rad_solve_demag_backend_hdiv_on_hex():
     assert mz > 1e2, f"hdiv-solved hex Mz not substantial: {mz}"       # mu_r=100, H0=1000 -> Mz ~3400
     assert abs(float(M[:, 0].mean())) < 1e-2 * mz and abs(float(M[:, 1].mean())) < 1e-2 * mz
     rad.UtiDelAll()
+
+
+def test_rad_solve_auto_on_hex_uses_hdiv():
+    """The wrapper path with the production default: rad.Solve(auto) on HEX soft_iron_from_mesh returns the
+    HDiv-VIM result dict and writes per-element M back."""
+    rad.UtiDelAll()
+    rad.set_demag_backend("auto")
+    with ng.TaskManager():
+        iron = soft_iron_from_mesh(_cube(3), mu_r=MU_R)
+    src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
+    top = rad.ObjCnt([iron, src])
+    last = None
+    for _ in range(5):
+        try:
+            with ng.TaskManager():
+                res = rad.Solve(top, 1e-6, 3000, 0)
+            break
+        except RuntimeError as e:
+            if "GetTrafo lattice evaluation unstable" in str(e):
+                last = e
+                continue
+            raise
+    else:
+        raise last
+
+    assert isinstance(res, dict), type(res)
+    assert res["n_el"] == 27
+    assert res["order"] == 1
+    M = np.array([m for (_c, m) in rad.ObjM(iron)], float)
+    assert M.shape[0] == 27
+    assert float(M[:, 2].mean()) > 1e2
+    rad.UtiDelAll()
+    rad.set_demag_backend("auto")
