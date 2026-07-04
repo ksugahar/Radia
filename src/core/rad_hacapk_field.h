@@ -51,10 +51,10 @@
 #include "rad_hacapk.h"
 
 #include <vector>
-#include <mutex>
 #include <string>
 
 class radTg3dRelax;
+class radTPolyhedron;
 
 /**
  * RadHACApKFieldEval: embed-in-square H-matrix for rad.Fld-style field
@@ -88,7 +88,7 @@ public:
     //         convention as rad.Solve(image=...) (field PARALLEL to a mirror -> '+', PERPENDICULAR -> '-').
     RadHACApKFieldEval(int container_handle, std::vector<double> obs_points,
                        const std::string& field_type = "b", const std::string& image = "");
-    ~RadHACApKFieldEval() override {}
+    ~RadHACApKFieldEval() override;
 
     int NObs() const { return m_nObs; }
     int NSrc() const { return m_nSrc; }
@@ -119,10 +119,10 @@ protected:
     int  GetUniformNFFC() const override { return 3; }
 
 private:
-    // 3x3 field-response of source s at observation point o (B or A per unit M).
-    // Serialised on m_fieldMutex (B_genComp reads elem->Magn, which we set to
-    // a unit vector and restore -- a mutation the parallel HACApK fill must
-    // not race on).  Row-major G[a*3+b], a=obs component, b=src component.
+    // 3x3 field-response of source s at observation point o (B or A per unit M).  Row-major G[a*3+b],
+    // a = obs component, b = src component.  Reads the 3 fixed unit-M clones m_clones[3*s+b] READ-ONLY
+    // (no elem->Magn mutation), so the HACApK fill runs fully PARALLEL under the caller's TaskManager
+    // (the earlier mutate-under-mutex kernel serialised the whole build).
     void Compute3x3(int o, int s, double* G) const;
 
     int m_handle;
@@ -131,12 +131,14 @@ private:
     std::vector<double> m_obs;               // 3*N_obs observation coordinates
     std::vector<radTg3dRelax*> m_src;        // N_src source leaves (NOT owned)
     std::vector<double> m_srcM;              // 3*N_src actual magnetization
+    // 3 OWNED unit-M clones per source (Magn = e_x/e_y/e_z fixed), flat [3*s + b].  radia's own safe
+    // deep copy (radTPolyhedron copy ctor) -- read-only per-thread B_genComp, so no mutation race.
+    std::vector<radTPolyhedron*> m_clones;
     bool m_isA;                              // true => A (vector potential, T*m); false => B (Tesla)
     double m_physScale;                      // per-field-type factor to physical units (B: mu0; A: 1)
     std::vector<int> m_imgAxmask;            // IMA: per-image axis bitmask (bit0=x, bit1=y, bit2=z)
     std::vector<double> m_imgSign;           // IMA: per-image field-eval sign (prod(plane signs) * (-1)^popcount)
     double m_scale;                          // O(1) normalisation (max sampled |raw entry|); physical = scale * stored
-    mutable std::mutex m_fieldMutex;         // serialises the Magn-set + B_genComp
 };
 
 #endif // __RAD_HACAPK_FIELD_H

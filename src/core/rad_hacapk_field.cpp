@@ -99,6 +99,11 @@ RadHACApKFieldEval::RadHACApKFieldEval(int container_handle, std::vector<double>
     }
 }
 
+RadHACApKFieldEval::~RadHACApKFieldEval()
+{
+    for (radTPolyhedron* c : m_clones) delete c;
+}
+
 //-------------------------------------------------------------------------
 // ExtractCoordinates: resolve the container to its leaf magnetic elements,
 // then build the COMBINED [obs; src] cluster-tree point set (uniform 3-DOF).
@@ -151,6 +156,24 @@ void RadHACApKFieldEval::ExtractCoordinates()
         m_srcM[3 * s + 0] = M.x;
         m_srcM[3 * s + 1] = M.y;
         m_srcM[3 * s + 2] = M.z;
+    }
+
+    // Three OWNED unit-M clones per source (Magn = e_x/e_y/e_z fixed).  The kernel reads these read-only,
+    // so the parallel HACApK fill needs NO mutation of the shared sources (and NO mutex) -- the build runs
+    // fully parallel.  radia's own safe deep copy (radTPolyhedron copy ctor deep-copies pM_LinCoef /
+    // pJ_LinCoef); B_genComp on the clone is bit-identical to setting the original's Magn.
+    for (radTPolyhedron* c : m_clones) delete c;
+    m_clones.assign((size_t)3 * m_nSrc, nullptr);
+    for (int s = 0; s < m_nSrc; ++s) {
+        radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(m_src[s]);
+        if (!poly)
+            throw std::runtime_error("RadHACApKFieldEval: source element is not a polyhedron (only "
+                                     "magnetized polyhedra -- tet/hex/wedge -- are supported)");
+        for (int b = 0; b < 3; ++b) {
+            radTPolyhedron* c = new radTPolyhedron(*poly);
+            c->Magn = TVector3d(b == 0 ? 1.0 : 0.0, b == 1 ? 1.0 : 0.0, b == 2 ? 1.0 : 0.0);
+            m_clones[(size_t)3 * s + b] = c;
+        }
     }
 
     // Combined [obs; src] point set for the square cluster tree.  Elements
@@ -209,65 +232,52 @@ void RadHACApKFieldEval::OnBeforeBuild()
 
 void RadHACApKFieldEval::Compute3x3(int o, int s, double* G) const
 {
-    radTg3dRelax* src = m_src[s];
     TVector3d obs(m_obs[3 * o + 0], m_obs[3 * o + 1], m_obs[3 * o + 2]);
     TVector3d ZeroVect(0.0, 0.0, 0.0);
 
-    // B_genComp reads elem->Magn; set it to a unit vector, evaluate, restore.
-    // The parallel HACApK fill must not race on this, hence the mutex (serial
-    // kernel -- correctness first; a mutation-free per-source unit-M clone /
-    // analytic face kernel is the follow-up optimization).
-    std::lock_guard<std::mutex> lk(m_fieldMutex);
-    TVector3d saveM = src->Magn;
-    try {
-        for (int b = 0; b < 3; ++b) {
-            TVector3d unitM(0.0, 0.0, 0.0);
-            if (b == 0) unitM.x = 1.0; else if (b == 1) unitM.y = 1.0; else unitM.z = 1.0;
-            src->Magn = unitM;
+    // Read the 3 fixed unit-M clones READ-ONLY (Magn = e_b baked in, never mutated), so concurrent
+    // B_genComp from the parallel HACApK fill is race-free (B_comp uses const handle refs -> no shared
+    // ref-count / state writes) -- NO mutex, the whole build parallelises under the caller's TaskManager.
+    for (int b = 0; b < 3; ++b) {
+        radTPolyhedron* cl = m_clones[(size_t)3 * s + b];   // clone with Magn = e_b
 
-            radTFieldKey FieldKey;
-            if (m_isA) FieldKey.A_ = true; else FieldKey.B_ = true;
+        radTFieldKey FieldKey;
+        if (m_isA) FieldKey.A_ = true; else FieldKey.B_ = true;
 
-            // Original contribution at obs.
-            // B: leaf stores the PRE-mu0 quantity in Field.B (H_total in A/m outside; H_total+M inside);
-            //    radTg3d::B_genComp does NOT scale it (rad.Fld applies mu0 at the top level) -> * mu0.
-            // A: leaf stores the PHYSICAL A in Field.A (mu0/4pi already baked into the face integral) -> * 1.
-            radTField Field(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
-            Field.P = obs;
-            src->B_genComp(&Field);
-            const TVector3d& r0 = m_isA ? Field.A : Field.B;
-            double gx = m_physScale * r0.x, gy = m_physScale * r0.y, gz = m_physScale * r0.z;
+        // Original contribution at obs.
+        // B: leaf stores the PRE-mu0 quantity in Field.B (H_total in A/m outside; H_total+M inside);
+        //    radTg3d::B_genComp does NOT scale it (rad.Fld applies mu0 at the top level) -> * mu0.
+        // A: leaf stores the PHYSICAL A in Field.A (mu0/4pi already baked into the face integral) -> * 1.
+        radTField Field(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
+        Field.P = obs;
+        cl->B_genComp(&Field);
+        const TVector3d& r0 = m_isA ? Field.A : Field.B;
+        double gx = m_physScale * r0.x, gy = m_physScale * r0.y, gz = m_physScale * r0.z;
 
-            // IMA image contributions: field of the mirror image of src == c * R * field_orig(R.obs).
-            // Evaluate the SAME source (unit e_b) at the REFLECTED obs point (negate coords on the image
-            // axes), reflect the resulting POLAR field vector (negate its components on the image axes),
-            // and add with the image scalar sign c (m_imgSign).
-            for (size_t im = 0; im < m_imgAxmask.size(); ++im) {
-                const int am = m_imgAxmask[im];
-                TVector3d obsR = obs;
-                if (am & 1) obsR.x = -obsR.x;
-                if (am & 2) obsR.y = -obsR.y;
-                if (am & 4) obsR.z = -obsR.z;
-                radTField F2(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
-                F2.P = obsR;
-                src->B_genComp(&F2);
-                TVector3d f = m_isA ? F2.A : F2.B;
-                if (am & 1) f.x = -f.x;
-                if (am & 2) f.y = -f.y;
-                if (am & 4) f.z = -f.z;
-                const double c = m_imgSign[im] * m_physScale;
-                gx += c * f.x; gy += c * f.y; gz += c * f.z;
-            }
-
-            G[0 * 3 + b] = gx;   // a = 0 (Bx / Ax)
-            G[1 * 3 + b] = gy;   // a = 1 (By / Ay)
-            G[2 * 3 + b] = gz;   // a = 2 (Bz / Az)
+        // IMA image contributions: field of the mirror image of src == c * R * field_orig(R.obs).
+        // Evaluate the SAME clone at the REFLECTED obs point (negate coords on the image axes), reflect
+        // the resulting POLAR field vector (negate its components on those axes), add with the sign c.
+        for (size_t im = 0; im < m_imgAxmask.size(); ++im) {
+            const int am = m_imgAxmask[im];
+            TVector3d obsR = obs;
+            if (am & 1) obsR.x = -obsR.x;
+            if (am & 2) obsR.y = -obsR.y;
+            if (am & 4) obsR.z = -obsR.z;
+            radTField F2(FieldKey, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect, ZeroVect);
+            F2.P = obsR;
+            cl->B_genComp(&F2);
+            TVector3d f = m_isA ? F2.A : F2.B;
+            if (am & 1) f.x = -f.x;
+            if (am & 2) f.y = -f.y;
+            if (am & 4) f.z = -f.z;
+            const double c = m_imgSign[im] * m_physScale;
+            gx += c * f.x; gy += c * f.y; gz += c * f.z;
         }
-    } catch (...) {
-        src->Magn = saveM;
-        throw;
+
+        G[0 * 3 + b] = gx;   // a = 0 (Bx / Ax)
+        G[1 * 3 + b] = gy;   // a = 1 (By / Ay)
+        G[2 * 3 + b] = gz;   // a = 2 (Bz / Az)
     }
-    src->Magn = saveM;
 }
 
 //-------------------------------------------------------------------------
