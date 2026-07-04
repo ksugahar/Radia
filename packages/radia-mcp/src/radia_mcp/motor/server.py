@@ -53,6 +53,7 @@ from .simple_mmm_2d import (
     format_motor_validation_route,
     route_motor_validation,
 )
+from .planar_coupling_knowledge import get_planar_coupling
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -119,6 +120,31 @@ def motor_darwin_model(topic: str = "overview") -> str:
             "all"          - Everything
     """
     return get_darwin_knowledge(topic)
+
+
+@mcp.tool()
+def motor_planar_coupling(topic: str = "overview") -> str:
+    """
+    2D PLANAR machine modelling in radia: MMMM / HDiv-VIM soft-iron demag + the SHARED
+    postprocessing (radia.planar_charges) + the staggered eddy-current coupling
+    (radia.planar_eddy) for PM motors / induction machines / eddy-current brakes.
+
+    Analytic-led + fully gated (Bessel / 2D dipole / monolithic FEM).  Companion to the
+    goldens validation_test/feec/test_moment2d_*.py, test_planar_eddy_coupling.py,
+    test_hdiv_vim_2d_magnets.py.  For the MMMM element formulation itself see the
+    mmm_core tool topic 'planar_2d'.
+
+    Args:
+        topic: One of:
+            "overview"      - the two demag methods + one shared coupling layer
+            "eddy_coupling" - staggered MMMM/HDiv-VIM <-> reduced-Az eddy FEM (maglev/IM/ECB)
+            "pm_motor"      - permanent magnets: design A (magnets=) / B (pm=) / unified rotor
+            "nonlinear"     - nonlinear soft iron + eddy (effective-chi AC)
+            "api"           - API quick reference
+            "validation"    - the gated validation ladder
+            "all"           - everything
+    """
+    return get_planar_coupling(topic)
 
 
 @mcp.tool()
