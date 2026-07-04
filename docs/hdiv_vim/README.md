@@ -163,9 +163,15 @@ showcase notebooks above.
    **2D nonlinear** iron is the 2D planar layer's own track.
 3. **Wedge** elements (extruded motor stacks) + the hex auto-dispatch policy (when a hex mesh
    defaults to HDiv-VIM vs collocation MMMM).
-4. **VIM ↔ reduced-FEM weak coupling** — 2D skeleton verified in research (stagger converges in 3
-   iterations; plate loss within 7.8% of an all-in-one FEM reference), not yet promoted; then the
-   motor/AGE comparison bench.
+4. **VIM ↔ reduced-FEM weak coupling — verified end-to-end + promoted to docs (2026-07-04).**  The 2D
+   maglev-pattern weak coupling (open-boundary VIM iron + reduced complex A_z FEM on the conductor) is
+   shipped as the executed showcase [`../electric_machine/planar_vim_motor.ipynb`](../electric_machine/planar_vim_motor.ipynb)
+   (+ `em_reference_audit.ipynb`): the nonlinear-iron ↔ eddy stagger converges in ~4 iters through deep
+   saturation (plate loss within ~2–3% of an all-in-one FEM), the salient-bar motor torque-angle matches
+   an exact-Newton FEM (mean 0.58%), and two induction machines pass (rotating cylinder vs Bessel 0.19%;
+   mini cage 0.57%).  Remaining: a PRODUCTION `radia.` coupling API (the docs layer is a research helper),
+   and the multi-harmonic AGE comparison bench (the linear-cylinder dual-lane bench already passes: VIM
+   0.01% @ 502 dof vs AGE 7e-4% @ 31.6k dof).
 5. The Sauter–Schwab 6D inner quadrature is a **negative result** so far (prototype plateaus at
    2e-3; needs a rigorous per-shuffle CPS second transform).  The retired Gauss-point and H-LU
    paths remain outside the public contract.
