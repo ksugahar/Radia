@@ -15,7 +15,12 @@ static const double MU0 = 1.2566370614359172953850573533118e-6;   // 4 pi x 1e-7
 void Field(int nq, const double* Xq, const double* Q,
            int nP, const double* P, double* Hout)
 {
-	// parallel over observation points (each is an independent O(nq) reduction)
+	// parallel over observation points (each is an independent O(nq) reduction).
+	// Self-wrap so a BARE call (no caller `with TaskManager()`) still runs parallel; RegionTaskManager
+	// reuses the caller's pool when one is already active (nested = no-op).  This kernel is
+	// allocation-free -> scales cleanly (matches the 3D rad.Fld self-wrap in
+	// radTApplication::ComputeFieldBatch).
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 	ngcore::ParallelFor(ngcore::IntRange(nP), [&](int i){
 		double px = P[2 * i], py = P[2 * i + 1];
 		double hx = 0.0, hy = 0.0;
@@ -34,6 +39,7 @@ void Field(int nq, const double* Xq, const double* Q,
 void FieldAz(int nq, const double* Xq, const double* Q,
              int nP, const double* P, double* Azout)
 {
+	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());   // self-wrap -> bare call parallel (see Field)
 	ngcore::ParallelFor(ngcore::IntRange(nP), [&](int i){
 		double px = P[2 * i], py = P[2 * i + 1];
 		double az = 0.0;
