@@ -41,8 +41,9 @@ _RULE_REMEDIATIONS = {
         "Netgen or Cubit, then open/export files for display."
     ),
     "pip-gmsh-import": (
-        "Avoid the pip gmsh runtime in public examples. Prefer standalone "
-        "gmsh.exe via subprocess or file-based visualization workflows."
+        "Keep the gmsh Python API out of computation/mesh-generation scripts. "
+        "Use the `gmsh` launcher on PATH for viewer/inspection workflows, and "
+        "prefer .msh v4.1 data plus a .geo launch file for Radia post."
     ),
 }
 

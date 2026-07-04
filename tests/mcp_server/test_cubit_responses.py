@@ -133,6 +133,14 @@ class TestExportKnowledge:
     def test_unknown_format(self):
         _assert_unknown_topic_graceful(get_export_documentation)
 
+    def test_gmsh_v4_documents_geo_as_radia_post_launch_artifact(self):
+        body = get_export_documentation("gmsh_v4")
+
+        assert ".msh v4.1 + .geo" in body
+        assert "standard file to open for Radia post-processing is `.geo`" in body
+        assert "`.msh` association is optional raw mesh/data inspection" in body
+        assert ".geo` companion" in body
+
 
 # ---------------------------------------------------------------------------
 # mesh_diagnostics_knowledge

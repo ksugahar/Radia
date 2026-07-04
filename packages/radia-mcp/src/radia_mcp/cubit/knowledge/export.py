@@ -21,7 +21,7 @@ Path A is the recommended export path. Use `export netgen "mesh.vol" order N` fo
 | Command | Format | Max Order | Notes |
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
-| `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh) | 1-3 | Wedge limited to order 2 |
+| `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh) | 1-3 | Raw display data; open via `.geo` for Radia post |
 | `export jmag_nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
 | `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
@@ -37,7 +37,7 @@ No fallback to HighOrderMesh (removed).
 cubit.cmd('export netgen "mesh.vol" order 3 overwrite')
 # -> produces mesh.vol + mesh.vol.json (CAD reference values)
 
-# Gmsh v4.1 (for GMSH visualization, order 1-3 supported)
+# Gmsh v4.1 raw display data (Radia post launches the .geo companion)
 cubit.cmd('export gmsh "mesh.msh" order 3 overwrite')
 
 # Netgen .vol supports order 1-5
@@ -122,6 +122,9 @@ export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 ```
 
 v4.1 is the only supported GMSH format. No block assignment required.
+For Radia post-processing, treat this `.msh` as raw mesh/data and open the
+generated or adjacent `.geo` launch recipe. Do not make `.msh` double-click the
+primary user-facing post-processing contract.
 
 ## Supported Elements
 
@@ -139,7 +142,7 @@ Wedge/Prism limited to order 2 (Gmsh limitation).
 
 ## Use Cases
 
-- **GMSH visualization**: View mesh in GMSH GUI
+- **GMSH raw display data**: View mesh in GMSH GUI, preferably through `.geo`
 - **NGSolve**: Use `export netgen` instead (order 1-5)
 
 ```python
@@ -161,10 +164,11 @@ v4.1 is the only supported GMSH format (v2.2 removed, lab-wide standard).
 | Direction | Format | Purpose | Tool |
 |-----------|--------|---------|------|
 | **Input** (-> NGSolve) | **.vol** | Mesh import into NGSolve | `export netgen "mesh.vol" order N` -> `Mesh("mesh.vol")` |
-| **Output** (Cubit ->) | **.msh v4.1** | Mesh visualization | `export gmsh "mesh.msh" order N` |
-| **Output** (NGSolve ->) | **.msh v4.1** | Field visualization in GMSH | `GmshPostExport.write()` -> GMSH GUI |
+| **Output** (Cubit ->) | **.msh v4.1 + .geo** | Mesh visualization/post launch | `export gmsh "mesh.msh" order N` + `.geo` recipe |
+| **Output** (NGSolve ->) | **.msh v4.1 + .geo** | Field visualization/post launch | `GmshPostExport.write()` + `.geo` recipe |
 
 The ONLY input format for NGSolve is `.vol`. `.msh` is output-only (Cubit mesh export or NGSolve field visualization).
+The standard file to open for Radia post-processing is `.geo`; `.msh` association is optional raw mesh/data inspection.
 
 ### GmshPostExport Methods
 
@@ -176,8 +180,9 @@ The ONLY input format for NGSolve is `.vol`. `.msh` is output-only (Cubit mesh e
 ## When to Use Which
 
 - **`export netgen "mesh.vol"`**: For NGSolve FEM computation (any order, recommended)
-- **`export gmsh "mesh.msh"`**: For Cubit mesh visualization in GMSH (order 1-3)
-- **`GmshPostExport.write()`**: For NGSolve field result visualization in GMSH
+- **`export gmsh "mesh.msh"`**: For Cubit mesh visualization data in GMSH (order 1-3)
+- **`GmshPostExport.write()`**: For NGSolve field result data in GMSH
+- **`.geo` companion**: Standard Radia post-processing launch artifact
 """
 
 EXPORT_CURVED = """
@@ -366,7 +371,7 @@ EXPORT_COMPARISON = """
 | Pyramid | Yes | Yes | Yes | Yes | degen hex | No |
 | Labels | block+sideset | block+sideset | block | block | block+sideset | block |
 | 2D mode | No | Yes | Yes | Yes | Yes (twod/axi) | No |
-| Companion | .vol.json | .geo | - | - | - | d3 |
+| Companion | .vol.json | .geo launch recipe | - | - | - | d3 |
 
 ## export netgen vs Gmsh for NGSolve
 
@@ -374,7 +379,7 @@ EXPORT_COMPARISON = """
 |--------|---------------------|-------------------|
 | Max order | 5 | 3 (wedge: 2) |
 | NGSolve input | Yes (.vol is the ONLY input) | No (.msh not supported) |
-| Best for | NGSolve FEM/BEM | GMSH visualization |
+| Best for | NGSolve FEM/BEM | GMSH visualization raw data; open `.geo` for Radia post |
 """
 
 
