@@ -8,8 +8,12 @@ references and result-bearing showcase notebooks, while source history stays in 
 Heavy validation/timing runs are mdx-idle canonical; LAB runs are acceptable for
 fast migration smoke/import checks and must be labelled as such.
 
-The HDiv-type VIM is the lab's FEEC (H(div) RT) production direction for Radia soft-iron demag:
-a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
+The HDiv-type VIM is the lab's FEEC (H(div) RT) production direction for Radia soft-iron demag.
+The main product reason is Reduced FEM coupling: the magnetization, material state, source field, and
+post-solve field reconstruction live in NGSolve `Mesh` / `GridFunction` / `CoefficientFunction` /
+`BilinearForm` vocabulary, so conductor and motor reduced-FEM legs can consume VIM iron through weak-form
+source terms instead of sampled Radia object fields.  Mathematically it is a SYMMETRIC demag operator
+N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
 mu_r-INDEPENDENT convergence with no hand-crafted loop-star.  Validated on: linear demag
 (sphere/spheroid/triaxial exact vs analytic), NONLINEAR (damped Newton; cube & C-yoke <1-3% vs shipped
 Radia), distorted-mesh mu_r-independence, CURVED + high-order (accuracy-per-DOF ~10-30x vs flat Radia),
@@ -21,7 +25,7 @@ charge-Coulomb Gram construction is expensive.  The production surface-charge pa
 Mathematica-derived multipole-moment MMM rows: cheaper local moment functionals for 3-DOF MMM and 5/6-DOF
 MSC, with HDiv retained as the higher-order and de-Rham-exact complement.
 
-PRIMARY (decision 2026-06-30, updated 2026-07-05, Sugahara -- SUPERSEDES the 2026-06-24 positioning above): HDiv-VIM is now the PRIMARY (本命) Radia soft-iron demag method, and Radia is moving toward HDiv-only production after MMMM migration to ELF_MAGIC@研究室版. The 2026-06-24 'production uses the multipole-moment MMM rows' framing is REVERSED: collocation MMMM gave up loop-free (its loop-free implementation was removed 2026-06-30) -- field-correct (loops field-null) but loop-polluted internal M, acceptable for legacy/lab cross-checks but NOT the Radia accurate/hysteresis route; HDiv-VIM is loop-free BY CONSTRUCTION (loops = ker(B)), so it is the primary accurate route. Use HDiv-VIM for mesh-backed pure TET / HEX / WEDGE production/accurate + hysteresis and 2D planar motor cross-sections. Treat collocation MMMM in Radia as a temporary migration cross-check; keep the active MMMM continuation in ELF_MAGIC@研究室版. Small-DoF speed is not decisive: if both methods finish interactively, record "both fast" and judge Radia on accuracy, Reduced-FEM coupling, and mdx engineering-scale build+solve. Memory: collocation_loopfree_abandoned.
+PRIMARY (decision 2026-06-30, updated 2026-07-05, Sugahara -- SUPERSEDES the 2026-06-24 positioning above): HDiv-VIM is now the PRIMARY (本命) Radia soft-iron demag method, and Radia is moving toward HDiv-only production after MMMM migration to ELF_MAGIC@研究室版. The strongest motive is the NGSolve Reduced FEM coupling path: HDiv can pass `CoefficientFunction`/`GridFunction` fields directly into conductor, motor, and reduced-potential weak forms, whereas MMMM's natural output is Radia object moments / `rad.Fld` samples that must be projected back into FEM. The 2026-06-24 'production uses the multipole-moment MMM rows' framing is REVERSED: collocation MMMM gave up loop-free (its loop-free implementation was removed 2026-06-30) -- field-correct (loops field-null) but loop-polluted internal M, acceptable for legacy/lab cross-checks but NOT the Radia accurate/hysteresis route; HDiv-VIM is loop-free BY CONSTRUCTION (loops = ker(B)), so it is the primary accurate route. Use HDiv-VIM for mesh-backed pure TET / HEX / WEDGE production/accurate + hysteresis and 2D planar motor cross-sections. Treat collocation MMMM in Radia as a temporary migration cross-check; keep the active MMMM continuation in ELF_MAGIC@研究室版. Small-DoF speed is not decisive: if both methods finish interactively, record "both fast" and judge Radia on accuracy, Reduced-FEM coupling, and mdx engineering-scale build+solve. Memory: collocation_loopfree_abandoned.
 
 CURRENT API (2026-06-23 -- the dense Python Gram path was REMOVED): the C++ `_ChargeGramHMatrix` kernel
 is the SOLE demag operator (N v = B^T (H.matvec(B v)); EXACT analytic near AND far; tet via

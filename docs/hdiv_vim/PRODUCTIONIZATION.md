@@ -88,6 +88,13 @@ interactively, record "both fast" and judge the Radia backend on accuracy, Reduc
 engineering-scale build+solve measurements on mdx.  The concrete benchmark plan is
 [`HDiv_vs_MMMM_benchmark_plan.md`](HDiv_vs_MMMM_benchmark_plan.md).
 
+The **primary motivation is Reduced FEM coupling**.  HDiv-VIM keeps magnetization, material state,
+external fields, and post-solve field reconstruction inside NGSolve-native objects, so conductor /
+motor reduced FEM can consume them through `CoefficientFunction`s and weak forms.  MMMM is valuable as a
+standalone moment method, but its natural interface is Radia object moments plus `rad.Fld` samples; a FEM
+coupling layer then has to sample/project those fields back into NGSolve.  This extra translation is the
+main architectural reason Radia should standardize on HDiv for coupled workflows.
+
 ## Definition of done — the HDiv-only gate (M0)
 
 HDiv-VIM is production-sealed as the Radia backend when it is at-least-as-good on the overlapping
