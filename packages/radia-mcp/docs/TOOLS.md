@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **581 tools** across 43 MCP servers.
+Total: **583 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 38 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 10 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
@@ -165,6 +165,8 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_examples` | Get GMSH tutorial and example documentation. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
+| `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
+| `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
 | `gmsh_reference` | Get GMSH technical reference (options, algorithms, fields, formats). |
 | `gmsh_status` | (no description) |
 | `gmsh_usage` | Get GMSH documentation for visualization and post-processing. |
