@@ -1,9 +1,9 @@
-"""radia.planar_charges -- SHARED 2D planar exterior field + Maxwell torque.
+"""radia.planar_charges -- shared 2D planar exterior field + Maxwell torque.
 
 Method-agnostic postprocessing for planar (per-unit-length) magnetostatics: given ANY 2D mesh and a
 per-element magnetization ``M_elem`` (nEl, 2), evaluate the exterior field and the Maxwell-stress
-torque.  Used identically by the collocation MMMM (``radia.mmmm2d``) and the HDiv-VIM
-(``radia.vim._vim2d``) -- both produce a per-element M, so the exterior field is the field of that
+torque.  Used by the HDiv-VIM planar layer and dense planar helpers; they produce a per-element M, so
+the exterior field is the field of that
 magnetization = its M.n equivalent bound charge on the element edges (log kernel -ln(r)/(2 pi)).
 
 The hot loops (charge-cloud field, circle torque integral) are C++
@@ -83,9 +83,9 @@ def exterior_field(mesh, M_elem, P, ngauss=4):
 
 def magnet_field(magnets, P, ngauss=4):
     """Combined H at P (n,2) of a list of PERMANENT-MAGNET bodies [(mesh, M_fixed), ...] (each a
-    RIGID / fixed magnetization) -- the source a soft-iron body reacts to.  SHARED: both MMMM
-    (radia.mmmm2d) and the HDiv-VIM add magnet_field(magnets, iron_centroids) to their applied
-    field (a hard PM does not demagnetize, so this is a one-way source; no iteration)."""
+    RIGID / fixed magnetization) -- the source a soft-iron body reacts to.  Planar solvers add
+    magnet_field(magnets, iron_centroids) to their applied field (a hard PM does not demagnetize,
+    so this is a one-way source; no iteration)."""
     P = np.ascontiguousarray(np.asarray(P, float).reshape(-1, 2))
     H = np.zeros((len(P), 2))
     for mesh, M in magnets:
@@ -96,8 +96,8 @@ def magnet_field(magnets, P, ngauss=4):
 def field_cf(Xq, Q):
     """The 2D charge-cloud H field as an NGSolve CoefficientFunction (the CF twin of charge_field):
         H(x,y) = (1/2 pi) sum_q Q_q (r - r_q) / |r - r_q|^2.
-    For the HDiv-VIM, whose applied field is projected onto H(div) from a CF (unlike MMMM, which
-    evaluates H at centroids as numpy).  A big sum over charges -- keep the cloud modest."""
+    For the HDiv-VIM, whose applied field is projected onto H(div) from a CF.  A big sum over charges
+    -- keep the cloud modest."""
     Xq = np.ascontiguousarray(np.asarray(Xq, float).reshape(-1, 2))
     Q = np.asarray(Q, float).ravel()
     Hx = ng.CF(0.0)
@@ -114,7 +114,7 @@ def field_cf(Xq, Q):
 
 def magnet_field_cf(magnets, ngauss=4):
     """Combined H CoefficientFunction of PERMANENT-MAGNET bodies [(mesh, M_fixed), ...] -- the CF
-    the HDiv-VIM adds to its applied field (same rigid source MMMM's magnet_field gives as numpy)."""
+    the HDiv-VIM adds to its applied field."""
     Xs, Qs = [], []
     for mesh, M in magnets:
         X, Q = mn_edge_cloud(mesh, M, ngauss)
@@ -138,7 +138,7 @@ def maxwell_torque(mesh, M_elem, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440
     return maxwell_torque_cloud(Xq, Q, Rc, H_ext=H_ext, center=center, n=n)
 
 
-# ---- Maxwell-stress FORCE (maglev levitation / actuator; shared by MMMM and HDiv-VIM) ------------
+# ---- Maxwell-stress FORCE (maglev levitation / actuator) -----------------------------------------
 
 def maxwell_force_cloud(Xq, Q, Rc, H_ext=(0.0, 0.0), center=(0.0, 0.0), n=1440):
     """Force per unit length (Fx,Fy) on a circle Rc in air from a cloud + uniform applied H_ext.

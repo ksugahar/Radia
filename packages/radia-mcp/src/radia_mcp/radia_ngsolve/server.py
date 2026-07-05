@@ -1,9 +1,9 @@
 """
 Radia + NGSolve Unified MCP Server
 
-Provides tools for both Radia (MMM/MSC/PEEC C++ core) and NGSolve (FEM/BEM):
+Provides tools for both Radia (field/PEEC C++ core) and NGSolve (FEM/BEM):
 - Unified linting (33 rules: Radia API + NGSolve FEM + BEM + PEEC)
-- Radia C++ library usage (MMM, MSC, field computation, materials, solver)
+- Radia C++ library usage (field computation, materials, solver)
 - NGSolve FEM usage (22 topics: EM formulations, axisymmetric, materials)
 - ngsolve.bem (BEM operators, inductance extraction)
 - radia.sparsesolv_ngsolve (Compact AMS/COCR/ICCG preconditioners)
@@ -58,7 +58,6 @@ from .knowledge.cln_3d import (
 )
 from .knowledge.bem_cln import get_bem_cln_documentation
 from .knowledge.cln_sphere_dd import get_cln_sphere_dd_documentation
-from .knowledge.mmm_core import get_mmm_core_documentation
 from .knowledge.hdiv_vim import get_hdiv_vim_documentation
 from .knowledge.femm_parity import get_femm_parity_documentation
 from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
@@ -209,7 +208,6 @@ def lint_radia_script(filepath: str) -> str:
     - ObjBckg called with list instead of callable (CRITICAL)
     - Missing UtiDelAll cleanup (HIGH)
     - Removed APIs: FldUnits, FldBatch, old solver params (HIGH)
-    - MSC sign convention, eval point (HIGH/MODERATE)
 
     NGSolve checks:
     - BEM on HDivSurface without .Trace() (CRITICAL)
@@ -941,55 +939,10 @@ def cln_sphere_dd_pipeline() -> str:
 
 
 @mcp.tool()
-def mmm_core(topic: str = "chubar_1998") -> str:
-    """
-    MMM/MSC (Magnetic Moment Method / Magnetic Surface Charge) -- how
-    to BUILD models, the interaction-matrix structure, the near-null
-    eigenvalue behavior, plus Radia heritage.
-
-    Practical "how to make an MMM/MSC model" recipes: topic
-    "build_msc_mmm". Matrix/system probes (MMM dense N vs current
-    multipole-moment MMM MSC system): "matrix_structure". Near-null "loop"
-    modes / conditioning / beautiful->ugly BiCGSTAB (CEFC 2026 study):
-    "eigenvalue_nullspace". Heritage (Chubar 1998, Wakao 2007 ACA,
-    Janet MMM+RNM, Le-Duc PEEC+MMM, Weddemann FEM-BEM): remaining
-    topics.
-
-    Args:
-        topic: One of:
-            "build_msc_mmm"      - HOW TO BUILD an MMM/MSC model
-                                   (elements, materials, solve, results)
-            "matrix_structure"   - Matrix probes: GetInteractMatrix is
-                                   MMM/dense legacy; multipole-moment MMM MSC uses
-                                   BuildMomentSystem / MomentSystemDenseRaw /
-                                   dense-only diagnostics
-            "eigenvalue_nullspace" - Near-null loop modes, cond ~ mu_r,
-                                   beautiful->ugly BiCGSTAB (CEFC 2026)
-            "multipole_modes"    - What field the 6-DoF MSC creates:
-                                   mono+dipole+2 quadrupole (SVD/eig + .wls
-                                   proof); cond = multipole field-strength
-                                   ratio; aspect ratio (not size) sets the
-                                   iteration count; distortion only rotates
-                                   the quadrupole (Sugahara-lab 2026-06-22)
-            "chubar_1998"        - Original Radia paper (ESRF 1998)
-            "takahashi_2007_aca" - Wakao group MMM + ACA H-matrix
-                                   (Sugahara lab heritage)
-            "pradhan_2007"       - Kolkata cyclotron Radia/TOSCA validation
-            "janet_2005_mmm_rnm" - MMM + Reluctance Network mixed (Schneider)
-            "le_duc_peec_mmm"    - PEEC + MMM coupling (G2Elab)
-            "weddemann_fembem"   - FEM-BEM hybrid alternative
-            "mmm_vs_other"       - Decision matrix: when to use MMM vs FEM
-                                   vs PEEC vs BEM
-            "all"                - Everything
-    """
-    return get_mmm_core_documentation(topic)
-
-
-@mcp.tool()
 def hdiv_vim(topic: str = "overview") -> str:
     """
     HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT
-    alternative/complement to the canonical multipole-moment MMM MSC kernel.  Canonical reference:
+    soft-iron demag route.  Canonical reference:
     docs/hdiv_vim/README.md.
 
     Key idea: SYMMETRIC demag operator N = B^T G B with the loop modes FIELD-NULL BY
@@ -1225,14 +1178,14 @@ def radia_usage(topic: str = "all") -> str:
     """
     Get Radia C++ library usage documentation.
 
-    Covers: MMM/MSC solvers, field computation, materials (MatLin, MatSatIsoTab,
-    hysteresis), background fields, solver configuration (LU/BiCGSTAB/HACApK),
+    Covers: field computation, fixed-magnet materials, HDiv-backed soft iron,
+    hysteresis, background fields, solver configuration (LU/BiCGSTAB/HACApK),
     NGSolve integration (RadiaField CF), memory management, IMA.
 
     Args:
         topic: Documentation topic. Options:
             "all"            - Complete documentation
-            "overview"       - Architecture, MMM vs MSC vs BEM
+            "overview"       - Architecture, Radia fields vs HDiv-VIM vs BEM
             "elements"       - ObjRecMag, ObjHexahedron, ObjTetrahedron, ObjWedge, ObjPyramid
             "materials"      - MatLin, MatSatIsoTab, hysteresis, permanent magnets
             "solver"         - rad.Solve, SolverConfig, LU/BiCGSTAB/HACApK
@@ -1262,7 +1215,8 @@ def analytical_formulas(topic: str = "all") -> str:
     The package collects nine modules of closed-form expressions taken from
     the Wakao-Igarashi-Fujiwara-Kameari review series (IEE Japan, 2002-2004).
     These are the trusted-baseline analytical results that the rest of Radia
-    (MMM, MSC, PEEC, FEM panels, ngsolve.bem) is sanity-checked against.
+    (HDiv-VIM, fixed-magnet fields, PEEC, FEM panels, ngsolve.bem) is
+    sanity-checked against.
 
     For any new analysis the FIRST QUESTION to ask is "is there a closed form
     here that I can validate against?". Use the validation_use_cases topic

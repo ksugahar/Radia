@@ -188,14 +188,6 @@ class TestAccelArgConstruction:
         args = self._build_args(formulation="a")
         assert args[args.index("--formulation") + 1] == "a"
 
-    def test_mmm_formulation(self):
-        args = self._build_args(formulation="mmm")
-        assert args[args.index("--formulation") + 1] == "mmm"
-
-    def test_msc_formulation(self):
-        args = self._build_args(formulation="msc")
-        assert args[args.index("--formulation") + 1] == "msc"
-
 
 # ============================================================
 # Test: Formulation selection logic
@@ -208,10 +200,10 @@ class TestFormulationSelection:
             return "omega"
         elif "HCurl" in combo_text:
             return "a"
-        elif "MMM" in combo_text:
-            return "mmm"
+        elif "HDiv" in combo_text:
+            return "hdiv"
         else:
-            return "msc"
+            return "unknown"
 
     def test_omega(self):
         assert self._select_formulation("Omega-reduced (H1)") == "omega"
@@ -219,16 +211,12 @@ class TestFormulationSelection:
     def test_a(self):
         assert self._select_formulation("A-formulation (HCurl)") == "a"
 
-    def test_mmm(self):
-        assert self._select_formulation("MMM (Radia tet)") == "mmm"
-
-    def test_msc(self):
-        assert self._select_formulation("MSC (Radia hex)") == "msc"
+    def test_hdiv(self):
+        assert self._select_formulation("HDiv-VIM") == "hdiv"
 
     def test_radia_disables_kelvin(self):
-        """MMM/MSC: no Kelvin needed (natural open BC)."""
-        for text in ["MMM (Radia tet)", "MSC (Radia hex)"]:
-            assert "Radia" in text
+        """HDiv-VIM is open-boundary through the charge Gram."""
+        assert self._select_formulation("HDiv-VIM") == "hdiv"
 
     def test_fem_needs_kelvin(self):
         """Omega/A: Kelvin needed for open boundary."""

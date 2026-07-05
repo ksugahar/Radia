@@ -2,8 +2,7 @@
 
 Item (b) of the HDiv-only gate (CLAUDE.md DIRECTION 2026-07-04): the mesh-less soft-iron capability is KEPT
 via intent constructors that STRUCTURE-MESH a simple shape (subdivided structured hex mesh) and register it
-through vim.MeshSoftIron, so rad.Solve auto-routes it to the FEEC HDiv-VIM (RT1) -- the API-compatible
-replacement for the legacy ObjHexahedron + MatApl(MatLin) mesh-less collocation-MMMM route.  The returned
+through vim.MeshSoftIron, so rad.Solve auto-routes it to the FEEC HDiv-VIM (RT1). The returned
 container IS the sub-mesh, so rad.Fld reflects the resolved per-sub-element M (no write-back plumbing).
 
 VALIDATED 2026-07-05: box demag 0.33284 (== the earlier full-hex HDiv ground truth), box==hex(box corners)
@@ -98,9 +97,7 @@ def _hexbox(x0, x1, y0, y1, z0, z1, nx, ny, nz):
 
 
 def test_multiple_irons_auto_fails_loud():
-    """rad.Solve(auto) FAILS LOUD on a multi-iron container (No-Fallbacks) instead of silently demoting to
-    collocation MMMM.  is_hdiv_eligible rejects multi-iron (its len!=1 guard); registered_iron_count>1 turns
-    that into a raise.  Explicit demag_backend='collocation_mmmm' remains the way to force the C++ path."""
+    """rad.Solve(auto) FAILS LOUD on a multi-iron container (No-Fallbacks)."""
     from radia.vim import _radsolve
     rad.UtiDelAll(); _radsolve.clear_registry()
     with ng.TaskManager():

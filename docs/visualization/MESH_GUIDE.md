@@ -12,7 +12,7 @@ This guide consolidates the mesh generation workflows for Radia. All mesh genera
 |  CAD (STEP/IGES) -> Cubit -> export netgen -> .vol -> Radia|
 |                                                                  |
 |  Mesh types by application:                                      |
-|    - Magnetic materials (MMM/MSC): Volume mesh (Tet4, Hex8)      |
+|    - Magnetic materials:        Volume mesh (Tet4, Hex8)         |
 |    - Conductors (PEEC):            Surface mesh only (Tri3, Quad4)|
 |                                                                  |
 |  Mesh file formats:                                              |

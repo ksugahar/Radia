@@ -12,7 +12,6 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 from netgen.geom2d import SplineGeometry
 
-import radia.mmmm2d as m2
 import radia.planar_aniso as pa
 import radia.planar_hysteresis as ph
 from radia.planar_materials import PlayHysteresis

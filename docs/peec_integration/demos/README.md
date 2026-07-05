@@ -143,7 +143,7 @@ python analysis/generate_paper_figures.py
 |--------|---------|--------|
 | fig1 | PEEC matrix verification | `analysis/figures/fig1_peec_matrix_verification.pdf` |
 | fig2 | PRIMA accuracy comparison | `analysis/figures/fig2_prima_accuracy.pdf` |
-| fig3 | Adaptive MSC error | `analysis/figures/fig3_adaptive_msc_error.pdf` |
+| fig3 | Magnetic-material coupling policy | `analysis/figures/fig3_magnetic_policy.pdf` |
 | fig4 | WPT coil (85 kHz) | `analysis/figures/fig4_wpt_coil_85khz.pdf` |
 
 ## References

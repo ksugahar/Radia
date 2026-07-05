@@ -43,7 +43,7 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
     ┌─────────────────────────────────────────────────────────┐
     │              Field Source Dispatcher (C++)              │
     │                                                         │
-    │   radTg3d?          -> Static field (Biot-Savart/MSC)  │
+    │   radTg3d?          -> Static field (Biot-Savart/fixed M) │
     │   radTConductor?    -> AC field (PEEC Loop-Star)       │
     │   ObjCnt?           -> Sum all sources                 │
     │                                                         │
@@ -54,7 +54,7 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
               ▼                             ▼
     ┌───────────────────┐         ┌───────────────────┐
     │ Static Magneto    │         │ PEEC Conductor    │
-    │ (Biot-Savart/MSC) │         │ (Loop-Star)       │
+    │ (Biot-Savart/HDiv)│         │ (Loop-Star)       │
     │                   │         │                   │
     │ - ObjRecMag       │         │ - PEECBuilder     │
     │ - ObjHexahedron   │         │ - PEECCircuit     │
@@ -68,7 +68,7 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
     │ ngbem Product Space (HDivSurface × SurfaceL2)    │
     │                                                   │
     │ - Low-frequency BEM (Weggler EFIE)               │
-    │ - Coupled core models (FEM-BEM, Radia MMM, etc.) │
+    │ - Coupled core models (FEM-BEM, Radia HDiv, etc.) │
     │ - Port extraction via Schur complement            │
     │                                                   │
     │ See: docs/peec_integration/demos/ngsbem_peec_demo/ │
@@ -110,14 +110,14 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
 4. Avoids reimplementing BEM infrastructure (quadrature, H-matrix, etc.)
 
 **Integration point**: Python level. ngbem matrices are assembled in Python, coupled with
-Radia MMM via `ngbem_coupled.py`. Field computation uses ngbem's `GridFunction.Evaluate()`.
+Radia field providers. Field computation uses ngbem's `GridFunction.Evaluate()`.
 
 | Domain | Solver | Language | API |
 |--------|--------|----------|-----|
-| Static magnets | Radia MMM/MSC | C++ | `rad.Fld()` |
+| Static magnets | Radia fixed-magnet field | C++ | `rad.Fld()` |
 | PEEC conductors | Radia PEEC | C++ | `rad.Fld()` |
 | Surface BEM | ngbem | Python | `ngbem_peec.py` |
-| Coupled (all) | Python glue | Python | `ngbem_coupled.py` |
+| Coupled (all) | Python glue | Python | application-specific coupling |
 
 ## API Reference
 

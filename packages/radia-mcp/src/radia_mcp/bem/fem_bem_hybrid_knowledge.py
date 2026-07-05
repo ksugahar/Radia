@@ -18,7 +18,7 @@ material.  Hybrid FEM-BEM splits the problem:
 
 | Strategy | When |
 |----------|------|
-| **Radia MMM + Kelvin transform (FEM)** | Lab production: iron+air natural |
+| **Radia HDiv-VIM + Kelvin transform (FEM)** | Lab production: iron+air natural |
 | **Pure FEM + PML** | When iron geometry is simple |
 | **Pure FEM + Kelvin** | NGSolve native, no BEM needed |
 | **Pure BEM (linear only)** | Conductors only, simple shapes |
@@ -40,8 +40,8 @@ accuracy.  See `radia_mcp.radia_ngsolve.kelvin_transformation`.
 
 ## When FEM-BEM hybrid IS used in the lab
 
-- Coupling MMM (Radia) with FEM (NGSolve) for transformer-like
-  problems → via `netgen_mesh_to_radia` (M from FEM → MMM eval)
+- Coupling HDiv-VIM / Radia field evaluation with FEM (NGSolve) for transformer-like
+  problems → via `netgen_mesh_to_radia` (M from FEM → Radia field evaluation)
 - Coupling PEEC (Radia) with BEM (ngsolve.bem) for inductance
   validation → see `radia_mcp.peec.peec_inductance`
 

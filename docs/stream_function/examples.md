@@ -38,7 +38,7 @@ point; as each case is promoted, link notebooks, JSON sidecars,
 | `demo_pareto_deform.py` | **Planar sheet-metal (板金) deformation** pushes the front | front | FORM the surface `z=f(x,y)` (folded-Tikhonov inner solve), CMA-ES optimise the shape per homogeneity level; `--zero-mean` (default) = genuine bending at FIXED standoff (**−17 %** exact-homog, whole front −5…−18 %); `--allow-standoff` ≈ −53 % but standoff-dominated |
 | `demo_pareto_cylinder_deform.py` | **Cylinder in-surface sheet-metal (板金)** — the dominant cylinder lever | front | length-preserving axial reparametrisation (radius FIXED → 100 % genuine, no standoff); spacing-weighted seminorm + non-uniform-spacing peak; whole Gx-fingerprint front **−10…−25 %**. Radial forming is WEAK (~−3 %): the lever **flips** vs the plane |
 | `demo_cmaes_magnet_design.py` | 16 magnetisation angles | — | SA-25-020 CMA-ES outer loop |
-| `demo_magnet_array.py` | MMM/MSC magnet array | — | Validates kernel-agnostic for magnetic materials |
+| `demo_magnet_array.py` | fixed-magnet array | — | Validates kernel-agnostic for magnetic materials |
 | `demo_coil_field_synthesis.py` | Simple coil field synthesis | — | First-principles demo |
 
 ## Visualisation

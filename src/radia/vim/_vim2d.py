@@ -28,7 +28,7 @@ import numpy as np
 import ngsolve as ng
 
 from ._vim import build_charge_gram, _charge_basis_2d, _prod_tri01, _g01
-from radia.planar_materials import law_from_table as _law_from_table   # SHARED with the MMMM
+from radia.planar_materials import law_from_table as _law_from_table
 
 MU0 = 4e-7 * np.pi
 
@@ -246,9 +246,9 @@ class PlanarDemagBody:
     def H_at(self, P, m):
         """Exterior H of the body's charges at P [n,2] (branch-free; valid outside the body).
 
-        Delegates the point-charge-cloud field to the SHARED C++ kernel
-        (radia.planar_charges.charge_field) -- the SAME routine the collocation MMMM uses
-        (radia.mmmm2d); this HDiv-VIM feeds its own native quadrature cloud (self._Xq, q=B@m)."""
+        Delegates the point-charge-cloud field to the shared C++ kernel
+        (radia.planar_charges.charge_field); this HDiv-VIM feeds its own native quadrature cloud
+        (self._Xq, q=B@m)."""
         from radia.planar_charges import charge_field
         q = self.B @ m
         Q = np.concatenate([q[a] * self._wq[a] for a in range(len(self._wq))])
@@ -297,11 +297,10 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
     """The ``vim.PlanarSolve`` / ``vim.Solve`` 2D dispatch target: single-region planar soft-iron demag solve.
 
     ``magnets`` is an optional list of SEPARATE-body PERMANENT MAGNETS [(pm_mesh, M_fixed), ...]
-    whose RIGID field (the SHARED planar_charges.magnet_field_cf, the CF twin of what MMMM adds at
-    its centroids) is added to the applied field before the H(div) projection -- a hard PM does not
-    demagnetize, so it is a one-way source (no iteration).  This is the HDiv-VIM twin of
-    radia.mmmm2d's ``magnets=`` (design A).  Embedded-PM regions (design B, ``pm=``) are not yet
-    wired here (they need a soft/hard partition of the PlanarDemagBody).
+    whose RIGID field (the shared planar_charges.magnet_field_cf) is added to the applied field before
+    the H(div) projection -- a hard PM does not demagnetize, so it is a one-way source (no iteration).
+    Embedded-PM regions (design B, ``pm=``) are not yet wired here (they need a soft/hard partition of
+    the PlanarDemagBody).
 
     Returns dict: M (n_el,2) per-element magnetization, M_avg (2,), demag_factors (Dx, Dy),
     iters, residual, ndof, n_el, n_charge, nonlinear (bool), linear_solver='dense-2d', and

@@ -1,8 +1,8 @@
-"""Cross-validation: NONLINEAR HDiv-VIM damped Newton  vs  Radia MMM/MSC (rad.Solve + MatSatIsoTab).
+"""Cross-validation: NONLINEAR HDiv-VIM damped Newton vs Radia nonlinear sphere solve.
 
 The operator damped Newton (test_hdiv_vim_tet_newton.py) is validated against the analytic uniform
-sphere.  This test cross-checks it against a COMPLETELY INDEPENDENT codebase -- Radia's trusted MMM/MSC
-C++ tetrahedral solver with the SAME saturating BH curve, SAME chi0/Msat, SAME sphere, SAME applied
+sphere.  This test cross-checks it against Radia's nonlinear C++ tetrahedral solve with the SAME
+saturating BH curve, SAME chi0/Msat, SAME sphere, SAME applied
 field -- in the deep-saturation regime that was the earlier sessions' open problem.
 
 Both solvers reproduce the analytic uniform-sphere magnetization to <0.1% at saturation, and agree with
@@ -54,7 +54,7 @@ def _radia_sphere_Mz(H0, R=0.05, maxh=0.4):
     return Mz
 
 
-def test_newton_matches_radia_mmm_msc_at_saturation():
+def test_newton_matches_radia_hdiv_reference_at_saturation():
     Mof = nl._bh_curve(CHI0, MSAT)
     geo = CSGeometry()
     geo.Add(Sphere(Pnt(0, 0, 0), 1.0))
@@ -67,4 +67,4 @@ def test_newton_matches_radia_mmm_msc_at_saturation():
     assert abs(M_hdiv - M_ana) < 2e-3 * M_ana, f"HDiv-VIM {M_hdiv:.1f} vs analytic {M_ana:.1f}"
     assert abs(M_radia - M_ana) < 2e-3 * M_ana, f"Radia {M_radia:.1f} vs analytic {M_ana:.1f}"
     assert abs(M_hdiv - M_radia) < 2e-3 * M_ana, \
-        f"HDiv-VIM ({M_hdiv:.1f}) and Radia MMM/MSC ({M_radia:.1f}) disagree at saturation"
+        f"HDiv-VIM ({M_hdiv:.1f}) and Radia nonlinear solve ({M_radia:.1f}) disagree at saturation"

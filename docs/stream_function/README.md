@@ -88,7 +88,7 @@ tree.
 
 This framework is an **integration of three OSS libraries** —
 `NGSolve` / `ngsolve.bem` (BEM operators + high-order FE basis),
-`HACApK` (kernel-agnostic ACA+ H-matrix), and `Radia` (MMM/MSC
+`HACApK` (kernel-agnostic ACA+ H-matrix), and `Radia` (fixed-magnet
 material kernels + chain construction) — plus SF-coil-design-specific
 glue (contour extraction, single-stroke spiral, Path-A iteration,
 Optuna CMA-ES bilevel deformation).
@@ -105,7 +105,7 @@ What may be **new** (subject to literature search before publication):
     its **monotone convergence** on FE-direct ψ (vs oscillation on
     grid-sampled ψ).
   - The **integrated open-source pipeline** that lets the same SF
-    design loop run on free-space, material (Radia MMM), or surface-
+    design loop run on free-space, material (Radia HDiv-VIM), or surface-
     BEM (ngsolve.bem) kernels by replacing the entry callback.
     See the paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\paper_outline.md) "Implementation
     contribution" for the framing.
@@ -158,7 +158,7 @@ What may be **new** (subject to literature search before publication):
   - Turner cylindrical Gz analytical — stub
   - Lemdiasov-Ludwig 2005 target field — stub
   - CoilGen OSS head-to-head — stub
-  - Shielded coil with Radia MMM iron yoke kernel — stub (material-kernel demo via the callback contract)
+  - Shielded coil with Radia HDiv-VIM iron yoke kernel — stub (material-kernel demo via the callback contract)
 
 ## Cross-references
 

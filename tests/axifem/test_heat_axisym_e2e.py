@@ -43,7 +43,7 @@ def regenerate_fixture():
     return FIXTURE
 
 
-def test_calc_heat_axisym_temperature_band(regenerate_fixture):
+def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
     """Run calc_heat_axisym.py end-to-end and check T_max / T_min are
     in the analytically-expected band."""
     cmd = [sys.executable, SCRIPT,
@@ -62,7 +62,8 @@ def test_calc_heat_axisym_temperature_band(regenerate_fixture):
            # subprocess on this machine.  Verified standalone: pardiso gives the
            # same T_max=59.8 C / T_min=34.6 C.  Production keeps pardiso default.
            "--linear-solver", "sparsecholesky",
-           "--fes-order", "1"]
+           "--fes-order", "1",
+           "--msh-output", str(tmp_path / "heat_axisym_T.msh")]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, (
         f"calc_heat_axisym exited {proc.returncode}\n"

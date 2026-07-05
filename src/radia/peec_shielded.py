@@ -11,9 +11,9 @@ the BEM solution of surface currents.
 At each frequency:
     Z_branch(f) = diag(R_dc + Zs_fil) + jw*L_air + Delta_Z_shield(f)
 
-Key difference from CoupledPEECSolver (MMM):
+Key difference from retired magnetic-coupled PEEC solver:
     - Delta_Z_shield is COMPLEX and FREQUENCY-DEPENDENT (BEM solve per freq)
-    - CoupledPEECSolver's Delta_L is REAL and FREQUENCY-INDEPENDENT (static)
+    - The retired magnetic-coupled PEEC Delta_L is REAL and FREQUENCY-INDEPENDENT (static)
 
 Usage:
     from radia.ngsbem_eddy import ShieldBEMSIBC

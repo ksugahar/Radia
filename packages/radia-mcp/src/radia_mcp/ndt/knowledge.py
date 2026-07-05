@@ -759,7 +759,7 @@ Lab papers:
   Surface Magnetic Currents Utilizing Edge Boundary Conditions"
 - "Eddy Current Analysis by Integral Equation Method Utilizing Loop
   Electric and Surface Magnetic Currents as Unknowns" -- lab style
-  loop+surface basis (compatible with MMM/MSC philosophy)
+  loop+surface basis (compatible with HDiv-VIM philosophy)
 - "Vector Potential Boundary Element Method for Three Dimensional
   Magnetostatic"
 
@@ -774,7 +774,7 @@ materials) on the volume mesh.
 - Lab paper: "Integral Analysis of a Magnetic Field for an Arbitrary
   Geometry Coil Width Rectangular Cross Section"
 
-VIE matches the Radia MMM (volume magnetization) and MSC (surface
+VIE matches the Radia HDiv-VIM / face-charge volume routes
 charge) philosophy -- see `radia_mcp.radia_ngsolve`.
 
 ### 3. Line IE (LIE)

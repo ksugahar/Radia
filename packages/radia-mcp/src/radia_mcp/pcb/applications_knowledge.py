@@ -101,8 +101,8 @@ WPT_LAB_LINEAGE = r"""
 
 1. **PEEC for primary/secondary L, M, k** → `radia_mcp.peec`
 2. **Carstensen AC copper loss** for Litz wire R → `radia_mcp.peec.carstensen`
-3. **RNA + PEEC coupling** for transformer-like core models →
-   `radia_mcp.bem.mmm_msc.rna_mmm`
+3. **RNA + PEEC + HDiv-VIM / reduced-FEM coupling** for transformer-like core models →
+   `radia_mcp.radia_ngsolve.hdiv_vim`
 4. **MOR / equivalent circuit** for time-domain control →
    `radia_mcp.mor.systematic` (CLN, Lanczos, PRIMA)
 5. **FOD via search coil arrays** (research direction)
@@ -128,10 +128,10 @@ Y = solver.compute_admittance_matrix(freq=85e3)
 from radia.carstensen_loss import compute_carstensen_loss
 loss = compute_carstensen_loss(coil_geometry, freq, current)
 
-# Couple to ferrite via Radia MMM
+# Couple to ferrite via Radia HDiv-VIM / reduced FEM
 ferrite = rad.ObjHexahedron(verts, [0, 0, 0])  # initial M=0
 rad.MatApl(ferrite, rad.MatSatIsoTab(BH_DATA))
-# Combined PEEC + MMM solve...
+# Combined PEEC plus magnetic-material exchange...
 ```
 
 ## References

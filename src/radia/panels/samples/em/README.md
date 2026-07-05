@@ -3,7 +3,7 @@
 ## Coil input policy (2026-04-25, user-set)
 
 Analytical coils and PEEC coils use DIFFERENT file formats by
-design.  The EM panel (`calc_accel_magnet` / `calc_accel_msc`)
+design.  The EM panel (`calc_accel_magnet` / `calc_accel_hdiv`)
 accepts **only** a Python module.  The PEEC path (IH panel,
 `calc_inductance.py --coil-solver peec` for inductance-only and
 weak-coupled workpiece modes) accepts **only** STEP.
@@ -112,7 +112,7 @@ or its parent `panels/samples/`):
 ## The full-ELF-CEFC-2020 reference
 
 The published C-type electromagnet reference is the **quarter_xz** variant with
-Radia MSC (direct hex-element extraction via `IMA='+x-z'` symmetry),
+the HDiv-VIM electromagnet path with `IMA='+x-z'` symmetry,
 giving `B_z = -228.1 mT` at `NI=2000, mu_r=1000` (verified by
 running the reference 2026-04-25; earlier README revisions
 incorrectly cited -976 mT, which was a transcription error).

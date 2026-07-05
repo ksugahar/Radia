@@ -12,7 +12,7 @@ run on LAB + 100号機 only.
 
 Future work: add full numerical E2E goldens for
   * calc_accel_magnet.py  (EM Picard, iron yoke)
-  * calc_accel_msc.py     (EM Newton, iron yoke)
+  * calc_accel_hdiv.py    (EM HDiv-VIM, iron yoke)
   * calc_pcb_peec.py      (PCB, FastHenry .inp)
   * calc_fem_kelvin.py with --impedance-model esim  (ESIM + Karl iter.)
 """

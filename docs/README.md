@@ -13,7 +13,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 > truth** for PEEC / FEM / Cubit / build123d / GMSH knowledge is the
 > `radia-mcp` package's knowledge modules at
 > [packages/radia-mcp/src/radia_mcp/](../packages/radia-mcp/src/radia_mcp/),
-> not `docs/`.  `docs/` is the **academic / historical reference layer** --
+> not `docs/`.  `docs/` is the **academic / user-facing reference layer** --
 > useful for citations and architectural overviews, but not the place to
 > look for "how do I do X today".  For runnable how-tos and the current
 > recipe for any task, query `radia-mcp` via Claude / your MCP client
@@ -27,25 +27,12 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 ## Solver Architecture
 
-- [SOLVER_ARCHITECTURE.md](solver/SOLVER_ARCHITECTURE.md) - Solver design philosophy and architecture overview
 - [EDDY_CURRENT_METHODS.md](solver/EDDY_CURRENT_METHODS.md) - Conductor eddy current modeling: method comparison (NGSolve + ngbem)
-- [IMA_SYMMETRY_DESIGN.md](solver/IMA_SYMMETRY_DESIGN.md) - Image symmetry implementation for MSC hexahedra
-- [NGBEM_INTEGRATION_DESIGN.md](solver/NGBEM_INTEGRATION_DESIGN.md) - Unified PEEC Loop-Star + MMM + MSC architecture with ngbem
 - [tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb](tetra_field_accuracy_evaluation/tetra_field_accuracy_validation.ipynb) - Result-bearing tetrahedron field-accuracy validation view synchronized with `validation_test/tetra_field_accuracy_evaluation/` JSON results.
 
-## Examples Migration
+## FEEC / HDiv-type VIM
 
-- [examples_classification/examples_classification.ipynb](examples_classification/examples_classification.ipynb) - Result-bearing retired-examples ledger, now empty after the VIM retirement; synchronized with `examples_classification_results.json`. `examples/` is retired permanently: references are migration blockers, not long-lived public links.
-- [jou_translation_bench/README.md](jou_translation_bench/README.md) - Docs-owned `.jou` to build123d translation benchmark record for MCP knowledge quality; fixtures and report were promoted from the old examples tree.
-
-## Multipole-Moment MMM
-
-- [multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb](multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb) - The production moment formulation for MMM/MSC. It should not be described with the old Yano-centered label: the contribution is the symbolic multipole-moment derivation that closes 3-DOF MMM and 5/6-DOF surface-charge elements by monopole, dipole, and residual-quadrupole conditions. This keeps matrix entries local and cheap compared with the HDiv Galerkin charge-Gram route, while retaining the open-boundary MMM workflow.
-
-## FEEC / HDiv-type VIM (multipole-moment MMM complement)
-
-- [hdiv_vim/README.md](hdiv_vim/README.md) - The **HDiv-type Volume Integral Method**: a symmetric FEEC H(div) demag operator `N = BᵀGB` whose loop modes are **field-null by construction** (de Rham). It complements the canonical multipole-moment MMM MSC backend with curved/high-order geometry, general FEEC loops, and symmetry-model machinery. Validated (feec 85/85): linear demag (sphere/spheroid/triaxial exact vs analytic), nonlinear (damped Newton; cube/C-yoke `<1%` vs shipped Radia; `analytic_gram` required for `div M ≠ 0`), distorted-mesh μr-independence, **curved + high-order** (`~10-30×` accuracy-per-DOF vs flat Radia), and **symmetry models** (1/2, 1/4, 1/8). The runnable layer is the radia-mcp `hdiv_vim(topic=...)` tool.
-- [loop_star_breakdown.md](loop_star_breakdown.md) - The *problem* the HDiv-type VIM solves: the high-μ magnetostatic loop-mode breakdown ↔ the low-frequency EFIE/MoM breakdown (same cause, same Loop-Star remedy).
+- [hdiv_vim/README.md](hdiv_vim/README.md) - The **HDiv-type Volume Integral Method**: a symmetric FEEC H(div) demag operator `N = B^T G B` whose loop modes are field-null by construction. This is the soft-iron route for Radia going forward.
 
 ## Kelvin Transformation
 
@@ -57,10 +44,8 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 - [PEEC_PANEL_IMPLEMENTATION.md](peec/PEEC_PANEL_IMPLEMENTATION.md) - Panel-based 2D surface integration implementation
 - [PEEC_CONDUCTOR_MODELING_GUIDE.md](peec/PEEC_CONDUCTOR_MODELING_GUIDE.md) - Conductor modeling via `coil_from_cad.py` (5-predicate classification dispatch, RMF, adaptive resampling, cap-centroid endpoint anchoring -- updated for v4.55.0)
-- [PEEC_MSC_COUPLING.md](peec/PEEC_MSC_COUPLING.md) - PEEC conductor + MSC magnetic material coupled solver
 - [PEEC_SHIELD_CONDUCTOR.md](peec/PEEC_SHIELD_CONDUCTOR.md) - Shield conductor modeling (`peec_shield.py`)
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
-- [PEEC_VALIDATION_PLAN.md](peec/PEEC_VALIDATION_PLAN.md) - Systematic validation plan for PEEC solver and PEEC-MSC coupling
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 - [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence record with synchronized JSON.
 - [solver_benchmarks/peec_solver_benchmarks.ipynb](solver_benchmarks/peec_solver_benchmarks.ipynb) - Result-bearing dense Ruehli vs HACApK PEEC benchmark notebook synchronized with committed JSON and `validation_test/solver_benchmarks/` drivers.
@@ -93,7 +78,7 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 
 ## Coil Design / Inverse Source
 
-- [stream_function.md](stream_function.md) - **(ACA+)+TSVD least-norm solver** (stream function method, generalised). Kernel-agnostic field-synthesis / inverse-source solver `A phi = B` (M field points x N basis sources, M < N): TSVD-regularised pseudo-inverse accelerated by ACA+ low-rank recompression. ACA+ delegated to HACApK (`cHACApK_acaplus`); the matrix entry `A(i,j)` is a caller callback built from Radia's existing field (Biot-Savart for coils, MMM/MSC for magnets) via `radia_field_kernel`. Methods 2/3 (IEEJ SA-25-020). Source: [src/radia/stream_function.py](../src/radia/stream_function.py) + `src/core/rad_stream_function.cpp`, tests: [tests/test_stream_function.py](../tests/test_stream_function.py), result-saved notebooks: [docs/stream_function/](stream_function/README.md).
+- [stream_function.md](stream_function.md) - **(ACA+)+TSVD least-norm solver** (stream function method, generalised). Kernel-agnostic field-synthesis / inverse-source solver `A phi = B` (M field points x N basis sources, M < N): TSVD-regularised pseudo-inverse accelerated by ACA+ low-rank recompression. ACA+ delegated to HACApK (`cHACApK_acaplus`); the matrix entry `A(i,j)` is a caller callback built from Radia's existing field (Biot-Savart for coils, fixed-magnet fields for magnets) via `radia_field_kernel`. Methods 2/3 (IEEJ SA-25-020). Source: [src/radia/stream_function.py](../src/radia/stream_function.py) + `src/core/rad_stream_function.cpp`, tests: [tests/test_stream_function.py](../tests/test_stream_function.py), result-saved notebooks: [docs/stream_function/](stream_function/README.md).
 - [complex_coil_geometry/complex_coil.ipynb](complex_coil_geometry/complex_coil.ipynb) - Result-bearing CoilBuilder showcase with docs-local helper scripts and synchronized JSON results.
 - [equivalence_source/demos.ipynb](equivalence_source/demos.ipynb) - Result-bearing NearFieldSource / equivalence-theorem showcase synchronized with `validation_test/equivalence_source/` JSON results.
 
@@ -126,6 +111,6 @@ For release-by-release changes, see [CHANGELOG.md](../CHANGELOG.md).
 The following features were removed; their docs were deleted to prevent confusion:
 
 - **Nastran BDF input** (Radia-side `.bdf` mesh import): removed.  Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve.  Note: **Cubit-side Nastran BDF export** (`export jmag_nastran`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships.
-- **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable for MSC coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
+- **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable enough for production coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.

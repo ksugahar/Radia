@@ -33,7 +33,7 @@ NGSolve's external ``ngsolve.bem`` Helmholtz solver coupled to a
 Sommerfeld-integral Green's function table, generated offline by one of
 the acceleration methods listed below.
 
-POLICY: Radia core (MMM/MSC) is Laplace-kernel only.  This module is
+POLICY: Radia core (HDiv-VIM) is Laplace-kernel only.  This module is
 the THEORY POINTER for users who need the FULL layered-medium Green's
 function (Sommerfeld integrals) -- the production answer is usually:
 either go to ngsolve.bem with a Helmholtz kernel + DCIM-accelerated
@@ -504,7 +504,7 @@ parameter sweeps.  See Figs. 2-8 of the paper.
 
 ## Why this matters for lab
 
-Lab production paths (Radia MMM/MSC, NGSolve FEM-Kelvin) handle
+Lab production paths (Radia HDiv-VIM, NGSolve FEM-Kelvin) handle
 open-boundary problems by FAR-FIELD vanishing assumptions OR
 Kelvin inversion.  They do NOT handle a dipole over a SEMI-INFINITE
 LOSSY GROUND PLANE -- that requires a layered-medium Green's
@@ -650,7 +650,7 @@ decision is:
      (Gustavsen-Semlyen).
 
 Pure Sommerfeld-integral evaluation is RARELY a lab production need;
-the more common production paths (Radia MMM/MSC, Kelvin-FEM, PEEC)
+the more common production paths (HDiv-VIM / Kelvin-FEM, PEEC)
 sidestep the layered-medium Green's function entirely by using
 volume integrals + open-boundary truncation OR Kelvin inversion.
 """
@@ -672,9 +672,9 @@ LAB_USAGE_NOTES = r"""
 
 ## Where Sommerfeld DOES NOT appear
 
-  * Radia MMM / MSC: volume / surface integral with Laplace kernel
-    only.  No layered background; the lab uses an UNBOUNDED
-    homogeneous space and lets the integrals decay naturally.
+  * HDiv-VIM / Kelvin-FEM: Laplace-kernel open-boundary route.  No
+    layered background; the lab uses homogeneous-space kernels or Kelvin
+    inversion instead of Sommerfeld integrals.
   * FEM-Kelvin: bounded computational domain via Kelvin inversion.
     Open boundary handled by inversion, not by Sommerfeld.
   * PEEC: filament + panel circuit extraction in homogeneous space.
@@ -691,8 +691,7 @@ LAB_USAGE_NOTES = r"""
     -> Koh-Yook 2006 closed form (SOMMERFELD_LAYERED tool).
   * The question is "what is the input impedance of a monopole over
     PEC ground"?
-    -> Image theory + closed-form (Radia MMM with image symmetry,
-       not Sommerfeld).
+    -> Image theory + closed-form, not Sommerfeld.
   * The question is "what does the field in layer 3 look like when
     a dipole is in layer 1 of a 5-layer dielectric stack"?
     -> ngsolve.bem with multilayer Green's function, accelerated
@@ -702,8 +701,8 @@ LAB_USAGE_NOTES = r"""
 
   * `bem_low_freq('loop_star')` -- the low-frequency stabilisation
     that PEEC uses for the homogeneous-space analogue.
-  * `bem_mmm_msc('mmm_overview')` -- Radia's volume-integral
-    alternative that sidesteps the Sommerfeld integral entirely.
+  * `radia_mcp.radia_ngsolve.hdiv_vim` -- Radia's current
+    magnetic-material route that sidesteps the Sommerfeld integral entirely.
   * `bem_h_matrix('aca')` -- the acceleration the lab uses for
     homogeneous-space MoM (NOT directly applicable to Sommerfeld
     kernels, which need DCIM instead).

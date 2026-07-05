@@ -18,7 +18,7 @@ Cubit Solve -> Radia-NGSolve...
   |     +-- Launch: python radia_*.py radia_model.vol [--optional-files ...]
   |
   +-- radia_ih.py    (Induction Heating: BEM / FEM)
-  +-- radia_em.py    (Electromagnet: Omega / A-Phi / MSC)
+  +-- radia_em.py    (Electromagnet: Omega / A-Phi / HDiv-VIM)
   +-- radia_pcb.py   (PCB: PEEC)
   +-- (user-defined radia_*.py auto-discovered)
 ```

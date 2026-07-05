@@ -3,7 +3,7 @@
 Tests for vector potential (A) field computation.
 
 Tests verify that:
-1. magnet_box (MMMM rectangular PM) and a hand-built ObjHexahedron give consistent A values off-axis
+1. magnet_box (rectangular fixed-M PM) and a hand-built ObjHexahedron give consistent A values off-axis
 2. A is computed using face-based integration
 3. A field symmetry properties are correct
 4. A = 0 on symmetry axes is physically correct for face-based method
@@ -40,7 +40,7 @@ class TestAFieldBasic:
     def test_a_off_axis_recmag_vs_hexahedron(self):
         """Test that A matches between magnet_box and a hand-built ObjHexahedron off-axis.
 
-        magnet_box is now the rectangular permanent magnet (MMMM surface-charge ObjHexahedron),
+        magnet_box is now the rectangular permanent magnet (fixed-M surface-charge ObjHexahedron),
         so this cross-checks the box-helper's vertex winding against a hand-built hexahedron.
         """
         dx, dy, dz = 0.02, 0.02, 0.03

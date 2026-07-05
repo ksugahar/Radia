@@ -333,32 +333,6 @@ def test_gmsh_to_ngsolve():
 
 
 # =====================================================================
-# Test 8: ngbem_coupled compute_coupling_radia signature
-# =====================================================================
-def test_ngbem_coupled_signature():
-    """Test that ngbem_coupled has the compute_coupling_radia method."""
-    print("\n" + "=" * 60)
-    print("Test 8: ngbem_coupled Method Signatures")
-    print("=" * 60)
-
-    try:
-        from ngbem_coupled import CoupledPEECMMM
-        record("import CoupledPEECMMM", "PASS")
-
-        # Check that the method exists
-        assert hasattr(CoupledPEECMMM, 'compute_coupling_radia'), \
-            "Missing compute_coupling_radia method"
-        record("compute_coupling_radia exists", "PASS")
-
-        assert hasattr(CoupledPEECMMM, '_extract_edge_geometry'), \
-            "Missing _extract_edge_geometry method"
-        record("_extract_edge_geometry exists", "PASS")
-
-    except ImportError as e:
-        record("import CoupledPEECMMM", "FAIL", str(e))
-
-
-# =====================================================================
 # Main
 # =====================================================================
 if __name__ == '__main__':
@@ -374,7 +348,6 @@ if __name__ == '__main__':
     test_peec_vs_ngbem()
     test_fasthenry_ngbem()
     test_gmsh_to_ngsolve()
-    test_ngbem_coupled_signature()
 
     # Summary
     print("\n" + "=" * 60)

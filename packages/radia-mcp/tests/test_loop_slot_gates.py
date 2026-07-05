@@ -3341,7 +3341,7 @@ def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_a
         },
         "timing_breakdown_s": {"solve": 2.5, "postprocess": 0.3},
         "learning_lanes": {"public": "verified", "source_tool": "candidate"},
-        "public_lesson": "HDiv/MMMM comparison artifacts must record timing and the public solver convention.",
+        "public_lesson": "HDiv/HDiv-VIM comparison artifacts must record timing and the public solver convention.",
         "learning_targets": ["radia-mcp", "radia_ngsolve.loop_learning"],
         "verification": {"public": "pytest packages/radia-mcp/tests/test_loop_slot_gates.py"},
     }

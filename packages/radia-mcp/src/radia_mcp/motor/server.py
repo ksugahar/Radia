@@ -51,10 +51,10 @@ from .triple_check_knowledge import (
     route_motor_triple_check,
     validate_motor_triple_check_artifact,
 )
-from .simple_mmm_2d import (
-    MmmQuickInput,
-    evaluate_mmm_quick_check,
-    format_mmm_quick_check,
+from .simple_field_2d import (
+    FieldQuickInput,
+    evaluate_field_quick_check,
+    format_field_quick_check,
     format_motor_validation_route,
     route_motor_validation,
 )
@@ -130,19 +130,17 @@ def motor_darwin_model(topic: str = "overview") -> str:
 @mcp.tool()
 def motor_planar_coupling(topic: str = "overview") -> str:
     """
-    2D PLANAR machine modelling in radia: MMMM / HDiv-VIM soft-iron demag + the SHARED
+    2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared
     postprocessing (radia.planar_charges) + the staggered eddy-current coupling
     (radia.planar_eddy) for PM motors / induction machines / eddy-current brakes.
 
-    Analytic-led + fully gated (Bessel / 2D dipole / monolithic FEM).  Companion to the
-    goldens validation_test/feec/test_moment2d_*.py, test_planar_eddy_coupling.py,
-    test_hdiv_vim_2d_magnets.py.  For the MMMM element formulation itself see the
-    mmm_core tool topic 'planar_2d'.
+    Analytic-led + fully gated (Bessel / 2D dipole / monolithic FEM). Companion to
+    the HDiv-VIM 2D and planar material validation tests.
 
     Args:
         topic: One of:
-            "overview"      - the two demag methods + one shared coupling layer
-            "eddy_coupling" - staggered MMMM/HDiv-VIM <-> reduced-Az eddy FEM (maglev/IM/ECB)
+            "overview"      - the HDiv demag method + one shared coupling layer
+            "eddy_coupling" - staggered HDiv-VIM <-> reduced-Az eddy FEM (maglev/IM/ECB)
             "pm_motor"      - permanent magnets: design A (magnets=) / B (pm=) / unified rotor
             "nonlinear"     - nonlinear soft iron + eddy (effective-chi AC)
             "anisotropic"   - GO-steel tensor chi (planar_aniso, direct-N) + embedded PM design-B
@@ -376,7 +374,7 @@ def motor_deck_bridge(topic: str = "overview") -> str:
             "routing_playbook"          - How to use public decks and radia-motor together
             "radia_strengthening_queue" - Next radia-side upgrades
             "jmag_coverage_reality"     - Turnkey production motor coverage boundary
-            "age_vs_mmm_strategy"       - Why AGE is the main 2D path; where MMM helps
+            "age_vs_field_strategy"       - Why AGE is the main 2D path; where field quick checks help
             "all"                       - Everything
     """
     return get_deck_bridge(topic)
@@ -423,8 +421,8 @@ def motor_validation_lanes(topic: str = "overview") -> str:
 
     Use this before promoting a private product, lab-local, open-source,
     stored-regression, or analytic comparison into radia-motor knowledge.
-    It keeps the supported NGSolve+AGE finite-element lane, supported coarse
-    MMMM lane, and experimental HDiv-VIM + reduced FEM RFC lane separate, so
+    It keeps the supported NGSolve+AGE finite-element lane and experimental
+    HDiv-VIM + reduced FEM RFC lane separate, so
     cross-validation artifacts train the correct solver path.
 
     Args:
@@ -445,8 +443,7 @@ def motor_validation_lane_template(lane_id: str = "all") -> str:
     Return the JSON artifact template for a motor validation lane.
 
     Args:
-        lane_id: "ngsolve_age", "mmmm2d_coarse",
-            "hdiv_vim_reduced_fem", or "all".
+        lane_id: "ngsolve_age", "hdiv_vim_reduced_fem", or "all".
     """
     return json.dumps(lane_template(lane_id), indent=2, sort_keys=True)
 
@@ -459,7 +456,7 @@ def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") 
     Args:
         artifact_json: JSON object text containing the cross-validation summary.
         expected_lane: Optional lane id to enforce:
-            "ngsolve_age", "mmmm2d_coarse", or "hdiv_vim_reduced_fem".
+            "ngsolve_age" or "hdiv_vim_reduced_fem".
     """
     result = validate_motor_validation_artifact(artifact_json, expected_lane)
     return format_artifact_gate_result(result)
@@ -498,8 +495,7 @@ def motor_triple_check_plan(goal: str) -> str:
 
     The plan uses the public ELF/MAGIC MCP surface for motor examples, the
     supported `ngsolve_age` lane, and the experimental
-    `hdiv_vim_reduced_fem` lane as the mandatory comparison pair.  The
-    supported coarse `mmmm2d_coarse` lane is an auxiliary fast check.  The
+    `hdiv_vim_reduced_fem` lane as the mandatory comparison pair. The
     HDiv/reduced-FEM lane is not treated as a supported solver path until its
     coupling contract is implemented and solver-ready verification is attached.
 
@@ -516,7 +512,7 @@ def motor_triple_check_artifact_gate(artifact_json: str) -> str:
     Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact.
 
     `ngsolve_age` and `hdiv_vim_reduced_fem` are mandatory for radia-motor
-    learning claims.  `mmmm2d_coarse` may be attached as an auxiliary lane.
+    learning claims.
 
     Args:
         artifact_json: JSON object text with schema
@@ -527,7 +523,7 @@ def motor_triple_check_artifact_gate(artifact_json: str) -> str:
 
 
 @mcp.tool()
-def motor_mmm_quick_check(
+def motor_field_quick_check(
     motor_type: str = "spm",
     pole_pairs: int = 4,
     airgap_radius_m: float = 0.05,
@@ -543,7 +539,7 @@ def motor_mmm_quick_check(
     slip_hz: float = 5.0,
 ) -> str:
     """
-    First-order 2D MMM/BEM-like motor quick check.
+    First-order 2D magnetic-circuit/BEM-like motor quick check.
 
     This is a public-safe, approximate magnetic-circuit evaluator for prompt-time
     sanity checks. It estimates PM flux linkage, back-EMF constant, dq torque
@@ -566,7 +562,7 @@ def motor_mmm_quick_check(
         saliency_ratio_lq_over_ld: Lq/Ld proxy for IPM/SynRM/SRM checks.
         slip_hz: Slip frequency for induction-machine proxy checks.
     """
-    inp = MmmQuickInput(
+    inp = FieldQuickInput(
         motor_type=motor_type,
         pole_pairs=pole_pairs,
         airgap_radius_m=airgap_radius_m,
@@ -581,16 +577,16 @@ def motor_mmm_quick_check(
         saliency_ratio_lq_over_ld=saliency_ratio_lq_over_ld,
         slip_hz=slip_hz,
     )
-    return format_mmm_quick_check(evaluate_mmm_quick_check(inp))
+    return format_field_quick_check(evaluate_field_quick_check(inp))
 
 
 @mcp.tool()
 def motor_validation_router(goal: str) -> str:
     """
-    Route a motor prompt to a public deck, MMM quick check, and NGSolve AGE validation.
+    Route a motor prompt to a public deck, field quick check, and NGSolve AGE validation.
 
     This is the dispatch layer for the hybrid workflow:
-    public decks for input authoring, the lightweight 2D MMM quick check for
+    public decks for input authoring, the lightweight 2D field quick check for
     first-order sign/scale checks, and NGSolve AGE / radia-ngsolve for
     independent motor-physics validation.
     """
@@ -736,11 +732,10 @@ def main():
         assert "gold_numeric_invariant" in bridge
         assert "radia-motor" in motor_deck_bridge("radia_strengthening_queue")
         assert "not a full" in motor_deck_bridge("jmag_coverage_reality")
-        assert "NGSolve AGE" in motor_deck_bridge("age_vs_mmm_strategy")
+        assert "NGSolve AGE" in motor_deck_bridge("age_vs_field_strategy")
         assert "gold_age_invariant" in motor_age_quality("publication_policy")
         assert "tests/test_airgap_eddy_machine.py" in motor_age_quality("gate_matrix")
         assert "HDiv-VIM" in motor_validation_lanes("lane_matrix")
-        assert "2D collocation MMMM" in motor_validation_lanes("lane_matrix")
         assert "NGSolve+AGE" in motor_validation_lanes("overview")
         assert "product_local_reference" in motor_validation_lanes("source_policy")
         dual_catalog = motor_dual_lane_training_catalog("all")
@@ -760,13 +755,10 @@ def main():
         print(f"  motor_triple_check_plan('IPM ...'): {len(triple_plan)} chars")
         assert "elf_motor_hybrid_router" in triple_plan
         assert "hdiv_vim_reduced_fem" in triple_plan
-        assert "mmmm2d_coarse" in triple_plan
         assert "ngsolve_age" in triple_plan
         assert "primary required lanes" in triple_plan
         lane_tpl = motor_validation_lane_template("hdiv_vim_reduced_fem")
         assert "vim_operator_contract" in lane_tpl
-        mmmm_lane_tpl = motor_validation_lane_template("mmmm2d_coarse")
-        assert "mmmm2d_contract" in mmmm_lane_tpl
         hdiv_selftest_artifact = {
             "schema_version": "radia-motor-validation-artifact/v1",
             "timestamp_utc": "2026-07-03T00:00:00Z",
@@ -811,33 +803,6 @@ def main():
             "age_gate_ids": ["age_rotation_torque"],
             "pytest_targets": ["tests/test_airgap_machine_rotation.py"],
         }
-        mmmm_selftest_artifact = {
-            "schema_version": "radia-motor-validation-artifact/v1",
-            "timestamp_utc": "2026-07-04T00:00:00Z",
-            "radia_version": "selftest",
-            "motor_validation_lane": "mmmm2d_coarse",
-            "reference_source_class": "analytic_reference",
-            "observable_family": "torque",
-            "case_count": 1,
-            "status": "pass",
-            "tolerances": {"torque_relative_error": 1.0e-2},
-            "metrics": {"torque_relative_error": 1.0e-4},
-            "timing_breakdown_s": {"solve": 0.01},
-            "artifact_feedback": {
-                "status": "candidate",
-                "public_lesson": "MMMM coarse torque lane selftest artifact is complete.",
-            },
-            "mmmm2d_contract": {
-                "solver": "radia.mmmm2d",
-                "material_input": "per-region dict",
-                "sweep": "factor-once torque_angle_sweep",
-            },
-            "region_material_contract": {
-                "regions": ["inner", "outer"],
-                "missing_region_policy": "raise",
-            },
-            "pytest_targets": ["validation_test/feec/test_moment2d_perregion.py"],
-        }
         triple_gate = motor_triple_check_artifact_gate(
             json.dumps(
                 {
@@ -851,12 +816,11 @@ def main():
                     },
                     "lane_artifacts": {
                         "hdiv_vim_reduced_fem": hdiv_selftest_artifact,
-                        "mmmm2d_coarse": mmmm_selftest_artifact,
                         "ngsolve_age": age_selftest_artifact,
                     },
                     "mcp_feedback": {
                         "public_status": "verified",
-                        "public_summary": "AGE, MMMM, and HDiv RFC metadata are complete.",
+                        "public_summary": "AGE and HDiv RFC metadata are complete.",
                         "learning_targets": ["radia_mcp.motor.triple_check_knowledge"],
                         "verification": ["selftest"],
                     },
@@ -875,11 +839,6 @@ def main():
             "ngsolve_age",
         )
         assert "accepted for MCP learning: `True`" in gate
-        mmmm_gate = motor_validation_artifact_gate(
-            json.dumps(mmmm_selftest_artifact),
-            "mmmm2d_coarse",
-        )
-        assert "validated coarse path: `True`" in mmmm_gate
         age_plan = motor_age_validation_plan("IPM hairpin MTPA field weakening")
         print(f"  motor_age_validation_plan('IPM ...'): {len(age_plan)} chars")
         assert "dq_control_layer" in age_plan
@@ -888,11 +847,11 @@ def main():
         print(f"  motor_age_validation_plan('induction ...'): {len(im_plan)} chars")
         assert "age_eddy_machine" in im_plan
         assert "tests/test_motor_induction_coupling.py" in im_plan
-        mmm = motor_mmm_quick_check(motor_type="ipm", electrical_angle_deg=25)
-        print(f"  motor_mmm_quick_check('ipm'): {len(mmm)} chars")
-        assert "2D MMM/BEM-like motor quick check" in mmm
-        assert "ld_lq" in mmm
-        assert "not a production solver" in mmm
+        field_check = motor_field_quick_check(motor_type="ipm", electrical_angle_deg=25)
+        print(f"  motor_field_quick_check('ipm'): {len(field_check)} chars")
+        assert "2D magnetic-circuit/BEM-like motor quick check" in field_check
+        assert "ld_lq" in field_check
+        assert "not a production solver" in field_check
         route = motor_validation_router("IPM hairpin motor flux linkage and MTPA")
         print(f"  motor_validation_router('IPM ...'): {len(route)} chars")
         assert "application/motor/emdlab_ipm_hairpin_10" in route

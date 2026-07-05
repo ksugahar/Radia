@@ -210,7 +210,7 @@ def case_2_magnetic(coil_inp, freqs_str, wire_w_m, wire_h_m, sigma):
 {coil_inp}
 
 * Iron core: 15x15x10 mm box at center of coil
-* Divisions: 2x2x1 for MSC resolution
+* Divisions: 2x2x1 for the magnetic-material handoff mesh
 .magnetic
   type=box
   center=0,0,0

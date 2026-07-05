@@ -1,5 +1,5 @@
-"""Golden: RT1 pure-TET HDiv-VIM supports IMA (image method / mirror symmetry), so HDiv-VIM can serve as
-radia's MMM (2026-07-04).  A reduced (1/2, 1/4, 1/8) symmetry model WITH the mirror image reproduces the
+"""Golden: RT1 pure-TET HDiv-VIM supports IMA (image method / mirror symmetry).
+A reduced (1/2, 1/4, 1/8) symmetry model WITH the mirror image reproduces the
 FULL model's demag factor (a z-magnetised sphere = 1/3), while the reduced model WITHOUT the image is wrong.
 
 The C++ highorder charge Gram folds the mirror-image charge interactions into every entry
@@ -8,7 +8,7 @@ with QuadDotRefl(tgt,src,mask) = the source's PhiInner potential at tgt's outer 
 axes (mirror isometry).  Physics + reflection/sign convention validated against the existing RT0 analytic
 IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for the FLAT pure-TET RT1 path, and the
 HEX/WEDGE RT1 image-fold is locked separately by the low-level charge-Gram smoke tests.  Curved reduced
-models still fail loud toward collocation MMMM (locked below).
+models still fail loud (locked below).
 """
 import numpy as np
 import pytest

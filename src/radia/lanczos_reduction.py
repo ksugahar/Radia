@@ -440,7 +440,7 @@ class HierarchicalReducer:
         """
         Step 4: Schur complement to eliminate Star and Magnetic DOFs.
 
-        PEEC-MMM System (physically correct formulation):
+        PEEC-magnetic System (physically correct formulation):
             [R + sL    s*K   ] [I]   [V]
             [-K.T      Z_MM  ] [M] = [0]
 
@@ -830,18 +830,18 @@ def generate_magnetic_impedance(n_M: int, L_self: float,
     return Z_MM
 
 
-def symmetrize_mmm_block(Z_MM: np.ndarray) -> np.ndarray:
+def symmetrize_magnetic_block(Z_MM: np.ndarray) -> np.ndarray:
     """
-    Symmetrize MMM (Magnetic Moment Method) impedance matrix.
+    Symmetrize magnetic block impedance matrix.
 
-    For PEEC-MMM coupling, the MMM block must be symmetric to ensure
+    For PEEC-magnetic coupling, the magnetic block must be symmetric to ensure
     proper energy conservation and passivity of the coupled system.
 
     The symmetrization follows the approach:
         Z_MM_sym = 0.5 * (Z_MM + Z_MM.T)
 
     Parameters:
-        Z_MM: MMM impedance matrix (may be slightly asymmetric)
+        Z_MM: magnetic impedance matrix (may be slightly asymmetric)
 
     Returns:
         Symmetrized Z_MM matrix
@@ -849,10 +849,10 @@ def symmetrize_mmm_block(Z_MM: np.ndarray) -> np.ndarray:
     return 0.5 * (Z_MM + Z_MM.T)
 
 
-def build_peec_mmm_system(L: np.ndarray, R: np.ndarray, L_LM: np.ndarray,
+def build_peec_magnetic_system(L: np.ndarray, R: np.ndarray, L_LM: np.ndarray,
                            Z_MM: np.ndarray, symmetrize: bool = True) -> dict:
     """
-    Build PEEC-MMM coupled system matrices.
+    Build PEEC-magnetic coupled system matrices.
 
     Physical Model:
     - Conductor current I creates H-field at magnetic elements
@@ -880,7 +880,7 @@ def build_peec_mmm_system(L: np.ndarray, R: np.ndarray, L_LM: np.ndarray,
         L: PEEC inductance matrix [n_L x n_L]
         R: PEEC resistance matrix [n_L x n_L]
         L_LM: Loop-Magnetic coupling [n_L x n_M] (H-field from I at M locations)
-        Z_MM: MMM reluctance/impedance matrix [n_M x n_M]
+        Z_MM: magnetic reluctance/impedance matrix [n_M x n_M]
         symmetrize: Whether to symmetrize Z_MM (default: True)
 
     Returns:
@@ -888,12 +888,12 @@ def build_peec_mmm_system(L: np.ndarray, R: np.ndarray, L_LM: np.ndarray,
             'L': PEEC inductance
             'R': PEEC resistance
             'K': Coupling matrix (= L_LM)
-            'Z_MM': Symmetrized MMM impedance
+            'Z_MM': Symmetrized magnetic impedance
             'L_coupling': K @ Z_MM^{-1} @ K.T (coupling contribution)
             'L_eff': L + L_coupling (effective inductance, INCREASES with mu > 1)
     """
     if symmetrize:
-        Z_MM = symmetrize_mmm_block(Z_MM)
+        Z_MM = symmetrize_magnetic_block(Z_MM)
 
     # Coupling matrix K
     K = L_LM
@@ -2293,11 +2293,11 @@ def demo_lc_resonant_prima():
 
 
 def demo_hierarchical_reduction():
-    """Demonstrate hierarchical reduction on a physically realistic PEEC-MMM system."""
+    """Demonstrate hierarchical reduction on a physically realistic PEEC-magnetic system."""
     print("=" * 60)
     print("PRIMA-style Hierarchical Model Order Reduction Demo")
     print("=" * 60)
-    print("(PEEC-MMM coupled system with physically correct formulation)")
+    print("(PEEC-magnetic coupled system with physically correct formulation)")
 
     np.random.seed(42)
 
@@ -2329,11 +2329,11 @@ def demo_hierarchical_reduction():
         coupling_strength=0.1  # 10% coupling
     )
 
-    # Generate MMM impedance matrix with proper scaling
+    # Generate magnetic impedance matrix with proper scaling
     Z_MM = generate_magnetic_impedance(n_M, L[0, 0], off_diag_ratio=0.1)
 
-    # Build PEEC-MMM system with physically correct formulation
-    system = build_peec_mmm_system(L, R, K, Z_MM, symmetrize=True)
+    # Build PEEC-magnetic system with physically correct formulation
+    system = build_peec_magnetic_system(L, R, K, Z_MM, symmetrize=True)
 
     L_eff = system['L_eff']
     L_coupling = system['L_coupling']
@@ -4245,7 +4245,7 @@ class PyKANSurfaceImpedance:
         1. Generate training data from ESIM cell problem or measurements
         2. Train KAN: (H, f) -> (R_s, X_s) or (|Z_s|, angle)
         3. Export to SPICE PWL or Verilog-A
-        4. Use in coupled PEEC+MMM simulations
+        4. Use in coupled PEEC+magnetic simulations
 
     Reference:
         Liu et al., "KAN: Kolmogorov-Arnold Networks", 2024
@@ -6941,12 +6941,12 @@ class NPortBlockLanczosSPICE:
 
 
 # =============================================================================
-# N-Port Block Lanczos for LoopStar + MMM Coupled Systems
+# N-Port Block Lanczos for LoopStar + magnetic block Coupled Systems
 # =============================================================================
 
 @dataclass
 class NPortCoupledLanczosResult:
-    """Result of N-port Block Lanczos for LoopStar + MMM coupled system.
+    """Result of N-port Block Lanczos for LoopStar + magnetic block coupled system.
 
     System structure (before Schur complement):
         [sL_L + R_L    K_LM  ] [I_L]   [V_port]
@@ -6962,7 +6962,7 @@ class NPortCoupledLanczosResult:
     T_L: np.ndarray              # Loop block tridiagonal [k_L*p x k_L*p]
     R_L_reduced: np.ndarray      # Reduced loop resistance
 
-    # Magnetic (MMM) reduction
+    # Magnetic material block reduction
     Q_M: np.ndarray              # Magnetic orthonormal basis [n_M x k_M]
     T_M: np.ndarray              # Magnetic tridiagonal [k_M x k_M]
     R_M_reduced: np.ndarray      # Reduced magnetic resistance (losses)
@@ -6977,11 +6977,11 @@ class NPortCoupledLanczosResult:
 
 
 class NPortCoupledBlockLanczosSPICE:
-    """N-port Block Lanczos for LoopStar + MMM coupled systems.
+    """N-port Block Lanczos for LoopStar + magnetic block coupled systems.
 
     Handles coupled conductor-magnetic systems where:
     - Conductor: Loop-Star PEEC with ports
-    - Magnetic: MMM (Magnetic Moment Method) for ferrite/iron cores
+    - Magnetic: magnetic block for ferrite/iron cores
 
     The coupled system impedance at ports:
         Z_port(s) = Z_L(s) - K_LM @ Z_M(s)^{-1} @ K_ML
@@ -7226,7 +7226,7 @@ class NPortCoupledBlockLanczosSPICE:
                 port_names.extend([f"p{i+1}_in", f"p{i+1}_out"])
 
         lines = []
-        lines.append(f"* N-Port Coupled (LoopStar + MMM) SPICE Netlist")
+        lines.append(f"* N-Port Coupled (LoopStar + magnetic block) SPICE Netlist")
         lines.append(f"* Conductor ports: {p}, Conductor stages: {k_L}, Magnetic stages: {k_M}")
         lines.append(f"* Total reduced DOF: {k_L * p} (conductor) + {k_M} (magnetic)")
         lines.append("")
@@ -7295,7 +7295,7 @@ class NPortCoupledBlockLanczosSPICE:
 
         # === Magnetic Ladder ===
         lines.append("")
-        lines.append("* === Magnetic Core Ladder (MMM) ===")
+        lines.append("* === Magnetic Core Ladder (magnetic block) ===")
         lines.append("* Models magnetic material inductance and losses")
 
         for i in range(k_M):
@@ -8525,9 +8525,9 @@ class NPortFullCoupledSPICE:
 
 
 def demo_coupled_nport_lanczos():
-    """Demonstrate N-port coupled (LoopStar + MMM) Block Lanczos."""
+    """Demonstrate N-port coupled (LoopStar + magnetic block) Block Lanczos."""
     print("=" * 70)
-    print("N-Port Coupled (LoopStar + MMM) Block Lanczos Demo")
+    print("N-Port Coupled (LoopStar + magnetic block) Block Lanczos Demo")
     print("=" * 70)
 
     # Create synthetic 2-port WPT system with ferrite core

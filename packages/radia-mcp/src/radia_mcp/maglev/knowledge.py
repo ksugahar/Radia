@@ -14,7 +14,7 @@ is the headline content -- two topics, `radia_iem_fem` and
 `cln_mor_control`, distilled from:
   - Yano & Sugahara, conf. digest E-3-1 "Construction of an IEM-FEM
     hybrid computation method toward high-accuracy magnetic levitation
-    analysis" (CAE-AI Lab) -- Radia IEM (MMM/MSC) <-> reduced-potential
+    analysis" (CAE-AI Lab) -- Radia IEM (HDiv-VIM) <-> reduced-potential
     FEM weak coupling for moving-magnet eddy-current levitation force.
   - Yano, master poster "Implementation of a 3D Multiport Cauer Ladder
     Network method for accelerating control-coupled analysis" -- CLN
@@ -70,7 +70,7 @@ against the unread lab PDFs when those become accessible.
 TOPICS: dict[str, str] = {
     "overview": "Magnetic levitation -- systems (EMS/EDS/PM/SC/Halbach) + force physics (induction/EML/AMB/SC/diamagnetic/Earnshaw) + the lab's Radia-IEM / CLN research line",
     # -- maglev systems + the lab's Radia/CLN research --
-    "radia_iem_fem": "Radia IEM (MMM/MSC) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
+    "radia_iem_fem": "Radia IEM (HDiv-VIM) <-> reduced-potential FEM weak coupling for moving-magnet eddy-current levitation force; A-phi (A_ext) / T-Omega (B_ext); no re-mesh on magnet motion; rotating-magnet-over-plate cross-validation tightens to ~0.1% at order=2; the Lorentz-force HDiv(J=curl T) function-space pitfall + verified NGSolve recipe (Yano bachelor, lab research)",
     "cln_mor_control": "Cauer Ladder Network (CLN) model-order reduction for real-time control-coupled maglev: ~1/500 speedup, multiport matrix-CLN, 3D gauge A-phi/T-Omega/A-T, TEAM 28 (Yano master, lab research)",
     "physical_tensor_rom": "Physical (exterior-matched) polarizability tensor alpha(s) as a passive, stable LTI: AAA discovers the Stoll poles + NNLS passive residues, fitting the per-frequency 3D HCurl tensor; Kameari+Kelvin accumulation BREAKS DOWN for the general 3D body (rom_fit.py, lab research)",
     "pm_maglev_zero_power": "Zero-power passive PM levitation: Maxwell-Earnshaw constraint, axial PM bearings, halbach diamagnetism",
@@ -125,7 +125,7 @@ conductor** -- with two complementary methods built on Radia + NGSolve:
 
 | Topic | What | Why it matters for maglev |
 |-------|------|----------------------------|
-| `radia_iem_fem`   | Radia IEM (MMM/MSC) computes the open-boundary external field; reduced-potential FEM computes only the eddy reaction field; weak-coupled, fed back to demagnetisation | The magnet MOVES -> only the external field updates, **no re-mesh** of the air gap; IEM removes the air-region discretisation error |
+| `radia_iem_fem`   | Radia IEM (HDiv-VIM) computes the open-boundary external field; reduced-potential FEM computes only the eddy reaction field; weak-coupled, fed back to demagnetisation | The magnet MOVES -> only the external field updates, **no re-mesh** of the air gap; IEM removes the air-region discretisation error |
 | `cln_mor_control` | Cauer Ladder Network (CLN) model-order reduction turns the 3D eddy-current FEM into a compact equivalent circuit | Real-time control-in-the-loop maglev design at **~1/500** of full-FEM time; TEAM 28 benchmark |
 
 These are validated on the standard eddy-current benchmarks: the
@@ -188,14 +188,14 @@ standard method handles this well alone:
 | Method | Strength | Weakness for maglev |
 |--------|----------|---------------------|
 | **FEM** | eddy currents, nonlinear materials | large PM<->conductor air gap must be meshed; **magnet motion forces re-meshing**; air-region discretisation error |
-| **IEM** (integral element method = Radia MMM/MSC) | NO air mesh, exact open boundary [Chadebec 2006] | does not solve eddy currents efficiently |
+| **IEM** (integral element method = Radia HDiv-VIM) | NO air mesh, exact open boundary [Chadebec 2006] | does not solve eddy currents efficiently |
 
 ## The weak coupling (the lab's answer)
 
 Run IEM and FEM SEQUENTIALLY, exchanging fields (weak coupling):
 
 ```
-  IEM (Radia MMM/MSC)                 reduced-potential FEM
+  IEM (Radia field evaluator / HDiv-VIM)                 reduced-potential FEM
   magnet region                       conductor region Omega_c
   --------------------                --------------------------
   analytic external field      ---->  source term
@@ -415,7 +415,7 @@ high-Rm TEAM 28 (CLN essential, validated against the published benchmark).
 
 | Role | Tool |
 |------|------|
-| IEM external field A_ext, B_ext | **Radia MMM/MSC** (`rad.Fld(obj,'a'|'b',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
+| IEM external field A_ext, B_ext | **Radia HDiv-VIM** (`rad.Fld(obj,'a'|'b',pts)`; ObjHexahedron/ObjTetrahedron magnets) -- exact analytic, open boundary |
 | reduced-potential FEM reaction field | **NGSolve** A-phi / T-Omega eddy-current solve on the conductor mesh |
 | coupling of Radia field into FEM | `rad.RadiaField(obj, 'a'|'b')` CoefficientFunction (in `_radia_pybind.pyd`; supports an origin/u/v/w coordinate transform) -> `gf.Set(...)` / `Integrate(...)` directly; or `radia_mcp.fem.equivalence_source` (NearFieldSource) |
 
@@ -861,7 +861,7 @@ F_axial(g) ~ (mu_0 / 2) * M_s^2 * pi * a^2
 
 where `f(.)` involves elliptic integrals (closed form in
 `radia_mcp.radia_ngsolve.analytical_formulas` topic
-`ellipsoid_demag_torque`). Radia (MMM/MSC) computes this exactly
+`ellipsoid_demag_torque`). Radia (HDiv-VIM) computes this exactly
 for arbitrary shape.
 
 ## Cross-references
@@ -1611,7 +1611,7 @@ motor) -- a bearingless machine merges the AMB and the motor windings.
 
 ## Computing it in Radia
 
-1. **Force map**: sweep the rotor over the gap range with Radia MMM/MSC
+1. **Force map**: sweep the rotor over the gap range with Radia HDiv-VIM
    (iron yoke + coil), extract F(i, g) via the Maxwell stress tensor
    (`force_computation`), then fit k_i and k_x for the control model.
 2. **PM-biased designs**: model the PM bias flux + coil control flux
@@ -1753,7 +1753,7 @@ levitation.
 
 ## Computing it in Radia
 
-1. Compute |B|^2 from the PM / coil array (Radia MMM/MSC, `rad.Fld`).
+1. Compute |B|^2 from the PM / coil array (Radia HDiv-VIM, `rad.Fld`).
 2. The trap is where grad(|B|^2) = 0 with a positive-definite Hessian of
    |B|^2 (a minimum); the levitation height is where the upward
    f_z balances rho*g.

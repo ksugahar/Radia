@@ -144,7 +144,7 @@ the other is GEOMETRY (the truncation-shape axis):
     frequency rule above, Kelvin is the closure of choice for a COMPACT,
     LOW-frequency open problem; leave that envelope -- high aspect ratio, OR
     radiating finite kR -- and a conformal / complex-stretch / IABC method wins.
-    This is the same geometry-class reasoning that keeps Radia's own MMM/MSC
+    This is the same geometry-class reasoning that keeps Radia's own charge-Gram
     volume integral on HACApK ACA+ (compact, near-field heavy) rather than FMM
     (extended, far-field): pick the open-boundary method by the geometry class,
     not by reflex.

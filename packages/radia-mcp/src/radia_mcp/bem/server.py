@@ -3,11 +3,11 @@
 Moment Method / Boundary Element Method theory + decision layer.
 
 Covers: MoM foundations (RWG/Galerkin), surface IE (EFIE/MFIE/CFIE/PMCHWT),
-low-frequency stabilization (Loop-Star/Calderon/Weggler ST), Radia's MMM/MSC,
-H-matrix acceleration (HACApK), FEM-BEM hybrid.
+low-frequency stabilization (Loop-Star/Calderon/Weggler ST), H-matrix
+acceleration (HACApK), and FEM-BEM hybrid.
 
 This is the **theory/genealogy** layer.  For concrete code usage:
-- Radia MMM/MSC: `radia_mcp.radia_ngsolve` (radia_usage)
+- Radia HDiv-VIM: `radia_mcp.radia_ngsolve.hdiv_vim`
 - PEEC: `radia_mcp.peec`
 - ngsolve.bem: `radia_mcp.radia_ngsolve.ngsbem_inductance`
 - HACApK: `radia_mcp.matrix_solvers` (preconditioners_ams)
@@ -26,7 +26,6 @@ from .overview_knowledge import get_overview_knowledge
 from .mom_foundations_knowledge import get_mom_foundations_knowledge
 from .surface_ie_knowledge import get_surface_ie_knowledge
 from .low_freq_knowledge import get_low_freq_knowledge
-from .mmm_msc_knowledge import get_mmm_msc_knowledge
 from .h_matrix_knowledge import get_h_matrix_knowledge
 from .fem_bem_hybrid_knowledge import get_fem_bem_hybrid_knowledge
 
@@ -44,7 +43,7 @@ def bem_overview(topic: str = "decision_tree") -> str:
     Args:
         topic: One of:
             "lab_stack"       - Sugahara lab BEM/MoM stack
-                                 (Radia MMM/MSC, ngsolve.bem, HACApK)
+                                 (HDiv-VIM, ngsolve.bem, HACApK)
             "decision_tree"   - Which technique for which problem (DEFAULT)
             "history"         - Genealogy 1968 Harrington -> 2024
             "all"             - Everything
@@ -112,23 +111,6 @@ def bem_low_freq(topic: str = "problem") -> str:
 
 
 @mcp.tool()
-def bem_mmm_msc(topic: str = "mmm_overview") -> str:
-    """
-    Magnetic Moment Method (MMM) and Surface Charge (MSC) -- Radia's core.
-
-    ★ THE foundation of Radia C++ (rad_polyhedron.cpp + rad_interaction.cpp).
-
-    Args:
-        topic: One of:
-            "mmm_overview"    - MMM foundation (DEFAULT) ★ lab CORE
-            "msc_hexahedra"   - MSC for hex/wedge elements
-            "rna_mmm"         - RNA + MMM coupling (transformer)
-            "all"             - Everything
-    """
-    return get_mmm_msc_knowledge(topic)
-
-
-@mcp.tool()
 def bem_h_matrix(topic: str = "overview") -> str:
     """
     H-matrix / ACA acceleration for BEM.
@@ -171,11 +153,11 @@ def pick_a_bem_method(problem_class: str) -> str:
     guidance = {
         "magnetostatic_pm_iron": (
             "Magnetostatic with PM + nonlinear iron (★ Radia core use case):\n"
-            "1. Use MMM (Magnetic Moment Method)\n"
-            "   -> bem_mmm_msc('mmm_overview')\n"
-            "2. For hex meshes, use MSC instead\n"
-            "   -> bem_mmm_msc('msc_hexahedra')\n"
-            "3. Large N (>2000) -> HACApK acceleration\n"
+            "1. Use HDiv-VIM as the Radia magnetic-material path\n"
+            "   -> radia_mcp.radia_ngsolve.hdiv_vim\n"
+            "2. Keep reduced-FEM / NGSolve coupling in the same workflow\n"
+            "   -> radia_mcp.radia_ngsolve\n"
+            "3. Large charge-Gram builds -> HACApK acceleration\n"
             "   -> bem_h_matrix('hacapk')\n"
             "4. Code recipe via radia\n"
             "   -> radia_ngsolve MCP, radia_usage\n"
@@ -195,8 +177,8 @@ def pick_a_bem_method(problem_class: str) -> str:
             "   -> bem_low_freq('loop_star')\n"
             "2. Coil filaments + panels via PEECBuilder\n"
             "   -> radia_mcp.peec\n"
-            "3. Coupled PEEC + MMM for iron core\n"
-            "   -> bem_mmm_msc('rna_mmm')\n"
+            "3. Magnetic material coupling should route through HDiv-VIM / reduced FEM\n"
+            "   -> radia_mcp.radia_ngsolve.hdiv_vim\n"
         ),
         "high_freq_scattering": (
             "High-frequency PEC/dielectric scattering (>100 MHz):\n"
@@ -214,8 +196,8 @@ def pick_a_bem_method(problem_class: str) -> str:
             "Transformer with open boundary:\n"
             "1. LAB approach: FEM + Kelvin transform (NOT FEM-BEM hybrid)\n"
             "   -> radia_mcp.radia_ngsolve.kelvin_transformation\n"
-            "2. RNA + MMM if reluctance network is enough\n"
-            "   -> bem_mmm_msc('rna_mmm')\n"
+            "2. Use HDiv-VIM / reduced-FEM coupling for magnetic materials\n"
+            "   -> radia_mcp.radia_ngsolve.hdiv_vim\n"
             "3. Hybrid FEM-BEM only as last resort\n"
             "   -> bem_fem_bem_hybrid('coupling')\n"
         ),
@@ -233,7 +215,7 @@ def pick_a_bem_method(problem_class: str) -> str:
 register_status_tool(
     mcp,
     server_name='mcp-server-bem',
-    description='MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, Radia MMM/MSC, HACApK, FEM-BEM',
+    description='MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, HACApK, FEM-BEM',
     subpackage='radia_mcp.bem',
     related_servers=["radia-ngsolve", "peec"],
 )
@@ -247,7 +229,6 @@ def main():
         print(f"  mom_foundations: {len(get_mom_foundations_knowledge('all'))} chars")
         print(f"  surface_ie: {len(get_surface_ie_knowledge('all'))} chars")
         print(f"  low_freq: {len(get_low_freq_knowledge('all'))} chars")
-        print(f"  mmm_msc: {len(get_mmm_msc_knowledge('all'))} chars")
         print(f"  h_matrix: {len(get_h_matrix_knowledge('all'))} chars")
         print(f"  fem_bem_hybrid: {len(get_fem_bem_hybrid_knowledge('all'))} chars")
         print("OK")

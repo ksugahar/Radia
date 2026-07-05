@@ -211,7 +211,7 @@ bool BuildElementData(
 );
 
 // ============================================================================
-// Complex Field Computation (for PEEC+MMM coupling)
+// Complex Field Computation
 // ============================================================================
 
 /**
@@ -251,7 +251,7 @@ ComplexFieldResult ComputeComplexFieldSingle(
 /**
  * @brief Batch compute complex B field at multiple points (OpenMP parallelized)
  *
- * Used by PEEC+MMM coupled solver for efficient field evaluation.
+ * Used by frequency-domain field workflows for efficient field evaluation.
  *
  * @param g3dPtr      Pointer to Radia 3D object
  * @param points      Array of evaluation points [x0,y0,z0, x1,y1,z1, ...]
@@ -274,7 +274,7 @@ void ComputeComplexFieldBatch(
 );
 
 /**
- * @brief Element face data for collocation MMMM (face-charge) integration
+ * @brief Element face data for surface-charge (face-charge) integration
  *
  * Stores face geometry for accurate near-field computation.
  * For tetrahedra: 4 triangular faces
@@ -288,10 +288,10 @@ struct ElementFaceData {
 };
 
 /**
- * @brief Compute B field from MMM elements with complex magnetization
+ * @brief Compute B field from compact magnetization sources.
  *
- * ADAPTIVE METHOD: Uses MSC integration for near-field, dipole for far-field.
- * - Near field (r < 3 * element_size): MSC surface charge integration (high accuracy)
+ * ADAPTIVE METHOD: Uses face integration for near-field, dipole for far-field.
+ * - Near field (r < 3 * element_size): face integration (high accuracy)
  * - Far field (r >= 3 * element_size): Dipole approximation (fast, <5% error)
  *
  * @param point       Evaluation point
@@ -313,7 +313,7 @@ void ComputeBFromMagnetization(
 /**
  * @brief Compute B field with error-controlled adaptive method
  *
- * Switches between MSC integration and dipole approximation based on
+ * Switches between face integration and dipole approximation based on
  * TARGET ERROR specification. The dipole approximation error scales as:
  *   error ~ (element_size / distance)^3
  *
@@ -326,7 +326,7 @@ void ComputeBFromMagnetization(
  *   target_error = 0.10 (10%) -> r > 2.2 * element_size uses dipole
  *
  * Special values:
- *   target_error = 0.0  -> Always use MSC (exact, slow)
+ *   target_error = 0.0  -> Always use face integration (exact, slow)
  *   target_error = 1.0  -> Always use dipole (fast, approximate)
  *
  * @param point          Evaluation point
@@ -355,7 +355,7 @@ void ComputeBFromMagnetizationAdaptive(
  * @return              Distance threshold as multiple of element size
  */
 inline double ErrorToThresholdFactor(double target_error) {
-    if (target_error <= 0.0) return 1e10;  // Always MSC
+    if (target_error <= 0.0) return 1e10;  // Always face integration
     if (target_error >= 1.0) return 0.0;   // Always dipole
     return 1.0 / std::pow(target_error, 1.0/3.0);
 }
@@ -363,7 +363,7 @@ inline double ErrorToThresholdFactor(double target_error) {
 /**
  * @brief Build element face data from Radia 3D object
  *
- * Extracts face geometry from all elements for MSC integration.
+ * Extracts face geometry from all elements for near-field integration.
  *
  * @param g3dPtr     Pointer to Radia 3D object
  * @param face_data  Output: face data array (one per element)
@@ -377,7 +377,7 @@ int BuildElementFaceData(
 /**
  * @brief Check if point is inside any element (with element data cache)
  *
- * Shared by both static MMM and PEEC+MMM solvers for inside/outside
+ * Shared by static and frequency-domain field routines for inside/outside
  * classification. Uses solid angle method for accurate determination.
  *
  * @param point           Point to check
@@ -395,7 +395,7 @@ bool IsPointInsideAnyElement(
  * @brief Get magnetization at point inside an element
  *
  * For points inside magnetic elements, returns the element's magnetization.
- * For PEEC+MMM, this uses the complex solution magnetization.
+ * When provided, this uses the complex solution magnetization.
  *
  * @param containing_elem Index of containing element
  * @param M_complex       Complex magnetization array (nullptr for static)
@@ -468,7 +468,7 @@ void ComputeBFromConductorBatch(
 );
 
 /**
- * @brief Combined PEEC+MMM field computation
+ * @brief Combined conductor and magnetization field computation.
  *
  * Computes total B field from both conductor current and magnetization.
  * B_total = B_conductor + B_magnet
@@ -498,7 +498,7 @@ void ComputeCombinedField(
 );
 
 /**
- * @brief Batch combined PEEC+MMM field computation
+ * @brief Batch combined conductor and magnetization field computation.
  *
  * @param points       Evaluation points
  * @param n_points     Number of points

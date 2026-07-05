@@ -248,7 +248,7 @@ class TestHexMeshImport(unittest.TestCase):
 
         magnetization = [0.0, 0.0, 1.0e6]  # 1 MA/m in z
 
-        # ObjHexahedron (MSC)
+        # ObjHexahedron face-charge element
         rad.UtiDelAll()
         vertices = [
             [0.0, 0.0, 0.0],  # 0
@@ -354,27 +354,11 @@ class TestMeshImportSolver(unittest.TestCase):
         ext_field = rad.ObjBckg(lambda p: [0, 0, B_ext])
         grp = rad.ObjCnt([container, ext_field])
 
-        # Solve
-        result = rad.Solve(grp, 0.001, 100, 1)  # BiCGSTAB
+        with self.assertRaisesRegex(RuntimeError, "mesh-less soft iron"):
+            rad.Solve(grp, 0.001, 100, 1)
 
-        # Get magnetization
-        all_M = rad.ObjM(container)
-        M_list = [m[1] for m in all_M]
-        M_avg_z = np.mean([m[2] for m in M_list])
-
-        print(f"  mu_r: 1000")
-        print(f"  H_ext: {H_ext} A/m")
-        print(f"  M_avg_z: {M_avg_z:.0f} A/m")
-        print(f"  Iterations: {result[3]:.0f}")
-
-        # M should be positive (induced by external field)
-        self.assertGreater(M_avg_z, 0, "Magnetization should be positive")
-
-    def test_hex_mesh_soft_iron_solve_collocation_mmmm(self):
-        """A hexahedral mesh of soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the
-        multipole-moment MMM MSC demag.  In a
-        uniform applied field the cube magnetizes (M_avg_z > 0), like the tetrahedral (MMM) solve
-        above.  (Permanent-magnet fields are unaffected.)"""
+    def test_hex_mesh_soft_iron_requires_mesh_backed_hdiv(self):
+        """A hexahedral soft-iron mesh built as raw ObjHexahedron elements is not a supported solve path."""
         center = [0.0, 0.0, 0.0]
         size = [1.0, 1.0, 1.0]
         n_div = 3
@@ -389,9 +373,8 @@ class TestMeshImportSolver(unittest.TestCase):
         rad.MatApl(cube_hex, rad.MatLin(mu_r))
         grp_hex = rad.ObjCnt([cube_hex, rad.ObjBckg(lambda p: [0, 0, B_ext])])
 
-        rad.Solve(grp_hex, 0.001, 100, 1)        # surface-charge MSC; no Error203
-        M_avg_z = sum(rad.ObjM(p)["magnetization"][2] for p in polyhedra) / len(polyhedra)
-        self.assertGreater(M_avg_z, 0, "surface-charge MSC: hex cube should magnetize in the applied field")
+        with self.assertRaisesRegex(RuntimeError, "mesh-less soft iron"):
+            rad.Solve(grp_hex, 0.001, 100, 1)
 
 
 class TestMethodComparison(unittest.TestCase):

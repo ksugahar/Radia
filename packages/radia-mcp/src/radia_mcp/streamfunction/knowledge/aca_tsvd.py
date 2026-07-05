@@ -5,7 +5,7 @@ Read this when:
   ``A phi = B`` (M field points x N basis sources, M < N) in the Radia stack.
 * Designing a coil (stream function method) or reconstructing a magnetization.
 * Wondering how to accelerate a TSVD pseudo-inverse whose matrix entries are
-  Radia field evaluations (Biot-Savart / MMM / MSC).
+  Radia field evaluations (Biot-Savart / HDiv-VIM).
 * Pairing the linear solve with an outer CMA-ES (Optuna) design loop
   (the IEEJ SA-25-020 "ACA stream function + CMA-ES" workflow).
 
@@ -62,7 +62,7 @@ numbers (~10x at N=2048, growing with N).
 
 ACA+ is NOT re-implemented: it is HACApK's cHACApK_acaplus (src/ext/HACApK),
 fed an arbitrary matrix-entry callback via the HACApK_set_entry_func override
-(default behaviour, the MMM/MSC system matrix, is unchanged when the override
+(default behaviour, the HDiv-VIM system matrix, is unchanged when the override
 is null).  Only the TSVD recompression (manuscript Method 2/3, SA-25-020) lives
 in rad_stream_function.cpp.
 """
@@ -140,7 +140,7 @@ machinery serves every Radia source family using Radia's already-implemented
 field computation:
 
   coils (thin wires)            -> Biot-Savart (ObjFlmCur, ObjArcCur)
-  permanent magnets / soft iron -> MMM / MSC surface-charge field
+  permanent magnets / soft iron -> HDiv-VIM surface-charge field
                                    (ObjRecMag, ObjHexahedron, ...)
 
 Use radia_field_kernel(obs, sources, ...) to build the callback from Radia
@@ -181,7 +181,7 @@ Singular values match the dense SVD to ~2e-9.
 Takeaways:
 - Speedup GROWS with N (~ N/(5 k_aca) for M=N/4): dense is O(N M^2); ACA is
   O(k_aca(M+N)) evals + tiny factor SVDs.
-- The win is largest when the kernel is EXPENSIVE (Biot-Savart / MMM-MSC /
+- The win is largest when the kernel is EXPENSIVE (Biot-Savart / HDiv-VIM / face-charge /
   radia.Fld) -- every avoided A(i,j) is an avoided field evaluation.
 - The matrix entry is a Python callback (per-call overhead).  Both methods pay
   it equally, so the RATIO is eval-count-driven; a C++ kernel lowers both
@@ -237,7 +237,7 @@ tests/test_stream_function.py (10 tests):
   its own Intel/MKL DLLs).  LAB-only (skip if the local reference module is absent).
 - Methods 2 and 3 agree to ~1e-9.
 - Least-norm solve recovers B in range(A); validates B-length.
-- Generic Radia-field path: factors a permanent-magnet array MMM/MSC coupling
+- Generic Radia-field path: factors permanent-magnet field-kernel coupling
   to < 1e-5 (test_radia_field_kernel_magnets).
 
 f2py reference (LAB): public-safe curated corpus
@@ -481,7 +481,7 @@ connection-optimisation loop tractable.
     is the natural sequel to SA-25-020 "ACA stream function + CMA-ES".
   E (kernel-agnostic generality) -- single-stroke design WITH magnetic
     materials (iron yoke / active shield) and on NON-cylindrical /
-    conformal surfaces, using radia_field_kernel (MMM/MSC).  Free-space
+    conformal surfaces, using radia_field_kernel (fixed-magnetization Radia field evaluator).  Free-space
     Biot-Savart SFM tools (Turner/Peeren/Kuijpers) do not address this
     setup, so it is the natural application area for our callback-based
     pipeline.  Originality of this scope in OSS subject to literature
@@ -879,7 +879,7 @@ ngsolve.bem (planned upstream).  Reasons:
     removed FMM (CLAUDE.md 2026-03-06) in favour of ACA+ because
     FMM's analytic multipole expansions are kernel-specific and
     do not help the compact / near-field-dominated geometries we
-    care about.  Each new kernel (material MMM, SIBC, ...) would
+    care about.  Each new kernel (material-field, SIBC, ...) would
     need new multipole math; ACA+ stays kernel-agnostic.
   - A custom bridge in the interim would have to consume
     ngsolve.bem's basis evaluation + quadrature (which evolve
@@ -985,7 +985,7 @@ the math is **FMM**, not ACA+.  This is consistent with the
 recommended use case (smooth-surface Biot-Savart for SF coil
 design, far-field-dominated) and does NOT conflict with the
 "FMM Removed" policy from CLAUDE.md -- that policy targets
-**Radia's MMM/MSC volume integral** (compact magnets, near-field
+**Radia's HDiv-VIM charge-Gram volume integral** (compact magnets, near-field
 heavy), a different layer + geometry class.  See
 memory ``feedback_fmm_vs_aca_distinction`` and CLAUDE.md
 "FMM Removed from Radia core (2026-03-06)" / "SCOPE CLARIFICATION
@@ -1024,7 +1024,7 @@ matrix as a per-entry callback for the existing
 
 WHY (A) matters even though the FE matrix here is cheap (30 ms
 full-assembly): the same ``entry`` callback contract handles
-EXPENSIVE kernels.  For Radia MMM iron yoke / shielded coil /
+EXPENSIVE kernels.  For Radia HDiv-VIM iron yoke / shielded coil /
 SIBC workpiece, each entry costs a Radia container solve and
 full assembly becomes O(MN) container solves.  ACA+ via the
 same machinery cuts that to O(k(M+N)).  (A) is the
@@ -1038,7 +1038,7 @@ WHY both paths matter:
     surface BEM acceleration for free-space smooth kernels,
     benefits from NGSolve's tree/quadrature infrastructure.
 
-Their natural domains are different (volume-MMM-MSC vs
+Their natural domains are different (volume-HDiv-VIM / face-charge vs
 surface-BEM), and they complement each other.
 
 See memory ``feedback_fmm_vs_aca_distinction`` for the FMM vs ACA+
@@ -1220,7 +1220,7 @@ Confirmed 2026-05-30:
     low-rank-friendly kernel (free-space, material, SIBC, ...).
     Good when each entry is expensive (Radia container solve).
 
-CLAUDE.md "FMM Removed (2026-03-06)" targets the Radia MMM/MSC
+CLAUDE.md "FMM Removed (2026-03-06)" targets the Radia HDiv-VIM
 volume integral (compact magnets, near-field heavy, FMM math bad).
 It does NOT forbid ngsolve.bem's FMM for surface BEM (smooth
 kernel, far-field, FMM math good) -- different layer, different
@@ -1385,7 +1385,7 @@ what we have, not a claim of relative ranking against other tools:
             ``docs/stream_function/benchmarks.md`` into runnable benchmark
             scripts with literature target specs and JSON outputs.
     Week 1 end: install CoilGen, run identical spec, head-to-head table.
-    Week 2: shielded coil (iron back plate) via Radia MMM kernel
+    Week 2: shielded coil (iron back plate) via Radia field-kernel / HDiv-VIM route
             through the (A) callback -- material-kernel demo not
             previously combined this way in OSS that we know of.
             Verify against any commercial-FEM equivalent before
@@ -1444,7 +1444,7 @@ check pending):
     (``CalcSubMatrix``, ``CalcSubMatrixCapsule``).
   - HACApK (Ida et al., ppOpen-HPC, MIT 2015+): kernel-agnostic ACA+
     H-matrix solver, callback via ``HACApK_set_entry_func``.
-  - Radia (ESRF + Sugahara Lab): MMM/MSC material kernels,
+  - Radia (ESRF + Sugahara Lab): HDiv-VIM charge-Gram / Radia field kernels,
     PEEC, single-stroke chain construction, Path-A iteration,
     kernel-agnostic ``radia.stream_function.aca_tsvd``.
 
@@ -1457,7 +1457,7 @@ Value of the integration:
      alignment is upstream-organic; we provide the SF-coil-design
      glue that uses it.
   2. Kernel-swap transparency -- same pipeline for free-space
-     Biot-Savart, Radia MMM iron yoke, SIBC workpiece, future
+     Biot-Savart, Radia HDiv-VIM iron yoke, SIBC workpiece, future
      application kernels by replacing the entry function.  Chain
      construction, Path-A, regularisation, deformation are unchanged.
   3. End-to-end OSS pipeline -- to our knowledge no other OSS SF
@@ -1678,7 +1678,7 @@ matter before trusting an L-curve.
      H1 / sigma-weighted H1 / inductance-diagonal / Lawson-IRLS L_inf
      each costs only one ``Sinv_V`` build + one k x k inverse.
   4. Material-kernel lift -- when each A(i, j) is a Radia ``rad.Solve()``
-     + ``rad.Fld()`` (= MMM iron yoke, shielded coil), the ACA+
+     + ``rad.Fld()`` (= HDiv-VIM iron yoke, shielded coil), the ACA+
      amortisation is the dominant cost; the regularisation-folded
      form means all design choices share that cost.
 

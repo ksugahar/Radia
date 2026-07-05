@@ -1,4 +1,4 @@
-"""Small 2D magnetic-circuit / MMM-like motor quick checks.
+"""Small 2D magnetic-circuit / field-kernel-like motor quick checks.
 
 The routines here are intentionally lightweight. They are not a replacement
 for NGSolve AGE, JMAG, or external motor-deck solvers. They provide public-safe
@@ -17,7 +17,7 @@ MU0 = 4.0 * math.pi * 1e-7
 
 
 @dataclass(frozen=True)
-class MmmQuickInput:
+class FieldQuickInput:
     motor_type: str = "spm"
     pole_pairs: int = 4
     airgap_radius_m: float = 0.05
@@ -58,7 +58,7 @@ def _infer_family(motor_type: str) -> str:
     return "spm"
 
 
-def evaluate_mmm_quick_check(inp: MmmQuickInput) -> dict[str, Any]:
+def evaluate_field_quick_check(inp: FieldQuickInput) -> dict[str, Any]:
     """Evaluate a first-order 2D motor quick check."""
     family = _infer_family(inp.motor_type)
     p = max(1, int(inp.pole_pairs))
@@ -132,7 +132,7 @@ def evaluate_mmm_quick_check(inp: MmmQuickInput) -> dict[str, Any]:
         warnings.append("hysteresis loop area and vector history are not modeled")
 
     return {
-        "schema_version": "radia-motor-mmm-quick/v1",
+        "schema_version": "radia-motor-field-quick/v1",
         "input": asdict(inp),
         "family": family,
         "primary_quantity": primary_quantity,
@@ -167,11 +167,11 @@ def evaluate_mmm_quick_check(inp: MmmQuickInput) -> dict[str, Any]:
     }
 
 
-def format_mmm_quick_check(result: dict[str, Any]) -> str:
+def format_field_quick_check(result: dict[str, Any]) -> str:
     """Format a quick-check result as Markdown."""
     out = result["outputs"]
     lines = [
-        "# 2D MMM/BEM-like motor quick check",
+        "# 2D magnetic-circuit/BEM-like motor quick check",
         "",
         f"- schema: `{result['schema_version']}`",
         f"- inferred family: `{result['family']}`",
@@ -205,32 +205,32 @@ def route_motor_validation(goal: str) -> dict[str, Any]:
     if any(term in g for term in ("induction", " cage", " im ", "slip", "deep bar")):
         family = "induction"
         deck_hint = "application/motor/emdlab_induction_bar_10"
-        mmm = "motor_mmm_quick_check(motor_type='induction', slip_hz=...)"
+        field_check = "motor_field_quick_check(motor_type='induction', slip_hz=...)"
         age = ("induction_machine", "airgap_eddy_machine", "deep_bar")
     elif any(term in g for term in ("srm", "switched reluctance", "sr motor")):
         family = "srm"
         deck_hint = "application/motor/emdlab_srm_pole_variants_10"
-        mmm = "motor_mmm_quick_check(motor_type='srm', electrical_angle_deg=...)"
+        field_check = "motor_field_quick_check(motor_type='srm', electrical_angle_deg=...)"
         age = ("reluctance_torque", "saturating_inductance")
     elif any(term in g for term in ("synrm", "reluctance motor")):
         family = "synrm"
         deck_hint = "application/motor/emdlab_synrm_flux_barrier_10"
-        mmm = "motor_mmm_quick_check(motor_type='synrm', saliency_ratio_lq_over_ld=...)"
+        field_check = "motor_field_quick_check(motor_type='synrm', saliency_ratio_lq_over_ld=...)"
         age = ("synchronous_power_angle", "mtpa", "cross_saturation")
     elif any(term in g for term in ("ipm", "interior", "hairpin")):
         family = "ipm"
         deck_hint = "application/motor/emdlab_ipm_hairpin_10"
-        mmm = "motor_mmm_quick_check(motor_type='ipm', electrical_angle_deg=...)"
+        field_check = "motor_field_quick_check(motor_type='ipm', electrical_angle_deg=...)"
         age = ("ld_lq", "mtpa", "field_weakening", "demag_margin")
     elif "hysteresis" in g:
         family = "hysteresis"
         deck_hint = "application/motor/hysteresis_motor_10"
-        mmm = "motor_mmm_quick_check(motor_type='hysteresis')"
+        field_check = "motor_field_quick_check(motor_type='hysteresis')"
         age = ("hysteresis_motor_loss", "hysteresis_play")
     else:
         family = "spm"
         deck_hint = "application/motor/spm_surface_pm_10"
-        mmm = "motor_mmm_quick_check(motor_type='spm', electrical_angle_deg=...)"
+        field_check = "motor_field_quick_check(motor_type='spm', electrical_angle_deg=...)"
         age = ("back_emf", "cogging_torque", "ld_lq", "mtpa")
 
     return {
@@ -238,11 +238,11 @@ def route_motor_validation(goal: str) -> dict[str, Any]:
         "goal": goal,
         "family": family,
         "deck_hint": deck_hint,
-        "mmm_quick_check": mmm,
+        "field_quick_check": field_check,
         "age_validation_targets": list(age),
         "workflow": [
             "Select and inspect a public motor input deck.",
-            "Run motor_mmm_quick_check for a first-order sign/scale sanity check.",
+            "Run motor_field_quick_check for a first-order sign/scale sanity check.",
             "Use motor_validation_lanes('lane_matrix') to choose HDiv-VIM + reduced FEM for pickup/demag/flux checks or NGSolve+AGE for FE air-gap quantities.",
             "Call motor_age_validation_plan(goal) to select the public AGE quality gates.",
             "Use NGSolve AGE / radia-ngsolve for the independent validation anchor.",
@@ -260,7 +260,7 @@ def format_motor_validation_route(route: dict[str, Any]) -> str:
         f"- goal: {route['goal']}",
         f"- inferred family: `{route['family']}`",
         f"- public deck hint: `{route['deck_hint']}`",
-        f"- MMM quick check: `{route['mmm_quick_check']}`",
+        f"- field quick check: `{route['field_quick_check']}`",
         "",
         "## AGE Validation Targets",
     ]

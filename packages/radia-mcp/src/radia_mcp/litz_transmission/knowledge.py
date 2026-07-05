@@ -1525,7 +1525,7 @@ def get_knowledge(topic: str = "overview") -> str:
     if topic in ("tlm_method", "tlm", "johns", "sadiku"):
         return TLM_METHOD
     if topic in ("rosskopf_coupled", "rosskopf", "coupled",
-                 "fem_peec_coupled"):
+                 "fem_peec_bridge"):
         return ROSSKOPF_COUPLED
     if topic in ("ac_loss_measurement", "measurement", "lcr",
                  "impedance_analyzer", "validation"):

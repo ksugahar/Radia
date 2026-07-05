@@ -38,6 +38,7 @@
 #include <stdexcept>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <optional>
 
 // Radia core headers (after NGSolve to avoid EXP macro conflict)
@@ -93,7 +94,6 @@ extern "C" {
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
-#include "rad_moment2d.h"        // 2D planar collocation MMMM (log-kernel tri/quad)
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
@@ -171,7 +171,7 @@ namespace radia_objects {
 
 // NOTE: The Python-facing ObjRecMag wrapper (radia_objects::ObjRecMag) was
 // removed when the Python ObjRecMag constructor was retired in favour of the
-// MMMM magnet_box path. The internal C++ surface-current rectangular block
+// fixed-M magnet_box path. The internal C++ surface-current rectangular block
 // kernel (radTRecMag) and the C API RadObjRecMag remain in use elsewhere.
 
 /**
@@ -345,7 +345,7 @@ int ObjTetrahedron(py::list vertices, py::array_t<double> magnetization) {
  *
  * Wedge element with triangular top and bottom faces.
  * 5 faces total: 2 triangular (top/bottom) + 3 quadrilateral (sides)
- * 5 DOF for MSC method.
+ * 5 surface-face coefficients for fixed-magnetization field evaluation.
  *
  * Vertex convention (ELF MMB6T compatible):
  *      3-----5
@@ -431,11 +431,8 @@ int ObjWedge(py::list vertices, py::array_t<double> magnetization) {
  * @brief Create pyramid element from 5 vertices
  *
  * Square-base pyramid: 1 quadrilateral base + 4 triangular sides.
- * 5 faces total -> 5 surface-charge DOF for the multipole-moment MMM MSC method.  The single quadrupole row is
- * the per-element RESIDUAL EIGENMODE (the in-plane dx^2-dy^2-type mode for a symmetric pyramid -- DISTINCT
- * from the wedge's axial mode; both were derived in the retired VIM prototype inventory
- * recorded by docs/hdiv_vim/vim_examples_retirement.ipynb),
- * so the pyramid solves through the same moment path as hex (6) and wedge (5) with no extra kernel.
+ * 5 faces total.  The object constructor is retained for fixed magnetization
+ * field evaluation; mesh-backed magnetic-material solves route through HDiv-VIM.
  *
  * Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
  *   v0..v3 = base quad, v4 = apex.
@@ -892,7 +889,7 @@ py::dict GetSolveStats() {
     if (n >= 8) {
         result["t_hmatrix_build"] = stats[7];
     }
-    // stats[8]/stats[9] were the moment loop-deflation cycles/alpha; MMMM no longer connects to HACApK,
+    // stats[8]/stats[9] were the moment loop-deflation cycles/alpha; surface-charge no longer connects to HACApK,
     // so they are always 0 and no longer surfaced.
     if (n >= 11) {
         result["t_moment_fieldgrad"] = stats[10];
@@ -903,21 +900,6 @@ py::dict GetSolveStats() {
 
     return result;
 }
-
-/**
- * @brief Set HACApK parameters
- *
- * @param eps ACA+ tolerance
- * @param leaf_size Minimum cluster size
- * @param eta Admissibility parameter
- */
-void SetHACApKParams(double eps, int leaf_size, double eta);  // Forward declaration
-
-/**
- * @brief Set BiCGSTAB tolerance
- * @param tol Convergence tolerance
- */
-void SetBiCGSTABTol(double tol);  // Forward declaration
 
 // PreRelax REMOVED (2026-01-31) - Use BuildMatrix() instead
 // The new API is: rad.BuildMatrix(obj, image='+x-z')
@@ -982,117 +964,6 @@ py::array_t<double> GetFaceGeom(int intrc_handle) {
             r(i, j) = data[(size_t)i * 11 + (size_t)j];
     return result;
 }
-
-/**
- * @brief Per moment-element centroid demag field + gradient functionals (the moment-formulation kernel)
- * @param intrc_handle Interaction handle from BuildMatrix
- * @return numpy array (nMom, 9, dof): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
- */
-py::array_t<double> GetCentroidFieldGrad(int intrc_handle) {
-    int nMom = 0, dof = 0;
-    int err = RadGetCentroidFieldGrad(nullptr, &nMom, &dof, intrc_handle);
-    check_error(err);
-    if (nMom <= 0 || dof <= 0) {
-        throw std::runtime_error("No moment MSC DOFs in interaction matrix");
-    }
-    py::array_t<double> result({nMom, 9, dof});
-    std::vector<double> data((size_t)nMom * 9 * dof);
-    err = RadGetCentroidFieldGrad(data.data(), &nMom, &dof, intrc_handle);
-    check_error(err);
-    auto r = result.mutable_unchecked<3>();
-    // C is ROW-MAJOR: C[(h*9 + k)*dof + g]
-    for (int h = 0; h < nMom; h++)
-        for (int k = 0; k < 9; k++)
-            for (int g = 0; g < dof; g++)
-                r(h, k, g) = data[((size_t)h * 9 + (size_t)k) * dof + (size_t)g];
-    return result;
-}
-
-// Multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for uniform linear chi + uniform applied
-// field (hx,hy,hz).  Step-1 verification of the EIEM2 -> multipole-moment MMM upgrade
-// against the retired Python prototype inventory recorded in docs/hdiv_vim/vim_examples_retirement.ipynb.
-py::tuple BuildMomentSystem(int intrc_handle, double chi, double hx, double hy, double hz) {
-    double Happ[3] = {hx, hy, hz};
-    int dof = 0;
-    int err = RadBuildMomentSystem(chi, Happ, nullptr, nullptr, &dof, intrc_handle);
-    check_error(err);
-    if (dof <= 0) throw std::runtime_error("No DOFs in interaction matrix");
-    py::array_t<double> Aout({dof, dof});
-    py::array_t<double> rout(dof);
-    err = RadBuildMomentSystem(chi, Happ, (double*)Aout.request().ptr, (double*)rout.request().ptr, &dof, intrc_handle);
-    check_error(err);
-    return py::make_tuple(Aout, rout, dof);
-}
-
-// Dense UN-normalized moment system A_raw built ENTRY-BY-ENTRY via radTInteraction::MomentSystemEntry --
-// the validation harness for the on-demand HACApK H-matrix entry (Phase 2; ACA_MOMENT_DESIGN.ipynb).
-py::tuple MomentSystemDenseRaw(int intrc_handle, double chi) {
-    int dof = 0;
-    int err = RadMomentSystemDenseRaw(chi, nullptr, &dof, intrc_handle);
-    check_error(err);
-    if (dof <= 0) throw std::runtime_error("No DOFs in interaction matrix");
-    py::array_t<double> Aout({dof, dof});
-    err = RadMomentSystemDenseRaw(chi, (double*)Aout.request().ptr, &dof, intrc_handle);
-    check_error(err);
-    return py::make_tuple(Aout, dof);
-}
-
-/**
- * @brief Densify the actual HACApK (ACA+) operator as a numpy array
- * @param intrc_handle Interaction handle from BuildMatrix
- * @return Tuple (matrix as 2D numpy array, dof)
- */
-py::tuple HMatrixDensify(int intrc_handle) {
-    int dof = 0;
-    int err = RadHMatrixDensify(nullptr, &dof, intrc_handle);
-    check_error(err);
-
-    if (dof <= 0) {
-        throw std::runtime_error("HMatrixDensify: no operator (HACApK unavailable or build failed)");
-    }
-
-    std::vector<double> matrix_data(static_cast<size_t>(dof) * dof);
-    err = RadHMatrixDensify(matrix_data.data(), &dof, intrc_handle);
-    check_error(err);
-
-    py::array_t<double> result({dof, dof});
-    auto r = result.mutable_unchecked<2>();
-    for (int i = 0; i < dof; i++) {
-        for (int j = 0; j < dof; j++) {
-            r(i, j) = matrix_data[i * dof + j];  // row-major A[target][source]
-        }
-    }
-
-    return py::make_tuple(result, dof);
-}
-
-/**
- * @brief Phase 4 debug: materialize the post-convert tree as a dense matrix.
- * Returns (A_perm, lod) where A_perm is in permuted ordering.
- */
-py::tuple HLUDebugMaterialize(int intrc_handle) {
-    // Pre-query: build manager to get dof count
-    // Use a hack: allocate generous buffer (say up to 10000 dof for diagnostics)
-    int max_dof = 10000;
-    std::vector<double> A_buf((size_t)max_dof * max_dof);
-    std::vector<int> lod_buf(max_dof);
-    int nd = 0;
-    int ok = RadHLUDebugMaterialize(intrc_handle, A_buf.data(), lod_buf.data(), &nd);
-    if (!ok || nd <= 0) {
-        throw std::runtime_error("HLUDebugMaterialize failed");
-    }
-    py::array_t<double> A_result({nd, nd});
-    auto Ar = A_result.mutable_unchecked<2>();
-    // A_buf is column-major nd x nd; convert to row-major for numpy
-    for (int i = 0; i < nd; i++)
-        for (int j = 0; j < nd; j++)
-            Ar(i, j) = A_buf[(size_t)i + (size_t)j * (size_t)nd];
-    py::array_t<int> lod_result(nd);
-    auto lr = lod_result.mutable_unchecked<1>();
-    for (int i = 0; i < nd; i++) lr(i) = lod_buf[i];
-    return py::make_tuple(A_result, lod_result);
-}
-
 
 } // namespace radia_solver
 
@@ -1436,7 +1307,7 @@ int TrfCmbR(int orig_trf, int trf) {
 }
 
 // TrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
-// TrfMlt shared DOFs between original and virtual elements, which is incorrect for MSC 6DOF hexahedra
+// TrfMlt shared DOFs between original and virtual elements, which is incorrect for independent face coefficients.
 // Use: Solve(..., image="+x-z") or BuildMatrix(obj, image="+x-z")
 
 int TrfOrnt(int obj, int trf) {
@@ -1753,10 +1624,6 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
 // Additional Solver Functions
 // ============================================================================
 
-// Opt-in analytic moment kernel toggle (defined in src/core/rad_interaction.cpp)
-void RadSetMomentAnalyticKernel(bool on);
-bool RadGetMomentAnalyticKernel();
-
 namespace radia_solver_ext {
 
 py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_method, const std::string& image = "") {
@@ -1770,102 +1637,6 @@ py::tuple SolveNonl(int obj, double prec, int max_iter, int method, int nonl_met
     check_error(err);
 
     return py::make_tuple(D[0], D[1], D[2], D[3]);
-}
-
-void SetHACApKParams(double eps, int leaf_size, double eta) {
-    int n = 0;
-    int err = RadSetHACApKParams(&n, eps, leaf_size, eta);
-    check_error(err);
-}
-
-void SetHMatrixEpsilon(double eps) {
-    int n = 0;
-    int err = RadSetHMatrixEpsilon(&n, eps);
-    check_error(err);
-}
-
-py::dict GetHACApKStats() {
-    double dOut[20] = {0};
-    int nOut = 0;
-
-    int err = RadGetHACApKStats(dOut, &nOut);
-    if (err != 0 || nOut == 0) {
-        return py::none();
-    }
-
-    py::dict result;
-    result["n_lowrank"] = static_cast<int>(dOut[0]);
-    result["n_dense"] = static_cast<int>(dOut[1]);
-    result["max_rank"] = static_cast<int>(dOut[2]);
-    result["n_leaves"] = static_cast<int>(dOut[3]);
-    result["n_dof"] = static_cast<int>(dOut[4]);
-    result["compression"] = dOut[5];
-    result["build_time"] = dOut[6];
-    result["hmatrix_build_time"] = dOut[7];
-    result["linear_iterations"] = static_cast<int>(dOut[9]);
-    result["memory_mb"] = dOut[10];
-    result["dense_memory_mb"] = dOut[11];
-    return result;
-}
-
-void SetBiCGSTABTol(double tol) {
-    int n = 0;
-    int err = RadSetBiCGSTABTol(&n, tol);
-    check_error(err);
-}
-
-double GetBiCGSTABTol() {
-    double tol = 0;
-    int err = RadGetBiCGSTABTol(&tol);
-    check_error(err);
-    return tol;
-}
-
-void SetMomentKrylovSolverByName(const std::string& name) {
-    int solver = -1;
-    if (name == "bicgstab") solver = 0;
-    else if (name == "gmres") solver = 1;
-    else throw std::invalid_argument("moment_krylov must be 'bicgstab' or 'gmres'");
-    int n = 0;
-    int err = RadSetMomentKrylovSolver(&n, solver);
-    check_error(err);
-}
-
-std::string GetMomentKrylovSolverName() {
-    int solver = 0;
-    int err = RadGetMomentKrylovSolver(&solver);
-    check_error(err);
-    if (solver == 0) return "bicgstab";
-    if (solver == 1) return "gmres";
-    return "invalid";
-}
-
-void SetMomentGMRESRestart(int restart) {
-    if (restart < 2) throw std::invalid_argument("moment_gmres_restart must be >= 2");
-    int n = 0;
-    int err = RadSetMomentGMRESRestart(&n, restart);
-    check_error(err);
-}
-
-int GetMomentGMRESRestart() {
-    int restart = 0;
-    int err = RadGetMomentGMRESRestart(&restart);
-    check_error(err);
-    return restart;
-}
-
-void SetMomentAndersonDepth(int depth) {
-    if (depth != 0 && depth != 1) throw std::invalid_argument("moment_anderson_depth currently supports 0 or 1");
-    int n = 0;
-    int err = RadSetMomentAndersonDepth(&n, depth);
-    check_error(err);
-}
-
-int GetMomentAndersonDepth() {
-    int depth = 0;
-    int err = RadGetMomentAndersonDepth(&depth);
-    check_error(err);
-    return depth;
 }
 
 void SetRelaxParam(double relax) {
@@ -1985,54 +1756,17 @@ double GetHantilaRelax() {
 // ---- Unified SolverConfig / GetSolverConfig ----
 
 void SolverConfig(py::kwargs kwargs) {
-    if (kwargs.contains("moment_inexact_bicgstab")) {
-        throw std::invalid_argument("moment_inexact_bicgstab was removed; use fixed bicgstab_tol and documented preconditioner options instead");
-    }
-    if (kwargs.contains("moment_two_level_precond")) {
-        throw std::invalid_argument("moment_two_level_precond was removed after the two-stage benchmark showed no iteration reduction; use the default element-block Jacobi path");
-    }
-
-    // HACApK parameters
-    if (kwargs.contains("hacapk_eps") || kwargs.contains("hacapk_leaf") || kwargs.contains("hacapk_eta")) {
-        double eps = kwargs.contains("hacapk_eps") ? kwargs["hacapk_eps"].cast<double>() : -1;
-        int leaf = kwargs.contains("hacapk_leaf") ? kwargs["hacapk_leaf"].cast<int>() : -1;
-        double eta = kwargs.contains("hacapk_eta") ? kwargs["hacapk_eta"].cast<double>() : -1;
-        // Get current values for unset params
-        if (eps < 0 || leaf < 0 || eta < 0) {
-            double cur_eps = 1e-4; int cur_leaf = 10; double cur_eta = 2.0;
-            // Read current from stats if available
-            double dOut[20] = {0}; int nOut = 0;
-            RadGetHACApKStats(dOut, &nOut);
-            // Defaults used if not previously set
-            if (eps < 0) eps = cur_eps;
-            if (leaf < 0) leaf = cur_leaf;
-            if (eta < 0) eta = cur_eta;
+    static const std::unordered_set<std::string> allowed = {
+        "relax_param", "newton_method",
+        "newton_damping", "newton_damping_max_iter", "newton_damping_min_omega",
+        "b_input_newton", "b_input_hantila", "hantila_alpha", "hantila_relax",
+        "keep_magnetization",
+    };
+    for (auto item : kwargs) {
+        std::string key = py::cast<std::string>(item.first);
+        if (allowed.find(key) == allowed.end()) {
+            throw std::invalid_argument("unknown SolverConfig option: " + key);
         }
-        SetHACApKParams(eps, leaf, eta);
-    }
-
-    if (kwargs.contains("hmatrix_eps")) {
-        SetHMatrixEpsilon(kwargs["hmatrix_eps"].cast<double>());
-    }
-
-    if (kwargs.contains("bicgstab_tol")) {
-        SetBiCGSTABTol(kwargs["bicgstab_tol"].cast<double>());
-    }
-
-    if (kwargs.contains("moment_krylov")) {
-        SetMomentKrylovSolverByName(kwargs["moment_krylov"].cast<std::string>());
-    }
-
-    if (kwargs.contains("moment_gmres_restart")) {
-        SetMomentGMRESRestart(kwargs["moment_gmres_restart"].cast<int>());
-    }
-
-    if (kwargs.contains("moment_anderson_depth")) {
-        SetMomentAndersonDepth(kwargs["moment_anderson_depth"].cast<int>());
-    }
-
-    if (kwargs.contains("moment_analytic_kernel")) {
-        ::RadSetMomentAnalyticKernel(kwargs["moment_analytic_kernel"].cast<bool>());
     }
 
     if (kwargs.contains("relax_param")) {
@@ -2069,22 +1803,10 @@ void SolverConfig(py::kwargs kwargs) {
     if (kwargs.contains("keep_magnetization")) {
         SetKeepMagnetization(kwargs["keep_magnetization"].cast<bool>());
     }
-
-    // (the old EIEM2/moment opt-out was REMOVED in Phase 3b-1: moment is the sole surface-charge demag.)
 }
 
 py::dict GetSolverConfig() {
     py::dict config;
-
-    // BiCGSTAB tolerance
-    { double tol = 1e-4;
-      RadGetBiCGSTABTol(&tol);
-      config["bicgstab_tol"] = tol; }
-
-    config["moment_krylov"] = GetMomentKrylovSolverName();
-    config["moment_gmres_restart"] = GetMomentGMRESRestart();
-    config["moment_anderson_depth"] = GetMomentAndersonDepth();
-    config["moment_analytic_kernel"] = ::RadGetMomentAnalyticKernel();
 
     // Relaxation parameter
     { double relax = 0.0;
@@ -2123,25 +1845,6 @@ py::dict GetSolverConfig() {
     { double relax = 0.0;
       RadGetHantilaRelax(&relax);
       config["hantila_relax"] = relax; }
-
-    // HACApK stats (if available)
-    { double dOut[20] = {0}; int nOut = 0;
-      RadGetHACApKStats(dOut, &nOut);
-      if (nOut > 0) {
-          py::dict stats;
-          stats["n_lowrank"] = static_cast<int>(dOut[0]);
-          stats["n_dense"] = static_cast<int>(dOut[1]);
-          stats["max_rank"] = static_cast<int>(dOut[2]);
-          stats["n_leaves"] = static_cast<int>(dOut[3]);
-          stats["n_dof"] = static_cast<int>(dOut[4]);
-          stats["compression"] = dOut[5];
-          stats["build_time"] = dOut[6];
-          stats["hmatrix_build_time"] = dOut[7];
-          stats["linear_iterations"] = static_cast<int>(dOut[9]);
-          stats["memory_mb"] = dOut[10];
-          stats["dense_memory_mb"] = dOut[11];
-          config["hacapk_stats"] = stats;
-      } }
 
     return config;
 }
@@ -2202,7 +1905,7 @@ void FldLenRndSw(const std::string& on_off) {
 } // namespace radia_field_ext
 
 
-// Replaced by Python-based PEEC topology solver (peec_topology.py, peec_coupled.py)
+// Replaced by Python-based PEEC topology solver (peec_topology.py)
 
 
 // ============================================================================
@@ -3036,78 +2739,8 @@ std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const st
 } // namespace radia_hdivvim
 
 // ============================================================================
-// 2D planar collocation MMMM (log-kernel tri/quad) -- rad_moment2d
-// ============================================================================
-namespace radia_moment2d {
-// Solve the LINEAR 2D planar MMMM demag problem on a cross-section mesh.
-//   verts   (nVert, 2) float64  -- concatenated element vertices (any winding)
-//   offsets (nElem+1,) int32    -- element -> vertex-start offsets
-//   chi     (nElem,)  float64   -- per-element susceptibility (mu_r - 1)
-//   Hext    (nElem, 2) float64  -- per-element applied field at the centroid
-// Returns M (nElem, 2) float64 -- per-element magnetization.
-py::array_t<double> Moment2DSolveLinear(
-        py::array_t<double, py::array::c_style | py::array::forcecast> verts,
-        py::array_t<int,    py::array::c_style | py::array::forcecast> offsets,
-        py::array_t<double, py::array::c_style | py::array::forcecast> chi,
-        py::array_t<double, py::array::c_style | py::array::forcecast> Hext) {
-    auto vbuf = verts.request(); auto obuf = offsets.request();
-    auto cbuf = chi.request();   auto hbuf = Hext.request();
-    if (obuf.ndim != 1 || obuf.shape[0] < 2)
-        throw std::runtime_error("Moment2DSolveLinear: offsets must be (nElem+1,)");
-    int nElem = static_cast<int>(obuf.shape[0]) - 1;
-    if (cbuf.ndim != 1 || cbuf.shape[0] != nElem)
-        throw std::runtime_error("Moment2DSolveLinear: chi must be (nElem,)");
-    if (hbuf.ndim != 2 || hbuf.shape[0] != nElem || hbuf.shape[1] != 2)
-        throw std::runtime_error("Moment2DSolveLinear: Hext must be (nElem, 2)");
-    if (vbuf.ndim != 2 || vbuf.shape[1] != 2)
-        throw std::runtime_error("Moment2DSolveLinear: verts must be (nVert, 2)");
-    const double* vxy = static_cast<double*>(vbuf.ptr);
-    const int*    voff = static_cast<int*>(obuf.ptr);
-    const double* chip = static_cast<double*>(cbuf.ptr);
-    const double* hp   = static_cast<double*>(hbuf.ptr);
-    py::array_t<double> M({nElem, 2});
-    double* mp = static_cast<double*>(M.request().ptr);
-    int rc;
-    { py::gil_scoped_release rel; rc = rad_moment2d::SolveLinear(nElem, voff, vxy, chip, hp, mp); }
-    if (rc != 0)
-        throw std::runtime_error("Moment2DSolveLinear: solver failed (code " + std::to_string(rc) + ")");
-    return M;
-}
-
-// Factor-once multi-RHS solve: HextMulti (nRHS, nElem, 2) -> M (nRHS, nElem, 2).  The moment matrix
-// is Hext-independent, so it is assembled + LU-factored ONCE and back-substituted for all nRHS
-// (e.g. a rotation sweep -- only the applied field rotates).
-py::array_t<double> Moment2DSolveMulti(
-        py::array_t<double, py::array::c_style | py::array::forcecast> verts,
-        py::array_t<int,    py::array::c_style | py::array::forcecast> offsets,
-        py::array_t<double, py::array::c_style | py::array::forcecast> chi,
-        py::array_t<double, py::array::c_style | py::array::forcecast> HextMulti) {
-    auto vbuf = verts.request(); auto obuf = offsets.request();
-    auto cbuf = chi.request();   auto hbuf = HextMulti.request();
-    if (obuf.ndim != 1 || obuf.shape[0] < 2)
-        throw std::runtime_error("Moment2DSolveMulti: offsets must be (nElem+1,)");
-    int nElem = static_cast<int>(obuf.shape[0]) - 1;
-    if (cbuf.ndim != 1 || cbuf.shape[0] != nElem)
-        throw std::runtime_error("Moment2DSolveMulti: chi must be (nElem,)");
-    if (hbuf.ndim != 3 || hbuf.shape[1] != nElem || hbuf.shape[2] != 2)
-        throw std::runtime_error("Moment2DSolveMulti: HextMulti must be (nRHS, nElem, 2)");
-    int nRHS = static_cast<int>(hbuf.shape[0]);
-    py::array_t<double> M({nRHS, nElem, 2});
-    double* mp = static_cast<double*>(M.request().ptr);
-    int rc;
-    { py::gil_scoped_release rel;
-      rc = rad_moment2d::SolveMulti(nElem, static_cast<int*>(obuf.ptr), static_cast<double*>(vbuf.ptr),
-                                    static_cast<double*>(cbuf.ptr), nRHS,
-                                    static_cast<double*>(hbuf.ptr), mp); }
-    if (rc != 0)
-        throw std::runtime_error("Moment2DSolveMulti: solver failed (code " + std::to_string(rc) + ")");
-    return M;
-}
-} // namespace radia_moment2d
-
-// ============================================================================
 // Shared 2D planar exterior field + Maxwell torque -- rad_planar_charges
-// (method-agnostic: MMMM and HDiv-VIM both feed a charge cloud)
+// (method-agnostic: planar solvers feed a charge cloud)
 // ============================================================================
 namespace radia_planar_charges {
 // H at observation points from a 2D point-charge cloud.  Xq (nq,2), Q (nq,), P (nP,2) -> H (nP,2)
@@ -4019,7 +3652,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // ========================================================================
 
     // NOTE: The Python-facing ObjRecMag constructor has been RETIRED. The
-    // canonical rectangular permanent magnet is now the MMMM surface-charge
+    // canonical rectangular permanent magnet is now the fixed-M surface-charge
     // hex via radia.magnet_box(...) (Python shim radia.magnet.ObjRecMag also
     // forwards to magnet_box). The internal C++ surface-current rectangular
     // block kernel (radTRecMag) and the C API RadObjRecMag are KEPT.
@@ -4060,7 +3693,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Wedge element with triangular top and bottom faces.
               5 faces total: 2 triangular (top/bottom) + 3 quadrilateral (sides).
-              5 DOF for MSC method.
+              5 surface-face coefficients for fixed-magnetization field evaluation.
 
               Vertex ordering (ELF MMB6T compatible):
                   Bottom triangle: vertices 0, 1, 2 (CCW when viewed from below)
@@ -4081,8 +3714,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Create pyramid element from 5 vertices.
 
               Square-base pyramid: 1 quadrilateral base + 4 triangular sides (5 faces total).
-              5 DOF for the multipole-moment MMM MSC method; the single quadrupole row is the per-element
-              residual eigenmode (same moment path as hex/wedge -- no extra kernel).
+              Retained for fixed-magnetization field evaluation.  Mesh-backed
+              magnetic-material solves route through HDiv-VIM.
 
               Vertex convention (matches netgen_mesh_import.PYRAMID_FACES):
                   v0..v3 = base quad, v4 = apex.
@@ -4240,39 +3873,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   - Large (>5000): method=2 (HACApK)
           )pbdoc");
 
-    m.def("Moment2DSolveLinear", &radia_moment2d::Moment2DSolveLinear,
-          py::arg("verts"), py::arg("offsets"), py::arg("chi"), py::arg("Hext"),
-          R"pbdoc(
-              Solve the LINEAR 2D planar collocation MMMM demag problem on a
-              cross-section mesh of triangles / quadrilaterals (log kernel).
-
-              Args:
-                  verts:   (nVert, 2) float64 -- concatenated element vertices
-                  offsets: (nElem+1,) int32   -- element -> vertex-start offsets
-                  chi:     (nElem,)  float64  -- per-element susceptibility (mu_r-1)
-                  Hext:    (nElem, 2) float64 -- applied field at each centroid
-
-              Returns:
-                  M: (nElem, 2) float64 -- per-element magnetization
-          )pbdoc");
-
-    m.def("Moment2DSolveMulti", &radia_moment2d::Moment2DSolveMulti,
-          py::arg("verts"), py::arg("offsets"), py::arg("chi"), py::arg("HextMulti"),
-          R"pbdoc(
-              Factor-once multi-RHS 2D planar MMMM solve: the moment matrix is
-              Hext-independent, so it is assembled + LU-factored ONCE and back-
-              substituted for all nRHS applied fields (e.g. a rotation sweep).
-
-              Args:  verts (nVert,2), offsets (nElem+1,) int32, chi (nElem,),
-                     HextMulti (nRHS, nElem, 2) float64
-              Returns: M (nRHS, nElem, 2) float64
-          )pbdoc");
-
     m.def("PlanarChargeField", &radia_planar_charges::PlanarChargeField,
           py::arg("Xq"), py::arg("Q"), py::arg("P"),
           R"pbdoc(
               2D planar exterior field H at points P from a point-charge cloud
-              (kernel -ln(r)/(2 pi)).  Shared by MMMM and HDiv-VIM.
+              (kernel -ln(r)/(2 pi)).  Shared by planar HDiv-VIM and dense planar helpers.
               Args:  Xq (nq,2), Q (nq,), P (nP,2) float64 -> H (nP,2) float64
           )pbdoc");
 
@@ -4369,78 +3974,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   numpy array (dof x 11).
-          )pbdoc");
-
-    m.def("GetCentroidFieldGrad", &radia_solver::GetCentroidFieldGrad,
-          py::arg("intrc_handle"),
-          R"pbdoc(
-              Per moment-element centroid demag field + gradient functionals -- the kernel of the
-              parameter-free surface-charge MSC moment formulation (replaces the eval-point alpha and
-              the finite-difference conditioning noise).
-
-              For each moment element, the demag field H and gradient gradH at the element
-              CENTROID as linear functionals of every source DOF charge:
-                SELF face  -> bare charged-face field (interior centroid, finite, no center
-                              charge -- patch-test exact: single cube -> demag N=1/3);
-                MUTUAL face -> collocation MMMM dipole layer = bare face - area*(point @ source center)
-                              (finite distance -> singularity-free).
-              Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.
-
-              Args:
-                  intrc_handle: Interaction handle from BuildMatrix()
-
-              Returns:
-                  numpy array (nMom, 9, dof): component k in
-                  (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g.  Use C[e,0:3,:] as the
-                  centroid field functional F0 and C[e,3:9,:] as the symmetric gradient Ginv.
-          )pbdoc");
-
-    m.def("BuildMomentSystem", &radia_solver::BuildMomentSystem,
-          py::arg("intrc_handle"), py::arg("chi"), py::arg("hx"), py::arg("hy"), py::arg("hz"),
-          R"pbdoc(
-              Parameter-free multipole-moment MMM system matrix A (dof x dof, row-major) + rhs (dof) for a
-              UNIFORM linear material (chi) in a UNIFORM applied field (hx,hy,hz).  Per moment
-              element: 3 dipole + 1 monopole + residual quadrupole rows = moment of sigma matched
-              to chi*{H,gradH}(centroid) via GetCentroidFieldGrad.  Step-1 verification of the
-              EIEM2 -> multipole-moment MMM upgrade (matches the retired Python prototype
-              inventory recorded in docs/hdiv_vim/vim_examples_retirement.ipynb).
-
-              Returns: (A, rhs, dof) -- A is (dof, dof), rhs is (dof,).
-          )pbdoc");
-
-    m.def("MomentSystemDenseRaw", &radia_solver::MomentSystemDenseRaw,
-          py::arg("intrc_handle"), py::arg("chi"),
-          R"pbdoc(
-              Dense UN-normalized moment system A_raw built ENTRY-BY-ENTRY via the on-demand
-              MomentSystemEntry (the HACApK H-matrix entry; ACA_MOMENT_DESIGN.ipynb Phase 2).  Validation
-              harness: re-normalizing A_raw's rows must reproduce BuildMomentSystem's A; and A_raw solves
-              to the SAME magnetization as the normalized system (row-norm = diagonal scaling, invariant).
-              Returns: (A_raw, dof).
-          )pbdoc");
-
-    m.def("HMatrixDensify", &radia_solver::HMatrixDensify,
-          py::arg("intrc_handle"),
-          R"pbdoc(
-              Densify the actual MMM HACApK (ACA+) system operator.
-
-              Builds the MMM H-matrix for the interaction handle and applies it
-              to unit vectors, returning the dense A = -N + diag(1/chi) in the
-              original DOF ordering.
-
-              Args:
-                  intrc_handle: Interaction handle from BuildMatrix()
-              Returns:
-                  Tuple (matrix, dof) where matrix is (dof x dof) numpy array
-          )pbdoc");
-
-    m.def("HLUDebugMaterialize", &radia_solver::HLUDebugMaterialize,
-          py::arg("intrc_handle"),
-          R"pbdoc(
-              Phase 4 debug: materialize the post-convert tree as dense.
-              Returns (A_perm, lod) where A_perm is in HACApK's permuted
-              ordering and lod[i] = 0-based original index of permuted
-              position i. Compare A_perm against P A_orig P^T to verify
-              the conversion + tree-building is correct.
           )pbdoc");
 
     m.def("HLUSetTruncTol", [](double tol) { cHACApK_hlu_set_trunc_tol(tol); },
@@ -4907,7 +4440,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "Combine transformations: orig_trf = orig_trf * trf (right multiply).");
 
     // TrfMlt REMOVED (2026-01-31) - Use IMA symmetry instead
-    // The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
+    // The shared-DOF approach was fundamentally incompatible with independent face coefficients.
 
     m.def("TrfOrnt", &radia_transform::TrfOrnt,
           py::arg("obj"), py::arg("trf"),
@@ -5151,32 +4684,21 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   hacapk_eta (float): H-matrix admissibility parameter (default: 2.0)
                   hmatrix_eps (float): H-matrix field evaluation epsilon
                   bicgstab_tol (float): BiCGSTAB convergence tolerance (default: 1e-4)
-                  moment_krylov (str): Moment method-2 Krylov solver, "bicgstab" or "gmres"
-                  moment_gmres_restart (int): Restart length for moment GMRES (default: 40)
-                  moment_anderson_depth (int): Safeguarded moment Anderson acceleration depth, 0 or 1
-                      (default: 1 since 2026-07-03, the "Anderson+Picard" standard for every moment
-                      Picard solve -- rescues coupled-block hysteresis divergence on the descending
-                      branch; acceptance is safeguarded so well-behaved solves are unaffected.
-                      Set 0 for plain Picard.)
                   relax_param (float): Under-relaxation (0=full step, <1=damped)
                   newton_method (bool): True=Newton-Raphson, False=Picard (default)
                   newton_damping (bool): Enable Newton line search damping
                   newton_damping_max_iter (int): Max line search iterations (default: 5)
                   newton_damping_min_omega (float): Minimum omega (default: 0.01)
-                  b_input_newton (bool): Enable B-input hysteresis stepping (default: False).
-                      All-moment (DOF>=4) bodies route to the moment B-input Picard(+Anderson);
-                      the dense 3-DOF B-input Newton survives only for genuine 3-DOF dipoles.
-                  b_input_hantila (bool): Same routing as b_input_newton for all-moment bodies
-                      (moment B-input Picard); the dense Hantila polarization path survives only
-                      for genuine 3-DOF dipoles (default: False)
+                  b_input_newton (bool): Enable B-input hysteresis stepping
+                      for supported 3-DOF dipole relaxation (default: False)
+                  b_input_hantila (bool): Enable Hantila B-input stepping
+                      for supported 3-DOF dipole relaxation (default: False)
                   hantila_alpha (float): Hantila polarization parameter (0=auto, default: 0)
                   hantila_relax (float): Hantila under-relaxation (0=full step, default: 0)
 
               Example:
                   rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
                   rad.SolverConfig(bicgstab_tol=1e-6, relax_param=0.3)
-                  rad.SolverConfig(moment_krylov="gmres", moment_gmres_restart=40)
-                  rad.SolverConfig(moment_anderson_depth=0)   # opt out to plain Picard
                   rad.SolverConfig(newton_method=True, newton_damping=True)
                   rad.SolverConfig(b_input_newton=True)  # B-input hysteresis stepping
           )pbdoc");
@@ -5187,8 +4709,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   Dictionary with all solver parameters:
-                  - bicgstab_tol, moment_krylov, moment_gmres_restart
-                  - moment_anderson_depth, relax_param, newton_method, b_input_newton, b_input_hantila
+                  - bicgstab_tol
+                  - relax_param, newton_method, b_input_newton, b_input_hantila
                   - newton_damping, newton_damping_max_iter, newton_damping_min_omega
                   - hacapk_stats (if H-matrix solve has been performed)
           )pbdoc");
@@ -6792,7 +6314,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // (ACA+)+TSVD generic least-norm solver (kernel-agnostic).
     // The matrix entry A(i,j) is supplied by a Python callable entry(i,j),
     // so the same machinery serves any Radia source family (coil Biot-Savart,
-    // MMM/MSC magnetic-material field, ...).  ACA+ is HACApK's cHACApK_acaplus.
+    // fixed-magnetization field kernels, ...).  ACA+ is HACApK's cHACApK_acaplus.
     // ========================================================================
     m.def("_stream_aca_tsvd",
         [](int M, int N, std::function<double(int, int)> entry,
@@ -6825,7 +6347,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
             entries are supplied on demand by the callback entry(i, j) ->
             A(i,j) (0-based row i in [0,M), col j in [0,N)).  Kernel-agnostic:
             the callback may use any Radia field computation (coil Biot-Savart,
-            MMM/MSC magnetic material field, ...).  ACA+ is delegated to HACApK
+            fixed-magnetization field kernels, ...).  ACA+ is delegated to HACApK
             (cHACApK_acaplus).  Returns (U, S, V, k_aca):
               U:     (M, modes) row-major
               S:     (modes,)

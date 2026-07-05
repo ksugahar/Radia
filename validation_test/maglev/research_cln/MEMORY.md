@@ -513,10 +513,10 @@
 - v2 から ELF を削除 (cuboid 5×2×1 §6 + A1 §5 + intro list + 各種 table)
 - Abstract から「4 手法」→「3 手法」(解析解 + NGSolve + VIM)
 - §7 corner table から ELF row 削除
-- abstract も「商用 MMM ELF」記述削除
+- abstract も「商用磁気モーメントELF」記述削除
 
 **ELF future work memo (lossy)**:
-- ELF/MAGIC 商用 MMM (Magnetic Moment Method, 磁気モーメント法) は時間領域 step response の Foster fit が苦手 (4 mode しか抽出できず Hankel-Padé extrapolation noise)
+- ELF/MAGIC 商用磁気モーメント法 は時間領域 step response の Foster fit が苦手 (4 mode しか抽出できず Hankel-Padé extrapolation noise)
 - 将来方向: ELF の time-domain solver で **eddy current 損失力 (Lorentz force)** を直接計算 → CLN とは別の検証 angle
 - 適用例: 電力機器の渦電流損装荷 + 機械的振動・力評価
 - これは別研究テーマとして切り出す (今は CLN 抽出に集中)
@@ -539,7 +539,7 @@
    - ただし \textbf{axisym smooth body では BEM ≡ VIM} (両者とも同じ Foster 固有値問題に帰着) という関係があるので注記追加
    - §3 intro と §3.2 の両方に「axisym smooth body では BEM $\equiv$ VIM」 note 追記
 
-3. §3.4 cuboid の「ELF 商用 MMM は本検証から除外...」注記は \textbf{完全削除} (§3 intro で既述、redundant)
+3. §3.4 cuboid の「ELF 商用磁気モーメント法 は本検証から除外...」注記は \textbf{完全削除} (§3 intro で既述、redundant)
    - \textbf{削除}: §3.4 cuboid の ELF 注記行を削除
 
 **実装状況**:

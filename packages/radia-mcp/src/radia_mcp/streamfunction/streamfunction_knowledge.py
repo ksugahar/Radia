@@ -39,7 +39,7 @@ WHAT THIS FRAMEWORK PROVIDES
 ----------------------------
   * Kernel-agnostic (ACA+)+TSVD least-norm solver -- the matrix entry
     A(i,j) is a callback, so the SAME solver drives coils (Biot-Savart) OR
-    magnets (Radia MMM material kernel).  [topic: kernel_agnostic, method]
+    magnets (Radia field-kernel / HDiv-VIM material route).  [topic: kernel_agnostic, method]
   * FE-direct psi as a continuous H1 GridFunction on ANY surface
     (plane / cylinder / sphere / conformal / 3D-printed former) -- the case
     the structured basis-loop grid cannot represent.  [topic: single_stroke]
@@ -469,7 +469,7 @@ win for single-conductor coils."
     (grad-psi winding orientation, so l>=2 saddle shims chain without the
     common series current cancelling) -> sheet-metal distort -> STEP CAD
     (OCC WriteStep) -> PEEC.  The PEEC step is a full circuit-extraction
-    SOLVER (L,R,C,M + SPICE, MMM coupling), not just an inductance number.
+    SOLVER (L,R,C,M + SPICE, magnetic-material coupling), not just an inductance number.
     (topics 'single_stroke' / 'low_turn'.)
   PHYSICS -- iron.  NESCOIL/REGCOIL/FOCUS are free-space (vacuum Biot-Savart).
     radia's material-aware kernel (Kelvin-FEM DtN, M = M_free + M_react,
@@ -1022,7 +1022,7 @@ TOPICS = {
     "theory": "SFM + (ACA+)+TSVD math (least-norm A psi = B, K = n x grad psi)",
     "method": "alias of theory",
     "api": "radia.stream_function API: aca_tsvd, RegularizedTSVD, pseudo_inverse_solve",
-    "kernel_agnostic": "callback matrix-entry contract -- coils (Biot-Savart) OR magnets (MMM)",
+    "kernel_agnostic": "callback matrix-entry contract -- coils (Biot-Savart) OR magnets (Radia field callback)",
     "regularized": "regularisation menu (L2/H1/sigma/inductance/L-inf) + folded Tikhonov closed form",
     "pareto": "(homogeneity, peak current density) Pareto front + 4 levers + sheet-metal",
     "sheet_metal": "sheet-metal: wire distortion + surface forming (-> pareto / single_stroke)",

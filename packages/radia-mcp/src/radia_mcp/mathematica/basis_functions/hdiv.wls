@@ -3,7 +3,7 @@
 
 (*
   hdiv.wls -- NGSolve-style H(div) (Raviart-Thomas / BDM) shape functions, clean wls.
-  THE space the MSC / VIM solver needs: the magnetization face-normal density lives
+  THE space the HDiv-VIM solver needs: the magnetization face-normal density lives
   in H(div), and the de Rham property  div(curl(H(curl))) = 0  is exactly what makes
   the div-free magnetization circulations ("loops", ker N) field-null by construction
   -- the machine-zero loops, replacing hand-built null vectors / element engineering.

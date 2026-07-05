@@ -46,18 +46,6 @@ def _base_artifact(lane: str, observable: str) -> dict:
         }
         data["reduced_fem_contract"] = {"basis": "P1", "quantity": observable}
         data["vim_operator_contract"] = {"space": "HDiv", "quantity": observable}
-    elif lane == "mmmm2d_coarse":
-        data["metrics"] = {"torque_relative_error": 1.0e-3}
-        data["mmmm2d_contract"] = {
-            "solver": "radia.mmmm2d",
-            "material_input": "scalar or per-region dict",
-            "sweep": "factor-once linear torque_angle_sweep",
-        }
-        data["region_material_contract"] = {
-            "regions": ["inner", "outer"],
-            "missing_region_policy": "raise",
-        }
-        data["pytest_targets"] = ["validation_test/feec/test_moment2d_perregion.py"]
     else:
         data["metrics"] = {"torque_relative_error": 1.0e-3}
         data["age_gate_ids"] = ["age_rotation_torque"]
@@ -69,7 +57,6 @@ def test_validation_lane_report_names_independent_radia_paths():
     report = format_motor_validation_lanes("lane_matrix")
     assert "HDiv-VIM + reduced FEM" in report
     assert "NGSolve+AGE" in report
-    assert "2D collocation MMMM" in report
     assert "pickup_flux" in report
     assert "linear_pm_flux" in report
     assert "linear_thrust" in report
@@ -79,7 +66,6 @@ def test_validation_lane_report_names_independent_radia_paths():
 def test_lane_templates_expose_required_artifact_contracts():
     hdiv = lane_template("hdiv_vim_reduced_fem")
     age = lane_template("ngsolve_age")
-    mmmm = lane_template("mmmm2d_coarse")
     assert "vim_operator_contract" in hdiv["required_fields"]
     assert "reduced_fem_contract" in hdiv["required_fields"]
     assert "interface_operator_contract" in hdiv["required_fields"]
@@ -87,9 +73,6 @@ def test_lane_templates_expose_required_artifact_contracts():
     assert "age_gate_ids" in age["required_fields"]
     assert "pytest_targets" in age["required_fields"]
     assert age["support_status"] == "supported_validation_path"
-    assert "mmmm2d_contract" in mmmm["required_fields"]
-    assert "region_material_contract" in mmmm["required_fields"]
-    assert mmmm["support_status"] == "supported_coarse_path"
     assert (
         "validation_test/feec/test_hdiv_motor_minimal_contract.py"
         in hdiv["public_evidence"]
@@ -187,17 +170,6 @@ def test_ngsolve_age_artifact_gate_accepts_torque_contract_json():
     assert result["status"] == "pass"
     assert result["accepted_for_mcp_learning"] is True
     assert result["validated_solver_path"] is True
-    assert result["validated_supported_path"] is True
-
-
-def test_mmmm2d_artifact_gate_accepts_supported_coarse_contract():
-    artifact = _base_artifact("mmmm2d_coarse", "torque")
-    result = validate_motor_validation_artifact(artifact, "mmmm2d_coarse")
-    assert result["status"] == "pass"
-    assert result["accepted_for_mcp_learning"] is True
-    assert result["support_status"] == "supported_coarse_path"
-    assert result["validated_solver_path"] is False
-    assert result["validated_coarse_path"] is True
     assert result["validated_supported_path"] is True
 
 

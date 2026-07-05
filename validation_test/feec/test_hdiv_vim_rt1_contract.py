@@ -4,16 +4,15 @@ HDiv-VIM is the RT1 (HDiv order=1) high-order element of the soft-iron demag sta
 pure-HEX, or pure-WEDGE mesh.  RT0 is retired (per-element INACCURATE -- the demag factor is right ~1/3
 but the per-element M leaks; RT1 is what fixes it); RT2+ is retired (no per-element gain over RT1, slower).
 Pyramid / mixed meshes, pm_M mixing,
-curved IMA, the 'gauss' point Gram and the 'hlu' system-A solver are retired from / not in HDiv-VIM ->
-the collocation MMMM backend.
+curved IMA, the 'gauss' point Gram and the 'hlu' system-A solver are not in the HDiv-VIM production path.
 
 HEX/WEDGE were UNLOCKED 2026-07-04: the wired RT1 charge Grams + the Gram-agnostic solve path already
 solve them, so the auto guard is now pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
 lock lives in test_hdiv_vim_hex_public_solve.py; wedge spectrum/cube locks live in
 test_hdiv_vim_wedge_spectrum.py.
 
-This test LOCKS the fail-loud retirement (No-Fallbacks: the raise IS the feature -- it names the backend to
-use instead) + the RT1 happy path + the rad.Solve 'auto' split.  It replaces the per-feature golden tests
+This test LOCKS the fail-loud retirement (No-Fallbacks: the raise IS the feature) + the RT1 happy path
++ the rad.Solve 'auto' split.  It replaces the per-feature golden tests
 for the retired paths (gauss / hlu / pm / curved image).
 
 NGSolve + Netgen required.  See memory/hdiv_vim_tet_rt1_only.md.
@@ -58,7 +57,7 @@ def test_rt1_nonlinear_solves():
 
 # ---------------------------------------------------------------- retired-from-HDiv-VIM (fail-loud)
 def test_rt0_retired():
-    """order=0 (RT0) is retired -- per-element inaccurate; the error names the collocation MMMM alternative."""
+    """order=0 (RT0) is retired -- per-element inaccurate."""
     mesh = _sphere()
     with pytest.raises(ValueError, match="RT1"):
         with ng.TaskManager():
@@ -82,7 +81,7 @@ def test_pm_mixing_retired():
 
 
 def test_curved_image_symmetry_retired():
-    """Curved IMA is not wired -- reduced curved models use collocation MMMM."""
+    """Curved IMA is not wired."""
     mesh = _sphere()
     with pytest.raises(NotImplementedError):
         with ng.TaskManager():
@@ -137,7 +136,7 @@ def test_vim_solve_accepts_wedge_mesh_directly():
     """vim.Solve now accepts pure-tet, pure-hex, AND pure-WEDGE/prism (6-vertex) via the C++
     wedge-mode charge Gram (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated).  A prism-meshed cube
     solves and returns the ~1/3 cube demag factor (the C++ wedge Gram is eig(M_mass^-1 N) in [0,1]:
-    0.992/0.998 @ n=2/3 in the de-risk).  A MIXED / pyramid mesh still routes to collocation MMMM."""
+    0.992/0.998 @ n=2/3 in the de-risk)."""
     from ngsolve.meshes import MakeStructured3DMesh
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
     try:

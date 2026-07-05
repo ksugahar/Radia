@@ -9,7 +9,7 @@ crystallized as its own package.
 
 - **motor / AGE validation routing**: added public-safe `motor_age_quality`
   and `motor_age_validation_plan` tools, plus the ELF/MAGIC motor bridge
-  and MMM quick-check router.  Motor prompts now route from SPM/IPM/IM/SRM/
+  and field quick-check router.  Motor prompts now route from SPM/IPM/IM/SRM/
   SynRM/hysteresis intent to explicit NGSolve AGE gates, physical quantities,
   pytest targets, and publication labels without exposing private solver
   provenance.
@@ -840,7 +840,7 @@ What shipped:
 - **bem `--selftest` extended** to exercise the new tool with
   size + unknown-topic assertions.
 
-POLICY: Radia core (MMM/MSC) is Laplace-kernel only.  This module
+POLICY: Radia core (HDiv-VIM) is Laplace-kernel only.  This module
 is the THEORY POINTER for users who need a full layered-medium
 Green's function — production answer is usually either Koh-Yook
 2006 closed form (single interface) or ngsolve.bem + DCIM
@@ -1768,7 +1768,7 @@ substantive PDF-sourced content; +7400 lines total):
 - `rna_mec`: 177→1591 lines, 12 topics (Derbas 2009 nodal-vs-mesh,
   Lee 2005 TEAM-28 reduced model, Kameari-Ebrahimi-Sugahara-Shindo-
   Matsuo 2018 canonical 3D-FEM CLN, Hane 2020 dynamic hysteresis +
-  Cauer MEC, Janet 2004-2005 RNA-MMM mixed method).
+  Cauer MEC, Janet 2004-2005 RNA magnetic-moment mixed method).
 - `metamaterial`: 90→1244 lines, 12 topics (Veselago/Pendry/Smith
   LH materials, SRR Pendry LC model, transformation optics with
   explicit Kelvin-inversion cross-link to electromagnet subpackage,
@@ -2005,7 +2005,7 @@ which panel mode is asking.
 
 - **`electromagnet` (new `symmetry_reductions` topic)**:
   - Two distinct Kelvin panel paths -- "Kelvin Benchmark" sphere
-    (1/2, 1/4 only) vs "EM panel FEM/MSC" C-yoke (1/1, 1/2, 1/4,
+    (1/2, 1/4 only) vs "EM panel FEM/HDiv-VIM" C-yoke (1/1, 1/2, 1/4,
     1/8).  Don't conflate.
   - C-yoke 1/8 sample paths and ELF CEFC 2020 convention
     `ht=0_x, ht=0_y, bn=0_z`.

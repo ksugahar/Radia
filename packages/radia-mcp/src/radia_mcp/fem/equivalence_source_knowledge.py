@@ -160,7 +160,7 @@ label and writes the NFS artifact + an external probe CSV.
 
 - **No new FEM solver.**  This module is a POST-PROCESSING layer on top
   of whatever FEM you already have (radia.axifem, ngsolve,
-  Radia MMM, etc.).
+  Radia field evaluator / HDiv-VIM, etc.).
 
 ## Known limitations (release v1.0)
 
@@ -437,7 +437,7 @@ evaluate() takes the magnetostatic-reduction code path automatically.
 _RADIA_RECIPE = r"""
 # Radia recipe -- extracting an NFS from rad.Fld() and re-radiating
 
-For pure-Radia (MMM/MSC) problems where you've solved magnetostatics
+For pure-Radia (HDiv-VIM) problems where you've solved magnetostatics
 with `rad.Solve()` and have a Radia container handle, the workflow
 mirrors the NGSolve recipe but uses `rad.Fld()` for surface sampling
 and `rad.ObjCnt` for re-radiation.

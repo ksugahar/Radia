@@ -7,7 +7,7 @@
 * Description:    Magnetic field source:
 *                 rectangular parallelepiped with constant (Ampere) current
 *                 density -- the current block behind ObjRecCur / ObjArcCur.
-*                 (Magnetized rectangular blocks are MMMM surface-charge
+*                 (Magnetized rectangular blocks are surface-charge surface-charge
 *                 polyhedra now; see radTApplication::SetRecMag.)
 *
 * Author(s):      Oleg Chubar
@@ -142,7 +142,7 @@ public:
 	int NumberOfDegOfFreedom() { return (MaterHandle.rep == 0)? 0 : 3;}
 	int SizeOfThis() { return sizeof(radTRecCur);}
 
-	// Current block is never converted to a polyhedron (the magnet path builds the MMMM polyhedron
+	// Current block is never converted to a polyhedron (the magnet path builds the surface-charge polyhedron
 	// directly in SetRecMag). Return 1 ("handled", like radTPolyhedron) so radTGroup::ConvertToPolyhedron
 	// does not treat a current block as a conversion failure (base radTg3dRelax returns 0).
 	int ConvertToPolyhedron(radThg&, radTApplication*, char) { return 1;}

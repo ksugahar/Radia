@@ -32,9 +32,7 @@
 //-------------------------------------------------------------------------
 
 namespace RadSolverMethod {
-	constexpr int LU         = 0;  // LU direct solver
-	constexpr int BICGSTAB   = 1;  // BiCGSTAB iterative solver (default)
-	constexpr int BICGSTAB_HMATRIX = 2;  // BiCGSTAB with H-matrix (HACApK ACA+)
+	constexpr int LU = 0;  // LU direct solver. Non-symmetric Krylov relaxation methods were retired.
 }
 
 //-------------------------------------------------------------------------
@@ -87,10 +85,6 @@ struct NonlinearContext {
 	double B_sat;               // Saturation B for relative convergence check
 	double max_B_rel_change;    // Maximum relative B change this iteration
 	double nonlinear_tol;       // Outer nonlinear convergence tolerance
-	bool last_solve_was_moment_hacapk;  // True when the last linear step used the moment method-2 path
-	bool last_solve_was_moment;         // True when the last linear step used ANY moment path (LU / dense-K / H-matrix) -- gates Anderson
-	double last_moment_linear_tol;      // Effective tolerance used by the last moment Krylov solve
-	int last_moment_krylov_solver;      // 0=BiCGSTAB, 1=GMRES
 
 	// Under-relaxation parameter (0 = full step, 0.5 = 50% damping)
 	double relax_param;
@@ -114,25 +108,6 @@ struct NonlinearContext {
 	bool use_b_input;                          // True for B-input Newton solver
 	std::vector<std::vector<TVector3d>> saved_hys_states;  // Per-element saved Jk states
 
-	// B-input PLAY-model hysteresis driven through the moment Picard loop
-	// (DOF >= 4 face-charge elements: tet/wedge/pyramid/hex).  When set, the
-	// dof>=4 branch of UpdateChiAndCheckConvergence computes B = mu0*(H_new + M)
-	// from the current solved state and updates chi via ComputeChiFromB(B)
-	// instead of ComputeChiFromH(H).  Per-element play state is saved at the
-	// start of the solve and restored before each material evaluation so each
-	// element keeps its own play trajectory across Picard iterations; states are
-	// committed once at the end of the converged solve.
-	bool b_input_play;                                  // True for moment B-input Picard
-	std::vector<radTHysteresisMaterial*> hys_mat_cache; // Per-element hysteresis material (nullptr if none)
-	std::vector<std::vector<double>> hys_play_state;    // Per-element start-of-step state array [GetStateSize()]
-
-	// Multipole-moment outer acceleration history (safeguarded Anderson depth 1).
-	bool moment_anderson_have_prev;
-	std::vector<double> MomentAndersonPrevResidual;
-	std::vector<double> MomentAndersonPrevImage;
-	int moment_anderson_accepted;
-	int moment_anderson_rejected;
-
 	// Constructor
 	NonlinearContext()
 		: totalDOF(0)
@@ -144,10 +119,6 @@ struct NonlinearContext {
 		, B_sat(1.0)
 		, max_B_rel_change(0.0)
 		, nonlinear_tol(0.0)
-		, last_solve_was_moment_hacapk(false)
-		, last_solve_was_moment(false)
-		, last_moment_linear_tol(0.0)
-		, last_moment_krylov_solver(0)
 		, relax_param(0.0)
 		, use_newton(false)
 		, newton_damping_enabled(false)
@@ -155,10 +126,6 @@ struct NonlinearContext {
 		, newton_ls_min_omega(0.01)
 		, total_ls_backtracks(0)
 		, use_b_input(false)
-		, b_input_play(false)
-		, moment_anderson_have_prev(false)
-		, moment_anderson_accepted(0)
-		, moment_anderson_rejected(0)
 	{}
 };
 
@@ -179,9 +146,7 @@ struct NonlinearContext {
 bool InitializeNonlinearContext(NonlinearContext& ctx, radTInteraction* IntrctPtr, bool MagnResetIsNotNeeded);
 
 /**
- * Build base matrix with correct sign convention for MMM/MSC elements.
- * MMM (3DOF): negate interaction matrix (stores N, need -N)
- * MSC (6DOF): use as-is (stores -K/(4pi))
+ * Build base matrix with correct sign convention for 3-DOF relaxable elements.
  *
  * @param ctx Context with BaseMatrix to fill
  * @param IntrctPtr Interaction data
@@ -345,9 +310,7 @@ protected:
 	// Override: LU direct solver for linear step
 	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
 
-	// Override: the all-moment MMM/MSC Picard path assembles its own per-element moment system and never
-	// reads the dense interaction/base matrix, so no dense BaseMatrix is needed (storage decoupling).
-	// Returns true for the genuine dense LU / B-input Newton-Hantila paths (which DO read the dense BaseMatrix).
+	// Override: LU reads the dense interaction/base matrix.
 	bool NeedsDenseMatrix() const override;
 
 	// Override: Dense Jacobian assembly + LAPACK dgesv_ for B-input Newton
@@ -371,188 +334,7 @@ private:
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-/**
- * BiCGSTAB iterative solver
- * Method number 1
- *
- * This solver uses BiCGSTAB (Biconjugate Gradient Stabilized) with
- * Jacobi (diagonal) preconditioning for faster convergence.
- * Stable for high permeability materials.
- *
- * Recommended for N > 100 elements where direct solver (Method 0)
- * becomes too slow due to O(N^3) complexity.
- *
- * Reference: van der Vorst, SIAM J. Sci. Stat. Comput. 13 (1992)
- */
-class radTRelaxationMethNo_1 : public radTIterativeRelaxMeth {
-
-public:
-	radTRelaxationMethNo_1(radTInteraction* InInteractionPtr)
-	: radTIterativeRelaxMeth(InInteractionPtr)
-	{
-		IntrctPtr = InInteractionPtr;
-	}
-
-	~radTRelaxationMethNo_1() {}
-
-	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
-
-protected:
-	// Override: BiCGSTAB iterative solver for linear step
-	int SolveLinearStep(NonlinearContext& ctx, int iterCount) override;
-
-	// Moment method-1 builds the parameter-free moment dense matrix inside
-	// SolveLinearStep, so it does not need the legacy FlatInteract matrix.
-	bool NeedsDenseMatrix() const override;
-
-private:
-	// Collocation-MMMM COARSE tier (method-2 request routed here by SolveGen): the chi-free geometry
-	// coupling K (RadHACApKMomentSystem H-matrix) + the chi-free localL/diagK blocks live in the
-	// CROSS-SOLVE cache on radTApplication (rad.m_moment_hk*), so an optimization inner loop that
-	// re-Solves the same geometry reuses them across rad.Solve calls, not just across the Picard
-	// iterations of one solve.  See rad_application.h / SolveLinearStep's hkCacheValid check.
-
-	// Variable DOF version of BiCGSTAB
-	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)
-	int SolveBiCGSTAB_VariableDOF(NonlinearContext& ctx,
-	                              int totalDOF, double tol, int max_iter, double& residual,
-	                              const std::vector<double>& elemChiArray,
-	                              bool use_newton = false,
-	                              const std::vector<double>* absChiArray = nullptr,
-	                              const double* oldSigma = nullptr);
-
-	// Matrix-vector product
-	// Computes: y = A * x where A = -N - diag(1/chi) (ELF-compatible)
-	void MatVec(const std::vector<double>& x, std::vector<double>& y,
-	            const std::vector<double>& inv_chi, int ndof);
-
-	// Dense matrix-vector product
-	// IMPORTANT: Uses pre-computed inv_chi values that are FIXED during BiCGSTAB iterations
-	void DenseMatVec(const std::vector<double>& x, std::vector<double>& y,
-	                 const std::vector<double>& inv_chi, int ndof);
-
-	// Build flat matrix for BLAS dgemv (row-major order)
-	// Matrix A = -N - diag(1/chi) stored in column-major for BLAS (ELF-compatible)
-	void BuildFlatMatrix(std::vector<double>& A_flat, const std::vector<double>& inv_chi, int ndof);
-
-	// Dense matrix-vector product using BLAS dgemv
-	void DenseMatVec_BLAS(const std::vector<double>& A_flat, const std::vector<double>& x,
-	                      std::vector<double>& y, int ndof);
-
-	// Variable DOF matrix-vector product using flat storage
-	void MatVec_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
-	                        const std::vector<double>& inv_chi, int totalDOF);
-
-	// Get diagonal elements for Jacobi preconditioner
-	// IMPORTANT: Uses pre-computed inv_chi values that are FIXED during BiCGSTAB iterations
-	void GetDiagonalElements(std::vector<double>& diag, const std::vector<double>& inv_chi, int n_elem);
-
-	// Variable DOF version
-	void GetDiagonalElements_VariableDOF(std::vector<double>& diag, const std::vector<double>& inv_chi, int totalDOF);
-
-	// Block Jacobi preconditioner (for ill-conditioned matrices)
-	bool BuildBlockJacobiPreconditioner_VariableDOF(std::vector<double>& blockInverse, std::vector<int>& blockOffsets,
-	                                                 const std::vector<double>& inv_chi, int totalDOF);
-	void ApplyBlockJacobiPreconditioner_VariableDOF(const std::vector<double>& x, std::vector<double>& y,
-	                                                 const std::vector<double>& blockInverse, const std::vector<int>& blockOffsets);
-
-	// BLAS-like operations
-	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);
-	double Norm2(const std::vector<double>& a, int n);
-	void Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n);
-	void Copy(const std::vector<double>& src, std::vector<double>& dst, int n);
-	void Scale(double alpha, std::vector<double>& x, int n);
-};
-
-//-------------------------------------------------------------------------
-//-------------------------------------------------------------------------
-
-#ifdef RADIA_USE_HACAPK
-/**
- * BiCGSTAB iterative solver with H-matrix acceleration (HACApK ACA+)
- * Method number 2
- *
- * Uses HACApK library for O(N log N) matrix-vector products via ACA+ compression.
- * Effective when elements are spatially well-separated (multiple objects).
- * For single compact objects, Method 1 (dense BiCGSTAB) may be faster.
- *
- * Reference:
- *   - HACApK: ppOpen-HPC project (MIT License)
- *   - ACA+: Bebendorf & Rjasanow, Computing 70 (2003)
- */
-class radTRelaxationMethNo_2 : public radTIterativeRelaxMeth {
-
-public:
-	radTRelaxationMethNo_2(radTInteraction* InInteractionPtr)
-	: radTIterativeRelaxMeth(InInteractionPtr)
-	, m_hacapk(nullptr)
-	{
-		IntrctPtr = InInteractionPtr;
-	}
-
-	~radTRelaxationMethNo_2() {
-		if (m_hacapk) {
-			delete m_hacapk;
-			m_hacapk = nullptr;
-		}
-	}
-
-	int AutoRelax(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
-
-	// Variable DOF version for 6DOF MSC hexahedra
-	int AutoRelax_VariableDOF(double PrecOnMagnetiz, int MaxIterNumber, char MagnResetIsNotNeeded=0);
-
-	// Get H-matrix statistics (for debugging/analysis)
-	const RadHACApKStats& GetHMatrixStats() const {
-		static RadHACApKStats empty_stats;
-		return m_hacapk ? m_hacapk->GetStats() : empty_stats;
-	}
-
-	// Set H-matrix parameters (call before AutoRelax)
-	void SetHACApKParams(const RadHACApKParams& params) { m_hacapk_params = params; }
-
-private:
-	// HACApK manager (owns the H-matrix)
-	RadHACApKMMMManager* m_hacapk;
-	RadHACApKParams m_hacapk_params;
-
-	// NOTE: Jacobi preconditioner is now recomputed every iteration (FIX 2025-12-27)
-	// No longer cached. See SolveBiCGSTAB_HMatrix_VariableDOF for details.
-
-	// BiCGSTAB with H-matrix for 6DOF MSC hexahedra
-	// Returns number of iterations (0 on failure)
-	// elemChiArray: chi for system matrix diagonal (chi_abs for Picard, chi_d for Newton)
-	// Newton params (optional): diffChiArray=differential chi, absChiArray=absolute chi, oldSigma=prev solution
-	int SolveBiCGSTAB_HMatrix_VariableDOF(NonlinearContext& ctx,
-	                                       int totalDOF, double tol, int max_iter, double& residual,
-	                                       const std::vector<double>& elemChiArray,
-	                                       bool use_newton = false,
-	                                       const std::vector<double>* absChiArray = nullptr,
-	                                       const double* oldSigma = nullptr);
-
-	// Matrix-vector product using H-matrix for 6DOF MSC hexahedra
-	void MatVec_HMatrix_VariableDOF(const std::vector<double>& x, std::vector<double>& y, int totalDOF);
-
-	// Get diagonal elements using H-matrix for 6DOF MSC hexahedra
-	void GetDiagonalElements_HMatrix_VariableDOF(std::vector<double>& diag,
-	                                              const std::vector<double>& inv_chi, int totalDOF);
-
-	// Block Jacobi preconditioner for H-matrix BiCGSTAB
-	bool BuildBlockJacobiPreconditioner_HMatrix(std::vector<double>& blockInverse,
-	                                             std::vector<int>& blockOffsets,
-	                                             const std::vector<double>& inv_chi, int totalDOF);
-	void ApplyBlockJacobiPreconditioner_HMatrix(const std::vector<double>& x, std::vector<double>& y,
-	                                             const std::vector<double>& blockInverse,
-	                                             const std::vector<int>& blockOffsets);
-
-	// BLAS-like operations (same as radTRelaxationMethNo_1)
-	double Dot(const std::vector<double>& a, const std::vector<double>& b, int n);
-	double Norm2(const std::vector<double>& a, int n);
-	void Axpy(double alpha, const std::vector<double>& x, std::vector<double>& y, int n);
-	void Copy(const std::vector<double>& src, std::vector<double>& dst, int n);
-	void Scale(double alpha, std::vector<double>& x, int n);
-};
-#endif // RADIA_USE_HACAPK
+/* Non-symmetric BiCGSTAB / HACApK relaxation methods retired. */
 
 //-------------------------------------------------------------------------
 

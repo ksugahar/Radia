@@ -1,6 +1,6 @@
 """Accelerator pole design via the hodograph -- design + measurement foundation.
 
-RESEARCH example.  First rung of the "hodograph inverse design + HDiv-MMM
+RESEARCH example.  First rung of the "hodograph inverse design + HDiv-VIM
 nonlinear forward" combination (the radia selling point): the pieces every
 forward verification needs --
 
@@ -20,7 +20,7 @@ forward verification needs --
 
 The ideal infinite pole gives a PERFECT multipole (no spurious harmonics);
 the design value is the FINITE pole + finite-mu + saturation, measured by
-(1) on the forward solve -- the next rungs ((a)-2 HDiv-MMM, (a)-3 the
+(1) on the forward solve -- the next rungs ((a)-2 HDiv-VIM, (a)-3 the
 saturation loop).
 
 Verified here (analytic): the analyzer returns ONLY b_2 for a pure quad and

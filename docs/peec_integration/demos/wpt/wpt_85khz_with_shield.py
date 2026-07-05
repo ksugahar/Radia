@@ -1,7 +1,8 @@
 """
 WPT System at 85 kHz with Ferrite Core and Aluminum Shield
 
-This example demonstrates PEEC Loop-Star + MMM analysis for:
+This example demonstrates PEEC Loop-Star conductor analysis plus a planned
+HDiv-VIM / reduced-FEM magnetic-material exchange for:
 1. Tx/Rx coils with ferrite cores (mu_r = 2000)
 2. Aluminum shield for EMI reduction
 3. Mutual inductance and coupling coefficient
@@ -475,10 +476,10 @@ Key Effects Modeled:
   3. Aluminum shield eddy current losses
   4. Frequency-dependent impedance matrix
 
-Next Steps for PEEC+MMM:
+Next Steps for PEEC + HDiv-VIM/reduced FEM:
   1. Replace analytical formulas with Radia 3D geometry
   2. Apply Loop-Star decomposition to coil mesh
-  3. Couple with MMM for ferrite core
+  3. Exchange ferrite-core response through HDiv-VIM / reduced FEM
   4. Validate against measurement or commercial software
 """.format(L1_ferrite*1e6, M_ferrite*1e6, k_dc, efficiencies[idx_85k]*100))
 

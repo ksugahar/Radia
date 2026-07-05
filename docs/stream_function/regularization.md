@@ -33,7 +33,7 @@ When you don't care about smoothness, just want the lowest-norm `ψ`
 that hits `B_target`.  `l2_aca` routes through HACApK ACA+TSVD instead
 of numpy lstsq — at our M=25 scale this is *slower* (1.12s vs 0.92s)
 because ACA+ overhead dominates, but the win is when M >> 25 or each
-matrix entry is expensive (= material kernels via Radia MMM, where
+matrix entry is expensive (= material kernels via Radia HDiv-VIM, where
 each entry is a Radia container solve).
 
 ### `h1` — minimum surface current density
@@ -394,7 +394,7 @@ Same value across:
     instant `solve(B)`.
   - **Path-A iteration**: factorise once, fire `solve(B)` per outer
     iter at zero marginal cost.
-  - **Material kernels** (Radia MMM, shielded coil):  each `A(i, j)`
+  - **Material kernels** (Radia HDiv-VIM, shielded coil):  each `A(i, j)`
     is a `rad.Solve()` + `rad.Fld()` call, so the **ACA+ amortisation
     matters most** — and once it has run, all regularisation choices
     plug into the same cache.

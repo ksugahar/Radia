@@ -1657,7 +1657,7 @@ double PEECMatrixBuilder::MutualPotentialPanel(const PEECPanel& panel_i,
 // ============================================================================
 // PEECSolver
 //
-// MNA multi-port solver using LAPACK zgetrf_/zgetrs_ (shared MKL with MSC).
+// MNA multi-port solver using LAPACK zgetrf_/zgetrs_.
 // Same LAPACK include pattern as rad_relaxation_methods.cpp (dgesv_).
 // ============================================================================
 
@@ -1788,10 +1788,10 @@ void PEECSolver::Solve(const std::vector<std::complex<double>>& V,
     BuildImpedanceMatrix(Z);
 
 #ifdef HAVE_LAPACK
-    // Use LAPACK zgesv_ (complex LU) - same pattern as MSC dgesv_ in
+    // Use LAPACK zgesv_ (complex LU) - same pattern as the real-valued dgesv_ path in
     // rad_relaxation_methods.cpp:1522-1532
 
-    // Transpose row-major -> column-major for LAPACK (same approach as MSC)
+    // Transpose row-major -> column-major for LAPACK.
     for (int i = 0; i < n; ++i) {
         for (int j = i + 1; j < n; ++j) {
             std::swap(Z[i * n + j], Z[j * n + i]);

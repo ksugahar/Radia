@@ -2,8 +2,8 @@
 """
 Sphere Analytical Magnetization to Radia Field Comparison
 
-This script tests if Radia's MSC (Magnetic Surface Charge) method correctly
-computes the B field from a uniformly magnetized sphere by:
+This script tests if Radia's fixed-magnet surface-charge field evaluation
+correctly computes the B field from a uniformly magnetized sphere by:
 
 1. Creating a tetrahedral mesh of a sphere using Netgen
 2. Assigning analytical uniform magnetization M = [0, 0, M_z] to each element
@@ -231,7 +231,7 @@ with TaskManager():
         print("  Uniform M_z: %.1f A/m" % M_z)
         print("  Radia M_avg_z: %.1f A/m" % M_radia_avg_z)
         print()
-        print("Field Comparison (Analytical dipole vs Radia MSC):")
+        print("Field Comparison (Analytical dipole vs Radia fixed-magnet field):")
         print("  Test points:   %d" % len(test_points))
         print("  Valid points:  %d" % len(errors))
         print("  Average error: %.4f%%" % avg_error)
@@ -240,13 +240,13 @@ with TaskManager():
 
         if avg_error < 5.0:
             print()
-            print("[PASS] Radia MSC matches analytical dipole field (< 5%% error)")
+            print("[PASS] Radia fixed-magnet field matches analytical dipole field (< 5%% error)")
         elif avg_error < 10.0:
             print()
-            print("[GOOD] Radia MSC is acceptable (< 10%% error)")
+            print("[GOOD] Radia fixed-magnet field is acceptable (< 10%% error)")
         else:
             print()
-            print("[CHECK] Radia MSC shows differences from analytical")
+            print("[CHECK] Radia fixed-magnet field shows differences from analytical")
 
     # Save results
     output_data = {

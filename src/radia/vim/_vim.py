@@ -827,7 +827,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     if p != 1:
         raise ValueError(
             "vim.ChargeGram: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
-            "inaccurate; use collocation MMMM for a low-order surface-charge demag) and RT2+ is retired (no "
+            "inaccurate) and RT2+ is retired (no "
             "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
     image_masks = [] if image_masks is None else list(image_masks)   # robust for NumPy arrays (truth-value)
@@ -843,8 +843,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         if mesh.dim != 3 or _ivt not in ({4}, {8}, {6}) or _curved:
             raise ValueError(
                 "vim.ChargeGram: image_masks (IMA) is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
-                "RT1 Gram only; 2D-planar and CURVED reduced models use collocation MMMM (rad.Solve "
-                "demag_backend='collocation_mmmm', image=...).  (got dim=%s, vtypes=%s, curve_order=%r)."
+                "RT1 Gram only; 2D-planar and CURVED reduced models are not supported.  "
+                "(got dim=%s, vtypes=%s, curve_order=%r)."
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
         # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
@@ -864,8 +864,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         raise ValueError(
             "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
             "(6-vertex) -- a MIXED-element mesh (e.g. tet+hex) needs HDiv-pyramid transition elements "
-            "(NGSolve 6.2.2604 does NOT implement them yet); pyramid / mixed soft-iron demag uses the "
-            "collocation MMMM backend, not the HDiv-VIM charge Gram.  Got vertex counts %s." % sorted(_vtypes))
+            "(NGSolve 6.2.2604 does NOT implement them yet).  Got vertex counts %s." % sorted(_vtypes))
     pv = max(p - 1, 0)
     # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
     # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs

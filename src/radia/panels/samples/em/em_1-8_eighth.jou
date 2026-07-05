@@ -6,7 +6,7 @@
 #   y=0:  H x n = 0  -> sym_ht=0_y  (Radia '-y', antimirror)
 #   z=0:  B . n = 0  -> sym_bn=0_z  (Radia '+z', mirror)
 #
-# Matches the ELF CEFC 2020 reference convention IMA='-x-y+z' for MSC.
+# Matches the ELF CEFC 2020 reference convention IMA='-x-y+z' for HDiv-VIM.
 # Physically, three mutually perpendicular planes with all-bn=0 would
 # force B = 0 everywhere; at least one axis must be antimirror (ht=0).
 #

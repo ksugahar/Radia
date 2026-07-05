@@ -60,7 +60,7 @@ This is a negative/limitation result, kept as knowledge.)
 | Mutual inductance (multi-conductor) | Yes | Neumann + filament model |
 | Inductance with magnetic core | Partial | FEM-BEM coupling |
 | Capacitance extraction | Yes | - |
-| Permanent magnet field | No | Use Radia (BEM/MSC) |
+| Permanent magnet field | No | Use Radia fixed-magnet field |
 | Nonlinear iron core | No | Use NGSolve FEM |
 
 ## Architecture

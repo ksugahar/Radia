@@ -116,7 +116,7 @@ demo extends our SF inverse-design pipeline to magnetic materials via
 the kernel-agnostic callback contract.
 
 **Why this benchmark**: the (A) callback contract lets us swap the
-free-space Biot-Savart kernel for Radia MMM/MSC (iron yoke, permanent
+free-space Biot-Savart kernel for Radia magnetic-material fields (iron yoke, permanent
 magnet shield, SIBC workpiece).  Demonstrating this works on a shielded
 coil (e.g., coil + iron back plate) makes a useful extension paper /
 section because the SF design pipeline + material-kernel evaluation
@@ -144,7 +144,7 @@ target → uniformity improves at the same coil power.
 |------|------|--------|
 | 1, days 1–3 | Bilac + Turner + Lemdiasov-Ludwig | 3 JSON results + comparison table |
 | 1, days 4–5 | CoilGen install + head-to-head | OSS comparison table |
-| 2, days 1–4 | Shielded coil + Radia MMM kernel | Material-kernel demo |
+| 2, days 1–4 | Shielded coil + Radia HDiv-VIM kernel | Material-kernel demo |
 | 2, days 5 | Paper draft (IEEE TMag / TMI) | Methods + Results draft |
 
 After this campaign, every claim in the paper is backed by reproducible

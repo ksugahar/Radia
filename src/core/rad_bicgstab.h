@@ -3,7 +3,7 @@
  *
  * Templated BiCGSTAB solver for real (double) and complex (std::complex<double>) types.
  *
- * Shares MKL BLAS infrastructure with MSC solver (rad_relaxation_methods.cpp).
+ * Shares MKL BLAS infrastructure with the Radia linear solver paths.
  * BLAS dispatch via function overloading:
  *   double           -> cblas_ddot, cblas_dnrm2, cblas_daxpy, cblas_dscal, cblas_dcopy, cblas_dgemv
  *   complex<double>  -> cblas_zdotc_sub, cblas_dznrm2, cblas_zaxpy, cblas_zscal, cblas_zcopy, cblas_zgemv
@@ -13,7 +13,7 @@
  *   auto precond = [&](const Z* x, Z* y) { for(int i=0;i<n;i++) y[i] = diag_inv[i]*x[i]; };
  *   auto result = bicgstab::Solve<Z>(n, matvec, precond, rhs, sol, 1e-10, 1000);
  *
- * Usage (MSC real):
+ * Usage (real-valued magnetic solve):
  *   auto matvec = [&](const double* x, double* y) { blas::gemv(n, n, -1.0, K, n, x, 0.0, y); ... };
  *   auto result = bicgstab::Solve<double>(n, matvec, precond, rhs, sol, tol, max_iter);
  *

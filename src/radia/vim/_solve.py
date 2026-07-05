@@ -3,7 +3,7 @@
 `vim.Solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r), and
 `vim.Solve(mesh, bh_table=.., H_ext=..)`       -- NONLINEAR soft iron (real BH table),
 
-the FEEC/HDiv counterpart to the multipole-moment MMM MSC hex/wedge/pyramid soft-iron demag in `rad.Solve`.
+the production FEEC/HDiv soft-iron demag path used by `rad.Solve`.
 Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunction -- e.g. a coil's
 Biot-Savart field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
@@ -66,10 +66,8 @@ report that the GENERAL-matvec CG diverges past nf ~ 20k (the spurious ACA antis
 the symmetric matvec was added, a re-measurement could NOT reproduce that divergence at HDiv scales: even with
 the lossy monopole far (max asymmetry) + a distorted hex + mu_r up to 1e6, the GENERAL-matvec CG converges
 fine through nf ~ 51k (the measured operator asymmetry stays ~1e-9, far below a CG-breaking level).  So the
-symmetric CG default is a BY-CONSTRUCTION robustness guarantee + a speedup, not a fix for an actively-
-reproducing failure at these scales; the original retreat was conservative.  Large-scale demag is the MMMM
-route's job anyway (CLAUDE.md role split 2026-06-27: HDiv = curved-surface accuracy + FEM coupling at moderate
-scale), so the >50k regime is out of HDiv's lane.
+symmetric CG default is a BY-CONSTRUCTION robustness guarantee + a speedup, not a fix for an actively
+reproducing failure at these scales; the original retreat was conservative.
 
 The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 47 s all-analytic vs a
 ~0.3 s mass-riesz solve; nonlinear sphere nf=9403 = 200 s exact build vs ~1 s/Newton-step solve).  Because
@@ -88,7 +86,7 @@ golden) -- so it is never defaulted; the low-quad far is what makes the fast bui
 For RT0, an explicit `near_factor` / `far_quad` always wins (pass `near_factor=1e30` to force the
 all-analytic Gram).  For high-order, use `ho_far_factor` for the separation threshold.
 
-KELVIN-LESS: the 1/r charge Gram IS the open boundary (a volume integral method like MMM/MSC); only
+KELVIN-LESS: the 1/r charge Gram IS the open boundary; only
 the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the analytic charge Gram
 (scalable `_ChargeGramHMatrix` at tight gram_eps), REQUIRED for div M != 0 (non-uniform M) bodies.
 
@@ -96,9 +94,8 @@ the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the a
 Per-region soft iron, LINEAR (`mu_r` scalar or `{material: mu_r}` dict) AND NONLINEAR (`bh_table` one
 [[H,B]] table or `{material: [[H,B]]}` dict).  N = B^T G B is geometry-only, so multi-grade iron enters
 ONLY through the (1/chi)-weighted HDiv mass (linear) / the per-element constitutive law (nonlinear).
-Mixed PM+iron (fixed-M source regions) + the 165k-DOF-scale preconditioner + the M0 parity gate are the
-remaining productionization steps (docs/hdiv_vim/PRODUCTIONIZATION.md).  Until they land, multipole-moment MMM MSC
-stays the `rad.Solve` default demag backend (`radia.set_demag_backend`); this entry does not touch it.
+Mixed PM+iron (fixed-M source regions) and the larger-scale preconditioner are tracked in
+docs/hdiv_vim/PRODUCTIONIZATION.md.  This entry is the soft-iron demag backend used by `rad.Solve`.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT
 open a TaskManager; the caller wraps the call in `with ng.TaskManager():`.
@@ -198,8 +195,7 @@ def _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit):
             "vim.Solve (symmetric mass-riesz CG): did NOT converge in %d iters (n_face=%d).  The "
             "operator is the EXACTLY-symmetric SPD +N system, so CG should converge -- a non-convergence "
             "here means an ill-conditioned material/mesh.  Tighten gram_eps or raise maxit; cross-check "
-            "with linear_solver='gmres' (mass-Riesz GMRES) to isolate.  (Large-scale demag is the MMMM "
-            "route's job, not HDiv-VIM; CLAUDE.md role split 2026-06-27.)" % (maxit, n_face))
+            "with linear_solver='gmres' (mass-Riesz GMRES) to isolate." % (maxit, n_face))
     return np.asarray(res["m"], float), iters
 
 
@@ -227,8 +223,7 @@ def _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmr
                          callback_type="pr_norm", **{_GMRES_TOL: float(tol)})
     if info != 0:                                # fail-loud (No-Fallbacks): never return a non-converged M
         raise RuntimeError("vim.Solve (mass-riesz GMRES): did NOT converge (info=%d, n_face=%d, "
-                           "iters=%d). Tighten gram_eps or raise maxit; for very large meshes use the MMMM "
-                           "route (large-scale demag is not HDiv-VIM's role)." % (info, n_face, it["n"]))
+                           "iters=%d). Tighten gram_eps or raise maxit." % (info, n_face, it["n"]))
     return np.asarray(m, float), it["n"]
 
 
@@ -299,21 +294,19 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     # RT0 retired: per-element INACCURATE (the demag FACTOR is right ~1/3, but the per-element M leaks --
     # raising the solution order to RT1 is what fixes it); RT2+ retired: no per-element gain over RT1, slower.
     # TET, pure-HEX (Q1 volume charge + Q2 geometry), and pure-WEDGE solve LINEAR + NONLINEAR through
-    # _solve_highorder here -- the C++ energy-Newton is Gram-agnostic (verified 2026-07-04: hex cube linear
-    # & nonlinear match collocation MMMM to ~1%).  Pyramid / mixed + pm_M remain the collocation MMMM
-    # backend's job (rad.Solve); curved IMA, 'gauss', and 'hlu' fail loud.
+    # _solve_highorder here -- the C++ energy-Newton is Gram-agnostic.  Pyramid / mixed + pm_M fail loud
+    # until the HDiv lane covers them; curved IMA, 'gauss', and 'hlu' fail loud.
     if int(order) != 1:
         raise ValueError(
             "HDiv-VIM is RT1 (HDiv order=1) only.  RT0 (order=0) is RETIRED -- it is per-element INACCURATE "
             "(the demag factor is right ~1/3 but the per-element magnetization leaks; RT1 is what fixes it); "
-            "use the collocation MMMM backend for a low-order surface-charge demag.  RT2+ is RETIRED too (no "
-            "per-element gain over RT1, markedly slower).  Pass order=1 (the default).  (The geometry "
+            "RT2+ is RETIRED too (no per-element gain over RT1, markedly slower).  Pass order=1 "
+            "(the default).  (The geometry "
             "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
     if pm_M is not None:
         raise NotImplementedError(
             "HDiv-VIM (RT1) is a SOFT-IRON (linear / nonlinear) demag solver and does not mix permanent "
-            "magnets (pm_M).  Place permanent magnets as direct-M elements solved by collocation MMMM "
-            "(rad.Solve), or as an applied-field source folded into H_ext.")
+            "magnets (pm_M).  Place permanent magnets as applied-field sources folded into H_ext.")
     # IMA mirror symmetry (image=) is wired for flat pure-TET / pure-HEX / pure-WEDGE RT1 (2026-07-04);
     # reduced curved / mixed / pyramid cases fail loud downstream instead of silently dropping the image.
     if mesh.dim == 2:
@@ -342,15 +335,13 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     if magnets is not None:
         raise NotImplementedError(
             "vim.Solve: magnets= (separate-body permanent-magnet source) is wired for the 2D "
-            "planar layer only; in 3D place PMs as direct-M collocation MMMM elements or fold their "
-            "field into H_ext.")
+            "planar layer only; in 3D fold the permanent-magnet field into H_ext.")
     _vtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
     if _vtx not in ({4}, {8}, {6}):
         raise ValueError(
             "HDiv-VIM (order 1) supports a pure-TET (4-vertex), pure-HEX (8-vertex), or pure-WEDGE/prism "
-            "(6-vertex) mesh; got vertex counts %s.  pyramid / MIXED-element soft-iron demag uses the "
-            "collocation MMMM backend (rad.Solve demag_backend='collocation_mmmm'), which rad.Solve's "
-            "'auto' split uses for unsupported mesh-backed iron." % sorted(_vtx))
+            "(6-vertex) mesh; got vertex counts %s.  Pyramid / MIXED-element soft-iron demag is not "
+            "supported until HDiv transition elements are available." % sorted(_vtx))
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("vim.Solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
@@ -400,19 +391,19 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     # IMA mirror symmetry: WIRED for the FLAT pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
     # pure-WEDGE (the C++ QuadBlockHex/Wedge(mask) reflected block) paths -- the Gram folds the mirror-image
     # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  CURVED (curve_order) +
-    # MIXED / pyramid fail loud (not yet wired) -> collocation MMMM.
+    # MIXED / pyramid fail loud (not yet wired).
     image_masks, image_signs = [], []
     if image is not None:
         if curve_order is not None:
             raise NotImplementedError(
                 "vim.Solve: IMA image symmetry is not yet wired for the CURVED (curve_order) "
-                "HDiv-VIM path -- use a flat tet/hex/wedge mesh, or collocation MMMM (rad.Solve).")
+                "HDiv-VIM path -- use a flat tet/hex/wedge mesh or a full unreduced curved model.")
         _ivtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
         if _ivtx not in ({4}, {8}, {6}):
             raise NotImplementedError(
                 "vim.Solve: IMA image symmetry is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
-                "RT1 Gram; MIXED / pyramid reduced models use collocation MMMM (rad.Solve "
-                "demag_backend='collocation_mmmm', image=...).  Got vertex counts %s." % sorted(_ivtx))
+                "RT1 Gram; MIXED / pyramid reduced models are not supported.  Got vertex counts %s."
+                % sorted(_ivtx))
         _planes = _tet.parse_image_string(image)
         # (2026-07-05) hex/wedge IMA now handles ANTISYMMETRIC (negative-sign, field-PERPENDICULAR) planes too:
         # the on-plane cut-face self-term is computed with the EXACT self-radial in the reflected block (the

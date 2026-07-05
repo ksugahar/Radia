@@ -8,7 +8,6 @@ PEEC-based coil impedance analysis demos.
 |------|-------------|
 | `coil_impedance_peec.py` | Coil impedance frequency response via PEEC |
 | `coil_on_magnetic_core_peec.py` | Coil on magnetic core analysis (CplMag solver) |
-| `coil_on_magnetic_core_analysis.py` | Magnetic core effect analysis |
 | `demo_circular_coil_gmsh.py` | Historical filename; now a Netgen/OCC `.vol` boundary-surface demo |
 
 ## Outputs

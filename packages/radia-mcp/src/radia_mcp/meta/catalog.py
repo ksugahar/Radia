@@ -120,7 +120,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "radia_mcp.bem",
         "entry_point": "mcp-server-bem",
         "description": "MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, "
-                       "Loop-Star, Calderon, Radia MMM/MSC, HACApK, FEM-BEM",
+                       "Loop-Star, Calderon, Radia HDiv-VIM, HACApK, FEM-BEM",
         "primary_tools": ["bem_usage"],
         "related": [
             "fem",

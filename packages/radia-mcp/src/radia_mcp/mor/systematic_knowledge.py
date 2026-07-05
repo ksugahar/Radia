@@ -536,7 +536,7 @@ simulator-coupled** motor / power-electronics analysis.
 
 The Sugahara lab has co-authored at least 5+ CLN papers:
 - Original CLN for PEEC matrices
-- Extension to MMM-coupled magnetic systems
+- Extension to magnetic-material coupled systems
 - Combined CLN+SIBC for IH workpieces
 - Verified-arithmetic CLN (DD precision, double-double)
 - 3D CLN extensions
@@ -706,7 +706,7 @@ Reduction" section).  Key classes:
 ```
 SPICEExtractionConfig     - configuration object
 PRIMASchurExtractor       - PRIMA + Schur complement for coupling
-LoopStarMagneticCoupled  - magnetic-MMM coupling layer
+LoopStarMagneticCoupled  - magnetic-magnetic-material coupling layer
 ```
 
 ### Recommended workflow

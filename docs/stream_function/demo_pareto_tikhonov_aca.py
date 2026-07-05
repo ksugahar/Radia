@@ -22,7 +22,7 @@ WHY FOLD IT INTO ACA+TSVD.  The expensive parts -- the ACA+ factorisation
 A = U Sigma V^T and the fold S^-1 V, W -- are computed ONCE.  Each alpha
 point is then a single k x k core solve (~50 us), so the whole L-curve is
 sub-millisecond of linear algebra.  When each A(i, j) is a material-kernel
-evaluation (Radia MMM rad.Solve + rad.Fld), the ACA+ factorisation
+evaluation (Radia HDiv-VIM solve + rad.Fld), the ACA+ factorisation
 dominates and reusing it across the entire alpha-sweep is the whole
 performance argument.
 

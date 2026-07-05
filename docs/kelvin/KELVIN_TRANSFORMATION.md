@@ -820,9 +820,9 @@ case, but Kelvin transformation handles both cases uniformly.
    when `div(J) != 0` at coil terminals (~12% error). Use full
    A-formulation for gapped coil geometries.
 
-4. **Radia MMM as reference**: Radia's Method of Magnetic Moments may
-   show 4-8% variation across mesh densities for Kelvin validation.
-   Use 2D axisymmetric FEM as ground truth instead.
+4. **Reference solver choice**: Old moment-path Radia comparisons showed
+   mesh-density variation for Kelvin validation.  Use 2D axisymmetric FEM or
+   HDiv-VIM / reduced-FEM cross-checks as the reference path instead.
 
 5. **Order 3+ Kelvin instability**: Higher polynomial orders (p >= 3)
    on the Kelvin domain may require regularization or adapted meshes

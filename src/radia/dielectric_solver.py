@@ -531,7 +531,7 @@ class UnifiedSurfaceSolver:
         self._P_cd = None  # Conductor-dielectric coupling
         self._n_stars_d = 0
 
-        # Magnetic (MMM)
+        # Magnetic material block
         self._N_mm = None  # Demagnetization matrix
         self._mu_r = 1.0   # Relative permeability (can be complex)
         self._L_Lm = None  # Loop-magnetic coupling (Biot-Savart)
@@ -841,7 +841,7 @@ class UnifiedSurfaceSolver:
 
         # Z_MM: Magnetic material impedance (reluctance formulation)
         #
-        # MMM equation: (I + χ*N) * M = χ * H_applied
+        # magnetic-material equation: (I + χ*N) * M = χ * H_applied
         # where χ = μ_r - 1 is the susceptibility
         #
         # Rewrite: M = χ * (I + χ*N)^{-1} * H_applied
@@ -851,7 +851,7 @@ class UnifiedSurfaceSolver:
         # - "Voltage" = H (magnetic field)
         # - Z_MM = (I + χ*N) / χ (reluctance-like)
         #
-        # Note: This is NOT multiplied by 1/s because MMM is quasi-static
+        # Note: This is NOT multiplied by 1/s because the magnetic response is quasi-static
         # (magnetization responds instantaneously to H in MQS regime)
         if self._N_mm is not None:
             chi = self._mu_r - 1.0

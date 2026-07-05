@@ -696,12 +696,6 @@ int radTApplication::DeleteAllElements(int DeletionMethNo)
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
 
-		// The cross-solve moment K/L/diagK cache holds a pointer INTO the deleted interaction --
-		// invalidate here (NOT only in Initialize(), which UtiDelAll does not call).  Without this,
-		// a rebuilt identical geometry can ABA-hit the stale cache (caught by
-		// test_analytic_kernel_matches_gauss_method2_hacapk going rel=0 on mdx, 2026-07-02).
-		InvalidateMomentHK();
-
 		// Clear element caches (stale after element deletion)
 		RadFieldUnified::ClearAllCaches();
 

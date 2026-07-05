@@ -135,9 +135,11 @@
             "auto",
             "lu",
             "minres",
-            "gmres"
+            "gmres",
+            "cocr",
+            "hacapk_cocr"
           ],
-          "help": "Saddle-point solver for BEM-A: auto (LU < 10000 tris, MINRES above), lu (dense LAPACK, overwrite_a=True), minres (Krylov symmetric indefinite), gmres (generic Krylov). Defaults to auto."
+          "help": "Saddle-point solver for the BEM-A impedance-EFIE: auto (LU below 5000 tris for AC / 10000 for frequency=0; above that cocr), lu (dense LAPACK, overwrite_a=True), cocr (SCALABLE: div-free loop reduction + complex-symmetric COCR, ~24 mesh-independent iters, exact vs LU, dense SL matvec -- the recommended large-N solver), hacapk_cocr (the same COCR with the HACApKBEMManager-compressed O(N log N) SL matvec, accuracy ~3e-7, RT0 only; identical R/L), gmres (complex-capable Krylov -- unpreconditioned, stalls on large saddles), minres (REAL symmetric Krylov -- VALID ONLY for the frequency=0 vacuum-L solve; scipy MINRES assumes a Hermitian operator and silently returns a wrong solution on the complex-symmetric AC saddle, so it is rejected there). Defaults to auto."
         },
         {
           "cli": "--coil-sigma",
@@ -685,13 +687,13 @@
         }
       ]
     },
-    "accel_msc": {
-      "script": "calc_accel_msc.py",
-      "function": "solve_msc",
-      "ja_name": "加速器電磁石 MSC",
-      "ja_description": "Radia MSC (表面磁荷法) + IMA 対称性 + HACApK",
-      "method": "Radia MSC (surface charge, integral equation)",
-      "command_builder": "radia_em.py:_MSCPanel.build_command",
+    "accel_hdiv": {
+      "script": "calc_accel_hdiv.py",
+      "function": "solve_hdiv",
+      "ja_name": "加速器電磁石 HDiv-VIM",
+      "ja_description": "HDiv-VIM + IMA ラベル読取 + HACApK charge Gram",
+      "method": "FEEC HDiv-VIM (NGSolve-aligned mesh-backed soft iron)",
+      "command_builder": "radia.em_design:EMDesignSpec._build_hdiv_command",
       "params": [
         {
           "cli": "--coil-script",
@@ -730,6 +732,15 @@
           "help": "0=LU, 1=BiCGSTAB, 2=HACApK",
           "ja": "線形ソルバー",
           "physics": "pardiso=直接法, bddc=反復法, ams=Compact AMS+COCR"
+        },
+        {
+          "cli": "--demag-backend",
+          "name": "demag_backend",
+          "default": "hdiv",
+          "choices": [
+            "hdiv"
+          ],
+          "help": "Demag backend: 'hdiv' (the FEEC HDiv-VIM; KELVIN-less, requires an iron-only .vol, does not support IMA symmetry yet)."
         },
         {
           "cli": "--max-iter",
@@ -1006,18 +1017,80 @@
           "help": "number of iso-contours = wire turns (manufacture)"
         },
         {
+          "cli": "--optimize-levels",
+          "name": "optimize_levels",
+          "help": "manufacture: optimise the N contour LEVELS (vs the uniform equal-deltaI default) to minimise the equal-current discrete-loop field error -- the few-turn quantisation fix (keeps clean contours; complements --distort's wire bend)."
+        },
+        {
+          "cli": "--greedy-turns",
+          "name": "greedy_turns",
+          "type": "int",
+          "default": null,
+          "help": "LOW-TURN STRATEGY (manufacture): build the coil GREEDILY -- lay up to this many turns one at a time, each placed where it most reduces the field residual (matching pursuit, monotone by construction; the antidote to non-monotonic contour quantisation).  Emits the rms-vs-turns trace (read off the fewest turns meeting any spec)."
+        },
+        {
+          "cli": "--greedy-dict",
+          "name": "greedy_dict",
+          "choices": [
+            "contour",
+            "pin",
+            "bubble"
+          ],
+          "default": "contour",
+          "help": "greedy candidate loops: 'contour' = dense psi iso-contour loops (A); 'pin' = on-surface k-ring loops at surface pins (B, 'wind a loop on a pin'); 'bubble' = bubble-packed pins, density ~ |grad psi| (C)."
+        },
+        {
+          "cli": "--greedy-connector-weight",
+          "name": "greedy_connector_weight",
+          "type": "float",
+          "default": 0.0,
+          "help": "connector-aware greedy: bias selection toward loops NEAR the ones already laid (score = field_residual + weight * gap/coil_diag) so the single-stroke connector ('rung') path stays short -> manufacturable wire.  0 = pure-field (default); ~0.3-1.0 trades a little field for short rungs (fixes the isolated-pin chaining penalty)."
+        },
+        {
+          "cli": "--greedy-target",
+          "name": "greedy_target",
+          "type": "float",
+          "default": null,
+          "help": "greedy stop threshold: stop adding turns once the field residual rms <= this (else use all --greedy-turns)."
+        },
+        {
+          "cli": "--greedy-plot",
+          "name": "greedy_plot",
+          "default": "",
+          "help": "turn-budget UI: write the greedy rms-vs-turns curve (with the --greedy-target spec line + min-turns mark) to this PNG."
+        },
+        {
+          "cli": "--pin-tiling",
+          "name": "pin_tiling",
+          "help": "DENSE BUBBLE-TILING pin coil (manufacture, many-turn): equal-current loops packed over the surface with density ~ |K| = |grad psi| and sized to their bubble -- the discrete-loop, manufacturable alternative to long iso-contours (dense where the current is strong)."
+        },
+        {
+          "cli": "--pin-tiling-pins",
+          "name": "pin_tiling_pins",
+          "type": "int",
+          "default": 80,
+          "help": "pin-tiling / bubble greedy dict: target number of bubble loops (k is bisected to land ~this many)."
+        },
+        {
+          "cli": "--pin-tiling-frac",
+          "name": "pin_tiling_frac",
+          "type": "float",
+          "default": 0.7,
+          "help": "pin-tiling / bubble greedy dict: loop radius as a fraction of the bubble clearance radius (0.7 -> loops tile without heavy overlap)."
+        },
+        {
           "cli": "--target-inductance",
           "name": "target_inductance",
           "type": "float",
           "default": null,
-          "help": "IH-RESONANCE design: search the turn count (nlevels) so the single-stroke coil inductance equals this value in Henries (the field design is unchanged; L_coil ~ N^2 sets the resonance).  Forces --peec."
+          "help": "IH-RESONANCE design: search the turn count (nlevels) so the single-stroke coil inductance equals this value in Henries (the field design is unchanged; L_coil ~ N^2 sets the resonance).  Forces --peec.  WITH --greedy-turns: turns are fixed by greedy (the low-turn coil), so nlevels is NOT searched; instead the result reports required_cap_F (the tank capacitor to resonate the delivered coil at --peec-freq)."
         },
         {
           "cli": "--resonance-cap",
           "name": "resonance_cap",
           "type": "float",
           "default": null,
-          "help": "IH-RESONANCE design via the tank capacitor in Farads: target L = 1/((2 pi f)^2 C) with f = --peec-freq (the inverter frequency).  Alternative to --target-inductance."
+          "help": "IH-RESONANCE design via the tank capacitor in Farads: target L = 1/((2 pi f)^2 C) with f = --peec-freq (the inverter frequency).  Alternative to --target-inductance.  WITH --greedy-turns: turns are fixed by greedy, so the result reports the resonance frequency THIS coil + this cap reach (resonance_freq_Hz) plus required_cap_F to hit --peec-freq exactly."
         },
         {
           "cli": "--nlevels-max",
@@ -1044,6 +1117,20 @@
           "help": "single-stroke chaining: field_aware (min net connector field; reaches the separate-turns floor for closed contours, no distort) or nn (nearest neighbour)"
         },
         {
+          "cli": "--chain-ncut",
+          "name": "chain_ncut",
+          "type": "int",
+          "default": 0,
+          "help": "field_aware cut candidates per loop (0 = auto-scale with loop count; raise for clustered/many-loop coils)"
+        },
+        {
+          "cli": "--chain-passes",
+          "name": "chain_passes",
+          "type": "int",
+          "default": 0,
+          "help": "field_aware cut coordinate-descent rounds (0 = auto-scale with loop count)"
+        },
+        {
           "cli": "--distort",
           "name": "distort",
           "help": "single-current sheet-metal wire distortion (manufacture)"
@@ -1067,6 +1154,46 @@
           "name": "step_output",
           "default": "",
           "help": "STEP CAD output path for the wire (manufacture)"
+        },
+        {
+          "cli": "--former-output",
+          "name": "former_output",
+          "default": "",
+          "help": "printable FORMER STEP (manufacture): a base plate with the DELIVERED wire CHANNEL cut out (plate - swept tube), for water-soluble-support 3D printing -- dissolve the support to leave the out-of-surface groove the single-stroke wire threads through. Distinct from --step-output (the wire centreline). STEP coords in metres; scale in the slicer."
+        },
+        {
+          "cli": "--former-clearance",
+          "name": "former_clearance",
+          "type": "float",
+          "default": 0.0003,
+          "help": "former channel radial clearance in m (channel radius = wire-diam/2 + clearance; default 0.3 mm)"
+        },
+        {
+          "cli": "--former-margin",
+          "name": "former_margin",
+          "type": "float",
+          "default": 0.005,
+          "help": "former plate XY margin beyond the wire footprint in m (default 5 mm)"
+        },
+        {
+          "cli": "--former-wall",
+          "name": "former_wall",
+          "type": "float",
+          "default": 0.003,
+          "help": "former minimum wall thickness around the channel in m (sets the plate Z half-thickness beyond the wire z-extent; default 3 mm)"
+        },
+        {
+          "cli": "--former-decimate",
+          "name": "former_decimate",
+          "type": "float",
+          "default": 0.0025,
+          "help": "former channel spine resample step in m (coarsens the wire polyline to bound the CAD primitive count / build time; 0 = no decimation; default 2.5 mm)"
+        },
+        {
+          "cli": "--former-stl",
+          "name": "former_stl",
+          "default": "",
+          "help": "printable FORMER as STL via a ROBUST MESH boolean (trimesh + manifold3d) -- the recommended path: it handles the 3D self-crossing single-stroke wire that the OCCT STEP route (--former-output) segfaults / under-cuts on, in ~1 s and watertight, and STL is the native 3D-print format. Same --former-clearance/-margin/-wall/-decimate knobs. Needs: pip install trimesh manifold3d. STL coords in metres; scale in the slicer."
         },
         {
           "cli": "--peec",
@@ -1109,6 +1236,89 @@
           "name": "steps_plot",
           "default": "",
           "help": "per-step manufacturing PNG (contours -> single-stroke -> sheet-metal -> with thickness) (manufacture)"
+        },
+        {
+          "cli": "--scan-map",
+          "name": "scan_map",
+          "help": "MEASUREMENT TWIN (manufacture): 3-component (Bx,By,Bz) planar raster scan of the delivered single-stroke wire -- the simulation counterpart of a 3-axis magnetometer (TMR/fluxgate) scan. Emits Bnormal (main uniform field), Bt (in-plane transverse leakage from single-stroke connectors -- what a 1-axis probe misses), homogeneity, and saves the full grid to a JSON to compare against a measured +-I current-reversal scan."
+        },
+        {
+          "cli": "--scan-plane",
+          "name": "scan_plane",
+          "choices": [
+            "x",
+            "y",
+            "z"
+          ],
+          "default": "z",
+          "help": "scan-plane normal axis (default z: an x-y plane above a planar coil). Bnormal is the component along this axis."
+        },
+        {
+          "cli": "--scan-standoff",
+          "name": "scan_standoff",
+          "type": "float",
+          "default": null,
+          "help": "scan-plane offset (m) along the normal from the coil centroid = the sensor standoff height. Default: the eval-region (DSV) height, so the scan sits where the design targets uniformity."
+        },
+        {
+          "cli": "--scan-half",
+          "name": "scan_half",
+          "type": "float",
+          "default": null,
+          "help": "scan half-width (m) in the two in-plane axes (square grid). Default: the eval-region in-plane half-extent (the DSV footprint)."
+        },
+        {
+          "cli": "--scan-n",
+          "name": "scan_n",
+          "type": "int",
+          "default": 21,
+          "help": "scan raster points per axis (n x n grid; default 21)"
+        },
+        {
+          "cli": "--scan-current",
+          "name": "scan_current",
+          "type": "float",
+          "default": null,
+          "help": "physical drive current (A) the map is scaled to (field is linear in current). Default: the best-fit design current. Set the bench current to match the sensor reading directly."
+        },
+        {
+          "cli": "--scan-output",
+          "name": "scan_output",
+          "default": "",
+          "help": "JSON path for the full 3-component scan grid. Default: next to --output (<base>_scanmap.json)."
+        },
+        {
+          "cli": "--iron-vol",
+          "name": "iron_vol",
+          "default": null,
+          "help": "iron/material .vol (iron region + 'kelvin' ball + periodic kelvin_int/kelvin_ext + 'GND' vertex -- the calc_fem_kelvin pipeline). When given, the design is MATERIAL-AWARE: the iron reaction (reduced scalar potential, Kelvin open boundary) is ADDED to the free-space kernel so a coil designed near a yoke/shield/core hits the target IN the iron system. Free-space by default (omit this flag)."
+        },
+        {
+          "cli": "--mu-r",
+          "name": "mu_r",
+          "type": "float",
+          "default": 1000.0,
+          "help": "relative permeability of the --iron-vol iron region (linear; default 1000).",
+          "ja": "比透磁率",
+          "physics": "mu = mu_0 * mu_r"
+        },
+        {
+          "cli": "--iron-mat",
+          "name": "iron_mat",
+          "default": "iron",
+          "help": "material name of the iron region in --iron-vol (default 'iron')."
+        },
+        {
+          "cli": "--iron-exact-source",
+          "name": "iron_exact_source",
+          "help": "material-aware kernel: evaluate the coil source field at the iron QUADRATURE points (analytic Biot-Savart, no P1-vertex interpolation -> removes the source plateau, ~14%% on a coarse shell).  Much heavier (one assembly per quad point); opt-in.  Default is the fast P1-vertex source."
+        },
+        {
+          "cli": "--iron-quad-order",
+          "name": "iron_quad_order",
+          "type": "int",
+          "default": null,
+          "help": "quadrature order for --iron-exact-source (default 2*fem_order)."
         },
         {
           "cli": "--shield-vol",

@@ -858,7 +858,7 @@ def paper_writing_check_abstract_no_math_no_citation(abstract: str) -> dict:
         であるべきで、引用は本文で文脈付きで導入する.  例外: critical な
         先行研究を必ず指摘する必要のある一部 conference (たとえば一部の
         ML conf) — そういう場では本 lint は warning として受け取る.
-      - **domain-specific acronym は abstract に入れない**.  MMM, FEM, BEM,
+      - **domain-specific acronym は abstract に入れない**.  FEM, BEM,
         MCP, LLM などの略語は abstract では避け、本文初出で
         ``Finite Element Method (FEM)`` のように展開する.  Universal acronym
         (PDF, USB, CPU など) は除外する.
@@ -3599,7 +3599,7 @@ def paper_writing_check_pdf_advanced_anomalies(
         "IEEE", "ROM", "SPICE", "CAD", "USA", "UK", "JP", "EU",
         "GPU", "CPU", "RAM", "SI", "QD", "CLN", "PEC",
         "FEM", "BEM", "RF", "EM", "VIM", "XFEM",
-        "MMM", "MSC", "ESIM", "SIBC", "PEEC", "PCB",
+        "ESIM", "SIBC", "PEEC", "PCB",
         "DOF", "OK", "CPE",
         # IEEE placeholder tokens in the cover page
         "XX", "YY", "MONTH", "VOL", "PP",

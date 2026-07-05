@@ -1,8 +1,8 @@
 """
-Accelerator magnet MSC solver for Cubit panel (ElectromagnetMSCDialog).
+Accelerator magnet HDiv-VIM solver for the electromagnet panel.
 
 Pipeline:
-  Netgen .vol hex mesh -> NGSolve read -> rad.ObjHexahedron -> Radia MSC Solve
+  Netgen .vol mesh -> NGSolve read -> radia.vim.MeshSoftIron -> rad.Solve
 
 User workflow:
   1. Write coil Python script (defines build_coil() -> CoilBuilder)
@@ -56,7 +56,7 @@ from calc_common import (MU_0, setup_paths,
 
 def _log(msg):
     """Write progress to stderr (panel reads these)."""
-    progress("MSC", msg)
+    progress("HDiv", msg)
 
 
 def ima_from_mesh_labels(boundaries):
@@ -162,7 +162,7 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
         elif el.type == ET.PRISM:
             etype = 'wedge'  # triangular prism
         else:
-            # PYRAMID, other exotic types are not supported by Radia MSC
+            # PYRAMID and other exotic types are not supported here yet.
             continue
         verts = [list(mesh.vertices[v.nr].point) for v in el.vertices]
         elements.append({'type': etype, 'vertices': verts})
@@ -170,11 +170,11 @@ def _extract_elements_from_mesh(mesh, material_name="yoke"):
     return elements
 
 
-def solve_msc(coil_script="", vol_file="",
+def solve_hdiv(coil_script="", vol_file="",
               mat=None, ima="", solver=0,
               max_iter=100, tol=1e-3, relax=0.0,
               msh_output="", demag_backend="hdiv"):
-    """MSC solver: Netgen .vol hex mesh -> Radia ObjHexahedron -> Solve.
+    """HDiv-VIM solver: Netgen .vol mesh -> MeshSoftIron -> rad.Solve.
 
     Args:
         coil_script: Path to Python script with build_coil()
@@ -213,7 +213,7 @@ def solve_msc(coil_script="", vol_file="",
     # (Bug fix 2026-06-17: this UtiDelAll used to live at the start of "Step 3",
     # AFTER the coil was built, so it DESTROYED the coil_container -- rad.UtiDelAll
     # invalidates every existing handle.  model = ObjCnt([yoke, coil_container]) then
-    # referenced a stale coil index, silently dropping the coil's field.  solve_msc had
+    # referenced a stale coil index, silently dropping the coil's field.  This solver had
     # no end-to-end golden (only a static --help smoke), so it went unnoticed.)
     rad.UtiDelAll()
 
@@ -281,12 +281,10 @@ def solve_msc(coil_script="", vol_file="",
 
     # --- FEEC HDiv-VIM backend (radia.vim) -- the only backend exposed by this panel.  KELVIN-less, IRON-ONLY:
     # the VIM solves the WHOLE registered mesh as iron, so the .vol must contain ONLY 'yoke' volume
-    # elements (no air / kelvin).  HDiv-VIM is TET / RT1 only; hex/wedge and IMA symmetry use the
-    # collocation MMMM backend outside this panel.
+    # elements (no air / kelvin).  This panel currently exposes the TET / RT1 lane only.
     if demag_backend != "hdiv":
         return {"error": "demag_backend=%r is not available in this panel. Use demag_backend='hdiv' "
-                         "(the FEEC HDiv-VIM). Mesh-less multipole-moment MMM MSC remains available through "
-                         "rad.Solve on ObjHexahedron/ObjWedge/ObjPyramid models."
+                         "(the FEEC HDiv-VIM)."
                          % (demag_backend,)}
     from ngsolve import VOL as _VOL, TaskManager as _TM
     n_nonyoke = sum(1 for el in mesh.Elements(_VOL) if el.mat != "yoke")
@@ -296,11 +294,11 @@ def solve_msc(coil_script="", vol_file="",
                          "Export the yoke block alone." % (n_nonyoke, sorted(set(mesh.GetMaterials())))}
     if n_hex or n_wedge:
         return {"error": "the HDiv-VIM panel requires a TET-only .vol (RT1 tetrahedral HDiv space).  "
-                         "This mesh has %d hex and %d wedge elements; use collocation MMMM for "
-                         "hex/wedge soft iron." % (n_hex, n_wedge)}
+                         "This mesh has %d hex and %d wedge elements; use a tet yoke export for this "
+                         "panel or a newer HDiv-capable notebook path." % (n_hex, n_wedge)}
     if ima:
-        return {"error": "IMA/image symmetry is retired from HDiv-VIM. Use collocation MMMM for reduced "
-                         "symmetry models, or run the full tet HDiv-VIM model with --ima empty."}
+        return {"error": "IMA/image symmetry is not exposed by this TET-only panel. Run the full tet "
+                         "HDiv-VIM model with --ima empty."}
     import radia.vim as _vim
     if is_linear:
         iron = _vim.MeshSoftIron(mesh, mu_r=float(mu_r))
@@ -340,7 +338,7 @@ def solve_msc(coil_script="", vol_file="",
     gmsh_file = ""
     if msh_output:
         try:
-            gmsh_file = _write_msc_vol_sol_msh(
+            gmsh_file = _write_hdiv_vol_sol_msh(
                 msh_output, elements, model, rad)
             _log(f"GMSH:{gmsh_file}")
         except Exception as e:
@@ -401,7 +399,7 @@ def _build_ngmesh_from_elements(elements):
     return m
 
 
-def _write_msc_vol_sol_msh(msh_path, elements, model, rad):
+def _write_hdiv_vol_sol_msh(msh_path, elements, model, rad):
     """.vol + .sol first, then vol2msh to GMSH v4.1 with ElementData.
 
     Outputs:
@@ -469,19 +467,19 @@ def build_argparser():
     """argparse factory shared by main() and the panel generator
     (ModePanel.bind_argparser in radia_gui_base)."""
     parser = argparse.ArgumentParser(
-        description="Accelerator magnet MSC solver (Radia hex)")
+        description="Accelerator magnet HDiv-VIM solver")
     parser.add_argument("--coil-script", required=True,
                         help="Python script with build_coil() -> CoilBuilder")
     parser.add_argument("--vol", default="",
                         help="Netgen .vol file with a 'yoke' material "
                              "(sole interface between Cubit and NGSolve; "
                              "this script no longer accepts .cub5)")
-    # include_custom=True so the EM panel's MSC-mode build_command
+    # include_custom=True so the EM panel's HDiv-VIM build_command
     # (which sends `--material custom --mu-r <user_value>` for the
     # "mu_r (Linear)" radio) is accepted at argparse.  Without this
     # the panel command fails silently with
     # `error: argument --material: invalid choice: 'custom'` --
-    # caught 2026-04-26.  See tests/panels/test_em_msc_smoke.py.
+    # caught 2026-04-26.  See validation_test/panels/test_em_hdiv_smoke.py.
     add_material_args(parser, default_material="steel",
                       include_custom=True, include_hys=True)
     parser.add_argument("--ima", default="",
@@ -511,7 +509,7 @@ def main():
     parser = build_argparser()
 
     def run(args):
-        return solve_msc(
+        return solve_hdiv(
             coil_script=args.coil_script,
             vol_file=args.vol,
             mat=EMMaterial.from_args(args),

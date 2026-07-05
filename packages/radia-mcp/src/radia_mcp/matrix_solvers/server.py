@@ -60,7 +60,7 @@ def matrix_solvers_direct(topic: str = "overview") -> str:
             "overview"      - When direct beats iterative (DEFAULT)
             "pardiso"       - Intel MKL PARDISO (NGSolve default)
             "mumps"         - Distributed MUMPS for >1 node
-            "lu_radia"      - Built-in LU for Radia MMM/MSC (N<500)
+            "lu_radia"      - Built-in LU for Radia HDiv-VIM (N<500)
             "all"           - Everything
     """
     return get_direct_solvers_knowledge(topic)
@@ -148,7 +148,7 @@ def pick_a_solver(problem_class: str) -> str:
             "2. Preconditioner: classical IC for N<100k, AMG for larger\n"
             "   → matrix_solvers_preconditioners('classical')\n"
             "   → matrix_solvers_preconditioners('amg')\n"
-            "3. For Radia MMM/MSC (N<500): LU direct (method=0)\n"
+            "3. For Radia HDiv-VIM (N<500): LU direct (method=0)\n"
             "   → matrix_solvers_direct('lu_radia')\n"
         ),
         "magnetostatic_hcurl": (

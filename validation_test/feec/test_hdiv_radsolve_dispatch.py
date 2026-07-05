@@ -1,14 +1,14 @@
 """Gate-2: rad.Solve dispatches the FEEC HDiv-VIM backend (demag_backend='hdiv').
 
-Previously rad.Solve only ran the legacy six-face surface-charge MSC; selecting 'hdiv' raised
+Previously rad.Solve did not route mesh-backed soft iron through HDiv-VIM; selecting 'hdiv' raised
 NotImplementedError.  This locks the wiring (radia.vim.MeshSoftIron +
 radia.vim._radsolve.dispatch): a soft-iron container built from an NGSolve mesh, solved
 via rad.Solve(demag_backend='hdiv'), reproduces a direct radia.vim.Solve to
 machine precision and writes the per-element M back so rad.ObjM/rad.Fld reflect it.
 
 With hdiv wired in, rad.Solve keeps a working soft-iron demag path: pure TET / HEX / WEDGE soft irons
-solve via HDiv-VIM (RT1) in the 'auto' split, while mixed / pyramid mesh-backed irons still route to the
-collocation MMMM bridge.
+solve via HDiv-VIM (RT1) in the 'auto' split, while unsupported mesh-less, mixed, or pyramid soft irons
+fail loud instead of falling back to a retired collocation route.
 """
 import math
 
@@ -61,14 +61,12 @@ def test_radsolve_hdiv_equals_direct():
 
 # (test_radsolve_hdiv_image_passed_through removed 2026-06-29 because the old case mixed several concerns.
 #  Flat pure-TET / HEX / WEDGE IMA is now locked by the dedicated IMA and charge-Gram tests; curved / mixed /
-#  pyramid reduced models still fail loud toward collocation MMMM.)
+#  pyramid reduced models have dedicated fail-loud coverage.)
 
 
-def test_meshless_hex_soft_iron_not_registered_uses_collocation_mmmm():
+def test_meshless_hex_soft_iron_not_registered_fails_loud():
     """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin, NOT via MeshSoftIron) has
-    no mesh association, so rad.Solve does NOT route it to the HDiv-VIM -- it falls through to the C++
-    solver, which now solves it with the six-face surface-charge MSC (the Error203 guard was removed 2026-06-19).
-    The full surface-charge MSC physics (cube demag ~1/3) is locked by tests/test_demag_backend.py."""
+    no mesh association, so rad.Solve does NOT route it to HDiv-VIM."""
     from radia.vim import _radsolve
     rad.set_demag_backend("auto")
     rad.UtiDelAll()
@@ -78,6 +76,7 @@ def test_meshless_hex_soft_iron_not_registered_uses_collocation_mmmm():
     rad.MatApl(obj, rad.MatLin(1000.0))
     cont = rad.ObjCnt([obj])
     assert not _radsolve.is_registered(cont)        # mesh-less -> not HDiv-registered
-    rad.Solve(cont, 1e-6, 100, 0)                   # no Error203; surface-charge MSC solves (M stays 0, no source)
+    with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+        rad.Solve(cont, 1e-6, 100, 0)
     rad.UtiDelAll()
     rad.set_demag_backend("auto")

@@ -18,7 +18,7 @@ Source: TEAM Workshop reference papers (IGTE Symposium 1990,
 Compumag, Cefc proceedings).
 
 Use cases:
-- "Which TEAM problem validates my MMM/MSC implementation?"
+- "Which TEAM problem validates my HDiv-VIM implementation?"
 - "What's the reference solution for problem 13 (nonlinear yoke)?"
 - "Where do I find the geometry definition for problem 32 (vector hysteresis)?"
 """

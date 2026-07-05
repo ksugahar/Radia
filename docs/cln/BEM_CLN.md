@@ -134,8 +134,7 @@ Comparison with alternative methods:
 
 | Method                  | DOF / element | Regime                |
 |-------------------------|---------------|------------------------|
-| MMM tetrahedron         | 3             | steady-state only      |
-| MSC hexahedron          | 6             | steady-state only      |
+| HDiv-VIM / Radia field route | HDiv order / face-charge kernel | steady magnetic-material forward solve |
 | FEM-element CLN         | ~60 N_Cauer   | transient, bounded     |
 | **BEM-CLN dipole + Warburg–Schur**  | **8 (N_Cauer + 1)** | **transient, inhomogeneous + SIBC** |
 | High-order curved tet (p=3) | ~60 + PML/Kelvin | transient, all regimes |

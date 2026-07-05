@@ -14,7 +14,7 @@ would have saved -- the point of this registry is to tell the two apart.)
 | test | first seen | symptom | suspected root cause | status |
 |---|---|---|---|---|
 | `test_omega_reduced_omega` | a61cecdf | intermittent assertion failure | iterative solver tolerance near a band edge | rerun-masked; not yet root-caused |
-| `test_B_accuracy_inside_iron` | 2026-05-20 | field value just outside the golden band | MMM dipole-in-material sampling sensitivity | rerun-masked; not yet root-caused |
+| `test_B_accuracy_inside_iron` | 2026-05-20 | field value just outside the golden band | retired moment-path dipole-in-material sampling sensitivity | rerun-masked; not yet root-caused |
 
 ## Policy
 

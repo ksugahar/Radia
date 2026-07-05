@@ -151,7 +151,7 @@ RWG triangular basis:
 - **Education** — easier to derive Pocklington than EFIE-RWG
 
 The lab does NOT use wire-grid.  All BEM workflows go through RWG
-surface meshes (or MMM/MSC volume elements).
+surface meshes (or HDiv-VIM volume elements).
 
 References (this folder):
 - `01_mom_basics/NEC/nec2prt1.pdf` — NEC-2 manual

@@ -27,14 +27,14 @@ External field: dipole superposed on B_ext.
 
 ## What it tests
 
-- ★ Basic FEM/BEM/MMM/MSC implementation correctness
+- ★ Basic FEM/BEM/HDiv-VIM implementation correctness
 - Open boundary handling (Kelvin transform vs PML vs ABC)
 - Material discontinuity at sphere surface
 - Higher-order convergence (analytic → exact ref)
 
 ## Lab usage
 
-- Used for `radia_mcp.bem.mmm_msc` validation
+- Used for HDiv-VIM / FEM-Kelvin validation
 - Used for FEM-Kelvin open-boundary validation
 - Sub-millimeter B accuracy at center → < 0.01% error target
 
@@ -71,14 +71,14 @@ Vertical plate: parallel to coil axis (key feature)
 | Solver | Method | Flux density along ref line |
 |--------|--------|----------------------------|
 | Various FEM (1988+) | A formulation | published in Compumag |
-| Volume IE (Nakata) | MMM | published |
+| Volume IE (Nakata) | magnetic moment method | published |
 | BEM (Onuki) | surface integral | published |
 | Hybrid FEM-BEM | combined | published |
 
 ## Lab usage
 
 - ★ Validates `radia_mcp.electromagnet` (Hantila polarization solver)
-- Validates `radia_mcp.bem.mmm_msc.nonlinear` (MMM nonlinear path)
+- Validates HDiv-VIM / reduced-FEM nonlinear magnetic-material paths
 - Used for nonlinear Picard convergence study (lab benchmarks)
 
 ## Reference
@@ -89,7 +89,7 @@ Vertical plate: parallel to coil axis (key feature)
 ## Cross-references
 
 - `radia_mcp.electromagnet` — Hantila polarization method
-- `radia_mcp.bem.mmm_msc.nonlinear` — nonlinear MMM
+- `radia_mcp.radia_ngsolve.hdiv_vim` — HDiv-VIM magnetic material path
 - `radia_mcp.matrix_solvers.preconditioners.shifted` — convergence for nonlinear
 """
 

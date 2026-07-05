@@ -53,24 +53,24 @@ from collections import Counter
 
 FIELD_NOTES: list[dict] = [
     # =====================================================
-    # CEFC 2026 -- H-matrix accelerated MMM (seed, anticipated)
+    # CEFC 2026 -- H-matrix accelerated HDiv-VIM (seed, anticipated)
     # =====================================================
     {
-        "id": "cefc2026-mmm-hacapk",
+        "id": "cefc2026-hdiv-hacapk",
         "venue": "CEFC 2026",
         "date": "2026-06-09",
         "location": "Thessaloniki, Greece",
         "talk": "H-matrix Accelerated Magnetic Moment Method with "
                 "Magnetic Surface Charges",
         "presenter": "K. Sugahara",
-        "topics": ["MMM", "MSC", "H-matrix", "HACApK", "ACA",
+        "topics": ["HDiv-VIM", "H-matrix", "HACApK", "ACA",
                    "accelerator-magnet", "validation", "FEM-comparison",
                    "scaling", "nonlinear", "open-boundary"],
         "status": "anticipated",
         "questions": [
             {
                 "q": "How do accuracy and computational cost compare with FEM?",
-                "a": "Field agrees with the FEM reference within 0.3 mT. MMM "
+                "a": "Field agrees with the FEM reference within 0.3 mT. HDiv-VIM "
                      "needs no air mesh and gives an exact open boundary; the "
                      "price is a dense matrix, which the H-matrix compresses "
                      "(204 GB -> 8.6 GB, ~24x).",
@@ -107,7 +107,7 @@ FIELD_NOTES: list[dict] = [
                           "problem before the next talk.",
             },
             {
-                "q": "Why MMM/MSC + HACApK rather than BEM with an FMM "
+                "q": "Why HDiv-VIM + HACApK rather than BEM with an FMM "
                      "(e.g. ngsolve.bem)?",
                 "a": "Compact, near-field-heavy magnet geometries are ~87% "
                      "near pairs, where HACApK ACA+ wins; FMM-BEM suits "
@@ -150,14 +150,14 @@ FIELD_NOTES: list[dict] = [
     # actual asked-Q&A not transcribed -- status="historical")
     # =====================================================
     {
-        "id": "cefc2020-mmm-msc",
+        "id": "cefc2020-retired-moment-path",
         "venue": "CEFC 2020",
         "date": "2020-11-03",
         "location": "Pisa, Italy (online)",
         "talk": "Magnetic Moment Method with the Idea of Magnetic Surface "
                 "Charge Method",
         "presenter": "H. Yano",
-        "topics": ["MMM", "MSC", "accelerator-magnet", "convergence",
+        "topics": ["HDiv-VIM", "accelerator-magnet", "convergence",
                    "FEM-comparison", "validation", "CST", "OPERA-3D",
                    "mesh-dependence"],
         "status": "historical",
@@ -168,7 +168,7 @@ FIELD_NOTES: list[dict] = [
                 "a": "The whole talk is built on it: a convergence study on a "
                      "T-shaped magnet (N=1..10) vs a stored commercial reference, "
                      "plus C-shaped and quadrupole mesh-dependence -- the proposed "
-                     "method converges far faster than plain MMM and matches that "
+                     "method converges far faster than plain retired moment path and matches that "
                      "reference.",
                 "lesson": "Position vs the SPECIFIC tools the audience uses "
                           "(OPERA-3D / Radia) and SHOW a convergence study "
@@ -568,7 +568,7 @@ FIELD_NOTES: list[dict] = [
         "venue": "CEFC 2026",
         "date": "2026-06-09",
         "location": "Thessaloniki, Greece",
-        "talk": "Bi-directional IEM-FEM Weak-Coupling Framework (Radia MMM + "
+        "talk": "Bi-directional IEM-FEM Weak-Coupling Framework (Radia HDiv-VIM + "
                 "NGSolve FEM) for Electromagnetic Analysis of Maglev Systems",
         "presenter": "Takaaki Yano",
         "topics": ["IEM-FEM", "weak-coupling", "maglev", "eddy-current",
@@ -599,7 +599,7 @@ FIELD_NOTES: list[dict] = [
                 "a": "Radia is credited explicitly as ESRF (Grenoble) and we "
                      "state we forked + extended it. Pure FEM must mesh the "
                      "air domain and re-mesh on magnet motion with open-"
-                     "boundary truncation error; MMM gives the exact open-"
+                     "boundary truncation error; the integral route gives the exact open-"
                      "boundary external field analytically, FEM solves only "
                      "the conductor reaction field (reduced potential), and "
                      "the two exchange fields via NGSolve CoefficientFunction "

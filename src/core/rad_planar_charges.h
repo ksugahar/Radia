@@ -2,11 +2,10 @@
 // rad_planar_charges.h
 //
 // SHARED 2D planar postprocessing: exterior field + Maxwell-stress torque from
-// a point-charge cloud (2D Laplace kernel G = -ln(r)/(2 pi)).  Method-agnostic:
-// BOTH the collocation MMMM (radia.mmmm2d) and the HDiv-VIM (radia.vim._vim2d)
-// evaluate their exterior field / torque through this one routine -- each just
-// supplies its charge cloud (Xq, Q).  The natural, method-independent cloud is
-// the M.n equivalent bound charge of the solved per-element magnetization,
+// a point-charge cloud (2D Laplace kernel G = -ln(r)/(2 pi)).  The HDiv-VIM
+// planar layer and dense planar helpers evaluate their exterior field / torque
+// through this one routine.  The natural cloud is the M.n equivalent bound charge
+// of the solved per-element magnetization,
 // sampled on the element edges (built in Python by radia.planar_charges).
 //
 // H(P) = (1/2 pi) sum_a Q_a (P - X_a) / |P - X_a|^2            (a 2D "point" charge

@@ -18,7 +18,7 @@
 #include "rad_application.h"
 #include "rad_point_classify.h"
 #include "rad_type_cast.h"
-#include "rad_poly_analytical.h"  // For MSC integration
+#include "rad_poly_analytical.h"  // For near-field face integration
 #include "rad_constants.h"       // For RadConst::MU_0, RadConst::FOUR_PI
 
 #include "rad_parallel.h"
@@ -564,7 +564,7 @@ void ClearAllCaches()
 }
 
 // ============================================================================
-// Complex Field Computation (for PEEC+MMM coupling)
+// Complex Field Computation
 // ============================================================================
 
 //-----------------------------------------------------------------------------
@@ -678,7 +678,7 @@ static inline void AddDipoleContribution(
 // the observation point is far from the source element (r >> element_size).
 //
 // For near-field accuracy, use ComputeBFromMagnetizationAdaptive() which
-// switches to MSC integration for near-field elements.
+// switches to face integration for near-field elements.
 //
 // Accuracy guideline: |error| < 5% when r > 3 * element_characteristic_size
 //-----------------------------------------------------------------------------
@@ -782,7 +782,7 @@ ComplexFieldResult ComputeComplexFieldSingle(
     result.status = STATUS_OUTSIDE;
 
     if (M_complex && n_elements > 0) {
-        // Use complex magnetization (PEEC+MMM mode)
+        // Use complex magnetization.
         // Need element centers and volumes
         std::vector<double> centers(n_elements * 3);
         std::vector<double> volumes(n_elements);
@@ -1173,7 +1173,7 @@ void ComputeCombinedFieldBatch(
 }
 
 // ============================================================================
-// Adaptive MSC Integration (Near: MSC, Far: Dipole)
+// Adaptive Face Integration (Near: face integral, Far: dipole)
 // ============================================================================
 
 //-----------------------------------------------------------------------------
@@ -1246,13 +1246,13 @@ int BuildElementFaceData(
 }
 
 //-----------------------------------------------------------------------------
-// ComputeBFromMagnetizationAdaptive: Error-controlled adaptive MSC/Dipole
+// ComputeBFromMagnetizationAdaptive: error-controlled adaptive face/dipole field.
 //
-// Uses collocation MMMM (face-charge) integration for near-field elements
+// Uses surface-charge (face-charge) integration for near-field elements
 // and dipole approximation for far-field elements.
 //
 // The target_error parameter specifies the maximum acceptable relative error:
-// - target_error = 0.0: Always use MSC (exact, slow)
+// - target_error = 0.0: Always use face integration (exact, slow)
 // - target_error = 0.01: Use dipole when r > 4.6 * element_size
 // - target_error = 0.05: Use dipole when r > 2.7 * element_size (default)
 // - target_error = 0.10: Use dipole when r > 2.2 * element_size
@@ -1296,11 +1296,11 @@ void ComputeBFromMagnetizationAdaptive(
         TVector3d diff = point - efd.centroid;
         double r = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
 
-        // Check if point is in near-field region (needs MSC for accuracy)
+        // Check if point is in near-field region (needs face integration for accuracy)
         double threshold = threshold_factor * efd.characteristic_size;
 
         if (r < threshold && efd.n_faces > 0) {
-            // NEAR FIELD: Use MSC integration (high accuracy)
+            // NEAR FIELD: use face integration (high accuracy)
             // H = sum_faces { sigma_f * solid_angle_integral }
             // where sigma_f = M . n_f (surface charge on face f)
 
@@ -1311,7 +1311,7 @@ void ComputeBFromMagnetizationAdaptive(
                 const auto& fv = efd.face_vertices[f];
 
                 if (fv.size() == 3) {
-                    // Triangular face - direct MSC integration
+                    // Triangular face: direct face integration.
                     TVector3d H_face = RadFieldFromTriangleFaceGlobal(
                         fv[0], fv[1], fv[2], M, point, efd.centroid);
                     H_real = H_real + H_face;
@@ -1346,7 +1346,7 @@ void ComputeBFromMagnetizationAdaptive(
                 }
             }
 
-            // B = mu0 * H (for MSC, H field is computed directly)
+            // B = mu0 * H; H field is computed directly by the face integral.
             B_out[0] += std::complex<double>(MU_0 * H_real.x, MU_0 * H_imag.x);
             B_out[1] += std::complex<double>(MU_0 * H_real.y, MU_0 * H_imag.y);
             B_out[2] += std::complex<double>(MU_0 * H_real.z, MU_0 * H_imag.z);

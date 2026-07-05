@@ -108,7 +108,7 @@ double RadHACApKPEECSanityCheck(int n_filaments) {
 
     // HACApK L via the PEEC adapter.
     RadHACApKPEECManager mgr(builder);
-    // Use the PEEC-specific default parameters (NOT the MSC defaults).
+    // Use the PEEC-specific default parameters.
     RadHACApKParams params = RadHACApKPEECDefaultParams();
     params.print_level = 0;
     bool ok = mgr.BuildHMatrix(params);

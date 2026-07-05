@@ -172,8 +172,8 @@ The right claim is therefore:
 """
 
 
-AGE_VS_MMM_STRATEGY = """\
-## AGE vs 2D MMM / ELF-like evaluator
+AGE_VS_FIELD_STRATEGY = """\
+## AGE vs 2D field quick check / ELF-like evaluator
 
 For 2D rotating machines, the main radia-motor path should be NGSolve AGE:
 
@@ -186,7 +186,7 @@ For 2D rotating machines, the main radia-motor path should be NGSolve AGE:
 That is the natural backbone for SPM/IPM/IM/SRM/SynRM examples because it can
 handle conductors, nonlinear reluctivity, and controlled weak forms.
 
-A 2D Radia-style MMM / BEM-like evaluator would still be valuable, especially
+A 2D Radia-style field-kernel / BEM-like evaluator would still be valuable, especially
 as an ELF/MAGIC bridge:
 
 - Fast PM and coil flux-linkage sweeps.
@@ -194,7 +194,7 @@ as an ELF/MAGIC bridge:
 - Lightweight co-energy and pickup-flux regression anchors.
 - Good prompt-time authoring checks before a heavier AGE solve.
 
-But a simple 2D MMM would not automatically cover everything:
+But a simple 2D field quick check would not automatically cover everything:
 
 - Eddy currents need conductor dynamics or an impedance/operator extension.
 - Nonlinear iron needs iteration and a robust material law.
@@ -205,7 +205,7 @@ But a simple 2D MMM would not automatically cover everything:
 So the practical strategy is hybrid:
 
 1. Use **NGSolve AGE** as the authoritative 2D motor solve path.
-2. Add a small **2D MMM/BEM-like public validation backend** for ELF-like
+2. Add a small **2D magnetic-circuit/BEM-like public validation backend** for ELF-like
    PM/coil/reluctance anchors, if we want fast deck-level feedback.
 3. Cross-check reduced quantities only: FLUM-like flux linkage, co-energy,
    torque sign/periodicity, back-EMF constants, Ld/Lq saliency, and slip-loss
@@ -267,7 +267,7 @@ SECTIONS = {
     "routing_playbook": ROUTING_PLAYBOOK,
     "radia_strengthening_queue": RADIA_STRENGTHENING_QUEUE,
     "jmag_coverage_reality": JMAG_COVERAGE_REALITY,
-    "age_vs_mmm_strategy": AGE_VS_MMM_STRATEGY,
+    "age_vs_field_strategy": AGE_VS_FIELD_STRATEGY,
     "linear_motor_dual_lane": LINEAR_MOTOR_DUAL_LANE,
     "run_artifact_contract": RUN_ARTIFACT_CONTRACT,
 }

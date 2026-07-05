@@ -151,7 +151,7 @@ def design_pcb_system(scenario: str) -> str:
             "   → pcb_fod('overview')\n"
             "5. Standards: SAE J2954 + IEC 61980-1\n"
             "   → pcb_efficiency_safety('standards_IEC_SAE')\n"
-            "6. Code: PEEC for L/M/k, Radia MMM for ferrite plate\n"
+            "6. Code: PEEC for L/M/k, HDiv-VIM / reduced FEM for ferrite plate\n"
             "   → radia_mcp.peec\n"
         ),
         "robot_multi_joint": (
@@ -162,8 +162,8 @@ def design_pcb_system(scenario: str) -> str:
             "3. Litz wire for high Q\n"
             "   → pcb_coil_compensation('coil_design')\n"
             "4. Cross-reference lab papers (WPT2016-23, 26, 39)\n"
-            "5. Code: PEEC + RNA for joint-by-joint analysis\n"
-            "   → radia_mcp.peec, radia_mcp.bem.mmm_msc.rna_mmm\n"
+            "5. Code: PEEC + reduced-FEM magnetic material coupling\n"
+            "   → radia_mcp.peec, radia_mcp.radia_ngsolve.hdiv_vim\n"
         ),
         "bearingless_motor": (
             "Bearingless motor + WPT integration (★ lab specialty):\n"

@@ -506,7 +506,7 @@ public:
     /**
      * Compute multi-port Z-parameter matrix at a single frequency.
      *
-     * Uses LAPACK zgetrf_/zgetrs_ (shared MKL infrastructure with MSC solver).
+     * Uses LAPACK zgetrf_/zgetrs_.
      *
      * Args:
      *   freq: Frequency in Hz
@@ -765,11 +765,11 @@ private:
  * This class enables C++ LAPACK MNA solve for ALL callers:
  * - PEECBuilder topology path
  * - ngbem bridge (ngbem_interface.py)
- * - Coupled PEEC+MMM (peec_coupled.py)
+ * - Shielded and reduced PEEC workflows
  * - Shielded PEEC (peec_shielded.py)
  *
  * Uses LAPACK zgesv_/zgetrf_/zgetrs_ + MKL cblas_zgemm
- * (shared infrastructure with MSC solver).
+ * (shared MKL/LAPACK infrastructure).
  */
 class PyMNASolver {
 public:
@@ -1351,7 +1351,7 @@ Example:
              R"doc(
              Compute multi-port Z-parameter matrix at a single frequency.
 
-             Uses LAPACK zgetrf_/zgetrs_ (shared MKL infrastructure with MSC solver).
+             Uses LAPACK zgetrf_/zgetrs_.
 
              Args:
                  freq: Frequency in Hz
@@ -1424,7 +1424,7 @@ Example:
         Standalone MNA (Modified Nodal Analysis) Solver.
 
         Accepts raw L, R, segment_nodes, ports arrays directly (no PEECBuilder).
-        Uses LAPACK zgesv_/zgetrf_/zgetrs_ (shared MKL infrastructure with MSC).
+        Uses LAPACK zgesv_/zgetrf_/zgetrs_.
 
         Used internally by PEECCircuitSolver for all MNA linear algebra.
         Also usable directly by ngbem bridge and other callers.

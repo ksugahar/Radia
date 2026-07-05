@@ -9,7 +9,7 @@
         H1  --grad-->  H(curl)  --curl-->  H(div)  --div-->  L2
 
   is EXACT, so  ker(curl|H(curl)) = grad(H1)  -- every curl-free edge field is a
-  gradient.  The div-free magnetization circulations the MSC/VIM solver must handle
+  gradient.  The div-free magnetization circulations the HDiv-VIM solver must handle
   ("loops", ker N c H(div)) are precisely  curl(H(curl))  -- div-free BY CONSTRUCTION
   (div o curl = 0).  The part of ker(curl) that is NOT a gradient is the de Rham
   cohomology H^1 (harmonic forms, one per topological hole) -- invisible on one

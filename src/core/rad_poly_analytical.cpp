@@ -299,7 +299,7 @@ TVector3d RadFieldFromTriangleFaceGlobal(
 	// here are the SAME operations as before (RadComputeTriangleFaceBasis mirrors them), and
 	// basis.basis_c == the raw face normal (e2 x (e2-e1/2) = 1/2 e1 x e2, same unit vector), so
 	// sigma = (M . basis.basis_c) * charge_sign reproduces the previous sigma -> bit-equivalent field
-	// (verified vs the saved reference: hex/tet/wedge PM + soft-iron MSC solve).
+	// (verified vs the saved fixed-magnetization and soft-iron references).
 	// =========================================================================
 	RadTriangleFaceBasis basis;
 	RadComputeTriangleFaceBasis(V0, V1, V2, elemCentroid, basis);

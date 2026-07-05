@@ -133,12 +133,7 @@ void MultipoleThresholds(double, double, double, double); // Maybe to be removed
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
-int HMatrixDensify(int, double*, int*);
 int GetFaceGeom(int, double*, int*);
-int GetCentroidFieldGrad(int, double*, int*, int*);
-int BuildMomentSystem(int, double, const double*, double*, double*, int*);
-int MomentSystemDenseRaw(int, double, double*, int*);
-int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -156,12 +151,6 @@ void GetHACApKStats( double*, int* );
 void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
-void SetMomentKrylovSolver( int );
-int GetMomentKrylovSolver();
-void SetMomentGMRESRestart( int );
-int GetMomentGMRESRestart();
-void SetMomentAndersonDepth( int );
-int GetMomentAndersonDepth();
 void SetRelaxParam( double );
 double GetRelaxParam();
 void SetKeepMagnetization( bool );
@@ -1416,40 +1405,9 @@ int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF)
 
 //-------------------------------------------------------------------------
 
-int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
-{
-	return rad.HMatrixDensify(InteractElemKey, pMatrix, pDOF);
-}
-
-//-------------------------------------------------------------------------
-
 int GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
 {
 	return rad.GetFaceGeom(InteractElemKey, pG, pDOF);
-}
-
-//-------------------------------------------------------------------------
-
-int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF)
-{
-	return rad.GetCentroidFieldGrad(InteractElemKey, pC, pNHex, pDOF);
-}
-
-//-------------------------------------------------------------------------
-
-int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF)
-{
-	return rad.BuildMomentSystem(InteractElemKey, chi, Happ, pA, pRhs, pDOF);
-}
-
-int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF)
-{
-	return rad.MomentSystemDenseRaw(InteractElemKey, chi, pA, pDOF);
-}
-
-int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out)
-{
-	return rad.HLUDebugMaterialize(InteractElemKey, A_perm_out, lod_out, nd_out);
 }
 
 //-------------------------------------------------------------------------
@@ -1554,38 +1512,6 @@ void SetBiCGSTABTolerance(double tol)
 double GetBiCGSTABTolerance()
 {
 	return rad.m_bicg_tol;
-}
-
-//-------------------------------------------------------------------------
-
-void SetMomentKrylovSolver(int solver)
-{
-	if(solver == 0 || solver == 1) rad.m_moment_krylov_solver = solver;
-}
-
-int GetMomentKrylovSolver()
-{
-	return rad.m_moment_krylov_solver;
-}
-
-void SetMomentGMRESRestart(int restart)
-{
-	if(restart >= 2) rad.m_moment_gmres_restart = restart;
-}
-
-int GetMomentGMRESRestart()
-{
-	return rad.m_moment_gmres_restart;
-}
-
-void SetMomentAndersonDepth(int depth)
-{
-	if(depth == 0 || depth == 1) rad.m_moment_anderson_depth = depth;
-}
-
-int GetMomentAndersonDepth()
-{
-	return rad.m_moment_anderson_depth;
 }
 
 //-------------------------------------------------------------------------

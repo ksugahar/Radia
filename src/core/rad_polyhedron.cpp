@@ -479,7 +479,7 @@ int radTPolyhedron::FillInTransAndFacesInLocFrames(TVector3d* ArrayOfPoints, int
 }
 
 //-------------------------------------------------------------------------
-// Tetrahedral mesh support (collocation MMMM face-charge method)
+// Tetrahedral mesh support (surface-charge face-charge method)
 //-------------------------------------------------------------------------
 
 void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
@@ -754,7 +754,7 @@ void radTPolyhedron::B_comp_tetrahedron_analytical(radTField* FieldPtr)
 
 		// =====================================================================
 		// IMA (Image Method) Field Contributions for tetrahedral elements
-		// Same pattern as B_comp_hexahedron_MSC IMA permanent magnet path
+		// Same pattern as B_comp_hexahedron_FaceCharge IMA permanent magnet path
 		// Magnetization is a pseudo-vector: mirror flips component along axis
 		// =====================================================================
 		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
@@ -1174,7 +1174,7 @@ void radTPolyhedron::B_comp_wedge_analytical(radTField* FieldPtr)
 
 //-------------------------------------------------------------------------
 
-void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
+void radTPolyhedron::B_comp_hexahedron_FaceCharge(radTField* FieldPtr)
 {
 	// =========================================================================
 	// GLOBAL COORDINATE METHOD for hexahedral elements (6 quadrilateral faces)
@@ -1316,9 +1316,9 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 			// The solver uses A = -K/(4pi) - 1/chi * I (ELF-compatible), giving sigma with correct sign
 			// Field formula: H = 2 * (sigma / 4pi) * solid_angle_integral
 			//
-			// Factor of 2 explanation (verified against ELF full model):
-			// The MSC sigma represents sum of charges on both sides of each face.
-			// ELF uses this convention for efficiency in the matrix computation.
+			// Factor of 2 explanation: sigma represents the sum of charges on
+			// both sides of each face.  ELF uses this convention for efficiency
+			// in the matrix computation.
 			// When computing field, we need 2x to account for both charge sheets.
 			for(int i = 0; i < nFaces; i++)
 			{
@@ -1605,16 +1605,16 @@ void radTPolyhedron::B_comp_hexahedron_MSC(radTField* FieldPtr)
 }
 
 //-------------------------------------------------------------------------
-// B_comp_wedge_MSC: generic face-charge MSC field evaluation for 4-6 face polyhedra.
+// B_comp_wedge_FaceCharge: generic face-charge field evaluation for 4-6 face polyhedra.
 // Each face has one surface charge sigma as DOF (tet=4, wedge/pyramid=5, hex=6).
 //-------------------------------------------------------------------------
-void radTPolyhedron::B_comp_wedge_MSC(radTField* FieldPtr)
+void radTPolyhedron::B_comp_wedge_FaceCharge(radTField* FieldPtr)
 {
 	radTFieldKey& FldKey = FieldPtr->FieldKey;
 	TVector3d& obsPoint = FieldPtr->P;
 
 	// Get face vertices in GLOBAL coordinates.
-	// Supported MSC polyhedra have 4-6 faces with variable vertex count (3 or 4).
+	// Supported face-charge polyhedra have 4-6 faces with variable vertex count (3 or 4).
 	std::array<int, 8> faceNumVerts;
 	std::array<std::array<TVector3d, 4>, 8> faceVertices;
 	int nFaces = (AmOfFaces <= 8) ? AmOfFaces : 8;
@@ -1853,7 +1853,7 @@ void radTPolyhedron::B_comp_wedge_MSC(radTField* FieldPtr)
 
 		// =====================================================================
 		// IMA (Image Method) Field Contributions for wedge elements
-		// Same pattern as B_comp_hexahedron_MSC IMA, adapted for variable face vertex count
+		// Same pattern as B_comp_hexahedron_FaceCharge IMA, adapted for variable face vertex count
 		// =====================================================================
 		if(RadIMAFieldContext::IsActive() && !FldKey.PreRelax_)
 		{
@@ -2130,7 +2130,7 @@ TVector3d radTPolyhedron::FieldFromFaceMirrored(const TVector3d& obs,
 }
 
 //-------------------------------------------------------------------------
-// Face-charge MSC field computation methods for triangular/quadrilateral faces.
+// Face-charge field computation methods for triangular/quadrilateral faces.
 // Note: 1/(4*pi) factor is applied in matrix assembly (rad_interaction.cpp),
 // not in these field computation functions. Use RadConst::INV_FOUR_PI.
 //-------------------------------------------------------------------------
@@ -2459,7 +2459,7 @@ TVector3d radTPolyhedron::FieldFromQuadFaceMirroredWithNormals(const TVector3d& 
 TVector3d radTPolyhedron::FieldFromQuadFace(const TVector3d& obs, int faceIdx, double sigma) const
 {
 	// Compute field from a single quadrilateral face with unit surface charge
-	// Surface-charge collocation MMMM face kernel:
+	// Surface-charge surface-charge face kernel:
 	// - Split quad into 2 triangles
 	// - For each triangle, check if normal points outward
 	// - Apply sign_factor to ensure outward-pointing normal
@@ -2653,12 +2653,9 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 }
 
 //-------------------------------------------------------------------------
-// NOTE: the surface-charge demag is UNCONDITIONALLY multipole-moment MMM
-// (tet 4-DOF + wedge/pyramid 5-DOF + hex 6-DOF, method 0/1/2).  MMMM does NOT
-// connect to HACApK: the moment linear step is the dense LU (method 0) or the
-// matrix-free path (method 1) -- the H-matrix moment route was removed.
-// The EIEM2 collocation kernel + its old moment / eval-point / pyramid-cloud opt-outs were fully
-// removed in Phase 3b; mixed tet+MSC is rejected fail-loud (Error204) in MakeAutoRelax.
+// Mesh-backed magnetic-material demagnetization is intentionally not solved
+// through this legacy face-charge path.  Use HDiv-VIM for production soft-iron
+// solves; this file keeps fixed-magnetization and field-evaluation utilities.
 //-------------------------------------------------------------------------
 
 
@@ -2693,45 +2690,45 @@ void radTPolyhedron::B_comp_frM(radTField* FieldPtr)
 //void radTPolyhedron::B_comp(radTField* FieldPtr)
 {
 	// =========================================================================
-	// Dispatch to specialized collocation MMMM face-charge methods based on element type
+	// Dispatch to specialized surface-charge face-charge methods based on element type
 	// =========================================================================
 	// Supported element types:
 	// - Tetrahedron: 4 triangular faces (AmOfFaces == 4)
 	// - Hexahedron: 6 quadrilateral faces (AmOfFaces == 6)
 	// =========================================================================
 
-	// For tetrahedral elements, use the analytical collocation MMMM method
+	// For tetrahedral elements, use the analytical surface-charge method
 	// The analytical method uses closed-form surface charge formulas and has been
 	// verified to produce identical results to the original Gauss integration method.
 	if(IsTetrahedron())
 	{
-		// Unified MMMM face-charge tetrahedron (Use6DOF_MSC, 4 DOF): a SOLVED soft-iron tet carries one
-		// surface charge per face (Sigma[0..3], written by the moment solve), so its field is evaluated from
-		// the 4 face charges via the face-count-generic collocation MMMM field eval (same sigma path as wedge/hex).
+		// A solved face-charge tetrahedron carries one surface charge per face
+		// (Sigma[0..3]), so its field is evaluated from the four face charges
+		// via the face-count-generic field path.
 		// A permanent-magnet / unsolved tet has Sigma == 0 and keeps the analytical magnetization-based field
 		// (M supplied in ObjTetrahedron).
 		bool tetSigmaIsZero = true;
 		for(int i = 0; i < AmOfFaces; i++) { if(Sigma[i] != 0.0) { tetSigmaIsZero = false; break; } }
-		if(Use6DOF_MSC && !tetSigmaIsZero)
-			B_comp_wedge_MSC(FieldPtr);              // generic face-charge (sigma) field eval; handles the 4 tri faces
+		if(UseFaceChargeDOF && !tetSigmaIsZero)
+			B_comp_wedge_FaceCharge(FieldPtr);              // generic face-charge (sigma) field eval; handles the 4 tri faces
 		else
 			B_comp_tetrahedron_analytical(FieldPtr); // PM / unsolved tet: analytic M-based field
 		return;
 	}
 
-	// For hexahedral elements (6 quadrilateral faces), use the collocation MMMM method
+	// For hexahedral elements (6 quadrilateral faces), use the surface-charge method
 	if(IsHexahedron())
 	{
-		B_comp_hexahedron_MSC(FieldPtr);
+		B_comp_hexahedron_FaceCharge(FieldPtr);
 		return;
 	}
 
 	// For wedge elements (5 faces: 2 triangular + 3 quadrilateral)
-	// Use 5-DOF MSC when enabled, otherwise fall back to 3-DOF analytical
+	// Use 5-DOF face charges when enabled, otherwise fall back to 3-DOF analytical.
 	if(AmOfFaces == 5)
 	{
-		if(Use6DOF_MSC)
-			B_comp_wedge_MSC(FieldPtr);
+		if(UseFaceChargeDOF)
+			B_comp_wedge_FaceCharge(FieldPtr);
 		else
 			B_comp_wedge_analytical(FieldPtr);
 		return;
@@ -3677,7 +3674,7 @@ void radTPolyhedron::DefineRelAndAbsTol(double* RelAbsTol)
 
 // radTPolyhedron::CheckForSpecialShapes (polyhedron->RecMag box-detection optimization)
 // REMOVED 2026-06-28: it rebuilt a magnetization radTRecCur from a box polyhedron, defeating
-// the MMMM surface-charge representation; it was gated by RecognizeRecMagsInPolyhedrons (default
+// the surface-charge surface-charge representation; it was gated by RecognizeRecMagsInPolyhedrons (default
 // off) so never ran. radTRecCur is retained only as the ObjRecCur/ObjArcCur current-source kernel.
 
 //-------------------------------------------------------------------------

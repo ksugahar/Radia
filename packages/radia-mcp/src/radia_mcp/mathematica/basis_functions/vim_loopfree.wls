@@ -20,7 +20,7 @@
    (ii) the contravariant Piola map preserves BOTH div and normal-trace (the de Rham
         commuting diagram) => charge-free is preserved under arbitrary distortion.
   The constant-M (lowest-order) basis CANNOT represent these loops (PART C: they average
-  to zero over the element), so constant-M MSC must build loops a different way (the
+  to zero over the element), so constant-M face-charge route must build loops a different way (the
   tree-cotree face-charge cycles) that only APPROXIMATELY match ker(N) on distorted hexes
   -- the documented defect the local-null-vector / installCycle fix had to patch.
 *)
@@ -92,7 +92,7 @@ Module[{ok = True, chk, W, M, faces, c, Vd, Nshp, F, Jm, Mref, Mphys, pts3,
   Mavg = Integrate[M, {x,0,1}, {y,0,1}, {z,0,1}];  (* element-average magnetization *)
   chk["FEEC loop averages to ZERO over the element ( Int M dV = 0 )", Simplify[Mavg] === {0,0,0}];
   Print["       => the field-null loop is INVISIBLE to a constant-M (lowest-order) basis;"];
-  Print["          representing it REQUIRES the high-order de Rham basis.  Constant-M MSC"];
+  Print["          representing it REQUIRES the high-order de Rham basis.  Constant-M face-charge route"];
   Print["          instead builds loops as tree-cotree FACE-CHARGE cycles, which only"];
   Print["          approximately match ker(N) on distorted hexes (the documented defect)."];
 

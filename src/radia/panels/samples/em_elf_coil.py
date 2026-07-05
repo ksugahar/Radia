@@ -40,7 +40,7 @@ def build_coil():
     """Build the ELF racetrack coil with Y_CENTER = 131.25 mm.
 
     Returns:
-        CoilBuilder instance (full coil, NOT mirrored -- the FEM/MSC
+        CoilBuilder instance (full coil, NOT mirrored -- the FEM/HDiv-VIM
         Biot-Savart integration uses the full source regardless of
         symmetry reduction).
     """

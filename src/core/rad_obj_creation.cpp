@@ -220,7 +220,7 @@ int radTApplication::SetRecMag(double* CPoi, long lenCPoi, double* Dims, long le
 		radThg hg;
 
 		// RecMag/RecCur separation (2026-06-28): a current-carrying block stays a radTRecCur
-		// (volume Biot-Savart); a magnetized block becomes an MMMM surface-charge polyhedron
+		// (volume Biot-Savart); a magnetized block becomes an surface-charge surface-charge polyhedron
 		// directly -- the magnet path no longer instantiates radTRecCur (which is now current-only).
 		const short isCurrent = J_IsNotZero
 			|| (fabs(J_vect.x)>ZeroTolCurrDens) || (fabs(J_vect.y)>ZeroTolCurrDens) || (fabs(J_vect.z)>ZeroTolCurrDens);
@@ -248,7 +248,7 @@ int radTApplication::SetRecMag(double* CPoi, long lenCPoi, double* Dims, long le
 		}
 		else
 		{
-			// Magnetized rectangular block -> MMMM surface-charge polyhedron directly. Same 8-corner /
+			// Magnetized rectangular block -> surface-charge surface-charge polyhedron directly. Same 8-corner /
 			// 6-face box (and winding) as the former radTRecMag::ConvertToPolyhedron, so the magnet
 			// field is bit-identical to the prior magnet path.
 			TVector3d hDims = 0.5*DimsVect;
@@ -552,7 +552,7 @@ int radTApplication::SetPolyhedron1(TVector3d* ArrayOfPoints, int lenArrayOfPoin
 			radThg hg(VolLimByPgnsPtr);
 			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
 			// RecognizeRecMagsInPolyhedrons / CheckForSpecialShapes (polyhedron->RecMag box
-			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay MMMM
+			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay surface-charge
 			// surface-charge polyhedra (radTRecCur kept only as the ObjRecCur/ObjArcCur current kernel).
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);
@@ -585,7 +585,7 @@ int radTApplication::SetPolyhedron2(TVector3d** ArrayOfFaces, int* ArrayOfNumOfP
 			radThg hg(VolLimByPgnsPtr);
 			VolLimByPgnsPtr = nullptr;  // Ownership transferred to radThg
 			// RecognizeRecMagsInPolyhedrons / CheckForSpecialShapes (polyhedron->RecMag box
-			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay MMMM
+			// optimization) REMOVED 2026-06-28: magnetization rectangular blocks stay surface-charge
 			// surface-charge polyhedra (radTRecCur kept only as the ObjRecCur/ObjArcCur current kernel).
 			int ElemKey = AddElementToContainer(hg);
 			if(SendingIsRequired) Send.Int(ElemKey);

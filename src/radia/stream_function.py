@@ -11,7 +11,7 @@ serves any Radia source family using Radia's *already-implemented* field
 computation -- there is no field kernel baked into this module:
 
     - coils                : Biot-Savart H/A from filaments
-    - permanent magnets,   : MMM / MSC field from magnetization
+    - permanent magnets,   : fixed-magnet field from magnetization
       soft iron
 
 For convenience, ``radia_field_kernel`` builds such a callback directly from
@@ -468,8 +468,8 @@ def radia_field_kernel(obs_points, sources, component=2, field="b"):
     ``A(i, j)`` = (``component`` of the ``field``) at observation point i
     produced by Radia source object ``sources[j]``, evaluated via ``radia.Fld``.
     This is the generic reuse of Radia's already-implemented kernels and works
-    for ANY source family -- coils (Biot-Savart), permanent magnets / soft iron
-    (MMM / MSC) -- without embedding a new field formula.
+    for ANY source family -- coils (Biot-Savart), fixed-magnet objects, or
+    solved magnetic materials -- without embedding a new field formula.
 
     Parameters
     ----------

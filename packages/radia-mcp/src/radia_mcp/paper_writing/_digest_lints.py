@@ -197,7 +197,7 @@ _IEEE_KW_BLOCK_RE = re.compile(
     r"\\begin\{IEEEkeywords\}(.+?)\\end\{IEEEkeywords\}",
     re.DOTALL,
 )
-# Elsevier / Springer: \keywords{ ... }  (also \PACS{} \MSC{} etc. — keep loose)
+# Elsevier / Springer: \keywords{ ... }  (also \PACS{} / Mathematics Subject Classification etc. — keep loose)
 _ELSEVIER_KW_RE = re.compile(
     r"\\keywords\s*\{(.+?)\}",
     re.DOTALL,

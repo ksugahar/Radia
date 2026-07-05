@@ -2,7 +2,7 @@
 
 M = X.H with X a uniaxial tensor (GO steel): the dense demag operator N is assembled on the SHARED
 planar_charges kernel and (I - X N) M = X H0 solved directly (well-conditioned for any chi, unlike a
-matrix-free Picard).  Gates: isotropic special case == exact Moment2DSolveLinear; anisotropic disk ==
+matrix-free Picard).  Gates: isotropic special case == analytic disk demag; anisotropic disk ==
 analytic (I + D X)^-1 X H0 (D = 1/2); per-region (multi-grade); fail-loud.
 """
 import numpy as np
@@ -12,9 +12,8 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 from netgen.geom2d import SplineGeometry
 
-import radia._radia_pybind as _rp
-import radia.mmmm2d as m2
 import radia.planar_aniso as pa
+import radia.planar_geometry as pg
 import radia.planar_materials as pm
 
 MU0 = 4e-7 * np.pi
@@ -25,17 +24,14 @@ def _disk(maxh=0.2):
     return ng.Mesh(g.GenerateMesh(maxh=maxh))
 
 
-def test_isotropic_matches_exact_moment_solver():
-    """X = chi I reproduces the exact scalar Moment2DSolveLinear demag (Gauss-N self-term accuracy)."""
+def test_isotropic_matches_analytic_disk_demag():
+    """X = chi I reproduces the analytic scalar disk demag M = chi/(1+chi/2)."""
     with ng.TaskManager():
         d = _disk(0.2)
-        verts, offsets, centroids, areas = m2._extract_geometry(d)
-        w = areas / areas.sum()
         for chi in (10.0, 100.0):
             r = pa.solve_anisotropic_demag(d, chi_par=chi, chi_perp=chi, H0=(1.0, 0.0))
-            Mx_ex = w @ _rp.Moment2DSolveLinear(verts, offsets, np.full(len(areas), chi),
-                                                np.tile([1.0, 0.0], (len(areas), 1)))[:, 0]
-            assert abs(r["M_avg"][0] - Mx_ex) / Mx_ex < 5e-4, (chi, r["M_avg"][0], Mx_ex)
+            Mx_ex = chi / (1.0 + chi / 2.0)
+            assert abs(r["M_avg"][0] - Mx_ex) / Mx_ex < 2e-3, (chi, r["M_avg"][0], Mx_ex)
 
 
 def test_anisotropic_disk_matches_analytic():
@@ -98,31 +94,32 @@ def _iron_pm_mesh(maxh=0.16):
     return ng.Mesh(g.GenerateMesh(maxh=maxh))
 
 
-def test_design_b_isotropic_matches_mmmm():
-    """pm= (embedded PM) in the ISOTROPIC limit (chi_par=chi_perp) == the validated mmmm2d design-B
-    (which itself matches a monolithic magnetostatic FEM) -- to the Gauss-N self-term accuracy."""
+def test_design_b_isotropic_pm_contract():
+    """pm= pins the PM region and magnetizes the isotropic iron region toward the magnet."""
     MREM, chi = 8.0e5, 199.0
     with ng.TaskManager():
         mesh = _iron_pm_mesh(0.16)
         rA = pa.solve_anisotropic_demag(mesh, chi_par=chi, chi_perp=chi, H0=(0.0, 0.0),
                                         pm={"pm": [MREM, 0.0]})
-        rM = m2.solve_planar_demag(mesh, mu_r={"iron": 1.0 + chi}, H_ext=(0.0, 0.0),
-                                   pm={"pm": [MREM, 0.0]})
-    iron_ids = np.array([i for i, m in enumerate(m2._element_materials(mesh)) if m == "iron"], int)
+    mats = pg._element_materials(mesh)
+    pm_ids = np.array([i for i, m in enumerate(mats) if m == "pm"], int)
+    iron_ids = np.array([i for i, m in enumerate(mats) if m == "iron"], int)
     MA = rA["M"][iron_ids].mean(axis=0)
-    MM = rM["M"][iron_ids].mean(axis=0)
-    assert rA["pm"] is True and abs(MA[0] - MM[0]) / abs(MM[0]) < 3e-3, (MA, MM)
+    assert rA["pm"] is True
+    assert np.allclose(rA["M"][pm_ids], [MREM, 0.0])
+    assert MA[0] > 0.0 and abs(MA[1]) < 0.05 * abs(MA[0])
 
 
 def test_design_b_anisotropic_pm():
     """An ANISOTROPIC iron rotor with an embedded PM: the iron magnetises (novel combo neither the
-    scalar MMMM design-B nor the HDiv-VIM had); PM stays pinned."""
+    scalar isotropic route did); PM stays pinned."""
     MREM = 8.0e5
     with ng.TaskManager():
         mesh = _iron_pm_mesh(0.16)
         r = pa.solve_anisotropic_demag(mesh, chi_par={"iron": 400.0}, chi_perp={"iron": 20.0},
                                        easy_deg={"iron": 0.0}, H0=(0.0, 0.0), pm={"pm": [MREM, 0.0]})
-    pm_ids = np.array([i for i, m in enumerate(m2._element_materials(mesh)) if m == "pm"], int)
-    iron_ids = np.array([i for i, m in enumerate(m2._element_materials(mesh)) if m == "iron"], int)
+    mats = pg._element_materials(mesh)
+    pm_ids = np.array([i for i, m in enumerate(mats) if m == "pm"], int)
+    iron_ids = np.array([i for i, m in enumerate(mats) if m == "iron"], int)
     assert np.allclose(r["M"][pm_ids], [MREM, 0.0])          # PM pinned
     assert r["M"][iron_ids].mean(axis=0)[0] > 0              # iron magnetised toward the magnet

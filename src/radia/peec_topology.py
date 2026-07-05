@@ -7,7 +7,7 @@ Computes port impedance Z(f) using Modified Nodal Analysis (MNA)
 with full node incidence matrix from PEECBuilder.build_topology().
 
 All linear algebra is delegated to C++ LAPACK via MNASolver
-(zgesv_/zgetrf_/zgetrs_ + cblas_zgemm, shared MKL infrastructure with MSC).
+(zgesv_/zgetrf_/zgetrs_ + cblas_zgemm, shared MKL infrastructure with face integration).
 
 Supports:
 - Series connections (wire segments)

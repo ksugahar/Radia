@@ -6,8 +6,8 @@ from .em_design import (
     EMDesignSpec,
     EM_METHODS,
     FEM_SOLVERS,
+    HDIV_SOLVERS,
     MATERIALS,
-    MSC_SOLVERS,
 )
 from .notebook_workbench import CommandWorkbench, NotebookFieldSpec, field_keys
 
@@ -28,9 +28,9 @@ EM_FIELD_SPECS = (
     NotebookFieldSpec("relax", "relax", section="Solver"),
     NotebookFieldSpec("newton", "Newton", "checkbox", section="Solver"),
     NotebookFieldSpec("solver", "FEM solver", "dropdown", FEM_SOLVERS, "Solver"),
-    NotebookFieldSpec("ima", "IMA", section="MSC"),
-    NotebookFieldSpec("msc_solver", "MSC solver", "dropdown", MSC_SOLVERS, "MSC"),
-    NotebookFieldSpec("demag_backend", "demag", "dropdown", ("hdiv",), "MSC"),
+    NotebookFieldSpec("ima", "IMA", section="HDiv-VIM"),
+    NotebookFieldSpec("hdiv_solver", "HDiv solver", "dropdown", HDIV_SOLVERS, "HDiv-VIM"),
+    NotebookFieldSpec("demag_backend", "demag", "dropdown", ("hdiv",), "HDiv-VIM"),
     NotebookFieldSpec("kelvin_mu_r", "mu_r", section="Kelvin"),
     NotebookFieldSpec("h0", "H0", section="Kelvin"),
     NotebookFieldSpec("field_axis", "axis", "dropdown", ("x", "y", "z"), "Kelvin"),
@@ -52,7 +52,7 @@ EM_NOTEBOOK_FIELD_ORDER = field_keys(EM_FIELD_SPECS)
 class EMWorkbench(CommandWorkbench):
     title = "Radia EM"
     field_specs = EM_FIELD_SPECS
-    section_order = ("Study", "Inputs", "Material", "Solver", "MSC", "Kelvin", "Clebsch")
+    section_order = ("Study", "Inputs", "Material", "Solver", "HDiv-VIM", "Kelvin", "Clebsch")
 
     def __init__(self, spec: EMDesignSpec | None = None):
         super().__init__(spec or EMDesignSpec(), run_root="runs/radia_em")

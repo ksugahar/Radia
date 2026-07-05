@@ -10,7 +10,7 @@ Why this matters for the SFM pipeline:
   - **ACA+ is kernel-agnostic** (CLAUDE.md "FMM Removed (2026-03-06)" /
     "SCOPE CLARIFICATION 2026-05-30").  Validating that it works on a
     FE-direct matrix opens the door to MATERIAL KERNELS (Radia
-    MMM/MSC iron yoke, shielded coil, SIBC workpiece, ...) where each
+    HDiv-VIM iron yoke, shielded coil, SIBC workpiece, ...) where each
     entry costs a Radia container solve and ACA+ is essential.
   - The Path-A compensated iteration RE-USES the cached TSVD
     factorisation across iters (one ACA+ build + N back-substitutions).

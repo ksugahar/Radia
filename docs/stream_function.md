@@ -96,7 +96,7 @@ almost one-for-one in wall-clock time:
 Singular values match the dense SVD to ~2e-9.  Notes:
 - The speedup **grows with N** (it is `~N/(5 k_aca)` for `M=N/4`); at fixed
   `k_aca` the dense route is `O(N M^2)` while ACA is `O(k_aca(M+N))` evals.
-- The win is largest when the kernel is **expensive** (Biot-Savart / MMM-MSC
+- The win is largest when the kernel is **expensive** (Biot-Savart / fixed-magnet
   field, `radia.Fld`) -- every avoided `A(i,j)` is an avoided field evaluation.
 - The matrix entry is supplied through a Python callback, so there is a
   per-call overhead; because both methods pay it equally, the *ratio* is
@@ -112,13 +112,13 @@ family using Radia's *already-implemented* field computation:
 | Source family | Radia kernel |
 |---------------|--------------|
 | coils (thin wires) | Biot-Savart (`ObjFlmCur`, `ObjArcCur`) |
-| permanent magnets / soft iron | MMM / MSC surface-charge field (`ObjRecMag`, `ObjHexahedron`, ...) |
+| permanent magnets / soft iron | Radia field evaluation (`ObjRecMag`, HDiv-VIM solved materials, ...) |
 
 ACA+ itself is **delegated to the in-repo HACApK C library**
 (`src/ext/HACApK/cHACApK_acaplus`) -- the single source of truth for ACA+ in
 Radia. There is no second ACA+ implementation. The Biot-Savart kernel feeds
-HACApK through the `HACApK_set_entry_func` override (default behaviour, the MMM
-system matrix, is unchanged when the override is null). This module's only
+HACApK through the `HACApK_set_entry_func` override (default behaviour, the
+in-repo material interaction matrix, is unchanged when the override is null). This module's only
 numerical algorithm is the TSVD recompression, which HACApK does not provide.
 
 ## 4. API
@@ -208,7 +208,7 @@ registered in `panel_registry.json`.
   `||S_f90 - S_radia|| / ||S_f90|| ~ 1e-15` for both methods
   (`tests/test_stream_function.py::test_matches_f90_reference`, LAB-only).
 - **magnetic-material path**: `test_radia_field_kernel_magnets` factors the
-  MMM/MSC coupling matrix of a permanent-magnet array to `< 1e-5`.
+  fixed-magnet field matrix of a permanent-magnet array to `< 1e-5`.
 
 ## 6. Optimisation layer: linear (TSVD) vs nonlinear (CMA-ES)
 

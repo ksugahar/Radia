@@ -48,7 +48,7 @@ Started 1985; problems continually added/updated.
 
 | Class | Problems | Lab MCP relevance |
 |-------|----------|-------------------|
-| **Magnetostatic** (linear, nonlinear) | 6, 13, 20, 23 | `radia_mcp.electromagnet`, `radia_mcp.bem.mmm_msc` |
+| **Magnetostatic** (linear, nonlinear) | 6, 13, 20, 23 | `radia_mcp.electromagnet`, `radia_mcp.radia_ngsolve.hdiv_vim` |
 | **Eddy current** (3D, transient, harmonic) | 1a, 1b, 2, 3, 4, 5, 7, 9, 21, 24 | `radia_mcp.ih`, `radia_mcp.peec`, `radia_mcp.fem` |
 | **Force / motion / levitation** | 17, 20, 23, 28, 33b | `radia_mcp.differential_forms.forces` |
 | **NDT (cracks, flaws)** | 8, 15, 27 | `radia_mcp.ndt` |
@@ -71,8 +71,8 @@ problem provides the reference solution.
 |---------|---------------|-----|
 | Linear magnetostatic (Phi) | problem06 (Sphere) | analytic comparison |
 | Nonlinear yoke | problem13 (3-D Non-Linear Magnetostatic) | published reference |
-| MMM volume integral | problem13 | published with VIE results |
-| MSC surface charge | problem06 | exact ref |
+| HDiv-VIM / reduced FEM magnetic material | problem13 | nonlinear reference |
+| HDiv-VIM sphere / open boundary | problem06 | exact ref |
 
 ## Eddy current solvers
 

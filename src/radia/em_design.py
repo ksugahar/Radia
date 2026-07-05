@@ -16,19 +16,19 @@ from .panel_design_common import (
 
 METHOD_OMEGA = "Omega"
 METHOD_APHI = "A-Phi"
-METHOD_MSC = "MSC"
+METHOD_HDIV = "HDiv-VIM"
 METHOD_KELVIN_BENCH = "Kelvin Benchmark"
 METHOD_CLEBSCH = "Clebsch hodograph"
 EM_METHODS = (
     METHOD_OMEGA,
     METHOD_APHI,
-    METHOD_MSC,
+    METHOD_HDIV,
     METHOD_KELVIN_BENCH,
     METHOD_CLEBSCH,
 )
 
 FEM_SOLVERS = ("auto", "pardiso", "ams", "bddc", "iccg")
-MSC_SOLVERS = (("LU", 0), ("BiCGSTAB", 1), ("HACApK", 2))
+HDIV_SOLVERS = (("LU", 0), ("BiCGSTAB", 1), ("HACApK", 2))
 MATERIALS = ("steel", "copper", "aluminum", "elf_steel", "linear", "hysteresis")
 
 
@@ -50,7 +50,7 @@ class EMDesignSpec:
     newton: bool = False
     solver: str = "auto"
     ima: str = ""
-    msc_solver: int = 0
+    hdiv_solver: int = 0
     demag_backend: str = "hdiv"
     kelvin_mu_r: str = "100"
     h0: str = "1.0"
@@ -69,10 +69,10 @@ class EMDesignSpec:
                 "bh_file", "hys_file", "fes_order", "n_steps",
                 "max_iter", "tol", "relax", "newton", "solver",
             })
-        elif self.method == METHOD_MSC:
+        elif self.method == METHOD_HDIV:
             fields.update({
                 "vol", "coil_script", "material", "sigma", "mu_r",
-                "bh_file", "hys_file", "ima", "msc_solver",
+                "bh_file", "hys_file", "ima", "hdiv_solver",
                 "demag_backend", "max_iter", "tol", "relax",
             })
         elif self.method == METHOD_KELVIN_BENCH:
@@ -88,7 +88,7 @@ class EMDesignSpec:
         return fields
 
     def missing_required_inputs(self) -> list[str]:
-        if self.method in (METHOD_OMEGA, METHOD_APHI, METHOD_MSC):
+        if self.method in (METHOD_OMEGA, METHOD_APHI, METHOD_HDIV):
             return [] if self.coil_script.strip() else ["Coil script"]
         if self.method == METHOD_KELVIN_BENCH:
             return [] if self.vol.strip() else ["Mesh .vol"]
@@ -101,8 +101,8 @@ class EMDesignSpec:
         py = python or sys.executable
         if self.method in (METHOD_OMEGA, METHOD_APHI):
             return self._build_fem_command(py, panels_dir)
-        if self.method == METHOD_MSC:
-            return self._build_msc_command(py, panels_dir)
+        if self.method == METHOD_HDIV:
+            return self._build_hdiv_command(py, panels_dir)
         if self.method == METHOD_KELVIN_BENCH:
             return self._build_kelvin_command(py, panels_dir)
         if self.method == METHOD_CLEBSCH:
@@ -139,21 +139,21 @@ class EMDesignSpec:
         append_switch(cmd, "--newton", self.newton)
         return cmd
 
-    def _build_msc_command(self, py: str, panels_dir) -> list[str]:
+    def _build_hdiv_command(self, py: str, panels_dir) -> list[str]:
         if not self.coil_script:
             raise ValueError("No coil script specified.")
         stem = self.vol or self.coil_script
         cmd = [
             py,
-            calc_script("calc_accel_msc.py", panels_dir),
+            calc_script("calc_accel_hdiv.py", panels_dir),
             "--coil-script", self.coil_script,
-            "--solver", str(self.msc_solver),
+            "--solver", str(self.hdiv_solver),
             "--demag-backend", self.demag_backend,
             "--max-iter", str(self.max_iter),
             "--tol", str(self.tol),
             "--relax", str(self.relax),
-            "--msh-output", msh_output(stem, "_msc"),
-            "--output", json_output(stem, "_msc"),
+            "--msh-output", msh_output(stem, "_hdiv"),
+            "--output", json_output(stem, "_hdiv"),
         ]
         append_value(cmd, "--vol", self.vol)
         append_value(cmd, "--ima", self.ima)

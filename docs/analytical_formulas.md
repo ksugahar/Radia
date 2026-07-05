@@ -357,8 +357,8 @@ high-fidelity verification.
 ## cuboid_average_field — Part 6 §7 (closed-form C++ kernel, v4.22.0)
 
 Spatial average of ``B`` over a target rectangular box from a uniform
-``M`` source box. Useful for FEM-MMM coupling (cell-averaged ``B`` in
-a rectangular FEM element), mesh-to-mesh transfer, and micromagnetics
+``M`` source box. Useful for FEM / HDiv-VIM field exchange
+(cell-averaged ``B`` in a rectangular FEM element), mesh-to-mesh transfer, and micromagnetics
 on a regular cubic lattice (the original PDF use case).
 
 The default path is a **closed-form 64-corner inclusion-exclusion

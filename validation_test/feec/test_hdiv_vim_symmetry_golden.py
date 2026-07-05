@@ -1,7 +1,7 @@
 """Golden test for the symmetric HDiv-type VIM demag operator (Radia C++ core, rad_hdiv_vim).
 
-Locks the structural foundation of the HDiv-type VIM (the symmetric alternative to the collocation
-MSC kernel): on a structured nx*ny*nz hex grid (RT0 faces), the demag operator N = B^T G B is
+Locks the structural foundation of the HDiv-type VIM: on a structured nx*ny*nz
+hex grid (RT0 faces), the demag operator N = B^T G B is
   (1) SYMMETRIC (Galerkin energy form) -- ||N - N^T||/||N|| ~ machine eps, and
   (2) loops are FIELD-NULL BY CONSTRUCTION (loops = ker B; B.loop = 0 => N.loop = 0).
 Golden values come from the NGSolve prototype (validation_test/feec/vim_legacy/hdiv_demag_quad_self.json):

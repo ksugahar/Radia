@@ -217,7 +217,7 @@ circuit interpretation.
 ## Connection to radia.hantila_solver
 
 `radia/hantila_solver.py` implements Hantila polarization method for
-nonlinear MMM.  The Hantila method also splits the constitutive
+nonlinear magnetic-material model.  The Hantila method also splits the constitutive
 relation into linear + residual parts and factors the linear
 operator once.  This is the same "factor once, iterate on residual"
 philosophy as CLN.

@@ -3,8 +3,8 @@ r"""ngsolve.bem INTEGRAL-EQUATION (BEM) solver helpers -- the OPEN boundary-elem
 the radia-ngsolve counterpart of a commercial high-frequency integral-equation (MoM) solver.
 
 The boundary element method solves an exterior PDE (Laplace / Helmholtz / Maxwell) with unknowns on the
-BODY SURFACE only (free space implicit to infinity) -- the same surface-charge / surface-current idea as
-radia's MMM and the ELF BEM, lifted to a full integral-equation formulation.  ngsolve.bem ships the
+BODY SURFACE only (free space implicit to infinity) -- the same surface-source idea as
+classical BEM, lifted to a full integral-equation formulation.  ngsolve.bem ships the
 Laplace, Helmholtz (scalar wave, wavenumber kappa) and Maxwell (full-wave EFIE/MFIE) single/double-layer
 potential operators, curved + high-order, FMM/H-matrix accelerated.
 

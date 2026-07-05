@@ -3,9 +3,8 @@
 The mesh-less soft-iron capability (build the iron from a simple SHAPE, no external NGSolve mesh) is KEPT
 by these intent constructors.  Each internally STRUCTURE-MESHES the shape into a subdivided structured hex
 mesh and registers it via :func:`radia.vim.MeshSoftIron`, so ``rad.Solve`` auto-routes it to the FEEC HDiv-VIM
-(RT1).  This is the API-compatible replacement for the legacy ``ObjHexahedron + MatApl(MatLin) + rad.Solve``
-mesh-less collocation-MMMM route (CLAUDE.md DIRECTION 2026-07-04: HDiv-VIM is radia's OFFICIAL / sole
-soft-iron demag route; collocation MMMM is the gated bridge -> ELF_MAGIC).
+(RT1).  This is the API-compatible replacement for the retired ``ObjHexahedron + MatApl(MatLin) +
+rad.Solve`` mesh-less surface-charge route.
 
 Why a constructor and not transparent ``ObjHexahedron`` interception: Radia exposes no per-element vertex
 getter, so a mesh-less handle's geometry is not recoverable at ``rad.Solve`` time -- the geometry must be

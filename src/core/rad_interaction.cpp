@@ -31,92 +31,6 @@
 
 #include "rad_parallel.h"
 
-// Collocation MMMM (Multipole Magnetic Moment Method) face-charge polyhedron support:
-// tet/wedge/pyramid/hexahedra carry one surface charge per face (4-6 DOF; legacy flag Use6DOF_MSC).
-// Always enabled (unconditional).  The old MMM / MSC (EIEM2) naming is abolished -- this IS the
-// collocation MMMM path.
-//
-// Note: the old tetra dipole-dipole path was tested but found numerically unstable; the production
-// polyhedron soft-iron solve is the collocation MMMM (face-charge) method.
-
-namespace {
-constexpr int MOM_NG = 8;
-constexpr int MOM_NS = MOM_NG * MOM_NG;
-static const double MOM_GP[MOM_NG] = {
-	0.01985507175123185, 0.10166676129318665, 0.23723379504183550, 0.40828267875217510,
-	0.59171732124782490, 0.76276620495816450, 0.89833323870681340, 0.98014492824876820
-};
-static const double MOM_GW[MOM_NG] = {
-	0.05061426814518815, 0.11119051722668725, 0.15685332293894365, 0.18134189168918100,
-	0.18134189168918100, 0.15685332293894365, 0.11119051722668725, 0.05061426814518815
-};
-
-struct MomentCflatCache {
-	int dof = 0;
-	int nElem = 0;
-	int nMom = 0;
-	int imaEnabled = 0;
-	int imaSymmetry = 0;
-	int imaSignX = 1;
-	int imaSignY = 1;
-	int imaSignZ = 1;
-	std::shared_ptr<std::vector<double>> cflat;
-};
-
-struct MomentGeomFaceCache {
-	double fc[3] = {0.0, 0.0, 0.0};
-	double nf[3] = {0.0, 0.0, 0.0};
-	double d[3] = {0.0, 0.0, 0.0};
-	double area = 0.0;
-	double V4[4][3] = {};                  // face corners (degenerate quad for a tri face) for the analytic kernel
-	double P[MOM_NS][3] = {};
-	double W[MOM_NS] = {};
-};
-
-struct MomentGeomElemCache {
-	int elemIdx = -1;
-	int valid = 0;
-	int nFace = 0;
-	double ce[3] = {0.0, 0.0, 0.0};
-	double Ve = 0.0;
-	double localDip[3][6] = {};
-	double localMono[6] = {};
-	double localQuad[2][6] = {};
-	double DvecQ[2][6] = {};
-	MomentGeomFaceCache face[6];
-};
-
-struct MomentGeomCache {
-	int dof = 0;
-	int nElem = 0;
-	int nHex = 0;
-	int nMom = 0;
-	uint64_t generation = 0;
-	std::shared_ptr<std::vector<MomentGeomElemCache>> elem;
-};
-
-std::mutex g_momentCflatCacheMutex;
-std::unordered_map<const radTInteraction*, MomentCflatCache> g_momentCflatCache;
-std::mutex g_momentGeomCacheMutex;
-std::unordered_map<const radTInteraction*, MomentGeomCache> g_momentGeomCache;
-std::unordered_map<const radTInteraction*, MomentGeomCache> g_momentAnyGeomCache;
-std::atomic<uint64_t> g_momentGeomGeneration{0};
-
-void ClearMomentCflatCache(const radTInteraction* interaction)
-{
-	{
-		std::lock_guard<std::mutex> lock(g_momentCflatCacheMutex);
-		g_momentCflatCache.erase(interaction);
-	}
-	{
-		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-		g_momentGeomCache.erase(interaction);
-		g_momentAnyGeomCache.erase(interaction);
-	}
-	g_momentGeomGeneration.fetch_add(1, std::memory_order_release);
-}
-} // namespace
-
 //-------------------------------------------------------------------------
 // Static member definitions for RadIMAFieldContext
 //-------------------------------------------------------------------------
@@ -125,16 +39,6 @@ std::atomic<int> RadIMAFieldContext::s_symmetry{0};
 std::atomic<int> RadIMAFieldContext::s_signX{1};
 std::atomic<int> RadIMAFieldContext::s_signY{1};
 std::atomic<int> RadIMAFieldContext::s_signZ{1};
-
-// Analytic moment kernel (closed-form triangle H + gradient vs 64pt Gauss); see rad_interaction.h.
-// DEFAULT ON since 2026-07-02 (the deliberate flip d2efb88d deferred): the closed form is EXACT
-// (removes the Gauss quadrature error; Mathematica-verified symmetric/traceless to machine eps) AND
-// measured 1.5x faster on the dominant method-2 H-matrix build (mdx knob matrix: ctype 28k DOF
-// 2.97 -> 1.95 s, cube 24.6k DOF 2.76 -> 1.84 s).  Gauss stays selectable via
-// rad.SolverConfig(moment_analytic_kernel=False) for cross-checks.
-std::atomic<bool> RadMomentKernelConfig::s_analyticKernel{true};
-void RadSetMomentAnalyticKernel(bool on) { RadMomentKernelConfig::SetAnalytic(on); }
-bool RadGetMomentAnalyticKernel() { return RadMomentKernelConfig::UseAnalytic(); }
 
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
@@ -177,8 +81,6 @@ radTInteraction::radTInteraction()
 
 	// PEEC element flag
 	m_hasPEECElements = false;
-	m_lastMomentFieldGradTime = 0.0;
-	m_lastMomentSystemBuildTime = 0.0;
 
 	// IMA flags - initialize to disabled
 	m_imaEnabled = false;
@@ -194,7 +96,6 @@ radTInteraction::radTInteraction()
 int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData, int rankMPI, int nProcMPI, char skipDenseMatrix) //OC08012020 + skipDenseMatrix
 //int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, const radTCompCriterium& InCompCriterium, short InMemAllocTotAtOnce, char AuxOldMagnArrayIsNeeded, char KeepTransData)
 {
-	ClearMomentCflatCache(this);
 	SomethingIsWrong = 0;
 
 	AmOfMainElem = 0;
@@ -216,8 +117,6 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	m_wedgeGeomReady = false;
 	m_hexaGeomReady = false;
 	m_hexaTriDataReady = false;
-	m_lastMomentFieldGradTime = 0.0;
-	m_lastMomentSystemBuildTime = 0.0;
 
 	// IMA flags - initialize to disabled
 	m_imaEnabled = false;
@@ -271,7 +170,7 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 	}
 	FillInMainTransPtrArray();
 
-	// Check if any element has variable DOF (e.g., 4-6 DOF face-charge MSC polyhedra)
+	// Check if any element has variable DOF (e.g., 4-6 independent face coefficients).
 	// If so, use the variable DOF interaction matrix setup
 	ComputeDOFOffsets();
 
@@ -293,11 +192,9 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 		NewMagnArray = vNewMagnArray.data();
 		NewFieldArray = vNewFieldArray.data();
 		ExternFieldArray = vExternFieldArray.data();
-		// The multipole-moment MMM H-matrix path (method 2) enumerates hexes via m_hexaElemIndices, populated by
-		// PrecomputeHexaGeometry() -- normally done inside SetupInteractMatrix_VariableDOF (skipped here).
-		// Call it directly (O(N) per-element geometry, idempotent) so the scalable moment solve sees the
-		// hexes even with the dense matrix skipped (Phase 2 Increment 4 storage decoupling).  Harmless for
-		// tet-only / EIEM2-HACApK models (nHex == 0 -> early return).
+		// Keep face geometry caches coherent when dense matrix construction is skipped.
+		// Mesh-backed magnetic-material solves are handled by HDiv-VIM; this cache is
+		// retained only for fixed-magnetization field and diagnostic paths.
 		PrecomputeHexaGeometry();
 	}
 	else
@@ -336,7 +233,6 @@ int radTInteraction::Setup(const radThg& In_hg, const radThg& In_hgMoreExtSrc, c
 
 radTInteraction::~radTInteraction()
 {
-	ClearMomentCflatCache(this);
 	DeallocateMemory(); //OC27122019
 }
 
@@ -344,14 +240,12 @@ radTInteraction::~radTInteraction()
 
 bool radTInteraction::HasSurfaceChargeElements() const
 {
-	// True if any relaxable element is a surface-charge (Use6DOF_MSC) polyhedron --
-	// a soft-iron hexahedron (6 faces) or wedge/pyramid (5 faces).  These are solved by
-	// the canonical multipole-moment MMM path in C++ unless the Python wrapper routes a mesh-backed
-	// soft iron to FEEC HDiv-VIM.
+	// True if any relaxable element carries independent face coefficients.
+	// Production mesh-backed magnetic-material solves are routed to HDiv-VIM.
 	for(int i = 0; i < AmOfMainElem; i++)
 	{
 		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[i]);
-		if(poly && poly->Use6DOF_MSC) return true;
+		if(poly && poly->UseFaceChargeDOF) return true;
 	}
 	return false;
 }
@@ -753,14 +647,14 @@ int radTInteraction::SetupInteractMatrix() //OC26122019
 
 //-------------------------------------------------------------------------
 //=========================================================================
-// Variable DOF support for hybrid collocation MMMM + standard element analysis.
+// Variable DOF support for hybrid surface-charge + standard element analysis.
 //=========================================================================
 //-------------------------------------------------------------------------
 
 void radTInteraction::ComputeDOFOffsets()
 {
 	// Compute DOF offsets for each element
-	// This allows mixing elements with different DOF counts (3 for standard, 6 for MSC)
+	// This allows mixing elements with different DOF counts.
 
 	m_elemDOF.resize(AmOfMainElem);
 	m_elemDOFOffset.resize(AmOfMainElem + 1);  // +1 for end sentinel
@@ -912,20 +806,20 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 	// If no symmetries, we can use simplified global coordinate computation with OpenMP
 	bool hasSymmetry = (AmOfElemWithSym > AmOfMainElem);
 
-	// Check if we have any MSC face-charge elements (4 DOF tetrahedra, 5 DOF wedges/pyramids, 6 DOF hexahedra)
-	// Surface-charge moment elements assemble their own system (BuildMomentSystemCore); only 3-DOF MMM
-	// dipole elements (RecMag) use this dense interaction matrix.
-	bool hasMSCElements = false;
-	for(int i = 0; i < AmOfMainElem && !hasMSCElements; i++)
+	// Check if any element uses independent face coefficients.  Dense relaxation
+	// matrix assembly is kept only for compact 3-component elements; mesh-backed
+	// magnetic-material solves route through HDiv-VIM.
+	bool hasFaceChargeElements = false;
+	for(int i = 0; i < AmOfMainElem && !hasFaceChargeElements; i++)
 	{
-		if(m_elemDOF[i] >= 4) hasMSCElements = true;
+		if(m_elemDOF[i] >= 4) hasFaceChargeElements = true;
 	}
 
 	// Build interaction matrix with variable-size blocks
 	// For each pair (row_elem, col_elem), compute the interaction block
 
-	// FAST PATH: Only for pure 3-DOF MMM dipole meshes (RecMag; no face-charge MSC element) without symmetry
-	if(!hasSymmetry && !hasMSCElements)
+	// FAST PATH: pure compact 3-component elements without symmetry.
+	if(!hasSymmetry && !hasFaceChargeElements)
 	{
 		// Pre-compute tetrahedron geometry for fast block computation
 		// This caches face vertices, normals, and areas to avoid B_comp overhead
@@ -989,10 +883,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				// CRITICAL: Use size_t cast to avoid int32 overflow for DOF > 46340
 				double* block = &m_flatInteractMatrix[(size_t)offset_row * m_totalDOF + offset_col];
 
-				// Compute the interaction block based on DOF types
-				// FAST PATH: Only for 3x3 blocks (tetrahedra)
-				// MSC hexahedra (6 DOF) fall through to slow path for correctness
-				// (surface-charge collocation requires midpoint evaluation and proper transforms)
+				// Compute the interaction block based on DOF types.
+				// FAST PATH: only for compact 3x3 blocks.
 				if(dof_row == 3 && dof_col == 3)
 				{
 					// 3x3 N-matrix computation: H_field at row center from col magnetization
@@ -1037,37 +929,23 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 						poly_col->Magn = orig_magn;
 					}
 				}
-				// Note: MSC blocks (3x6, 6x3, 6x6) not handled in fast path
-				// They will fall through and be computed in slow path below
+				// Non-3x3 blocks are no longer assembled by this legacy dense path.
 			}
 		});
 		return 1;
 	}
 
-	// EIEM2 retirement (Phase 3b): the dense MSC (surface-charge) interaction blocks are no longer
-	// assembled.  After the fail-loud guards in MakeAutoRelax (mixed MMM+MSC and B-input-on-MSC are
-	// rejected), the ONLY path that reaches here with an MSC element (DOF>=5) is a pure surface-charge
-	// (hex / wedge / pyramid) model solved by the parameter-free multipole-moment MMM formulation.  That path assembles its
-	// own system (BuildMomentSystemCore, on-the-fly geometry via momentFaceGeom) and NEVER reads this
-	// dense interaction matrix -- it is identical to the method-2 path, which runs with no dense matrix at
-	// all (Phase 2 Increment 4).  So leave the MSC blocks zero (the matrix is already zero-initialized) and
-	// return -- the EIEM2 collocation block kernels (Compute6x6/5x5/MixedBlockFast) are retired (Phase 3b).
-	// Precompute the per-element geometry caches so the
-	// method-2 H-matrix moment path (which enumerates hexes via m_hexaElemIndices) and any precompute-based
-	// scaffold see the elements -- idempotent, O(N), mirrors the skipDenseMatrix=1 branch in Setup.
-	if(hasMSCElements)
+	// Independent face-coefficient blocks are no longer assembled by the legacy
+	// dense relaxation path.  Mesh-backed magnetic-material solves route through
+	// HDiv-VIM; fixed-M field evaluation owns the face geometry below.
+	if(hasFaceChargeElements)
 	{
 		PrecomputeHexaGeometry();
 		PrecomputeWedgeGeometry();
 		return 1;
 	}
 
-	// EIEM2 retirement (Phase 3b): the dense MSC fast paths (pure-hex / pure-wedge via Compute6x6/5x5BlockFast)
-	// and the no-symmetry MEDIUM MSC path were deleted.  The only surface-charge path now reaches the
-	// hasMSCElements early-return above (multipole-moment MMM assembles its own system and never reads this dense
-	// matrix).  What remains below is the SLOW PATH, now MMM-only (3x3, symmetry-aware) -- reached only by
-	// an all-tetrahedron model WITH space-group symmetry (pure-tet without symmetry returned via the fast
-	// path at the top of this function).
+	// What remains below is the symmetry-aware compact 3-component path.
 
 	// SLOW PATH: With symmetry transformations (original code)
 	for(int col = 0; col < AmOfMainElem; col++)
@@ -1130,8 +1008,8 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 				block[(size_t)2 * m_totalDOF + 1] = SubMatrix.Str2.y;  // (2,1)
 				block[(size_t)2 * m_totalDOF + 2] = SubMatrix.Str2.z;  // (2,2)
 			}
-			// EIEM2 retirement (Phase 3b): the dof>=4 MSC branches were deleted.  In this MMM-only path
-			// dof is always 3, so the 3x3 branch above always matches; the defensive else zeroes any
+			// Mesh-backed magnetic-material blocks are no longer assembled here.
+			// In this compact path dof is always 3; the defensive else zeroes any
 			// unexpected block.
 			else
 			{
@@ -1215,7 +1093,7 @@ void radTInteraction::SetupExternFieldArray()
 				m_flatExternFieldArray[offset + 1] += H_ext.y;
 				m_flatExternFieldArray[offset + 2] += H_ext.z;
 			}
-			// MSC (hex/wedge/pyramid): no per-face external field -- the multipole-moment MMM solve samples ExternFieldArray (centroid).
+			// Face-coefficient elements do not store a per-face external field here.
 		}
 	}
 	//g3dExternPtrVect.erase(g3dExternPtrVect.begin(), g3dExternPtrVect.end()); //OC240408, to enable current scaling/update
@@ -1262,7 +1140,7 @@ void radTInteraction::AddExternFieldFromMoreExtSource()
 					m_flatExternFieldArray[offset + 1] = H_ext.y;
 					m_flatExternFieldArray[offset + 2] = H_ext.z;
 				}
-				// MSC: no per-face external field (multipole-moment MMM uses the centroid ExternFieldArray).
+				// Face-coefficient elements do not store a per-face external field here.
 			}
 		}
 	}
@@ -1390,7 +1268,7 @@ void radTInteraction::FindMaxModMandH(double& MaxModM, double& MaxModH)
 //=========================================================================
 // PrecomputeTetraGeometry: Pre-compute tetrahedron face geometry
 // Extracts vertices, normals, and areas for fast 3x3 block computation
-// Reference: ELF-style optimization (same as RadHACApKMMMManager::PrecomputeGeometry3DOF)
+// Reference: ELF-style optimization (same as RadHACApKMagnetostaticManager::PrecomputeGeometry3DOF)
 //=========================================================================
 
 void radTInteraction::PrecomputeTetraGeometry()
@@ -1762,7 +1640,7 @@ static void FieldGradFromChargedTriangleLocal(const double* obs,
 //=========================================================================
 // Compute3x3BlockFast: Fast 3x3 interaction block for tetrahedra
 // Uses pre-computed geometry (no B_comp overhead)
-// Reference: ELF-style optimization (same as RadHACApKMMMManager::Compute3x3BlockFast)
+// Reference: ELF-style optimization (same as RadHACApKMagnetostaticManager::Compute3x3BlockFast)
 //=========================================================================
 
 void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const
@@ -1882,8 +1760,8 @@ void radTInteraction::Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat)
 	}
 
 	// =========== IMA: Mirrored source contributions ===========
-	// Same pattern as Compute6x6BlockFast: mirror source geometry inline
-	// For MMM (tet), M is a pseudovector: sign matrix S[beta] per component
+	// Mirror source geometry inline.  M is a pseudovector: sign matrix S[beta]
+	// per component.
 	if(m_imaEnabled)
 	{
 		auto addMirrorTet = [&](int mirrorAxis, int combinedSign) {
@@ -2204,1216 +2082,6 @@ void radTInteraction::BuildFaceGeom(std::vector<double>& Gflat) const
 			Gflat[b + 8] = ec.x; Gflat[b + 9] = ec.y; Gflat[b + 10] = ec.z;
 		}
 	}
-}
-
-//=========================================================================
-// CentroidFieldGradFromFace: the reusable single-(target,source) kernel of the moment formulation -- field
-// H[3] + grad gH[6] (xx,yy,zz,xy,xz,yz, RAW = before the 1/4pi factor) at target centroid ce3 from ONE unit
-// surface-charge face (V4 corners, srcCenter = the face's element center, area), INCLUDING the IMA mirror
-// images.  isSelf drops the original collocation center charge (singularity-free); each IMA mirror always carries
-// its (reflected) center charge.  Shared by BuildCentroidFieldGrad (dense Cflat) and MomentSystemEntry
-// (on-demand H-matrix entry) so the two never diverge.  Caller applies 1/4pi.
-//=========================================================================
-void radTInteraction::CentroidFieldGradFromFace(const double ce3[3], const double V4[4][3],
-        const double srcCenter[3], bool isSelf, double area, double Hout[3], double gHout[6]) const
-{
-	Hout[0] = Hout[1] = Hout[2] = 0.0;
-	for(int k = 0; k < 6; k++) gHout[k] = 0.0;
-
-	// field+grad from a bilinear quad Vq (unit charge density, 8x8 Gauss) + optional point charge q=-area at
-	// cen; scaled by sgn (IMA image sign; 1.0 original).  Computing FRESH from mirrored geometry makes the
-	// rank-2 gradient transform under the reflection automatically -- sgn only carries the BC charge sign.
-	auto accumQG = [&](const double Vq[4][3], bool withCenter, const double cen[3], double sgn)
-	{
-		if(RadMomentKernelConfig::UseAnalytic())          // default analytic closed-form triangle kernel (vs 64pt Gauss)
-		{
-			const double* tri[2][3] = { {Vq[0], Vq[1], Vq[2]}, {Vq[0], Vq[2], Vq[3]} };  // fan-triangulate the (degenerate-)quad
-			for(int t = 0; t < 2; t++)
-			{
-				double Ht[3], Gt[6];
-				FieldGradFromChargedTriangleLocal(ce3, tri[t][0], tri[t][1], tri[t][2], 1.0, Ht, Gt);
-				Hout[0] += sgn*Ht[0]; Hout[1] += sgn*Ht[1]; Hout[2] += sgn*Ht[2];
-				for(int k = 0; k < 6; k++) gHout[k] += sgn*Gt[k];
-			}
-		}
-		else
-		{
-		for(int iu = 0; iu < MOM_NG; iu++) for(int iv = 0; iv < MOM_NG; iv++)
-		{
-			double u = MOM_GP[iu], v = MOM_GP[iv], wuv = MOM_GW[iu]*MOM_GW[iv];
-			double a0 = (1-u)*(1-v), a1 = u*(1-v), a2 = u*v, a3 = (1-u)*v;
-			double Px = a0*Vq[0][0]+a1*Vq[1][0]+a2*Vq[2][0]+a3*Vq[3][0];
-			double Py = a0*Vq[0][1]+a1*Vq[1][1]+a2*Vq[2][1]+a3*Vq[3][1];
-			double Pz = a0*Vq[0][2]+a1*Vq[1][2]+a2*Vq[2][2]+a3*Vq[3][2];
-			double Tux = (1-v)*(Vq[1][0]-Vq[0][0])+v*(Vq[2][0]-Vq[3][0]);
-			double Tuy = (1-v)*(Vq[1][1]-Vq[0][1])+v*(Vq[2][1]-Vq[3][1]);
-			double Tuz = (1-v)*(Vq[1][2]-Vq[0][2])+v*(Vq[2][2]-Vq[3][2]);
-			double Tvx = (1-u)*(Vq[3][0]-Vq[0][0])+u*(Vq[2][0]-Vq[1][0]);
-			double Tvy = (1-u)*(Vq[3][1]-Vq[0][1])+u*(Vq[2][1]-Vq[1][1]);
-			double Tvz = (1-u)*(Vq[3][2]-Vq[0][2])+u*(Vq[2][2]-Vq[1][2]);
-			double jx = Tuy*Tvz-Tuz*Tvy, jy = Tuz*Tvx-Tux*Tvz, jz = Tux*Tvy-Tuy*Tvx;
-			double dA = std::sqrt(jx*jx+jy*jy+jz*jz)*wuv*sgn;
-			double dx = ce3[0]-Px, dy = ce3[1]-Py, dz = ce3[2]-Pz;
-			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-			double c3 = inv_r3*dA, c5 = inv_r5*dA;
-			Hout[0] += dx*c3; Hout[1] += dy*c3; Hout[2] += dz*c3;
-			gHout[0] += c3 - 3.0*dx*dx*c5; gHout[1] += c3 - 3.0*dy*dy*c5; gHout[2] += c3 - 3.0*dz*dz*c5;
-			gHout[3] += -3.0*dx*dy*c5;     gHout[4] += -3.0*dx*dz*c5;     gHout[5] += -3.0*dy*dz*c5;
-		}
-		}
-		if(withCenter)
-		{
-			double dx = ce3[0]-cen[0], dy = ce3[1]-cen[1], dz = ce3[2]-cen[2];
-			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2, q = -area*sgn;
-			Hout[0] += q*dx*inv_r3; Hout[1] += q*dy*inv_r3; Hout[2] += q*dz*inv_r3;
-			gHout[0] += q*(inv_r3-3.0*dx*dx*inv_r5); gHout[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-			gHout[2] += q*(inv_r3-3.0*dz*dz*inv_r5); gHout[3] += q*(-3.0*dx*dy*inv_r5);
-			gHout[4] += q*(-3.0*dx*dz*inv_r5);       gHout[5] += q*(-3.0*dy*dz*inv_r5);
-		}
-	};
-
-	accumQG(V4, !isSelf, srcCenter, 1.0);                  // original (center charge only for the mutual pairing)
-	if(m_imaEnabled)                                       // IMA mirror images (scalar BC sign)
-	{
-		auto addMir = [&](int ax, double sgn)
-		{
-			double Vm[4][3]; double cm[3] = {srcCenter[0], srcCenter[1], srcCenter[2]};
-			for(int c = 0; c < 4; c++) { Vm[c][0]=V4[c][0]; Vm[c][1]=V4[c][1]; Vm[c][2]=V4[c][2]; }
-			if(ax & IMA_X) { for(int c=0;c<4;c++) Vm[c][0]=-Vm[c][0]; cm[0]=-cm[0]; }
-			if(ax & IMA_Y) { for(int c=0;c<4;c++) Vm[c][1]=-Vm[c][1]; cm[1]=-cm[1]; }
-			if(ax & IMA_Z) { for(int c=0;c<4;c++) Vm[c][2]=-Vm[c][2]; cm[2]=-cm[2]; }
-			accumQG(Vm, true, cm, sgn);
-		};
-		bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
-		if(hX) addMir(IMA_X, (double)m_imaSignX);
-		if(hY) addMir(IMA_Y, (double)m_imaSignY);
-		if(hZ) addMir(IMA_Z, (double)m_imaSignZ);
-		if(hX && hY) addMir(IMA_XY, (double)m_imaSignX*m_imaSignY);
-		if(hX && hZ) addMir(IMA_XZ, (double)m_imaSignX*m_imaSignZ);
-		if(hY && hZ) addMir(IMA_YZ, (double)m_imaSignY*m_imaSignZ);
-		if(hX && hY && hZ) addMir(IMA_XYZ, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
-	}
-}
-
-//=========================================================================
-// momentFaceGeom: per-face geometry for the moment formulation, generalized to triangular (3-vert) and
-// quad (4-vert) faces.  Fills V4col (the corners, with a TRIANGLE returned as a degenerate quad V[3]=V[2]
-// so the bilinear-quad kernel CentroidFieldGradFromFace integrates the triangle), the face center fc, the
-// OUTWARD unit normal nf, the polygon area (fan over nv-2 triangles), and d = fc - element centroid.  For a
-// hex quad (nv=4) this reproduces the previous inline geometry BIT-FOR-BIT.  File-static: used only by the
-// three moment kernel functions below (BuildCentroidFieldGrad / BuildMomentSystemCore / MomentSystemEntry).
-//=========================================================================
-static int momentFaceGeom(radTPolyhedron* poly, int f, const TVector3d& ce,
-                          double V4col[4][3], double fc[3], double nf[3], double& area, double d[3])
-{
-	const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-	radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
-	const radTVect2dVect& v2d = pgn->EdgePointsVector;
-	int nv = (int)v2d.size(); if(nv > 4) nv = 4; if(nv < 3) nv = 3;
-	TVector3d V[4];
-	for(int v = 0; v < nv; v++) V[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-	if(nv == 3) V[3] = V[2];                       // degenerate quad -> bilinear kernel integrates the triangle
-	double cx = 0, cy = 0, cz = 0;
-	for(int v = 0; v < nv; v++) { cx += V[v].x; cy += V[v].y; cz += V[v].z; }
-	fc[0] = cx/nv; fc[1] = cy/nv; fc[2] = cz/nv;
-	double sx = 0, sy = 0, sz = 0; area = 0.0;
-	for(int t = 0; t < nv-2; t++)                  // fan triangulation (quad: 2 triangles, tri: 1)
-	{
-		const TVector3d& P0 = V[0]; const TVector3d& P1 = V[t+1]; const TVector3d& P2 = V[t+2];
-		double ux = P1.x-P0.x, uy = P1.y-P0.y, uz = P1.z-P0.z;
-		double wx = P2.x-P0.x, wy = P2.y-P0.y, wz = P2.z-P0.z;
-		double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
-		area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz); sx += rx; sy += ry; sz += rz;
-	}
-	double nlen = std::sqrt(sx*sx+sy*sy+sz*sz); if(nlen < 1e-300) nlen = 1.0;
-	double ox = fc[0]-ce.x, oy = fc[1]-ce.y, oz = fc[2]-ce.z;
-	double sgn = (sx*ox+sy*oy+sz*oz >= 0.0) ? 1.0 : -1.0;
-	nf[0] = sgn*sx/nlen; nf[1] = sgn*sy/nlen; nf[2] = sgn*sz/nlen;
-	d[0] = fc[0]-ce.x; d[1] = fc[1]-ce.y; d[2] = fc[2]-ce.z;
-	for(int v = 0; v < 4; v++) { V4col[v][0] = V[v].x; V4col[v][1] = V[v].y; V4col[v][2] = V[v].z; }
-	return nv;
-}
-
-static void momentPrecomputeFaceSamples(const double V4[4][3], double P[MOM_NS][3], double W[MOM_NS])
-{
-	int is = 0;
-	for(int iu = 0; iu < MOM_NG; iu++) for(int iv = 0; iv < MOM_NG; iv++, is++)
-	{
-		double u = MOM_GP[iu], v = MOM_GP[iv], wuv = MOM_GW[iu]*MOM_GW[iv];
-		double a0 = (1-u)*(1-v), a1 = u*(1-v), a2 = u*v, a3 = (1-u)*v;
-		P[is][0] = a0*V4[0][0]+a1*V4[1][0]+a2*V4[2][0]+a3*V4[3][0];
-		P[is][1] = a0*V4[0][1]+a1*V4[1][1]+a2*V4[2][1]+a3*V4[3][1];
-		P[is][2] = a0*V4[0][2]+a1*V4[1][2]+a2*V4[2][2]+a3*V4[3][2];
-		double Tux = (1-v)*(V4[1][0]-V4[0][0])+v*(V4[2][0]-V4[3][0]);
-		double Tuy = (1-v)*(V4[1][1]-V4[0][1])+v*(V4[2][1]-V4[3][1]);
-		double Tuz = (1-v)*(V4[1][2]-V4[0][2])+v*(V4[2][2]-V4[3][2]);
-		double Tvx = (1-u)*(V4[3][0]-V4[0][0])+u*(V4[2][0]-V4[1][0]);
-		double Tvy = (1-u)*(V4[3][1]-V4[0][1])+u*(V4[2][1]-V4[1][1]);
-		double Tvz = (1-u)*(V4[3][2]-V4[0][2])+u*(V4[2][2]-V4[1][2]);
-		double jx = Tuy*Tvz-Tuz*Tvy, jy = Tuz*Tvx-Tux*Tvz, jz = Tux*Tvy-Tuy*Tvx;
-		W[is] = std::sqrt(jx*jx+jy*jy+jz*jz)*wuv;
-	}
-}
-
-//=========================================================================
-// momentResidualEigenmodes: orthonormal basis of the RESIDUAL subspace -- the (nF-4) charge patterns with
-// ZERO monopole and ZERO dipole MOMENT (null space of the 4 functionals {Ae, Ae*d_x, Ae*d_y, Ae*d_z} in
-// R^nF).  These are the element's natural QUADRUPOLE eigenmodes; using them as the moment-system quadrupole
-// test directions (in place of the hand-picked dx^2-dy^2 / axial forms) is geometry-adaptive and ALWAYS
-// full-rank -- it never hits the degenerate near-null mode a fixed quadratic can on a distorted element
-// (the wedge dx^2-dy^2 -> M~1e9 blow-up that motivated the axial hand-fix; verified equivalent to the
-// hand-pick on symmetric elements -> cube demag N=1/3 preserved).  Deterministic Gram-Schmidt (nF <= 6,
-// no LAPACK needed); identical Ae/d in BuildMomentSystemCore and MomentSystemEntry -> identical modes, so
-// the dense (method 0/1) and H-matrix (method 2) moment systems stay consistent.  Returns the mode count
-// (nF-4 generically); phi[q][f] is the q-th orthonormal mode (sum_f phi[q][f]^2 = 1).
-//=========================================================================
-static int momentResidualEigenmodes(const double Ae[], const double d[][3], int nF, double phi[][6])
-{
-	double basis[6][6]; int nb = 0;
-	auto orthoAdd = [&](double v[6]) -> bool
-	{
-		for(int b = 0; b < nb; b++)
-		{
-			double dot = 0.0; for(int f = 0; f < nF; f++) dot += basis[b][f]*v[f];
-			for(int f = 0; f < nF; f++) v[f] -= dot*basis[b][f];
-		}
-		double nrm = 0.0; for(int f = 0; f < nF; f++) nrm += v[f]*v[f]; nrm = std::sqrt(nrm);
-		if(nrm > 1.0e-9) { for(int f = 0; f < nF; f++) basis[nb][f] = v[f]/nrm; nb++; return true; }
-		return false;
-	};
-	// 1) orthonormalize the monopole + 3 dipole MOMENT functionals -> ortho basis of the NON-residual part
-	for(int i = 0; i < 4; i++)
-	{
-		double v[6]; for(int f = 0; f < nF; f++) v[f] = (i == 0) ? Ae[f] : Ae[f]*d[f][i-1];
-		orthoAdd(v);
-	}
-	// 2) extend to R^nF with the standard basis; each newly-independent residual vector is a quad eigenmode
-	int nq = 0;
-	for(int e = 0; e < nF && nb < nF; e++)
-	{
-		double v[6] = {0,0,0,0,0,0}; v[e] = 1.0;
-		if(orthoAdd(v)) { for(int f = 0; f < nF; f++) phi[nq][f] = basis[nb-1][f]; nq++; }
-	}
-	return nq;
-}
-
-//=========================================================================
-// CollectMomentElems: e-ordered list of MOMENT elements (the surface-charge polyhedra: tet 4 DOF +
-// wedge/pyramid 5 DOF + hex 6 DOF).  For a pure-hex model this equals m_hexaElemIndices order, so the moment Cflat / row
-// layout is unchanged (hex stays bit-identical).  THE single source of element ordering for the moment
-// dense path (BuildCentroidFieldGrad + BuildMomentSystemCore) and the SolveLinearStep moment branch.
-//=========================================================================
-void radTInteraction::CollectMomentElems(std::vector<int>& out) const
-{
-	out.clear();
-	for(int e = 0; e < AmOfMainElem; e++)
-		if(m_elemDOF[e] == 6 || m_elemDOF[e] == 5 || m_elemDOF[e] == 4) out.push_back(e);
-}
-
-//=========================================================================
-// BuildCentroidFieldGrad: per moment element demag field H and gradient gradH at the element CENTROID, as linear
-// functionals of each source DOF charge -- the kernel of the parameter-free moment formulation (the fix
-// for the eval-point alpha + the finite-difference conditioning noise).
-//   SELF face (same element): bare charged-face field, no center charge.  The centroid is interior, at
-//     finite distance from every face, so the integrand is smooth -> exact by Gauss quadrature, and it is
-//     patch-test exact (single cube -> demag N=1/3).
-//   MUTUAL face: collocation MMMM dipole layer = (bare face) - area*(point charge @ source element center).  The
-//     per-face center charge is REQUIRED (without it a regular grid develops a charge-free dipole-free
-//     quadrupole near-null mode); the source center is at finite distance from this centroid -> finite.
-//     Excluding it for SELF is exactly where it would be singular -> the kernel is singularity-free.
-// Output Cflat ROW-MAJOR (nMom x 9 x m_totalDOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g
-// -> Cflat[(h*9+k)*m_totalDOF + g].  Field convention H = (1/4pi) int sigma (r-r')/|r-r'|^3 dA'.
-//=========================================================================
-
-void radTInteraction::BuildCentroidFieldGrad(std::vector<double>& Cflat, int& nHexOut) const
-{
-	const int NK = 9;
-	std::vector<int> melem; CollectMomentElems(melem);   // hex (6) + wedge/pyramid (5), e-ordered
-	int nMom = (int)melem.size();
-	nHexOut = nMom;                                       // historical name; = moment-element count (hex+wedge+pyramid)
-	Cflat.assign((size_t)nMom * NK * m_totalDOF, 0.0);
-	if(nMom == 0 || m_totalDOF == 0) return;
-
-	// gather per-DOF source-face data (corners as a possibly-degenerate quad, polygon area, source element
-	// center + index) for every moment element's faces (hex 6 / wedge 5; triangle faces via momentFaceGeom).
-	struct FaceRec { double V[4][3]; double area; TVector3d srcEC; int srcElem; int valid; double P[MOM_NS][3]; double W[MOM_NS]; };
-	std::vector<FaceRec> faces((size_t)m_totalDOF);
-	for(size_t i = 0; i < faces.size(); i++) { faces[i].valid = 0; faces[i].srcElem = -1; }
-
-	for(int h = 0; h < nMom; h++)
-	{
-		int elemIdx = melem[h];
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly) continue;
-		int nF = poly->AmOfFaces; if(nF != 6 && nF != 5 && nF != 4) continue;
-		int off = m_elemDOFOffset[elemIdx];
-		const TVector3d ec = poly->CentrPoint;
-		for(int f = 0; f < nF; f++)
-		{
-			const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-			if(!hpt.PgnHndl.rep || !hpt.TransHndl.rep) continue;
-			double V4col[4][3], fc[3], nf[3], d[3], area;
-			momentFaceGeom(poly, f, ec, V4col, fc, nf, area, d);   // tri -> degenerate quad; hex bit-identical
-			FaceRec& fr = faces[off+f];
-			for(int v = 0; v < 4; v++) { fr.V[v][0]=V4col[v][0]; fr.V[v][1]=V4col[v][1]; fr.V[v][2]=V4col[v][2]; }
-			fr.area = area; fr.srcEC = ec; fr.srcElem = elemIdx; fr.valid = 1;
-			int is = 0;
-			for(int iu = 0; iu < MOM_NG; iu++) for(int iv = 0; iv < MOM_NG; iv++, is++)
-			{
-				double u = MOM_GP[iu], v = MOM_GP[iv], wuv = MOM_GW[iu]*MOM_GW[iv];
-				double a0 = (1-u)*(1-v), a1 = u*(1-v), a2 = u*v, a3 = (1-u)*v;
-				fr.P[is][0] = a0*fr.V[0][0]+a1*fr.V[1][0]+a2*fr.V[2][0]+a3*fr.V[3][0];
-				fr.P[is][1] = a0*fr.V[0][1]+a1*fr.V[1][1]+a2*fr.V[2][1]+a3*fr.V[3][1];
-				fr.P[is][2] = a0*fr.V[0][2]+a1*fr.V[1][2]+a2*fr.V[2][2]+a3*fr.V[3][2];
-				double Tux = (1-v)*(fr.V[1][0]-fr.V[0][0])+v*(fr.V[2][0]-fr.V[3][0]);
-				double Tuy = (1-v)*(fr.V[1][1]-fr.V[0][1])+v*(fr.V[2][1]-fr.V[3][1]);
-				double Tuz = (1-v)*(fr.V[1][2]-fr.V[0][2])+v*(fr.V[2][2]-fr.V[3][2]);
-				double Tvx = (1-u)*(fr.V[3][0]-fr.V[0][0])+u*(fr.V[2][0]-fr.V[1][0]);
-				double Tvy = (1-u)*(fr.V[3][1]-fr.V[0][1])+u*(fr.V[2][1]-fr.V[1][1]);
-				double Tvz = (1-u)*(fr.V[3][2]-fr.V[0][2])+u*(fr.V[2][2]-fr.V[1][2]);
-				double jx = Tuy*Tvz-Tuz*Tvy, jy = Tuz*Tvx-Tux*Tvz, jz = Tux*Tvy-Tuy*Tvx;
-				fr.W[is] = std::sqrt(jx*jx+jy*jy+jz*jz)*wuv;
-			}
-		}
-	}
-
-	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
-
-	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-	ngcore::ParallelFor(ngcore::IntRange(nMom), [&](size_t hh) {
-		int h = (int)hh;
-		int elemIdx = melem[h];
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly) return;
-		const TVector3d ce = poly->CentrPoint;
-		const double ce3[3] = {ce.x, ce.y, ce.z};
-		size_t base = (size_t)h * NK * m_totalDOF;
-		for(int g = 0; g < m_totalDOF; g++)
-		{
-			const FaceRec& fr = faces[g];
-			if(!fr.valid) continue;
-			double H[3], gH[6];
-			H[0] = H[1] = H[2] = 0.0; for(int k = 0; k < 6; k++) gH[k] = 0.0;
-			if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs precomputed 64 samples; same IMA + center handling)
-			{
-				const double srcEC3[3] = {fr.srcEC.x, fr.srcEC.y, fr.srcEC.z};
-				CentroidFieldGradFromFace(ce3, fr.V, srcEC3, fr.srcElem == elemIdx, fr.area, H, gH);
-			}
-			else
-			{
-			auto addPoint = [&](double px, double py, double pz, double q)
-			{
-				double dx = ce3[0]-px, dy = ce3[1]-py, dz = ce3[2]-pz;
-				double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-				double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-				H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
-				gH[0] += q*(inv_r3-3.0*dx*dx*inv_r5); gH[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-				gH[2] += q*(inv_r3-3.0*dz*dz*inv_r5); gH[3] += q*(-3.0*dx*dy*inv_r5);
-				gH[4] += q*(-3.0*dx*dz*inv_r5);       gH[5] += q*(-3.0*dy*dz*inv_r5);
-			};
-			auto addSamples = [&](int ax, bool withCenter, double sgn)
-			{
-				for(int s = 0; s < MOM_NS; s++)
-				{
-					double px = fr.P[s][0], py = fr.P[s][1], pz = fr.P[s][2];
-					if(ax & IMA_X) px = -px;
-					if(ax & IMA_Y) py = -py;
-					if(ax & IMA_Z) pz = -pz;
-					addPoint(px, py, pz, fr.W[s]*sgn);
-				}
-				if(withCenter)
-				{
-					double cx = fr.srcEC.x, cy = fr.srcEC.y, cz = fr.srcEC.z;
-					if(ax & IMA_X) cx = -cx;
-					if(ax & IMA_Y) cy = -cy;
-					if(ax & IMA_Z) cz = -cz;
-					addPoint(cx, cy, cz, -fr.area*sgn);
-				}
-			};
-			addSamples(0, fr.srcElem != elemIdx, 1.0);
-			if(m_imaEnabled)
-			{
-				bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
-				if(hX) addSamples(IMA_X, true, (double)m_imaSignX);
-				if(hY) addSamples(IMA_Y, true, (double)m_imaSignY);
-				if(hZ) addSamples(IMA_Z, true, (double)m_imaSignZ);
-				if(hX && hY) addSamples(IMA_XY, true, (double)m_imaSignX*m_imaSignY);
-				if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
-				if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
-				if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
-			}
-			}
-			Cflat[base + 0*m_totalDOF + g] = H[0]*INV4PI;
-			Cflat[base + 1*m_totalDOF + g] = H[1]*INV4PI;
-			Cflat[base + 2*m_totalDOF + g] = H[2]*INV4PI;
-			for(int k = 0; k < 6; k++) Cflat[base + (size_t)(3+k)*m_totalDOF + g] = gH[k]*INV4PI;
-		}
-	});
-}
-
-//=========================================================================
-// BuildMomentSystemCore: the parameter-free multipole-moment MMM system matrix A and RHS for PER-ELEMENT linear
-// susceptibility chiPerHex[h] in a PER-ELEMENT external field HextPerHex[h*3+k] (at the element centroid) -- the
-// C++ port of the retired multipole-moment Python prototype, generalized for the solve
-// (coil/source fields are not uniform).  Per moment element (tet 4 DOF, wedge/pyramid 5 DOF, hex 6 DOF):
-//   3 dipole rows : (local dipole moment of sigma)/Ve - chi*H_k(centroid) . sigma = chi*Hext_k
-//   1 monopole row: sum_f area_f sigma_f = 0                       (= div B = 0)
-//   2 quad rows   : (local diagonal-quadrupole moment of sigma) - chi*(Dvec . gradH(centroid)) . sigma = 0
-// Global field/grad functionals H,gradH(centroid) come from BuildCentroidFieldGrad; the local geometric
-// moments (face center fc, outward normal n, area, d=fc-centroid, volume Ve) from the element geometry.  Each
-// row is 2-norm normalized.  A is ROW-MAJOR (dof x dof); rhs length dof.  The column index of A is the face
-// DOF, so dgesv's solution is sigma in DOF order (drop-in for the retired EIEM2 LU write-back).
-// The uniform BuildMomentSystem(chi,Happ,...) wrapper below broadcasts a scalar chi + uniform Happ.
-//=========================================================================
-void radTInteraction::BuildMomentSystemCore(const double* chiPerHex, const double* HextPerHex,
-                                            std::vector<double>& A, std::vector<double>& rhs, bool normalize) const
-{
-	m_lastMomentFieldGradTime = 0.0;
-	m_lastMomentSystemBuildTime = 0.0;
-	auto t_system_start = std::chrono::high_resolution_clock::now();
-	std::shared_ptr<std::vector<double>> cachedCflat;
-	int nMom = 0;
-	auto t_fieldgrad_start = std::chrono::high_resolution_clock::now();
-	{
-		std::lock_guard<std::mutex> lock(g_momentCflatCacheMutex);
-		MomentCflatCache& cache = g_momentCflatCache[this];
-		const bool valid =
-			cache.cflat && cache.dof == m_totalDOF && cache.nElem == AmOfMainElem &&
-			cache.imaEnabled == (m_imaEnabled ? 1 : 0) && cache.imaSymmetry == m_imaSymmetry &&
-			cache.imaSignX == m_imaSignX && cache.imaSignY == m_imaSignY && cache.imaSignZ == m_imaSignZ;
-		if(!valid)
-		{
-			cache.cflat = std::make_shared<std::vector<double>>();
-			BuildCentroidFieldGrad(*cache.cflat, cache.nMom);                 // (nMom x 9 x dof): H[3], gradH[6] per moment elem
-			cache.dof = m_totalDOF;
-			cache.nElem = AmOfMainElem;
-			cache.imaEnabled = m_imaEnabled ? 1 : 0;
-			cache.imaSymmetry = m_imaSymmetry;
-			cache.imaSignX = m_imaSignX;
-			cache.imaSignY = m_imaSignY;
-			cache.imaSignZ = m_imaSignZ;
-		}
-		cachedCflat = cache.cflat;
-		nMom = cache.nMom;
-	}
-	auto t_fieldgrad_end = std::chrono::high_resolution_clock::now();
-	m_lastMomentFieldGradTime = std::chrono::duration<double>(t_fieldgrad_end - t_fieldgrad_start).count();
-	const std::vector<double>& Cflat = *cachedCflat;
-	std::vector<int> melem; CollectMomentElems(melem);   // SAME hex(6)+wedge/pyramid(5) e-order as Cflat
-	const int dof = m_totalDOF;
-	A.assign((size_t)dof * dof, 0.0);
-	rhs.assign(dof, 0.0);
-	if(nMom == 0 || dof == 0)
-	{
-		auto t_system_end = std::chrono::high_resolution_clock::now();
-		m_lastMomentSystemBuildTime = std::chrono::duration<double>(t_system_end - t_system_start).count();
-		return;
-	}
-
-	std::vector<int> rowBase((size_t)nMom, 0), nFaceByMom((size_t)nMom, 0);
-	int totalRows = 0;
-	for(int h = 0; h < nMom; h++)
-	{
-		int elemIdx = melem[h];
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		int nF = poly ? poly->AmOfFaces : 0;
-		if(nF != 6 && nF != 5 && nF != 4) nF = 0;     // hex 6 / wedge/pyramid 5 / tet 4
-		rowBase[h] = totalRows;
-		nFaceByMom[h] = nF;
-		totalRows += nF;
-	}
-
-	const size_t matrixSize = (size_t)dof * (size_t)dof;
-	A.resize(matrixSize);
-	if(totalRows != dof) std::fill(A.begin(), A.end(), 0.0); // fail-soft for unexpected mixed layouts
-	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-	ngcore::ParallelFor(ngcore::IntRange(nMom), [&](size_t hh) {
-		const int h = (int)hh;
-		const int nF = nFaceByMom[h];
-		if(nF == 0) return;
-		int elemIdx = melem[h];
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly) return;
-		const int off = m_elemDOFOffset[elemIdx];
-		int row = rowBase[h];
-		const TVector3d ce = poly->CentrPoint;
-		const double chiH = chiPerHex[h];                 // per-element susceptibility (linear or current Picard)
-		const double* Hext = &HextPerHex[(size_t)h*3];    // external field at this element centroid
-
-		// per-face local geometry (center fc, OUTWARD unit normal nf, area Ae, d = fc - centroid); the shared
-		// momentFaceGeom handles tri(3-vert) + quad(4-vert) faces and is bit-identical for the hex quad case.
-		double fc[6][3], nf[6][3], Ae[6], d[6][3]; int fnv[6];
-		for(int f = 0; f < nF; f++)
-		{
-			double V4col[4][3];
-			fnv[f] = momentFaceGeom(poly, f, ce, V4col, fc[f], nf[f], Ae[f], d[f]);
-		}
-		// residual quadrupole eigenmodes (the geometry-adaptive replacement for the hand-picked dx^2-dy^2 /
-		// axial forms): the (nF-4) zero-monopole, zero-dipole-moment charge patterns the element can carry.
-		double phiQ[6][6]; int nQ = momentResidualEigenmodes(Ae, d, nF, phiQ); (void)nQ;
-		double Ve = 0.0;
-		for(int f = 0; f < nF; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
-		Ve *= (1.0/3.0);
-
-		const double* Hh = &Cflat[(size_t)h*9*dof];           // Hh[k*dof..] field (k<3), grad (k 3..8)
-
-		auto normalizeRow = [&](int rowIdx, double rh)
-		{
-			if(normalize)
-			{
-				double* Arow = &A[(size_t)rowIdx*dof];
-				double nn = 0.0; for(int g = 0; g < dof; g++) nn += Arow[g]*Arow[g];
-				nn = std::sqrt(nn);
-				if(nn > 1e-300) { double inv = 1.0/nn; for(int g = 0; g < dof; g++) Arow[g] *= inv; rh *= inv; }
-			}
-			rhs[rowIdx] = rh;
-		};
-
-		// 3 dipole rows
-		for(int k = 0; k < 3; k++)
-		{
-			double* Arow = &A[(size_t)row*dof];
-			const double* F0k = &Hh[(size_t)k*dof];
-			for(int g = 0; g < dof; g++) Arow[g] = -chiH*F0k[g];
-			for(int f = 0; f < nF; f++) Arow[off+f] += Ae[f]*d[f][k]/Ve;
-			normalizeRow(row, chiH*Hext[k]);
-			row++;
-		}
-		// monopole row
-		{
-			double* Arow = &A[(size_t)row*dof];
-			std::fill(Arow, Arow + dof, 0.0);
-			for(int f = 0; f < nF; f++) Arow[off+f] = Ae[f];
-			normalizeRow(row, 0.0);
-			row++;
-		}
-		// residual-eigenmode quadrupole rows: (nF-4) of them (hex 2, wedge 1).  3 dipole + 1 monopole +
-		// (nF-4) quad = nF rows = nF DOF (square per element).  Bm = the qq-th residual eigenmode written as
-		// a per-face form so the test term Ae*Bm = phi_qq exactly; the cm-correction + Dm field-balance below
-		// are unchanged (they act on Ae*Bm).
-		for(int qq = 0; qq < nF-4; qq++)
-		{
-			double Bm[6];
-			for(int f = 0; f < nF; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
-			double* Arow = &A[(size_t)row*dof];
-			std::fill(Arow, Arow + dof, 0.0);
-			for(int f = 0; f < nF; f++) Arow[off+f] += Ae[f]*Bm[f];
-			double cm[3] = {0,0,0};
-			for(int f = 0; f < nF; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
-			for(int f = 0; f < nF; f++)
-			{
-				double cd = cm[0]*d[f][0]+cm[1]*d[f][1]+cm[2]*d[f][2];
-				Arow[off+f] -= Ae[f]*cd/Ve;
-			}
-			double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-			for(int f = 0; f < nF; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
-				Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
-			double Dvec[6] = {Dm[0][0], Dm[1][1], Dm[2][2], Dm[0][1]+Dm[1][0], Dm[0][2]+Dm[2][0], Dm[1][2]+Dm[2][1]};
-			const double* G0 = &Hh[(size_t)3*dof];
-			const double* G1 = &Hh[(size_t)4*dof];
-			const double* G2 = &Hh[(size_t)5*dof];
-			const double* G3 = &Hh[(size_t)6*dof];
-			const double* G4 = &Hh[(size_t)7*dof];
-			const double* G5 = &Hh[(size_t)8*dof];
-			const double w0 = chiH*Dvec[0], w1 = chiH*Dvec[1], w2 = chiH*Dvec[2];
-			const double w3 = chiH*Dvec[3], w4 = chiH*Dvec[4], w5 = chiH*Dvec[5];
-			for(int g = 0; g < dof; g++)
-			{
-				Arow[g] -= w0*G0[g] + w1*G1[g] + w2*G2[g] + w3*G3[g] + w4*G4[g] + w5*G5[g];
-			}
-			normalizeRow(row, 0.0);
-			row++;
-		}
-	});
-	auto t_system_end = std::chrono::high_resolution_clock::now();
-	m_lastMomentSystemBuildTime = std::chrono::duration<double>(t_system_end - t_system_start).count();
-}
-
-// Uniform-field wrapper: broadcast a scalar chi + uniform applied field Happ to every moment element
-// (verification path + uniform-source linear solves).  See BuildMomentSystemCore.
-void radTInteraction::BuildMomentSystem(double chi, const double Happ[3],
-                                        std::vector<double>& A, std::vector<double>& rhs) const
-{
-	std::vector<int> melem; CollectMomentElems(melem);   // hex(6)+wedge/pyramid(5), matches BuildMomentSystemCore order
-	int nMom = (int)melem.size();
-	if(nMom <= 0) { A.clear(); rhs.assign(m_totalDOF, 0.0); return; }
-	std::vector<double> chiv((size_t)nMom, chi), Hv((size_t)nMom*3);
-	for(int h = 0; h < nMom; h++) { Hv[(size_t)h*3] = Happ[0]; Hv[(size_t)h*3+1] = Happ[1]; Hv[(size_t)h*3+2] = Happ[2]; }
-	BuildMomentSystemCore(chiv.data(), Hv.data(), A, rhs);
-}
-
-void radTInteraction::PrecomputeMomentGeometry() const
-{
-	const int nHex = (int)m_hexaElemIndices.size();
-	const uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
-	{
-		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-		auto it = g_momentGeomCache.find(this);
-		if(it != g_momentGeomCache.end())
-		{
-			MomentGeomCache& c = it->second;
-			if(c.elem && c.dof == m_totalDOF && c.nElem == AmOfMainElem && c.nHex == nHex)
-			{
-				c.generation = currentGen;
-				return;
-			}
-		}
-	}
-
-	auto elems = std::make_shared<std::vector<MomentGeomElemCache>>((size_t)nHex);
-	for(int h = 0; h < nHex; h++)
-	{
-		int elemIdx = m_hexaElemIndices[h];
-		MomentGeomElemCache& ge = (*elems)[h];
-		ge.elemIdx = elemIdx;
-		ge.nFace = 6;
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || poly->AmOfFaces != 6 || m_elemDOFOffset[elemIdx] != 6*h) continue;
-		const TVector3d ce = poly->CentrPoint;
-		ge.ce[0] = ce.x; ge.ce[1] = ce.y; ge.ce[2] = ce.z;
-
-		double Ae[6], d[6][3], nf[6][3];
-		for(int f = 0; f < 6; f++)
-		{
-			double V4[4][3];
-			MomentGeomFaceCache& gf = ge.face[f];
-			momentFaceGeom(poly, f, ce, V4, gf.fc, gf.nf, gf.area, gf.d);
-			for(int v = 0; v < 4; v++) for(int k = 0; k < 3; k++) gf.V4[v][k] = V4[v][k];   // cache corners for the analytic kernel
-			momentPrecomputeFaceSamples(V4, gf.P, gf.W);
-			Ae[f] = gf.area;
-			for(int k = 0; k < 3; k++) { d[f][k] = gf.d[k]; nf[f][k] = gf.nf[k]; }
-			ge.localMono[f] = gf.area;
-		}
-
-		double Ve = 0.0;
-		for(int f = 0; f < 6; f++)
-			Ve += Ae[f]*(ge.face[f].fc[0]*nf[f][0]+ge.face[f].fc[1]*nf[f][1]+ge.face[f].fc[2]*nf[f][2]);
-		Ve *= (1.0/3.0);
-		ge.Ve = Ve;
-		if(std::abs(Ve) < 1.0e-300) continue;
-		for(int k = 0; k < 3; k++) for(int f = 0; f < 6; f++) ge.localDip[k][f] = Ae[f]*d[f][k]/Ve;
-
-		double phiQ[6][6];
-		momentResidualEigenmodes(Ae, d, 6, phiQ);
-		for(int qq = 0; qq < 2; qq++)
-		{
-			double Bm[6];
-			for(int f = 0; f < 6; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
-			double cm[3] = {0,0,0};
-			for(int f = 0; f < 6; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
-			for(int f = 0; f < 6; f++)
-			{
-				double cd = cm[0]*d[f][0]+cm[1]*d[f][1]+cm[2]*d[f][2];
-				ge.localQuad[qq][f] = Ae[f]*Bm[f] - Ae[f]*cd/Ve;
-			}
-			double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-			for(int f = 0; f < 6; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
-				Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
-			ge.DvecQ[qq][0] = Dm[0][0]; ge.DvecQ[qq][1] = Dm[1][1]; ge.DvecQ[qq][2] = Dm[2][2];
-			ge.DvecQ[qq][3] = Dm[0][1]+Dm[1][0]; ge.DvecQ[qq][4] = Dm[0][2]+Dm[2][0]; ge.DvecQ[qq][5] = Dm[1][2]+Dm[2][1];
-		}
-		ge.valid = 1;
-	}
-
-	MomentGeomCache cache;
-	cache.dof = m_totalDOF;
-	cache.nElem = AmOfMainElem;
-	cache.nHex = nHex;
-	cache.nMom = nHex;
-	cache.generation = currentGen;
-	cache.elem = elems;
-	std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-	g_momentGeomCache[this] = cache;
-}
-
-void radTInteraction::MomentSystemBlock6x6(int rowHexPos, int colHexPos, const double* chiPerHex, double* block, bool kernelOnly) const
-{
-	if(!block) return;
-	std::fill(block, block + 36, 0.0);
-	int nHex = (int)m_hexaElemIndices.size();
-	if((!chiPerHex && !kernelOnly) || rowHexPos < 0 || rowHexPos >= nHex || colHexPos < 0 || colHexPos >= nHex) return;
-
-	static thread_local const radTInteraction* tl_geom_owner = nullptr;
-	static thread_local int tl_geom_dof = 0;
-	static thread_local int tl_geom_nElem = 0;
-	static thread_local int tl_geom_nHex = 0;
-	static thread_local uint64_t tl_geom_generation = 0;
-	static thread_local std::shared_ptr<std::vector<MomentGeomElemCache>> tl_geom_elems;
-	std::shared_ptr<std::vector<MomentGeomElemCache>> elems = tl_geom_elems;
-	uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
-	const bool tlValid =
-		elems && tl_geom_owner == this && tl_geom_dof == m_totalDOF && tl_geom_nElem == AmOfMainElem &&
-		tl_geom_nHex == nHex && tl_geom_generation == currentGen;
-	if(!tlValid)
-	{
-		PrecomputeMomentGeometry();
-		currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
-		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-		auto it = g_momentGeomCache.find(this);
-		if(it == g_momentGeomCache.end() || !it->second.elem || it->second.nHex != nHex) return;
-		elems = it->second.elem;
-		tl_geom_owner = this;
-		tl_geom_dof = it->second.dof;
-		tl_geom_nElem = it->second.nElem;
-		tl_geom_nHex = it->second.nHex;
-		tl_geom_generation = currentGen;
-		tl_geom_elems = elems;
-	}
-	const MomentGeomElemCache& row = (*elems)[rowHexPos];
-	const MomentGeomElemCache& col = (*elems)[colHexPos];
-	if(!row.valid || !col.valid) return;
-
-	const double chiH = kernelOnly ? 1.0 : chiPerHex[rowHexPos];
-	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
-	const double chiScale = chiH*INV4PI;
-	const bool selfBlock = (row.elemIdx == col.elemIdx);
-	if(!kernelOnly && std::abs(chiH) < 1.0e-300)
-	{
-		if(!selfBlock) return;
-		for(int f = 0; f < 6; f++)
-		{
-			for(int k = 0; k < 3; k++) block[k*6 + f] = row.localDip[k][f];
-			block[3*6 + f] = row.localMono[f];
-			for(int qq = 0; qq < 2; qq++) block[(4+qq)*6 + f] = row.localQuad[qq][f];
-		}
-		return;
-	}
-	for(int f = 0; f < 6; f++)
-	{
-		const MomentGeomFaceCache& src = col.face[f];
-		double H[3] = {0.0, 0.0, 0.0};
-		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-		if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs cached 64 samples)
-		{
-			CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, H, G);
-		}
-		else
-		{
-		auto addPoint = [&](double px, double py, double pz, double q)
-		{
-			double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
-			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-			H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
-			G[0] += q*(inv_r3-3.0*dx*dx*inv_r5); G[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-			G[2] += q*(inv_r3-3.0*dz*dz*inv_r5); G[3] += q*(-3.0*dx*dy*inv_r5);
-			G[4] += q*(-3.0*dx*dz*inv_r5);       G[5] += q*(-3.0*dy*dz*inv_r5);
-		};
-		auto addSamples = [&](int ax, bool withCenter, double sgn)
-		{
-			for(int s = 0; s < MOM_NS; s++)
-			{
-				double px = src.P[s][0], py = src.P[s][1], pz = src.P[s][2];
-				if(ax & IMA_X) px = -px;
-				if(ax & IMA_Y) py = -py;
-				if(ax & IMA_Z) pz = -pz;
-				addPoint(px, py, pz, src.W[s]*sgn);
-			}
-			if(withCenter)
-			{
-				double cx = col.ce[0], cy = col.ce[1], cz = col.ce[2];
-				if(ax & IMA_X) cx = -cx;
-				if(ax & IMA_Y) cy = -cy;
-				if(ax & IMA_Z) cz = -cz;
-				addPoint(cx, cy, cz, -src.area*sgn);
-			}
-		};
-		addSamples(0, !selfBlock, 1.0);
-		if(m_imaEnabled)
-		{
-			bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
-			if(hX) addSamples(IMA_X, true, (double)m_imaSignX);
-			if(hY) addSamples(IMA_Y, true, (double)m_imaSignY);
-			if(hZ) addSamples(IMA_Z, true, (double)m_imaSignZ);
-			if(hX && hY) addSamples(IMA_XY, true, (double)m_imaSignX*m_imaSignY);
-			if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
-			if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
-			if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
-		}
-		}
-		for(int k = 0; k < 3; k++)
-		{
-			double val = -chiScale*H[k];
-			if(selfBlock && !kernelOnly) val += row.localDip[k][f];
-			block[k*6 + f] = val;
-		}
-		block[3*6 + f] = (selfBlock && !kernelOnly) ? row.localMono[f] : 0.0;
-		for(int qq = 0; qq < 2; qq++)
-		{
-			double val = (selfBlock && !kernelOnly) ? row.localQuad[qq][f] : 0.0;
-			const double* Dv = row.DvecQ[qq];
-			for(int m = 0; m < 6; m++) val -= chiScale*Dv[m]*G[m];
-			block[(4+qq)*6 + f] = val;
-		}
-	}
-}
-
-void radTInteraction::MomentKernelMatVec6x6(const double* x, const double* chiPerHex, double* y) const
-{
-	const int nHex = (int)m_hexaElemIndices.size();
-	if(!x || !chiPerHex || !y || nHex <= 0) return;
-	std::fill(y, y + (size_t)6 * nHex, 0.0);
-
-	PrecomputeMomentGeometry();
-
-	std::shared_ptr<std::vector<MomentGeomElemCache>> elems;
-	{
-		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-		auto it = g_momentGeomCache.find(this);
-		if(it == g_momentGeomCache.end() || !it->second.elem || it->second.nHex != nHex) return;
-		elems = it->second.elem;
-	}
-	if(!elems || (int)elems->size() < nHex) return;
-
-	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
-	auto applyRow = [&](size_t hh) {
-		const int h = (int)hh;
-		const MomentGeomElemCache& row = (*elems)[h];
-		if(!row.valid) return;
-		const double chiScale = chiPerHex[h] * INV4PI;
-		double acc[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-
-		for(int g = 0; g < nHex; g++)
-		{
-			const MomentGeomElemCache& col = (*elems)[g];
-			if(!col.valid) continue;
-			const bool selfBlock = (row.elemIdx == col.elemIdx);
-			const double* xg = &x[(size_t)6 * g];
-
-			for(int f = 0; f < 6; f++)
-			{
-				const double xf = xg[f];
-				if(xf == 0.0) continue;
-				const MomentGeomFaceCache& src = col.face[f];
-				double H[3] = {0.0, 0.0, 0.0};
-				double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-				if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs cached 64 samples)
-				{
-					double Hu[3], Gu[6];
-					CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, Hu, Gu);
-					for(int k = 0; k < 3; k++) H[k] = xf * Hu[k];
-					for(int k = 0; k < 6; k++) G[k] = xf * Gu[k];
-				}
-				else
-				{
-
-				auto addPoint = [&](double px, double py, double pz, double q)
-				{
-					double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
-					double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-					double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-					H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
-					G[0] += q*(inv_r3-3.0*dx*dx*inv_r5); G[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-					G[2] += q*(inv_r3-3.0*dz*dz*inv_r5); G[3] += q*(-3.0*dx*dy*inv_r5);
-					G[4] += q*(-3.0*dx*dz*inv_r5);       G[5] += q*(-3.0*dy*dz*inv_r5);
-				};
-
-				auto addSamples = [&](int ax, bool withCenter, double sgn)
-				{
-					const double wsgn = xf * sgn;
-					for(int s = 0; s < MOM_NS; s++)
-					{
-						double px = src.P[s][0], py = src.P[s][1], pz = src.P[s][2];
-						if(ax & IMA_X) px = -px;
-						if(ax & IMA_Y) py = -py;
-						if(ax & IMA_Z) pz = -pz;
-						addPoint(px, py, pz, src.W[s]*wsgn);
-					}
-					if(withCenter)
-					{
-						double cx = col.ce[0], cy = col.ce[1], cz = col.ce[2];
-						if(ax & IMA_X) cx = -cx;
-						if(ax & IMA_Y) cy = -cy;
-						if(ax & IMA_Z) cz = -cz;
-						addPoint(cx, cy, cz, -src.area*wsgn);
-					}
-				};
-
-				addSamples(0, !selfBlock, 1.0);
-				if(m_imaEnabled)
-				{
-					bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
-					if(hX) addSamples(IMA_X, true, (double)m_imaSignX);
-					if(hY) addSamples(IMA_Y, true, (double)m_imaSignY);
-					if(hZ) addSamples(IMA_Z, true, (double)m_imaSignZ);
-					if(hX && hY) addSamples(IMA_XY, true, (double)m_imaSignX*m_imaSignY);
-					if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
-					if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
-					if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
-				}
-
-				}
-				for(int k = 0; k < 3; k++) acc[k] -= chiScale * H[k];
-				for(int qq = 0; qq < 2; qq++)
-				{
-					const double* Dv = row.DvecQ[qq];
-					double dg = 0.0;
-					for(int m = 0; m < 6; m++) dg += Dv[m] * G[m];
-					acc[4 + qq] -= chiScale * dg;
-				}
-			}
-		}
-
-		double* yh = &y[(size_t)6 * h];
-		for(int i = 0; i < 6; i++) yh[i] = acc[i];
-	};
-
-	if(nHex <= 8) { for(int h = 0; h < nHex; h++) applyRow((size_t)h); }
-	else { ngcore::ParallelFor(ngcore::IntRange(nHex), applyRow); }
-}
-
-void radTInteraction::PrecomputeMomentAnyGeometry() const
-{
-	std::vector<int> melem;
-	CollectMomentElems(melem);
-	const int nMom = (int)melem.size();
-	const uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
-	{
-		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-		auto it = g_momentAnyGeomCache.find(this);
-		if(it != g_momentAnyGeomCache.end())
-		{
-			MomentGeomCache& c = it->second;
-			if(c.elem && c.dof == m_totalDOF && c.nElem == AmOfMainElem && c.nMom == nMom)
-			{
-				c.generation = currentGen;
-				return;
-			}
-		}
-	}
-
-	auto elems = std::make_shared<std::vector<MomentGeomElemCache>>((size_t)nMom);
-	for(int h = 0; h < nMom; h++)
-	{
-		const int elemIdx = melem[h];
-		MomentGeomElemCache& ge = (*elems)[h];
-		ge.elemIdx = elemIdx;
-		radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-		if(!poly || (poly->AmOfFaces != 6 && poly->AmOfFaces != 5 && poly->AmOfFaces != 4)) continue;  // tet(4)/wedge,pyramid(5)/hex(6)
-		const int nF = poly->AmOfFaces;
-		ge.nFace = nF;
-		const TVector3d ce = poly->CentrPoint;
-		ge.ce[0] = ce.x; ge.ce[1] = ce.y; ge.ce[2] = ce.z;
-
-		double Ae[6] = {0,0,0,0,0,0}, d[6][3] = {}, nf[6][3] = {};
-		for(int f = 0; f < nF; f++)
-		{
-			double V4[4][3];
-			MomentGeomFaceCache& gf = ge.face[f];
-			momentFaceGeom(poly, f, ce, V4, gf.fc, gf.nf, gf.area, gf.d);
-			for(int v = 0; v < 4; v++) for(int k = 0; k < 3; k++) gf.V4[v][k] = V4[v][k];   // cache corners for the analytic kernel
-			momentPrecomputeFaceSamples(V4, gf.P, gf.W);
-			Ae[f] = gf.area;
-			ge.localMono[f] = gf.area;
-			for(int k = 0; k < 3; k++) { d[f][k] = gf.d[k]; nf[f][k] = gf.nf[k]; }
-		}
-
-		double Ve = 0.0;
-		for(int f = 0; f < nF; f++)
-			Ve += Ae[f]*(ge.face[f].fc[0]*nf[f][0]+ge.face[f].fc[1]*nf[f][1]+ge.face[f].fc[2]*nf[f][2]);
-		Ve *= (1.0/3.0);
-		ge.Ve = Ve;
-		if(std::abs(Ve) < 1.0e-300) continue;
-		for(int k = 0; k < 3; k++) for(int f = 0; f < nF; f++) ge.localDip[k][f] = Ae[f]*d[f][k]/Ve;
-
-		double phiQ[6][6];
-		momentResidualEigenmodes(Ae, d, nF, phiQ);
-		for(int qq = 0; qq < nF - 4; qq++)
-		{
-			double Bm[6];
-			for(int f = 0; f < nF; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
-			double cm[3] = {0,0,0};
-			for(int f = 0; f < nF; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
-			for(int f = 0; f < nF; f++)
-			{
-				const double cd = cm[0]*d[f][0]+cm[1]*d[f][1]+cm[2]*d[f][2];
-				ge.localQuad[qq][f] = Ae[f]*Bm[f] - Ae[f]*cd/Ve;
-			}
-			double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-			for(int f = 0; f < nF; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
-				Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
-			ge.DvecQ[qq][0] = Dm[0][0]; ge.DvecQ[qq][1] = Dm[1][1]; ge.DvecQ[qq][2] = Dm[2][2];
-			ge.DvecQ[qq][3] = Dm[0][1]+Dm[1][0]; ge.DvecQ[qq][4] = Dm[0][2]+Dm[2][0]; ge.DvecQ[qq][5] = Dm[1][2]+Dm[2][1];
-		}
-		ge.valid = 1;
-	}
-
-	MomentGeomCache cache;
-	cache.dof = m_totalDOF;
-	cache.nElem = AmOfMainElem;
-	cache.nHex = (int)m_hexaElemIndices.size();
-	cache.nMom = nMom;
-	cache.generation = currentGen;
-	cache.elem = elems;
-	std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-	g_momentAnyGeomCache[this] = cache;
-}
-
-void radTInteraction::MomentSystemBlockAny(int rowMomPos, int colMomPos, const double* chiPerMom, double* block, bool kernelOnly) const
-{
-	if(!block) return;
-	std::fill(block, block + 36, 0.0);
-	if(!chiPerMom && !kernelOnly) return;
-
-	std::vector<int> melem;
-	CollectMomentElems(melem);
-	const int nMom = (int)melem.size();
-	if(rowMomPos < 0 || rowMomPos >= nMom || colMomPos < 0 || colMomPos >= nMom) return;
-
-	static thread_local const radTInteraction* tl_owner = nullptr;
-	static thread_local int tl_dof = 0;
-	static thread_local int tl_nElem = 0;
-	static thread_local int tl_nMom = 0;
-	static thread_local uint64_t tl_generation = 0;
-	static thread_local std::shared_ptr<std::vector<MomentGeomElemCache>> tl_elems;
-	std::shared_ptr<std::vector<MomentGeomElemCache>> elems = tl_elems;
-	uint64_t currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
-	const bool tlValid =
-		elems && tl_owner == this && tl_dof == m_totalDOF && tl_nElem == AmOfMainElem &&
-		tl_nMom == nMom && tl_generation == currentGen;
-	if(!tlValid)
-	{
-		PrecomputeMomentAnyGeometry();
-		currentGen = g_momentGeomGeneration.load(std::memory_order_acquire);
-		std::lock_guard<std::mutex> lock(g_momentGeomCacheMutex);
-		auto it = g_momentAnyGeomCache.find(this);
-		if(it == g_momentAnyGeomCache.end() || !it->second.elem || it->second.nMom != nMom) return;
-		elems = it->second.elem;
-		tl_owner = this;
-		tl_dof = it->second.dof;
-		tl_nElem = it->second.nElem;
-		tl_nMom = it->second.nMom;
-		tl_generation = currentGen;
-		tl_elems = elems;
-	}
-
-	const MomentGeomElemCache& row = (*elems)[rowMomPos];
-	const MomentGeomElemCache& col = (*elems)[colMomPos];
-	if(!row.valid || !col.valid || row.nFace < 4 || col.nFace < 4) return;
-
-	const int rdof = row.nFace;
-	const int cdof = col.nFace;
-	const int rq = rdof - 4;
-	const double chiH = kernelOnly ? 1.0 : chiPerMom[rowMomPos];
-	const double INV4PI = 1.0/(4.0*3.14159265358979323846);
-	const double chiScale = chiH * INV4PI;
-	const bool selfBlock = (row.elemIdx == col.elemIdx);
-	if(!kernelOnly && std::abs(chiH) < 1.0e-300)
-	{
-		if(!selfBlock) return;
-		for(int f = 0; f < cdof; f++)
-		{
-			for(int k = 0; k < 3; k++) block[k * 6 + f] = row.localDip[k][f];
-			block[3 * 6 + f] = row.localMono[f];
-			for(int qq = 0; qq < rq; qq++) block[(4 + qq) * 6 + f] = row.localQuad[qq][f];
-		}
-		return;
-	}
-
-	for(int f = 0; f < cdof; f++)
-	{
-		const MomentGeomFaceCache& src = col.face[f];
-		double H[3] = {0.0, 0.0, 0.0};
-		double G[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-		if(RadMomentKernelConfig::UseAnalytic())          // default closed-form triangle kernel (vs cached 64 samples)
-		{
-			CentroidFieldGradFromFace(row.ce, src.V4, col.ce, selfBlock, src.area, H, G);
-		}
-		else
-		{
-		auto addPoint = [&](double px, double py, double pz, double q)
-		{
-			double dx = row.ce[0]-px, dy = row.ce[1]-py, dz = row.ce[2]-pz;
-			double r2 = dx*dx+dy*dy+dz*dz, inv_r = 1.0/std::sqrt(r2);
-			double inv_r3 = inv_r/r2, inv_r5 = inv_r3/r2;
-			H[0] += q*dx*inv_r3; H[1] += q*dy*inv_r3; H[2] += q*dz*inv_r3;
-			G[0] += q*(inv_r3-3.0*dx*dx*inv_r5); G[1] += q*(inv_r3-3.0*dy*dy*inv_r5);
-			G[2] += q*(inv_r3-3.0*dz*dz*inv_r5); G[3] += q*(-3.0*dx*dy*inv_r5);
-			G[4] += q*(-3.0*dx*dz*inv_r5);       G[5] += q*(-3.0*dy*dz*inv_r5);
-		};
-		auto addSamples = [&](int ax, bool withCenter, double sgn)
-		{
-			for(int s = 0; s < MOM_NS; s++)
-			{
-				double px = src.P[s][0], py = src.P[s][1], pz = src.P[s][2];
-				if(ax & IMA_X) px = -px;
-				if(ax & IMA_Y) py = -py;
-				if(ax & IMA_Z) pz = -pz;
-				addPoint(px, py, pz, src.W[s]*sgn);
-			}
-			if(withCenter)
-			{
-				double cx = col.ce[0], cy = col.ce[1], cz = col.ce[2];
-				if(ax & IMA_X) cx = -cx;
-				if(ax & IMA_Y) cy = -cy;
-				if(ax & IMA_Z) cz = -cz;
-				addPoint(cx, cy, cz, -src.area*sgn);
-			}
-		};
-		addSamples(0, !selfBlock, 1.0);
-		if(m_imaEnabled)
-		{
-			bool hX = (m_imaSymmetry & IMA_X) != 0, hY = (m_imaSymmetry & IMA_Y) != 0, hZ = (m_imaSymmetry & IMA_Z) != 0;
-			if(hX) addSamples(IMA_X, true, (double)m_imaSignX);
-			if(hY) addSamples(IMA_Y, true, (double)m_imaSignY);
-			if(hZ) addSamples(IMA_Z, true, (double)m_imaSignZ);
-			if(hX && hY) addSamples(IMA_XY, true, (double)m_imaSignX*m_imaSignY);
-			if(hX && hZ) addSamples(IMA_XZ, true, (double)m_imaSignX*m_imaSignZ);
-			if(hY && hZ) addSamples(IMA_YZ, true, (double)m_imaSignY*m_imaSignZ);
-			if(hX && hY && hZ) addSamples(IMA_XYZ, true, (double)m_imaSignX*m_imaSignY*m_imaSignZ);
-		}
-		}
-		for(int k = 0; k < 3; k++)
-		{
-			double val = -chiScale*H[k];
-			if(selfBlock && !kernelOnly) val += row.localDip[k][f];
-			block[k * 6 + f] = val;
-		}
-		block[3 * 6 + f] = (selfBlock && !kernelOnly) ? row.localMono[f] : 0.0;
-		for(int qq = 0; qq < rq; qq++)
-		{
-			double val = (selfBlock && !kernelOnly) ? row.localQuad[qq][f] : 0.0;
-			const double* Dv = row.DvecQ[qq];
-			for(int m = 0; m < 6; m++) val -= chiScale * Dv[m] * G[m];
-			block[(4 + qq) * 6 + f] = val;
-		}
-	}
-}
-
-//=========================================================================
-// MomentSystemEntry: the ON-DEMAND un-normalized moment system entry A_raw[rowGlobal][colDOF] (the HACApK
-// H-matrix entry; see docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).  Reproduces BuildMomentSystemCore's row math
-// for a SINGLE (row,col) WITHOUT building the full system or normalizing -- the row 2-norm is a diagonal
-// scaling that leaves the direct solve invariant, so the H-LU path uses A_raw.  HEX-ONLY; assumes all
-// m_hexaElemIndices are valid 6-face hexes (rowGlobal = 6*h + t).
-//=========================================================================
-double radTInteraction::MomentSystemEntry(int rowGlobal, int colDOF, const double* chiPerHex) const
-{
-	const int dof = m_totalDOF;
-	if(colDOF < 0 || colDOF >= dof) return 0.0;
-	int nHex = (int)m_hexaElemIndices.size();
-	int h = rowGlobal / 6, t = rowGlobal % 6;
-	if(h < 0 || h >= nHex) return 0.0;
-	int elemIdx = m_hexaElemIndices[h];
-	radTPolyhedron* poly = dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[elemIdx]);
-	if(!poly || poly->AmOfFaces != 6) return 0.0;
-	const int off = m_elemDOFOffset[elemIdx];
-	const TVector3d ce = poly->CentrPoint;
-	const double chiH = chiPerHex[h];
-
-	// per-face local geometry of the ROW element (identical to BuildMomentSystemCore)
-	double fc[6][3], nf[6][3], Ae[6], d[6][3];
-	for(int f = 0; f < 6; f++)
-	{
-		const radTHandlePgnAndTrans& hpt = poly->VectHandlePgnAndTrans[f];
-		radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
-		const radTVect2dVect& v2d = pgn->EdgePointsVector;
-		TVector3d V4[4];
-		for(int v = 0; v < 4; v++) V4[v] = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-		double cx = 0, cy = 0, cz = 0;
-		for(int v = 0; v < 4; v++) { cx += V4[v].x; cy += V4[v].y; cz += V4[v].z; }
-		fc[f][0] = cx*0.25; fc[f][1] = cy*0.25; fc[f][2] = cz*0.25;
-		double sx = 0, sy = 0, sz = 0, area = 0;
-		for(int tt = 0; tt < 2; tt++)
-		{
-			const TVector3d& P0 = V4[0]; const TVector3d& P1 = V4[tt+1]; const TVector3d& P2 = V4[tt+2];
-			double ux = P1.x-P0.x, uy = P1.y-P0.y, uz = P1.z-P0.z;
-			double wx = P2.x-P0.x, wy = P2.y-P0.y, wz = P2.z-P0.z;
-			double rx = uy*wz-uz*wy, ry = uz*wx-ux*wz, rz = ux*wy-uy*wx;
-			area += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz); sx += rx; sy += ry; sz += rz;
-		}
-		double nlen = std::sqrt(sx*sx+sy*sy+sz*sz); if(nlen < 1e-300) nlen = 1.0;
-		double ox = fc[f][0]-ce.x, oy = fc[f][1]-ce.y, oz = fc[f][2]-ce.z;
-		double sgn = (sx*ox+sy*oy+sz*oz >= 0.0) ? 1.0 : -1.0;
-		nf[f][0] = sgn*sx/nlen; nf[f][1] = sgn*sy/nlen; nf[f][2] = sgn*sz/nlen;
-		Ae[f] = area;
-		d[f][0] = fc[f][0]-ce.x; d[f][1] = fc[f][1]-ce.y; d[f][2] = fc[f][2]-ce.z;
-	}
-	double Ve = 0.0;
-	for(int f = 0; f < 6; f++) Ve += Ae[f]*(fc[f][0]*nf[f][0]+fc[f][1]*nf[f][1]+fc[f][2]*nf[f][2]);
-	Ve *= (1.0/3.0);
-
-	// on-demand field/grad C[h, :, colDOF] (INV4PI-scaled): find colDOF's element + face, build its geometry,
-	// then evaluate the shared kernel at THIS element's centroid (incl. IMA mirrors).
-	double Hc[3] = {0,0,0}, gHc[6] = {0,0,0,0,0,0};
-	{
-		// O(1) DOF->(hex,face): for pure hex m_elemDOFOffset[m_hexaElemIndices[h]] == 6h, so colDOF/6 is
-		// the hex position and colDOF%6 the local face (no O(nHex) search).  Guard the pure-hex premise.
-		int h_col = colDOF / 6, colF = colDOF % 6, colElem = -1;
-		if(h_col >= 0 && h_col < nHex)
-		{
-			int ei = m_hexaElemIndices[h_col];
-			if(m_elemDOFOffset[ei] == 6 * h_col) colElem = ei;   // premise holds -> direct map
-		}
-		radTPolyhedron* pc = (colElem >= 0) ? dynamic_cast<radTPolyhedron*>(g3dRelaxPtrVect[colElem]) : nullptr;
-		if(pc && pc->AmOfFaces == 6)
-		{
-			const radTHandlePgnAndTrans& hpt = pc->VectHandlePgnAndTrans[colF];
-			radTPolygon* pgn = hpt.PgnHndl.rep; radTrans* tr = hpt.TransHndl.rep;
-			if(pgn && tr)
-			{
-				const radTVect2dVect& v2d = pgn->EdgePointsVector;
-				double V4c[4][3]; double areaC = 0.0;
-				for(int v = 0; v < 4; v++)
-				{
-					TVector3d P = tr->TrPoint(TVector3d(v2d[v].x, v2d[v].y, pgn->CoordZ));
-					V4c[v][0] = P.x; V4c[v][1] = P.y; V4c[v][2] = P.z;
-				}
-				for(int tt = 0; tt < 2; tt++)
-				{
-					double ux=V4c[tt+1][0]-V4c[0][0], uy=V4c[tt+1][1]-V4c[0][1], uz=V4c[tt+1][2]-V4c[0][2];
-					double wx=V4c[tt+2][0]-V4c[0][0], wy=V4c[tt+2][1]-V4c[0][1], wz=V4c[tt+2][2]-V4c[0][2];
-					double rx=uy*wz-uz*wy, ry=uz*wx-ux*wz, rz=ux*wy-uy*wx;
-					areaC += 0.5*std::sqrt(rx*rx+ry*ry+rz*rz);
-				}
-				const TVector3d cce = pc->CentrPoint;
-				const double cenC[3] = {cce.x, cce.y, cce.z};
-				const double ce3[3] = {ce.x, ce.y, ce.z};
-				CentroidFieldGradFromFace(ce3, V4c, cenC, colElem == elemIdx, areaC, Hc, gHc);
-				const double INV4PI = 1.0/(4.0*3.14159265358979323846);
-				for(int k = 0; k < 3; k++) Hc[k] *= INV4PI;
-				for(int k = 0; k < 6; k++) gHc[k] *= INV4PI;
-			}
-		}
-	}
-
-	const int lf = colDOF - off;
-	const bool localFace = (lf >= 0 && lf < 6);
-	double val = 0.0;
-	if(t < 3)                                   // dipole-t
-	{
-		if(localFace) val += Ae[lf]*d[lf][t]/Ve;
-		val -= chiH*Hc[t];
-	}
-	else if(t == 3)                             // monopole
-	{
-		if(localFace) val = Ae[lf];
-	}
-	else                                        // diagonal-quadrupole qq = t-4
-	{
-		int qq = t - 4;
-		// SAME residual quadrupole eigenmode as BuildMomentSystemCore (identical Ae/d -> identical modes),
-		// so the H-matrix (method 2) and dense (method 0/1) moment systems stay consistent.  Bm = phi_qq/Ae.
-		double phiQ[6][6]; momentResidualEigenmodes(Ae, d, 6, phiQ);
-		double Bm[6];
-		for(int f = 0; f < 6; f++) Bm[f] = (Ae[f] > 1.0e-300) ? phiQ[qq][f]/Ae[f] : 0.0;
-		if(localFace) val += Ae[lf]*Bm[lf];
-		double cm[3] = {0,0,0};
-		for(int f = 0; f < 6; f++) for(int k = 0; k < 3; k++) cm[k] += Ae[f]*nf[f][k]*Bm[f];
-		if(localFace)
-		{
-			double cd = cm[0]*d[lf][0]+cm[1]*d[lf][1]+cm[2]*d[lf][2];
-			val -= Ae[lf]*cd/Ve;
-		}
-		double Dm[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-		for(int f = 0; f < 6; f++) for(int ii = 0; ii < 3; ii++) for(int jj = 0; jj < 3; jj++)
-			Dm[ii][jj] += Ae[f]*d[f][jj]*nf[f][ii]*Bm[f];
-		double Dvec[6] = {Dm[0][0], Dm[1][1], Dm[2][2], Dm[0][1]+Dm[1][0], Dm[0][2]+Dm[2][0], Dm[1][2]+Dm[2][1]};
-		for(int m = 0; m < 6; m++) val -= chiH*Dvec[m]*gHc[m];
-	}
-	return val;
 }
 
 //=========================================================================
@@ -3738,10 +2406,8 @@ void radTInteraction::PrecomputeWedgeGeometry()
 	m_wedgeGeomReady = true;
 }
 
-// EIEM2 surface-charge kernels retired (Phase 3b, live/dead step C): Compute5x5BlockFast (wedge),
-// Compute6x6BlockFast (hex), and ComputeMixedBlockFast (cross-DOF) are deleted -- the multipole-moment MMM
-// formulation (BuildMomentSystemCore) is the sole surface-charge demag, and the method-2 HACApK
-// path is MMM-only (3x3) for the remaining tetrahedron solves.
+// Legacy dense face-coefficient block kernels were deleted.  Mesh-backed
+// magnetic-material solves route through HDiv-VIM.
 
 //-------------------------------------------------------------------------
 // SetIMASymmetry: Configure IMA symmetry mode
@@ -3751,7 +2417,6 @@ void radTInteraction::PrecomputeWedgeGeometry()
 //-------------------------------------------------------------------------
 int radTInteraction::SetIMASymmetry(int symmetry, int signX, int signY, int signZ)
 {
-	ClearMomentCflatCache(this);
 	m_imaSymmetry = symmetry;
 	m_imaSignX = (signX >= 0) ? 1 : -1;  // Normalize to +1 or -1
 	m_imaSignY = (signY >= 0) ? 1 : -1;
@@ -3917,14 +2582,12 @@ int radTInteraction::GetMirrorElementIndex(int elemIdx, int symmetryAxis) const
 }
 
 // Legacy ELF face-permutation + IMA-mirror block (ApplyDOFPermutation, ApplyRowPermutation,
-// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget) deleted (Phase 3b).
-// It was #if 0 dead code (kernel-based IMA replaced it); the multipole-moment MMM path adds IMA mirror
-// images via CentroidFieldGradFromFace.
+// Compute6x6BlockIMA, Compute6x6BlockMirrored, Compute6x6BlockMirroredTarget) deleted.
 
 //-------------------------------------------------------------------------
 // SetupInteractMatrix_IMA: Build IMA interaction matrix.
-// The tet MMM path uses Compute3x3BlockFast. Surface-charge multipole-moment MMM handles IMA in
-// BuildMomentSystemCore / CentroidFieldGradFromFace and skips this dense MSC matrix.
+// Compact 3-component elements use Compute3x3BlockFast.  Mesh-backed
+// magnetic-material solves route through HDiv-VIM.
 //-------------------------------------------------------------------------
 int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 {
@@ -3935,7 +2598,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 	}
 
 
-	// Check all elements have valid DOF (3=dipole MMM, 4-6=face-charge MSC)
+	// Check all elements have valid DOF.
 	bool allHex = true;
 	bool allTet = true;
 	bool allWedge = true;
@@ -3950,9 +2613,8 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		if(m_elemDOF[i] != 5) allWedge = false;
 		if(m_elemDOF[i] != 3) allTet = false;
 	}
-	// EIEM2 retirement (Phase 3b): any MSC surface-charge element (DOF 4/5/6) present?  (DOF is in {3,4,5,6}
-	// here; the loop above errors on < 3.)  Used below to skip the dense MSC IMA build.
-	bool hasMSC = !allTet;
+	// Any independent face-coefficient element (DOF 4/5/6) present?
+	bool hasFaceCharge = !allTet;
 
 	// Pre-compute geometry for fast path (all element types, including mixed meshes)
 	if(!m_hexaGeomReady)
@@ -4019,7 +2681,6 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// Update AmOfMainElem to IMA element count
 	AmOfMainElem = m_imaNumElements;
-	ClearMomentCflatCache(this);
 
 	// Rebuild m_elemDOF and m_elemDOFOffset for IMA elements (variable DOF)
 	m_elemDOF.resize(m_imaNumElements);
@@ -4046,9 +2707,8 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 	// IMA: AmOfMainElem updated, m_totalDOF set
 
-	// For HACApK: skip dense matrix. Pure tet MMM computes entries on demand through
-	// Compute3x3BlockFast; surface-charge multipole-moment (MMMM) uses the dense LU / matrix-free moment
-	// path (no HACApK).  Reset geometry so it gets recomputed for the reduced IMA element set.
+	// For HACApK: skip dense matrix and recompute compact-element geometry for
+	// the reduced IMA element set.
 	if(skipDenseMatrix)
 	{
 		// Reset precomputed geometry so HACApK recomputes for the reduced IMA elements
@@ -4058,12 +2718,10 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 		return 1;
 	}
 
-	// EIEM2 retirement (Phase 3b): skip the dense MSC IMA matrix.  moment+IMA assembles its own system
-	// (BuildMomentSystemCore + CentroidFieldGradFromFace, which adds the IMA mirror images) and never reads
-	// this matrix; mixed MMM+MSC and B-input-on-MSC are rejected fail-loud in MakeAutoRelax.  Pure-tet (MMM)
-	// IMA still builds its 3x3 dense matrix below.  Geometry precomputed above is left intact (moment uses
-	// on-the-fly momentFaceGeom; the precompute caches stay valid for the reduced IMA element set).
-	if(hasMSC)
+	// Independent face-coefficient IMA dense assembly is retired; HDiv-VIM owns
+	// mesh-backed magnetic-material solves.  Compact 3-component IMA still
+	// builds its 3x3 dense matrix below.
+	if(hasFaceCharge)
 		return 1;
 
 	// Build mapping from IMA index to type-specific geometry index
@@ -4099,7 +2757,7 @@ int radTInteraction::SetupInteractMatrix_IMA(bool skipDenseMatrix)
 
 			double* block = &m_flatInteractMatrix[(size_t)offset_row * imaDOF + offset_col];
 
-			// Fast path: 3DOF-3DOF tet (MMM) - Compute3x3BlockFast handles IMA inline
+			// Fast path: compact 3DOF blocks; Compute3x3BlockFast handles IMA inline.
 			if(dof_row == 3 && dof_col == 3)
 			{
 				int tet_row = imaToTet[ima_row];

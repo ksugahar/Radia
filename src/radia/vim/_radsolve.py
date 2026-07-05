@@ -16,13 +16,13 @@ magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 ``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
 
 Element types: HDiv-VIM is RT1 (HDiv order 1) on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
-radia's OFFICIAL soft-iron demag route (CLAUDE.md DIRECTION 2026-07-04).  rad.Solve's 'auto' split
+radia's soft-iron demag route.  rad.Solve's 'auto' split
 (:func:`is_hdiv_eligible`) dispatches a mesh-backed TET / HEX / WEDGE iron to the HDiv-VIM
 (:func:`radia.vim.Solve`, order=1), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
 reflected-block QuadBlockHex/Wedge(mask); validated 2026-07-04 -- a reduced 1/2,1/4,1/8 model reproduces
-the full model to ~1e-4).  A MIXED / pyramid mesh-backed iron (not yet HDiv-covered), and any iron under
-set_demag_backend('collocation_mmmm'), route to the collocation MMMM gated bridge.  The per-element
-write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge, so all three round-trip ``ObjSetM`` /
+the full model to ~1e-4).  A MIXED / pyramid mesh-backed iron is not yet HDiv-covered and fails loud
+instead of falling back.  The per-element write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge,
+so all three round-trip ``ObjSetM`` /
 ``rad.Fld``.  If ``image=`` is used, dispatch also materializes the mirror-image polyhedra after the
 HDiv solve.  The solved Radia container therefore redirects ``rad.Fld`` to the full field object of that
 reduced solution, while the HDiv solve itself still runs on the reduced mesh.
@@ -127,15 +127,13 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     """Build a soft-iron Radia container from an NGSolve ``mesh`` AND register it so
     ``rad.Solve`` can dispatch the FEEC HDiv-VIM backend.
 
-    The returned container works with BOTH demag backends: ``'collocation_mmmm'`` (the applied
-    ``MatLin`` / ``MatSatIsoTab`` canonical collocation MMMM path) and ``'hdiv'`` (the FEEC
-    HDiv-VIM on the registered mesh).  Exactly one of ``mu_r`` (linear) or
+    The returned container is registered for the FEEC HDiv-VIM backend.  Exactly one of ``mu_r`` (linear) or
     ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
 
     TET, HEX, and WEDGE meshes all build a container.  The 'auto' backend routes pure
-    TET / HEX / WEDGE meshes to HDiv-VIM (order=1); mixed / pyramid meshes stay on the
-    collocation MMMM bridge.  Either way the per-element
-    ObjTetrahedron / ObjHexahedron / ObjWedge round-trips ``ObjSetM`` + ``rad.Fld``.
+    TET / HEX / WEDGE meshes to HDiv-VIM (order=1); mixed / pyramid meshes fail loud until
+    HDiv coverage is added.  The per-element ObjTetrahedron / ObjHexahedron / ObjWedge
+    round-trips ``ObjSetM`` + ``rad.Fld``.
     """
     from radia.netgen_mesh_import import netgen_mesh_to_radia
     if (mu_r is None) == (bh_table is None):
@@ -149,7 +147,7 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
             f"vim.MeshSoftIron: mesh import produced {len(handles)} Radia handles but "
             f"{len(vertices)} element vertex records; material_filter/order drift?"
         )
-    # Apply the soft-iron material so the explicit collocation_mmmm backend also works on this container.
+    # Apply the soft-iron material to keep ObjM/Fld material metadata meaningful.
     mat = rad.MatLin(float(mu_r)) if mu_r is not None else rad.MatSatIsoTab(bh_table)
     for h in handles:
         rad.MatApl(h, mat)
@@ -163,16 +161,14 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
 
 def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None, verbose=False):
     """Build a soft-iron Radia container from a netgen ``.vol`` FILE -- the canonical, correctly
-    oriented geometry interchange for BOTH demag backends.
+    oriented geometry interchange for the HDiv-VIM demag backend.
 
     ``.vol`` is the SOLE Cubit<->NGSolve mesh interchange (Cubit ``export netgen`` / Netgen / OCC
     ``ngmesh.Save``).  Loading via NGSolve lets netgen own the mesh topology + face orientation,
     which avoids the hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding that silently
-    breaks the HDiv surface charge).  Both backends then read the SAME mesh: pure TET / HEX / WEDGE
-    irons solve on the registered mesh by default (FEEC HDiv-VIM, order=1), while
-    ``demag_backend='collocation_mmmm'`` forces the built ObjHexahedron/Tetrahedron/Wedge elements through
-    canonical collocation MMMM.  Mixed / pyramid mesh-backed irons remain on the collocation bridge.
-    Exactly one of ``mu_r`` (linear) or ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
+    breaks the HDiv surface charge).  Pure TET / HEX / WEDGE irons solve on the registered mesh by
+    default (FEEC HDiv-VIM, order=1); mixed / pyramid mesh-backed irons fail loud until HDiv coverage
+    is added.  Exactly one of ``mu_r`` (linear) or ``bh_table`` (nonlinear ``[[H,B],...]``) must be given.
     (Caller opens ``with ng.TaskManager():``.)
     """
     import ngsolve as ng
@@ -184,8 +180,8 @@ def soft_iron_from_vol(vol_path, mu_r=None, bh_table=None, material_filter=None,
 def is_registered(top):
     """True if ``top`` (a rad.Solve object handle) IS, or CONTAINS, a soft-iron body registered via
     ``vim.MeshSoftIron``.  Used by radia.Solve to find a mesh-backed soft iron, route the default
-    'auto' split (pure TET/HEX/WEDGE -> HDiv-VIM, mixed/pyramid -> collocation MMMM bridge), and leave everything else
-    (mesh-less MSC/MMM, PM) on the C++ solve.  Read-only, never raises."""
+    'auto' split (pure TET/HEX/WEDGE -> HDiv-VIM; unsupported meshes fail loud), and leave everything else
+    (mesh-less soft iron / fixed-M PM) on the C++ solve.  Read-only, never raises."""
     if top in _DEMAG_REGISTRY:
         return True
     members = _KNOWN_CONTAINER_MEMBERS.get(top, [])
@@ -194,11 +190,9 @@ def is_registered(top):
 
 def is_hdiv_eligible(top):
     """True if ``top``'s registered soft-iron mesh is PURE-TET, PURE-HEX, or PURE-WEDGE -- the 'auto'
-    eligibility for the FEEC HDiv-VIM, radia's OFFICIAL soft-iron demag route (CLAUDE.md DIRECTION
-    2026-07-04: HDiv-VIM is the sole soft-iron method; collocation MMMM is the gated bridge -> ELF_MAGIC).
-    A MIXED / pyramid mesh-backed iron is NOT yet HDiv-covered, so rad.Solve's 'auto' split routes it to
-    the collocation MMMM bridge.  (Mesh-less iron is not registered, so it never reaches here and stays on
-    collocation MMMM.)  Read-only, never raises."""
+    eligibility for the FEEC HDiv-VIM, radia's soft-iron demag route.
+    A MIXED / pyramid mesh-backed iron is NOT yet HDiv-covered, so rad.Solve's 'auto' split rejects it.
+    Mesh-less surface-charge soft iron is retired in Radia.  Read-only, never raises."""
     import ngsolve as ng
     iron = top if top in _DEMAG_REGISTRY else None
     if iron is None:
@@ -216,8 +210,8 @@ def is_hdiv_eligible(top):
 
 def registered_iron_count(top):
     """Number of HDiv-registered soft-iron bodies inside ``top`` (0, 1, or >1).  rad.Solve's 'auto' split
-    uses this to FAIL LOUD on a MULTI-iron container -- which is_hdiv_eligible rejects (its len!=1 guard) --
-    instead of SILENTLY demoting it to collocation MMMM (a No-Fallbacks violation).  Read-only, never raises."""
+    uses this to FAIL LOUD on a MULTI-iron container -- which is_hdiv_eligible rejects (its len!=1 guard).
+    Read-only, never raises."""
     if top in _DEMAG_REGISTRY:
         return 1
     return sum(1 for m in _KNOWN_CONTAINER_MEMBERS.get(top, []) if m in _DEMAG_REGISTRY)

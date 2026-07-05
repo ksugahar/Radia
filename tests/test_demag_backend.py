@@ -1,11 +1,8 @@
-"""The demag-backend API: BOTH multipole-moment MMM MSC and the FEEC HDiv-VIM are kept.
+"""The demag-backend API: Radia soft iron uses FEEC HDiv-VIM.
 
-Default is "auto" (API-split): mesh-LESS hex/wedge/pyramid soft iron is
-solved by the canonical collocation MMMM demag; mesh-BACKED pure TET / HEX /
-WEDGE soft iron (radia.vim.MeshSoftIron) is eligible for FEEC HDiv-VIM
-RT1; mixed / pyramid meshes stay on the collocation MMMM bridge.
-set_demag_backend("collocation_mmmm"|"hdiv") overrides; "auto"/None restores
-the split.  Tet (MMM) and permanent-magnet solves are unaffected.  The
+Default is "auto": mesh-BACKED pure TET / HEX / WEDGE soft iron
+(radia.vim.MeshSoftIron) is eligible for FEEC HDiv-VIM RT1. Permanent-magnet
+field-only objects are unaffected. The
 mesh-backed HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math
 
@@ -20,9 +17,7 @@ def test_backend_default_is_auto():
     assert rad.get_demag_backend() == "auto"
 
 
-def test_set_collocation_mmmm_and_hdiv_accepted():
-    assert rad.set_demag_backend("collocation_mmmm") == "collocation_mmmm"
-    assert rad.get_demag_backend() == "collocation_mmmm"
+def test_set_hdiv_accepted():
     assert rad.set_demag_backend("hdiv") == "hdiv"
     assert rad.get_demag_backend() == "hdiv"
     assert rad.set_demag_backend("auto") == "auto"
@@ -41,41 +36,14 @@ def test_invalid_per_call_backend_raises_before_cpp_dispatch():
     rad.set_demag_backend("auto")
 
 
-def test_solverconfig_both_ok():
+def test_solverconfig_hdiv_and_auto_ok():
     rad.SolverConfig(demag_backend="hdiv")
-    rad.SolverConfig(demag_backend="collocation_mmmm")
     rad.SolverConfig(demag_backend="auto")
     rad.set_demag_backend("auto")
 
 
-_retired_surface_charge_backend_name = "ya" + "no"
-_retired_moment_backend_name = "moment_" + "galer" + "kin"
-_retired_short_backend_name = "m" + "g"
-_retired_variational_backend_name = "galer" + "kin"
-
-
-@pytest.mark.parametrize(
-    "old_name",
-    [
-        _retired_surface_charge_backend_name,
-        _retired_moment_backend_name,
-        _retired_short_backend_name,
-        _retired_variational_backend_name,
-    ],
-)
-def test_retired_backend_names_raise(old_name):
-    with pytest.raises(ValueError):
-        rad.set_demag_backend(old_name)
-    with pytest.raises(ValueError):
-        rad.SolverConfig(demag_backend=old_name)
-    rad.set_demag_backend("auto")
-
-
-def test_meshless_hex_soft_iron_solves_via_collocation_mmmm():
-    """A hex soft iron built the mesh-less way (ObjHexahedron + MatLin) is solved by the canonical
-    collocation MMMM demag (no NGSolve needed).  A cube in a uniform applied Hz magnetizes with demag ~1/3,
-    so for mu_r=1000 the magnetization M_z ~ H0/(1/3) = 3*H0.  This locks that the mesh-less
-    collocation MMMM path is reachable (no Error203) and physical."""
+def test_meshless_hex_soft_iron_rejected():
+    """ObjHexahedron + MatLin soft iron must use a mesh-backed HDiv route."""
     rad.set_demag_backend("auto")
     rad.UtiDelAll()
     L = 0.01
@@ -86,11 +54,8 @@ def test_meshless_hex_soft_iron_solves_via_collocation_mmmm():
     H0 = 1000.0
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])   # uniform Bz = mu0*H0
     cont = rad.ObjCnt([h, bkg])
-    rad.Solve(cont, 1e-6, 1000, 0)
-    M = rad.ObjM(h)["magnetization"]
-    # demag ~1/3 -> M_z ~ 3*H0 (chi=999); accept a generous band for a single coarse cube
-    assert 2.0 * H0 < M[2] < 4.0 * H0, f"surface-charge MSC cube M_z={M[2]:.1f} not ~3*H0={3*H0}"
-    assert abs(M[0]) < 0.05 * abs(M[2]) and abs(M[1]) < 0.05 * abs(M[2])
+    with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+        rad.Solve(cont, 1e-6, 1000, 0)
     rad.UtiDelAll()
     rad.set_demag_backend("auto")
 

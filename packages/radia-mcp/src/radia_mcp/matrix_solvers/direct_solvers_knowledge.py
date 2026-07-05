@@ -121,7 +121,7 @@ NOT include MUMPS — build from source if needed.
 LU_RADIA = r"""
 # Built-in LU (Radia method=0)
 
-For Radia MMM/MSC interaction matrices (N < 500 elements), the built-in
+For Radia HDiv-VIM interaction matrices (N < 500 elements), the built-in
 LAPACK LU is appropriate:
 
 ```python
@@ -147,7 +147,7 @@ def get_direct_solvers_knowledge(topic: str = "overview") -> str:
         overview     - When direct beats iterative (DEFAULT)
         pardiso      - Intel MKL PARDISO (NGSolve default)
         mumps        - Distributed MUMPS
-        lu_radia     - Built-in LU for Radia MMM/MSC
+        lu_radia     - Built-in LU for Radia HDiv-VIM
         all          - Everything
     """
     topic = topic.lower().strip()

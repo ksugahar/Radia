@@ -977,46 +977,6 @@ def check_build_release_path(filepath: str, lines: List[str]) -> List[Dict]:
     return findings
 
 
-def check_msc_wrong_sign(filepath: str, lines: List[str]) -> List[Dict]:
-    """HIGH: MSC system matrix must be (1/chi + N), not (-1/chi - N)."""
-    findings = []
-    has_msc = any(kw in line for line in lines
-                  for kw in ['MMMSolver', 'MMMBuilder', 'inv_chi', 'K_msc'])
-    if not has_msc:
-        return findings
-    patterns = [re.compile(r'-\s*np\.diag\s*\(\s*inv_chi\s*\)\s*-\s*N'),
-                re.compile(r'-\s*self\._inv_chi\s*\*\s*x\s*-\s*self\._N'),
-                re.compile(r'A\s*=\s*-N')]
-    for i, line in enumerate(lines, 1):
-        if line.strip().startswith('#'):
-            continue
-        for p in patterns:
-            if p.search(line.strip()):
-                findings.append({
-                    'line': i, 'severity': 'HIGH', 'rule': 'msc-wrong-sign',
-                    'message': 'Correct: K = diag(1/chi) + N (positive).',
-                })
-                break
-    return findings
-
-
-def check_msc_eval_face_center(filepath: str, lines: List[str]) -> List[Dict]:
-    """MODERATE: production surface-charge demag should not introduce ad-hoc face eval points."""
-    findings = []
-    has_msc = any(kw in line for line in lines
-                  for kw in ['eval_point', 'eval_pts', 'MMMBuilder'])
-    if not has_msc:
-        return findings
-    pattern = re.compile(r'eval_point.*=.*face_center\b(?!.*elem)')
-    for i, line in enumerate(lines, 1):
-        if not line.strip().startswith('#') and pattern.search(line.strip()):
-            findings.append({
-                'line': i, 'severity': 'MODERATE', 'rule': 'msc-eval-face-center',
-                    'message': 'Do not use face_center as a production MSC eval point; production surface-charge demag uses multipole-moment MMM instead.',
-            })
-    return findings
-
-
 def check_scattered_eddy_missing_a0(filepath: str, lines: List[str]) -> List[Dict]:
     """HIGH: Scattered-field eddy/Joule loss must include the background A0 in E.
 
@@ -1541,6 +1501,4 @@ ALL_RULES = [
     check_removed_solver_apis,
     check_docstring_hardcoded_mm,
     check_build_release_path,
-    check_msc_wrong_sign,
-    check_msc_eval_face_center,
 ]

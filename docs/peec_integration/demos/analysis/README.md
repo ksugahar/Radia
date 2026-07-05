@@ -11,7 +11,6 @@ Scripts for generating publication figures and performing detailed analysis.
 | `analyze_dowell_prima.py` | Dowell–PRIMA comparison analysis |
 | `analyze_tet_ordering.py` | Tetrahedral ordering analysis |
 | `compare_symmetrized_solve.py` | Symmetrized vs unsymmetrized solve comparison |
-| `measure_msc_asymmetry.py` | MSC matrix asymmetry measurement |
 
 ## Outputs
 
@@ -21,5 +20,5 @@ Figures are saved to `figures/` subdirectory:
 |--------|---------|
 | fig1 | PEEC matrix verification |
 | fig2 | PRIMA accuracy comparison |
-| fig3 | Adaptive MSC error |
+| fig3 | Magnetic-material coupling policy |
 | fig4 | WPT coil (85 kHz) characteristics |
