@@ -70,9 +70,11 @@ kernels `A` is numerically **low rank**, so we instead:
    come out **orthonormal** -- exactly what the folded regularisation
    (`RegularizedTSVD`) requires.
 
-   (The earlier manuscript Method 2/3 -- two/three SVDs -- were removed; see
-   `memory/aca_tsvd_qr_recompression.md`.  The `method` argument on `aca_tsvd`
-   is now a deprecated no-op.)
+   Exactly **two** methods are kept (the manuscript Method 2/3 were removed; see
+   `memory/aca_tsvd_qr_recompression.md`): `method="qr"` (this fast ACA + QR
+   path, the default) and `method="dense"` -- the plain/direct TSVD (materialise
+   `A` and take its dense SVD), the **exact reference** the review noted the paper
+   lacked.  Legacy `method=2/3` map to `"qr"`; an unknown value raises.
 
 Net cost is roughly `(M/k_aca)^2` lower than the dense route.
 
@@ -126,7 +128,7 @@ from radia.stream_function import (
 )
 ```
 
-### `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method=None) -> StreamTSVD`
+### `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method="qr") -> StreamTSVD`
 
 (ACA+)+TSVD of the `M x N` matrix whose entries are returned by
 `entry(i, j) -> float` (0-based `i in [0,M)`, `j in [0,N)`). `entry` is called
@@ -135,8 +137,10 @@ on demand by ACA+, not over the full grid.
 - `modes`   -- singular triplets to return (clamped to `k_aca`); default `kmax`.
 - `kmax`    -- maximum ACA+ rank; default `min(M, N)`.
 - `aca_eps` -- ACA+ stopping tolerance (absolute pivot threshold).
-- `method`  -- DEPRECATED, ignored (the recompression is the standard QR method
-  above; the legacy Method 2/3 were removed).
+- `method`  -- `"qr"` (default) = ACA + QR recompression (the fast path above);
+  `"dense"` / `"tsvd"` = the direct dense TSVD (exact reference, small problems).
+  Legacy `2`/`3` map to `"qr"`; an unknown value raises (the manuscript Method
+  2/3 were removed).
 
 Returns a `StreamTSVD` with `U (M,modes)`, `S (modes,)`, `V (N,modes)` (row-major
 NumPy arrays), `k_aca`, and `method`.

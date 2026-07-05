@@ -156,33 +156,41 @@ def test_truncation_monotonic():
         assert b <= a + 1.0e-12
 
 
-def test_recompression_matches_dense_svd():
-    """The ACA+ factors are recompressed to a TRUE SVD by the standard
-    QR-of-each-factor + one small SVD (peer review JIAM-2026-36).  Lock that it
-    reproduces the dense SVD of A: matching singular values, ORTHONORMAL U / V
-    (exactly the property the folded-regularisation stack requires), and a
-    machine-precision reconstruction.  The legacy manuscript Method 2/3 were
-    removed; ``method`` is now a deprecated no-op (any value -> same result)."""
+def test_qr_and_dense_methods_agree_with_svd():
+    """The two supported methods (peer review JIAM-2026-36) -- and ONLY two:
+      - ``method="dense"`` IS the direct TSVD of A (materialise + numpy.linalg.svd);
+      - ``method="qr"`` (default, ACA + QR-of-a-low-rank-product) matches it to the
+        ACA tolerance, with ORTHONORMAL U / V (what RegularizedTSVD requires).
+    This makes the reviewer's point concrete: QR is validated against the CORRECT
+    dense baseline, not a broken 'naive' one.  Legacy method=2/3 -> qr; an unknown
+    method RAISES."""
     obs, centers, offsets = _coil_geometry(obs_z=0.1)
     M, N = obs.shape[0], centers.shape[0]
     A = _coil_dense_A(obs, centers, offsets)
     entry = lambda i, j: A[i, j]
-    res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N), aca_eps=1.0e-10)
-    ns = res.modes
-    # singular values vs the dense SVD of A
     s_dense = np.linalg.svd(A, compute_uv=False)
-    rel_s = np.linalg.norm(res.S[:ns] - s_dense[:ns]) / np.linalg.norm(s_dense[:ns])
-    assert rel_s < 1.0e-8, f"singular values off dense SVD: {rel_s}"
+
+    # method="dense" == the exact direct TSVD of A
+    rd = aca_tsvd(M, N, entry, modes=min(M, N), method="dense")
+    assert rd.method == "dense"
+    nd = rd.modes
+    assert np.linalg.norm(rd.S[:nd] - s_dense[:nd]) / np.linalg.norm(s_dense) < 1.0e-12
+    assert np.linalg.norm(A - (rd.U * rd.S) @ rd.V.T) / np.linalg.norm(A) < 1.0e-12
+
+    # method="qr" (default) matches the dense SVD to the ACA tolerance
+    rq = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N), aca_eps=1.0e-10)
+    assert rq.method == "qr"
+    nq = rq.modes
+    assert np.linalg.norm(rq.S[:nq] - s_dense[:nq]) / np.linalg.norm(s_dense) < 1.0e-8
     # orthonormal factors -- required by RegularizedTSVD.from_stiffness (W = V^T V = I)
-    assert np.linalg.norm(res.U.T @ res.U - np.eye(ns)) < 1.0e-10, "U not orthonormal"
-    assert np.linalg.norm(res.V.T @ res.V - np.eye(ns)) < 1.0e-10, "V not orthonormal"
-    # machine-precision reconstruction of the ACA approximation
-    recon = (res.U * res.S) @ res.V.T
-    assert np.linalg.norm(A - recon) / np.linalg.norm(A) < 1.0e-6
-    # `method` is a deprecated no-op: any value still works and gives the same SVD
-    res_m = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                     aca_eps=1.0e-10, method=2)
-    assert np.linalg.norm(res_m.S[:ns] - res.S[:ns]) < 1.0e-12
+    assert np.linalg.norm(rq.U.T @ rq.U - np.eye(nq)) < 1.0e-10, "U not orthonormal"
+    assert np.linalg.norm(rq.V.T @ rq.V - np.eye(nq)) < 1.0e-10, "V not orthonormal"
+
+    # legacy method=2/3 map to qr (deprecated; no separate algorithm survives)
+    assert aca_tsvd(M, N, entry, modes=min(M, N), method=3).method == "qr"
+    # only two methods -- an unknown value fails loud (No-Fallback)
+    with pytest.raises(ValueError):
+        aca_tsvd(M, N, entry, modes=min(M, N), method="bogus")
 
 
 # --------------------------------------------------------------------------
