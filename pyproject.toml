@@ -57,9 +57,9 @@ dependencies = [
     #     ngsolve-side H-matrix path: `rad.RadiaField(...)` has no
     #     `use_hmatrix=` parameter (passing it raises TypeError), and
     #     BEM-A remains dense (H-matrix deferred — see
-    #     memory/direction_bem_a_hmatrix_in_radia.md).  H-matrix
-    #     acceleration is available ONLY via Radia's own HACApK path
-    #     for the MMM/MSC solver (`rad.Solve(obj, prec, iter, 2)`).
+    #     memory/direction_bem_a_hmatrix_in_radia.md).  Radia-specific
+    #     H-matrix acceleration is kept in Radia's C++ kernels, primarily
+    #     the HDiv-VIM open-boundary path.
     "ngsolve==6.2.2604",
     "netgen-mesher==6.2.2604",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
@@ -134,7 +134,7 @@ radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 # shipped + deployed SOLELY by the cubit-mesh-export package, so radia and
 # cubit-mesh-export release fully independently.  "*.ccm" is dropped here;
 # cubit_mesh_curver.pyd is excluded below (the "*.pyd" glob ships only
-# _radia_pybind.pyd / cln_core.pyd / mmm_core.pyd / peec_matrices.pyd /
+# _radia_pybind.pyd / cln_core.pyd / peec_matrices.pyd /
 # sparsesolv_ngsolve.pyd).
 radia = [
     "*.pyd", "*.pyi", "*.png", "*.ico",
@@ -145,6 +145,8 @@ radia = [
     "panels/samples/*.json",
     "panels/samples/*.py",
     "panels/samples/em_sample_bh.txt",
+    "panels/samples/em/c_type_dipole/*.md",
+    "panels/samples/em/c_type_dipole/*.step",
     "panels/*.json",
     "panels/notebooks/*.ipynb",
     "panels/notebooks/*.json",

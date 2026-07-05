@@ -87,7 +87,7 @@ st_cHACApK_block_node_t *cHACApK_build_block_tree(
     st_cHACApK_cluster_t  *root_col_cluster);
 
 /* Phase 4 variant: cluster ranges in ELEMENT units, leaf positions in
- * DOF units. nffc = uniform DOF per element (3 tet / 6 hex MSC / etc.).
+ * DOF units. nffc = uniform DOF per element for the active formulation.
  *
  * HACApK's cHACApK_generate_cbitree builds clusters in element units
  * (nstrt, nsize count elements). The leafmtxp leaves are filled with

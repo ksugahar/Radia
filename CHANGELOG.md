@@ -22,37 +22,9 @@ All notable changes to the `radia` package.  Format: each release lists
 Released 2026-06-26.
 
 - **TaskManager fix**: removed the `radia.vim` import-time
-  `ngsolve.SetNumThreads(4)` side effect. Mesh-less multipole-moment MMM
-  solves still probe `radia.vim` for backend dispatch, so the old import
-  path could reset an explicitly configured mdx run to four threads before
-  `rad.Solve`. Benchmarks must configure NGSolve/RADIA thread counts through
-  the documented mechanism and verify the actual
-  `GetSolveStats()["num_threads"]` value.
-
-## 4.95.1 — Multipole-moment MMM matrix-free and HACApK acceleration
-
-Released 2026-06-26.
-
-- **Release correction**: supersedes the unpublished `v4.95.0` tag.  The
-  shared BiCGSTAB helper now treats an already-satisfied initial residual
-  and zero-residual breakdowns as converged, so the matrix-free moment
-  solve does not reject a valid nonlinear Picard step.
-- **Multipole-moment MMM method 1**: replaced the dense BiCGSTAB linear
-  step with matrix-free moment matvecs and element-wise block Jacobi for
-  pure hexahedral and mixed hex/wedge/pyramid 5/6-DOF surface-charge
-  systems.  The path now uses the same moment blocks on demand instead of
-  building a full dense matrix.
-- **Multipole-moment MMM method 2**: the nonlinear HACApK path now reuses a
-  chi-free geometry H-matrix across Picard iterations and applies the
-  current per-element susceptibility as `Lx + diag(chi) Kx`, rebuilding
-  only the local block-Jacobi preconditioner and RHS each outer iteration.
-  The default Krylov solver remains BiCGSTAB; restarted GMRES is exposed as
-  an explicit comparison path.
-- **Fail-loud cleanup**: removed the inexact BiCGSTAB and two-level coarse
-  preconditioner experiments from the runtime API.  Passing their old
-  `SolverConfig` keys now raises instead of silently selecting a different
-  path.  The failed branches are recorded in
-  `docs/multipole_moment_mmm/MEMORY.md`.
+  `ngsolve.SetNumThreads(4)` side effect. Benchmarks must configure
+  NGSolve/RADIA thread counts through the documented mechanism and verify
+  the actual `GetSolveStats()["num_threads"]` value.
 
 ## 4.89.1 — radia-ih hardening + stream_function Tikhonov/Pareto
 
@@ -69,41 +41,6 @@ Released 2026-06-02.
   for the (homogeneity, peak-J) trade-off.
 - Docs / radia-mcp knowledge reframed from the removed auto-mesh
   "2-Stage" path to the current EM -> q_surf -> Thermal flow.
-
-## 4.89.0 — Loop-free solution by default (Helmholtz-Hodge loop removal)
-
-Released 2026-06-02.
-
-The MSC/MMM solvers now return a **loop-free physical magnetization** by
-default.  The discrete operator `N` has an exact null space of circulating
-surface charges ("loops" = the cycle space of the element-adjacency graph);
-these are non-physical (they produce no field) but at high permeability they
-dominate the raw solved `sigma` (up to ~99% of its norm).  After the solve
-converges, a Helmholtz-Hodge projection removes the loop component:
-`c` solves `(L^T L) c = L^T sigma` (CG; `L` = topological cycle basis), then
-`sigma -= L c`.
-
-- **Default ON** (`rad.SetLoopProjection(True)` is the default; pass `False`
-  to keep the raw loop-containing `sigma`).
-- **Field-transparent.** `N L = 0`, so `N*sigma` -- the field -- is unchanged
-  (`rad.Fld` differs by `~1e-15`).  Verified: 102/102 core field + golden tests
-  unchanged with the default on.  Only the (non-physical) circulating part of
-  the magnetization distribution changes.
-- **Cheap.** `L^T L` is the geometric, sparse, `mu_r`-independent, well-
-  conditioned (`cond ~ 1`) loop Gram matrix; the CG converges in a handful of
-  iters with no measurable slowdown.
-- **All solver paths, consistent.** Method 0 (LU), 1 (dense BiCGSTAB), and 2
-  (HACApK) all return the same loop-free `sigma` (the non-HACApK paths use a
-  standalone pure-sparse cycle projection -- no H-matrix needed).
-- **Nonlinear-safe.** `L = ker(N)` is `chi`-independent; the projection is
-  applied once after the nonlinear iteration converges, so `chi(H)` is driven
-  by the true loop-included `sigma` and only the final answer is loop-free.
-  Auto-skipped when the loop-star / loop-deflated gauge is active.
-
-Diagnostics: `rad.GetLoopProjStats()`.  Test: `tests/test_loop_projection.py`.
-Docs: `docs/solver/MSC_NULLSPACE_DEFLATION.md` Section 8.5.  Also lands (opt-in,
-off by default) the loop-deflated block-Jacobi gauge and the A_SS H-ILU
-preconditioner as experimental reference paths.
 
 ## 4.88.0 — Cubit plugin command verb `radia_export` -> `export`
 
@@ -166,39 +103,6 @@ field and overridable.  A user-supplied EM `.vol` is never clobbered; a
 browses the correct mesh.  The calc script still receives `--em-vol`
 explicitly — the panel auto-fill is a visible UX convenience, not a
 silent fallback (calc-side No-Fallback intact).
-
-## 4.86.0 — feat: loop-star MSC gauge KEEPS the loops (field-exact, tree-cotree)
-
-Released 2026-05-31.
-
-`rad.SetLoopStarGauge(True)` (the HACApK/MSC tree-cotree loop-star solver)
-now **keeps** the loop (null-space) content of the magnetic-surface-charge
-solution instead of dropping it, so the external field matches the direct
-LU / plain-BiCGSTAB / FEM solution to ~1e-10 at every `mu_r`.
-
-**Why**: the old behaviour solved only the reduced star system
-(`sigma = S y_S`) and discarded the loop part.  On the C-type electromagnet
-the topological loops are not exactly externally field-silent *and* the
-sparse star/loop bases are not exactly mutually orthogonal, so the external
-field came out ~0.5% off (`dBz/Bz` = 5.4e-3 at `mu_r`=2) — a real method
-error, not noise.
-
-**Fix** (`RadHACApKMSCManager::SolveLoopStar`): after the reduced star solve,
-recover the full solution by a few **block Gauss-Seidel** sweeps — (i) star
-correction via the K-dense reduced solve, (ii) loop correction
-`A_LL y_L = L^T r` with `A_LL = L^T diag(inv_chi) L` (CG) — each sweep
-targeting the true residual `b - A sigma`.  Converges to the direct solution
-regardless of star/loop basis orthogonality; the loops are kept.
-
-**Verified field-exact** (`Bz` vs plain BiCGSTAB): C-type 6^3 `dBz/Bz`
-4.7e-11…7.3e-10 across `mu_r` 2…1000 (was 5.4e-3…1.3e-5); cube 4^3 ~1e-11
-(GS converges in 1 sweep); antisym IMA `mu_r`=1e5 `'+x'` 1.9e-4 / `'+x-z'`
-7.4e-5 (both PASS, the high-`mu_r` shielding floor).
-
-**Scope**: the star correction uses the K-dense `A_SS` LU (caps ~15^3 /
-8 GB); field-exact keep-loops is validated in that regime.  Linear
-(uniform-`chi`) target.  New diagnostic `rad.GetKeepLoopStats()`.  Larger-`N`
-needs a scalable `A_SS` preconditioner (ILU/H-LU), the next increment.
 
 ## 4.85.3 — fix: linear-SIBC Z_s double-counted mu_r (extra sqrt(mu_r))
 
@@ -1642,21 +1546,9 @@ Single COIL_TEMPLATE constant in `radia_gui_base.py` powers both.
 Verified end-to-end: 84-segment closed racetrack, 2000 A, gap=1e-17 m,
 .step = 125 KB OCC swept solid.
 
-## 4.9.0 — EM canonical trio + 1/2 Kelvin Benchmark + MSC silent breakage fix
+## 4.9.0 — EM canonical trio + 1/2 Kelvin Benchmark
 
 Released 2026-04-26.
-
-### MSC silent breakage fix (production bug)
-
-`calc_accel_msc.py` registered `add_material_args(include_custom=False)`,
-so the EM panel's MSC mode (which sends `--material custom --mu-r <user>`
-for the "mu_r (Linear)" material option) was rejected at argparse with
-`error: argument --material: invalid choice: 'custom'`.  Clicking Run in
-MSC mode produced no useful error in the GUI and no field result.  Fixed
-by flipping to `include_custom=True` (matches the FEM Omega/A-Phi
-convention in `calc_accel_magnet.py`).  Regression guard:
-`tests/panels/test_em_msc_smoke.py` (6 sub-second static checks of the
-MSC panel command vs argparse).
 
 ### Kelvin Benchmark — 1/2 sample joins 1/4
 

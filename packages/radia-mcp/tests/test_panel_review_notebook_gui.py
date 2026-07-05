@@ -30,7 +30,7 @@ def test_panel_review_exposes_cubit_panels_migration_route():
 
     assert "validation_test/induction_heating/cubit_panels_legacy" in doc
     assert "examples/cubit_panels" in doc
-    assert "panels/samples/em/c_type_dipole" in doc
+    assert "src/radia/panels/samples/em/c_type_dipole" in doc
     assert "src/radia" in doc
     assert "validation_test" in doc
     assert "result-saved docs notebooks" in doc
@@ -55,4 +55,4 @@ def test_standalone_panels_redirects_to_cubit_panels_route():
     assert "examples/cubit_panels" in doc
     assert "panel_review(topic=\"cubit_panels_migration\")" in doc
     assert "validation_test/induction_heating" in doc
-    assert "panels/samples/em/c_type_dipole" in doc
+    assert "src/radia/panels/samples/em/c_type_dipole" in doc

@@ -24,7 +24,6 @@ public examples:
 - `benchmark_*construction.py`
 - `benchmark_field_evaluation.py`
 - `benchmark_lu_vs_hmatrix.py`
-- `benchmark_dipole_vs_msc.py`
 - `verify_field_accuracy.py`
 - `run_all_benchmarks.py`
 - `plot_benchmark_results.py`

@@ -45,7 +45,7 @@ Known-good (and known-missing) variants of the C-type dipole EM
 sample for `calc_accel_magnet.py`, derived from the canonical ELF
 CEFC 2020 C-type geometry.  The old examples staging copy was pruned;
 panel-only rescued STEP fixtures now live under
-`panels/samples/em/c_type_dipole/`.
+`src/radia/panels/samples/em/c_type_dipole/`.
 
 Each variant is a different symmetry reduction of the same physical
 dipole.  The `.jou` defines the yoke geometry + air sphere; the

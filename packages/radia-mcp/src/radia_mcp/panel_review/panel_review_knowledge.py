@@ -147,7 +147,7 @@ As of 2026-06-29, the induction-heating side has been drained from
 `examples/cubit_panels/inductance` into
 `validation_test/induction_heating/cubit_panels_legacy`.  The accel-magnet
 staging scripts were later pruned from `examples`; only rescued panel fixtures
-belong under `panels/samples/em/c_type_dipole/`.  Treat any remaining
+belong under `src/radia/panels/samples/em/c_type_dipole/`.  Treat any remaining
 `examples/cubit_panels` path as reference debt to eliminate, not as a
 long-lived examples tier.
 
@@ -173,7 +173,7 @@ the EM notebook/panel track:
   probes were development diagnostics; their lesson lives in memory, not in
   the source tree.
 - `coil_wire.step` and `yoke.step` were rescued to
-  `panels/samples/em/c_type_dipole/`.
+  `src/radia/panels/samples/em/c_type_dipole/`.
 - `BH.txt` is embedded in `src/radia/em_material.py` and shipped as
   `src/radia/panels/samples/em_sample_bh.txt`; the examples copy was removed.
 
