@@ -4,9 +4,11 @@ The public API is intentionally small.  Six functions + two dataclasses
 cover the kernel-agnostic (ACA+)+TSVD pipeline plus the
 regularisation-folded form; everything else is in the demo files.
 
-## `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method=3)`
+## `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method=None)`
 
-(ACA+)+TSVD recompressed truncated SVD of an `M × N` matrix `A`.
+(ACA+)+TSVD recompressed truncated SVD of an `M × N` matrix `A`.  The
+recompression is the standard "SVD of a low-rank product" (QR each ACA factor,
+then one small SVD; peer review JIAM-2026-36).
 
 **Parameters**
 
@@ -18,7 +20,7 @@ regularisation-folded form; everything else is in the demo files.
 | `modes`  | int, optional   | TSVD modes to return (clamped to k_aca).  Default = kmax. |
 | `kmax`   | int, optional   | maximum ACA+ rank.  Default = min(M, N).   |
 | `aca_eps`| float, optional | ACA+ stopping tolerance (pivot threshold). Default 1e-4. |
-| `method` | int, optional   | 3 (default) = improved 2-SVD recompression (manuscript Method 2); 2 = full re-SVD of both factors (manuscript Method 1). |
+| `method` | optional        | DEPRECATED, ignored (the legacy manuscript Method 2/3 were removed; recompression is the standard QR method). |
 
 **Returns** `StreamTSVD` with `U (M, modes)`, `S (modes,)`,
 `V (N, modes)` row-major NumPy arrays, `k_aca`, `method`.
@@ -39,7 +41,7 @@ The cached `result` can be REUSED across many calls with different
 right-hand sides (e.g., Path-A iteration), since the factorisation is
 independent of `B`.
 
-## `solve(M, N, entry, B, modes=None, k_mode=None, kmax=None, aca_eps=1e-4, method=3)`
+## `solve(M, N, entry, B, modes=None, k_mode=None, kmax=None, aca_eps=1e-4, method=None)`
 
 Convenience: `aca_tsvd` then `pseudo_inverse_solve` in one call.
 

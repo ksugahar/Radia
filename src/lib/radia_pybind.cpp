@@ -6796,18 +6796,15 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // ========================================================================
     m.def("_stream_aca_tsvd",
         [](int M, int N, std::function<double(int, int)> entry,
-           int modes, int kmax, double aca_eps, int method)
+           int modes, int kmax, double aca_eps)
         {
             if (M <= 0 || N <= 0)
                 throw std::invalid_argument("M and N must be positive");
             if (!entry)
                 throw std::invalid_argument("entry callback must be callable");
-            const radia::stream_function::Method mth =
-                (method == 2) ? radia::stream_function::Method::Method2
-                              : radia::stream_function::Method::Method3;
             radia::stream_function::TSVDResult r =
                 radia::stream_function::ACATSVD(
-                    M, N, entry, modes, kmax, aca_eps, mth);
+                    M, N, entry, modes, kmax, aca_eps);
 
             py::array_t<double> U({r.M, r.modes});
             py::array_t<double> S(r.modes);
@@ -6822,7 +6819,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
         },
         py::arg("M"), py::arg("N"), py::arg("entry"),
         py::arg("modes"), py::arg("kmax"),
-        py::arg("aca_eps") = 1.0e-4, py::arg("method") = 3,
+        py::arg("aca_eps") = 1.0e-4,
         R"pbdoc(
             (ACA+)+TSVD recompressed truncated SVD of an M x N matrix A whose
             entries are supplied on demand by the callback entry(i, j) ->
@@ -6834,7 +6831,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               S:     (modes,)
               V:     (N, modes) row-major
               k_aca: ACA+ rank found before truncation
-            method=3 (default) is the improved 2-SVD path (f90 method_aca_tsvd_2);
-            method=2 is the full re-SVD of both factors (f90 method_aca_tsvd_1).
+            Recompression is the standard "SVD of a low-rank product": QR each
+            tall-skinny ACA factor (C, D), then ONE small kt x kt SVD (peer
+            review JIAM-2026-36).  The legacy manuscript Method 2/3 were removed.
         )pbdoc");
 }
