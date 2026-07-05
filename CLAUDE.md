@@ -1214,6 +1214,47 @@ library by GEOMETRY CLASS, not by reflex.
 - Post-processing field data (GMSH views)
 - Reading `.msh` file format for visualization verification
 
+### CAD Authoring: build123d or Cubit, NOT Ad-Hoc netgen.occ (2026-07-05)
+
+**POLICY** (Sugahara): for CAD AUTHORING -- parametric solids, booleans,
+sweeps, any real geometry construction -- use **build123d** (the lab's hardened
+`radia_mcp.build123d` parametric library + the `radia-build123d` MCP) or
+**Cubit** (`.jou` / plugin, for hex meshing and complex topology).  Do NOT
+author CAD with ad-hoc **`netgen.occ`** scripting.
+
+`netgen.occ` is a MESH library with only a THIN OCC binding -- fine for the
+STEP -> mesh path (read a STEP, mesh it, write `.vol`), but NOT a CAD authoring
+kernel.  Its OCC ops are FRAGILE and mislead (all measured 2026-07-05 building
+the SF printable-former; see `memory/sf_printable_former_cad_status.md`):
+- OCCT `Pipe`/sweep over a self-crossing or sharp-cornered path SEGFAULTS
+  (uncatchable);
+- `Glue` of overlapping solids SILENTLY returns the input UNCUT (it is
+  shared-face assembly, NOT a boolean union);
+- `Fuse` of many solids is slow (~O(N^2)) and goes DEGENERATE on self-crossing
+  tools;
+- a small profile swept along a large path yields a degenerate SHELL
+  (volume ~0), not a solid.
+
+**Decision rule**:
+- new parametric CAD (magnets, yokes, coils, formers, primitives + booleans)
+  -> **build123d** (`radia_mcp.build123d.modeling`/`archetypes`, run via
+  `execute_build123d`); it is tested + Netgen-meshable + region-labelled.
+- hex mesh / complex topology / imprint-merge -> **Cubit** (`.jou`, the plugin
+  `export netgen`/`gmsh`).
+- reading/meshing an EXISTING STEP -> `netgen.occ` / OCC is fine (that is I/O,
+  not authoring).
+
+**Caveat -- build123d AND netgen.occ BOTH wrap the OCCT kernel**: an
+arbitrary-path SWEEP of complex / self-crossing geometry is fragile in OCCT
+ITSELF (verified: build123d `sweep` of the same wire also returns a degenerate
+shell).  The lab's own build123d knowledge already flags "closed-path sweep is
+fragile in the OCCT kernel; use `cos_theta_dipole`".  When you genuinely need a
+ROBUST boolean of complex / self-crossing geometry (e.g. the SF printable-former
+channel of a self-crossing single-stroke wire), use a **MESH boolean**
+(`trimesh` + `manifold3d`) and export **STL** -- watertight in ~1 s where OCCT
+segfaults / degenerates, and STL is the native 3D-print format (shipped as
+`calc_streamfunction.py --former-stl`).
+
 ### GMSH .msh Format Version Policy (2026-04-15 update)
 
 **POLICY**: **全リポジトリで GMSH .msh v4.1 のみ**。v2.2 は全廃。
