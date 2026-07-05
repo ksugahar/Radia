@@ -70,7 +70,11 @@ global axial axis, and the solver/mesh/timing metadata.  Then
 ``axisymmetric_to_3d_force_gate`` checks axial agreement and, for full 360 degree
 models, cancellation of the transverse force components.  This is the preferred
 bridge when an axisymmetric reference is used to validate a later 3D NGSolve or
-`.vol`-mesh force run.
+`.vol`-mesh force run.  The runnable validation-test artifact is
+``validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py``:
+it saves a target-torus `.vol`, reloads it with NGSolve, computes
+``integral J x B dV`` over the target material, writes solver-run and
+solver-ready JSON artifacts, and then calls the same gate.
 
 Lorentz force on an imposed-current conductor:
 

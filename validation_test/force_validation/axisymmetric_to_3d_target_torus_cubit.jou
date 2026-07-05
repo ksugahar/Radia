@@ -1,0 +1,13 @@
+reset
+create torus major radius 1 minor radius 0.03
+move volume 1 z 1.5
+volume 1 scheme tetmesh
+volume 1 size 0.011
+mesh volume 1
+set duplicate block elements on
+block 1 add tet all
+block 1 name "target"
+block 2 add tri all
+block 2 name "boundary"
+export netgen "validation_test/force_validation/axisymmetric_to_3d_target_torus.vol" order 1 overwrite
+exit
