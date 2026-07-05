@@ -458,6 +458,68 @@ def test_streamfunction_easy_tier_single_stroke_sub500ppm(sample_vols):
         f"easy-tier single-stroke not sub-500 ppm: {r['wire_homogeneity_rms']}"
 
 
+def test_streamfunction_scan_map_3component(sample_vols, tmp_path):
+    """3-axis MEASUREMENT TWIN: --scan-map emits the delivered single-stroke
+    wire's 3-component (Bx,By,Bz) field on a planar raster -- the simulation
+    counterpart of a 3-axis TMR/fluxgate scan (fixed array or moving stage; both
+    sample the same grid).  Locks:
+      (a) the summary carries the along-normal MAIN field (Bnormal) AND the
+          in-plane TRANSVERSE leakage (Bt) a 3-axis sensor sees that a 1-axis
+          probe misses;
+      (b) with the default current the map reproduces the target amplitude;
+      (c) --scan-current rescales the whole map LINEARLY (field ~ current);
+      (d) the full n x n grid is persisted to committed JSON with provenance
+          (Data Persistence Policy);
+      (e) --scan-n < 2 fails loud (No-Fallback)."""
+    import numpy as np
+    coil, evalv = sample_vols
+    scan = str(tmp_path / "scan.json")
+    base = ["--order", "1", "--method", "manufacture", "--nlevels", "12",
+            "--confine", "off", "--eval-max", "60"]
+    # (b) default current -> design amplitude (uniform target "1" T)
+    r = _run_calc(coil, evalv, "1",
+                  extra=base + ["--scan-map", "--scan-n", "13",
+                                "--scan-output", scan])
+    assert "error" not in r, f"scan-map error: {r.get('error')}"
+    sm = r["scan_map"]
+    assert sm["plane_normal"] == "z" and {sm["axis_u"], sm["axis_v"]} == {"x", "y"}
+    # (a) main field + transverse leakage both reported
+    for k in ("Bnormal_mean_T", "Bnormal_homogeneity_rms", "Bt_mean_T",
+              "Bt_max_T", "Bt_over_Bn_max", "Bmag_mean_T"):
+        assert k in sm, f"scan_map missing {k}"
+    # default current = best-fit design current -> |Bnormal| ~ target 1 T
+    assert abs(abs(sm["Bnormal_mean_T"]) - 1.0) < 0.05, sm["Bnormal_mean_T"]
+    assert sm["Bnormal_homogeneity_rms"] >= 0.0
+    assert 0.0 <= sm["Bt_over_Bn_max"] < 1.0        # transverse < main (uniform)
+    assert r["t_scan_s"] >= 0.0
+    # (d) the full 3-component grid is persisted with provenance
+    assert r["scan_map_output"] == scan and os.path.exists(scan)
+    with open(scan, encoding="utf-8") as f:
+        doc = json.load(f)
+    assert doc["artifact"] == "sf_scan_map_3component"
+    assert "generated_at_utc" in doc and "radia_version" in doc
+    Bx = np.array(doc["Bx_T"]); By = np.array(doc["By_T"])
+    Bz = np.array(doc["Bz_T"])
+    assert Bx.shape == By.shape == Bz.shape == (13, 13)
+    assert len(doc["grid_u_m"]) == len(doc["grid_v_m"]) == 13
+    # (c) --scan-current rescales the field LINEARLY on the SAME grid
+    I0 = r["best_fit_current_A"]
+    scan2 = str(tmp_path / "scan2.json")
+    r2 = _run_calc(coil, evalv, "1",
+                   extra=base + ["--scan-map", "--scan-n", "13",
+                                 "--scan-current", repr(0.5 * I0),
+                                 "--scan-output", scan2])
+    assert "error" not in r2, f"scan-current error: {r2.get('error')}"
+    assert r2["scan_map"]["Bnormal_mean_T"] == pytest.approx(
+        0.5 * sm["Bnormal_mean_T"], rel=1e-6), \
+        "field must be linear in --scan-current (same grid)"
+    # (e) No-Fallback: too-few raster points fail loud
+    rbad = _run_calc(coil, evalv, "1",
+                     extra=base + ["--scan-map", "--scan-n", "1"],
+                     expect_error=True)
+    assert "error" in rbad and "scan-n" in rbad["error"]
+
+
 def test_streamfunction_min_inductance(sample_vols):
     """Min-inductance regularizer: design min 1/2 psi^T L psi s.t. A psi = B
     where L is the ngsolve.bem single-layer self-inductance (K = n x grad psi).
