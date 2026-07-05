@@ -1,173 +1,149 @@
-# Handover: Multipole-Moment MMM Iterative Solver Design
+# HANDOVER — purge pre-presentation manuscripts from git HISTORY
 
-Date policy: 2026_06_26
+**To:** codex &nbsp; **From:** Claude &nbsp; **Date:** 2026-07-05
 
-This handover is for Codex / Claude Code continuation.  Claude Code may be
-touching source files, so treat this file as the coordination note.  Do not
-edit source just to "clean up" while another agent is active.
+Transient coordination note (the previous MMMM-solver handover here was retired by
+Sugahara as no longer needed). Delete this file once the purge is complete — it is
+NOT a purge target, so it survives the rewrite and should be removed afterwards.
 
-## Current Solver Map
+---
 
-- `method 0`: dense direct LU.
-- `method 1`: matrix-free multipole-moment BiCGSTAB / Krylov with element
-  block-Jacobi.
-- `method 2`: HACApK H-matrix matvec with Krylov and element block-Jacobi.
+## 1. What to do
 
-The current convergence problem is not mainly a moment-kernel speed problem.
-The raw multipole-moment operator is harder for Krylov than the old yano-type
-face-collocation operator.  The local element block-Jacobi preconditioner is
-the best local block-diagonal choice, but it does not bound the iteration count.
+Sugahara decided: purge the pre-presentation paper **manuscripts** from git
+**history** (not just HEAD). Execute a `git filter-repo` rewrite + force-push +
+re-sync all clones. This is your domain (push / history / release / shared-.git);
+Claude prepared the inventory + recipe below and did **not** run filter-repo or
+force-push.
 
-## Key Finding: Loop Modes
+## 2. Current state (verified 2026-07-05)
 
-Loop modes are part of the convergence problem:
+- The HEAD-removal commits are already on public `origin/main`:
+  `ca990656` (policy), `aee46758` (SF JA move), `a71ad521` (IGTE move),
+  `4b664f5c` (URN move). These were a **normal push** — NOT a history rewrite.
+- **The purge has NOT run.** All SHAs are unchanged and the manuscripts are still
+  in `origin/main` history, retrievable from public:
+  `git cat-file -s 4b664f5c^:docs/universal_relaxation_network/paper/urn_paper.tex`
+  → `61284` bytes. So this is now a force-push **over already-public history**
+  (it reduces future discoverability only; GitHub keeps orphan commits by SHA
+  until GC / Support, and any fork/clone retains them).
+- Include ALL in-flight commits in the pre-rewrite state (e.g. the hdiv work
+  `4fc30f04` and anything newer) so the rewrite preserves them. This handover
+  commit sits on top of that — clone the NAS local (below) to capture everything.
 
-- The centroid field/gradient demag operator is essentially blind to loop modes:
-  `D @ Lb ~= 0`.
-- With block-Jacobi, the preconditioned operator collapses loop modes toward
-  small eigenvalues of size roughly `1 / chi`.
-- Therefore the block-Jacobi preconditioned spectrum develops a near-zero loop
-  cluster at high `mu_r`.
+## 3. Purge target inventory (complete; historical paths across all renames)
 
-However, loop modes are not the whole story.  A previous full loop deflation
-test improved GMRES only modestly (`174 -> 160` on the larger C-yoke case), so
-the remaining bottleneck is the non-normal demag-complement coupling.
+Manuscripts moved through the examples→docs migration, the levitation→maglev
+rename, and the radia-levitation dissolution, so every historical prefix must be
+listed or remnants survive.
 
-## ILU Experiment: What Was Proven
-
-Prototype:
-
-- `C:\temp\mmmm_iterative_no_hacapk.py`
-- Uses dense/stored matrix matvec, GMRES, and SciPy `spilu` as the dense-side
-  analog of an approximate factorization / H-LU preconditioner.
-- C-yoke case: `nxy=12`, `nz=2`, `dof=648`, `nLoop=111`.
-
-Observed GMRES iterations:
-
-| `mu_r` | Preconditioner | Iterations | Residual |
-|---:|---|---:|---:|
-| 100 | block-Jacobi | 82 | `6.5e-11` |
-| 100 | ILU, threshold `1e-4` | 5 | `6.2e-12` |
-| 1000 | block-Jacobi | 117 | `7.8e-11` |
-| 1000 | ILU, threshold `1e-4` | 8 | `4.1e-11` |
-
-Follow-up eigen / loop-overlap check:
-
-| `mu_r` | Preconditioner | `#(|lambda| < 0.05)` | `min |lambda|` | Loop overlap |
-|---:|---|---:|---:|---:|
-| 100 | block-Jacobi | 87 | `1.778e-2` | `1.000` |
-| 100 | ILU, threshold `1e-4` | 0 | `9.878e-1` | n/a |
-| 1000 | block-Jacobi | 111 | `1.792e-3` | `1.000` |
-| 1000 | ILU, threshold `1e-4` | 0 | `8.883e-1` | n/a |
-
-Interpretation:
-
-- ILU does not physically remove loop modes.
-- ILU makes loop modes non-bad for Krylov by moving the near-zero loop cluster
-  back near eigenvalue 1 in `M^{-1} A`.
-- The good iteration count comes from approximate factorization treating both
-  loop modes and the non-normal demag-complement, not from loop deflation alone.
-
-Caveat:
-
-- This ILU was strong.  The input sparsified matrix was about `56%` nonzero, and
-  `L+U` was about `88%` dense-equivalent.  This proves the factorization idea,
-  not yet that the preconditioner is cheap or scalable.
-
-## Design Direction
-
-The convergence fix is not to keep strengthening matrix-free `method 1` with
-local tricks.  The design direction is:
-
-```text
-linear solver:   GMRES
-matvec:          stored matrix product
-                 dense for prototype, HACApK H-matrix for scalable path
-preconditioner:  approximate factorization
-                 ILU for dense prototype, H-LU / robust H-factor for HACApK
+**Manuscript-ONLY directory subtrees — purge the whole subtree:**
+```
+docs/maglev/papers/
+docs/paper/
+docs/universal_relaxation_network/paper/
+examples/Universal_Relaxation_Network/paper/
+examples/universal_relaxation_network/paper/
+examples/levitation/papers/
+examples/maglev/papers/
+packages/radia-levitation/papers/
 ```
 
-Important separation:
+**Loose manuscript FILES in MIXED dirs — per-file ONLY (do NOT purge the dir):**
+```
+examples/CLN/igte_symposium_2026.tex
+examples/CLN/igte_symposium_2026.pdf
+examples/CLN/igtesymp.cls
+examples/CLN/A1_sibc_3stage_final.pdf
+examples/CLN/A1_sibc_compact_with_AC.pdf
+docs/stream_function/former_cad.md
+docs/stream_function/paper_outline.md
+docs/stream_function/paper_outline_sheet_metal.md
+```
+> ⚠️ `examples/CLN/` also holds the CLN research `.wls` scripts — purge only the
+> IGTE files above, never the whole directory.
+> ⚠️ CONFIRM: are `examples/CLN/A1_sibc_3stage_final.pdf` /
+> `A1_sibc_compact_with_AC.pdf` paper figures (purge) or standalone CLN result
+> figures referenced elsewhere (keep)? They also appear inside every
+> `.../igte_symposium_2026/` manuscript dir, so they read as paper figures — but
+> confirm before running.
 
-- Main operator `A_H`: the operator whose action defines the linear system.
-- Preconditioner `M_H`: an approximation to `A_H` used only through
-  `M_H^{-1}`.
+**STAYS (NOT manuscripts — must NOT be purged):**
+`docs/universal_relaxation_network/` scripts / notebooks / result-JSON /
+`generate_paper_figures.py` / `results/*.tex`; `validation_test/maglev/research_cln/`
+scripts; `docs/figures/lab_diagrams/*.tex`; `packages/radia-mcp/.../poster/templates/*.tex`.
 
-They must agree on:
+## 4. Recipe (run in a FRESH clone, NEVER the shared NAS working tree)
 
-- DOF ordering.
-- row/column cluster ordering or an explicit permutation map.
-- geometry, chi values, and moment formulation.
-- matrix dimensions and row scaling convention.
+```bash
+# --- 0. make sure ALL intended commits are in the state to be rewritten ---
+#     The clone below clones the NAS local working repo, which includes any
+#     unpushed commits (4fc30f04 etc.) + this handover commit.
 
-They may differ in:
+# --- 1. backup BEFORE anything (recover point) ---
+git -C /s/Radia/01_GitHub bundle create /c/temp/radia_prepurge.bundle --all
 
-- ACA+ tolerance.
-- max rank.
-- leaf size.
-- admissibility parameter `eta`.
-- far-block approximation accuracy.
+# --- 2. fresh clone of the NAS local (includes unpushed commits) ---
+rm -rf /c/temp/radia_purge
+git clone --no-local /s/Radia/01_GitHub /c/temp/radia_purge
+cd /c/temp/radia_purge
 
-Use separate H-matrix instances for `A_H` and `M_H`.  H-LU factorization may
-modify the tree/storage in place, so it must not destroy the matvec operator.
+# --- 3. write the paths file ---
+cat > /c/temp/purge_paths.txt <<'PATHS'
+docs/maglev/papers/
+docs/paper/
+docs/universal_relaxation_network/paper/
+examples/Universal_Relaxation_Network/paper/
+examples/universal_relaxation_network/paper/
+examples/levitation/papers/
+examples/maglev/papers/
+packages/radia-levitation/papers/
+examples/CLN/igte_symposium_2026.tex
+examples/CLN/igte_symposium_2026.pdf
+examples/CLN/igtesymp.cls
+examples/CLN/A1_sibc_3stage_final.pdf
+examples/CLN/A1_sibc_compact_with_AC.pdf
+docs/stream_function/former_cad.md
+docs/stream_function/paper_outline.md
+docs/stream_function/paper_outline_sheet_metal.md
+PATHS
 
-If `M_H` is fixed during one linear solve, ordinary GMRES is valid.  If the
-preconditioner changes inside a linear solve, use flexible GMRES instead.
+# --- 4. purge (git-filter-repo is installed on LAB) ---
+git filter-repo --invert-paths --paths-from-file /c/temp/purge_paths.txt
 
-## Method-1 Boundary
+# --- 5. VERIFY (all must be EMPTY / fail) ---
+git log --all --oneline -- docs/universal_relaxation_network/paper/urn_paper.tex \
+   docs/paper/urn_paper.tex 'examples/**/paper/urn_paper.tex'         # empty
+git log --all --oneline -- docs/maglev/papers examples/CLN/igte_symposium_2026.tex # empty
+git log --all --pretty=format: --name-only | \
+   grep -iE 'igte_symposium_2026|urn_paper|/papers?/|former_cad|paper_outline'      # empty
+git cat-file -p HEAD:docs/universal_relaxation_network/README.md | grep -n 'W:'      # README still points to W:
+#   also: repo still builds + `python tools/ci_preflight.py` clean.
+```
 
-Pure matrix-free `method 1` cannot use an ILU/H-LU preconditioner without
-storing some approximation of the matrix.  A hybrid method could keep the main
-matvec matrix-free while storing a sparse/H-matrix preconditioner, but that is
-a different memory contract from the current method-1 design.
+## 5. Publish (codex only)
 
-Therefore, do not present ILU/H-LU as a small tweak to matrix-free method 1.
-It is a new stored-matrix-plus-factorization-preconditioner path.
+```bash
+# filter-repo drops 'origin' by design; re-add and force-push
+cd /c/temp/radia_purge
+git remote add origin git@github.com:ksugahar/Radia.git
+git push --force-with-lease origin main
+```
+Then coordinate the re-sync (the disruptive part):
+- **LAB + 100号機 share the NAS `.git`** — reset it to the rewritten `origin/main`
+  (`git -C /s/Radia/01_GitHub fetch origin && git -C /s/Radia/01_GitHub reset --hard origin/main`),
+  after confirming no un-committed / un-pushed work is stranded (esp. your own,
+  and Claude may be mid-edit — coordinate the mutex).
+- Re-`pip install -e` the editable packages on LAB + 100号機 if paths shifted.
+- CI runner clone: reset or re-clone.
+- mdx / hibino are PyPI consumers (not clones) — unaffected.
 
-## What Is Not Yet Proven
+## 6. Rollback
 
-Do not claim that HACApK H-LU is fully validated yet.  What is proven is:
+If verification fails, do NOT force-push. Restore from
+`/c/temp/radia_prepurge.bundle` (`git clone /c/temp/radia_prepurge.bundle`).
 
-- approximate factorization fixes the loop near-zero cluster;
-- approximate factorization can bound GMRES iterations on the dense prototype;
-- block-Jacobi and loop-only deflation are insufficient.
-
-Still to prove:
-
-- the same works on `A_raw`, not only the row-normalized prototype matrix;
-- the required fill/rank stays acceptable as `N` grows;
-- HACApK H-LU is robust for the non-symmetric moment matrix;
-- factorization time and memory beat dense LU at the target sizes.
-
-There is an older warning in `docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb`:
-no-pivot H-LU had trouble on non-symmetric `A_raw`.  Treat that as a real risk.
-The H-LU preconditioner implementation may need pivoting, row scaling, or a
-different robust H-factorization strategy.
-
-## Next Experiments
-
-1. Dense ILU scaling study before HACApK implementation:
-   - vary problem size;
-   - test both row-normalized `A_norm` and raw `A_raw`;
-   - record GMRES iterations, residual, input nnz, `L+U` nnz, factor time,
-     solve time, and memory;
-   - check whether the loop near-zero cluster reappears as fill is reduced.
-
-2. If dense ILU remains convincing:
-   - implement a separate preconditioner H-matrix instance;
-   - factor it with H-LU / robust H-factorization;
-   - use GMRES with `A_H` matvec and `M_H^{-1}` apply;
-   - sweep `A_H` ACA tolerance and `M_H` ACA tolerance independently.
-
-3. Keep policy:
-   - no silent dense-LU fallback;
-   - no scalar/identity substitute preconditioner;
-   - fail loud if factorization/preconditioner construction fails;
-   - no hard-coded thread count.
-
-4. For MDX:
-   - develop and smoke on LAB first;
-   - release through the normal package path before MDX benchmarking;
-   - run compute on MDX temp storage;
-   - recover JSON/JSONL results into repository docs/ipynb, not only `C:\temp`.
-
+---
+Inventory rationale + why-codex-not-Claude: `memory/pre_presentation_history_purge.md`
+(Claude's private memory). Same recipe also at `C:\temp\HISTORY_PURGE_HANDOFF.md`
++ `C:\temp\purge_paths.txt`.
