@@ -44,8 +44,8 @@ def _build_axisym_quad_mesh(ra, rb, za, zb, maxh):
 
     Netgen's OCC quad-dominated mesher may split even a rectangle into skewed
     trapezoids.  The closed-form Henrotte Q1/Q2 paths require true
-    axis-aligned rectangles, so the smoke tests use NGSolve's structured mesh
-    generator instead of OCC meshing.
+    axis-aligned rectangles, so the smoke tests build a tiny structured Netgen
+    mesh, save it as ``.vol``, and reload it with ``ngsolve.Mesh(path)``.
     """
     nx = max(1, int(np.ceil((rb - ra) / maxh)))
     ny = max(1, int(np.ceil((zb - za) / maxh)))

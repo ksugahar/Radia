@@ -14,7 +14,7 @@ def test_axifem_element_evidence_json_covers_all_shipping_paths():
     assert "runtime_radia_version" in evidence
     assert "executed_at_utc" in evidence
     assert evidence["pytest"]["returncode"] == 0
-    assert evidence["pytest"]["passed"] >= 20
+    assert evidence["pytest"]["passed"] >= 34
 
     labels = {row["Element path"] for row in evidence["evidence_matrix"]}
     assert {
@@ -39,7 +39,9 @@ def test_axifem_element_evidence_notebook_is_result_bearing():
 
     text = json.dumps(nb)
     assert "runtime_radia_version" in text
-    assert "20 passed" in text
+    assert f"{radia_meta['version_stamp']['pytest_passed']} passed" in text
+    assert ".vol" in text
+    assert "du_rham_identity" in text
     for label in [
         "P1 triangle",
         "Q1 quad",

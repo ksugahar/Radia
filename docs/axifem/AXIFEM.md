@@ -13,8 +13,11 @@ provides closed-form `BilinearFormIntegrator`s; the rest of the workflow
 Built into the radia wheel since 2026-05-10 (radia ≥ 4.30.0).  Source
 under [`src/ext/axifem/`](../../src/ext/axifem/).
 
-The shipping basis supports **triangular** and **axis-aligned quadrilateral**
-meshes.  It is polynomial in the variable `s = r²` (not `r`), with the
+The shipping basis is used through the normal NGSolve mesh path:
+`Mesh("model.vol")` for Netgen `.vol` input, then `H1Henrotte(...)` /
+`FESpace("axihenrotte", ...)`.  It supports **triangular** and
+**axis-aligned quadrilateral** meshes.  It is polynomial in the variable
+`s = r²` (not `r`), with the
 function being represented being `ψ = 2π r A_φ` (the magnetic flux function),
 not `A_φ` itself. After a per-node `T = diag(2π r)` transformation the
 assembled DOF vector stores `A_φ` at each node directly. This is the key trick
@@ -42,7 +45,7 @@ Q2 curved.
 
 | Mesh element | API order | Geometry support | Local DOFs | Status |
 |--------------|-----------|------------------|------------|--------|
-| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM `prob3big.cpp` direct port |
+| Triangle P1 | `order=1` | straight triangle | 3 vertex | shipping; FEMM/Henrotte-derived P1 reference plus production V-DOF stiffness |
 | Triangle P2 | `order=2` | straight or `mesh.Curve(2)` curved triangle | 3 vertex + 3 edge | shipping; uses NGSolve's element transformation to read curved mid-edge coordinates |
 | Quad Q1 | `order=1` | straight axis-aligned rectangle in `(r, z)` | 4 vertex | shipping; closed-form matrices |
 | Quad Q2 | `order=2` | straight axis-aligned rectangle in `(r, z)` | 4 vertex + 4 edge + 1 face | shipping; closed-form matrices with the `s`-midpoint convention |
@@ -235,8 +238,11 @@ under the keys `"R_2k"` and `"L_2k_plus_1"` for each stage.
 Triangles are the general-shape path.
 
 - `order=1` triangle: 3 DOFs at vertices, with basis
-  `{1, r², z}`.  This is the FEMM `prob3big.cpp` direct-port path and is
-  useful for compatibility with unstructured triangle meshes.
+  `{1, r², z}`.  The pure-Python reference keeps the FEMM `prob3big.cpp`
+  P1 formula lineage for comparison, while production C++ uses the
+  NGSolve `.vol` mesh route and the V-DOF stiffness lane that reproduces
+  a uniform axial `B_z` field.  Do not describe the production path as a
+  line-for-line FEMM port.
 - `order=2` triangle: 6 DOFs at 3 vertices + 3 edge midnodes, with basis
   `{1, r², z, r⁴, r² z, z²}`.  The C++ FESpace obtains all 6 physical
   node positions through NGSolve's element transformation, so after

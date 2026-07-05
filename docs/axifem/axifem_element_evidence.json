@@ -1,73 +1,92 @@
 {
-  "runtime_radia_version": "4.94.0",
-  "executed_at_utc": "2026-06-26T02:02:08.730485+00:00",
-  "git_head": "53303f1a",
+  "runtime_radia_version": "4.95.5",
+  "executed_at_utc": "2026-07-05T02:09:01.637577+00:00",
+  "git_head": "19e54c13",
   "git_dirty": true,
   "artifact": "docs/axifem/AXIFEM_ELEMENT_EVIDENCE.ipynb",
   "version_stamp": {
-    "runtime_radia_version": "4.94.0",
-    "executed_at_utc": "2026-06-26T02:02:08.730485+00:00",
+    "runtime_radia_version": "4.95.5",
+    "executed_at_utc": "2026-07-05T02:09:01.637577+00:00",
     "python": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "git_head": "53303f1a",
-    "git_dirty": true
+    "git_head": "19e54c13",
+    "git_dirty": true,
+    "mesh_route": "Netgen .vol -> ngsolve.Mesh(path)",
+    "pytest_passed": 34
   },
   "pytest": {
     "command": [
       "python",
       "-m",
       "pytest",
-      "tests\\axifem\\test_element_matrices.py",
-      "tests\\axifem\\test_python_reference_consistency.py",
-      "tests\\axifem\\test_q1_vdof.py",
-      "tests\\axifem\\test_p2_axis_eddy.py",
-      "tests\\axifem\\test_p2_curved_magsta.py",
-      "tests\\axifem\\test_q2_curved.py",
-      "tests\\axifem\\test_taskmanager_race.py",
+      "tests\\axifem",
       "-q",
-      "-s"
+      "--ignore=tests\\axifem\\test_docs_notebook_evidence.py"
     ],
     "returncode": 0,
-    "passed": 20,
-    "elapsed_s": 1.08,
-    "stdout": "============================= test session starts =============================\nplatform win32 -- Python 3.12.10, pytest-9.0.3, pluggy-1.6.0\nrootdir: W:\\00_CAE\\Radia\\01_GitHub\nconfigfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)\nplugins: anyio-4.13.0, rerunfailures-16.3\ncollected 20 items\n\ntests\\axifem\\test_element_matrices.py [OK] interior triangle Mr, Mz are symmetric\n.[OK] flag=2 (2 nodes on axis) executes without NaN/Inf\n.[OK] flag=1 (1 node on axis) executes without NaN/Inf\n.[OK] interpolation: B_z=0.859437 B_r=-246.690162\n.  Mr * (1/r_j) = [-7.80625564e-18  1.31838984e-16  0.00000000e+00]\n  Mz * (1/r_j) = [-7.02563008e-17 -9.62771529e-17 -1.28369537e-16]\n[OK] const phi (V-form: 1/r) annihilates Mr, Mz\n.  d_meeker = 1.200000e-08, a_hat = 1.500000e-06, check = 1.500000e-06\n[OK] a_hat = d_meeker / (4*R)\n.\ntests\\axifem\\test_python_reference_consistency.py .....\ntests\\axifem\\test_q1_vdof.py   Q1 4x4: ||V_int - B0 r/2||/||.|| = 1.99e-16\n  Q1 8x8: ||V_int - B0 r/2||/||.|| = 3.18e-16\n  Q1 12x12: ||V_int - B0 r/2||/||.|| = 3.39e-16\n[OK] Q1 axis-aligned quad stiffness is a true V-DOF operator\n.\ntests\\axifem\\test_p2_axis_eddy.py [OK] all 84 P2 trig-center slots are UNUSED and not free\n.  order=1: lambda_min = 11.8279\n  order=2: lambda_min = 11.5936\n[OK] P2 triangle is full-rank on axis; P1 vs P2 agree to 2.0%\n.\ntests\\axifem\\test_p2_curved_magsta.py   volume err: straight 3.897%   Curve(2) 0.0248%\n[OK] Curve(2) captures the circular boundary to machine precision\n.called base class apply trans, type = called base class apply trans, type = class axifem::AxiHenrotteDiffOpGradientclass axifem::AxiHenrotteDiffOpGradient\n\ncalled base class apply trans, type = class axifem::AxiHenrotteDiffOpGradient\ncalled base class apply, type = class axifem::AxiHenrotteDiffOpGradient\ncalled base class apply, type = class axifem::AxiHenrotteDiffOpGradient\ncalled base class apply, type = class axifem::AxiHenrotteDiffOpGradient\n  D(vol)  err%: straight  -3.8973  Curve(2)  -0.0248\n  N(flux) err%: straight  -5.0744  Curve(2)  -1.0740   (ratio 0.212)\n  avg     err%: straight  -1.2249  Curve(2)  -1.0495   (delta 0.1754)\n[OK] evaluating the volume/total-flux exposes curving (the average hides it)\n.\ntests\\axifem\\test_q2_curved.py   straight nx=4: axis=25.41825968 curved=25.41825968 rel=9.63e-12\n  straight nx=6: axis=25.40419304 curved=25.40419304 rel=2.34e-13\n  straight nx=8: axis=25.40176553 curved=25.40176553 rel=3.29e-14\n[OK] Q2_Curved reproduces the axis-aligned closed form on straight quads\n.  annular 3x6: curved lam_min=14.352329\n  annular 4x8: curved lam_min=14.297310\n  annular 6x12: curved lam_min=14.271475\n  annular 8x16: curved lam_min=14.265415\n[OK] Q2_Curved converges on general (skewed annular) quads\n.\ntests\\axifem\\test_taskmanager_race.py   V-DOF BFI : chk(1t)=4.006736832010e+11  chk(4t)=4.006736832010e+11  rel=0.00e+00\n.  symbolic P2: chk(1t)=2.803341029578e+11  chk(4t)=2.803341029578e+11  rel=0.00e+00\n.\n\n============================= 20 passed in 1.08s ==============================\n"
+    "passed": 34,
+    "elapsed_s": 2.883,
+    "stdout": "============================= test session starts =============================\nplatform win32 -- Python 3.12.10, pytest-9.0.3, pluggy-1.6.0\nrootdir: W:\\00_CAE\\Radia\\01_GitHub\nconfigfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)\nplugins: anyio-4.13.0, rerunfailures-16.3\ncollected 34 items\n\ntests\\axifem\\test_axifem_guards.py ....                                  [ 11%]\ntests\\axifem\\test_de_rham_identities.py .....                            [ 26%]\ntests\\axifem\\test_element_matrices.py ......                             [ 44%]\ntests\\axifem\\test_heat_axisym_e2e.py .                                   [ 47%]\ntests\\axifem\\test_heat_henrotte_smoke.py ....                            [ 58%]\ntests\\axifem\\test_p2_axis_eddy.py ..                                     [ 64%]\ntests\\axifem\\test_p2_curved_magsta.py ..                                 [ 70%]\ntests\\axifem\\test_python_reference_consistency.py .....                  [ 85%]\ntests\\axifem\\test_q1_vdof.py .                                           [ 88%]\ntests\\axifem\\test_q2_curved.py ..                                        [ 94%]\ntests\\axifem\\test_taskmanager_race.py ..                                 [100%]\n\n============================= 34 passed in 1.33s ==============================\n"
   },
   "evidence_matrix": [
     {
       "Element path": "P1 triangle",
-      "Production selection": "H1Henrotte(mesh, order=1) on triangles",
-      "Evidence gate": "test_element_matrices.py + test_python_reference_consistency.py",
-      "What would fail if broken": "singular/NaN element matrices, non-symmetric Mr/Mz, wrong const-phi null mode, Python reference drift"
+      "Production selection": "H1Henrotte(mesh, order=1) on triangles loaded through Netgen .vol",
+      "Evidence gate": "test_de_rham_identities.py + test_element_matrices.py + test_python_reference_consistency.py + test_axifem_guards.py",
+      "What would fail if broken": "wrong ET_TRIG vertex convention, singular (r^2,z) Vandermonde, Python FEMM-reference drift, or loss of constant-mode/null-mode checks"
     },
     {
       "Element path": "Q1 quad",
-      "Production selection": "H1Henrotte(mesh, order=1) on axis-aligned quads",
-      "Evidence gate": "test_q1_vdof.py + Q1 V-DOF reference in test_python_reference_consistency.py",
-      "What would fail if broken": "uniform Bz field no longer reproduced; C++ stiffness/mass spectrum no longer matches Python V-DOF reference"
+      "Production selection": "H1Henrotte(mesh, order=1) on axis-aligned quads loaded through Netgen .vol",
+      "Evidence gate": "test_de_rham_identities.py + test_q1_vdof.py + test_axifem_guards.py + V-DOF reference in test_python_reference_consistency.py",
+      "What would fail if broken": "uniform B_z field no longer reproduced, non-axis-aligned quads silently accepted, or V-DOF stiffness/mass spectrum drifts"
     },
     {
       "Element path": "P2 triangle",
-      "Production selection": "H1Henrotte(mesh, order=2) on triangles",
-      "Evidence gate": "test_p2_axis_eddy.py + test_python_reference_consistency.py",
-      "What would fail if broken": "dead face-center DOFs become free, K/M lose full rank, P1/P2 slowest eddy mode diverges"
+      "Production selection": "H1Henrotte(mesh, order=2) on triangles loaded through Netgen .vol",
+      "Evidence gate": "test_de_rham_identities.py + test_p2_axis_eddy.py + test_python_reference_consistency.py",
+      "What would fail if broken": "dead face-center DOFs become free, K/M lose full rank, or P1/P2 slowest eddy mode diverges"
     },
     {
       "Element path": "Q2 quad",
-      "Production selection": "H1Henrotte(mesh, order=2, curvedquad=False) on axis-aligned quads",
-      "Evidence gate": "test_q2_curved.py straight-quad equivalence + Cauer Q2 stored validation summary",
-      "What would fail if broken": "axis-aligned Q2 eigenvalue changes; Q2 Cauer time constants drift"
+      "Production selection": "H1Henrotte(mesh, order=2, curvedquad=False) on axis-aligned quads loaded through Netgen .vol",
+      "Evidence gate": "test_de_rham_identities.py + test_q2_curved.py straight-quad equivalence + test_axifem_guards.py + Cauer Q2 stored validation summary",
+      "What would fail if broken": "axis-aligned Q2 eigenvalue changes, non-axis-aligned closed-form input is not rejected, or Q2 Cauer time constants drift"
     },
     {
       "Element path": "P2 curved triangle",
-      "Production selection": "mesh.Curve(2) with H1Henrotte(mesh, order=2)",
-      "Evidence gate": "test_p2_curved_magsta.py",
-      "What would fail if broken": "Curve(2) no longer improves sphere volume/total-flux error"
+      "Production selection": "mesh.Curve(2), saved as .vol, reloaded with ngsolve.Mesh(path), then H1Henrotte(mesh, order=2)",
+      "Evidence gate": "test_de_rham_identities.py + test_p2_curved_magsta.py",
+      "What would fail if broken": "Curve(2) no longer improves curved-boundary volume/total-flux error or curved P2 identities drift"
     },
     {
       "Element path": "Q2 curved quad",
-      "Production selection": "H1Henrotte(mesh, order=2, curvedquad=True)",
-      "Evidence gate": "test_q2_curved.py",
-      "What would fail if broken": "curved Q2 no longer matches straight Q2 on rectangles or converges on annular skewed quads"
+      "Production selection": "H1Henrotte(mesh, order=2, curvedquad=True) on .vol-backed mapped/skewed quads",
+      "Evidence gate": "test_de_rham_identities.py + test_q2_curved.py + test_axifem_guards.py",
+      "What would fail if broken": "curved Q2 no longer matches straight Q2 on rectangles, no longer converges on annular skewed quads, or cannot accept skewed .vol quads"
+    }
+  ],
+  "cross_cutting_gates": [
+    {
+      "gate": ".vol-backed_mesh_route",
+      "files": "tests/axifem/_vol_mesh.py, test_de_rham_identities.py, test_axifem_guards.py, test_heat_henrotte_smoke.py",
+      "contract": "Tests save Netgen meshes to .vol and reload with ngsolve.Mesh(path), matching the production entry route."
+    },
+    {
+      "gate": "du_rham_identity",
+      "files": "tests/axifem/test_de_rham_identities.py",
+      "contract": "Limited Henrotte scalar lane identity: u=1, r^2, z interpolate exactly and satisfy B_r=-du/dz, B_z=du/dr+u/r."
+    },
+    {
+      "gate": "closed_form_quad_guard",
+      "files": "src/ext/axifem/axi_henrotte_fespace.cpp, tests/axifem/test_axifem_guards.py",
+      "contract": "Default Q1/Q2 closed-form quads reject non-axis-aligned .vol quads; curvedquad=True is the opt-in general-quad path."
+    },
+    {
+      "gate": "boundary_value_trace",
+      "files": "tests/axifem/test_de_rham_identities.py",
+      "contract": "Axis-aligned boundary value traces integrate against analytic edge integrals after .vol reload."
     }
   ],
   "cauer_validation_summary": [
@@ -129,8 +148,8 @@
     }
   ],
   "timing_breakdown_s": {
-    "pytest_axifem_element_subset": 1.08,
-    "cauer_json_summary_load": 0.000668,
-    "notebook_artifact_generation": 0.032237
+    "pytest_axifem_vol_backed_gates": 2.883,
+    "cauer_json_summary_load": 0.0,
+    "notebook_artifact_generation": 0.0
   }
 }
