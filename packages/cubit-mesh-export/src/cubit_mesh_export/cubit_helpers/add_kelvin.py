@@ -117,7 +117,7 @@ def sym_sideset_name(axis, bc):
 
     Returns:
         e.g. "sym_bn=0_x", "sym_ht=0_z".  This string is the single
-        source of truth -- `calc_accel_magnet`/`calc_accel_msc` both
+        source of truth -- the Radia EM headless backends
         parse it with `parse_sym_label`.
     """
     axis = axis.lower()

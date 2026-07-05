@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:43:30Z",
   "notebook": "docs/peec_integration/cleanup_routing.ipynb",
-  "notebook_sha256": "d187db608123d5d679598fc834202cf4f4f2bb43eaea131ee56c81e464507fa4",
+  "notebook_sha256": "5fe8f6b17fde04ce4c6b20fd45e3c99357afecdb7ced4bb64e01d5bf2dd7db1b",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

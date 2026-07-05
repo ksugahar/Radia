@@ -120,7 +120,7 @@ double cHACApK_harith_self_test_addmul_rkrk(int m, int n, int inner,
  * Builds a depth=3 tree where the root has 2x2 children but two of them
  * are internal (TL and BR, each containing 2x2 leaves) and two are
  * leaves (TR and BL). This matches the structure HACApK produces for
- * Radia MSC matrices at small leaf_size (e.g., nx=3 hex cube with
+ * Radia magnetostatic H-matrix blocks at small leaf_size (e.g., nx=3 hex cube with
  * leaf_size=10 elements: 10 leaves, 3 internal nodes, depth 3).
  *
  * Both root-level children are square sub-blocks (2*nb_small x 2*nb_small),
@@ -163,7 +163,7 @@ double cHACApK_harith_self_test_depth3_asymmetric(int nb_tiny);
 double cHACApK_harith_self_test_radia_exact(void);
 
 /* Phase 4 debug: same as radia_exact but with adjustable diag_boost
- * (default 2.0 = mildly diagonally dominant; lower values approach MSC
+ * (default 2.0 = mildly diagonally dominant; lower values approach weakly
  * matrix's weaker dominance to test no-pivot LU stability). */
 double cHACApK_harith_self_test_radia_exact_diag(double diag_boost);
 

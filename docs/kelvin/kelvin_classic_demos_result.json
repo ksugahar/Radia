@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T22:39:24Z",
   "notebook": "docs/kelvin/kelvin_classic_demos.ipynb",
-  "notebook_sha256": "6f899963bce2e61ba4481ef71c306712265f398cf3c10e1c5a5d9827c5d58235",
+  "notebook_sha256": "efa64ed7cf71b51df1645e6f19ed5c9b2bc159d2e41c537718d92ff606b302b1",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -30,16 +30,8 @@
       "execution_count": 1,
       "source_sha256": "131d625f0d02e01fc63af2ef8307b27c07465ccfbafe837140d747aa8f3e57f0",
       "source_preview": "from pathlib import Path\nimport datetime as dt\nimport json\nimport sys\n\nNOTEBOOK_DIR = Path.cwd()\nif not (NOTEBOOK_DIR / 'kelvin_examples_migration.py').exists():\n    NOTEBOOK_DIR = Path('docs/kelvin').resolve()\nsys.path.insert(0, str(NOTEBOOK_DIR))\n\nfrom kelvin_examples_migration import (\n    build_migration_report,\n    build_source_archive,\n    markdown_table,\n    package_versions,\n    write_report_json,\n)\n\narchive_path = NOTEBOOK_DIR / 'kelvin_classic_demos_results.json'\nmigration = build_migration_report()\nfresh_archive = build_source_archive(\n    migration,\n    lanes=['docs_classic_demo_candidate'],\n    include_source=True,\n)\narchive = fresh_archive\nif archive_path.exists():\n    existing = json.loads(archive_path.read_text(encoding='utf-8'))\n    existing_archive = existing.get('source_archive') if isinstance(existing, dict) else None\n    existing_count = existing_archive.get('summary', {}).get('archived_files', 0) if isinstance(existing_archive, dict) else 0\n    if existing_count >",
-      "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text_chars": 401,
-          "text_sha256": "57f820c464da16e62256e77b857303ce2bc7a1ce9059b3791f56df015fddbcba",
-          "text_preview": "loaded existing classic archive to preserve deleted source snapshots\n{\n  \"classic_demo_python_files\": 37,\n  \"archived_lines\": 15663,\n  \"archived_bytes\": 628228,\n  \"groups\": {\n    \"H-formulation\": 15,\n    \"A-formulation\": 13,\n    \"Omega_ReducedOmega\": 8,\n    \"radia_iem_vs_fem_sphere.py\": 1\n  },\n  \"selected_source_excerpts\": 4,\n  \"full_source_archive\": true\n}\n\nwrote kelvin_classic_demos_results.json\n",
-          "text_truncated": false
-        }
-      ]
+      "outputs": [],
+      "output_count": 0
     },
     {
       "cell_index": 3,

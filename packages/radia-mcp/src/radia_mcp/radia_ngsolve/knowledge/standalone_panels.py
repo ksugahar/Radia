@@ -110,7 +110,7 @@ tests as the canonical contract.
 `examples/cubit_panels` is not a permanent destination.  The IH inductance
 scripts have moved to `validation_test/induction_heating/cubit_panels_legacy`,
 and the remaining accel-magnet examples were pruned after rescuing panel
-fixtures to `panels/samples/em/c_type_dipole`.  Any future legacy copy should
+fixtures to `src/radia/panels/samples/em/c_type_dipole`.  Any future legacy copy should
 move into one of these lanes:
 
 - reusable accel magnet geometry / coil builders -> `src/radia` EM APIs

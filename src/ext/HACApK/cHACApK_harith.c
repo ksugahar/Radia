@@ -8,7 +8,7 @@
  * (ndl x ndt). This matches HACApK's call-pattern with LAPACK / BLAS.
  *
  * No pivoting (matches H2Lib's lrdecomp_hmatrix). For high-mu_r non-
- * symmetric MSC at large scale we will need to add diagonal-leaf
+ * symmetric magnetostatic blocks at large scale we will need to add diagonal-leaf
  * pivoting in Phase 3 (the LAPACKE_dgetrf row swaps stay local to the
  * leaf if we cap the pivot at the leaf boundary).
  */
@@ -202,7 +202,8 @@ static inline double *leaf_rk_V(const st_cHACApK_block_node_t *n)
 /* In-place NO-PIVOT dense LU (Doolittle): A overwritten with L (unit-lower,
  * below the diagonal) and U (on and above the diagonal). For Phase 1
  * minimal we restrict to diagonally-dominant matrices (validated by the
- * self-test); Phase 3 will add diagonal-leaf pivoting for general MSC.
+ * self-test); Phase 3 will add diagonal-leaf pivoting for general weakly
+ * dominant magnetostatic blocks.
  *
  * This explicit loop avoids the LAPACKE_dgetrf pivot tracking that would
  * have to be propagated through every off-diagonal trsm and the solve
@@ -3193,9 +3194,9 @@ double cHACApK_harith_self_test_radia_exact_with_matrix(
 
 double cHACApK_harith_self_test_radia_exact_diag(double diag_boost)
 {
-    /* Match Radia exactly. diag_boost = additional diagonal magnitude over
-     * row sum. Default 2.0 = mildly diag-dominant (similar to MSC).
-     * Real Radia MSC has even weaker dominance. */
+    /* Match Radia's non-uniform block-tree shape. diag_boost = additional
+     * diagonal magnitude over row sum. Default 2.0 = mildly diag-dominant;
+     * lower values exercise weaker dominance. */
     int s_root_TL = 108, s_root_BR = 54;
     int s_TL_TL = 72, s_TL_BR = 36;
     int s_TLTL_TL = 48, s_TLTL_BR = 24;

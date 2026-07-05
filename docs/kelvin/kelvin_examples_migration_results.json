@@ -56,7 +56,7 @@
     {
       "name": "classic_kelvin_demo_notebook",
       "lane": "docs_classic_demo_candidate",
-      "description": "A/H/Omega formulation demos plus radia_iem_vs_fem_sphere rendered as one or two docs notebooks."
+      "description": "A/H/Omega formulation demos rendered as one or two docs notebooks."
     },
     {
       "name": "cubit_p_convergence",

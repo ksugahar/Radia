@@ -124,8 +124,6 @@ def migration_lane(py_file: Path, examples_root: Path, validation_ref_count: int
         return "collapse_to_notebook_or_memory"
     if group in {"A-formulation", "H-formulation", "Omega_ReducedOmega"}:
         return "docs_classic_demo_candidate"
-    if py_file.name == "radia_iem_vs_fem_sphere.py":
-        return "docs_classic_demo_candidate"
     return "manual_review"
 
 
@@ -457,7 +455,7 @@ def build_migration_report(repo_root: str | Path | None = None) -> dict:
             {
                 "name": "classic_kelvin_demo_notebook",
                 "lane": "docs_classic_demo_candidate",
-                "description": "A/H/Omega formulation demos plus radia_iem_vs_fem_sphere rendered as one or two docs notebooks.",
+                "description": "A/H/Omega formulation demos rendered as one or two docs notebooks.",
             },
             {
                 "name": "cubit_p_convergence",

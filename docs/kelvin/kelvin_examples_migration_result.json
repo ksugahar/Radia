@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T04:02:20Z",
   "notebook": "docs/kelvin/kelvin_examples_migration.ipynb",
-  "notebook_sha256": "a5cc049cc1b18477afd983b9154e74c325fa48578518969843a5549ece85da16",
+  "notebook_sha256": "6d608f6bde0036da3e044a71765814dd92953ee289a3692796d8ba86d60008eb",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
