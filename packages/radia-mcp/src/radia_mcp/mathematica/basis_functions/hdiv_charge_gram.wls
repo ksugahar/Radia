@@ -110,6 +110,20 @@ If[MemberQ[$ScriptCommandLine, "-selftest"] || True,
    chk["disjoint G[1_A,1_B] == 0.9808850 (anchored box-box Coulomb)",
       Abs[Re@N@chargeGramSemiclosed[{}, {}, A, B, 8] - 0.9808850] < 1*^-5];
 
+   (* (3b) FULL Q1 basis vs numeric on a SEPARATED disjoint pair -- validates the DOUBLE/TRIPLE moment charges
+      (xy, xz, yz, xyz), the entries not exercised by the const/single-moment checks above.  Separated (a z-gap
+      between A and Bs) so the 6-fold NIntegrate reference converges cleanly (no touching-face slowdown). *)
+   With[{Bs = {{0, 1}, {0, 1}, {-2, -1}},
+         gN = Function[{Sa, Sb, BB},
+            NIntegrate[(Times @@ ({x1, x2, x3}[[Sa]])) (Times @@ ({y1, y2, y3}[[Sb]])) *
+               kern[x1 - y1, x2 - y2, x3 - y3],
+               {x1, 0, 1}, {x2, 0, 1}, {x3, 0, 1},
+               {y1, BB[[1, 1]], BB[[1, 2]]}, {y2, BB[[2, 1]], BB[[2, 2]]}, {y3, BB[[3, 1]], BB[[3, 2]]},
+               PrecisionGoal -> 7, MaxRecursion -> 16]]},
+    Do[chk["closed==num (separated)  G[" <> lab[p[[1]]] <> "_A, " <> lab[p[[2]]] <> "_B]",
+        Abs[Re@N@chargeGramSemiclosed[p[[1]], p[[2]], A, Bs, 10] - gN[p[[1]], p[[2]], Bs]] < 1*^-5],
+     {p, {{{}, {1, 2}}, {{}, {1, 2, 3}}, {{1, 2}, {1, 3}}, {{3}, {2, 3}}}}]];
+
    (* (4) EXACT reflection symmetry: a charge odd about a box center pairs to MACHINE ZERO -- purely from the
       closed form.  These are the entries the C++ 6-tet+Duffy quadrature returns as the spurious ~1e-5. *)
    chk["EXACT-SYM  G[1_A,(y-1/2)_B] machine-zero",
