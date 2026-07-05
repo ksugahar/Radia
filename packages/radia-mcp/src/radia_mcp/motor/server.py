@@ -468,7 +468,7 @@ def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") 
 @mcp.tool()
 def motor_dual_lane_training_catalog(topic: str = "all") -> str:
     """
-    Return the public-safe 30-case motor learning catalog.
+    Return the public-safe wide motor learning catalog.
 
     Every case routes to both `radia-motor-age` and `radia-motor-vim`.
     Source-native provenance is deliberately scrubbed from this public surface.
@@ -481,7 +481,7 @@ def motor_dual_lane_training_catalog(topic: str = "all") -> str:
 
 @mcp.tool()
 def motor_dual_lane_training_gate() -> str:
-    """Check that the public 30-case catalog is complete and provenance-scrubbed."""
+    """Check that the public motor catalog is complete and provenance-scrubbed."""
     return json.dumps(build_dual_lane_training_catalog_gate(), indent=2, sort_keys=True)
 
 
@@ -745,11 +745,13 @@ def main():
         assert "radia-motor-vim" in dual_catalog
         dual_gate = json.loads(motor_dual_lane_training_gate())
         assert dual_gate["status"] == "PASS"
-        assert dual_gate["count"] == 30
+        assert dual_gate["count"] >= 50
         assert not dual_gate["forbidden_hits"]
         dual_route = motor_dual_lane_training_route("SRM static torque")
         assert "srm_static_torque_curve" in dual_route
         assert "hdiv_vim_reduced_fem" in dual_route
+        outer_route = motor_dual_lane_training_route("BLDC outer rotor polarity")
+        assert "bldc_outer_rotor_polarity" in outer_route
         triple_plan = motor_triple_check_plan("IPM hairpin motor flux linkage and MTPA")
         print(f"  motor_triple_check_plan('IPM ...'): {len(triple_plan)} chars")
         assert "elf_motor_hybrid_router" in triple_plan
