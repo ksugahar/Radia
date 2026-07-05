@@ -1969,21 +1969,30 @@ def _decimate_polyline(poly, step):
 
 
 def _write_former_step(chain, wire_diam, clearance, margin, wall, decimate,
-                       filename):
+                       filename, max_segments=300):
     """Printable FORMER for the delivered wire: a base plate with the wire
     CHANNEL cut out (plate - swept tube), so a water-soluble-support 3D print
     leaves the out-of-surface groove the single-stroke wire threads through.
 
-    The channel is a union of per-segment cylinders (radius = wire_diam/2 +
-    clearance) + joint spheres, subtracted from the plate in ONE boolean cut
-    against a GLUED COMPOUND of all tool solids.  (A per-primitive sequential
-    fuse -- ``body = body + s`` in a loop -- is O(N^2) and unusable: it blew
-    past 2 min at ~800 primitives; the single glued cut does the same wire in
-    ~15-25 s.)  ``decimate`` (m) resamples the wire spine to bound the primitive
-    count.  Returns geometry provenance; raises (No-Fallback) if the cut yields
-    no solid or removes no material (the channel missed the plate)."""
+    The channel = a true boolean UNION (``occ.Fuse``) of per-segment cylinders
+    (radius = wire_diam/2 + clearance) + joint spheres, subtracted from the
+    plate in ONE cut.  ``Fuse`` (not ``Glue``) is REQUIRED: the single-stroke
+    connectors cross other turns, so the tube self-overlaps, and ``Glue`` (which
+    assumes non-overlapping shapes) silently returns the plate uncut; a
+    per-primitive sequential fuse (``body = body + s``) is O(N^2) and unusable
+    (>2 min at ~800 primitives).  ``decimate`` (m) resamples the wire spine to
+    bound the primitive count, and ``max_segments`` hard-caps the Fuse cost
+    (coarsening the step further if needed -- reported, not silent).  Returns
+    geometry provenance; raises (No-Fallback) if the cut yields no solid or
+    removes no material (the channel missed the plate)."""
     import netgen.occ as occ
-    chain = _decimate_polyline(np.asarray(chain, float), decimate)
+    chain0 = np.asarray(chain, float)
+    chain = _decimate_polyline(chain0, decimate)
+    decimate_used = float(decimate)
+    if len(chain) - 1 > max_segments:                  # cap the Fuse cost
+        seglen = np.linalg.norm(np.diff(chain0, axis=0), axis=1)
+        decimate_used = float(seglen.sum()) / max_segments
+        chain = _decimate_polyline(chain0, decimate_used)
     if len(chain) < 2:
         raise ValueError("former: wire chain has < 2 points")
     r = 0.5 * float(wire_diam) + float(clearance)
@@ -2001,7 +2010,7 @@ def _write_former_step(chain, wire_diam, clearance, margin, wall, decimate,
     mx = chain.max(axis=0) + np.array([margin, margin, r + wall])
     plate = occ.Box(occ.Pnt(*map(float, mn)), occ.Pnt(*map(float, mx)))
     plate_vol = float(plate.mass)
-    former = plate - occ.Glue(tools)
+    former = plate - occ.Fuse(tools)
     vol = float(former.mass)
     if not (vol > 0.0):
         raise ValueError("former: plate - channel yielded no solid (check "
@@ -2014,6 +2023,7 @@ def _write_former_step(chain, wire_diam, clearance, margin, wall, decimate,
         "former_step": filename,
         "channel_segments": int(len(chain) - 1),
         "channel_radius_m": r,
+        "decimate_step_m": decimate_used,
         # STEP coords are in METRES (Radia convention) -- scale x1000 in the
         # slicer if it interprets STEP as mm.
         "former_size_m": [float(mx[i] - mn[i]) for i in range(3)],

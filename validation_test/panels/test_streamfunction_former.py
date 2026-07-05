@@ -51,5 +51,6 @@ def test_write_former_step_smoke(tmp_path):
     assert out.exists()
     assert out.stat().st_size > 0
     assert info["channel_segments"] == 2
+    assert info["decimate_step_m"] == 0.0
     assert info["channel_volume_m3"] > 0.0
     assert info["former_volume_m3"] < info["plate_volume_m3"]
