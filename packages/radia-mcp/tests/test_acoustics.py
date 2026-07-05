@@ -13,6 +13,7 @@ if _SRC not in sys.path:
 
 from radia_mcp.radia_ngsolve.acoustics import (
     _baffled_piston_resistance_reactance_ratios,
+    acoustic_fembem_gmsh_artifact_manifest_gate,
     acoustic_boundary_power_summary,
     acoustic_dtn_from_impedance,
     acoustic_impedance_reflection_summary,
@@ -136,6 +137,57 @@ def test_acoustic_method_selection_gate_encodes_public_blog_lessons():
     assert pml["status"] == "needs_attention"
     assert pml["checks"]["lab_wave_boundary_policy_is_high_order_zs"] is False
     assert pml["checks"]["pml_not_used"] is False
+
+
+def test_acoustic_fembem_gmsh_artifact_gate_accepts_gypsilab_radia_contract():
+    manifest = {
+        "schema": "cae-ai-lab.vol-fembem-cq-gmsh3d-build.v1",
+        "mesh_id": "unit_sphere_p1_tet",
+        "result_output_schema_id": "vol_fembem_cq_gmsh3d_v1",
+        "volume_basis": "H1_P1",
+        "boundary_basis": "Surface_P1",
+        "coupling_form": "JohnsonNedelec",
+        "double_layer_k_included": True,
+        "boundary_policy": "bem_radiation_closure_with_high_order_impedance_boundary_lane",
+        "uses_pml": False,
+        "gmsh_post_display": {
+            "schema": "cae-ai-lab.gmsh-post-launch.v1",
+            "gmsh_msh_version": "4.1",
+            "launch_target": "case.geo",
+            "gmsh_geo_opt": "case.geo.opt",
+            "gmsh_msh_opt": "case.msh.opt",
+            "gmsh_opt": "case.opt",
+            "camera": {"axis_up": "z", "rotation": [-68.0, 0.0, 0.0]},
+            "cut_plane": {"enabled": True, "normal": [0, -1, 0], "offset": 0.0},
+            "views": [
+                {"index": 0, "name": "BEM pressure on x-z plane"},
+                {"index": 1, "name": "3D deforming drum BEM surface"},
+            ],
+        },
+    }
+
+    gate = acoustic_fembem_gmsh_artifact_manifest_gate(manifest)
+    assert gate["status"] == "ok"
+    assert gate["checks"]["volume_basis_is_p1"] is True
+    assert gate["checks"]["boundary_basis_is_p1"] is True
+    assert gate["checks"]["coupling_is_calderon_or_johnson_nedelec"] is True
+    assert gate["checks"]["boundary_policy_is_high_order_zs"] is True
+    assert gate["checks"]["gmsh_post_display_contract_ok"] is True
+
+    bad = acoustic_fembem_gmsh_artifact_manifest_gate(
+        {
+            **manifest,
+            "uses_pml": True,
+            "gmsh_post_display": {
+                **manifest["gmsh_post_display"],
+                "launch_target": "case.msh",
+                "views": [],
+            },
+        }
+    )
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["pml_not_used"] is False
+    assert bad["checks"]["gmsh_post_display_contract_ok"] is False
 
 
 def test_pulsating_sphere_impedance_and_power_conservation():

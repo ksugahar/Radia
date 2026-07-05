@@ -179,6 +179,118 @@ def acoustic_method_selection_manifest_gate(manifest, expected_problem_family=No
     }
 
 
+def acoustic_fembem_gmsh_artifact_manifest_gate(manifest):
+    """Validate a Gypsilab/Radia acoustic FEM/BEM Gmsh artifact manifest.
+
+    This is the cross-learning gate for readable MATLAB/Gypsilab artifacts and
+    radia-acoustic artifacts.  It expects the same public-safe contract on both
+    sides: first-order P1 volume FEM, P1 boundary BEM, Johnson-Nedelec or
+    equivalent Calderon coupling, high-order ``Zs`` as the wave-boundary policy
+    lane, no PML, and the shared Gmsh ``case.geo`` launch contract.
+    """
+
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest must be a dictionary")
+
+    def get(*names, default=None):
+        for name in names:
+            if name in manifest and manifest[name] is not None:
+                return manifest[name]
+        return default
+
+    def lower(*names):
+        return str(get(*names, default="")).strip().lower()
+
+    def has_text(*names):
+        value = get(*names)
+        return value is not None and str(value).strip() != ""
+
+    def as_bool(*names):
+        value = get(*names, default=False)
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(value)
+
+    checks = {
+        "schema_recorded": has_text("schema"),
+        "result_artifact_id_recorded": has_text("result_artifact_id", "mesh_id"),
+        "result_output_schema_id_recorded": has_text("result_output_schema_id", "schema"),
+        "volume_basis_is_p1": lower("volume_basis", "fem_basis", "volume_element") in {
+            "p1",
+            "h1_p1",
+            "linear_tetrahedron",
+        }
+        or as_bool("p1_volume_fem"),
+        "boundary_basis_is_p1": lower("boundary_basis", "bem_basis", "boundary_element") in {
+            "p1",
+            "surface_p1",
+            "linear_triangle",
+        }
+        or as_bool("p1_boundary_bem"),
+        "coupling_is_calderon_or_johnson_nedelec": lower("coupling_form", "coupling") in {
+            "johnsonnedelec",
+            "johnson-nedelec",
+            "calderon",
+            "calderon_johnson_nedelec",
+        }
+        or as_bool("johnson_nedelec_calderon_form"),
+        "double_layer_recorded": as_bool("double_layer_k_included")
+        or "double" in lower("operator_family", "bem_operators"),
+        "boundary_policy_is_high_order_zs": lower(
+            "open_boundary_policy",
+            "boundary_policy",
+            "radiation_boundary_policy",
+        )
+        in {
+            "high_order_zs",
+            "high_order_surface_impedance",
+            "bem_radiation_closure_with_high_order_impedance_boundary_lane",
+        }
+        or as_bool("high_order_impedance_boundary_lane"),
+        "pml_not_used": not as_bool("uses_pml", "pml"),
+    }
+
+    gmsh_manifest = get("gmsh_post_display", "gmsh_display_manifest", default=None)
+    if gmsh_manifest is None:
+        gmsh_manifest = {
+            "schema": "cae-ai-lab.gmsh-post-launch.v1",
+            "gmsh_msh_version": get("gmsh_msh_version", default=""),
+            "launch_target": get("gmsh_geo", default=""),
+            "gmsh_geo_opt": get("gmsh_geo_opt", default=""),
+            "gmsh_msh_opt": get("gmsh_msh_opt", default=""),
+            "gmsh_opt": get("gmsh_opt", default=""),
+            "camera": {
+                "axis_up": get("camera_axis_up", default="z"),
+                "rotation": get("camera_rotation", default=[]),
+            },
+            "cut_plane": {
+                "enabled": as_bool("cut_plane_enabled", "exterior_cut_plane_enabled"),
+                "normal": get("cut_plane_normal", default=[0, -1, 0]),
+                "offset": get("cut_plane_offset", default=get("exterior_cut_plane_y", default=0)),
+            },
+            "views": get("views", default=[]),
+        }
+    try:
+        from radia_mcp.gmsh.post_display import gmsh_post_display_manifest_gate
+
+        gmsh_gate = gmsh_post_display_manifest_gate(gmsh_manifest)
+        checks["gmsh_post_display_contract_ok"] = gmsh_gate["status"] == "ok"
+    except Exception:
+        checks["gmsh_post_display_contract_ok"] = False
+
+    return {
+        "schema": "cae-ai-lab.acoustic-fembem-gmsh-artifact-gate.v1",
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "teaching_note": (
+            "Gypsilab and radia-acoustic should promote only artifacts that "
+            "carry P1 FEM/BEM basis identity, Calderon/Johnson-Nedelec coupling, "
+            "high-order Zs/no-PML boundary policy, and the shared Gmsh .geo "
+            "post-display contract."
+        ),
+    }
+
+
 def helmholtz_green_3d(distance, wavenumber):
     r"""Outgoing 3D scalar Helmholtz Green function.
 

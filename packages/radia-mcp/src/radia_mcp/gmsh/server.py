@@ -30,6 +30,10 @@ from .rules import ALL_RULES
 from .gmsh_knowledge import get_gmsh_documentation
 from .gmsh_reference import get_gmsh_reference
 from .gmsh_examples import get_gmsh_examples
+from .post_display import (
+    build_gmsh_post_display_contract,
+    gmsh_post_display_manifest_gate,
+)
 
 _RULE_REMEDIATIONS = {
     "numsubedges-missing": (
@@ -476,6 +480,36 @@ def gmsh_examples(topic: str = "all") -> str:
         topic: Example topic (default: "all").
     """
     return get_gmsh_examples(topic)
+
+
+@mcp.tool()
+def gmsh_post_display_contract(msh_path: str,
+                               output_base: str | None = None,
+                               camera_preset: str = "z_up_xz_from_positive_y") -> dict:
+    """
+    Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts.
+
+    Use this before writing radia-acoustic or Gypsilab-derived display files:
+    the raw data stay in one MSH v4.1 file, users open the sibling .geo,
+    and the exact sidecars preserve camera, cut-plane, and view state.
+    """
+    return build_gmsh_post_display_contract(
+        msh_path,
+        output_base=output_base,
+        camera_preset=camera_preset,
+        views=[{"index": 0, "name": "primary_post_view", "kind": "scalar"}],
+    )
+
+
+@mcp.tool()
+def gmsh_post_display_gate(manifest: dict) -> dict:
+    """
+    Validate a Radia/Gypsilab Gmsh post-display manifest.
+
+    The gate checks MSH v4.1, .geo launch target, exact .geo.opt/.msh.opt
+    autoload naming, Z-up camera metadata, cut-plane metadata, and named views.
+    """
+    return gmsh_post_display_manifest_gate(manifest)
 
 
 @mcp.tool()
