@@ -1950,6 +1950,79 @@ def _write_step_polylines(polylines, filename):
     Glue(edges).WriteStep(filename)
 
 
+def _decimate_polyline(poly, step):
+    """Keep the endpoints + every point at least ``step`` (m) of straight-line
+    distance from the last kept point -- resamples a dense wire polyline to a
+    coarser channel spine (fewer CAD primitives) WITHOUT changing its shape.
+    ``step <= 0`` returns the polyline unchanged."""
+    poly = np.asarray(poly, float)
+    if step <= 0.0 or len(poly) < 3:
+        return poly
+    keep = [0]
+    last = poly[0]
+    for i in range(1, len(poly) - 1):
+        if np.linalg.norm(poly[i] - last) >= step:
+            keep.append(i)
+            last = poly[i]
+    keep.append(len(poly) - 1)
+    return poly[keep]
+
+
+def _write_former_step(chain, wire_diam, clearance, margin, wall, decimate,
+                       filename):
+    """Printable FORMER for the delivered wire: a base plate with the wire
+    CHANNEL cut out (plate - swept tube), so a water-soluble-support 3D print
+    leaves the out-of-surface groove the single-stroke wire threads through.
+
+    The channel is a union of per-segment cylinders (radius = wire_diam/2 +
+    clearance) + joint spheres, subtracted from the plate in ONE boolean cut
+    against a GLUED COMPOUND of all tool solids.  (A per-primitive sequential
+    fuse -- ``body = body + s`` in a loop -- is O(N^2) and unusable: it blew
+    past 2 min at ~800 primitives; the single glued cut does the same wire in
+    ~15-25 s.)  ``decimate`` (m) resamples the wire spine to bound the primitive
+    count.  Returns geometry provenance; raises (No-Fallback) if the cut yields
+    no solid or removes no material (the channel missed the plate)."""
+    import netgen.occ as occ
+    chain = _decimate_polyline(np.asarray(chain, float), decimate)
+    if len(chain) < 2:
+        raise ValueError("former: wire chain has < 2 points")
+    r = 0.5 * float(wire_diam) + float(clearance)
+    tools = [occ.Sphere(occ.Pnt(*map(float, chain[0])), r)]
+    for k in range(len(chain) - 1):
+        p, q = chain[k], chain[k + 1]
+        d = q - p
+        L = float(np.linalg.norm(d))
+        if L < 1e-12:
+            continue
+        tools.append(occ.Cylinder(occ.Pnt(*map(float, p)),
+                                   occ.Dir(*map(float, d / L)), r=r, h=L))
+        tools.append(occ.Sphere(occ.Pnt(*map(float, q)), r))
+    mn = chain.min(axis=0) - np.array([margin, margin, r + wall])
+    mx = chain.max(axis=0) + np.array([margin, margin, r + wall])
+    plate = occ.Box(occ.Pnt(*map(float, mn)), occ.Pnt(*map(float, mx)))
+    plate_vol = float(plate.mass)
+    former = plate - occ.Glue(tools)
+    vol = float(former.mass)
+    if not (vol > 0.0):
+        raise ValueError("former: plate - channel yielded no solid (check "
+                         "--wire-diam / --former-wall / --former-margin)")
+    if vol >= plate_vol * (1.0 - 1e-9):
+        raise ValueError("former: the channel removed no material (the wire "
+                         "tube did not intersect the plate)")
+    former.WriteStep(filename)
+    return {
+        "former_step": filename,
+        "channel_segments": int(len(chain) - 1),
+        "channel_radius_m": r,
+        # STEP coords are in METRES (Radia convention) -- scale x1000 in the
+        # slicer if it interprets STEP as mm.
+        "former_size_m": [float(mx[i] - mn[i]) for i in range(3)],
+        "former_volume_m3": vol,
+        "plate_volume_m3": plate_vol,
+        "channel_volume_m3": plate_vol - vol,
+    }
+
+
 def _bubble_seeds(pts2d, bmag, k_const, n_max=240):
     """Bubble-system seed placement (Hirahatake/Noguchi/Igarashi/Yamashita):
     greedily drop seeds, biggest |B| first, keeping a clearance radius
@@ -2889,6 +2962,23 @@ def run_manufacture(args):
             _write_step_polylines(step_poly, args.step_output)
             result["step"] = args.step_output
 
+        if getattr(args, "former_output", ""):
+            # printable FORMER: plate - wire channel (C2 deliverable) -- the
+            # water-soluble-support 3D print of the out-of-surface groove the
+            # single-stroke wire threads through.  Uses the DELIVERED wire
+            # (distorted if --distort).  No-Fallback: negative knobs fail loud.
+            for _nm in ("former_clearance", "former_margin", "former_wall",
+                        "former_decimate"):
+                if float(getattr(args, _nm)) < 0.0:
+                    return {"method": "manufacture",
+                            "error": f"--{_nm.replace('_', '-')} must be >= 0"}
+            t_f0 = time.perf_counter()
+            result["former"] = _write_former_step(
+                out_chain, args.wire_diam, args.former_clearance,
+                args.former_margin, args.former_wall, args.former_decimate,
+                args.former_output)
+            result["t_former_s"] = round(time.perf_counter() - t_f0, 3)
+
         if args.peec:
             result["peec"] = _peec_inductance(
                 out_chain, args.wire_diam, 5.8e7, args.peec_freq)
@@ -3134,6 +3224,29 @@ def build_argparser():
                     help="sheet-metal Gauss-Newton iterations (manufacture)")
     ap.add_argument("--step-output", default="",
                     help="STEP CAD output path for the wire (manufacture)")
+    # ---- printable former (3D-print deliverable) ----
+    ap.add_argument("--former-output", default="",
+                    help="printable FORMER STEP (manufacture): a base plate with "
+                         "the DELIVERED wire CHANNEL cut out (plate - swept "
+                         "tube), for water-soluble-support 3D printing -- "
+                         "dissolve the support to leave the out-of-surface "
+                         "groove the single-stroke wire threads through. "
+                         "Distinct from --step-output (the wire centreline). "
+                         "STEP coords in metres; scale in the slicer.")
+    ap.add_argument("--former-clearance", type=float, default=3e-4,
+                    help="former channel radial clearance in m (channel radius = "
+                         "wire-diam/2 + clearance; default 0.3 mm)")
+    ap.add_argument("--former-margin", type=float, default=5e-3,
+                    help="former plate XY margin beyond the wire footprint in m "
+                         "(default 5 mm)")
+    ap.add_argument("--former-wall", type=float, default=3e-3,
+                    help="former minimum wall thickness around the channel in m "
+                         "(sets the plate Z half-thickness beyond the wire "
+                         "z-extent; default 3 mm)")
+    ap.add_argument("--former-decimate", type=float, default=2.5e-3,
+                    help="former channel spine resample step in m (coarsens the "
+                         "wire polyline to bound the CAD primitive count / build "
+                         "time; 0 = no decimation; default 2.5 mm)")
     ap.add_argument("--peec", action="store_true",
                     help="compute PEEC coil inductance L, R (manufacture)")
     ap.add_argument("--wire-diam", type=float, default=1e-3,
