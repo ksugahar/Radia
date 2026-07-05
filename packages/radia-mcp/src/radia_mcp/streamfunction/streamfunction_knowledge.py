@@ -264,6 +264,28 @@ r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
                     measured +-I current-reversal scan (coil-only, Earth + sensor
                     offset cancelled) -> the sheet-metal-PoC verification base.
 
+PRINTABLE FORMER (3D-print the out-of-surface groove the wire threads through)
+-----------------------------------------------------------------------------
+The DELIVERED wire (distorted if --distort) is realised as a base plate with the
+wire CHANNEL cut out (plate - swept tube), water-soluble-support printed.  Two
+outputs, shared --former-clearance/-margin/-wall/-decimate knobs:
+  --former-stl f.stl   RECOMMENDED.  A ROBUST MESH boolean (trimesh + manifold3d)
+                    -> STL (the native 3D-print / slicer format).  Handles the 3D
+                    SELF-CROSSING single-stroke wire WATERTIGHT in ~1 s (channel
+                    ratio ~0.93).  Needs `pip install trimesh manifold3d` (lazy
+                    import, fails loud if absent).
+  --former-output f.step   OCCT (netgen.occ cylinder-Fuse) -> STEP.  OK for the
+                    PLANAR demonstrator (channel ~0.96) but SILENTLY under-cuts /
+                    segfaults on a 3D self-crossing wire.
+CAD-KERNEL LESSON: an arbitrary-path SWEEP of a thin-profile / large-path /
+self-crossing wire is fragile in the OCCT kernel ITSELF -- netgen.occ `Pipe`
+segfaults, `Glue` silently no-ops, `Fuse` degenerates, and build123d's dedicated
+`swept()` ALSO degenerates / raises `StdFail_NotDone` (same kernel).  So for a
+robust boolean of that geometry use the MESH boolean (--former-stl); and author
+CAD generally with build123d or Cubit (ACIS -- a different, robust kernel), NOT
+ad-hoc netgen.occ (which is a STEP->mesh I/O library).  Full record:
+docs/stream_function/former_cad.md.
+
 CHAIN (--chain {field_aware, nn})
 ---------------------------------
 The "extra lines" in the single-stroke view are the inter-loop CONNECTORS
