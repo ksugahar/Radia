@@ -69,3 +69,4 @@ def test_force_validation_method_map_exposes_axisymmetric_to_3d_gate():
     assert "Axisymmetric reference -> 3D force-vector validation" in doc
     assert "axisymmetric_to_3d_force_gate" in doc
     assert "full-revolution 3D axial force" in doc
+    assert "validation_axisymmetric_to_3d_vol_force.py" in doc
