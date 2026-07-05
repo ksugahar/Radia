@@ -568,7 +568,7 @@ you still see no window, see `gmsh_usage(topic=pitfalls)` #9.)
 ## Cross-reference
 
   - Math: [theory.md](theory.md) Path-A section
-  - Open extension paths: [paper_outline.md](paper_outline.md) Path A/B/D
+  - Open extension paths: the paper outline (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\) Path A/B/D
   - MCP topic: `streamfunction(topic=single_stroke)`,
     `streamfunction(topic=session_2026_05_30)` sections 2 (chain methods) +
     3 (Path-A representation) + 4 (dead-end variants).

@@ -954,16 +954,16 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 **POLICY**: NEVER use Unicode mathematical symbols in print statements. Use ASCII equivalents: `^2` not `²`, `->` not `→`, `<=` not `≤`, etc. Windows console defaults to cp932 in Japanese environments.
 
-### Repository Language: English (docs RESEARCH NOTES + PAPER DRAFTS may be Japanese, 2026-07-05)
+### Repository Language: English — Japanese project docs live in W:\学会資料, NOT the repo (2026-07-05)
 
-**POLICY**: All source code, documentation, comments, commit messages, and docstrings in the Radia repository MUST be written in **English**, EXCEPT for the cases below. Japanese text is NOT allowed in tracked files unless an exception applies. Conversation with the user may be in Japanese, but shipped repository content is English-only.
+**POLICY**: All source code, documentation, comments, commit messages, and docstrings in the Radia repository MUST be written in **English**. Japanese text is NOT allowed in tracked files, EXCEPT `CLAUDE.md` policy descriptions. Conversation with the user may be in Japanese, but the tracked repository content is **English-only**.
 
-**Exceptions — Japanese ALLOWED**:
-1. `CLAUDE.md` policy descriptions.
-2. **`docs/` RESEARCH NOTES** (Sugahara, 2026-07-05): internal investigation / design / decision records — the "what we tried, why it failed, what we chose" log (e.g. [`docs/stream_function/former_cad.md`](docs/stream_function/former_cad.md)). Header marker: `> 研究ノート (research note)`.
-3. **`docs/` PAPER PLANNING / OUTLINE DRAFTS** (Sugahara, 2026-07-05): the Markdown planning + outline docs (`paper_outline*.md` and the like) — many target IEEJ / domestic venues that are Japanese anyway. Header marker: `> 論文ドラフト (paper draft)`. This covers the Markdown PLANNING drafts ONLY. An actual submission MANUSCRIPT (a LaTeX `.tex` paper, slides, digest) is kept in the **conference-materials area `W:\02_学会資料\<年度>\<会議>\`, NOT tracked in the code repo** (e.g. the IGTE symposium paper lives in `W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\`, moved out 2026-07-05); its language follows the VENUE — INTERNATIONAL (IGTE, IEEE, Compumag) stays **ENGLISH**, IEEJ / domestic may be Japanese.
+**Japanese-language project materials live OUTSIDE the repo, under `W:\02_学会資料\<年度>\<会議>\`** (Sugahara, 2026-07-05) — they are NOT committed to the code repo:
+- **Research notes** (Japanese investigation / design / decision write-ups), **paper-planning drafts** (`paper_outline*.md`), and **paper manuscripts** (LaTeX `.tex`, slides, digests) all live in that conference-materials area, organised by year / venue. Examples: the stream-function paper materials → `W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\`; the IGTE symposium paper → `W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\`.
+- A submission manuscript's language follows its **VENUE** — INTERNATIONAL (IGTE, IEEE, Compumag) = English; IEEJ / domestic = Japanese.
+- The **code repo** keeps ONLY English code + technical / dev docs (`README`, API reference `api.md`, method / theory / showcase notes `theory.md` / `single_stroke.md` / `regularization.md` / method `.ipynb`). Do NOT commit paper manuscripts, paper-planning drafts, or Japanese write-ups to the repo — put them in `W:\02_学会資料\`.
 
-**Still English-ONLY** (the exceptions above do NOT cover these): source code, comments, docstrings, and **commit messages**; and the reference / public docs — `README`, API reference (`api.md`), and method / theory / showcase docs (`theory.md`, `single_stroke.md`, `regularization.md`, method `.ipynb`). Those stay English for the code interface and public-repo identity.
+(History: an interim 2026-07-05 experiment allowed Japanese research notes / paper drafts *inside* `docs/` under `> 研究ノート` / `> 論文ドラフト` header markers; that was superseded the same day — the Japanese materials moved to `W:\02_学会資料\` and the repo returned to English-only.)
 
 ### Naming Policy: External Project References
 
