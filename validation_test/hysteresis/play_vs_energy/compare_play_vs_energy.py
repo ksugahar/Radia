@@ -15,7 +15,7 @@ functions; they differ in:
         Energy form: Picard with constant-matrix iteration
                          B^{n+1} = (H - H_irr(B^n)) / nu_rev
                      The matrix is just nu_rev (a scalar here, but the
-                     stiffness matrix in MMM/MSC). Constant -> one-time LU
+                     material stiffness matrix in a discretized solve). Constant -> one-time LU
                      factorisation in a FEM/BEM nonlinear loop. This is
                      the Hantila-compatible form.
 

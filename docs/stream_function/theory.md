@@ -85,7 +85,7 @@ evaluating only `~k_aca · (M + N)` entries of `A` — never the full
 licensed, ppOpen-HPC project.
 
 Radia delegates ACA+ entirely to HACApK via the entry-function override
-`HACApK_set_entry_func` (default behaviour, the MMM/MSC system matrix,
+`HACApK_set_entry_func` (default behaviour, the reusable material interaction matrix,
 is unchanged when the override is null).  No ACA+ re-implementation in
 Radia.
 

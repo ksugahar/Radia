@@ -1,20 +1,19 @@
-"""radia.planar_aniso -- SHARED 2D anisotropic-susceptibility linear demag solver.
+"""radia.planar_aniso -- 2D anisotropic-susceptibility linear demag solver.
 
 Grain-oriented (GO) silicon steel and other uniaxially-anisotropic laminations obey M = X.H with X a
 2x2 susceptibility tensor (``planar_materials.chi_tensor``: chi_par along the easy axis, chi_perp
-across it).  Neither the scalar collocation MMMM (``Moment2DSolveLinear``) nor the HDiv-VIM handles a
-tensor chi, and a matrix-free Picard on M is ILL-CONDITIONED for a real chi (the demag operator X.N
-has spectral radius ~ chi_max/2, so the Picard diverges for chi>>2).  So this assembles the demag
+across it).  The production HDiv-VIM planar layer handles isotropic scalar chi; tensor chi is kept in
+this dense direct helper because a matrix-free Picard on M is ILL-CONDITIONED for a real chi (the demag
+operator X.N has spectral radius ~ chi_max/2, so the Picard diverges for chi>>2).  This assembles the demag
 operator N DENSELY on the SHARED planar_charges kernel (N[i,j] = field at centroid i from a unit
 magnetisation on element j, the Gauss-sampled M.n log-charge cloud) and solves the well-conditioned
 dense system directly:
 
     (I - X_blockdiag N) M = X_blockdiag H0 .
 
-Because N is built from ``planar_charges`` (the same kernel MMMM and the HDiv-VIM already use for field
-evaluation), this is METHOD-AGNOSTIC -- one anisotropic solver for both.  Verified: the isotropic
-special case (X = chi I) reproduces the exact ``Moment2DSolveLinear`` to ~1e-4 (Gauss-N self-term), and
-the anisotropic disk matches the analytic  M = (I + D X)^-1 X H0  (D = 1/2) to ~3e-4.
+Because N is built from ``planar_charges``, post-processing shares the same exterior-field and
+Maxwell-stress machinery as the HDiv-VIM planar layer.  Verified: the anisotropic disk matches the
+analytic M = (I + D X)^-1 X H0 (D = 1/2) to ~3e-4.
 
 2D moment methods are FEW-element (motor cross-section ~1e2-1e3 DOF), so the dense O(n^3) solve is
 cheap; for very large n use the scalar solvers (this is the tensor-chi niche).
@@ -30,7 +29,7 @@ import ngsolve as ng
 
 from radia.planar_charges import charge_field, _gauss01
 from radia.planar_materials import chi_tensor, region_ids, check_regions
-from radia.mmmm2d import _extract_geometry, _element_materials, _pm_hard_M
+from radia.planar_geometry import _extract_geometry, _element_materials, _pm_hard_M
 
 MU0 = 4e-7 * np.pi
 
@@ -121,7 +120,7 @@ def solve_anisotropic_demag(mesh, chi_par, chi_perp, easy_deg=0.0, H0=(0.0, 0.0)
 
     ``pm`` = {region: [Mx,My]} embeds RIGID permanent magnets (design B: an anisotropic PM-motor rotor
     with magnets inside the iron).  Those regions are fixed sources; only the soft subsystem is solved
-    (the shared direct-N gives BOTH the MMMM and HDiv-VIM planar layers this anisotropic + PM capability).
+    (the shared direct-N gives the planar layer this anisotropic + PM capability).
 
     Returns dict: M (n,2, ALL elements incl. PM), M_avg (2,), n_el, ndof, pm (bool)."""
     _, _, centroids, areas = _extract_geometry(mesh)

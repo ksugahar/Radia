@@ -123,7 +123,8 @@ except ImportError:
     ESIM_AVAILABLE = False
 
 # NOTE: Old conductor API (CndLoop, CndRecBlock, CplMag*, Rwg*) removed (2026-02-13).
-# Use PEEC topology solver (peec_topology.py) and coupled solver (peec_coupled.py).
+# Use the PEEC topology solver for conductor-only PEEC. Magnetic-material
+# coupling is handled through the HDiv-VIM / reduced-FEM route.
 
 # NOTE: FldVTS() and beam_tracking removed (2026-03-22).
 # Use NGSolve + GmshPostExport for visualization, CERN Xsuite for tracking.
@@ -143,14 +144,6 @@ try:
         # PEEC solver classes
         PEECAnalysisSolver,
         UnifiedAnalysis,
-        # MMM result classes
-        MMMStaticResult,
-        MMMFrequencyResult,
-        # MMM solver classes
-        MMMAnalysisSolver,
-        UnifiedMMMAnalysis,
-        # MMM utility functions
-        build_magnetic_circuit_from_mmm,
         # Convenience waveform generators
         step_voltage,
         pulse_voltage,
@@ -178,62 +171,41 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Demag backend: BOTH the canonical collocation MMMM surface-charge path and the FEEC HDiv-VIM
-# (radia.vim) are kept.  They are complementary -- collocation MMMM is the canonical
-# mesh-less C++ path for hex/wedge/pyramid soft iron; HDiv-VIM is the mesh-backed
-# FEEC path with loop-free convergence.  Retired backend names are rejected because
-# they conflate the old MSC/EIEM2 path with the live collocation MMMM path.
+# Demag backend: soft iron is HDiv-VIM only in Radia.
 #
-# DEFAULT = "auto" (API-split): the API you use selects the method.
-#   - mesh-LESS soft iron (ObjHexahedron/ObjWedge + MatLin/MatSatIsoTab + rad.Solve) -> collocation MMMM (C++).
+# DEFAULT = "auto":
 #   - mesh-BACKED pure TET / HEX / WEDGE soft iron
 #     (radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM (RT1).
-#   - mesh-BACKED mixed / pyramid soft iron -> collocation MMMM bridge.
-#   - tetrahedron (MMM) and permanent-magnet solves -> C++ solver (unchanged).
-# set_demag_backend("collocation_mmmm"|"hdiv") OVERRIDES the auto split (a MeshSoftIron
-# container carries both representations, so either backend can solve it);
+#   - mesh-BACKED unsupported element mixes fail loud until HDiv coverage is added.
+#   - mesh-LESS surface-charge soft iron is retired; build a mesh and use MeshSoftIron/SoftIron.
+#   - permanent-magnet field objects and legacy non-soft-iron C++ operations are unchanged.
+# set_demag_backend("hdiv") is accepted for explicitness.
 # set_demag_backend("auto"/None) restores the split.
 # ---------------------------------------------------------------------------
 
-_demag_backend = None   # None/"auto" = API-split default; "collocation_mmmm" or "hdiv" = forced override
+_demag_backend = None   # None/"auto" = default; "hdiv" = explicit HDiv-VIM
 
 
 _BACKEND_MISSING = object()
 
 
 def set_demag_backend(name):
-    """Select the soft-iron demag backend.  "collocation_mmmm" = canonical collocation MMMM
-    surface-charge MSC; "hdiv" = FEEC HDiv-VIM; "auto"/None = API-split default
-    (mesh-less -> collocation MMMM, MeshSoftIron(pure tet/hex/wedge) -> HDiv-VIM RT1,
-    mixed/pyramid mesh-backed iron -> collocation MMMM bridge).  The choice is consulted
-    by rad.Solve.
+    """Select the soft-iron demag backend.
 
-    Positioning (2026-06-30, Sugahara): HDiv-VIM is the PRIMARY accurate soft-iron
-    method (loop-free by construction); collocation MMMM is the COARSE / fast tier for
-    optimization inner loops + mesh-less quick passes (loop-polluted internal M, but
-    field-correct -- loops are field-null).
-
-    Coarse-tier scalability (2026-07-02, Sugahara): a PURE-HEX collocation-MMMM solve
-    accepts rad.Solve(..., method=2) to run HACApK-BiCGSTAB -- the chi-free geometry
-    coupling K is built once as an H-matrix (RadHACApKMomentSystem, O(N log N) matvec)
-    and BiCGSTAB solves the field-correct (loop-abandoned) moment system; tune with
-    rad.SolverConfig(hacapk_eps=, hacapk_leaf=, hacapk_eta=).  method=0 (dense LU) and
-    method=1 (matrix-free dense-K BiCGSTAB) are unchanged; tet/wedge/mixed method=2 fall
-    back to the dense moment LU (the moment H-matrix is hex-only).  Returns the effective
-    backend string."""
+    Accepted values are ``"hdiv"`` and ``"auto"``/``None``.
+    """
     global _demag_backend
     if name in (None, "auto"):
         _demag_backend = None
-    elif name in ("collocation_mmmm", "hdiv"):
+    elif name == "hdiv":
         _demag_backend = name
     else:
-        raise ValueError("demag_backend must be 'collocation_mmmm', 'hdiv', or 'auto'/None (got %r)"
-                         % (name,))
+        raise ValueError("demag_backend must be 'hdiv' or 'auto'/None (got %r)" % (name,))
     return _demag_backend or "auto"
 
 
 def get_demag_backend():
-    """The selected soft-iron demag backend: "collocation_mmmm", "hdiv", or "auto"."""
+    """The selected soft-iron demag backend: "hdiv" or "auto"."""
     return _demag_backend or "auto"
 
 
@@ -241,12 +213,9 @@ def _normalize_demag_backend(name):
     """Normalize a per-call demag backend without mutating the global default."""
     if name in (None, "auto"):
         return None
-    if name in ("collocation_mmmm", "hdiv"):
+    if name == "hdiv":
         return name
-    raise ValueError(
-        "demag_backend must be 'collocation_mmmm', 'hdiv', or 'auto'/None (got %r)"
-        % (name,)
-    )
+    raise ValueError("demag_backend must be 'hdiv' or 'auto'/None (got %r)" % (name,))
 
 
 if "ObjCnt" in globals():
@@ -274,15 +243,13 @@ if "Solve" in globals():
     _cpp_Solve = globals()["Solve"]
 
     def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: pick the soft-iron demag backend)
-        """Radia relaxation solve with the API-split demag backend (see set_demag_backend):
+        """Radia relaxation solve with the HDiv-VIM soft-iron backend (see set_demag_backend):
           - mesh-BACKED pure TET / HEX / WEDGE soft iron (radia.vim.MeshSoftIron)
-            -> FEEC HDiv-VIM (RT1, default),
-            or collocation MMMM if demag_backend='collocation_mmmm';
-          - mesh-BACKED mixed / pyramid soft iron -> collocation MMMM bridge in 'auto';
-          - mesh-LESS hex/wedge/pyramid soft iron -> collocation MMMM (C++);
-          - tetrahedron (MMM) and permanent magnets -> C++ solver.
-        A per-call demag_backend=('collocation_mmmm'|'hdiv'|'auto') overrides the global
-        set_demag_backend choice."""
+            -> FEEC HDiv-VIM (RT1, default);
+          - mesh-BACKED unsupported element mixes fail loud until HDiv support lands;
+          - mesh-LESS surface-charge soft iron is retired and rejected by the C++ relaxation layer;
+          - permanent magnets and legacy non-soft-iron operations stay on the C++ path.
+        A per-call demag_backend=('hdiv'|'auto') overrides the global set_demag_backend choice."""
         backend_arg = kwargs.pop("demag_backend", _BACKEND_MISSING)
         backend = _demag_backend if backend_arg is _BACKEND_MISSING else _normalize_demag_backend(backend_arg)
         top = args[0] if args else None
@@ -295,31 +262,21 @@ if "Solve" in globals():
                 registered = False
         if registered:
             from radia.vim import _radsolve
-            if backend == "collocation_mmmm":
-                return _cpp_Solve(*args, **kwargs)          # collocation MMMM on the mesh-built elements
-            # HDiv-VIM is radia's OFFICIAL soft-iron demag route (CLAUDE.md DIRECTION 2026-07-04): 'auto'
-            # routes a mesh-backed PURE-TET / PURE-HEX / PURE-WEDGE iron to the FEEC HDiv-VIM (RT1, incl.
-            # IMA image symmetry).  A MIXED / pyramid mesh-backed iron is not yet HDiv-covered -> the
-            # collocation MMMM gated bridge.  An explicit demag_backend='hdiv' on an unsupported mesh falls
-            # through to dispatch and fails loud there.
-            if backend is None and not _radsolve.is_hdiv_eligible(top):
+            if not _radsolve.is_hdiv_eligible(top):
                 if _radsolve.registered_iron_count(top) > 1:
-                    # No-Fallbacks: a MULTI-iron container makes is_hdiv_eligible False (its len!=1 guard);
-                    # do NOT silently demote it to collocation MMMM -- fail loud (the HDiv-VIM does not yet
-                    # solve multiple registered irons; the user expected HDiv per the mesh-backed flip).
                     raise ValueError(
                         "rad.Solve(auto): multiple mesh-backed soft irons in one container are not supported "
-                        "by the HDiv-VIM yet -- solve each iron separately, or pass "
-                        "demag_backend='collocation_mmmm' to force the collocation MMMM path explicitly.")
-                return _cpp_Solve(*args, **kwargs)          # auto + single mixed/pyramid -> collocation MMMM (bridge)
+                        "by the HDiv-VIM yet -- solve each iron separately.")
+                raise ValueError(
+                    "rad.Solve(auto): this mesh-backed soft iron is not HDiv-VIM eligible yet "
+                    "(pure tet/hex/wedge only).")
             return _radsolve.dispatch(*args, **kwargs)      # auto tet/hex/wedge / explicit hdiv -> FEEC HDiv-VIM
         if backend == "hdiv":
             raise ValueError(
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "
                 "radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=); this body is mesh-less.  "
-                "Build it via radia.vim.MeshSoftIron, or use demag_backend='collocation_mmmm' "
-                "for the mesh-less collocation MMMM path.")
-        return _cpp_Solve(*args, **kwargs)                  # mesh-less -> collocation MMMM (or MMM/PM)
+                "Build it via radia.vim.MeshSoftIron or radia.SoftIron.")
+        return _cpp_Solve(*args, **kwargs)                  # PM / legacy non-soft-iron C++ path
 
 
 if "Fld" in globals():
@@ -345,7 +302,7 @@ if "SolverConfig" in globals():
     _cpp_SolverConfig = globals()["SolverConfig"]
 
     def SolverConfig(**kwargs):   # noqa: F811  (adds demag_backend on top of the C++ SolverConfig)
-        """Unified solver config.  Adds the demag_backend selector ("collocation_mmmm" | "hdiv", see
+        """Unified solver config.  Adds the demag_backend selector ("hdiv" | "auto", see
         set_demag_backend); all other kwargs (hacapk_eps, bicgstab_tol, relax_param, newton_method, ...)
         pass through to the C++ SolverConfig."""
         if "demag_backend" in kwargs:
@@ -369,14 +326,14 @@ if "UtiDelAll" in globals():
 
 
 # Intent-based user-facing API (2-layer API; see CLAUDE.md "Reduce Proprietary API Surface").
-# radia.SoftIron("yoke.vol", mu_r=) unifies the surface-charge MSC and HDiv-VIM soft-iron paths behind one
+# radia.SoftIron("yoke.vol", mu_r=) exposes the HDiv-VIM soft-iron path behind one
 # .vol-driven object; the ObjHexahedron/... primitives become an internal representation detail.
 from .soft_iron import SoftIron  # noqa: E402,F401
-# radia.magnet_box(center, dimensions, magnetization) -- the ObjRecMag substitute on MMMM
-# (surface-charge ObjHexahedron); a fixed-M permanent magnet, no Solve. See CLAUDE.md PM-on-MMMM.
+# radia.magnet_box(center, dimensions, magnetization) -- the ObjRecMag substitute on a fixed-M
+# surface-charge ObjHexahedron; a permanent magnet, no Solve.
 from .magnet import magnet_box  # noqa: E402,F401
 # Script-side ObjRecMag: the SOLE definition now that the C++ surface-current ObjRecMag
-# constructor is retired (un-exposed from the extension). It forwards to the MMMM
-# (surface-charge ObjHexahedron) magnet_box so production / other solvers / examples / tests
+# constructor is retired (un-exposed from the extension). It forwards to the fixed-M
+# ObjHexahedron magnet_box so production / other solvers / examples / tests
 # keep working unchanged.
 from .magnet import ObjRecMag  # noqa: E402,F401

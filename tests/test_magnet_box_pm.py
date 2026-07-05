@@ -1,7 +1,7 @@
-"""Golden: radia.magnet_box -- the MMMM permanent-magnet substitute for the retiring ObjRecMag.
+"""Golden: radia.magnet_box -- the fixed-M permanent-magnet substitute for the retiring ObjRecMag.
 
 A uniformly magnetized rectangular block has the IDENTICAL external field whether modeled as a
-surface-current ObjRecMag or as a surface-charge MMMM ObjHexahedron (sigma = M.n).  magnet_box builds
+surface-current ObjRecMag or as a fixed-M surface-charge ObjHexahedron (sigma = M.n).  magnet_box builds
 the ObjHexahedron from (center, dimensions, magnetization) -- same call shape as ObjRecMag -- so
 permanent magnets survive the ObjRecMag retirement (CLAUDE.md "Reduce Proprietary API Surface").
 

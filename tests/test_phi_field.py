@@ -3,7 +3,7 @@
 Tests for scalar potential (Phi) field computation.
 
 Tests verify that:
-1. magnet_box (MMMM rectangular PM) and a hand-built ObjHexahedron give consistent Phi values
+1. magnet_box (rectangular fixed-M PM) and a hand-built ObjHexahedron give consistent Phi values
 2. Phi is computed using face-based integration (not dipole approximation)
 3. Phi symmetry properties are correct
 
@@ -40,7 +40,7 @@ class TestPhiFieldBasic:
         """Test that Phi matches between magnet_box and a hand-built ObjHexahedron on z-axis."""
         dx, dy, dz = 0.02, 0.02, 0.03
 
-        # Create magnet_box (MMMM rectangular PM = surface-charge ObjHexahedron)
+        # Create magnet_box (rectangular fixed-M PM = surface-charge ObjHexahedron)
         rec_mag = rad.magnet_box([0, 0, 0], [2*dx, 2*dy, 2*dz], [0, 0, Mr])
 
         # Create ObjHexahedron

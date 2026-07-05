@@ -10,9 +10,6 @@ The standard radia-motor workflow is an always-on primary comparison:
    HDiv-VIM rotor source-field plus fixed-stator reduced-FEM coupling remains
    experimental, but a motor result is not accepted for MCP learning unless this
    lane is checked alongside ``ngsolve_age``.
-4. Optionally attach the supported coarse/reduced planar ``mmmm2d_coarse`` lane
-   as a fast auxiliary sign/scale gate.
-
 Only the source deck family, public MCP call names, lane IDs, and reduced
 engineering lessons belong in public radia-mcp.  Product solver outputs,
 private paths, and raw commercial benchmark values stay in the private lane.
@@ -32,7 +29,7 @@ from .validation_lanes_knowledge import (
 
 
 PRIMARY_COMPARISON_LANES = ("ngsolve_age", "hdiv_vim_reduced_fem")
-OPTIONAL_AUXILIARY_LANES = ("mmmm2d_coarse",)
+OPTIONAL_AUXILIARY_LANES: tuple[str, ...] = ()
 
 
 FAMILY_SEEDS: dict[str, dict[str, Any]] = {
@@ -43,12 +40,6 @@ FAMILY_SEEDS: dict[str, dict[str, Any]] = {
             "application/motor/pm_square_2pole_pickup_100/pm001/pm001.mai",
         ),
         "hdiv_observables": ("pickup_flux", "flux_linkage", "demag_field"),
-        "mmmm_observables": ("torque", "per_region_magnetization", "demag_field"),
-        "mmmm_focus": (
-            "per-region soft-iron material dictionaries",
-            "factor-once torque-angle sweep",
-            "planar PM/iron sign and scale check before AGE",
-        ),
         "age_focus": ("back_emf", "cogging_torque", "ld_lq", "mtpa"),
     },
     "ipm": {
@@ -58,12 +49,6 @@ FAMILY_SEEDS: dict[str, dict[str, Any]] = {
             "application/motor/pm_cosine_pickup_72/pm001/pm001.mai",
         ),
         "hdiv_observables": ("pickup_flux", "flux_linkage", "demag_field"),
-        "mmmm_observables": ("torque", "per_region_magnetization", "demag_field"),
-        "mmmm_focus": (
-            "multi-grade rotor/stator soft-iron regions",
-            "coarse torque-angle and demag sanity checks",
-            "optimization-loop triage before AGE verification",
-        ),
         "age_focus": ("ld_lq", "mtpa", "field_weakening", "demag_margin"),
     },
     "induction": {
@@ -72,11 +57,6 @@ FAMILY_SEEDS: dict[str, dict[str, Any]] = {
             "application/motor/induction_cage_10/im001/im001.mai",
         ),
         "hdiv_observables": ("flux_linkage", "force_or_torque_trend"),
-        "mmmm_observables": ("force_or_torque_trend", "per_region_magnetization"),
-        "mmmm_focus": (
-            "coarse rotor/stator magnetization trend",
-            "geometry/material sanity check before slip-frequency FE",
-        ),
         "age_focus": ("induction_machine", "airgap_eddy_machine", "deep_bar"),
     },
     "srm": {
@@ -85,11 +65,6 @@ FAMILY_SEEDS: dict[str, dict[str, Any]] = {
             "application/motor/sr_motor_loop_10/sr001/sr001.mai",
         ),
         "hdiv_observables": ("coenergy", "force_or_torque_trend"),
-        "mmmm_observables": ("coenergy", "force_or_torque_trend", "per_region_magnetization"),
-        "mmmm_focus": (
-            "reluctance-torque sign and periodicity",
-            "saturation-free geometry/material sanity check",
-        ),
         "age_focus": ("reluctance_torque", "saturating_inductance"),
     },
     "synrm": {
@@ -98,11 +73,6 @@ FAMILY_SEEDS: dict[str, dict[str, Any]] = {
             "application/motor/reluctance_motor_10/rel001/rel001.mai",
         ),
         "hdiv_observables": ("coenergy", "force_or_torque_trend"),
-        "mmmm_observables": ("coenergy", "force_or_torque_trend", "per_region_magnetization"),
-        "mmmm_focus": (
-            "flux-barrier saliency trend before full FE",
-            "multi-region soft-iron consistency check",
-        ),
         "age_focus": ("synchronous_power_angle", "mtpa", "cross_saturation"),
     },
     "hysteresis": {
@@ -110,11 +80,6 @@ FAMILY_SEEDS: dict[str, dict[str, Any]] = {
             "application/motor/hysteresis_motor_10/hys001/hys001.mai",
         ),
         "hdiv_observables": ("demag_field", "force_or_torque_trend"),
-        "mmmm_observables": ("demag_field", "force_or_torque_trend"),
-        "mmmm_focus": (
-            "demag-field sign and scale",
-            "linearized precheck before hysteresis-specific validation",
-        ),
         "age_focus": ("hysteresis_motor_loss", "hysteresis_play"),
     },
 }
@@ -150,7 +115,7 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
             "rule": (
                 "Every radia-motor validation that claims MCP learning must "
                 "compare the NGSolve+AGE lane with the HDiv-VIM/reduced-FEM "
-                "lane.  Coarse MMMM evidence is useful but auxiliary."
+                "lane."
             ),
         },
         "source_mcp_seed": {
@@ -175,20 +140,6 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
                 "pytest_targets": age_plan["pytest_targets"],
                 "artifact_template": lane_template("ngsolve_age"),
             },
-            "mmmm2d_coarse": {
-                "role": "optional supported coarse/reduced planar MMMM auxiliary lane",
-                "support_status": "supported_coarse_path",
-                "observable_candidates": list(seed["mmmm_observables"]),
-                "mmmm_focus": list(seed["mmmm_focus"]),
-                "pytest_targets": ["validation_test/feec/test_moment2d_perregion.py"],
-                "artifact_template": lane_template("mmmm2d_coarse"),
-                "minimum_gate": (
-                    "Use this as a verified fast planar sign/scale and "
-                    "per-region material gate. It can train motor routing and "
-                    "coarse optimization advice, but it does not replace AGE "
-                    "for final rotating-machine validation."
-                ),
-            },
             "hdiv_vim_reduced_fem": {
                 "role": "mandatory experimental reduced integral / VIM-to-reduced-FEM comparison lane",
                 "support_status": "experimental_rfc",
@@ -210,21 +161,17 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
                 "source_mcp_seed",
                 "ngsolve_age artifact",
                 "hdiv_vim_reduced_fem solver-ready artifact",
-                "mmmm2d_coarse artifact when a fast auxiliary check is available",
             ],
             "required_gates": [
                 'motor_validation_artifact_gate(..., "ngsolve_age")',
                 'motor_validation_artifact_gate(..., "hdiv_vim_reduced_fem")',
-                'motor_validation_artifact_gate(..., "mmmm2d_coarse") when provided',
                 "motor_triple_check_artifact_gate(...)",
             ],
             "learning_rule": (
                 "radia-motor learned only after the supported AGE lane and "
                 "the HDiv-VIM/reduced-FEM lane are both verified in the same "
                 "combined artifact, with at least one public-safe MCP "
-                "target/test changed and verified.  MMMM can strengthen the "
-                "case as a fast auxiliary check, but it is not the primary "
-                "comparison gate."
+                "target/test changed and verified."
             ),
         },
     }
@@ -235,7 +182,6 @@ def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
     src = plan["source_mcp_seed"]
     standard = plan["standard_comparison"]
     age = plan["radia_lanes"]["ngsolve_age"]
-    mmmm = plan["radia_lanes"]["mmmm2d_coarse"]
     hdiv = plan["radia_lanes"]["hdiv_vim_reduced_fem"]
     lines = [
         "# radia-motor triple-check plan",
@@ -246,7 +192,7 @@ def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
         "- primary required lanes: "
         + ", ".join(f"`{lane}`" for lane in standard["primary_required_lanes"]),
         "- optional auxiliary lanes: "
-        + ", ".join(f"`{lane}`" for lane in standard["optional_auxiliary_lanes"]),
+        + (", ".join(f"`{lane}`" for lane in standard["optional_auxiliary_lanes"]) or "`none`"),
         f"- comparison rule: {standard['rule']}",
         "",
         "## Source MCP Seed",
@@ -273,22 +219,6 @@ def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
     lines.extend(f"  - `{item}`" for item in age["pytest_targets"])
     lines.extend(
         [
-            "",
-            "## 2D MMMM Coarse Lane",
-            "- role: " + mmmm["role"],
-            f"- support status: `{mmmm['support_status']}`",
-            "- observable candidates:",
-        ]
-    )
-    lines.extend(f"  - `{item}`" for item in mmmm["observable_candidates"])
-    lines.extend(["- MMMM focus:"])
-    lines.extend(f"  - {item}" for item in mmmm["mmmm_focus"])
-    lines.extend(["- pytest targets:"])
-    lines.extend(f"  - `{item}`" for item in mmmm["pytest_targets"])
-    lines.extend(
-        [
-            "- minimum gate: " + mmmm["minimum_gate"],
-            "",
             "## HDiv-VIM + Reduced FEM RFC Lane",
             "- role: " + hdiv["role"],
             f"- support status: `{hdiv['support_status']}`",
@@ -349,7 +279,7 @@ def validate_motor_triple_check_artifact(
         lane_artifacts = {}
 
     lane_results: dict[str, Any] = {}
-    known_lanes = set(PRIMARY_COMPARISON_LANES) | set(OPTIONAL_AUXILIARY_LANES)
+    known_lanes = set(PRIMARY_COMPARISON_LANES)
     for lane_id in lane_artifacts:
         if lane_id not in known_lanes:
             errors.append(f"unknown lane artifact: {lane_id}")
@@ -363,15 +293,6 @@ def validate_motor_triple_check_artifact(
         lane_results[lane_id] = result
         if result["status"] != "pass":
             errors.append(f"{lane_id} artifact gate failed")
-
-    for lane_id in OPTIONAL_AUXILIARY_LANES:
-        lane_data = lane_artifacts.get(lane_id)
-        if lane_data is None:
-            continue
-        result = validate_motor_validation_artifact(lane_data, lane_id)
-        lane_results[lane_id] = result
-        if result["status"] != "pass":
-            errors.append(f"{lane_id} auxiliary artifact gate failed")
 
     feedback = data.get("mcp_feedback", {})
     if not isinstance(feedback, Mapping):
@@ -393,17 +314,9 @@ def validate_motor_triple_check_artifact(
         and lane_results.get("hdiv_vim_reduced_fem", {}).get("support_status")
         == "experimental_rfc"
     )
-    optional_mmmm_check_ready = (
-        "mmmm2d_coarse" in lane_results
-        and lane_results.get("mmmm2d_coarse", {}).get("validated_coarse_path") is True
-    )
     validated_supported_solver_check = (
         status == "pass"
         and lane_results.get("ngsolve_age", {}).get("validated_solver_path") is True
-        and (
-            "mmmm2d_coarse" not in lane_results
-            or optional_mmmm_check_ready
-        )
     )
     validated_dual_solver_check = (
         status == "pass"
@@ -418,11 +331,6 @@ def validate_motor_triple_check_artifact(
         and validated_supported_solver_check
         and lane_results.get("ngsolve_age", {}).get("accepted_for_mcp_learning")
         is True
-        and (
-            "mmmm2d_coarse" not in lane_results
-            or lane_results.get("mmmm2d_coarse", {}).get("accepted_for_mcp_learning")
-            is True
-        )
     )
     accepted_for_mcp_rfc_learning = (
         status == "pass"
@@ -449,7 +357,6 @@ def validate_motor_triple_check_artifact(
         "optional_auxiliary_lanes": list(OPTIONAL_AUXILIARY_LANES),
         "research_triple_check_ready": research_triple_check_ready,
         "validated_supported_solver_check": validated_supported_solver_check,
-        "optional_mmmm_check_ready": optional_mmmm_check_ready,
         "validated_dual_solver_check": validated_dual_solver_check,
         "accepted_for_supported_mcp_learning": accepted_for_supported_mcp_learning,
         "accepted_for_mcp_rfc_learning": accepted_for_mcp_rfc_learning,
@@ -471,10 +378,9 @@ def format_triple_check_gate_result(result: Mapping[str, Any]) -> str:
         "- primary required lanes: "
         + ", ".join(f"`{lane}`" for lane in result.get("primary_required_lanes", ())),
         "- optional auxiliary lanes: "
-        + ", ".join(f"`{lane}`" for lane in result.get("optional_auxiliary_lanes", ())),
+        + (", ".join(f"`{lane}`" for lane in result.get("optional_auxiliary_lanes", ())) or "`none`"),
         f"- research triple check ready: `{result.get('research_triple_check_ready', False)}`",
         f"- validated supported solver check: `{result.get('validated_supported_solver_check', False)}`",
-        f"- optional MMMM check ready: `{result.get('optional_mmmm_check_ready', False)}`",
         f"- validated dual solver check: `{result.get('validated_dual_solver_check', False)}`",
         f"- accepted for supported MCP learning: `{result.get('accepted_for_supported_mcp_learning', False)}`",
         f"- accepted for MCP RFC learning: `{result.get('accepted_for_mcp_rfc_learning', False)}`",

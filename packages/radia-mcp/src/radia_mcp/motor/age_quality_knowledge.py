@@ -328,7 +328,7 @@ The public quality policy is:
 
 - Use AGE as the authoritative open validation path for 2D SPM/IPM/IM/SRM/SynRM
   reduced quantities.
-- Use the small MMM quick check only for sign and scale triage.
+- Use the small field quick check only for sign and scale triage.
 - Publish examples only when their advertised quantity is covered by a passing
   public gate below.
 - Do not publish commercial solver logs, private paths, or product-run numeric
@@ -383,7 +383,7 @@ Suggested labels:
   public finite-element or closed-form consistency gate.
 - `silver_age_loss`: hysteresis/core-loss invariant from a public stateful
   material model.
-- `prompt_triage_only`: MMM quick-check output; not a publishable validation
+- `prompt_triage_only`: field quick-check output; not a publishable validation
   label by itself.
 """
 
@@ -445,7 +445,7 @@ State these limitations when relevant:
   gates unless a coupled study is explicitly built.
 - Hysteresis and lamination losses are available as public models, but material
   calibration remains a separate validation task.
-- MMM quick checks are prompt-time triage only; AGE or another open gate must
+- field quick checks are prompt-time triage only; AGE or another open gate must
   carry any public validation claim.
 """
 
@@ -481,7 +481,7 @@ def route_age_validation_plan(goal: str) -> dict[str, Any]:
         "pytest_targets": tests,
         "quality_labels": sorted({gate.level for gate in gates}),
         "workflow": [
-            "Use motor_mmm_quick_check only for prompt-time sign/scale triage.",
+            "Use motor_field_quick_check only for prompt-time sign/scale triage.",
             "Run the AGE/public reduced gates for the advertised physical quantity.",
             "Upgrade the example label only to the strongest passed gate.",
             "Keep commercial solver provenance, private paths, and raw product references out of public text.",

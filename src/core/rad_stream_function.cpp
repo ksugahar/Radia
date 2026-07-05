@@ -35,7 +35,7 @@
 // File-static handle to the caller's matrix-entry callback + a C-linkage
 // trampoline that HACApK's ACA+ invokes (cHACApK_entry_ij -> g_entry_override
 // -> here).  Set around the single cHACApK_acaplus call in ACAPlus
-// (GIL-serialized; no concurrent MMM build), so a plain static pointer suffices.
+// (GIL-serialized; no concurrent stream-function build), so a plain static pointer suffices.
 //
 // HACApK passes 1-based indices, row (field) index first, column (source)
 // index second (cHACApK_calc_vec convention, identity lod); we convert to the

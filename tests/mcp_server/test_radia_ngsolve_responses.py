@@ -235,7 +235,7 @@ class TestRadiaKnowledge:
     def test_all(self):
         body = get_radia_documentation("all")
         _assert_substantial(body, min_chars=1000)
-        _assert_contains_any(body, ["Radia", "ObjHexahedron", "magnetization", "MMM"],
+        _assert_contains_any(body, ["Radia", "ObjHexahedron", "magnetization", "HDiv-VIM"],
                               label="radia all")
 
     def test_unknown_topic(self):

@@ -522,7 +522,7 @@ with TaskManager():
 
         if avg_error < 10.0:
             print()
-            print("[PASS] Radia MSC field matches NGSolve (< 10%% error)")
+            print("[PASS] Radia fixed-magnet field matches NGSolve (< 10%% error)")
         else:
             print()
             print("[CHECK] Field comparison shows differences")

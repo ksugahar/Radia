@@ -1315,7 +1315,7 @@ private:
 // where g_0 = f_0 - nu_rev*r and g_k = f_k for k >= 1. The forward
 // map is algebraically identical to direct Play (H-axis congruency
 // preserved exactly), and nu_rev is exposed for Hantila one-time-LU
-// coupling in MMM/MSC nonlinear iteration.
+// coupling in nonlinear magnetic-material iteration.
 //
 // API: MatEnergyHysteresis(K, chi, tables, eps). The chi parameter is
 // numerically equal to the Play threshold eta_k by Hane–Sugahara

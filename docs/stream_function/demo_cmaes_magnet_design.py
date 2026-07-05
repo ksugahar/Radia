@@ -11,7 +11,7 @@ uniform transverse field.
 
 This is the "+ CMA-ES" half of the "ACA stream function + CMA-ES" workflow
 (IEEJ SA-25-020): the linear inner design uses (ACA+)+TSVD; the nonlinear outer
-design uses CMA-ES.  Forward field is Radia's MMM/MSC (`ObjRecMag` + `radia.Fld`).
+design uses CMA-ES.  Forward field is Radia's fixed-magnet field (`ObjRecMag` + `radia.Fld`).
 
 Run:  python demo_cmaes_magnet_design.py [--trials N]
 """

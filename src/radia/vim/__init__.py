@@ -1,12 +1,12 @@
 """radia.vim -- HDiv-type VIM demag operator.
 
-The FEEC H(div) RT alternative/complement to the canonical multipole-moment MMM MSC kernel: a SYMMETRIC demag
+The FEEC H(div) RT production demag path: a SYMMETRIC demag
 operator N = B^T G B whose loop modes are field-null by construction (de Rham), giving mu_r-independent
 convergence with no hand-crafted loop-star.
 
 This is the PRODUCTION home (productionization milestone M1): the validated core was promoted here from
 the retired Python prototype inventory.  Canonical docs: docs/hdiv_vim/README.md; roadmap:
-docs/hdiv_vim/PRODUCTIONIZATION.md; retirement ledger: docs/hdiv_vim/vim_examples_retirement.ipynb.
+docs/hdiv_vim/PRODUCTIONIZATION.md.
 
 Public API (NGSolve-aligned validated solve primitives):
   Solve(mesh, mu_r=/bh_table=, H_ext=..)

@@ -763,7 +763,7 @@ PATTERNS: list[dict] = [
                 "regression gets waved off as 'flaky', OR a flake burns a "
                 "fix-forward cycle.",
         "root_cause": "Iterative-solver tolerance near a golden band edge / "
-                      "MMM dipole-in-material sampling sensitivity makes a few "
+                      "retired moment-path dipole-in-material sampling sensitivity makes a few "
                       "assertions non-deterministic.  --reruns 2 masks them "
                       "but records neither WHICH tests flake nor WHY.",
         "detection": "tests/known_flaky.md (the registry); the workflow log's "
@@ -909,49 +909,6 @@ PATTERNS: list[dict] = [
     # =====================================================
     # C++ SOLVER / CROSS-SOLVE CACHE BUGS
     # =====================================================
-    {
-        "id": "cross-solve-cache-config-flag-key-and-lifecycle",
-        "title": "A cross-Solve cache returned a STALE artifact after a "
-                 "config-flag flip (silently wrong field): the validity key "
-                 "missed the flag + no invalidation on UtiDelAll.",
-        "topics": ["radia", "solve", "cache", "concurrency", "side-effect", "aba"],
-        "severity": "high",
-        "first_seen": "2026-07-02",
-        "last_seen": "2026-07-02",
-        "what": "collocation-MMMM method 2 caches the chi-free geometry K on "
-                "radTApplication across Solve calls (optimization inner loops "
-                "re-Solve the SAME geometry many times). Flipping "
-                "moment_analytic_kernel between two solves of the same geometry "
-                "(no UtiDelAll) reused the 1st solve's stale K -> the 2nd solve "
-                "SILENTLY returned the old kernel's field. Worse, UtiDelAll then "
-                "rebuilding an identical geometry at the same heap address "
-                "ABA-hit the stale cache (nondeterministic; LAB passed, mdx caught).",
-        "root_cause": "The cross-solve cache validity key checked pointer "
-                      "identity + hacapk eps/leaf/eta + GeometryMatches() but "
-                      "MISSED (a) the moment_analytic_kernel flag baked into K, "
-                      "and (b) lifecycle invalidation -- UtiDelAll goes through "
-                      "DeleteAllElements, which does NOT call Initialize(), so "
-                      "the cache survived deletion. Fix: rad_relaxation_methods.cpp "
-                      "~2966 (flag in key) + InvalidateMomentHK() at all 9 "
-                      "m_cached_interact_key write sites (rad_transform_impl.cpp "
-                      "DeleteAllElements, rad_application.h Initialize/DeleteElement, "
-                      "rad_material_impl.cpp SolveGen/BuildMatrix x6). Commit 9120bb9d.",
-        "detection": "validation_test/feec/test_moment_analytic_kernel.py::"
-                     "test_cross_solve_analytic_flip_respected_no_utildelall "
-                     "(DETERMINISTIC: flips the kernel across two cached solves, "
-                     "no UtiDelAll) + the analytic-liveness asserts in the same file.",
-        "prevention": "A cross-call cache MUST key on EVERY config flag baked "
-                      "into the cached artifact (not just pointer identity + "
-                      "numeric params) AND call the invalidation hook at EVERY "
-                      "lifecycle site that can free the pointed-to object: "
-                      "Initialize, DeleteElement, DeleteAllElements/UtiDelAll, "
-                      "and every cache-key write. Note UtiDelAll does NOT call "
-                      "Initialize(), so hooking only Initialize() is not enough. "
-                      "A pointer-identity key is ABA-unsafe on its own.",
-        "related": ["memory/collocation_loopfree_abandoned.md",
-                    "src/core/rad_relaxation_methods.cpp",
-                    "src/core/rad_transform_impl.cpp"],
-    },
     {
         "id": "ngsolve-gettrafo-first-touch-garbage",
         "title": "NGSolve scalar tr(ip).point occasionally returns uninitialized memory on the "

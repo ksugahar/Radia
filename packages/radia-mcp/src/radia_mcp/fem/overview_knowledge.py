@@ -4,7 +4,7 @@ LAB_STACK = r"""
 # Sugahara Lab FEM stack (production, 2026-05)
 
 ★ Production FEM library = **NGSolve 6.2.2603+** (PyPI)
-  with lab additions in `src/ext/sparsesolv/` and Radia for open-boundary/MMM.
+  with lab additions in `src/ext/sparsesolv/` and Radia for open-boundary/HDiv-VIM.
 
 | Layer | Tool | Use |
 |-------|------|-----|
@@ -32,7 +32,7 @@ LAB_STACK = r"""
 ## Cross-references
 
 - `radia_mcp.matrix_solvers` — CG/COCR + preconditioners (Compact AMS theory)
-- `radia_mcp.bem` — when to use BEM vs FEM (MMM/MSC) vs FEM-BEM hybrid
+- `radia_mcp.bem` — when to use BEM vs FEM (HDiv-VIM) vs FEM-BEM hybrid
 - `radia_mcp.motor` — Hollaus MSFEM application
 - `radia_mcp.differential_forms` — exterior calculus foundation of H(curl)/H(div)
 """

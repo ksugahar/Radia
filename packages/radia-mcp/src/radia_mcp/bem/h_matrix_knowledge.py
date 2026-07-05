@@ -1,4 +1,4 @@
-"""H-matrix and ACA acceleration for BEM/MMM."""
+"""H-matrix and ACA acceleration for BEM / HDiv-VIM."""
 
 OVERVIEW = r"""
 # H-matrix / ACA / BLR for BEM acceleration
@@ -15,7 +15,7 @@ for N > 10,000.  Two main acceleration families:
 ## Why lab uses H-matrix over FMM
 
 Per CLAUDE.md "FMM (Fast Multipole Method): Removed (2026-03-06)":
-1. FMM dipole approximation is inaccurate for MSC distributed charges
+1. FMM dipole approximation is inaccurate for distributed face charges
 2. Compact geometries (87% near-field pairs) eliminate FMM's advantage
 3. HACApK provides same O(N log N) memory with better practical performance
 4. FMM tree-build overhead dominates for typical Radia N < 10,000
@@ -123,7 +123,7 @@ rad.Solve(container, 1e-4, 1000, 2)  # method=2 = HACApK
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `hacapk_eps` | 1e-4 | ACA truncation tolerance |
-| `hacapk_leaf` | 10 | Min cluster size (≈66 DOF for MSC hex) |
+| `hacapk_leaf` | 10 | Min cluster size (≈66 DOF for face-charge hex) |
 | `hacapk_eta` | 2.0 | Admissibility: clusters separated if dist > η·diam |
 
 ## When to use HACApK

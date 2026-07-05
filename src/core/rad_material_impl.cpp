@@ -37,27 +37,6 @@
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
-// Free the cross-Solve collocation-MMMM coarse-tier cache (the chi-free geometry-K H-matrix +
-// the chi-free per-hex localL/diagK blocks).  Called from Initialize() (ctor / UtiDelAll / error
-// cleanup; NSDMI null init makes the first call safe) and on a cache miss before rebuilding.
-// Defined here (not inline in rad_application.h) because RadHACApKMomentSystem is complete here.
-void radTApplication::InvalidateMomentHK()
-{
-	if(m_moment_hk)
-	{
-		delete m_moment_hk;
-		m_moment_hk = nullptr;
-	}
-	m_moment_hk_eps = 0.0;
-	m_moment_hk_leaf = 0;
-	m_moment_hk_eta = 0.0;
-	m_moment_hk_analytic = false;
-	m_moment_hk_localL.clear();
-	m_moment_hk_localL.shrink_to_fit();
-	m_moment_hk_diagK.clear();
-	m_moment_hk_diagK.shrink_to_fit();
-}
-
 int radTApplication::SetLinearMaterial(double* KsiArray, long lenKsiArray, double* RemMagnArray, long lenRemMagnArray)
 {
 	radTMaterial* MaterPtr = nullptr;
@@ -1056,209 +1035,6 @@ int radTApplication::GetFaceGeom(int InteractElemKey, double* pG, int* pDOF)
 
 //-------------------------------------------------------------------------
 
-int radTApplication::GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF)
-{
-	// Per moment-element centroid demag field + gradient functionals (nMom x 9 x m_totalDOF, ROW-MAJOR).
-	// Two-call pattern: pass pC=nullptr to read back nMom and dof, then allocate nMom*9*dof and call again.
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
-
-		int totalDOF = InteractPtr->GetTotalDOF();
-		std::vector<int> momElem;
-		InteractPtr->CollectMomentElems(momElem);
-		int nMom = (int)momElem.size();
-		if(pDOF) *pDOF = totalDOF;
-		if(pNHex) *pNHex = nMom;
-
-		if(pC != nullptr && totalDOF > 0 && nMom > 0)
-		{
-			std::vector<double> Cflat; int nh = 0;
-			InteractPtr->BuildCentroidFieldGrad(Cflat, nh);
-			std::memcpy(pC, Cflat.data(), (size_t)nh * 9 * totalDOF * sizeof(double));
-		}
-
-		return 1;
-	}
-	catch (...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-//-------------------------------------------------------------------------
-
-int radTApplication::BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF)
-{
-	// Multipole-moment MMM system matrix A (dof x dof, ROW-MAJOR) + rhs (dof) for uniform linear chi + uniform Happ.
-	// Two-call pattern: pA=nullptr -> read back dof; then allocate dof*dof + dof and call again to fill.
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
-
-		int totalDOF = InteractPtr->GetTotalDOF();
-		if(pDOF) *pDOF = totalDOF;
-
-		if(pA != nullptr && pRhs != nullptr && totalDOF > 0)
-		{
-			std::vector<double> A, rhs;
-			InteractPtr->BuildMomentSystem(chi, Happ, A, rhs);
-			std::memcpy(pA, A.data(), (size_t)totalDOF * totalDOF * sizeof(double));
-			std::memcpy(pRhs, rhs.data(), (size_t)totalDOF * sizeof(double));
-		}
-		return 1;
-	}
-	catch (...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-int radTApplication::MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF)
-{
-	// Build the UN-normalized moment system A_raw ENTRY-BY-ENTRY via radTInteraction::MomentSystemEntry --
-	// the validation harness for the on-demand HACApK H-matrix entry (Phase 2, ACA_MOMENT_DESIGN.ipynb).
-	// Two-call: pA=nullptr -> read back dof; allocate dof*dof + call again.  Uniform chi.
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
-		int totalDOF = InteractPtr->GetTotalDOF();
-		if(pDOF) *pDOF = totalDOF;
-		if(pA != nullptr && totalDOF > 0)
-		{
-			int nHex = InteractPtr->GetNumHexElements();
-			std::vector<double> chiv((size_t)(nHex > 0 ? nHex : 1), chi);
-			for(int i = 0; i < totalDOF; i++)
-				for(int j = 0; j < totalDOF; j++)
-					pA[(size_t)i*totalDOF + j] = InteractPtr->MomentSystemEntry(i, j, chiv.data());
-		}
-		return 1;
-	}
-	catch (...)
-	{
-		Initialize(); return 0;
-	}
-}
-
-int radTApplication::HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF)
-{
-#ifdef RADIA_USE_HACAPK
-	try
-	{
-		radThg hg;
-		if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
-
-		int totalDOF = InteractPtr->GetTotalDOF();
-		*pDOF = totalDOF;
-
-		if(pMatrix != nullptr && totalDOF > 0)
-		{
-			// Build the actual HACApK (ACA+) operator and densify it column-by-
-			// column via MatVec on unit vectors. The result is the system matrix
-			// A = -N + diag(1/chi) WITH the ACA approximation, in the original
-			// (user) DOF ordering -- same ordering as GetInteractMatrix, so it is
-			// directly comparable / usable for deflation.
-			RadHACApKMMMManager mgr(InteractPtr);
-			RadHACApKParams params;
-			params.aca_eps = m_hacapk_eps;
-			params.leaf_size = m_hacapk_leaf_size;
-			params.eta = m_hacapk_eta;
-			params.print_level = 0;
-			if(!mgr.BuildHMatrix(params))
-			{
-				long matrixSize = (long)totalDOF * (long)totalDOF;
-				std::memset(pMatrix, 0, matrixSize * sizeof(double));
-				return 0;
-			}
-			// TaskManager self-wrap (CLAUDE.md "C++ HACApK Self-Wrap Policy"): keep the pool up
-			// across the densify loop (totalDOF H-matvecs) without a caller `with TaskManager()`.
-			ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-			std::vector<double> x((size_t)totalDOF, 0.0), y((size_t)totalDOF, 0.0);
-			for(int j = 0; j < totalDOF; j++)
-			{
-				x[j] = 1.0;
-				mgr.MatVec(x, y);
-				for(int i = 0; i < totalDOF; i++)
-					pMatrix[(long)i * totalDOF + j] = y[i];  // row-major A[i][j]
-				x[j] = 0.0;
-			}
-		}
-		return 1;
-	}
-	catch (...)
-	{
-		Initialize(); return 0;
-	}
-#else
-	(void)InteractElemKey; (void)pMatrix;
-	if(pDOF) *pDOF = 0;
-	return 0;
-#endif
-}
-
-//-------------------------------------------------------------------------
-
-#ifdef RADIA_USE_HACAPK
-extern "C" {
-    double cHACApK_hlu_run_on_hacapk(void *leafmtxp_void, void *control_void,
-                                      const double *x_orig, const double *y_orig,
-                                      int nffc);
-    int cHACApK_hlu_debug_materialize(void *leafmtxp_void, void *control_void,
-                                        int nffc,
-                                        double *A_perm_out,
-                                        int *lod_out,
-                                        int *nd_out);
-}
-#endif
-
-int radTApplication::HLUDebugMaterialize(int InteractElemKey,
-                                          double *A_perm_out,
-                                          int *lod_out,
-                                          int *nd_out)
-{
-#ifdef RADIA_USE_HACAPK
-    try
-    {
-        radThg hg;
-        if(!ValidateElemKey(InteractElemKey, hg)) return 0;
-        radTInteraction* InteractPtr = Cast.InteractCast(hg.rep);
-        if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0; }
-
-        int totalDOF = InteractPtr->GetTotalDOF();
-        if (totalDOF <= 0) return 0;
-
-        RadHACApKMMMManager mgr(InteractPtr);
-        RadHACApKParams params;
-        params.aca_eps = m_hacapk_eps;
-        params.leaf_size = m_hacapk_leaf_size;
-        params.eta = m_hacapk_eta;
-        params.print_level = 0;
-        if(!mgr.BuildHMatrix(params)) return 0;
-
-        int nffc_uniform = 6;
-        int rc = cHACApK_hlu_debug_materialize(
-            mgr.GetLeafmtxp(), mgr.GetLcontrol(),
-            nffc_uniform, A_perm_out, lod_out, nd_out);
-        return rc == 0 ? 1 : 0;
-    }
-    catch (...) { Initialize(); return 0; }
-#else
-    (void)InteractElemKey; (void)A_perm_out; (void)lod_out; (void)nd_out;
-    return 0;
-#endif
-}
-
 void radTApplication::ShowInteractVector(int InteractElemKey, char* FieldVectID)
 {
 	radThg hg;
@@ -1283,12 +1059,9 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 		radTInteraction* InteractPtr = Cast.InteractCast(hg.rep); 
 		if(InteractPtr==0) { Send.ErrorMessage("Radia::Error017"); return 0;}
 
-		// Valid methods: LU (0), BICGSTAB (1), HACAPK (2)
+		// Legacy non-symmetric Krylov relaxation methods are retired.
 		{
-			bool validMethod = (MethNo == RadSolverMethod::LU || MethNo == RadSolverMethod::BICGSTAB);
-#ifdef RADIA_USE_HACAPK
-			validMethod = validMethod || (MethNo == RadSolverMethod::BICGSTAB_HMATRIX);
-#endif
+			bool validMethod = (MethNo == RadSolverMethod::LU);
 			if(!validMethod) { Send.ErrorMessage("Radia::Error028"); return 0;}
 		}
 		if(IterNumber<0) { Send.ErrorMessage("Radia::Error019"); return 0;}
@@ -1304,44 +1077,6 @@ int radTApplication::MakeManualRelax(int InteractElemKey, int MethNo, int IterNu
 				RelaxMethNo_0.AutoRelax(1.0e-6, 1);  // Dummy precision, single "iteration"
 			}
 			break;
-		case RadSolverMethod::BICGSTAB:
-			{
-				// BiCGSTAB iterative solver (default)
-				radTRelaxationMethNo_1 RelaxMethNo_1(InteractPtr);
-				RelaxMethNo_1.AutoRelax(RelaxParam, IterNumber);
-			}
-			break;
-#ifdef RADIA_USE_HACAPK
-		case RadSolverMethod::BICGSTAB_HMATRIX:
-			{
-				// BiCGSTAB with H-matrix (HACApK ACA+)
-				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
-
-				// Set HACApK parameters from application settings
-				RadHACApKParams hacapk_params;
-				hacapk_params.aca_eps = m_hacapk_eps;
-				hacapk_params.leaf_size = m_hacapk_leaf_size;
-				hacapk_params.eta = m_hacapk_eta;
-				hacapk_params.print_level = 0;  // Silent (set to 1 for debug output)
-				RelaxMethNo_2.SetHACApKParams(hacapk_params);
-
-				RelaxMethNo_2.AutoRelax(RelaxParam, IterNumber);
-
-				// Store statistics for later retrieval
-				const RadHACApKStats& stats = RelaxMethNo_2.GetHMatrixStats();
-				m_hacapk_n_lowrank = stats.n_lowrank;
-				m_hacapk_n_dense = stats.n_dense;
-				m_hacapk_max_rank = stats.max_rank;
-				m_hacapk_n_leaves = stats.n_leaves;
-				m_hacapk_n_dof = stats.n_dof;
-				m_hacapk_compression = stats.compression;
-				m_hacapk_build_time = stats.build_time;
-				m_hacapk_memory_mb = stats.memory_mb;
-				m_hacapk_dense_memory_mb = stats.dense_memory_mb;
-				m_hacapk_stats_valid = true;
-			}
-			break;
-#endif
 		}
 
 		int lenRelaxStatusParamArray = 3;
@@ -1364,8 +1099,6 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	// Initialize solve statistics
 	m_solve_stats_valid = false;
 	m_solve_t_matrix_build = 0.0;
-	m_solve_t_moment_fieldgrad = 0.0;
-	m_solve_t_moment_system_build = 0.0;
 	m_solve_t_linear_solve = 0.0;
 	m_solve_t_lu_decomp = 0.0;  // Reset LU decomposition time
 	m_solve_linear_iterations = 0;
@@ -1391,12 +1124,9 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 			if(PrecOnMagnetiz <= 0.) { Send.ErrorMessage("Radia::Error030"); return 0; }
 			if(MaxIterNumber <= 0) { Send.ErrorMessage("Radia::Error031"); return 0; }
 
-			// Valid methods: LU (0), BICGSTAB (1), HACAPK (2)
+			// Legacy non-symmetric Krylov relaxation methods are retired.
 			{
-				bool validMethod = (MethNo == RadSolverMethod::LU || MethNo == RadSolverMethod::BICGSTAB);
-#ifdef RADIA_USE_HACAPK
-				validMethod = validMethod || (MethNo == RadSolverMethod::BICGSTAB_HMATRIX);
-#endif
+				bool validMethod = (MethNo == RadSolverMethod::LU);
 				if(!validMethod) { Send.ErrorMessage("Radia::Error041"); return 0; }
 			}
 
@@ -1420,67 +1150,21 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 
 			//int ActualIterNum = 0;
 
-			// EIEM2 retirement (Phase 3b): the parameter-free multipole-moment MMM formulation
-			// (BuildMomentSystemCore) is the SOLE surface-charge (MSC) demag solver.  The retired EIEM2
-			// collocation kernel used to cover two element-composition cases that moment does NOT
-			// represent; both are now rejected fail-loud (No Fallbacks -- a silent wrong number is worse
-			// than an error):
-			//   (1) a single Solve that MIXES the 3-DOF MMM dipole element (RecMag, DOF == 3) with MSC
-			//       face-charge elements (tetrahedron / wedge / pyramid / hexahedron, DOF >= 4).  The two
-			//       use different formulations (dipole vs surface charge); solve them as separate containers.
-			//   (2) B-input hysteresis (b_input_newton / b_input_hantila) on MSC elements -- the B-input
-			//       Newton/Hantila Jacobian is block-3x3 (MMM, 3 DOF) only; a 4/5/6-DOF MSC element cannot
-			//       be driven by it.  Hysteresis stays on the 3-DOF MMM dipole element (RecMag).
-			// Reset the per-solve B-input moment flag; it is (re)set below only when
-			// the routing selects the moment B-input Picard path.
-			m_b_input_moment = false;
-			bool b_input_moment_route = false;   // route through normal moment LU/Picard with the B-input chi update
+			// Surface-charge soft iron (DOF >= 4) is no longer a supported C++ relaxation path.
+			// Mesh-backed soft iron belongs to FEEC HDiv-VIM before reaching this function.
 			{
 				int nElemChk = InteractPtr->GetAmOfMainElem();
-				bool anyMSC = false, anyMMM3 = false;
-				bool allMoment = (nElemChk > 0), allMomentHys = (nElemChk > 0);
 				for(int i = 0; i < nElemChk; i++)
 				{
 					int dd = InteractPtr->GetElementDOF(i);
-					if(dd >= 4) anyMSC = true;        // tet(4) / wedge,pyramid(5) / hex(6): unified face-charge moment
-					else if(dd == 3) anyMMM3 = true;  // RecMag: 3-DOF MMM dipole (the other formulation)
-					if(dd < 4) allMoment = false;     // a genuine 3-DOF dipole present
-					radTg3dRelax* g3d = InteractPtr->GetElement(i);
-					radTMaterial* mat = (radTMaterial*)(g3d->MaterHandle.rep);
-					if(dynamic_cast<radTHysteresisMaterial*>(mat) == nullptr) allMomentHys = false;
-				}
-				if(anyMSC && anyMMM3) { Send.ErrorMessage("Radia::Error204"); return 0; }
-
-				if(m_b_input_newton || m_b_input_hantila)
-				{
-					// B-input PLAY-model hysteresis through the MMMM moment Picard:
-					// allowed when every element is a moment/MSC face-charge element
-					// (DOF in {4,5,6}) AND every material is a hysteresis material.
-					// Set the per-solve flag and DO NOT raise Error205 -- fall through
-					// to the normal moment LU/BiCGSTAB driver (switch(MethNo)).
-					if(allMoment && allMomentHys && nElemChk > 0)
-					{
-						m_b_input_moment = true;
-						b_input_moment_route = true;
-					}
-					else if(anyMSC)
-					{
-						// A moment/MSC element is present but NOT all-moment-hysteresis:
-						// the dense 3-DOF B-input Newton Jacobian cannot drive it.
-						// Fail loud (No Fallbacks) rather than silently treat as linear.
-						Send.ErrorMessage("Radia::Error205"); return 0;
-					}
-					// else: pure 3-DOF (no MSC) -> handled by AutoRelax_BInput_Newton below.
+					if(dd >= 4) { Send.ErrorMessage("Radia::Error203"); return 0; }
 				}
 			}
 
 			// B-input solvers for hysteresis (energy or play)
 			// Auto-activates when b_input_newton=True or b_input_hantila=True
 			// and all materials are radTHysteresisMaterial.
-			// NOTE: the all-moment (DOF>=4) B-input case is routed through the normal
-			// moment Picard driver below (b_input_moment_route), NOT through the dense
-			// 3-DOF AutoRelax_BInput_Newton -- only genuine 3-DOF dipoles take this branch.
-			if((m_b_input_newton || m_b_input_hantila) && !b_input_moment_route)
+			if(m_b_input_newton || m_b_input_hantila)
 			{
 				// Check if all elements have hysteresis materials
 				bool all_hysteresis = true;
@@ -1543,44 +1227,6 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 				ActualIterNum = RelaxMethNo_0.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
 			}
 			break;
-			case RadSolverMethod::BICGSTAB:
-			{
-				// BiCGSTAB iterative solver
-				radTRelaxationMethNo_1 RelaxMethNo_1(InteractPtr);
-				ActualIterNum = RelaxMethNo_1.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-			}
-			break;
-#ifdef RADIA_USE_HACAPK
-			case RadSolverMethod::BICGSTAB_HMATRIX:
-			{
-				// BiCGSTAB with H-matrix (HACApK ACA+)
-				radTRelaxationMethNo_2 RelaxMethNo_2(InteractPtr);
-
-				// Set HACApK parameters from application settings
-				RadHACApKParams hacapk_params;
-				hacapk_params.aca_eps = m_hacapk_eps;
-				hacapk_params.leaf_size = m_hacapk_leaf_size;
-				hacapk_params.eta = m_hacapk_eta;
-				hacapk_params.print_level = 0;  // Silent (set to 1 for debug output)
-				RelaxMethNo_2.SetHACApKParams(hacapk_params);
-
-				ActualIterNum = RelaxMethNo_2.AutoRelax(PrecOnMagnetiz, MaxIterNumber, MagnResetIsNotNeeded);
-
-				// Store statistics for later retrieval
-				const RadHACApKStats& stats = RelaxMethNo_2.GetHMatrixStats();
-				m_hacapk_n_lowrank = stats.n_lowrank;
-				m_hacapk_n_dense = stats.n_dense;
-				m_hacapk_max_rank = stats.max_rank;
-				m_hacapk_n_leaves = stats.n_leaves;
-				m_hacapk_n_dof = stats.n_dof;
-				m_hacapk_compression = stats.compression;
-				m_hacapk_build_time = stats.build_time;
-				m_hacapk_memory_mb = stats.memory_mb;
-				m_hacapk_dense_memory_mb = stats.dense_memory_mb;
-				m_hacapk_stats_valid = true;
-			}
-			break;
-#endif
 			}
 
 			binput_done:
@@ -1636,17 +1282,10 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		short PrevSendingIsRequired = SendingIsRequired;
 		SendingIsRequired = 0;
 
-		// For HACApK (method 2), skip the dense interaction matrix N: the MMM/MSC method-2 path
-		// (radTRelaxationMethNo_2) builds its own H-matrix and never reads the dense N.  (MMMM moment requests
-		// for method 2 are rerouted to the dense LU moment driver -- MMMM does not connect to HACApK.)  The
-		// moment Picard scaffold (ComputeActualHFieldFromSigma etc.) uses the constitutive H=M/chi -- so we
-		// skip the O(N^2) dense build (storage decoupling).  EXCEPTION: the B-input Newton/Hantila hysteresis
-		// path builds its NpI from the dense BaseMatrix (needs N), so keep the dense build when those flags are set.
+		// Legacy non-symmetric H-matrix relaxation is retired; the legacy path always
+		// builds the dense interaction object. Production magnetic-material solves
+		// belong to HDiv-VIM.
 		char skipDenseMatrix = 0;
-#ifdef RADIA_USE_HACAPK
-		if(MethNo == RadSolverMethod::BICGSTAB_HMATRIX && !m_b_input_newton && !m_b_input_hantila)
-			skipDenseMatrix = 1;
-#endif
 
 		// Check if we can reuse cached interaction matrix
 		// The interaction matrix N only depends on geometry, not on chi (material)
@@ -1664,20 +1303,9 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 		{
 			cacheValid = false;
 			m_cached_interact_key = 0;
-			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = 0;
 			m_cached_image_spec.clear();
 		}
-
-		// For HACApK, cache invalidation is handled differently (H-matrix is rebuilt internally)
-		// Also invalidate cache if solver method changed (different matrix type might be needed)
-#ifdef RADIA_USE_HACAPK
-		if(cacheValid && MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
-		{
-			// HACApK builds its own H-matrix, may need to rebuild
-			// For now, keep the cache - HACApK handles its own caching
-		}
-#endif
 
 		if(cacheValid)
 		{
@@ -1692,7 +1320,6 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 				// Cache is stale, need to rebuild
 				cacheValid = false;
 				m_cached_interact_key = 0;
-				InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 				m_cached_obj_key = 0;
 				m_cached_image_spec.clear();
 			}
@@ -1735,74 +1362,11 @@ int radTApplication::SolveGen(int ObjKey, double PrecOnMagnetiz, int MaxIterNumb
 
 			// Cache the interaction key for future reuse
 			m_cached_interact_key = InteractElemKey;
-			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = ObjKey;
 			m_cached_image_spec = imageSpec;
 		}
 
 		SendingIsRequired = PrevSendingIsRequired;
-
-		// Mesh-less surface-charge soft iron (ObjTetrahedron/ObjHexahedron/ObjWedge/ObjPyramid + MatLin/MatSatIsoTab
-		// + rad.Solve) is solved by the canonical multipole-moment MMM MSC path here.  Mesh-BACKED pure
-		// TET/HEX/WEDGE soft iron (radia.vim.soft_iron_from_mesh) is routed to FEEC HDiv-VIM by the Python
-		// rad.Solve wrapper before reaching this C++ path.  demag_backend='collocation_mmmm' and unsupported
-		// mixed/pyramid mesh-backed irons intentionally use this C++ collocation MMMM representation.
-		// Permanent magnets are unaffected; 3-DOF RecMag keeps the dipole MMM path.
-
-		// multipole-moment MMM dispatch (UNCONDITIONAL since Phase 3b-1): the parameter-free MOMENT formula
-		// (BuildMomentSystemCore) is the SOLE solver for surface-charge soft iron -- tet (4 DOF),
-		// wedge/pyramid (5 DOF), and hex (6 DOF).  Solver method:
-		//   - method 0 (LU)       -> dense direct moment solve.
-		//   - method 1 (BiCGSTAB) -> matrix-free moment BiCGSTAB + element-block Jacobi (4/5/6 DOF).
-		//   - method 2 (HACApK)   -> COARSE-tier HACApK-BiCGSTAB (Sugahara 2026-07-02): PURE-HEX moment
-		//     routes to the matrix-free moment BiCGSTAB (method 1) with the chi-free geometry K built as a
-		//     RadHACApKMomentSystem H-matrix (O(N log N) matvec); loop-free abandoned (field-correct,
-		//     loop-polluted internal M -- coarse/optimization tier).  tet/wedge/mixed method-2 -> dense LU.
-		// PER-ELEMENT chi: the nonlinear Picard loop re-solves each iteration with the current chi (Inc 4).
-		// IMA (image symmetry) IS moment-eligible (BuildCentroidFieldGrad adds the mirror images).  Mixed
-		// 3-DOF RecMag dipole + 4-6 DOF MSC is rejected fail-loud (Error204) in MakeAutoRelax.  The
-		// EIEM2 surface-charge collocation kernel was fully removed in Phase 3b.
-		{
-			// multipole-moment MMM is UNCONDITIONAL for surface-charge polyhedra.  The allMoment check below routes
-			// tet/wedge/pyramid to the LU/Picard moment driver; a method-2 (HACApK) request on a PURE-HEX moment
-			// object routes to the matrix-free BiCGSTAB moment driver with an H-matrix geometry K (collocation
-			// MMMM coarse tier, loop-free abandoned).  Mixed 3-DOF dipole + MSC is rejected fail-loud (Error204),
-			// since no production case mixes surface-charge + dipole soft iron.
-			radThg hgMom;
-			if(ValidateElemKey(InteractElemKey, hgMom))
-			{
-				radTInteraction* pIntrMom = dynamic_cast<radTInteraction*>(hgMom.rep);
-				if(pIntrMom != 0)
-				{
-					int neMom = pIntrMom->GetAmOfMainElem();
-					bool allMoment = (neMom > 0), allHex6 = (neMom > 0);
-					for(int iEl = 0; iEl < neMom; iEl++)
-					{
-						int dd = pIntrMom->GetElementDOF(iEl);
-						if(dd != 6 && dd != 5 && dd != 4) allMoment = false;   // moment = tet(4) + wedge/pyramid(5) + hex(6)
-						if(dd != 6) allHex6 = false;                            // pure-hex 6-DOF (moment H-matrix is hex-only)
-					}
-					// Collocation-MMMM COARSE tier (Sugahara 2026-07-02): a method-2 (HACApK) request on a
-					// PURE-HEX moment object routes to the matrix-free BiCGSTAB moment driver (method 1) with a
-					// chi-free geometry K built as a RadHACApKMomentSystem H-matrix (O(N log N) matvec) -- loop-free
-					// abandoned (field-correct, loop-polluted internal M; coarse/optimization tier only).
-					// tet/wedge/mixed method-2 stay on the dense moment LU (the moment H-matrix is hex-only).
-					m_moment_use_hmatrix = false;
-					if(allMoment && MethNo == RadSolverMethod::BICGSTAB_HMATRIX)
-					{
-						if(allHex6)
-						{
-							m_moment_use_hmatrix = true;          // method-1 pureHexMatrixFree builds K as an H-matrix
-							MethNo = RadSolverMethod::BICGSTAB;    // route to the matrix-free moment BiCGSTAB driver
-						}
-						else
-						{
-							MethNo = RadSolverMethod::LU;          // tet/wedge/mixed -> dense moment LU
-						}
-					}
-				}
-			}
-		}
 
 		try
 		{
@@ -1865,7 +1429,6 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 		{
 			cacheValid = false;
 			m_cached_interact_key = 0;
-			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = 0;
 			m_cached_image_spec.clear();
 		}
@@ -1882,7 +1445,6 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 				// Cache is stale, need to rebuild
 				cacheValid = false;
 				m_cached_interact_key = 0;
-				InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 				m_cached_obj_key = 0;
 				m_cached_image_spec.clear();
 			}
@@ -1916,7 +1478,6 @@ int radTApplication::BuildMatrix(int ObjKey, const char* image)
 
 			// Cache the interaction key for future reuse
 			m_cached_interact_key = InteractElemKey;
-			InvalidateMomentHK();   // cross-solve moment K cache follows the interaction lifecycle
 			m_cached_obj_key = ObjKey;
 			m_cached_image_spec = imageSpec;
 		}
@@ -2565,16 +2126,14 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 #ifdef RADIA_USE_HACAPK
 	// H-matrix timing (Method 2 only) - ELF-compatible
 	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
-	dOut[8] = 0.0;  // (was moment loop-deflation cycles; MMMM no longer connects to HACApK)
-	dOut[9] = 0.0;  // (was moment loop-deflation shift alpha; removed)
+	dOut[8] = 0.0;
+	dOut[9] = 0.0;
 #else
 	dOut[7] = 0.0;
 	dOut[8] = 0.0;
 	dOut[9] = 0.0;
 #endif
-	dOut[10] = m_solve_t_moment_fieldgrad;
-	dOut[11] = m_solve_t_moment_system_build;
-	*nOut = 12;
+	*nOut = 10;
 }
 
 //-------------------------------------------------------------------------

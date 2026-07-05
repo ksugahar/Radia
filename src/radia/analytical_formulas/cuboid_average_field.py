@@ -44,7 +44,7 @@ Useful for
 * Micromagnetics on a regular cubic lattice: cell-cell magnetic
   interaction.
 * Mesh-to-mesh transfer between two rectangular grids.
-* FEM-MMM coupling: cell-averaged B for a rectangular FEM element.
+* FEM-magnetic coupling: cell-averaged B for a rectangular FEM element.
 
 Numerical caveat
 ----------------

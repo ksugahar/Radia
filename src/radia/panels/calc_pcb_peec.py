@@ -9,7 +9,7 @@ Pipeline:
   -> frequency sweep -> Z(f), L(f), R(f)
 
 Supports:
-  - .magnetic blocks -> CoupledPEECSolver (MMM coupling)
+  - conductor PEEC extraction; magnetic-material coupling is application-specific
   - Multi-filament (nwinc/nhinc) for skin/proximity effect
   - Multi-port Z-parameter extraction
   - SPICE netlist output (PRIMA Lanczos MOR)
@@ -48,7 +48,8 @@ def solve_peec(inp_file="", inp_text="",
         freq_min: Minimum frequency [Hz]
         freq_max: Maximum frequency [Hz]
         n_freq: Number of frequency points (log-spaced)
-        solver_method: Radia solver for magnetic coupling (0=LU, 1=BiCGSTAB, 2=HACApK)
+        solver_method: retained CLI slot; magnetic-material coupling is handled
+            by HDiv-VIM / reduced-FEM workflows, not this PEEC panel.
         solver_prec: Solver precision
         solver_maxiter: Max solver iterations
         spice_output: Optional SPICE netlist output path
@@ -103,20 +104,14 @@ def solve_peec(inp_file="", inp_text="",
     has_magnetic = bool(parser.magnetic_blocks)
 
     if has_magnetic:
-        # Use auto-solve which handles magnetic coupling
-        _log("SOLVE:magnetic coupling (CoupledPEECSolver)")
-        result = parser.solve(
-            freqs=freqs,
-            solver_method=solver_method,
-            solver_prec=solver_prec,
-            solver_maxiter=solver_maxiter,
-        )
-        t_solve = time.perf_counter() - t0
-
-        Z_port = result['Z_port']
-        R_arr = result['R']
-        L_arr = result['L']
-        n_loops = result.get('topology', {}).get('n_loop', 0)
+        return {
+            "error": (
+                ".magnetic blocks used the retired PEEC magnetic-material "
+                "coupling path. Use this panel for conductor/shield PEEC and "
+                "HDiv-VIM / reduced FEM for magnetic cores."
+            ),
+            "has_magnetic": True,
+        }
 
     else:
         # Standard PEEC (no magnetic coupling)
@@ -241,7 +236,7 @@ def build_argparser():
                         help="Number of frequency points")
     parser.add_argument("--solver-method", type=int, default=0,
                         choices=[0, 1, 2],
-                        help="Radia solver for magnetic coupling")
+                        help="Retained option; magnetic-material PEEC coupling is retired")
     parser.add_argument("--spice-output", default="",
                         help="SPICE netlist output path")
     parser.add_argument("--output", default="",

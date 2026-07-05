@@ -18,7 +18,7 @@ textbook / paper absorbed gets reflected into this NGSolve-side module.
 Companion modules in radia_ngsolve.knowledge:
   - kelvin.py — needed for Gangl-Sturm's W/Q exterior cell problem
                 (truncated nonlinear cell problem on truncated R^3)
-  - mmm_core.py — MMM tangent reluctivity tensor for averaged adjoint
+  - hdiv_vim.py — mesh-backed magnetic material state for reduced-FEM coupling
   - basis_functions.py — Nedelec HCurl edge elements (state space)
   - esim.py — SIBC / nonlinear surface impedance (related sensitivity
               framework for fluid-conductor TopOpt extensions)
@@ -1665,7 +1665,7 @@ paper) — only the surrogate L2 cost.
 
 (h) RADIA ROLE:
     Marginal — this is a bounded-domain FEM problem with no open-
-    boundary need, so radia.RadiaField / MMM / MSC do not apply.
+    boundary need, so Radia fixed-source fields / HDiv-VIM do not apply.
 """
 
 
@@ -1826,7 +1826,7 @@ jagged boundaries.  The hybrid is the lab default.
 
   - `kelvin` — truncated cell-problem solve for Gangl-Sturm W/Q
                 exterior corrector
-  - `mmm_core` — MMM tangent reluctivity for averaged adjoint
+  - `hdiv_vim` — mesh-backed magnetic material state for reduced-FEM coupling
   - `basis_functions` — Nedelec HCurl edge elements (state space)
   - `esim` — SIBC / nonlinear surface impedance (related sensitivity
               framework for fluid-conductor TopOpt extensions)

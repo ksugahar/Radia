@@ -23,7 +23,7 @@ Key implementation notes:
   - nograds=True on HCurl: eliminates gradient kernel of curl operator
   - PEEC n_seg=64 for accurate circle approximation (not 16)
   - Core Delta_L: same-mesh reference (mu_r=1 vs mu_r=1000 on same mesh)
-  - PEEC core: computed dynamically via CoupledPEECSolver (.magnetic block)
+  - PEEC core: computed dynamically via the retired .magnetic PEEC path
   - Shield: plate ABOVE coil (not surrounding it) for fair FEM vs PEEC comparison
   - Shield Delta_L: low-frequency eddy current as DC reference
 

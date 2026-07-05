@@ -209,11 +209,11 @@ def test_abstract_strength_returns_dict():
 
 def test_abstract_no_math_no_citation_flags_domain_acronym():
     r = pw.paper_writing_check_abstract_no_math_no_citation(
-        "This paper combines MMM and FEM for magnetic levitation design."
+        "This paper combines FEM and BEM for magnetic levitation design."
     )
     assert r["status"] == "warning"
     assert r["n_acronyms"] == 2
-    assert r["acronyms"] == ["FEM", "MMM"]
+    assert r["acronyms"] == ["BEM", "FEM"]
 
 
 def test_abstract_no_math_no_citation_flags_numeric_reference_marker():

@@ -4,7 +4,8 @@ fasthenry_parser.py
 FastHenry .inp file parser for Radia PEEC
 
 Parses FastHenry input files and converts to PEECBuilder topology.
-Supports magnetic material blocks for coupled PEEC+MMM analysis.
+Magnetic material coupling is not solved through the old PEEC+magnetic-moment
+path; use the HDiv-VIM / reduced-FEM workflow for ferrite or iron cores.
 
 Supported directives:
   .Units  - Length unit (m, mm, um, cm, etc.)
@@ -14,7 +15,7 @@ Supported directives:
   .freq    - Frequency sweep: .freq fmin=1e3 fmax=1e9 ndec=10
   .default - Default segment parameters
   .equiv   - Node merge (equivalence)
-  .magnetic / .endmagnetic - Magnetic material block (box/hexahedron/mesh)
+  .magnetic / .endmagnetic - Parsed for diagnostics, rejected by solve()
   .panel / .endpanel - Panel block for capacitive effects (plate/mesh)
 
 Usage:
@@ -30,7 +31,7 @@ Usage:
     # Get frequencies
     freqs = parser.get_frequencies()
 
-    # Solve (auto-detects magnetic blocks and uses coupled solver)
+    # Solve PEEC / shielded PEEC
     result = parser.solve(freqs)
 
 Part of Radia project
@@ -1043,7 +1044,9 @@ class FastHenryParser:
         Parse, build, and solve in one step.
 
         Automatically uses ShieldedPEECSolver when .shield blocks are present,
-        CoupledPEECSolver when .magnetic blocks are present.
+        conductor PEEC, or ShieldedPEECSolver when .shield blocks are present.
+        .magnetic blocks are rejected because the old PEEC+magnetic-moment
+        coupling path has been retired.
 
         Args:
             freqs: Frequency array [Hz], or None to use .freq directive
@@ -1083,48 +1086,14 @@ class FastHenryParser:
 
         Delta_L = None
 
-        if self.shield_blocks and self.magnetic_blocks:
-            # Combined: magnetic core + conducting shield
-            from radia.peec_coupled import CoupledPEECSolver
-            from radia.peec_shielded import ShieldedPEECSolver
+        if self.magnetic_blocks:
+            raise NotImplementedError(
+                "FastHenry .magnetic blocks used the retired PEEC+magnetic-moment "
+                "coupling path. Use PEEC for conductors and the HDiv-VIM / "
+                "reduced-FEM workflow for magnetic cores."
+            )
 
-            # Step 1: Compute Delta_L from magnetic coupling
-            mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
-            mu_r_real = self.magnetic_blocks[0].get('mu_r', 1000.0)
-
-            mag_objects = self.build_magnetic_objects()
-            coupled = CoupledPEECSolver(topo, mag_objects,
-                                        mu_r_imag=mu_r_imag)
-            coupled.compute_coupling_matrix(
-                solver_method=solver_method,
-                solver_prec=solver_prec,
-                solver_maxiter=solver_maxiter,
-                mu_r_real=mu_r_real)
-            Delta_L = coupled.Delta_L
-
-            # Step 2: Modified topology with L_total = L_air + Delta_L
-            topo_coupled = dict(topo)
-            topo_coupled['L'] = coupled.L  # Already L_air + Delta_L
-
-            # Step 3: Shielded solver with coupled L
-            shield_solvers = self.build_shield_solvers()
-            shield = shield_solvers[0]
-            solver = ShieldedPEECSolver(topo_coupled, shield)
-
-            # Step 4: Frequency sweep with optional magnetic loss
-            tan_delta_m = coupled.tan_delta_m
-            if tan_delta_m > 0:
-                def Zs_with_mag_loss(freq, _td=tan_delta_m, _dL=Delta_L,
-                                     _zf=Zs_func, _n=coupled.n_loop):
-                    omega_f = 2.0 * np.pi * freq
-                    R_mag = omega_f * _td * np.diag(_dL)
-                    Zs_base = _zf(freq) if _zf is not None else np.zeros(_n)
-                    return R_mag.astype(complex) + np.asarray(Zs_base, dtype=complex)
-                Z_port = solver.frequency_sweep(freqs, Zs_with_mag_loss)
-            else:
-                Z_port = solver.frequency_sweep(freqs, Zs_func)
-
-        elif self.shield_blocks:
+        if self.shield_blocks:
             # Shielded PEEC solve (BEM + SIBC)
             from radia.peec_shielded import ShieldedPEECSolver
 
@@ -1133,23 +1102,6 @@ class FastHenryParser:
             solver = ShieldedPEECSolver(topo, shield)
             Z_port = solver.frequency_sweep(freqs, Zs_func)
 
-        elif self.magnetic_blocks:
-            # Coupled PEEC + MMM solve
-            from radia.peec_coupled import CoupledPEECSolver
-
-            mu_r_imag = self.magnetic_blocks[0].get('mu_r_imag', 0.0)
-            mu_r_real = self.magnetic_blocks[0].get('mu_r', 1000.0)
-
-            mag_objects = self.build_magnetic_objects()
-            solver = CoupledPEECSolver(topo, mag_objects,
-                                       mu_r_imag=mu_r_imag)
-            solver.compute_coupling_matrix(
-                solver_method=solver_method,
-                solver_prec=solver_prec,
-                solver_maxiter=solver_maxiter,
-                mu_r_real=mu_r_real)
-            Delta_L = solver.Delta_L
-            Z_port = solver.frequency_sweep(freqs, Zs_func)
         else:
             # Standard PEEC solve (no magnetic coupling)
             from radia.peec_topology import PEECCircuitSolver

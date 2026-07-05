@@ -2,7 +2,7 @@
 radia rectangular permanent-magnet field vs the closed-form on-axis field of a uniformly
 magnetized rectangular block (cuboid).
 
-The canonical rectangular PM is now ``rad.magnet_box`` -- an MMMM **surface-charge**
+The canonical rectangular PM is now ``rad.magnet_box`` -- a fixed-M surface-charge
 ``ObjHexahedron`` (the Python-facing surface-current ``ObjRecMag`` constructor was retired;
 ``rad.ObjRecMag`` is a thin shim forwarding to ``magnet_box``).  For a uniformly magnetized
 block the surface-charge field IS the exact analytic (Kennelly & Joch / surface-charge K&J)
@@ -31,7 +31,7 @@ BR = 1.2            # remanence [T]
 WX = WY = 20.0      # block cross-section [mm]
 WZ = 10.0           # block thickness [mm]
 
-# The MMMM surface-charge magnet_box reproduces the K&J closed form on-axis to ~1e-16
+# The fixed-M surface-charge magnet_box reproduces the K&J closed form on-axis to ~1e-16
 # near the face, growing to ~3e-14 in the far field (atan cancellation).  Assert 1e-12:
 # far tighter than the old surface-current ObjRecMag's 1e-6 gate, strict but cancellation-safe.
 TOL = 1e-12
@@ -44,7 +44,7 @@ def _analytic(zsurf):
 
 
 def test_recmag_onaxis_matches_closed_form():
-    """radia magnet_box on-axis B_z == closed form to machine precision (MMMM surface-charge
+    """radia magnet_box on-axis B_z == closed form to machine precision (fixed-M surface-charge
     field IS the exact analytic cuboid field)."""
     mag = rad.magnet_box([0, 0, 0], [WX, WY, WZ], [0, 0, BR / MU0])   # M in A/m
     worst = 0.0

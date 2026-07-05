@@ -5,7 +5,7 @@
   vim_field.wls -- the VIM (Volume Integral Method) FIELD OPERATOR: the field produced
   by a symbolic magnetization density M(x) (= one H(div) basis function) via the 1/r
   Laplace kernel.  This is the kernel that turns the FEEC basis (h1/hcurl/hdiv/...) into
-  an MSC/MMM solver -- and the thing the C++ core implements.
+  an HDiv-VIM solver -- and the thing the C++ core implements.
 
   Magnetostatic scalar potential of a magnetization M on element T (Laplace kernel only,
   per the Radia "Green's Function: Laplace Kernel Only" policy):
@@ -16,15 +16,15 @@
                                 + Sum_f Int_f sigma_s (r-x')/|r-x'|^3 dS' ]
      B = mu_0 (H + M)   (M = 0 outside T)
 
-  KEY de Rham bridge (why FEEC loops are the MSC null space):
+  KEY de Rham bridge (why FEEC loops are charge-free null modes):
     a div-free M (a "loop" = curl of an H(curl) function) has  rho_v = -div M = 0
     IDENTICALLY -> NO volume charge -> the field is PURELY surface-charge, a high
-    multipole that is (near-)null at the MSC collocation points.  This is exactly the
+    multipole that is (near-)null at the face-charge collocation points.  This is exactly the
     field-null property the C++ installCycle loop basis exploits.
 
   Routes (cf. README): (1) GAUSS quadrature -- always available (NIntegrate here = the
   reference).  (2) ANALYTICAL -- the van Oosterom-Strackee solid angle closes the
-  constant-sigma NORMAL field exactly (the MSC analytic kernel Radia's
+  constant-sigma NORMAL field exactly (the solid-angle face-charge kernel Radia's
   rad_poly_analytical.cpp uses); high-order sigma needs recursive moment formulas
   (Graglia/Wilton) or Gauss.  Both are validated below against each other.
 *)
@@ -113,11 +113,11 @@ Module[{ok = True, chk, Mc, Mdf, mmom, hN, hD, ratio, a, b, c, robs, wV, wN, hin
    chk["loop from H(curl) shape: rho = -div M = 0 (purely surface-charge field)",
        Simplify[volCharge[Mh]] === 0]];
 
-  (* ---- (3) MSC analytic kernel: van Oosterom-Strackee solid angle vs quadrature ---- *)
+  (* ---- (3) solid-angle face-charge kernel: van Oosterom-Strackee solid angle vs quadrature ---- *)
   a = {0, 0, 0}; b = {1, 0, 0}; c = {0, 1, 0}; robs = {0.2, 0.2, 0.7};
   wV = solidAngleVOS[a, b, c, robs];
   wN = solidAngleNum[a, b, c, robs];
-  chk["van Oosterom-Strackee solid angle = quadrature (MSC analytic kernel)",
+  chk["van Oosterom-Strackee solid angle = quadrature (solid-angle face-charge kernel)",
       Abs[Abs[wV] - Abs[wN]] < 1*^-7];
   (* a second observation point (off-axis) *)
   robs = {0.4, -0.1, 0.5};

@@ -5,7 +5,7 @@ Reluctance Network Analysis (RNA) / Magnetic Equivalent Circuit (MEC) knowledge.
 Distilled from public-safe curated corpus (17 files, lab Sugahara 田中/羽根 lineage).
 
 Cross-references:
-- `radia_mcp.bem.mmm_msc.rna_mmm` — RNA + MMM coupling
+- `radia_mcp.radia_ngsolve.hdiv_vim` — magnetic-material field coupling
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` — Play model
 - `radia_mcp.mor.systematic.cln` — Cauer ladder for eddy
 
@@ -34,12 +34,12 @@ def rna_mec(topic: str = "overview") -> str:
             "reluctance_network_construction" - flux tube, claw-pole example
             "lumped_extraction_fea"          - L, M from FEA (Lee 2005 TEAM-28)
             "cauer_ladder_rna"               - CLN for eddy-current MOR (Kameari 2018)
-            "rna_mmm_coupling"               - Janet 2004-2005 mixed method, CT
+            "rna_magnetic_coupling"               - Janet 2004-2005 mixed method, CT
             "electromechanical_coupling"     - State-space RNA + ODE (RK4)
             "team28_reduced_model"           - TEAM-28 in depth, 85h -> 1h speedup
             "topology_optimization"          - Yin 2023 grid RNA + AVM
             "dynamic_hysteresis"             - Lab Play + Cauer dynamic MEC
-            "vs_pec_peec"                    - Acronym map: RNA/MEC/MMM/MSC/PEEC
+            "vs_pec_peec"                    - Acronym map: RNA/MEC/PEEC/FEM/HDiv-VIM
             "all"                            - Everything
     """
     return get_knowledge(topic)

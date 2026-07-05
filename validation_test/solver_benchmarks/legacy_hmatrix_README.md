@@ -101,19 +101,13 @@ Tests solver performance with linear materials:
 - Single-iteration convergence for linear problems
 - Matrix construction overhead analysis
 
-### 10. `benchmark_dipole_vs_msc.py`
-Compares dipole approximation vs MSC integration:
-- Dipole approximation (far-field, O(N))
-- MSC integration (exact, O(N*faces))
-- Helps determine optimal threshold for adaptive computation
-
-### 11. `benchmark_lu_vs_hmatrix.py`
+### 10. `benchmark_lu_vs_hmatrix.py`
 Direct LU vs BiCGSTAB vs HACApK comparison:
 - Computational time scaling with problem size
 - Solution accuracy consistency
 - Memory usage estimation
 
-### 12. `benchmark_solver_methods.py`
+### 11. `benchmark_solver_methods.py`
 Solver methods benchmark with detailed performance metrics:
 - Three solver methods (LU, BiCGSTAB, HACApK)
 - Nonlinear magnetic material with background field
@@ -121,16 +115,16 @@ Solver methods benchmark with detailed performance metrics:
 
 ### Verification and Utilities
 
-### 13. `verify_field_accuracy.py`
+### 12. `verify_field_accuracy.py`
 Verifies field accuracy for different mesh refinements:
 - Compares N=125 vs N=343 element meshes
 - Maximum relative error: < 0.01%
 - Exports geometry to VTK for visualization
 
-### 14. `run_all_benchmarks.py`
+### 13. `run_all_benchmarks.py`
 Runs all benchmarks in sequence and generates a summary report.
 
-### 15. `plot_benchmark_results.py`
+### 14. `plot_benchmark_results.py`
 Generates visualization plots:
 - Solver speedup vs number of elements
 - Field evaluation speedup vs number of points
@@ -184,7 +178,6 @@ python benchmark_linear_material.py       # Linear material performance
 python verify_field_accuracy.py          # Field accuracy verification
 
 # Additional benchmarks
-python benchmark_dipole_vs_msc.py          # Dipole vs MSC comparison
 python benchmark_lu_vs_hmatrix.py          # LU vs HACApK detailed comparison
 python benchmark_solver_methods.py         # Solver methods comparison
 

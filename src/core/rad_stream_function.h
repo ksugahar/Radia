@@ -13,7 +13,7 @@
  * machinery serves any Radia source family using Radia's already-implemented
  * field computation:
  *   - coils      : Biot-Savart H/A from filaments (rad_biot_savart_filaments)
- *   - magnets /  : MMM / MSC field from magnetization (rad_field_unified,
+ *   - magnets    : fixed-magnetization field kernels (rad_field_unified,
  *     soft iron    rad_interaction)
  * No field kernel is embedded here -- this module does ONLY (ACA+)+TSVD.
  *
@@ -40,7 +40,7 @@ namespace stream_function {
 
 // Matrix-entry callback:  A(i,j), with i in [0,M) (field/observation index)
 // and j in [0,N) (basis/source index).  Supplied by the caller from Radia's
-// existing field computation (Biot-Savart, MMM/MSC, ...).
+// existing field computation (Biot-Savart, fixed-magnetization kernels, ...).
 using EntryFn = std::function<double(int i, int j)>;
 
 // Recompressed truncated SVD of A:  A ~= U diag(S) V^T, truncated to `modes`.

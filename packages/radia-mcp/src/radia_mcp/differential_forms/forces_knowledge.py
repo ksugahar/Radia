@@ -935,7 +935,7 @@ In all cases, agreement with **measurement** is within 5%.
 
 ### Implementation in radia_mcp
 
-For Radia (MMM / MSC) which already handles open-domain magnetostatics
+For Radia HDiv-VIM / face-charge route which already handles open-domain magnetostatics
 without an "air mesh" per se, the virtual-air-gap idea is even more
 natural: just place the integration surface at the touching plane.
 The required B field at the virtual surface is available analytically

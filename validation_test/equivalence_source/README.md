@@ -129,4 +129,5 @@ NGSolve-coupled version (Stage 2 CLI for the future Cubit panel).
   (stronger than IABC), and the 2015 Sugahara Lab work showed the
   reconstruction OUTSIDE is insensitive to the inner BC anyway.
 - **No competing FEM solver**.  This is a POST-PROCESSING layer on
-  top of whatever solver you used (NGSolve, Radia MMM, ngsolve.bem).
+  top of whatever solver you used (NGSolve, Radia field evaluator,
+  HDiv-VIM, ngsolve.bem).

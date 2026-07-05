@@ -75,7 +75,7 @@ and A-D below demonstrate; the four extra axes are:
   orientation, so `l>=2` saddle shims chain without the common series current
   cancelling) -> sheet-metal distort -> STEP CAD (OCC `WriteStep`) -> PEEC. The
   PEEC step is a full circuit-extraction **solver** (`L, R, C, M` + SPICE
-  netlist, MMM coupling), not just an inductance number. See
+  netlist, application-specific material coupling), not just an inductance number. See
   [single_stroke.md](single_stroke.md).
 - **Physics -- iron.** These codes are all free-space (vacuum Biot-Savart).
   radia's material-aware kernel (Kelvin-FEM DtN transfer `M = M_free + M_react`,

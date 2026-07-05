@@ -46,7 +46,7 @@ TOPICS: dict[str, str] = {
     "nodal_vs_mesh_analysis": "Derbas 2009: nodal (KCL) vs mesh (KVL), Jacobian conditioning",
     "reluctance_network_construction": "Flux tube discretization, claw-pole example, area selection",
     "lumped_extraction_fea": "Inductance L/M extraction from FEM, conductor segmentation",
-    "rna_mmm_coupling": "RNA + MMM mixed method, Janet transformer, current transformer",
+    "rna_magnetic_coupling": "RNA + magnetic-moment mixed method, Janet transformer, current transformer",
     "electromechanical_coupling": "TEAM-28 levitation, Runge-Kutta ODE, dL/dz force",
     "topology_optimization": "RNA + AVM (adjoint variable method), SIMP, magnetic actuator TO",
     "vs_pec_peec": "RNA vs PEEC vs PEC (partial element equivalent circuit) terminology",
@@ -136,7 +136,7 @@ Hysteresis-focused (`public-safe curated corpus`):
 
 ## Cross-references in radia_mcp
 
-- `radia_mcp.bem.mmm_msc.rna_mmm` -- detailed RNA + MMM coupling
+- `radia_mcp.radia_ngsolve.hdiv_vim` -- magnetic-material field coupling
 - `radia_mcp.magnetic_materials.hysteresis_models.play` -- Play model
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` -- Energy /
   Play core (Tohoku-Kindai lineage)
@@ -228,7 +228,7 @@ behaviour -- see topic `nodal_vs_mesh_analysis`.
 ## What MEC cannot do (without help)
 
 - **3D leakage with no obvious flux tube** -- e.g. quick stray field
-  around the corner of a transformer.  Needs RNA + MMM or RNA + FEM.
+  around the corner of a transformer.  Needs RNA + magnetic-moment model or RNA + FEM.
 - **Detailed force distribution on a moving armature** -- needs FEM or
   a fine RNA mesh with Maxwell-stress tensor evaluation.
 
@@ -602,17 +602,17 @@ for power electronics and electric machine design.
 
 
 
-RNA_MMM_COUPLING = r"""
-# RNA + MMM mixed method (Janet 2004, 2005)
+RNA_MAGNETIC_COUPLING = r"""
+# RNA + magnetic-moment mixed method (Janet 2004, 2005)
 
 Pure RNA struggles with 3D LEAKAGE flux outside the dominant flux
-tubes.  Pure MMM (Magnetic Moment Method) handles 3D leakage but needs
+tubes.  Pure magnetic-moment method handles 3D leakage but needs
 many elements to resolve a long, thin closed magnetic circuit (slow
 mesh refinement, slow MoM matrix assembly).
 
 The Janet (Schneider Electric / LEG Grenoble) work shows how to
 **combine** them for current-transformer-class problems: use a few-
-element MMM to capture 3D leakage + saturation, then ADJUST its
+element magnetic-moment model to capture 3D leakage + saturation, then ADJUST its
 coupling coefficients using a fast RNA computation that captures the
 linear-regime behaviour accurately.
 
@@ -643,10 +643,10 @@ into the air (LEAKAGE).  The output signal I_2(t) waveform is
 distorted by both effects, and a designer needs to predict the
 distortion as a function of geometry and core material.
 
-## MMM applied to CTs
+## Magnetic-moment model applied to CTs
 
 The core is meshed into n ferromagnetic elements with uniform
-magnetization M_i in each (Radia / MMM convention).  The total field
+magnetization M_i in each (magnetization convention).  The total field
 in element i is:
 
     H_i = H_0,i + sum_j f_ij M_j                                     (1)
@@ -662,7 +662,7 @@ over the core volume.
 Drawback: in CT geometry n must be large (100s to 1000s) to resolve
 the long thin core; matrix assembly + solve becomes expensive.
 
-## Simplified MMM (SMMM)
+## Simplified magnetic-moment model
 
 Idea: use VERY FEW elements (3 to 5) for the entire core, with
 magnetization direction PRESET in each element using symmetry.  In
@@ -680,10 +680,10 @@ FAILS at low induction -- because then the magnetization is small,
 not uniform, and the coupling coefficients f_ij computed under the
 saturation hypothesis are wrong.
 
-## SMMM + Simplified RNA (SRNM) -- the Janet recipe
+## Simplified magnetic moment + Simplified RNA -- the Janet recipe
 
 The fix: use RNA, which is accurate at low induction, to CORRECT the
-MMM coupling coefficients f_ij.
+magnetic-moment coupling coefficients f_ij.
 
 1. Build a simplified RNA model of the same core (Fig. 6 Janet 2005):
    a few reluctances for the iron sectors + a few MMFs for the
@@ -693,7 +693,7 @@ MMM coupling coefficients f_ij.
    RNA to get the mean magnetic field <H_i>_RNA and mean magnetization
    <M_i>_RNA in each element.
 
-3. Compute the diagonal coefficients f_ii of the MMM coupling matrix
+3. Compute the diagonal coefficients f_ii of the magnetic-moment coupling matrix
    by inverting the relation:
 
        <H_i>_RNA = H_0,i + f_ii <M_i>_RNA + sum_{j != i} f_ij <M_j>_RNA
@@ -707,7 +707,7 @@ MMM coupling coefficients f_ij.
    magnetization in element 1 vanishes for a known zero-total-MMF
    condition (Janet 2005 eq. 7).
 
-5. Use the CORRECTED MMM system for the full saturation sweep.  Now
+5. Use the corrected magnetic-moment system for the full saturation sweep.  Now
    both the low-induction and high-saturation regimes are captured by
    the same 3-5-element model.
 
@@ -715,49 +715,49 @@ MMM coupling coefficients f_ij.
 
 For their test CT:
   - Static error vs FEM: < 7% across the full operating range
-    (compared to 15% for vanilla SMMM and > 20% for pure 3-element
-    MMM without correction).
-  - Static calculation time per point: 0.2 s (vs 1 min for full MMM,
+    (compared to 15% for vanilla simplified magnetic-moment model and > 20% for pure 3-element
+    magnetic-moment model without correction).
+  - Static calculation time per point: 0.2 s (vs 1 min for full magnetic-moment model,
     20 min for FEM).
   - Response surface generation (140 x 140 grid): 35 min (vs 2 days
-    for full MMM, > 10 days for FEM).
+    for full magnetic-moment model, > 10 days for FEM).
 
-The recipe trades modeling EFFORT (build both a small MMM and a small
+The recipe trades modeling EFFORT (build both a small magnetic-moment model and a small
 RNA, then perform the calibration) for run-time SPEED.  Worth it when
 the model will be queried millions of times -- e.g. Monte Carlo
 analysis, optimization, or as part of a real-time simulator.
 
-## When to use RNA + MMM vs full MMM (Radia)
+## When to use RNA + magnetic-moment model vs full magnetic-moment model (Radia)
 
 | Scenario                                  | Choice               |
 |-------------------------------------------|----------------------|
-| Need exact M(x) field map                 | Full MMM (Radia)     |
-| Need fast secondary current waveform      | RNA + MMM mixed      |
-| Optimization over geometry parameters     | RNA + MMM mixed      |
-| Coupling to power-electronics SPICE model | RNA + MMM mixed      |
-| One-shot validation against measurement   | Full MMM (Radia)     |
-| Sweep across 100+ load conditions         | RNA + MMM mixed      |
+| Need exact M(x) field map                 | HDiv-VIM / FEM     |
+| Need fast secondary current waveform      | RNA + magnetic-moment model mixed      |
+| Optimization over geometry parameters     | RNA + magnetic-moment model mixed      |
+| Coupling to power-electronics SPICE model | RNA + magnetic-moment model mixed      |
+| One-shot validation against measurement   | HDiv-VIM / FEM     |
+| Sweep across 100+ load conditions         | RNA + magnetic-moment model mixed      |
 
-## PEEC + MMM coupling (Le-Duc 2013, COMPEL)
+## PEEC + magnetic-material coupling (Le-Duc 2013, COMPEL)
 
 A different hybrid by Le-Duc, Chadebec et al. (G2Elab Grenoble):
-combine PEEC for the conductors (driving AC currents) with MMM for
+combine PEEC for the conductors (driving AC currents) with a magnetic-material model for
 the ferromagnetic material.  Both methods avoid meshing air, so the
 hybrid retains the "mesh only what matters" virtue:
 
   - PEEC computes self / mutual partial inductances among conductor
     segments (Ruehli 1974).
-  - MMM provides the magnetic-material H field at each conductor
+  - The magnetic-material model provides the magnetic-material H field at each conductor
     segment, modifying the partial-inductance matrix.
   - The coupled system is solved in the frequency domain (time-
     harmonic) to give I_k and M_j simultaneously.
 
-This is the natural counterpart of "RNA + MMM": where RNA + MMM
-addresses CLOSED magnetic circuit + few-element 3D leakage, PEEC + MMM
+This is the natural counterpart of "RNA + magnetic-moment model": where RNA + magnetic-moment model
+addresses CLOSED magnetic circuit + few-element 3D leakage, PEEC + magnetic-material model
 addresses MULTI-CONDUCTOR ferromagnetic interaction (e.g. air-cored
 inductor with a nearby iron yoke).
 
-Cross-reference: `radia_mcp.peec.coupling.mmm` -- detailed PEEC + MMM
+Cross-reference: `radia_mcp.peec.magnetic_policy` -- detailed PEEC + magnetic-material
 formulation per Le-Duc 2013 with full derivation.
 """
 
@@ -1088,7 +1088,7 @@ PREFER FEM-based TO:
 
 
 VS_PEC_PEEC = r"""
-# Terminology: RNA vs PEC vs PEEC vs MEC vs MoM vs MMM
+# Terminology: RNA vs PEC vs PEEC vs MEC vs MoM vs HDiv-VIM
 
 These acronyms are often confused.  Here is the canonical split as
 used in the Sugahara-Kindai lab and in the literature cited above:
@@ -1140,31 +1140,17 @@ solver for SCATTERING / radiation problems (full-wave, Helmholtz
 kernel).
 
 Sometimes "MoM" is used loosely to mean any integral-equation method,
-including MMM and PEEC.  Strictly, MoM = Galerkin / collocation
+including PEEC.  Strictly, MoM = Galerkin / collocation
 discretization of an integral operator.
 
-## MMM -- Magnetic Moment Method
+## HDiv-VIM -- Radia magnetic-material route
 
-An integral-equation method for MAGNETOSTATICS / SLOW MAGNETO-
-QUASI-STATIC problems.  Discretize the ferromagnetic volume into
-elements, treat the magnetization vector M_i as the unknown in each
-element, write down the linear system M_i = chi_i (H_0,i + sum_j f_ij M_j)
-where f_ij is the analytical demagnetization tensor.
+Radia's current magnetic-material route is HDiv-VIM: express the
+magnetic material problem in NGSolve-compatible HDiv language, build
+the charge-Gram interaction, and keep the route compatible with
+reduced FEM and higher-order curved meshes.
 
-Domain: 3D unbounded magnetostatics with ferromagnetic materials and
-external Biot-Savart sources.  This is THE Radia core algorithm.
-
-Synonyms: "moment method for magnetics", "volume integral equation
-for magnetization", "M-method".
-
-In radia_mcp: see `radia_mcp.bem.mmm_msc.mmm`.
-
-## MSC -- Magnetic Surface Charge
-
-A surface-integral counterpart of MMM.  Unknown is the surface charge
-sigma on element faces (5/6 DOF per element for wedge/hex).  Faster
-than MMM for many geometries (fewer DOF per element).  In radia_mcp:
-see `radia_mcp.bem.mmm_msc.msc`.
+In radia_mcp: see `radia_mcp.radia_ngsolve.hdiv_vim`.
 
 ## Cross-method comparison table
 
@@ -1173,14 +1159,13 @@ see `radia_mcp.bem.mmm_msc.msc`.
 | RNA/MEC | branch flux phi  | magnetostatics + QS  | iron (BH curve) |
 | PEEC    | seg current I    | air + conductors, QS | linear (or SIBC)|
 | MoM     | surface curr J   | full-wave            | PEC, lossy diel.|
-| MMM     | element M        | magnetostatics       | nonlin iron     |
-| MSC     | face charge sig  | magnetostatics       | nonlin iron     |
+| HDiv-VIM| HDiv / charge DOF| magnetostatics       | nonlin iron     |
 | FEM     | nodal A or H     | any domain           | any             |
 | BEM     | surface phi or J | any domain           | any             |
 
 ## Which to use when
 
-- Pure soft iron + PM, no eddy currents -> **MMM** or **MSC** (Radia).
+- Pure soft iron + PM, no eddy currents -> **HDiv-VIM** (Radia).
 - Conductor inductance extraction, possibly with skin effect ->
   **PEEC** (Radia).
 - Quick electric-machine concept design with saturation -> **RNA / MEC**.
@@ -1212,9 +1197,9 @@ def get_knowledge(topic: str = "overview") -> str:
         "fea_extraction": "lumped_extraction_fea",
         "lumped_extraction": "lumped_extraction_fea",
         "lee": "lumped_extraction_fea",
-        "rna_mmm": "rna_mmm_coupling",
-        "transformer": "rna_mmm_coupling",
-        "janet": "rna_mmm_coupling",
+        "rna_magnetic": "rna_magnetic_coupling",
+        "transformer": "rna_magnetic_coupling",
+        "janet": "rna_magnetic_coupling",
         "electromechanical": "electromechanical_coupling",
         "team28": "team28_reduced_model",
         "team_28": "team28_reduced_model",
@@ -1234,7 +1219,7 @@ def get_knowledge(topic: str = "overview") -> str:
         "nodal_vs_mesh_analysis": NODAL_VS_MESH_ANALYSIS,
         "reluctance_network_construction": RELUCTANCE_NETWORK_CONSTRUCTION,
         "lumped_extraction_fea": LUMPED_EXTRACTION_FEA,
-        "rna_mmm_coupling": RNA_MMM_COUPLING,
+        "rna_magnetic_coupling": RNA_MAGNETIC_COUPLING,
         "electromechanical_coupling": ELECTROMECHANICAL_COUPLING,
         "team28_reduced_model": TEAM28_REDUCED_MODEL,
         "topology_optimization": TOPOLOGY_OPTIMIZATION,
@@ -1249,7 +1234,7 @@ def get_knowledge(topic: str = "overview") -> str:
             "nodal_vs_mesh_analysis",
             "reluctance_network_construction",
             "lumped_extraction_fea",
-            "rna_mmm_coupling",
+            "rna_magnetic_coupling",
             "electromechanical_coupling",
             "team28_reduced_model",
             "topology_optimization",

@@ -154,8 +154,8 @@ class TestMaterialApplication:
     def setup_method(self):
         rad.UtiDelAll()
 
-    def test_tetrahedron_with_linear_material(self):
-        """Test tetrahedron with linear magnetic material."""
+    def test_tetrahedron_with_linear_material_requires_mesh_backed_hdiv(self):
+        """Mesh-less soft iron must be modeled through the mesh-backed HDiv route."""
         vertices = [
             [0, 0, 0], [0.1, 0, 0], [0.05, 0.0866, 0], [0.05, 0.0289, 0.0816]
         ]
@@ -165,15 +165,11 @@ class TestMaterialApplication:
         mat = rad.MatLin(1000)
         rad.MatApl(tetra, mat)
 
-        # Should solve without error
-        result = rad.Solve(tetra, 0.0001, 100, 0)
-        assert result is not None
+        with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+            rad.Solve(tetra, 0.0001, 100, 0)
 
-    def test_hexahedron_soft_iron_solve_collocation_mmmm(self):
-        """A hex soft iron (ObjHexahedron + MatLin) solved via rad.Solve uses the multipole-moment MMM
-        MSC demag.  With no applied field M stays 0 --
-        this just locks that the mesh-less hex path SOLVES (no raise).  The collocation MMMM physics (cube demag
-        ~1/3) is locked in tests/test_demag_backend.py."""
+    def test_hexahedron_soft_iron_requires_mesh_backed_hdiv(self):
+        """ObjHexahedron + MatLin soft iron is not a supported mesh-less solve path."""
         rad.set_demag_backend("auto")
         s = 0.05
         vertices = [
@@ -182,9 +178,8 @@ class TestMaterialApplication:
         ]
         hex_obj = rad.ObjHexahedron(vertices, [0, 0, 0])
         rad.MatApl(hex_obj, rad.MatLin(1000))
-        rad.Solve(hex_obj, 0.0001, 100, 0)        # surface-charge MSC; no Error203
-        M = rad.ObjM(hex_obj)["magnetization"]
-        assert abs(M[0]) + abs(M[1]) + abs(M[2]) < 1e-6   # no source -> M stays 0
+        with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+            rad.Solve(hex_obj, 0.0001, 100, 0)
 
 
 class TestContainer:

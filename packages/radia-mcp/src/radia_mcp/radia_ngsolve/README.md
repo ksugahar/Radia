@@ -1,9 +1,9 @@
 # `radia_mcp.radia_ngsolve` — Radia + NGSolve coupled magnetostatics
 
-**31 MCP tools** — second-largest subpackage. Covers the lab's
+**30 MCP tools** — second-largest subpackage. Covers the lab's
 production Radia + NGSolve workflow: Kelvin transformation, sparse
 solvers (Compact AMS via radia.sparsesolv_ngsolve), Cauer Ladder
-Network reduction, PEEC inductance, ngsolve.bem, MMM core, plus
+Network reduction, PEEC inductance, ngsolve.bem, HDiv-VIM, plus
 the closed-form analytical formula bank (Wakao-Igarashi-Fujiwara-
 Kameari Part 1-9, cuboid average B, Bessel impedance).
 
@@ -29,7 +29,7 @@ mcp-server-radia-ngsolve             # stdio server
 | **NGSolve usage** | `ngsolve_usage`, `ngsolve_examples`, `ngsolve_recipe_<topic>` |
 | **Closed-form analytical** | `analytical_formulas` (11 topics: Wakao Part 1-9, cuboid_average_field, validation_use_cases) |
 | **PEEC inductance** | `peec_inductance`, `peec_filament_dispatch` |
-| **MMM core** | `mmm_core` (collocation MMMM sign convention, moment rows, 1/(4pi) convention) |
+| **HDiv-VIM** | `hdiv_vim` (Radia soft-iron demag, charge-Gram H-matrix, Reduced FEM coupling) |
 | **sparsesolv** | `compact_ams_preconditioner`, `cocr_solver` (HYPRE-free, TaskManager-native) |
 | **CLN SIBC orthogonal** | `cln_sibc_orthogonal` — Hierarchical Cauer SIBC (lab specialty) |
 | **Mesh + I/O** | `netgen_workflow`, `vol_format_inspect`, `vol_file_lint` |
@@ -84,7 +84,7 @@ For pure documentation use, install with `pip install radia-mcp`
 - `mcp-server-fem` — FEM-formulation theory layer (A-Ω, T-Ω, H,
   Reduced potential, Darwin, MSFEM)
 - `mcp-server-bem` — RWG, EFIE/MFIE, Loop-Star, Calderón, Radia
-  MMM/MSC, HACApK, FEM-BEM hybrid
+  HDiv-VIM, HACApK, FEM-BEM hybrid
 - `mcp-server-matrix-solvers` — Krylov + preconditioner theory
 - `mcp-server-mor` — Cauer Ladder Network model-order reduction
 - `mcp-server-peec` — PEEC filament/panel, FastHenry, HOIBC

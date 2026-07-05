@@ -7,7 +7,7 @@
 * Description:    Magnetic field source:
 *                 rectangular parallelepiped with constant (Ampere) current
 *                 density -- the current block behind ObjRecCur / ObjArcCur.
-*                 (Magnetized rectangular blocks are MMMM surface-charge
+*                 (Magnetized rectangular blocks are surface-charge surface-charge
 *                 polyhedra now; see radTApplication::SetRecMag.)
 *
 * Author(s):      Oleg Chubar
@@ -21,7 +21,7 @@
 //-------------------------------------------------------------------------
 // Implementation of class radTRecCur - a rectangular current-carrying block
 // (uniform current density J, volume Biot-Savart field). radTRecCur derives
-// from radTg3dRelax. Magnetized rectangular blocks are MMMM polyhedra now.
+// from radTg3dRelax. Magnetized rectangular blocks are surface-charge polyhedra now.
 //-------------------------------------------------------------------------
 
 #include "rad_rectangular_block.h"
@@ -816,7 +816,7 @@ void radTRecCur::IntOverSurf(radTField* FieldPtr)
 //-------------------------------------------------------------------------
 
 // radTRecCur::ConvertToPolyhedron body REMOVED 2026-06-28: a current block is never converted
-// (the magnet path now builds the MMMM polyhedron directly in SetRecMag). The override is now an
+// (the magnet path now builds the surface-charge polyhedron directly in SetRecMag). The override is now an
 // inline { return 1; } in rad_rectangular_block.h (1 = "handled", so radTGroup conversion succeeds).
 
 //-------------------------------------------------------------------------

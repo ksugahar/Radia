@@ -228,7 +228,7 @@ A4 紙に手書きで筋を書く:
 - **重複・逆戻りチェック**: slideごとに「この slide で初めて言う新情報」を
   1 行で書き出す。前 slide と同じ利点・背景・課題を再説明していたら削るか、
   役割を変える。いったん比較・定式化・結果へ進んだ後に、導入済みのメリット説明へ
-  戻らない。例: MMMの軽さ・非線形実績は3DoF/6DoF比較に入る前に済ませ、
+  戻らない。例: 旧moment pathの軽さ・非線形実績は3DoF/6DoF比較に入る前に済ませ、
   その後は3DoFと6DoFの差分だけを話す。
 - **まとめ slide 例外**: Summary は再掲してよいが、本文と同じ文を読まない。
   「何を示したか」ではなく「何を持ち帰るか」に言い換える。
@@ -988,7 +988,7 @@ OHP 世代の本だが、**図の語り方**として今も有効:
 
 ## 🏆 CEFC/Compumag oral playbook — 自研究室の実録から (2026-06)
 
-過去の自研究室 CEFC/Compumag **口頭発表**（CEFC2020 Yano: MMM-MSC / Compumag2023
+過去の自研究室 CEFC/Compumag **口頭発表**（CEFC2020 Yano: retired moment-path / Compumag2023
 Tanimoto: CLN-TEAM28 / CEFC2024 Sugahara: FP-CLN）から抽出した、この会場で通る型。
 各 talk の field note は `talk_feedback.py`。**ポスターは別物**（`radia-poster` 参照）。
 
@@ -996,7 +996,7 @@ Tanimoto: CLN-TEAM28 / CEFC2024 Sugahara: FP-CLN）から抽出した、この�
 1. **Title** ＋ 原案者クレジット（例「CLN は Kameari 2016」）
 2. **Background / 位置づけ** — 聴衆が**実際に使う固有ツール名**に対して置く
    （OPERA-3D TOSCA / CST / COMSOL / Radia / FEM / BEM）。"de-facto standard は X"
-3. **Gap** — 従来法の何が問題かを**専用スライド＋具体例**で（"Why MMM is not good?" /
+3. **Gap** — 従来法の何が問題かを**専用スライド＋具体例**で（"Why the old moment path is not good?" /
    "FEM は air mesh が要る" / "BEM は時間がかかる" / "Radia の parallelepiped mesh 誤差"）
 4. **Formulation** — 定式化（記号定義＋物理意味）
 5. **Validation（最重要・厚く）** — 次を複数:
@@ -1211,7 +1211,7 @@ Q&A・座長/客の反応・教訓を蓄積する catalog を持つ。
 2. ACA/H 行列近似で精度・反復回数は劣化しない?
 3. N に対するメモリ/時間 scaling は? sub-cubic?（**過大主張しない**・正直な caveat）
 4. TEAM 問題 or 実測で検証した?（**必ず先読み**・正直に・できれば次回までに TEAM 追加）
-5. FMM-BEM (ngsolve.bem) でなく MMM+HACApK の理由は?
+5. FMM-BEM (ngsolve.bem) でなく HDiv-VIM+HACApK の理由は?
 6. 3D か? 非線形鉄は扱えるか?（明示的に早く言う）
 7. コードは公開? C/Fortran?
 

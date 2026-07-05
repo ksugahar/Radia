@@ -1,6 +1,7 @@
-"""Golden lock for the SHARED 2D constitutive-law layer (radia.planar_materials) that BOTH planar
-demag solvers (collocation MMMM radia.mmmm2d AND HDiv-VIM radia.vim._vim2d) consume -- one source of
-truth for the material side (a new law is written once and both methods get it).
+"""Golden lock for the shared 2D constitutive-law layer (radia.planar_materials).
+
+The material laws are intentionally method-neutral: HDiv-VIM, dense planar
+helpers, and future notebook/panel routes all import the same implementation.
 """
 import numpy as np
 import pytest
@@ -61,9 +62,7 @@ def test_chi_tensor_uniaxial():
         pm.chi_tensor(-1.0, 200.0)                            # chi_par <= 0 -> fail loud
 
 
-def test_both_solvers_share_the_same_law():
-    """mmmm2d and _vim2d import the SAME law object from planar_materials (no per-method copy)."""
-    import radia.mmmm2d as m2
+def test_hdiv_imports_the_canonical_law():
+    """_vim2d imports the SAME law object from planar_materials (no per-method copy)."""
     from radia.vim import _vim2d
-    assert m2._law_from_table is pm.law_from_table
     assert _vim2d._law_from_table is pm.law_from_table

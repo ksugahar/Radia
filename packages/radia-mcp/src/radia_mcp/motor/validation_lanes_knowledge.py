@@ -5,8 +5,6 @@ into one score:
 
 * NGSolve+AGE for the finite-element air-gap machine path: torque, dq,
   eddy, and nonlinear machine quantities.
-* 2D collocation MMMM for fast planar per-region soft-iron and torque-sweep
-  checks.
 * HDiv-VIM + reduced FEM as an experimental RFC for future rotor/source-field
   plus fixed-stator reduced response coupling.
 
@@ -116,59 +114,7 @@ LANES: dict[str, MotorValidationLane] = {
         ),
         promotion_targets=(
             "radia_mcp.motor.age_quality_knowledge",
-            "radia_mcp.motor.simple_mmm_2d validation routing",
             "radia_mcp.radia_ngsolve AGE / force recipes",
-        ),
-    ),
-    "mmmm2d_coarse": MotorValidationLane(
-        lane_id="mmmm2d_coarse",
-        label="2D collocation MMMM coarse motor lane",
-        support_status="supported_coarse_path",
-        support_note=(
-            "This is now a verified coarse/reduced radia path for planar "
-            "multi-region soft-iron MMMM checks. It supports per-region "
-            "mu_r/BH inputs and factor-once torque sweeps, but it is not the "
-            "full AGE rotating-machine finite-element path."
-        ),
-        radia_path="radia.mmmm2d dense 2D collocation moment solver",
-        best_for=(
-            "fast planar soft-iron sanity checks before AGE",
-            "multi-grade rotor/stator region experiments",
-            "factor-once torque-angle sweeps for reduced motor studies",
-            "coarse optimization loops where internal loop pollution is acceptable",
-        ),
-        observable_families=(
-            "torque",
-            "coenergy",
-            "force_or_torque_trend",
-            "per_region_magnetization",
-            "demag_field",
-        ),
-        required_fields=COMMON_REQUIRED_FIELDS
-        + (
-            "mmmm2d_contract",
-            "region_material_contract",
-            "pytest_targets",
-        ),
-        required_metrics=(
-            "torque_relative_error",
-            "m_avg_relative_error",
-            "region_magnetization_ratio",
-            "quantity_specific_residual",
-        ),
-        public_evidence=(
-            "validation_test/feec/test_moment2d_perregion.py",
-        ),
-        private_reference_sources=(
-            "product local reference",
-            "lab-local finite-element reference",
-            "open-source reference",
-            "stored regression reference",
-        ),
-        promotion_targets=(
-            "radia_mcp.motor.validation_lanes_knowledge",
-            "radia_mcp.motor.triple_check_knowledge",
-            "radia_mcp.radia_ngsolve knowledge/mmm_core.py",
         ),
     ),
     "hdiv_vim_reduced_fem": MotorValidationLane(
@@ -228,7 +174,6 @@ LANES: dict[str, MotorValidationLane] = {
         ),
         promotion_targets=(
             "radia_mcp.motor.validation_lanes_knowledge",
-            "radia_mcp.motor.simple_mmm_2d prompt triage text",
             "radia_mcp.radia_ngsolve force / flux recipes when applicable",
         ),
     ),
@@ -247,10 +192,6 @@ can pass its own metadata gate, but it is not enough to say radia-motor learned.
 - `ngsolve_age`: NGSolve+AGE.  This is the current supported radia-motor
   finite-element air-gap machine lane for torque, dq quantities, cogging,
   eddy/slip, hysteresis, and nonlinear machine studies.
-- `mmmm2d_coarse`: 2D collocation MMMM.  This is a supported coarse/reduced
-  lane for planar multi-region soft iron, per-region material dictionaries,
-  and factor-once torque sweeps.  It is useful before AGE and for optimization
-  triage, but it is not the full AGE moving-air-gap path.
 - `hdiv_vim_reduced_fem`: HDiv-VIM plus reduced FEM.  This is an experimental
   RFC lane.  The idea of using HDiv-VIM for the rotor and a reduced FEM model
   for the fixed stator is new and intentionally unusual; do not describe it as
@@ -293,7 +234,7 @@ PROMOTION_POLICY = """\
 
 Each motor cross-validation slot should end with three decisions:
 
-1. `which_lane`: `ngsolve_age`, `mmmm2d_coarse`, or `hdiv_vim_reduced_fem`.
+1. `which_lane`: `ngsolve_age` or `hdiv_vim_reduced_fem`.
 2. `which_observable`: one lane-supported observable family.
 3. `which_promotion`: the exact public-safe knowledge or recipe that improved.
 
@@ -307,27 +248,15 @@ Promotion is allowed when:
   benchmark numbers.
 
 For radia-motor learning, promote through the combined comparison gate:
-`ngsolve_age` and `hdiv_vim_reduced_fem` must both be present.  The HDiv-VIM
+`ngsolve_age` and `hdiv_vim_reduced_fem` must both be present. The HDiv-VIM
 lane must include a solver-ready artifact with a non-empty verification list.
-MMMM may be attached as an auxiliary coarse check, but it is not a substitute
-for the primary AGE+HDiv-VIM comparison.  If the slot only produced a useful
-private comparison, keep it in the private cross-validation directory and mark
-`artifact_feedback.status = candidate`.
+If the slot only produced a useful private comparison, keep it in the private
+cross-validation directory and mark `artifact_feedback.status = candidate`.
 """
 
 
 RUNBOOK = """\
 # Motor validation lane runbook
-
-For a 2D MMMM coarse motor slot:
-
-```powershell
-python -m pytest validation_test\\feec\\test_moment2d_perregion.py -q
-```
-
-Then attach the comparison as `motor_validation_lane = "mmmm2d_coarse"` with
-`mmmm2d_contract`, `region_material_contract`, and the pytest target. This lane
-can be used as a verified coarse/reduced path, not as a replacement for AGE.
 
 For an HDiv-VIM + reduced FEM research slot:
 
@@ -574,11 +503,6 @@ def validate_motor_validation_artifact(
         and status_value == "pass"
         and support_status == "supported_validation_path"
     )
-    validated_coarse_path = (
-        result_status == "pass"
-        and status_value == "pass"
-        and support_status == "supported_coarse_path"
-    )
     accepted_for_mcp_rfc_learning = (
         result_status == "pass"
         and status_value == "pass"
@@ -594,7 +518,6 @@ def validate_motor_validation_artifact(
         and status_value == "pass"
         and (
             validated_solver_path
-            or validated_coarse_path
             or validated_experimental_solver_path
         )
     )
@@ -605,8 +528,7 @@ def validate_motor_validation_artifact(
         "support_status": support_status,
         "validated_solver_path": validated_solver_path,
         "validated_experimental_solver_path": validated_experimental_solver_path,
-        "validated_coarse_path": validated_coarse_path,
-        "validated_supported_path": validated_solver_path or validated_coarse_path,
+        "validated_supported_path": validated_solver_path,
         "accepted_for_mcp_learning": accepted_for_mcp_learning,
         "accepted_for_mcp_rfc_learning": accepted_for_mcp_rfc_learning,
         "errors": errors,
@@ -625,7 +547,6 @@ def format_artifact_gate_result(result: Mapping[str, Any]) -> str:
         f"- support status: `{result.get('support_status', '')}`",
         f"- validated solver path: `{result.get('validated_solver_path', False)}`",
         f"- validated experimental solver path: `{result.get('validated_experimental_solver_path', False)}`",
-        f"- validated coarse path: `{result.get('validated_coarse_path', False)}`",
         f"- validated supported path: `{result.get('validated_supported_path', False)}`",
         f"- accepted for MCP learning: `{result.get('accepted_for_mcp_learning', False)}`",
         f"- accepted for MCP RFC learning: `{result.get('accepted_for_mcp_rfc_learning', False)}`",

@@ -1939,7 +1939,7 @@ This pattern was validated via stone-bridge analysis (2026-04-17):
      (proper h/p convergence, refined maxh=4mm order 3)
   3. 2D axisym reference vs Radia Biot-Savart (air): 0.02% agreement
 
-**DO NOT** use Radia MMM/MSC as a convergence reference -- MMM showed
+**DO NOT** use retired moment/surface-charge soft-iron paths as a convergence reference -- they showed
 4-8% variation between mesh densities at iron endcap/surface probes,
 masquerading as FEM error. The 2D axisym FEM reference
 (`reference_2d_axisym.py`, u=r*A_phi formulation, order 4) is

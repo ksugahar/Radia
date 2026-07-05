@@ -250,6 +250,7 @@ def test_fem_kelvin_to_heat_chain(tmp_path):
     exp_a = g["expected_heat_axisym"]
     wp_vol_axi = _ensure_wp_axisym_fixture(tmp_path)
     heat_axi_csv = str(tmp_path / "heat_probe_axi.csv")
+    heat_axi_msh = str(tmp_path / "heat_axisym_T.msh")
     heat_axi_cmd = [
         sys.executable, CALC_HEAT_AXI,
         "--wp-vol", wp_vol_axi,
@@ -267,6 +268,7 @@ def test_fem_kelvin_to_heat_chain(tmp_path):
         "--probe-point",
         f"{exp_a['probe_point_rz'][0]},{exp_a['probe_point_rz'][1]}",
         "--csv-output", heat_axi_csv,
+        "--msh-output", heat_axi_msh,
     ]
     proc = subprocess.run(heat_axi_cmd, capture_output=True,
                            text=True, timeout=300)

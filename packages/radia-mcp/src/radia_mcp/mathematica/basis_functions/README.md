@@ -6,10 +6,10 @@ H(div)), ported from NGSolve's C++ element library.  Kept here (not in an
 application directory such as `examples/CLN/`) because the basis is a
 **reusable building block**: the `mathematica_*` MCP tools and any future
 work that needs the *analytical* form of a shape function — e.g. the
-analytical solid-angle / `1/r` integral for an MSC/IEM integral-equation
+analytical solid-angle / `1/r` integral for an HDiv-VIM integral-equation
 kernel built on the FEEC basis — draws on it here.
 
-## Why this matters (the loopless MSC/IEM solver)
+## Why this matters (the loopless HDiv-VIM solver)
 
 The discrete de Rham structure of these bases is exactly what removes the
 "loop" problem from a surface-charge / integral-equation magnetostatic or
@@ -113,15 +113,14 @@ self-tested.
 | `hdiv.wls`          | H(div) RT/BDM: **Hex/Quad tensor (high-order p)** + tet/trig Whitney RT0 + SZ covariant helpers | done, self-test PASS (dims, `div(H(div)) = L2`, RT0 face dof, **de Rham `curl H(curl) c H(div)` showcase**) |
 | `simplex_ho.wls`    | high-order **Tet/Trig** H(curl)/H(div): classical Nédélec `N_k` + Raviart–Thomas `RT_k` | done, self-test PASS (dims, `S_k·x̃=0`, `grad P c N_k`, `curl N_k c RT_k` div-free, `div RT_k = P_k`) |
 | `cohomology.wls`    | discrete de Rham complex (d0/d1 incidence), Betti b0/b1/b2, **harmonic H^1 generator** (tree-cotree, `b1=E-V+C`), **metric-independence of Betti** (harmonic-1-form dim = `b1` under ANY SPD metric M1 — the Hodge/material can't change topology) | done, self-test PASS (filled-disk/cycle/annulus/figure-eight; generator is a cycle but not a gradient; harmonic dim = b1 under random SPD metrics) — the GLOBAL loops, and *topology is not in the Hodge* |
-| `vim_field.wls`     | **VIM field operator**: charge extraction (sigma=M.n, rho=-div M), 1/r field, van Oosterom-Strackee solid angle (MSC analytic kernel) | done, self-test PASS (div-free M -> rho=0 = loop field-null; VIM -> dipole far-field O(1/R^2); VOS solid angle = quadrature) |
-| `moment_field_gradient.wls` | **MMMM analytic moment kernel** (the quadrupole field-GRADIENT): closed-form `gH = grad_obs(H)` = the Hessian `-grad grad I0` of the single-layer potential, obtained as the symbolic gradient of the van Oosterom-Strackee field `H`. Assembled from tangential log-term derivatives + tracelessness (`Gzz=-(Gxx+Gyy)`) so NO atan derivative is needed. Verified for EVERY element type's faces: tet (4 tri), pyramid (4 tri + 1 quad), wedge (2 tri + 3 quad), hex (6 quad) — one per-triangle closed form covers all (a quad is fan-triangulated). | done, self-test PASS (gH symmetric + traceless to ~1e-16 = `div H = 0` automatic; analytic == 64pt Gauss to ~1e-8..1e-11 per element type). The closed form Radia's `FieldGradFromChargedTriangleLocal` ships; see `docs/multipole_moment_mmm/QUADRUPOLE_ANALYTIC_KERNEL.md`. |
+| `vim_field.wls`     | **VIM field operator**: charge extraction (sigma=M.n, rho=-div M), 1/r field, van Oosterom-Strackee solid angle (solid-angle face-charge kernel) | done, self-test PASS (div-free M -> rho=0 = loop field-null; VIM -> dipole far-field O(1/R^2); VOS solid angle = quadrature) |
 | `vim_loopfree.wls`  | **THE loop-mode question**: is the FEEC VIM formulated so no spurious loop modes arise? | done, self-test PASS -- loops = curl(interior H(curl)) (+) cohomology are CHARGE-FREE (div=0 AND M.n=0) => field-null **by construction on any element** (Piola preserves div + normal-trace); constant-M misses them (avg=0) -> its tree-cotree loops only approx ker(N) on distorted hexes = the defect |
 | `infinite_element_derham.wls` | **de Rham (exact-sequence) INFINITE ELEMENT** on the spherical EXTERIOR (open boundary) -- Mathematica twin of the maintained IE notes in `docs/open_boundary/INFINITE_ELEMENT_SOTA.md` | done, self-test PASS -- via Mathematica's built-in ORTHONORMAL spherical `Grad`/`Curl`/`Div`: the radial decay families shift **+1 per form degree** (S0={n+1..n+P}, S1=S0+1, S2=S0+2, S3=S0+3) so grad/curl/div COMMUTE (grad(V0) subset V1, curl(V1) subset V2, div(V2) subset V3 with explicit structure constants; curl.grad=0, div.curl=0; toroidal/div closure via the Legendre eig -n(n+1), shown m-independent). Demkowicz-Pal (CMAME 164, 1998), STATIC/low-freq; the 0-form tower is the scalar Bettess IE. NOTE the shipped de Rham open boundary is instead the coordinate-mapping family (Kelvin / coordinate-scaling IE), de Rham inherited free; high-freq needs an oscillatory exp(ikr) basis (Astley/Demkowicz-Pal radiating) |
 
 **The de Rham complex `H1 →grad→ H(curl) →curl→ H(div) →div→ L2` is now verified
 symbolically** (both maps exact: `curl∘grad=0`, `div∘curl=0`, each image lands in
 the next space), and the **cohomology `H^1`** (global loops on multiply-connected
-bodies) is the tree-cotree cycle count. (The former collocation `BuildLoopBasis` loop code was REMOVED 2026-06-30 -- collocation MMMM gives up loop-free; loop-free is HDiv-VIM's domain. See memory `collocation_loopfree_abandoned`.)
+bodies) is the tree-cotree cycle count. Loop-free magnetic-material solving is HDiv-VIM's domain.
 
 **What is settled at the `.wls` level** (the right gate BEFORE any C++): the FEEC VIM is
 **loop-mode-free by construction** (`vim_loopfree.wls`) — the field-null loops are exactly
@@ -129,8 +128,8 @@ the charge-free space `curl(interior H(curl)) ⊕ cohomology H^1`, and the Piola
 them charge-free (div=0 AND M·n=0) on *any* distorted element, so no spurious loop modes
 arise and no per-geometry numerical null-vector patch is needed.  This is the formulation
 question that had to be answered symbolically first.  The full de Rham complex + cohomology
-+ VIM field operator are covered for every element Radia's solver uses (MMM=tet,
-MSC=hex/wedge; plus quad/trig/prism) — 10 files, 100+ self-test assertions, all PASS —
++ VIM field operator are covered for the FEEC element families Radia needs
+(tet/hex/wedge plus quad/trig/prism) — 9 files, 100+ self-test assertions, all PASS —
 now including the **EXTERIOR open-boundary** de Rham element (`infinite_element_derham.wls`),
 the FEEC counterpart on the unbounded side (the same `H1→H(curl)→H(div)→L2` exactness, with
 decay families that commute under grad/curl/div).
@@ -145,7 +144,7 @@ Still to settle at the `.wls`/formulation level before C++:
 
 Deferred (NOT on the solver's critical path):
 - **pyramid** p>=2 (rational edge/face bubbles): Radia has **no pyramid element**
-  (MSC=hex/wedge, MMM=tet), so this is a completeness item only.  The space is the
+  (legacy face-charge hex/wedge and tetra moment paths), so this is a completeness item only.  The space is the
   rational collapsed-coordinate bubbles (`xt=x/(1-z)`, scaled integrated-Legendre +
   triangle bubbles); NGSolve's `EdgeOrthoPol`/`TrigOrthoPol` are dual-shape
   optimizations, not needed for the primal space.

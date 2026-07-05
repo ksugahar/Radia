@@ -57,7 +57,8 @@ def _run_heat(wp_vol, tmp_path):
            "--wp-vol", wp_vol,
            "--q-uniform", "1.0e6",
            "--dt", "1.0", "--t-end", "1.0",
-           "--output", str(tmp_path / "heat.json")]
+           "--output", str(tmp_path / "heat.json"),
+           "--msh-output", str(tmp_path / "heat_T.msh")]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     # calc_main exits non-zero on error (radia >= 4.92.0, commit
     # 5b88b67f, "No Fallbacks -- Fail Fast" policy).  Either a

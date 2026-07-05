@@ -32,7 +32,7 @@
  */
 inline RadHACApKParams RadHACApKBEMDefaultParams() {
     RadHACApKParams p;
-    p.aca_eps = 1.0e-6;   // Laplace SL: ACA needs tighter eps than MSC
+    p.aca_eps = 1.0e-6;   // Laplace SL: ACA needs tighter eps than compact magnetic kernels
     p.leaf_size = 64;     // 1 DOF/vertex; 64 vertices per leaf
     p.eta = 2.0;
     p.max_rank = 400;

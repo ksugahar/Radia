@@ -559,10 +559,10 @@ ABSTRACT_AND_CONCISENESS = r"""
    body-order number is the intended outcome, not a problem to avoid.)
 
 3. **NO domain-specific acronyms in the abstract.**
-   Avoid abbreviations such as MMM, FEM, BEM, MCP, or LLM in the
+   Avoid abbreviations such as FEM, BEM, MCP, or LLM in the
    abstract, even if they are familiar inside the lab.  Write the
    abstract in plain words, then introduce acronyms at their first body
-   use: `Finite Element Method (FEM)`, `magnetic moment method (MMM)`,
+   use: `Finite Element Method (FEM)`,
    etc.  Universal acronyms such as PDF, USB, or CPU are ignored by the
    checker.
 

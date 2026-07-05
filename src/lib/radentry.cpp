@@ -86,12 +86,7 @@ int MatHysCommitState( int );
 void PreRelax( int, int );
 void ShowInteractMatrix(int);
 int GetInteractMatrix(int, double*, int*);
-int HMatrixDensify(int, double*, int*);
 int GetFaceGeom(int, double*, int*);
-int GetCentroidFieldGrad(int, double*, int*, int*);
-int BuildMomentSystem(int, double, const double*, double*, double*, int*);
-int MomentSystemDenseRaw(int, double, double*, int*);
-int HLUDebugMaterialize(int, double*, int*, int*);
 void SetRelaxSubInterval(int, int, int, int);
 void ShowInteractVector(int, char*);
 void ManualRelax( int, int, int, double );
@@ -108,12 +103,6 @@ void GetHACApKStats( double*, int* );
 void GetSolveStats( double*, int* );
 void SetBiCGSTABTolerance( double );
 double GetBiCGSTABTolerance();
-void SetMomentKrylovSolver( int );
-int GetMomentKrylovSolver();
-void SetMomentGMRESRestart( int );
-int GetMomentGMRESRestart();
-void SetMomentAndersonDepth( int );
-int GetMomentAndersonDepth();
 void SetRelaxParam( double );
 double GetRelaxParam();
 void SetKeepMagnetization( bool );
@@ -193,8 +182,7 @@ int (*pgRadYieldExternFunc)() = 0;
 
 //-------------------------------------------------------------------------
 // Note: Tetrahedral method selection was removed (2025-12-09).
-// Dipole-dipole method was found numerically unstable.
-// Surface charge (MSC) method is always used.
+// Mesh-backed magnetic-material solves are handled by HDiv-VIM.
 //-------------------------------------------------------------------------
 
 int CALL RadUtiYeldFuncSet(int (*pExtFunc)())
@@ -601,7 +589,7 @@ int CALL RadTrfInv(int* n)
 //-------------------------------------------------------------------------
 
 // RadTrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
-// The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
+// The shared-DOF approach was fundamentally incompatible with independent face coefficients.
 // Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 //-------------------------------------------------------------------------
@@ -1262,7 +1250,7 @@ int CALL RadUtiMPI(int* arPar, char* sOnOff, double* arData, long* pnData, long*
 
 // RadTrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
 // RadTrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
-// These functions used RadTrfMlt internally, which has fundamental issues with MSC 6DOF hexahedra
+// These functions used RadTrfMlt internally, which has fundamental issues with independent face coefficients.
 // Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 //-------------------------------------------------------------------------
@@ -1353,53 +1341,6 @@ int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey)
 
 //-------------------------------------------------------------------------
 
-int CALL RadGetCentroidFieldGrad(double* pC, int* pNHex, int* pDOF, int InteractElemKey)
-{
-	int result = GetCentroidFieldGrad(InteractElemKey, pC, pNHex, pDOF);
-	if(result == 0) return ioBuffer.OutErrorStatus();
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadBuildMomentSystem(double chi, const double* Happ, double* pA, double* pRhs, int* pDOF, int InteractElemKey)
-{
-	int result = BuildMomentSystem(InteractElemKey, chi, Happ, pA, pRhs, pDOF);
-	if(result == 0) return ioBuffer.OutErrorStatus();
-	return 0;
-}
-
-int CALL RadMomentSystemDenseRaw(double chi, double* pA, int* pDOF, int InteractElemKey)
-{
-	int result = MomentSystemDenseRaw(InteractElemKey, chi, pA, pDOF);
-	if(result == 0) return ioBuffer.OutErrorStatus();
-	return 0;
-}
-
-int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey)
-{
-#ifdef HAVE_LAPACK
-	mkl_set_num_threads(1);  // BLAS calls from TaskManager threads must be single-threaded
-#endif
-	ngcore::RegionTaskManager rtm;  // auto-start TaskManager: BuildHMatrix + MatVec use ngcore::ParallelFor
-	int result = HMatrixDensify(InteractElemKey, pMatrix, pDOF);
-	if(result == 0) return ioBuffer.OutErrorStatus();
-	return 0;
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadHLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out)
-{
-#ifdef HAVE_LAPACK
-	mkl_set_num_threads(1);
-#endif
-	ngcore::RegionTaskManager rtm;
-	return HLUDebugMaterialize(InteractElemKey, A_perm_out, lod_out, nd_out);
-}
-
-//-------------------------------------------------------------------------
-
 int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether)
 {
 	SetRelaxSubInterval(InteractElemKey, StartNo, FinNo, RelaxTogether);
@@ -1452,47 +1393,6 @@ int CALL RadSetBiCGSTABTol(int* n, double tol)
 int CALL RadGetBiCGSTABTol(double* tol)
 {
 	*tol = GetBiCGSTABTolerance();
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadSetMomentKrylovSolver(int* n, int solver)
-{
-	SetMomentKrylovSolver(solver);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadGetMomentKrylovSolver(int* solver)
-{
-	*solver = GetMomentKrylovSolver();
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetMomentGMRESRestart(int* n, int restart)
-{
-	SetMomentGMRESRestart(restart);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadGetMomentGMRESRestart(int* restart)
-{
-	*restart = GetMomentGMRESRestart();
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetMomentAndersonDepth(int* n, int depth)
-{
-	SetMomentAndersonDepth(depth);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadGetMomentAndersonDepth(int* depth)
-{
-	*depth = GetMomentAndersonDepth();
 	return ioBuffer.OutErrorStatus();
 }
 

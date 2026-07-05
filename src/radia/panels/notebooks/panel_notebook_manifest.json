@@ -45,7 +45,7 @@
         "src/radia/em_design.py",
         "src/radia/em_notebook.py",
         "src/radia/panels/calc_accel_magnet.py",
-        "src/radia/panels/calc_accel_msc.py",
+        "src/radia/panels/calc_accel_hdiv.py",
         "src/radia/panels/calc_kelvin_benchmark.py"
       ]
     },

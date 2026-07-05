@@ -399,33 +399,6 @@ non-hex DOFs get elem_local=-1 and zeros.
 */
 EXP int CALL RadGetFaceGeom(double* pG, int* pDOF, int InteractElemKey);
 
-/** Per moment-element centroid demag field+gradient functionals (the parameter-free moment formulation kernel).
-For each moment element, the demag field H and gradient gradH at the element CENTROID as linear functionals
-of every source DOF charge (SELF = bare charged face; MUTUAL = collocation MMMM dipole layer, singularity-free).
-ROW-MAJOR (nMom x 9 x DOF): comp k (Hx,Hy,Hz, gxx,gyy,gzz,gxy,gxz,gyz), source DOF g -> C[(h*9+k)*DOF+g].
-@param pC [out] flat array (nMom*9*DOF, row-major), or nullptr to query nMom/DOF
-@param pNHex [out] number of moment elements (historical parameter name)
-@param pDOF [out] total number of DOF
-@param InteractElemKey [in] interaction handle from BuildMatrix
-@return integer error code
-*/
-EXP int CALL RadGetCentroidFieldGrad(double* pC, int* pNHex, int* pDOF, int InteractElemKey);
-EXP int CALL RadBuildMomentSystem(double chi, const double* Happ, double* pA, double* pRhs, int* pDOF, int InteractElemKey);
-EXP int CALL RadMomentSystemDenseRaw(double chi, double* pA, int* pDOF, int InteractElemKey);
-
-/** Densify the actual HACApK (ACA+) system operator into a dense matrix.
-Builds the MSC H-matrix for the interaction handle and applies it to unit
-vectors (A = -N + diag(1/chi), original DOF ordering). Use to validate the
-H-matrix against the exact dense matrix (eigenvalues / deflation).
-@param pMatrix [out] flat (pDOF x pDOF) row-major, or nullptr to query size
-@param pDOF [out] number of DOF
-@param InteractElemKey [in] interaction handle from BuildMatrix
-@return integer error code
-*/
-EXP int CALL RadHMatrixDensify(double* pMatrix, int* pDOF, int InteractElemKey);
-
-EXP int CALL RadHLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug
-
 // RadPreRelax REMOVED (2026-01-31) - Use RadBuildMatrix instead
 // The new API is: int handle = RadBuildMatrix(obj, image);
 // where image is "+x", "-z", "+x-z", etc. for IMA symmetry
@@ -553,7 +526,7 @@ EXP int CALL RadTrfCmbL(int* fintrf, int origtrf, int trf);
 EXP int CALL RadTrfCmbR(int* fintrf, int origtrf, int trf);
 
 // RadTrfMlt REMOVED (2026-01-31) - Use Image symmetry instead
-// The shared-DOF approach was fundamentally incompatible with MSC 6DOF hexahedra
+// The shared-DOF approach was fundamentally incompatible with independent face coefficients.
 // Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 /** Orients object obj by applying transformation trf to it once.
@@ -565,7 +538,7 @@ EXP int CALL RadTrfOrnt(int* objout, int obj, int trf);
 
 // RadTrfZerPara REMOVED (2026-01-31) - Use Image symmetry instead
 // RadTrfZerPerp REMOVED (2026-01-31) - Use Image symmetry instead
-// These functions used RadTrfMlt internally, which has fundamental issues with MSC 6DOF hexahedra
+// These functions used RadTrfMlt internally, which has fundamental issues with independent face coefficients.
 // Use: RadSolve(..., image="+x-z") or RadBuildMatrix(obj, image="+x-z")
 
 /** Applies material mat to object obj.
@@ -1090,18 +1063,6 @@ EXP int CALL RadSetBiCGSTABTol(int* n, double tol);
 */
 EXP int CALL RadGetBiCGSTABTol(double* tol);
 
-/** Select multipole-moment method-2 Krylov solver: 0=BiCGSTAB, 1=restarted GMRES. */
-EXP int CALL RadSetMomentKrylovSolver(int* n, int solver);
-EXP int CALL RadGetMomentKrylovSolver(int* solver);
-
-/** Configure restarted GMRES restart length for multipole-moment method-2. */
-EXP int CALL RadSetMomentGMRESRestart(int* n, int restart);
-EXP int CALL RadGetMomentGMRESRestart(int* restart);
-
-/** Configure safeguarded Anderson acceleration depth for multipole-moment method-2 (0=off, 1=depth-1). */
-EXP int CALL RadSetMomentAndersonDepth(int* n, int depth);
-EXP int CALL RadGetMomentAndersonDepth(int* depth);
-
 /** Sets under-relaxation coefficient for nonlinear iteration.
 @param n [out] dummy output (set to 1)
 @param relax [in] relaxation coefficient (0.0 = full step, 0.0-1.0 = under-relaxation)
@@ -1248,7 +1209,7 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
 
 
-// Replaced by Python-based PEEC topology solver (peec_topology.py, peec_coupled.py)
+// Replaced by Python-based PEEC topology solver (peec_topology.py)
 // and FastHenry .inp parser (fasthenry_parser.py).
 // See CLAUDE.md for the new PEEC API reference.
 

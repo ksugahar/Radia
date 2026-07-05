@@ -1,13 +1,14 @@
-"""radia.magnet -- intent-based permanent-magnet builders on the MMMM (surface-charge moment) elements.
+"""radia.magnet -- intent-based permanent-magnet builders on fixed-M surface-charge elements.
 
 The historical ``ObjRecMag`` (surface-current rectangular block) is being retired as a user-facing
 primitive (CLAUDE.md "Reduce Proprietary API Surface": geometry primitives demote to an internal
 representation; users place intent objects).  A uniformly magnetized rectangular block is represented
-**exactly** by an MMMM ``ObjHexahedron`` carrying surface charge ``sigma = M . n`` on its six faces:
+**exactly** by an ``ObjHexahedron`` carrying fixed magnetization, equivalent to surface charge
+``sigma = M . n`` on its six faces:
 for a constant ``M`` the surface-charge and surface-current models give the identical external field.
 
 ``magnet_box(...)`` is the drop-in substitute -- the SAME ``(center, dimensions, magnetization)`` call
-shape as ``ObjRecMag``, the MMMM representation, and an external field validated to ~5e-8 relative error
+shape as ``ObjRecMag``, the fixed-M surface-charge representation, and an external field validated to ~5e-8 relative error
 against ``ObjRecMag`` (off-axis, far field, and on the magnetization axis just above a face).
 
 A permanent magnet needs **no** ``Solve`` -- the magnetization is fixed in the constructor and
@@ -23,14 +24,14 @@ Example::
 
 General (non-box) permanent magnets do not need a helper -- build the element directly with the
 magnetization in the constructor: ``rad.ObjHexahedron(verts, M)`` / ``rad.ObjTetrahedron(verts, M)`` /
-``rad.ObjWedge(verts, M)`` (all MMMM surface-charge moment elements; all evaluate the exact open
+``rad.ObjWedge(verts, M)`` (fixed-M surface-charge elements; all evaluate the exact open
 boundary field with no Solve).
 """
 import radia as rad
 
 
 def magnet_box(center, dimensions, magnetization):
-    """Rectangular permanent magnet as an MMMM ``ObjHexahedron`` -- the ``ObjRecMag`` substitute.
+    """Rectangular permanent magnet as a fixed-M ``ObjHexahedron`` -- the ``ObjRecMag`` substitute.
 
     Parameters
     ----------
@@ -52,8 +53,8 @@ def magnet_box(center, dimensions, magnetization):
     """
     cx, cy, cz = (float(v) for v in center)
     hx, hy, hz = (float(v) / 2.0 for v in dimensions)
-    # 8 vertices: bottom face (z-) CCW, then top face (z+) CCW -- the netgen hexahedron winding the
-    # MMMM surface-charge setup expects (validated to reproduce ObjRecMag to ~5e-8).
+    # 8 vertices: bottom face (z-) CCW, then top face (z+) CCW -- the netgen hexahedron winding
+    # expected by ObjHexahedron (validated to reproduce ObjRecMag to ~5e-8).
     verts = [
         [cx - hx, cy - hy, cz - hz], [cx + hx, cy - hy, cz - hz],
         [cx + hx, cy + hy, cz - hz], [cx - hx, cy + hy, cz - hz],
@@ -64,14 +65,14 @@ def magnet_box(center, dimensions, magnetization):
 
 
 def ObjRecMag(center, dimensions, magnetization):
-    """Script-side ``ObjRecMag`` compatibility wrapper -- a rectangular block on the MMMM
-    (surface-charge ``ObjHexahedron``) representation, identical signature to the retiring C++
+    """Script-side ``ObjRecMag`` compatibility wrapper -- a rectangular fixed-M
+    ``ObjHexahedron`` representation, identical signature to the retiring C++
     ``ObjRecMag`` (surface-current ``radTRecMag``).
 
     The C++ ``ObjRecMag`` is being demoted from the user API (CLAUDE.md "Reduce Proprietary API
     Surface"); other solvers / examples / tests that call ``rad.ObjRecMag(center, dimensions,
-    magnetization)`` keep working through this script-side wrapper, now backed by the unified MMMM
-    element.  For a uniformly magnetized block the MMMM surface-charge field IS the exact analytic
+    magnetization)`` keep working through this script-side wrapper, now backed by the fixed-M
+    element.  For a uniformly magnetized block the surface-charge field IS the exact analytic
     (K&J) cuboid field -- verified to machine precision on-axis (1e-16) and ~1e-7 vs the old
     surface-current ``ObjRecMag`` off-axis -- so this is a faithful drop-in.
 

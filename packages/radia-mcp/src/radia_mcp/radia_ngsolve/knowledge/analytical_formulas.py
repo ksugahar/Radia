@@ -8,7 +8,7 @@ sourced from the IEE Japan review
     Computations (Part 1..5)", SA / RM technical meeting, 2002-2004.
 
 The package collects nine reference formula modules. They are the
-trusted-baseline layer that the rest of Radia (MMM, MSC, PEEC, FEM
+trusted-baseline layer that the rest of Radia (HDiv-VIM, PEEC, FEM
 panels, ngsolve.bem) is checked against. **For new analyses the first
 question to ask is "is there a closed-form here that I can sanity-check
 against?".** Cross-validation patterns are listed in the
@@ -152,7 +152,7 @@ T_z = ellipsoid_torque(H_0, alpha, chi_r, a, c)
 
 ## Use it for
 
-* Validate Radia MMM/MSC magnetisation of a meshed ellipsoid against
+* Validate HDiv-VIM magnetisation of a meshed ellipsoid against
   the analytical internal field (mu_r effective vs N_z prediction).
 * Quick sanity check of permanent-magnet far-field demag corrections.
 * Predict the torque on a soft-iron insert before running a 3D solve.
@@ -220,7 +220,7 @@ S_sph,asym = 9 / (2 mu_r (1 - (a/b)**3))
 
 * Ballpark the wall thickness needed for a magnetic shield around an
   experiment.
-* Validate a 3D Radia MMM solve of a high-mu cylinder / sphere shell
+* Validate a 3D HDiv-VIM solve of a high-mu cylinder / sphere shell
   by comparing the interior field to the analytical S.
 """
 

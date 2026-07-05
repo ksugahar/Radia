@@ -2,8 +2,8 @@
 
 This is the SAME solver as `demo_coil_field_synthesis.py`, but the basis
 sources are permanent-magnet cubes (`radia.ObjRecMag`) instead of current
-loops.  The matrix entry now comes from Radia's MMM / MSC field (surface-charge
-analytical formulas) -- again via `radia_field_kernel` + `radia.Fld`, with zero
+loops.  The matrix entry now comes from Radia's fixed-magnet field -- again via
+`radia_field_kernel` + `radia.Fld`, with zero
 changes to the solver.  This demonstrates that the (ACA+)+TSVD machinery is
 kernel-agnostic: it serves coils and magnetic materials alike.
 
@@ -47,7 +47,7 @@ def main():
                                np.full(ox.size, 0.06)])
         M = obs.shape[0]
 
-        # --- matrix entry from Radia's MMM/MSC field -------------------------
+        # --- matrix entry from Radia's fixed-magnet field --------------------
         entry = radia_field_kernel(obs, sources, component=2, field="b")
         A = np.array([[entry(i, j) for j in range(N)] for i in range(M)])
 

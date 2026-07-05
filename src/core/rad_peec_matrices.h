@@ -475,7 +475,7 @@ private:
  *   0 = LU (LAPACK zgesv_/zgetrf_/zgetrs_) - default, O(n^3)
  *   1 = BiCGSTAB (rad_bicgstab.h templated solver) - iterative, O(k*n^2)
  *
- * Both share MKL BLAS/LAPACK infrastructure with MSC solver.
+ * Both share MKL BLAS/LAPACK infrastructure with Radia solver paths.
  */
 class PEECSolver {
 public:

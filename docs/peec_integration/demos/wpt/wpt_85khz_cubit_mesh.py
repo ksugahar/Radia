@@ -1,16 +1,17 @@
 """
 WPT 85 kHz System with Cubit Mesh Generation
 
-This example demonstrates PEEC Loop-Star + MMM analysis using Coreform Cubit
-for mesh generation.
+This example demonstrates PEEC Loop-Star conductor analysis with Cubit meshes,
+and documents where a separate HDiv-VIM / reduced-FEM magnetic-material solve
+would exchange ferrite response.
 
 Mesh components:
 1. Tx/Rx spiral coils (hex mesh) - PEEC conductor
-2. Ferrite cores (hex mesh) - MMM magnetic material
+2. Ferrite cores (hex mesh) - HDiv-VIM / reduced-FEM magnetic material
 3. Aluminum shields (hex mesh) - PEEC conductor with eddy currents
 
 Workflow:
-    Cubit geometry -> NGSolve mesh (direct via export_NGSolveCurvedMesh) -> Radia PEEC+MMM
+    Cubit geometry -> NGSolve mesh (direct via export_NGSolveCurvedMesh) -> Radia PEEC + HDiv-VIM/reduced FEM
 
 Note: Netgen alone cannot create 3D hexahedral meshes.
       Cubit is required for hex mesh generation.
@@ -223,7 +224,8 @@ def load_mesh_to_radia(mesh, material_type='conductor'):
 
 def analyze_wpt_system():
     """
-    Analyze WPT system using PEEC + MMM.
+    Analyze WPT system using PEEC plus a separate HDiv-VIM / reduced-FEM
+    magnetic-material response.
     """
     import radia as rad
 
@@ -254,10 +256,10 @@ def analyze_wpt_system():
     # Convert Netgen meshes to Radia objects
     # Full implementation would use mesh_info['tx_mesh'] and mesh_info['rx_mesh']
 
-    print("\nNote: Full PEEC+MMM analysis requires:")
+    print("\nNote: Full PEEC + HDiv-VIM/reduced FEM analysis requires:")
     print("  1. CndFromMesh() for conductor elements (PEEC)")
-    print("  2. ObjHexahedron() for magnetic elements (MMM)")
-    print("  3. CplMag coupling between conductor and magnetic parts")
+    print("  2. HDiv-VIM / reduced FEM for ferrite magnetic response")
+    print("  3. Terminal/source-field exchange between conductor and magnetic parts")
 
     # Placeholder for analysis results
     print("\n--- Placeholder Analysis Results ---")
@@ -267,12 +269,12 @@ def analyze_wpt_system():
     print("""
 Expected Workflow:
     1. Load Tx coil mesh -> PEEC conductor
-    2. Load Tx ferrite mesh -> MMM magnetic material
+    2. Load Tx ferrite mesh -> HDiv-VIM / reduced-FEM magnetic material
     3. Load Tx shield mesh -> PEEC conductor (with eddy currents)
     4. Repeat for Rx assembly
-    5. Create CplMag solver for Tx+Rx system
+    5. Exchange source fields / terminal quantities between PEEC and magnetic response
     6. Set frequency (85 kHz)
-    7. Solve coupled PEEC+MMM system
+    7. Solve coupled PEEC + HDiv-VIM/reduced FEM system
     8. Extract:
        - Self-inductances L1, L2
        - Mutual inductance M
@@ -289,7 +291,7 @@ Expected Workflow:
     rad.UtiDelAll()
 
     print("\n" + "=" * 70)
-    print("Mesh generation complete. Full PEEC+MMM implementation pending.")
+    print("Mesh generation complete. Full PEEC + HDiv-VIM/reduced FEM implementation pending.")
     print("=" * 70)
 
 

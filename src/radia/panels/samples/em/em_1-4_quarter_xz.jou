@@ -4,7 +4,7 @@
 #   x=0:  B . n = 0 (flux parallel)       -> sym_bn=0_x (Radia '+x')
 #   z=0:  H x n = 0 (flux perpendicular)  -> sym_ht=0_z (Radia '-z')
 #
-# Matches the ELF CEFC 2020 reference convention IMA='+x-z' for MSC.
+# Matches the ELF CEFC 2020 reference convention IMA='+x-z' for HDiv-VIM.
 # For FEM Omega the solver picks:
 #   sym_bn=0_x -> Natural (do nothing)
 #   sym_ht=0_z -> Dirichlet (Omega = 0)
@@ -14,8 +14,8 @@
 # not a physics-accuracy comparison to any published reference.  The coil
 # (em_sample_coil.py) is a full racetrack -- the symmetry BCs impose the
 # field symmetry but do not "undo" the coil's actual spatial distribution.
-# End users chasing the published ELF MSC -228 mT reference need the full
-# ELF pipeline (Radia MSC via calc_accel_msc.py + matching coil symmetry).
+# End users chasing the published ELF -228 mT reference need the full
+# ELF pipeline (HDiv-VIM via calc_accel_hdiv.py + matching coil symmetry).
 #
 # Units: meters
 #

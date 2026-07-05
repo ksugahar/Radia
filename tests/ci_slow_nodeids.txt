@@ -1,10 +1,7 @@
 # Tests measured >=10 s in CI run 27871849250 on 2026-06-20.
 # Fast CI runs with -m "not slow and not golden"; workflow_dispatch full_slow=true still runs these.
-validation_test/feec/parity_vs_msc/test_ctype_nonlinear_parity.py::test_ctype_coil_nonlinear_gap_field  # 303.090s
 validation_test/bem/test_coil_bem_a_volume_vol.py::test_bem_a_inductance_from_volume_vol  # 143.087s
 tests/test_omega_reduced_omega.py::TestOmegaReducedOmegaKelvin::test_B_accuracy_inside_iron  # 118.703s
-validation_test/feec/parity_vs_msc/test_linear_cube_parity.py::test_hdiv_plus_N_mesh_robust  # 100.934s
-validation_test/feec/parity_vs_msc/test_ctype_nonlinear_parity.py::test_ctype_coil_nonlinear_sharp_bh_newton  # 84.495s
 validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_nl_equal_table_matches_single  # 74.162s
 validation_test/feec/test_hdiv_vim_poly_field.py::test_solve_demag_newton_saturating_matches_picard  # 69.016s
 validation_test/feec/test_hdiv_vim_poly_field.py::test_solve_demag_newton_linear_stiff  # 61.664s
@@ -29,7 +26,6 @@ tests/test_ellipsoid_alpha_tensor_3d_golden.py::test_transverse_matches_analytic
 tests/test_maxwell_stress_torque.py::test_torque_matches_lorentz_couple  # 19.356s
 tests/test_maxwell_stress_torque.py::test_transverse_field_zero_torque  # 18.687s
 validation_test/feec/test_clebsch_hodograph_research.py::test_accel_pole_ends_fem_open_boundary  # 18.623s
-validation_test/feec/parity_vs_msc/test_linear_cube_parity.py::test_collocation_mmmm_hdiv_cube_linear_parity  # 18.560s
 validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_different_mu_physics  # 17.636s
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_dipole_saturation_3d_aform  # 16.814s
 validation_test/feec/test_hdiv_vim_bem_demag.py::test_spheroid_full_tensor_and_sum_rule  # 15.746s

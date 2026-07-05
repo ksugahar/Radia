@@ -102,7 +102,7 @@ Inertial confinement is out of scope.
 | Error-field forecasting (Monte)  | Same as eddy current, with Monte-Carlo coil perturbations  |
 | H-matrix acceleration            | `radia_mcp.bem.h_matrix` (ACA+) for dense BEM/integral     |
 
-Radia's MMM/MSC is **not** the natural first tool for fusion; the
+Radia's HDiv-VIM is **not** the natural first tool for fusion; the
 field is dominated by Cariddi-type integral eddy current codes
 (Rubinacci, Villone et al., CREATE Consortium).  Radia is useful
 when (a) the geometry has soft iron (TBM modules, magnetic shields,
@@ -242,7 +242,7 @@ ITER (N_TF = 18): peak-to-peak ripple at outer plasma edge
 JT-60SA (N_TF = 18): ~1% peak-to-peak.
 
 TF ripple is mitigated by ferritic inserts in the vacuum vessel
-shadow.  This is one of the few places Radia's MMM (nonlinear iron)
+shadow.  This is one of the few places Radia's HDiv-VIM / reduced-FEM nonlinear-iron route
 is genuinely useful for tokamak design.
 
 ## References
@@ -1185,7 +1185,7 @@ radia continues: contours -> SINGLE-STROKE wire (grad-psi winding orientation,
 so even l>=2 saddle shims chain without the common current cancelling) ->
 SHEET-METAL distort (bend the discrete wire against its own Biot-Savart) ->
 STEP CAD (OCC WriteStep) -> PEEC.  The PEEC step is a full circuit-extraction
-SOLVER (`radia.peec_*`: L, R, C, M + SPICE netlist, MMM coupling), not just an
+SOLVER (`radia.peec_*`: L, R, C, M + SPICE netlist, magnetic-material coupling), not just an
 inductance number.  So from ONE run radia emits a windable conductor + CAD + a
 circuit model that the design codes do not.
 

@@ -244,9 +244,8 @@ HACApK and NOT a Radia-vendored FMM library.  Rationale:
 
 1. The one-shot evaluator has **no matrix to recompress** — HACApK's
    strength (ACA+ on a re-used matrix during iterative solve) does
-   not apply here.  HACApK remains the right choice for MMM/MSC
-   interaction matrices (per CLAUDE.md "Use HACApK Only" policy);
-   that is a separate use case.
+   not apply here.  HACApK remains the right choice for reusable
+   charge/interactions matrices; that is a separate use case.
 
 2. NGSolve.bem 6.2.2603 already ships the full FMM stack:
    `BiotSavartRegularMLCF`, `BiotSavartSingularMLCF`,
@@ -332,7 +331,7 @@ By Phase E the diff is: remove the inner loops in `equivalence_source.py`, keep 
 
 ## 10. Why FMM is intentionally skipped
 
-CLAUDE.md "FMM (Fast Multipole Method): Removed (2026-03-06)" documents the empirical conclusion that for Radia's MMM/MSC use cases:
+CLAUDE.md "FMM (Fast Multipole Method): Removed (2026-03-06)" documents the empirical conclusion for Radia's compact surface/charge interaction use cases:
 
 1. Dipole approximation accuracy is poor for distributed surface sources
 2. Compact geometries have ≥87% near-field pairs → HACApK is 10-100× faster
@@ -348,7 +347,7 @@ If a future use case demands N > 10⁶ (multi-billion-DOF FEM with massive surfa
 - [ ] Does NGSolve's TaskManager work inside a Python-callable C++ extension built via pybind11, or only inside `add_ngsolve_python_module` targets? (If the former is no, the static kernel needs `add_ngsolve_python_module` from Phase A, not just Phase C.)
 - [ ] Does the existing `_radia_pybind.pyd` already link the NGSolve TaskManager symbol? If yes, Phase A is straightforward. If no, we may need to split the equivalence-source module out from day one.
 - [ ] Serialisation format compatibility: should the new C++ writer produce a binary `.nfs` for speed (~50× smaller files), or keep the JSON format for portability? Default decision: KEEP JSON in Phase A (don't break the existing `.nfs.json` artifacts), add binary `.nfs.bin` as an optional Phase E enhancement.
-- [ ] For Phase D, should we use the same HACApK leaf size / ACA tolerance as Radia's MMM (eps=1e-4, leaf=10, eta=2.0), or do equivalence-theorem-specific defaults need exploration?
+- [ ] For Phase D, should we use the same HACApK leaf size / ACA tolerance as Radia's HDiv-VIM charge-Gram route (eps=1e-4, leaf=10, eta=2.0), or do equivalence-theorem-specific defaults need exploration?
 
 ## 12. References
 

@@ -9,10 +9,9 @@
 *
 *                 Refactored 2026-04-16:
 *                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
-*                 - RadHACApKMMMManager : public RadHACApKBase implements the
-*                   MMM 3-DOF tetrahedron kernel. Surface-charge MSC multipole-moment
-*                   (MMMM) solves use the dense LU / matrix-free moment path -- MMMM
-*                   does NOT connect to HACApK. RadHACApKPEECManager implements
+*                 - RadHACApKMagnetostaticManager : public RadHACApKBase implements the
+*                   compact 3-component interaction kernel. Mesh-backed magnetic-material
+*                   solves route through HDiv-VIM. RadHACApKPEECManager implements
 *                   Ruehli finite-filament mutual inductance.
 *
 * First release:  2025
@@ -26,7 +25,7 @@
 #define __RAD_HACAPK_H
 
 #include "rad_interaction.h"
-#include "rad_polyhedron.h"  // For radTPolyhedron 6DOF MSC support
+#include "rad_polyhedron.h"  // For compact polyhedron field kernels
 #include <vector>
 #include <functional>
 #include <unordered_map>
@@ -96,7 +95,7 @@ struct RadHACApKStats {
  *     is applied once inside RadHACApKCallback::ComputeEntry)
  *
  * Typical usage:
- *   RadHACApKMMMManager mgr(interaction);
+ *   RadHACApKMagnetostaticManager mgr(interaction);
  *   mgr.BuildHMatrix();
  *   mgr.MatVec(x, y);                    // y = A * x
  *   mgr.UpdateDiagonal(new_inv_chi);     // nonlinear iteration update
@@ -149,7 +148,7 @@ public:
 
     /**
      * Return the kernel's physical +N(i, j) interaction matrix element.
-     * For MSC this is the demagnetization tensor contribution (system
+     * For magnetic interaction kernels this is the demagnetization tensor contribution (system
      * matrix is -N + diag(1/chi)); for PEEC this is the +L mutual
      * inductance (system matrix is L itself, frequency-dependent
      * factors applied outside HACApK).
@@ -163,7 +162,7 @@ public:
      * Return the system-matrix entry A(i, j) as stored by HACApK.
      * Default implementation returns GetInteractionMatrixElement
      * unchanged (PEEC / BEM convention where the physical N is itself
-     * the system matrix). MSC overrides this to apply the sign flip
+     * the system matrix). Magnetostatic kernels override this to apply the sign flip
      * and the diag(1/chi) shift: A = -N + delta_ij / chi_i.
      *
      * This is the hook called by RadHACApKCallback::ComputeEntry, so
@@ -204,7 +203,7 @@ protected:
 
     /**
      * Uniform DOF count per element (used when IsVariableDOF() is false).
-     * Typical: 3 (MMM tetra), 6 (MSC hex), 1 (PEEC filament).
+     * Typical: 3 (compact vector element), 1 (PEEC filament / face DOF).
      */
     virtual int GetUniformNFFC() const = 0;
 
@@ -251,14 +250,13 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMMMManager: MMM kernel (tetra 3DOF)
+// RadHACApKMagnetostaticManager: compact 3-component interaction kernel
 //-------------------------------------------------------------------------
 
 /**
- * RadHACApKMMMManager implements the HACApK kernel for Radia's Magnetic
- * Moment Method (MMM, tetrahedra, 3 DOF).  Magnetic Surface Charge
- * elements (hex/wedge/pyramid, 5-6 DOF) use the dense moment LU / matrix-free
- * multipole-moment (MMMM) path -- MMMM does not connect to HACApK.
+ * RadHACApKMagnetostaticManager implements the HACApK kernel for Radia's
+ * compact 3-component interaction matrices.  Mesh-backed magnetic-material
+ * solves route through HDiv-VIM instead.
  *
  * All kernel-specific precomputation (PrecomputeHexaGeometry, etc.),
  * flat matrix caching, and on-demand block computation routines live
@@ -270,10 +268,10 @@ private:
  * pipeline, but the dense BiCGSTAB solver (Method 1) is often faster
  * on small/medium problems. Use HACApK when N > ~1000.
  */
-class RadHACApKMMMManager : public RadHACApKBase {
+class RadHACApKMagnetostaticManager : public RadHACApKBase {
 public:
-    explicit RadHACApKMMMManager(radTInteraction* interaction);
-    ~RadHACApKMMMManager() override;
+    explicit RadHACApKMagnetostaticManager(radTInteraction* interaction);
+    ~RadHACApKMagnetostaticManager() override;
 
     radTInteraction* GetInteraction() const { return m_interaction; }
 
@@ -281,7 +279,7 @@ public:
     double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
 
     /**
-     * MSC system-matrix convention: A = -N + delta_ij / chi_i.
+     * System-matrix convention: A = -N + delta_ij / chi_i.
      */
     double ComputeSystemEntry(int dof_i, int dof_j) const override;
 
@@ -296,14 +294,14 @@ protected:
     void ExtractCoordinates() override;
     void OnBeforeBuild() override;
     void InitializeInvChi() override;
-    bool IsVariableDOF() const override { return false; }   // MMM-only: uniform 3-DOF tet
+    bool IsVariableDOF() const override { return false; }   // uniform 3-component blocks
     int GetUniformNFFC() const override { return m_nffc; }   // == 3
 
 private:
     // Pointer to Radia interaction (not owned)
     radTInteraction* m_interaction;
 
-    // DOF per element: MMM-only manager, always 3 (tetrahedron)
+    // DOF per element: always 3.
     int m_nffc;
 
     // O(1) DOF-to-element lookup (ELF-style)
@@ -326,61 +324,13 @@ private:
     void BuildDOFLookupTable();
     void PrecomputeGeometry3DOF();
 
-    // 3DOF tetrahedron block computation (MMM -- the only element type this manager solves;
-    // EIEM2 surface-charge 6x6/5x5/mixed kernels were retired in Phase 3b; hex/wedge/pyramid MSC
-    // multipole-moment solves use the dense LU / matrix-free moment path -- MMMM does not connect to HACApK)
+    // 3DOF tetrahedron block computation.
     double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
     void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;
     void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;
 
     double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
-};
-
-//-------------------------------------------------------------------------
-// RadHACApKMomentSystem: the chi-free multipole-moment (MMMM) geometry coupling K as a
-// HACApK H-matrix -- the O(N log N) matvec kernel for the collocation-MMMM COARSE-tier
-// HACApK-BiCGSTAB demag solve (Sugahara 2026-07-02; docs/multipole_moment_mmm/ACA_MOMENT_DESIGN.ipynb).
-//-------------------------------------------------------------------------
-
-/* Revived matvec-ONLY (2026-07-02): NO H-LU, NO deflation, NO loop-free.  Collocation MMMM gives up
- * loop-free (the internal M is field-correct but loop-polluted -- acceptable for the coarse / optimization
- * tier; accurate + hysteresis work uses the loop-free HDiv-VIM).  The method-2 pure-hex moment BiCGSTAB
- * (radTRelaxationMethNo_1::SolveLinearStep, pureHexMatrixFree) builds this chi-INDEPENDENT geometry K
- * ONCE (incl. INV4PI + IMA images) and applies A(chi)x = L_local x + diag_row(chi)(K x) with K x via this
- * H-matvec, so a nonlinear Picard loop reuses K (only the block-diagonal chi changes).  The entry K[i][j]
- * is computed ON DEMAND by radTInteraction::MomentSystemBlock6x6(..., kernelOnly=true) (no dense build).
- * HEX-ONLY; assumes m_elemDOFOffset[m_hexaElemIndices[h]] == 6*h (pure-hex moment); tet/wedge/mixed
- * method-2 stay on the dense moment LU (the moment H-matrix is hex-only). */
-class RadHACApKMomentSystem : public RadHACApKBase {
-public:
-    explicit RadHACApKMomentSystem(radTInteraction* interaction);   // chi-free K_geometry (kernel-only)
-    ~RadHACApKMomentSystem() override {}
-
-    radTInteraction* GetInteraction() const { return m_interaction; }
-
-    // Cross-Solve cache validity: TRUE iff the interaction's CURRENT hex centroids are bit-identical
-    // to the coordinates this H-matrix was built on (same extraction code path -> exact compare is
-    // correct).  Guards the radTApplication-level cache against pointer reuse (ABA) after the cached
-    // interaction was deleted and a different geometry landed at the same address.  O(nHex) doubles.
-    bool GeometryMatches() const;
-
-    // K[i][j] on demand (the chi-free geometry entry; rows 6h+t, cols = face DOF).
-    double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
-    // 6x6 geometry block unit behind the scalar HACApK callback.
-    void GetInteractionBlock6x6(int elem_i, int elem_j, double* block) const;
-    // The H-matrix stores the chi-free K directly (no MSC sign flip / 1-chi shift).
-    double ComputeSystemEntry(int dof_i, int dof_j) const override { return GetInteractionMatrixElement(dof_i, dof_j); }
-
-protected:
-    void ExtractCoordinates() override;   // cluster tree = hex centroids; ndof = 6*nHex
-    void OnBeforeBuild() override;
-    void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }   // chi folded outside K (in the matvec)
-    bool IsVariableDOF() const override { return false; }
-    int  GetUniformNFFC() const override { return 6; }                    // 6 DOF per hex
-
-private:
-    radTInteraction* m_interaction;   // not owned
 };
 
 //-------------------------------------------------------------------------
@@ -409,7 +359,7 @@ namespace RadHACApKCallback {
     // Clear all global callback state (called on manager destruction)
     void ClearGlobalState();
 
-    // Set interaction for callback (MSC kernel informational; PEEC adapters
+    // Set interaction for callback (kernel informational; PEEC adapters
     // may leave interaction null)
     void SetInteraction(radTInteraction* interaction, int n_elem, int nffc);
 

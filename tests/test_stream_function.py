@@ -494,7 +494,7 @@ def test_tikhonov_lcurve_monotone():
 # Generic path through Radia's OWN field computation (magnetic materials)
 # --------------------------------------------------------------------------
 def test_radia_field_kernel_magnets():
-    """The same (ACA+)+TSVD machinery works with Radia's MMM/MSC field over
+    """The same (ACA+)+TSVD machinery works with Radia's fixed-magnet field over
     permanent-magnet objects (not coils), via radia_field_kernel + radia.Fld.
     Proves the solver is kernel-agnostic and reuses Radia's existing kernels."""
     import radia as rad

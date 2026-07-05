@@ -28,7 +28,7 @@ result-bearing entry points are:
 | `validation_test/peec_integration/ngsbem_peec_demo/ngbem_peec.py` | PEEC Loop-Star solver (`NGBEMPEECSolver`) with 3 modes: mqs, full, stabilized |
 | `validation_test/peec_integration/ngsbem_peec_demo/ngbem_eddy.py` | Eddy current solver (`ShieldBEMSIBC`): EFIE + SIBC for conducting/magnetic bodies |
 | `validation_test/peec_integration/ngsbem_peec_demo/ngbem_interface.py` | Bridge: ngbem matrices to Radia PEEC topology |
-| `validation_test/peec_integration/ngsbem_peec_demo/ngbem_coupled.py` | Coupled PEEC + Radia MMM solver (lazy Radia import) |
+| `validation_test/peec_integration/ngsbem_peec_demo/ngbem_coupled.py` | Retired coupled prototype; use conductor-only PEEC plus HDiv-VIM / reduced-FEM magnetic response |
 
 ## Subdirectories
 

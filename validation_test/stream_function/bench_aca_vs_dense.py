@@ -14,7 +14,7 @@ So there are two wins, both shown here:
 The matrix entry is computed per call by the SAME smooth (numerically low-rank)
 kernel for both methods, so the comparison is apples-to-apples and the
 eval-count reduction shows up in wall-clock time when the kernel is non-trivial
-(as a real Biot-Savart / MMM-MSC field kernel is).
+(as a real Biot-Savart / magnetic-material field kernel is).
 
 Output: results_aca_vs_dense.json (per the repository benchmark policy).
 Run:    python bench_aca_vs_dense.py [--max-n N]

@@ -151,7 +151,7 @@ def solve_l2_aca(A, B, fes, aca_eps=1.0e-10):
       1. Validates that ACA+TSVD works on FE-direct matrices (callback
          contract carries over from basis-loop case).
       2. Caches the TSVD factorisation for Path-A iteration re-use.
-      3. Is the foundation for material-kernel acceleration (Radia MMM,
+      3. Is the foundation for material-kernel acceleration (Radia HDiv-VIM,
          shielded coil) where each matrix entry is expensive.
 
     Note: this is the L2 / Euclidean min-norm path.  The H1 min-seminorm

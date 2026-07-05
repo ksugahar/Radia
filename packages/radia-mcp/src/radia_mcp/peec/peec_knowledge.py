@@ -19,12 +19,11 @@ SHOWCASE NOTEBOOK: docs/peec/dowell_surface_impedance_demo.ipynb -- executable c
 PEEC knowledge base for the mcp-server-peec MCP server.
 
 Covers: Loop-Star PEEC architecture, node-segment topology, circuit extraction,
-multi-filament subdivision, SIBC surface impedance, coupled PEEC+MMM,
+multi-filament subdivision, SIBC surface impedance,
 PRIMA model order reduction, SPICE netlist export, and ngsolve.bem integration.
 
 Sources:
   - src/radia/peec_topology.py (PEECCircuitSolver, MNA)
-  - src/radia/peec_coupled.py (CoupledPEECSolver, Delta_L)
   - src/radia/fasthenry_parser.py (FastHenry .inp parser)
   - src/radia/lanczos_reduction.py (PRIMA, Lanczos, SPICE export)
   - src/radia/esim_cell_problem.py (ESIM nonlinear Z_s)
@@ -315,7 +314,7 @@ topo = builder.build_topology()
 # Get frequency sweep points
 freqs = parser.get_frequencies()
 
-# Solve (auto-detects .magnetic blocks -> CoupledPEECSolver)
+# Solve conductor / shielded PEEC. .magnetic blocks are rejected by solve().
 result = parser.solve(freqs)
 ```
 
@@ -330,12 +329,15 @@ result = parser.solve(freqs)
 | `.freq` | `.freq fmin=1e3 fmax=1e9 ndec=10` | Frequency sweep |
 | `.default` | `.default sigma=5.8e7 w=0.5 h=0.1` | Default parameters |
 | `.equiv` | `.equiv N1 N2 N3` | Node merge (equivalence) |
-| `.magnetic` | See below | Magnetic material block |
+| `.magnetic` | Parsed, rejected by solve() | Magnetic material block |
 | `.panel` | See below | Panel (capacitive) block |
 
 ## Magnetic Material Block (.magnetic)
 
-For coupled PEEC+MMM simulation with magnetic cores:
+The old PEEC magnetic-material coupling path is retired.  FastHenry
+`.magnetic` blocks are still parsed so inputs can be diagnosed, but
+`parser.solve()` raises and points you to HDiv-VIM / reduced FEM for
+magnetic cores.
 
 ```
 .magnetic
@@ -378,29 +380,20 @@ E3 N3 N4 w=0.5 h=0.1
 ```
 """
 
-PEEC_COUPLED_MMM = """
-# Coupled PEEC + MMM (CoupledPEECSolver)
+PEEC_MAGNETIC_POLICY = """
+# Magnetic Material Coupling Policy
 
 ## Overview
 
-CoupledPEECSolver extends PEECCircuitSolver with magnetic material coupling.
-For each filament segment, it computes the inductance change Delta_L caused
-by nearby magnetic material using Radia MMM/MSC.
-
-**Physics**:
-```
-Z_eff(f) = diag(R + Zs(f)) + jw * (L_air + Delta_L)
-         + omega * tan_delta_m * Delta_L    [lossy material]
-```
-
-For linear materials, Delta_L is computed ONCE and reused for all frequencies.
+PEEC in Radia is conductor/shield circuit extraction.  Magnetic material
+cores are no longer solved through the old PEEC magnetic-moment coupling
+path.  Keep the magnetic state mesh-backed and use HDiv-VIM / reduced FEM,
+then couple fields at the application layer.
 
 ## Usage
 
 ```python
-import radia as rad
 from peec_matrices import PyPEECBuilder
-from peec_coupled import CoupledPEECSolver
 
 # Build conductor topology
 builder = PyPEECBuilder()
@@ -409,49 +402,13 @@ n2 = builder.add_node_at(0.1, 0, 0)
 builder.add_connected_segment(n1, n2, 1e-3, 1e-3, sigma=5.8e7)
 builder.add_port(n1, n2)
 topo = builder.build_topology()
-
-# Create magnetic core (coordinates in meters)
-verts = [[-0.02,-0.02,-0.02], [0.02,-0.02,-0.02],
-         [0.02,0.02,-0.02],   [-0.02,0.02,-0.02],
-         [-0.02,-0.02,0.02],  [0.02,-0.02,0.02],
-         [0.02,0.02,0.02],    [-0.02,0.02,0.02]]
-core = rad.ObjHexahedron(verts, [0, 0, 0])
-mat = rad.MatLin(999)
-rad.MatApl(core, mat)
-
-# Coupled solver (mu_r_imag for magnetic loss)
-solver = CoupledPEECSolver(topo, [core], mu_r_imag=10.0)
-solver.compute_coupling_matrix()  # N_seg Radia Solve calls
-
-# Port impedance
-Z = solver.compute_port_impedance(freq=1e6)
-L_total = solver.get_effective_inductance()  # L_air + Delta_L
-
-# Frequency sweep
-freqs = np.logspace(3, 8, 50)
-Z_sweep = solver.frequency_sweep(freqs)
 ```
 
-## Delta_L Computation (Column-by-Column)
-
-For each column j of Delta_L:
-1. Unit current in segment j -> H-field via Biot-Savart
-2. H-field set as `rad.ObjBckg(h_func)` background
-3. `rad.Solve()` for induced magnetization M
-4. Compute A-field at each segment center from magnetized material
-5. `Delta_L[i][j] = dot(A(center_i), dir_i) * length_i`
-
-## Complex Permeability (Lossy Material)
-
-```python
-# mu = mu'_r - j*mu"_r
-# tan_delta_m = mu"_r / mu'_r
-# R_mag(f) = omega * tan_delta_m * Delta_L
-
-solver = CoupledPEECSolver(topo, [core], mu_r_imag=10.0)
-solver.compute_coupling_matrix(mu_r_real=1000.0)
-R_mag = solver.get_magnetic_loss_resistance(freq=1e6)
-```
+For ferrite/iron cores:
+1. solve the conductor PEEC problem or extract the current distribution;
+2. solve the magnetic core with HDiv-VIM / reduced FEM;
+3. exchange fields in the application workflow and validate against a
+   result-bearing notebook or validation_test case.
 """
 
 PEEC_SIBC = """
@@ -609,7 +566,7 @@ C1 n3 0 7.89e-12
 | `PRIMASchurExtractor` | Port impedance extraction via Schur complement |
 | `SPICEExtractionConfig` | Configuration (n_moments, tol) |
 | `SparseCircuit` | Circuit netlist (R, L, C, M, ports) |
-| `LoopStarMagneticCoupled` | Full PEEC+MMM reduction (3-block system) |
+| Magnetic-material coupling | Retired from PEEC; use HDiv-VIM / reduced FEM |
 
 ## References
 
@@ -636,9 +593,8 @@ Both PEEC and ngsolve.bem cover the DC-1 MHz range. Choose based on output:
 
 1. **Direct circuit extraction**: L, R, C, M matrices -> SPICE netlist
 2. **Lanczos MOR**: PRIMA reduction to compact equivalent circuit
-3. **MMM coupling**: Magnetic material (iron core) via Radia Solve
-4. **FastHenry compatibility**: Parse existing .inp models
-5. **Multi-filament**: nwinc/nhinc for skin/proximity within PEEC
+3. **FastHenry compatibility**: Parse existing .inp models
+4. **Multi-filament**: nwinc/nhinc for skin/proximity within PEEC
 
 ## When to Use Which
 
@@ -646,7 +602,7 @@ Both PEEC and ngsolve.bem cover the DC-1 MHz range. Choose based on output:
 |------|-----|
 | Inductance/resistance extraction | PEEC |
 | SPICE netlist for circuit simulator | PEEC + PRIMA |
-| Inductor on ferrite substrate | PEEC + CoupledPEECSolver |
+| Inductor on ferrite substrate | PEEC for conductors + HDiv-VIM / reduced FEM for core |
 | Field distribution visualization | ngsolve.bem |
 | High-frequency scattering (> 1 MHz) | ngsolve.bem (Helmholtz) |
 | Induction heating (P_total) | ngsolve.bem (Scalar BIE + SIBC) |
@@ -685,10 +641,7 @@ Without `add_port()`, `compute_port_impedance()` returns 0.
 
 ## 4. Cleanup with UtiDelAll
 
-When using CoupledPEECSolver with Radia magnetic objects:
-```python
-rad.UtiDelAll()  # Always call before exit
-```
+PEEC no longer owns magnetic-material Radia objects.
 
 ## 5. Import Order (with Cubit)
 
@@ -705,12 +658,7 @@ import cubit        # Last (DLL conflict avoidance)
 Zs array must have exactly n_loop elements (= number of filament segments).
 With multi-filament (nwinc=3, nhinc=3), n_loop = 9 * n_segments.
 
-## 7. Delta_L Before Frequency Sweep
-
-For coupled PEEC, call `compute_coupling_matrix()` ONCE before any
-`frequency_sweep()` or `compute_port_impedance()` call.
-
-## 8. Laplace Kernel Only
+## 7. Laplace Kernel Only
 
 PEEC uses G(r) = 1/(4*pi*r). Do NOT add Helmholtz kernel (e^{-jkr}/r).
 Wave propagation effects are NOT modeled. Use ngsolve.bem for high frequency.
@@ -725,7 +673,7 @@ def get_peec_documentation(topic: str = "all") -> str:
         "solver": PEEC_CIRCUIT_SOLVER,
         "multi_filament": PEEC_MULTI_FILAMENT,
         "fasthenry": PEEC_FASTHENRY,
-        "coupled": PEEC_COUPLED_MMM,
+        "magnetic": PEEC_MAGNETIC_POLICY,
         "sibc": PEEC_SIBC,
         "prima": PEEC_PRIMA,
         "ngsolve_bem": PEEC_NGSOLVE_BEM,

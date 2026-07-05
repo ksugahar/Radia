@@ -26,12 +26,11 @@
 /**
  * Recommended default HACApK parameters for the PEEC filament kernel.
  *
- * MSC defaults (leaf_size=32 hex → ~192 DOF/leaf; max_rank=200) are
- * tuned for 3D-spread volume elements with 6 DOF each. PEEC has 1 DOF
- * per filament, so leaf_size scales up by ~6x to preserve "DOFs per
- * leaf". max_rank scales up because the 1/r Neumann kernel between
- * slender filaments has slower singular-value decay than the 6DOF MSC
- * kernel. eta is slightly larger so adjacent-turn blocks (near-field)
+ * PEEC has 1 DOF per filament, so leaf_size is larger than the compact
+ * magnetic defaults to preserve a useful "DOFs per leaf" scale. max_rank
+ * is higher because the 1/r Neumann kernel between slender filaments has
+ * slower singular-value decay. eta is slightly larger so adjacent-turn blocks
+ * (near-field)
  * stay dense rather than being forced through ACA on a kernel where
  * ACA struggles.
  *
@@ -42,9 +41,9 @@ inline RadHACApKParams RadHACApKPEECDefaultParams() {
     RadHACApKParams p;
     p.aca_eps = 1.0e-8;  // PEEC sweet spot: ACA rank jumps 14->96, error 4.8%->0.38%
                          // between 1e-7 and 1e-8 for Ruehli 1/r kernel (bench 2026-04-16)
-    p.leaf_size = 128;   // 1 DOF/fil -> ~MSC-equivalent DOF/leaf
+    p.leaf_size = 128;   // 1 DOF/fil -> useful DOFs/leaf for PEEC
     p.eta = 3.0;         // keep near-field blocks dense (helix adjacent turns)
-    p.max_rank = 400;    // 1/r kernel needs higher rank than MSC
+    p.max_rank = 400;    // 1/r kernel needs higher rank than compact magnetic kernels
     p.print_level = 0;
     return p;
 }

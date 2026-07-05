@@ -118,7 +118,7 @@ def test_cohomology_currentlink():
 
 
 def test_accel_pole_design_multipole_analyzer():
-    """The design+measurement foundation for the hodograph + HDiv-MMM
+    """The design+measurement foundation for the hodograph + HDiv-VIM
     combination: the multipole analyzer returns ONLY the quad for a pure
     quad field and detects an injected octupole to machine precision."""
     import accel_pole_design as apd

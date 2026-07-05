@@ -3,7 +3,7 @@
 
 (*
   cohomology.wls -- the DISCRETE de Rham complex and its cohomology H^1: the GLOBAL
-  "loops" the MMM/MSC VIM solver must carry on a multiply-connected body.
+  "loops" the HDiv-VIM VIM solver must carry on a multiply-connected body.
 
   derham.wls / h1 / hcurl / hdiv give the LOCAL (per-element) FEEC basis; the div-free
   circulations there are curl(H(curl)) -- the LOCAL, contractible loops, field-null by

@@ -1,23 +1,18 @@
 """radia.SoftIron -- the unified, intent-based soft-iron object.
 
-"Place soft iron, solve it, read the field" -- backend-agnostic over the two demag methods
-(multipole-moment MMM MSC and the FEEC HDiv-VIM).  Geometry comes from a ``.vol`` file (the canonical,
-correctly-oriented netgen interchange) or an in-memory NGSolve mesh; the Radia element
-representation (ObjHexahedron / ...) is an INTERNAL detail the user no longer touches.
+"Place soft iron, solve it, read the field" on the FEEC HDiv-VIM route.  Geometry comes from a
+``.vol`` file (the canonical, correctly-oriented netgen interchange) or an in-memory NGSolve mesh; the
+Radia element representation (ObjHexahedron / ...) is an INTERNAL detail the user no longer touches.
 
-Both demag backends read the SAME mesh -> element container -> ``rad.Fld`` (analytic open
-boundary); the backend is a SELECTOR (``solve(backend=...)`` / ``radia.set_demag_backend``), not
-a second API.  This is the user-facing layer of the 2-layer API (see CLAUDE.md "Reduce Proprietary
-API Surface").
+This is the user-facing layer of the 2-layer API (see CLAUDE.md "Reduce Proprietary API Surface").
 
 Example::
 
     import radia as rad
     iron = rad.SoftIron("yoke.vol", mu_r=1000)          # or bh_table=[[H,B],...]
     coil = rad.ObjCnt(my_coilbuilder.to_radia())        # a mesh-free Biot-Savart source
-    iron.solve(source=coil, backend="auto")             # auto: mesh-backed -> HDiv-VIM
+    iron.solve(source=coil)                             # mesh-backed -> HDiv-VIM
     B = iron.field("b", [[0, 0, 0.05]])                 # total (iron + source) field, exact open bdry
-    iron.solve(source=coil, backend="collocation_mmmm") # same object, collocation MMMM instead
 """
 import os
 
@@ -49,7 +44,7 @@ class SoftIron:
             self._geometry = "<ngsolve.Mesh>"
         self.mu_r = mu_r
         self.bh_table = bh_table
-        self.result = None          # last solve() return (HDiv dict or C++ collocation MMMM tuple)
+        self.result = None          # last solve() return (HDiv dict)
         self._source = []           # last applied-field source members (for total-field queries)
 
     def solve(self, source=None, backend="auto", prec=1e-6, maxiter=2000, method=0, image=None):
@@ -60,9 +55,9 @@ class SoftIron:
         source : Radia handle | sequence of handles, optional
             The applied-field object(s) -- a coil container, ``rad.ObjBckg``, a permanent magnet, ...
             Combined with the iron for the solve.  ``None`` = self-demag only (M stays 0 without a source).
-        backend : {"auto", "collocation_mmmm", "hdiv"}
-            ``"auto"`` -> a mesh-backed iron dispatches to the HDiv-VIM; ``"collocation_mmmm"`` / ``"hdiv"`` force
-            the method.  (Per-call; the global default is restored afterwards.)
+        backend : {"auto", "hdiv"}
+            ``"auto"`` dispatches to the HDiv-VIM for supported mesh-backed soft iron;
+            ``"hdiv"`` is accepted for explicitness.  (Per-call; the global default is restored afterwards.)
         image : str, optional
             IMA mirror symmetry (e.g. ``"+x-z"``), passed to both backends.
         """

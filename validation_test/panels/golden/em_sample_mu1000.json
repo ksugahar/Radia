@@ -21,7 +21,7 @@
     "solver": "pardiso"
   },
   "observations": {
-    "note": "Absolute-value snapshot for regression guard.  EM panel accepts .py only (2026-04-25 policy); em_sample_coil.build_coil() returns an ELF-LIKE (NOT ELF-matched) racetrack with 4 straight + 4 arc CoilBuilder segments (8 Radia objects, 84 wire segments) at NI=2000.  Not matched to the ELF CEFC 2020 quarter-XZ Radia-MSC reference (-228.1 mT); see src/radia/panels/samples/em/README.md for the variant plan.  Mesh topology lock refreshed 2026-04-26 after `_add_kelvin_cubit_reduction` deterministic-anchor fix and after relocating the canonical .vol to the shipped path `src/radia/panels/samples/em_sample.vol` (was C:/temp/em_sample.vol, regen-only): ne 456477 -> 456476, ndof 83798 -> 83797 (drift 1).  Physics expected unchanged within tolerance.",
+    "note": "Absolute-value snapshot for regression guard.  EM panel accepts .py only (2026-04-25 policy); em_sample_coil.build_coil() returns an ELF-LIKE (NOT ELF-matched) racetrack with 4 straight + 4 arc CoilBuilder segments (8 Radia objects, 84 wire segments) at NI=2000.  Not matched to the ELF CEFC 2020 quarter-XZ reference (-228.1 mT); see src/radia/panels/samples/em/README.md for the variant plan.  Mesh topology lock refreshed 2026-04-26 after `_add_kelvin_cubit_reduction` deterministic-anchor fix and after relocating the canonical .vol to the shipped path `src/radia/panels/samples/em_sample.vol` (was C:/temp/em_sample.vol, regen-only): ne 456477 -> 456476, ndof 83798 -> 83797 (drift 1).  Physics expected unchanged within tolerance.",
     "I_2000A_coil_py": {
       "B_origin_T": [4.773e-06, -2.936e-03, -8.283e-03],
       "B_origin_mag_T": 8.788e-03,

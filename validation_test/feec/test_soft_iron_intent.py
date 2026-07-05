@@ -1,8 +1,7 @@
 """radia.SoftIron -- the unified intent-based soft-iron object (2-layer API, 2026-06-19).
 
-Locks that ONE object built from a .vol drives BOTH demag backends (surface-charge MSC and HDiv-VIM) with no
-ObjHexahedron in the user's hands: build -> solve(backend=...) -> field(), backend-agnostic, and the
-two backends agree on the same .vol within the RT0-vs-MSC discretization gap."""
+Locks that ONE object built from a .vol drives HDiv-VIM with no ObjHexahedron in the user's hands:
+build -> solve() -> field()."""
 import math
 
 import pytest
@@ -25,11 +24,11 @@ def _vol(path):
         m.ngmesh.Save(str(path))
 
 
-def test_soft_iron_both_backends_from_vol(tmp_path):
+def test_soft_iron_hdiv_from_vol(tmp_path):
     vol = tmp_path / "cube_hex.vol"
     _vol(vol)
 
-    def run(backend):
+    def run(backend="hdiv"):
         rad.UtiDelAll()
         with ng.TaskManager():
             iron = rad.SoftIron(vol, mu_r=MU_R)                  # intent object, no ObjHexahedron
@@ -37,21 +36,13 @@ def test_soft_iron_both_backends_from_vol(tmp_path):
             iron.solve(source=src, backend=backend)
             mz = sum(m[2] for (_c, m) in iron.magnetization()) / len(iron.magnetization())
             # field() returns total (iron+source); check it is finite at the centre
-            bz = iron.field("b", [[0.0, 0.0, 0.0]])[0][2] if backend == "hdiv" else \
-                iron.field("b", [0.0, 0.0, 0.0])[2]
+            bz = iron.field("b", [[0.0, 0.0, 0.0]])[0][2]
         rad.UtiDelAll()
         return mz, bz
 
-    mz_hdiv, _ = run("hdiv")
-    mz_collocation, _ = run("collocation_mmmm")
-
-    for name, mz in (("hdiv", mz_hdiv), ("collocation_mmmm", mz_collocation)):
-        assert 2.5e3 < mz < 4.0e3, f"SoftIron({name}) unphysical M_avg_z={mz:.1f}"
-    rel = abs(mz_hdiv - mz_collocation) / abs(mz_collocation)
-    assert rel < 0.06, (
-        f"SoftIron hdiv {mz_hdiv:.1f} vs collocation MMMM {mz_collocation:.1f} "
-        f"differ {rel*100:.1f}%"
-    )
+    mz_hdiv, bz = run()
+    assert 2.5e3 < mz_hdiv < 4.0e3, f"SoftIron(hdiv) unphysical M_avg_z={mz_hdiv:.1f}"
+    assert abs(bz) > 0.0
 
 
 def test_soft_iron_repr_and_auto(tmp_path):

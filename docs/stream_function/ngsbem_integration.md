@@ -118,7 +118,7 @@ Both are H-matrix-style accelerators but fundamentally different math:
 | In Radia     | Removed (CLAUDE.md 2026-03-06)       | HACApK (kept and developed)             |
 
 CLAUDE.md "FMM Removed (2026-03-06)" applies to Radia's own
-MMM/MSC volume integral, NOT to `ngsolve.bem`'s surface BEM
+HDiv-VIM volume integral, NOT to `ngsolve.bem`'s surface BEM
 acceleration.  Different layer, different geometry class.
 
 ## How upstream activity affects us

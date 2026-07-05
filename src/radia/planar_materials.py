@@ -1,17 +1,16 @@
-"""radia.planar_materials -- SHARED 2D soft-iron constitutive laws for BOTH planar demag solvers
-(collocation MMMM ``radia.mmmm2d`` AND HDiv-VIM ``radia.vim._vim2d``).
+"""radia.planar_materials -- shared 2D soft-iron constitutive laws.
 
-ONE source of truth for the material side so a new law is written ONCE and both methods get it:
+ONE source of truth for the material side so a new law is written ONCE:
 
   * B-H table parse/validate           -> ``hm_arrays`` (H, M, chi0)
   * anhysteretic isotropic scalar law  -> ``law_from_table`` (M_of_h, chi_sec, chi0)
   * per-region (multi-grade) laws      -> ``per_region_chi`` / ``per_region_law`` (element-mats list)
   * anisotropic linear susceptibility  -> ``chi_tensor`` (easy-axis chi_par/chi_perp -> 2x2 X)
 
-Both solvers impose M = X.H (X = chi I for isotropic) via a per-element (secant) susceptibility fed to
-their own scalar-chi Picard, so these stateless laws slot in without per-method duplication.  The
-mesh-specific glue (extracting element material names) stays in each solver; these take a plain
-``mats`` list of per-element material names.
+The HDiv-VIM planar layer imposes M = X.H (X = chi I for isotropic) via a per-element
+(secant) susceptibility.  Dense planar helpers such as anisotropic and hysteresis solvers reuse the
+same stateless laws.  Mesh-specific glue (extracting element material names) stays outside this module;
+these functions take a plain ``mats`` list of per-element material names.
 """
 from __future__ import annotations
 
@@ -169,8 +168,8 @@ def chi_tensor(chi_par, chi_perp, easy_deg=0.0):
     ``chi_par`` along the easy axis (angle ``easy_deg`` from +x) and ``chi_perp`` across it, so
     M = X.H.  X = R diag(chi_par, chi_perp) R^T (symmetric positive-definite for chi_par,chi_perp>0).
 
-    The shared spec both solvers consume: MMMM imposes X on its 2 dipole rows, the HDiv-VIM on its
-    RT1 mass; grain-oriented silicon steel is the canonical use (chi_par >> chi_perp)."""
+    The shared spec consumed by dense planar helpers and the HDiv-VIM roadmap; grain-oriented silicon
+    steel is the canonical use (chi_par >> chi_perp)."""
     if not (chi_par > 0.0 and chi_perp > 0.0):
         raise ValueError("chi_tensor: chi_par, chi_perp must be > 0 (got %r, %r)" % (chi_par, chi_perp))
     t = np.deg2rad(easy_deg)

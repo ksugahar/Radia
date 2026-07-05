@@ -70,7 +70,7 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
   matched HOIBC — which reproduces the complex DtN to **`~6e−6` with the exact impedance** and
   **`~3e−2` with the 2nd-order HOIBC** (the radiating-band knee at `n≈ka`, measured in `act7_22`),
   competitive with **PML** (`d_n ~ 1e−4` in its home) and exact **BEM-FEM**. *(The Laplace-kernel /
-  MQS limit is on Radia's CORE field solver — MMM/MSC — not on this open-boundary study.)*
+  MQS limit is on Radia's static field kernels, not on this open-boundary study.)*
 
 ## The headline (the two classes, measured)
 
@@ -84,7 +84,7 @@ of the *continuous* exterior operator `Λ_ext`, regime by regime:
   `R`).
 - **High-freq / radiating is studied, not excluded**: the DtN goes **complex**; carried by the
   **extended (radiating) Kelvin** (matched HOIBC, Sugahara *IEICE Trans. C* 2024), **PML**, and
-  **BEM-FEM**. The Laplace-kernel / MQS limit is on Radia's *core field solver* (MMM/MSC), not on
+  **BEM-FEM**. The Laplace-kernel / MQS limit is on Radia's static field kernels, not on
   this open-boundary comparison.
 
 > The comparison is **not a single number**: on the *accuracy* axis Kelvin, BEM and PML are all
@@ -140,7 +140,7 @@ exact for `n ≤ P−1`).
 The **practical / shipped** de Rham open boundary is the coordinate-mapping kind (the same family as
 the Kelvin transformation, and the real-stretch cousin of PML); the decay-basis exact-sequence IE is
 the academic alternative. For a VECTOR problem handled by a **volume integral** method instead
-(MMM / MSC, or the H(div) charge-Gram VIM), the open boundary lives in the free-space kernel — there
+(for example the H(div) charge-Gram VIM), the open boundary lives in the free-space kernel — there
 is no exterior to mesh, so the IE-vs-Kelvin choice does not arise. That integral route is an
 **alternative to**, not a combination with, the mapped-exterior FEM.
 

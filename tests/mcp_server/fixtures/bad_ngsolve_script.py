@@ -3,7 +3,7 @@
 This script contains violations for NGSolve-specific rules.
 Used by --selftest when examples/ directory is not available.
 
-Expected findings: 18+ (one per triggerable NGSolve/BEM/MSC rule)
+Expected findings: 18+ (one per triggerable NGSolve/BEM/HDiv rule)
 """
 from ngsolve import *
 from netgen.occ import *

@@ -105,7 +105,7 @@ hot operation.
 
 ## Radia implementation
 
-Permanent magnets are MMMM (surface-charge moment) elements carrying a FIXED magnetization given in
+Permanent magnets are fixed-M surface-charge elements carrying a FIXED magnetization given in
 the constructor -- **no Solve needed**: an unsolved element has `sigma == 0`, so `rad.Fld` takes the
 analytic magnetization-based open-boundary branch (`B_comp_frM`).  Call `Solve` only when soft iron is
 present alongside the magnet (then put both in an `ObjCnt` and Solve the container).
@@ -119,15 +119,15 @@ B  = rad.Fld(pm, 'b', [0, 0, 0.03])                            # no Solve
 ```
 `magnet_box(center, dimensions, magnetization)` builds an `ObjHexahedron` from the box corners and is
 the **drop-in replacement for the retiring `ObjRecMag`** (CLAUDE.md "Reduce Proprietary API Surface":
-the surface-current `ObjRecMag` primitive demotes; the surface-charge MMMM block is the user path).  A
+the surface-current `ObjRecMag` primitive demotes; the fixed-M surface-charge block is the user path).  A
 uniformly magnetized block has the IDENTICAL external field in both models -- verified to ~5e-8..1e-7
 relative vs `ObjRecMag` off-axis, far field, and on the magnetization axis (golden
 `tests/test_magnet_box_pm.py`).  Same call shape + units as `ObjRecMag`, so it is a direct swap.
 
 **`rad.ObjRecMag` itself is now a SCRIPT-SIDE wrapper over `magnet_box`** (`radia.magnet`, shadows the
 demoted C++ surface-current primitive): existing `rad.ObjRecMag(center, dims, M)` calls in other solvers
-/ examples / tests keep working on the MMMM element with no code change (198 ObjRecMag tests pass
-unchanged, incl. the on-axis machine-precision golden -- the MMMM surface-charge hex reproduces the K&J
+/ examples / tests keep working on the fixed-M element with no code change (198 ObjRecMag tests pass
+unchanged, incl. the on-axis machine-precision golden -- the surface-charge hex reproduces the K&J
 analytic cuboid field to ~1e-16 on-axis, even tighter than the old surface-current ObjRecMag's ~1e-10).
 
 **General shape (non-box) -> build the element directly with M in the constructor:**
@@ -136,7 +136,7 @@ analytic cuboid field to ~1e-16 on-axis, even tighter than the old surface-curre
 M_x = 1.2 / (4 * math.pi * 1e-7)
 pm_obj = rad.ObjHexahedron(verts, [M_x, 0, 0])   # or ObjTetrahedron / ObjWedge (verts, M)
 ```
-All are MMMM surface-charge moment elements; all evaluate the exact open boundary with no Solve.
+All are fixed-M surface-charge elements; all evaluate the exact open boundary with no Solve.
 
 UNITS PITFALL (recurring): Radia magnetization is **A/m, NOT Tesla**.  Passing
 `[0, 0, 1]` thinking "1 T" gives M = 1 A/m -> field ~0.0002 mT (essentially zero),

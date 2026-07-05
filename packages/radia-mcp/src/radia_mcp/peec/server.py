@@ -6,7 +6,7 @@ Provides tools for:
 - PyPEECBuilder and PEECCircuitSolver API guidance
 - Multi-filament subdivision (nwinc/nhinc) for skin/proximity effect
 - Surface impedance methods (Bessel, Dowell, ESIM)
-- Coupled PEEC + MMM for conductors near magnetic materials
+- Magnetic-material coupling is handled by HDiv-VIM / reduced FEM, not PEEC
 - FastHenry .inp file parsing
 - PRIMA model order reduction and SPICE extraction
 - ngsolve.bem integration notes
@@ -74,7 +74,7 @@ def peec_usage(topic: str = "all") -> str:
     Complete workflow for extracting circuit parameters (L, R, C, M)
     from conductor geometry using integral equations. Covers node-segment
     topology, MNA port impedance, multi-filament subdivision, surface
-    impedance, coupled PEEC+MMM, PRIMA model order reduction, and
+    impedance, PRIMA model order reduction, and
     SPICE netlist extraction.
 
     Args:
@@ -85,7 +85,7 @@ def peec_usage(topic: str = "all") -> str:
             "solver"         - PEECCircuitSolver (MNA, port impedance, sweep)
             "multi_filament" - nwinc/nhinc subdivision for skin/proximity
             "fasthenry"      - FastHenry .inp parser usage
-            "coupled"        - CoupledPEECSolver (PEEC + MMM, Delta_L)
+            "magnetic"       - Magnetic-material coupling policy
             "sibc"           - Surface impedance (Bessel, Dowell, ESIM)
             "prima"          - PRIMA model order reduction, SPICE export
             "ngsolve_bem"    - ngsolve.bem integration, frequency range guide
@@ -178,9 +178,9 @@ def new_peec_simulation(conductor_type: str) -> str:
         ),
         "coil_on_core": (
             "Coil on magnetic core (transformer/inductor):\n"
-            "- Use CoupledPEECSolver with Radia magnetic objects\n"
-            "- compute_coupling_matrix() for Delta_L\n"
-            "- mu_r_imag for core loss\n"
+            "- Use PEEC for conductors only\n"
+            "- Use HDiv-VIM / reduced FEM for the magnetic core\n"
+            "- Exchange fields through the application workflow\n"
         ),
         "litz": (
             "Litz wire (parallel strands):\n"
@@ -206,12 +206,12 @@ def new_peec_simulation(conductor_type: str) -> str:
         "1. Define geometry: PyPEECBuilder (add_node_at, add_connected_segment)\n"
         "2. Define ports: builder.add_port(n_pos, n_neg)\n"
         "3. Build topology: topo = builder.build_topology()\n"
-        "4. Create solver: PEECCircuitSolver(topo) or CoupledPEECSolver(topo, [core])\n"
+        "4. Create solver: PEECCircuitSolver(topo)\n"
         "5. Compute: Z = solver.compute_port_impedance(freq)\n"
         "6. Sweep: Z_sweep = solver.frequency_sweep(freqs, Zs_func)\n"
         "7. Optional: PRIMA reduction for SPICE netlist\n\n"
         "Use the peec_usage tool for detailed API documentation.\n"
-        "Key topics: 'builder', 'solver', 'sibc', 'coupled', 'prima'\n"
+        "Key topics: 'builder', 'solver', 'sibc', 'magnetic', 'prima'\n"
     )
 
 
@@ -235,7 +235,7 @@ def main():
     if "--selftest" in sys.argv:
         print("PEEC MCP server self-test:")
         for topic in ["overview", "builder", "solver", "multi_filament",
-                       "fasthenry", "coupled", "sibc", "prima",
+                       "fasthenry", "magnetic", "sibc", "prima",
                        "ngsolve_bem", "pitfalls"]:
             doc = peec_usage(topic)
             print(f"  peec_usage('{topic}'): {len(doc)} chars")

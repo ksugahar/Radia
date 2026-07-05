@@ -11,8 +11,8 @@ ACADEMIC-ONLY -- DO NOT SHIP THE .vol IN panels/samples/.
 The 1/8 case is a sphere-symmetric academic benchmark.  Realistic
 electromagnet geometries (C-magnets, dipoles, quadrupoles) at most
 have 1/2 or 1/4 symmetry; 1/8 only applies to spheres / cubes /
-fully-symmetric primitives, which are better served by Radia's
-analytical / MMM path than by FEM-Kelvin.
+fully-symmetric primitives, which are better served by analytical
+checks or fixed-source Radia field evaluations than by FEM-Kelvin.
 
 The build script is kept here so future research can pick it up,
 but the EM panel itself is fully covered by the 1/2 and 1/4 samples

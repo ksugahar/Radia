@@ -35,7 +35,6 @@ using PyObject = _object;
 //-------------------------------------------------------------------------
 
 struct TVector2d;
-class RadHACApKMomentSystem;   // collocation-MMMM coarse-tier chi-free geometry-K H-matrix (rad_hacapk.h)
 
 //-------------------------------------------------------------------------
 
@@ -64,35 +63,8 @@ public:
 	// Can be set via Python API: rad.SolverPar("bicg_tol", value)
 	double m_bicg_tol;
 
-	// Multipole-moment method-2 linear/nonlinear acceleration controls.
-	// moment_krylov_solver: 0 = BiCGSTAB, 1 = restarted GMRES.
-	int m_moment_krylov_solver;
-	int m_moment_gmres_restart;
-	int m_moment_anderson_depth;
-	// Collocation-MMMM COARSE-tier HACApK-BiCGSTAB (Sugahara 2026-07-02): set by SolveGen when a
-	// method-2 (HACApK) request lands on a PURE-HEX moment object.  The pure-hex moment BiCGSTAB
-	// (radTRelaxationMethNo_1) then builds the chi-free geometry K as a RadHACApKMomentSystem
-	// H-matrix (O(N log N) matvec) instead of the dense K.  Loop-free is abandoned (field-correct,
-	// loop-polluted internal M -- coarse/optimization tier only).  false = dense K (method 0/1).
-	bool m_moment_use_hmatrix;
-
-	// CROSS-SOLVE cache of the chi-free moment geometry (Sugahara 2026-07-02 speedup pass): the
-	// coarse tier's real use case is an OPTIMIZATION INNER LOOP that re-Solves the SAME geometry
-	// many times (only source / material changes).  K, localL, and diagK are pure geometry
-	// (chi-independent), so they are cached here across rad.Solve calls instead of being rebuilt
-	// per solve (K, O(N log N) ACA fill) or per Picard iteration (localL/diagK, 2N kernel evals).
-	// Validity = (interaction pointer match) + (hacapk eps/leaf/eta match) + GeometryMatches()
-	// (bit-exact centroid compare against the CURRENT interaction -- ABA-safe, O(N) doubles).
-	// Owned; freed by InvalidateMomentHK() (called from Initialize() / on rebuild).  NSDMI null
-	// init keeps the ctor's Initialize() call safe (delete nullptr).
-	RadHACApKMomentSystem* m_moment_hk = nullptr;
-	double m_moment_hk_eps = 0.0;
-	int    m_moment_hk_leaf = 0;
-	double m_moment_hk_eta = 0.0;
-	bool   m_moment_hk_analytic = false;   // kernel flag K was built with (part of the validity key)
-	std::vector<double> m_moment_hk_localL;   // chi-free per-hex local moment 6x6 blocks
-	std::vector<double> m_moment_hk_diagK;    // chi-free per-hex self geometry 6x6 blocks
-	void InvalidateMomentHK();                // defined in rad_material_impl.cpp (complete type there)
+	// Legacy surface-charge-specific acceleration controls were removed;
+	// magnetic-material development now belongs to the HDiv-VIM path.
 
 	// Relaxation coefficient for nonlinear iteration (default: 0.0 = full step)
 	// 0.0 = full step (no under-relaxation)
@@ -135,19 +107,8 @@ public:
 	double m_hantila_alpha;   // Polarization parameter (0 = auto-compute from initial susceptibility)
 	double m_hantila_relax;   // Under-relaxation (0 = full step)
 
-	// B-input PLAY-model hysteresis driven through the MMMM moment Picard loop.
-	// Set by MakeAutoRelax (NOT a SolverConfig knob) when (b_input_newton ||
-	// b_input_hantila) is requested AND every element is a moment/MSC face-charge
-	// element (DOF in {4,5,6}: tet/wedge/pyramid/hex).  When true, the moment
-	// Picard updates per-element chi via material->ComputeChiFromB(B) (B-input)
-	// instead of ComputeChiFromH(H), and threads per-element play state.  The
-	// genuine 3-DOF dipole (RecMag) B-input path stays on AutoRelax_BInput_Newton.
-	bool m_b_input_moment;
-
 	// Solve statistics (always available)
 	double m_solve_t_matrix_build;   // Interaction matrix build time [s]
-	double m_solve_t_moment_fieldgrad;      // Dense moment centroid field/gradient build time [s]
-	double m_solve_t_moment_system_build;   // Dense moment system assembly time [s]
 	double m_solve_t_lu_decomp;      // LU decomposition time [s] (Method 0 only)
 	double m_solve_t_linear_solve;   // Total linear solver time [s]
 	int m_solve_linear_iterations;   // Total linear iterations (BiCGSTAB only)
@@ -199,20 +160,11 @@ public:
 		CompCriterium.BasedOnPrecLevel = 0;
 		SendingIsRequired = 1;
 		TreatRecMagsAsExtrPolygons = TreatExtrPgnsAsPolyhedrons = 0;
-		TreatRecMagsAsPolyhedrons = 1;  // Default ON: ObjRecMag uses 6 DOF MSC hexahedron
-		RecognizeRecMagsInPolyhedrons = 0; // Disable: Keep hexahedra as polyhedra for 6 DOF MSC solver
+		TreatRecMagsAsPolyhedrons = 1;  // Default ON: keep ObjRecMag on the polyhedron field path
+		RecognizeRecMagsInPolyhedrons = 0; // Disable: keep hexahedra as polyhedra for face-based field evaluation
 		MemAllocForIntrctMatrTotAtOnce = 0;
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
 		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
-		m_moment_krylov_solver = 0;
-		m_moment_gmres_restart = 40;
-		m_moment_use_hmatrix = false;
-		m_moment_anderson_depth = 1;  // Default ON (2026-07-03, Sugahara "Anderson+Picard"): safeguarded Anderson(1)
-		                              // on every moment Picard solve (LU / dense-K / H-matrix).  Rescues the measured
-		                              // coupled-block B-input hysteresis divergence on the descending branch (plain
-		                              // Picard fails, relax=0.3 fails; Anderson completes at ~4.5 iters/step).  The
-		                              // acceptance is safeguarded (accelerated iterate kept only if it reduces the
-		                              // residual), so linear and well-behaved solves are unaffected.  0 = plain Picard.
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
@@ -230,13 +182,8 @@ public:
 		m_hantila_alpha = 0.0;   // 0 = auto-compute
 		m_hantila_relax = 0.0;   // 0 = full step
 
-		// B-input moment-Picard init (set per-solve by MakeAutoRelax)
-		m_b_input_moment = false;
-
 		// Solve statistics init
 		m_solve_t_matrix_build = 0.0;
-		m_solve_t_moment_fieldgrad = 0.0;
-		m_solve_t_moment_system_build = 0.0;
 		m_solve_t_lu_decomp = 0.0;
 		m_solve_t_linear_solve = 0.0;
 		m_solve_linear_iterations = 0;
@@ -248,7 +195,6 @@ public:
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
 		m_cached_image_spec.clear();
-		InvalidateMomentHK();   // cross-Solve moment K/L/diagK cache (NSDMI-null before first call -> safe)
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
 
@@ -397,12 +343,7 @@ public:
 	int SetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int RelaxTogether);
 	void ShowInteractMatrix(int InteractElemKey);
 	int GetInteractMatrix(int InteractElemKey, double* pMatrix, int* pDOF);
-	int HMatrixDensify(int InteractElemKey, double* pMatrix, int* pDOF);  // Densify actual HACApK ACA+ operator (validation)
 	int GetFaceGeom(int InteractElemKey, double* pG, int* pDOF);  // per-DOF hex face geometry (area/centroid/normal/elem-center)
-	int GetCentroidFieldGrad(int InteractElemKey, double* pC, int* pNHex, int* pDOF);  // per moment-element centroid demag field+gradient functionals
-	int BuildMomentSystem(int InteractElemKey, double chi, const double* Happ, double* pA, double* pRhs, int* pDOF);  // multipole-moment MMM system matrix + rhs (Step-1 verification of the EIEM2->moment upgrade)
-	int MomentSystemDenseRaw(int InteractElemKey, double chi, double* pA, int* pDOF);  // dense UN-normalized A_raw built ENTRY-BY-ENTRY via MomentSystemEntry (ACA H-matrix entry validation, Phase 2)
-	int HLUDebugMaterialize(int InteractElemKey, double *A_perm_out, int *lod_out, int *nd_out);  // Phase 4 debug: materialize post-convert tree
 	void ShowInteractVector(int InteractElemKey, char* FieldVectID);
 	int MakeManualRelax(int InteractElemKey, int MethNo, int IterNumber, double RelaxParam);
 	int MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, int MaxIterNumber, int MethNo, const char** arOptionNames=0, const char** arOptionValues=0, int numOptions=0);
@@ -533,7 +474,6 @@ inline int radTApplication::DeleteElement(int ElemKey)
 	{
 		m_cached_interact_key = 0;
 		m_cached_obj_key = 0;
-		InvalidateMomentHK();   // the cross-solve moment K cache points into the discarded interaction
 	}
 
 	if(SendingIsRequired) Send.Int(0);

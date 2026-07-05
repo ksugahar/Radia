@@ -1,56 +1,55 @@
 """BEM/MoM overview, decision tree, and lab stack."""
 
 LAB_STACK = r"""
-# Sugahara Lab BEM/MoM stack (production, 2026-05)
+# Sugahara Lab BEM/MoM stack (production, 2026-07)
 
 The lab uses BEM/MoM techniques in MULTIPLE places, each with a different
 formulation and tool:
 
 | Use case | Formulation | Tool | Files (this folder) |
 |----------|-------------|------|---------------------|
-| **Permanent magnets / soft iron** ★ | MSC (surface charge) | radia C++ `rad_polyhedron.cpp` | 02_mmm_surface_charge/ |
-| **Volume magnetization** ★ | MMM (volume integral, M as DOF) | radia C++ `rad_interaction.cpp` | 02_mmm_surface_charge/ |
+| **Permanent magnets / soft iron** ★ | HDiv-VIM / charge Gram | radia HDiv-VIM + NGSolve | HDiv-VIM / reduced FEM |
 | **IH workpiece + Kelvin** | FEM-SIBC + Robin BC (NOT pure BEM, but BEM-like) | radia `calc_fem_kelvin.py` | 03_bem_eddy_current/, 05_low_freq_* |
-| **PEEC filament+panel** | FastImp-style PEEC | radia `peec_matrices` | 80_applications/Fast_Impedance_*, 02/rna_mmm/PEEC_MMM_* |
-| **PEEC + BEM coupling** | weak coupling, ΔL_telegen | radia `calc_inductance.py` | 02/rna_mmm/PEEC_MMM_Coupling.pdf |
+| **PEEC filament+panel** | FastImp-style PEEC | radia `peec_matrices` | 80_applications/Fast_Impedance_* |
+| **PEEC conductor analysis plus HDiv-VIM / reduced-FEM magnetic-material coupling** | PEEC + HDiv-VIM / reduced FEM | radia + NGSolve | application notebooks |
 | **HCurl Galerkin BEM** | EFIE/MFIE/PMCHWT with RWG | `ngsolve.bem` | 04_efie_mfie_cfie/, 05_low_freq_* |
-| **H-matrix acceleration** | ACA on MMM/MSC blocks | radia `HACApK` (method=2) | 06_h_matrix_aca/ |
+| **H-matrix acceleration** | ACA on charge-Gram / BEM blocks | radia `HACApK` | 06_h_matrix_aca/ |
 | **FEM-BEM hybrid (transformer)** | FEM inside, BEM outside | (not lab production, ref only) | 08_fem_bem_hybrid/ |
 
-★ = Radia's CORE methods (MMM + MSC).  See CLAUDE.md "Terminology" for
-the distinction from Galerkin BEM (ngsolve.bem).
+★ = Radia's current magnetic-material route.  Follow NGSolve terminology and
+prefer HDiv-VIM / reduced-FEM coupling over proprietary legacy vocabularies.
 
 ## What the lab does NOT use
 
 - **FMM** — Removed from Radia 2026-03 (see CLAUDE.md).  HACApK with ACA
   handles the same large-N problems with better practical performance.
-- **Calderón preconditioners** — Not needed because MMM/MSC are
-  well-conditioned by construction.  Only relevant for ngsolve.bem
+- **Calderón preconditioners** — Only relevant for ngsolve.bem
   high-frequency scattering (not a lab focus).
 - **Null-field / TDS** — Reference only; lab does not use thin-dielectric
   approximations.
 - **Wire-grid models** — NEC-era; superseded by RWG triangular surface
   meshes everywhere.
 
-## Why MMM/MSC instead of Galerkin BEM
+## Why HDiv-VIM is the Radia magnetic-material route
 
-MMM/MSC use **constant-per-element** M or σ (analogous to RWG with
-constant-tangential basis).  Trade-off vs Galerkin RWG-BEM:
+HDiv-VIM keeps the magnetic-material unknowns in the same finite-element
+language used by NGSolve.  This is the important advantage over old
+collocation-style integral routes:
 
-| Property | MMM/MSC (Radia) | Galerkin RWG-BEM (ngsolve.bem) |
+| Property | HDiv-VIM / reduced FEM | Galerkin RWG-BEM (ngsolve.bem) |
 |----------|-----------------|--------------------------------|
-| Basis order | 0 (constant per element) | RWG (linear edge basis) |
-| Element type | Tet/hex/wedge volumes (MMM) or faces (MSC) | Triangles on surface only |
-| Material | Nonlinear iron, PM | Linear conductors |
-| Open boundary | Natural (volume integral) | Natural (surface integral) |
+| Basis order | NGSolve HDiv order, curved elements | RWG (linear edge basis) |
+| Element type | FEM volume mesh, reduced-FEM compatible | Triangles on surface only |
+| Material | Nonlinear iron, PM, reduced-FEM coupling | Linear conductors |
+| Open boundary | Kelvin / image / charge-Gram route | Natural (surface integral) |
 | Kernel | Laplace 1/r only | Laplace OR Helmholtz |
-| Acceleration | HACApK (ACA) | H-matrix or FMM |
+| Acceleration | HACApK charge Gram | H-matrix or FMM |
 | Lab production | YES ★ | Optional (for high-freq scattering) |
 
-The choice was made because Radia's heritage is accelerator magnets
-(permanent magnets + iron yokes), where MMM is naturally fast and
-nonlinear-material-friendly.  Galerkin BEM is appropriate for high-frequency
-scattering, where the lab uses NGSolve's `bem` module instead.
+The choice is deliberate: Radia should align with NGSolve's abstractions,
+especially where reduced FEM and higher-order curved meshes matter.  Galerkin
+BEM remains appropriate for high-frequency scattering, where the lab uses
+NGSolve's `bem` module instead.
 """
 
 
@@ -60,12 +59,12 @@ DECISION_TREE = r"""
 ```
 1. What's the SOURCE?
    ├── Permanent magnet (fixed M)
-   │   → MSC in Radia (no Solve needed)
-   │     → rad.ObjHexahedron(verts, [Mx, My, Mz])
+   │   → HDiv-VIM / Radia field evaluator
+   │     → radia_mcp.radia_ngsolve.hdiv_vim
    │
    ├── Soft iron (M unknown, BH curve)
-   │   → MMM in Radia + nonlinear Solve
-   │     → rad.MatSatIsoTab(BH_DATA) + rad.MatApl
+   │   → HDiv-VIM + reduced-FEM-compatible nonlinear solve
+   │     → radia_mcp.electromagnet / radia_mcp.radia_ngsolve
    │
    ├── Coil current (known I)
    │   → Biot-Savart analytical or PEEC filaments
@@ -76,12 +75,12 @@ DECISION_TREE = r"""
 
 2. What's the FREQUENCY?
    ├── DC / static
-   │   → MMM/MSC (Radia)
+   │   → HDiv-VIM / reduced FEM
    │
    ├── Quasi-static (MQS, DC to 100 kHz)
    │   ├── Thin conductor with skin effect
    │   │   → PEEC + SIBC (radia.peec_matrices)
-   │   │     → CoupledPEECSolver
+   │   │     → HDiv-VIM / reduced-FEM coupling
    │   ├── Bulk conductor (workpiece in IH)
    │   │   → FEM-SIBC + Kelvin in radia
    │   │     → calc_fem_kelvin.py --vol model.vol
@@ -102,7 +101,7 @@ DECISION_TREE = r"""
    ├── 500 < N < 2000
    │   → BiCGSTAB (radia method=1)
    └── N > 2000
-       → HACApK H-matrix (radia method=2) — lab core for big BEM
+       → HACApK H-matrix — lab core for large charge-Gram / BEM blocks
          → see matrix_solvers MCP for solver theory
 
 4. What's the GEOMETRY topology?
@@ -112,7 +111,7 @@ DECISION_TREE = r"""
    │   ├── A-V Bíró-Preis gauge (FEM) or PEEC loop currents
    │   └── Tree-cotree decomposition for ngsolve.bem
    └── Open boundary (unbounded domain)
-       ├── Radia MMM/MSC: natural (no PML/Kelvin needed)
+       ├── HDiv-VIM: Kelvin / image / charge-Gram route
        ├── FEM: Kelvin transformation + Radia evaluator
        └── BEM (ngsolve.bem): natural via radiation BC
 ```
@@ -123,9 +122,9 @@ DECISION_TREE = r"""
 |---------|---------|-----|
 | Using EFIE at low freq | nan, ill-conditioned | Switch to Loop-Star or Weggler ST |
 | MFIE with RWG below 1 MHz | wrong solution | Use Vico-Greengard MFIE-LF stabilization |
-| MMM with non-uniform M expected | wrong integral | Use higher-order MMM or subdivide elements |
+| Non-uniform M expected | wrong low-order approximation | Use higher-order HDiv / curved elements |
 | HACApK on small N (<500) | overhead dominates | Use LU (method=0) instead |
-| Galerkin BEM on nonlinear iron | doesn't converge | Use MMM (Radia native nonlinear) |
+| Galerkin BEM on nonlinear iron | awkward nonlinear coupling | Use HDiv-VIM / reduced FEM |
 | FMM on Radia | Removed 2026-03 | Use HACApK ACA instead |
 """
 

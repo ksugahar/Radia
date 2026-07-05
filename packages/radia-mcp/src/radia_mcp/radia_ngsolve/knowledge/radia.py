@@ -45,20 +45,22 @@ RADIA_GEOMETRY = """
 
 | Function | Description | DOF Type |
 |----------|-------------|----------|
-| `ObjRecMag(center, dims, M)` | Rectangular magnet | 3 DOF (MMM) |
-| `ObjHexahedron(vertices, M)` | 8-vertex hexahedron | 6 DOF (MSC) |
-| `ObjTetrahedron(vertices, M)` | 4-vertex tetrahedron | 3 DOF (MMM) |
-| `ObjWedge(vertices, M)` | 6-vertex wedge/prism | 5 DOF (MSC) |
-| `ObjPyramid(vertices, M)` | 5-vertex square-base pyramid | 5 DOF (MSC) |
+| `ObjRecMag(center, dims, M)` | Rectangular permanent/current magnet | fixed magnetization |
+| `ObjHexahedron(vertices, M)` | 8-vertex permanent/current magnet | fixed magnetization |
+| `ObjTetrahedron(vertices, M)` | 4-vertex permanent/current magnet | fixed magnetization |
+| `ObjWedge(vertices, M)` | 6-vertex wedge/prism | fixed magnetization |
+| `ObjPyramid(vertices, M)` | 5-vertex square-base pyramid | fixed magnetization |
 | `ObjThckPgn(z, dz, polygon, axis, M)` | Extruded polygon | varies |
 | `ObjPolyhdr(vertices, faces, M)` | General polyhedron | varies |
 
-## DOF Types
+## Soft-Iron Policy
 
-- **MMM (3 DOF)**: Volume magnetization, 3 components. For tetrahedra / RecMag.
-- **MSC (5/6 DOF)**: Multipole-moment MMM magnetic surface charge on faces. Hexahedra have 6 DOF;
-  wedge/pyramid elements have 5 DOF. This is the symbolic moment formulation that closes the
-  face-charge DOF by monopole, dipole, and residual quadrupole conditions.
+- Use `radia.vim.MeshSoftIron` / `radia.Solve(..., demag_backend="hdiv")`
+  for mesh-backed soft iron.
+- Raw mesh-less polyhedra remain useful for fixed magnetization and field
+  evaluation, but they are not the production soft-iron solve path.
+- For Cubit/Netgen meshes, keep the NGSolve mesh as the owner of material
+  labels and finite-element spaces, then route the solve through HDiv-VIM.
 
 ## Examples
 
@@ -364,9 +366,9 @@ Newton+Hantila Hybrid:
 | `b_input_newton=True` | Hysteresis, few elements, fast convergence needed |
 | `b_input_hantila=True` | **Hysteresis, any size** (recommended) |
 
-**Current limitation**: B-input hysteresis is MMM-only (tetrahedra / RecMag, 3 DOF).
-Surface-charge MSC (hex/wedge/pyramid, 5-6 DOF) supports MatLin / MatSatIsoTab through
-multipole-moment MMM, but `b_input_newton` / `b_input_hantila` on MSC raises `Radia::Error205`.
+**Current limitation**: B-input hysteresis flags are not a generic mesh-less
+polyhedron feature.  For new soft-iron work, use the mesh-backed HDiv-VIM
+material route and record the nonlinear material-state convergence metadata.
 
 **Verified**: 0.00% error across 11-step hysteresis loop, 3-47 iterations per step.
 
@@ -408,7 +410,7 @@ faces lie ON the symmetry plane, when observation points are also on that plane.
 **When IMA is Safe**:
 - Elements offset from symmetry planes (not touching)
 - Observation points off-plane
-- MMM (tetrahedra) -- no limitation
+- Mesh-backed HDiv models with matching image signs and symmetric cuts
 """
 
 RADIA_PARALLELIZATION = """
@@ -682,8 +684,9 @@ similar. Use the listed replacement instead.
 
 Why removed: the old implementation relied on `SubdivideItself`-based midpoint
 quadrature (physical mesh splitting with user-specified `SbdPar=[kx,ky,kz,kxs,kys,kzs]`).
-This is superseded by the plan to use the MSC/MMM interaction kernel in closed form,
-combined with NGSolve's high-order `Integrate(..., order=N)` quadrature.
+This is superseded by the plan to use closed-form / HDiv-compatible field
+interactions combined with NGSolve's high-order `Integrate(..., order=N)`
+quadrature.
 
 Still live: `rad.FldFrc(obj, shape)` and `rad.FldFrcShpRtg(center, size)` --
 the Maxwell stress tensor path is independent and unaffected.
@@ -742,8 +745,8 @@ from radia.netgen_mesh_import import netgen_mesh_to_radia
 
 | Element | Radia Object | DOF |
 |---------|-------------|-----|
-| Tetrahedron (ET.TET) | ObjTetrahedron | 3 DOF (MMM) |
-| Hexahedron (ET.HEX) | ObjHexahedron | 6 DOF (MSC) |
+| Tetrahedron (ET.TET) | ObjTetrahedron | fixed magnetization export |
+| Hexahedron (ET.HEX) | ObjHexahedron | fixed magnetization export |
 | Wedge (ET.PRISM) | ObjWedge | 5 DOF |
 | Pyramid | ObjPyramid | 5 DOF |
 
@@ -972,7 +975,7 @@ and capacitance extraction from 3D conductor geometries.
 
 ```
 FastHenry .inp file  -->  FastHenryParser  -->  PEECBuilder (C++)  -->  PEECCircuitSolver
-                                                                    -->  CoupledPEECSolver (with mag. core)
+                                                                    -->  HDiv-VIM / reduced-FEM core coupling
                                                                     -->  ShieldedPEECSolver (with BEM shield)
 ```
 
@@ -982,7 +985,7 @@ FastHenry .inp file  -->  FastHenryParser  -->  PEECBuilder (C++)  -->  PEECCirc
 |--------|-------|---------|
 | `peec_matrices.pyd` | `PEECBuilder` | C++ matrix assembly (L, R, P matrices) |
 | `peec_topology.py` | `PEECCircuitSolver` | MNA nodal admittance circuit solver |
-| `peec_coupled.py` | `CoupledPEECSolver` | Conductor + magnetic core coupling |
+| Magnetic core coupling | HDiv-VIM / reduced FEM | Keep PEEC conductor-only |
 | `peec_shielded.py` | `ShieldedPEECSolver` | Conductor + BEM shield coupling |
 | `fasthenry_parser.py` | `FastHenryParser` | FastHenry .inp file parser |
 
@@ -1114,9 +1117,9 @@ Surface Mesh (Netgen OCC)
   |     - BEM + SIBC for conducting shields
   |     - compute_impedance_matrix() -> Delta_Z (shield coupling)
   |
-  +-> CoupledPEECMMM (ngsbem_coupled.py)
-        - Image method for ferrite core coupling
-        - compute_delta_L() -> Delta_L (freq-independent)
+  +-> Application-specific magnetic coupling
+        - Keep PEEC/BEM impedance extraction separate from mesh-backed
+          HDiv-VIM soft-iron solves.
 ```
 
 ## Key Modules
@@ -1126,7 +1129,6 @@ Surface Mesh (Netgen OCC)
 | `ngsbem_peec.py` | `NGBEMPEECSolver` | Galerkin PEEC: L, P, M_LS assembly + impedance sweep |
 | `ngsbem_eddy.py` | `ShieldBEMSIBC` | Loop-only BEM+SIBC for conducting shields |
 | `ngsbem_eddy.py` | `LoopBasisBuilder` | Div-free loop basis from face-edge topology |
-| `ngsbem_coupled.py` | `CoupledPEECMMM` | Ferrite core coupling via image method |
 | `ngsbem_interface.py` | `extract_edge_geometry` | Bridge: ngsolve.bem mesh to PEEC topology |
 
 ## Quick Start: Plate Impedance
@@ -1368,13 +1370,13 @@ Z_shielded = Z_air + Delta_Z  # Add to PEEC branch impedance
 
 ## Ferrite Core Coupling (Image Method)
 
-For planar ferrite cores, the analytical image method scales L_air directly:
+For planar ferrite cores, keep the analytical image-method approximation as an
+application-level model instead of reviving the removed PEEC-moment coupling
+module:
 
 ```python
-from radia.ngsbem_coupled import CoupledPEECMMM, compute_delta_L
-
 mu_r = 1000
-Delta_L = compute_delta_L(solver.L, mu_r)  # = L_air / (mu_r + 1)
+Delta_L = solver.L / (mu_r + 1)
 L_total = solver.L + Delta_L * (mu_r - 1)  # = L_air * 2*mu_r/(mu_r+1)
 ```
 
@@ -1594,7 +1596,7 @@ Both approaches correctly apply Dowell formula (F_R ratio within ~5-10%):
 1. **First pass**: FastHenry for fast L,R estimation (ms-scale)
 2. **If needed**: ngsolve.bem for precision (current redistribution, complex geometry)
 3. **Dowell/Bessel**: Both support Zs_func callback for skin effect
-4. **Shield/core coupling**: Both integrate with ShieldBEMSIBC and CoupledPEECSolver
+4. **Shield/core coupling**: Shield coupling uses ShieldBEMSIBC; magnetic cores use HDiv-VIM / reduced FEM
 """
 
 RADIA_EFIE_PRECONDITIONER = """
@@ -2278,22 +2280,20 @@ B_voxel = create_voxel_cf(combined, 'b', mesh=mesh, resolution=61)
 """
 
 RADIA_PLAY_MODELS = """
-# Play Models: Typical MMM/MSC Usage Patterns
+# Play Models: Typical Radia Usage Patterns
 
-Radia uses two integral methods depending on element type:
+For fixed magnetization, Radia evaluates fields from geometric objects directly.
+For soft iron, use the mesh-backed HDiv-VIM route.
 
-| Method | Elements | DOF/elem | Description |
-|--------|----------|----------|-------------|
-| **MMM** | Tetrahedron (4 vtx) | 3 (Mx,My,Mz) | Volume magnetization |
-| **MSC** | Hexahedron (8 vtx) | 6 (sigma/face) | Surface charge on faces |
-| **MSC** | Wedge (6 vtx) | 5 (sigma/face) | Transition elements |
-| **MSC** | Pyramid (5 vtx) | 5 (sigma/face) | Hex/tet transition caps |
-| **MMM** | ObjRecMag (center+dims) | 3 | Optimized rectangular block |
+| Object | Use |
+|--------|-----|
+| ObjRecMag | optimized rectangular fixed magnet/current source |
+| ObjHexahedron / ObjTetrahedron / ObjWedge / ObjPyramid | fixed magnetization on imported geometry |
+| radia.vim.MeshSoftIron | mesh-backed soft iron for HDiv-VIM |
 
-Mixed surface-charge meshes (hex+wedge+pyramid) are supported by the dense multipole-moment MMM
-path. A single soft-iron `rad.Solve` mixing MMM tet/RecMag elements with MSC
-hex/wedge/pyramid elements is rejected with `Radia::Error204`; split the solve or use
-the mesh-backed HDiv-VIM path.
+Do not build new soft-iron workflows by applying magnetic material directly to
+raw imported polyhedra.  Keep the NGSolve mesh and use the HDiv-VIM path so the
+same mesh/material labels can be reused by reduced FEM.
 
 ---
 
@@ -2387,7 +2387,7 @@ B = rad.Fld(grp, 'b', [0, 0, 0.02])
 rad.UtiDelAll()
 ```
 
-**Element count**: 27 hex = 27 * 6 = 162 DOF (MSC)
+**Element count**: 27 hex; HDiv-VIM DOF count depends on the selected HDiv order.
 **Example**: `validation_test/cube_uniform_field/experiment_objm_minimal.py`
 **Showcase notebook** (LU vs BiCGSTAB vs HACApK scaling, hex + tetra):
 `docs/cube_uniform_field/hmatrix_solver_scaling.ipynb`
@@ -2427,37 +2427,25 @@ rad.UtiDelAll()
 
 ---
 
-## Pattern E: Mixed Surface-Charge Element Types
+## Pattern E: Mesh-Backed Soft Iron
 
-Use netgen_mesh_to_radia() for complex geometries, but keep the soft-iron solve in one
-formulation. Hex+wedge+pyramid are multipole-moment MMM MSC; tetrahedra are MMM.
+Use the NGSolve mesh directly for complex soft-iron geometries.
 
 ```python
 import radia as rad
-from radia.netgen_mesh_import import netgen_mesh_to_radia
+import radia.vim as vim
 
 rad.UtiDelAll()
 
-# Import NGSolve mesh -> Radia (auto-creates hex/wedge/pyramid/tet elements)
-container = netgen_mesh_to_radia(
-    mesh,
-    material={'magnetization': [0, 0, 0]},  # or callable per element
-    units='m'
-)
-
-# Apply material
-rad.MatApl(container, rad.MatLin(1000))
-
+iron = vim.MeshSoftIron(mesh, mu_r=1000)
 bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
-grp = rad.ObjCnt([container, bkg])
-result = rad.Solve(grp, 0.001, 100, 0)  # dense moment path for mixed surface-charge MSC
+grp = rad.ObjCnt([iron, bkg])
+result = rad.Solve(grp, 0.001, 100, 2, demag_backend="hdiv")
 rad.UtiDelAll()
 ```
 
-**DOF**: surface-charge mixed -- hex has 6 DOF; wedge/pyramid have 5 DOF. If the
-imported soft iron contains tetrahedra together with MSC elements, do not run one C++
-soft-iron solve on the mixed container; use all-MSC/all-MMM geometry, split the solve, or
-build a mesh-backed HDiv-VIM soft iron.
+**Rule**: imported soft iron stays mesh-backed.  Use raw imported polyhedra for
+fixed magnetization export and field evaluation, not for new soft-iron solves.
 **Example**: `validation_test/ngsolve_integration/mesh_magnetization_import/`
 **Showcase notebook** (B=curl(A) check, RadiaField->HDiv projection, batch
 evaluation, executed + rendered): `docs/ngsolve_integration/integration_basics.ipynb`
@@ -3622,7 +3610,7 @@ from fasthenry_parser import FastHenryParser
 result = FastHenryParser().parse_string(inp).solve()  # L, R, Z(f)
 ```
 - Sub-second for 100 frequency points
-- Magnetic core via Delta_L (Radia MSC)
+- Magnetic core via Delta_L from the Radia HDiv-VIM soft-iron route
 - Limitation: filament approximation (no skin/proximity in conductor)
 
 ## Level 2: NGSBEM (detailed)
@@ -3653,7 +3641,7 @@ Any two levels validate each other on the same geometry:
 
 | Level | Core Method | Eddy | Nonlinear |
 |-------|------------|------|-----------|
-| 1 PEEC | Radia MSC (Delta_L) | No | Yes |
+| 1 PEEC | Radia HDiv-VIM (Delta_L) | No | Yes |
 | 2 NGSBEM | Scalar/Vector FEM-BEM | Yes | No |
 | 3 FEM | Volume FEM | Yes | Yes |
 
@@ -3683,16 +3671,17 @@ RADIA_PEEC_CORE_PITFALLS = """
 4. **NGSBEM: Set maxh <= min_cross_section / 2**:
    For 1mm wire: `maxh=0.5e-3`. Larger creates elongated triangles → bad SL entries.
 
-5. **Current MSC solve is multipole-moment MMM**:
-   Use `BuildMomentSystem` / `MomentSystemDenseRaw` when inspecting the dense
-   surface-charge system. Do not reconstruct an ad-hoc point-collocation matrix.
+5. **Soft iron is mesh-backed HDiv-VIM**:
+   keep material labels on the NGSolve mesh and inspect the HDiv charge map,
+   charge-Gram H-matrix stats, and nonlinear iteration metadata.
 
-6. **No production face-center eval point**:
-   Current multipole-moment MMM uses element-centroid applied fields and centroid field/gradient rows.
+6. **No mesh-less soft-iron shortcut**:
+   raw Radia polyhedra are fine for fixed magnetization and field evaluation,
+   but new soft-iron workflows should use `radia.vim.MeshSoftIron`.
 
-7. **Center-charge correction is internal**:
-   Mutual face-center cancellation is inside `CentroidFieldGradFromFace`; user code should not
-   rebuild the retired point-collocation correction.
+7. **Image symmetry must be verified with a full-model check**:
+   on a truly symmetric mesh, reduced-image `rad.Fld` and an explicitly mirrored
+   full model should agree to near roundoff at field probes.
 
 8. **Loop port**: Don't use `add_port(n1, n1)`. Split the loop:
    ```python
@@ -3701,24 +3690,19 @@ RADIA_PEEC_CORE_PITFALLS = """
    builder.add_port(n1, n1b)
    ```
 
-9. **Hex vertex order**: bottom CCW (v0-v3), top CCW (v4-v7).
-   Face 0=bottom(-Z), 1=top(+Z), 2=front(-Y), 3=back(+Y), 4=left(-X), 5=right(+X).
+9. **Hex vertex order still matters for fixed-magnet export**:
+   bottom CCW (v0-v3), top CCW (v4-v7).  For soft iron, prefer the NGSolve mesh
+   route so element orientation is handled by the FEM layer.
 
-10. **Nonlinear: Newton first, then Picard** (not the reverse!):
-    Newton can excite zero-eigenvalue modes → wrong solution branch.
-    Picard is slow but avoids these modes.
-    ```python
-    rad.SolverConfig(newton_method=True)
-    rad.Solve(obj, 1e-3, 10, 2)   # Newton: fast approach
-    rad.SolverConfig(newton_method=False, keep_magnetization=True)
-    rad.Solve(obj, 1e-3, 100, 2)  # Picard: stable finish
-    ```
+10. **Nonlinear metadata is part of the result**:
+    store tolerance, iteration count, convergence flag, and material-state
+    update in JSON artifacts.
 
 ## Solver Selection
 
 ```
 Core conducting?
- No  → Radia MSC ('radia')     [ferrite, laminated steel, nonlinear]
+ No  → Radia HDiv-VIM ('radia') [ferrite, laminated steel, nonlinear]
  Yes → mu_r > 1?
         No  → Scalar FEM-BEM ('fembem')     [Al/Cu shield]
         Yes → Vector FEM-BEM ('vector_fembem') [solid steel]
@@ -3735,104 +3719,47 @@ material properties and frequency range.
 
 | Core Type | Solver | core_model | Key Limitation |
 |-----------|--------|------------|----------------|
-| Ferrite (high mu_r, sigma~0) | Radia MSC | 'radia' | No eddy currents |
-| Laminated steel (low eff. sigma) | Radia MSC + complex mu | 'radia' | Static Delta_L |
+| Ferrite (high mu_r, sigma~0) | Radia HDiv-VIM | 'radia' | No eddy currents |
+| Laminated steel (low eff. sigma) | Radia HDiv-VIM + effective mu | 'radia' | Static Delta_L |
 | Solid steel (high mu_r + sigma) | Vector FEM-BEM | 'vector_fembem' | Linear only |
 | Al/Cu shield (mu_r=1, high sigma) | Scalar FEM-BEM | 'fembem' | mu_r=1 only |
-| Nonlinear (B-H curve, hysteresis) | Radia MSC | 'radia' | No eddy currents |
+| Nonlinear (B-H curve) | Radia HDiv-VIM | 'radia' | No eddy currents |
 
-## Radia MSC vs NGSBEM (vector FEM-BEM)
+## Radia HDiv-VIM vs NGSBEM (vector FEM-BEM)
 
-| Aspect | Radia MSC | NGSBEM vector FEM-BEM |
+| Aspect | Radia HDiv-VIM | NGSBEM vector FEM-BEM |
 |--------|-----------|----------------------|
 | Eddy currents | No | Yes |
-| Nonlinear | Yes (B-H, hysteresis) | No |
+| Nonlinear | Yes (B-H) | No |
 | Domain | Unbounded (no air mesh) | Unbounded (BEM) |
-| DOF per hex | 6 (surface charge) | ~100+ (FEM volume) |
-| Acceleration | HACApK (H-matrix) | Dense/FMM |
+| Unknowns | H(div) mesh DOFs | FEM volume DOFs |
+| Acceleration | HACApK charge Gram | Dense/FMM |
 | Best regime | DC / low freq / nonlinear | AC / eddy current |
 
 ## API
 
 ```python
-# Option 1: ngsbem_coupled.py (NGSBEM PEEC + core)
-from radia.ngsbem_coupled import CoupledPEECMMM
-coupled = CoupledPEECMMM(peec_solver, core_model='radia', radia_core=core)
-coupled.compute_coupling_radia()
-
-# Option 2: peec_coupled.py (simpler, column-by-column)
-from peec_coupled import CoupledPEECSolver
-solver = CoupledPEECSolver(topo, [core], mu_r_imag=0)
-solver.compute_coupling_matrix()
-
-# Option 3: peec_msc_schur.py (standalone, preserves H-matrix)
-from peec_msc_schur import SchurComplementSolver
-schur = SchurComplementSolver()
-schur.set_msc_system(N, dof_offset, inv_chi)
-schur.solve(freq, V_source)
+# Keep the soft-iron state mesh-backed and exchange fields through
+# NGSolve GridFunction / CoefficientFunction data.
+# PEEC stays conductor/shield oriented; magnetic cores use HDiv-VIM /
+# reduced FEM at the application layer.
 ```
-
-## Validation (2026-03-28)
-
-Historical note: a standalone `mmm_core` pybind module (retired
-2026-04-23) was used to cross-validate the MSC kernel against Radia's
-direct `Solve()` on 1-hex and 27-hex (3x3x3) cases, matching to ~0.03 %.
-PEEC/NGSBEM loop-inductance agreement was ~4.5 %.  The kernel formulas
-below are what both implementations shared and remain the reference for
-the current `_radia_pybind` solver.
 """
 
-RADIA_MSC_KERNEL = """
-# MSC Kernel Implementation Notes
+RADIA_HDIV_SOFT_IRON = """
+# HDiv Soft-Iron Implementation Notes
 
-## Critical: FieldFromChargedTriangle must compute full 3D H vector
+The current Radia soft-iron route is mesh-backed HDiv-VIM:
 
-The H-field from a uniformly charged triangular face has **three components**:
-tangential (2) + normal (1). A common bug is to compute only the normal
-component using the solid angle Omega:
+- keep the NGSolve mesh as the owner of material and boundary labels;
+- create `radia.vim.MeshSoftIron(mesh, mu_r=... | bh_table=...)`;
+- solve with `rad.Solve(..., demag_backend="hdiv")`;
+- evaluate the resulting model with `rad.Fld` or pass fields back to NGSolve.
 
-```
-WRONG: H = sigma * Omega / (4*pi) * n_face   (normal only, missing tangential)
-RIGHT: H = full analytical integral with edge log-terms + atan-terms (3 components)
-```
-
-The correct formula (same as radTInteraction::FieldFromChargedTriangleLocal in Radia core):
-- **HH1** (tangential along edge direction a): `-sigma * sum_edges(YD[j] * log(RM/RP))`
-- **HH2** (tangential along b = c x a):       `-sigma * sum_edges(XD[j] * log(RM/RP))`
-- **HH3** (normal along face normal c):         `sigma * sum_edges(atan terms)`
-
-All three are computed WITHOUT the 1/(4*pi) factor; the caller multiplies by INV_FOUR_PI.
-
-### Sign convention
-
-The analytical formula returns H pointing INTO the charged surface (negative of
-the physical field from positive sigma). The result must be **negated** to match
-Radia's sign convention where positive sigma produces H pointing away from the surface.
-
-### Current surface-charge moment kernel
-
-Current surface-charge soft iron uses the multipole-moment MMM path
-(`BuildMomentSystemCore` / centroid field-gradient coupling).  Applied fields are sampled
-at element centroids; mutual center-charge cancellation is internal to
-`CentroidFieldGradFromFace` and the moment assembly.
-
-### Schur complement for PEEC-MSC coupling
-
-The coupled PEEC-MSC system can be solved efficiently by eliminating PEEC DOFs
-(small, n_peec) via Schur complement, preserving H-matrix (HACApK) for MSC:
-
-```
-K_schur = K_msc + B_pm * Z_peec^{-1} * jw * M_mp    (low-rank correction, rank = n_peec)
-rhs_schur = -B_pm * Z_peec^{-1} * V_source
-```
-
-The coupling matrices B_pm (Biot-Savart -> face normals) and M_mp (A-field -> flux linkage)
-must use the canonical MSC face ordering:
-- Face 0: bottom (-Z), Face 1: top (+Z)
-- Face 2: front (-Y), Face 3: back (+Y)
-- Face 4: left (-X), Face 5: right (+X)
-
-Implementation: `peec_msc_schur.py::SchurComplementSolver`
+For diagnostics, inspect the charge map B, the charge Gram H-matrix stats,
+nonlinear iteration metadata, and image-symmetry materialization.  For truly
+symmetric meshes, a reduced image model and an explicit full model should agree
+to near roundoff at field probes.
 """
 
 
@@ -4047,7 +3974,7 @@ mesh volume {air_vid}
 The magnetic field in the gap changes rapidly over the gap width (5-10mm).
 Without resolving this gradient:
 - Linear mu=1000: Bz = -709 mT (without air_gap) vs -879 mT (with air_gap)
-- Reference MSC: Bz = -976 mT
+- Reference target: Bz near -1 T for the detailed C-yoke benchmark
 - Factor 1.24x improvement from gap mesh alone
 
 ### Pyramid Element Warning
@@ -4134,7 +4061,7 @@ def get_radia_documentation(topic: str = "all") -> str:
         "hysteresis": RADIA_HYSTERESIS,
         "esim": RADIA_ESIM,
         "build_and_release": RADIA_BUILD_AND_RELEASE,
-        "msc_kernel": RADIA_MSC_KERNEL,
+        "hdiv_soft_iron": RADIA_HDIV_SOFT_IRON,
         "magnetic_core_guide": RADIA_MAGNETIC_CORE_SOLVER_GUIDE,
         "peec_core_pitfalls": RADIA_PEEC_CORE_PITFALLS,
         "multilevel": RADIA_MULTILEVEL_SIMULATOR,

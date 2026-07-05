@@ -770,10 +770,8 @@ coil = A-side), so the framework is one method, not two.
 - the 1-turn coil stream-function design (§5 B);
 - nonlinear µ(B) (saturation) inside the potential framework — the elegant
   "design sophistication", done within the reduced potential / hodograph
-  (NOT via the volume-integral HDiv-MMM, which is the wrong tool here:
-  it solves the iron's volume magnetization, a different part of the
-  de Rham complex, and is 3-D-tet where this design is 2-D-native +
-  thin-end).
+  framework. HDiv-VIM is reserved for the 3-D magnetic-material forward
+  verification layer; this design step is 2-D-native plus thin-end geometry.
 
 ---
 

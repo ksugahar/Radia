@@ -94,7 +94,7 @@ PARAM_JA = {
     "newton": {"ja": "Newton 法", "physics": "True=Newton-Raphson, False=Picard 反復"},
     "relax": {"ja": "緩和係数", "physics": "0=フルステップ, 0.3=30%減衰"},
 
-    # --- MSC (calc_accel_msc) ---
+    # --- HDiv-VIM (calc_accel_hdiv) ---
     "ima": {"ja": "IMA 対称性", "physics": "'+x-z'=1/4モデル。符号: 平行=+, 垂直=-"},
     "unit_scale": {"ja": "座標スケール", "physics": "Cubit座標→メートル。0.001=mm→m"},
     "unit-scale": {"ja": "座標スケール", "physics": ""},
@@ -173,13 +173,13 @@ PANELS = {
         "method": "FEM (H1 Omega / HCurl A-field)",
         "command_builder": "radia_em.py:_AccelMagnetPanel.build_command",
     },
-    "accel_msc": {
-        "script": "calc_accel_msc.py",
-        "function": "solve_msc",
-        "ja_name": "加速器電磁石 MSC",
-        "ja_description": "Radia MSC (表面磁荷法) + IMA 対称性 + HACApK",
-        "method": "Radia MSC (surface charge, integral equation)",
-        "command_builder": "radia_em.py:_MSCPanel.build_command",
+    "accel_hdiv": {
+        "script": "calc_accel_hdiv.py",
+        "function": "solve_hdiv",
+        "ja_name": "加速器電磁石 HDiv-VIM",
+        "ja_description": "HDiv-VIM + IMA ラベル読取 + HACApK charge Gram",
+        "method": "FEEC HDiv-VIM (NGSolve-aligned mesh-backed soft iron)",
+        "command_builder": "radia.em_design:EMDesignSpec._build_hdiv_command",
     },
     "pcb_peec": {
         "script": "calc_pcb_peec.py",

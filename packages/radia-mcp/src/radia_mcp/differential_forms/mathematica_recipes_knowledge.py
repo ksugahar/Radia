@@ -908,7 +908,7 @@ constitutiveEntry[i_, j_, mu_, basis_, region_] :=
 ```
 
 ## Why this matters for Radia
-Radia C++ uses MSC (Magnetic Surface Charge) on hexahedra with
+Radia C++ uses face-charge extraction on hexahedra with
 6 DoFs (one per face).  The mass-matrix construction follows the
 same energetic principle: ensure positive-definite stable + consistent
 constitutive matrices.  See `rad_interaction.cpp` in the Radia tree

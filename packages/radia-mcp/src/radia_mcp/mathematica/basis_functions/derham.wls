@@ -3,7 +3,7 @@
 
 (*
   derham.wls -- the lowest-order Whitney de Rham complex on the reference TET,
-  the cohomology / loop foundation for the MMM/MSC VIM solver.
+  the cohomology / loop foundation for the HDiv-VIM VIM solver.
 
       W0 (H1, nodal)  --grad-->  W1 (H(curl), edge)  --curl-->  W2 (H(div), face)  --div-->  W3 (L2, cell)
 

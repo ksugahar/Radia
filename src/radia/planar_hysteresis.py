@@ -5,8 +5,8 @@ through a sequence of applied fields; at each step the demagnetising fixed point
 solved by NEWTON on the dense demag operator N (``planar_aniso.demag_operator``, assembled on the SHARED
 planar_charges kernel).  The play's INCREMENTAL susceptibility (>= 0 even on the descending branch) keeps
 the Newton Jacobian I - diag(chi_inc) N well-conditioned -- a secant-chi Picard would see negative chi
-near coercivity and break.  Because N comes from the shared kernel, this is METHOD-AGNOSTIC (one
-hysteresis solver for both the MMMM and HDiv-VIM planar layers).
+near coercivity and break.  Because N comes from the shared kernel, this stays aligned with the
+HDiv-VIM planar layer.
 
 UNIAXIAL: the hysteresis axis is x (field applied along +x, M along x, M_y = 0 by symmetry for a body
 symmetric about the x-axis) -- the standard first 2D hysteresis model.  Verified: the anhysteretic limit
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from radia.mmmm2d import _extract_geometry
+from radia.planar_geometry import _extract_geometry
 from radia.planar_aniso import demag_operator
 
 MU0 = 4e-7 * np.pi

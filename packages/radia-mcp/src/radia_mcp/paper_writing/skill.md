@@ -401,7 +401,7 @@ The main contributions of this paper are:
 ## 🚫 NG パターン 13 (journal / digest 特有)
 
 1. **Abstract に数式 / 引用 / 専門略語** — display math (`\begin{equation}`, `\[...\]`),
-   inline math (`$...$`), `\cite{}` / `[1]`, MMM/FEM/BEM/MCP/LLM などの
+   inline math (`$...$`), `\cite{}` / `[1]`, FEM/BEM/MCP/LLM などの
    domain-specific acronym はすべて abstract から除外。
    理由: (a) 検索エンジン (IEEE Xplore / Scopus / Google Scholar) は abstract
    をプレーンテキストとして index → math symbols が garble、(b) self-contained
@@ -1037,7 +1037,7 @@ A+B→C が揃って初めて Discussion として機能する。
 - `paper_writing_check_subject_verb_distance` — 主述の物理距離
 - `paper_writing_check_paragraph_length` — 段落字数の範囲
 - `paper_writing_check_abstract_background_ratio` — abstract 内 background 比率
-- `paper_writing_check_abstract_no_math_no_citation` — **abstract に数式 (TeX math)、`\cite{}` / `[1]`、domain-specific acronym (MMM/FEM/BEM/MCP/LLM など) が混入していないかチェック** (IEEE / Elsevier / Springer / Nature / Science 共通の慣習: abstract は self-contained + 検索エンジン indexing 可能であるべき)。Display math (`\begin{equation}`/`\[...\]`) と citation は `status="fail"`、inline math (`$...$`) と acronym は `status="warning"`、両方なしなら `status="clean"`。
+- `paper_writing_check_abstract_no_math_no_citation` — **abstract に数式 (TeX math)、`\cite{}` / `[1]`、domain-specific acronym (FEM/BEM/MCP/LLM など) が混入していないかチェック** (IEEE / Elsevier / Springer / Nature / Science 共通の慣習: abstract は self-contained + 検索エンジン indexing 可能であるべき)。Display math (`\begin{equation}`/`\[...\]`) と citation は `status="fail"`、inline math (`$...$`) と acronym は `status="warning"`、両方なしなら `status="clean"`。
 - `paper_writing_check_digest_human_review_triggers(tex_or_text)` — **1-page digest の human review trigger を検出**。abstract の個別 percent error 列挙、Warburg/CLN 既知事項を novelty として見せる書き方、経験的な接続周波数の問題を Galerkin 限定に見せる表現、HOIBC/Warburg 初出 citation 不足、説明過多 caption、`rank-(1,1)` 型の不透明 shorthand、「基底 2 個で円形導体を表せる」と誤読される minimal-basis 表現、重要な Schur/ブロック式の無番号・未ラベル・本文未引用、`K_{bb}`/`K_{sb}` などの `(s)` 依存や体積・表面・結合ブロック定義不足、`N_b` の定義不足、`N_b=1` が DC+IBC と誤読される構成、CLN 基底数 / HOIBC 次数の未記載、円形導体ベンチマークの導電率・参照解不足、"wall band" / 「壁帯」の不明瞭語、main result figure が Numerical Example / Verification より前に浮く配置、検証節が太字段落に埋まる構成、`$f_N$` など未説明の基準線、球・立方体・多面体まで盛る scope creep を `status="warning"` で返す。`paper_writing_em_submission_gate` からも自動実行。
 - `paper_writing_check_undefined_acronyms(tex_path)` — **略語 (IH, MQS, FEM, BEM, ...) が初出時に full name と並記されているかチェック**。`Full Name (ACRONYM)` または `ACRONYM (Full Name)` パターン (初出の ±80 文字以内)、または Nomenclature / Acronyms / Abbreviations section に listed があれば OK。万人共通の略語 (PDF, USA, CPU, USB, ...) のみ whitelist、研究室 EM 専門用語 (FEM/BEM/MQS/IH) は意図的に whitelist 外 → 必ず spell out 必要。`extra_whitelist="ABC,XYZ"` で institutional 略語追加可。
 - `paper_writing_check_citation_keys_exist(tex_path, bib_path)` — **`\cite{key}` の key が `.bib` の entry に存在するか静的チェック**。`status="fail"` = 引用キーが bib にない (compile 時 `[?]` で render される)、`status="warning"` = bib にあるが cite されていない entry あり (cleanup 推奨)、`status="clean"` = 1-to-1 一致。`\input{}` chain も自動 resolve (`auto_resolve_inputs=True` default)。bibtex compile 前の sanity check として使う。

@@ -46,7 +46,7 @@ def _ensure_fixture():
                     f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
 
 
-def test_heat_axisym_uniform_golden():
+def test_heat_axisym_uniform_golden(tmp_path):
     g = _load_golden()
     _ensure_fixture()
     c = g["cli"]
@@ -63,6 +63,7 @@ def test_heat_axisym_uniform_golden():
         "--dt", str(c["dt_s"]),
         "--t-end", str(c["t_end_s"]),
         "--probe-point", f"{c['probe_point_rz'][0]},{c['probe_point_rz'][1]}",
+        "--msh-output", str(tmp_path / "heat_axisym_T.msh"),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
     assert proc.returncode == 0, (

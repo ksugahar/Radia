@@ -65,8 +65,8 @@ Build a matrix-entry callback from Radia's existing field computation:
 **Returns** `entry(i, j) -> float`.
 
 Works for **ANY source family** — coils (Biot-Savart from `ObjFlmCur`),
-permanent magnets (MMM from `ObjRecMag`), soft iron (MSC from
-`ObjHexahedron`), shielded systems via Radia container — because
+permanent magnets (`ObjRecMag`), soft iron (HDiv-VIM solved materials),
+shielded systems via Radia container — because
 `radia.Fld` is the universal field evaluator.
 
 ## `StreamTSVD` dataclass

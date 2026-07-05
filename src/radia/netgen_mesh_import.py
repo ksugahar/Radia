@@ -50,10 +50,10 @@ TETRA_FACES = [
 # Standard brick/hexahedron with 8 vertices
 # Vertices numbered as: v0-v7 (0-indexed) -> 1-8 (Radia 1-indexed)
 #
-# WARNING: Hexahedral elements have known issues in Radia MMM
+# WARNING: Hexahedral elements have known issues in Radia fixed-magnetization path
 # ============================================================
 # 1. Non-convex (concave) meshes: Hexahedral meshes from Netgen may produce
-#    non-convex (concave) elements, which cause errors in Radia MMM.
+#    non-convex (concave) elements, which cause errors in Radia fixed-magnetization path.
 #    Radia requires convex polyhedra for correct field computation.
 #
 # 2. Netgen 3D hex meshing limitations: Netgen's 3D hexahedral meshing
@@ -103,7 +103,7 @@ def create_radia_hexahedron(vertices, magnetization=None):
     """
     Create a single hexahedral (brick) polyhedron in Radia.
 
-    WARNING: Hexahedral elements may cause numerical issues in Radia MMM.
+    WARNING: Hexahedral elements may cause numerical issues in Radia fixed-magnetization path.
     Tetrahedral meshes are recommended for better stability.
 
     Parameters
@@ -258,7 +258,7 @@ def extract_elements(mesh, material_filter=None, allow_hex=False, allow_wedge=Fa
         If True, allow hexahedral elements (ET.HEX)
         If False, raise error on non-tetrahedral elements
         Default: False
-        WARNING: Hexahedral elements may cause issues in Radia MMM
+        WARNING: Hexahedral elements may cause issues in Radia fixed-magnetization path
 
     Returns
     -------
@@ -327,13 +327,13 @@ def extract_elements(mesh, material_filter=None, allow_hex=False, allow_wedge=Fa
                 raise ValueError(
                     f"Element {el_idx} is hexahedral (ET.HEX). "
                     f"Hexahedral elements are not allowed by default. "
-                    f"Set allow_hex=True to enable (WARNING: may cause MMM issues)."
+                    f"Set allow_hex=True to enable (WARNING: may cause magnetic block issues)."
                 )
             elif el.type == ET.PRISM:
                 raise ValueError(
                     f"Element {el_idx} is a wedge/prism (ET.PRISM). "
                     f"Wedge elements are not allowed by default. "
-                    f"Set allow_wedge=True to enable (WARNING: may cause MMM issues)."
+                    f"Set allow_wedge=True to enable (WARNING: may cause magnetic block issues)."
                 )
             else:
                 raise ValueError(
@@ -368,10 +368,10 @@ def extract_elements(mesh, material_filter=None, allow_hex=False, allow_wedge=Fa
 
     if hex_count > 0:
         print(f"[WARNING] Imported {hex_count} hexahedral elements. "
-              f"Hexahedra may cause numerical issues in Radia MMM.")
+              f"Hexahedra may cause numerical issues in Radia fixed-magnetization path.")
     if wedge_count > 0:
         print(f"[WARNING] Imported {wedge_count} wedge/prism elements. "
-              f"Wedges may cause numerical issues in Radia MMM.")
+              f"Wedges may cause numerical issues in Radia fixed-magnetization path.")
 
     return elements, skipped_count
 
@@ -421,7 +421,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
         If False, raise error if mesh contains hexahedral elements
         Default: False
 
-        WARNING: Hexahedral meshes may produce concave elements causing MMM errors.
+        WARNING: Hexahedral meshes may produce concave elements causing magnetic block errors.
         Exception: Regular cubic grids (structured hex meshes) are safe.
 
     Returns
@@ -498,7 +498,7 @@ def netgen_mesh_to_radia(mesh, material=None, units='m', combine=True, verbose=T
             filter_str = material_filter if isinstance(material_filter, str) else ', '.join(material_filter)
             print(f"                Material filter: {filter_str}")
         if allow_hex:
-            print(f"                [WARNING] Hexahedral elements enabled (may cause MMM issues)")
+            print(f"                [WARNING] Hexahedral elements enabled (may cause magnetic block issues)")
 
     try:
         elements, skipped_count = extract_elements(mesh, material_filter=material_filter,
@@ -626,7 +626,7 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
     Convert Cubit hexahedral mesh data to Radia geometry for CplMag solver.
 
     This function takes hex element data (list of vertex lists) from Cubit
-    and creates Radia ObjHexahedron objects suitable for CplMag (PEEC-MMM coupling).
+    and creates Radia ObjHexahedron objects suitable for CplMag (PEEC-magnetic coupling).
 
     Parameters
     ----------
@@ -679,9 +679,10 @@ def cubit_hex_to_radia(hex_elements, magnetization=None, mu_r=None, combine=True
     -----
     - All coordinates must be in meters
     - Vertices should follow standard hexahedron numbering convention
-    - Multi-element meshes enable proper MMM demagnetization coupling
+    - Multi-element meshes enable proper magnetic demagnetization coupling
     - Legacy CplMag APIs (CndLoop, CplMagCreate, etc.) have been removed.
-      Use PEECBuilder + CoupledPEECSolver instead.
+      Use PEECBuilder for conductor PEEC and HDiv-VIM / reduced FEM for
+      magnetic material coupling.
 
     See Also
     --------

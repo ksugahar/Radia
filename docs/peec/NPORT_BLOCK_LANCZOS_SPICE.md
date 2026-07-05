@@ -117,7 +117,7 @@ netlist = solver.to_spice(result, "COIL_2PORT")
 ```
 
 ### NPortCoupledMagneticSPICE
-LoopStar + MMM (magnetic) coupled system.
+LoopStar + magnetic-material reduced model.
 
 ```python
 solver = NPortCoupledMagneticSPICE(n_ports=2, n_stages_L=5, n_stages_M=3)
@@ -362,20 +362,22 @@ R_diag = diag([R0, R0, ..., R0])
 frequencies = logspace(1, 7, 100)  # 10 Hz to 10 MHz
 ```
 
-### Coupling Matrix Transformation Rules for PEEC-MMM/STAR Systems
+### Coupling Matrix Transformation Rules for Retired PEEC-Magnetic/STAR Systems
 
-When coupling the CLN I-transformed LoopStar subsystem with other physics (MMM, STAR, etc.), the coupling matrices require one-sided transformation:
+When coupling the CLN I-transformed LoopStar subsystem with other physics
+(magnetic-material or STAR subsystems), the coupling matrices require one-sided
+transformation:
 
 | Coupling Term | Original | CLN I Coordinates | Note |
 |---------------|----------|-------------------|------|
 | Z_s * I | Z_s * I | Z_s * (Q^T * Q) | Surface impedance |
-| Z_LM | Z_LM | Q^T * Z_LM | Loop to MMM (left multiply) |
-| Z_ML | Z_ML | Z_ML * Q | MMM to Loop (right multiply) |
+| Z_LM | Z_LM | Q^T * Z_LM | Loop to magnetic subsystem (left multiply) |
+| Z_ML | Z_ML | Z_ML * Q | Magnetic subsystem to Loop (right multiply) |
 | Z_LS | Z_LS | Q^T * Z_LS | Loop to STAR |
 | Z_SL | Z_SL | Z_SL * Q | STAR to Loop |
 
 **Important rules:**
-1. **MMM/STAR subsystem matrices are NOT transformed** - Z_MMM, Z_STAR remain unchanged
+1. **Magnetic/STAR subsystem matrices are NOT transformed** - Z_MAG, Z_STAR remain unchanged
 2. **Coupling matrices are one-sided** - Z_LM gets Q^T on the left; Z_ML gets Q on the right
 3. **Excitation vectors are also transformed** - Loop excitation V_L becomes Q^T * V_L
 
@@ -384,13 +386,13 @@ When coupling the CLN I-transformed LoopStar subsystem with other physics (MMM, 
 Original coupled system:
 ```
 [R + sL    Z_LM  ] [I_L]   [V_L]
-[Z_ML     Z_MMM ] [I_M] = [V_M]
+[Z_ML     Z_MAG ] [I_M] = [V_M]
 ```
 
 After CLN I transform:
 ```
 [R_diag + s*L_tridiag    Q^T*Z_LM ] [I_L']   [Q^T*V_L]
-[Z_ML*Q                  Z_MMM    ] [I_M ] = [V_M    ]
+[Z_ML*Q                  Z_MAG    ] [I_M ] = [V_M    ]
 ```
 
 where `I_L' = Q^{-1} * I_L` is the transformed Loop current.

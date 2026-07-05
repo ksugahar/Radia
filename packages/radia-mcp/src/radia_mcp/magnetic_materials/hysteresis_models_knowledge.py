@@ -4113,11 +4113,11 @@ HYSTERESIS_THEORY.md §7.5.9.
 
 | Version | Title | Mechanism | Identification |
 |---|---|---|---|
-| v4 (logged in CHANGES.md) | "Energy-Consistent B-Input Stop" | hard clip + per-hysteron coenergy psi_k = int g_k; ADAPTIVE saturation heights (half-grid offset + arc-length knee refinement, N=23); H-input/MMM use + Egger Schur | constrained lsqlin, descending branch |
+| v4 (logged in CHANGES.md) | "Energy-Consistent B-Input Stop" | hard clip + per-hysteron coenergy psi_k = int g_k; ADAPTIVE saturation heights (half-grid offset + arc-length knee refinement, N=23); H-input / magnetic-material use + Egger Schur | constrained lsqlin, descending branch |
 | v5-Bergqvist (THIS topic; copy folder, NOT yet logged) | "Bergqvist Energy-Based B-Input Stop" | VARIATIONAL update (eq above) + Bergqvist dry-friction; the DOMAIN argument front-and-center | EM (E: variational, M: BVLS I-spline) |
 
 v5 is the cleaner story (domain argument + a genuine Bergqvist variational
-update + self-consistent EM), rms 13.7 A/m.  v4 leads with the H-input/MMM
+update + self-consistent EM), rms 13.7 A/m.  v4 leads with the H-input / magnetic-material
 use case and adaptive hysteron placement.  Pick ONE for the IGTE
 submission; do NOT blend (1-page limit; the comparison does not fit --
 CHANGES.md lesson 3).

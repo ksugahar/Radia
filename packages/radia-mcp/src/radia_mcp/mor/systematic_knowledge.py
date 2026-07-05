@@ -600,7 +600,7 @@ Key classes:
 ```
 SPICEExtractionConfig     - configuration object
 PRIMASchurExtractor       - PRIMA + Schur complement for coupling
-LoopStarMagneticCoupled  - magnetic-MMM coupling layer
+LoopStarMagneticCoupled  - magnetic-magnetic-material coupling layer
 ```
 
 ### Recommended workflow

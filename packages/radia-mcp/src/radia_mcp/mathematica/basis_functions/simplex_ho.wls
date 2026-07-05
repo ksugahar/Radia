@@ -18,7 +18,7 @@
   div(RT_k) = P_k  all exact.  Lowest order (k=0) reproduces Whitney: RT_0 = 4 tet
   faces / 3 trig edges (cf. derham.wls W2), N_0 = 6 tet / 3 trig edges (W1).
 
-  Reference simplex (x,y,z>=0, x+y+z<=1).  These are the MMM-element (tet) high-order
+  Reference simplex (x,y,z>=0, x+y+z<=1).  These are the tetrahedral moment-path high-order
   companions to the tensor Hex/Quad spaces in hdiv.wls / hcurl.wls.
 *)
 

@@ -4,7 +4,7 @@ Stream-Function (SF) Coil Design MCP Server (radia_mcp.streamfunction)
 SF-focused front door for the Radia stream-function coil-design framework:
 
 - Kernel-agnostic (ACA+)+TSVD least-norm solver (coils Biot-Savart OR
-  magnets via the Radia MMM material kernel -- the matrix entry is a callback)
+  magnets via the Radia field-kernel / HDiv-VIM material route -- the matrix entry is a callback)
 - FE-direct psi (continuous H1 GridFunction) on ANY surface: plane / cylinder
   / sphere / conformal / 3D-printed former
 - Regularisation menu (L2 / H1 / sigma-weighted / inductance / L-inf) folded
@@ -100,7 +100,7 @@ def new_sf_coil_design(target: str = "uniform Bz") -> str:
         "Workflow:\n"
         "1. Choose the former surface (plane / cylinder / sphere) and the DSV\n"
         "   target points.  streamfunction('kernel_agnostic') for the A(i,j)\n"
-        "   matrix-entry callback (coils Biot-Savart OR magnets MMM).\n"
+        "   matrix-entry callback (coils Biot-Savart OR magnets Radia field callback).\n"
         "2. Solve A psi = B with (ACA+)+TSVD + a regularisation.\n"
         "   streamfunction('regularized') -- pick H1 (min surface-current\n"
         "   energy) as the physical default; sigma-weighted for ohmic;\n"

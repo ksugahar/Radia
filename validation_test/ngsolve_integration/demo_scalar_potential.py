@@ -1,4 +1,4 @@
-"""Demo: Scalar potential solver combining Radia (MMM/MSC) + NGSolve FEM.
+"""Demo: Scalar potential solver combining Radia fixed-magnet fields + NGSolve FEM.
 
 This example demonstrates the two-scalar-potential (phi-reduced/phi)
 method for computing B field from permanent magnets in the presence
@@ -10,8 +10,7 @@ Problem setup:
     - Air surrounding both
 
 Method:
-    1. Radia computes H_s from the permanent magnet (MMM/MSC integral
-       method, analytical for ObjRecMag)
+    1. Radia computes H_s from the permanent magnet (analytical for ObjRecMag)
     2. NGSolve solves for the correction potential phi that accounts
        for the iron magnetization (FEM)
     3. Total field: H = H_s - grad(phi), B = mu * H

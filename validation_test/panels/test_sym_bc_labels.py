@@ -18,7 +18,7 @@ Python touch-points:
   2. `add_kelvin.add_kelvin_cubit(reduction=...)` validation branches
      (1/8 NotImplementedError, invalid bc, invalid axis, offset_dir
      conflict).
-  3. `calc_accel_msc.ima_from_mesh_labels` auto-assembly.
+  3. `calc_accel_hdiv.ima_from_mesh_labels` auto-assembly.
 
 The Cubit-headless end-to-end run (reduction mode actually producing
 `sym_*_*` sidesets in a .vol) lives in a separate slow test.
@@ -178,39 +178,39 @@ def test_reduction_type_rejected():
 
 
 # ==========================================================
-# calc_accel_msc.ima_from_mesh_labels
+# calc_accel_hdiv.ima_from_mesh_labels
 # ==========================================================
 
 def test_ima_auto_quarter_xz_ht_bn():
     """1/4 xz model: sym_ht=0_x (antisym about x=0) + sym_bn=0_z
     (symmetric about z=0) -> Radia IMA '-x+z'."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     bnds = ["yoke", "air", "sym_ht=0_x", "sym_bn=0_z"]
     assert ima_from_mesh_labels(bnds) == "-x+z"
 
 
 def test_ima_auto_full_symmetric_quadrant():
     """1/4 xz model with BOTH faces bn=0 (flux parallel) -> '+x+z'."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels(
         ["sym_bn=0_x", "sym_bn=0_z"]) == "+x+z"
 
 
 def test_ima_auto_half_x_only():
     """1/2 x model with sym_ht=0_x -> '-x'."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels(["air", "sym_ht=0_x"]) == "-x"
 
 
 def test_ima_auto_xyz_order_canonical():
     """Output axes appear in x/y/z order regardless of input ordering."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels(
         ["sym_bn=0_z", "sym_ht=0_x", "sym_bn=0_y"]) == "-x+y+z"
 
 
 def test_ima_auto_empty_when_no_sym():
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels(["yoke", "air", "kelvin_int"]) == ""
     assert ima_from_mesh_labels([]) == ""
 
@@ -219,18 +219,18 @@ def test_ima_auto_ignores_legacy_axisless():
     """'sym_tangential' / 'sym_normal' have no axis so they cannot
     contribute to an IMA string; they are intentionally ignored here
     (the user should pass --ima explicitly for such legacy samples)."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels(["sym_tangential", "sym_normal"]) == ""
 
 
 def test_ima_auto_accepts_string_input():
     """Single string is treated as a 1-element list."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels("sym_ht=0_x") == "-x"
 
 
 def test_ima_auto_unknown_axis_ignored():
     """sym_*_w etc. must not leak into the output."""
-    from calc_accel_msc import ima_from_mesh_labels
+    from calc_accel_hdiv import ima_from_mesh_labels
     assert ima_from_mesh_labels(
         ["sym_ht=0_w", "sym_bn=0_x"]) == "+x"

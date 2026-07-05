@@ -317,7 +317,7 @@ Once you have the 3 files, the user gets all of these for free:
 
 Read these for working examples of the pattern:
 
-- `src/radia/radia_em.py` -- multi-mode panel (Omega / A-Phi / MSC /
+- `src/radia/radia_em.py` -- multi-mode panel (Omega / A-Phi / HDiv-VIM /
   KelvinBench / Clebsch hodograph), `QStackedWidget` over 5 generator-driven
   sub-panels.
 - `src/radia/panels/calc_accel_magnet.py` -- the CLI counterpart

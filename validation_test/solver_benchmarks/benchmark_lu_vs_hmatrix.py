@@ -100,7 +100,7 @@ def benchmark_solver(n, method, tol=1e-4, max_iter=1000):
 
 def estimate_memory(n_elem, method):
     """Estimate memory usage in MB."""
-    n_dof = n_elem * 6  # 6 DOF per hexahedral element (MSC)
+    n_dof = n_elem * 6  # 6 face-charge DOF per hexahedral element
     if method in [0, 1]:  # LU or BiCGSTAB (dense matrix)
         return n_dof * n_dof * 8 / (1024 * 1024)
     elif method == 2:  # HACApK (H-matrix compression)

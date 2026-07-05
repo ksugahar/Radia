@@ -51,7 +51,7 @@ Adds μ_r ≈ 2000-3000 layer behind primary/secondary coils:
 
 Lab choice (PEEC+FEM coupled):
 - `radia_mcp.peec` — coil filaments
-- `radia_mcp.bem.mmm_msc` — ferrite via MMM (Radia MMM)
+- `radia_mcp.radia_ngsolve.hdiv_vim` — ferrite / magnetic material path
 - Coupled solve for k between primary + secondary with ferrite
 
 ## References

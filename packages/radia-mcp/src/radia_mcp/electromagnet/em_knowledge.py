@@ -2,7 +2,7 @@
 Accelerator electromagnet analysis knowledge base for the Radia MCP server.
 
 Covers: complete pipeline for accelerator magnet design and analysis using
-Radia (CoilBuilder, MMM/MSC, IMA) + Cubit (hex mesh) + NGSolve (FEM, Kelvin).
+Radia (CoilBuilder, HDiv-VIM, IMA) + Cubit (hex mesh) + NGSolve (FEM, Kelvin).
 
 Sources:
   - CLAUDE.md "Accelerator Magnet Solver Architecture"
@@ -104,7 +104,7 @@ The standalone `radia-em` panel exposes five Method choices:
 |--------|----------------|---------|
 | Omega | `calc_accel_magnet.py --formulation omega` | Reduced scalar-potential FEM with Kelvin open boundary |
 | A-Phi | `calc_accel_magnet.py --formulation a` | Vector-potential FEM path |
-| MSC | `calc_accel_msc.py` | Magnetic surface charge / HDiv-VIM path for iron-yoke magnets |
+| HDiv-VIM | `calc_accel_hdiv.py` | Mesh-backed HDiv-VIM path for iron-yoke magnets |
 | Kelvin Benchmark | `calc_kelvin_benchmark.py` | Analytical sphere-in-uniform-field check for the Kelvin pipeline |
 | Clebsch hodograph | `calc_clebsch_hodograph.py` | Self-meshed reduced-potential demonstration; forward field quality and Clebsch potentials |
 
@@ -416,7 +416,7 @@ plus a nonlinear residual:
 B = mu_0*(1+alpha)*H + mu_0*R    where R = M - alpha*H
 ```
 
-For Radia MMM, the interaction matrix N maps M -> H_demag (constant, geometry-only):
+For HDiv-VIM, the charge-Gram demag operator maps M -> H_demag (constant, geometry-only):
 
 ```
 H = H_ext + N*M
@@ -482,8 +482,9 @@ B = rad.Fld(iron_container, 'b', [0, 0, 0.05])
 
 ## Current Limitation
 
-MMM (tetrahedra, 3 DOF) only. MSC (hexahedra, 6 DOF) requires
-sigma-M conversion (future work).
+The production soft-iron route is HDiv-VIM.  Keep new accelerator
+magnet work on mesh-backed HDiv spaces rather than resurrecting the
+old moment/surface-charge soft-iron paths.
 
 ## Reference
 
@@ -628,7 +629,7 @@ IMA produces incorrect results (~0.5x magnitude) for **boundary elements**
 **When IMA is Safe**:
 1. Elements offset from symmetry planes (not touching)
 2. Observation points off-plane
-3. MMM (tetrahedra) -- no limitation
+3. Mesh-backed HDiv-VIM with explicit mirror materialization after solve
 
 **Workaround**: For models with boundary elements on symmetry planes,
 use explicit element duplication instead of IMA.
@@ -660,7 +661,7 @@ mean the EM panel path, not the benchmark path.
 
 | Panel mode | Sample location | Purpose | Reductions |
 |------------|----------------|---------|------------|
-| **EM panel FEM/MSC** | `panels/samples/em/em_1-{1,2,4,8}.jou` | Production C-yoke dipole / quad analysis | 1/1, 1/2, 1/4, **1/8** |
+| **EM panel FEM/HDiv-VIM** | `panels/samples/em/em_1-{1,2,4,8}.jou` | Production C-yoke dipole / quad analysis | 1/1, 1/2, 1/4, **1/8** |
 | **EM panel "Kelvin Benchmark"** | `panels/samples/kelvin_benchmark_sphere_1_{2,4}.vol` | Verify Kelvin pipeline against analytical sphere-in-uniform-Hz | 1/2, 1/4 only |
 
 The Kelvin Benchmark mode does **NOT** ship a 1/8 reduction because

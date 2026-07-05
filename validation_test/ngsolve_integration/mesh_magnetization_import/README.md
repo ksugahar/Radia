@@ -20,7 +20,8 @@ where `Identify()` information was lost during mesh generation with `Glue()`. Th
 
 ### Key Findings
 
-1. **Radia tetrahedral MSC method is ACCURATE** (< 1% error vs analytical dipole)
+1. **Radia fixed-magnetization tetrahedral field evaluation is accurate**
+   (< 1% error vs analytical dipole)
 2. **NGSolve H-formulation with Kelvin transform is ACCURATE** (< 0.15% error with correct version)
 3. **Use `netgen_mesh_import` module** for correct Netgen -> Radia mesh transfer
 
@@ -34,7 +35,8 @@ where `Identify()` information was lost during mesh generation with `Glue()`. Th
 | Mesh Elements | 4496 tetrahedra |
 | Magnetization | Uniform M = [0, 0, 1000] A/m |
 
-**Conclusion**: Radia's MSC method correctly computes B field from tetrahedral meshes
+**Conclusion**: Radia's fixed-magnetization field evaluator correctly computes
+B field from tetrahedral meshes
 when given correct magnetization values.
 
 ### NGSolve H-formulation with Kelvin Transform
@@ -95,10 +97,10 @@ python sphere_analytical_to_radia.py
 
 **Output**:
 ```
-Field Comparison (Analytical dipole vs Radia MSC):
+Field Comparison (Analytical dipole vs Radia fixed-magnet field):
   Average error: 0.9832%
   Maximum error: 1.0311%
-  [PASS] Radia MSC matches analytical dipole field (< 5% error)
+  [PASS] Radia fixed-magnet field matches analytical dipole field (< 5% error)
 ```
 
 ## Key Implementation Notes
@@ -180,7 +182,7 @@ Inside sphere:
 B = (2/3)*mu_0*M
 ```
 
-### Radia MSC (Magnetic Surface Charge) Method
+### Radia Fixed-Magnet Surface-Charge Field
 
 Radia computes B field from surface charge density:
 ```

@@ -37,7 +37,7 @@ Complete reference for Radia Python API.
 
 ## Quick Start
 
-### MSC Hexahedral Example (ObjThckPgn)
+### HDiv-VIM Hexahedral Example (ObjThckPgn)
 
 ```python
 import radia as rad
@@ -74,7 +74,7 @@ grp = rad.ObjCnt([container, ext])
 rad.Solve(grp, 0.001, 1000, 1)
 ```
 
-### Tetrahedral Mesh Example (Netgen)
+### Netgen Mesh Example (HDiv-VIM Workflow)
 
 ```python
 import radia as rad
@@ -89,7 +89,9 @@ cube = Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))
 cube.mat('magnetic')
 mesh = Mesh(OCCGeometry(cube).GenerateMesh(maxh=0.3))
 
-# Import to Radia
+# Import to Radia for fixed-magnetization field evaluation.
+# Soft-iron and nonlinear magnetic-material solves should use HDiv-VIM /
+# reduced-FEM workflows rather than legacy 3-DOF tetrahedral moment paths.
 mag_obj = netgen_mesh_to_radia(mesh,
                                 material={'magnetization': [0, 0, 0]},
                                 units='m',
@@ -110,7 +112,7 @@ The following APIs have been removed from Radia. Calling them will raise an erro
 | `RlxPre()`, `RlxMan()`, `RlxAuto()` | — | `rad.Solve(obj, prec, maxiter, method)` | Unified solver API |
 | `RlxUpdSrc()`, `SetRelaxSubInterval()` | — | `rad.Solve()` | Unified solver API |
 | `TrfMlt()`, `SetIMASymmetry()`, `BuildIMAMatrix()`, `PreRelax()`, `Image()` | 2026-01-31 | `rad.Solve(image=...)` / `rad.BuildMatrix(image=...)` | Unified image symmetry parameter |
-| `CndLoop`, `CndRecBlock`, `CndLoopFromHelix`, `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency`, `CndHexahedron`, `CndWire`, `CndSpiral`, `MatSIBC` | 2026-02-13 | `PEECBuilder` + `CoupledPEECSolver` | Legacy PEEC conductor API |
+| `CndLoop`, `CndRecBlock`, `CndLoopFromHelix`, `CplMagCreate`, `CplMagSolve`, `CplMagSetFrequency`, `CndHexahedron`, `CndWire`, `CndSpiral`, `MatSIBC` | 2026-02-13 | `PEECBuilder`; HDiv-VIM / reduced FEM for magnetic cores | Legacy PEEC conductor API |
 | `ObjDrwVTK()`, `exportGeometryToVTK()` | — | NGSolve WebGUI / `GmshPostExport` | Old VTK visualization removed |
 | `ObjDivMag()`, `ObjDivMagPln()`, `ObjCutMag()` | — | Netgen / Cubit | Mesh operations use external tools |
 | `FldVTS()` | 2026-03-22 | NGSolve + `GmshPostExport` | Field visualization removed |
@@ -144,16 +146,16 @@ Cubit → export netgen "mesh.vol" → NGSolve Mesh("mesh.vol") → netgen_mesh_
 | Element Type | API | Faces | DOF | Use Case |
 |--------------|-----|-------|-----|----------|
 | **Extruded Polygon** | `ObjThckPgn()` | N-gon extruded | 3 | General prism shapes |
-| **Hexahedron (MSC)** | `ObjHexahedron()` | 6 quad | 6 | Permanent magnets, soft iron |
-| **Tetrahedron** | `ObjTetrahedron()` | 4 tri | 3 | Complex curved geometry |
-| **Wedge/Prism (MSC)** | `ObjWedge()` | 5 | 5 | Hybrid surface-charge meshes |
-| **Pyramid (MSC)** | `ObjPyramid()` | 5 | 5 | Mesh transitions |
+| **Hexahedron (face charge)** | `ObjHexahedron()` | 6 quad | 6 | Fixed-magnetization field kernels |
+| **Tetrahedron** | `ObjTetrahedron()` | 4 tri | 3 | Fixed-magnetization geometry import |
+| **Wedge/Prism (face charge)** | `ObjWedge()` | 5 | 5 | Fixed-magnetization hybrid meshes |
+| **Pyramid (face charge)** | `ObjPyramid()` | 5 | 5 | Mesh transitions for field evaluation |
 | **General** | `ObjPolyhdr()` | custom | 3/5/6 | Arbitrary polyhedra |
 
 **DOF (Degrees of Freedom)**:
-- **Surface-charge MSC elements**: 6 DOF for hexahedra, 5 DOF for wedge/pyramid (sigma per face)
-- **MMM elements**: 3 DOF magnetization vector (Mx, My, Mz), e.g. tetrahedra / `ObjRecMag`
-- A single soft-iron `rad.Solve` may mix surface-charge MSC element types (hex+wedge+pyramid), but not MMM tet/RecMag with MSC; that fails loud with `Radia::Error204`.
+- **Face-charge elements**: 6 DOF for hexahedra, 5 DOF for wedge/pyramid (sigma per face)
+- **Fixed magnetization elements**: 3-vector magnetization for permanent-field evaluation only.
+- Soft-iron and nonlinear magnetic-material solves are HDiv-VIM / reduced-FEM workflows.
 - All meshes are expected to be generated externally (Netgen, GMSH, Cubit, etc.)
 
 ### Simplified APIs (Recommended)
@@ -569,7 +571,7 @@ All parameters are optional keyword arguments. Only specified parameters are cha
 | Parameter | Default | Rationale |
 |-----------|---------|-----------|
 | `hacapk_eps` | 1e-4 | Balance between accuracy and compression. Lower values (1e-6, 1e-8) for higher accuracy. |
-| `hacapk_leaf` | 10 | For MSC 6DOF hexahedra, leaf_size=10 gives ~66 DOF/leaf (binary tree splitting). |
+| `hacapk_leaf` | 10 | For face-charge hexahedra, leaf_size=10 gives roughly 60 DOF/leaf (binary tree splitting). |
 | `hacapk_eta` | 2.0 | Admissibility: clusters are "well-separated" when dist >= eta * max(diam). eta=2.0 is conservative. |
 
 **Examples:**
@@ -990,7 +992,7 @@ The PEEC (Partial Element Equivalent Circuit) solver provides circuit parameter 
 | `peec_matrices.MNASolver` | C++ MNA multi-port solver (LAPACK zgesv_) |
 | `peec_topology.PEECCircuitSolver` | Python API for port impedance/coupling |
 | `fasthenry_parser.FastHenryParser` | FastHenry .inp file parser |
-| `peec_coupled.CoupledPEECSolver` | PEEC + MMM coupled solver |
+| Magnetic core coupling | HDiv-VIM / reduced FEM workflow |
 
 ### PyPEECBuilder - Matrix Construction
 
@@ -1143,7 +1145,7 @@ result = parser.solve()
 | `.equiv` | `.equiv N1 N3` | Node merge |
 | `.magnetic` | See below | Magnetic material block |
 
-**Magnetic material blocks** (for coupled PEEC+MMM):
+**Magnetic material blocks** are parsed for diagnostics, but `FastHenryParser.solve()` rejects them. Use HDiv-VIM / reduced FEM for magnetic cores:
 ```
 .magnetic
   type=box
@@ -1154,19 +1156,14 @@ result = parser.solve()
 .endmagnetic
 ```
 
-### CoupledPEECSolver - PEEC + MMM Coupling
+### Magnetic Material Coupling Policy
 
-Couple PEEC conductors with magnetic materials:
+PEEC is conductor/shield oriented. Magnetic material coupling uses the
+HDiv-VIM / reduced-FEM workflow, with field exchange at the application layer.
 
 ```python
-from peec_coupled import CoupledPEECSolver
-
-solver = CoupledPEECSolver(topology_dict, magnetic_objects=[core_id])
-solver.compute_coupling_matrix()  # N_seg Radia Solve calls
-
-Z = solver.compute_port_impedance(freq=1e6)
-Z_sweep = solver.frequency_sweep(freqs)
-L_total = solver.get_effective_inductance()  # L_air + Delta_L
+# conductor PEEC: PEECCircuitSolver(topology_dict)
+# magnetic core: radia.vim / reduced FEM
 ```
 
 ---
@@ -1691,12 +1688,10 @@ matrix, dof = rad.GetInteractMatrix(handle)
 - Symmetric (+): `N_Image[i,j] = N[i,j] + N[i, mirror_j] @ P`
 - Antisymmetric (-): `N_Image[i,j] = N[i,j] - N[i, mirror_j] @ P`
 
-**IMA Boundary Element Limitation**:
-IMA may produce incorrect results (~0.5x magnitude) for boundary elements whose faces
-lie ON the symmetry plane, when observation points are also on that plane. MMM (tetrahedra)
-has no such limitation.
-
-See [IMA_SYMMETRY_DESIGN.md](IMA_SYMMETRY_DESIGN.md) for implementation details.
+**IMA Boundary Element Note**:
+Image symmetry is a solver contract of the HDiv-VIM / charge-Gram route.  Keep
+full-model and image-model tests in sync for boundary elements lying on symmetry
+planes; do not use the retired tetrahedral moment path as an exception.
 
 ---
 
@@ -1977,7 +1972,7 @@ B = cuboid.get_B([25, 0, 0])
 
 10. **Ravaud, R., et al.** (2009). "Analytical calculation of the magnetic field created by permanent-magnet rings." IEEE Trans. Magn. 45(4), 1572-1576. - Surface current A-field integration
 
-### Triangle B-field (MSC Method)
+### Triangle B-field / Solid Angle Kernels
 
 11. **Guptasarma, D.** (1999). "Computation of the time-domain response of a polarizable ground." Geophysics 64(1), 70-74. - Solid angle formula for triangle B-field
 

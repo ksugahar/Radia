@@ -205,7 +205,6 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
-| `mmm_core` | MMM/MSC (Magnetic Moment Method / Magnetic Surface Charge) -- how |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
 | `panel_add_param` | Plan where to add a new parameter to a Radia-NGSolve panel. |
@@ -257,7 +256,7 @@ Module: `radia_mcp.fem.server`
 
 ## `mcp-server-bem`
 
-_MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, Radia MMM/MSC, HACApK, FEM-BEM_
+_MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, HACApK, FEM-BEM_
 
 Module: `radia_mcp.bem.server`
 
@@ -266,7 +265,6 @@ Module: `radia_mcp.bem.server`
 | `bem_fem_bem_hybrid` | FEM-BEM hybrid methods for open-boundary EM. |
 | `bem_h_matrix` | H-matrix / ACA acceleration for BEM. |
 | `bem_low_freq` | Low-frequency BEM stabilization. |
-| `bem_mmm_msc` | Magnetic Moment Method (MMM) and Surface Charge (MSC) -- Radia's core. |
 | `bem_mom_foundations` | MoM foundations: Harrington 1968, RWG 1982, wire-grid (NEC). |
 | `bem_overview` | BEM/MoM landscape: lab stack, decision tree, genealogy. |
 | `bem_status` | (no description) |
@@ -365,9 +363,9 @@ Module: `radia_mcp.motor.server`
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
-| `motor_mmm_quick_check` | First-order 2D MMM/BEM-like motor quick check. |
+| `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
-| `motor_planar_coupling` | 2D PLANAR machine modelling in radia: MMMM / HDiv-VIM soft-iron demag + the SHARED |
+| `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
 | `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact. |
@@ -376,7 +374,7 @@ Module: `radia_mcp.motor.server`
 | `motor_validation_artifact_gate` | Check whether a motor cross-validation artifact can train radia-motor. |
 | `motor_validation_lane_template` | Return the JSON artifact template for a motor validation lane. |
 | `motor_validation_lanes` | Cross-validation lane policy for radia-motor. |
-| `motor_validation_router` | Route a motor prompt to a public deck, MMM quick check, and NGSolve AGE validation. |
+| `motor_validation_router` | Route a motor prompt to a public deck, field quick check, and NGSolve AGE validation. |
 
 ## `mcp-server-accelerator`
 
