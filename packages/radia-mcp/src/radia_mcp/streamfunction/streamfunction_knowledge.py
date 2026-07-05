@@ -246,6 +246,23 @@ r ~ 1/sqrt|B|) enforces.  Two manufacture refinements:
                     (2) single-stroke wire, (3) sheet-metal --distort wire,
                     (4) wire WITH thickness (--wire-diam, twist-free
                     parallel-transport tube) + distortion.
+  --scan-map        MEASUREMENT TWIN: the 3-component (Bx,By,Bz) field of the
+                    DELIVERED single-stroke wire (distorted if --distort) on a
+                    planar raster -- the simulation counterpart of a 3-axis
+                    magnetometer (TMR / fluxgate) scan (fixed sensor ARRAY or
+                    one sensor on a moving stage sample the SAME grid).  Reports
+                    Bnormal (the along-normal MAIN uniform field) AND Bt (the
+                    in-plane TRANSVERSE leakage a 3-axis sensor catches -- the
+                    single-stroke connector stray a 1-axis probe misses), plus
+                    homogeneity; the full grid is saved to committed JSON
+                    (artifact "sf_scan_map_3component"; Data Persistence).
+                    --scan-plane {x,y,z} normal, --scan-standoff (default = the
+                    eval/DSV height), --scan-half (default = DSV footprint),
+                    --scan-n (n x n; No-Fallback: >=2), --scan-current (default =
+                    the best-fit design current; set the bench current -> real
+                    Tesla; field is LINEAR in current).  Compare against a
+                    measured +-I current-reversal scan (coil-only, Earth + sensor
+                    offset cancelled) -> the sheet-metal-PoC verification base.
 
 CHAIN (--chain {field_aware, nn})
 ---------------------------------

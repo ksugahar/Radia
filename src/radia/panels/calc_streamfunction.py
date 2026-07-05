@@ -2023,6 +2023,90 @@ def _flux_line_plot(chain, current, out_path, plane="y", half=None,
             "n_flux_lines": int(len(seeds))}
 
 
+def _scan_map_3component(chain, current, axn, plane_point, half, n):
+    """3-component (Bx,By,Bz) field of the single-stroke wire on a planar raster
+    scan -- the SIMULATION TWIN of a 3-axis magnetometer (TMR / fluxgate)
+    scanning a plane a standoff above the coil.
+
+    ``axn`` is the plane-normal axis (0/1/2); the field is sampled on the two
+    in-plane axes over a square (u, v) grid centred at ``plane_point``, half-
+    width ``half`` (m), ``n`` points per axis, at the physical drive ``current``
+    (A) (the field is linear in current, so this scales the whole map to the
+    bench current the sensor sees).  Returns the grid, the three Cartesian
+    components, and a homogeneity / transverse-leakage summary.
+
+    ``Bnormal`` is the component along the plane normal (the wanted uniform
+    field for a normal-aligned target); ``Bt`` is the in-plane transverse
+    magnitude a 3-axis sensor captures (single-stroke connector stray) that a
+    single-axis probe would miss."""
+    ia, ib = [c for c in (0, 1, 2) if c != axn]
+    u = np.linspace(-half, half, int(n))
+    v = np.linspace(-half, half, int(n))
+    U, V = np.meshgrid(u, v, indexing="ij")            # U[i,j]=u[i], V[i,j]=v[j]
+    obs = np.empty((U.size, 3))
+    obs[:, axn] = float(plane_point[axn])
+    obs[:, ia] = float(plane_point[ia]) + U.ravel()
+    obs[:, ib] = float(plane_point[ib]) + V.ravel()
+    B = _segment_field_B(np.asarray(chain, float), obs, float(current))
+    nn = int(n)
+    Bx = B[:, 0].reshape(nn, nn); By = B[:, 1].reshape(nn, nn)
+    Bz = B[:, 2].reshape(nn, nn)
+    Bn = B[:, axn].reshape(nn, nn)                      # along-normal (main)
+    Bt = np.hypot(B[:, ia], B[:, ib]).reshape(nn, nn)   # in-plane transverse
+    Bmag = np.linalg.norm(B, axis=1).reshape(nn, nn)
+    bn_mean = float(Bn.mean())
+    den = abs(bn_mean) + 1e-30
+    lbl = "xyz"
+    return {
+        "plane_normal": lbl[axn], "axis_u": lbl[ia], "axis_v": lbl[ib],
+        "plane_point_m": [float(p) for p in plane_point],
+        "half_m": float(half), "n": nn, "current_A": float(current),
+        # full grid + components (durable measurement-comparison artifact)
+        "grid_u_m": [float(x) for x in u],
+        "grid_v_m": [float(x) for x in v],
+        "Bx_T": Bx.tolist(), "By_T": By.tolist(), "Bz_T": Bz.tolist(),
+        # summary (rendered in the panel Output; full arrays are in scan_output)
+        "Bnormal_mean_T": bn_mean,
+        "Bnormal_min_T": float(Bn.min()), "Bnormal_max_T": float(Bn.max()),
+        "Bnormal_homogeneity_rms": float(np.sqrt(np.mean((Bn - bn_mean) ** 2))
+                                         / den),
+        "Bnormal_ptp_rel": float((Bn.max() - Bn.min()) / den),
+        "Bt_mean_T": float(Bt.mean()), "Bt_max_T": float(Bt.max()),
+        "Bt_over_Bn_max": float(Bt.max() / den),
+        "Bmag_mean_T": float(Bmag.mean()),
+        "Bmag_min_T": float(Bmag.min()), "Bmag_max_T": float(Bmag.max()),
+    }
+
+
+def _write_scan_map_json(path, args, scan):
+    """Persist the full 3-component scan map + provenance to committed JSON
+    (Data Persistence Policy: figure/result-backing data always saved next to
+    its driver, never left transient).  This is the file a measured 3-axis
+    scan (CSV, current-reversal averaged) is compared against."""
+    import json
+    import platform
+    from datetime import datetime, timezone
+    try:
+        import radia as _r
+        rv = getattr(_r, "__version__", None)
+    except Exception:                                  # noqa: BLE001
+        rv = None
+    doc = {
+        "artifact": "sf_scan_map_3component",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "radia_version": rv,
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "coil_vol": os.path.basename(args.coil_vol),
+        "eval_vol": os.path.basename(args.eval_vol),
+        "target_cf": args.target_cf,
+        "distort": bool(getattr(args, "distort", False)),
+    }
+    doc.update(scan)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(doc, f, indent=2, ensure_ascii=False)
+
+
 def _equal_3d(ax, pts):
     """Equal aspect box for a 3D axis around a point cloud."""
     pts = np.asarray(pts, float)
@@ -2452,6 +2536,8 @@ def run_manufacture(args):
     if getattr(args, "distort", False):
         _checks += [("distort_grid", 2, "control-grid points per axis"),
                     ("distort_iter", 1, "Gauss-Newton iterations")]
+    if getattr(args, "scan_map", False):
+        _checks += [("scan_n", 2, "raster points per axis (n x n grid)")]
     for _nm, _lo, _hint in _checks:
         _v = int(getattr(args, _nm, _lo))
         if _v < _lo:
@@ -2734,6 +2820,70 @@ def run_manufacture(args):
             })
         t3 = time.perf_counter()
 
+        if getattr(args, "scan_map", False):
+            # 3-component (Bx,By,Bz) planar raster scan of the DELIVERED wire --
+            # the simulation twin of a 3-axis magnetometer (TMR/fluxgate) scan.
+            # Matches a fixed sensor ARRAY or a single sensor on a moving stage
+            # (both sample the same grid); compare against a measured scan taken
+            # with current reversal (+-I averaged -> coil-only, Earth + sensor
+            # offset cancelled).
+            axn = {"x": 0, "y": 1, "z": 2}[args.scan_plane]
+            ia, ib = [c for c in (0, 1, 2) if c != axn]
+            coil_c = verts.mean(axis=0)
+            ev = np.asarray(P["mpts"], float)
+            ev_c = ev.mean(axis=0) if len(ev) else coil_c
+            # standoff along the normal from the coil centroid (default = the
+            # eval-region / DSV height: scan where the design cares)
+            if args.scan_standoff is not None:
+                standoff = float(args.scan_standoff)
+            else:
+                standoff = float(ev_c[axn] - coil_c[axn])
+            # in-plane half-width (default = eval-region in-plane half-extent)
+            if args.scan_half is not None:
+                half = float(args.scan_half)
+            elif len(ev):
+                half = 0.5 * float(max(ev[:, ia].max() - ev[:, ia].min(),
+                                       ev[:, ib].max() - ev[:, ib].min()))
+            else:
+                half = 0.0
+            if not (half > 0.0):                       # eval degenerate -> coil
+                half = 0.5 * float(max(verts[:, ia].max() - verts[:, ia].min(),
+                                       verts[:, ib].max() - verts[:, ib].min()))
+            if not (half > 0.0):
+                return {"method": "manufacture",
+                        "error": "--scan-map: could not derive a scan half-width "
+                                 "from the eval region or coil; pass --scan-half "
+                                 "(metres)"}
+            plane_point = ev_c.astype(float).copy()
+            plane_point[axn] = coil_c[axn] + standoff
+            scan_current = (float(args.scan_current)
+                            if args.scan_current is not None
+                            else float(result["best_fit_current_A"]))
+            scan = _scan_map_3component(out_chain, scan_current, axn,
+                                        plane_point, half, int(args.scan_n))
+            # Data Persistence: ALWAYS save the full grid + components.  Prefer
+            # next to --output (the panel's result dir); else next to the coil.
+            scan_path = (args.scan_output
+                         or (os.path.splitext(args.output)[0] + "_scanmap.json"
+                             if args.output
+                             else os.path.splitext(args.coil_vol)[0]
+                             + "_scanmap.json"))
+            _write_scan_map_json(scan_path, args, scan)
+            _big = ("Bx_T", "By_T", "Bz_T", "grid_u_m", "grid_v_m")
+            result["scan_map"] = {k: v for k, v in scan.items()
+                                  if k not in _big}
+            result["scan_map"]["scan_output"] = scan_path
+            result["scan_map"]["standoff_m"] = standoff
+            result["scan_map"]["note"] = (
+                "3-component planar scan of the delivered single-stroke wire at "
+                "current_A -- simulation twin of a 3-axis TMR/fluxgate scan. "
+                "Bnormal = along plane_normal (main uniform field); Bt = in-plane "
+                "transverse leakage a 3-axis sensor sees (single-stroke "
+                "connectors) that a 1-axis probe misses. Full grid saved to "
+                "scan_output; compare vs a measured +-I current-reversal scan.")
+            result["scan_map_output"] = scan_path
+        t_scan = time.perf_counter()
+
         if args.step_output:
             step_poly = [out_chain] if args.distort else loops
             _write_step_polylines(step_poly, args.step_output)
@@ -2817,6 +2967,7 @@ def run_manufacture(args):
         result["t_solve_s"] = round(t_psi - t1, 3)
         result["t_chain_s"] = round(t2 - t_psi, 3)
         result["t_distort_s"] = round(t3 - t2, 3)
+        result["t_scan_s"] = round(t_scan - t3, 3)
         result["t_total_s"] = round(time.perf_counter() - t0, 3)
     return result
 
@@ -2997,6 +3148,38 @@ def build_argparser():
     ap.add_argument("--steps-plot", default="",
                     help="per-step manufacturing PNG (contours -> single-stroke "
                          "-> sheet-metal -> with thickness) (manufacture)")
+    # ---- 3-component scan map (3-axis magnetometer twin) ----
+    ap.add_argument("--scan-map", action="store_true",
+                    help="MEASUREMENT TWIN (manufacture): 3-component (Bx,By,Bz) "
+                         "planar raster scan of the delivered single-stroke wire "
+                         "-- the simulation counterpart of a 3-axis magnetometer "
+                         "(TMR/fluxgate) scan. Emits Bnormal (main uniform field), "
+                         "Bt (in-plane transverse leakage from single-stroke "
+                         "connectors -- what a 1-axis probe misses), homogeneity, "
+                         "and saves the full grid to a JSON to compare against a "
+                         "measured +-I current-reversal scan.")
+    ap.add_argument("--scan-plane", choices=["x", "y", "z"], default="z",
+                    help="scan-plane normal axis (default z: an x-y plane above a "
+                         "planar coil). Bnormal is the component along this axis.")
+    ap.add_argument("--scan-standoff", type=float, default=None,
+                    help="scan-plane offset (m) along the normal from the coil "
+                         "centroid = the sensor standoff height. Default: the "
+                         "eval-region (DSV) height, so the scan sits where the "
+                         "design targets uniformity.")
+    ap.add_argument("--scan-half", type=float, default=None,
+                    help="scan half-width (m) in the two in-plane axes (square "
+                         "grid). Default: the eval-region in-plane half-extent "
+                         "(the DSV footprint).")
+    ap.add_argument("--scan-n", type=int, default=21,
+                    help="scan raster points per axis (n x n grid; default 21)")
+    ap.add_argument("--scan-current", type=float, default=None,
+                    help="physical drive current (A) the map is scaled to (field "
+                         "is linear in current). Default: the best-fit design "
+                         "current. Set the bench current to match the sensor "
+                         "reading directly.")
+    ap.add_argument("--scan-output", default="",
+                    help="JSON path for the full 3-component scan grid. Default: "
+                         "next to --output (<base>_scanmap.json).")
     # ---- active shielding ----
     ap.add_argument("--iron-vol", default=None,
                     help="iron/material .vol (iron region + 'kelvin' ball + "
