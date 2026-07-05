@@ -30,12 +30,217 @@ import cmath
 import math
 
 
+_NONBOUNDARY_PROBLEM_FAMILIES = {
+    "acoustic_trap_particle_streaming",
+    "saw_droplet_streaming",
+    "thermoviscous_radiation_force",
+    "thermoviscous_microphone",
+    "thermoacoustic_engine",
+    "acoustic_topology_optimization",
+    "thermoviscous_topology_optimization",
+    "room_hybrid_response",
+    "smart_speaker_impulse_response",
+    "ultrasonic_pipe_pulse_echo_rom",
+}
+
+_BOUNDARY_PROBLEM_FAMILIES = {
+    "absorbing_boundary",
+    "open_boundary",
+    "exterior_radiation_boundary",
+    "pml",
+    "port_boundary",
+    "impedance_boundary",
+    "kelvin_boundary",
+}
+
+
+def public_acoustic_nonboundary_problem_catalog():
+    """Return 10 public-safe acoustic teaching problems that are not BC topics.
+
+    The entries are distilled from public acoustics modeling articles and kept
+    solver-independent.  They are intended as a shared Gypsilab/readable-MATLAB
+    and radia-acoustic learning catalog: each case names the reduced physics,
+    the observable that should be saved, and the first validation gate.  Boundary
+    condition lessons are deliberately excluded; wave truncation policy remains
+    "high-order Zs, no PML" when an open wave problem later needs a closure.
+    """
+
+    cases = [
+        {
+            "id": "AC-NB-001",
+            "family": "acoustic_trap_particle_streaming",
+            "title": "Acoustic trap with Gor'kov potential, streaming, and particles",
+            "core_physics": ["piezoelectric drive", "pressure field", "radiation force", "streaming drag"],
+            "gypsilab_task": "P1 pressure field plus a particle-force post map; start with Gor'kov-potential observables.",
+            "radia_task": "Create an acoustic-trap manifest gate for pressure extrema, force direction, and particle equilibrium.",
+            "observable": "trap-center force sign and Gor'kov-potential minimum",
+            "validation_gate": "force points toward the pressure-node/antinode target prescribed by the particle contrast",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-002",
+            "family": "saw_droplet_streaming",
+            "title": "Surface-acoustic-wave-induced streaming in a droplet",
+            "core_physics": ["Rayleigh SAW", "droplet pressure field", "steady streaming", "contactless mixing"],
+            "gypsilab_task": "Represent the SAW as a source field and teach first-order acoustic energy to streaming forcing.",
+            "radia_task": "Add a reduced streaming-force manifest: wave direction, steady flow sign, and mixing observable.",
+            "observable": "streaming circulation sense and acoustic-energy localization",
+            "validation_gate": "streaming forcing is quadratic in first-order acoustic amplitude",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-003",
+            "family": "thermoviscous_radiation_force",
+            "title": "Thermoviscous acoustic radiation force on small particles",
+            "core_physics": ["first-order thermoviscous field", "second-order perturbation", "radiation force"],
+            "gypsilab_task": "Teach inviscid Gor'kov as the fast gate, then mark thermoviscous corrections as the heavy lane.",
+            "radia_task": "Gate force reports by first-order field provenance, particle contrast, and perturbation order.",
+            "observable": "radiation-force vector and Rayleigh-limit agreement",
+            "validation_gate": "lossless/Rayleigh limit reduces to the analytic Gor'kov force",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-004",
+            "family": "thermoviscous_microphone",
+            "title": "Small microphone with thermoviscous and electromechanical losses",
+            "core_physics": ["thermoviscous acoustics", "diaphragm mechanics", "electromechanical coupling"],
+            "gypsilab_task": "Keep a reduced lumped diaphragm plus thermoviscous duct/cavity teaching model.",
+            "radia_task": "Gate microphone manifests by acoustic compliance, mechanical resonance, and loss-channel identity.",
+            "observable": "frequency response and phase around diaphragm/cavity resonance",
+            "validation_gate": "adding viscothermal loss lowers Q without moving the low-frequency compliance limit",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-005",
+            "family": "thermoacoustic_engine",
+            "title": "Thermoacoustic engine: heat input to acoustic power",
+            "core_physics": ["temperature gradient", "thermoviscous wave", "traveling-wave energy conversion"],
+            "gypsilab_task": "Build a 1D readable thermoacoustic transfer-matrix or weak-form teaching gate.",
+            "radia_task": "Gate energy conversion by heat-work sign, acoustic power flux, and stack location metadata.",
+            "observable": "net acoustic power generated by the thermal stack",
+            "validation_gate": "power sign changes when the imposed temperature gradient is reversed",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-006",
+            "family": "acoustic_topology_optimization",
+            "title": "Acoustic topology optimization with density/bulk-modulus interpolation",
+            "core_physics": ["Helmholtz equation", "design variable", "density interpolation", "bulk-modulus interpolation"],
+            "gypsilab_task": "Use a tiny 2D/3D Helmholtz design field and save objective, constraint, and filter metadata.",
+            "radia_task": "Gate optimization artifacts by design-variable bounds, objective region, and material interpolation.",
+            "observable": "objective pressure in the observation region before/after optimization",
+            "validation_gate": "optimized objective improves while design variable remains in [0, 1]",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-007",
+            "family": "thermoviscous_topology_optimization",
+            "title": "Microacoustic topology optimization with thermoviscous losses",
+            "core_physics": ["microacoustic Helmholtz", "viscothermal loss", "design interpolation", "objective constraint"],
+            "gypsilab_task": "Teach a lossy equivalent-fluid objective before attempting full thermoviscous elements.",
+            "radia_task": "Gate lossy optimization by loss-model identity and objective-vs-loss tradeoff columns.",
+            "observable": "loss-aware acoustic objective and dissipated power proxy",
+            "validation_gate": "loss-aware design reports both objective and dissipated-power columns",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-008",
+            "family": "room_hybrid_response",
+            "title": "Room acoustics split into low-frequency wave and high-frequency statistics",
+            "core_physics": ["modal pressure acoustics", "ray acoustics", "diffusion/statistical acoustics"],
+            "gypsilab_task": "Create a Schroeder-split teaching manifest rather than forcing one solver to cover all bands.",
+            "radia_task": "Gate room artifacts by Schroeder frequency, low-band method, high-band method, and merge rule.",
+            "observable": "band-merged response or reverberation metric",
+            "validation_gate": "low/high frequency methods and transition frequency are explicitly recorded",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-009",
+            "family": "smart_speaker_impulse_response",
+            "title": "Small speaker room impulse response with FEM-to-ray source handoff",
+            "core_physics": ["near-field FEM source", "ray propagation", "impulse response", "receiver signal"],
+            "gypsilab_task": "Save source directivity/near-field data as the handoff artifact before room propagation.",
+            "radia_task": "Gate impulse-response artifacts by source-map provenance, receiver list, and time axis.",
+            "observable": "room impulse response at receiver points",
+            "validation_gate": "source-map id, receiver id, and time-step convention travel with the result",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+        {
+            "id": "AC-NB-010",
+            "family": "ultrasonic_pipe_pulse_echo_rom",
+            "title": "Ultrasonic pulse-echo pipe measurement with reduced-order replay",
+            "core_physics": ["time-explicit pulse", "elastic-acoustic coupling", "symmetry reduction", "receiver echo"],
+            "gypsilab_task": "Start with an axisymmetric or symmetry-reduced pulse/echo manifest and measured echo times.",
+            "radia_task": "Gate transient acoustic artifacts by pulse definition, material wave speeds, and echo windows.",
+            "observable": "arrival-time windows for incident, pipe-excited, and reflected pulses",
+            "validation_gate": "arrival windows are ordered by source-to-target-to-receiver travel time",
+            "not_boundary_problem": True,
+            "uses_pml": False,
+        },
+    ]
+    return {
+        "schema": "cae-ai-lab.public-acoustic-nonboundary-problem-catalog.v1",
+        "count": len(cases),
+        "boundary_topic_exclusion": sorted(_BOUNDARY_PROBLEM_FAMILIES),
+        "wave_truncation_policy": "high_order_zs_no_pml_when_open_wave_closure_is_needed",
+        "cases": cases,
+    }
+
+
+def acoustic_nonboundary_problem_catalog_manifest_gate(catalog, expected_count=10):
+    """Validate the 10-case non-boundary acoustic teaching catalog."""
+
+    if not isinstance(catalog, dict):
+        raise ValueError("catalog must be a dictionary")
+    cases = catalog.get("cases", [])
+    if not isinstance(cases, list):
+        cases = []
+
+    families = [str(case.get("family", "")).strip() for case in cases if isinstance(case, dict)]
+    ids = [str(case.get("id", "")).strip() for case in cases if isinstance(case, dict)]
+    checks = {
+        "schema_recorded": catalog.get("schema")
+        == "cae-ai-lab.public-acoustic-nonboundary-problem-catalog.v1",
+        "expected_count": len(cases) == int(expected_count),
+        "count_field_matches": catalog.get("count") == len(cases),
+        "ids_unique": len(ids) == len(set(ids)) and all(ids),
+        "families_unique": len(families) == len(set(families)) and all(families),
+        "all_families_nonboundary": all(f in _NONBOUNDARY_PROBLEM_FAMILIES for f in families),
+        "boundary_families_excluded": not any(f in _BOUNDARY_PROBLEM_FAMILIES for f in families),
+        "no_pml_cases": all(not bool(case.get("uses_pml", False)) for case in cases if isinstance(case, dict)),
+        "all_cases_marked_nonboundary": all(
+            bool(case.get("not_boundary_problem", False)) for case in cases if isinstance(case, dict)
+        ),
+        "gypsilab_tasks_recorded": all(str(case.get("gypsilab_task", "")).strip() for case in cases),
+        "radia_tasks_recorded": all(str(case.get("radia_task", "")).strip() for case in cases),
+        "observables_recorded": all(str(case.get("observable", "")).strip() for case in cases),
+        "validation_gates_recorded": all(str(case.get("validation_gate", "")).strip() for case in cases),
+        "wave_policy_keeps_high_order_zs": catalog.get("wave_truncation_policy")
+        == "high_order_zs_no_pml_when_open_wave_closure_is_needed",
+    }
+    return {
+        "schema": "cae-ai-lab.acoustic-nonboundary-problem-catalog-gate.v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "case_ids": ids,
+    }
+
+
 def acoustic_method_selection_manifest_gate(manifest, expected_problem_family=None):
     """Validate a public-safe acoustic method-selection lesson.
 
     The gate is intentionally solver-independent.  It captures reusable
-    acoustic modeling choices learned from public acoustics literature and blog
-    material, then applies the CAE-AI Lab wave-boundary policy: acoustic and
+    acoustic modeling choices learned from public acoustics literature and open
+    teaching material, then applies the CAE-AI Lab wave-boundary policy: acoustic and
     electromagnetic exterior/absorbing boundaries use high-order surface
     impedance ``Zs`` and do not use PML as the default validation route.  BEM is
     a frequency-domain exterior-radiation/open-boundary lane; acoustic-structure
@@ -172,7 +377,7 @@ def acoustic_method_selection_manifest_gate(manifest, expected_problem_family=No
         "checks": checks,
         "status": "ok" if all(checks.values()) else "needs_attention",
         "teaching_note": (
-            "Use this before promoting public acoustic blog/literature lessons "
+            "Use this before promoting public acoustic literature lessons "
             "into FEM/BEM examples: method family, domain, coupling, impedance, "
             "absorber reaction, and output schema identity must travel together."
         ),

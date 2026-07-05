@@ -21,6 +21,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     acoustic_impedance_radiation_pressure_summary,
     acoustic_impedance_from_dtn,
     acoustic_method_selection_manifest_gate,
+    acoustic_nonboundary_problem_catalog_manifest_gate,
     baffled_circular_piston_radiation,
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
@@ -28,6 +29,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     low_frequency_helmholtz_kernel_manifest_gate,
     planar_helmholtz_dtn_symbol,
     planar_mode_radiation_impedance,
+    public_acoustic_nonboundary_problem_catalog,
     pulsating_sphere_radiation,
     spherical_hankel2,
     spherical_helmholtz_dtn_eigenvalue,
@@ -35,7 +37,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
 )
 
 
-def test_acoustic_method_selection_gate_encodes_public_blog_lessons():
+def test_acoustic_method_selection_gate_encodes_public_modeling_lessons():
     exterior_bem = {
         "problem_family": "exterior_radiation",
         "primary_method": "bem",
@@ -137,6 +139,46 @@ def test_acoustic_method_selection_gate_encodes_public_blog_lessons():
     assert pml["status"] == "needs_attention"
     assert pml["checks"]["lab_wave_boundary_policy_is_high_order_zs"] is False
     assert pml["checks"]["pml_not_used"] is False
+
+
+def test_public_acoustic_nonboundary_problem_catalog_has_10_cross_learning_cases():
+    catalog = public_acoustic_nonboundary_problem_catalog()
+    gate = acoustic_nonboundary_problem_catalog_manifest_gate(catalog)
+
+    assert gate["status"] == "ok"
+    assert catalog["count"] == 10
+    assert gate["checks"]["all_families_nonboundary"] is True
+    assert gate["checks"]["boundary_families_excluded"] is True
+    assert gate["checks"]["no_pml_cases"] is True
+    assert gate["checks"]["gypsilab_tasks_recorded"] is True
+    assert gate["checks"]["radia_tasks_recorded"] is True
+    assert gate["checks"]["observables_recorded"] is True
+    assert gate["checks"]["validation_gates_recorded"] is True
+    assert catalog["wave_truncation_policy"] == "high_order_zs_no_pml_when_open_wave_closure_is_needed"
+
+    families = {case["family"] for case in catalog["cases"]}
+    assert "acoustic_trap_particle_streaming" in families
+    assert "thermoacoustic_engine" in families
+    assert "room_hybrid_response" in families
+    assert "ultrasonic_pipe_pulse_echo_rom" in families
+    assert "absorbing_boundary" not in families
+    assert "pml" not in families
+
+
+def test_acoustic_nonboundary_problem_catalog_gate_rejects_boundary_catalog():
+    catalog = public_acoustic_nonboundary_problem_catalog()
+    bad = dict(catalog)
+    bad["cases"] = [dict(case) for case in catalog["cases"]]
+    bad["cases"][0]["family"] = "absorbing_boundary"
+    bad["cases"][0]["uses_pml"] = True
+    bad["cases"][0]["not_boundary_problem"] = False
+
+    gate = acoustic_nonboundary_problem_catalog_manifest_gate(bad)
+    assert gate["status"] == "needs_attention"
+    assert gate["checks"]["all_families_nonboundary"] is False
+    assert gate["checks"]["boundary_families_excluded"] is False
+    assert gate["checks"]["no_pml_cases"] is False
+    assert gate["checks"]["all_cases_marked_nonboundary"] is False
 
 
 def test_acoustic_fembem_gmsh_artifact_gate_accepts_gypsilab_radia_contract():
