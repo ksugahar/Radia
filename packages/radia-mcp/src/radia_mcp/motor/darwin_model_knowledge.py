@@ -1,7 +1,7 @@
 """Darwin-model time-domain knowledge for radia_mcp.motor.
 
 Reference: Kaimori-Mifune-Kameari-Wakao, "Time-Domain Finite-Element
-Analysis of the Darwin Model with Coulomb-type Gauge", in W:/04_卒論
+Analysis of the Darwin Model with Coulomb-type Gauge", in public-safe curated corpus
 論文関係/2025年度/136_劉馨遙/モーター/.
 
 The Darwin model is the **A-φ formulation including displacement

@@ -160,6 +160,6 @@ def test_at_least_30_servers_runnable() -> None:
     assert runnable >= 30, (
         f"Only {runnable}/{len(SERVERS)} CLI scripts on PATH.  Probable "
         f"editable-install drift.  Fix with:\n"
-        f"  pip install -e S:/Radia/01_GitHub/packages/radia-mcp "
+        f"  pip install -e repo:/packages/radia-mcp "
         f"--no-deps --no-cache-dir"
     )

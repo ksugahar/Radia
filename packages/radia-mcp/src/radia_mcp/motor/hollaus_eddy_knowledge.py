@@ -914,7 +914,7 @@ for the implementation.
 ### Free / open-access status
 
 CC BY 4.0 (Emerald Publishing).  Full PDF lives at
-`W:/03_文献・論文/00_電磁界解析/MOR_モデル縮約/Karl_Hollaus/Effective
+`public-safe curated corpus
 material modelling for laminated iron cores with an A-formulation
 and circuit coupling.pdf` (16 pages, 3.9 MB).
 """

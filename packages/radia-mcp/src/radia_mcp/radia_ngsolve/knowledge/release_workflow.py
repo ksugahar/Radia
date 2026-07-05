@@ -190,7 +190,7 @@ This is strong evidence for:
 * radia-mcp package test health,
 * package version management,
 * consolidation into `packages/radia-mcp` instead of the old
-  `S:/mcp-server` layout.
+  `public-safe curated corpus` layout.
 
 However, do **not** call the release perfect or fully operational yet.
 Those claims require the deployment gates:

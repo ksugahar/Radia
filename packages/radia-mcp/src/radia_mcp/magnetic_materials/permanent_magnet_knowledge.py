@@ -46,7 +46,7 @@ NdFeB DROPS QUICKLY with temperature.  SmCo MUCH more stable.
 - du Trémolet de Lacheisserie, "Magnetism Vol II", Springer 2005
 
 ## Lab folder
-W:/磁気特性/04_永久磁石/FORC解析と永久磁石材料への適用.pdf — FORC
+public-safe curated corpus — FORC
 applied to PM characterisation (Mayergoyz Preisach formalism for
 intrinsic vs normal demag curve disentangling).
 """
@@ -161,7 +161,7 @@ For demag analysis (full PM demag not yet implemented; the MatMagCurve skeleton 
 
 ## Lab paper: FORC for PM characterisation
 
-`W:/磁気特性/04_永久磁石/FORC解析と永久磁石材料への適用.pdf`:
+`public-safe curated corpus`:
 FORC (First-Order Reversal Curves) measurement disentangles:
 - Reversible (recoil-line) component → μ_recoil
 - Irreversible (full demag) component → Preisach distribution

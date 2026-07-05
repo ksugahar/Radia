@@ -8,7 +8,7 @@ def test_gmsh_knowledge_records_zup_geo_opt_and_animation_export():
 
     assert "PowerShell `-string` quoting" in cli
     assert "Unknown variable 'W'" in cli
-    assert "Print 'W:/path/frame.png'; Exit;" in cli
+    assert "Print 'C:/temp/frame.png'; Exit;" in cli
 
     assert "Z-up x-z plane post view" in opt_file
     assert "General.RotationX = -68" in opt_file

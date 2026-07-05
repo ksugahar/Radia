@@ -1,7 +1,7 @@
 """presentation/pptx_drawing.py -- python-pptx wrappers for the lab
 PowerPoint-as-figure-editor workflow.
 
-Promoted on 2026-05-26 from `S:\\Python\\50_Office連携\\PowerPoint\\`
+Promoted on 2026-05-26 from `public-safe curated corpus`
 where the original 6 scripts lived (`ppt2png.py`, `作図.py`, `期末.py`,
 `正弦波.py`, `色をいろいろ.py`, `ppt2pdf.py`).  The originals used
 `win32com.client` (Windows-only, requires PowerPoint installed); the

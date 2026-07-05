@@ -1,6 +1,6 @@
 # Lab PowerPoint figure-creation scripts
 
-5 historical scripts from `S:\Python\50_Office連携\PowerPoint\`
+5 historical scripts from `public-safe curated corpus`
 (promoted into the presentation subpackage on 2026-05-26) that
 illustrate the lab's PowerPoint-as-figure-editor workflow.
 

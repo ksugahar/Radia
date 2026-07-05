@@ -6,8 +6,8 @@ SynRM topology optimization (Wakao 2025 autoencoder + LS), and the
 Darwin model time-domain solver (Kaimori-Mifune-Kameari-Wakao 2024).
 
 Distilled from:
-- S:/ONELAB/ElectricMachines/   (Sabariego-Gyselinck-Geuzaine)
-- W:/04_卒論論文関係/2025年度/136_劉馨遙/   (Liu Xinyao thesis)
+- public-safe curated corpus   (Sabariego-Gyselinck-Geuzaine)
+- public-safe curated corpus   (Liu Xinyao thesis)
 
 Usage:
     mcp-server-motor              # Start MCP server (stdio transport)
@@ -494,13 +494,14 @@ def motor_dual_lane_training_route(goal: str) -> str:
 @mcp.tool()
 def motor_triple_check_plan(goal: str) -> str:
     """
-    Plan an ELF-seeded radia-motor triple check.
+    Plan the standard radia-motor comparison.
 
     The plan uses the public ELF/MAGIC MCP surface for motor examples, the
-    supported `ngsolve_age` lane, the supported coarse `mmmm2d_coarse` lane,
-    and the experimental `hdiv_vim_reduced_fem` RFC lane.  The
+    supported `ngsolve_age` lane, and the experimental
+    `hdiv_vim_reduced_fem` lane as the mandatory comparison pair.  The
+    supported coarse `mmmm2d_coarse` lane is an auxiliary fast check.  The
     HDiv/reduced-FEM lane is not treated as a supported solver path until its
-    coupling contract is implemented.
+    coupling contract is implemented and solver-ready verification is attached.
 
     Args:
         goal: Natural-language motor goal, e.g.
@@ -512,7 +513,10 @@ def motor_triple_check_plan(goal: str) -> str:
 @mcp.tool()
 def motor_triple_check_artifact_gate(artifact_json: str) -> str:
     """
-    Validate a combined ELF-seeded AGE, MMMM, and HDiv-VIM/RFEM artifact.
+    Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact.
+
+    `ngsolve_age` and `hdiv_vim_reduced_fem` are mandatory for radia-motor
+    learning claims.  `mmmm2d_coarse` may be attached as an auxiliary lane.
 
     Args:
         artifact_json: JSON object text with schema
@@ -758,6 +762,7 @@ def main():
         assert "hdiv_vim_reduced_fem" in triple_plan
         assert "mmmm2d_coarse" in triple_plan
         assert "ngsolve_age" in triple_plan
+        assert "primary required lanes" in triple_plan
         lane_tpl = motor_validation_lane_template("hdiv_vim_reduced_fem")
         assert "vim_operator_contract" in lane_tpl
         mmmm_lane_tpl = motor_validation_lane_template("mmmm2d_coarse")
@@ -858,9 +863,11 @@ def main():
                 }
             )
         )
-        assert "accepted for MCP learning: `True`" in triple_gate
         assert "validated supported solver check: `True`" in triple_gate
         assert "validated dual solver check: `False`" in triple_gate
+        assert "accepted for supported MCP learning: `True`" in triple_gate
+        assert "accepted for MCP RFC learning: `True`" in triple_gate
+        assert "accepted for MCP learning: `False`" in triple_gate
         gate = motor_validation_artifact_gate(
             json.dumps(
                 age_selftest_artifact

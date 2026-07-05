@@ -6,7 +6,7 @@ Covers RNA/MEC techniques + lab Sugahara group (田中/羽根) lineage:
 - Dynamic hysteresis in MEC (lab core)
 - Topology optimization of magnetic actuators via RNA
 
-Distilled from W:/.../13_RNA/ (17 files, 45 MB).
+Distilled from public-safe curated corpus (17 files, 45 MB).
 """
 
 from .knowledge import get_knowledge

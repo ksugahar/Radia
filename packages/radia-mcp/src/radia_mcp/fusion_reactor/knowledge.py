@@ -1,7 +1,7 @@
 """Fusion magnet knowledge.
 
 Sourced from peer-reviewed papers and design reports archived at
-W:/03_文献・論文/00_電磁界解析/99_アプリケーション/08_核融合/.  Each
+public-safe curated corpus  Each
 topic constant ends with a "References" block listing the specific
 PDFs / journal articles used to populate it, so future contributors
 (and the AI assistant) can re-open the source instead of
@@ -179,7 +179,7 @@ following the 2024 baseline revision.
 | Correction coil sets     | 18 (6 top + 6 side + 6 bottom) |
 
 (Source: ITER Organization Public Web, JADA/QST "ITER計画" pamphlet
-W:/.../01_ITER/Iter計画.pdf)
+public-safe curated corpus)
 
 ## JT-60SA (Naka, Japan)
 
@@ -250,18 +250,18 @@ is genuinely useful for tokamak design.
 - ITER Organization Public Web (https://www.iter.org)
 - "ITER計画" pamphlet, QST / National Institutes for Quantum and
   Radiological Science (Naka), 2017
-  W:/.../01_ITER/Iter計画.pdf
+  public-safe curated corpus
 - Matsunaga, G. et al. "In-vessel coils for magnetic error field
   correction in JT-60SA" Fusion Eng. Des. 98-99 (2015) 1113-1117.
   doi:10.1016/j.fusengdes.2015.06.024
-  W:/.../research/InVesselCoils_JT60SA_ErrorField.pdf
+  public-safe curated corpus
 - Hender, T.C. et al. "Chapter 3: MHD stability, operational limits
   and disruptions" Nucl. Fusion 47 (2007) S128 -- canonical error
   field threshold reference (TMEI metric)
 - 2017 Ohm 12月号 "ITER特集" (Japanese review issue)
-  W:/.../01_ITER/2017_Ohm_12月号.pdf
+  public-safe curated corpus
 - 原型炉_誤差磁場_補正コイル_日立 (Hitachi DEMO error field study)
-  W:/.../research/原型炉_誤差磁場_補正コイル_日立.pdf
+  public-safe curated corpus
 
 ## Cross-references
 
@@ -306,7 +306,7 @@ QA / QH / QI by coil shaping.
 
 (Source: Landreman, Simons Summer School 2020; reviewed in
 Zhu et al. "Towards simpler coils for optimized stellarators"
-W:/.../research/Simpler_Coils_Stellarators.pdf)
+public-safe curated corpus)
 
 ## Stage-1 / Stage-2 optimization workflow
 
@@ -398,7 +398,7 @@ steel casing.  Coil position tolerance was 1 mm / 5 m, requiring
 the narrow support elements described in `w7x_modular`.
 
 (Source: Bosch et al. IEEE Trans. Plasma Sci. 38 (2010) 265,
-W:/.../11_三菱_モジュラー型/Construction of Wendelstein 7-X.pdf)
+public-safe curated corpus of Wendelstein 7-X.pdf)
 
 ## Other / next-generation stellarators
 
@@ -410,29 +410,29 @@ W:/.../11_三菱_モジュラー型/Construction of Wendelstein 7-X.pdf)
 - **Helicity / Type One / Renaissance Fusion** -- private-sector
   stellarator startups using simpler coils + HTS.  See
   `企業による核融合研究の最近の動向` (Japanese review of fusion
-  startups, W:/.../10_三菱_ヘリカル型/).
+  startups, public-safe curated corpus).
 
 ## References
 
 - Alexander, R. and Garabedian, P. "Choice of coils for a fusion
   reactor" PNAS 104 (2007) 12250-12252.
-  W:/.../research/Choice_of_coils_fusion.pdf
+  public-safe curated corpus
 - Zhu, C. et al. "Towards simpler coils for optimized stellarators"
   Talk slides (Princeton PPPL).
-  W:/.../research/Simpler_Coils_Stellarators.pdf
+  public-safe curated corpus
 - Zhu, C. et al. "New method to design stellarator coils without
   the winding surface" Nucl. Fusion 58 (2018) 016008 -- FOCUS code
 - Bosch, H.-S. et al. "Construction of Wendelstein 7-X -- Engineering
   a Steady-State Stellarator" IEEE Trans. Plasma Sci. 38 (2010) 265
-  W:/.../11_三菱_モジュラー型/Construction of Wendelstein 7-X.pdf
+  public-safe curated corpus of Wendelstein 7-X.pdf
 - LHDプラズマのモデリングと理論解析 (LHD plasma modelling and
   theoretical analysis), NIFS
-  W:/.../10_三菱_ヘリカル型/LHDプラズマのモデリングと理論解析.pdf
+  public-safe curated corpus
 - ヘリカル型核融合炉設計 (Helical fusion reactor design)
-  W:/.../10_三菱_ヘリカル型/ヘリカル型核融合炉設計.pdf
+  public-safe curated corpus
 - モジュラーコイルを用いたプラズマの閉じ込め (Plasma confinement
   using modular coils)
-  W:/.../11_三菱_モジュラー型/モジュラーコイルを用いたプラズマの閉じ込め.pdf
+  public-safe curated corpus
 
 ## Cross-references
 
@@ -566,7 +566,7 @@ See `sc_cable` topic for the NbTi vs Nb3Sn vs HTS trade-off.
 
 - ITER Organization Public Web (https://www.iter.org/mach)
 - "ITER計画" pamphlet, JADA / QST (2017)
-  W:/.../01_ITER/Iter計画.pdf
+  public-safe curated corpus
 - Mitchell, N. et al. "The ITER Magnet System" IEEE Trans. Appl.
   Supercond. 18 (2008) 435 -- canonical reference for ITER magnets
 - Devred, A. et al. "Status of ITER conductor development and
@@ -656,7 +656,7 @@ while permitting up to 5 mm relative sliding and 1 degree tilt
 during magnet energization.  300 NSE in total (3-7 per coil pair,
 depending on coil pair type).
 
-NSE design (Heinemann et al. 2006, W:/.../11_三菱_モジュラー型/
+NSE design (Heinemann et al. 2006, public-safe curated corpus
 Design of Narrow Support Elements...pdf):
 - Central pad: Al-bronze alloy (DIN 2.0966 / 2.0978), 60 mm or
   73 mm diameter depending on load class
@@ -766,20 +766,20 @@ shows you cannot generate the full B with magnets alone.
 
 - Bosch, H.-S. et al. "Construction of Wendelstein 7-X -- Engineering
   a Steady-State Stellarator" IEEE Trans. Plasma Sci. 38 (2010) 265
-  W:/.../11_三菱_モジュラー型/Construction of Wendelstein 7-X.pdf
+  public-safe curated corpus of Wendelstein 7-X.pdf
 - Heinemann, B. et al. "Design of Narrow Support Elements for Non
   Planar Coils of Wendelstein 7-X" Proc. 21st IEEE SOFE (2006)
-  W:/.../11_三菱_モジュラー型/Design of Narrow Support Elements...pdf
+  public-safe curated corpus of Narrow Support Elements...pdf
 - Bosch, H.-S. et al. "Final integration, commissioning and start
   of the Wendelstein 7-X stellarator operation" Nucl. Fusion 57
   (2017) 116015
 - Alternative conceptual design of a magnet support structure for
-  plasma fusion (W:/.../11_三菱_モジュラー型/Alternative.../...)
+  plasma fusion (public-safe curated corpus)
 - First operational phase of the superconducting magnet system of
-  W7-X (W:/.../11_三菱_モジュラー型/First operational phase...)
+  W7-X (public-safe curated corpus operational phase...)
 - Engineering Lessons Learned in the Assembly, Commissioning,
   Initial Operation and in the Further Upgrading of W7-X
-  (W:/.../11_三菱_モジュラー型/Engineering Lessons Learned...)
+  (public-safe curated corpus Lessons Learned...)
 """
 
 
@@ -850,7 +850,7 @@ Disadvantages:
 
 (Source: Iiyoshi et al. "Overview of the Large Helical Device
 project" Nucl. Fusion 39 (1999) 1245; "LHDプラズマのモデリングと
-理論解析" W:/.../10_三菱_ヘリカル型/)
+理論解析" public-safe curated corpus)
 
 ## Mitsubishi heliotron lineage
 
@@ -874,7 +874,7 @@ the Kameari method.
 
 ## References (Mitsubishi heliotron lineage folder)
 
-W:/.../10_三菱_ヘリカル型/:
+public-safe curated corpus
 - ヘリカル型核融合炉設計 (Helical fusion reactor design)
 - LHDプラズマのモデリングと理論解析 (LHD modelling)
 - 核融合科学研究所（仮称）設立と大型ヘリカル装置計画 (NIFS
@@ -1067,7 +1067,7 @@ between S and the plasma surface, so the inverse amplifies noise.
 Regularization: restrict to a small number of low-order coefficients,
 both in the plasma boundary description (b_{mn}) and in kappa.
 This is the "limited Fourier" approach of Alexander & Garabedian
-(PNAS 2007, W:/.../research/Choice_of_coils_fusion.pdf).
+(PNAS 2007, public-safe curated corpus).
 
 ## Design code lineage
 
@@ -1091,7 +1091,7 @@ FOCUS (Zhu, Hudson, Gates et al.) is the modern reference:
 - 36 users worldwide as of 2020 (PPPL distribution list)
 
 (Source: Zhu et al. "Towards simpler coils for optimized
-stellarators" slide deck, W:/.../research/Simpler_Coils_Stellarators.pdf;
+stellarators" slide deck, public-safe curated corpus;
 Zhu et al. Nucl. Fusion 58 (2018) 016008.)
 
 ## Objectives in FOCUS / REGCOIL
@@ -1349,7 +1349,7 @@ coil segments need tight tolerance and which can be relaxed --
   and disruptions" Nucl. Fusion 47 (2007) S128 -- TMEI metric
 - Matsunaga, G. et al. "In-vessel coils for magnetic error field
   correction in JT-60SA" Fusion Eng. Des. 98-99 (2015) 1113-1117
-  W:/.../research/InVesselCoils_JT60SA_ErrorField.pdf
+  public-safe curated corpus
 - Knaster, J. et al. "Assessment of the JT-60SA error field and
   correction" Fusion Eng. Des. 86 (2011) 1053
 - Park, J.-K. et al. "Computation of three-dimensional tokamak and
@@ -1358,7 +1358,7 @@ coil segments need tight tolerance and which can be relaxed --
   field sensitivity to coil deviations" Plasma Phys. Control.
   Fusion 60 (2018) 054016
 - 原型炉_誤差磁場_補正コイル_日立 (Hitachi DEMO error field study)
-  W:/.../research/原型炉_誤差磁場_補正コイル_日立.pdf
+  public-safe curated corpus
 
 ## Cross-references
 
@@ -1425,7 +1425,7 @@ prohibitive for N > ~10000 DOF.
 Villone "A Fast Matrix Compression Method for Large Scale Numerical
 Modelling of Rotationally Symmetric 3D Passive Structures in
 Fusion Devices" Energies 15 (2022) 3214.
-W:/.../research/FastMatrixCompression_Fusion_3D.pdf)
+public-safe curated corpus)
 
 ### Thin-conductor current-function formulation (Kameari 1981)
 
@@ -1454,7 +1454,7 @@ eddy-current analysis of thin shells in modern devices.
 (Source: Kameari "Transient Eddy Current Analysis on Thin
 Conductors with Arbitrary Connections and Shapes" J. Comput. Phys.
 42 (1981) 124-140.
-W:/.../research/Transient_Eddy_Thin_Conductors.pdf)
+public-safe curated corpus)
 
 ### Boundary conditions
 - Conductors are insulated from each other except at junctions
@@ -1535,7 +1535,7 @@ hot spots.
 - Kameari, A. "Transient Eddy Current Analysis on Thin Conductors
   with Arbitrary Connections and Shapes" J. Comput. Phys. 42
   (1981) 124-140
-  W:/.../research/Transient_Eddy_Thin_Conductors.pdf
+  public-safe curated corpus
 - Bossavit, A. "Computational Electromagnetism" Academic Press
   (1998) -- canonical text, chapter on the T-Omega formulation
 - Albanese, R. and Rubinacci, G. "Integral formulation for 3D
@@ -1544,7 +1544,7 @@ hot spots.
 - Cau, F. et al. "A Fast Matrix Compression Method for Large Scale
   Numerical Modelling of Rotationally Symmetric 3D Passive
   Structures in Fusion Devices" Energies 15 (2022) 3214
-  W:/.../research/FastMatrixCompression_Fusion_3D.pdf
+  public-safe curated corpus
 - Hammerschmid, D. et al. "Transient eddy current and force
   analysis for ITER" Fusion Eng. Des. 86 (2011) 1808 -- ITER
   VDE benchmark
@@ -1612,7 +1612,7 @@ field (m/n = 1/1, 2/1, 3/1) or a higher-n RMP (n = 3 typically).
 ## n = 3 ELM control on JT-60SA
 
 (Source: Matsunaga et al. Fusion Eng. Des. 98-99 (2015) 1113-1117,
-W:/.../research/InVesselCoils_JT60SA_ErrorField.pdf)
+public-safe curated corpus)
 
 JT-60SA EFCC for ELM control:
 - n = 3 toroidal mode (3 sets of co-phased coils around the torus)
@@ -1689,7 +1689,7 @@ strategy, with pellet pacing as backup.
   47 (2007) S1 -- ITER physics basis chapter on ELMs
 - Matsunaga, G. et al. "In-vessel coils for magnetic error field
   correction in JT-60SA" Fusion Eng. Des. 98-99 (2015) 1113-1117
-  W:/.../research/InVesselCoils_JT60SA_ErrorField.pdf -- dual-use
+  public-safe curated corpus -- dual-use
   EFCC for error correction + RMP ELM control
 - Suzuki, Y. et al. (IAEA-CN-221 TH/P 7-37, 2014) -- RMP-induced
   field structure analysis for JT-60SA

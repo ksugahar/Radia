@@ -370,8 +370,8 @@ Module: `radia_mcp.motor.server`
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: MMMM / HDiv-VIM soft-iron demag + the SHARED |
 | `motor_status` | (no description) |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
-| `motor_triple_check_artifact_gate` | Validate a combined ELF-seeded AGE, MMMM, and HDiv-VIM/RFEM artifact. |
-| `motor_triple_check_plan` | Plan an ELF-seeded radia-motor triple check. |
+| `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact. |
+| `motor_triple_check_plan` | Plan the standard radia-motor comparison. |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
 | `motor_validation_artifact_gate` | Check whether a motor cross-validation artifact can train radia-motor. |
 | `motor_validation_lane_template` | Return the JSON artifact template for a motor validation lane. |
@@ -957,7 +957,7 @@ Module: `radia_mcp.poster.server`
 
 ## `mcp-server-literature-index`
 
-_★ Meta-MCP: full-text search across 3,889 lab literature files in W:/00_電磁界解析_
+_★ Meta-MCP: full-text search across 3,889 lab literature files in public-safe curated corpus_
 
 Module: `radia_mcp.literature_index.server`
 

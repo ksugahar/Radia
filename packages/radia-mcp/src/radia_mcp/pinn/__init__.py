@@ -21,6 +21,6 @@ Distilled from:
   - Raissi 2017 (PI-GP foundation), 2019 (PINN foundation)
   - Pförtner et al 2023 (PI-GP generalizes linear PDE solvers)
   - Henderson 2023 (wave equation PI-GP)
-  - W:\\03_文献・論文\\04_機械学習と最適化\\Physics-Informed Neural Network\\
-  - W:\\03_文献・論文\\04_機械学習と最適化\\ガウス過程回帰\\Physics_informed\\
+  - public-safe curated corpus Neural Network\\
+  - public-safe curated corpus
 """

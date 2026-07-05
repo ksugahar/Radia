@@ -208,7 +208,7 @@ Update at each step:
 where w = inertia (0.7-0.9), c1 = c2 = 2 (cognitive + social),
 r1, r2 = U(0,1) random.
 
-## Lab PSO variants (W:/.../02_最適化_進化計算/)
+## Lab PSO variants (public-safe curated corpus)
 
 | Paper | Variant | Key idea |
 |-------|---------|----------|
@@ -371,7 +371,7 @@ Inspired by biological immune system: B-cells (antibodies) bind to
 antigens (objective). Clonal selection: high-affinity antibodies
 clone and mutate; low-affinity die.
 
-Lab papers (W:/.../02_最適化_進化計算/):
+Lab papers (public-safe curated corpus):
 - `免疫アルゴリズムによる多峰性関数最適化.pdf`
 - `改良型免疫アルゴリズムによる多峰性関数の大域的最大値の探索.pdf`
 

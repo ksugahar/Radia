@@ -4,7 +4,7 @@ Adapted from wjc9011/COMSOL_Multiphysics_MCP src/knowledge/retriever.py
 which uses the same stack to index 75 COMSOL official PDFs (~500MB)
 into a persistent ChromaDB store, then expose semantic search to LLMs.
 
-For radia_mcp the target corpus is W:/03_文献・論文/00_電磁界解析/
+For radia_mcp the target corpus is public-safe curated corpus
 (3,889 files / 51 GB) plus the freshly-organized 04_機械学習と最適化/.
 
 Optional dependencies (graceful degradation if missing):
@@ -517,7 +517,7 @@ def extract_pdf_chunks(
             fall back to ``detect_filename_language(pdf_path.name)``.
             Useful for mixed-language collections (the radia-mcp lab
             corpus is roughly 50/50 English papers + Japanese
-            textbooks side by side under W:/03_文献・論文).
+            textbooks side by side under public-safe curated corpus).
 
     Requires `pymupdf` (a.k.a. `fitz`).
 

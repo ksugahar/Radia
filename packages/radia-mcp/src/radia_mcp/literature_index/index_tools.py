@@ -1,13 +1,14 @@
-"""Index + search tools for W:/03_文献・論文/00_電磁界解析/."""
+"""Index + search tools for a user-provided literature corpus."""
 import json
 import os
 from pathlib import Path
 from typing import Optional
 
-# Source root. Defaults to the Sugahara-Lab NAS path; override with
-# RADIA_LIT_ROOT so the server works on any machine (degrades gracefully
-# to an empty index when the corpus is absent -- see _build_index).
-LIT_ROOT = Path(os.environ.get("RADIA_LIT_ROOT", r"W:\03_文献・論文\00_電磁界解析"))
+# Source root. Public wheels do not embed lab-local NAS paths.  Set
+# RADIA_LIT_ROOT explicitly on machines that own a literature corpus; otherwise
+# the index degrades gracefully to empty.
+_LIT_ROOT_RAW = os.environ.get("RADIA_LIT_ROOT", "")
+LIT_ROOT = Path(_LIT_ROOT_RAW) if _LIT_ROOT_RAW else Path("__RADIA_LIT_ROOT_NOT_SET__")
 
 # Cache location
 CACHE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".cache"))) / "radia_mcp_literature_index"
@@ -76,7 +77,7 @@ def lit_search(query: str, limit: int = 30, folder_filter: Optional[str] = None)
     idx = _load_or_build_index()
     if not idx:
         return ("No index available. Run with query='rebuild' to scan "
-                f"{LIT_ROOT}. Note: W: drive must be accessible.")
+                f"{LIT_ROOT}. Note: the configured literature root must be accessible.")
 
     kws = [k.lower() for k in query.split() if k.strip()]
     if not kws:

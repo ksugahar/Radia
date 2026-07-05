@@ -15,7 +15,7 @@ Usage:
     mcp-server-electromagnet              # Start MCP server (stdio transport)
     mcp-server-electromagnet --selftest   # Run self-test
 
-Promoted from s:/mcp-server/mcp-server-electromagnet/ to public
+Promoted from legacy private source tree to public
 radia-mcp on 2026-04-24 (single Radia monorepo).  General Kelvin
 and NGSolve/BEM knowledge live in radia_mcp.radia_ngsolve.*; this
 subpackage holds electromagnet-specific topics (CoilBuilder,

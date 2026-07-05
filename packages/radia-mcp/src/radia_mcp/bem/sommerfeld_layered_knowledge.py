@@ -1,7 +1,7 @@
 """Sommerfeld integral / layered-medium Green's function knowledge module.
 
 Absorbed 2026-05-26 from
-``W:\\03_文献・論文\\00_電磁界解析\\11_BEM_モーメント法\\10_sommerfeld_layered\\``
+``public-safe curated corpus``
 (3 PDFs):
 
   1. ``Sommerfeld_Integral_Weyl_Identity.pdf`` -- Chew lecture notes (lecture

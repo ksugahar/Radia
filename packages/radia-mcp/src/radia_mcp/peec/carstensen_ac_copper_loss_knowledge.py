@@ -6,7 +6,7 @@ Switched Reluctance Machines", PhD dissertation, RWTH Aachen ISEA
 Chapter 3 (Fundamentals of Analytic Eddy Current Loss Calculation).
 
 Lab library path:
-  W:/03_文献・論文/00_電磁界解析/MOR_モデル縮約/Eddy_Currents/
+  public-safe curated corpus
     Eddy Currents in Windings of Switched Reluctance Machines.pdf
   (187 pages, full PhD monograph)
 

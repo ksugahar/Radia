@@ -2,7 +2,7 @@
 for electromagnetic FEM — knowledge module for radia_mcp.fem.
 
 Source folder (Sugahara Lab curated, 33+ PDFs, 6 subcategories):
-    W:/03_文献・論文/00_電磁界解析/15_非接合/
+    public-safe curated corpus
 
 The folder organizes literature for the "HFSS Mesh Fusion"-style problem:
 how to independently mesh multiple regions of an EM model and couple
@@ -24,14 +24,14 @@ KEY DISAMBIGUATION — two senses of "nonconforming":
 This module is about the **second** meaning (mesh-coupling).  XFEM
 (trial-space enrichment within a single mesh) is a separate lineage —
 see radia_mcp.fem.xfem_em_hiruma_knowledge and
-W:/03_文献・論文/00_電磁界解析/Hiruma_XFEM_CLN/.
+public-safe curated corpus
 """
 
 # Reference: source folder organization
 _FOLDER_LAYOUT = r"""
 # Source folder layout
 
-W:/03_文献・論文/00_電磁界解析/15_非接合/
+public-safe curated corpus
 
   00_overview/                  4 PDFs   Concept introduction, mixed FE
   01_mortar_nitsche/           12 PDFs   Mortar + Nitsche-type coupling
@@ -698,7 +698,7 @@ crosses the "more rotor angles needed" threshold.
 _BIBLIOGRAPHY = r"""
 # Bibliography — 33 PDFs by category (catalog 2026-05-26)
 
-All PDFs at W:/03_文献・論文/00_電磁界解析/15_非接合/<subfolder>/.
+All PDFs at public-safe curated corpus
 
 ## 00_overview (4)
 - Non-conforming Finite Elements (Compumag Newsletter 2018-11)

@@ -2,7 +2,7 @@
 
 Litz wire + transmission line knowledge for high-frequency conductor analysis.
 
-Distilled from W:/.../39_部品材料/02_リッツ線/ (44 files) + 03_伝送線路/ (22 files).
+Distilled from public-safe curated corpus (44 files) + 03_伝送線路/ (22 files).
 
 Cross-references:
 - `radia_mcp.peec.carstensen_ac_copper_loss` — Carstensen AC loss

@@ -17,7 +17,7 @@ length, and a one-line orientation.
 Academic Press, 1998, ISBN 0-12-118710-1.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   Computational Electromagnetism\\
   {01Preface,02Contents,1..9,A,B,C}.pdf
 
@@ -34,7 +34,7 @@ calculus, homological techniques, and applications", Acta Numerica
 15 (2006), pp. 1-155. doi:10.1017/S0962492906210018.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   コホモロジー\\Finite element exterior calculus, homological
   techniques, and applications.pdf
 
@@ -50,9 +50,9 @@ Informs: feec, basics (§2 exterior algebra), de_rham, whitney
 ## 3. 微分形式.pdf  (lecture notes / monograph, Japanese)
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   コホモロジー\\微分形式.pdf
-  (Moved 2026-05-20 from W:\\03_文献・論文\\02_数学\\微分幾何\\ to
+  (Moved 2026-05-20 from public-safe curated corpus to
    consolidate cohomology / forms literature in one place.  Sibling
    papers in the same folder: 微分形式とその外微分.pdf, 微分形式とその積分.pdf,
    微分幾何講義.pdf, 位相解析の基礎.pdf.)
@@ -71,7 +71,7 @@ Informs: basics (entire), maxwell (§6 Maxwell-as-forms, §7 Hodge).
 SA-11-013 / RM-11-013, 電気学会静止器・回転機合同研究会, 2011.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   コホモロジー\\(2011) 亀有、辺要素を巡ってー「張力」って？－、SA-11-013,
   RM-11-013.pdf
   (Moved 2026-05-20 from .../Bossavit/ to consolidate cohomology
@@ -104,7 +104,7 @@ and Differential Forms", Internet Publications Ltd, New York, 2023.
 ISBN 9798398260243.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   コホモロジー\\Exterior Calculs.pdf
 
 Pages: 474
@@ -124,7 +124,7 @@ Informs: bibliography only (referenced as background textbook).
 Physics 2".
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\10_電磁気学・物理基礎\\
+  public-safe curated corpus
   洋書・専門\\電磁気学とベクトル解析.pdf
 
 Pages: 315
@@ -139,7 +139,7 @@ Informs: bibliography only (referenced as background).
 "新しい計算電磁気学 [基礎と数理]", 培風館, 2003.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   新しい計算電磁気学.pdf
 
 Pages: 307
@@ -174,7 +174,7 @@ Informs: whitney (higher-order, non-simplex), de_rham (orientation
 FIT and FEM Approaches", IEEE Trans. Magn. 36 (4), 2000, pp. 861-867.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   コホモロジー\\Yee Like Schemes on Staggered Cellular Grids A
   Synthesis Between DIT and FEM Approaches.pdf
 
@@ -200,7 +200,7 @@ Relevance: Convergence analysis for staggered cellular Yee-like
 Journal of Computational Physics 229 (2010), pp. 7401-7410.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   コホモロジー\\A new set of basis functions for the discrete
   geometric approach.pdf
 
@@ -229,7 +229,7 @@ Informs: whitney ("Whitney for non-simplices"),
 continuous medium", ICS Newsletter (post-2004), 7 pp.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\01_教科書\\00_有限要素法・数値解析\\
+  public-safe curated corpus
   Bossavit\\Handbook for the computation of electromagnetic forces
   in a continuous medium.pdf
 
@@ -256,7 +256,7 @@ electromagnetic force field in deformable bodies", IJAEM 2:333-343,
 1992.
 
 Path:
-  (Not directly stored in W:\\.  Cited via Bossavit-Henrotte 2004
+  (Not directly stored in public-safe curated corpus  Cited via Bossavit-Henrotte 2004
   Handbook reference list.)
 
 Language: English
@@ -273,7 +273,7 @@ International Journal of Applied Electromagnetics in Materials
 (IJAEM), Vol. 3, pp. 231-240, 1993.
 
 Path:
-  (Not directly stored in W:\\ — bibliographic reference only.
+  (Not directly stored in public-safe curated corpus — bibliographic reference only.
   Cited as Ref [12] in Bossavit-Henrotte 2004 Handbook.)
 
 Language: English
@@ -294,7 +294,7 @@ IEEJ Static Apparatus & Rotating Machinery joint study group,
 August 1997.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\FEMの定式化\\辺要素\\
+  public-safe curated corpus
   (1997) 亀有、有限要素法電磁気解析における種々な手法のアイデア,
   SA-97-6_RM-97-65.pdf
 
@@ -315,7 +315,7 @@ Informs: whitney (Kikko symmetric high-order element).
 IEEE Trans. Magn. 40(2):553-556, March 2004.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\電磁力\\
+  public-safe curated corpus
   Electromagnetic Force Density in a Ferromagnetic Material.pdf
 
 Pages: 4
@@ -330,7 +330,7 @@ EM forces in iron.  Key reference for `forces('henrotte_ferromagnetic')`.
 ## 16. TEAM Workshop Problems (force benchmarks)
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\ベンチマーク問題(TEAM)\\
+  public-safe curated corpus)\\
     problem20_3-D Static Force Problem.pdf           (13 pp)
     problem23_Forces in Permanent Magnets.pdf         (8 pp)
     problem-33b_V3_Experimental Validation of Electric Local
@@ -349,7 +349,7 @@ SA-20-003 (magnetostatic) / SA-20-034 (eddy current),
 IEEJ Static Apparatus & Rotating Machinery joint study group, 2020.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\電磁力\\ニ段階誤差補正\\
+  public-safe curated corpus
     SA-20-003_ニ段階誤差補正による有限要素法に基づく電磁力解析の計算
     精度改善に関する検討.pdf  (12 pp)
     SA-20-034_誤差補正による時間領域渦電流解析から得られる電磁力の
@@ -367,7 +367,7 @@ eddy current (SA-20-034).  Distilled into `forces('error_correction')`.
 IEEE Trans. Magn. 28(2):1450-1453, March 1992.
 
 Path:
-  W:\\03_文献・論文\\00_電磁界解析\\電磁力\\
+  public-safe curated corpus
   Analysis_of_eddy_current_and_force_in_conductors_with_motion.pdf
 
 Pages: 4
@@ -383,7 +383,7 @@ into `forces('kameari_eddy_current')`.
 IEEE Trans. Magn. 44(6):682-685, June 2008.
 
 Path:
-  S:\\ngsolve\\01_菅原\\2024_05_Hiptmair_Problem\\
+  public-safe curated corpus
   A Robust Maxwell Formulation for All Frequencies.pdf
 
 Pages: 4
@@ -405,7 +405,7 @@ Plus the Gangl PhD thesis:
    Magnetostatics, Part II (Numerics)" — 51 pp
 
 Path:
-  S:\\ngsolve\\03_TolologyOptimization\\
+  public-safe curated corpus
   Shape and Topology Optimization subject to 3D Nonlinear
   Magnetostatics Part 1 sensitivity analysis.pdf
   Part II Numerics.pdf

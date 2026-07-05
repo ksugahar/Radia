@@ -67,7 +67,96 @@ from .panel_describer import (
 
 mcp = FastMCP("mcp-server-radia-ngsolve")
 
-PROJECT_ROOT = Path.cwd()
+PACKAGE_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = PACKAGE_ROOT.parent.parent if PACKAGE_ROOT.parent.name == "packages" else PACKAGE_ROOT
+PROJECT_ROOT = PACKAGE_ROOT
+MAX_LINT_FILE_BYTES = 2_000_000
+MAX_LINT_DIRECTORY_FILES = 300
+
+
+def _is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+def _lint_allowed_roots() -> tuple[Path, ...]:
+    """Roots that MCP lint tools may inspect.
+
+    Public MCP operation must not become a local-file oracle.  By default the
+    linter can inspect only this package.  Advanced local use can opt in to
+    extra roots with RADIA_MCP_LINT_ROOTS, separated by os.pathsep.
+    """
+    roots = [PACKAGE_ROOT]
+    extra = os.environ.get("RADIA_MCP_LINT_ROOTS", "")
+    for raw in extra.split(os.pathsep):
+        raw = raw.strip()
+        if raw:
+            roots.append(Path(raw).expanduser())
+    resolved: list[Path] = []
+    for root in roots:
+        try:
+            resolved.append(root.resolve())
+        except OSError:
+            continue
+    return tuple(dict.fromkeys(resolved))
+
+
+def _resolve_lint_path(value: str) -> Path:
+    p = Path(value).expanduser()
+    if p.is_absolute():
+        return p.resolve(strict=False)
+
+    parts_lower = tuple(part.lower() for part in p.parts)
+    if parts_lower[:2] == ("packages", "radia-mcp"):
+        return (REPO_ROOT / p).resolve(strict=False)
+    if parts_lower[:1] == ("radia-mcp",):
+        return (PACKAGE_ROOT.parent / p).resolve(strict=False)
+
+    candidates = [PROJECT_ROOT / p, REPO_ROOT / p, PACKAGE_ROOT.parent / p]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve(strict=False)
+    return candidates[0].resolve(strict=False)
+
+
+def _lint_path_allowed(path: Path) -> bool:
+    return any(_is_relative_to(path, root) for root in _lint_allowed_roots())
+
+
+def _lint_display_path(path: Path) -> str:
+    try:
+        resolved = path.resolve(strict=False)
+    except OSError:
+        resolved = path
+    if _is_relative_to(resolved, REPO_ROOT):
+        return "repo:/" + resolved.relative_to(REPO_ROOT).as_posix()
+    for idx, root in enumerate(_lint_allowed_roots()):
+        if _is_relative_to(resolved, root):
+            rel = resolved.relative_to(root).as_posix()
+            prefix = "package-root" if root == PACKAGE_ROOT else f"allowed-root-{idx}"
+            return f"{prefix}:/{rel}" if rel != "." else f"{prefix}:/"
+    return "<outside allowed lint roots>"
+
+
+def _lint_display_roots() -> str:
+    labels = []
+    for idx, root in enumerate(_lint_allowed_roots()):
+        if _is_relative_to(root, REPO_ROOT):
+            labels.append("repo:/" + root.relative_to(REPO_ROOT).as_posix())
+        else:
+            labels.append("package-root" if root == PACKAGE_ROOT else f"allowed-root-{idx}")
+    return ", ".join(dict.fromkeys(labels))
+
+
+def _lint_denied(path: Path) -> str:
+    return (
+        f"Error: Access denied: {_lint_display_path(path)}. "
+        "Allowed lint roots are: "
+        f"{_lint_display_roots()}. Set RADIA_MCP_LINT_ROOTS to opt in to another project root."
+    )
 
 
 def _lint_file(filepath: str) -> list[dict]:
@@ -136,17 +225,25 @@ def lint_radia_script(filepath: str) -> str:
     Args:
         filepath: Absolute or relative path to the Python file to check.
     """
-    p = Path(filepath)
-    if not p.is_absolute():
-        p = PROJECT_ROOT / p
+    p = _resolve_lint_path(filepath)
 
+    if not _lint_path_allowed(p):
+        return _lint_denied(p)
     if not p.exists():
-        return f"Error: File not found: {p}"
+        return f"Error: File not found: {_lint_display_path(p)}"
     if not p.suffix == '.py':
-        return f"Error: Not a Python file: {p}"
+        return f"Error: Not a Python file: {_lint_display_path(p)}"
+    try:
+        if p.stat().st_size > MAX_LINT_FILE_BYTES:
+            return (
+                f"Error: File too large for MCP lint: {_lint_display_path(p)} "
+                f"({p.stat().st_size} bytes > {MAX_LINT_FILE_BYTES})."
+            )
+    except OSError as exc:
+        return f"Error: Cannot stat file: {_lint_display_path(p)} ({exc.__class__.__name__})."
 
     findings = _lint_file(str(p))
-    return _format_findings(str(p), findings)
+    return _format_findings(_lint_display_path(p), findings)
 
 
 @mcp.tool()
@@ -159,13 +256,28 @@ def lint_radia_directory(directory: str = ".") -> str:
     Args:
         directory: Directory path (default: current directory).
     """
-    d = Path(directory)
-    if not d.is_absolute():
-        d = PROJECT_ROOT / d
+    d = _resolve_lint_path(directory)
+    if not _lint_path_allowed(d):
+        return _lint_denied(d)
     if not d.exists():
-        return f"Error: Directory not found: {d}"
+        return f"Error: Directory not found: {_lint_display_path(d)}"
 
-    py_files = sorted(d.rglob("*.py"))
+    py_files = []
+    for py_file in sorted(d.rglob("*.py")):
+        resolved = py_file.resolve(strict=False)
+        if not _lint_path_allowed(resolved):
+            return _lint_denied(resolved)
+        try:
+            if resolved.stat().st_size > MAX_LINT_FILE_BYTES:
+                continue
+        except OSError:
+            continue
+        py_files.append(resolved)
+        if len(py_files) > MAX_LINT_DIRECTORY_FILES:
+            return (
+                f"Error: Too many Python files for MCP lint: more than "
+                f"{MAX_LINT_DIRECTORY_FILES} under {_lint_display_path(d)}."
+            )
     if not py_files:
         return f"No Python files found in {directory}."
 
@@ -177,8 +289,7 @@ def lint_radia_directory(directory: str = ".") -> str:
         findings = _lint_file(str(py_file))
         if findings:
             total_findings += len(findings)
-            rel_path = py_file.relative_to(PROJECT_ROOT) if py_file.is_relative_to(PROJECT_ROOT) else py_file
-            file_results.append(_format_findings(str(rel_path), findings))
+            file_results.append(_format_findings(_lint_display_path(py_file), findings))
             for f in findings:
                 sev = f['severity']
                 if sev in summary_by_severity:

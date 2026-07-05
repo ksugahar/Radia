@@ -15,7 +15,7 @@ Usage:
     mcp-server-peec              # Start MCP server (stdio transport)
     mcp-server-peec --selftest   # Run self-test
 
-Promoted from s:/mcp-server/mcp-server-peec/ to public radia-mcp on
+Promoted from legacy private source tree to public radia-mcp on
 2026-04-24 (single Radia monorepo).  General PEEC inductance formulae
 live in radia_mcp.radia_ngsolve.peec_inductance_knowledge; this
 subpackage holds the LAB PEEC workflow (Loop-Star, FastHenry parsing,
@@ -48,7 +48,7 @@ def peec_carstensen_ac_loss(topic: str = "motivation") -> str:
 
     Reference: C. Carstensen, "Eddy Currents in Windings of Switched
     Reluctance Machines", PhD diss., RWTH Aachen ISEA, 2007 (187p).
-    Lab library: W:/03_文献・論文/00_電磁界解析/MOR_モデル縮約/Eddy_Currents/
+    Lab library: public-safe curated corpus
 
     Args:
         topic: One of:
@@ -109,7 +109,7 @@ def peec_hoibc(topic: str = "vs_sibc_decision") -> str:
       - Coil end-regions with sharp curvature
     you need HIGHER ORDER (Mitzner correction or beyond).
 
-    Reference papers (W:/03_文献・論文/00_電磁界解析/SIBC/03_HOIBC/):
+    Reference papers (public-safe curated corpus):
       - Course G2ELab 2018 lesson 2 (derivation)
       - Dong-Di Rienzo 2020 IEEE Access 8:186496 (3D FEM/BEM)
       - Bilicz-Badics-Pavo 2023 ISEM (wide-band nonlocal)
@@ -134,7 +134,7 @@ def peec_hoibc(topic: str = "vs_sibc_decision") -> str:
             "sibc_family"           - Variant landscape: XFEM SIBC,
                                        FDTD SIBC, Nonlinear SIBC,
                                        Multi-layer / coated conductor,
-                                       WPT wide-band (lab W:/SIBC/04-07/)
+                                       WPT wide-band (lab public-safe curated corpus)
             "mathematica_derivation"- Wolfram Language recipes: small-
                                        parameter p_tilde, BVP_0/1/2
                                        Neumann RHS symbolic, Mitzner

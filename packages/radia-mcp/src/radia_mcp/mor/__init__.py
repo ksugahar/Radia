@@ -14,6 +14,6 @@ Also covers general MOR for industrial inductors, motor + hybrid twins,
 PRIMA, Arnoldi-Krylov, POD methods.
 
 Distilled from:
-  - All of W:\\03_文献・論文\\00_電磁界解析\\MOR_モデル縮約\\ (~32 PDFs)
+  - All of public-safe curated corpus (~32 PDFs)
   - Industrial inductor application (Köster-König-Birò Graz 2021)
 """

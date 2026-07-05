@@ -6,7 +6,7 @@ Covers fusion plasma confinement EM analysis:
 - Eddy current in passive structures
 - Mitsubishi heliotron + modular research (lab connection)
 
-Distilled from W:/.../99_アプリケーション/08_核融合/ (52 files, 1.6 GB).
+Distilled from public-safe curated corpus (52 files, 1.6 GB).
 """
 
 from .knowledge import get_knowledge

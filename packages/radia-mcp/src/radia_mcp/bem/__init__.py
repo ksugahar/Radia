@@ -11,7 +11,7 @@ Covers:
 - FMM (Greengard-Rokhlin, removed from Radia but documented)
 - Application areas (PCB EMC, planar EM, shielding, transformer)
 
-Distilled from W:/03_文献・論文/00_電磁界解析/モーメント法・境界要素法/
+Distilled from public-safe curated corpus
 (135 files, 1040 MB across 16 numbered top-level folders).
 
 Theory/genealogy layer.  For code usage:

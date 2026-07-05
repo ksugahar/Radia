@@ -10,7 +10,7 @@ Hankel-Pade arithmetic, and Stoll (1974) analytical Bessel-series chi-Foster
 representation.
 
 Source code in CLN research repo:
-  w:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+  internal CLN research repo
     dd_axisym_kernel.py       — DD axisym Green's function via mpmath ellipk/E
     dd_sphere_axisym.py       — Sphere DD axisym (serial)
     dd_sphere_axisym_mp.py    — Sphere DD axisym (multiprocessing K)

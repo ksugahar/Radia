@@ -2,7 +2,7 @@
 
 Fusion reactor magnet knowledge.
 
-Distilled from W:/.../99_アプリケーション/08_核融合/ (52 files, 1.6 GB).
+Distilled from public-safe curated corpus (52 files, 1.6 GB).
 
 Cross-references:
 - `radia_mcp.accelerator` — adjacent SC magnet expertise

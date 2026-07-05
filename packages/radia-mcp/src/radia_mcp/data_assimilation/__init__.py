@@ -1,6 +1,6 @@
 """radia_mcp.data_assimilation — Kalman / Ensemble / 4D-Var for EM.
 
-Distilled from W:/.../06_最適化_データ同化/:
+Distilled from public-safe curated corpus
   - Recent Progress of Data Assimilation Methods in Meteorology
   - トロッコ問題で理解するカルマンフィルタ
 

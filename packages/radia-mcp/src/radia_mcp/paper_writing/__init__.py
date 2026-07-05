@@ -1,7 +1,7 @@
 """radia_mcp.paper_writing -- journal-paper writing skill suite.
 
 Promoted on 2026-05-26 from
-  s:/mcp-server/src/mcp_server_document/paper_writing/
+  legacy private source tree
 into radia-mcp following the standard ``radia_mcp.<topic>.server``
 pattern (statusable, --selftest-able, discoverable via the meta
 catalog).

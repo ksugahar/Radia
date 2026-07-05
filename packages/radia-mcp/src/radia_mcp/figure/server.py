@@ -16,7 +16,7 @@ tools:
         embedding width.
 
 Promoted on 2026-05-26 from
-  s:/mcp-server/src/mcp_server_document/graph/
+  legacy private source tree
 into radia-mcp following the standard `radia_mcp.<topic>.server`
 pattern (statusable, --selftest-able, discoverable via the meta
 catalog).
@@ -745,8 +745,8 @@ CAVEATS:
         "export_targets": """\
 [export_targets]
 
-LAB EXPORT-FORMAT MATRIX (extracted 2026-06 from the lab's real MATLAB
-+ matplotlib scripts on S:, including the FEMM folder).  The correct
+LAB EXPORT-FORMAT MATRIX (extracted 2026-06 from internal MATLAB
++ matplotlib scripts).  The correct
 format depends on WHERE the figure is embedded -- the lab uses three
 in practice, not just paper PDF:
 
@@ -772,7 +772,7 @@ and keeps EMF vector.  Ready-to-paste recipes:
   - figure_office_export_recipe()  -> MATLAB exportgraphics EMF + PNG
   - figure_everyday_recipe()       -> matplotlib everyday analysis figure
 
-OBSERVED LAB HABIT (from S: scripts):
+OBSERVED LAB HABIT (from internal scripts):
   - FEMM MATLAB (legacy): set(gca,'FontName','Times'); xlabel('{\\it X}
                    (m)'); print('-dmeta','f.emf');  % print is DEPRECATED
                    -> modern: exportgraphics(...,'ContentType','vector')
@@ -783,7 +783,7 @@ RULE: NEVER embed a raster PNG in a CAMERA-READY paper -- re-render to
 vector PDF (or TikZ).  PNG/EMF are for drafts + Office.  EMF (not PNG)
 is the right Office format because it keeps the text vector inside Word.
 
-VERIFICATION (2026-06): the lab's real S: scripts AGREE with this
+VERIFICATION (2026-06): the lab's internal script archive AGREES with this
 server's core rules -- Times/TNR, italic variable + unit in PARENTHESES
 ('{\\it X} (m)'), box-on + inward ticks, frameless legend, NO in-figure
 title.  The everyday matplotlib analysis style additionally uses a

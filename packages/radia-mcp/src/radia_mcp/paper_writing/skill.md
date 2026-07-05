@@ -513,7 +513,7 @@ The main contributions of this paper are:
 
 ## 📚 references.bib lab style (2023 Compumag review 由来)
 
-**経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`W:\02_学会資料\2023年度\2023_05_Compumag2023@京都\01_発表\CLN_TEAM28@谷本\`) で references.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
+**経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`public-safe curated corpus`) で references.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
 
 ### Rule 0: `.bib` は毎回外部検索で裏を取る
 

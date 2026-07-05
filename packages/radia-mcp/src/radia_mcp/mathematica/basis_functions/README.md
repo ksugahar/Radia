@@ -81,7 +81,7 @@ Zaglmayr, COMPEL 24 (2005).  See `../notes_fem_hcurl.md`.
   `fem/h1hofe*`, `fem/hcurlhofe*`, `fem/hdivhofe*` (per-element high-order
   shape functions).  Re-derivable from these directly.
 - **Original working notebooks (LAB-local, not shipped)**:
-  `S:\NGSolve\EMPY\EMPY_Analysis\Elements\Shapr functions\*.nb`
+  `public-safe curated corpus functions\*.nb`
   (`H1 Shape functions.nb`, `Hcurl Shape Functions.nb`,
   `High Order Nédélec Elements 3D.nb`, ...; 2026-02 vintage).  These are
   large binary `.nb` and are **not** committed here (PyPI size + diff

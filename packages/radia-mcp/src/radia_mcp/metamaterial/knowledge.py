@@ -1,10 +1,10 @@
 """Metamaterial knowledge: physics, design and lab cross-links.
 
 Distilled from PDFs in
-  W:/03_文献・論文/00_電磁界解析/39_部品材料/01_メタマテリアル/
-  W:/03_文献・論文/00_電磁界解析/14_FDTD/01_Faraday_Rotation/
-  W:/03_文献・論文/00_電磁界解析/99_アプリケーション/06_非破壊検査/
-  W:/03_文献・論文/00_電磁界解析/20_トポロジー最適化/research/
+  public-safe curated corpus
+  public-safe curated corpus
+  public-safe curated corpus
+  public-safe curated corpus
 
 Source papers
 -------------
@@ -914,7 +914,7 @@ GYRATOR_LH_LINE = r"""
 Source: "ジャイレータを用いた左手系伝送線路に関する研究"
 (Study of left-handed transmission lines using gyrators), lab
 thesis archived at
-W:/03_文献・論文/00_電磁界解析/39_部品材料/01_メタマテリアル/.
+public-safe curated corpus
 
 The PDF is password-protected (lab-internal); this topic summarizes
 the publicly known approach to gyrator-based LH TL design.

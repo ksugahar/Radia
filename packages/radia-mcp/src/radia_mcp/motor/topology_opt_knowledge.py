@@ -5,7 +5,7 @@ Distilled from:
 - Kishi-Wakao-Murata-Makino-Takeuchi-Matsushita, "Multi-Objective
   Topology Optimization of Synchronous Reluctance Motors Using
   Autoencoder-Estimated Flux Barrier Shapes", IEEJ Trans. PE, 2025.
-- Liu Xinyao 2025 thesis (W:/04_卒論論文関係/2025年度/136_劉馨遙)
+- Liu Xinyao 2025 thesis (public-safe curated corpus)
   applying the Wakao method end-to-end on a 4-pole SynRM with
   ONELAB cross-validation.
 
@@ -117,7 +117,7 @@ waveforms → label (T_ave, T_rip) → train AE.
 LIU_THESIS_APPLICATION = """\
 ## Liu Xinyao 2025 — Wakao method applied end-to-end
 
-Location: `W:/04_卒論論文関係/2025年度/136_劉馨遙`.
+Location: `public-safe curated corpus`.
 
 ### Contribution
 

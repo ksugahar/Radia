@@ -13,7 +13,7 @@ Usage:
     mcp-server-ih              # Start MCP server (stdio transport)
     mcp-server-ih --selftest   # Run self-test
 
-Promoted from s:/mcp-server/mcp-server-ih/ to public radia-mcp on
+Promoted from legacy private source tree to public radia-mcp on
 2026-04-24 (single Radia monorepo).  General knowledge lives in
 radia_mcp.radia_ngsolve.*; this subpackage holds IH-only topics
 (induction heating workflow, ESIM cell problem, workpiece SIBC,
@@ -113,7 +113,7 @@ def ih_esim(topic: str = "all") -> str:
     iteration tuning, JSON output schema, and troubleshooting.
 
     For the underlying physics + formulation, see the canonical docs
-    at s:/Radia/01_GitHub/docs/esim/ (especially MATHEMATICAL_ANALYSIS.md
+    at repo:/docs/esim/ (especially MATHEMATICAL_ANALYSIS.md
     and IMPLEMENTATION.md) or the sibling tool `esim` in
     radia_ngsolve server (physics-side overview).
 

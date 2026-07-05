@@ -88,17 +88,74 @@ def test_lane_templates_expose_required_artifact_contracts():
     assert "mmmm2d_contract" in mmmm["required_fields"]
     assert "region_material_contract" in mmmm["required_fields"]
     assert mmmm["support_status"] == "supported_coarse_path"
+    assert (
+        "validation_test/feec/test_hdiv_motor_minimal_contract.py"
+        in hdiv["public_evidence"]
+    )
 
 
 def test_hdiv_vim_artifact_gate_accepts_pickup_flux_contract():
     artifact = _base_artifact("hdiv_vim_reduced_fem", "pickup_flux")
     result = validate_motor_validation_artifact(artifact, "hdiv_vim_reduced_fem")
     assert result["status"] == "pass"
-    assert result["accepted_for_mcp_learning"] is True
+    assert result["accepted_for_mcp_learning"] is False
+    assert result["accepted_for_mcp_rfc_learning"] is True
     assert result["support_status"] == "experimental_rfc"
     assert result["validated_solver_path"] is False
+    assert result["validated_experimental_solver_path"] is False
     text = format_artifact_gate_result(result)
-    assert "accepted for MCP learning: `True`" in text
+    assert "accepted for MCP learning: `False`" in text
+    assert "accepted for MCP RFC learning: `True`" in text
+
+
+def test_hdiv_vim_solver_validated_artifact_can_train_solver_lane():
+    artifact = _base_artifact("hdiv_vim_reduced_fem", "pickup_flux")
+    artifact["coupling_design_status"] = "solver_validated"
+    artifact["solver_ready_artifact"] = {
+        "artifact_id": "hdiv_vim_pickup_flux_solver_ready_v1",
+        "verification": ["pytest validation_test/motor/test_hdiv_vim_pickup_flux.py"],
+    }
+    result = validate_motor_validation_artifact(artifact, "hdiv_vim_reduced_fem")
+    assert result["status"] == "pass"
+    assert result["accepted_for_mcp_learning"] is True
+    assert result["accepted_for_mcp_rfc_learning"] is True
+    assert result["validated_experimental_solver_path"] is True
+
+
+def test_hdiv_vim_saliency_motor_contract_can_train_vim_operator_lane():
+    artifact = _base_artifact("hdiv_vim_reduced_fem", "force_or_torque_trend")
+    artifact["coupling_design_status"] = "solver_validated"
+    artifact["metrics"] = {
+        "signed_agreement_count": 2,
+        "max_abs_relative_error": 2.0e-2,
+    }
+    artifact["solver_ready_artifact"] = {
+        "artifact_id": "hdiv_vim_planar_saliency_torque_contract_v1",
+        "verification": [
+            "python -m pytest validation_test/feec/test_hdiv_motor_minimal_contract.py -q"
+        ],
+    }
+
+    result = validate_motor_validation_artifact(artifact, "hdiv_vim_reduced_fem")
+
+    assert result["status"] == "pass"
+    assert result["validated_experimental_solver_path"] is True
+    assert result["accepted_for_mcp_learning"] is True
+
+
+def test_hdiv_vim_solver_validated_artifact_requires_verification_list():
+    artifact = _base_artifact("hdiv_vim_reduced_fem", "pickup_flux")
+    artifact["coupling_design_status"] = "solver_validated"
+    artifact["solver_ready_artifact"] = {
+        "artifact_id": "hdiv_vim_pickup_flux_solver_ready_v1",
+        "verification": "todo",
+    }
+
+    result = validate_motor_validation_artifact(artifact, "hdiv_vim_reduced_fem")
+
+    assert result["status"] == "fail"
+    assert result["accepted_for_mcp_learning"] is False
+    assert any("verification list" in item for item in result["errors"])
 
 
 def test_ngsolve_age_artifact_gate_accepts_torque_contract_json():
@@ -135,3 +192,4 @@ def test_validation_lane_docs_do_not_embed_private_absolute_paths():
     for private_source in ("COMSOL", "FEMM", "JMAG", "CST", "ELF/MAGIC"):
         assert private_source not in docs
     assert "product_local_reference" in docs
+    assert "test_hdiv_motor_minimal_contract.py" in docs

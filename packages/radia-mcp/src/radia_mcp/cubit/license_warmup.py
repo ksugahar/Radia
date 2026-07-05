@@ -1,6 +1,6 @@
 """License pre-warm for Coreform Cubit (Learn-edition flow).
 
-Mirrors the user's `S:\\CoreformCubit\\coreform_cubit.ps1` flow:
+Mirrors the user's `public-safe curated corpus` flow:
 
   1. Read the cached renewals file at
      %LOCALAPPDATA%\\Coreform\\Cubit\\Coreform\\licenses\\renewals

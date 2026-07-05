@@ -65,7 +65,7 @@ kQ-distance = log((1+kQ)/(1-kQ))
 Maps kQ ∈ [-1,1] to ℝ with constant differential metric, useful for
 optimization landscapes.
 
-W:/.../05_ワイヤレス給電/03_IEICE/05_resonance_topology/
+public-safe curated corpus
 - 近傍ダイポールアンテナ間のkQ積とポアンカレ距離 (WPT2018-18)
 
 ## Cross-references
@@ -128,8 +128,8 @@ chosen for **flat k(lateral)** out to ±10 cm at z = 15 cm.
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/01_coil_design/ (15 papers on coupling)
-W:/.../05_ワイヤレス給電/03_IEICE/04_dynamic_charging/ (7 papers, dynamic k)
+public-safe curated corpus (15 papers on coupling)
+public-safe curated corpus (7 papers, dynamic k)
 """
 
 
@@ -161,7 +161,7 @@ limits from:
 - **Implanted pacemakers / ICDs**: high field can trigger malfunction
   - HF-band WPT (>1 MHz) particularly concerning
   - IEC 62366-1 + medical device EMC standards
-  - W:/.../03_IEICE/01_coil_design/ 2018 papers (WPT2018-14, 18-53):
+  - public-safe curated corpus 2018 papers (WPT2018-14, 18-53):
     植込み心臓ペースメーカEMI 評価
 
 - **Metallic implants (knee, hip)**: induction heating risk
@@ -173,8 +173,8 @@ limits from:
 ## Cross-references
 
 - IEC 61980-1 general EV WPT safety
-- W:/.../05_ワイヤレス給電/03_IEICE/06_safety_EMF_human/
-- W:/.../05_ワイヤレス給電/00_文献/99_misc/03_曝露_規制/ (Japanese 規制)
+- public-safe curated corpus
+- public-safe curated corpus (Japanese 規制)
 """
 
 
@@ -217,7 +217,7 @@ Wireless Power Consortium standard for phones/wearables:
 
 Each standard mandates FOD before/during charging:
 - IEC 61980-3 FDIS: specific test items 項目1, 項目2, 項目3
-  (W:/.../05_ワイヤレス給電/10_異物検出/06_標準_IEC/)
+  (public-safe curated corpus)
 
 ## Lab compliance status
 
@@ -227,7 +227,7 @@ Each standard mandates FOD before/during charging:
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/03_efficiency/ (5 papers, including standards-aligned design)
+public-safe curated corpus (5 papers, including standards-aligned design)
 """
 
 

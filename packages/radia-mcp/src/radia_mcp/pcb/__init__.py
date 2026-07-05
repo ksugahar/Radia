@@ -8,7 +8,7 @@ Covers:
 - Dynamic charging (EV running, robot, bearingless motor)
 - Capacitive / microwave / rectenna alternatives
 
-Distilled from W:/03_文献・論文/00_電磁界解析/99_アプリケーション/05_ワイヤレス給電/
+Distilled from public-safe curated corpus
 (269 files, 2.1 GB across 13 numbered thematic subdirs including IEICE technical
 reports 2010-2019, FOD literature, lab Sugahara group papers).
 

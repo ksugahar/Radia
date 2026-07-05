@@ -565,7 +565,7 @@ Production gapped-torus + steel-cylinder benchmark (50 kHz, 1 A):
 | D (FEM-coilmesh, pardiso)    | 87500        | 25 s  | full re-assembly of Robin + coil-sigma term |
 
 The scalar BIE path is the recommended PUBLICATION path; FEM paths
-serve as cross-checks ([three-path consistency at <2 %](file:///S:/Radia/01_GitHub/docs/esim/CROSS_VALIDATION.md)).
+serve as cross-checks ([three-path consistency at <2 %](repo:/docs/esim/CROSS_VALIDATION.md)).
 
 ## Reviewer-question pre-cooked answers
 
@@ -589,7 +589,7 @@ A: To any MQS thin-skin eddy-current problem on closed
 
 ## Full discussion
 
-See [`docs/esim/SCALAR_BIE_VS_VECTOR_BEM.md`](file:///S:/Radia/01_GitHub/docs/esim/SCALAR_BIE_VS_VECTOR_BEM.md)
+See [`docs/esim/SCALAR_BIE_VS_VECTOR_BEM.md`](repo:/docs/esim/SCALAR_BIE_VS_VECTOR_BEM.md)
 for the full path-A vs path-B/C/D analysis, error-rate proofs, and
 the historical Sauter-Schwab / Calderon-calculus reference list.
 """

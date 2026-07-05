@@ -33,7 +33,7 @@ def magnetic_materials_hysteresis(topic: str = "lab_core") -> str:
     ★ DEFAULT topic = 'lab_core' (B-input Stop based energy model),
     which is the Sugahara Lab's PRIMARY production hysteresis method.
 
-    Covers 13+ models documented in W:/03_文献・論文/00_電磁界解析/
+    Covers 13+ models documented in public-safe curated corpus
     30_磁気特性/02_ヒステリシスモデル/ (1184 files):
     Jiles-Atherton, Play, Stop, Energy-Based (Bergqvist/Henrotte/
     Francois-Lavet/Jacques/Egger lineage), Preisach, Chua, Chan,
@@ -212,7 +212,7 @@ def magnetic_materials_silicon_steel(topic: str = "grades") -> str:
     """
     JIS silicon steel grade database + processing/handling notes.
 
-    Source: W:/磁気特性/00_教科書/電磁鋼板の磁気特性と取扱方法.pdf
+    Source: public-safe curated corpus
     (94 MB, JFE Steel handbook).
 
     Args:

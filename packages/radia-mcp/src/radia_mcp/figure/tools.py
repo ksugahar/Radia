@@ -1,7 +1,7 @@
 """Tool functions for radia_mcp.figure (publication-figure style guide).
 
 Promoted on 2026-05-26 from
-  s:/mcp-server/src/mcp_server_document/graph/tools.py
+  legacy private source tree
 into radia-mcp.  The original docstring `mcp_server_document.graph.tools`
 import paths in examples have been updated to `radia_mcp.figure` below.
 

@@ -1,7 +1,7 @@
 """Hysteresis model catalog & decision tree.
 
 Covers 13+ models documented in the lab library at
-``W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/``:
+``public-safe curated corpus``:
   Jiles-Atherton (01_), Preisach (02_), Play (03_), Stop (04_),
   Energy-Based (05_; Henrotte / Bergqvist / Francois-Lavet / Egger),
   Chua (06_), Chan (07_), Bouc-Wen (08_), Potter-Schmulian (09_),
@@ -129,7 +129,7 @@ script enforces these constraints with a soft penalty.
 
 ## Key references (lab library)
 
-In `W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/
+In `public-safe curated corpus
 03_Play_model/` (the historical Play naming; Stop operators sit
 in the same family; this folder has the largest paper collection,
 1000+ files):
@@ -213,7 +213,7 @@ electromagnets, **start with the lab core method**.
 
 CATALOG_OVERVIEW = r"""
 # Hysteresis model catalog
-# (W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/)
+# (public-safe curated corpus)
 
 ★ **Lab CORE method**: B-input Stop model based energy formulation.
   Use `magnetic_materials_hysteresis('lab_core')` for the production
@@ -268,7 +268,7 @@ Adjacent:
 - `セルラー・オートマトンによる磁化特性の表現.pdf`
 - `高周波大振幅励磁におけるMn-Znフェライトコア内部の磁化特性解析.pdf`
 
-## Textbooks (00_教科書/, in W:/03_文献・論文/00_電磁界解析/30_磁気特性/)
+## Textbooks (00_教科書/, in public-safe curated corpus)
 
 | File | Description |
 |------|-------------|
@@ -357,7 +357,7 @@ Need: magnetic hysteresis in FE solver
 
 ## Standard reference: Mayergoyz "Mathematical Models of Hysteresis"
 
-The 1991/2003 monograph (W:/磁気特性/00_教科書/Mathematical_Models...pdf,
+The 1991/2003 monograph (public-safe curated corpus,
 260 MB) is the definitive overview.  Key chapters:
 - Ch 1-2: Preisach formalism
 - Ch 3-4: Vector Preisach
@@ -365,7 +365,7 @@ The 1991/2003 monograph (W:/磁気特性/00_教科書/Mathematical_Models...pdf,
 - Ch 7-8: JA, Stoner-Wohlfarth, magnetic recording
 
 For energy-based hysteresis specifically, the Jacques 2018 PhD
-monograph (254p, in S:/lab library, also covered in MCP
+monograph (254p, in public-safe curated corpus library, also covered in MCP
 `motor_henrotte_lineage('jacques_2018')`) is the canonical reference.
 """
 
@@ -526,7 +526,7 @@ Procedure to calibrate:
 
 ## Lab references
 
-Major paper trail in `W:/03_文献・論文/00_電磁界解析/30_磁気特性/
+Major paper trail in `public-safe curated corpus
 02_ヒステリシスモデル/03_Play_model/` (1000+ files, the lab's
 densest collection):
 - Bobbio 1997 (original)
@@ -656,7 +656,7 @@ its theoretical advantages.
 
 ## Lab references
 
-`W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/
+`public-safe curated corpus
 05_Energy_Based/`:
 - 2006_Henrotte_EnergyBased.pdf
 - 2013_Energy-based_VariationalModel_FrancoisLavetHenrotte.pdf
@@ -791,7 +791,7 @@ nested Picard) — see arXiv:2506.01499 and arXiv:2506.01499 follow-up.
 - H. Egger, F. Engertsberger, A. Schafelner, "Efficient evaluation
   of forward and inverse energy-based magnetic hysteresis operators",
   arXiv:2507.15289v1 [math.NA] 21 Jul 2025.
-- File: `W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/
+- File: `public-safe curated corpus
    05_Energy_Based/Efficient evaluation of forward and inverse
    energy-based magnetic hysteresis operators.pdf`
 
@@ -804,7 +804,7 @@ PREISACH = r"""
 
 ## History
 - F. Preisach, Z. Physik 94:277-302, 1935 ("Uber die magnetische
-  nachwirkung" — IN W:/03_文献・論文/00_電磁界解析/30_磁気特性/
+  nachwirkung" — IN public-safe curated corpus
   02_ヒステリシスモデル/02_Preisach/)
 - I. D. Mayergoyz formalized as Everett surface representation (1986)
 - Vector extension: classical Preisach is SCALAR; Mayergoyz vector
@@ -865,7 +865,7 @@ Visintin's **"Differential Models of Hysteresis"** (Applied
 Mathematical Sciences vol 111, Springer 1994) provides the
 rigorous mathematical theory for Preisach as a hysteresis
 *operator* (variational inequality / monotone operator
-framework).  File: `W:/03_文献・論文/00_電磁界解析/30_磁気特性/
+framework).  File: `public-safe curated corpus
 00_教科書/Applied Mathematical Sciences.pdf`.  Use when
 proving well-posedness of Preisach + PDE coupled systems.
 
@@ -1160,7 +1160,7 @@ Radia API -- on the development roadmap.
 
 ## References (lab library)
 
-`W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/`:
+`public-safe curated corpus`:
 - `04_Stop_model/Stop Model With Input-Dependent Shape Function
    and Its Identification Methods.pdf` (Matsuo, Terada, Shimasaki,
    IEEE TMAG 40:1776-1783, 2004)
@@ -1641,7 +1641,7 @@ approximation of Visintin's asymptotic homogenization.
 - **A. Visintin**, "Differential Models of Hysteresis", Applied
    Mathematical Sciences vol 111, Springer-Verlag, 1994
    (420 pages, file `Applied Mathematical Sciences.pdf` in
-   `W:/03_文献・論文/00_電磁界解析/30_磁気特性/00_教科書/`).
+   `public-safe curated corpus`).
    Comprehensive treatment of play/stop/Preisach as variational
    inequalities + PDE coupling theory.
 - **M. A. Krasnosel'skii & A. V. Pokrovskii**, "Systems with
@@ -2275,7 +2275,7 @@ the clip box is bias-independent (Matsuo-Shimasaki 2005 theorem). This
 was verified numerically on the IGTE'26 Bergqvist energy-stop model:
 the minor-loop vertical chord Delta_h(a, B0) is bias-independent to
 0.0-0.1% over B0 in [0, 1.2] T
-(W:/.../2026_09_IGTE_Symposium/.../python_stop/demo_equal_vertical_chords.py).
+(public-safe curated corpus).
 Equal vertical chords is removed ONLY by (a) an input-DEPENDENT shape
 w(B)*g_0 -- which makes the per-hysteron coenergy B-dependent,
 U_k(s_k,B)=w(B) integral g_0, breaking the *simple* fixed-domain
@@ -2305,7 +2305,7 @@ T. Matsuo, D. Shimode, Y. Terada, M. Shimasaki, "Application of stop
 and play models to the representation of magnetic characteristics of
 silicon steel sheet", IEEE Trans. Magn. 39(3):1361-1364, May 2003.
 DOI: 10.1109/TMAG.2003.810171.  File:
-`W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/
+`public-safe curated corpus
  04_Stop_model/Application_of_stop_and_play_models_to_the_
  representation_of_magnetic_characteristics_of_silicon_steel_sheet.pdf`.
 """
@@ -3788,7 +3788,7 @@ but needs a robust root-finder.
 K. Jacques, "Energy-Based Magnetic Hysteresis Models — Theoretical
 Development and Finite Element Formulations", PhD thesis, Université
 de Liège, 2018 (254 pages).  https://orbi.uliege.be/handle/2268/229596
-File: `W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/
+File: `public-safe curated corpus
 05_Energy_Based/Energy-BasedMagnetic Hysteresis Models.pdf`.
 
 Cross-ref: `lab_core_production` (the formulas this monograph derives),
@@ -3805,7 +3805,7 @@ CONGRUENCY_BINPUT_SELECTION = r"""
 # Accepted: IEEE Trans. Magn., "Experimental Verification of Congruency
 # Property in Magnetic Material and Its Reproducibility Using B-input Play
 # Model" (Manuscript TMAG-25-11-0894, COMPUMAG 2025 regular paper).
-# File: W:/02_学会資料/2025年度/2025_11_21_IEEE_Magnetics_論文投稿/ (Final
+# File: public-safe curated corpus (Final
 # Submission); copy stored in 02_ヒステリシスモデル/03_Play_model/.
 
 ## TL;DR (the selection chain)
@@ -4152,7 +4152,7 @@ CHANGES.md lesson 3).
 PEELING_IDENTIFICATION = r"""
 # Peeling identification of play / stop shape functions
 # (Sugahara Lab / Ahagon -- analytic, NON-least-squares calibration)
-# Code: W:/999_菅原賢悟/19_磁気ヒステリシス/2024_IGTE_共同研究/
+# Code: public-safe curated corpus
 #       VectorPlayModel/supplement/playmodel.py  (shapeFunction)
 #       + ...VectorPlayModel/supplement/阿波根@形状関数同定.py
 
@@ -4222,7 +4222,7 @@ the operator.  Use peeling, not LSQ, for play.)
   biased loops are then PREDICTED via the play operator (congruency).
 
 ## Full lab calibration pipeline
-## (W:/.../2024_10_16_B入力用ループ/prototype_step0-4.m)
+## (public-safe curated corpus)
 
 step0: load measured symmetric loops data_XXXXmT.mat (B_max =
        0.05:0.05:1.5 T; raw 5 Hz columns: t, V_exc, I_exc, V_search,
@@ -4256,7 +4256,7 @@ playmodel.py: shapeFunction(HdataLUT) -> Hfunc (peeling); then forward
 
 VECTOR_PLAY_MODEL = r"""
 # Canonical B-input vector play model (Sugahara Lab / Ahagon)
-# Code: W:/999_菅原賢悟/19_磁気ヒステリシス/2024_IGTE_共同研究/
+# Code: public-safe curated corpus
 #       VectorPlayModel/  (+ supplement/playmodel.py)
 #       and .../2024_10_16_B入力用ループ/  (data + calibration pipeline)
 
@@ -4306,7 +4306,7 @@ cross-check in JilesAtherton.m.
 NO least-squares (ill-conditioned for play -- see
 `peeling_identification` "Why NOT least squares").
 
-## Data (W:/.../2024_10_16_B入力用ループ/)
+## Data (public-safe curated corpus)
 
 - data_XXXXmT.mat : measured symmetric loops, B_max = 50 ... 1500 mT in
   50 mT steps (cols: t, V_exc, I_exc, V_search, H, B; raw 5 Hz).

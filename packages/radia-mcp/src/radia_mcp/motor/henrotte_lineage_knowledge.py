@@ -382,7 +382,7 @@ energy-based hysteresis school.  Supervised by Christophe Geuzaine
   comparison.
 - Calibrating model parameters from measured B-H loops → Chapter 5.
 - Lab library location:
-  `W:/03_文献・論文/00_電磁界解析/磁気特性/ヒステリシス/12_Energy_Based/`
+  `public-safe curated corpus`
 """
 
 CARSTENSEN_2007 = """\
@@ -448,7 +448,7 @@ resolvable skin depth.
 
 ### Library location
 
-`W:/03_文献・論文/00_電磁界解析/MOR_モデル縮約/Eddy_Currents/Eddy
+`public-safe curated corpus
 Currents in Windings of Switched Reluctance Machines.pdf` (187 pages)
 """
 

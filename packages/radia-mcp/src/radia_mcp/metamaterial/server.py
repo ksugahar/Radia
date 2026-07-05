@@ -11,9 +11,9 @@ Electromagnetic metamaterial knowledge:
 - Gyrator-based active LH lines (lab thesis)
 
 Distilled from PDFs in
-  W:/03_文献・論文/00_電磁界解析/39_部品材料/01_メタマテリアル/
-  W:/03_文献・論文/00_電磁界解析/14_FDTD/01_Faraday_Rotation/
-  W:/03_文献・論文/00_電磁界解析/99_アプリケーション/06_非破壊検査/
+  public-safe curated corpus
+  public-safe curated corpus
+  public-safe curated corpus
 
 Cross-references:
 - `radia_mcp.electromagnet` -- Kelvin transform (same coordinate-

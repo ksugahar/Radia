@@ -470,7 +470,7 @@ FULL_EXAMPLE = r"""
 
 ```python
 import sys
-sys.path.insert(0, 'S:/Radia/01_GitHub/src/radia/panels')
+sys.path.insert(0, 'repo:/src/radia/panels')
 from calc_common import setup_paths; setup_paths()
 import calc_em_force as cef
 from netgen.occ import Rectangle, OCCGeometry, Glue

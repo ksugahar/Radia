@@ -32,7 +32,7 @@ material: copper, optionally with magnetic shield (ferrite plate)
 
 - `radia_mcp.peec.carstensen_ac_copper_loss` — Carstensen AC copper loss
   with FE-extracted per-layer H
-- W:/.../39_部品材料/02_リッツ線/ — 44 papers on homogenization,
+- public-safe curated corpus — 44 papers on homogenization,
   high-freq resistance, magnetic-plated wire, etc.
 
 Key formula (Dowell):
@@ -56,7 +56,7 @@ Lab choice (PEEC+FEM coupled):
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/01_coil_design/ (15 papers)
+public-safe curated corpus (15 papers)
 - 受電/送電/送受電 coil design
 - Helmholtz, ヘリカル, コイル設計
 """
@@ -109,7 +109,7 @@ C_p = 1 / (ω² × (L_1 - L_f))                 (resonance with primary L_1)
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/05_resonance_topology/ (6 papers)
+public-safe curated corpus (6 papers)
 - ディスクリピーター for arm robot (lab WPT2016-23, 26)
 - LCC-LCC topology design
 - ZVS / ZCS techniques
@@ -175,7 +175,7 @@ Lab target: Q > 100 at 85 kHz for EV WPT (Litz wire + ferrite + careful design).
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/02_impedance_matching/ (3 papers)
+public-safe curated corpus (3 papers)
 """
 
 

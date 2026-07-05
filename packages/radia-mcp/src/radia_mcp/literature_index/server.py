@@ -1,8 +1,8 @@
 """MCP Server: radia_mcp.literature_index
 
-Meta-MCP for searching the lab literature corpus.
+Meta-MCP for searching a configured lab literature corpus.
 
-Indexes W:/03_文献・論文/00_電磁界解析/ (3,889 files / 51 GB).
+Indexes the corpus pointed to by RADIA_LIT_ROOT.
 
 Two search modes (2026-05-24 update):
   - `literature_search` — keyword/filename match (fast, no embedding)
@@ -32,11 +32,11 @@ from ..common.chroma_retriever import (
 mcp = FastMCP("mcp-server-literature-index")
 
 
-# Literature corpus root. Defaults to the Sugahara-Lab NAS path but is
-# overridable via RADIA_LIT_ROOT, so the server is usable on any machine
-# (keyword + semantic search degrade gracefully when the corpus is absent).
-_LIT_ROOT = Path(os.environ.get(
-    "RADIA_LIT_ROOT", r"W:\03_文献・論文\00_電磁界解析"))
+# Literature corpus root. Public wheels do not embed lab-local NAS paths.
+# Set RADIA_LIT_ROOT on machines that own the corpus; keyword + semantic search
+# degrade gracefully when it is unset or absent.
+_LIT_ROOT_RAW = os.environ.get("RADIA_LIT_ROOT", "")
+_LIT_ROOT = Path(_LIT_ROOT_RAW) if _LIT_ROOT_RAW else Path("__RADIA_LIT_ROOT_NOT_SET__")
 
 # Persistent ChromaDB location (per-user, off the NAS).
 # Override with RADIA_LIT_CHROMA_DIR.
@@ -115,7 +115,7 @@ def literature_search(query: str, limit: int = 30, folder_filter: str = "") -> s
     Examples:
         literature_search("RWG basis")
         literature_search("hysteresis vector", folder_filter="30_磁気特性")
-        literature_search("rebuild")  # force re-scan W: drive
+        literature_search("rebuild")  # force re-scan configured literature root
     """
     return lit_search(query, limit=limit,
                       folder_filter=folder_filter or None)
@@ -169,7 +169,7 @@ def literature_semantic_search(
     language tag (if any), and the matching text chunk.
 
     First-time use: call `literature_build_vector_index` to populate
-    the vector store from W:/.../00_電磁界解析/ PDFs. Without an index,
+    the vector store from the configured corpus PDFs. Without an index,
     this returns an empty result + hint.
 
     Args:
@@ -270,7 +270,7 @@ def literature_build_vector_index(
     whatever lands in ``broken_text_layer``.
 
     Args:
-        folder: subfolder of W:/.../00_電磁界解析/ to ingest
+        folder: subfolder of the configured corpus to ingest
                 (e.g. "30_磁気特性", "11_BEM_モーメント法",
                 or "" for ENTIRE corpus -- multi-hour build).
         max_pdfs: cap for this run (default 50; safety against
@@ -425,8 +425,8 @@ def literature_index_cancel() -> str:
 register_status_tool(
     mcp,
     server_name="mcp-server-literature-index",
-    description=("Meta-MCP: keyword + semantic search across 3,889 lab "
-                  "literature files (W:/03_文献・論文/00_電磁界解析)."),
+    description=("Meta-MCP: keyword + semantic search across a configured "
+                  "lab literature corpus."),
     subpackage="radia_mcp.literature_index",
     related_servers=["radia-meta", "radia-team-benchmark"],
     optional_deps=["chromadb", "sentence_transformers", "fitz"],

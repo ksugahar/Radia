@@ -3,7 +3,7 @@ Bayesian Optimization MCP Server (radia_mcp.bayesian_opt)
 
 GP regression, Bayesian optimization, FMQA, physics-informed GP,
 and surrogate models for CAE — distilled from 57 lab files in
-W:/.../04_最適化_ベイズ_BBO/.
+public-safe curated corpus
 
 Usage:
     mcp-server-bayesian-opt              # Start MCP server (stdio)

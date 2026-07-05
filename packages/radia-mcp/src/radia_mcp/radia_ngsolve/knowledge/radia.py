@@ -3449,7 +3449,7 @@ Build.ps1 (MSVC + MKL + NGSolve)
 
 - **Visual Studio 2022** (MSVC compiler)
 - **Intel oneAPI Base Toolkit** (MKL only, NOT the Intel compiler)
-- **NGSolve** (source build at S:\\NGSolve\\01_GitHub\\install_ngsolve)
+- **NGSolve** (source build at public-safe curated corpus)
 - **Python 3.12** with pybind11
 
 ### Build Commands
@@ -3470,12 +3470,12 @@ powershell -ExecutionPolicy Bypass -File Build.ps1 -Verbose
 
 ### NGSolve for CI Runner
 
-The self-hosted CI runner (NETWORK SERVICE account) cannot access S: drive.
+The self-hosted CI runner (NETWORK SERVICE account) cannot access the mapped lab share.
 NGSolve must be copied to C:\\NGSolve locally:
 
 ```powershell
 # Run as Administrator when NGSolve is rebuilt:
-robocopy S:\\NGSolve\\01_GitHub\\install_ngsolve C:\\NGSolve /MIR
+robocopy "<configured-ngsolve-source>" C:\\NGSolve /MIR
 ```
 
 ## CI/CD Pipeline (GitHub Actions)

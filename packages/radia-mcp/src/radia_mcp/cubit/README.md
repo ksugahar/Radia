@@ -57,7 +57,7 @@ Guess"):
 - **Coreform Cubit official help** (offline copy + scrape index)
 - **Cubit Discourse forum** (search + cached threads)
 - **Coreform training videos** (YouTube transcripts, search indexed)
-- **Sugahara lab Cubit archive** at `S:\CoreformCubit\` (787 files,
+- **Sugahara lab Cubit archive** at `public-safe curated corpus` (787 files,
   proven .jou snippets, lab-specific recipes)
 - **In-tree examples** at `src/radia/panels/samples/*.jou`
 

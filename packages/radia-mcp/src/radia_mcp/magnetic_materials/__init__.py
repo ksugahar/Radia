@@ -8,7 +8,7 @@ Topics covered:
 - Demagnetization factor (Osborn 1945 + numerical)
 - Radia implementation status (MatPlay, MatEnergy, MatSatIsoTab)
 
-Distilled from W:/03_文献・論文/00_電磁界解析/磁気特性/ (151 files, 2.7 GB).
+Distilled from public-safe curated corpus (151 files, 2.7 GB).
 """
 
 from .hysteresis_models_knowledge import get_hysteresis_models_knowledge

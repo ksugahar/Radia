@@ -146,3 +146,18 @@ def test_tracked_only_provenance_scan_for_repo_root(tmp_path):
         "examples/public_leak.py",
         "examples/private_scratch.py",
     }
+
+
+def test_tracked_only_provenance_scan_uses_all_scan_suffixes(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    tracked = src / "public_leak.m"
+    tracked.write_text("(* PATH = W:/00_CAE/NGSolve/leak *)\n", encoding="utf-8")
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True,
+                   stdout=subprocess.DEVNULL)
+    subprocess.run(["git", "add", "src/public_leak.m"], cwd=tmp_path,
+                   check=True, stdout=subprocess.DEVNULL)
+
+    tracked_findings = policy_lint.scan_text_tree(tmp_path, tracked_only=True)
+    assert [item[0] for item in tracked_findings] == ["src/public_leak.m"]

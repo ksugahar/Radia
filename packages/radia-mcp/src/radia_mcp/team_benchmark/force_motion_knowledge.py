@@ -111,7 +111,7 @@ Yano's production validation: order=5, same mesh, visual match in comparison_BzJ
 ## Lab source
 
 Reference Python solver + output plots:
-  W:\\00_CAE\\NGSolve\\矢野\\2026_03_30_TEAM_benchmark\\Problem7\\APhi\\
+  public-safe curated corpus
   Problem_7_A_Phi_Kelvin.py
   output_A_Phi_Kelvin_FreqDomain\\comparison_BzJy.png
   output_A_Phi_Kelvin_FreqDomain\\Bz_comparison.csv
@@ -137,7 +137,7 @@ with NONLINEAR steel.) Exact Fig.1 dimensions are a low-res 1992 scan (labels
 mesh/input before building an NGSolve model -- do NOT guess the flagship geometry.
 Source PDF (owner-protected; decrypt with empty password via pymupdf
 doc.save(..., encryption=PDF_ENCRYPT_NONE)):
-W:\...\05_TEAM_benchmark\16_problem20\problem20_tech_3ax.pdf
+public-safe curated corpus
 
 ## What it tests
 
@@ -655,9 +655,9 @@ Other P21 family losses at 10 A rms Case I:
 ## Lab source
 
 Reference notebook (Yano, P21e variant — different coil/plate dimensions):
-  W:\\00_CAE\\NGSolve\\矢野\\2026_03_30_TEAM_benchmark\\Problem21\\Problem_21_FEM_APhi.ipynb
+  public-safe curated corpus
 TEAM P21 family spec (V.2009):
-  W:\\03_文献・論文\\00_電磁界解析\\ベンチマーク問題(TEAM)\\problem21_Family (V.2009).pdf
+  public-safe curated corpus)\\problem21_Family (V.2009).pdf
 """
 
 
@@ -864,11 +864,11 @@ Shipped as validation case ``validate_team13_bflux``
 ## Lab source
 
 Geometry + getMeshingParameters:
-  W:\\00_CAE\\NGSolve\\矢野\\2026_03_30_TEAM_benchmark\\Problem13\\geometry.py
+  public-safe curated corpus
 Measurement functions:
-  W:\\00_CAE\\NGSolve\\矢野\\2026_03_30_TEAM_benchmark\\Problem13\\measurement.py
+  public-safe curated corpus
 Reference notebook:
-  W:\\00_CAE\\NGSolve\\矢野\\2026_03_30_TEAM_benchmark\\Problem13\\solution_of_team13_problem.ipynb
+  public-safe curated corpus
 """
 
 

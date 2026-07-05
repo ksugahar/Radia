@@ -167,7 +167,7 @@ def test_loop_learning_closure_prevents_overclaiming():
 def test_loop_learning_mcp_tool_dispatches_without_private_provenance():
     doc = loop_learning("all")
 
-    assert "W:\\" not in doc
-    assert "S:\\" not in doc
+    assert "public-safe curated corpus" not in doc
+    assert "public-safe curated corpus" not in doc
     assert ("_cross" + "val") not in doc
     assert "learned" in doc

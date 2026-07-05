@@ -2,7 +2,7 @@
 GNN MCP Server (radia_mcp.gnn)
 
 Graph Neural Networks for PDE / EM problems, distilled from
-W:/.../12_機械学習_GNN/.
+public-safe curated corpus
 
 Usage:
     mcp-server-gnn              # Start MCP server

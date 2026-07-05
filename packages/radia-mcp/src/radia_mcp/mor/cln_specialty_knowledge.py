@@ -1,6 +1,6 @@
 """CLN lab-specialty methods: termination, Hiruma, BEM+FEM, Nagamine error.
 
-Covers W:\\30_CauerLadderNetwork\\{08_終端問題, 12_比留間法, 13_BEM+FEM,
+Covers public-safe curated corpus, 12_比留間法, 13_BEM+FEM,
 15_誤差論@長嶺氏}. These are the lab-internal techniques not yet
 fully published in the canonical Kameari-Ebrahimi-Sugahara-Shindo-
 Matsuo 2018 IEEE TMAG paper or its standard extensions.
@@ -159,7 +159,7 @@ The 2018-03-13 driver compares the ladder with and without termination
 optimisation.  Skeleton:
 
 ```matlab
-% main.m   (W:/30_CauerLadderNetwork/08_終端問題/.../main.m)
+% main.m   (public-safe curated corpus)
 global y z N
 f   = logspace(3, 7, 200);
 sig = 5.8e7;  mu = 4*pi*1e-7;  d = 0.001;
@@ -361,7 +361,7 @@ HIRUMA_CODE = """
 ## Scalar 1-port driver: hiruma_scalar.m
 
 ```matlab
-% W:/30_CauerLadderNetwork/12_比留間法/2018_03_30_比留間法/hiruma_scalar.m
+% public-safe curated corpus
 N = 6;
 G = symmetric_random(N);    % SPD stiffness
 C = symmetric_random(N);    % SPD mass
@@ -529,7 +529,7 @@ BEM_FEM_CODE = """
 The Biot-Savart 2-D kernel for a line current at the origin:
 
 ```matlab
-% W:/30_CauerLadderNetwork/13_BEM+FEM/Bio2D.m
+% public-safe curated corpus
 function [hx, hy, az] = Bio2D(x0, y0, X, Y)
   % field at (x0,y0) from a polygonal current loop with vertices (X,Y)
   for k = 1 : length(X)-1
@@ -807,7 +807,7 @@ LAB_LESSONS = """
 # ---------------------------------------------------------------------------
 
 KEY_FILES = """
-# Key files cited (paths relative to W:/30_CauerLadderNetwork/)
+# Key files cited (paths relative to public-safe curated corpus)
 
 ## 08_終端問題  (Termination)
 
@@ -934,7 +934,7 @@ CITATIONS = """
   title  = {Precision of CLN circuit constants from finite-element
             analysis (shared with Sugahara)},
   note   = {2023-01-24 lab note, 9 pages.  Kyoto, Matsuo Lab.
-            Archived in W:/.../15_誤差論@長嶺氏/2023_02_07_長嶺氏_
+            Archived in public-safe curated corpus
             CLN誤差/},
   year   = {2023}
 }

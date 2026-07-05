@@ -10,7 +10,7 @@ bearingless motor), alternatives (capacitive, microwave/rectenna,
 metamaterial).
 
 Distilled from 269 files / 2.1 GB in
-W:/03_文献・論文/00_電磁界解析/99_アプリケーション/05_ワイヤレス給電/
+public-safe curated corpus
 
 Cross-references:
 - `radia_mcp.peec` — PEEC for coil L, M, k computation

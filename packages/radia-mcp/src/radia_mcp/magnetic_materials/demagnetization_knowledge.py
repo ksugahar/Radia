@@ -1,6 +1,6 @@
 """Demagnetization factor (反磁場係数) for ellipsoids + numerical methods.
 
-Source papers (W:/磁気特性/01_DC_BH特性/):
+Source papers (public-safe curated corpus):
 - 反磁場係数.pdf
 - 円柱状磁心の反磁界係数と磁気力.pdf
 - 磁気回路の反磁場係数.pdf (17 MB)
@@ -165,9 +165,9 @@ Better: use the Sato-Ishii tabulated values from the lab paper.
 
 ## Lab papers
 
-- `W:/磁気特性/01_DC_BH特性/円柱状磁心の反磁界係数と磁気力.pdf`
+- `public-safe curated corpus`
   — cylindrical core demag + corresponding magnetic force
-- `W:/磁気特性/01_DC_BH特性/磁気回路の反磁場係数.pdf` (17 MB)
+- `public-safe curated corpus` (17 MB)
   — magnetic circuit perspective, includes air gap effect
 
 ## When to compute N analytically vs let FE do it

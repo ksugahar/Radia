@@ -209,7 +209,7 @@ FOUR_DVAR = r"""
 # 4D-Var (Four-Dimensional Variational Data Assimilation)
 
 `Recent Progress of Data Assimilation Methods in Meteorology.pdf`
-(W:/.../06_最適化_データ同化/) covers DA in geophysics where 4D-Var
+(public-safe curated corpus) covers DA in geophysics where 4D-Var
 is the gold standard. The principle transfers directly to EM.
 
 ## Idea

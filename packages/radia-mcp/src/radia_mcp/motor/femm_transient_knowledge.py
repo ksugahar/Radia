@@ -9,7 +9,7 @@ Source documents:
   IEEE Trans. Mag. 45(3):1258-1261, 2009.
   DOI: 10.1109/TMAG.2009.2012585.
   (Institute of Electrical Machines, RWTH Aachen University.)
-- Dave Meeker, private correspondence (forwarded by Kengo Sugahara,
+- Dave Meeker, private note (forwarded by Kengo Sugahara,
   2026-05-21).
 
 The middle author **François Henrotte** is the same Henrotte cited in
@@ -549,8 +549,8 @@ Rationale:
 
 ### Hameyer / Henrotte canonical references (Sugahara lab library)
 
-All available at W:/03_文献・論文/00_電磁界解析/99_アプリケーション/モータ/
-or W:/03_文献・論文/00_電磁界解析/磁気特性/ヒステリシス/:
+All available at public-safe curated corpus
+or public-safe curated corpus
 
 | Year | Authors | Title | Relevance |
 |------|---------|-------|-----------|

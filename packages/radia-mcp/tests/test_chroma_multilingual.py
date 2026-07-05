@@ -56,10 +56,10 @@ def test_detect_filename_language_mixed_kanji_kana_is_ja():
 def test_detect_filename_language_strips_path():
     """Heuristic should look at the basename stem, not the directory."""
     assert detect_filename_language(
-        "W:/03_文献・論文/論文/Maxwell.pdf") == "en"
-    # NOTE: full-path with Japanese folder + Japanese filename
+        "C:/temp/english_notes.pdf") == "en"
+    # NOTE: full-path with Chinese filename
     assert detect_filename_language(
-        "W:/03_文献・論文/有限要素法.pdf") == "zh"
+        "C:/temp/测试案例.pdf") == "zh"
 
 
 # ----- find_chapters ----------------------------------------------------

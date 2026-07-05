@@ -105,8 +105,8 @@ _BD_WAREHOUSE_EXAMPLES_URL = ("https://api.github.com/repos/gumyr/bd_warehouse/"
 # Default local roots walked by refresh_cubit_local_examples. Anything a
 # user wants indexed can also be passed explicitly via `roots=[...]`.
 _DEFAULT_LOCAL_CUBIT_ROOTS = [
-	r"S:\CoreformCubit",
-	r"S:\Radia\01_GitHub\examples",
+	r"public-safe curated corpus",
+	r"repo:/examples",
 ]
 
 # Source families — `search_examples(family, ...)` unions all sub-sources
@@ -1179,7 +1179,7 @@ def refresh_bd_warehouse_examples(include_examples_dir: bool = True) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# cubit_local: walks on-disk directories (S:\CoreformCubit, Radia/examples, ...)
+# cubit_local: walks on-disk directories (public-safe curated corpus, Radia/examples, ...)
 # ---------------------------------------------------------------------------
 
 _LOCAL_EXTS = (".jou", ".py")
@@ -1213,8 +1213,8 @@ def refresh_cubit_local_examples(roots: list[str] | None = None,
                                  extra_skip_dirs: list[str] | None = None) -> dict:
 	"""Walk local directories and index .jou / .py files as Cubit examples.
 
-	Default roots: `S:\\CoreformCubit` (the lab's years of curated
-	Cubit projects, ~145 files) and `S:\\Radia\\01_GitHub\\examples`
+	Default roots: `public-safe curated corpus` (the lab's years of curated
+	Cubit projects, ~145 files) and `repo:/examples`
 	(~400 files across radia / build123d / cubit / ngsolve / ih /
 	electromagnet workflows). Users can pass `roots=[...]` to override.
 

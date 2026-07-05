@@ -36,8 +36,8 @@ Charge EV while it's moving (no stop required). Key challenges:
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/04_dynamic_charging/ (7 papers)
-W:/.../05_ワイヤレス給電/10_異物検出/01_位置検知方式/ (10 papers, dual-use)
+public-safe curated corpus (7 papers)
+public-safe curated corpus (10 papers, dual-use)
 """
 
 
@@ -78,8 +78,8 @@ Cross-references:
 
 ## References
 
-W:/.../05_ワイヤレス給電/99_その他/99_misc/01_論文_ロボット_モータ/ (6 papers)
-W:/.../05_ワイヤレス給電/99_その他/99_misc/02_論文_ロボット/ (5 papers)
+public-safe curated corpus (6 papers)
+public-safe curated corpus (5 papers)
 """
 
 
@@ -95,7 +95,7 @@ WPT_LAB_LINEAGE = r"""
 | 久田 (Hisada) | 修士論文_本審査 久田 |  |
 | 吉田 (Yoshida) | 博士論文_本審査 吉田 |  |
 
-(All in W:/.../13_RNA/01_lab_sugahara/)
+(All in public-safe curated corpus)
 
 ## Lab core methods for WPT analysis
 
@@ -136,9 +136,9 @@ rad.MatApl(ferrite, rad.MatSatIsoTab(BH_DATA))
 
 ## References
 
-W:/.../99_アプリケーション/05_ワイヤレス給電/03_IEICE/ (90 papers, lab WPT IEICE corpus)
-W:/.../13_RNA/01_lab_sugahara/ (10+ files, lab RNA-WPT lineage)
-W:/.../39_部品材料/02_リッツ線/ (44 papers, Litz wire physics)
+public-safe curated corpus (90 papers, lab WPT IEICE corpus)
+public-safe curated corpus (10+ files, lab RNA-WPT lineage)
+public-safe curated corpus (44 papers, Litz wire physics)
 """
 
 

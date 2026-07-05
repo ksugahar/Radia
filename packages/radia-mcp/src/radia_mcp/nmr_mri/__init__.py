@@ -3,7 +3,7 @@
 Magnetic resonance applications: spectrometer magnet design,
 high-uniformity coil arrangements, shimming, gradient coil design.
 
-Distilled from W:\\03_文献・論文\\00_電磁界解析\\99_アプリケーション\\NMR・MRI\\
+Distilled from public-safe curated corpus
 and related directories.
 
 Skeleton subpackage — populated by the auto-indexer.

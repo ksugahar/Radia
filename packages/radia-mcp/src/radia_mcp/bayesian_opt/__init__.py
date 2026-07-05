@@ -1,7 +1,7 @@
 """radia_mcp.bayesian_opt — Bayesian optimization, Gaussian Process
 regression, FMQA, and surrogate models for EM engineering.
 
-Distilled from W:/.../04_最適化_ベイズ_BBO/ (57 lab files), including:
+Distilled from public-safe curated corpus (57 lab files), including:
   - GP regression theory: ガウス過程回帰の基礎.pdf, Mochihashi GP tutorial
   - ARD kernel for nonlinear EM/seismic response: 2 papers
   - Physics-informed GP: Raissi 2017, Pförtner 2023, Henderson 2023
