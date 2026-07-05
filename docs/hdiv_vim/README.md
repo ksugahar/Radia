@@ -5,10 +5,11 @@ equation on distorted meshes (see [`../loop_star_breakdown.md`](../loop_star_bre
 **field-null by construction** when the magnetization lives in NGSolve's H(div) (RT) finite-element
 space — so the **HDiv-type VIM** is the **primary accurate soft-iron demag route** (decision
 2026-06-30; collocation MMMM is the coarse/fast tier), with a de-Rham-exact operator for **RT1 demag
-on tetrahedra (flat + curved P2) and pure-hex meshes (flat + curved Q2, Piola-exact charges,
-H-matrix build)**, plus a **2D planar tri/quad layer** (log kernel, motor cross-sections).
-Permanent-magnet regions mix directly into `Solve` (`pm_M=`); wedge/mixed-element bodies
-and symmetry-reduced image models remain routed to the collocation MMMM backend.
+on tetrahedra (flat + curved P2), pure-hex meshes (flat + curved Q2, Piola-exact charges,
+H-matrix build), and flat pure-wedge meshes**, plus a **2D planar tri/quad layer** (log
+kernel, motor cross-sections). Permanent-magnet regions mix directly into `Solve` (`pm_M=`);
+flat pure-TET / pure-HEX / pure-WEDGE symmetry-reduced image models are supported by the
+charge-Gram IMA path. Mixed/pyramid bodies remain routed to the collocation MMMM bridge.
 
 The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix and high-order extensibility,
 but the charge-Coulomb Gram integrals dominate matrix construction.  Multipole-moment MMM gives up
@@ -90,7 +91,7 @@ What each number is measured against, precisely:
 | Pure-hex RT1 (affine / distorted / real-warp hex) | physical bound + cube 1/3 | eig ∈ [0,1] incl. the worst real Cubit cylinder hex (pre-Piola leaked to 1.0105); `hex_rt1_and_2d_showcase.ipynb` |
 | Curved hex cylinder (Q2 geometry) | **ANALYTIC** moment (volume capture) | moment err 0.13%; max eig 1.0078 — the one documented bound violation, open item |
 | 2D disk / ellipse / Clausius–Mossotti | **ANALYTIC** closed forms | disk demag 1/2 exact (0.50000); ellipse 2:1 → 0.33438/0.66562; CM `2–3e-4` |
-| Symmetry models 1/2, 1/4, 1/8 | retired from HDiv-VIM | use collocation MMMM for reduced image/symmetry models |
+| Symmetry models 1/2, 1/4, 1/8 | explicit full model + parity | flat pure-TET/HEX/WEDGE IMA; `M_avg` is full-domain, `M_avg_reduced` is diagnostic |
 
 **Reference rules:** sphere / spheroid / ellipsoid / dipole are validated vs **analytic truth** (real
 errors). Cube / C-yoke have **no analytic solution** — validated vs **shipped Radia** (a trusted
@@ -111,11 +112,23 @@ in **6 Newton iters** and matches Radia to `<1%`.
 
 ## 5. Symmetry models (1/2, 1/4, 1/8)
 
-Image / IMA symmetry is retired from HDiv-VIM.  Reduced symmetry / image models and wedge /
-mixed-element bodies are the responsibility of collocation MMMM.  This keeps the public HDiv
-contract small and fail-loud instead of carrying experimental image rules in the Galerkin path.
-(Pure-hex meshes are **no longer** in that exclusion — the hex RT1 charge Gram shipped 2026-07;
-permanent-magnet mixing is native via `Solve(pm_M=...)`.)
+Image / IMA symmetry is live for **flat pure-TET, pure-HEX, and pure-WEDGE RT1** HDiv-VIM.
+The reduced mesh solve folds mirror charges into the charge-Gram H-matrix; when called through
+`rad.Solve(..., image=...)`, the Radia bridge also materializes explicit mirror polyhedra after
+write-back.  Therefore `rad.Fld(iron, ...)` on the solved `MeshSoftIron` container evaluates the
+**materialized full field of that reduced solution**, suitable for probes and visualization.  This is a
+roundoff-level contract against `res["field_object"]`, not a license to accept percent-level differences
+against an unconstrained explicit full solve.  The latter still exposes a hex RT1 write-back gap: small
+transverse components in the full solve follow the hex ChargeGram quadrature details, so the 10-eps
+explicit-full `rad.Fld` target is tracked as an xfail validation item until the reflection symmetry of the
+hex RT1 operator is fixed.  The result dict reports:
+
+- `M_avg`: physical full-domain average magnetization; odd components across an image plane cancel.
+- `M_avg_reduced`: raw reduced-domain average, kept for diagnostics and debugging only.
+- `image_field_handles`: explicit mirror element handles added for `rad.Fld` when `image=` is used.
+
+Curved reduced models, mixed-element bodies, and pyramid-containing meshes fail loud or route to the
+collocation MMMM bridge; do not silently drop image symmetry in those cases.
 
 ## 6. HDiv-type vs multipole-moment MMM
 
@@ -124,11 +137,11 @@ permanent-magnet mixing is native via `Solve(pm_M=...)`.)
 | Linear demag (sphere/spheroid/triaxial) | ✓ | ✓ exact vs analytic |
 | Nonlinear (cube / C-yoke) | ✓ | ✓ `<1%` vs Radia, 6 iters |
 | Distorted-mesh μr-independence | ✓ (hand-crafted) | ✓ **by construction** (`4e-16`) |
-| Symmetry 1/4, 1/8 | ✓ (loop-star / image handling) | retired; use collocation MMMM |
+| Symmetry 1/4, 1/8 | ✓ (image handling) | ✓ flat pure-TET/HEX/WEDGE; `rad.Fld` materializes images |
 | **Curved tetrahedral geometry** | ✗ (flat elements) | ✓ RT1 + curved P2 tet geometry |
 | **Pure-hex meshes** | ✓ (its native element; coarse/fast tier) | ✓ RT1, Piola-exact charges, flat + curved Q2, H-matrix build |
 | **2D planar tri/quad (motor cross-sections)** | ✗ | ✓ log-kernel Gram, closed-form gated |
-| Wedge / mixed-element bodies | ✓ | not yet (open) |
+| Wedge / mixed-element bodies | ✓ | pure-wedge RT1 live; mixed/pyramid still bridge/open |
 | Hand-crafted elements | required | **not needed** (de-Rham-exact) |
 
 ## 7. Honest status & open work
@@ -157,12 +170,18 @@ showcase notebooks above.
 2. **Hex public API — DONE (2026-07-04).**  `Solve(hexmesh, mu_r=/bh_table=)` and
    `rad.Solve(demag_backend='hdiv')` now solve a pure-hex mesh **LINEAR + NONLINEAR** (the C++
    energy-Newton was already Gram-agnostic — it takes the hex `(H, B, M_mass)` unchanged), matching
-   collocation MMMM to ~1% (golden `test_hdiv_vim_hex_public_solve.py`).  The `auto` default still
-   routes a mesh-backed hex iron to collocation MMMM (KEEP-BOTH; flipping that default is item 3).
-   The legacy `solve_nonlinear_newton_scalable` (`tet.build_demag` head-to-head path) stays tet-only.
-   **2D nonlinear** iron is the 2D planar layer's own track.
-3. **Wedge** elements (extruded motor stacks) + the hex auto-dispatch policy (when a hex mesh
-   defaults to HDiv-VIM vs collocation MMMM).
+   collocation MMMM to ~1% (golden `test_hdiv_vim_hex_public_solve.py`).  The `auto` default routes
+   mesh-backed pure TET/HEX/WEDGE iron to HDiv-VIM; KEEP-BOTH remains available via explicit
+   `demag_backend='collocation_mmmm'`.  The legacy `solve_nonlinear_newton_scalable`
+   (`tet.build_demag` head-to-head path) stays tet-only. **2D nonlinear** iron is the 2D planar layer's
+   own track.
+3. **`rad.Fld` / application contract hardening (2026-07-05):** `rad.Solve` now has validation gates
+   for HDiv write-back into Radia field objects, IMA full-domain `rad.Fld`, HACApK charge-Gram build
+   stats, and a minimal planar motor saliency angle sweep.  Important correction: IMA `rad.Fld` is exact
+   for the materialized reduced solution, while unconstrained explicit-full hex RT1 `rad.Fld` is not yet
+   a machine-precision oracle because the hex ChargeGram still has a small reflection-symmetry defect.
+   The remaining application work is to fix that explicit-full field parity, then promote the validation
+   gates into the radia-motor operating API and larger mdx benchmarks.
 4. **VIM ↔ reduced-FEM weak coupling — verified end-to-end + promoted to docs (2026-07-04).**  The 2D
    maglev-pattern weak coupling (open-boundary VIM iron + reduced complex A_z FEM on the conductor) is
    shipped as the executed showcase [`../electric_machine/planar_vim_motor.ipynb`](../electric_machine/planar_vim_motor.ipynb)
@@ -188,6 +207,9 @@ showcase notebooks above.
 | Head-to-head vs shipped Radia | `compare_curved_vs_radia_field.py` | `test_curved_vs_radia_field.py` |
 | C-yoke nonlinear (non-convex) | `hdiv_cyoke_nonlinear.py` | `test_hdiv_vim_cyoke_nonlinear.py` |
 | RT1 pure-TET / pure-HEX public contract | `Solve(..., order=1)` | `test_hdiv_vim_rt1_contract.py`, `test_hdiv_vim_hex_public_solve.py` |
+| Radia field write-back / IMA field contract | `rad.Solve(..., image=...)`, `rad.Fld(...)` | `test_hdiv_radfld_contract.py` |
+| HACApK Gram build stats / speed guard | `_ChargeGramHMatrix`, `res["hmat_stats"]` | `test_hdiv_hacapk_gram_performance.py` |
+| Planar motor minimal contract | `PlanarDemagBody`, angle sweep | `test_hdiv_motor_minimal_contract.py` |
 
 The live executable checks are under `validation_test/feec/`; the legacy helper
 scripts imported by those checks are under `validation_test/feec/vim_legacy/`

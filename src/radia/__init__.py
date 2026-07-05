@@ -322,6 +322,25 @@ if "Solve" in globals():
         return _cpp_Solve(*args, **kwargs)                  # mesh-less -> collocation MMMM (or MMM/PM)
 
 
+if "Fld" in globals():
+    _cpp_Fld = globals()["Fld"]
+
+    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv IMA field-container redirect)
+        """Evaluate Radia fields.
+
+        Mesh-backed HDiv-VIM solves with ``image=`` run on a reduced mesh but need an explicit mirror object
+        for field evaluation of that reduced solution.  The HDiv bridge records that full-field container,
+        and this wrapper redirects only those solved handles.  All ordinary Radia objects call the C++
+        ``Fld`` unchanged.
+        """
+        try:
+            from radia.vim import _radsolve
+            obj = _radsolve.field_object_for(obj)
+        except Exception:
+            pass
+        return _cpp_Fld(obj, *args, **kwargs)
+
+
 if "SolverConfig" in globals():
     _cpp_SolverConfig = globals()["SolverConfig"]
 

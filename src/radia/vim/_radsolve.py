@@ -23,18 +23,22 @@ reflected-block QuadBlockHex/Wedge(mask); validated 2026-07-04 -- a reduced 1/2,
 the full model to ~1e-4).  A MIXED / pyramid mesh-backed iron (not yet HDiv-covered), and any iron under
 set_demag_backend('collocation_mmmm'), route to the collocation MMMM gated bridge.  The per-element
 write-back container is ObjTetrahedron / ObjHexahedron / ObjWedge, so all three round-trip ``ObjSetM`` /
-``rad.Fld``.
+``rad.Fld``.  If ``image=`` is used, dispatch also materializes the mirror-image polyhedra after the
+HDiv solve.  The solved Radia container therefore redirects ``rad.Fld`` to the full field object of that
+reduced solution, while the HDiv solve itself still runs on the reduced mesh.
 """
 import radia as rad
 
 _DEMAG_REGISTRY = {}   # iron container handle -> dict(mesh, mu_r, bh_table, handles)
 _KNOWN_CONTAINER_MEMBERS = {}  # container handle -> member handles known to be safe for ObjCntStuf-free lookup
+_FIELD_REDIRECTS = {}  # solved reduced container/top handle -> full field container handle for rad.Fld
 
 
 def clear_registry():
     """Drop all mesh<->container associations (call when Radia handles are invalidated)."""
     _DEMAG_REGISTRY.clear()
     _KNOWN_CONTAINER_MEMBERS.clear()
+    _FIELD_REDIRECTS.clear()
 
 
 def register_container(container, members):
@@ -42,6 +46,81 @@ def register_container(container, members):
     ObjCntStuf on arbitrary handles.  ObjCntStuf segfaults on non-container handles in some Radia builds,
     so registry lookup must stay Python-side and conservative."""
     _KNOWN_CONTAINER_MEMBERS[container] = list(members)
+
+
+def _mesh_element_vertices(mesh, material_filter=None):
+    """Return volume-element vertices in the same order as ``netgen_mesh_to_radia(..., combine=False)``."""
+    from ngsolve import VOL
+
+    if material_filter is None:
+        allowed = None
+    elif isinstance(material_filter, str):
+        allowed = {material_filter}
+    elif isinstance(material_filter, (list, tuple, set)):
+        allowed = set(material_filter)
+    else:
+        raise ValueError(
+            f"material_filter must be str, list, or None, got {type(material_filter)}"
+        )
+
+    vertices = []
+    for el in mesh.Elements(VOL):
+        if allowed is not None and el.mat not in allowed:
+            continue
+        vertices.append([
+            [float(c) for c in mesh.vertices[v.nr].point]
+            for v in el.vertices
+        ])
+    return vertices
+
+
+def _delete_handles(handles):
+    """Best-effort cleanup for explicit IMA field images from a previous solve."""
+    for h in list(handles or []):
+        try:
+            rad.UtiDel(h)
+        except Exception:
+            pass
+
+
+def _clear_image_field_handles(iron, reg):
+    _delete_handles(reg.get("image_handles", []))
+    reg["image_handles"] = []
+    for key in reg.get("field_redirect_keys", []):
+        _FIELD_REDIRECTS.pop(key, None)
+    reg["field_redirect_keys"] = []
+    reg["field_container"] = None
+    reg["field_top_container"] = None
+    register_container(iron, reg["handles"])
+
+
+def _materialize_image_field_handles(iron, reg, image, top=None, sources=None):
+    """Add explicit IMA images so ``rad.Fld(iron, ...)`` evaluates the reduced solution's full field."""
+    _clear_image_field_handles(iron, reg)
+    if image is None:
+        return [], iron
+    from radia.ima_field import add_ima_images
+
+    images = add_ima_images(reg["handles"], reg["vertices"], image, container=None)
+    field_iron = rad.ObjCnt(list(reg["handles"]) + list(images))
+    reg["image_handles"] = list(images)
+    reg["field_container"] = field_iron
+    _FIELD_REDIRECTS[iron] = field_iron
+    keys = [iron]
+    field_top = field_iron
+    if top is not None:
+        members = [field_iron] + list(sources or [])
+        field_top = rad.ObjCnt(members)
+        reg["field_top_container"] = field_top
+        _FIELD_REDIRECTS[top] = field_top
+        keys.append(top)
+    reg["field_redirect_keys"] = keys
+    return images, field_iron
+
+
+def field_object_for(handle):
+    """Return the full-field object for a solved HDiv IMA handle, else the handle itself."""
+    return _FIELD_REDIRECTS.get(handle, handle)
 
 
 def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, verbose=False):
@@ -61,9 +140,15 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     from radia.netgen_mesh_import import netgen_mesh_to_radia
     if (mu_r is None) == (bh_table is None):
         raise ValueError("vim.MeshSoftIron: give exactly one of mu_r (linear) or bh_table (nonlinear)")
+    vertices = _mesh_element_vertices(mesh, material_filter=material_filter)
     handles = netgen_mesh_to_radia(mesh, material={'magnetization': [0.0, 0.0, 0.0]},
                                    combine=False, verbose=verbose, material_filter=material_filter,
                                    allow_hex=True, allow_wedge=True)
+    if len(vertices) != len(handles):
+        raise RuntimeError(
+            f"vim.MeshSoftIron: mesh import produced {len(handles)} Radia handles but "
+            f"{len(vertices)} element vertex records; material_filter/order drift?"
+        )
     # Apply the soft-iron material so the explicit collocation_mmmm backend also works on this container.
     mat = rad.MatLin(float(mu_r)) if mu_r is not None else rad.MatSatIsoTab(bh_table)
     for h in handles:
@@ -71,7 +156,8 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     cont = rad.ObjCnt(handles)
     register_container(cont, handles)
     _DEMAG_REGISTRY[cont] = dict(mesh=mesh, mu_r=mu_r, bh_table=bh_table,
-                                  handles=list(handles))
+                                  handles=list(handles), vertices=vertices, image_handles=[],
+                                  field_redirect_keys=[], field_container=None, field_top_container=None)
     return cont
 
 
@@ -179,6 +265,7 @@ def dispatch(top, *solve_args, **solve_kwargs):
     iron, sources = _find_registered_iron(top)
     reg = _DEMAG_REGISTRY[iron]
     mesh = reg["mesh"]
+    _clear_image_field_handles(iron, reg)
 
     # applied field H_ext = the source members' H field (coils / ObjBckg), as an NGSolve CF
     if sources:
@@ -196,4 +283,11 @@ def dispatch(top, *solve_args, **solve_kwargs):
             f"{len(M)} HDiv elements) -- mesh and registered handles are out of sync.")
     for h, m in zip(handles, M):
         rad.ObjSetM(h, [float(m[0]), float(m[1]), float(m[2])])
+    if image is not None:
+        image_handles, field_iron = _materialize_image_field_handles(iron, reg, image, top=top, sources=sources)
+        res["image_field_handles"] = image_handles
+        res["field_object"] = field_iron
+        res["field_contract"] = "rad.Fld on the MeshSoftIron container redirects to explicit IMA mirror images of the reduced solution"
+    else:
+        res["field_contract"] = "rad.Fld on the MeshSoftIron container uses the solved reduced/full mesh"
     return res

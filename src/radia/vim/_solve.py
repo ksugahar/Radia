@@ -503,10 +503,13 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             solver_used = "mass-riesz-cg"
 
     gfM = ng.GridFunction(fes); gfM.vec.FV().NumPy()[:] = m
-    fesM = ng.VectorL2(mesh, order=0); gfMc = ng.GridFunction(fesM); gfMc.Set(gfM)
-    M_el = gfMc.vec.FV().NumPy().reshape(3, n_el).T.copy()
-    vol = ng.Integrate(ng.CoefficientFunction(1.0), mesh)
-    M_avg_reduced = np.array([ng.Integrate(gfM[i], mesh) for i in range(3)]) / vol   # raw REDUCED-domain average
+    vol_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True), float)
+    M_el = np.vstack([
+        np.asarray(ng.Integrate(gfM[i], mesh, element_wise=True), float) / vol_el
+        for i in range(3)
+    ]).T.copy()
+    vol = float(np.sum(vol_el))
+    M_avg_reduced = np.average(M_el, axis=0, weights=vol_el)   # raw REDUCED-domain average
     # With image= (a symmetry-reduced solve), the raw average above is over the REDUCED domain only.  A
     # magnetization component that is ODD across an image mirror plane (e.g. Mx across a '+x' plane) integrates
     # to a nonzero ONE-SIDED value over the reduced half/quarter/octant, but that value CANCELS exactly against

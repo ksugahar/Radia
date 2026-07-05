@@ -16,8 +16,8 @@ hard **definition-of-done** (the parity gate).
 | Linear solve | **`SolveLinearMaterial`: Jacobi-PCG for ((1/chi)M_mass + B^T G B) in C++ (M3, golden-locked vs scipy MINRES + dense)**; public `Solve(..., linear_solver="auto")` uses the C++ CG path for scalar uniform linear materials. The old `linear_solver="hlu"` system-A experiment is retired from HDiv-VIM. | scipy GMRES remains for nonlinear and per-region orchestration |
 | Nonlinear demag | **scalar-chi Picard `SolveNonlinearPicard` in C++ (M3): isotropic nonlinear demag M=Mof(H0-Dscal*M), golden vs Python Picard <1e-5 + analytic fixed point <1%**; per-element tensor-tangent Newton (non-uniform M) still NGSolve | `Solve` damped Newton uses the C++ Gram H-matvec |
 | Curved + high-order Gram | — (uses NGSolve) | `ngsolve.bem` single-layer (sphere/spheroid/ellipsoid validation) |
-| Symmetry image method | retired from HDiv-VIM | use collocation MMMM for image/symmetry reduced models |
-| **Public Radia API** | `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, order=1)` and `rad.Solve(demag_backend='hdiv')` on tet mesh-backed iron | `build_demag` returns sparse B/Mass/geometry for diagnostics |
+| Symmetry image method | flat pure-TET / pure-HEX / pure-WEDGE IMA folded into `_ChargeGramHMatrix`; `rad.Solve(..., image=...)` materializes field images for `rad.Fld` | curved / mixed / pyramid reduced models fail loud or bridge to collocation MMMM |
+| **Public Radia API** | `radia.vim.Solve(mesh, mu_r=/bh_table=, H_ext=, order=1)` and `rad.Solve(demag_backend='hdiv')` on mesh-backed pure TET/HEX/WEDGE iron | `build_demag` returns sparse B/Mass/geometry for diagnostics |
 
 TaskManager is the threading substrate.  The shared HACApK build path and the long C++ HDiv solve loops
 stand up/reuse an NGSolve `RegionTaskManager`; direct Python/NGSolve assembly and diagnostic `.matvec()`
@@ -46,9 +46,9 @@ quadrature (~10x vs the bring-up build on the cylinder benches: 166/164 s -> 18.
 flat/curved); the ~20k-charge use-after-free crash is fixed (commit `20e6e9e2`).  (b) The 2D planar
 tri/quad log-kernel Gram for motor cross-sections (commit `a9999dd7`, closed-form gated: disk demag
 1/2 exact, ellipse thirds, 2D Clausius-Mossotti 2-3e-4).  Both auto-route through
-`ChargeGram`; the `rad.Solve` engineering dispatch for hex REMAINS with collocation MMMM
-until the dispatch-flip decision (open), and nonlinear remains tet-only (the energy-Newton must
-learn an external (B, G, M) triple).  Executed evidence + fresh build timings:
+`ChargeGram`; the later dispatch flip is now complete: `rad.Solve(auto)` routes mesh-backed pure
+TET/HEX/WEDGE iron to HDiv-VIM, while explicit `demag_backend='collocation_mmmm'` remains the
+coarse-tier cross-check.  Executed evidence + fresh build timings:
 [`hex_rt1_and_2d_showcase.ipynb`](hex_rt1_and_2d_showcase.ipynb) (+ `_result.json` sidecar).
 Open: curved-hex max eig 1.0078 (halved from 1.0166; self/touching curved quadrature), wedge,
 2D nonlinear, Sauter-Schwab 6D (negative so far).
@@ -66,6 +66,20 @@ space is tri-P1 (x) z-P1 = {1, x, y, z, xz, yz} -- SIX monomials per cell (the d
 EXISTING C++ tet-face and hex-face charge machinery covers all wedge faces; the 18-node
 (P2-tri x 3 z-levels) geometry lattice evaluates via GetTrafo.  The C++ port (ref-wedge sub-tet
 tables + WedgeSiteRad quadrature + goldens) is the named next increment and is mechanical.
+
+Progress (2026-07-05): **Radia-facing HDiv contract hardening**.  The solver math gates were already
+thick; the missing production layer was the application contract after write-back.  New validation locks:
+`rad.Solve -> ObjSetM -> rad.Fld` equals an explicit Radia rebuild from `res["M"]`;
+`rad.Solve(..., image=...)` materializes explicit IMA mirror polyhedra so `rad.Fld(iron, ...)` is the
+full field of the same reduced solution to roundoff.  Do not claim percent-level explicit-full parity:
+the 10-eps target against an unconstrained full hex RT1 solve is currently an xfail because the full
+hex ChargeGram path still has a small reflection-symmetry defect (the transverse component changes with
+the quadrature knobs).  `M_avg` is the
+full-domain average while `M_avg_reduced` keeps the raw reduced-domain diagnostic; HACApK charge-Gram
+build stats enter low-rank/compressed mode on a modest hex grid; and the 2D planar layer has a minimal
+radia-motor saliency angle-sweep contract.  Validation files:
+`test_hdiv_radfld_contract.py`, `test_hdiv_hacapk_gram_performance.py`,
+`test_hdiv_motor_minimal_contract.py`.
 
 ## Definition of done — the parity gate (M0)
 
