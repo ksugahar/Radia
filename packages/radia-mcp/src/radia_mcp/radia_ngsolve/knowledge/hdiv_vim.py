@@ -589,9 +589,17 @@ construction (no quadrature -> no asymmetry, no 16x).  The infrastructure alread
 `mathematica/basis_functions/hdiv.wls` builds the RT_p hex de Rham basis and states it is "ideal for the
 analytical VIM field operator" -- this charge Gram IS that operator.  Since the VIM is RT1-only the symbolic
 derivation stays small/tractable; this matches the `analytical_formulas` closed-form-reference layer and is
-the right path, NOT the 16x quadrature hack.  (Origin: this surfaced from the IMA mixed-plane study whose 15%
-was itself only an M_avg comparison artifact -- see the M_avg full-domain note above; the Gram symmetry is the
-separate, genuine-but-tiny residual.)
+the right path, NOT the 16x quadrature hack.  DERIVED + PACKAGED (2026-07-05,
+`mathematica/basis_functions/hdiv_charge_gram.wls`, self-tested): the inner box Newtonian potential
+`INT_B c_b/|x-y|` IS closed form (Waldvogel 3-fold antiderivative + Q1 moments, verified vs numeric); the
+fully-symbolic OUTER (6-fold antiderivative) is too heavy but is NOT needed -- the PRACTICAL exact fix is
+(closed-form box potential) x (SYMMETRIC tensor Gauss-Legendre outer over box A): the symmetric outer rule
+commutes with the box reflections, so a symmetry-forbidden transverse entry is MACHINE ZERO by construction
+(verified G[const_A, ylin_B] = -6.5e-18 vs the C++ ~1e-5; genuine G[const, const] = 0.98088 matches numeric).
+So the recommended fix (which SUPERSEDES the 24-tet) = replace the near-block 6-tet+Duffy quadrature with the
+closed box potential + a symmetric tensor-Gauss outer: exactly reflection-symmetric, NO sub-tet, NO Duffy, NO
+16x.  (Origin: this surfaced from the IMA mixed-plane study whose 15% was itself only an M_avg comparison
+artifact -- see the M_avg full-domain note above; the Gram symmetry is the separate, genuine-but-tiny residual.)
 Curved / mixed / pyramid reduced models remain fail-loud or collocation-MMMM bridge territory.
 
 ## NON-UNIFORM NONLINEAR needs analytic_gram; C-YOKE VERIFIED vs Radia (2026-06-08, the 1/8-gate audit)
