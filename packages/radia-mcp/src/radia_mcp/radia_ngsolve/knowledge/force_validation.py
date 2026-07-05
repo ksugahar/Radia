@@ -32,6 +32,7 @@ of the methods below, with an analytic sanity check available.
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d``, ``force.planar_lorentz_force_summary``, ``force.parallel_wire_lorentz_force_summary`` |
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
+| Axisymmetric reference -> 3D force-vector validation | Axial full-revolution force + transverse cancellation | ``axisymmetric_3d_validation.axisymmetric_to_3d_force_gate`` |
 | Uniform air-gap holding force | Magnetic pressure | ``force.air_gap_*`` and ``solve.magnetic_circuit_gap_force`` |
 | Uniform / sampled cylindrical air-gap torque | Maxwell shear stress | ``force.air_gap_shear_*``, ``force.air_gap_shear_torque_from_angle_samples`` |
 | RF beam / waveguide radiation pressure | Time-averaged Poynting momentum flux | ``force.radiation_pressure_*``, ``force.poynting_patch_force_summary``, ``force.time_average_maxwell_*`` |
@@ -59,6 +60,17 @@ F_k = - integral_band [(1/mu0) B_k (B.grad g)
 
 Use this when possible: it averages over elements, avoids surface-trace jumps,
 and is the most robust extractor for unstructured FEM meshes.
+
+Axisymmetric weighted stress is a particularly good 3D validation oracle.  A
+result from ``eggshell_force_axi`` includes the ``2*pi*r`` weight, so it is a
+full-revolution 3D axial force, not a per-radian or per-length number.  A 3D
+validation artifact should therefore record whether its force vector is
+``full_revolution`` or a ``symmetry_sector`` result, the sector angle, the
+global axial axis, and the solver/mesh/timing metadata.  Then
+``axisymmetric_to_3d_force_gate`` checks axial agreement and, for full 360 degree
+models, cancellation of the transverse force components.  This is the preferred
+bridge when an axisymmetric reference is used to validate a later 3D NGSolve or
+`.vol`-mesh force run.
 
 Lorentz force on an imposed-current conductor:
 

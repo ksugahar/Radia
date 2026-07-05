@@ -541,9 +541,9 @@ def test_streamfunction_min_inductance(sample_vols):
     assert r["peak_J"] > 0.0
 
 
-DEMO_REGCOIL = os.path.join(REPO, "examples", "stream_function",
+DEMO_REGCOIL = os.path.join(REPO, "docs", "stream_function",
                             "demo_regcoil_fusion.py")
-DEMO_REGCOIL_ADV = os.path.join(REPO, "examples", "stream_function",
+DEMO_REGCOIL_ADV = os.path.join(REPO, "docs", "stream_function",
                                 "demo_regcoil_fusion_advanced.py")
 
 

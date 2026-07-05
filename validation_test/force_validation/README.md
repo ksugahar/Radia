@@ -17,6 +17,7 @@ adjacent JSON summary with timestamp and runtime version metadata.
 | [`validation_torque_waveform_comparison.py`](validation_torque_waveform_comparison.py) | Periodic torque tables can be compared by mean drift, sample error, and harmonic ripple deltas |
 | [`validation_maxwell_contour_segment_balance.py`](validation_maxwell_contour_segment_balance.py) | Closed 2D Maxwell stress contours expose large local segment forces while the symmetric net force cancels |
 | [`validation_torque_waveform_health.py`](validation_torque_waveform_health.py) | A single periodic torque table is checked by mean torque, RMS ripple ratio, dominant harmonic, and harmonic variance budget |
+| [`validation_axisymmetric_to_3d_force_gate.py`](validation_axisymmetric_to_3d_force_gate.py) | Full `2*pi*r` axisymmetric force results validate 3D force vectors by axial agreement and transverse cancellation |
 
 ```powershell
 python validation_test/force_validation/validation_parallel_wire_virtual_work_force.py
@@ -25,4 +26,5 @@ python validation_test/force_validation/validation_coenergy_torque_table_consist
 python validation_test/force_validation/validation_torque_waveform_comparison.py
 python validation_test/force_validation/validation_maxwell_contour_segment_balance.py
 python validation_test/force_validation/validation_torque_waveform_health.py
+python validation_test/force_validation/validation_axisymmetric_to_3d_force_gate.py
 ```
