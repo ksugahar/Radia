@@ -1,23 +1,21 @@
-# Closed-form charge-Gram fill for the HDiv-VIM hex/wedge near block
+# Axis-aligned closed-form charge-Gram fill note
 
 **Design + decision record (2026-07-05).** The HDiv-VIM RT1 hex/wedge charge Gram
 `G_ab = INT_A INT_B c_a(x) c_b(y)/|x-y|` (the demag operator `N = B^T G B`; `c` = div of the RT1 basis, a Q1
 trilinear charge) is currently filled per-entry by a 6-sub-tet Duffy-graded quadrature (`QuadBlockHex`). This
-note records the decision to replace that per-entry fill with a **semi-closed form** — a closed box Newtonian
-potential (inner) plus a **symmetric** tensor Gauss outer — which (1) removes the ~1e-5 reflection-symmetry
-defect exactly and (2) lowers the per-entry cost. The closed forms are derived and verified here; the C++ port
-into `src/core/rad_hacapk_hdiv.cpp` is gated (see *Implementation gate*).
+note records why the tested **semi-closed form** is only an axis-aligned rectangular-box idea, not a production
+replacement for the general hex/wedge near block. The inner closed box Newtonian potential assumes a Cartesian
+product box and Q1 monomial charges in box-local axis coordinates. It does not cover warped, curved, swept, or
+general Cubit hex/wedge cells without an additional geometric transformation theory.
 
 ## Decision
 
-- Adopt the **semi-closed charge-Gram entry** for **disjoint** hex/wedge pairs (near + far blocks). The
-  coincident/self block keeps the existing exact `QuadBlockHex` path (it is already exact to 3.66e-15).
-- This is direction **"A" (closed-form per-entry fill)**, chosen over "B" (structured-hex BTTB/FFT, rejected as
-  too narrow — it only helps regular lattices).
-- The reflection-symmetry defect's strict xfail
-  (`validation_test/feec/test_hdiv_radfld_contract.py`) stays as the documented known-limitation until the port
-  lands; the 1e-5 field-parity error is accepted in the interim (two orders below the ~1e-3 engineering
-  tolerance; the demag factor and the parity-averaged `M_avg` are already correct).
+- Do **not** adopt this as the general HDiv-VIM hex/wedge Gram fill. It is valid only for axis-aligned boxes.
+- Keep `QuadBlockHex` / `QuadBlockWedge` as the production path for general and Cubit-origin cells.
+- The closed-form box identities remain useful as a small analytic oracle for axis-aligned fixtures.
+- No complex arithmetic is needed for this oracle. The kernel and charges are real; removable singularities and
+  branch choices must be handled by real limits / real `atan2`-style quadrant control, not by promoting the
+  expression to complex arithmetic.
 
 ## Why: LAB build profile (the bottleneck)
 
