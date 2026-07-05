@@ -144,16 +144,13 @@ a silent wrong result.  Always convert: `M = Br / mu_0` (Br=1.0 T -> 795775 A/m;
 Br=1.05 T -> 835559 A/m; Br=1.2 T -> 954930 A/m).  Sanity-check that the probe
 field is in the expected mT-to-T range, not micro-Tesla.
 
-### Worked example: SmCo hexagonal array (VERIFIED)
+### Worked example status: SmCo hexagonal array retired from docs
 
-`docs/smco_magnet_array/smco_magnet_array.ipynb` -- 125 cylindrical Sm2Co17
-magnets (Br = 1.05 T -> M = 8.36e5 A/m, `ObjCylMag` 16-sided) on a meshed
-soft-iron base plate (`MatLin(1000)`, wedge core ring + hex annular sectors).
-Self-contained notebook (code + `smco_results.json` + `smco_bz_map.png`).
-VERIFIED 2026-06-26 against the built wheel: Solve (LU) converges in 1 iter,
-|B| = 177.6 / 68.4 / 202.9 mT at (0,0,20) / (0,0,50) / (30,0,20) mm.  Note the
-meshed-disk core ring is a 6-vertex **wedge** -> `ObjWedge` (NOT `ObjHexahedron`);
-both element constructors require the magnetization argument.
+The old SmCo array notebook was retired because it mixed a permanent-magnet
+source lesson with a legacy soft-iron demag path. Keep the durable lesson:
+permanent magnets require `M = Br / mu_0` in A/m, and a field sanity check should
+land in the mT-to-T range. New user-facing examples that include soft iron must
+use HDiv-VIM.
 
 For demag analysis (full PM demag not yet implemented; the MatMagCurve skeleton was removed 2026-06-26):
 - Currently approximate as MatLin(mu_recoil) plus initial M

@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-27T02:45:19Z",
   "notebook": "docs/hdiv_vim/polynomial_charge_field.ipynb",
-  "notebook_sha256": "54c0dd83382132e2479c966bf880413d1f95adbe99cd656665c5adc002a9c6cd",
+  "notebook_sha256": "e85548bd80516db60b6b4ac5c61c355227cbc85057cf8114f70dea6befe5a09f",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T07:36:09Z",
   "notebook": "docs/clebsch_hodograph/examples_catalog.ipynb",
-  "notebook_sha256": "dc83132b9ad3a5e7756093d75ee4eb200a2b3cbae13d5d8eae2846dbe630df43",
+  "notebook_sha256": "31612afdabeda770716497702f5d755d06ed2da4c06b62dc96a70cdafc4f6021",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
