@@ -54,7 +54,7 @@ def test_meshless_hex_soft_iron_rejected():
     H0 = 1000.0
     bkg = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])   # uniform Bz = mu0*H0
     cont = rad.ObjCnt([h, bkg])
-    with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+    with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
         rad.Solve(cont, 1e-6, 1000, 0)
     rad.UtiDelAll()
     rad.set_demag_backend("auto")

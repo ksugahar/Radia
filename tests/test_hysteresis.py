@@ -161,10 +161,10 @@ class TestPlayStateManagement:
 
 
 class TestPlaySolverIntegration:
-    """Test Play material with BEM solver."""
+    """Test Play material solve routing."""
 
     def test_solve_with_play_material(self, play_fixture):
-        """rad.Solve converges with Play hysteresis material."""
+        """Mesh-less Play hysteresis solve is rejected; use mesh-backed HDiv."""
         K, eta, tables = play_fixture
         rad.UtiDelAll()
         mat = rad.MatPlayHysteresis(K, eta, tables)
@@ -176,9 +176,8 @@ class TestPlaySolverIntegration:
         bkg = rad.ObjBckg(lambda p: [0, 0, 0.1])
         container = rad.ObjCnt([mag, bkg])
 
-        result = rad.Solve(container, 0.001, 100, 0)
-        assert result[3] > 0, "Should have done at least 1 iteration"
-        assert result[3] < 100, f"Should converge in < 100 iterations, got {result[3]}"
+        with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
+            rad.Solve(container, 0.001, 100, 0)
 
 
 class TestPlayMonotoneLimits:

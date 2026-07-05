@@ -82,11 +82,8 @@ class TestNGSolveIntegration:
         self.magnet = rad.magnet_box(
             self.magnet_center,
             self.magnet_size,
-            [0, 0, 1.2]  # Magnetization 1.2 T in z-direction
+            [0, 0, 1000.0],
         )
-        # Apply NdFeB material
-        rad.MatApl(self.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
-        rad.Solve(self.magnet, 0.0001, 10000)
 
         yield
 
@@ -145,12 +142,10 @@ class TestNGSolveIntegration:
 
         # Create RadiaField (it IS a CoefficientFunction) and project
         B_cf = self.RadiaField(self.magnet, 'b')
-        from ngsolve import TaskManager
-        with TaskManager():
-            B_gf.Set(B_cf)
+        B_gf.Set(B_cf)
 
-            print(f"  FES DOFs: {fes.ndof}")
-            print("  [OK] HDiv GridFunction projection successful")
+        print(f"  FES DOFs: {fes.ndof}")
+        print("  [OK] HDiv GridFunction projection successful")
 
     def test_field_accuracy_far_from_magnet(self):
         """Test 5: Field accuracy at distance > 1 mesh cell from magnet"""
@@ -285,9 +280,7 @@ class TestNGSolveFunctionSpaces:
 
         rad.UtiDelAll()
 
-        self.magnet = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1.2])
-        rad.MatApl(self.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
-        rad.Solve(self.magnet, 0.0001, 10000)
+        self.magnet = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1000.0])
 
         yield
         rad.UtiDelAll()
@@ -375,9 +368,7 @@ def run_standalone_test():
         test.Pnt = Pnt
         test.magnet_center = [0, 0, 0]
         test.magnet_size = [0.020, 0.020, 0.030]
-        test.magnet = rad.magnet_box(test.magnet_center, test.magnet_size, [0, 0, 1.2])
-        rad.MatApl(test.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
-        rad.Solve(test.magnet, 0.0001, 10000)
+        test.magnet = rad.magnet_box(test.magnet_center, test.magnet_size, [0, 0, 1000.0])
 
         test.test_units_are_meters()
         test.test_radiafield_api()
@@ -402,9 +393,7 @@ def run_standalone_test():
         test2.CSGeometry = CSGeometry
         test2.OrthoBrick = OrthoBrick
         test2.Pnt = Pnt
-        test2.magnet = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1.2])
-        rad.MatApl(test2.magnet, rad.MatPM(1.2, 900000, [0, 0, 1]))
-        rad.Solve(test2.magnet, 0.0001, 10000)
+        test2.magnet = rad.magnet_box([0, 0, 0], [0.02, 0.02, 0.03], [0, 0, 1000.0])
 
         test2.test_hdiv_space()
         test2.test_hcurl_space()

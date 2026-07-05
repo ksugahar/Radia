@@ -76,7 +76,7 @@ def test_meshless_hex_soft_iron_not_registered_fails_loud():
     rad.MatApl(obj, rad.MatLin(1000.0))
     cont = rad.ObjCnt([obj])
     assert not _radsolve.is_registered(cont)        # mesh-less -> not HDiv-registered
-    with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+    with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
         rad.Solve(cont, 1e-6, 100, 0)
     rad.UtiDelAll()
     rad.set_demag_backend("auto")
