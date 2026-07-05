@@ -2033,6 +2033,85 @@ def _write_former_step(chain, wire_diam, clearance, margin, wall, decimate,
     }
 
 
+def _write_former_stl(chain, wire_diam, clearance, margin, wall, decimate,
+                      filename, sections=10, max_segments=1200):
+    """Printable FORMER via a ROBUST MESH boolean (trimesh + manifold3d),
+    exported as STL -- the native 3D-print / slicer format.
+
+    The channel = a mesh UNION of per-segment cylinder meshes + joint sphere
+    meshes, subtracted from a box-mesh plate.  manifold3d resolves the tube's
+    SELF-OVERLAP (from the single-stroke connectors crossing other turns) in
+    ~1 s and stays WATERTIGHT -- exactly where the OCCT BRep route
+    (netgen.occ ``Pipe`` / ``Fuse`` AND build123d ``sweep``, all one kernel)
+    segfaults or emits a degenerate near-EMPTY channel.  VERIFIED on the 3D
+    self-crossing distorted MRI-scale wire (386 pts, 8 m): union 0.7 s, cut
+    0.1 s, channel ratio 0.93, watertight (see
+    memory/sf_printable_former_cad_status.md).  Optional feature: needs
+    ``trimesh`` + ``manifold3d`` (``pip install trimesh manifold3d``); raises a
+    clear message if absent.  Raises (No-Fallback) if the result is not
+    watertight or the channel is near-empty."""
+    try:
+        import trimesh
+        import manifold3d  # noqa: F401  (the union/difference boolean engine)
+    except ImportError as e:
+        raise ImportError(
+            "--former-stl needs trimesh + manifold3d: "
+            "pip install trimesh manifold3d") from e
+    chain0 = np.asarray(chain, float)
+    chain = _decimate_polyline(chain0, decimate)
+    decimate_used = float(decimate)
+    if len(chain) - 1 > max_segments:                  # bound the mesh size
+        seglen = np.linalg.norm(np.diff(chain0, axis=0), axis=1)
+        decimate_used = float(seglen.sum()) / max_segments
+        chain = _decimate_polyline(chain0, decimate_used)
+    if len(chain) < 2:
+        raise ValueError("former: wire chain has < 2 points")
+    r = 0.5 * float(wire_diam) + float(clearance)
+    seglen = np.linalg.norm(np.diff(chain, axis=0), axis=1)
+    exp_channel = float(np.pi * r * r * float(seglen.sum()))
+    caps = []
+    for k in range(len(chain) - 1):
+        p, q = chain[k], chain[k + 1]
+        if float(np.linalg.norm(q - p)) < 1e-12:
+            continue
+        caps.append(trimesh.creation.cylinder(
+            radius=r, segment=(p, q), sections=int(sections)))
+    sph = trimesh.creation.icosphere(subdivisions=1, radius=r)
+    for k in range(len(chain)):                         # joint fill (bends)
+        s = sph.copy(); s.apply_translation(chain[k]); caps.append(s)
+    tube = trimesh.boolean.union(caps, engine="manifold")
+    mn = chain.min(axis=0) - np.array([margin, margin, r + wall])
+    mx = chain.max(axis=0) + np.array([margin, margin, r + wall])
+    plate = trimesh.creation.box(
+        extents=(mx - mn),
+        transform=trimesh.transformations.translation_matrix(0.5 * (mn + mx)))
+    plate_vol = float(plate.volume)
+    former = trimesh.boolean.difference([plate, tube], engine="manifold")
+    vol = float(former.volume)
+    channel = plate_vol - vol
+    ratio = channel / (exp_channel + 1e-30)
+    if not bool(former.is_watertight):
+        raise ValueError("former STL is not watertight (mesh boolean failed)")
+    if ratio < 0.5:
+        raise ValueError(
+            f"former channel ratio {ratio:.2f} < 0.5 -- the channel did not cut "
+            "(check --wire-diam / --former-wall / --former-margin)")
+    former.export(filename)
+    return {
+        "former_stl": filename,
+        "channel_segments": int(len(chain) - 1),
+        "channel_radius_m": r,
+        "decimate_step_m": decimate_used,
+        "channel_volume_m3": channel,
+        "channel_volume_expected_m3": exp_channel,
+        "channel_ratio": ratio,
+        "watertight": bool(former.is_watertight),
+        "former_size_m": [float(mx[i] - mn[i]) for i in range(3)],
+        "former_volume_m3": vol,
+        "plate_volume_m3": plate_vol,
+    }
+
+
 def _bubble_seeds(pts2d, bmag, k_const, n_max=240):
     """Bubble-system seed placement (Hirahatake/Noguchi/Igarashi/Yamashita):
     greedily drop seeds, biggest |B| first, keeping a clearance radius
@@ -2989,6 +3068,24 @@ def run_manufacture(args):
                 args.former_output)
             result["t_former_s"] = round(time.perf_counter() - t_f0, 3)
 
+        if getattr(args, "former_stl", ""):
+            # ROBUST printable FORMER via a MESH boolean (trimesh + manifold3d),
+            # STL out -- handles the 3D self-crossing single-stroke wire that the
+            # OCCT --former-output route segfaults / silently under-cuts on, and
+            # STL is the native 3D-print format.  Uses the DELIVERED wire
+            # (distorted if --distort).  No-Fallback: negative knobs fail loud.
+            for _nm in ("former_clearance", "former_margin", "former_wall",
+                        "former_decimate"):
+                if float(getattr(args, _nm)) < 0.0:
+                    return {"method": "manufacture",
+                            "error": f"--{_nm.replace('_', '-')} must be >= 0"}
+            t_fs0 = time.perf_counter()
+            result["former_mesh"] = _write_former_stl(
+                out_chain, args.wire_diam, args.former_clearance,
+                args.former_margin, args.former_wall, args.former_decimate,
+                args.former_stl)
+            result["t_former_stl_s"] = round(time.perf_counter() - t_fs0, 3)
+
         if args.peec:
             result["peec"] = _peec_inductance(
                 out_chain, args.wire_diam, 5.8e7, args.peec_freq)
@@ -3257,6 +3354,15 @@ def build_argparser():
                     help="former channel spine resample step in m (coarsens the "
                          "wire polyline to bound the CAD primitive count / build "
                          "time; 0 = no decimation; default 2.5 mm)")
+    ap.add_argument("--former-stl", default="",
+                    help="printable FORMER as STL via a ROBUST MESH boolean "
+                         "(trimesh + manifold3d) -- the recommended path: it "
+                         "handles the 3D self-crossing single-stroke wire that "
+                         "the OCCT STEP route (--former-output) segfaults / "
+                         "under-cuts on, in ~1 s and watertight, and STL is the "
+                         "native 3D-print format. Same --former-clearance/-margin/"
+                         "-wall/-decimate knobs. Needs: pip install trimesh "
+                         "manifold3d. STL coords in metres; scale in the slicer.")
     ap.add_argument("--peec", action="store_true",
                     help="compute PEEC coil inductance L, R (manufacture)")
     ap.add_argument("--wire-diam", type=float, default=1e-3,
