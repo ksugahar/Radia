@@ -21,14 +21,16 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_TEAM28 = os.path.join(_HERE, "..", "examples", "maglev", "sphere")
-_SCRIPT = os.path.join(_TEAM28, "coil_sphere_eddy_force.py")
-_JSON = os.path.join(_TEAM28, "coil_sphere_eddy_force_results.json")
+_SPHERE_DEMO = os.path.join(_HERE, "..", "docs", "maglev", "demos", "sphere")
+_SCRIPT = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force.py")
+_JSON = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force_results.json")
 
 
 @pytest.fixture(scope="module")
 def results():
-    proc = subprocess.run([sys.executable, _SCRIPT], cwd=_TEAM28,
+    if not os.path.isfile(_SCRIPT):
+        pytest.skip(f"coil sphere demo script not found: {_SCRIPT}")
+    proc = subprocess.run([sys.executable, _SCRIPT], cwd=_SPHERE_DEMO,
                           capture_output=True, text=True, timeout=600)
     assert proc.returncode == 0, (
         f"coil_sphere_eddy_force.py failed:\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}")

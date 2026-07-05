@@ -165,7 +165,7 @@ class TestMaterialApplication:
         mat = rad.MatLin(1000)
         rad.MatApl(tetra, mat)
 
-        with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+        with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
             rad.Solve(tetra, 0.0001, 100, 0)
 
     def test_hexahedron_soft_iron_requires_mesh_backed_hdiv(self):
@@ -178,7 +178,7 @@ class TestMaterialApplication:
         ]
         hex_obj = rad.ObjHexahedron(vertices, [0, 0, 0])
         rad.MatApl(hex_obj, rad.MatLin(1000))
-        with pytest.raises(RuntimeError, match="mesh-less soft iron"):
+        with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
             rad.Solve(hex_obj, 0.0001, 100, 0)
 
 

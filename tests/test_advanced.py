@@ -9,6 +9,7 @@ import os
 import math
 
 from pathlib import Path
+import pytest
 
 # Find project root (works from any test subdirectory)
 current_file = Path(__file__).resolve()
@@ -129,8 +130,8 @@ def test_quadrupole():
 	rad.UtiDelAll()
 	print(f"\n   [OK] Test completed")
 
-def test_iron_core():
-	"""Test with iron core (nonlinear material)"""
+def test_meshless_iron_core_rejected():
+	"""Mesh-less nonlinear iron cores must use the mesh-backed HDiv route."""
 	print("\n" + "=" * 60)
 	print("TEST: Iron Core Magnet")
 	print("=" * 60)
@@ -152,17 +153,11 @@ def test_iron_core():
 	rad.ObjSetM(core, [0, 0, 500])
 	print(f"   External field applied")
 
-	print("\n2. Solving with relaxation...")
+	print("\n2. Verifying mesh-less relaxation is rejected...")
 	precision = 0.001
 	max_iter = 1000
-	result = rad.Solve(core, precision, max_iter)
-	print(f"   Solver result: {result}")
-
-	print("\n3. Calculating field...")
-	points = [[0, 0, 0], [0, 0, 0.060]]  # 60 mm in meters
-	for pt in points:
-		field = rad.Fld(core, 'b', pt)
-		print(f"   Point {pt}: Bz = {field[2]:.6f} T")
+	with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
+		rad.Solve(core, precision, max_iter, 0)
 
 	# Cleanup
 	rad.UtiDelAll()

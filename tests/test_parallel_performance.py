@@ -8,6 +8,7 @@ All coordinates in meters, magnetization in A/m.
 import sys
 import time
 import os
+import pytest
 
 from pathlib import Path
 
@@ -76,8 +77,8 @@ def _field_computation_2d(magnet, grid_size=50):
 	end_time = time.perf_counter()
 	return end_time - start_time, len(points)
 
-def test_relaxation_performance():
-	"""Test relaxation solver performance with multiple elements"""
+def test_meshless_relaxation_rejected():
+	"""Mesh-less nonlinear relaxation must be modeled through HDiv-VIM."""
 	rad.UtiDelAll()
 	start_time = time.perf_counter()
 	try:
@@ -97,14 +98,12 @@ def test_relaxation_performance():
 		# Create container
 		container = rad.ObjCnt(elements)
 
-		# Create interaction
-		result = rad.Solve(container, 0.0001, 1000)
+		with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
+			rad.Solve(container, 0.0001, 1000, 0)
 
 		end_time = time.perf_counter()
 		elapsed_time = end_time - start_time
 
-		# Test passes if solver completes (rad.Solve returns convergence data)
-		assert result is not None
 		assert elapsed_time > 0
 	finally:
 		rad.UtiDelAll()

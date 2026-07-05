@@ -118,8 +118,8 @@ def test_field_calculation():
 	print(f"[OK] Field direction is correct (Bz > 0)")
 
 @pytest.mark.basic
-def test_solve():
-	"""Test 6: Relaxation/Solve"""
+def test_meshless_soft_iron_solve_rejected():
+	"""Test 6: Mesh-less soft-iron Solve is rejected"""
 	import radia as rad
 	print("\n" + "=" * 60)
 	print("Test 6: Relaxation Solver")
@@ -133,11 +133,9 @@ def test_solve():
 		# Solve the system
 		precision = 0.001
 		max_iter = 1000
-		result = rad.Solve(block, precision, max_iter)
-		print(f"[OK] SUCCESS: Solver completed")
-		print(f"  Result: {result}")
-		# rad.Solve returns convergence data (list), not a single int
-		assert result is not None
+		with pytest.raises(RuntimeError, match="[Mm]esh-less soft iron"):
+			rad.Solve(block, precision, max_iter, 0)
+		print("[OK] SUCCESS: Mesh-less soft-iron solve was rejected")
 	finally:
 		rad.UtiDelAll()
 

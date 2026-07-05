@@ -354,8 +354,8 @@ class TestMeshImportSolver(unittest.TestCase):
         ext_field = rad.ObjBckg(lambda p: [0, 0, B_ext])
         grp = rad.ObjCnt([container, ext_field])
 
-        with self.assertRaisesRegex(RuntimeError, "mesh-less soft iron"):
-            rad.Solve(grp, 0.001, 100, 1)
+        with self.assertRaisesRegex(ValueError, "mesh-backed soft iron"):
+            rad.Solve(grp, 0.001, 100, 1, demag_backend="hdiv")
 
     def test_hex_mesh_soft_iron_requires_mesh_backed_hdiv(self):
         """A hexahedral soft-iron mesh built as raw ObjHexahedron elements is not a supported solve path."""
@@ -373,8 +373,8 @@ class TestMeshImportSolver(unittest.TestCase):
         rad.MatApl(cube_hex, rad.MatLin(mu_r))
         grp_hex = rad.ObjCnt([cube_hex, rad.ObjBckg(lambda p: [0, 0, B_ext])])
 
-        with self.assertRaisesRegex(RuntimeError, "mesh-less soft iron"):
-            rad.Solve(grp_hex, 0.001, 100, 1)
+        with self.assertRaisesRegex(ValueError, "mesh-backed soft iron"):
+            rad.Solve(grp_hex, 0.001, 100, 1, demag_backend="hdiv")
 
 
 class TestMethodComparison(unittest.TestCase):

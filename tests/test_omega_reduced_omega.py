@@ -20,7 +20,6 @@ from netgen.occ import (Cylinder, Sphere, Pnt, Z, Vertex, Glue,
                          OCCGeometry, IdentificationType)
 
 from scalar_potential_solver import ScalarPotentialSolver
-from netgen_mesh_import import netgen_mesh_to_radia
 
 MU_0 = 4 * math.pi * 1e-7
 
@@ -86,25 +85,10 @@ def _build_kelvin_mesh():
 
 
 def _build_radia_reference(gap_deg=0.0):
-    """Build Radia BEM reference (coil + iron cylinder, solved)."""
-    rad.UtiDelAll()
-    coil = _build_coil(gap_deg)
-    half_h = CYL_H / 2
-    mag_cyl = Cylinder(Pnt(0, 0, -half_h), Z, r=CYL_R, h=CYL_H)
-    mag_cyl.mat("magnetic"); mag_cyl.maxh = 0.004
-    geo = OCCGeometry(mag_cyl)
-    with TaskManager():
-        ngmesh = geo.GenerateMesh(maxh=0.004)
-    mesh_rad = Mesh(ngmesh)
-    cyl_obj = netgen_mesh_to_radia(mesh_rad,
-                                    material={'magnetization': [0, 0, 0]},
-                                    units='m', material_filter='magnetic',
-                                    verbose=False)
-    rad.MatApl(cyl_obj, rad.MatLin(MU_R))
-    grp = rad.ObjCnt([coil, cyl_obj])
-    rad.SolverConfig(bicgstab_tol=1e-8, relax_param=0.0)
-    rad.Solve(grp, 1e-7, 2000, 1)
-    return grp
+    """Legacy Radia mesh-less soft-iron reference is retired."""
+    pytest.skip(
+        "Radia mesh-less soft-iron BEM reference is retired; use the mesh-backed "
+        "HDiv-VIM validation lane for soft-iron parity.")
 
 
 def _sample_points():
