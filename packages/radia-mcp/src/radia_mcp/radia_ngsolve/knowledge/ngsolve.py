@@ -7463,6 +7463,29 @@ rotating-field trig sum to machine precision (tests/test_mmf_harmonics.py). The 
 """
 
 
+NGSOLVE_ACDC_CROSS_LEARNING = r"""
+AC/DC CROSS-LEARNING CATALOG -- public-safe 100-case learning queue distilled from private
+source-native metadata.  Query the code artifact via
+``radia_mcp.radia_ngsolve.acdc_cross_learning.public_acdc_problem_catalog()`` and gate it with
+``acdc_problem_catalog_manifest_gate()`` before promoting cases to solver-ready validations.
+
+The catalog deliberately stores only scrubbed engineering families, solver lanes, observables, and
+validation gates.  Source-native titles, URLs, and benchmark numbers stay in the private
+cross-validation lane.  Important families include coil inductance, electric-current conduction,
+induction heating, transformer/magnetic circuits, rotating machines, capacitance matrices,
+open-boundary BEM/high-order impedance boundaries, material models, transmission-line/cable fields,
+eddy-current braking, and EM multiphysics coupling.
+
+Representative next promotions:
+  - coil cases -> inductance energy/flux-linkage reciprocity
+  - eddy/heating cases -> skin-depth/loss monotonicity and energy balance
+  - transformer cases -> open/short equivalent parameters and flux conservation
+  - motor cases -> torque/coenergy identity plus AGE/HDiv lane agreement
+  - electrostatic cases -> capacitance-matrix symmetry and positive semidefinite checks
+  - open-boundary cases -> FEM/BEM reciprocity and the lab high-order impedance boundary policy
+"""
+
+
 def get_ngsolve_documentation(topic: str = "all") -> str:
     """Return NGSolve usage documentation by topic."""
     topics = {
@@ -7555,6 +7578,9 @@ def get_ngsolve_documentation(topic: str = "all") -> str:
         "validation_registry": NGSOLVE_CROSS_VALIDATION_REGISTRY,
         "xval_registry": NGSOLVE_CROSS_VALIDATION_REGISTRY,
         "loop_learning": NGSOLVE_CROSS_VALIDATION_REGISTRY,
+        "acdc_cross_learning": NGSOLVE_ACDC_CROSS_LEARNING,
+        "acdc_problem_catalog": NGSOLVE_ACDC_CROSS_LEARNING,
+        "acdc_learning_catalog": NGSOLVE_ACDC_CROSS_LEARNING,
         "optuna_policy": NGSOLVE_CROSS_VALIDATION_REGISTRY,
         "force": NGSOLVE_ELECTROMAGNETIC_FORCE,
         "forces": NGSOLVE_ELECTROMAGNETIC_FORCE,
