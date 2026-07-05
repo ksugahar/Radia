@@ -162,5 +162,5 @@ proof-of-priority on any specific contribution is intended.
 ## Cross-reference
 
   - Capability matrix: [README.md](README.md)
-  - Paper outline: [paper_outline.md](paper_outline.md)
+  - Paper outline: W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\paper_outline.md (moved out of repo)
   - MCP topic: `streamfunction(topic=session_2026_05_30)` section 11

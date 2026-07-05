@@ -284,7 +284,7 @@ segfaults, `Glue` silently no-ops, `Fuse` degenerates, and build123d's dedicated
 robust boolean of that geometry use the MESH boolean (--former-stl); and author
 CAD generally with build123d or Cubit (ACIS -- a different, robust kernel), NOT
 ad-hoc netgen.occ (which is a STEP->mesh I/O library).  Full record:
-docs/stream_function/former_cad.md.
+the former CAD research note (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\former_cad.md).
 
 CHAIN (--chain {field_aware, nn})
 ---------------------------------
