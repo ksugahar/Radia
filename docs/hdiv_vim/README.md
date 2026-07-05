@@ -4,17 +4,21 @@
 equation on distorted meshes (see [`../loop_star_breakdown.md`](../loop_star_breakdown.md)) are
 **field-null by construction** when the magnetization lives in NGSolve's H(div) (RT) finite-element
 space — so the **HDiv-type VIM** is the **primary accurate soft-iron demag route** (decision
-2026-06-30; collocation MMMM is the coarse/fast tier), with a de-Rham-exact operator for **RT1 demag
+2026-06-30; updated 2026-07-05 toward Radia HDiv-only after the MMMM migration to
+`ELF_MAGIC@研究室版`), with a de-Rham-exact operator for **RT1 demag
 on tetrahedra (flat + curved P2), pure-hex meshes (flat + curved Q2, Piola-exact charges,
 H-matrix build), and flat pure-wedge meshes**, plus a **2D planar tri/quad layer** (log
 kernel, motor cross-sections). Permanent-magnet regions mix directly into `Solve` (`pm_M=`);
 flat pure-TET / pure-HEX / pure-WEDGE symmetry-reduced image models are supported by the
-charge-Gram IMA path. Mixed/pyramid bodies remain routed to the collocation MMMM bridge.
+charge-Gram IMA path. Mixed/pyramid bodies are temporary migration gaps rather than a reason to keep
+MMMM as the Radia production backend.
 
-The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix and high-order extensibility,
-but the charge-Coulomb Gram integrals dominate matrix construction.  Multipole-moment MMM gives up
-that full Galerkin symmetry and instead uses Mathematica-derived moment rows, so the 3-DOF and
-surface-charge MMM systems keep cheap local element functionals and scalable H-matrix matvecs.
+The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix, high-order / curved geometry,
+2D planar support, and direct Reduced-FEM coupling; the charge-Coulomb Gram integrals dominate matrix
+construction but the HACApK charge-Gram makes the build scalable at engineering size.  Multipole-moment
+MMMM remains useful in `ELF_MAGIC@研究室版` and as a transitional Radia cross-check, but Radia's
+production direction is HDiv-only.  Very small DoF timing is treated as "both fast", not as a backend
+selection criterion.
 
 This is the canonical technical reference. The runnable legacy corpus that the
 FEEC goldens still import now lives under
@@ -32,6 +36,8 @@ The decision/narrative record is the radia-mcp `hdiv_vim` knowledge (MCP tool
 build timing + 2D planar closed-form gates + the production `Solve` one-call), and
 [`hex_vs_mmmm_crossvalidation.ipynb`](hex_vs_mmmm_crossvalidation.ipynb) (2026-07-04: HDiv-VIM hex
 RT1 vs collocation-MMMM hex on the same cube and C-yoke meshes).
+The HDiv-only transition benchmark plan is
+[`HDiv_vs_MMMM_benchmark_plan.md`](HDiv_vs_MMMM_benchmark_plan.md).
 
 ---
 
@@ -139,7 +145,7 @@ collocation MMMM bridge; do not silently drop image symmetry in those cases.
 | Distorted-mesh μr-independence | ✓ (hand-crafted) | ✓ **by construction** (`4e-16`) |
 | Symmetry 1/4, 1/8 | ✓ (image handling) | ✓ flat pure-TET/HEX/WEDGE; `rad.Fld` materializes images |
 | **Curved tetrahedral geometry** | ✗ (flat elements) | ✓ RT1 + curved P2 tet geometry |
-| **Pure-hex meshes** | ✓ (its native element; coarse/fast tier) | ✓ RT1, Piola-exact charges, flat + curved Q2, H-matrix build |
+| **Pure-hex meshes** | ✓ (legacy / ELF / transition cross-check) | ✓ RT1, Piola-exact charges, flat + curved Q2, H-matrix build |
 | **2D planar tri/quad (motor cross-sections)** | ✗ | ✓ log-kernel Gram, closed-form gated |
 | Wedge / mixed-element bodies | ✓ | pure-wedge RT1 live; mixed/pyramid still bridge/open |
 | Hand-crafted elements | required | **not needed** (de-Rham-exact) |
@@ -154,8 +160,9 @@ collocation MMMM bridge; do not silently drop image symmetry in those cases.
 analytic charge Gram is an all-C++ HACApK H-matrix (symmetric leaf fill + static-site radial inner
 quadrature, ~10× vs the bring-up build on the cylinder benchmarks), the linear solve is the
 symmetric mass-Riesz CG, the nonlinear tet path is the all-C++ energy-Newton (deep-saturation
-robust), and the 2026-06-30 role decision makes it the **primary accurate soft-iron route**
-(collocation MMMM = coarse/fast tier).  Shipped and golden-locked: tet RT1 flat + curved P2
+robust), and the 2026-06-30 / 2026-07-05 role decision makes it the **primary accurate Radia
+soft-iron route**.  Collocation MMMM is now a transition cross-check in Radia and the active
+continuation belongs in `ELF_MAGIC@研究室版`.  Shipped and golden-locked: tet RT1 flat + curved P2
 (linear/nonlinear/PM-mixed/per-region/holed bodies), pure-hex RT1 flat + curved Q2 (Piola-exact
 charges; the ~20k-charge use-after-free is fixed, commit `20e6e9e2`), and the 2D planar tri/quad
 layer (commit `a9999dd7`).  Evidence: `validation_test/feec/` (40+ HDiv goldens) + the executed
@@ -171,8 +178,9 @@ showcase notebooks above.
    `rad.Solve(demag_backend='hdiv')` now solve a pure-hex mesh **LINEAR + NONLINEAR** (the C++
    energy-Newton was already Gram-agnostic — it takes the hex `(H, B, M_mass)` unchanged), matching
    collocation MMMM to ~1% (golden `test_hdiv_vim_hex_public_solve.py`).  The `auto` default routes
-   mesh-backed pure TET/HEX/WEDGE iron to HDiv-VIM; KEEP-BOTH remains available via explicit
-   `demag_backend='collocation_mmmm'`.  The legacy `solve_nonlinear_newton_scalable`
+   mesh-backed pure TET/HEX/WEDGE iron to HDiv-VIM; explicit
+   `demag_backend='collocation_mmmm'` is a transitional cross-check while the MMMM migration/deletion is
+   audited.  The legacy `solve_nonlinear_newton_scalable`
    (`tet.build_demag` head-to-head path) stays tet-only. **2D nonlinear** iron is the 2D planar layer's
    own track.
 3. **`rad.Fld` / application contract hardening (2026-07-05):** `rad.Solve` now has validation gates

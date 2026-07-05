@@ -42,7 +42,7 @@ property and is expected to carry to hex."""),
 import json, numpy as np, matplotlib
 %matplotlib inline
 import matplotlib.pyplot as plt
-data = json.load(open("build_scaling_mdx_data.json"))
+data = json.load(open("build_scaling_mdx_data.json", encoding="utf-8"))
 rows = data["rows"]
 print("measured_on:", data["measured_on"])
 print("radia", data["radia_version"], "| element:", data["element"], "|", data["num_threads"], "threads")
@@ -83,18 +83,20 @@ print("HDiv/MMMM build ratio:", {int(nc[i]): round(ratio[i], 1) for i in range(l
 print(data["crossover"])"""),
 
     MD("""\
-## Conclusion — a tiered role split, not a replacement
+## Conclusion -- supports the Radia HDiv-only direction
 
-The HACApK charge-Gram **neutralises HDiv-VIM's one weakness** (the heavy singular-Gram build): the
-build scales `~N^{1.2}` and reaches parity with the moment method's build by `~34k` DoF (below that,
-MMMM's build is up to ~5× faster due to H-matrix overhead + weak small-N compression).
+The HACApK charge-Gram **neutralises HDiv-VIM's main cost risk** (the heavy singular-Gram build): the
+build scales `~N^{1.2}` and reaches parity with the moment method's build by `~34k` DoF.
 
-So the honest, measured positioning is **complementary / tiered**, not one method beating the other:
+Below that size MMMM's build can be faster, but these runs are already tiny enough that the practical
+conclusion is simply **both are fast**.  Small-N timing should not decide Radia's production backend.
+The decision axis is accuracy, Reduced-FEM coupling, and engineering-scale build+solve.
 
 | regime | main | why |
 |---|---|---|
-| large-scale (≳34k DoF), accuracy, loop-free, distorted | **HDiv-VIM** | build scales `~N^1.2` (HACApK), on par with MMMM; loop-free + monotone convergence |
-| small-scale (<10k DoF), optimisation inner loops, coarse fast passes | **MMMM** | ~5× faster build, DoF-economical |
+| large-scale (>=34k DoF), accuracy, loop-free, distorted, Reduced-FEM coupling | **HDiv-VIM in Radia** | build scales `~N^1.2` (HACApK), reaches MMMM build parity, and keeps the de-Rham / curved-geometry advantages |
+| small-scale (<10k DoF) | **both fast** | record latency, but do not use it to block HDiv-only Radia |
+| MMMM continuation | **ELF_MAGIC@研究室版** | useful laboratory / legacy / cross-check implementation, outside Radia's production backend |
 
 **Authoritative next step**: repeat this on **hex** (the paper's element) once the pure-hex HDiv-VIM is
 on mdx — timing on mdx, per policy."""),
@@ -123,8 +125,8 @@ def main():
                    resources={"metadata": {"path": str(HERE)}}).execute()
     nbformat.write(nb, NB)
     sha = hashlib.sha256(NB.read_bytes()).hexdigest()
-    d = json.loads(SIDE.read_text()); d["notebook_sha256"] = sha
-    SIDE.write_text(json.dumps(d, indent=2))
+    d = json.loads(SIDE.read_text(encoding="utf-8")); d["notebook_sha256"] = sha
+    SIDE.write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
     print("wrote", NB.name, "+ sidecar sha", sha[:16])
 
 

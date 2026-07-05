@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-03T03:15:43Z",
   "notebook": "docs/hdiv_vim/hex_rt1_and_2d_showcase.ipynb",
-  "notebook_sha256": "8607acb67c15219e2b9985639f9168dab4a5444628396993d84240d32abd73d1",
+  "notebook_sha256": "c8ee3d360d7bedd5185a63042709abc61729943ddccc3b7c6568496f38d90986",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
