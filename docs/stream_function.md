@@ -72,10 +72,10 @@ kernels `A` is numerically **low rank**, so we instead:
 
    Exactly **two** methods are kept (the manuscript Method 2/3 were removed; see
    `memory/aca_tsvd_qr_recompression.md`): `method="aca_qr_tsvd"` (this fast
-   ACA + QR + TSVD path, the default; short aliases `"qr"`/`"aca"`) and
-   `method="dense"` -- the plain/direct TSVD (materialise `A` and take its dense
-   SVD), the **exact reference** the review noted the paper lacked.  Legacy
-   `method=2/3` map to `"aca_qr_tsvd"`; an unknown value raises.
+   ACA + QR + TSVD path, the default) and `method="dense"` -- the plain/direct
+   TSVD (materialise `A` and take its dense SVD), the **exact reference** the
+   review noted the paper lacked.  NO backward compatibility: legacy `method=2/3`
+   and the terse `"qr"`/`"aca"` now raise.
 
 Net cost is roughly `(M/k_aca)^2` lower than the dense route.
 
@@ -138,10 +138,10 @@ on demand by ACA+, not over the full grid.
 - `modes`   -- singular triplets to return (clamped to `k_aca`); default `kmax`.
 - `kmax`    -- maximum ACA+ rank; default `min(M, N)`.
 - `aca_eps` -- ACA+ stopping tolerance (absolute pivot threshold).
-- `method`  -- `"aca_qr_tsvd"` (default; aliases `"qr"`/`"aca"`) = ACA + QR + TSVD
-  (the fast path above); `"dense"` / `"tsvd"` = the direct dense TSVD (exact
-  reference, small problems).  Legacy `2`/`3` map to `"aca_qr_tsvd"`; an unknown
-  value raises (the manuscript Method 2/3 were removed).
+- `method`  -- `"aca_qr_tsvd"` (default) = ACA + QR + TSVD (the fast path above);
+  `"dense"` / `"tsvd"` = the direct dense TSVD (exact reference, small problems).
+  NO backward compatibility: legacy `2`/`3` and the terse `"qr"`/`"aca"` raise
+  (the manuscript Method 2/3 were removed).
 
 Returns a `StreamTSVD` with `U (M,modes)`, `S (modes,)`, `V (N,modes)` (row-major
 NumPy arrays), `k_aca`, and `method`.

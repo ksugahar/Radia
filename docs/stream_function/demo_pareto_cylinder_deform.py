@@ -114,7 +114,7 @@ class CylinderDeformPareto:
         md = float(np.mean(np.diag(A.T @ A)))
         base = aca_tsvd(self.M, len(corners), lambda i, j: float(A[i, j]),
                         modes=self.M, kmax=min(self.M, len(corners)),
-                        aca_eps=1e-10, method=3)
+                        aca_eps=1e-10)
         reg = RegularizedTSVD.from_stiffness(base, S)
         den_phi = (np.roll(Phi, -1) - np.roll(Phi, 1)) % TWO_PI
 

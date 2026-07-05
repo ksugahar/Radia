@@ -126,7 +126,7 @@ def _sf_design():
         return _loop_Hz(obs[i], corners[j])
 
     res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                   aca_eps=1e-8, method=3)
+                   aca_eps=1e-8)
     psi = pseudo_inverse_solve(res, B, k_mode=res.modes).reshape(nz, nphi)
     polylines, dI, _ = contour_polylines_phi_z(psi, phi_grid, z_grid, nlevels)
     return polylines, dI, a, L
@@ -308,7 +308,7 @@ def build_chain_msh(out_msh, show_cylinder=True):
         return _loop_Hz(obs[i], corners[j])
 
     res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                   aca_eps=1e-8, method=3)
+                   aca_eps=1e-8)
     psi = pseudo_inverse_solve(res, B, k_mode=res.modes).reshape(nz, nphi)
     polys, _, _ = contour_polylines_phi_z(psi, phi_grid, z_grid, nlevels)
     # default = Kuijpers 2023 Method-1 inspired chain (per-lobe cut line,

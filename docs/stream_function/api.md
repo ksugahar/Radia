@@ -7,9 +7,10 @@ regularisation-folded form; everything else is in the demo files.
 ## `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method="aca_qr_tsvd")`
 
 Truncated SVD of an `M × N` matrix `A`.  Two methods (peer review JIAM-2026-36):
-`method="aca_qr_tsvd"` (default; aliases `"qr"`/`"aca"`) = ACA + the standard "SVD
-of a low-rank product" (QR each factor, then one small TSVD); `method="dense"` =
-the direct dense TSVD (exact reference).
+`method="aca_qr_tsvd"` (default) = ACA + the standard "SVD of a low-rank product"
+(QR each factor, then one small TSVD); `method="dense"` = the direct dense TSVD
+(exact reference).  NO backward compatibility (legacy 2/3 and terse "qr"/"aca"
+raise).
 
 **Parameters**
 
@@ -21,7 +22,7 @@ the direct dense TSVD (exact reference).
 | `modes`  | int, optional   | TSVD modes to return (clamped to k_aca).  Default = kmax. |
 | `kmax`   | int, optional   | maximum ACA+ rank.  Default = min(M, N).   |
 | `aca_eps`| float, optional | ACA+ stopping tolerance (pivot threshold). Default 1e-4. |
-| `method` | {"aca_qr_tsvd","dense"} | "aca_qr_tsvd" (default; aliases "qr"/"aca") = ACA + QR + TSVD (fast); "dense"/"tsvd" = direct dense TSVD (exact reference, small problems).  Legacy 2/3 -> "aca_qr_tsvd"; unknown raises. |
+| `method` | {"aca_qr_tsvd","dense"} | "aca_qr_tsvd" (default) = ACA + QR + TSVD (fast); "dense"/"tsvd" = direct dense TSVD (exact reference, small problems).  NO backward compat: legacy 2/3 and terse "qr"/"aca" raise. |
 
 **Returns** `StreamTSVD` with `U (M, modes)`, `S (modes,)`,
 `V (N, modes)` row-major NumPy arrays, `k_aca`, `method`.

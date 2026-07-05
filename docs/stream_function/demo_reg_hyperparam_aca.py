@@ -159,7 +159,7 @@ def main():
     t0 = time.time()
     res = aca_tsvd(M_dim, N_dim, lambda i, j: float(A_free[i, j]),
                    modes=M_dim, kmax=min(M_dim, N_dim),
-                   aca_eps=args.aca_eps, method=3)
+                   aca_eps=args.aca_eps)
     t_aca = time.time() - t0
     print(f"  [ONCE] ACA+TSVD of A: rank {res.k_aca}/{res.modes},"
           f" {t_aca*1000:.1f} ms  <-- reused across all {args.trials} trials")

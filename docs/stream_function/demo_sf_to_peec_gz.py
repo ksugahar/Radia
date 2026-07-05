@@ -54,7 +54,7 @@ def design_rings(n_rings, n_wires, k_modes=0):
     M = obs.shape[0]
     entry = radia_field_kernel(obs, basis, component=2, field="b")
     modes = min(M, N) if k_modes <= 0 else min(k_modes, M, N)
-    res = aca_tsvd(M, N, entry, modes=modes, kmax=min(M, N), aca_eps=1e-8, method=3)
+    res = aca_tsvd(M, N, entry, modes=modes, kmax=min(M, N), aca_eps=1e-8)
     I = pseudo_inverse_solve(res, GZ * zt, k_mode=res.modes)
     rad.UtiDelAll()
     psi = np.concatenate([[0.0], np.cumsum(0.5 * (I[1:] + I[:-1]))])

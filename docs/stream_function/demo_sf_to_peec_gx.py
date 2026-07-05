@@ -1229,7 +1229,7 @@ def main():
     if args.regularize == "tsvd":
         modes = min(M, N) if args.k <= 0 else min(args.k, M, N)
         res = aca_tsvd(M, N, entry, modes=modes, kmax=min(M, N),
-                       aca_eps=1.0e-8, method=3)
+                       aca_eps=1.0e-8)
         k_use = res.modes if args.k <= 0 else min(args.k, res.modes)
         psi = pseudo_inverse_solve(res, B_target, k_mode=k_use)
         reg_note = (f"ACA+ k_aca = {res.k_aca} (of min(M,N)={min(M, N)}),"
