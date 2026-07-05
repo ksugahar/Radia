@@ -344,6 +344,12 @@ examples, anisotropic tet meshing into an advanced reference lane, and solver
 I/O improvements into format-compatibility notes rather than `.vol` parser
 relaxation.
 
+For loop learning, close a Coreform/Cubit slot only when the headless batch
+command, `result_artifact_id`, `result_output_schema_id`, top
+`timing_breakdown_s`, mesh-quality evidence, and `.vol` or Exodus export
+inventory are recorded together.  A GUI-only screenshot or a mesh file without
+sidecar identity is a candidate, not a verified MCP lesson.
+
 ### Continuous-loop third-party curvilinear handoff manifest gate
 
 The new literature on high-order curvilinear mesh generation from third-party

@@ -119,6 +119,9 @@ def test_build123d_lab_policy_routes_tet_to_netgen_and_mixed_to_cubit():
     assert "Slot441 keeps Cubit headless teardown warnings separate" in doc
     assert "do not treat the exit code alone as\na build123d volume mismatch" in doc
     assert "source`, `sink`, `sibc`, `coil`, `workpiece`, and\n`air" in doc
+    assert "Slot449 adds the one-loop learning closure rule for build123d" in doc
+    assert "learning_lanes.source_tool=verified" in doc
+    assert "CST are\ncross-kernel volume witnesses" in doc
     assert "shape_mass_property_crosscheck_summary" in doc
     assert "build123d_mass_property_crosscheck" in doc
     assert "Slot211 tightens that bridge" in doc

@@ -19,6 +19,7 @@ from radia_mcp.radia_ngsolve.acoustics import (
     acoustic_impedance_reflection_sweep_summary,
     acoustic_impedance_radiation_pressure_summary,
     acoustic_impedance_from_dtn,
+    acoustic_method_selection_manifest_gate,
     baffled_circular_piston_radiation,
     helmholtz_green_3d,
     helmholtz_green_low_frequency_series,
@@ -31,6 +32,110 @@ from radia_mcp.radia_ngsolve.acoustics import (
     spherical_helmholtz_dtn_eigenvalue,
     spherical_mode_radiation_impedance,
 )
+
+
+def test_acoustic_method_selection_gate_encodes_public_blog_lessons():
+    exterior_bem = {
+        "problem_family": "exterior_radiation",
+        "primary_method": "bem",
+        "exterior_method": "bem",
+        "study_domain": "frequency_domain",
+        "domain_topology": "unbounded_exterior",
+        "surface_only_boundary_mesh": True,
+        "wave_family": "acoustic",
+        "open_boundary_policy": "high_order_zs",
+        "uses_pml": False,
+        "result_artifact_id": "public_acoustic_bem_method_lesson_v1",
+        "result_output_schema_id": "acoustic_method_selection_v1",
+    }
+    gate = acoustic_method_selection_manifest_gate(
+        exterior_bem,
+        expected_problem_family="exterior_radiation",
+    )
+    assert gate["status"] == "ok"
+    assert gate["checks"]["bem_is_frequency_domain"] is True
+    assert gate["checks"]["bem_open_exterior_or_surface_mesh_recorded"] is True
+    assert gate["checks"]["lab_wave_boundary_policy_is_high_order_zs"] is True
+    assert gate["checks"]["pml_not_used"] is True
+
+    time_domain_bem = dict(exterior_bem, study_domain="time_domain")
+    bad = acoustic_method_selection_manifest_gate(time_domain_bem)
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["bem_is_frequency_domain"] is False
+
+    asi = acoustic_method_selection_manifest_gate({
+        "problem_family": "acoustic_structure_interaction",
+        "primary_method": "fem_bem",
+        "study_domain": "frequency_domain",
+        "coupling_kind": "two_way",
+        "structural_field": "solid displacement",
+        "acoustic_field": "pressure",
+        "result_artifact_id": "asi_method_lesson_v1",
+        "result_output_schema_id": "acoustic_method_selection_v1",
+    })
+    assert asi["status"] == "ok"
+    assert asi["checks"]["asi_coupling_is_two_way"] is True
+
+    impedance = acoustic_method_selection_manifest_gate({
+        "problem_family": "impedance_lumping",
+        "primary_method": "pressure_acoustics",
+        "study_domain": "frequency_domain",
+        "impedance_kind": "rcl_or_interpolated",
+        "frequency_dependent_impedance": True,
+        "power_balance_observable": "incident_minus_reflected_minus_transmitted",
+        "result_artifact_id": "impedance_lumping_lesson_v1",
+        "result_output_schema_id": "acoustic_method_selection_v1",
+    })
+    assert impedance["status"] == "ok"
+    assert impedance["checks"]["power_balance_observable_recorded"] is True
+
+    room = acoustic_method_selection_manifest_gate({
+        "problem_family": "room_acoustics",
+        "primary_method": "hybrid_wave_ray_diffusion",
+        "study_domain": "frequency_and_high_frequency",
+        "schroeder_frequency_hz": 115.0,
+        "low_frequency_method": "pressure_acoustics_frequency_domain",
+        "high_frequency_method": "ray_or_diffusion_acoustics",
+        "result_artifact_id": "room_acoustics_hybrid_lesson_v1",
+        "result_output_schema_id": "acoustic_method_selection_v1",
+    })
+    assert room["status"] == "ok"
+    assert room["checks"]["schroeder_frequency_recorded"] is True
+
+    absorber = acoustic_method_selection_manifest_gate({
+        "problem_family": "absorbing_boundary",
+        "primary_method": "pressure_acoustics",
+        "study_domain": "frequency_domain",
+        "reaction_model": "extended",
+        "boundary_model": "high_order_zs",
+        "wave_family": "acoustic",
+        "open_boundary_policy": "high_order_zs",
+        "uses_pml": False,
+        "frequency_dependent_boundary": True,
+        "angle_dependency_recorded": True,
+        "result_artifact_id": "absorber_extended_reaction_lesson_v1",
+        "result_output_schema_id": "acoustic_method_selection_v1",
+    })
+    assert absorber["status"] == "ok"
+    assert absorber["checks"]["boundary_model_is_high_order_zs"] is True
+    assert absorber["checks"]["extended_reaction_metadata_recorded"] is True
+
+    pml = acoustic_method_selection_manifest_gate({
+        "problem_family": "absorbing_boundary",
+        "primary_method": "pressure_acoustics",
+        "study_domain": "frequency_domain",
+        "reaction_model": "local",
+        "boundary_model": "pml",
+        "wave_family": "electromagnetic",
+        "open_boundary_policy": "pml",
+        "uses_pml": True,
+        "angle_dependency_recorded": True,
+        "result_artifact_id": "pml_negative_control_v1",
+        "result_output_schema_id": "acoustic_method_selection_v1",
+    })
+    assert pml["status"] == "needs_attention"
+    assert pml["checks"]["lab_wave_boundary_policy_is_high_order_zs"] is False
+    assert pml["checks"]["pml_not_used"] is False
 
 
 def test_pulsating_sphere_impedance_and_power_conservation():
