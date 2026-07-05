@@ -24,6 +24,18 @@ def test_run_artifact_contract_keeps_mao_as_primary_result_log():
     assert "never treat it as the solver result" in doc
 
 
+def test_linear_motor_bridge_requires_age_and_hdiv_vim_lanes():
+    doc = get_elf_magic_bridge("linear_motor_dual_lane")
+
+    assert "Linear PM motor" in doc
+    assert "NGSolve+AGE" in doc
+    assert "HDiv-VIM + reduced FEM" in doc
+    assert "linear_thrust" in doc
+    assert "linear_pm_flux" in doc
+    assert "product_local_reference" in doc
+    assert "raw local logs" in doc
+
+
 def test_bridge_all_includes_artifact_contract_without_private_paths():
     doc = get_elf_magic_bridge("all")
 

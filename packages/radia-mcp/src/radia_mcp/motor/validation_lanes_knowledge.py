@@ -73,11 +73,14 @@ LANES: dict[str, MotorValidationLane] = {
             "coenergy torque-angle and cogging periodicity",
             "dq quantities, MTPA, and field-weakening checks",
             "slip-frequency eddy-current and hysteresis-loss anchors",
+            "linear motor air-gap thrust, flux-linkage, and end-effect reduced checks",
             "nonlinear material iteration once the reduced invariant is clear",
         ),
         observable_families=(
             "airgap_flux",
             "torque",
+            "linear_thrust",
+            "linear_pm_flux",
             "cogging_torque",
             "back_emf",
             "ld_lq",
@@ -183,6 +186,7 @@ LANES: dict[str, MotorValidationLane] = {
         radia_path="proposed radia.vim HDiv rotor source-field lane plus fixed-stator reduced FEM",
         best_for=(
             "passive pickup flux and signed flux-linkage sweeps",
+            "linear PM motor pickup-flux and thrust-trend reduced checks",
             "permanent-magnet demagnetizing-field anchors",
             "source-field / surface-current intuition",
             "planar saliency torque sign and scale checks against closed form reluctance torque",
@@ -191,6 +195,8 @@ LANES: dict[str, MotorValidationLane] = {
         observable_families=(
             "pickup_flux",
             "flux_linkage",
+            "linear_pm_flux",
+            "linear_force_or_thrust",
             "demag_field",
             "coenergy",
             "force_or_torque_trend",
