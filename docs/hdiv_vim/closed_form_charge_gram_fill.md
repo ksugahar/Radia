@@ -67,10 +67,27 @@ converges as (relative error vs a high-order reference):
 | TOUCH xyz-xyz | n=6 | 216 |
 | SEPARATED const-const (far) | n=4 | 64 |
 
-So the semi-closed uses **~2.5x fewer outer points on near/touching pairs (512 vs 1296)** and **~20x fewer on
+So the semi-closed uses **~4x fewer outer points on near/touching pairs (343 vs 1296)** and **~20x fewer on
 far pairs (64 vs 1296)** — the far win because the hex path has no far reduction today. The inner cost per outer
-point is comparable (both closed). This is an operation-count estimate; the delivered wall-clock factor must be
-measured on **mdx** after the C++ port (LAB timing is contended).
+point is comparable (both closed).
+
+**Empirical wall-clock (LAB, fair numpy-vs-numpy at matched 1e-6, same closed inner in both).** Timing the
+symmetric tensor outer (A) against a *lean* Kuhn 6-sub-tet outer (B, order tuned to 1e-6 — already leaner than
+the C++'s fixed 1296-pt Duffy outer), per entry:
+
+| pair / charge | A symmetric outer | B 6-sub-tet outer | A faster by |
+|---------------|-------------------|-------------------|------------:|
+| TOUCH const-const | n=7, 343 pts | q=5, 750 pts | 1.45x |
+| TOUCH xyz-xyz | n=5, 125 pts | q=5, 750 pts | 2.59x |
+| SEP const-const | n=4, 64 pts | q=4, 384 pts | 1.75x |
+| SEP xyz-xyz | n=4, 64 pts | q=4, 384 pts | 1.89x |
+
+The closed inner was cross-checked against `scipy.integrate.tplquad` (0 / 6e-16). A is **1.45–2.6x faster per
+entry than even a lean sub-tet outer**; against the *actual* C++ QuadBlockHex (fixed 1296 outer pts, no far
+reduction) A uses ~4x (near) to ~20x (far) fewer outer points, so the real-C++ advantage is larger than the
+measured numpy ratio. Absolute seconds are numpy; the RATIO is language-neutral (same inner, same primitives).
+The delivered C++ wall-clock factor still needs the C++ port measured on **mdx** (LAB timing is contended), but
+the algorithm-level win is now empirically confirmed, not only counted.
 
 ## The verified closed antiderivatives (C99; `r = sqrt(u*u+v*v+w*w)`)
 
