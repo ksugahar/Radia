@@ -213,6 +213,31 @@ So the practical strategy is hybrid:
 """
 
 
+RUN_ARTIFACT_CONTRACT = """\
+## Source-tool run artifact contract
+
+For local product runs used as private cross-validation seeds, keep the
+artifact roles explicit:
+
+| Suffix | Role | Public-safe use |
+|---|---|---|
+| `.mai` | analysis/control input deck | route and classify the motor family |
+| `.meg` | compiled geometry/mesh input | check that the source-native run is solver-ready |
+| `.mei` | mesh-script input, when present | never treat it as the solver result |
+| `.mao` | primary execution log | parse version, status, timings, BMAX, FLUM, force/torque rows |
+| `.mag` | field/result file | optional field post-processing and probes |
+| `.mat`, `.mac`, `.mas` | auxiliary solver outputs | keep private unless reduced to public-safe invariants |
+
+The important correction is that `.mao` is the primary run-log artifact.
+Do not count `.mei` as a run result; it is part of the mesh-generation input
+route.  When a private source-tool slot is promoted into radia-motor learning,
+the public artifact should contain only reduced quantities and generic lessons:
+which observable was checked, which radia lane was used, whether AGE and
+HDiv-VIM reduced-FEM both ran, tolerances, version/date/timing metadata, and a
+scrubbed summary.
+"""
+
+
 SECTIONS = {
     "overview": OVERVIEW,
     "coverage_matrix": COVERAGE_MATRIX,
@@ -221,6 +246,7 @@ SECTIONS = {
     "radia_strengthening_queue": RADIA_STRENGTHENING_QUEUE,
     "jmag_coverage_reality": JMAG_COVERAGE_REALITY,
     "age_vs_mmm_strategy": AGE_VS_MMM_STRATEGY,
+    "run_artifact_contract": RUN_ARTIFACT_CONTRACT,
 }
 
 
