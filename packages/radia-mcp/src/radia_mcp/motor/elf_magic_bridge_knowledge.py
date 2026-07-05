@@ -213,6 +213,28 @@ So the practical strategy is hybrid:
 """
 
 
+LINEAR_MOTOR_DUAL_LANE = """\
+## Linear motor dual-lane replay contract
+
+Linear PM motor examples should train radia-motor as a **dual-lane** target,
+not as a one-off deck replay:
+
+1. Use `NGSolve+AGE` for the field/air-gap finite-element lane:
+   `linear_thrust`, `linear_pm_flux`, and field-energy consistency.
+2. Use `HDiv-VIM + reduced FEM` for the reduced source-field lane:
+   `linear_pm_flux` and `linear_force_or_thrust` sign/trend checks.
+3. Keep the source-tool run as `product_local_reference`; publish only the
+   scrubbed lesson, not raw local logs or benchmark rows.
+4. A local direct-solver replay may confirm the source deck is runnable, but
+   radia-motor learning is accepted only after both radia lanes have verification
+   commands and timing metadata attached.
+
+This is the same rule as rotary motors, but linear motors make the force axis
+explicit: call it thrust/force rather than torque unless the reduced case is a
+rotary surrogate.
+"""
+
+
 RUN_ARTIFACT_CONTRACT = """\
 ## Source-tool run artifact contract
 
@@ -246,6 +268,7 @@ SECTIONS = {
     "radia_strengthening_queue": RADIA_STRENGTHENING_QUEUE,
     "jmag_coverage_reality": JMAG_COVERAGE_REALITY,
     "age_vs_mmm_strategy": AGE_VS_MMM_STRATEGY,
+    "linear_motor_dual_lane": LINEAR_MOTOR_DUAL_LANE,
     "run_artifact_contract": RUN_ARTIFACT_CONTRACT,
 }
 

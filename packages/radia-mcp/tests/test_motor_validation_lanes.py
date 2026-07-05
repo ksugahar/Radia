@@ -71,6 +71,8 @@ def test_validation_lane_report_names_independent_radia_paths():
     assert "NGSolve+AGE" in report
     assert "2D collocation MMMM" in report
     assert "pickup_flux" in report
+    assert "linear_pm_flux" in report
+    assert "linear_thrust" in report
     assert "cogging_torque" in report
 
 
@@ -120,6 +122,27 @@ def test_hdiv_vim_solver_validated_artifact_can_train_solver_lane():
     assert result["accepted_for_mcp_learning"] is True
     assert result["accepted_for_mcp_rfc_learning"] is True
     assert result["validated_experimental_solver_path"] is True
+
+
+def test_linear_motor_observables_are_dual_lane_training_targets():
+    age = _base_artifact("ngsolve_age", "linear_thrust")
+    age["metrics"] = {"field_relative_error": 1.0e-3}
+    age_result = validate_motor_validation_artifact(age, "ngsolve_age")
+
+    hdiv = _base_artifact("hdiv_vim_reduced_fem", "linear_pm_flux")
+    hdiv["coupling_design_status"] = "solver_validated"
+    hdiv["solver_ready_artifact"] = {
+        "artifact_id": "hdiv_vim_linear_pm_flux_solver_ready_v1",
+        "verification": [
+            "python -m pytest validation_test/feec/test_hdiv_motor_minimal_contract.py -q"
+        ],
+    }
+    hdiv_result = validate_motor_validation_artifact(hdiv, "hdiv_vim_reduced_fem")
+
+    assert age_result["status"] == "pass"
+    assert age_result["accepted_for_mcp_learning"] is True
+    assert hdiv_result["status"] == "pass"
+    assert hdiv_result["accepted_for_mcp_learning"] is True
 
 
 def test_hdiv_vim_saliency_motor_contract_can_train_vim_operator_lane():
