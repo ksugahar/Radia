@@ -14,6 +14,26 @@ It does **not** need to prove that HDiv is faster on tiny cases. At very low
 DoF both methods are fast enough, so small-N timing is recorded only as a
 latency sanity check, not as a method-selection criterion.
 
+## Primary Motivation: Reduced FEM Coupling
+
+The strongest reason to adopt HDiv-VIM in Radia is not that it wins every tiny
+timing comparison.  It is that HDiv-VIM lives in the same NGSolve finite-element
+world as the Reduced FEM workflows Radia needs for motors, conductors, and
+open-boundary multiphysics.
+
+| Coupling concern | Why HDiv / NGSolve is better than MMMM |
+|---|---|
+| Shared data model | HDiv magnetization is a NGSolve `GridFunction` / `CoefficientFunction` on a NGSolve `Mesh`; Reduced FEM uses the same mesh, material labels, integration rules, and `BilinearForm` machinery. MMMM lives in Radia object / collocation elements and must be sampled or projected before FEM can consume it. |
+| Weak-form handoff | VIM iron fields can enter conductor / motor FEM as source `CoefficientFunction`s or projected fields, so coupling can be written as integrals. MMMM naturally gives element moments / `rad.Fld` samples, which are good for postprocessing but less natural as weak-form inputs. |
+| FEEC compatibility | H(div), H(curl), H1, and L2 are part of one de Rham sequence. Divergence, normal trace, curl, and gradient constraints line up with Reduced FEM spaces; loop modes are `ker(B)` by construction. MMMM needs hand-crafted loop/co-loop logic outside the FE complex. |
+| Curved / high-order geometry | NGSolve `mesh.Curve`, Piola maps, and `GetTrafo` are shared by HDiv and FEM. MMMM's flat-element / custom-element representation creates a geometry translation layer and loses the clean curved high-order path. |
+| Solver/runtime integration | `TaskManager`, sparse FE assembly, preconditioners, material `GridFunction`s, and notebook/webgui inspection are already NGSolve-native. MMMM can be fast as a standalone VIM, but coupling it to Reduced FEM adds glue code and another ownership boundary. |
+| Existing evidence | `docs/electric_machine/planar_vim_motor.ipynb` already demonstrates the intended split: laminated nonlinear iron via VIM, conducting bars / rotor via reduced complex FEM, and staggered coupling against all-in-one FEM references. |
+
+Therefore the benchmark should treat Reduced FEM coupling as a first-class
+result: report field handoff quality, torque/loss agreement, stagger
+convergence, and rebuild/remesh counts, not only matrix build time.
+
 ## Current Evidence
 
 | Axis | Existing artifact | What it says |

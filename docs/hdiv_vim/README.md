@@ -13,12 +13,14 @@ flat pure-TET / pure-HEX / pure-WEDGE symmetry-reduced image models are supporte
 charge-Gram IMA path. Mixed/pyramid bodies are temporary migration gaps rather than a reason to keep
 MMMM as the Radia production backend.
 
-The tradeoff is deliberate: HDiv-VIM gives a symmetric Galerkin matrix, high-order / curved geometry,
-2D planar support, and direct Reduced-FEM coupling; the charge-Coulomb Gram integrals dominate matrix
-construction but the HACApK charge-Gram makes the build scalable at engineering size.  Multipole-moment
-MMMM remains useful in `ELF_MAGIC@研究室版` and as a transitional Radia cross-check, but Radia's
-production direction is HDiv-only.  Very small DoF timing is treated as "both fast", not as a backend
-selection criterion.
+The tradeoff is deliberate, and the main product motive is **Reduced FEM coupling**: HDiv-VIM lives in
+NGSolve's finite-element world (`Mesh`, `GridFunction`, `CoefficientFunction`, `BilinearForm`,
+`TaskManager`), so VIM iron can be coupled weakly to conductor / motor FEM without translating through a
+Radia-only collocation object layer.  It also gives a symmetric Galerkin matrix, high-order / curved
+geometry, and 2D planar support; the charge-Coulomb Gram integrals dominate matrix construction, but the
+HACApK charge-Gram makes the build scalable at engineering size.  Multipole-moment MMMM remains useful in
+`ELF_MAGIC@研究室版` and as a transitional Radia cross-check, but Radia's production direction is
+HDiv-only.  Very small DoF timing is treated as "both fast", not as a backend selection criterion.
 
 This is the canonical technical reference. The runnable legacy corpus that the
 FEEC goldens still import now lives under
