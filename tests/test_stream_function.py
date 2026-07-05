@@ -159,10 +159,10 @@ def test_truncation_monotonic():
 def test_qr_and_dense_methods_agree_with_svd():
     """The two supported methods (peer review JIAM-2026-36) -- and ONLY two:
       - ``method="dense"`` IS the direct TSVD of A (materialise + numpy.linalg.svd);
-      - ``method="qr"`` (default, ACA + QR-of-a-low-rank-product) matches it to the
+      - ``method="aca_qr_tsvd"`` (default, ACA+QR+TSVD) matches it to the
         ACA tolerance, with ORTHONORMAL U / V (what RegularizedTSVD requires).
     This makes the reviewer's point concrete: QR is validated against the CORRECT
-    dense baseline, not a broken 'naive' one.  Legacy method=2/3 -> qr; an unknown
+    dense baseline, not a broken 'naive' one.  Legacy method=2/3 -> aca_qr_tsvd; an unknown
     method RAISES."""
     obs, centers, offsets = _coil_geometry(obs_z=0.1)
     M, N = obs.shape[0], centers.shape[0]
@@ -177,9 +177,11 @@ def test_qr_and_dense_methods_agree_with_svd():
     assert np.linalg.norm(rd.S[:nd] - s_dense[:nd]) / np.linalg.norm(s_dense) < 1.0e-12
     assert np.linalg.norm(A - (rd.U * rd.S) @ rd.V.T) / np.linalg.norm(A) < 1.0e-12
 
-    # method="qr" (default) matches the dense SVD to the ACA tolerance
+    # method="aca_qr_tsvd" (default) matches the dense SVD to the ACA tolerance
     rq = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N), aca_eps=1.0e-10)
-    assert rq.method == "qr"
+    assert rq.method == "aca_qr_tsvd"
+    # the short aliases resolve to the same canonical name
+    assert aca_tsvd(M, N, entry, modes=min(M, N), method="qr").method == "aca_qr_tsvd"
     nq = rq.modes
     assert np.linalg.norm(rq.S[:nq] - s_dense[:nq]) / np.linalg.norm(s_dense) < 1.0e-8
     # orthonormal factors -- required by RegularizedTSVD.from_stiffness (W = V^T V = I)
@@ -187,7 +189,7 @@ def test_qr_and_dense_methods_agree_with_svd():
     assert np.linalg.norm(rq.V.T @ rq.V - np.eye(nq)) < 1.0e-10, "V not orthonormal"
 
     # legacy method=2/3 map to qr (deprecated; no separate algorithm survives)
-    assert aca_tsvd(M, N, entry, modes=min(M, N), method=3).method == "qr"
+    assert aca_tsvd(M, N, entry, modes=min(M, N), method=3).method == "aca_qr_tsvd"
     # only two methods -- an unknown value fails loud (No-Fallback)
     with pytest.raises(ValueError):
         aca_tsvd(M, N, entry, modes=min(M, N), method="bogus")
