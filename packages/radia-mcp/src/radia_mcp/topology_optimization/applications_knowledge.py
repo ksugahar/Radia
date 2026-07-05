@@ -262,7 +262,7 @@ When the inverse problem is NOT closed-form -- manufacturable bounds on
 segment angles, discrete magnetization directions, soft-iron return paths, a
 black-box FE/Radia forward solve in the loop -- the design is a bounded,
 possibly non-smooth, gradient-free optimization.  The Sugahara Lab optimizer
-toolbox (W:\...\MATLAB\30_Optimization) is the practical reference for this
+toolbox (public-safe curated corpus) is the practical reference for this
 outer loop; the canonical members:
 
   * NELDER-MEAD SIMPLEX (direct search, Nelder-Mead 1965) -- the workhorse

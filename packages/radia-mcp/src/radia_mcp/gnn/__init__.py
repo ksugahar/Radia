@@ -1,6 +1,6 @@
 """radia_mcp.gnn — Graph Neural Networks for PDE / EM problems.
 
-Distilled from W:/.../12_機械学習_GNN/:
+Distilled from public-safe curated corpus
   - Physics-Embedded Neural Networks: Graph Neural PDE Solvers with
     Mixed Boundary Conditions
   - Isometric Transformation Invariant and Equivariant GCN

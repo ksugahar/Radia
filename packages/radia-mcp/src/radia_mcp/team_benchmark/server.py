@@ -14,7 +14,7 @@ Covers 30 problems organized by physics class:
 ★ Problems 13, 20, 23, 32, 33b are heavily used in lab validation.
 
 Distilled from 45 files / 449 MB in
-W:/03_文献・論文/00_電磁界解析/05_TEAM_benchmark/
+public-safe curated corpus
 
 Use cases:
 - "Which TEAM problem validates Maxwell stress force?" → problem 20

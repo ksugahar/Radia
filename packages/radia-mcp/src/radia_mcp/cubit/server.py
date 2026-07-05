@@ -1219,7 +1219,7 @@ def get_lint_rules() -> str:
 			'rule': 'hardcoded-absolute-path',
 			'severity': 'MODERATE',
 			'description': 'Hardcoded absolute paths in sys.path (except Coreform Cubit/NGSolve).',
-			'trigger': 'sys.path.insert(0, "S:/Projects/mymodule")',
+			'trigger': 'sys.path.insert(0, "public-safe curated corpus")',
 			'fix': 'sys.path.insert(0, os.path.dirname(__file__))',
 		},
 		{
@@ -2463,11 +2463,11 @@ def cubit_examples(query: str, limit: int = 3,
 	     hex meshing, sweep, boundary layer, thin shell, quality,
 	     refinement, abaqus, high-order, polyhedron, multi-sweep,
 	     imprint/merge, webcut, export, journal)
-	  2. **Local lab archive**: `S:\\CoreformCubit` (~145 .jou/.py
+	  2. **Local lab archive**: `public-safe curated corpus` (~145 .jou/.py
 	     across years of research projects — twisted wire, claw-pole
 	     alternator, kelvin transformation, TEAM problems, helical
 	     coils, JMAG integration, Mesh AI, Nastran/VTU pipelines)
-	     + `s:\\Radia\\01_GitHub\\examples` (~400 .jou/.py covering
+	     + `repo:/examples` (~400 .jou/.py covering
 	     build123d→Cubit, ngsolve, ih, electromagnet, peec, kelvin).
 	     Lab-curated items get a small score boost.
 
@@ -2495,7 +2495,7 @@ def cubit_examples_refresh(limit_per_query: int = 5,
 
 	Sub-sources:
 	  * forum (Discourse) — always
-	  * local (S:\\CoreformCubit + Radia/examples + extras) — always
+	  * local (public-safe curated corpus + Radia/examples + extras) — always
 	  * cubit_youtube — if `include_youtube`
 	  * Coreform training .zip → folded into local — if
 	    `include_training_zip`
@@ -3078,7 +3078,7 @@ def _learned_recipes_path() -> Path:
 	Resolution order:
 	  1. `RADIA_MCP_LEARNED_DIR` env var — point all lab machines to a
 	     shared SMB / network drive (e.g.,
-	     `S:\\Radia\\01_GitHub\\lab_learned\\`) so every race winner
+	     `repo:/lab_learned\\`) so every race winner
 	     contributes to one collective pool.
 	  2. Fallback: `<state_dir>/learned_recipes.jsonl` (per-machine).
 	"""

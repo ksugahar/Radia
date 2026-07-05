@@ -2,7 +2,7 @@
 Evolutionary Computation MCP Server (radia_mcp.evolutionary)
 
 GA / DE / PSO / CMA-ES / Immune algorithm / NSGA-II/III knowledge,
-distilled from W:/.../02_最適化_進化計算/.
+distilled from public-safe curated corpus
 
 Usage:
     mcp-server-evolutionary              # Start MCP server

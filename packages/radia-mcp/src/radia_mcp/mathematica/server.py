@@ -24,7 +24,7 @@ Without Mathematica installed, all tools return {"ok": False, "error": ...}
 cleanly; the server itself still loads and can be probed via --selftest.
 
 History: promoted on 2026-05-20 from
-  s:/mcp-server/src/mcp_server_document/mathematica/
+  legacy private source tree
 into radia-mcp as a standalone subpackage.  The original in
 mcp_server_document is left in place for backward compatibility.
 """

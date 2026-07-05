@@ -16,8 +16,9 @@ B. PROVENANCE guard (``scan_text_tree``): public artifacts must NOT attribute
    verification to commercial / licensed tools, and must not leak internal
    filesystem paths. Per the lab boundary policy (2026-06-06): cite the open /
    published basis, but never write "vs FEMM <number>", "REAL COMSOL",
-   "ONELAB vs JMAG", a tool-attributed benchmark table, an ``S:\\FEMM`` /
-   ``W:\\00_CAE`` / ``_crossval`` path, etc. A commercial-derived verification
+   "ONELAB vs JMAG", a tool-attributed benchmark table, any lab-local
+   ``S:`` / ``W:`` absolute path, a user-profile ``C:\\Users\\Administrator``
+   path, an ``_crossval`` path, etc. A commercial-derived verification
    *number* may REMAIN, but reworded as a neutral "stored regression reference"
    WITHOUT the tool name. This scanner reports ``file:line: <reason>`` so each
    such leak can be scrubbed (number kept, attribution removed).
@@ -26,7 +27,9 @@ B. PROVENANCE guard (``scan_text_tree``): public artifacts must NOT attribute
    Gmsh), published method / author citations (e.g. "Abdel-Razek air-gap
    element", "Dowell", "Hollaus MSFEM"), generic "FEM" / "finite element", and
    formulation names ("A-Omega", "T-Omega"). Only tool-ATTRIBUTED verification
-   and internal paths are flagged -- bare capability mentions are fine.
+   and internal paths are flagged -- bare capability mentions are fine.  Open
+   tools may be cited, but their lab-local clone / NAS paths must be replaced
+   by repo-relative or generic corpus descriptions before publication.
 
 This is the executable form of "失敗からも lint に学ぶ": it turns the near-miss of
 attributing public results to a commercial benchmark into a permanent,
@@ -299,22 +302,38 @@ PROVENANCE_RULES: list[tuple[re.Pattern, str]] = [
                 r"(?:verb|feature|operation|primitive)\b", re.IGNORECASE),
      "commercial tool named as the source of a modelling verb / feature"),
     # --- internal / commercial-harness paths & identifiers ----------------
-    # Commercial-tool drive paths the policy names explicitly: S:\<TOOL>,
-    # W:\00_CAE\<TOOL>, plus a deeper S:\..\<TOOL>\ component. Open-tool paths
-    # (S:\cubit, W:\00_CAE\NGSolve, literature dirs) are deliberately NOT matched
-    # here -- that broader lab-path cleanup is out of this guard's scope.
-    (re.compile(r"[SW]:[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
+    # Public radia-mcp must not reveal lab-local drive topology.  Open-source
+    # tools and literature corpora may be cited by name, but not by S:/ or W:/
+    # clone/NAS paths.  Windows installation examples under C:/Program Files
+    # and temporary examples under C:/temp are intentionally not matched here.
+    (re.compile(r"(?<![A-Za-z])(?:file:///)?[SW]:[\\/]", re.IGNORECASE),
+     "lab-local absolute drive path (S:/ or W:/)"),
+    (re.compile(r"\\\\(?:\d{1,3}\.){3}\d{1,3}[\\/]", re.IGNORECASE),
+     "lab-local UNC path with private network address"),
+    (re.compile(r"\b192\.168\.\d{1,3}\.\d{1,3}\b"),
+     "private LAN address leaked into public text"),
+    (re.compile(r"\b00_CAE\b", re.IGNORECASE),
+     "lab-local CAE workspace name leaked into public text"),
+    (re.compile(r"\b[SW]:\s*(?:drive|scripts?|share)\b", re.IGNORECASE),
+     "bare lab drive topology leaked into public text"),
+    (re.compile(r"C:[\\/]Users[\\/]Administrator\b", re.IGNORECASE),
+     "user-local absolute profile path"),
+    (re.compile(r"<lab-local path>|private local path", re.IGNORECASE),
+     "temporary scrub placeholder leaked into public text"),
+    (re.compile(r"private\s+correspondence", re.IGNORECASE),
+     "private correspondence/provenance note"),
+    (re.compile(r"(?<![A-Za-z])[SW]:[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
      "internal commercial-tool drive path (S:/W: \\<tool>)"),
-    (re.compile(r"[SW]:[\\/](?:ELF_MAGIC|ELF)\b", re.IGNORECASE),
+    (re.compile(r"(?<![A-Za-z])[SW]:[\\/](?:ELF_MAGIC|ELF)\b", re.IGNORECASE),
      "internal ELF/MAGIC drive path"),
-    (re.compile(r"W:[\\/]00_CAE[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
+    (re.compile(r"(?<![A-Za-z])W:[\\/]00_CAE[\\/](?:FEMM|JMAG|COMSOL|CST)\b", re.IGNORECASE),
      "internal commercial-tool path (W:\\00_CAE\\<tool>)"),
-    (re.compile(r"W:[\\/]00_CAE[\\/](?:ELF_MAGIC|ELF)\b", re.IGNORECASE),
+    (re.compile(r"(?<![A-Za-z])W:[\\/]00_CAE[\\/](?:ELF_MAGIC|ELF)\b", re.IGNORECASE),
      "internal ELF/MAGIC path"),
-    (re.compile(r"[SW]:[\\/][^\n\"']*[\\/](?:FEMM|JMAG|COMSOL|CST)[\\/]",
+    (re.compile(r"(?<![A-Za-z])[SW]:[\\/][^\n\"']*[\\/](?:FEMM|JMAG|COMSOL|CST)[\\/]",
                 re.IGNORECASE),
      "internal path with a commercial-tool directory component"),
-    (re.compile(r"[SW]:[\\/][^\n\"']*[\\/](?:ELF_MAGIC|ELF)[\\/]",
+    (re.compile(r"(?<![A-Za-z])[SW]:[\\/][^\n\"']*[\\/](?:ELF_MAGIC|ELF)[\\/]",
                 re.IGNORECASE),
      "internal path with an ELF/MAGIC directory component"),
     (re.compile(r"\b_crossval\b", re.IGNORECASE),
@@ -341,7 +360,10 @@ _ALLOW_SUBSTR = (
 )
 
 # File globs to scan under each tree.
-_SCAN_GLOBS = ("*.py", "*.md")
+_SCAN_GLOBS = ("*.py", "*.md", "*.m", "*.wls")
+_SCAN_SUFFIXES = tuple(
+    glob[1:] for glob in _SCAN_GLOBS if glob.startswith("*.") and len(glob) > 1
+)
 # Subtrees of the package to scan.
 _SCAN_DIRS = ("src", "examples", "tests")
 # Files exempt from the provenance scan: this guard's OWN test, which holds
@@ -411,7 +433,7 @@ def _git_tracked_files(root: Path) -> list[Path] | None:
 
 
 def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str, int, str]]:
-    """Scan src/ + examples/ + tests/ (*.py, *.md) for provenance findings."""
+    """Scan src/ + examples/ + tests/ files matching _SCAN_GLOBS for findings."""
     findings: list[tuple[str, int, str]] = []
     seen: set[Path] = set()
     try:
@@ -427,7 +449,7 @@ def scan_text_tree(root: Path, *, tracked_only: bool = False) -> list[tuple[str,
             if (scan_root / sub).is_dir()
         ]
         for f in sorted(tracked):
-            if "__pycache__" in f.parts or f.suffix not in {".py", ".md"}:
+            if "__pycache__" in f.parts or f.suffix not in _SCAN_SUFFIXES:
                 continue
             if not any(_is_relative_to(f, base) for base in scan_bases):
                 continue
@@ -484,6 +506,17 @@ def selftest() -> int:
         r"the lab's CST corpus (S:\CST).",                        # CST internal path
         r"private validation mesh at S:\ELF_MAGIC\_crossval\case.meg",
         r"licensed reference path W:\00_CAE\ELF_MAGIC\_crossval\run.json",
+        r"YANO_PATH = r'W:\00_CAE\NGSolve\矢野'",
+        "Distilled from S:/ONELAB/ElectricMachines/",
+        "distilled from s:/local/private/notes",
+        r"absorbed from W:\03_文献・論文\00_電磁界解析 corpus",
+        r"see S:\cubit\knowledge\license.py",
+        r"C:\Users\Administrator\.claude\skills\pdf2ppt-pdfgear",
+        r"pip install -e \\192.168.11.100\work\00_CAE\Radia\01_GitHub",
+        "ssh 192.168.11.100",
+        "self-hosted CI runner cannot access S: drive",
+        "the scrub left <lab-local path> in public docs",
+        "Dave Meeker, private correspondence",
         # design / capability reference (no number) -- the leak class this guard now catches:
         'The CST-modeller "rotate with copies" verb',            # <tool>-modeller
         "a CST-style near-field equivalent source",              # <tool>-style
@@ -513,11 +546,9 @@ def selftest() -> int:
         "see CHANGELOG.md for per-release notes",
         "a temp file under C:\\temp\\foo.py is fine",             # generic C:\temp ok
         "| Capability | FEMM | JMAG | radia-ngsolve | Strongest |",  # capability header
-        # open-tool / non-commercial lab paths are OUT of this guard's scope:
-        r"YANO_PATH = r'W:\00_CAE\NGSolve\矢野'",                  # NGSolve (open)
-        "Distilled from S:/ONELAB/ElectricMachines/",            # ONELAB (open)
-        r"absorbed from W:\03_文献・論文\00_電磁界解析 corpus",       # literature corpus
-        r"see S:\cubit\knowledge\license.py",                    # Cubit (open)
+        "Distilled from the ONELAB/GetDP ElectricMachines templates",
+        "absorbed from the lab literature corpus",
+        "see the Cubit license knowledge module",
         # VERSION strings are not benchmark numbers:
         "in FEMM 4.2 (build dates 2018-2023).",
         "Created in COMSOL Multiphysics 6.2",
@@ -527,6 +558,8 @@ def selftest() -> int:
         "ELF/MAGIC product documentation server is public-safe when solver data is absent",
         "EMF is at the EED/CST London, UK, e-mail 10016.3130",   # quoted paper affiliation (allowlisted)
         "high-frequency tools (HFSS, FEKO) exist",               # competitor landscape (not in _TOOL)
+        "candidate_doi='HTTPS://DOI.ORG/10.1109/tap.2006.880747'",
+        "public-safe curated corpus",
         # FEMM design-references are ALLOWED (FEMM-parity is the stated open goal):
         "radia-ngsolve is FEMM-like -- the FEMM-parity goal",    # FEMM excluded from _REF_TOOL
         "the FEMM modeller workflow, reimplemented openly",      # FEMM, not COMSOL/JMAG/CST

@@ -1,7 +1,7 @@
 """CLN advanced extensions: HF / nonlinear / circuit / Bloch /
 finite-period (FP).
 
-Covers W:\\30_CauerLadderNetwork\\{05_高周波, 06_非線形, 07_電気力学,
+Covers public-safe curated corpus, 06_非線形, 07_電気力学,
 14_ブロッホ方程式, 16_FP_CLN, 2020_12_07_高周波CLNの練習}.
 
 Sister module to `radia_mcp.mor.cln_knowledge` (basic linear CLN).
@@ -21,7 +21,7 @@ The basic CLN (cln_knowledge.py) assumes:
 
 Each of those assumptions has a counter-example in real engineering
 problems, and each has its own Sugahara-Lab WIP folder in
-W:\\30_CauerLadderNetwork\\.  This module catalogues the FOUR
+public-safe curated corpus  This module catalogues the FOUR
 extensions and the ONE cross-application:
 
 | Extension | Folder | Status (as observed) | What breaks without it |
@@ -51,8 +51,8 @@ HIGH_FREQUENCY = """
 # High-frequency CLN (Helmholtz regime)
 
 Folders:
-  W:\\30_CauerLadderNetwork\\05_高周波\\               (15 files, 14 .m)
-  W:\\30_CauerLadderNetwork\\2020_12_07_高周波CLNの練習\\  (9 .m + 4 .mph)
+  public-safe curated corpus               (15 files, 14 .m)
+  public-safe curated corpus  (9 .m + 4 .mph)
 
 ## Motivation -- where basic CLN runs out
 
@@ -209,7 +209,7 @@ boundary trimming).
 NONLINEAR = """
 # Nonlinear CLN (saturation + hysteresis)
 
-Folder: W:\\30_CauerLadderNetwork\\06_非線形\\
+Folder: public-safe curated corpus
   Subfolders (chronological generations):
    - 2017_11_19_FreeFEM_非線形の練習         (FEMM driver, GenFEMM.m)
    - 2017_12_12_非線形の案_01                 (first symbolic + numeric attempt)
@@ -276,7 +276,7 @@ Validation against COMSOL FEM on a 2D circular conductor:
               Jz = dHy/dx - dHx/dy
             integrates J_n * Jz per stage.  Saves to mat/.
   compare_freefem.m -- cross-check vs FreeFEM++ at
-                       S:/FreeFEM++/2016_08_07.../mat/.
+                       public-safe curated corpus
 
 This is the ONLY 06_非線形 file that drives nonlinear CLN through
 a full FEM (COMSOL) end-to-end.  Companion .mph: `1D_FEM.mph`,
@@ -411,7 +411,7 @@ integrations there, and compare to the symbolic ground truth.
 ELECTRODYNAMIC_CIRCUIT = """
 # Electrodynamic / circuit-coupled CLN (07_電気力学)
 
-Folder: W:\\30_CauerLadderNetwork\\07_電気力学\\
+Folder: public-safe curated corpus
   Main artifacts:
    - shindo.edp                            (FreeFEM++ driver, 437 lines)
    - 20170509.docm                         (Word doc-with-macros, TBD)
@@ -506,14 +506,14 @@ And independently:
   - Sabariego-Vanbroekhoven-Gyselinck-Kuo-Peng, "RL-Ladder Circuit
     Models for Eddy-Current Problems With Translational Movement,"
     IEEE Trans. Magn. 58(9), 2022.
-Neither of these has source code in W:\\30_..., they appear only
+Neither of these has source code in public-safe curated corpus, they appear only
 as citations.
 """
 
 BLOCH_EQUATION = """
 # Bloch equation / NMR-MRI cross-application (14_ブロッホ方程式)
 
-Folder: W:\\30_CauerLadderNetwork\\14_ブロッホ方程式\\
+Folder: public-safe curated corpus
   Single file: 2019_08_11_ブロッホ方程式.docx
 
 ## Honest scope statement
@@ -548,7 +548,7 @@ than a working extension.
 
 For an MCP user asking "can I use CLN for NMR/MRI?", the honest
 answer is: the lab has thought about it (2019), the document is at
-W:\\30_CauerLadderNetwork\\14_ブロッホ方程式\\2019_08_11_ブロッホ方程式.docx,
+public-safe curated corpus,
 and there is no code yet.  See instead `radia_mcp.nmr_mri` for the
 lab's actually-implemented NMR-MRI knowledge layer.
 """
@@ -556,7 +556,7 @@ lab's actually-implemented NMR-MRI knowledge layer.
 FP_CLN = """
 # FP-CLN -- Fixed-Point Cauer Ladder Network (16_FP_CLN)
 
-Folder: W:\\30_CauerLadderNetwork\\16_FP_CLN\\
+Folder: public-safe curated corpus
   Subfolders:
    - HaromonicBalance\\       (harmonic-balance / frequency-domain
                                 FP-CLN)
@@ -934,7 +934,7 @@ LAB_LESSONS = """
 KEY_FILES = """
 # Top files referenced (advanced CLN corpus)
 
-Base path: W:\\30_CauerLadderNetwork\\
+Base path: public-safe curated corpus
 
 ## Theory references (PDFs)
 
@@ -1123,7 +1123,7 @@ advanced literature.
 
 ## Bloch equation (NMR-MRI) -- no Sugahara-Lab CLN-NMR paper
 
-The 2019 design doc at W:\\30_CauerLadderNetwork\\14_ブロッホ方程式\\
+The 2019 design doc at public-safe curated corpus
 sketches the analogy; no publication.  See `radia_mcp.nmr_mri` for
 the actually-implemented NMR-MRI knowledge layer.
 """

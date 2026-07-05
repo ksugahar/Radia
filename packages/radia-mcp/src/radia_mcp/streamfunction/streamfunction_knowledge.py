@@ -283,8 +283,9 @@ segfaults, `Glue` silently no-ops, `Fuse` degenerates, and build123d's dedicated
 `swept()` ALSO degenerates / raises `StdFail_NotDone` (same kernel).  So for a
 robust boolean of that geometry use the MESH boolean (--former-stl); and author
 CAD generally with build123d or Cubit (ACIS -- a different, robust kernel), NOT
-ad-hoc netgen.occ (which is a STEP->mesh I/O library).  Full record:
-the former CAD research note (W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\former_cad.md).
+ad-hoc netgen.occ (which is a STEP->mesh I/O library).  The full former-CAD
+research note remains a private lab artifact; public radia-mcp keeps only this
+general CAD-kernel lesson.
 
 CHAIN (--chain {field_aware, nn})
 ---------------------------------

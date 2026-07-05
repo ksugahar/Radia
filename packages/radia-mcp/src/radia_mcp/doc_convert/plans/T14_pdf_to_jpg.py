@@ -1,7 +1,7 @@
 """Tier 1 — doc_convert_pdf_to_jpg.
 
 Convert PDF to JPG via Adobe Acrobat COM automation. Mirrors the pattern
-established by the seed script ``S:\\Python\\40_GUI*\\SchemDraw\\CLN.py``:
+established by the seed script ``public-safe curated corpus``:
 
     avDoc = win32com.client.Dispatch("AcroExch.AVDoc")
     avDoc.Open(pdf_path, "")

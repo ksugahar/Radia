@@ -1,5 +1,5 @@
 """Iron loss models: Steinmetz, Bertotti 3-term, Pry-Bean, MSE, iGSE,
-Carstensen, anomalous loss.  W:/磁気特性/鉄損/ + adjacent.
+Carstensen, anomalous loss.  public-safe curated corpus + adjacent.
 """
 
 STEINMETZ_FAMILY = r"""
@@ -52,7 +52,7 @@ Captures: DC bias, minor loops, non-sinusoidal trapezoid.
 - Venkatachalam et al., IEEE COMPEL 2002 (iGSE)
 - Sullivan et al., Power Electronics Society (review)
 
-## Lab papers (W:/磁気特性/鉄損/)
+## Lab papers (public-safe curated corpus)
 - インバータ回路解析と磁気解析の併用計算による...半導体特性の影響まで...
 - 電磁鋼板の詳細な積層モデルを用いた高周波用リアクトルの鉄損解析
 - 高周波励磁下におけるリアクトル損失の空隙特性
@@ -190,7 +190,7 @@ For commercial NO (non-oriented) and GO (grain-oriented) steel:
 | 27ZH95 (GO, 0.27 mm)  | 0.005 | 1.6 | 2.8e-5 | 0.00005 |
 
 (approximate; check manufacturer datasheet for exact values; lab data
-in `W:/磁気特性/00_教科書/電磁鋼板の磁気特性と取扱方法.pdf`)
+in `public-safe curated corpus`)
 
 ## Frequency / waveform dependence
 - Bertotti 3-term assumes sinusoidal — for PWM, multiply each term by
@@ -203,7 +203,7 @@ in `W:/磁気特性/00_教科書/電磁鋼板の磁気特性と取扱方法.pdf`
 ## Reference
 - G. Bertotti, "General properties of power losses in soft
   ferromagnetic materials", IEEE TMAG 24(1):621, 1988
-- Lab textbook: `W:/磁気特性/00_教科書/General properties of power
+- Lab textbook: `public-safe curated corpus properties of power
   losses in soft ferromagnetic material.pdf` (21 MB)
 - Bertotti, "Hysteresis in Magnetism" 1998 (579 MB scan; the canonical
   monograph)
@@ -230,7 +230,7 @@ CARSTENSEN = r"""
 
 ## Status: PRODUCTION (in radia_mcp.peec.carstensen_ac_loss)
 
-Carstensen 2007 PhD (W:/MOR_モデル縮約/Eddy_Currents/Carstensen 2007
+Carstensen 2007 PhD (public-safe curated corpus 2007
 PhD; cross-link from peec.carstensen_ac_loss):
 - Originally for SRM (switched reluctance motor) winding losses
 - Dowell-Kelvin functions for skin + proximity effect in slot windings
@@ -290,7 +290,7 @@ Have measured B(t) waveform OR simulated FE B(t)?
         (calc_motor_transient.py + Picard nonlinear FE)
 ```
 
-## Lab papers (W:/03_文献・論文/00_電磁界解析/30_磁気特性/31_損失/)
+## Lab papers (public-safe curated corpus)
 
 - Iron Loss Evaluation of Reactor Core with Air Gaps by Magnetic
   Field (Magnetic-field-based, not assumed-sinusoid)
@@ -394,7 +394,7 @@ DC-biased coefficients deviate most from the sinusoidal coefficients.
   "Iron Loss Estimation Method for a General Hysteresis Loop With
   Minor Loops", IEEE Trans. Magn. 51(11):8112304, Nov 2015.
   doi:10.1109/TMAG.2015.2445930
-- File: `W:/03_文献・論文/00_電磁界解析/30_磁気特性/02_ヒステリシスモデル/
+- File: `public-safe curated corpus
    00_review/Iron_Loss_Estimation_Method_for_a_General_Hysteresis_
    Loop_With_Minor_Loops.pdf`
 

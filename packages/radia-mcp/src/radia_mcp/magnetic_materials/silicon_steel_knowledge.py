@@ -1,6 +1,6 @@
 """JIS silicon steel grade database + handling notes.
 
-Source: W:/磁気特性/00_教科書/電磁鋼板の磁気特性と取扱方法.pdf (94 MB,
+Source: public-safe curated corpus (94 MB,
 the canonical JFE/Nippon Steel handling handbook).
 """
 
@@ -69,7 +69,7 @@ for Japan.
 HANDLING_NOTES = r"""
 # 電磁鋼板 取扱方法 (handling and processing) notes
 
-Source: `W:/磁気特性/00_教科書/電磁鋼板の磁気特性と取扱方法.pdf`
+Source: `public-safe curated corpus`
 (JFE / 川崎製鉄 handbook).
 
 ## Critical processing effects on iron loss

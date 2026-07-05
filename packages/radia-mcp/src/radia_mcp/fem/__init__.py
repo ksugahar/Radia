@@ -9,7 +9,7 @@ Covers all major EM-FEM formulations + numerical techniques:
 - Coupling: circuit-FE coupling, multi-physics
 - Scaling: large-scale FEM, error theory, a-posteriori estimators
 
-Distilled from W:/03_文献・論文/00_電磁界解析/10_FEM_定式化/
+Distilled from public-safe curated corpus
 (199 files, 4.9 GB across 19 numbered thematic subdirs).
 
 This is the **theory/genealogy** layer.  For concrete code usage:

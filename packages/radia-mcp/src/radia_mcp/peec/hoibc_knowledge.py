@@ -4,7 +4,7 @@ Extends the 1st-order Leontovich SIBC documented in peec_knowledge.py
 to higher-order perturbation theory that captures surface curvature
 and remains valid at lower frequencies (δ comparable to body size).
 
-Reference papers (W:/03_文献・論文/00_電磁界解析/SIBC/03_HOIBC/):
+Reference papers (public-safe curated corpus):
 - Course G2ELab 2018 lesson 2 (derivation tutorial)
 - Dong-Di Rienzo 2020 IEEE Access 8:186496 (FEM/BEM 3D implementation)
 - Bilicz-Badics-Pávó 2023 ISEM (wide-band nonlocal IBC)
@@ -478,13 +478,13 @@ is the sweet spot** — captures curvature without exorbitant cost.
 
 
 SIBC_FAMILY_VARIANTS = r"""
-# SIBC / HOIBC variant landscape (papers in W:/SIBC/)
+# SIBC / HOIBC variant landscape (papers in public-safe curated corpus)
 
 Beyond the canonical 1st-order Leontovich (radia_mcp.peec.peec_usage
 'sibc') and Mitzner HOIBC (this module), several SIBC variants exist
 for specialized scenarios.  Lab paper coverage:
 
-## XFEM SIBC (W:/SIBC/04_XFEM/)
+## XFEM SIBC (public-safe curated corpus)
 
 X-FEM (eXtended FEM) embeds the SIBC into a discontinuous enrichment
 of the FE basis near the conductor boundary, avoiding the need to
@@ -496,7 +496,7 @@ through a fixed coil).
 
 Reference: Bouillault, Buffa, Ren — IEEE TMAG ~2008 series.
 
-## FDTD SIBC (W:/SIBC/05_FDTD/)
+## FDTD SIBC (public-safe curated corpus)
 
 For time-domain analysis (FDTD), the SIBC becomes a CONVOLUTION in
 time: E_t(t) = ∫_0^t Z_s(t-τ) H_t(τ) dτ.
@@ -509,7 +509,7 @@ Z_s(t) is approximated by:
 USE WHEN: full-wave FDTD with conductive walls, ultra-wideband.
 NOT applicable to MQS / Darwin / quasistatic.
 
-## Nonlinear SIBC (W:/SIBC/06_Nonlinear/)
+## Nonlinear SIBC (public-safe curated corpus)
 
 Standard SIBC assumes linear material (single Z_s value).  For
 saturating iron under high B, Z_s(|B|) becomes field-dependent.
@@ -542,7 +542,7 @@ NOT YET in Radia.  Workaround: extend `peec_sibc` Dowell formula manually.
 ## WPT (Wireless Power Transfer) wide-band
 
 For WPT coil design across DC → GHz, the nonlocal IBC (Bilicz 2023)
-is the natural method.  Lab paper at `W:/SIBC/07_Applications/` covers
+is the natural method.  Lab paper at `public-safe curated corpus` covers
 WPT-specific application.
 
 Cross-link: `peec_hoibc('bilicz_2023_nonlocal')` for the formulation,

@@ -35,7 +35,7 @@ from .ngsolve_hierarchy_knowledge import get_ngsolve_hierarchy_knowledge
 from .xfem_em_hiruma_knowledge import get_em_xfem_knowledge
 # Non-conforming mesh coupling (mortar / Nitsche / FETI-DP / DG /
 # HFSS Mesh Fusion analogs).  2026-05-26: distilled from
-# W:/03_文献・論文/00_電磁界解析/15_非接合/ (33 PDFs across 6 subfolders).
+# public-safe curated corpus (33 PDFs across 6 subfolders).
 from .nonconforming_mesh_coupling_knowledge import (
     get_nonconforming_mesh_coupling_documentation,
 )
@@ -218,7 +218,7 @@ def fem_nonconforming_mesh_coupling(topic: str = "overview") -> str:
     HFSS Mesh Fusion analogs in NGSolve.
 
     Distilled from 33 PDFs across 6 subfolders at
-    W:/03_文献・論文/00_電磁界解析/15_非接合/ (Sugahara Lab curated).
+    public-safe curated corpus (Sugahara Lab curated).
 
     Independent meshing of multiple regions coupled weakly at the
     interface -- the academic foundation for Ansys HFSS Mesh Fusion.

@@ -46,9 +46,9 @@ Reference / niche; lab focus is inductive resonant.
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/04_dynamic_charging/
+public-safe curated corpus
 - 電界結合型WPTの漏洩電磁界を低減する整流回路配置 (WPT2018-7)
-W:/.../05_ワイヤレス給電/99_その他/99_misc/06_論文_電磁界結合/
+public-safe curated corpus
 - 磁界_電界ハイブリッド結合WPTシステム
 """
 
@@ -101,8 +101,8 @@ Cross-reference: ngsolve.bem for full-wave high-freq simulation.
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/03_2017_技報/ (6 papers includes microwave)
-W:/.../05_ワイヤレス給電/03_IEICE/04_2018_技報/ (29 papers, multiple microwave)
+public-safe curated corpus (6 papers includes microwave)
+public-safe curated corpus (29 papers, multiple microwave)
 """
 
 
@@ -126,9 +126,9 @@ for homogenization theory + effective medium approximations.
 
 ## References
 
-W:/.../05_ワイヤレス給電/03_IEICE/09_metamaterial_WPT/ (none in this folder
+public-safe curated corpus (none in this folder
 yet; reference is in 39_部品材料/01_メタマテリアル/)
-W:/.../99_アプリケーション/05_ワイヤレス給電/A Scalable, Dual-Polarized
+public-safe curated corpus Scalable, Dual-Polarized
 Absorber Surface for Electromagnetic Energy Harvesting and Wireless Power
 Transfer.pdf
 

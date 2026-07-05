@@ -13,7 +13,7 @@ Pairs with:
   - Radia core (the actual field solver, BNL ESRF heritage)
 
 Distilled from:
-  - W:\\03_文献・論文\\00_電磁界解析\\99_アプリケーション\\加速器\\ (18 PDFs)
+  - public-safe curated corpus (18 PDFs)
   - Delferriere-de Menezes-Duperrier (CEA Saclay) on end pole design
   - Pradhan et al, Kolkata SC Cyclotron (RADIA validation)
   - SOLEIL, ESRF, RIBF design documents

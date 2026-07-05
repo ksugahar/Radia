@@ -1,7 +1,7 @@
 """radia_mcp.md2html — Markdown -> self-contained HTML with MathJax.
 
 Promoted on 2026-05-26 from
-  s:/mcp-server/src/mcp_server_document/md2html/
+  legacy private source tree
 into radia-mcp.  Source files (converter.py, tools.py) carried over
 byte-identical; only the registration layer (server.py) is new and
 follows the standard radia_mcp.<topic>.server pattern (statusable,

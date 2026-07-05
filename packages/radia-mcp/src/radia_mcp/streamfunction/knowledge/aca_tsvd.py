@@ -234,13 +234,13 @@ tests/test_stream_function.py (10 tests):
   of the same HACApK ACA+): identical k_aca and
   ||S_f90 - S_radia|| / ||S_f90|| ~ 1e-15 for BOTH methods.  Runs in a fresh
   subprocess to dodge conftest's DLL-search pollution (the f2py module bundles
-  its own Intel/MKL DLLs).  LAB-only (skipif W: drive missing).
+  its own Intel/MKL DLLs).  LAB-only (skip if the local reference module is absent).
 - Methods 2 and 3 agree to ~1e-9.
 - Least-norm solve recovers B in range(A); validates B-length.
 - Generic Radia-field path: factors a permanent-magnet array MMM/MSC coupling
   to < 1e-5 (test_radia_field_kernel_magnets).
 
-f2py reference (LAB): W:\04_..\046_伊藤海人\2026_01_06_f2py_matlab比較\f2py.
+f2py reference (LAB): public-safe curated corpus
 
 The checks above validate the SOLVER (the matrix A, the ACA+ factorisation, the
 TSVD least-norm solve). The checks below validate the DESIGN -- that the psi the
@@ -367,7 +367,7 @@ kernel-agnostic re-implementation of exactly this CP+TSVD solve.
   nonlinear DOF, TSVD owns the linear amplitude solve.
 
 ## Source folder (LAB, owner-password PDFs; decrypt with pikepdf)
-W:\03_文献..\..\流れ関数法 (Turner target-field subfolder; Truncated Singular
+public-safe curated corpus (Turner target-field subfolder; Truncated Singular
 Value Decomposition subfolder = the Abe / NESCOIL / TSVD line).
 """
 

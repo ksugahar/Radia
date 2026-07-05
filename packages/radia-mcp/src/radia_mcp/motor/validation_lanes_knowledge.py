@@ -175,14 +175,17 @@ LANES: dict[str, MotorValidationLane] = {
         support_note=(
             "This is a new research coupling idea, not the historical "
             "radia-motor supported path. Treat HDiv-VIM rotor plus reduced-FEM "
-            "stator as a design proposal until an interface operator, reduced "
-            "basis, and regression artifact are implemented."
+            "stator as a design proposal until an interface operator and "
+            "reduced basis are implemented.  The standalone planar HDiv-VIM "
+            "saliency torque contract is solver-ready evidence for the VIM "
+            "operator, not proof of the full coupled machine path."
         ),
         radia_path="proposed radia.vim HDiv rotor source-field lane plus fixed-stator reduced FEM",
         best_for=(
             "passive pickup flux and signed flux-linkage sweeps",
             "permanent-magnet demagnetizing-field anchors",
             "source-field / surface-current intuition",
+            "planar saliency torque sign and scale checks against closed form reluctance torque",
             "researching whether a rotor VIM source can drive a compact fixed-stator reduced FEM response",
         ),
         observable_families=(
@@ -207,6 +210,7 @@ LANES: dict[str, MotorValidationLane] = {
         ),
         public_evidence=(
             "analytic sign/scale checks",
+            "validation_test/feec/test_hdiv_motor_minimal_contract.py",
             "stored public-safe regression artifacts",
             "reduced FEM consistency checks",
         ),
@@ -228,7 +232,11 @@ LANES: dict[str, MotorValidationLane] = {
 OVERVIEW = """\
 # radia-motor validation lanes
 
-radia-motor should keep independent cross-validation lanes:
+radia-motor should keep independent cross-validation lanes, but its default
+learning environment is an always-on two-lane comparison: every motor result
+that claims radia-motor MCP learning must include both `ngsolve_age` and
+`hdiv_vim_reduced_fem` in the same combined artifact.  A single-lane artifact
+can pass its own metadata gate, but it is not enough to say radia-motor learned.
 
 - `ngsolve_age`: NGSolve+AGE.  This is the current supported radia-motor
   finite-element air-gap machine lane for torque, dq quantities, cogging,
@@ -292,8 +300,13 @@ Promotion is allowed when:
 - the lesson can be stated without private paths, product logs, or commercial
   benchmark numbers.
 
-If the slot only produced a useful private comparison, keep it in the private
-cross-validation directory and mark `artifact_feedback.status = candidate`.
+For radia-motor learning, promote through the combined comparison gate:
+`ngsolve_age` and `hdiv_vim_reduced_fem` must both be present.  The HDiv-VIM
+lane must include a solver-ready artifact with a non-empty verification list.
+MMMM may be attached as an auxiliary coarse check, but it is not a substitute
+for the primary AGE+HDiv-VIM comparison.  If the slot only produced a useful
+private comparison, keep it in the private cross-validation directory and mark
+`artifact_feedback.status = candidate`.
 """
 
 
@@ -313,14 +326,19 @@ can be used as a verified coarse/reduced path, not as a replacement for AGE.
 For an HDiv-VIM + reduced FEM research slot:
 
 ```powershell
+python -m pytest validation_test\\feec\\test_hdiv_motor_minimal_contract.py -q
 python -m pytest tests\\test_loop_slot_gates.py -k hdiv
 ```
 
+Use the first command as the public solver-ready HDiv-VIM operator gate: a
+planar elliptic saliency body, rotating applied field, cached body operator,
+odd torque under angle reversal, and closed-form reluctance-torque scale.
 Then attach the private/local comparison as a research artifact with
 `motor_validation_lane = "hdiv_vim_reduced_fem"` and
-`coupling_design_status = "experimental_rfc"`.  Passing this metadata gate
-means the idea is organized for learning; it does not mean radia-motor already
-supports the coupled solver.
+`coupling_design_status = "experimental_rfc"` unless the artifact includes
+a non-empty `solver_ready_artifact.verification` list.  Passing this metadata
+gate means the idea is organized for learning; it does not mean radia-motor
+already supports the full coupled solver.
 
 For an NGSolve+AGE slot:
 
@@ -409,6 +427,7 @@ def lane_template(lane_id: str = "all") -> dict[str, Any]:
         "support_note": lane.support_note,
         "reference_source_class": "product_local_reference | opensource_reference | analytic_reference | stored_regression",
         "observable_family": list(lane.observable_families),
+        "public_evidence": list(lane.public_evidence),
         "required_fields": list(lane.required_fields),
         "required_metrics": list(lane.required_metrics),
         "timing_breakdown_s": {
@@ -433,6 +452,26 @@ def _as_artifact(value: Mapping[str, Any] | str) -> Mapping[str, Any]:
         msg = "artifact JSON must decode to an object"
         raise TypeError(msg)
     return parsed
+
+
+def _valid_solver_ready_verification(value: Any) -> bool:
+    """Return True for a concrete, non-empty solver verification list."""
+    if not isinstance(value, (list, tuple)) or not value:
+        return False
+    for item in value:
+        if isinstance(item, str):
+            if not item.strip():
+                return False
+            continue
+        if isinstance(item, Mapping):
+            if not any(
+                str(item.get(key, "")).strip()
+                for key in ("command", "artifact_id", "result", "test", "path")
+            ):
+                return False
+            continue
+        return False
+    return True
 
 
 def validate_motor_validation_artifact(
@@ -496,6 +535,22 @@ def validate_motor_validation_artifact(
     if not isinstance(timing, Mapping) or not timing:
         errors.append("timing_breakdown_s must be a non-empty object")
 
+    coupling_status = str(data.get("coupling_design_status", "")).strip().lower()
+    solver_artifact = data.get("solver_ready_artifact", {})
+    solver_verification = (
+        solver_artifact.get("verification") if isinstance(solver_artifact, Mapping) else None
+    )
+    has_solver_ready_artifact = (
+        isinstance(solver_artifact, Mapping)
+        and bool(str(solver_artifact.get("artifact_id", "")).strip())
+        and _valid_solver_ready_verification(solver_verification)
+    )
+    if coupling_status in {"solver_validated", "validated_solver_path"} and not has_solver_ready_artifact:
+        errors.append(
+            "solver_ready_artifact must include artifact_id and a non-empty "
+            "verification list when coupling_design_status claims solver validation"
+        )
+
     feedback = data.get("artifact_feedback", {})
     if not isinstance(feedback, Mapping):
         errors.append("artifact_feedback must be an object")
@@ -518,15 +573,36 @@ def validate_motor_validation_artifact(
         and status_value == "pass"
         and support_status == "supported_coarse_path"
     )
+    accepted_for_mcp_rfc_learning = (
+        result_status == "pass"
+        and status_value == "pass"
+        and support_status == "experimental_rfc"
+    )
+    validated_experimental_solver_path = (
+        accepted_for_mcp_rfc_learning
+        and coupling_status in {"solver_validated", "validated_solver_path"}
+        and has_solver_ready_artifact
+    )
+    accepted_for_mcp_learning = (
+        result_status == "pass"
+        and status_value == "pass"
+        and (
+            validated_solver_path
+            or validated_coarse_path
+            or validated_experimental_solver_path
+        )
+    )
     return {
         "schema_version": "radia-motor-validation-artifact-gate/v1",
         "status": result_status,
         "lane": lane_id,
         "support_status": support_status,
         "validated_solver_path": validated_solver_path,
+        "validated_experimental_solver_path": validated_experimental_solver_path,
         "validated_coarse_path": validated_coarse_path,
         "validated_supported_path": validated_solver_path or validated_coarse_path,
-        "accepted_for_mcp_learning": result_status == "pass" and status_value == "pass",
+        "accepted_for_mcp_learning": accepted_for_mcp_learning,
+        "accepted_for_mcp_rfc_learning": accepted_for_mcp_rfc_learning,
         "errors": errors,
         "warnings": warnings,
     }
@@ -542,9 +618,11 @@ def format_artifact_gate_result(result: Mapping[str, Any]) -> str:
         f"- lane: `{result.get('lane', '')}`",
         f"- support status: `{result.get('support_status', '')}`",
         f"- validated solver path: `{result.get('validated_solver_path', False)}`",
+        f"- validated experimental solver path: `{result.get('validated_experimental_solver_path', False)}`",
         f"- validated coarse path: `{result.get('validated_coarse_path', False)}`",
         f"- validated supported path: `{result.get('validated_supported_path', False)}`",
         f"- accepted for MCP learning: `{result.get('accepted_for_mcp_learning', False)}`",
+        f"- accepted for MCP RFC learning: `{result.get('accepted_for_mcp_rfc_learning', False)}`",
     ]
     errors = list(result.get("errors", ()))
     warnings = list(result.get("warnings", ()))

@@ -554,7 +554,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "radia_mcp.literature_index",
         "entry_point": "mcp-server-literature-index",
         "description": "★ Meta-MCP: full-text search across 3,889 lab "
-                       "literature files in W:/00_電磁界解析",
+                       "literature files in public-safe curated corpus",
         "primary_tools": ["literature_search", "literature_by_folder",
                             "literature_folder_tree", "literature_stats",
                             "literature_semantic_search"],
@@ -666,8 +666,8 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
     },
     "mcp-server-document": {
         "pypi": "(LAB-private, not on PyPI)",
-        "github": "(internal: S:/mcp-server)",
-        "install": "pip install -e S:/mcp-server",
+        "github": "(internal: public-safe curated corpus)",
+        "install": "pip install -e public-safe curated corpus",
         "entry_point": "mcp-server-document",
         "description": "Paper/grant/poster/presentation writing helpers "
                        "(grant_writing_*, paper_writing_*, poster_*, "

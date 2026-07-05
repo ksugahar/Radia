@@ -110,7 +110,7 @@ Run artifacts:
 Presentation template:
 
 The NGSolve User Meeting draft
-`W:/02_学会資料/2026年度/2026_06_29_NGSolve_User_Meeting/HDiv-VIM@菅原/RADIA-IH.ipynb`
+`public-safe curated corpus`
 is a presentation shell for the IH workbench.  Its pattern is:
 
 1. Markdown title explaining that the notebook is the panel.

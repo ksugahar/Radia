@@ -1578,7 +1578,7 @@ spectral boundary layer (width ~1/(2t)) is the classic delicate part of Sommerfe
 a thick slab's DC limit approaches the 2-media image only as O(1/t) because R(k=0)=r02 for ANY t;
 under-resolving k~0 spuriously 'passes' (this is why DCIM / tail-extraction methods exist: Aksun;
 Michalski-Mosig). The full WAVE Sommerfeld integral (branch cuts, surface-wave/Zenneck poles) is the
-time-harmonic extension. LIT (W:\03..\11_BEM_..\10_sommerfeld_layered): Koh-Yook 2006 (impedance plane),
+time-harmonic extension. LIT (public-safe curated corpus): Koh-Yook 2006 (impedance plane),
 Chew lectures (Weyl/spectral) [pre-existing]; ADDED 2026-06-14: Sautbekov 2020 (short-wave asymptotic,
 arXiv 2005.06857), Lai-Greengard-O'Neil 2015 (hybrid integral representation, arXiv 1507.03491),
 Burke-Poggio NEC-2 Part I theory (the classic PUBLIC-DOMAIN Sommerfeld-ground MoM = the user's "NES"/NEC
@@ -2362,7 +2362,7 @@ time-domain magnetics-IABC / Kelvin linkage -- those two are ours.)
 
 LOW-FREQUENCY (static / Laplace) IABC -- a MORE ELEGANT derivation of Meeker/Sugahara's nested-shell
 construction (act7_14_iabc_static_elegant, VERIFIED 2026-06-15; user: read Meeker's Mathematica notebook
-femm.info/improvisedabcs and Sugahara's optimization S:\...\2015_11_03_IABC定式化; "it should be
+femm.info/improvisedabcs and Sugahara's optimization public-safe curated corpus; "it should be
 derivable more elegantly"). THE ORIGINAL METHOD (faithfully ported from main0.m + cf1.m/cf2.m): per
 spherical-harmonic mode n, build the 2x2 basis M=[[r^n,r^{-(n+1)}],[n r^{n-1},-(n+1)r^{-(n+2)}]],
 cascade it through N concentric shells with permeability jumps diag[1,1/x], apply a termination, read a

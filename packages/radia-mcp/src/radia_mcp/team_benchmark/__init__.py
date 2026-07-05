@@ -11,7 +11,7 @@ validation suite.  ~36 problems span:
 - Inverse problems
 - Hysteresis
 
-Distilled from W:/03_文献・論文/00_電磁界解析/05_TEAM_benchmark/
+Distilled from public-safe curated corpus
 (45 files / 449 MB across 30 problem subfolders + _references/).
 
 Source: TEAM Workshop reference papers (IGTE Symposium 1990,

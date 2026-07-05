@@ -137,10 +137,10 @@ When passing a Gmsh script snippet with a Windows path through PowerShell,
 prefer single quotes inside the Gmsh snippet:
 
 ```powershell
-gmsh display.geo -string "Print 'W:/path/frame.png'; Exit;"
+gmsh display.geo -string "Print 'C:/temp/frame.png'; Exit;"
 ```
 
-Do not pass backslash-escaped double quotes such as `\"W:/path/frame.png\"`
+Do not pass backslash-escaped double quotes such as `\"C:/temp/frame.png\"`
 through `gmsh.bat`; the wrapper can leave Gmsh seeing an unquoted `W:` token,
 which fails as `Unknown variable 'W'`. `Print` also needs a graphical
 OpenGL/FLTK context to create PNG/JPEG images; for unattended animation export,
@@ -1055,13 +1055,13 @@ mesh = Mesh("cubit_export.vol")  # .vol is the sole interface
 """
 
 GMSH_ONELAB = """
-# ONELAB Distribution (S:\\ONELAB)
+# ONELAB Distribution (public-safe curated corpus)
 
 GMSH is distributed as part of the ONELAB suite.
 
 ## Structure
 ```
-S:\\ONELAB\\
+public-safe curated corpus
   00_installer/
     gmsh.exe          (4.15.2, standalone executable)
     getdp.exe         (FEM solver, not used by Radia)

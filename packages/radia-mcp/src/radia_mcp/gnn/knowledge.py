@@ -73,7 +73,7 @@ PHYSICS_EMBEDDED = r"""
 # Physics-Embedded GNN PDE Solvers
 
 `Physics-Embedded Neural Networks: Graph Neural PDE Solvers with
-Mixed Boundary Conditions.pdf` (W:/.../12_機械学習_GNN/)
+Mixed Boundary Conditions.pdf` (public-safe curated corpus)
 
 ## Idea
 
@@ -175,7 +175,7 @@ EQUIVARIANT_GNN = r"""
 # Equivariant GNN: Isometry-respecting architectures
 
 `Isometric Transformation Invariant and Equivariant Graph
-Convolutional Networks.pdf` (W:/.../12_機械学習_GNN/)
+Convolutional Networks.pdf` (public-safe curated corpus)
 
 ## Definition
 

@@ -8,7 +8,7 @@ Covers:
 - Decision tree: which method for which problem class
 - Lab stack reference: radia.sparsesolv_ngsolve concrete API
 
-Distilled from W:/03_文献・論文/00_電磁界解析/行列解法/ (18 files, ~236 MB).
+Distilled from public-safe curated corpus (18 files, ~236 MB).
 
 This subpackage is the **theory/genealogy** layer.  For concrete code
 usage of the lab stack (CompactAMS, COCR, etc.), see the `sparsesolv`

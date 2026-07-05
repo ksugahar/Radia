@@ -7,15 +7,15 @@ Layout:
   radia_mcp.radia_ngsolve — Radia + NGSolve general FEM/BEM/Kelvin/PEEC/MSH knowledge
   radia_mcp.ih            — Induction Heating workflow (workpiece SIBC, ESIM,
                             Karl iteration, screening physics) — promoted from
-                            s:/mcp-server/mcp-server-ih/ on 2026-04-24
+                            legacy private source tree on 2026-04-24
   radia_mcp.peec          — LAB PEEC workflow (Loop-Star, FastHenry, PyPEECBuilder,
                             PEECCircuitSolver, Bessel/Dowell/ESIM, PRIMA MOR,
                             SPICE extraction) — promoted from
-                            s:/mcp-server/mcp-server-peec/ on 2026-04-24
+                            legacy private source tree on 2026-04-24
   radia_mcp.electromagnet — Accelerator electromagnet (CoilBuilder, Hantila polarization,
                             B-input Play/Energy hysteresis, IMA sign selection,
                             multipole harmonics) — promoted from
-                            s:/mcp-server/mcp-server-electromagnet/ on 2026-04-24
+                            legacy private source tree on 2026-04-24
   radia_mcp.differential_forms — Differential geometry for computational EM:
                             tangent spaces, k-forms, wedge product, exterior
                             derivative, Hodge star, Whitney elements, de Rham
@@ -27,7 +27,7 @@ Layout:
                             status / simplify / to_tex / check_identity /
                             vector_calc / unit_convert / solve / integrate /
                             differentiate via wolframscript. Promoted from
-                            s:/mcp-server/src/mcp_server_document/mathematica/
+                            legacy private source tree
                             on 2026-05-20. Pairs with differential_forms for
                             symbolic verification of Maxwell identities.
   radia_mcp.topology_optimization — Shape and topology optimization for nonlinear

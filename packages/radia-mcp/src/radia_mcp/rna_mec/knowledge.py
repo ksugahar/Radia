@@ -107,7 +107,7 @@ parameter extractor), use RNA as the dynamic / optimization model.
    grid of reluctance cells, each cell = 4 reluctances + flux sources.
    Used in topology optimization (Yin 2023).
 
-## Lab core papers (W:/.../13_RNA/01_lab_sugahara/)
+## Lab core papers (public-safe curated corpus)
 
 Tanaka / Hane lineage (Tohoku University Nakamura lab, collaborating
 with Sugahara lab):
@@ -121,7 +121,7 @@ with Sugahara lab):
   - `博士論文_本審査_吉田.pptx` -- Yoshida (Ph.D. thesis)
   - `AC_DC_Bridgeless_Flyback.pdf` -- application
 
-External (`W:/.../13_RNA/external/`):
+External (`public-safe curated corpus`):
   - `Comparison_Nodal_Mesh_MEC.pdf` (Derbas 2009) -- the canonical
     nodal-vs-mesh comparison.
   - `Dynamic_Hysteresis_Magnetic_Circuit.pdf` (Hane 2020) -- the
@@ -129,7 +129,7 @@ External (`W:/.../13_RNA/external/`):
   - `TopOpt_Magnetic_Actuator_RNA.pdf` (Yin 2023) -- RNA + Adjoint
     Variable Method for topology optimization.
 
-Hysteresis-focused (`W:/.../13_RNA/02_ヒステリシス/`):
+Hysteresis-focused (`public-safe curated corpus`):
   - `(1)LSモデル(Physica B, 2000).pdf` -- LS hysteresis model
   - `(2)LSモデル_RNA(Not peer-reviewed,2017).pdf` -- LS embedded in RNA
   - `プライザッハRNA(東南大学,IEEE,2019).pdf` -- Preisach RNA (Southeast
@@ -733,7 +733,7 @@ available for PWM iron-loss prediction.
   arbitrary 3D FEM problems (Kameari 2018 and successors).
 - `radia_mcp.magnetic_materials.hysteresis_models.play` -- Play model
   forward / inverse evaluation.
-- W:/.../18_MOR_モデル縮約/10_CLN_Cauer_Ladder/ -- 30+ Cauer / CLN
+- public-safe curated corpus -- 30+ Cauer / CLN
   papers (Sato/Igarashi, Matsuo, Shindo, Eskandari, etc.).
 """
 
@@ -1002,7 +1002,7 @@ realistic iron loss + saturation + frequency-dependent eddy current.
   framework.
 - `team28_reduced_model` topic -- TEAM-28 in further depth (modeling
   variations, comparison with BEM-FVM).
-- W:/.../05_TEAM_benchmark/23_problem28/ -- 10+ papers on TEAM-28
+- public-safe curated corpus -- 10+ papers on TEAM-28
   variants (FVM, BEM, hybrid, POD, MOR).
 """
 
@@ -1032,7 +1032,7 @@ been tested against it.
 The challenge is reproducing the transient h(t) and v(t) curves with
 acceptable accuracy.
 
-## Reference solutions in W:/.../05_TEAM_benchmark/23_problem28/
+## Reference solutions in public-safe curated corpus
 
 | Method                              | Reference                  |
 |-------------------------------------|----------------------------|
@@ -1375,9 +1375,9 @@ the Tohoku-Kindai collaboration.
   forward / inverse evaluation API.
 - `radia_mcp.magnetic_materials.hysteresis_models.lab_core` -- the
   Tohoku-Kindai energy / play core lineage.
-- W:/.../13_RNA/01_lab_sugahara/1912_マグ研_羽根_PlayCauer.pdf -- the
+- public-safe curated corpus -- the
   seminal lab paper.
-- W:/.../13_RNA/external/Dynamic_Hysteresis_Magnetic_Circuit.pdf --
+- public-safe curated corpus --
   English IEEE version.
 """
 

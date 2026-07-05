@@ -1,6 +1,6 @@
 """NGSolve hierarchical H(curl) bases — Zaglmayr / nograds / tree-cotree.
 
-Migrated 2026-05-23 from S:/mcp-server/src/mcp_server_document/mathematica/
+Migrated 2026-05-23 from public-safe curated corpus
 notes_fem_hcurl.md (per "all FEM knowledge lives in radia-mcp" policy).
 """
 

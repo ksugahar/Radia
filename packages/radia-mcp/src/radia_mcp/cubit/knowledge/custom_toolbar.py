@@ -371,7 +371,7 @@ a downloadable `.tar.gz`):
 
 ## Sharing across a team
 
-- Check the archive into a shared S: drive or Artifactory.
+- Check the archive into a managed internal share or Artifactory.
 - Each user imports once; updates require re-importing (Cubit replaces
   the existing namespace).
 - For lab-wide distribution on the 100goki farm, piggyback on the

@@ -3,7 +3,7 @@
 Originally ``ppt2pdf`` (PowerPoint → PDF only). Renamed to ``doc_convert``
 2026-05-19 and extended with PDF → JPG via Adobe Acrobat COM.
 
-Seed: W:/02_学会資料/2025年度/2026_03_04_静止器・回転機合同研究会@川越/
+Seed: public-safe curated corpus
 H行列@菅原/原稿/Figures/ppt2pdf.py (16 lines, 2026).
 
 Original behaviour: glob ``*.ppt*`` in the current directory and SaveAs(32)

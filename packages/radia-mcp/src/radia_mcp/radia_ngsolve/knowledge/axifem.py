@@ -515,7 +515,7 @@ Reference:
 
 Test: `validation_test/axifem/research/verification/test_3way_cauer_cross_validation.py`
 Reference data (separate working tree, not in this repo):
-  W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+  public-safe curated corpus
     bem_disk_axisym_cauer.wls     (Mathematica BEM + Foster amplitudes)
     disk_bem_cauer.py             (Python mpmath Cauer-I CFE)
     bem_disk_axisym_cauer.json
@@ -678,7 +678,7 @@ tests/axifem/                            # pytest golden tests (CI-collected)
 ```
 
 The Mathematica derivation lives upstream at
-`W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/`
+`public-safe curated corpus`
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
 
 Comprehensive design + theory documentation: `docs/axifem/AXIFEM.md`.

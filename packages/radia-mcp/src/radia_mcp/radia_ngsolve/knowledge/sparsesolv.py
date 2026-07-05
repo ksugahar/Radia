@@ -1144,7 +1144,7 @@ crashes at apply time when it walks the C++ vtable layouts.
 **Workarounds**:
 1. **Rebuild sparsesolv_ngsolve** against the current NGSolve.  This is
    the canonical fix.  Build via `python -m pip install -e
-   S:/Radia/01_GitHub/src/ext/sparsesolv` or follow `src/ext/sparsesolv/
+   repo:/src/ext/sparsesolv` or follow `src/ext/sparsesolv/
    docs/development.md`.
 2. **Use BDDC** (`solver=bddc`) as a substitute for AMS in the
    FEM-Kelvin panel.  It's a different preconditioner family but

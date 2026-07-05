@@ -1,6 +1,6 @@
 """CLN multi-port / multi-expansion / 3D extensions.
 
-Covers W:\\30_CauerLadderNetwork\\{03_複数電源, 04_展開点, 10_タイル,
+Covers public-safe curated corpus, 04_展開点, 10_タイル,
 11_3次元}. Source-side and structural extensions of the basic
 single-port linear CLN: vector port impedance Z_ij, multi-expansion-
 point convergence acceleration (Kuriyama 2019), periodic/tiled
@@ -24,7 +24,7 @@ That is enough for a one-winding inductor on a textbook geometry.
 Real engineering systems require four extensions that this module
 covers:
 
-  1. MULTI-PORT (W:\\30_CauerLadderNetwork\\03_複数電源)
+  1. MULTI-PORT (public-safe curated corpus)
      -- N-conductor windings, transformers, multi-source coils
      -- Output: a Y_ij(jw) (or Z_ij(jw)) MATRIX, not a scalar
      -- Two formulations exist: "voltage-controlled-current-source"
@@ -32,7 +32,7 @@ covers:
         (Matsuo 2017 / 2018c); the matrix form converges at lower
         ladder order so it is the production choice.
 
-  2. MULTI-EXPANSION POINT (W:\\30_CauerLadderNetwork\\04_展開点)
+  2. MULTI-EXPANSION POINT (public-safe curated corpus)
      -- Add s_0 != 0 (typically s_0 = j*omega_0 of the operating
         frequency) so the same ladder works DC -> high-f with few
         stages.
@@ -46,7 +46,7 @@ covers:
      -- Published as Kuriyama-Kameari-Ebrahimi-Fujiwara-Sugahara-
         Shindo-Matsuo 2019 (cited in cln_knowledge.py).
 
-  3. TILED / PERIODIC (W:\\30_CauerLadderNetwork\\10_タイル)
+  3. TILED / PERIODIC (public-safe curated corpus)
      -- A graphical representation of ladder networks where each
         circuit element becomes a rectangular tile; total impedance
         = aspect ratio of the assembled tile pattern.
@@ -54,7 +54,7 @@ covers:
         helps the lab visualize convergence and termination at a
         glance, especially for multi-port (multi-color-tile) cases.
 
-  4. 3D EXTENSION (W:\\30_CauerLadderNetwork\\11_3次元)
+  4. 3D EXTENSION (public-safe curated corpus)
      -- Vector A_phi formulation with HCurl/Nedelec edge elements
         + H1 nodal Lagrange multiplier (gauge); FreeFEM++ for mesh
         prototyping (test.edp), Gridap.jl for production
@@ -373,7 +373,7 @@ in H1 (see 11_3次元 / A_phi_Gridap.jl, THREE_D_EXTENSION below).
 
 ## A-K formulation (有限要素法展開点付ak.doc)
 
-An "A and K" hybrid -- specifics in `W:\\30_CauerLadderNetwork\\
+An "A and K" hybrid -- specifics in `public-safe curated corpus
 04_展開点\\有限要素法展開点付ak.doc`.  Lab notes mark this as
 research-stage; production uses A-form 3D.
 """
@@ -855,7 +855,7 @@ foundational papers (Kameari 2018a/b, Matsuo 2018c, Ebrahimi 2020).
              Method)},
   journal = {Lab note},
   year    = {2017},
-  note    = {Folder: W:\\30_CauerLadderNetwork\\03_複数電源\\
+  note    = {Folder: public-safe curated corpus
              2_port_1-wire\\2017_02_27_複数電源のKameari法.docx},
 }
 
@@ -894,7 +894,7 @@ foundational papers (Kameari 2018a/b, Matsuo 2018c, Ebrahimi 2020).
              Element Space (with Expansion Points))},
   journal = {Lab note},
   year    = {2017},
-  note    = {Folder: W:\\30_CauerLadderNetwork\\04_展開点\\
+  note    = {Folder: public-safe curated corpus
              有限要素法展開点付.doc and 3d/t/ak variants},
 }
 
@@ -909,7 +909,7 @@ foundational papers (Kameari 2018a/b, Matsuo 2018c, Ebrahimi 2020).
              Rotating Machinery},
   number  = {SA-17-64, RM-17-95},
   year    = {2017},
-  note    = {Cited in W:\\30_CauerLadderNetwork\\03_複数電源\\
+  note    = {Cited in public-safe curated corpus
              マルチターン空芯コイルのＣＬＮ解析.docx as the source
              of the homogenization framing.},
 }
@@ -920,7 +920,7 @@ foundational papers (Kameari 2018a/b, Matsuo 2018c, Ebrahimi 2020).
   author  = {Sugahara, K. and Lukas, [given name TBD]},
   title   = {A-phi Formulation 3D CLN in Gridap.jl},
   year    = {2023},
-  note    = {Folder: W:\\30_CauerLadderNetwork\\11_3次元\\
+  note    = {Folder: public-safe curated corpus
              20231120_A_phi_Lukas定式\\A_phi_Gridap.jl.  Production
              3D-CLN script (Julia, Gridap.jl, Nedelec+H1
              saddle-point form).},

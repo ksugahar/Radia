@@ -1,13 +1,13 @@
 """CLN practice / foundations: 4 source folders + 3 root reference docs.
 
 Sugahara lab's Cauer Ladder Network MATLAB+COMSOL implementation
-practice corpus -- absorbed from W:\\30_CauerLadderNetwork\\.
+practice corpus -- absorbed from public-safe curated corpus
 
 Scope (Group A: Foundations + Practice):
-  - 01_single_source   (W:\\30_CauerLadderNetwork\\01_単一電源\\)
-  - 02_boundary_cond   (W:\\30_CauerLadderNetwork\\02_境界条件\\)
-  - 09_series_expand   (W:\\30_CauerLadderNetwork\\09_級数展開\\)
-  - linear-CLN-practice (W:\\30_CauerLadderNetwork\\2020_11_04_線形のCLNの練習\\)
+  - 01_single_source   (public-safe curated corpus)
+  - 02_boundary_cond   (public-safe curated corpus)
+  - 09_series_expand   (public-safe curated corpus)
+  - linear-CLN-practice (public-safe curated corpus)
   - A-phi-formulation-2.pdf (root)
   - 二次元準静磁場解析の再考.docx (root)
   - 2016_10_02_ベッセルの不等式.docx (root)
@@ -22,7 +22,7 @@ verification machinery.
 OVERVIEW = """
 # CLN practice and foundations (Sugahara lab MATLAB+COMSOL corpus)
 
-The lab's W:\\30_CauerLadderNetwork\\ tree contains roughly a decade of
+The lab's public-safe curated corpus tree contains roughly a decade of
 Cauer Ladder Network implementation experiments.  This module absorbs
 the foundational and 2020 single-frequency-input practice layer.
 
@@ -72,7 +72,7 @@ Topics (each is a self-contained markdown block):
 CLN_MATLAB_CLASS = """
 # The CLN.m MATLAB class (71 lines, canonical lab implementation)
 
-Location: W:\\30_CauerLadderNetwork\\2020_11_04_線形のCLNの練習\\CLN.m
+Location: public-safe curated corpus
 
 This is the SINGLE canonical Sugahara-lab MATLAB class that consumes
 the per-stage CLN basis fields {R_n, L_n, J_n, A_n} produced by a
@@ -237,8 +237,8 @@ closed-form Bessel-function reference (see lab_lessons / key_files).
 E0_MODE_PRACTICE = """
 # E0 mode practice: cylindrical conductor + COMSOL HelmholtzEquation hack
 
-File: W:\\30_CauerLadderNetwork\\2020_11_04_線形のCLNの練習\\CLN_E0_mode.m
-File: W:\\30_CauerLadderNetwork\\2020_11_04_線形のCLNの練習\\CLN_E0_mode_ver_2.m
+File: public-safe curated corpus
+File: public-safe curated corpus
 
 ## The geometry and physics
 
@@ -390,7 +390,7 @@ higher stages.  See lab_lessons for when these matter.
 H1_MODE_PRACTICE = """
 # H1 mode practice: magnetic source variant + 3 BC choices
 
-Files in W:\\30_CauerLadderNetwork\\2020_11_04_線形のCLNの練習\\:
+Files in public-safe curated corpus
   - CLN_H1_mode.m                            (Robin BC, single disk)
   - CLN_H1_mode_Infinite_Element.m           (COMSOL Infinite Element)
   - CLN_H1_mode_Kelvin_NG.m                  (Kelvin transformation -- FAILED)
@@ -520,7 +520,7 @@ or Infinite Element, NOT Kelvin -- at least with this implementation.
 BOUNDARY_CONDITIONS = """
 # Boundary conditions for open-domain CLN: 3 strategies compared
 
-Source: W:\\30_CauerLadderNetwork\\02_境界条件\\
+Source: public-safe curated corpus
 Files:
   - 2016_12_01_2導体モデルに亀有法を適用_iabc.docx  (IABC on 2-conductor)
   - 2017_05_21_境界条件.docx                       (BC overview)
@@ -634,7 +634,7 @@ For 2D round-conductor CLN with frequency sweep 0 - few MHz:
 ROBIN_BC = """
 # Check_Robin_BC.m: focused verification of the Robin BC
 
-File: W:\\30_CauerLadderNetwork\\2020_11_04_線形のCLNの練習\\Check_Robin_BC.m
+File: public-safe curated corpus
 
 A standalone driver that ONLY verifies the COMSOL Robin BC setup
 against an analytical Poisson solve.  Useful when chasing whether a
@@ -711,9 +711,9 @@ SERIES_EXPANSION_THEORY = """
 # Series expansion theory + Bessel's inequality (foundation)
 
 Sources:
-  - W:\\30_CauerLadderNetwork\\09_級数展開\\10-04_old.docx
-  - W:\\30_CauerLadderNetwork\\09_級数展開\\亀有追記0921.docx
-  - W:\\30_CauerLadderNetwork\\2016_10_02_ベッセルの不等式.docx
+  - public-safe curated corpus
+  - public-safe curated corpus
+  - public-safe curated corpus
 
 (All binary docx -- the descriptions below are the lab's standing
 notes on what these documents establish.)
@@ -772,16 +772,16 @@ empirically in the H1 mode analytical R_o formula.
 
 Specific theorem statements / proofs not transcribed here (binary
 docx).  See:
-  W:\\30_CauerLadderNetwork\\09_級数展開\\10-04_old.docx
-  W:\\30_CauerLadderNetwork\\09_級数展開\\亀有追記0921.docx
-  W:\\30_CauerLadderNetwork\\2016_10_02_ベッセルの不等式.docx
+  public-safe curated corpus
+  public-safe curated corpus
+  public-safe curated corpus
 """
 
 
 A_PHI_FORMULATION = """
 # A-phi formulation reference
 
-File: W:\\30_CauerLadderNetwork\\A-phi-formulation-2.pdf
+File: public-safe curated corpus
 
 (Binary PDF, see file for full content.)
 
@@ -827,14 +827,14 @@ Promotion of A-phi to MATLAB-class form is a TBD upgrade path.
 ## TBD
 
 Specific equations / derivations not transcribed.  See the PDF:
-W:\\30_CauerLadderNetwork\\A-phi-formulation-2.pdf
+public-safe curated corpus
 """
 
 
 QUASI_STATIC_2D_RETHINK = """
 # 2D quasi-static rethink (二次元準静磁場解析の再考.docx)
 
-File: W:\\30_CauerLadderNetwork\\二次元準静磁場解析の再考.docx
+File: public-safe curated corpus
 
 (Binary docx, see file for full content.)
 
@@ -879,7 +879,7 @@ This view enables the 2D MQS CLN code to be lifted to:
 ## TBD
 
 Specific equations / numerics not transcribed.  See the docx:
-W:\\30_CauerLadderNetwork\\二次元準静磁場解析の再考.docx
+public-safe curated corpus
 """
 
 
@@ -1081,7 +1081,7 @@ KEY_FILES = """
 
 ## Folders explicitly NOT in this module's scope
 
-(For Group B / future absorption -- not in W:\\30_CauerLadderNetwork
+(For Group B / future absorption -- not in public-safe curated corpus
 Group A list)
 
   - 03_複数電源       (multi-source -- needs separate module)
@@ -1187,7 +1187,7 @@ CITATIONS = """
 
 ## Internal lab documents (docx, not formally published)
 
-Cited inline in this module by full path under W:\\30_CauerLadderNetwork\\
+Cited inline in this module by full path under public-safe curated corpus
 (see key_files topic for the complete table).  Authors are lab members
 (Sugahara, Kameari attribution noted on '亀有追記' files).  Dates
 embedded in filenames (2016, 2017, 2020 ranges) where available.

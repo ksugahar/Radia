@@ -1,7 +1,7 @@
 """radia_mcp.evolutionary — Evolutionary computation (GA / DE / PSO /
 CMA-ES / Immune algorithm) for EM engineering.
 
-Distilled from W:/.../02_最適化_進化計算/ (6 papers):
+Distilled from public-safe curated corpus (6 papers):
   - 第17回進化計算シンポジウム 2023 (Evolutionary Computation Symposium)
   - PSO の制御設計への応用 (PSO for control design)
   - 大域的最適化が可能なPSO (Global PSO)

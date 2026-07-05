@@ -1,7 +1,7 @@
 """3D Cauer Ladder Network (CLN) knowledge base for Radia MCP server.
 
 Captures Tanimoto-Kameari iterative CLN methods for 3D eddy current
-analysis as developed in W:/00_CAE/NGSolve/谷本/ (Tanimoto's master's
+analysis as developed in public-safe curated corpus (Tanimoto's master's
 thesis + production code for static/rotating machine analysis).
 
 Covers ~25 notebooks across three thematic groups:
@@ -157,7 +157,7 @@ f_T += -Cross(Es, W.Trace()) * n * ds("conductorBND")
 
 
 CLN_3D_NOTEBOOK_INDEX = """
-## Notebook Index (W:/00_CAE/NGSolve/谷本/)
+## Notebook Index (public-safe curated corpus)
 
 ### 修論/ — Master's Thesis (canonical reference)
 - CLN_AT.ipynb         : A-T formulation, primary 3D Kameari (10-stage)
@@ -189,7 +189,7 @@ CLN_3D_NOTEBOOK_INDEX = """
 
 **Context**: Kelvin transformation in NGSolve is a PROVEN, HIGH-ACCURACY
 technique when properly formulated. Kameari (2025/10/14 slides,
-W:/00_CAE/NGSolve/亀有/4-05.pdf) demonstrates:
+public-safe curated corpus) demonstrates:
 - Magnetic sphere (mu_r=1000), coarse mesh, Order 3:
   A-Omega_r gives **0.001% error**, Omega-Omega_r Order 4 gives 0.029%
 - **Independent of Kelvin radius rk** -- even rk=100 (huge) gives same
@@ -458,7 +458,7 @@ This finally closes the apples-to-apples loop: any future BEM-Foster
 benchmark for a Kameari iteration code MUST drop the τ_k power by 1.
 
 Reference: bem_to_kameari_cauer.py at
-W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+public-safe curated corpus
 
 ### REFERENCE IMPLEMENTATION: BEM-Foster spectrum → Kameari Cauer-I
 
@@ -517,7 +517,7 @@ Verified results (Cu, B0 = 1 T uniform):
       Hiruma  τ_pair = [219.32, 78.65, 40.04, 23.74, 17.07, 14.73] μs
       Kameari τ_pair = [209.14, 68.59, 34.14, 22.41, 18.52, 15.41] μs
 
-Source: W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+Source: public-safe curated corpus
         bem_to_kameari_cauer.py
 
 POLICY (2026-05-10): For new CLN extraction code, prefer Kameari
@@ -559,7 +559,7 @@ def get_cln_3d_documentation() -> str:
     A-T, T-Ω, A-Φ formulations with constraint variants (penalty, gauge)
     and production-grade solver implementations (A + ICCG).
 
-    Source: W:/00_CAE/NGSolve/谷本/ (Tanimoto's master's thesis +
+    Source: public-safe curated corpus (Tanimoto's master's thesis +
     production code for static/rotating machine analysis).
 
     Returns:

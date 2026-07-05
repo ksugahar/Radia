@@ -2,7 +2,7 @@
 
 Reluctance Network Analysis (RNA) / Magnetic Equivalent Circuit (MEC) knowledge.
 
-Distilled from W:/.../13_RNA/ (17 files, lab Sugahara 田中/羽根 lineage).
+Distilled from public-safe curated corpus (17 files, lab Sugahara 田中/羽根 lineage).
 
 Cross-references:
 - `radia_mcp.bem.mmm_msc.rna_mmm` — RNA + MMM coupling

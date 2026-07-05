@@ -1,7 +1,7 @@
 """Tanimoto's 3D CLN notebook code (converted from ipynb).
 
 Each .py file is the Python script extraction of the corresponding
-Jupyter notebook in W:/00_CAE/NGSolve/谷本/.
+Jupyter notebook in public-safe curated corpus
 
 Available notebooks:
   - CLN_AT.py       : A-T formulation, primary 3D Kameari (修論)

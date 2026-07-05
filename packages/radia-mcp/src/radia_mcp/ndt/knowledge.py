@@ -3,8 +3,8 @@
 This module is the substantive knowledge layer for the
 `radia_mcp.ndt` subpackage. It complements the searchable
 `bibliography_index_knowledge.py` catalog by providing distilled,
-topic-organized prose drawn from the W: drive literature library at
-`W:\\03_文献・論文\\00_電磁界解析\\99_アプリケーション\\06_非破壊検査\\`
+topic-organized prose drawn from the configured literature library at
+`public-safe curated corpus`
 (approximately 145 PDFs across 12 subfolders).
 
 The catalog covers:
@@ -126,7 +126,7 @@ inspection depth.
 
 ## Lab connections (Sugahara Lab, Kindai University)
 
-The W: drive holds approximately 145 NDT papers, dominated by:
+The configured literature corpus holds approximately 145 NDT papers, dominated by:
 
 - Hokkaido / Igarashi school -- vector potential ECT (Igarashi 1998,
   thin magnetic conductive layer IBC).
@@ -248,7 +248,7 @@ Even with these, numerical methods (FEM, BEM, VIE) are needed when:
 
 ## Lab reference
 
-W:/.../99_アプリケーション/06_非破壊検査/01_eddy_current_NDT/
+public-safe curated corpus
 
 - "Analytical Solutions to Eddy-Current Probe-Coil Problems" (the
   closed-form reference manual)
@@ -367,7 +367,7 @@ sensitivity. Used in:
 
 ## Lab reference
 
-W:/.../99_アプリケーション/06_非破壊検査/01_eddy_current_NDT/
+public-safe curated corpus
 - "An Eddy Current Testing Platform System for Pipe Defect Inspection
   Based on an Optimized Eddy Current Technique Probe Design" --
   modern parametric coil optimization
@@ -472,7 +472,7 @@ Two approaches:
 
 ## Lab reference
 
-W:/.../99_アプリケーション/06_非破壊検査/
+public-safe curated corpus
 - "Eddy-Current Analysis of a Conductor With a Crack by Line
   Integral Equations With Loop Electric and Magnetic Currents as
   Unknowns" -- BEM for cracks (loop-current basis)
@@ -584,9 +584,9 @@ POD studies use the MIL-HDBK-1823A (Mil Handbook 1823A) methodology:
 
 ## Lab reference
 
-- W:/.../06_非破壊検査/01_eddy_current_NDT/ -- platform paper
+- public-safe curated corpus -- platform paper
   with optimized probe + signal processing
-- W:/.../06_非破壊検査/99_misc/ディープラーニング... -- general
+- public-safe curated corpus -- general
   deep-learning textbook cross-referenced for ML-NDT
 """
 
@@ -835,8 +835,8 @@ Dense BEM/VIE matrices are O(N^2). Acceleration:
 
 ## Lab reference
 
-W:/.../06_非破壊検査/03_integral_equation_BEM/ (17 PDFs)
-W:/.../06_非破壊検査/01_eddy_current_NDT/ (BEM-flavoured papers)
+public-safe curated corpus (17 PDFs)
+public-safe curated corpus (BEM-flavoured papers)
 - Dense IE solver: "Solution of Dense Systems of Linear Equations
   Arising from Integral-Equation Formulations" (bibliography catalog)
 """
@@ -950,7 +950,7 @@ by an external voltage source. The IE formulation needs:
 
 ## Lab reference
 
-W:/.../06_非破壊検査/06_multiply_connected/ (7 PDFs, all explicitly
+public-safe curated corpus (7 PDFs, all explicitly
 on this topic)
 """
 
@@ -1072,7 +1072,7 @@ functions in the truncated region.
 
 ## Lab reference
 
-W:/.../06_非破壊検査/05_open_boundary_PML/ (24 PDFs)
+public-safe curated corpus (24 PDFs)
 """
 
 
@@ -1193,7 +1193,7 @@ These cover the lab's hysteresis identification + simulation IP.
 
 ## Lab reference
 
-W:/.../06_非破壊検査/02_hysteresis_models/ (25 PDFs)
+public-safe curated corpus (25 PDFs)
 - Also `radia_mcp.magnetic_materials` for non-NDT hysteresis context
 - Hysteresis models in Radia: `MatPlayHysteresis` / `MatEnergyHysteresis`
 """
@@ -1323,8 +1323,8 @@ soil-side (bottom) of the floor plate, which is invisible from above.
 
 ## Lab reference
 
-- W:/.../06_非破壊検査/01_eddy_current_NDT/Korean Hall-array paper
-- W:/.../06_非破壊検査/02_hysteresis_models/ -- the hysteresis
+- public-safe curated corpus Hall-array paper
+- public-safe curated corpus -- the hysteresis
   underpinning MFL nonlinearity
 - `radia_mcp.electromagnet` -- DC yoke design via Hantila method
 """
@@ -1436,9 +1436,9 @@ lab library as an adjacent technique.
 
 ## Lab reference
 
-- W:/.../06_非破壊検査/00_金属探知機/ (5 PDFs -- metal detection +
+- public-safe curated corpus (5 PDFs -- metal detection +
   landmine EMI spectroscopy)
-- W:/.../06_非破壊検査/08_scattering_antenna/ (23 PDFs --
+- public-safe curated corpus (23 PDFs --
   microwave scattering, MoM, FDTD)
 - "Effects of building materials and structures on radiowave
   propagation above about 100 MHz" -- field-strength prediction in
@@ -1538,8 +1538,8 @@ Cross-references:
 
 ## Lab reference
 
-- W:/.../99_アプリケーション/06_非破壊検査/99_misc/
-- General textbooks in W:/.../04_機械学習と最適化/
+- public-safe curated corpus
+- General textbooks in public-safe curated corpus
 """
 
 

@@ -103,7 +103,7 @@
 ```python
 # 1-call で health report + 修正計画 + リライト候補をまとめて取得
 poster_run_full_workflow(
-    tex_path="W:/.../Kelvin.tex",
+    tex_path="public-safe curated corpus",
     conference="IEEJ",
     rewrite_target="title",
 )

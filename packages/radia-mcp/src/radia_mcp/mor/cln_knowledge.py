@@ -418,7 +418,7 @@ what makes CLN distinctive in the PGD family.
 
 ## PDF location (Sugahara Lab archive)
 
-    W:\\03_文献・論文\\00_電磁界解析\\18_MOR_モデル縮約\\
+    public-safe curated corpus
         10_CLN_Cauer_Ladder\\02_Niels\\
         Proper_Generalized_Decomposition_With_Cauer_Ladder_Network_
         Applied_to_Eddy_Current_Problems.pdf

@@ -376,7 +376,7 @@ Key points:
 - NGSolve `IdentifyPeriodicBoundaries("kelvin", "kelvin_int", Trafo(...), point_tolerance=1e-3)`
   then `Mesh(ngmesh)` re-wrap + `Periodic(HCurl)` constrains matching DOFs
 
-Source: S:\\CoreformCubit\\2021_07_19_Kelvin_Pythonscript\\ (verified 2026-03-29)
+Source: public-safe curated corpus (verified 2026-03-29)
 
 ## Interval Matching: Over-Constrained Systems
 

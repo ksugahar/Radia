@@ -1,16 +1,17 @@
-"""ELF-seeded triple-check planning for radia-motor.
+"""ELF-seeded comparison planning for radia-motor.
 
-The triple-check workflow is:
+The standard radia-motor workflow is an always-on primary comparison:
 
 1. Use the public ELF/MAGIC MCP surface to choose a motor deck family and
    product-local handoff contract.
 2. Verify the current supported finite-element rotating-machine path with the
    ``ngsolve_age`` lane contract.
-3. Verify the supported coarse/reduced planar path with the ``mmmm2d_coarse``
-   lane contract.
-4. Organize the new ``hdiv_vim_reduced_fem`` idea as an experimental RFC:
-   HDiv-VIM rotor source field plus fixed-stator reduced FEM response.  This is
-   not yet a supported radia-motor solver path.
+3. Verify the ``hdiv_vim_reduced_fem`` lane with a solver-ready artifact.  The
+   HDiv-VIM rotor source-field plus fixed-stator reduced-FEM coupling remains
+   experimental, but a motor result is not accepted for MCP learning unless this
+   lane is checked alongside ``ngsolve_age``.
+4. Optionally attach the supported coarse/reduced planar ``mmmm2d_coarse`` lane
+   as a fast auxiliary sign/scale gate.
 
 Only the source deck family, public MCP call names, lane IDs, and reduced
 engineering lessons belong in public radia-mcp.  Product solver outputs,
@@ -28,6 +29,10 @@ from .validation_lanes_knowledge import (
     lane_template,
     validate_motor_validation_artifact,
 )
+
+
+PRIMARY_COMPARISON_LANES = ("ngsolve_age", "hdiv_vim_reduced_fem")
+OPTIONAL_AUXILIARY_LANES = ("mmmm2d_coarse",)
 
 
 FAMILY_SEEDS: dict[str, dict[str, Any]] = {
@@ -139,6 +144,15 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
         "schema_version": "radia-motor-triple-check-plan/v1",
         "goal": goal,
         "inferred_family": family,
+        "standard_comparison": {
+            "primary_required_lanes": list(PRIMARY_COMPARISON_LANES),
+            "optional_auxiliary_lanes": list(OPTIONAL_AUXILIARY_LANES),
+            "rule": (
+                "Every radia-motor validation that claims MCP learning must "
+                "compare the NGSolve+AGE lane with the HDiv-VIM/reduced-FEM "
+                "lane.  Coarse MMMM evidence is useful but auxiliary."
+            ),
+        },
         "source_mcp_seed": {
             "server": "mcp-server-elf",
             "calls": [
@@ -162,7 +176,7 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
                 "artifact_template": lane_template("ngsolve_age"),
             },
             "mmmm2d_coarse": {
-                "role": "supported coarse/reduced planar MMMM lane",
+                "role": "optional supported coarse/reduced planar MMMM auxiliary lane",
                 "support_status": "supported_coarse_path",
                 "observable_candidates": list(seed["mmmm_observables"]),
                 "mmmm_focus": list(seed["mmmm_focus"]),
@@ -176,37 +190,41 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
                 ),
             },
             "hdiv_vim_reduced_fem": {
-                "role": "experimental reduced integral / VIM-to-reduced-FEM coupling RFC",
+                "role": "mandatory experimental reduced integral / VIM-to-reduced-FEM comparison lane",
                 "support_status": "experimental_rfc",
                 "observable_candidates": list(seed["hdiv_observables"]),
                 "artifact_template": lane_template("hdiv_vim_reduced_fem"),
                 "minimum_gate": (
-                    "A private source comparison may be collected as a research "
-                    "artifact, but this lane is not a validated solver path "
-                    "until the rotor VIM source operator, stator reduced basis, "
-                    "and interface operator are implemented and regression-tested."
+                    "For radia-motor learning, this lane must include a "
+                    "solver-ready artifact with a non-empty verification list. "
+                    "The full coupling is still experimental until the rotor "
+                    "VIM source operator, stator reduced basis, and interface "
+                    "operator are regression-tested."
                 ),
             },
         },
         "closure": {
+            "primary_required_lanes": list(PRIMARY_COMPARISON_LANES),
+            "optional_auxiliary_lanes": list(OPTIONAL_AUXILIARY_LANES),
             "required_artifacts": [
                 "source_mcp_seed",
                 "ngsolve_age artifact",
-                "mmmm2d_coarse artifact",
-                "hdiv_vim_reduced_fem RFC artifact",
+                "hdiv_vim_reduced_fem solver-ready artifact",
+                "mmmm2d_coarse artifact when a fast auxiliary check is available",
             ],
             "required_gates": [
                 'motor_validation_artifact_gate(..., "ngsolve_age")',
-                'motor_validation_artifact_gate(..., "mmmm2d_coarse")',
                 'motor_validation_artifact_gate(..., "hdiv_vim_reduced_fem")',
+                'motor_validation_artifact_gate(..., "mmmm2d_coarse") when provided',
                 "motor_triple_check_artifact_gate(...)",
             ],
             "learning_rule": (
                 "radia-motor learned only after the supported AGE lane and "
-                "the supported coarse MMMM lane are verified, the "
-                "HDiv/reduced-FEM RFC is explicitly labeled as experimental, "
-                "and at least one public-safe MCP target/test changed and "
-                "verified."
+                "the HDiv-VIM/reduced-FEM lane are both verified in the same "
+                "combined artifact, with at least one public-safe MCP "
+                "target/test changed and verified.  MMMM can strengthen the "
+                "case as a fast auxiliary check, but it is not the primary "
+                "comparison gate."
             ),
         },
     }
@@ -215,6 +233,7 @@ def route_motor_triple_check(goal: str) -> dict[str, Any]:
 def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
     """Format a triple-check plan as Markdown."""
     src = plan["source_mcp_seed"]
+    standard = plan["standard_comparison"]
     age = plan["radia_lanes"]["ngsolve_age"]
     mmmm = plan["radia_lanes"]["mmmm2d_coarse"]
     hdiv = plan["radia_lanes"]["hdiv_vim_reduced_fem"]
@@ -224,6 +243,11 @@ def format_motor_triple_check_plan(plan: Mapping[str, Any]) -> str:
         f"- schema: `{plan['schema_version']}`",
         f"- goal: {plan['goal']}",
         f"- inferred family: `{plan['inferred_family']}`",
+        "- primary required lanes: "
+        + ", ".join(f"`{lane}`" for lane in standard["primary_required_lanes"]),
+        "- optional auxiliary lanes: "
+        + ", ".join(f"`{lane}`" for lane in standard["optional_auxiliary_lanes"]),
+        f"- comparison rule: {standard['rule']}",
         "",
         "## Source MCP Seed",
         f"- server: `{src['server']}`",
@@ -325,8 +349,12 @@ def validate_motor_triple_check_artifact(
         lane_artifacts = {}
 
     lane_results: dict[str, Any] = {}
-    required_lanes = ("ngsolve_age", "mmmm2d_coarse", "hdiv_vim_reduced_fem")
-    for lane_id in required_lanes:
+    known_lanes = set(PRIMARY_COMPARISON_LANES) | set(OPTIONAL_AUXILIARY_LANES)
+    for lane_id in lane_artifacts:
+        if lane_id not in known_lanes:
+            errors.append(f"unknown lane artifact: {lane_id}")
+
+    for lane_id in PRIMARY_COMPARISON_LANES:
         lane_data = lane_artifacts.get(lane_id)
         if lane_data is None:
             errors.append(f"missing lane artifact: {lane_id}")
@@ -335,6 +363,15 @@ def validate_motor_triple_check_artifact(
         lane_results[lane_id] = result
         if result["status"] != "pass":
             errors.append(f"{lane_id} artifact gate failed")
+
+    for lane_id in OPTIONAL_AUXILIARY_LANES:
+        lane_data = lane_artifacts.get(lane_id)
+        if lane_data is None:
+            continue
+        result = validate_motor_validation_artifact(lane_data, lane_id)
+        lane_results[lane_id] = result
+        if result["status"] != "pass":
+            errors.append(f"{lane_id} auxiliary artifact gate failed")
 
     feedback = data.get("mcp_feedback", {})
     if not isinstance(feedback, Mapping):
@@ -353,34 +390,71 @@ def validate_motor_triple_check_artifact(
     research_triple_check_ready = (
         status == "pass"
         and lane_results.get("ngsolve_age", {}).get("validated_solver_path") is True
-        and lane_results.get("mmmm2d_coarse", {}).get("validated_coarse_path") is True
         and lane_results.get("hdiv_vim_reduced_fem", {}).get("support_status")
         == "experimental_rfc"
+    )
+    optional_mmmm_check_ready = (
+        "mmmm2d_coarse" in lane_results
+        and lane_results.get("mmmm2d_coarse", {}).get("validated_coarse_path") is True
     )
     validated_supported_solver_check = (
         status == "pass"
         and lane_results.get("ngsolve_age", {}).get("validated_solver_path") is True
-        and lane_results.get("mmmm2d_coarse", {}).get("validated_coarse_path") is True
+        and (
+            "mmmm2d_coarse" not in lane_results
+            or optional_mmmm_check_ready
+        )
     )
     validated_dual_solver_check = (
         status == "pass"
-        and all(
-            lane_results.get(lane, {}).get("validated_solver_path") is True
-            for lane in ("hdiv_vim_reduced_fem", "ngsolve_age")
+        and lane_results.get("ngsolve_age", {}).get("validated_solver_path") is True
+        and lane_results.get("hdiv_vim_reduced_fem", {}).get(
+            "validated_experimental_solver_path"
+        ) is True
+    )
+    accepted_for_supported_mcp_learning = (
+        status == "pass"
+        and not warnings
+        and validated_supported_solver_check
+        and lane_results.get("ngsolve_age", {}).get("accepted_for_mcp_learning")
+        is True
+        and (
+            "mmmm2d_coarse" not in lane_results
+            or lane_results.get("mmmm2d_coarse", {}).get("accepted_for_mcp_learning")
+            is True
         )
+    )
+    accepted_for_mcp_rfc_learning = (
+        status == "pass"
+        and not warnings
+        and research_triple_check_ready
+        and lane_results.get("hdiv_vim_reduced_fem", {}).get(
+            "accepted_for_mcp_rfc_learning"
+        ) is True
+    )
+    accepted_for_primary_dual_learning = (
+        status == "pass"
+        and not warnings
+        and validated_dual_solver_check
+        and lane_results.get("ngsolve_age", {}).get("accepted_for_mcp_learning")
+        is True
+        and lane_results.get("hdiv_vim_reduced_fem", {}).get(
+            "accepted_for_mcp_learning"
+        ) is True
     )
     return {
         "schema_version": "radia-motor-triple-check-artifact-gate/v1",
         "status": status,
+        "primary_required_lanes": list(PRIMARY_COMPARISON_LANES),
+        "optional_auxiliary_lanes": list(OPTIONAL_AUXILIARY_LANES),
         "research_triple_check_ready": research_triple_check_ready,
         "validated_supported_solver_check": validated_supported_solver_check,
+        "optional_mmmm_check_ready": optional_mmmm_check_ready,
         "validated_dual_solver_check": validated_dual_solver_check,
-        "accepted_for_mcp_learning": status == "pass"
-        and not warnings
-        and all(
-            lane_results.get(lane, {}).get("accepted_for_mcp_learning") is True
-            for lane in required_lanes
-        ),
+        "accepted_for_supported_mcp_learning": accepted_for_supported_mcp_learning,
+        "accepted_for_mcp_rfc_learning": accepted_for_mcp_rfc_learning,
+        "accepted_for_primary_dual_learning": accepted_for_primary_dual_learning,
+        "accepted_for_mcp_learning": accepted_for_primary_dual_learning,
         "errors": errors,
         "warnings": warnings,
         "lane_results": lane_results,
@@ -394,9 +468,17 @@ def format_triple_check_gate_result(result: Mapping[str, Any]) -> str:
         "",
         f"- schema: `{result.get('schema_version', '')}`",
         f"- status: `{result.get('status', '')}`",
+        "- primary required lanes: "
+        + ", ".join(f"`{lane}`" for lane in result.get("primary_required_lanes", ())),
+        "- optional auxiliary lanes: "
+        + ", ".join(f"`{lane}`" for lane in result.get("optional_auxiliary_lanes", ())),
         f"- research triple check ready: `{result.get('research_triple_check_ready', False)}`",
         f"- validated supported solver check: `{result.get('validated_supported_solver_check', False)}`",
+        f"- optional MMMM check ready: `{result.get('optional_mmmm_check_ready', False)}`",
         f"- validated dual solver check: `{result.get('validated_dual_solver_check', False)}`",
+        f"- accepted for supported MCP learning: `{result.get('accepted_for_supported_mcp_learning', False)}`",
+        f"- accepted for MCP RFC learning: `{result.get('accepted_for_mcp_rfc_learning', False)}`",
+        f"- accepted for primary dual learning: `{result.get('accepted_for_primary_dual_learning', False)}`",
         f"- accepted for MCP learning: `{result.get('accepted_for_mcp_learning', False)}`",
     ]
     lane_results = result.get("lane_results", {})

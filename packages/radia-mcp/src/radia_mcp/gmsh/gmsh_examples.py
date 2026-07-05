@@ -1,11 +1,11 @@
 """
 GMSH examples and tutorials knowledge base.
 
-Content from S:\\ONELAB tutorials, examples, and electric machine models.
+Content from public-safe curated corpus tutorials, examples, and electric machine models.
 """
 
 GMSH_TUTORIALS = """
-# GMSH Tutorial Summary (S:\\ONELAB\\00_installer\\tutorials)
+# GMSH Tutorial Summary (public-safe curated corpus)
 
 ## t1.geo -- Geometry Basics, Physical Groups
 Fundamental building blocks: Point, Line, Curve Loop, Plane Surface.
@@ -141,7 +141,7 @@ PartitionMesh 4;  // Partition into 4 parts (METIS)
 """
 
 GMSH_ELECTRIC_MACHINES = """
-# Electric Machine Models (S:\\ONELAB\\00_installer\\models\\ElectricMachines)
+# Electric Machine Models (public-safe curated corpus)
 
 ## Overview
 Complete 2D FEM models for rotating electrical machines using GMSH + GetDP.
@@ -290,7 +290,7 @@ View[0].IntervalsType = 2;
 """
 
 GMSH_MAGNETS_INDUCTOR = """
-# Magnet and Inductor Models (S:\\ONELAB)
+# Magnet and Inductor Models (public-safe curated corpus)
 
 ## Permanent Magnet Force Computation (models/Magnets)
 3D Maxwell stress tensor force between multiple magnets.

@@ -1231,29 +1231,29 @@ tool: `presentation_qa_from_history` / `presentation_talk_feedback_lookup` /
 `packages/radia-mcp/skills/pdf2ppt-pdfgear/{SKILL.md, pdf2ppt_pdfgear.py}`
 
 **Discovery path** (Claude が skill 発見する場所、 canonical home への symlink):
-`C:/Users/Administrator/.claude/skills/pdf2ppt-pdfgear/` (Windows symbolic link、
-S:\ NAS drive 越しでも動作 — junction は対応不可)
+`<user-local skill path>` (Windows symbolic link、
+network drive 越しでも動作 — junction は対応不可)
 
 **Setup** (一度きり):
 ```powershell
 # canonical home に実装が無ければコピー、 ある場合は不要
-Remove-Item "C:\Users\Administrator\.claude\skills\pdf2ppt-pdfgear" -Force -ErrorAction SilentlyContinue
+Remove-Item "<user-local skill path>\pdf2ppt-pdfgear" -Force -ErrorAction SilentlyContinue
 New-Item -ItemType SymbolicLink \
-  -Path   "C:\Users\Administrator\.claude\skills\pdf2ppt-pdfgear" \
-  -Target "S:\Radia\01_GitHub\packages\radia-mcp\skills\pdf2ppt-pdfgear"
+  -Path   "<user-local skill path>\pdf2ppt-pdfgear" \
+  -Target "repo:/packages\radia-mcp\skills\pdf2ppt-pdfgear"
 ```
-junction (`-ItemType Junction`) は S:\ (\\192.168.11.100\work) で「再解析ポイント
+junction (`-ItemType Junction`) は network drive で「再解析ポイント
 バッファー無効」エラー。 SymbolicLink を使うこと (2026-06-14 切替済)。
 
 **使い方** (discovery path 経由 — symlink で canonical home を解決):
 ```powershell
-python "C:/Users/Administrator/.claude/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
-       "input.pdf" -o "S:/path/out.pptx"
+python "<user-local skill script>" \
+       "input.pdf" -o "<output path>"
 ```
 canonical home を直接呼んでも OK:
 ```powershell
-python "S:/Radia/01_GitHub/packages/radia-mcp/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
-       "input.pdf" -o "S:/path/out.pptx"
+python "repo:/packages/radia-mcp/skills/pdf2ppt-pdfgear/pdf2ppt_pdfgear.py" \
+       "input.pdf" -o "<output path>"
 ```
 - `-o` なし: PDFgear のデフォルト出力先 (`%USERPROFILE%/OneDrive/PDFgear/<stem> conv.pptx`)
 - 上級モードは **skill の default** (`--no-advanced` で OFF; 通常使わない)

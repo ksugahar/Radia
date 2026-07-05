@@ -12,7 +12,7 @@ Sources:
   - https://ngsolve.org/documentation.html (NGS24, Treasure Trove, iFEM)
   - https://forum.ngsolve.org/
   - https://weggler.github.io/ngsbem/intro.html
-  - S:\\NGSolve\\EMPY\\EMPY_Analysis (K. Sugahara's EM formulations)
+  - public-safe curated corpus (K. Sugahara's EM formulations)
 """
 
 NGSOLVE_OVERVIEW = """
@@ -2356,7 +2356,7 @@ refer to keeps mutating beneath them.
 
 **Cross-references**:
 - `cln_3d.py` knowledge — Kameari accumulation snapshot pattern
-- W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/
+- public-safe curated corpus
   cln_team28_kelvin.py — reference fix in `Apot_acc -> snap_acc`
 """
 
@@ -5335,11 +5335,11 @@ Otherwise CG/GMRes can't converge.
 
 ## Reference implementations
 
-- **Tanimoto's penalty CLN**: `W:/00_CAE/NGSolve/谷本/定式_誤差検証/
+- **Tanimoto's penalty CLN**: `public-safe curated corpus
   20231211_A_(Penalty)_CLN.ipynb` — A-formulation cylinder example
 - **Tanimoto's gauge CLN**: `..._A_gauge_CLN.ipynb` — adds H1 gauge
   potential for div-free A
-- **Cuboid Case B validation**: `W:/30_CauerLadderNetwork/
+- **Cuboid Case B validation**: `public-safe curated corpus
   2026_04_01_長方形CLN/ngsolve_validation/cuboid_CaseB_freq_sweep.py`
   — direct frequency sweep, agrees with Mathematica Foster sum
   (1 Hz - 100 kHz, <10% error with N_modes=21 truncation)
@@ -5516,7 +5516,7 @@ for edge_nr in build_spanning_tree(mesh):
 
 # Each Kameari stage: curl-curl in cotree subspace + ACCUMULATED Apotential
 # (Tanimoto pattern, validated against analytic Cauer-I for both circular and
-#  rectangular cross sections — see W:/00_CAE/NGSolve/谷本/20241129_2次元CLN練習.ipynb)
+#  rectangular cross sections — see public-safe curated corpus)
 Apot = None
 for n in range(N_STAGES):
     a = BilinearForm(fes); a += (1/mu) * curl(u) * curl(v) * dx
@@ -5595,8 +5595,8 @@ G_matrix, fes_H1 = fes_HCurl.CreateGradient()
 
 ### Reference files
 
-- `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/ngsolve_validation/cuboid_521_tree_cotree.py`
-- `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/2026_04_27_NGSolve_validation.tex/.pdf`
+- `public-safe curated corpus`
+- `public-safe curated corpus`
 """
 
 

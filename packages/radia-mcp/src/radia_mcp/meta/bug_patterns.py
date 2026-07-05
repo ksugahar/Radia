@@ -238,7 +238,7 @@ PATTERNS: list[dict] = [
                       "[...] -> Deactivate.  Alternative CLI trick: "
                       "log in from any machine with a DIFFERENT account "
                       "(displaces the previous activation row).  See "
-                      "S:\\coreformcubit\\CoreformCubit.ps1 "
+                      "public-safe curated corpus "
                       "-ReleaseSeat switch (2026-05-30 update).",
         "related": ["memory/feedback_coreform_http_500_login.md",
                     "memory/reference_rlm_activate_logoff_procedure.md"],
@@ -340,7 +340,7 @@ PATTERNS: list[dict] = [
         "last_seen": "2026-06-01",
         "what": "After release-qud Phase 8, LAB's "
                 "`pip show radia` no longer says "
-                "'Editable project location: S:\\Radia\\01_GitHub'.  "
+                "'Editable project location: public-safe curated corpus'.  "
                 "Source edits no longer flow to runtime; dev loop is "
                 "broken.",
         "root_cause": "pip install --force-reinstall replaces the "

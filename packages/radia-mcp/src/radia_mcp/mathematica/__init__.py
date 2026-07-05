@@ -11,7 +11,7 @@ WOLFRAMSCRIPT_PATH environment variable.  Without it, all tools return
 {"ok": False, "error": "..."} cleanly — the server itself loads.
 
 Promoted on 2026-05-20 from
-  s:/mcp-server/src/mcp_server_document/mathematica/
+  legacy private source tree
 into radia-mcp as part of consolidating the LAB MCP knowledge under a single
 public PyPI package.  Companion knowledge for symbolic differential-forms
 manipulation: pairs well with `radia_mcp.differential_forms` for verifying

@@ -69,7 +69,7 @@ Use ARD when you have many inputs and want feature importance for
 free as a byproduct of GP fit.
 
 Lab reference: `ARD カーネルによる非線形地震応答解析のガウス過程回帰
-代替モデル構築.pdf` (W:/.../04_最適化_ベイズ_BBO/) uses ARD-RBF to
+代替モデル構築.pdf` (public-safe curated corpus) uses ARD-RBF to
 build a GP surrogate for nonlinear seismic response analysis — same
 principle applies to nonlinear EM (saturating iron, BH curves).
 
@@ -274,7 +274,7 @@ QUBO (Quadratic Unconstrained Binary Optimization) form natively.
 
 ### Metamaterial design (★ lab paper)
 
-`量子アニーリングを用いたメタマテリアル設計.pdf` (W:/.../
+`量子アニーリングを用いたメタマテリアル設計.pdf` (public-safe curated corpus
 04_最適化_ベイズ_BBO/). Variables: which unit cells are "filled"
 or "empty" in a 2D/3D metamaterial lattice (binary). Objective:
 target effective permittivity / permeability response.
@@ -358,7 +358,7 @@ Raissi-Perdikaris-Karniadakis 2017, "Machine learning of linear
 differential equations using Gaussian processes", J. Comp. Physics
 348:683-693. DOI: 10.1016/j.jcp.2017.07.050.
 
-Lab copy: `W:/.../04_最適化_ベイズ_BBO/Physics_informed/Raissi et al
+Lab copy: `public-safe curated corpus et al
 - 2017 - Machine learning of linear differential equations using
 Gaussian processes.pdf`
 
@@ -462,7 +462,7 @@ gp = MultitaskGPModel(wave_kernel, ...)
 SURROGATE_MODELS = r"""
 # Surrogate Models for CAE (Lab Workshop Lineage)
 
-`2024_CAE懇話会_CAEのサロゲートモデル入門/` (W:/.../
+`2024_CAE懇話会_CAEのサロゲートモデル入門/` (public-safe curated corpus
 04_最適化_ベイズ_BBO/) — 5-session online workshop on CAE surrogate
 modeling, June-October 2024.
 
@@ -687,7 +687,7 @@ LLM_BO = r"""
 # LLM-Enhanced Bayesian Optimization
 
 `Large Language Models to Enhance Bayesian Optimization.pdf` (in
-W:/.../11_機械学習_LLM/ — flagged here because BO-relevant).
+public-safe curated corpus — flagged here because BO-relevant).
 
 ## Key idea
 

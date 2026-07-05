@@ -17,8 +17,8 @@ work (Liu Xinyao's 2025 thesis, Kishi-Wakao-Murata-Makino-Takeuchi
 - Pointers from GetDP source-region groups → NGSolve material labels
 
 Distilled from:
-- S:/ONELAB/ElectricMachines/ (Sabariego-Gyselinck-Geuzaine, ULiège-ULB)
-- W:/04_卒論論文関係/2025年度/136_劉馨遙/ (Liu Xinyao thesis, SynRM)
+- public-safe curated corpus (Sabariego-Gyselinck-Geuzaine, ULiège-ULB)
+- public-safe curated corpus (Liu Xinyao thesis, SynRM)
 - Kishi-Wakao-Murata et al., IEEJ 2025 (autoencoder + LS, SynRM)
 - Kaimori-Mifune-Kameari-Wakao, Darwin TD with Coulomb-type gauge
 - https://www.femm.info/doku/doku.php?id=newbuild (David Meeker)

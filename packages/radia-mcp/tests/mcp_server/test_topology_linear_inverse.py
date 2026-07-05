@@ -3,7 +3,7 @@
 the SVD pseudo-inverse and the filter-factor / L-curve identities on a controlled
 ill-conditioned, rank-deficient system with a known SVD.
 
-Grounds the lab's truncated-SVD magnet/coil field-synthesis method (W:\\00_CAE\\MATLAB\\
+Grounds the lab's truncated-SVD magnet/coil field-synthesis method (public-safe curated corpus
 30_Optimization\\2019_10_16_TSVD) as the linear-inverse core of topology_opt_applications
 topic `field_synthesis`.  Exercises radia_mcp.topology_optimization.linear_inverse.
 """

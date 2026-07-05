@@ -225,7 +225,7 @@ _LAB_KEY_RE = re.compile(r"^[a-z]+\d{4}[a-z]+$")
 def is_lab_style_key(key: str) -> bool:
     """Return True if ``key`` matches the lab convention ``<author><year><word>``.
 
-    Lab convention (from W:/.../reference.bib): all lowercase, format
+    Lab convention (from public-safe curated corpus): all lowercase, format
     ``lastname + 4-digit year + semantic keyword``, e.g. ``bobbio1997play``,
     ``sugahara2026binput``. The 3rd word is hand-picked, not the title's
     first word — so this checker validates the SHAPE only.

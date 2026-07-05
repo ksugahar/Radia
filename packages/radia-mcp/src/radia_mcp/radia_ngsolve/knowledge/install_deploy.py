@@ -45,8 +45,8 @@ Topics: two_tier, lab_editable, hyaku_editable, mdx_pypi, hibino_pypi, gui_extra
 
 | Machine  | Install                                  | Source                                            |
 |----------|------------------------------------------|---------------------------------------------------|
-| LAB      | editable (`pip install -e`)              | NAS `S:\\Radia\\01_GitHub`                        |
-| 100号機  | editable (`pip install -e`)              | NAS `\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub` |
+| LAB      | editable (`pip install -e`)              | NAS `public-safe curated corpus`                        |
+| 100号機  | editable (`pip install -e`)              | managed internal share |
 | mdx      | PyPI wheel consumer                      | `C:\\Program Files\\Python312\\Lib\\site-packages` |
 | hibino   | PyPI wheel consumer via `ssh hibino`     | `C:\\Program Files\\Python312\\Lib\\site-packages` |
 
@@ -78,7 +78,7 @@ the Cubit plugin — net zero gain over PyPI install.
 ## lab_editable — LAB editable install
 ============================================================
 
-LAB has the canonical NAS-mapped working tree at `S:\\Radia\\01_GitHub`.
+LAB has the canonical NAS-mapped working tree at `public-safe curated corpus`.
 All editing happens here. Build.ps1 compiles C++ artifacts directly
 into the local clone (`src/radia/_radia_pybind.pyd`,
 `packages/cubit-mesh-export/.../cubit_mesh_curver.pyd`, etc.) and the
@@ -103,14 +103,15 @@ do not read the NAS source during the release gate.
 ## hyaku_editable — 100号機 NAS editable install
 ============================================================
 
-100号機 (the lab's shared 21-user box) receives Radia from the NAS
-checkout via editable install. The SSH host remains `192.168.11.100`.
+100号機 (the lab's shared workstation) receives Radia from the managed
+internal share via editable install. The SSH host is configured outside
+the public package.
 
 After every release or source-side deploy, `release_qud.py phase8
 --target 100` runs the equivalent of:
 
 ```powershell
-cat << 'PS' | ssh 192.168.11.100 'pwsh -ExecutionPolicy Bypass -Command -'
+cat << 'PS' | ssh <shared-workstation-host> 'pwsh -ExecutionPolicy Bypass -Command -'
 # Stop locks
 Get-Process -ErrorAction SilentlyContinue | Where-Object {
     $_.Name -like 'mcp-server*' -or
@@ -118,9 +119,9 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 } | ForEach-Object { Stop-Process -Id $_.Id -Force }
 Start-Sleep -Seconds 2
 
-pip install -e "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub" `
-    -e "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\packages\\cubit-mesh-export" `
-    -e "\\\\192.168.11.100\\work\\00_CAE\\Radia\\01_GitHub\\packages\\radia-mcp" `
+pip install -e "<managed-internal-share>\\Radia\\01_GitHub" `
+    -e "<managed-internal-share>\\Radia\\01_GitHub\\packages\\cubit-mesh-export" `
+    -e "<managed-internal-share>\\Radia\\01_GitHub\\packages\\radia-mcp" `
     --no-deps --no-cache-dir
 
 cubit-plugin-install --all-users

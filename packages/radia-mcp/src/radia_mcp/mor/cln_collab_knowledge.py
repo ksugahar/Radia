@@ -1,6 +1,6 @@
 """CLN collaborator work + form-conversion + application examples.
 
-Covers W:\\30_CauerLadderNetwork\\{2021_01_22_CauerI_to_CauerII,
+Covers public-safe curated corpus,
 2022_10_09_遠藤@法政, 2023_08_08_松本@法政, 2026_04_01_長方形CLN}
 plus the 2017_05_17_インバータ回路.docx application.
 
@@ -173,7 +173,7 @@ with K = LL (CauerI inductance matrix) and N = RR (CauerI resistance
 matrix).  This is exactly the "two-matrix simultaneous reduction"
 that the Lanczos three-term recurrence solves.
 
-## The recurrence (MATLAB, from W:\\30_...\\MATLAB\\lanczos.m)
+## The recurrence (MATLAB, from public-safe curated corpus)
 
 ```matlab
 % K is to be diagonalized; N is to be tridiagonalized; v0 is starting vector
@@ -213,7 +213,7 @@ R_CauerII as element values.
 ## Equivalence verification (untruncated)
 
 `verify_cln_i_ii_equivalence.py` in
-W:\\30_CauerLadderNetwork\\2021_01_22_CauerI_to_CauerII\\ verifies
+public-safe curated corpus verifies
 the round-trip CauerI -> Lanczos -> CauerII -> impedance against the
 direct CauerI impedance:
 
@@ -446,7 +446,7 @@ Endo's setup, scaled up so the CLN basis fields can be tested at
 finer resolution.  No CLN .mat or solver outputs were preserved
 in this folder -- those live on Matsumoto's side.
 
-See W:\\30_CauerLadderNetwork\\2023_08_08_松本@法政\\補足スライド.pdf
+See public-safe curated corpus
 for the actual content (this module deliberately does not duplicate
 slide bullet points -- the PDF is short enough to read directly).
 
@@ -735,13 +735,13 @@ KEY_FILES = r"""
 
 | Path                                                       | Role                |
 |------------------------------------------------------------|---------------------|
-| `W:\\30_CauerLadderNetwork\\2017_05_17_インバータ回路.docx` | Design memo (CLN + H-bridge)|
+| `public-safe curated corpus` | Design memo (CLN + H-bridge)|
 
 ## Rectangular CLN (2026)
 
 | Path                                              | Role                       |
 |---------------------------------------------------|----------------------------|
-| `W:\\30_CauerLadderNetwork\\2026_04_01_長方形CLN\\`| Empty placeholder, see TBD |
+| `public-safe curated corpus`| Empty placeholder, see TBD |
 """
 
 CITATIONS = r"""

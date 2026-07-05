@@ -1,7 +1,7 @@
 """Litz wire + transmission line knowledge.
 
-Distilled from W:/.../39_部品材料/02_リッツ線/ (44 files) and
-W:/.../39_部品材料/03_伝送線路/ (22 files).
+Distilled from public-safe curated corpus (44 files) and
+public-safe curated corpus (22 files).
 
 This knowledge layer covers the analytical, semi-analytical, and
 numerical machinery used in the lab to predict AC resistance,
@@ -787,7 +787,7 @@ The lab has implemented multiple variants for different applications:
   permeability tensor (mu_par along strand axis, mu_perp transverse)
 - Voxel-based FEM with homogenization for 3D Litz characterisation
 
-References (all in W:/.../02_リッツ線/99_misc/01_均質化_homogenization/):
+References (all in public-safe curated corpus):
 - Eddy Current Analysis of Litz Wire Using Homogenization-Based FEM
 - Fast 3-D Analysis of Eddy Current in Litz Wire Using Integral Equation
 - 均質化法を用いた磁性メッキ巻線の有限要素解析
@@ -1369,7 +1369,7 @@ optimisation.
   in inductive systems with litz wire conductors by a coupled
   numeric approach", PhD thesis, Friedrich-Alexander-Universitaet
   Erlangen-Nuernberg, 2018.
-  PDF at W:/.../02_リッツ線/01_AC_loss/.
+  PDF at public-safe curated corpus
 """
 
 

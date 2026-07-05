@@ -48,12 +48,10 @@ machine) will not validate.
 
 Lab convention (since 2026-04-24):
 
-| Host    | Per-user launcher                                     |
-|---------|-------------------------------------------------------|
-| LAB     | ``S:/CoreformCubit/CoreformCubit.ps1``                |
-| 100号機 | ``W:/00_CAE/CoreformCubit/CoreformCubit.ps1``         |
-
-(LAB ``S:`` and 100号機 ``W:/00_CAE`` are the same SMB share.)
+Place the per-user launcher on a managed internal share or an
+equivalent per-site software distribution path.  The public package
+must not hard-code host names, drive letters, account rosters, or
+private launcher paths.
 
 The launcher script:
 
@@ -98,8 +96,8 @@ Admin's role is **infrastructure setup only**:
   - Install ``coreform_cubit.exe`` and ``rlm_activate.exe`` under
     ``C:\\Program Files\\Coreform Cubit ...\\bin\\`` (machine-wide,
     Users:RX).
-  - Place the per-user launcher script on the SMB share
-    (``W:/00_CAE/CoreformCubit/CoreformCubit.ps1``) so each user
+  - Place the per-user launcher script on the managed internal share
+    so each user
     can read + execute it from their own session.
   - Place a ``.cmd`` wrapper alongside the ``.ps1`` so users do not
     need to type ``pwsh -NoProfile -ExecutionPolicy Bypass``.
@@ -248,8 +246,7 @@ OR run `--logout` first.
 
 ## Recommended launcher behaviour (CoreformCubit.ps1 2026-05-26)
 
-The LAB launcher at `S:\\CoreformCubit\\CoreformCubit.ps1` (and the
-identical `W:/00_CAE/CoreformCubit/CoreformCubit.ps1` on 100号機)
+The lab launcher
 implements the following adapted policy:
 
   1. Probe `$LOCALAPPDATA\\Coreform\\login_tokens.json`.  If present

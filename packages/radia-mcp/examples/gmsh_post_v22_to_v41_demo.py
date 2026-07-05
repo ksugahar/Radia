@@ -1,13 +1,22 @@
-"""gmsh_post end-to-end test against real lab meshes."""
+"""gmsh_post end-to-end smoke demo for a user-provided Gmsh v2.2 mesh."""
 from __future__ import annotations
+import os
 import sys, json, io
+from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 from radia_mcp.gmsh_post import server as g
 
-V22 = r's:/CoreformCubit/2026_04_06_CoreformCUBIT_ExportMesh/01_Tet_Hex_Pyramid/01_Tet_Hex_Pyramid_order1.msh'
-V41_OUT = r'w:/roundtrip_v41.msh'
-V41_WITH_DATA = r'w:/roundtrip_v41_with_data.msh'
+V22 = os.environ.get("RADIA_MCP_GMSH_POST_V22_MSH", "")
+OUT_DIR = Path(os.environ.get("RADIA_MCP_GMSH_POST_OUT", r"C:\temp"))
+V41_OUT = str(OUT_DIR / "roundtrip_v41.msh")
+V41_WITH_DATA = str(OUT_DIR / "roundtrip_v41_with_data.msh")
+
+if not V22:
+    raise SystemExit(
+        "Set RADIA_MCP_GMSH_POST_V22_MSH to a local Gmsh v2.2 .msh file "
+        "before running this smoke demo."
+    )
 
 # 1. inspect v2.2 source
 print("=== 1. inspect v2.2 Cubit export ===")

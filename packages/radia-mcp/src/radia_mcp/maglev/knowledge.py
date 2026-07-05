@@ -20,7 +20,7 @@ is the headline content -- two topics, `radia_iem_fem` and
     Network method for accelerating control-coupled analysis" -- CLN
     model-order reduction for real-time control-coupled maglev (TEAM 28).
 
-Distilled from the lab archive (W:/.../99_applications/07_magnetic-levitation/;
+Distilled from the lab archive (public-safe curated corpus;
 folder/file names below are English translations of the Japanese originals)
 plus open literature for standard maglev topics that the
 lab does not have direct PDFs for (those sections are clearly marked

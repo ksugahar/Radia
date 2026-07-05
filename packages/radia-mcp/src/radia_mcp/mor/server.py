@@ -20,7 +20,7 @@ from .cln_knowledge import get_cln_documentation
 from .systematic_knowledge import get_systematic_mor_knowledge
 
 # CLN deep-dive modules from the 2026-05-25 absorption of
-# W:\30_CauerLadderNetwork (~5238 lines / 57 topics across 5 modules).
+# public-safe curated corpus (~5238 lines / 57 topics across 5 modules).
 # See CHANGELOG.md 0.74.0 entry.
 from .cln_practice_knowledge import get_cln_practice_documentation
 from .cln_multiport_knowledge import get_cln_multiport_documentation
@@ -92,7 +92,7 @@ def mor_bibliography(query: str = "") -> str:
 
 # ============================================================
 # CLN deep-dive tools -- 5238 lines / 57 topics, absorbed
-# 2026-05-25 from W:\30_CauerLadderNetwork (~500 .m / .docx / .pdf
+# 2026-05-25 from public-safe curated corpus (~500 .m / .docx / .pdf
 # files across 16 topic folders + 6 root references). Group out by
 # theme so a topic query maps to a tractable knowledge chunk.
 # ============================================================
@@ -102,7 +102,7 @@ def mor_cln_practice(topic: str = "all") -> str:
     """CLN MATLAB+COMSOL practice corpus -- foundations + 2020_11_04 lab
     practice + A-phi / 2D-rethink / Bessel root references.
 
-    Source: W:\\30_CauerLadderNetwork\\{01_単一電源, 02_境界条件,
+    Source: public-safe curated corpus, 02_境界条件,
     09_級数展開, 2020_11_04_線形のCLNの練習} + A-phi.pdf + 2D-rethink
     docx + Bessel-inequality docx.
 
@@ -122,7 +122,7 @@ def mor_cln_practice(topic: str = "all") -> str:
 def mor_cln_multiport(topic: str = "all") -> str:
     """CLN multi-port + multi-expansion-point + 3D extensions.
 
-    Source: W:\\30_CauerLadderNetwork\\{03_複数電源, 04_展開点,
+    Source: public-safe curated corpus, 04_展開点,
     10_タイル, 11_3次元}.
 
     Topics (10):
@@ -146,7 +146,7 @@ def mor_cln_advanced(topic: str = "all") -> str:
     """CLN advanced physics extensions -- HF, nonlinear, circuit,
     Bloch, fixed-point (FP) CLN.
 
-    Source: W:\\30_CauerLadderNetwork\\{05_高周波, 06_非線形,
+    Source: public-safe curated corpus, 06_非線形,
     07_電気力学, 14_ブロッホ方程式, 16_FP_CLN, 2020_12_07_高周波CLN
     の練習}.
 
@@ -171,7 +171,7 @@ def mor_cln_specialty(topic: str = "all") -> str:
     """CLN lab-signature techniques -- termination, Hiruma method,
     BEM+FEM coupling, Nagamine error theory.
 
-    Source: W:\\30_CauerLadderNetwork\\{08_終端問題, 12_比留間法,
+    Source: public-safe curated corpus, 12_比留間法,
     13_BEM+FEM, 15_誤差論@長嶺氏}.
 
     Topics (11):
@@ -202,7 +202,7 @@ def mor_cln_collab(topic: str = "all") -> str:
     """CLN external-collaborator work + Cauer-form conversion +
     application examples.
 
-    Source: W:\\30_CauerLadderNetwork\\{2021_01_22_CauerI_to_CauerII,
+    Source: public-safe curated corpus,
     2022_10_09_遠藤@法政, 2023_08_08_松本@法政,
     2026_04_01_長方形CLN} + 2017_05_17_インバータ回路.docx.
 

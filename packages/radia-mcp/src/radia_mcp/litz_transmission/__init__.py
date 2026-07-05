@@ -6,7 +6,7 @@ Covers high-frequency conductor analysis:
 - Cross-link to Carstensen AC copper loss (radia_mcp.peec)
 - Cross-link to Hollaus MSFEM (radia_mcp.motor)
 
-Distilled from W:/.../39_部品材料/02_リッツ線/ (44 files, 743 MB) +
+Distilled from public-safe curated corpus (44 files, 743 MB) +
 03_伝送線路/ (22 files, 190 MB).
 """
 

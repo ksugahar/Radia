@@ -2293,7 +2293,7 @@ convention is now unified across both mesh sources.
 KELVIN_KAMEARI_CANONICAL = """
 # Kameari Canonical Pattern: Boundary-Integral Source Injection (2026-05-05)
 
-Reference: Kameari (2025/10/14 slides), W:/00_CAE/NGSolve/亀有/4-05.pdf,
+Reference: Kameari (2025/10/14 slides), public-safe curated corpus,
 "Electromagnetic Analyses Using Higher Order Hierarchic Finite Elements".
 
 ## Key Insight
