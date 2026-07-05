@@ -40,6 +40,11 @@ from .validation_lanes_knowledge import (
     lane_template,
     validate_motor_validation_artifact,
 )
+from .dual_lane_training_catalog import (
+    format_motor_dual_lane_training_catalog,
+    motor_dual_lane_training_catalog_gate as build_dual_lane_training_catalog_gate,
+    route_dual_lane_training_case,
+)
 from .triple_check_knowledge import (
     format_motor_triple_check_plan,
     format_triple_check_gate_result,
@@ -461,6 +466,32 @@ def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") 
 
 
 @mcp.tool()
+def motor_dual_lane_training_catalog(topic: str = "all") -> str:
+    """
+    Return the public-safe 30-case motor learning catalog.
+
+    Every case routes to both `radia-motor-age` and `radia-motor-vim`.
+    Source-native provenance is deliberately scrubbed from this public surface.
+
+    Args:
+        topic: "all" or a family/case/search phrase.
+    """
+    return format_motor_dual_lane_training_catalog(topic)
+
+
+@mcp.tool()
+def motor_dual_lane_training_gate() -> str:
+    """Check that the public 30-case catalog is complete and provenance-scrubbed."""
+    return json.dumps(build_dual_lane_training_catalog_gate(), indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def motor_dual_lane_training_route(goal: str) -> str:
+    """Route a motor prompt to one catalog case and both radia-motor lanes."""
+    return json.dumps(route_dual_lane_training_case(goal), indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def motor_triple_check_plan(goal: str) -> str:
     """
     Plan an ELF-seeded radia-motor triple check.
@@ -708,6 +739,17 @@ def main():
         assert "2D collocation MMMM" in motor_validation_lanes("lane_matrix")
         assert "NGSolve+AGE" in motor_validation_lanes("overview")
         assert "product_local_reference" in motor_validation_lanes("source_policy")
+        dual_catalog = motor_dual_lane_training_catalog("all")
+        print(f"  motor_dual_lane_training_catalog('all'): {len(dual_catalog)} chars")
+        assert "radia-motor-age" in dual_catalog
+        assert "radia-motor-vim" in dual_catalog
+        dual_gate = json.loads(motor_dual_lane_training_gate())
+        assert dual_gate["status"] == "PASS"
+        assert dual_gate["count"] == 30
+        assert not dual_gate["forbidden_hits"]
+        dual_route = motor_dual_lane_training_route("SRM static torque")
+        assert "srm_static_torque_curve" in dual_route
+        assert "hdiv_vim_reduced_fem" in dual_route
         triple_plan = motor_triple_check_plan("IPM hairpin motor flux linkage and MTPA")
         print(f"  motor_triple_check_plan('IPM ...'): {len(triple_plan)} chars")
         assert "elf_motor_hybrid_router" in triple_plan
