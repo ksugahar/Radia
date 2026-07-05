@@ -4,8 +4,8 @@ fasthenry_parser.py
 FastHenry .inp file parser for Radia PEEC
 
 Parses FastHenry input files and converts to PEECBuilder topology.
-Magnetic material coupling is not solved through the old PEEC+magnetic-moment
-path; use the HDiv-VIM / reduced-FEM workflow for ferrite or iron cores.
+Magnetic material coupling is handled by the HDiv-VIM / reduced-FEM workflow
+for ferrite or iron cores, not by the PEEC input parser.
 
 Supported directives:
   .Units  - Length unit (m, mm, um, cm, etc.)
@@ -423,36 +423,10 @@ class FastHenryParser:
 
     def _parse_magnetic_block(self, lines):
         """
-        Parse a .magnetic / .endmagnetic block.
+        Parse an unsupported .magnetic / .endmagnetic block for diagnostics.
 
-        Supported formats:
-
-        Box form (structured hex mesh):
-            .magnetic
-              type=box
-              center=0,0,0
-              size=0.03,0.03,0.03
-              divisions=3,3,3
-              mu_r=1000
-              mu_r_imag=0
-            .endmagnetic
-
-        Hexahedron form (explicit 8 vertices):
-            .magnetic
-              type=hexahedron
-              vertices=x1,y1,z1, x2,y2,z2, ..., x8,y8,z8
-              mu_r=1000
-              mu_r_imag=0
-            .endmagnetic
-
-        Mesh file form (GMSH .msh import):
-            .magnetic
-              type=mesh
-              file=ferrite_core.msh
-              mu_r=1000
-              mu_r_imag=0
-              physical_group=1    (optional: GMSH physical group filter)
-            .endmagnetic
+        The PEEC parser records that a magnetic-core input was present, then
+        `solve()` rejects it and routes users to HDiv-VIM / reduced FEM.
 
         Args:
             lines: List of lines between .magnetic and .endmagnetic
@@ -950,92 +924,15 @@ class FastHenryParser:
 
     def build_magnetic_objects(self):
         """
-        Create Radia magnetic objects from parsed .magnetic blocks.
+        Reject FastHenry .magnetic conversion.
 
-        Returns:
-            list of Radia object handles, or empty list if no magnetic blocks
-
-        Raises:
-            ImportError: If radia module not available
+        Magnetic cores are solved by the HDiv-VIM / reduced-FEM workflow,
+        not by the PEEC FastHenry parser.
         """
-        if not self.magnetic_blocks:
-            return []
-
-        import sys
-        import os
-        try:
-            sys.path.insert(0, os.path.dirname(__file__))
-            from _radia_pybind import (ObjHexahedron, ObjCnt, MatLin, MatApl)
-        except ImportError:
-            import radia as rad
-            ObjHexahedron = rad.ObjHexahedron
-            ObjCnt = rad.ObjCnt
-            MatLin = rad.MatLin
-            MatApl = rad.MatApl
-
-        objects = []
-
-        for block in self.magnetic_blocks:
-            mu_r = block['mu_r']
-
-            if block['type'] == 'box':
-                # Create structured hex mesh
-                center = np.array(block['center'])
-                size = np.array(block['size'])
-                divs = block['divisions']
-
-                # Element sizes
-                dx = size[0] / divs[0]
-                dy = size[1] / divs[1]
-                dz = size[2] / divs[2]
-
-                # Starting corner
-                corner = center - size / 2.0
-
-                sub_objs = []
-                for iz in range(divs[2]):
-                    for iy in range(divs[1]):
-                        for ix in range(divs[0]):
-                            x0 = corner[0] + ix * dx
-                            y0 = corner[1] + iy * dy
-                            z0 = corner[2] + iz * dz
-
-                            verts = [
-                                [x0, y0, z0],
-                                [x0 + dx, y0, z0],
-                                [x0 + dx, y0 + dy, z0],
-                                [x0, y0 + dy, z0],
-                                [x0, y0, z0 + dz],
-                                [x0 + dx, y0, z0 + dz],
-                                [x0 + dx, y0 + dy, z0 + dz],
-                                [x0, y0 + dy, z0 + dz],
-                            ]
-                            obj = ObjHexahedron(verts, [0, 0, 0])
-                            mat = MatLin(mu_r)
-                            MatApl(obj, mat)
-                            sub_objs.append(obj)
-
-                if len(sub_objs) == 1:
-                    objects.append(sub_objs[0])
-                else:
-                    objects.append(ObjCnt(sub_objs))
-
-            elif block['type'] == 'hexahedron':
-                obj = ObjHexahedron(block['vertices'], [0, 0, 0])
-                mat = MatLin(mu_r)
-                MatApl(obj, mat)
-                objects.append(obj)
-
-            elif block['type'] == 'mesh':
-                # NOTE: gmsh_mesh_import is removed. Use .vol path instead:
-                #   mesh = Mesh("model.vol")
-                #   netgen_mesh_to_radia(mesh, material={'magnetization': [0,0,0]})
-                raise NotImplementedError(
-                    "GMSH .msh mesh import is no longer supported. "
-                    "Use .vol files with netgen_mesh_to_radia() instead."
-                )
-
-        return objects
+        raise NotImplementedError(
+            "FastHenry .magnetic conversion is unsupported. Use PEEC for "
+            "conductors/shields and HDiv-VIM / reduced FEM for magnetic cores."
+        )
 
     def solve(self, freqs=None, Zs_func=None, solver_method=0,
               solver_prec=0.0001, solver_maxiter=1000,
@@ -1045,8 +942,8 @@ class FastHenryParser:
 
         Automatically uses ShieldedPEECSolver when .shield blocks are present,
         conductor PEEC, or ShieldedPEECSolver when .shield blocks are present.
-        .magnetic blocks are rejected because the old PEEC+magnetic-moment
-        coupling path has been retired.
+        .magnetic blocks are rejected because magnetic cores are solved by
+        the HDiv-VIM / reduced-FEM workflow rather than the PEEC parser.
 
         Args:
             freqs: Frequency array [Hz], or None to use .freq directive
@@ -1088,9 +985,9 @@ class FastHenryParser:
 
         if self.magnetic_blocks:
             raise NotImplementedError(
-                "FastHenry .magnetic blocks used the retired PEEC+magnetic-moment "
-                "coupling path. Use PEEC for conductors and the HDiv-VIM / "
-                "reduced-FEM workflow for magnetic cores."
+                "FastHenry .magnetic blocks are outside the Radia PEEC parser. "
+                "Use PEEC for conductors and the HDiv-VIM / reduced-FEM "
+                "workflow for magnetic cores."
             )
 
         if self.shield_blocks:

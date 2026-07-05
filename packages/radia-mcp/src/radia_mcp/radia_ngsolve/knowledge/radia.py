@@ -1041,17 +1041,11 @@ Use `nwinc` and `nhinc` to subdivide conductor cross-sections:
 builder.add_connected_segment(n1, n2, 3e-3, 3e-3, sigma=5.8e7, nwinc=5, nhinc=5)
 ```
 
-## Magnetic Core Coupling (.magnetic block)
+## Magnetic Cores
 
-```
-.magnetic
-  type=box
-  center=0,0,0
-  size=15,15,10
-  divisions=3,3,2
-  mu_r=1000
-.endmagnetic
-```
+PEEC handles conductor / shield circuit extraction.  Magnetic cores use
+the HDiv-VIM / reduced-FEM workflow and are coupled at the application
+layer.  FastHenry `.magnetic` blocks are rejected by the PEEC parser.
 
 ## Accuracy Parameters
 

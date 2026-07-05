@@ -1768,7 +1768,7 @@ substantive PDF-sourced content; +7400 lines total):
 - `rna_mec`: 177→1591 lines, 12 topics (Derbas 2009 nodal-vs-mesh,
   Lee 2005 TEAM-28 reduced model, Kameari-Ebrahimi-Sugahara-Shindo-
   Matsuo 2018 canonical 3D-FEM CLN, Hane 2020 dynamic hysteresis +
-  Cauer MEC, Janet 2004-2005 RNA magnetic-moment mixed method).
+  Cauer MEC, Janet 2004-2005 RNA calibrated leakage mixed method).
 - `metamaterial`: 90→1244 lines, 12 topics (Veselago/Pendry/Smith
   LH materials, SRR Pendry LC model, transformation optics with
   explicit Kelvin-inversion cross-link to electromagnet subpackage,

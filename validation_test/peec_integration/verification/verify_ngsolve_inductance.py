@@ -1,10 +1,10 @@
 """
 verify_ngsolve_inductance.py
 
-NGSolve FEM verification of PEEC 4-case circular coil results.
+NGSolve FEM verification of PEEC circular-coil air/shield results.
 
 Compares inductance computed by:
-  1. PEEC+BEM (demo_circular_coil_4cases.py) - boundary integral methods
+  1. PEEC+BEM conductor/shield workflow - boundary integral methods
   2. NGSolve FEM (this script) - volume finite elements
 
 Cases:
@@ -23,7 +23,7 @@ Key implementation notes:
   - nograds=True on HCurl: eliminates gradient kernel of curl operator
   - PEEC n_seg=64 for accurate circle approximation (not 16)
   - Core Delta_L: same-mesh reference (mu_r=1 vs mu_r=1000 on same mesh)
-  - PEEC core: computed dynamically via the retired .magnetic PEEC path
+  - Magnetic cores: verify with FEM / HDiv-VIM; PEEC parser rejects .magnetic
   - Shield: plate ABOVE coil (not surrounding it) for fair FEM vs PEEC comparison
   - Shield Delta_L: low-frequency eddy current as DC reference
 
@@ -47,7 +47,7 @@ from netgen.occ import *
 MU_0 = 4e-7 * np.pi
 
 # ============================================================
-# Geometry parameters (match demo_circular_coil_4cases.py)
+# Geometry parameters for the PEEC circular-coil validation.
 # ============================================================
 R_COIL = 20e-3       # Coil radius: 20 mm
 W_WIRE = 1e-3        # Wire width (radial): 1 mm
@@ -309,7 +309,7 @@ def generate_circular_coil_inp(R_mm=20.0, n_seg=16, w=1.0, h=1.0,
                                 sigma=5.8e7):
     """Generate FastHenry .inp text for a circular coil.
 
-    Same as demo_circular_coil_4cases.py for consistency.
+    Kept consistent across PEEC and FEM validation paths.
     """
     lines = []
     angles = np.linspace(0, 2 * np.pi, n_seg + 1)[:-1]
@@ -435,98 +435,22 @@ def run_peec(freqs, include_shield=False, shield_center_z_mm=10.0,
 
 
 def run_peec_core():
-    """Run PEEC calculation with ferrite core to get Delta_L.
+    """Core coupling moved out of PEEC.
 
-    Uses FastHenryParser with .magnetic block (same as demo_circular_coil_4cases.py).
-    Delta_L_core is frequency-independent for linear materials.
-
-    Returns:
-        dict with 'L_air', 'L_core', 'Delta_L_core', 'Delta_L_matrix'
+    Magnetic cores are validated with FEM / HDiv-VIM.  FastHenry
+    `.magnetic` blocks are intentionally rejected by `FastHenryParser.solve()`.
     """
-    radia_path = os.path.join(os.path.dirname(__file__), '../../../src/radia')
-    if radia_path not in sys.path:
-        sys.path.insert(0, radia_path)
-    mkl_bin = os.path.join(sys.prefix, 'Library', 'bin')
-    if os.path.isdir(mkl_bin):
-        os.add_dll_directory(mkl_bin)
-
-    import radia as rad
-    from fasthenry_parser import FastHenryParser
-
-    rad.UtiDelAll()
-
-    sigma_cu = 5.8e7
-    coil_inp = generate_circular_coil_inp(
-        R_mm=R_COIL * 1e3, n_seg=N_SEG_PEEC,
-        w=W_WIRE * 1e3, h=H_WIRE * 1e3, sigma=sigma_cu)
-
-    # Core dimensions in mm (match FEM geometry)
-    cx_mm = CORE_X * 1e3
-    cy_mm = CORE_Y * 1e3
-    cz_mm = CORE_Z * 1e3
-
-    # Air-only (no core) for L_air reference
-    inp_air = f"""\
-.Units mm
-.default sigma={sigma_cu:.2e}
-
-{coil_inp}
-
-.freq fmin=1e3 fmax=1e3 ndec=1
-.end
-"""
-    parser_air = FastHenryParser()
-    parser_air.parse_string(inp_air)
-    result_air = parser_air.solve(Zs_func=None)
-    L_air = result_air['L'][0]
-
-    rad.UtiDelAll()
-
-    # With core (.magnetic block)
-    inp_core = f"""\
-.Units mm
-.default sigma={sigma_cu:.2e}
-
-{coil_inp}
-
-* Ferrite core: {cx_mm:.0f}x{cy_mm:.0f}x{cz_mm:.0f} mm box at center
-.magnetic
-  type=box
-  center=0,0,0
-  size={cx_mm:.0f},{cy_mm:.0f},{cz_mm:.0f}
-  divisions=3,3,2
-  mu_r={MU_R_CORE}
-.endmagnetic
-
-.freq fmin=1e3 fmax=1e3 ndec=1
-.end
-"""
-    parser_core = FastHenryParser()
-    parser_core.parse_string(inp_core)
-    result_core = parser_core.solve(Zs_func=None)
-    L_core = result_core['L'][0]
-
-    Delta_L_core = L_core - L_air
-    Delta_L_matrix = result_core.get('Delta_L', None)
-
-    print(f"  PEEC L_air (n_seg={N_SEG_PEEC}) = {L_air * 1e9:.2f} nH")
-    print(f"  PEEC L_core = {L_core * 1e9:.2f} nH")
-    print(f"  PEEC Delta_L_core = {Delta_L_core * 1e9:+.2f} nH")
-
-    rad.UtiDelAll()
-    return {
-        'L_air': L_air,
-        'L_core': L_core,
-        'Delta_L_core': Delta_L_core,
-        'Delta_L_matrix': Delta_L_matrix,
-    }
+    raise NotImplementedError(
+        "PEEC core coupling is not a supported validation path; use FEM / "
+        "HDiv-VIM for magnetic cores."
+    )
 
 
 if __name__ == '__main__':
     print()
     print("=" * 70)
     print("  NGSolve FEM Verification: Circular Coil Inductance")
-    print("  Comparison with PEEC+BEM (demo_circular_coil_4cases.py)")
+    print("  Comparison with PEEC+BEM conductor/shield workflow")
     print("=" * 70)
     print()
 
@@ -634,18 +558,7 @@ if __name__ == '__main__':
         L_peec_air = 98.23e-9  # Fallback
         print(f"  Using fallback: {L_peec_air * 1e9:.2f} nH")
 
-    # PEEC core: Delta_L from magnetic coupling
-    try:
-        peec_core_result = run_peec_core()
-        Delta_L_peec_core = peec_core_result['Delta_L_core']
-        L_peec_core = peec_core_result['L_core']
-    except Exception as e:
-        print(f"  PEEC core computation failed: {e}")
-        import traceback
-        traceback.print_exc()
-        Delta_L_peec_core = 4.38e-9  # Fallback
-        L_peec_core = L_peec_air + Delta_L_peec_core
-        print(f"  Using fallback Delta_L_core: {Delta_L_peec_core * 1e9:.2f} nH")
+    print("  PEEC core comparison skipped: magnetic cores use FEM / HDiv-VIM")
 
     # PEEC shield at FEM frequencies
     try:
@@ -683,8 +596,7 @@ if __name__ == '__main__':
           f"{L_peec_air * 1e9:12.2f}  "
           f"{(L_air - L_peec_air) / L_peec_air * 100:+7.1f}%")
     print(f"  {'Delta_L_core [nH]':>20s}  {Delta_L_core * 1e9:+12.2f}  "
-          f"{Delta_L_peec_core * 1e9:+12.2f}  "
-          f"{(Delta_L_core - Delta_L_peec_core) / abs(Delta_L_peec_core) * 100:+7.1f}%")
+          f"{'HDiv/FEM':>12s}  {'N/A':>8s}")
     print()
 
     # --- Shield frequency sweep comparison ---
@@ -729,9 +641,7 @@ if __name__ == '__main__':
     shield_ok = all(L < L_dc_ref for L in fem_L)
     air_ok = abs(L_air - L_analytical) / L_analytical < 0.05
     air_peec_ok = abs(L_air - L_peec_air) / L_peec_air < 0.05
-    core_diff_pct = (abs(Delta_L_core - Delta_L_peec_core)
-                     / abs(Delta_L_peec_core) * 100)
-    core_match = core_diff_pct < 15.0
+    core_match = True
 
     print(f"    L_air within 5% of analytical:         "
           f"{'PASS' if air_ok else 'FAIL'} "
@@ -742,11 +652,8 @@ if __name__ == '__main__':
     print(f"    Delta_L_core > 0 (core increases L):   "
           f"{'PASS' if core_ok else 'FAIL'} "
           f"({Delta_L_core * 1e9:+.2f} nH)")
-    print(f"    Delta_L_core within 15% of PEEC:       "
-          f"{'PASS' if core_match else 'FAIL'} "
-          f"(FEM={Delta_L_core * 1e9:+.2f}, "
-          f"PEEC={Delta_L_peec_core * 1e9:+.2f}, "
-          f"diff={core_diff_pct:.1f}%)")
+    print("    Delta_L_core PEEC comparison:          SKIP "
+          "(magnetic cores use FEM / HDiv-VIM)")
     print(f"    Shield decreases L at all freqs:       "
           f"{'PASS' if shield_ok else 'FAIL'}")
 
@@ -777,8 +684,7 @@ if __name__ == '__main__':
     print(f"    -> Analytical (with internal Li/4): "
           f"{L_analytical * 1e9:.2f} nH")
     print(f"    -> PEEC Neumann with GMD already includes internal inductance")
-    print("  - Core: Both capture volume magnetization effect")
-    print(f"    -> Delta_L agrees within {core_diff_pct:.1f}%")
+    print("  - Core: magnetic-material effect is checked by FEM / HDiv-VIM")
     print("  - Shield: FEM = volume eddy currents, PEEC = BEM+SIBC (surface)")
     print("    -> Shield is plate above coil (not surrounding it)")
     delta_1k = np.sqrt(2.0 / (2 * np.pi * 1e3 * MU_0 * SIGMA_AL))

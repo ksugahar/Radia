@@ -4245,7 +4245,7 @@ class PyKANSurfaceImpedance:
         1. Generate training data from ESIM cell problem or measurements
         2. Train KAN: (H, f) -> (R_s, X_s) or (|Z_s|, angle)
         3. Export to SPICE PWL or Verilog-A
-        4. Use in coupled PEEC+magnetic simulations
+        4. Use in coupled PEEC + HDiv-VIM / reduced-FEM simulations
 
     Reference:
         Liu et al., "KAN: Kolmogorov-Arnold Networks", 2024
