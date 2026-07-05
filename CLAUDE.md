@@ -961,7 +961,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 **Exceptions — Japanese ALLOWED**:
 1. `CLAUDE.md` policy descriptions.
 2. **`docs/` RESEARCH NOTES** (Sugahara, 2026-07-05): internal investigation / design / decision records — the "what we tried, why it failed, what we chose" log (e.g. [`docs/stream_function/former_cad.md`](docs/stream_function/former_cad.md)). Header marker: `> 研究ノート (research note)`.
-3. **`docs/` PAPER DRAFTS / OUTLINES** (Sugahara, 2026-07-05): paper planning + draft docs (`paper_outline*.md` and the like) — many target IEEJ / domestic venues that are Japanese anyway. Header marker: `> 論文ドラフト (paper draft)`.
+3. **`docs/` PAPER PLANNING / OUTLINE DRAFTS** (Sugahara, 2026-07-05): the Markdown planning + outline docs (`paper_outline*.md` and the like) — many target IEEJ / domestic venues that are Japanese anyway. Header marker: `> 論文ドラフト (paper draft)`. This covers the Markdown PLANNING drafts ONLY. An actual submission MANUSCRIPT (e.g. a LaTeX `.tex` paper such as `docs/maglev/papers/igte_symposium_2026/`) follows its VENUE language — an INTERNATIONAL venue (IGTE, IEEE, Compumag) stays **ENGLISH**; an IEEJ / domestic venue may be Japanese — and is NOT governed by this exception.
 
 **Still English-ONLY** (the exceptions above do NOT cover these): source code, comments, docstrings, and **commit messages**; and the reference / public docs — `README`, API reference (`api.md`), and method / theory / showcase docs (`theory.md`, `single_stroke.md`, `regularization.md`, method `.ipynb`). Those stay English for the code interface and public-repo identity.
 
