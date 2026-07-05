@@ -18,12 +18,13 @@
  * No field kernel is embedded here -- this module does ONLY (ACA+)+TSVD.
  *
  * ACA+ itself is delegated to the in-repo HACApK C library (cHACApK_acaplus,
- * src/ext/HACApK) -- the single source of truth for ACA+ in Radia.  The TSVD
- * recompression (manuscript Method 2/3, IEEJ SA-25-020) is the only numerical
- * algorithm implemented in this file, because HACApK does not provide it.  The
- * validated Fortran reference coil_solver.f90 (method_aca_tsvd_1/2) is a
- * faithful port of the same HACApK ACA+, so this matches it to machine
- * precision for the coil kernel.
+ * src/ext/HACApK) -- the single source of truth for ACA+ in Radia.  The
+ * recompression to a truncated SVD is the standard "SVD of a low-rank product"
+ * (QR each tall-skinny ACA factor C, D, then ONE small SVD of the kt x kt core;
+ * peer review JIAM-2026-36), the only numerical algorithm implemented in this
+ * file because HACApK does not provide it.  It reproduces the dense TSVD of the
+ * ACA approximation to machine precision.  (The legacy manuscript Method 2/3 --
+ * two/three SVDs -- were removed; see memory/aca_tsvd_qr_recompression.md.)
  *
  * Storage convention: ROW-MAJOR for the returned U / V (matches Radia's
  * CblasRowMajor / NumPy C-contiguous arrays).
@@ -42,11 +43,6 @@ namespace stream_function {
 // existing field computation (Biot-Savart, MMM/MSC, ...).
 using EntryFn = std::function<double(int i, int j)>;
 
-enum class Method {
-    Method2,   // full re-SVD of both ACA factors (manuscript Method 2)
-    Method3    // improved: SVD(C), E = diag(Sc) Vc^T D^T, SVD(E) (Method 3, default)
-};
-
 // Recompressed truncated SVD of A:  A ~= U diag(S) V^T, truncated to `modes`.
 struct TSVDResult {
     int M = 0, N = 0, modes = 0;   // dimensions actually returned
@@ -63,11 +59,11 @@ int ACAPlus(int M, int N, const EntryFn& entry,
             int kmax, double aca_eps,
             std::vector<double>& C, std::vector<double>& D);
 
-// (ACA+)+TSVD: factor A with ACA+, then TSVD the small factors.
+// (ACA+)+TSVD: factor A with ACA+, then recompress the small factors to a
+// truncated SVD (standard QR-of-each-factor + one small SVD).
 // Returns A ~= U diag(S) V^T truncated to `modes` (<= k_aca).
 TSVDResult ACATSVD(int M, int N, const EntryFn& entry,
-                   int modes, int kmax, double aca_eps,
-                   Method method = Method::Method3);
+                   int modes, int kmax, double aca_eps);
 
 // Least-norm pseudo-inverse solve:  phi = V diag(1/S) U^T B, using the first
 // k_mode (<= result.modes) singular triplets (TSVD regularization).

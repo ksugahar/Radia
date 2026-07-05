@@ -8,8 +8,10 @@
  *   1. ACAPlus  -- a thin adapter that hands the caller's matrix-entry
  *      callback A(i,j) to HACApK's ACA+ (cHACApK_acaplus, the single source of
  *      truth for ACA+ in Radia).  No field kernel is embedded.
- *   2. ACATSVD  -- the TSVD recompression of the small ACA factors (manuscript
- *      Method 2/3), which HACApK does not provide.  LAPACKE_dgesdd + cblas_dgemm.
+ *   2. ACATSVD  -- the standard SVD-of-a-low-rank-product recompression of the
+ *      small ACA factors (QR of each tall-skinny factor + ONE small SVD; peer
+ *      review JIAM-2026-36), which HACApK does not provide.
+ *      LAPACKE_dgeqrf/dorgqr + dgesdd + cblas_dgemm.
  *   3. PseudoInverseSolve -- the least-norm back-substitution.
  *
  * Internally matrices are COLUMN-MAJOR (LAPACK / HACApK native: cHACApK_acaplus
@@ -63,6 +65,30 @@ void SvdEcon(int m, int n, double* a, double* u, double* s, double* vt) {
         throw std::runtime_error("rad_stream_function: LAPACKE_dgesdd failed");
 }
 
+// Economy QR of a column-major m x n matrix `a` (m >= n), via LAPACKE_dgeqrf +
+// LAPACKE_dorgqr.  On return: Q is m x n (orthonormal columns, col-major), R is
+// n x n upper-triangular (col-major).  `a` is read-only (copied into Q first).
+// This is the tall-skinny orthogonaliser of the standard "SVD of a low-rank
+// product" recompression (cheaper than an SVD of the same factor).
+void QrEcon(int m, int n, const double* a,
+            std::vector<double>& Q, std::vector<double>& R) {
+    Q.assign(static_cast<size_t>(m) * n, 0.0);
+    std::copy(a, a + static_cast<size_t>(m) * n, Q.begin());   // dgeqrf is in-place
+    std::vector<double> tau(std::min(m, n));
+    lapack_int info = LAPACKE_dgeqrf(LAPACK_COL_MAJOR, m, n, Q.data(), m, tau.data());
+    if (info != 0)
+        throw std::runtime_error("rad_stream_function: LAPACKE_dgeqrf failed");
+    // R = upper-triangular n x n block of the factored matrix.
+    R.assign(static_cast<size_t>(n) * n, 0.0);
+    for (int j = 0; j < n; ++j)
+        for (int i = 0; i <= j; ++i)
+            R[i + static_cast<size_t>(j) * n] = Q[i + static_cast<size_t>(j) * m];
+    // Overwrite Q with the explicit economy orthonormal factor (m x n).
+    info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, m, n, n, Q.data(), m, tau.data());
+    if (info != 0)
+        throw std::runtime_error("rad_stream_function: LAPACKE_dorgqr failed");
+}
+
 }  // namespace
 
 //-------------------------------------------------------------------------
@@ -114,7 +140,7 @@ int ACAPlus(int M, int N, const EntryFn& entry,
 
 //-------------------------------------------------------------------------
 TSVDResult ACATSVD(int M, int N, const EntryFn& entry,
-                   int modes, int kmax, double aca_eps, Method method) {
+                   int modes, int kmax, double aca_eps) {
     if (M <= 0 || N <= 0) throw std::invalid_argument("rad_stream_function: empty problem");
 
     std::vector<double> C, D;
@@ -123,59 +149,36 @@ TSVDResult ACATSVD(int M, int N, const EntryFn& entry,
 
     const int m = std::min(modes, kt);  // cannot return more than kt triplets
 
-    // SVD of C (M x kt) -> Uc (M x kt), Sc (kt), VTc (kt x kt).
-    std::vector<double> Uc(static_cast<size_t>(M) * kt), Sc(kt), VTc(static_cast<size_t>(kt) * kt);
-    SvdEcon(M, kt, C.data(), Uc.data(), Sc.data(), VTc.data());  // uses first kt cols of C
+    // Standard SVD-of-a-low-rank-product recompression (peer review JIAM-2026-36).
+    // A ~= C D^T with C (M x kt), D (N x kt), both tall-skinny (kt <= min(M,N)).
+    // Orthogonalise the factors by QR (cheaper than an SVD of the same factor):
+    //   C = Qc Rc,  D = Qd Rd   ->   A = Qc (Rc Rd^T) Qd^T.
+    // ONE small kt x kt SVD  Rc Rd^T = Um Sm VTm  then gives the exact SVD of A:
+    //   A = (Qc Um) Sm (Qd VTm^T)^T,   U = Qc Um,  V = Qd VTm^T,  S = Sm.
+    // (The legacy manuscript Method 2/3 -- two/three SVDs -- were removed here;
+    //  the lesson lives in memory/aca_tsvd_qr_recompression.md.)
+    std::vector<double> Qc, Rc, Qd, Rd;
+    QrEcon(M, kt, C.data(), Qc, Rc);   // Qc (M x kt), Rc (kt x kt)
+    QrEcon(N, kt, D.data(), Qd, Rd);   // Qd (N x kt), Rd (kt x kt)
+
+    // Middle = Rc * Rd^T   (kt x kt)
+    std::vector<double> Middle(static_cast<size_t>(kt) * kt);
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, kt, kt, kt,
+                1.0, Rc.data(), kt, Rd.data(), kt, 0.0, Middle.data(), kt);
+    // ONE small SVD of the kt x kt Middle -> Um (kt x kt), Sm (kt), VTm (kt x kt)
+    std::vector<double> Um(static_cast<size_t>(kt) * kt), Sm(kt), VTm(static_cast<size_t>(kt) * kt);
+    SvdEcon(kt, kt, Middle.data(), Um.data(), Sm.data(), VTm.data());
 
     std::vector<double> Ufinal, Sfinal(m), Vfinal;  // col-major M x m, m, N x m
-
-    if (method == Method::Method3) {
-        // E = diag(Sc) * VTc * D^T   (kt x N)
-        std::vector<double> ScVTc(static_cast<size_t>(kt) * kt);
-        for (int j = 0; j < kt; ++j)
-            for (int i = 0; i < kt; ++i)
-                ScVTc[i + static_cast<size_t>(j) * kt] = Sc[i] * VTc[i + static_cast<size_t>(j) * kt];
-        std::vector<double> E(static_cast<size_t>(kt) * N);
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, kt, N, kt,
-                    1.0, ScVTc.data(), kt, D.data(), N, 0.0, E.data(), kt);
-        // SVD of E (kt x N) -> UE (kt x kt), SE (kt), VTE (kt x N).
-        std::vector<double> UE(static_cast<size_t>(kt) * kt), SE(kt), VTE(static_cast<size_t>(kt) * N);
-        SvdEcon(kt, N, E.data(), UE.data(), SE.data(), VTE.data());
-        for (int i = 0; i < m; ++i) Sfinal[i] = SE[i];
-        // U = Uc * UE(:, 0:m)   (M x m)
-        Ufinal.assign(static_cast<size_t>(M) * m, 0.0);
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, M, m, kt,
-                    1.0, Uc.data(), M, UE.data(), kt, 0.0, Ufinal.data(), M);
-        // V(i,j) = VTE(j,i)   (N x m)
-        Vfinal.assign(static_cast<size_t>(N) * m, 0.0);
-        for (int j = 0; j < m; ++j)
-            for (int i = 0; i < N; ++i)
-                Vfinal[i + static_cast<size_t>(j) * N] = VTE[j + static_cast<size_t>(i) * kt];
-    } else {
-        // Method2: also SVD D, combine via Middle.
-        std::vector<double> Ud(static_cast<size_t>(N) * kt), Sd(kt), VTd(static_cast<size_t>(kt) * kt);
-        SvdEcon(N, kt, D.data(), Ud.data(), Sd.data(), VTd.data());
-        // VcTVd = VTc * VTd^T  (kt x kt)
-        std::vector<double> VcTVd(static_cast<size_t>(kt) * kt);
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, kt, kt, kt,
-                    1.0, VTc.data(), kt, VTd.data(), kt, 0.0, VcTVd.data(), kt);
-        // Middle(i,j) = Sc(i) * VcTVd(i,j) * Sd(j)
-        std::vector<double> Middle(static_cast<size_t>(kt) * kt);
-        for (int j = 0; j < kt; ++j)
-            for (int i = 0; i < kt; ++i)
-                Middle[i + static_cast<size_t>(j) * kt] = Sc[i] * VcTVd[i + static_cast<size_t>(j) * kt] * Sd[j];
-        std::vector<double> Um(static_cast<size_t>(kt) * kt), Sm(kt), VTm(static_cast<size_t>(kt) * kt);
-        SvdEcon(kt, kt, Middle.data(), Um.data(), Sm.data(), VTm.data());
-        for (int i = 0; i < m; ++i) Sfinal[i] = Sm[i];
-        // U = Uc * Um(:, 0:m)
-        Ufinal.assign(static_cast<size_t>(M) * m, 0.0);
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, M, m, kt,
-                    1.0, Uc.data(), M, Um.data(), kt, 0.0, Ufinal.data(), M);
-        // V = Ud * VTm^T(:, 0:m)
-        Vfinal.assign(static_cast<size_t>(N) * m, 0.0);
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, N, m, kt,
-                    1.0, Ud.data(), N, VTm.data(), kt, 0.0, Vfinal.data(), N);
-    }
+    for (int i = 0; i < m; ++i) Sfinal[i] = Sm[i];
+    // U = Qc * Um(:, 0:m)   (M x m)
+    Ufinal.assign(static_cast<size_t>(M) * m, 0.0);
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, M, m, kt,
+                1.0, Qc.data(), M, Um.data(), kt, 0.0, Ufinal.data(), M);
+    // V = Qd * VTm^T(:, 0:m)   (N x m)
+    Vfinal.assign(static_cast<size_t>(N) * m, 0.0);
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, N, m, kt,
+                1.0, Qd.data(), N, VTm.data(), kt, 0.0, Vfinal.data(), N);
 
     // Pack into row-major TSVDResult (NumPy C-contiguous).
     TSVDResult r;

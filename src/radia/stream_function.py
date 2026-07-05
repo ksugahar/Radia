@@ -64,7 +64,9 @@ class StreamTSVD:
     k_aca : int
         ACA+ rank found before TSVD truncation.
     method : int
-        Recompression method used (2 or 3).
+        Recompression method tag; always 0 = the standard QR-based SVD of the
+        low-rank product (the legacy manuscript Method 2/3 were removed
+        2026-07-05, peer review JIAM-2026-36).
     """
 
     U: np.ndarray
@@ -87,7 +89,7 @@ class StreamTSVD:
 
 
 def aca_tsvd(M, N, entry, modes=None, kmax=None,
-             aca_eps=1.0e-4, method=3) -> StreamTSVD:
+             aca_eps=1.0e-4, method=None) -> StreamTSVD:
     """(ACA+)+TSVD recompressed truncated SVD of an M x N matrix A.
 
     Parameters
@@ -108,9 +110,12 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
         Maximum ACA+ rank.  Defaults to ``min(M, N)``.
     aca_eps : float, optional
         ACA+ stopping tolerance (absolute pivot/row/col threshold).  Default 1e-4.
-    method : int, optional
-        3 (default) = improved 2-SVD recompression (f90 method_aca_tsvd_2);
-        2 = full re-SVD of both factors (f90 method_aca_tsvd_1).
+    method : optional, DEPRECATED and IGNORED
+        The recompression is now the standard "SVD of a low-rank product"
+        (QR of each tall-skinny ACA factor + ONE small SVD; peer review
+        JIAM-2026-36).  The legacy manuscript Method 2/3 (two/three SVDs)
+        were removed 2026-07-05; see ``memory/aca_tsvd_qr_recompression.md``.
+        Accepted for backward compatibility but has no effect.
 
     Returns
     -------
@@ -122,8 +127,8 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
         raise ValueError(f"M and N must be positive, got M={M}, N={N}")
     if not callable(entry):
         raise TypeError("entry must be callable: entry(i, j) -> float")
-    if method not in (2, 3):
-        raise ValueError(f"method must be 2 or 3, got {method}")
+    # `method` is deprecated + ignored (see docstring): the recompression is the
+    # single standard QR-based SVD of the low-rank product.  Any value is accepted.
 
     if kmax is None:
         kmax = min(M, N)
@@ -137,8 +142,8 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
         return float(entry(i, j))
 
     U, S, V, k_aca = _cpp_aca_tsvd(
-        M, N, _entry, int(modes), int(kmax), float(aca_eps), int(method))
-    return StreamTSVD(U=U, S=S, V=V, k_aca=int(k_aca), method=int(method))
+        M, N, _entry, int(modes), int(kmax), float(aca_eps))
+    return StreamTSVD(U=U, S=S, V=V, k_aca=int(k_aca), method=0)
 
 
 def pseudo_inverse_solve(result: StreamTSVD, B, k_mode=None) -> np.ndarray:
@@ -414,7 +419,7 @@ def pseudo_inverse_solve_regularized(result: StreamTSVD, B, S, k_mode=None):
 
 
 def solve(M, N, entry, B, modes=None, k_mode=None,
-          kmax=None, aca_eps=1.0e-4, method=3):
+          kmax=None, aca_eps=1.0e-4, method=None):
     """Convenience: (ACA+)+TSVD decompose then pseudo-inverse solve.
 
     Returns

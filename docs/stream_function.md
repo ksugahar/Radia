@@ -54,16 +54,25 @@ kernels `A` is numerically **low rank**, so we instead:
    `A ~= C D^T` with `C in R^{M x k_aca}`, `D in R^{N x k_aca}`,
    `k_aca << min(M,N)`, evaluating only `O(k_aca (M+N))` entries of `A` --
    never the full `M N`.
-2. **TSVD recompression** of the small factors yields the SVD of the rank-`k_aca`
-   approximation. Two equivalent recompression methods (IEEJ SA-25-020):
+2. **Recompression to a truncated SVD** of the small factors -- the standard
+   "SVD of a low-rank product" (peer review JIAM-2026-36).  QR each tall-skinny
+   factor `C = Qc Rc`, `D = Qd Rd`, then take ONE small SVD of the
+   `k_aca x k_aca` core `Rc Rd^T = U_bar Sigma V_bar^T`.  This gives the exact
+   SVD of the ACA approximation:
 
-   | `method` | Steps | f90 name |
-   |----------|-------|----------|
-   | `3` (default) | `SVD(C) -> Uc,Sc,VTc`; `E = diag(Sc) VTc D^T`; `SVD(E) -> UE,SE,VTE`; `U=Uc UE`, `S=SE`, `V=VTE^T` | `method_aca_tsvd_2` |
-   | `2` | `SVD(C)`, `SVD(D)`, `Middle = Sc (VTc VTd^T) Sd`, `SVD(Middle)`, combine | `method_aca_tsvd_1` |
+   ```
+   A ~= C D^T = Qc (Rc Rd^T) Qd^T = (Qc U_bar) Sigma (Qd V_bar)^T
+   U = Qc U_bar,   S = Sigma,   V = Qd V_bar
+   ```
 
-   Method 3 needs only two SVDs (of an `M x k_aca` and a `k_aca x N` matrix) and
-   is the recommended default.
+   QR (backward-stable, cheaper than an SVD of the same factor) orthogonalises
+   the factors and the only SVD is the tiny `k_aca x k_aca` core, so `U` and `V`
+   come out **orthonormal** -- exactly what the folded regularisation
+   (`RegularizedTSVD`) requires.
+
+   (The earlier manuscript Method 2/3 -- two/three SVDs -- were removed; see
+   `memory/aca_tsvd_qr_recompression.md`.  The `method` argument on `aca_tsvd`
+   is now a deprecated no-op.)
 
 Net cost is roughly `(M/k_aca)^2` lower than the dense route.
 
@@ -117,7 +126,7 @@ from radia.stream_function import (
 )
 ```
 
-### `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method=3) -> StreamTSVD`
+### `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method=None) -> StreamTSVD`
 
 (ACA+)+TSVD of the `M x N` matrix whose entries are returned by
 `entry(i, j) -> float` (0-based `i in [0,M)`, `j in [0,N)`). `entry` is called
@@ -126,7 +135,8 @@ on demand by ACA+, not over the full grid.
 - `modes`   -- singular triplets to return (clamped to `k_aca`); default `kmax`.
 - `kmax`    -- maximum ACA+ rank; default `min(M, N)`.
 - `aca_eps` -- ACA+ stopping tolerance (absolute pivot threshold).
-- `method`  -- `3` (default) or `2` (see table above).
+- `method`  -- DEPRECATED, ignored (the recompression is the standard QR method
+  above; the legacy Method 2/3 were removed).
 
 Returns a `StreamTSVD` with `U (M,modes)`, `S (modes,)`, `V (N,modes)` (row-major
 NumPy arrays), `k_aca`, and `method`.
