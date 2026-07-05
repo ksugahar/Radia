@@ -954,9 +954,15 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 **POLICY**: NEVER use Unicode mathematical symbols in print statements. Use ASCII equivalents: `^2` not `²`, `->` not `→`, `<=` not `≤`, etc. Windows console defaults to cp932 in Japanese environments.
 
-### Repository Language: English
+### Repository Language: English (docs RESEARCH NOTES may be Japanese, 2026-07-05)
 
-**POLICY**: All source code, documentation (`docs/**/*.md`), comments, commit messages, and docstrings in the Radia repository MUST be written in **English**. Japanese text is NOT allowed in tracked files. Exception: `CLAUDE.md` may contain Japanese policy descriptions. Conversation with the user may be in Japanese, but repository content must remain English-only.
+**POLICY**: All source code, documentation, comments, commit messages, and docstrings in the Radia repository MUST be written in **English**, EXCEPT for the two cases below. Japanese text is NOT allowed in tracked files unless an exception applies. Conversation with the user may be in Japanese, but shipped repository content is English-only.
+
+**Exceptions — Japanese ALLOWED**:
+1. `CLAUDE.md` policy descriptions.
+2. **`docs/` RESEARCH NOTES** (Sugahara, 2026-07-05): internal investigation / design / decision records — the "what we tried, why it failed, what we chose" log (e.g. [`docs/stream_function/former_cad.md`](docs/stream_function/former_cad.md)). These MAY be written in Japanese. A research note MUST carry a header line marking it as such: `> 研究ノート (research note)`.
+
+**Still English-ONLY** (the research-note exception does NOT cover these): source code, comments, docstrings, and **commit messages**; and the public-/paper-facing docs — `README`, API reference (`api.md`), method / theory / showcase docs (`theory.md`, `single_stroke.md`, `regularization.md`, method `.ipynb`), and paper drafts / outlines (`paper_outline*.md`). Those stay English for the paper and public-repo identity.
 
 ### Naming Policy: External Project References
 
