@@ -1660,6 +1660,14 @@ expected labels such as `source`, `sink`, `sibc`, `coil`, `workpiece`, and
 handoff gates; if the file or labels are missing, the Cubit route is not
 solver-ready even when the original build123d volume row is correct.
 
+Slot449 adds the one-loop learning closure rule for build123d.  A build123d
+slot starts from build123d source CAD, not from a downstream mesh dump.  The CAD
+row should carry `result_artifact_id`, `result_output_schema_id`,
+`timing_breakdown_s`, and `learning_lanes.source_tool=verified` before a
+volume/area crosscheck is fed back into radia-mcp knowledge.  Cubit and CST are
+cross-kernel volume witnesses; they do not replace the build123d source script
+or the analytic mass-property gate.
+
 When the external CAD kernel also reports surface area or bounding boxes, use
 the stronger `shape_mass_property_crosscheck_summary(...)` or MCP tool
 `build123d_mass_property_crosscheck(...)`.  Keep `shape_volume_crosscheck_summary`

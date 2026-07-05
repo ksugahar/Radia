@@ -1348,6 +1348,11 @@ that matter for `.vol`/NGSolve validation loops.
    The latter records area, edge ratio, angle range, and
    `2 * inradius / circumradius` so sliver boundary triangles are caught before
    they become scalar-BEM/RWG trace elements.
+7. For loop learning, close a Coreform/Cubit slot only when the headless batch
+   command, `result_artifact_id`, `result_output_schema_id`, top
+   `timing_breakdown_s`, mesh-quality evidence, and `.vol` or Exodus export
+   inventory are recorded together.  A GUI-only screenshot or a mesh file without
+   sidecar identity is a candidate, not a verified MCP lesson.
 
 ### Sources
 

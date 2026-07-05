@@ -30,6 +30,155 @@ import cmath
 import math
 
 
+def acoustic_method_selection_manifest_gate(manifest, expected_problem_family=None):
+    """Validate a public-safe acoustic method-selection lesson.
+
+    The gate is intentionally solver-independent.  It captures reusable
+    acoustic modeling choices learned from public acoustics literature and blog
+    material, then applies the CAE-AI Lab wave-boundary policy: acoustic and
+    electromagnetic exterior/absorbing boundaries use high-order surface
+    impedance ``Zs`` and do not use PML as the default validation route.  BEM is
+    a frequency-domain exterior-radiation/open-boundary lane; acoustic-structure
+    interaction needs an explicit two-way interface; compact thermo/viscous
+    submodels should travel as impedance plus power-balance metadata; room
+    acoustics should record the modal/high-frequency split; and absorbing
+    boundaries should keep local/extended reaction metadata as secondary
+    physics, not as the lab open-boundary policy.
+    """
+
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest must be a dictionary")
+
+    def get(*names, default=None):
+        for name in names:
+            if name in manifest and manifest[name] is not None:
+                return manifest[name]
+        return default
+
+    def as_bool(*names):
+        value = get(*names, default=False)
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(value)
+
+    def has_text(*names):
+        value = get(*names)
+        return value is not None and str(value).strip() != ""
+
+    def lower(*names):
+        value = get(*names, default="")
+        return str(value).strip().lower()
+
+    def positive_number(*names):
+        value = get(*names)
+        try:
+            return value is not None and float(value) > 0.0
+        except (TypeError, ValueError):
+            return False
+
+    family = lower("problem_family", "family")
+    study_domain = lower("study_domain", "analysis_domain")
+    primary_method = lower("primary_method", "method")
+    exterior_method = lower("exterior_method", "open_boundary_method")
+    boundary_model = lower("boundary_model", "boundary_condition")
+    reaction_model = lower("reaction_model", "absorber_reaction_model")
+    coupling_kind = lower("coupling_kind", "coupling")
+    wave_family = lower("wave_family", "physics_family")
+    open_boundary_policy = lower("open_boundary_policy", "absorbing_boundary_policy", "radiation_boundary_policy")
+
+    uses_bem = primary_method == "bem" or exterior_method == "bem" or as_bool("uses_bem", "bem")
+    uses_time_domain = study_domain == "time_domain" or as_bool("time_domain")
+    uses_frequency_domain = study_domain == "frequency_domain" or as_bool("frequency_domain")
+    is_wave_boundary = family in {"absorbing_boundary", "exterior_radiation", "wave_open_boundary"} or wave_family in {
+        "acoustic",
+        "electromagnetic",
+        "em",
+        "maxwell",
+    }
+
+    checks = {
+        "problem_family_recorded": has_text("problem_family", "family"),
+        "primary_method_recorded": has_text("primary_method", "method"),
+        "study_domain_recorded": has_text("study_domain", "analysis_domain"),
+        "result_artifact_id_recorded": has_text("result_artifact_id"),
+        "result_output_schema_id_recorded": has_text("result_output_schema_id"),
+    }
+    if expected_problem_family is not None:
+        checks["expected_problem_family_matches"] = family == str(expected_problem_family).strip().lower()
+
+    if uses_bem:
+        checks["bem_is_frequency_domain"] = uses_frequency_domain and not uses_time_domain
+        checks["bem_open_exterior_or_surface_mesh_recorded"] = (
+            as_bool("surface_only_boundary_mesh", "boundary_surface_mesh")
+            or lower("domain_topology") in {"unbounded_exterior", "open_exterior"}
+            or exterior_method == "bem"
+        )
+
+    if is_wave_boundary:
+        checks["lab_wave_boundary_policy_is_high_order_zs"] = open_boundary_policy in {
+            "high_order_zs",
+            "high_order_surface_impedance",
+            "higher_order_zs",
+            "higher_order_surface_impedance",
+        }
+        checks["pml_not_used"] = not as_bool("uses_pml", "pml", "absorbing_layer")
+
+    if family == "acoustic_structure_interaction":
+        checks["asi_coupling_is_two_way"] = "two" in coupling_kind or coupling_kind in {
+            "fem_bem",
+            "solid_fluid",
+            "fluid_structure",
+        }
+        checks["asi_structural_field_recorded"] = has_text("structural_field")
+        checks["asi_acoustic_field_recorded"] = has_text("acoustic_field")
+
+    if family == "impedance_lumping":
+        checks["impedance_kind_recorded"] = has_text("impedance_kind", "impedance_model")
+        checks["frequency_dependent_impedance_recorded"] = as_bool(
+            "frequency_dependent_impedance", "impedance_frequency_dependent"
+        )
+        checks["power_balance_observable_recorded"] = has_text("power_balance_observable")
+
+    if family == "room_acoustics":
+        checks["schroeder_frequency_recorded"] = positive_number("schroeder_frequency_hz")
+        checks["low_frequency_wave_method_recorded"] = has_text("low_frequency_method")
+        checks["high_frequency_method_recorded"] = has_text("high_frequency_method")
+
+    if family == "absorbing_boundary":
+        checks["absorber_reaction_model_recorded"] = reaction_model in {"local", "extended"}
+        checks["angle_dependency_recorded"] = as_bool("angle_dependency_recorded", "incident_angle_dependency")
+        checks["boundary_model_is_high_order_zs"] = boundary_model in {
+            "high_order_zs",
+            "high_order_surface_impedance",
+            "higher_order_zs",
+            "higher_order_surface_impedance",
+        }
+        if reaction_model == "extended":
+            checks["extended_reaction_metadata_recorded"] = as_bool(
+                "frequency_dependent_boundary",
+                "frequency_dependent_impedance",
+            )
+
+    return {
+        "policy": "acoustic_method_selection_manifest_gate",
+        "problem_family": family or None,
+        "primary_method": primary_method or None,
+        "exterior_method": exterior_method or None,
+        "study_domain": study_domain or None,
+        "boundary_model": boundary_model or None,
+        "reaction_model": reaction_model or None,
+        "wave_family": wave_family or None,
+        "open_boundary_policy": open_boundary_policy or None,
+        "checks": checks,
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "teaching_note": (
+            "Use this before promoting public acoustic blog/literature lessons "
+            "into FEM/BEM examples: method family, domain, coupling, impedance, "
+            "absorber reaction, and output schema identity must travel together."
+        ),
+    }
+
+
 def helmholtz_green_3d(distance, wavenumber):
     r"""Outgoing 3D scalar Helmholtz Green function.
 

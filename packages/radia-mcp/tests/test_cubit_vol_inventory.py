@@ -2568,6 +2568,9 @@ def test_netgen_workflow_records_coreform_2026_6_release_routing_gate():
     assert "hex-led and mixed hex+pyramid+tet lane" in doc
     assert "tet-only\neducation stays on Netgen/OCC" in doc
     assert "rather than `.vol` parser\nrelaxation" in doc
+    assert "close a Coreform/Cubit slot only when the headless batch\ncommand" in doc
+    assert "result_artifact_id" in doc
+    assert "mesh-quality evidence" in doc
     assert "third-party curvilinear handoff manifest gate" in doc
     assert "cubit_curvilinear_handoff_manifest_gate" in doc
     assert "no implicit tetization" in doc
