@@ -183,7 +183,11 @@ This implementation accompanies the paper:
 
 > K. Sugahara and Y. Sato, "KAN-inspired Universal Relaxation Network for Automatic Discovery of Physical Relaxation Mechanisms with Direct Circuit Synthesis," IEEE Access, 2026.
 
-The paper is located at `docs/paper/urn_paper.tex`.
+The manuscript source is maintained **outside** the code repository, in the lab's
+conference-materials area (paper manuscripts live in 学会資料, not the repo):
+`W:\02_学会資料\2026年度\2026_08_25_静止器・回転機@八戸\URN@佐藤・菅原\paper\`.
+The reproducibility scripts, result JSON, and showcase notebooks in this directory
+remain in the repo.
 
 ## Requirements
 
