@@ -17,14 +17,14 @@
       "transverse_components_cancel": true
     },
     "errors": {
-      "axial_abs_error_N": 5.108025893000108e-09,
+      "axial_abs_error_N": 5.11328532050782e-09,
       "axial_allowed_error_N": 7.83350690071191e-09,
-      "axial_rel_error": 0.01630184908797326,
+      "axial_rel_error": 0.01631863412299772,
       "transverse_allowed_magnitude_N": 3.133402760284764e-10,
-      "transverse_magnitude_N": 1.5295113517865755e-11
+      "transverse_magnitude_N": 1.212112082801267e-11
     },
     "metadata": {
-      "mesh_source": "netgen_occ_vol",
+      "mesh_source": "coreform_cubit_export_netgen",
       "producer": "ngsolve_vol_lorentz_integral",
       "source_segments": 64
     },
@@ -38,25 +38,25 @@
     ],
     "status": "ok",
     "three_d_result": {
-      "axial_component_N": -3.082322501354763e-07,
+      "axial_component_N": -3.082269907079686e-07,
       "full_revolution_force_vector_N": [
-        -1.5280080446746018e-11,
-        -6.779668615572031e-13,
-        -3.082322501354763e-07
+        1.2120925127542087e-11,
+        6.887800665971216e-14,
+        -3.082269907079686e-07
       ],
       "input_force_vector_N": [
-        -1.5280080446746018e-11,
-        -6.779668615572031e-13,
-        -3.082322501354763e-07
+        1.2120925127542087e-11,
+        6.887800665971216e-14,
+        -3.082269907079686e-07
       ],
       "result_basis": "full_revolution",
       "scale_to_full_revolution": 1.0,
       "sector_angle_deg": 360.0,
       "transverse_components_N": [
-        -1.5280080446746018e-11,
-        -6.779668615572031e-13
+        1.2120925127542087e-11,
+        6.887800665971216e-14
       ],
-      "transverse_magnitude_N": 1.5295113517865755e-11
+      "transverse_magnitude_N": 1.212112082801267e-11
     },
     "tolerances": {
       "axial_atol_N": 0.0,
@@ -84,46 +84,50 @@
     "validation_passed": true,
     "vol_loaded_by_ngsolve": true
   },
-  "created_at_utc": "2026-07-05T02:58:00Z",
+  "created_at_utc": "2026-07-05T04:11:54Z",
   "errors": {
-    "axial_rel_error": 0.01630184908797326,
-    "max_abs": 5.108025893000108e-09,
-    "max_rel": 0.01642868750258704,
-    "target_volume_rel_error": 0.01642868750258704,
-    "transverse_rel_error": 4.881311049995926e-05
+    "axial_rel_error": 0.01631863412299772,
+    "max_abs": 5.11328532050782e-09,
+    "max_rel": 0.016444170458633205,
+    "target_volume_rel_error": 0.016444170458633205,
+    "transverse_rel_error": 3.868357104182515e-05
   },
   "mesh_generation": {
+    "cubit_command": "coreform_cubit.com -nographics -batch -nojournal -input <journal>",
+    "cubit_exit_code": 0,
     "cubit_journal": "validation_test/force_validation/axisymmetric_to_3d_target_torus_cubit.jou",
+    "cubit_log_had_license_error_line": false,
+    "cubit_log_written_to_temp": true,
+    "cubit_success_criterion": "exported .vol exists and is non-empty",
     "generated": true,
-    "mesh_generation_duration_s": 5.276527,
-    "mesh_source": "netgen_occ_vol",
-    "ne_raw": 36019,
+    "mesh_generation_duration_s": 6.6062,
+    "mesh_source": "coreform_cubit_export_netgen",
     "vol_path": "validation_test/force_validation/axisymmetric_to_3d_target_torus.vol"
   },
   "ngsolve_vol_result": {
     "force_vector_N": [
-      -1.5280080446746018e-11,
-      -6.779668615572031e-13,
-      -3.082322501354763e-07
+      1.2120925127542087e-11,
+      6.887800665971216e-14,
+      -3.082269907079686e-07
     ],
     "mesh": {
       "boundaries": [
-        "default"
+        "Surface_1"
       ],
       "materials": [
         "target"
       ],
-      "ne": 36019,
-      "nv": 12702,
+      "ne": 123824,
+      "nv": 26763,
       "target_volume_exact_m3": 0.017765287921960846,
-      "target_volume_m3": 0.017473427558297467,
-      "target_volume_rel_error": 0.01642868750258704
+      "target_volume_m3": 0.017473152499125424,
+      "target_volume_rel_error": 0.016444170458633205
     },
     "ngsolve_version": "6.2.2604",
     "timing": {
-      "mesh_import": 0.330452,
-      "ngsolve_lorentz_integral": 10.226391,
-      "source_field_build": 0.003618
+      "mesh_import": 0.740878,
+      "ngsolve_lorentz_integral": 36.373806,
+      "source_field_build": 0.003539
     }
   },
   "pass": true,
@@ -134,8 +138,8 @@
     "validation_test/force_validation/validation_axisymmetric_to_3d_vol_force_ready.json"
   ],
   "run": {
-    "command": "python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py --rebuild-vol",
-    "duration_s": 15.978615,
+    "command": "python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py --rebuild-vol --mesh-source auto",
+    "duration_s": 43.871712,
     "exit_code": 0,
     "workdir": "."
   },
@@ -143,11 +147,11 @@
   "solver": "radia-ngsolve",
   "source_artifact": "validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py",
   "timing_breakdown_s": {
-    "gate_and_write_results": 0.06044,
-    "mesh_generation_or_reuse": 5.276527,
-    "mesh_import": 0.330452,
-    "ngsolve_lorentz_integral": 10.226391,
-    "source_field_build": 0.003618
+    "gate_and_write_results": 0.061106,
+    "mesh_generation_or_reuse": 6.6062,
+    "mesh_import": 0.740878,
+    "ngsolve_lorentz_integral": 36.373806,
+    "source_field_build": 0.003539
   },
   "tolerances": {
     "axial_rtol": 0.025,
@@ -199,7 +203,7 @@
     }
   },
   "verification": {
-    "command": "python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py --rebuild-vol",
+    "command": "python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py --rebuild-vol --mesh-source auto",
     "method": "NGSolve Mesh(.vol) Lorentz volume integral checked by axisymmetric_to_3d_force_gate"
   }
 }

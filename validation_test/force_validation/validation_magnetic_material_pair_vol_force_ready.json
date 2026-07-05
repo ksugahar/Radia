@@ -1,0 +1,60 @@
+{
+  "case": "3D .vol magnetic-material pair force",
+  "checks": {
+    "compiled_or_imported": true,
+    "ran_to_completion": true,
+    "validation_passed": true,
+    "vol_loaded_by_ngsolve": true
+  },
+  "created_at_utc": "2026-07-05T04:10:54Z",
+  "errors": {
+    "axial_rel_error": 0.014478454889012518,
+    "force_vector_rel_error": 0.014478546719862477,
+    "max_abs": 0.049329685191321214,
+    "max_rel": 0.014656177465474833,
+    "source_volume_rel_error": 0.014656177465474833,
+    "target_volume_rel_error": 0.014495291291192189
+  },
+  "geometry_kind": "tri_tet_vol",
+  "learning_lanes": {
+    "public": "verified",
+    "source_tool": "verified"
+  },
+  "next_slot_allowed": true,
+  "run": {
+    "command": "python validation_test/force_validation/validation_magnetic_material_pair_vol_force.py --rebuild-vol --mesh-source auto",
+    "duration_s": 3.260823,
+    "exit_code": 0,
+    "workdir": "."
+  },
+  "schema": "cae-ai-lab.solver-ready.v1",
+  "solver_ready": true,
+  "solver_ready_inputs": {
+    "cubit_journal": "validation_test/force_validation/magnetic_material_pair_spheres_cubit.jou",
+    "geometry_rebuilt": true,
+    "mesh_file": "validation_test/force_validation/magnetic_material_pair_spheres.vol",
+    "result_file": "validation_test/force_validation/validation_magnetic_material_pair_vol_force_summary.json",
+    "script_file": "validation_test/force_validation/validation_magnetic_material_pair_vol_force.py"
+  },
+  "source_artifact": "validation_test/force_validation/validation_magnetic_material_pair_vol_force.py",
+  "timing_breakdown_s": {
+    "maxwell_stress_and_virtual_work_crosschecks": 0.029773,
+    "mesh_generation_or_reuse": 2.954442,
+    "mesh_import": 0.070235,
+    "ngsolve_magnetic_material_force_integral": 0.046239,
+    "source_field_gradient_build": 0.000317
+  },
+  "tool_slot": "radia-ngsolve",
+  "tool_versions": {
+    "ngsolve": "6.2.2604",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python": "3.12.10",
+    "radia": "4.95.5",
+    "radia_mcp": "1.4.3"
+  },
+  "verification": {
+    "solver_ready": "validate_solver_ready.py",
+    "solver_run": "validation_test/force_validation/validation_magnetic_material_pair_vol_force_summary.json",
+    "tests": "pytest tests/test_axisymmetric_3d_validation.py"
+  }
+}

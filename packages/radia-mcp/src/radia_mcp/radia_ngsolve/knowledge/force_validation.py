@@ -30,6 +30,7 @@ of the methods below, with an analytic sanity check available.
 | First-order `.vol` boundary triangle force trace | P1 triangle traction load / Maxwell traction / boundary pressure/vector-traction rows | ``force.surface_triangle_constant_traction_load_summary``, ``force.surface_triangle_maxwell_traction_summary``, ``NetgenTriTetVolMesh.boundary_pressure_force_moment_rows``, ``NetgenTriTetVolMesh.boundary_traction_force_moment_rows`` |
 | CAD-side analytic box face loads | build123d face pressure / vector traction rows | ``build123d.modeling.box_face_pressure_moment_rows``, ``build123d.modeling.box_face_traction_moment_rows`` |
 | Current-carrying conductor force | Lorentz volume integral | ``force.lorentz_force_2d``, ``force.planar_lorentz_force_summary``, ``force.parallel_wire_lorentz_force_summary`` |
+| Magnetic material acting on magnetic material | Coenergy / weighted Maxwell stress / dipole-pair gate | ``axisymmetric_3d_validation.magnetic_material_pair_force_gate`` |
 | Discrete force rows to net force/torque | Resultant and pivot moment sum | ``force.force_moment_resultant_summary`` |
 | Axisymmetric actuator / coil force | Axisymmetric weighted stress | ``force.eggshell_force_axi`` |
 | Axisymmetric reference -> 3D force-vector validation | Axial full-revolution force + transverse cancellation | ``axisymmetric_3d_validation.axisymmetric_to_3d_force_gate`` |
@@ -75,6 +76,21 @@ bridge when an axisymmetric reference is used to validate a later 3D NGSolve or
 it saves a target-torus `.vol`, reloads it with NGSolve, computes
 ``integral J x B dV`` over the target material, writes solver-run and
 solver-ready JSON artifacts, and then calls the same gate.
+
+Magnetic bodies need a different gate from current-carrying conductors.  For a
+force between magnetized or magnetizable materials, do not label the observable
+as Lorentz ``J x B`` unless the target really is a conductor-current region.
+Use coenergy/virtual work, weighted Maxwell stress in air, or an analytic
+magnetic-material reference.  The runnable `.vol` artifact
+``validation_test/force_validation/validation_magnetic_material_pair_vol_force.py``
+generates two uniformly magnetized spheres, reloads the saved `.vol` with
+NGSolve, integrates ``M . grad(B_source)`` over the target magnetic material,
+and checks the vector against the exact dipole-dipole attraction using
+``magnetic_material_pair_force_gate``.  It also records two non-nodal
+cross-checks: closed-air-surface Maxwell stress on a sphere around the target,
+and virtual work from a centered finite difference of the interaction energy.
+The `.vol` is a generated artifact; the source of truth is the generator script
+plus solver-run / solver-ready JSON.
 
 Lorentz force on an imposed-current conductor:
 

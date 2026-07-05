@@ -33,6 +33,7 @@ validation example is:
 ```powershell
 python validation_test/force_validation/validation_axisymmetric_to_3d_force_gate.py
 python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py
+python validation_test/force_validation/validation_magnetic_material_pair_vol_force.py
 ```
 
 The second script writes a real solver-run artifact and a solver-ready
@@ -42,3 +43,13 @@ Netgen `.vol`, reloads it with NGSolve, integrates `J x B` over the 3D target
 torus, and then runs the same axisymmetric-to-3D gate.  It also writes the
 equivalent Cubit journal so a Coreform Cubit `export netgen` mesh can replace
 the default Netgen/OCC mesh when a Cubit license is available.
+
+For magnetic material acting on magnetic material, use
+`validation_magnetic_material_pair_vol_force.py`.  It generates or reuses a
+two-sphere `.vol`, reloads it with NGSolve, integrates `M . grad(B_source)` over
+the target magnetic material, and validates the global force vector against the
+analytic dipole-dipole force.  The same artifact also records closed-surface
+Maxwell stress and virtual-work / interaction-energy cross-checks, so the case
+is not limited to a nodal-force-style observable.  The `.vol` itself is
+generated and may stay out of git; the reproducible source is the script, the
+Cubit journal, and the solver-run / solver-ready JSON artifacts.

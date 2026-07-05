@@ -3,6 +3,7 @@ import pytest
 from radia_mcp.radia_ngsolve.axisymmetric_3d_validation import (
     axisymmetric_to_3d_force_gate,
     axisymmetric_to_3d_validation_plan,
+    magnetic_material_pair_force_gate,
 )
 from radia_mcp.radia_ngsolve.knowledge.force_validation import get_force_validation_documentation
 
@@ -70,3 +71,37 @@ def test_force_validation_method_map_exposes_axisymmetric_to_3d_gate():
     assert "axisymmetric_to_3d_force_gate" in doc
     assert "full-revolution 3D axial force" in doc
     assert "validation_axisymmetric_to_3d_vol_force.py" in doc
+    assert "validation_magnetic_material_pair_vol_force.py" in doc
+    assert "closed-air-surface Maxwell stress" in doc
+    assert "virtual work" in doc
+
+
+def test_magnetic_material_pair_force_gate_accepts_dipole_pair_force_vector():
+    gate = magnetic_material_pair_force_gate(
+        [0.0, 0.0, -3.4],
+        [2.0e-4, -1.0e-4, -3.35],
+        case_id="two_sphere_dipole_fixture",
+        axial_axis="z",
+        axial_rtol=0.02,
+        vector_rtol=0.02,
+        transverse_rtol=1.0e-3,
+    )
+
+    assert gate["status"] == "ok"
+    assert gate["policy"] == "magnetic_material_pair_force_gate"
+    assert gate["checks"]["force_vector_matches_reference"] is True
+    assert gate["checks"]["transverse_components_match_reference"] is True
+
+
+def test_magnetic_material_pair_force_gate_rejects_lost_attraction_sign():
+    gate = magnetic_material_pair_force_gate(
+        [0.0, 0.0, -3.4],
+        [0.0, 0.0, 3.4],
+        case_id="bad_two_sphere_sign_fixture",
+        axial_rtol=0.02,
+        vector_rtol=0.02,
+    )
+
+    assert gate["status"] == "needs_attention"
+    assert gate["checks"]["axial_component_matches_reference"] is False
+    assert gate["checks"]["force_vector_matches_reference"] is False

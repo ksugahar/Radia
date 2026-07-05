@@ -166,6 +166,8 @@ def build_cubit_vol(vol_path: Path, journal_path: Path, log_path: Path) -> dict[
     if cubit is None:
         raise RuntimeError("Coreform Cubit console launcher was not found")
     write_cubit_journal(journal_path, vol_path)
+    if vol_path.exists():
+        vol_path.unlink()
     t0 = time.perf_counter()
     cmd = [
         str(cubit),
@@ -178,18 +180,23 @@ def build_cubit_vol(vol_path: Path, journal_path: Path, log_path: Path) -> dict[
     with log_path.open("w", encoding="utf-8", errors="replace") as log:
         completed = subprocess.run(cmd, cwd=str(REPO), stdout=log, stderr=subprocess.STDOUT, text=True)
     duration = time.perf_counter() - t0
-    if completed.returncode != 0 or not vol_path.exists():
+    if vol_path.exists() and vol_path.stat().st_size > 0:
+        log_text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+        return {
+            "mesh_source": "coreform_cubit_export_netgen",
+            "mesh_generation_duration_s": round(duration, 6),
+            "generated": True,
+            "cubit_command": "coreform_cubit.com -nographics -batch -nojournal -input <journal>",
+            "cubit_exit_code": completed.returncode,
+            "cubit_log_written_to_temp": True,
+            "cubit_log_had_license_error_line": "License Error" in log_text,
+            "cubit_success_criterion": "exported .vol exists and is non-empty",
+        }
+    else:
         tail = ""
         if log_path.exists():
             tail = "\n".join(log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-20:])
         raise RuntimeError(f"Cubit export failed with exit_code={completed.returncode}: {tail}")
-    return {
-        "mesh_source": "coreform_cubit_export_netgen",
-        "mesh_generation_duration_s": round(duration, 6),
-        "generated": True,
-        "cubit_command": "coreform_cubit.com -nographics -batch -nojournal -input <journal>",
-        "cubit_log_written_to_temp": True,
-    }
 
 
 def ensure_vol(mesh_source: str, rebuild: bool, vol_path: Path, journal_path: Path) -> dict[str, object]:
@@ -209,9 +216,13 @@ def ensure_vol(mesh_source: str, rebuild: bool, vol_path: Path, journal_path: Pa
             return build_cubit_vol(vol_path, journal_path, log_path)
         except Exception as exc:  # noqa: BLE001 - record fallback reason in public-safe artifact
             info = build_netgen_vol(vol_path)
+            reason_lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+            reason = next((line for line in reason_lines if "License Error" in line), "")
+            if not reason:
+                reason = reason_lines[0][:300] if reason_lines else type(exc).__name__
             info["cubit_attempt"] = {
                 "status": "unavailable",
-                "reason": str(exc).splitlines()[0][:300],
+                "reason": reason[:300],
                 "log_written_to_temp": log_path.exists(),
             }
             return info
