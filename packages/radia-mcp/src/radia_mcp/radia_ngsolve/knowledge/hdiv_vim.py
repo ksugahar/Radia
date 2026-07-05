@@ -8,8 +8,8 @@ references and result-bearing showcase notebooks, while source history stays in 
 Heavy validation/timing runs are mdx-idle canonical; LAB runs are acceptable for
 fast migration smoke/import checks and must be labelled as such.
 
-The HDiv-type VIM is the lab's FEEC (H(div) RT) alternative/complement to the canonical multipole-moment MMM MSC
-kernel: a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
+The HDiv-type VIM is the lab's FEEC (H(div) RT) production direction for Radia soft-iron demag:
+a SYMMETRIC demag operator N = B^T G B whose loop modes are FIELD-NULL BY CONSTRUCTION, giving
 mu_r-INDEPENDENT convergence with no hand-crafted loop-star.  Validated on: linear demag
 (sphere/spheroid/triaxial exact vs analytic), NONLINEAR (damped Newton; cube & C-yoke <1-3% vs shipped
 Radia), distorted-mesh mu_r-independence, CURVED + high-order (accuracy-per-DOF ~10-30x vs flat Radia),
@@ -21,7 +21,7 @@ charge-Coulomb Gram construction is expensive.  The production surface-charge pa
 Mathematica-derived multipole-moment MMM rows: cheaper local moment functionals for 3-DOF MMM and 5/6-DOF
 MSC, with HDiv retained as the higher-order and de-Rham-exact complement.
 
-PRIMARY (decision 2026-06-30, updated 2026-07-04, Sugahara -- SUPERSEDES the 2026-06-24 positioning above): HDiv-VIM is now the PRIMARY (本命) accurate soft-iron demag method, and collocation MMMM is DEMOTED to the COARSE / fast tier (optimization inner loops, mesh-less quick passes). The 2026-06-24 'production uses the multipole-moment MMM rows' framing is REVERSED: collocation MMMM gave up loop-free (its loop-free implementation was removed 2026-06-30) -- field-correct (loops field-null) but loop-polluted internal M, acceptable for coarse/optimization but NOT accurate/hysteresis; HDiv-VIM is loop-free BY CONSTRUCTION (loops = ker(B)), so it is the primary accurate route. Use HDiv-VIM for mesh-backed pure TET / HEX / WEDGE production/accurate + hysteresis; use collocation MMMM for mesh-less quick passes, optimization coarse passes, and unsupported mixed/pyramid mesh-backed irons. Memory: collocation_loopfree_abandoned.
+PRIMARY (decision 2026-06-30, updated 2026-07-05, Sugahara -- SUPERSEDES the 2026-06-24 positioning above): HDiv-VIM is now the PRIMARY (本命) Radia soft-iron demag method, and Radia is moving toward HDiv-only production after MMMM migration to ELF_MAGIC@研究室版. The 2026-06-24 'production uses the multipole-moment MMM rows' framing is REVERSED: collocation MMMM gave up loop-free (its loop-free implementation was removed 2026-06-30) -- field-correct (loops field-null) but loop-polluted internal M, acceptable for legacy/lab cross-checks but NOT the Radia accurate/hysteresis route; HDiv-VIM is loop-free BY CONSTRUCTION (loops = ker(B)), so it is the primary accurate route. Use HDiv-VIM for mesh-backed pure TET / HEX / WEDGE production/accurate + hysteresis and 2D planar motor cross-sections. Treat collocation MMMM in Radia as a temporary migration cross-check; keep the active MMMM continuation in ELF_MAGIC@研究室版. Small-DoF speed is not decisive: if both methods finish interactively, record "both fast" and judge Radia on accuracy, Reduced-FEM coupling, and mdx engineering-scale build+solve. Memory: collocation_loopfree_abandoned.
 
 CURRENT API (2026-06-23 -- the dense Python Gram path was REMOVED): the C++ `_ChargeGramHMatrix` kernel
 is the SOLE demag operator (N v = B^T (H.matvec(B v)); EXACT analytic near AND far; tet via
@@ -173,11 +173,12 @@ mdx (radia 4.95.5, tet, unit cube mu_r=1000, HACApK eps=1e-4; isolated build tim
 `hmat_stats.build_time`, MMMM `GetSolveStats.t_moment_system_build`):
 - **HDiv charge-Gram BUILD ~ n_charge^1.23 (NEAR-LINEAR = SCALABLE)** -- a dense face-face Gram would be
   ~N^2; the charge-Gram H-matrix compression grows 0.98 -> 0.17 with N, which is WHY the build scales.
-- **HDiv build reaches PARITY with the MMMM build at ~34k DoF (~10k charges)**; below that MMMM build is
-  up to ~5x faster (H-matrix overhead + weak small-N compression).
-- **DECISION = tiered role split, NOT replacement**: HDiv-VIM main for large-scale (>=34k DoF) / accuracy
-  / loop-free / distorted; MMMM main for small-N (<10k) / optimization inner loops / coarse fast passes.
-  Quantitatively backs the KEEP-BOTH role split.
+- **HDiv build reaches PARITY with the MMMM build at ~34k DoF (~10k charges)**; below that MMMM build can
+  be faster, but those runs are already in the "both fast" latency tier and should not decide Radia's
+  production backend.
+- **DECISION = Radia HDiv-only direction, with MMMM migrated to ELF/lab use**: HDiv-VIM is the Radia
+  backend for accuracy / loop-free / distorted / curved / Reduced-FEM-coupled work.  MMMM remains a
+  temporary Radia cross-check during deletion/audit and the active continuation in `ELF_MAGIC@研究室版`.
 - CAVEAT: this timing block is the tet mdx build-scaling gate.  The AUTHORITATIVE hex-vs-hex build-scaling
   (the paper element; MMMM = 6-face hex) must be refreshed with the shipped pure-hex HDiv-VIM on mdx.  MMMM
   GetSolveStats is empty {} at large N (stats not recorded on the large-N method-2 path -- a small radia fix).  Data +
@@ -753,8 +754,10 @@ _STATUS = r"""
 # Status summary
 
 [UPDATE 2026-07-04 -- pure TET/HEX/WEDGE auto dispatch + IMA shipped; HDiv-VIM is the PRIMARY accurate route]
-  * ROLE (Sugahara 2026-06-30): HDiv-VIM = the primary ACCURATE soft-iron demag route (loop-free by
-    construction, ~6 mesh/mu_r-independent Newton iters); collocation MMMM = the COARSE/fast tier.
+  * ROLE (Sugahara 2026-06-30, updated 2026-07-05): HDiv-VIM = the primary ACCURATE Radia soft-iron
+    demag route (loop-free by construction, ~6 mesh/mu_r-independent Newton iters).  MMMM moves to
+    ELF_MAGIC@研究室版 / legacy cross-check status; small-N speed is recorded as "both fast", not used
+    to block HDiv-only Radia.
   * PURE-HEX and PURE-WEDGE RT1 charge Grams SHIPPED and are eligible for rad.Solve(auto): hex uses Q1
     volume charges (div(HDiv order-1) on a hex is Q1, NOT P0) + quad-face surface charges, extracted
     PIOLA-EXACTLY on the 27-node Q2 geometry; wedge/prism uses the corresponding six-monomial prism
@@ -850,7 +853,7 @@ CLOSED since the 2026-06-07 status (do NOT re-open):
     gap closed (cube -0.08%, C-yoke <1% vs Radia, volume-avg); the old "~8.7%/13%" were the wrong Gram.
   - real BH table + C-yoke validation: DONE (see DONE list).
 
-OPEN (honest boundaries / next increments) -- the lift to productionize HDiv-VIM alongside multipole-moment MMM:
+OPEN (honest boundaries / next increments) -- the lift to seal Radia HDiv-only production while MMMM migrates:
   - C++ PRODUCTIONIZATION (the big one): the charge Gram (Wilton surface / phi_tet volume / ngsolve.bem
     single-layer) + the Newton loop in C++ behind a Radia API.  This also enables a fair WALL-CLOCK
     comparison -- all present wins are accuracy-per-DOF (geometry-driven); the Python prototype is not
@@ -1008,8 +1011,9 @@ is mesh-robust (cube 23, C-yoke 34, ~constant).  This is the 3D SURFACE-charge-v
 (1)+(2) above left open.
 ARCHITECTURE NOTE: this head-to-head predates the final dispatch flip, but its conclusion is now production:
 the hex RT1 Gram is wired at ChargeGram, public Solve accepts pure hex, and rad.Solve(auto)
-routes mesh-backed pure HEX/WEDGE soft iron to HDiv-VIM.  KEEP-BOTH still holds: collocation MMMM remains the
-coarse tier and the forced `demag_backend='collocation_mmmm'` cross-check.  Executed, result-saving
+routes mesh-backed pure HEX/WEDGE soft iron to HDiv-VIM.  Collocation MMMM remains only as the forced
+`demag_backend='collocation_mmmm'` transition cross-check while the Radia deletion / ELF migration is
+audited.  Executed, result-saving
 showcase: docs/hdiv_vim/hex_vs_mmmm_crossvalidation.ipynb (+ hex_vs_mmmm_helpers.py +
 hex_vs_mmmm_crossvalidation_result.json).  LAB radia 4.95.5; wall-clock timing deferred to mdx-idle
 (Benchmark Policy: mdx = quiet compute host, run only after other jobs finish).

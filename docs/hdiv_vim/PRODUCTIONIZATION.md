@@ -1,10 +1,10 @@
 # HDiv-type VIM — productionization roadmap
 
 The HDiv-type VIM method is validated (see [README.md](README.md)). This document is
-the roadmap to make it a **shipped production solver alongside the canonical multipole-moment MMM MSC backend**:
-a clean Radia API for the FEEC H(div) operator, plus parity and speed evidence on the cases where flat
-MSC is already strong and a clear win on curved tetrahedral cases. Honest scope, milestone-based, with a
-hard **definition-of-done** (the parity gate).
+the roadmap to make it the **Radia production soft-iron demag backend** after the MMMM implementation is
+migrated to `ELF_MAGIC@研究室版`: a clean Radia API for the FEEC H(div) operator, plus accuracy,
+Reduced-FEM-coupling, and speed evidence against the legacy MMMM path where both are valid. Honest
+scope, milestone-based, with a hard **definition-of-done** (the HDiv-only gate).
 
 ## Current state (inventory, 2026-06-29)
 
@@ -81,25 +81,34 @@ radia-motor saliency angle-sweep contract.  Validation files:
 `test_hdiv_radfld_contract.py`, `test_hdiv_hacapk_gram_performance.py`,
 `test_hdiv_motor_minimal_contract.py`.
 
-## Definition of done — the parity gate (M0)
+Policy update (2026-07-05): **Radia moves to HDiv-only for production soft iron.**  MMMM remains as a
+transition reference in Radia only while tests/docs/validation are audited, and as the active implementation
+in `ELF_MAGIC@研究室版`.  Small-DoF timing is not a deciding criterion: if both methods finish
+interactively, record "both fast" and judge the Radia backend on accuracy, Reduced-FEM coupling, and
+engineering-scale build+solve measurements on mdx.  The concrete benchmark plan is
+[`HDiv_vs_MMMM_benchmark_plan.md`](HDiv_vs_MMMM_benchmark_plan.md).
 
-HDiv-VIM is production-sealed **only when** it is at-least-as-good on the full case matrix the shipped MSC
-handles, measured head-to-head:
+## Definition of done — the HDiv-only gate (M0)
+
+HDiv-VIM is production-sealed as the Radia backend when it is at-least-as-good on the overlapping
+MMMM case matrix and clearly better on the cases Radia now cares about: curved/high-order accuracy,
+2D / Reduced-FEM coupling, and engineering-scale runtime.  The overlapping head-to-head remains useful
+as a transition audit, not as a permanent dual-backend policy.
 
 | Case | Accuracy criterion | Speed criterion |
 |---|---|---|
-| Linear soft iron (mu_r 10–1e5), convex + non-convex | match shipped MSC to its mesh-converged value | wall-clock within ~2x of MSC (target: faster) |
-| Nonlinear BH iron (cube, C-yoke, real table) | match MSC volume-avg `<1%` (done at prototype level) | within ~2x |
-| Permanent magnet + soft iron (mixed) | match MSC | within ~2x |
-| IMA symmetry 1/4, 1/8 | collocation MMMM responsibility | not HDiv-VIM scope |
-| Distorted meshes (high distortion) | mu_r-independent (done) + correct values | bounded iters (done) |
-| Standard validation set (the lab's MSC golden problems) | parity | parity |
+| Linear soft iron (mu_r 10-1e5), convex + non-convex | match MMMM / mesh-converged value on flat overlap; beat flat faceting on curved geometry | small-N: both fast; engineering N: total build+solve on mdx |
+| Nonlinear BH iron (cube, C-yoke, real table) | analytic where available; overlap with MMMM as transition audit; no silent non-convergence | mdx build+solve, iterations, memory |
+| Permanent magnet + soft iron (mixed) | HDiv field write-back + `rad.Fld` contract; analytic / self-consistency where possible | no rebuild/remesh surprises |
+| IMA symmetry 1/4, 1/8 | materialized reduced-solution field is roundoff-consistent; explicit-full hex parity stays labelled until fixed | not a percent-level tolerance gate |
+| 2D planar / motor Reduced FEM | analytic disk/ellipse/CM; torque/loss vs analytic or all-in-one FEM references | reusable Gram; per-angle solve time and stagger count |
+| Distorted meshes (high distortion) | mu_r-independent + loop field-null by construction | bounded iterations |
 
 **M0 deliverable**: (1) enumerate the exact golden problems above into a `tests/feec/parity_vs_msc/`
-suite; (2) **measure the speed gap honestly** — isolate the *algorithm* from the Python orchestration:
-time the C++ `_ChargeGramHMatrix` demag MatVec + the iteration count vs the shipped MSC interaction
-MatVec at matched N (the orchestration becomes C++ in production, so the per-MatVec + iters are the
-production-representative numbers). This sizes the C++ lift and fixes the "done" bar.
+suite while MMMM still exists in Radia; (2) **measure the speed gap honestly** on mdx, including total
+build time, solve time, iterations, compression, and memory; (3) migrate MMMM-only user docs/tests to
+`ELF_MAGIC@研究室版` or convert them into HDiv / analytic references.  This sizes the remaining C++ lift
+and fixes the "HDiv-only" bar.
 
 **The comparison headline — LOOPS (not A_SS, not H-LDLᵀ).** Frame the HDiv-VIM advantage at the LOOP
 level: HDiv-VIM's loops are ker(B), FIELD-NULL BY CONSTRUCTION (de Rham / Piola) — no loop-star, no
