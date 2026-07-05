@@ -4,11 +4,12 @@ The public API is intentionally small.  Six functions + two dataclasses
 cover the kernel-agnostic (ACA+)+TSVD pipeline plus the
 regularisation-folded form; everything else is in the demo files.
 
-## `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method=None)`
+## `aca_tsvd(M, N, entry, modes=None, kmax=None, aca_eps=1e-4, method="qr")`
 
-(ACA+)+TSVD recompressed truncated SVD of an `M × N` matrix `A`.  The
-recompression is the standard "SVD of a low-rank product" (QR each ACA factor,
-then one small SVD; peer review JIAM-2026-36).
+Truncated SVD of an `M × N` matrix `A`.  Two methods (peer review JIAM-2026-36):
+`method="qr"` (default) = ACA + the standard "SVD of a low-rank product" (QR each
+factor, then one small SVD); `method="dense"` = the direct dense TSVD (exact
+reference).
 
 **Parameters**
 
@@ -20,7 +21,7 @@ then one small SVD; peer review JIAM-2026-36).
 | `modes`  | int, optional   | TSVD modes to return (clamped to k_aca).  Default = kmax. |
 | `kmax`   | int, optional   | maximum ACA+ rank.  Default = min(M, N).   |
 | `aca_eps`| float, optional | ACA+ stopping tolerance (pivot threshold). Default 1e-4. |
-| `method` | optional        | DEPRECATED, ignored (the legacy manuscript Method 2/3 were removed; recompression is the standard QR method). |
+| `method` | {"qr","dense"}  | "qr" (default) = ACA + QR recompression (fast); "dense"/"tsvd" = direct dense TSVD (exact reference, small problems).  Legacy 2/3 -> "qr"; unknown raises. |
 
 **Returns** `StreamTSVD` with `U (M, modes)`, `S (modes,)`,
 `V (N, modes)` row-major NumPy arrays, `k_aca`, `method`.
@@ -41,7 +42,7 @@ The cached `result` can be REUSED across many calls with different
 right-hand sides (e.g., Path-A iteration), since the factorisation is
 independent of `B`.
 
-## `solve(M, N, entry, B, modes=None, k_mode=None, kmax=None, aca_eps=1e-4, method=None)`
+## `solve(M, N, entry, B, modes=None, k_mode=None, kmax=None, aca_eps=1e-4, method="qr")`
 
 Convenience: `aca_tsvd` then `pseudo_inverse_solve` in one call.
 
