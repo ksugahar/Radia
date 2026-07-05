@@ -1,10 +1,11 @@
 # CLN — Cauer Ladder Network for eddy-current modeling
 
-> **Location note (2026-06-14):** this is `research/cln/` — the research
+> **Location note (updated 2026-07-05):** this is `research/cln/` — the research
 > corpus tier (verification scratch, not curated package examples; see
 > `../README.md`).  The IGTE 2026 paper artifacts (`igte_symposium_2026.tex`,
-> `igtesymp.cls`, PDFs) referenced below have moved to
-> `../../papers/igte_symposium_2026/`.
+> `igtesymp.cls`, PDFs) have moved OUT of the code repo to the conference-materials
+> area (paper manuscripts live in 学会資料, not the repo):
+> `W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\igte_symposium_2026\`.
 
 Working folder for the **Cauer Ladder Network (CLN)** research line: extracting
 RL-ladder equivalent circuits of eddy-current decay in 3D conductors via
@@ -97,7 +98,8 @@ manuscript Tables 1-5 and Figures 1-2.
 ## Build the digest
 
 ```bash
-cd ../../papers/igte_symposium_2026
+# The IGTE digest now lives in the conference-materials area (not the repo):
+cd "W:/02_学会資料/2026年度/2026_09_IGTE_Symposium/CauerLadderNetwork@菅原/igte_symposium_2026"
 pdflatex igte_symposium_2026.tex   # or via texcompile skill
 ```
 
