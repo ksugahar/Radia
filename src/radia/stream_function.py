@@ -64,8 +64,8 @@ class StreamTSVD:
     k_aca : int
         ACA+ rank found before TSVD truncation.
     method : str
-        Which method produced this SVD: ``"qr"`` (ACA + QR-of-a-low-rank-product,
-        the fast default) or ``"dense"`` (direct dense TSVD, the exact reference).
+        Which method produced this SVD: ``"aca_qr_tsvd"`` (ACA + QR + TSVD, the
+        fast default) or ``"dense"`` (direct dense TSVD, the exact reference).
         (The legacy manuscript Method 2/3 were removed 2026-07-05, JIAM-2026-36.)
     """
 
@@ -89,15 +89,16 @@ class StreamTSVD:
 
 
 def aca_tsvd(M, N, entry, modes=None, kmax=None,
-             aca_eps=1.0e-4, method="qr") -> StreamTSVD:
+             aca_eps=1.0e-4, method="aca_qr_tsvd") -> StreamTSVD:
     """Truncated SVD of an M x N matrix A supplied by the callback ``entry(i,j)``.
 
     Two methods -- and ONLY two (peer review JIAM-2026-36):
 
-    - ``method="qr"`` (default): ACA+ factors ``A ~= C D^T`` (only
-      O(k_aca*(M+N)) entry evaluations), then the standard "SVD of a low-rank
-      product" recompression -- QR each tall-skinny factor + ONE small
-      ``k_aca x k_aca`` SVD.  Fast; the production path.
+    - ``method="aca_qr_tsvd"`` (default; short aliases ``"qr"`` / ``"aca"``):
+      ACA+ factors ``A ~= C D^T`` (only O(k_aca*(M+N)) entry evaluations), then
+      the standard "SVD of a low-rank product" recompression -- QR each
+      tall-skinny factor + ONE small ``k_aca x k_aca`` TSVD.  Fast; the
+      production path.  (Name = the full pipeline: ACA + QR + TSVD.)
     - ``method="dense"`` (alias ``"tsvd"``): the plain/direct TSVD -- materialise
       the full A via the callback and take its dense SVD (``numpy.linalg.svd``),
       then truncate.  EXACT (no ACA approximation), the trusted reference /
@@ -113,14 +114,14 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
     modes : int, optional
         Singular triplets to return (clamped to the rank).  Defaults to ``kmax``.
     kmax : int, optional
-        Maximum ACA+ rank (``method="qr"`` only).  Defaults to ``min(M, N)``.
+        Maximum ACA+ rank (``aca_qr_tsvd`` only).  Defaults to ``min(M, N)``.
     aca_eps : float, optional
-        ACA+ stopping tolerance (``method="qr"`` only).  Default 1e-4.
-    method : {"qr", "dense"}, optional
-        "qr" (default) = ACA + QR recompression; "dense"/"tsvd" = direct dense
-        SVD (exact reference).  Legacy integers 2/3 and None map to "qr" (the
-        manuscript Method 2/3 were removed 2026-07-05; see
-        ``memory/aca_tsvd_qr_recompression.md``).
+        ACA+ stopping tolerance (``aca_qr_tsvd`` only).  Default 1e-4.
+    method : {"aca_qr_tsvd", "dense"}, optional
+        "aca_qr_tsvd" (default; aliases "qr"/"aca") = ACA + QR + TSVD;
+        "dense"/"tsvd" = direct dense SVD (exact reference).  Legacy integers
+        2/3 and None map to "aca_qr_tsvd" (the manuscript Method 2/3 were removed
+        2026-07-05; see ``memory/aca_tsvd_qr_recompression.md``).
 
     Returns
     -------
@@ -134,15 +135,16 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
         raise TypeError("entry must be callable: entry(i, j) -> float")
 
     # Only two methods are supported (No-Fallback: an unknown value RAISES).
-    # Legacy int 2/3 and None -> "qr" (the manuscript Method 2/3 were removed).
-    _m = "qr" if method in (None, 2, 3) else str(method).strip().lower()
-    if _m in ("qr", "aca"):
-        _m = "qr"
+    # Legacy int 2/3 and None -> "aca_qr_tsvd" (the manuscript Method 2/3 were removed).
+    _m = "aca_qr_tsvd" if method in (None, 2, 3) else str(method).strip().lower()
+    if _m in ("aca_qr_tsvd", "aca+qr+tsvd", "acaqrtsvd", "qr", "aca"):
+        _m = "aca_qr_tsvd"
     elif _m in ("dense", "tsvd", "direct", "svd", "full"):
         _m = "dense"
     else:
         raise ValueError(
-            f"method must be 'qr' (ACA+QR) or 'dense' (direct TSVD); got {method!r}")
+            f"method must be 'aca_qr_tsvd' (default; ACA+QR+TSVD) or 'dense' "
+            f"(direct TSVD); got {method!r}")
 
     if kmax is None:
         kmax = min(M, N)
@@ -162,12 +164,12 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
                           V=np.ascontiguousarray(Vtf[:m, :].T),
                           k_aca=int(min(M, N)), method="dense")
 
-    # method="qr": ACA+ then the QR-of-a-low-rank-product recompression (C++).
+    # method="aca_qr_tsvd": ACA+ then the QR-of-a-low-rank-product recompression (C++).
     def _entry(i, j):                       # C++ side always gets plain floats
         return float(entry(i, j))
     U, S, V, k_aca = _cpp_aca_tsvd(
         M, N, _entry, int(modes), int(kmax), float(aca_eps))
-    return StreamTSVD(U=U, S=S, V=V, k_aca=int(k_aca), method="qr")
+    return StreamTSVD(U=U, S=S, V=V, k_aca=int(k_aca), method="aca_qr_tsvd")
 
 
 def pseudo_inverse_solve(result: StreamTSVD, B, k_mode=None) -> np.ndarray:
@@ -443,10 +445,10 @@ def pseudo_inverse_solve_regularized(result: StreamTSVD, B, S, k_mode=None):
 
 
 def solve(M, N, entry, B, modes=None, k_mode=None,
-          kmax=None, aca_eps=1.0e-4, method="qr"):
+          kmax=None, aca_eps=1.0e-4, method="aca_qr_tsvd"):
     """Convenience: (ACA+)+TSVD decompose then pseudo-inverse solve.
-    ``method`` selects "qr" (ACA+QR, default) or "dense" (direct TSVD); see
-    :func:`aca_tsvd`.
+    ``method`` selects "aca_qr_tsvd" (ACA+QR+TSVD, default) or "dense" (direct
+    TSVD); see :func:`aca_tsvd`.
 
     Returns
     -------
