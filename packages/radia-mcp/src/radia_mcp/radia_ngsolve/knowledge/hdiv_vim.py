@@ -568,6 +568,29 @@ the surface DOF (108 / 52 / 20 cap-tris vs the full 192).  In the current produc
 solve as acceptable.  The explicit-full `rad.Fld` target is ~10 eps, and it is currently tracked as an
 xfail because the full hex ChargeGram path still has a small reflection-symmetry defect (the transverse
 component changes with the quadrature knobs).
+ROOT CAUSE + FIX DIRECTION (2026-07-05 deep dive): the defect is ~1e-5 and lives in the NEAR-PAIR quadrature,
+NOT the self Gram -- a single symmetric hex gives Mx=My=0 to 3.66e-15; it appears with the first near pair
+(1x1x2 -> 2e-5).  It is STRUCTURAL, not resolution: bumping the quadrature order (glout/glin 6,5->8,7->12,10)
+leaves it wobbling at ~1e-5, no convergence.  The root is the ref-fixed hex->6-tet split (HEXREF_TETS: all 6
+tets share the body diagonal 0-6) + the Duffy near grading (toward one corner): the 0-6 diagonal maps to a
+DIFFERENT diagonal (1-7) under x-reflection, so the near-pair quadrature is not reflection-symmetric and, for
+a symmetric pair (target != source), the spurious Mz->Mx/My coupling does not cancel.  The self Gram is exact
+because target==source makes the asymmetry identical on both sides; the Duffy grading is REQUIRED (forcing the
+symmetric outer cloud degrades the self from 3.66e-15 to 6.8e-4), so the asymmetry cannot be removed, only
+symmetrized.  COST of a symmetric-quadrature fix: a reflection-symmetric decomposition (24-tet: the 4
+body-diagonal splits, or the face-center split) makes QuadBlockHex loop nsubT x nsubS = 24x24 = 576 sub-pairs
+vs 6x6 = 36 -- ~16x the near-block quadrature + 4x memory.  DECISION (Sugahara 2026-07-05): do NOT pay 16x for
+a 1e-5 field-parity defect (the demag/energy matches to 10eps, M_avg is correct via the parity fix, and
+engineering accuracy is unaffected); keep the strict xfail as a documented known-limitation.  CLEAN FIX
+DIRECTION if ever pursued (Sugahara): derive the RT1 hex charge Gram SYMBOLICALLY -- the closed-form Coulomb
+integral of the Q1 charges (= div of the RT1 basis) over box hexes is EXACTLY reflection-symmetric by
+construction (no quadrature -> no asymmetry, no 16x).  The infrastructure already exists:
+`mathematica/basis_functions/hdiv.wls` builds the RT_p hex de Rham basis and states it is "ideal for the
+analytical VIM field operator" -- this charge Gram IS that operator.  Since the VIM is RT1-only the symbolic
+derivation stays small/tractable; this matches the `analytical_formulas` closed-form-reference layer and is
+the right path, NOT the 16x quadrature hack.  (Origin: this surfaced from the IMA mixed-plane study whose 15%
+was itself only an M_avg comparison artifact -- see the M_avg full-domain note above; the Gram symmetry is the
+separate, genuine-but-tiny residual.)
 Curved / mixed / pyramid reduced models remain fail-loud or collocation-MMMM bridge territory.
 
 ## NON-UNIFORM NONLINEAR needs analytic_gram; C-YOKE VERIFIED vs Radia (2026-06-08, the 1/8-gate audit)
