@@ -1143,18 +1143,11 @@ result = parser.solve()
 | `.freq` | `.freq fmin=1e3 fmax=1e6 ndec=5` | Frequency sweep |
 | `.default` | `.default w=1 h=1 sigma=5.8e7` | Default parameters |
 | `.equiv` | `.equiv N1 N3` | Node merge |
-| `.magnetic` | See below | Magnetic material block |
+| `.magnetic` | Rejected by `solve()` | Magnetic core input |
 
-**Magnetic material blocks** are parsed for diagnostics, but `FastHenryParser.solve()` rejects them. Use HDiv-VIM / reduced FEM for magnetic cores:
-```
-.magnetic
-  type=box
-  center=0.05,0.01,0.0
-  size=0.06,0.01,0.01
-  divisions=2,1,1
-  mu_r=1000
-.endmagnetic
-```
+**Magnetic core inputs** are parsed only for diagnostics, and
+`FastHenryParser.solve()` rejects them. Use HDiv-VIM / reduced FEM for
+magnetic cores and keep PEEC for conductor/shield circuit extraction.
 
 ### Magnetic Material Coupling Policy
 

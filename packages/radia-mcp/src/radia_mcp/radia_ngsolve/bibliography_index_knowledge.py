@@ -1,6 +1,6 @@
 """Bibliography INDEX for radia_mcp.radia_ngsolve.
 
-Auto-generated catalog of 457 PDF references from the Sugahara
+Auto-generated catalog of 451 PDF references from the Sugahara
 Lab literature library.  Catalog paths are relative to the
 corpus root (configure the root via RADIA_LIT_ROOT).
 
@@ -1910,15 +1910,6 @@ _CATALOG_JSON = r"""
   "relative_path": "04_機械学習と最適化\\Large Language Model\\LLM_day7_weblab-10B.pdf"
  },
  {
-  "filename": "Large-Scale_and_Fast_Nonlinear_Magnetostatic_Field_Analysis_by_the_Magnetic_Moment_Method_With_the_Adaptive_Cross_Approximation.pdf",
-  "title": "IEEE TRANSACTIONS ON MAGNETICS, VOL. 43, NO. 4, APRIL 2007",
-  "authors": "Large-Scale and Fast Nonlinear Magnetostatic Field",
-  "abstract_excerpt": "1277\nLarge-Scale and Fast Nonlinear Magnetostatic Field\nAnalysis by the Magnetic Moment Method With\nthe Adaptive Cross Approximation\nYasuhito Takahashi, Chiharu Matsumoto, and Shinji Wakao\nDepartment of Electrical Engineering and Bioscience, Waseda University, Tokyo 169-8555, Japan\nThis paper describes large-scale and fast nonlinear magnetostatic ﬁeld analyses by the magnetic moment method (MMM) with the\nadaptive cross approximation. In order to stabilize the convergence characteristic of the Newton–Raphson method, we apply a line search\ntechnique to the MMM. Some numerical results that demonstrate the validity of the developed method are also presented.\nIndex Terms—Adaptive cross approximation, line search, magnetic moment method (MMM), nonlinear magnetostatic ﬁeld analysis.\nI. INTRODUCT",
-  "page_count": 4,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\Large-Scale_and_Fast_Nonlinear_Magnetostatic_Field_Analysis_by_the_Magnetic_Moment_Method_With_the_Adaptive_Cross_Approximation.pdf"
- },
- {
   "filename": "Low Frequency Scaling of the Mixed MFIE for Scatterers with a Non-Simply Connected Surface.pdf",
   "title": "Low Frequency Scaling of the Mixed MFIE for",
   "authors": "Scatterers with a Non-Simply Connected Surface",
@@ -1944,24 +1935,6 @@ _CATALOG_JSON = r"""
   "page_count": 8,
   "is_scanned": false,
   "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\低週波\\Magnetic Field Integral Equation at Very Low Frequencies.pdf"
- },
- {
-  "filename": "Magnetic Moment and Reluctance Network Mixed Method Applied to Transformer's Modeling.pdf",
-  "title": "IEEE TRANSACTIONS ON MAGNETICS, VOL. 41, NO. 5, MAY 2005",
-  "authors": "Magnetic Moment and Reluctance Network Mixed",
-  "abstract_excerpt": "Magnetic Moment and Reluctance Network Mixed\nMethod Applied to Transformer’s Modeling\nFleur Janet1, Jean-Louis Coulomb2, Christian Chillet2, and Patrick Mas1\nSchneider Electric and the Laboratoire d’Electrotechnique de Grenoble (LEG), Institut National Polytechnique\nde Grenoble, INPG/UJF-CNRS UMR 5529 ENSIEG, BP 46, 38402 Saint Martin d’Héres, France\nLaboratoire d Electrotechnique de Grenoble (LEG), Institut National Polytechnique de Grenoble, INPG/UJF-CNRS UMR\n5529 ENSIEG, BP 46, 38402 Saint Martin d’Héres, France\nThe aim of the study is to ﬁnd a method to model electromagnetic devices which generate consequent magnetic leakage. Classical\nmethods have proved to be efﬁcient but time consuming. The method proposed in this paper is based on the magnetic moment method\n(MMM). An original meth",
-  "page_count": 4,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\RNA\\Magnetic Moment and Reluctance Network Mixed Method Applied to Transformer's Modeling.pdf"
- },
- {
-  "filename": "Magnetic Moment and Reluctance Network Mixed Method Applied to Transformer's Modeling.pdf",
-  "title": "IEEE TRANSACTIONS ON MAGNETICS, VOL. 41, NO. 5, MAY 2005",
-  "authors": "Magnetic Moment and Reluctance Network Mixed",
-  "abstract_excerpt": "Magnetic Moment and Reluctance Network Mixed\nMethod Applied to Transformer’s Modeling\nFleur Janet1, Jean-Louis Coulomb2, Christian Chillet2, and Patrick Mas1\nSchneider Electric and the Laboratoire d’Electrotechnique de Grenoble (LEG), Institut National Polytechnique\nde Grenoble, INPG/UJF-CNRS UMR 5529 ENSIEG, BP 46, 38402 Saint Martin d’Héres, France\nLaboratoire d Electrotechnique de Grenoble (LEG), Institut National Polytechnique de Grenoble, INPG/UJF-CNRS UMR\n5529 ENSIEG, BP 46, 38402 Saint Martin d’Héres, France\nThe aim of the study is to ﬁnd a method to model electromagnetic devices which generate consequent magnetic leakage. Classical\nmethods have proved to be efﬁcient but time consuming. The method proposed in this paper is based on the magnetic moment method\n(MMM). An original meth",
-  "page_count": 4,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\RNA+MMM\\Magnetic Moment and Reluctance Network Mixed Method Applied to Transformer's Modeling.pdf"
  },
  {
   "filename": "Magnetic_Field_Integral_Equation_at_Very_Low_Frequencies.pdf",
@@ -2430,24 +2403,6 @@ _CATALOG_JSON = r"""
   "page_count": 7,
   "is_scanned": false,
   "relative_path": "00_電磁界解析\\98_部品・材料\\リッツ線\\Semi-Analytical Approach for Finite Element Analysis of Multi-turn Coil Considering Skin and Proximity Effects.pdf"
- },
- {
-  "filename": "Simplified Magnetic Moment Method Applied to Current Transformer Modeling.pdf",
-  "title": "IEEE TRANSACTIONS ON MAGNETICS, VOL. 40, NO. 2, MARCH 2004",
-  "authors": "Simplified Magnetic Moment Method Applied to",
-  "abstract_excerpt": "—The aim of the study is to find a method to model",
-  "page_count": 4,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\RNA\\Simplified Magnetic Moment Method Applied to Current Transformer Modeling.pdf"
- },
- {
-  "filename": "Simplified magnetic moment method applied to current transformer modeling.pdf",
-  "title": "IEEE TRANSACTIONS ON MAGNETICS, VOL. 40, NO. 2, MARCH 2004",
-  "authors": "Simplified Magnetic Moment Method Applied to",
-  "abstract_excerpt": "—The aim of the study is to find a method to model",
-  "page_count": 4,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\RNA+MMM\\Simplified magnetic moment method applied to current transformer modeling.pdf"
  },
  {
   "filename": "Simulation of Low-Frequency Magnetic Fields in Automotive EMC Problems.pdf",
@@ -2952,15 +2907,6 @@ _CATALOG_JSON = r"""
   "page_count": 69,
   "is_scanned": false,
   "relative_path": "00_電磁界解析\\99_アプリケーション\\ワイヤレス給電\\その他\\スッチング電源技術シンポジウム.pdf"
- },
- {
-  "filename": "スマートエントリーシステムにおけるLF，UHF電磁場解析.pdf",
-  "title": "スマートエントリーシステムにおける",
-  "authors": "LF，UHF電磁場解析",
-  "abstract_excerpt": "LF，UHF電磁場解析\n依田　潔＊　\n田邉信二＊\n菅原賢悟＊＊\n山本博明＊＊＊\n白木康博＊＊\n要　旨\nスマートエントリーシステムは従来のキーレスエントリ\nー機能とイモビライザ機能を併せ持つシステムで，通常，\n携帯機から車へはUHF（Ultra High Frequency）帯，車か\nら携帯機へはLF（Low Frequency）帯で無線通信する。シ\nートアレンジなどの配置制約の下でなるべく少ない数の\nLFアンテナを用いて車室内全域で通信するためには，ア\nンテナ配置を最適化する必要がある。実車で試行錯誤的に\n配置を決めることは効率が悪く，特に新型車種の場合は，\n実車が存在しない段階で配置を決める必要がある。我々は，\nこれらの問題点を解決するために，車形状を考慮した電磁\n場シミュレータを開発している。LF帯の磁場解析につい\nては，車体の金属部表面における磁界の境界条件を用いた\n磁界積分方程式法を定式化し，新たにコードを開発した。\n車体の金属部のCADデータを開発したコードの入力デー\nタとして利用し，各要素の辺を循環するループ電流値を未\n知変数とした。計算に先立ち，磁気モーメント法と表面磁\n荷法を組み合わせた積分要素法を用いて，フェライトを装\n荷したLFアンテナ単体を高精度解析し，実効比透磁率を\n求めた。この結果を基に，LFアンテナをループ電流でモ\nデル化し，金属面上の境界条件を用いて行列方程式を導出\nした。計算結果と実測値は測定精度内でほぼ一致すること\nを確認した。一方，車室内のUHF帯受信アンテナの最適\n化を目的として，時間領域解析手法であるFDTD（Finite\nDifference Time Domain）法を用いて車体を考慮した電磁\n場解析を実施し，車体による波面伝搬への影響をアニメー\nション表示した。\nアンテナ設計パラメータ \nフェライトの比透磁率の計算 \n車形状フ",
-  "page_count": 1,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\Keyless\\スマートエントリーシステムにおけるLF，UHF電磁場解析.pdf"
  },
  {
   "filename": "セルオートマトンを用いた電磁界シミュレーションの提案.pdf",

@@ -1,6 +1,6 @@
 """Bibliography INDEX for radia_mcp.peec.
 
-Auto-generated catalog of 381 PDF references from the Sugahara
+Auto-generated catalog of 380 PDF references from the Sugahara
 Lab literature library.  Catalog paths are relative to the
 corpus root (configure the root via RADIA_LIT_ROOT).
 
@@ -1386,15 +1386,6 @@ _CATALOG_JSON = r"""
   "page_count": 7,
   "is_scanned": false,
   "relative_path": "00_電磁界解析\\98_部品・材料\\リッツ線\\Continuum Representation of Wound Coils via an Equivalent Foil Approach.pdf"
- },
- {
-  "filename": "Coupling between PEEC and magnetic moment method.pdf",
-  "title": "REGULAR PAPER",
-  "authors": "Coupling between PEEC and",
-  "abstract_excerpt": "Purpose – The aim of this paper is to model time-harmonic problems in unbounded domains with",
-  "page_count": 17,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\RNA+MMM\\Coupling between PEEC and magnetic moment method.pdf"
  },
  {
   "filename": "D050121OHP.pdf",

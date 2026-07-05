@@ -5,12 +5,9 @@ Knowledge base derived from canonical RNA / MEC references:
   - Derbas, Williams, Koenig, Pekarek, "A Comparison of Nodal- and
     Mesh-Based Magnetic Equivalent Circuit Models", IEEE Trans. Energy
     Conversion 24(2), 388-395, 2009.
-  - Janet, Coulomb, Chillet, Mas, "Magnetic Moment and Reluctance
-    Network Mixed Method Applied to Transformer's Modeling", IEEE
-    Trans. Magn. 41(5), 1428-1431, 2005.
-  - Janet, Coulomb, Chillet, Mas, "Simplified Magnetic Moment Method
-    Applied to Current Transformer Modeling", IEEE Trans. Magn. 40(2),
-    818-821, 2004.
+  - Janet, Coulomb, Chillet, Mas, legacy current-transformer
+    integral/circuit mixed modeling papers, IEEE Trans. Magn. 40(2)
+    and 41(5), 2004-2005.
   - Hane, Nakamura, "Dynamic Hysteresis Modeling for Magnetic Circuit
     Analysis by Incorporating Play Model and Cauer's Equivalent Circuit
     Theory", IEEE Trans. Magn., DOI 10.1109/TMAG.2020.3004355, 2020.
@@ -25,8 +22,8 @@ Knowledge base derived from canonical RNA / MEC references:
     Representation of Eddy-Current Fields for Model Order Reduction
     Using Finite-Element Method", IEEE Trans. Magn. 54(3), 7201804,
     2018.
-  - Le-Duc, Chadebec, Guichon, Meunier, Lembeey, "Coupling between
-    PEEC and magnetic moment method", COMPEL 32(1), 383-395, 2013.
+  - Le-Duc, Chadebec, Guichon, Meunier, Lembeey, legacy PEEC/core
+    integral coupling, COMPEL 32(1), 383-395, 2013.
 
 All knowledge below is plain ASCII; no Unicode mathematics symbols are
 used.  Coordinates in meters, B in Tesla, H in A/m (Radia convention).
@@ -46,7 +43,7 @@ TOPICS: dict[str, str] = {
     "nodal_vs_mesh_analysis": "Derbas 2009: nodal (KCL) vs mesh (KVL), Jacobian conditioning",
     "reluctance_network_construction": "Flux tube discretization, claw-pole example, area selection",
     "lumped_extraction_fea": "Inductance L/M extraction from FEM, conductor segmentation",
-    "rna_magnetic_coupling": "RNA + magnetic-moment mixed method, Janet transformer, current transformer",
+    "rna_magnetic_coupling": "RNA + legacy integral leakage correction, Janet transformer, current transformer",
     "electromechanical_coupling": "TEAM-28 levitation, Runge-Kutta ODE, dL/dz force",
     "topology_optimization": "RNA + AVM (adjoint variable method), SIMP, magnetic actuator TO",
     "vs_pec_peec": "RNA vs PEEC vs PEC (partial element equivalent circuit) terminology",
@@ -228,7 +225,8 @@ behaviour -- see topic `nodal_vs_mesh_analysis`.
 ## What MEC cannot do (without help)
 
 - **3D leakage with no obvious flux tube** -- e.g. quick stray field
-  around the corner of a transformer.  Needs RNA + magnetic-moment model or RNA + FEM.
+  around the corner of a transformer.  Needs RNA plus a calibrated
+  integral leakage correction, RNA + FEM, or the current Radia HDiv-VIM path.
 - **Detailed force distribution on a moving armature** -- needs FEM or
   a fine RNA mesh with Maxwell-stress tensor evaluation.
 
@@ -603,28 +601,24 @@ for power electronics and electric machine design.
 
 
 RNA_MAGNETIC_COUPLING = r"""
-# RNA + magnetic-moment mixed method (Janet 2004, 2005)
+# RNA + legacy integral leakage correction (Janet 2004, 2005)
 
 Pure RNA struggles with 3D LEAKAGE flux outside the dominant flux
-tubes.  Pure magnetic-moment method handles 3D leakage but needs
+tubes.  A legacy integral leakage model handles 3D leakage but needs
 many elements to resolve a long, thin closed magnetic circuit (slow
 mesh refinement, slow MoM matrix assembly).
 
 The Janet (Schneider Electric / LEG Grenoble) work shows how to
 **combine** them for current-transformer-class problems: use a few-
-element magnetic-moment model to capture 3D leakage + saturation, then ADJUST its
+element integral leakage model to capture 3D leakage + saturation, then ADJUST its
 coupling coefficients using a fast RNA computation that captures the
 linear-regime behaviour accurately.
 
 Two papers:
 
-  Janet, Coulomb, Chillet, Mas, "Simplified Magnetic Moment Method
-  Applied to Current Transformer Modeling", IEEE Trans. Magn. 40(2),
-  818-821, 2004.
-
-  Janet, Coulomb, Chillet, Mas, "Magnetic Moment and Reluctance
-  Network Mixed Method Applied to Transformer's Modeling", IEEE
-  Trans. Magn. 41(5), 1428-1431, 2005.
+  Janet, Coulomb, Chillet, Mas, legacy current-transformer
+  integral/circuit mixed modeling, IEEE Trans. Magn. 40(2), 818-821,
+  2004; 41(5), 1428-1431, 2005.
 
 ## The target: current transformer
 
@@ -643,7 +637,7 @@ into the air (LEAKAGE).  The output signal I_2(t) waveform is
 distorted by both effects, and a designer needs to predict the
 distortion as a function of geometry and core material.
 
-## Magnetic-moment model applied to CTs
+## Janet low-order integral leakage model applied to CTs
 
 The core is meshed into n ferromagnetic elements with uniform
 magnetization M_i in each (magnetization convention).  The total field
@@ -662,7 +656,7 @@ over the core volume.
 Drawback: in CT geometry n must be large (100s to 1000s) to resolve
 the long thin core; matrix assembly + solve becomes expensive.
 
-## Simplified magnetic-moment model
+## Simplified Janet leakage model
 
 Idea: use VERY FEW elements (3 to 5) for the entire core, with
 magnetization direction PRESET in each element using symmetry.  In
@@ -680,10 +674,10 @@ FAILS at low induction -- because then the magnetization is small,
 not uniform, and the coupling coefficients f_ij computed under the
 saturation hypothesis are wrong.
 
-## Simplified magnetic moment + Simplified RNA -- the Janet recipe
+## Simplified integral leakage model + simplified RNA -- the Janet recipe
 
 The fix: use RNA, which is accurate at low induction, to CORRECT the
-magnetic-moment coupling coefficients f_ij.
+integral leakage coupling coefficients f_ij.
 
 1. Build a simplified RNA model of the same core (Fig. 6 Janet 2005):
    a few reluctances for the iron sectors + a few MMFs for the
@@ -693,7 +687,7 @@ magnetic-moment coupling coefficients f_ij.
    RNA to get the mean magnetic field <H_i>_RNA and mean magnetization
    <M_i>_RNA in each element.
 
-3. Compute the diagonal coefficients f_ii of the magnetic-moment coupling matrix
+3. Compute the diagonal coefficients f_ii of the integral coupling matrix
    by inverting the relation:
 
        <H_i>_RNA = H_0,i + f_ii <M_i>_RNA + sum_{j != i} f_ij <M_j>_RNA
@@ -707,7 +701,7 @@ magnetic-moment coupling coefficients f_ij.
    magnetization in element 1 vanishes for a known zero-total-MMF
    condition (Janet 2005 eq. 7).
 
-5. Use the corrected magnetic-moment system for the full saturation sweep.  Now
+5. Use the corrected integral leakage system for the full saturation sweep.  Now
    both the low-induction and high-saturation regimes are captured by
    the same 3-5-element model.
 
@@ -715,28 +709,28 @@ magnetic-moment coupling coefficients f_ij.
 
 For their test CT:
   - Static error vs FEM: < 7% across the full operating range
-    (compared to 15% for vanilla simplified magnetic-moment model and > 20% for pure 3-element
-    magnetic-moment model without correction).
-  - Static calculation time per point: 0.2 s (vs 1 min for full magnetic-moment model,
+    (compared to 15% for the uncorrected simplified model and > 20% for the pure 3-element
+    model without correction).
+  - Static calculation time per point: 0.2 s (vs 1 min for the full volume-integral leakage model,
     20 min for FEM).
   - Response surface generation (140 x 140 grid): 35 min (vs 2 days
-    for full magnetic-moment model, > 10 days for FEM).
+    for the full volume-integral leakage model, > 10 days for FEM).
 
-The recipe trades modeling EFFORT (build both a small magnetic-moment model and a small
+The recipe trades modeling EFFORT (build both a small integral leakage model and a small
 RNA, then perform the calibration) for run-time SPEED.  Worth it when
 the model will be queried millions of times -- e.g. Monte Carlo
 analysis, optimization, or as part of a real-time simulator.
 
-## When to use RNA + magnetic-moment model vs full magnetic-moment model (Radia)
+## When to use RNA + calibrated leakage vs full HDiv-VIM (Radia)
 
 | Scenario                                  | Choice               |
 |-------------------------------------------|----------------------|
 | Need exact M(x) field map                 | HDiv-VIM / FEM     |
-| Need fast secondary current waveform      | RNA + magnetic-moment model mixed      |
-| Optimization over geometry parameters     | RNA + magnetic-moment model mixed      |
-| Coupling to power-electronics SPICE model | RNA + magnetic-moment model mixed      |
+| Need fast secondary current waveform      | RNA + calibrated leakage mixed      |
+| Optimization over geometry parameters     | RNA + calibrated leakage mixed      |
+| Coupling to power-electronics SPICE model | RNA + calibrated leakage mixed      |
 | One-shot validation against measurement   | HDiv-VIM / FEM     |
-| Sweep across 100+ load conditions         | RNA + magnetic-moment model mixed      |
+| Sweep across 100+ load conditions         | RNA + calibrated leakage mixed      |
 
 ## PEEC + magnetic-material coupling (Le-Duc 2013, COMPEL)
 
@@ -752,7 +746,7 @@ hybrid retains the "mesh only what matters" virtue:
   - The coupled system is solved in the frequency domain (time-
     harmonic) to give I_k and M_j simultaneously.
 
-This is the natural counterpart of "RNA + magnetic-moment model": where RNA + magnetic-moment model
+This is the natural counterpart of "RNA + calibrated leakage": where RNA + calibrated leakage
 addresses CLOSED magnetic circuit + few-element 3D leakage, PEEC + magnetic-material model
 addresses MULTI-CONDUCTOR ferromagnetic interaction (e.g. air-cored
 inductor with a nearby iron yoke).

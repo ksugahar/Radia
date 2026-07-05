@@ -2,7 +2,7 @@
 
 Covers RNA/MEC techniques + lab Sugahara group (田中/羽根) lineage:
 - RNA fundamentals (nodal / mesh-based MEC)
-- RNA + magnetic-moment model coupling for transformer core analysis
+- RNA + calibrated leakage coupling for transformer core analysis
 - Dynamic hysteresis in MEC (lab core)
 - Topology optimization of magnetic actuators via RNA
 

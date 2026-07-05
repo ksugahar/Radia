@@ -329,31 +329,19 @@ result = parser.solve(freqs)
 | `.freq` | `.freq fmin=1e3 fmax=1e9 ndec=10` | Frequency sweep |
 | `.default` | `.default sigma=5.8e7 w=0.5 h=0.1` | Default parameters |
 | `.equiv` | `.equiv N1 N2 N3` | Node merge (equivalence) |
-| `.magnetic` | Parsed, rejected by solve() | Magnetic material block |
+| `.magnetic` | Parsed for diagnostics, rejected by solve() | Magnetic core input |
 | `.panel` | See below | Panel (capacitive) block |
 
-## Magnetic Material Block (.magnetic)
+## Magnetic Core Input (.magnetic)
 
-The old PEEC magnetic-material coupling path is retired.  FastHenry
-`.magnetic` blocks are still parsed so inputs can be diagnosed, but
+FastHenry `.magnetic` blocks are parsed only so inputs can be diagnosed.
 `parser.solve()` raises and points you to HDiv-VIM / reduced FEM for
 magnetic cores.
-
-```
-.magnetic
-  type=box
-  center=0.05,0.01,0.0
-  size=0.06,0.01,0.01
-  mu_r=1000
-.endmagnetic
-```
-
-Supported types: `box` (hexahedron), `hexahedron` (8 vertices), `mesh` (file).
 
 ## FastHenry .inp File Format Example
 
 ```
-* Spiral inductor on ferrite substrate
+* Spiral inductor
 .Units mm
 .default sigma=5.8e7 nwinc=3 nhinc=1
 
@@ -369,13 +357,6 @@ E3 N3 N4 w=0.5 h=0.1
 .external N1 N4
 .freq fmin=1e3 fmax=1e9 ndec=10
 
-.magnetic
-  type=box
-  center=5,5,-0.5
-  size=12,12,1
-  mu_r=2000
-.endmagnetic
-
 .end
 ```
 """
@@ -386,9 +367,8 @@ PEEC_MAGNETIC_POLICY = """
 ## Overview
 
 PEEC in Radia is conductor/shield circuit extraction.  Magnetic material
-cores are no longer solved through the old PEEC magnetic-moment coupling
-path.  Keep the magnetic state mesh-backed and use HDiv-VIM / reduced FEM,
-then couple fields at the application layer.
+cores stay mesh-backed and use HDiv-VIM / reduced FEM, then couple fields
+at the application layer.
 
 ## Usage
 

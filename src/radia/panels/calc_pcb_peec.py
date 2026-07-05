@@ -106,9 +106,9 @@ def solve_peec(inp_file="", inp_text="",
     if has_magnetic:
         return {
             "error": (
-                ".magnetic blocks used the retired PEEC magnetic-material "
-                "coupling path. Use this panel for conductor/shield PEEC and "
-                "HDiv-VIM / reduced FEM for magnetic cores."
+                ".magnetic blocks are outside the PEEC panel. Use this panel "
+                "for conductor/shield PEEC and HDiv-VIM / reduced FEM for "
+                "magnetic cores."
             ),
             "has_magnetic": True,
         }

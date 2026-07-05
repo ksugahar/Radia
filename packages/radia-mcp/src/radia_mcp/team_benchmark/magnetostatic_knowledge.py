@@ -71,7 +71,7 @@ Vertical plate: parallel to coil axis (key feature)
 | Solver | Method | Flux density along ref line |
 |--------|--------|----------------------------|
 | Various FEM (1988+) | A formulation | published in Compumag |
-| Volume IE (Nakata) | magnetic moment method | published |
+| Volume IE (Nakata) | published volume-integral reference | published |
 | BEM (Onuki) | surface integral | published |
 | Hybrid FEM-BEM | combined | published |
 

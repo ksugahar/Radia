@@ -1,6 +1,6 @@
 """Bibliography INDEX for radia_mcp.differential_forms.
 
-Auto-generated catalog of 101 PDF references from the Sugahara
+Auto-generated catalog of 100 PDF references from the Sugahara
 Lab literature library.  Catalog paths are relative to the
 corpus root (configure the root via RADIA_LIT_ROOT).
 
@@ -882,15 +882,6 @@ _CATALOG_JSON = r"""
   "page_count": 108,
   "is_scanned": false,
   "relative_path": "00_電磁界解析\\磁気特性\\ヒステリシス\\Chua型\\磁性材料の構成方程式に関する研究.pdf"
- },
- {
-  "filename": "粒子法と磁気モーメント法の連成による電磁現象解析.pdf",
-  "title": "日本AEM 学会誌　Vol. 23, No.2 (2015)",
-  "authors": "A Magnetic Phenomena Analysis by Employing Particle Method and Magnetic Moment Method\u0003",
-  "abstract_excerpt": "(34)\n\u0003\n⢏Ꮚἲ࡜☢Ẽ࣮࣓ࣔࣥࢺἲࡢ㐃ᡂ࡟ࡼࡿ㟁☢⌧㇟ゎᯒ\u0003\n\u0003\nA Magnetic Phenomena Analysis by Employing Particle Method and Magnetic Moment Method\u0003\n\u0003\nග⸨\u0003 ೺ኴ\r\u0014\u000bᏛ⏕ဨ\f㸪ᖹ⏣\u0003 ຾ᘯ\r\u0014\u000bṇဨ\f㸪ᐑᆏ\u0003 ྐ࿴\r\u0014\u000bṇဨ\f㸪ᯇ⃝\u0003 ࿘ᖹ\r\u0014\u000bᏛ⏕ဨ\f\u0003\u0003\n\u0003\nKenta Mitsufuji (Stu. Mem.) , Katsuhiro Hirata (Mem.), Fumikazu Miyasaka (Mem.), Shuhei Matsuzawa(Stu. Mem.) \nThis paper proposes a mesh-less numerical analysis method employing magnetic moment method and particle \nmethod for magnetic fluid motion and magnetic phenomena. A basic idea in this method, the magnetic fluid motion is \ncalculated by particle method, the magnetic field distribution and magnetic forces on the each particle are analyzed by \nmagnetic moment method. The magnetic moment method analyzes magnetic field by dividing only ferromagnetic \nmaterials into fine elements. In this case, the elements o",
-  "page_count": 6,
-  "is_scanned": false,
-  "relative_path": "00_電磁界解析\\モーメント法・境界要素法\\磁気モーメント法\\粒子法と磁気モーメント法の連成による電磁現象解析.pdf"
  },
  {
   "filename": "論文_学会　北海道_学会　北海道　用途志向型次世代モータの技術動向と機電一体化技術　S18_6.pdf",

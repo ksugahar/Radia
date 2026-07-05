@@ -60,8 +60,8 @@ FIELD_NOTES: list[dict] = [
         "venue": "CEFC 2026",
         "date": "2026-06-09",
         "location": "Thessaloniki, Greece",
-        "talk": "H-matrix Accelerated Magnetic Moment Method with "
-                "Magnetic Surface Charges",
+        "talk": "H-matrix Accelerated HDiv-VIM for Open-Boundary "
+                "Magnetostatics",
         "presenter": "K. Sugahara",
         "topics": ["HDiv-VIM", "H-matrix", "HACApK", "ACA",
                    "accelerator-magnet", "validation", "FEM-comparison",
@@ -154,8 +154,7 @@ FIELD_NOTES: list[dict] = [
         "venue": "CEFC 2020",
         "date": "2020-11-03",
         "location": "Pisa, Italy (online)",
-        "talk": "Magnetic Moment Method with the Idea of Magnetic Surface "
-                "Charge Method",
+        "talk": "Retired Surface-Charge Inspired Magnetic Solver Study",
         "presenter": "H. Yano",
         "topics": ["HDiv-VIM", "accelerator-magnet", "convergence",
                    "FEM-comparison", "validation", "CST", "OPERA-3D",

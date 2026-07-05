@@ -217,8 +217,8 @@ Relevance: MODERN extension of Whitney to general polyhedra.
   Energetic approach gives symmetric, positive-definite, consistent
   constitutive matrices via  M_{ij} = ∫_v v_i · m v_j dv.
   Cited by `mathematica_recipes('hex_dga')` for symbolic recipe.
-  Directly relevant to Radia C++ MSC (Magnetic Surface Charge)
-  hexahedral mass-matrix construction.
+  Directly relevant to Radia C++ HDiv-VIM hexahedral mass-matrix
+  construction.
 
 Informs: whitney ("Whitney for non-simplices"),
   feec (energetic method, alternative to Galerkin),
