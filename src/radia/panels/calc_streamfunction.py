@@ -765,7 +765,7 @@ def _build_problem(args, eval_scale=1.0):
     n_free = R.shape[1]
     base = aca_tsvd(Ac.shape[0], n_free, lambda i, j: float(Af[i, j]),
                     modes=Ac.shape[0], kmax=min(Ac.shape[0], n_free),
-                    aca_eps=1e-10, method=3)
+                    aca_eps=1e-10)
     reg = RegularizedTSVD.from_stiffness(base, S)
     # mean diag(Af^T Af) = mean of column norms^2 -- WITHOUT forming the
     # n_free x n_free dense Af^T Af (the other O(N^2) wall).
@@ -940,7 +940,7 @@ def _build_shielded_problem(args, eval_scale=1.0):
                     lambda i, j: float(A_stack[i, j]),
                     modes=A_stack.shape[0],
                     kmax=min(A_stack.shape[0], n_free),
-                    aca_eps=1e-10, method=3)
+                    aca_eps=1e-10)
     reg = RegularizedTSVD.from_stiffness(base, S_block)
 
     return dict(

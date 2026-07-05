@@ -3,20 +3,19 @@
 The C++ core (src/core/rad_stream_function.cpp) is kernel-agnostic: it does
 (ACA+)+TSVD of an M x N matrix whose entries A(i,j) come from a caller-supplied
 callback.  ACA+ itself is HACApK's cHACApK_acaplus (single source of truth);
-only the TSVD recompression (manuscript Method 2/3, IEEJ SA-25-020) lives in
-Radia.
+only the recompression to a truncated SVD (the standard QR-of-a-low-rank-product;
+peer review JIAM-2026-36) lives in Radia.  There is ONE recompression method,
+``method="aca_qr_tsvd"`` (default); ``method="dense"`` is the direct-SVD
+reference.  NO backward compatibility -- the legacy manuscript Method 2/3 (and
+their integer selectors) were removed 2026-07-05.
 
 Two kernels are exercised:
   1. a coil Biot-Savart kernel (mirrored rectangular current loops) implemented
-     in numpy HERE, to cross-check bit-for-bit against the validated Fortran
-     reference coil_solver.f90 (method_aca_tsvd_1/2);
+     in numpy HERE, to cross-check against the validated Fortran reference
+     coil_solver.f90 (the recompression gives the same SVD by either route);
   2. Radia's OWN field computation (radia.Fld over permanent-magnet objects via
      radia_field_kernel), to prove the same machinery serves magnetic materials,
      not just coils.
-
-Method mapping (radia <-> f90):
-  radia method=3 (E = diag(Sc) Vc' D, 2 SVDs)  <->  f90 method_aca_tsvd_2
-  radia method=2 (SVD(C)+SVD(D)+Middle)         <->  f90 method_aca_tsvd_1
 """
 import os
 import sys
@@ -114,8 +113,7 @@ def _recon_err(A, res, k=None):
 # --------------------------------------------------------------------------
 # Reconstruction vs true dense A (coil kernel)
 # --------------------------------------------------------------------------
-@pytest.mark.parametrize("method", [3, 2])
-def test_reconstruction_near_field_full_rank(method):
+def test_reconstruction_near_field_full_rank():
     """Near field is effectively full rank (k_aca = min(M,N)); the
     (ACA+)+TSVD factorization reconstructs A to machine precision."""
     obs, centers, offsets = _coil_geometry(obs_z=0.05)
@@ -123,7 +121,7 @@ def test_reconstruction_near_field_full_rank(method):
     A = _coil_dense_A(obs, centers, offsets)
     entry = lambda i, j: A[i, j]
     res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                   aca_eps=1.0e-8, method=method)
+                   aca_eps=1.0e-8)
     assert res.k_aca == min(M, N)
     assert _recon_err(A, res) < 1.0e-10
     assert np.all(res.S >= 0.0)
@@ -137,7 +135,7 @@ def test_low_rank_far_field_compresses():
     A = _coil_dense_A(obs, centers, offsets)
     entry = lambda i, j: A[i, j]
     res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                   aca_eps=1.0e-8, method=3)
+                   aca_eps=1.0e-8)
     assert res.k_aca < min(M, N)        # compression happened
     assert res.k_aca >= 1
     assert _recon_err(A, res) < 1.0e-4
@@ -150,7 +148,7 @@ def test_truncation_monotonic():
     A = _coil_dense_A(obs, centers, offsets)
     entry = lambda i, j: A[i, j]
     res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                   aca_eps=1.0e-10, method=3)
+                   aca_eps=1.0e-10)
     errs = [_recon_err(A, res, k=k) for k in (5, 10, 15, res.k_aca)]
     for a, b in zip(errs, errs[1:]):
         assert b <= a + 1.0e-12
@@ -162,8 +160,8 @@ def test_qr_and_dense_methods_agree_with_svd():
       - ``method="aca_qr_tsvd"`` (default, ACA+QR+TSVD) matches it to the
         ACA tolerance, with ORTHONORMAL U / V (what RegularizedTSVD requires).
     This makes the reviewer's point concrete: QR is validated against the CORRECT
-    dense baseline, not a broken 'naive' one.  Legacy method=2/3 -> aca_qr_tsvd; an unknown
-    method RAISES."""
+    dense baseline, not a broken 'naive' one.  NO backward compatibility: the
+    legacy ints 2/3, the terse "qr"/"aca", and any unknown value all RAISE."""
     obs, centers, offsets = _coil_geometry(obs_z=0.1)
     M, N = obs.shape[0], centers.shape[0]
     A = _coil_dense_A(obs, centers, offsets)
@@ -180,19 +178,17 @@ def test_qr_and_dense_methods_agree_with_svd():
     # method="aca_qr_tsvd" (default) matches the dense SVD to the ACA tolerance
     rq = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N), aca_eps=1.0e-10)
     assert rq.method == "aca_qr_tsvd"
-    # the short aliases resolve to the same canonical name
-    assert aca_tsvd(M, N, entry, modes=min(M, N), method="qr").method == "aca_qr_tsvd"
     nq = rq.modes
     assert np.linalg.norm(rq.S[:nq] - s_dense[:nq]) / np.linalg.norm(s_dense) < 1.0e-8
     # orthonormal factors -- required by RegularizedTSVD.from_stiffness (W = V^T V = I)
     assert np.linalg.norm(rq.U.T @ rq.U - np.eye(nq)) < 1.0e-10, "U not orthonormal"
     assert np.linalg.norm(rq.V.T @ rq.V - np.eye(nq)) < 1.0e-10, "V not orthonormal"
 
-    # legacy method=2/3 map to qr (deprecated; no separate algorithm survives)
-    assert aca_tsvd(M, N, entry, modes=min(M, N), method=3).method == "aca_qr_tsvd"
-    # only two methods -- an unknown value fails loud (No-Fallback)
-    with pytest.raises(ValueError):
-        aca_tsvd(M, N, entry, modes=min(M, N), method="bogus")
+    # NO backward compatibility (MCP-delivered software): the legacy ints 2/3,
+    # the terse "qr"/"aca", and any unknown value all RAISE.
+    for bad in (2, 3, "qr", "aca", "bogus"):
+        with pytest.raises(ValueError):
+            aca_tsvd(M, N, entry, modes=min(M, N), method=bad)
 
 
 # --------------------------------------------------------------------------
@@ -206,7 +202,7 @@ def test_pseudo_inverse_solve_recovers_range():
     A = _coil_dense_A(obs, centers, offsets)
     entry = lambda i, j: A[i, j]
     res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                   aca_eps=1.0e-10, method=3)
+                   aca_eps=1.0e-10)
     rng = np.random.default_rng(0)
     phi0 = rng.standard_normal(N)
     B = A @ phi0
@@ -221,7 +217,7 @@ def test_pseudo_inverse_solve_validates_B_length():
     M, N = obs.shape[0], centers.shape[0]
     A = _coil_dense_A(obs, centers, offsets)
     res = aca_tsvd(M, N, lambda i, j: A[i, j], modes=min(M, N),
-                   kmax=min(M, N), aca_eps=1.0e-8, method=3)
+                   kmax=min(M, N), aca_eps=1.0e-8)
     with pytest.raises(ValueError):
         pseudo_inverse_solve(res, np.zeros(M + 1))
 
@@ -244,7 +240,7 @@ def _random_dense_problem(M=12, N=90, seed=0):
     A = rng.standard_normal((M, N)) / np.sqrt(N)
     B = rng.standard_normal(M)
     res = aca_tsvd(M, N, lambda i, j: float(A[i, j]),
-                   modes=M, kmax=min(M, N), aca_eps=1.0e-13, method=3)
+                   modes=M, kmax=min(M, N), aca_eps=1.0e-13)
     return A, B, res
 
 
@@ -523,7 +519,7 @@ def test_radia_field_kernel_magnets():
         A = np.array([[entry(i, j) for j in range(N)] for i in range(M)])
 
         res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                       aca_eps=1.0e-8, method=3)
+                       aca_eps=1.0e-8)
         assert 1 <= res.k_aca <= min(M, N)
         assert _recon_err(A, res) < 1.0e-5
     finally:
@@ -594,8 +590,10 @@ for i in range(M):
 entry = lambda i, j: A[i, j]
 
 fails = []
-for f90name, method in (("method_aca_tsvd_2", 3), ("method_aca_tsvd_1", 2)):
-    r = aca_tsvd(M, N, entry, modes=modes, kmax=kmax, aca_eps=eps, method=method)
+# radia has ONE recompression (aca_qr_tsvd) -> the SAME SVD as BOTH f90 methods
+# (all recompress the same ACA product), so compute it once.
+r = aca_tsvd(M, N, entry, modes=modes, kmax=kmax, aca_eps=eps)
+for f90name in ("method_aca_tsvd_2", "method_aca_tsvd_1"):
     fn = getattr(coil_solver, f90name)
     Uf, Sf, Vf, kf, _t1, _t2, _pk = fn(
         np.ascontiguousarray(obs[:, 0]), np.ascontiguousarray(obs[:, 1]),

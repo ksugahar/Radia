@@ -230,7 +230,7 @@ def build_regularized_cache(A, fes, regularize, alpha=0.0, aca_eps=1.0e-10,
 
     t0 = time.time()
     res = aca_tsvd(M_dim, N_dim, entry, modes=M_dim,
-                   kmax=min(M_dim, N_dim), aca_eps=aca_eps, method=3)
+                   kmax=min(M_dim, N_dim), aca_eps=aca_eps)
     t_aca = time.time() - t0
 
     if regularize == "l2":

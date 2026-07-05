@@ -68,7 +68,7 @@ def main():
 
         # --- (ACA+)+TSVD factorization ---------------------------------------
         res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                       aca_eps=1.0e-8, method=3)
+                       aca_eps=1.0e-8)
 
         print("=== Coil field synthesis: (ACA+)+TSVD ===")
         print(f"M (field points) = {M},  N (loops) = {N}")

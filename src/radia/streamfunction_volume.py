@@ -123,7 +123,7 @@ def solve_lambda(mesh, fes, targets, b0, aca_eps=1e-10):
     M, N = len(targets), fes.ndof
     A = assemble_response(mesh, fes, targets)
     res = aca_tsvd(M, N, lambda i, j: A[i, j],
-                   modes=M, kmax=M, aca_eps=aca_eps, method=3)
+                   modes=M, kmax=M, aca_eps=aca_eps)
     lam = pseudo_inverse_solve(res, np.full(M, b0))
     fit_res = float(np.linalg.norm(A @ lam - b0) / (abs(b0) * math.sqrt(M)))
     gf = GridFunction(fes)

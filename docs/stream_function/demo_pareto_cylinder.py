@@ -50,7 +50,7 @@ def cyl_front(L, a, Gx, dsv, nphi, dz_target, ndsv, lams):
     S = _cyl_laplacian(nz, nphi)
     md = float(np.mean(np.diag(A.T @ A)))
     base = aca_tsvd(M, N, lambda i, j: float(A[i, j]),
-                    modes=M, kmax=min(M, N), aca_eps=1.0e-10, method=3)
+                    modes=M, kmax=min(M, N), aca_eps=1.0e-10)
     reg = RegularizedTSVD.from_stiffness(base, S)
 
     def peak(psi):

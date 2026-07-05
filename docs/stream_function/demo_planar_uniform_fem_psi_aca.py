@@ -108,7 +108,7 @@ def main():
     t0 = time.time()
     res = aca_tsvd(M, len(free_idx), entry, modes=modes,
                    kmax=min(M, len(free_idx)),
-                   aca_eps=args.aca_eps, method=3)
+                   aca_eps=args.aca_eps)
     t_aca = time.time() - t0
     print(f"    k_aca = {res.k_aca} (of min(M,N)={min(M, len(free_idx))}),"
           f" TSVD modes used = {res.modes}, factorised in {t_aca:.3f} s")

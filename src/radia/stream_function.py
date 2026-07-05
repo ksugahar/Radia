@@ -94,11 +94,11 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
 
     Two methods -- and ONLY two (peer review JIAM-2026-36):
 
-    - ``method="aca_qr_tsvd"`` (default; short aliases ``"qr"`` / ``"aca"``):
-      ACA+ factors ``A ~= C D^T`` (only O(k_aca*(M+N)) entry evaluations), then
-      the standard "SVD of a low-rank product" recompression -- QR each
-      tall-skinny factor + ONE small ``k_aca x k_aca`` TSVD.  Fast; the
-      production path.  (Name = the full pipeline: ACA + QR + TSVD.)
+    - ``method="aca_qr_tsvd"`` (default): ACA+ factors ``A ~= C D^T`` (only
+      O(k_aca*(M+N)) entry evaluations), then the standard "SVD of a low-rank
+      product" recompression -- QR each tall-skinny factor + ONE small
+      ``k_aca x k_aca`` TSVD.  Fast; the production path.  (Name = the full
+      pipeline: ACA + QR + TSVD.)
     - ``method="dense"`` (alias ``"tsvd"``): the plain/direct TSVD -- materialise
       the full A via the callback and take its dense SVD (``numpy.linalg.svd``),
       then truncate.  EXACT (no ACA approximation), the trusted reference /
@@ -118,10 +118,11 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
     aca_eps : float, optional
         ACA+ stopping tolerance (``aca_qr_tsvd`` only).  Default 1e-4.
     method : {"aca_qr_tsvd", "dense"}, optional
-        "aca_qr_tsvd" (default; aliases "qr"/"aca") = ACA + QR + TSVD;
-        "dense"/"tsvd" = direct dense SVD (exact reference).  Legacy integers
-        2/3 and None map to "aca_qr_tsvd" (the manuscript Method 2/3 were removed
-        2026-07-05; see ``memory/aca_tsvd_qr_recompression.md``).
+        "aca_qr_tsvd" (default) = ACA + QR + TSVD; "dense" (alias "tsvd") =
+        direct dense SVD (exact reference).  NO backward compatibility: the
+        legacy integers 2/3 and the terse "qr"/"aca" now RAISE (the manuscript
+        Method 2/3 were removed 2026-07-05; see
+        ``memory/aca_tsvd_qr_recompression.md``).
 
     Returns
     -------
@@ -134,16 +135,17 @@ def aca_tsvd(M, N, entry, modes=None, kmax=None,
     if not callable(entry):
         raise TypeError("entry must be callable: entry(i, j) -> float")
 
-    # Only two methods are supported (No-Fallback: an unknown value RAISES).
-    # Legacy int 2/3 and None -> "aca_qr_tsvd" (the manuscript Method 2/3 were removed).
-    _m = "aca_qr_tsvd" if method in (None, 2, 3) else str(method).strip().lower()
-    if _m in ("aca_qr_tsvd", "aca+qr+tsvd", "acaqrtsvd", "qr", "aca"):
+    # Exactly TWO canonical methods -- NO backward-compat shims.  MCP-delivered
+    # software carries no legacy aliases: unknown / legacy values (incl. the old
+    # ints 2/3 and the terse "qr"/"aca") RAISE.
+    _m = "aca_qr_tsvd" if method is None else str(method).strip().lower()
+    if _m in ("aca_qr_tsvd", "aca+qr+tsvd"):
         _m = "aca_qr_tsvd"
-    elif _m in ("dense", "tsvd", "direct", "svd", "full"):
+    elif _m in ("dense", "tsvd"):
         _m = "dense"
     else:
         raise ValueError(
-            f"method must be 'aca_qr_tsvd' (default; ACA+QR+TSVD) or 'dense' "
+            f"method must be 'aca_qr_tsvd' (default, ACA+QR+TSVD) or 'dense' "
             f"(direct TSVD); got {method!r}")
 
     if kmax is None:

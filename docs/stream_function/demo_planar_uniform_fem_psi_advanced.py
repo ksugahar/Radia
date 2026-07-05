@@ -169,7 +169,7 @@ def solve_l2_aca(A, B, fes, aca_eps=1.0e-10):
         return float(A_free[i, j])
 
     res = aca_tsvd(M, N, entry, modes=M, kmax=min(M, N),
-                   aca_eps=aca_eps, method=3)
+                   aca_eps=aca_eps)
     psi_free = pseudo_inverse_solve(res, B, k_mode=res.modes)
     psi = np.zeros(A.shape[1])
     psi[free_idx] = psi_free
@@ -431,7 +431,7 @@ def solve_linf_irls(A, B, fes, jmax=None, n_iter=12, weight_ratio_max=20.0,
         return float(A_free[i, j])
 
     res = aca_tsvd(M_dim, N_dim, entry, modes=M_dim,
-                   kmax=min(M_dim, N_dim), aca_eps=1.0e-10, method=3)
+                   kmax=min(M_dim, N_dim), aca_eps=1.0e-10)
 
     vert_xy = np.array([list(v.point) for v in mesh.vertices])
     u_t, v_t = fes.TnT()

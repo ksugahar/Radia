@@ -101,8 +101,7 @@ class DeformPareto:
         md = float(np.mean(np.diag(Af.T @ Af)))
         base = aca_tsvd(len(self.targets), len(fi),
                         lambda i, j: float(Af[i, j]), modes=len(self.targets),
-                        kmax=min(len(self.targets), len(fi)), aca_eps=1e-10,
-                        method=3)
+                        kmax=min(len(self.targets), len(fi)), aca_eps=1e-10)
         reg = RegularizedTSVD.from_stiffness(base, S)
         vpts = np.array([list(v.point) for v in mesh.vertices])
         gf = GridFunction(fes)

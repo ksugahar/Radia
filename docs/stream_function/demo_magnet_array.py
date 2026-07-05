@@ -53,7 +53,7 @@ def main():
 
         # --- (ACA+)+TSVD factorization ---------------------------------------
         res = aca_tsvd(M, N, entry, modes=min(M, N), kmax=min(M, N),
-                       aca_eps=1.0e-8, method=3)
+                       aca_eps=1.0e-8)
         Alr = res.U @ np.diag(res.S) @ res.V.T
         recon = np.linalg.norm(A - Alr) / np.linalg.norm(A)
 

@@ -100,7 +100,7 @@ class FoldedPareto:
         # ---- the ONE ACA+TSVD factorisation ----
         base = aca_tsvd(self.M, self.N, lambda i, j: float(self.Af[i, j]),
                         modes=self.M, kmax=min(self.M, self.N),
-                        aca_eps=aca_eps, method=3)
+                        aca_eps=aca_eps)
         self.k = base.modes
         self.U = base.U[:, :self.k]
         self.Sig = base.S[:self.k]
