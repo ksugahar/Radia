@@ -954,16 +954,18 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 **POLICY**: NEVER use Unicode mathematical symbols in print statements. Use ASCII equivalents: `^2` not `²`, `->` not `→`, `<=` not `≤`, etc. Windows console defaults to cp932 in Japanese environments.
 
-### Repository Language: English — Japanese project docs live in W:\学会資料, NOT the repo (2026-07-05)
+### Repository Language + Pre-Presentation Materials (English code repo; papers live in W:\学会資料, 2026-07-05)
 
-**POLICY**: All source code, documentation, comments, commit messages, and docstrings in the Radia repository MUST be written in **English**. Japanese text is NOT allowed in tracked files, EXCEPT `CLAUDE.md` policy descriptions. Conversation with the user may be in Japanese, but the tracked repository content is **English-only**.
+**POLICY (language)**: All source code, documentation, comments, commit messages, and docstrings in the Radia repository MUST be written in **English**. Japanese text is NOT allowed in tracked files, EXCEPT `CLAUDE.md` policy descriptions. Conversation with the user may be in Japanese, but the tracked repository content is **English-only**.
 
-**Japanese-language project materials live OUTSIDE the repo, under `W:\02_学会資料\<年度>\<会議>\`** (Sugahara, 2026-07-05) — they are NOT committed to the code repo:
-- **Research notes** (Japanese investigation / design / decision write-ups), **paper-planning drafts** (`paper_outline*.md`), and **paper manuscripts** (LaTeX `.tex`, slides, digests) all live in that conference-materials area, organised by year / venue. Examples: the stream-function paper materials → `W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\`; the IGTE symposium paper → `W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\`.
-- A submission manuscript's language follows its **VENUE** — INTERNATIONAL (IGTE, IEEE, Compumag) = English; IEEJ / domestic = Japanese.
-- The **code repo** keeps ONLY English code + technical / dev docs (`README`, API reference `api.md`, method / theory / showcase notes `theory.md` / `single_stroke.md` / `regularization.md` / method `.ipynb`). Do NOT commit paper manuscripts, paper-planning drafts, or Japanese write-ups to the repo — put them in `W:\02_学会資料\`.
+**POLICY (pre-presentation materials — Sugahara, 2026-07-05): material for a NOT-yet-presented / not-yet-published work does NOT go in the code repo.** Papers, paper-planning drafts, manuscripts (LaTeX `.tex`), slides, posters, digests, and Japanese research-note write-ups — in **ANY language** — live OUTSIDE the repo, under `W:\02_学会資料\<年度>\<会議>\`, organised by year / venue. (This is why the IGTE symposium paper and the stream-function paper materials were moved out on 2026-07-05.)
+- stream-function paper materials → `W:\02_学会資料\2025年度\2026_01_JIAM\streamfunction\`
+- IGTE symposium paper → `W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\`
+- A manuscript's language follows its **VENUE** — INTERNATIONAL (IGTE, IEEE, Compumag) = English; IEEJ / domestic = Japanese.
 
-(History: an interim 2026-07-05 experiment allowed Japanese research notes / paper drafts *inside* `docs/` under `> 研究ノート` / `> 論文ドラフト` header markers; that was superseded the same day — the Japanese materials moved to `W:\02_学会資料\` and the repo returned to English-only.)
+**The code repo keeps ONLY** English code + technical / dev docs (`README`, API reference `api.md`, method / theory / showcase notes `theory.md` / `single_stroke.md` / `regularization.md` / method `.ipynb`) and **figure/diagram SOURCE** (`.tex` diagrams, plot scripts) + committed figure/result data (per Data Persistence). Do NOT commit a paper MANUSCRIPT, paper-planning drafts, slides/posters, or Japanese write-ups — put them in `W:\02_学会資料\`. (A published result's reproducibility scripts + its committed figure data stay in the repo; the manuscript itself does not. `docs/maglev/papers/` was deleted 2026-07-05 as part of this.)
+
+(History: an interim 2026-07-05 experiment allowed Japanese research notes / paper drafts *inside* `docs/` under `> 研究ノート` / `> 論文ドラフト` header markers; superseded the same day — moved to `W:\02_学会資料\`, repo returned to English-only.)
 
 ### Naming Policy: External Project References
 
