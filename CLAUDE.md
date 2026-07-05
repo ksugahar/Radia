@@ -1219,8 +1219,10 @@ library by GEOMETRY CLASS, not by reflex.
 **POLICY** (Sugahara): for CAD AUTHORING -- parametric solids, booleans,
 sweeps, any real geometry construction -- use **build123d** (the lab's hardened
 `radia_mcp.build123d` parametric library + the `radia-build123d` MCP) or
-**Cubit** (`.jou` / plugin, for hex meshing and complex topology).  Do NOT
-author CAD with ad-hoc **`netgen.occ`** scripting.
+**Cubit** -- a FIRST-CLASS CAD authoring environment in its own right (the
+robust **ACIS** solid kernel: `create`, `unite`/`subtract`/`intersect`,
+`webcut`, `imprint`/`merge`, `sweep`/`tweak` via `.jou` + the lab plugin; NOT
+just a mesher).  Do NOT author CAD with ad-hoc **`netgen.occ`** scripting.
 
 `netgen.occ` is a MESH library with only a THIN OCC binding -- fine for the
 STEP -> mesh path (read a STEP, mesh it, write `.vol`), but NOT a CAD authoring
@@ -1245,8 +1247,13 @@ the SF printable-former; see `memory/sf_printable_former_cad_status.md`):
   (a missing `.solid()` / wrong profile plane silently yields a degenerate
   shell -- use the helpers, which do `Plane(origin=path@0, z_dir=path%0) *
   profile` then `sweep(...).solid()`).
-- hex mesh / complex topology / imprint-merge -> **Cubit** (`.jou`, the plugin
-  `export netgen`/`gmsh`).
+- CAD authoring is EQUALLY well served by **Cubit** (`.jou` + the lab plugin
+  `export netgen`/`gmsh`) -- and it is the route for hex meshing / complex
+  topology.  Its **ACIS** kernel is a DIFFERENT, mature solid modeller (NOT
+  OCCT), so tricky booleans / webcuts / sweeps that are FRAGILE in OCCT
+  (build123d / netgen.occ) may just work in Cubit -- reach for Cubit on hard
+  CAD, not only for meshing.  (Pick by fit: build123d for Python-parametric
+  families + Netgen-tet; Cubit for ACIS-robust construction + hex.)
 - reading/meshing an EXISTING STEP -> `netgen.occ` / OCC is fine (that is I/O,
   not authoring).
 
