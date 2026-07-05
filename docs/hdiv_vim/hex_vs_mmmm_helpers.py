@@ -4,11 +4,9 @@ collocation-MMMM hex, on the SAME structured hex mesh.
 Two INDEPENDENT hex soft-iron demag backends are cross-validated:
   * collocation MMMM (six-face surface charge) via the public rad.Solve(demag_backend='collocation_mmmm')
     on the ObjHexahedron iron built by radia.vim.MeshSoftIron.
-  * HDiv-VIM RT1: the hex RT1 charge Gram IS wired at radia.vim.ChargeGram(HDiv(hexmesh,
-    order=1)), but the public entry radia.vim.Solve deliberately GUARDS non-tet (production
-    'auto' routes hex -> collocation MMMM).  So we drive the wired hex Gram with the SHIPPED production
-    linear solver radia.vim._solve._solve_linear_mass_riesz_cpp (the mode-agnostic symmetric mass-Riesz
-    CG that the tet _solve_highorder uses) -- i.e. the real HDiv-VIM hex solve, minus the guard.
+  * HDiv-VIM RT1: public radia.vim.Solve and rad.Solve(auto) now accept pure hex.  This historical
+    helper still drives the same wired hex Gram with the shipped production mass-Riesz CG directly so the
+    notebook remains byte-stable with its 2026-07-04 result sidecar.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- these helpers open NO TaskManager;
 the notebook wraps each call in `with ngsolve.TaskManager():`.

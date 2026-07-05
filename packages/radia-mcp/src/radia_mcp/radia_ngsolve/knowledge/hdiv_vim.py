@@ -553,17 +553,22 @@ cohomology bookkeeping.  VERIFIED (golden test_hdiv_vim_symmetry_loops.py): a sp
 ||N.loop||/||N|| ~ 4e-16 (machine zero) on EVERY reduced mesh.  => the "loop-jokyo (loop removal) is
 metsuky-doi / mendokusai" problem is ELIMINATED -- ker(B) handles the cut topology for free.
 SCOPE (honest 2-part split): (1) the LOOP machinery on cut meshes = automatic (verified here).  (2) the
-demag VALUE of a symmetry MODEL = the IMAGE method -- retired from the HDiv-VIM public lane;
-collocation MMMM owns reduced image/symmetry models.  Only the REAL surface (spherical
-cap) carries sigma = M.n = n_z; the flat cut faces are symmetry planes (no real charge).  Reflecting the
-cap charge over the reduction planes -- sign = (-1)^(#z-reflections), since sigma = n_z flips under a
-z-mirror (the IMA sign rule: field-PARALLEL mirror x=0/y=0 keeps sign, field-PERPENDICULAR z=0 flips it)
--- reconstructs the full sphere's sigma = cos(theta).  RESULT (M=z_hat, vs the full-sphere demag from the
-same crude Gram): 1/2 +0.08%, 1/4 +0.11%, 1/8 -0.32% -- i.e. the reduced models reproduce the FULL demag
-from ~1/2, 1/4, 1/8 the surface DOF (108 / 52 / 20 cap-tris vs the full 192).  So 1/4 and 1/8 models are
-SUPPORTED: loops automatic (ker B) + demag via the image method, no hand-crafted loop-star.  (Production
-note: this uses the elementary sub-point Gram; the ngsolve.bem single-layer with image kernels is the
-high-order/curved/scalable production version of the same image method.)
+demag VALUE of a symmetry MODEL = the IMAGE method -- now live for flat pure-TET / pure-HEX / pure-WEDGE
+RT1 in the HDiv-VIM public lane.  Only the REAL surface (spherical cap) carries sigma = M.n = n_z; the
+flat cut faces are symmetry planes (no real charge).  Reflecting the cap charge over the reduction planes
+-- sign = (-1)^(#z-reflections), since sigma = n_z flips under a z-mirror (the IMA sign rule:
+field-PARALLEL mirror x=0/y=0 keeps sign, field-PERPENDICULAR z=0 flips it) -- reconstructs the full
+sphere's sigma = cos(theta).  RESULT (M=z_hat, vs the full-sphere demag from the same crude Gram): 1/2
++0.08%, 1/4 +0.11%, 1/8 -0.32% -- i.e. the reduced models reproduce the FULL demag from ~1/2, 1/4, 1/8
+the surface DOF (108 / 52 / 20 cap-tris vs the full 192).  In the current production bridge,
+`rad.Solve(..., image=...)` also materializes explicit mirror polyhedra after write-back, so
+`rad.Fld(iron, ...)` evaluates the full field of that materialized reduced solution to roundoff;
+`M_avg` is full-domain and `M_avg_reduced` is the raw reduced-domain diagnostic.  Important correction
+(2026-07-05): do NOT treat a percent-level comparison against an unconstrained explicit full hex RT1
+solve as acceptable.  The explicit-full `rad.Fld` target is ~10 eps, and it is currently tracked as an
+xfail because the full hex ChargeGram path still has a small reflection-symmetry defect (the transverse
+component changes with the quadrature knobs).
+Curved / mixed / pyramid reduced models remain fail-loud or collocation-MMMM bridge territory.
 
 ## NON-UNIFORM NONLINEAR needs analytic_gram; C-YOKE VERIFIED vs Radia (2026-06-08, the 1/8-gate audit)
 The gate before symmetry models: confirm nonlinear + C-yoke + distorted-mesh are solid.  Outcome:

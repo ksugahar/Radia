@@ -21,7 +21,11 @@ Public API (NGSolve-aligned validated solve primitives):
       -> (B, G, M_mass), the charge map, charge-Gram H-matrix, and HDiv mass used by DemagOperator.
   MeshSoftIron(mesh, mu_r=/bh_table=) / VolSoftIron(path, mu_r=/bh_table=)
       -> method-layer constructors for mesh-backed Radia soft iron.  For ordinary user code prefer the
-         user-intent API `rad.SoftIron(geometry, mu_r=...).solve(...)`.
+         user-intent API `rad.SoftIron(geometry, mu_r=...).solve(...)`.  When `rad.Solve(..., image=...)`
+         is used on a MeshSoftIron, the bridge materializes explicit mirror elements after write-back so
+         `rad.Fld(iron, ...)` evaluates the full field of that reduced solution; `M_avg_reduced` is the
+         reduced-domain diagnostic and `M_avg` is the physical full-domain average.  Unconstrained explicit
+         full-solve `rad.Fld` parity is a separate 10-eps validation target, not a percent-level tolerance.
   PlanarSolve(...) and PlanarDemagBody(...)
       -> the 2D planar tri/quad layer.
 
