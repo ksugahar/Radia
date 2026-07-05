@@ -1237,21 +1237,29 @@ the SF printable-former; see `memory/sf_printable_former_cad_status.md`):
 
 **Decision rule**:
 - new parametric CAD (magnets, yokes, coils, formers, primitives + booleans)
-  -> **build123d** (`radia_mcp.build123d.modeling`/`archetypes`, run via
-  `execute_build123d`); it is tested + Netgen-meshable + region-labelled.
+  -> the DEDICATED **`radia_mcp.build123d`** API: `modeling` verbs (`swept`,
+  `coil`, `revolved`, `lofted`, `tube`, `racetrack_coil`, `path_array`, boolean
+  `+`/`-`) + `archetypes` (`c_core`, `halbach_ring`, `cos_theta_dipole`,
+  `solenoid`, `litz_wire`, ...), run via `execute_build123d`; tested +
+  Netgen-meshable + region-labelled.  Do NOT hand-roll raw build123d
+  (a missing `.solid()` / wrong profile plane silently yields a degenerate
+  shell -- use the helpers, which do `Plane(origin=path@0, z_dir=path%0) *
+  profile` then `sweep(...).solid()`).
 - hex mesh / complex topology / imprint-merge -> **Cubit** (`.jou`, the plugin
   `export netgen`/`gmsh`).
 - reading/meshing an EXISTING STEP -> `netgen.occ` / OCC is fine (that is I/O,
   not authoring).
 
-**Caveat -- build123d AND netgen.occ BOTH wrap the OCCT kernel**: an
-arbitrary-path SWEEP of complex / self-crossing geometry is fragile in OCCT
-ITSELF (verified: build123d `sweep` of the same wire also returns a degenerate
-shell).  The lab's own build123d knowledge already flags "closed-path sweep is
-fragile in the OCCT kernel; use `cos_theta_dipole`".  When you genuinely need a
-ROBUST boolean of complex / self-crossing geometry (e.g. the SF printable-former
-channel of a self-crossing single-stroke wire), use a **MESH boolean**
-(`trimesh` + `manifold3d`) and export **STL** -- watertight in ~1 s where OCCT
+**Caveat -- build123d AND netgen.occ BOTH wrap the OCCT kernel**: the dedicated
+`modeling.swept`/`coil` work for NORMAL wire/coil ratios (helices, pipes), but
+an arbitrary-path SWEEP of THIN-profile / large-path / SELF-CROSSING geometry is
+fragile in OCCT ITSELF -- verified 2026-07-05: even `radia_mcp.build123d.swept`
+gives a DEGENERATE volume on the SF former's 0.8 mm-wire / 0.15 m-coil arc and
+RAISES `StdFail_NotDone BRep_API` on the self-crossing single-stroke wire (the
+lab's build123d knowledge already flags "closed-path sweep is fragile in the
+OCCT kernel; use `cos_theta_dipole`").  For a ROBUST boolean of THAT
+self-crossing geometry (the SF printable-former channel) use a **MESH boolean**
+(`trimesh` + `manifold3d`) -> **STL** -- watertight in ~1 s where OCCT
 segfaults / degenerates, and STL is the native 3D-print format (shipped as
 `calc_streamfunction.py --former-stl`).
 
