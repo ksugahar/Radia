@@ -293,6 +293,7 @@ FEMM_VALIDATION = """\
 | test_stranded                       | uniform-J B(a/2)=mu0 I/(4 pi a)   | +0.14% |
 | test_planar_eddy_nonlinear (lin)    | reduces to linear solve_planar_eddy| 3e-11 |
 | test_axi_force                      | coaxial loops I1 I2 dM/dz (ellip.)| +0.93% |
+| validation_axisymmetric_to_3d_force_gate | 3D loop quadrature vs full 2*pi*r axi ref | gate |
 | test_scalar_fem2d_ext (radiation)   | slab k(T0-TL)/L = eps sig(TL^4-..) | 0.000% |
 | test_nonlinear_magnet               | B_op = mu0 mu_r(B_op)Hc/(mu_r+1)  | -0.05% |
 | test_axi_eddy_harmonic              | P_eddy(w)>0, rising, w^2-onset    | physics|
