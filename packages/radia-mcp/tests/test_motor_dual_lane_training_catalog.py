@@ -18,15 +18,16 @@ from radia_mcp.motor.dual_lane_training_catalog import (  # noqa: E402
 )
 
 
-def test_dual_lane_training_catalog_has_exactly_30_scrubbed_cases():
+def test_dual_lane_training_catalog_has_wide_scrubbed_case_set():
     cases = motor_dual_lane_training_catalog()
-    assert len(cases) == 30
+    assert len(cases) >= 50
     gate = motor_dual_lane_training_catalog_gate()
     assert gate["status"] == "PASS"
-    assert gate["count"] == 30
+    assert gate["count"] >= 50
     assert gate["forbidden_hits"] == []
     assert gate["checks"]["all_cases_have_age_lane"] is True
     assert gate["checks"]["all_cases_have_vim_lane"] is True
+    assert gate["checks"]["covers_wide_machine_families"] is True
 
 
 def test_each_training_case_routes_to_age_and_vim():
@@ -50,11 +51,16 @@ def test_catalog_keeps_source_names_out_of_public_text():
 def test_catalog_closes_external_readable_reference_gap():
     gate = motor_dual_lane_training_catalog_gate()
     assert gate["source_seed_classes"]["external_readable_machine_fem_reference"] >= 4
+    assert gate["source_seed_classes"]["external_current_machine_example_library"] >= 20
     titles = "\n".join(case["title"] for case in motor_dual_lane_training_catalog())
     assert "Nonlinear C-core" in titles
     assert "SRM static torque" in titles
     assert "Induction-machine radial air-gap" in titles
     assert "Surface-PM air-gap" in titles
+    assert "Axial-flux PM" in titles
+    assert "Outer-rotor BLDC" in titles
+    assert "Doubly-fed induction generator" in titles
+    assert "Distributed winding-function" in titles
 
 
 def test_training_route_selects_matching_case_and_both_lanes():
@@ -63,3 +69,12 @@ def test_training_route_selects_matching_case_and_both_lanes():
     calls = "\n".join(route["next_public_calls"])
     assert "motor_age_validation_plan" in calls
     assert "hdiv_vim_reduced_fem" in calls
+
+
+def test_training_route_covers_wide_machine_families():
+    route = route_dual_lane_training_case("BLDC outer rotor polarity")
+    assert route["selected_case"]["case_id"] == "bldc_outer_rotor_polarity"
+    route = route_dual_lane_training_case("DFIG slip power")
+    assert route["selected_case"]["case_id"] == "dfig_slip_power_coupling"
+    route = route_dual_lane_training_case("distributed winding function")
+    assert route["selected_case"]["case_id"] == "winding_function_distributed_layout"
