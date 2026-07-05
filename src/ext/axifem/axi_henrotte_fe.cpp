@@ -5,6 +5,8 @@
 #include <comp.hpp>
 #include <python_comp.hpp>
 #include <pybind11/stl.h>
+#include <algorithm>
+#include <cmath>
 #include "axi_henrotte_fe.hpp"
 
 namespace axifem {
@@ -367,46 +369,38 @@ AxiHenrotteFE_P1_Triangle::AxiHenrotteFE_P1_Triangle(
     // such that shape_i(r_j, z_j) = delta_ij.
     // 3x3 system per i: [1, r_j^2, z_j] * (alpha, beta, gamma)^T_i = e_i
     double s[3] = { r[0]*r[0], r[1]*r[1], r[2]*r[2] };
-    // Determinant
     double det = (s[1] - s[0]) * (z[2] - z[0]) - (z[1] - z[0]) * (s[2] - s[0]);
-    if (det == 0.0) det = 1.0;  // degenerate — caller should avoid
-    double inv_det = 1.0 / det;
-    // Solve via Cramer for each i:
-    //   shape_i = ... we use: (alpha, beta, gamma)_i = M^{-1} * e_i
-    // M = [[1, s_0, z_0], [1, s_1, z_1], [1, s_2, z_2]]
-    // Cofactors (transpose for inverse):
-    auto col = [&](int i) {
-        // Returns the i-th column of M^{-1}, i.e. (alpha_i, beta_i, gamma_i).
-        // Compute as cofactors / det.
-        // Indices: ip1, ip2 = (i+1)%3, (i+2)%3
-        int ip1 = (i + 1) % 3;
-        int ip2 = (i + 2) % 3;
-        // Cofactor of (0, i): determinant of 2x2 minor with sign.
-        double c0 = (s[ip1] * z[ip2] - s[ip2] * z[ip1]);  // alpha_i * det
-        double c1 = -(z[ip2] - z[ip1]);                   // beta_i  * det
-        double c2 = (s[ip2] - s[ip1]);                    // gamma_i * det
-        // Sign correction for non-cyclic permutation:
-        int sign = ((i % 2) == 0) ? 1 : -1;
-        // Actually this is hand-derived; cleanest is to verify numerically below.
-        (void)sign;
-        alpha[i] = c0 * inv_det;
-        beta[i]  = c1 * inv_det;
-        gamma_[i] = c2 * inv_det;
-    };
-    col(0); col(1); col(2);
+    double ds_scale = std::max({1.0, std::abs(s[1] - s[0]), std::abs(s[2] - s[0])});
+    double dz_scale = std::max({1.0, std::abs(z[1] - z[0]), std::abs(z[2] - z[0])});
+    if (std::abs(det) <= 1.0e-14 * ds_scale * dz_scale)
+        throw Exception("AxiHenrotteFE_P1_Triangle: singular Vandermonde in (r^2,z)");
+
+    Mat<3,3> V;
+    for (int i = 0; i < 3; ++i) {
+        V(i, 0) = 1.0;
+        V(i, 1) = s[i];
+        V(i, 2) = z[i];
+    }
+    Mat<3,3> Vinv;
+    CalcInverse(V, Vinv);
+    for (int i = 0; i < 3; ++i) {
+        alpha[i] = Vinv(0, i);
+        beta[i] = Vinv(1, i);
+        gamma_[i] = Vinv(2, i);
+    }
 }
 
 void AxiHenrotteFE_P1_Triangle::CalcShape(
     const IntegrationPoint & ip, BareSliceVector<> shape) const
 {
-    // Reference triangle: (xi, eta) with xi >= 0, eta >= 0, xi + eta <= 1.
-    // Map to physical via standard P1 affine map:
-    //   r = r_0 + (r_1 - r_0)*xi + (r_2 - r_0)*eta
-    //   z = z_0 + (z_1 - z_0)*xi + (z_2 - z_0)*eta
+    // NGSolve ET_TRIG convention matches the P2 path:
+    //   ref (1, 0) <-> mesh vertex 0
+    //   ref (0, 1) <-> mesh vertex 1
+    //   ref (0, 0) <-> mesh vertex 2
     double xi = ip(0);
     double eta = ip(1);
-    double rp = r[0] + (r[1] - r[0]) * xi + (r[2] - r[0]) * eta;
-    double zp = z[0] + (z[1] - z[0]) * xi + (z[2] - z[0]) * eta;
+    double rp = r[2] + (r[0] - r[2]) * xi + (r[1] - r[2]) * eta;
+    double zp = z[2] + (z[0] - z[2]) * xi + (z[1] - z[2]) * eta;
     double sp = rp * rp;
     for (int i = 0; i < 3; ++i)
         shape(i) = alpha[i] + beta[i] * sp + gamma_[i] * zp;
@@ -417,14 +411,14 @@ void AxiHenrotteFE_P1_Triangle::CalcDShape(
 {
     double xi = ip(0);
     double eta = ip(1);
-    double rp = r[0] + (r[1] - r[0]) * xi + (r[2] - r[0]) * eta;
+    double rp = r[2] + (r[0] - r[2]) * xi + (r[1] - r[2]) * eta;
     // d phi/dr = beta_i * 2 r ;  d phi/dz = gamma_i
-    // dr/dxi = r_1 - r_0,    dr/deta = r_2 - r_0
-    // dz/dxi = z_1 - z_0,    dz/deta = z_2 - z_0
-    double dr_dxi = r[1] - r[0];
-    double dr_deta = r[2] - r[0];
-    double dz_dxi = z[1] - z[0];
-    double dz_deta = z[2] - z[0];
+    // dr/dxi = r_0 - r_2,    dr/deta = r_1 - r_2
+    // dz/dxi = z_0 - z_2,    dz/deta = z_1 - z_2
+    double dr_dxi = r[0] - r[2];
+    double dr_deta = r[1] - r[2];
+    double dz_dxi = z[0] - z[2];
+    double dz_deta = z[1] - z[2];
     for (int i = 0; i < 3; ++i) {
         double dphi_dr = beta[i] * 2.0 * rp;
         double dphi_dz = gamma_[i];

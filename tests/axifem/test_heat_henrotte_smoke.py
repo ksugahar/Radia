@@ -25,10 +25,11 @@ import pytest
 
 pytest.importorskip("ngsolve")
 
-from netgen.occ import OCCGeometry, MoveTo
 from ngsolve import (
-    BilinearForm, CoefficientFunction, Mesh, TaskManager,
+    BilinearForm, CoefficientFunction, TaskManager,
 )
+
+from _vol_mesh import structured_rect_vol_mesh
 
 
 def _to_dense(mat, n):
@@ -39,11 +40,26 @@ def _to_dense(mat, n):
 
 
 def _build_axisym_quad_mesh(ra, rb, za, zb, maxh):
-    """Single (or few) Q1 quad on [ra,rb] x [za,zb]."""
-    box = MoveTo(ra, za).Rectangle(rb - ra, zb - za).Face()
-    box.faces.name = "wp"
-    return Mesh(OCCGeometry(box, dim=2).GenerateMesh(
-        maxh=maxh, quad_dominated=True))
+    """Structured axis-aligned Q1 quads on [ra,rb] x [za,zb].
+
+    Netgen's OCC quad-dominated mesher may split even a rectangle into skewed
+    trapezoids.  The closed-form Henrotte Q1/Q2 paths require true
+    axis-aligned rectangles, so the smoke tests use NGSolve's structured mesh
+    generator instead of OCC meshing.
+    """
+    nx = max(1, int(np.ceil((rb - ra) / maxh)))
+    ny = max(1, int(np.ceil((zb - za) / maxh)))
+    return structured_rect_vol_mesh(
+        ra,
+        rb,
+        za,
+        zb,
+        quads=True,
+        nx=nx,
+        ny=ny,
+        mapping=lambda x, y: (ra + (rb - ra) * x, za + (zb - za) * y),
+        stem="axifem_heat_rect",
+    )
 
 
 @pytest.mark.parametrize("ra,rb,za,zb", [
