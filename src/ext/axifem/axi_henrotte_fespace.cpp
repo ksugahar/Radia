@@ -5,10 +5,73 @@
 #include "axi_henrotte_fe.hpp"
 #include "axi_henrotte_diffop.hpp"
 #include <python_comp.hpp>
+#include <algorithm>
+#include <cmath>
 
 namespace axifem {
 
 using namespace ngcomp;
+
+namespace {
+
+struct AxisAlignedQuadBounds {
+    double r_min;
+    double r_max;
+    double z_min;
+    double z_max;
+};
+
+double QuadCoordTol(const Vec<3> p[4])
+{
+    double span = 1.0;
+    for (int i = 0; i < 4; ++i) {
+        span = std::max(span, std::abs(p[i](0)));
+        span = std::max(span, std::abs(p[i](1)));
+    }
+    return 1.0e-12 * span;
+}
+
+bool Near(double a, double b, double tol)
+{
+    return std::abs(a - b) <= tol;
+}
+
+AxisAlignedQuadBounds RequireAxisAlignedQuad(const Vec<3> p[4], ElementId ei, int order)
+{
+    double tol = QuadCoordTol(p);
+    AxisAlignedQuadBounds b{p[0](0), p[0](0), p[0](1), p[0](1)};
+    for (int i = 1; i < 4; ++i) {
+        b.r_min = std::min(b.r_min, p[i](0));
+        b.r_max = std::max(b.r_max, p[i](0));
+        b.z_min = std::min(b.z_min, p[i](1));
+        b.z_max = std::max(b.z_max, p[i](1));
+    }
+    bool has_ll = false, has_lr = false, has_ul = false, has_ur = false;
+    bool axis_aligned = (b.r_max > b.r_min + tol) && (b.z_max > b.z_min + tol);
+    for (int i = 0; i < 4 && axis_aligned; ++i) {
+        const bool r_lo = Near(p[i](0), b.r_min, tol);
+        const bool r_hi = Near(p[i](0), b.r_max, tol);
+        const bool z_lo = Near(p[i](1), b.z_min, tol);
+        const bool z_hi = Near(p[i](1), b.z_max, tol);
+        axis_aligned = (r_lo || r_hi) && (z_lo || z_hi);
+        has_ll = has_ll || (r_lo && z_lo);
+        has_lr = has_lr || (r_hi && z_lo);
+        has_ul = has_ul || (r_lo && z_hi);
+        has_ur = has_ur || (r_hi && z_hi);
+    }
+    axis_aligned = axis_aligned && has_ll && has_lr && has_ul && has_ur;
+    if (!axis_aligned) {
+        string hint = (order == 2)
+            ? "use H1Henrotte(..., order=2, curvedquad=True) for skewed/curved quads"
+            : "use structured axis-aligned quads or triangle elements";
+        throw Exception("AxiHenrotteFESpace: non-axis-aligned quad at "
+                        + ToString(ei) + " is not valid for the closed-form Q"
+                        + ToString(order) + " path; " + hint);
+    }
+    return b;
+}
+
+}  // namespace
 
 AxiHenrotteFESpace::AxiHenrotteFESpace(shared_ptr<MeshAccess> ma, const Flags & flags)
   : FESpace(ma, flags)
@@ -143,8 +206,9 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             }
             Vec<3> p[4];
             for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
-            double r_a = p[0](0), r_b = p[1](0);
-            double z_a = p[0](1), z_b = p[2](1);
+            auto b = RequireAxisAlignedQuad(p, ei, 2);
+            double r_a = b.r_min, r_b = b.r_max;
+            double z_a = b.z_min, z_b = b.z_max;
             return *new (lh) AxiHenrotteFE_Q2_AxisAligned(r_a, r_b, z_a, z_b);
         }
         if (ngel.GetType() == ET_TRIG && vertices.Size() == 3) {
@@ -188,8 +252,9 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
     if (ngel.GetType() == ET_QUAD && vertices.Size() == 4) {
         Vec<3> p[4];
         for (int i = 0; i < 4; ++i) p[i] = ma->GetPoint<3>(vertices[i]);
-        double r_a = p[0](0), r_b = p[1](0);
-        double z_a = p[0](1), z_b = p[2](1);
+        auto b = RequireAxisAlignedQuad(p, ei, 1);
+        double r_a = b.r_min, r_b = b.r_max;
+        double z_a = b.z_min, z_b = b.z_max;
         return *new (lh) AxiHenrotteFE_Q1_AxisAligned(r_a, r_b, z_a, z_b);
     }
     if (ngel.GetType() == ET_TRIG && vertices.Size() == 3) {
