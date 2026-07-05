@@ -208,3 +208,123 @@ def axisymmetric_to_3d_validation_plan(
             "mesh_refinement_target_rtol": 0.02,
         },
     }
+
+
+def magnetic_material_pair_force_gate(
+    reference_force_vector_N: Iterable[float],
+    computed_force_vector_N: Iterable[float],
+    *,
+    case_id: str = "magnetic_material_pair_force",
+    axial_axis: str = "z",
+    reference_method: str = "dipole_dipole_or_coenergy",
+    axial_rtol: float = 0.03,
+    axial_atol_N: float = 0.0,
+    vector_rtol: float = 0.03,
+    vector_atol_N: float = 0.0,
+    transverse_rtol: float = 0.005,
+    transverse_atol_N: float = 0.0,
+    metadata: dict | None = None,
+) -> dict:
+    """Check a 3-D magnetic-material force vector against a reference vector.
+
+    This gate is for forces between magnetized or magnetizable bodies, where
+    ``J x B`` is not the right observable.  The reference may come from
+    coenergy/virtual work, weighted Maxwell stress, or an analytic magnetic
+    dipole pair.  The gate keeps the vector basis explicit and separately
+    checks the axial component and transverse cancellation/match.
+    """
+
+    axis_i = _axis_index(axial_axis)
+    reference = _vector3(reference_force_vector_N)
+    computed = _vector3(computed_force_vector_N)
+    axial_rel_tol = float(axial_rtol)
+    axial_abs_tol = float(axial_atol_N)
+    vec_rel_tol = float(vector_rtol)
+    vec_abs_tol = float(vector_atol_N)
+    trans_rel_tol = float(transverse_rtol)
+    trans_abs_tol = float(transverse_atol_N)
+    if min(axial_rel_tol, axial_abs_tol, vec_rel_tol, vec_abs_tol, trans_rel_tol, trans_abs_tol) < 0.0:
+        raise ValueError("force tolerances must be non-negative")
+
+    diff = [computed[i] - reference[i] for i in range(3)]
+    ref_norm = math.sqrt(sum(value * value for value in reference))
+    comp_norm = math.sqrt(sum(value * value for value in computed))
+    diff_norm = math.sqrt(sum(value * value for value in diff))
+    scale = max(ref_norm, comp_norm, 1.0e-300)
+    vector_rel_error = diff_norm / scale
+    vector_allowed = max(vec_abs_tol, vec_rel_tol * max(ref_norm, 1.0e-300))
+
+    axial_error = abs(computed[axis_i] - reference[axis_i])
+    axial_rel_error = _rel_error(computed[axis_i], reference[axis_i])
+    axial_allowed = max(axial_abs_tol, axial_rel_tol * max(abs(reference[axis_i]), 1.0e-300))
+
+    transverse_reference = [value for i, value in enumerate(reference) if i != axis_i]
+    transverse_computed = [value for i, value in enumerate(computed) if i != axis_i]
+    transverse_diff = [
+        transverse_computed[i] - transverse_reference[i]
+        for i in range(len(transverse_reference))
+    ]
+    transverse_reference_mag = math.sqrt(sum(value * value for value in transverse_reference))
+    transverse_computed_mag = math.sqrt(sum(value * value for value in transverse_computed))
+    transverse_error = math.sqrt(sum(value * value for value in transverse_diff))
+    transverse_allowed = max(trans_abs_tol, trans_rel_tol * scale)
+
+    checks = {
+        "reference_force_vector_finite": all(math.isfinite(value) for value in reference),
+        "computed_force_vector_finite": all(math.isfinite(value) for value in computed),
+        "axial_component_matches_reference": axial_error <= axial_allowed,
+        "force_vector_matches_reference": diff_norm <= vector_allowed,
+        "transverse_components_match_reference": transverse_error <= transverse_allowed,
+    }
+    ok = all(value is True for value in checks.values())
+    result = {
+        "policy": "magnetic_material_pair_force_gate",
+        "case_id": str(case_id),
+        "status": "ok" if ok else "needs_attention",
+        "reference_method": str(reference_method),
+        "axis": {
+            "axial_axis": str(axial_axis).strip().lower(),
+            "force_basis": "global_cartesian_components",
+        },
+        "reference": {
+            "force_vector_N": reference,
+            "force_norm_N": ref_norm,
+            "transverse_components_N": transverse_reference,
+            "transverse_magnitude_N": transverse_reference_mag,
+        },
+        "computed": {
+            "force_vector_N": computed,
+            "force_norm_N": comp_norm,
+            "transverse_components_N": transverse_computed,
+            "transverse_magnitude_N": transverse_computed_mag,
+        },
+        "errors": {
+            "component_abs_error_N": [abs(value) for value in diff],
+            "vector_abs_error_N": diff_norm,
+            "vector_rel_error": vector_rel_error,
+            "vector_allowed_error_N": vector_allowed,
+            "axial_abs_error_N": axial_error,
+            "axial_rel_error": axial_rel_error,
+            "axial_allowed_error_N": axial_allowed,
+            "transverse_abs_error_N": transverse_error,
+            "transverse_allowed_error_N": transverse_allowed,
+        },
+        "tolerances": {
+            "axial_rtol": axial_rel_tol,
+            "axial_atol_N": axial_abs_tol,
+            "vector_rtol": vec_rel_tol,
+            "vector_atol_N": vec_abs_tol,
+            "transverse_rtol": trans_rel_tol,
+            "transverse_atol_N": trans_abs_tol,
+        },
+        "checks": checks,
+        "required_result_contract": [
+            "state whether the force is magnetic-material/Maxwell-stress/coenergy, not Lorentz JxB",
+            "record source and target material selections",
+            "record global Cartesian force-vector basis and sign convention",
+            "record mesh/order/solver versions and timing with the result JSON",
+        ],
+    }
+    if metadata:
+        result["metadata"] = dict(metadata)
+    return result

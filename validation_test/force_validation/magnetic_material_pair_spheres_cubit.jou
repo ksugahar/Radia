@@ -1,0 +1,16 @@
+reset
+create sphere radius 0.04
+create sphere radius 0.04
+move volume 2 z 0.3
+volume all scheme tetmesh
+volume all size 0.008
+mesh volume all
+set duplicate block elements on
+block 1 add volume 1
+block 1 name "source_magnetic"
+block 2 add volume 2
+block 2 name "target_magnetic"
+block 3 add tri all
+block 3 name "boundary"
+export netgen "validation_test/force_validation/magnetic_material_pair_spheres.vol" order 1 overwrite
+exit

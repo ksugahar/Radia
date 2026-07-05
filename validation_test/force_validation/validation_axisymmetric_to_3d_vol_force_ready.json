@@ -6,23 +6,23 @@
     "validation_passed": true,
     "vol_loaded_by_ngsolve": true
   },
-  "created_at_utc": "2026-07-05T02:58:00Z",
+  "created_at_utc": "2026-07-05T04:11:54Z",
   "errors": {
-    "axial_rel_error": 0.01630184908797326,
-    "max_abs": 5.108025893000108e-09,
-    "max_rel": 0.01642868750258704,
-    "target_volume_rel_error": 0.01642868750258704,
-    "transverse_rel_error": 4.881311049995926e-05
+    "axial_rel_error": 0.01631863412299772,
+    "max_abs": 5.11328532050782e-09,
+    "max_rel": 0.016444170458633205,
+    "target_volume_rel_error": 0.016444170458633205,
+    "transverse_rel_error": 3.868357104182515e-05
   },
   "geometry_kind": "tri_tet_vol",
   "learning_lanes": {
     "public": "verified",
-    "source_tool": "candidate"
+    "source_tool": "verified"
   },
   "next_slot_allowed": true,
   "run": {
-    "command": "python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py --rebuild-vol",
-    "duration_s": 15.978615,
+    "command": "python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py --rebuild-vol --mesh-source auto",
+    "duration_s": 43.871712,
     "exit_code": 0,
     "workdir": "."
   },
@@ -37,11 +37,11 @@
   },
   "source_artifact": "validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py",
   "timing_breakdown_s": {
-    "gate_and_write_results": 0.06044,
-    "mesh_generation_or_reuse": 5.276527,
-    "mesh_import": 0.330452,
-    "ngsolve_lorentz_integral": 10.226391,
-    "source_field_build": 0.003618
+    "gate_and_write_results": 0.061106,
+    "mesh_generation_or_reuse": 6.6062,
+    "mesh_import": 0.740878,
+    "ngsolve_lorentz_integral": 36.373806,
+    "source_field_build": 0.003539
   },
   "tool_slot": "radia-ngsolve",
   "tool_versions": {

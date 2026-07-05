@@ -19,6 +19,7 @@ adjacent JSON summary with timestamp and runtime version metadata.
 | [`validation_torque_waveform_health.py`](validation_torque_waveform_health.py) | A single periodic torque table is checked by mean torque, RMS ripple ratio, dominant harmonic, and harmonic variance budget |
 | [`validation_axisymmetric_to_3d_force_gate.py`](validation_axisymmetric_to_3d_force_gate.py) | Full `2*pi*r` axisymmetric force results validate 3D force vectors by axial agreement and transverse cancellation |
 | [`validation_axisymmetric_to_3d_vol_force.py`](validation_axisymmetric_to_3d_vol_force.py) | A saved `.vol` target torus is loaded by NGSolve and checked by `axisymmetric_to_3d_force_gate` after `int J x B dV` |
+| [`validation_magnetic_material_pair_vol_force.py`](validation_magnetic_material_pair_vol_force.py) | A generated two-sphere `.vol` is loaded by NGSolve and checked as magnetic-material force, with volume force, Maxwell stress, and virtual-work cross-checks |
 
 ```powershell
 python validation_test/force_validation/validation_parallel_wire_virtual_work_force.py
@@ -29,4 +30,5 @@ python validation_test/force_validation/validation_maxwell_contour_segment_balan
 python validation_test/force_validation/validation_torque_waveform_health.py
 python validation_test/force_validation/validation_axisymmetric_to_3d_force_gate.py
 python validation_test/force_validation/validation_axisymmetric_to_3d_vol_force.py
+python validation_test/force_validation/validation_magnetic_material_pair_vol_force.py
 ```
