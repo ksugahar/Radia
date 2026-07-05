@@ -62,14 +62,14 @@ versioned + released separately on PyPI):
 
 | Package | Install | Purpose |
 |---------|---------|---------|
-| **radia** | `pip install radia` | C++ core + Python (MMM/MSC/PEEC, panels, MCP) |
+| **radia** | `pip install radia` | C++ core + Python (HDiv-VIM/PEEC, panels, MCP) |
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
 
 ### POLICY: Compute Core in `radia`, Applications Outside (2026-06-14)
 
-**POLICY**: The computational **core methods** -- MMM/MSC, axisymmetric FE,
-HDiv-VIM, the DtN / FEM-Kelvin operator, and any future solver/kernel -- live in
+**POLICY**: The computational **core methods** -- HDiv-VIM, PEEC, axisymmetric FE,
+the DtN / FEM-Kelvin operator, and any future solver/kernel -- live in
 **radia 本体** (the `radia` wheel: `src/core/`, `src/ext/`, `src/radia/`). They are
 **NEVER** spun out as separate `radia-<X>` PyPI packages. The `radia-<X>` name and
 the `radia.<domain>` subpackages are the **application** layer (induction heating,
@@ -88,20 +88,19 @@ Decision rule for new work:
   `radia.<domain>` is ever its own PyPI package -- they all ship inside the `radia`
   wheel.
 
-This is why `radia-mmm` / `radia-axifem` / `radia-vim` were dissolved into radia
-on 2026-06-14 (they were compute methods mis-packaged as `radia-<X>`); `packages/`
-now holds only the two genuine PyPI packages above.
+This is why compute-method side packages were dissolved into radia on 2026-06-14
+(they were compute methods mis-packaged as `radia-<X>`); `packages/` now holds
+only the two genuine tooling packages above.
 
 **Core solver methods inside `radia`** (NOT standalone packages -- they ship in the
 `radia` wheel):
 
 | Method | Code (ships in radia wheel) | Docs / Validation / Tests |
 |--------|------------------------------|------------------|
-| **MMM / MSC** (collocation demag) | `mmm_core.pyd` + `radia.ObjHexahedron/Tetrahedron/Wedge` (`import radia`; the old `radia_mmm` namespace is gone) | `docs/smco_magnet_array/` (notebook), tests / validation lanes as needed |
 | **Axisymmetric FE** (Henrotte basis) | `radia.axifem` (`src/radia/axifem.pyd`) | `docs/axifem/`, `validation_test/axifem/`, `tests/axifem/` |
 | **FEEC HDiv-VIM** (the VIM) | `radia.vim` (`src/core/rad_hdiv_vim.cpp`, `src/radia/hdiv_vim/`) -- the SOLE VIM. The separate Newton-kernel Galerkin VIM prototype (`src/ext/radia_vim/`) was deleted 2026-06-14 as unnecessary (recover from git history if ever needed). | `docs/vim/`, `validation_test/vim/`, tests |
 | **DtN / FEM-Kelvin operator** (compute core) | the FEM-Kelvin sparse generator of the layered (Sommerfeld-type) Green's operator -- a **core** capability, NOT an application. The historical research act scripts are archived in `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb` + `kelvin_dtn_spectrum_archive_results.json`; reusable pieces promote into `src/radia/open_boundary` (like `hdiv_vim` did). **Two write-up tracks (2026-06-15):** Track A = this DtN+Kelvin core (the SA/Hachinohe paper: DtN-spectrum datasheet, sparse Kelvin open boundary, Sommerfeld isomorphism/surrogate, the directly-assembled material-aware DtN matrix, FEM-condensed≠BEM); Track B = its use as the **stream-function coil-design** kernel with iron (SEPARATE paper, see the Stream-function domain row + `HANDOFF_sommerfeld_dtn_kelvin_streamfunction.md`). | `docs/kelvin/kelvin_dtn_spectrum_archive.ipynb`, `packages/radia-mcp/tests/test_dtn_*` |
-| **PEEC** (Partial Element Equivalent Circuit) | `peec_matrices.pyd` (`src/core/rad_peec_matrices.*` + `src/lib/rad_peec_matrices_api.cpp`) + `radia.peec_topology` / `peec_coupled` / `peec_msc_schur` / `fasthenry_parser` -- filament/panel (FastImp-style) L,R,C,M circuit extraction, SIBC/ESIM surface impedance, PRIMA/Lanczos MOR. A **core** integral-equation / circuit-extraction method (same rank as MMM/MSC), consumed by the PCB and IH application domains; **never** a `radia-peec` package. | `docs/peec_integration/demos/`, PEEC `tests/` suite |
+| **PEEC** (Partial Element Equivalent Circuit) | `peec_matrices.pyd` (`src/core/rad_peec_matrices.*` + `src/lib/rad_peec_matrices_api.cpp`) + `radia.peec_topology` / `peec_coupled` / `fasthenry_parser` -- filament/panel (FastImp-style) L,R,C,M circuit extraction, SIBC/ESIM surface impedance, PRIMA/Lanczos MOR. A **core** integral-equation / circuit-extraction method, consumed by the PCB and IH application domains; **never** a `radia-peec` package. | `docs/peec_integration/demos/`, PEEC `tests/` suite |
 | **BEM** (boundary integral / surface IE) | `radia.bem` (`sibc_hacapk` = HACApK-backed Laplace-kernel Galerkin BEM; `coil_inductance_ngsolve` = `ngsolve.bem` Weggler-EFIE integration, the `--coil-solver bem-a` path) + the top-level `radia.bem_sibc_solver` helper. A **core** surface-integral-equation solver (HACApK ACA backend ships in the radia wheel), consumed by the PCB and IH domains; **never** a `radia-bem` package. | `docs/peec_integration/demos/ngsbem_peec_demo/`, BEM `tests/` |
 
 **Core support infrastructure** (also ships in the radia wheel, also **never**
@@ -237,8 +236,8 @@ on the tree is not.
    snapshot, not the test that documents why the approach failed.
 
 4. **Genuinely co-valid alternatives are NOT iteration snapshots.** Two
-   implementations that are BOTH live and user-selectable (e.g. yano-MSC AND the
-   HDiv-VIM per "KEEP BOTH", or `--coil-solver peec|bem-a`) are separate
+   implementations that are BOTH live and user-selectable (e.g.
+   `--coil-solver peec|bem-a`, or independent FEM/BEM validation paths) are separate
    canonical artifacts. Do not delete one as "superseded" — neither superseded
    the other.
 
@@ -352,11 +351,11 @@ modules** that the notebook (and `radia_mcp`, for mcp-server integration) import
 this is allowed/encouraged (see "File Placement Policy"); do not inline-duplicate
 shared logic across notebooks.
 
-This is why `mmm_eigenvalue_study` was removed (2026-06-27): it was a research
-exploration of the now-closed loop-deflation direction (MMMM is the official MMM
-H-matrix route), so it had no business persisting as a tracked `examples/` corpus —
-the nullspace *theory* it produced is kept in `docs/solver/MSC_NULLSPACE_DEFLATION.md`,
-the *lesson* in `memory/`, and nothing else. **Decision rule for new research:**
+This is why the old eigenvalue/nullspace study was removed (2026-06-27): it was
+a research exploration of a now-closed loop-deflation direction, so it had no
+business persisting as a tracked `examples/` corpus. The nullspace *theory* it
+produced is kept in solver notes, the *lesson* in `memory/`, and nothing else.
+**Decision rule for new research:**
 run it in `C:\temp`; promote to `docs/ipynb` (knowledge) or `src/` (API) only when
 it has crossed that bar; otherwise distill to `memory/` and leave the tracked tree
 clean. This is the research-lifecycle complement to the "Promotion Ladder:
@@ -1129,9 +1128,8 @@ the full investigation record.
 **ExaFMM-t was removed from the repository**. Do NOT re-implement FMM
 acceleration in the Radia C++ core (rad_*.cpp).
 
-**SCOPE CLARIFICATION (2026-05-30)**: This policy targets the
-**Radia MMM/MSC volume integral** (magnetisation-element to
-magnetisation-element interaction inside the Radia core).  It does
+**SCOPE CLARIFICATION (2026-05-30, updated 2026-07-05)**: This policy targets
+Radia-owned compact Laplace-kernel interaction matrices in the core. It does
 NOT forbid the use of FMM-based libraries at OTHER LAYERS of the
 stack -- specifically:
 
@@ -1144,8 +1142,8 @@ stack -- specifically:
     SF coil design on smooth surfaces where Biot-Savart is the
     natural kernel (free-space, far-field-dominated) -- exactly
     the geometry class where FMM math works well.
-  - **HACApK ACA+** remains the choice for Radia's own
-    MMM/MSC system matrix (compact magnets, near-field heavy).
+  - **HACApK ACA+** remains the choice for Radia's own HDiv-VIM charge-Gram and
+    PEEC/BEM interaction matrices when repeated matvecs or compression matter.
 
 The two libraries live at different layers and serve different
 geometry classes; using them in their natural domains is not a
@@ -1181,14 +1179,17 @@ direct 4.24 s at N=8000), while an **H-matrix wins repeated apply**
 (near-free matvec, 0.015 s vs FMM eval 0.12 s at 24k DoF; rank
 ~900 constant in N, storage O(N*r) = 14x less than dense).  This
 does NOT change the Radia core: **HACApK ACA+ stays Radia's own
-MMM/MSC system matrix** (compact, near-field heavy) per the scope
+HDiv-VIM / PEEC / BEM H-matrix route** per the scope
 clarification above; the wait-for-Hlib rule is only about the
 `ngsolve.bem` (free-space BEM / SF-coil) layer.
 
-**Why FMM was removed from Radia (the original reasoning, still
-binding for the Radia core / volume MMM-MSC layer)**:
+**Why FMM was removed from Radia (the original reasoning, still binding for
+compact Radia core matrices)**:
 
-1. **Dipole approximation accuracy is poor for MSC elements**: MSC (surface charge) elements have distributed charge on 4-8 faces. A single dipole m=M*V approximates this poorly at intermediate distances (r ~ 2-5 element sizes). The O((a/r)^2) error is unacceptable for engineering accuracy.
+1. **Point multipole approximations are poor for extended element sources**:
+   distributed face/volume sources cannot be collapsed to a single dipole at
+   intermediate distances (r ~ 2-5 element sizes) without unacceptable
+   engineering error.
 
 2. **FMM Solve (Method 3) was useless**: Compact geometries (C-type magnets, iron yokes) have 87% near-field pairs. Near-field correction memory equals the full dense matrix, eliminating FMM's O(N log N) advantage. HACApK (H-matrix, Method 2) is 10-100x faster because ACA+ compression works on the same near-field blocks.
 
@@ -1198,9 +1199,9 @@ binding for the Radia core / volume MMM-MSC layer)**:
 
 **Lesson**: FMM is effective for point charges/dipoles in unbounded
 space (N-body), and for smooth surface BEM kernels (= what
-ngsolve.bem targets).  It is NOT effective for MSC where source
-distributions are extended (face integrals) and geometries are
-compact (= what Radia's own core targets).  Choose the acceleration
+ngsolve.bem targets).  It is not Radia's default for compact core
+operators with extended element sources and near-field-heavy geometry.
+Choose the acceleration
 library by GEOMETRY CLASS, not by reflex.
 
 ### GmshBuilder: Removed (2026-03-13)
@@ -1468,77 +1469,35 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 
 ## Architecture Overview
 
-### Terminology: MMM/MSC vs BEM
+### Terminology: HDiv-VIM / BEM / PEEC
 
-**POLICY**: Radia's core solvers (MMM, MSC) are **NOT** BEM (Boundary Element Method). Use precise terminology:
+**POLICY**: Radia's production soft-iron demagnetization route is
+**HDiv-VIM**. Do not revive retired collocation demag backend names or aliases.
+Use precise terminology:
 
 | Term | Method | Library | Description |
 |------|--------|---------|-------------|
-| **MMM** | Magnetic Moment Method | Radia C++ | Volume magnetization M as DOF, dipole interaction |
-| **MSC** | Magnetic Surface Charge | Radia C++ | Surface charge sigma as DOF, solid angle integration |
+| **HDiv-VIM** | FEEC flux / charge-Gram volume integral method | Radia C++ + `radia.vim` | Soft-iron demag path, NGSolve mesh/FES coupled |
 | **BEM** | Boundary Element Method | **ngsolve.bem** | EFIE/MFIE, HDivSurface, Maxwell/Laplace kernels |
 | **PEEC** | Partial Element Equivalent Circuit | Radia Python + C++ | Loop-Star, circuit extraction (L,R,C,M) |
 
-**Do NOT** call MMM/MSC "BEM". They are integral equation methods but with different formulations:
+**Do NOT** blur these:
 - BEM (ngsolve.bem): surface integral equations (EFIE/MFIE) on conductor/dielectric boundaries
-- MMM: volume integral equation for magnetization, solved element-by-element
-- MSC: surface charge on element faces, solved via solid angle kernel
+- HDiv-VIM: volume/mesh-based soft iron demag, charge-Gram/HACApK acceleration,
+  reduced-FEM/NGSolve coupling.
+- PEEC: conductor circuit extraction and MQS/Darwin surface-impedance analysis.
 
-**DIRECTION (decision 2026-07-04, Sugahara): Radia's OFFICIAL soft-iron demag method is HDiv-VIM ONLY; collocation MMMM is a GATED BRIDGE that will leave Radia for ELF_MAGIC.**  End-state TARGET: the `radia` wheel ships **HDiv-VIM as the SOLE soft-iron demag route** (tet AND hex/wedge/pyramid AND mesh-less), and **collocation MMMM is removed from Radia and lives only in ELF_MAGIC** (the LAB-private Fortran, where it continues as research -> SA-26-0xx; memory [[radia_hdiv_only_mmmm_to_fortran]], [[mmmm_in_elf_magic_port]]).  This SUPERSEDES the "KEEP BOTH" / "PRIMARY-COARSE both-kept" framing below -- that framing now describes the **CURRENT BRIDGE state, not the destination**.
-
-**GATED -- do NOT remove MMMM from Radia yet.**  Removal is blocked until every soft-iron input class has a production HDiv-VIM backend: TODAY the `set_demag_backend` auto split still routes **mesh-backed HEX/WEDGE and mesh-less soft iron to collocation MMMM** (HDiv is dispatch-tet-only), so removing MMMM now would leave hex/wedge/mesh-less demag with no backend.  Two remaining gate pieces (both in codex's active dispatch/backend area -- coordinate, do NOT unilaterally edit `src/radia/__init__.py` backend / `vim/_radsolve.py` / `vim/_solve.py` dispatch):
-1. **hex/wedge dispatch flip** -- route mesh-backed hex/wedge soft iron to HDiv-VIM.  The hex/wedge HDiv C++ EXISTS and matches MMMM to ~1% (`vim/_solve.py`); remaining work = flip the auto-dispatch + production goldens.
-2. **mesh-less -> auto-mesh -> HDiv** (decision 2026-07-04) -- a mesh-LESS soft iron (`ObjHexahedron`/`ObjWedge` built directly, no NGSolve mesh) is internally STRUCTURE-MESHED (`MakeStructured3DMesh` / OCC) and solved on HDiv-VIM, KEEPING the mesh-less API (NOT dropped; the API-compat auto-mesh path replaces the mesh-less MMMM route).
-
-Once BOTH land + are production-validated, collocation MMMM is deleted from Radia (the moment path, `set_demag_backend("collocation_mmmm")`, the C++ moment kernels) -> ELF_MAGIC.  Until then MMMM stays as the hex/wedge/mesh-less bridge exactly as described below.  (This does NOT touch tet **MMM** or permanent magnets -- those are separate C++ paths, not the collocation-MMMM moment route.)
-
-**KEEP BOTH (decision 2026-06-19 -- now the BRIDGE state, see DIRECTION above): yano-type MSC AND the FEEC HDiv-VIM are both kept.**  The earlier
-"drop yano-type" plan was CANCELLED -- measured that yano-MSC reaches the converged field with FEWER
-hex elements than HDiv RT0 (yano-MSC = 6 surface-charge DOF/hex, higher per-element order; HDiv RT0 =
-1 flux DOF/face, lowest order).  The two are COMPLEMENTARY: **yano-MSC for per-element accuracy on hex;
-HDiv-VIM for loop-free (mesh/mu_r-independent ~6 Newton iters) convergence.**  (yano is also preserved
-in the private MAGIC Fortran repo; Yano's academic work is cited.)
-
-**PRIMARY / COARSE-TIER (decision 2026-06-30, Sugahara): HDiv-VIM is now the 本命 (PRIMARY) soft-iron demag method; collocation MMMM is DEMOTED to the COARSE / fast tier** (optimization inner loops, mesh-less quick passes).  Both are still KEPT.  Rationale (from the loop-free de-risk; memory `collocation_loopfree_abandoned`): collocation MMMM's ONE weakness is loop-mode suppression (the surface-charge near-null == cell-graph cycle space), and collocation GIVES UP loop-free (its loop-free implementation was removed 2026-06-30) -- it stays FIELD-CORRECT (loops are field-null) but the internal M is loop-polluted, which is fine for coarse/optimization use but NOT for accurate / hysteresis work.  HDiv-VIM (tet RT1) is loop-free BY CONSTRUCTION (loops are ker(B), never enter N = B^T G B; ~6 mesh/mu_r-independent Newton iters), so it is the primary ACCURATE route.  Guidance: use **HDiv-VIM (tet mesh)** for production / accurate demag + hysteresis; use **collocation MMMM (hex / mesh-less)** for fast coarse passes where a loop-polluted internal M is acceptable.  The `set_demag_backend` auto split (tet -> HDiv-VIM, hex/mesh-less -> collocation MMMM) is UNCHANGED -- it is a capability + tier split, not a quality compromise.
-
-**SUPERSEDED 2026-06-28 (Sugahara): "MMMM does NOT connect to HACApK" — the 2026-06-27 role split below is REVERSED.**
-MMMM is now DENSE-ONLY (the moment-HACApK manager/solver, runtime deflation, and H-LU route were removed,
-commits 3534d31b / 494d8374). **HDiv-VIM is AGAIN the large-scale / loop-heavy / high-`mu_r` route** (HACApK-backed,
-loop-free); MMMM is the dense, distorted-element-robust route for low/medium `mu_r`, small/medium N. PEEC stays
-HACApK-backed. The paragraph below is HISTORICAL.
-
-**ROLE SPLIT (Sugahara 2026-06-27): MMMM is the MAIN large-scale route; HDiv-VIM is NOT.** MMMM scales via
-the retired QR-free + sparse-PARDISO two-sided deflation experiment (3a `f9cb1dd4` / 3b `0aba78be`):
-QR-free coarse op `E=(AL)ᵀ(AL)` assembled sparse + factored by PARDISO sparse-direct -> SUB-CUBIC coarse
-setup, deflation AL-build-limited `O(N² log N)`.  **HDiv-VIM is NO LONGER the large-scale route** --
-repositioned to **(a) curved-surface high accuracy** (H(div) RT flux) and **(b) FEM coupling** (NGSolve
-interop, flux continuity at interfaces).  The earlier "large loop-heavy N -> HDiv-VIM (symmetric AMS
-scalable)" framing is RETIRED.  (Net: MMMM = large-scale + open boundary; HDiv-VIM = curved accuracy +
-FEM coupling; yano-MSC = per-element hex accuracy.  See "H-Matrix Route Policy" below.)
-
-- **Canonical geometry path for BOTH backends = `.vol` -> NGSolve `Mesh` -> `radia.vim.soft_iron_from_mesh`
-  (or the one-call `soft_iron_from_vol("iron.vol", mu_r=/bh_table=)`).**  `.vol` is the SOLE
-  Cubit<->NGSolve interchange (Cubit `export netgen` / Netgen / OCC `ngmesh.Save`); netgen owns the mesh
-  orientation, which avoids hand-built-mesh pitfalls (e.g. inconsistent boundary-face winding silently
-  breaking the HDiv surface charge -- a real bug seen 2026-06-19).  The returned container carries BOTH
-  representations (Radia `ObjHexahedron/Tetrahedron/Wedge` for collocation MMMM + field eval; the registered NGSolve
-  mesh for HDiv), so either backend can solve it.  Do NOT hand-build netgen meshes for this.
-- **Backend selection** (`radia.set_demag_backend(...)`, default `"auto"`):
-  - `"auto"` (API-split, default): a mesh-backed soft iron (`soft_iron_from_mesh`) -> HDiv-VIM; a
-    mesh-LESS soft iron (`ObjHexahedron`/`ObjWedge` + `MatLin`/`MatSatIsoTab` built directly) -> collocation MMMM;
-    tet (MMM) and permanent magnets -> C++ solver.
-  - `"collocation_mmmm"` -> force the collocation MMMM face-charge path (solves the container's `ObjHexahedron`/`Wedge` elements, incl. a
-    `soft_iron_from_mesh` body); `"hdiv"` -> force the HDiv-VIM (needs a mesh-backed body).
-  - Per-call override: `rad.Solve(cont, ..., demag_backend="collocation_mmmm"|"hdiv"|"auto")`.
-  - Wrapper in `src/radia/__init__.py`; goldens `tests/test_demag_backend.py`,
-    `tests/feec/test_hdiv_radsolve_dispatch.py`, `tests/feec/test_vol_both_backends.py`.
-- **MMM (tetrahedron)** soft-iron demag and **permanent magnets** are UNAFFECTED (not the collocation MMMM path).
-- The collocation MMMM C++ kernel (`Use6DOF_MSC` legacy flag-name branches in `rad_relaxation_methods.cpp` / `rad_interaction.cpp`,
-  hex-MSC assembly in `BuildMatrix`) is LIVE again (the `SolveGen` Error203 guard was removed
-  2026-06-19).  It is dense/matrix-free, not a moment-HACApK route.
+**Decision (2026-07-05, Sugahara): Radia soft-iron demag is HDiv-VIM only.**
+The public API must not preserve retired collocation or yano backend aliases.
+`demag_backend="auto"` and `"hdiv"` are the supported names;
+`"auto"` selects the HDiv-VIM path for soft iron. Mesh-backed operation goes
+through `.vol` -> NGSolve `Mesh` -> `radia.vim.soft_iron_from_mesh` (or
+`soft_iron_from_vol(...)`). Hand-built element primitives are an internal
+representation detail, not a parallel user-facing demag backend.
 
 **When to use which**:
-- Permanent magnets, soft iron → **MMM/MSC** (Radia)
+- Soft iron, nonlinear demag, reduced-FEM coupling -> **HDiv-VIM** (Radia)
+- Permanent-magnet source fields -> **rad.Fld / analytical Radia field kernels**
 - Eddy currents, shielding, impedance extraction → **BEM** (ngsolve.bem) or **PEEC** (Radia)
 - High-frequency scattering → **BEM** (ngsolve.bem, Helmholtz kernel)
 
@@ -1550,7 +1509,7 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Electromagnetic Analysis                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  NGSolve (FEM)              │  Radia (MMM/MSC/PEEC)             │
+│  NGSolve (FEM)              │  Radia (HDiv-VIM/PEEC/field)      │
 │  ───────────────────────────│──────────────────────────────────│
 │  OK: Bounded domains        │  OK: Unbounded domains (open BC) │
 │  OK: Complex geometry       │  OK: Permanent magnets (no mesh) │
@@ -1575,7 +1534,7 @@ HDiv-VIM), because they are exactly the value NGSolve does not provide.
 **The decision rule (apply every time):**
 > "Does netgen/ngsolve already provide this?"
 > - **YES (plumbing)** → delete Radia's version, delegate to netgen/ngsolve.
-> - **NO (a method NGSolve lacks: open-boundary analytic field, MMM/MSC,
+> - **NO (a method NGSolve lacks: open-boundary analytic field, HDiv-VIM,
 >   PEEC, Henrotte axisymmetric FE, ...)** → KEEP it (and over time DEMOTE it
 >   from a user-facing API to an internal C++/representation detail — keep ≠
 >   expose; the un-pybind path is gradual, see the 2-layer API below).
@@ -1594,7 +1553,7 @@ HDiv-VIM), because they are exactly the value NGSolve does not provide.
 
 **KEEP (genuine methods — Radia's reason to exist; never delete, even on ngsolve):**
 the whole `core` set — `rad.Fld` **analytic open-boundary field** (the crown
-jewel), **MMM/MSC**, **yano-MSC**, **HDiv-VIM**, **`axifem`** (Henrotte
+jewel), **HDiv-VIM**, **`axifem`** (Henrotte
 axisymmetric FE — NGSolve has no native Henrotte magnetic basis), **DtN/FEM-Kelvin
 operator**, **PEEC**, **BEM** (`sibc_hacapk`…), **sparsesolv** (Compact AMS/AMG/COCR),
 **HACApK**, **analytical_formulas**, **coil_builder** (mesh-free Biot-Savart source),
@@ -1612,18 +1571,15 @@ KEPT as internal kernels even as their direct user-facing pybind surface shrinks
   panels, docs notebooks, validation lanes, or tests may depend on them today —
   demote first, remove after migration).
 
-**Unify yano-MSC + HDiv-VIM under ONE soft-iron path** (already mostly done): the
-SAME `.vol` → mesh → element container → `rad.Fld`, with the demag backend a
-**selector** (`set_demag_backend` / `SoftIron.solve(backend=…)`), NOT two diverging
-APIs.  "Unify" = one ingestion/data/field-eval/API; it does **not** merge the two
-algorithms (that would defeat keeping both — yano = per-element accuracy, HDiv =
-loop-free convergence).
+**Soft-iron path**: the SAME `.vol` -> mesh -> HDiv-VIM object -> `rad.Fld`
+workflow is the supported path. Backend selectors are limited to the current
+HDiv-VIM names and must not carry retired compatibility aliases.
 
 ### Maglev Analysis: Radia + NGSolve, Not FEM Alone
 
 **POLICY**: Magnetic levitation (maglev) analysis -- the eddy-current
 electromagnetic FORCE between a permanent magnet / coil and a (moving)
-conductor -- is solved with **Radia (IEM = MMM/MSC) + NGSolve (FEM) weak
+conductor -- is solved with **Radia analytic field kernels + NGSolve (FEM) weak
 coupling**, NOT with standalone FEM.
 
 **Why pure FEM is the wrong tool for maglev**:
@@ -1710,27 +1666,17 @@ The complete pipeline for accelerator electromagnet analysis:
 - Custom H-matrix algorithms (use HACApK)
 
 **Radia C++ Core** (maintain and enhance):
-1. MMM - Magnetic Moment Method for permanent magnets and soft iron
-2. MSC - Magnetic Surface Charge for hexahedra/tetrahedra
-3. Field computation - B, H, A, Phi in unbounded domains
+1. HDiv-VIM soft-iron demag and charge-Gram kernels
+2. Field computation - B, H, A, Phi in unbounded domains
+3. PEEC / BEM Laplace-kernel matrix assembly where Radia owns the workflow
 4. NGSolve integration - RadiaField CoefficientFunction
 
-### Solver Methods: MMM and MSC
+### Soft-Iron Solver Method: HDiv-VIM
 
-| Method | Element | DOF | Description |
-|--------|---------|-----|-------------|
-| **MMM** | Tetrahedra (4 faces) | 3 (Mx, My, Mz) | Magnetic dipole distributions |
-| **MSC** | Hexahedra (6 faces) | 6 (sigma/face) | Surface charge solid angle integration |
-| **MSC** | Wedges (5 faces) | 5 (sigma/face) | Transition elements |
-
-**Mixed Element Support**: All solvers (LU, BiCGSTAB, HACApK) support mixed hex+wedge+tet meshes. Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`.
-
-**BiCGSTAB Block Jacobi**: Automatically switches to block Jacobi preconditioner when diagonal ratio > 10 or min dominance < 0.1 (distorted elements). Uses LAPACK `dgetrf_`/`dgetri_` for block inversion.
-
-**Interaction Matrix Blocks** (mixed elements):
-- **3x3** (tet-tet), **5x5** (wedge-wedge), **6x6** (hex-hex)
-- **5x6 / 6x5** (wedge-hex cross), **3x6 / 3x5 / 6x3 / 5x3** (tet-hex/wedge cross)
-- Implementation: `SetupInteractMatrix_VariableDOF()`, compile flag `RADIA_MSC_SUPPORT`
+HDiv-VIM is the supported soft-iron demagnetization method. It is built around
+NGSolve mesh/FES concepts, HDiv flux continuity, and Radia's charge-Gram /
+HACApK acceleration path. Retired collocation demag names are not supported as
+public backends.
 
 ### Unified Field Computation Architecture
 
@@ -1755,14 +1701,16 @@ The complete pipeline for accelerator electromagnet analysis:
 ```
 
 
-**Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC).
+**Key Features**: Inside/outside classification, TaskManager parallelized batch, complex field support for PEEC/SIBC workflows.
 
 ### Field Calculation: Surface Current vs Surface Charge
 
 - **ObjRecMag**: Surface current model (rectangular blocks). 8-corner BufVect formula, efficient and non-cancelling on symmetry axes.
 - **ObjHexahedron/ObjTetrahedron**: Surface charge model (general polyhedra). Face-based solid angle integration. A field may be zero on symmetry axes (mathematical cancellation, not a bug).
 
-**rad.Fld() inside materials**: MMM gives dipole approximations inside materials; MSC gives uniform field per element. For validation, compare sigma values or external field points, not internal fields.
+**rad.Fld() inside materials**: Prefer external field probes or HDiv/NGSolve
+state variables for validation. Interior material fields depend on the active
+formulation and should not be compared against retired collocation conventions.
 
 ### Vector Potential A Field
 
@@ -1775,18 +1723,6 @@ A field is **implemented** for all element types using face integration (Wilton 
 - `rad.ObjTetrahedron(vertices, magnetization)` -- Tetrahedra (4 vertices)
 - `rad.ObjWedge(vertices, magnetization)` -- Wedges (6 vertices)
 - Mesh import functions (`netgen_mesh_to_radia`) for complex geometries
-
-### EIEM2 Evaluation Point Convention
-
-**POLICY**: The MSC interaction matrix evaluation point for face `i` is:
-```cpp
-EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
-```
-Do NOT change this. This matches ELF's EIEM2 convention exactly.
-
-**MSC Source Files**: `rad_polyhedron.cpp` (element dispatch), `rad_poly_analytical.cpp` (triangle/quad integration), `rad_interaction.cpp` (interaction matrix, `PrecomputeHexaGeometry()`).
-
-See `docs/MSC_QUICK_START.md` for quick start guide.
 
 ---
 
@@ -2096,16 +2032,16 @@ the H-matvec call `ngcore::ParallelFor`, which **silently falls back to
 single-threaded when NO `RegionTaskManager` region is active**.  A non-panel
 caller of `rad.Solve(..., method=2)` (or a bare `hdiv_demag_solve`) does NOT open
 a `with TaskManager()` region, so without a C++ self-wrap the **entire HACApK
-build + Krylov solve runs serial** -- the exact failure mode that made moment-yano
-method 2 silently single-threaded off the panel path (2026-06-23).
+build + Krylov solve runs serial** -- the exact failure mode that made a retired
+demag method-2 path silently single-threaded off the panel path (2026-06-23).
 
 **RULE**: every C++ entry point that drives an HACApK `ngcore::ParallelFor` MUST
 self-wrap **exactly once, at the right granularity**:
 
 - **BUILD** -- `RadHACApKBase::BuildHMatrix` stands up the region at the top of
   its body.  This is the **single central** protection for EVERY build site
-  (moment-yano, HDiv ChargeGram, MMM/MSC, PEEC, the diagnostic densify/smoke
-  entries).  Do NOT duplicate it per build caller.
+  (HDiv ChargeGram, PEEC, BEM, the diagnostic densify/smoke entries).  Do NOT
+  duplicate it per build caller.
 - **SOLVE LOOP** -- each Krylov / iterative loop (BiCGSTAB, CG, MINRES, Picard)
   that repeatedly calls `MatVec` stands up **ONE** region around the whole loop.
   **NEVER wrap inside `RadHACApKBase::MatVec` itself**: a per-matvec region would
@@ -2131,8 +2067,7 @@ is the established C++ pattern -- already used by
 bridge `chacapk_par_region` (`cHACApK_harith_par.cpp`).
 
 **Self-wrapped surface (2026-06-23 sweep)** -- BUILD: `RadHACApKBase::BuildHMatrix`;
-SOLVE LOOPS: `radTRelaxationMethNo_2::SolveBiCGSTAB_HMatrix_VariableDOF` (classic MMM/MSC method 2),
-`RadHACApKChargeGram::SolveLinearMaterial` / `SolveNonlinearPicard` (HDiv;
+SOLVE LOOPS: `RadHACApKChargeGram::SolveLinearMaterial` / `SolveNonlinearPicard` (HDiv;
 `SolveMaterialMINRES` already had it), and the `HMatrixDensify` densify loop.
 **Any NEW HACApK solver loop or build path MUST add the self-wrap.**  (The stale
 `OpenMP`-worded comments in the HACApK callback state were corrected to
@@ -2459,7 +2394,6 @@ src/radia/
   __init__.py           # DLL path setup + re-export from C++ module
   _radia_pybind.pyd     # Main C++ extension (includes RadiaField CoefficientFunction)
   cln_core.pyd          # CLN transient solver
-  mmm_core.pyd          # MMM solver
   peec_matrices.pyd     # PEEC matrix assembly
   *.py                  # Python utility modules
   # NO .dll files
@@ -2478,7 +2412,7 @@ src/radia/
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
 Official PyPI ngsolve **6.2.2604**+ includes: **MKL**, **PARDISO**, Periodic BC fix,
-**curvedelements Save/Load**, **p-version hex/prism curving**, and an **FMM-style hierarchical Biot-Savart / Laplace / Helmholtz backend in `ngsolve.bem`**.  The FMM backend is appropriate for SF coil design on smooth surfaces (free-space Biot-Savart on plane / cylinder / sphere); see the "FMM Removed from Radia core (2026-03-06)" policy section for the scope clarification -- Radia's own MMM/MSC volume integral remains on HACApK ACA+ (different geometry class).
+**curvedelements Save/Load**, **p-version hex/prism curving**, and an **FMM-style hierarchical Biot-Savart / Laplace / Helmholtz backend in `ngsolve.bem`**.  The FMM backend is appropriate for SF coil design on smooth surfaces (free-space Biot-Savart on plane / cylinder / sphere); see the "FMM Removed from Radia core (2026-03-06)" policy section for the scope clarification -- Radia's own HDiv-VIM / PEEC / BEM repeated-apply matrices remain on HACApK ACA+ where compression is the right tool.
 
 Installed on LAB 2026-05-30: `pip show ngsolve` -> `Version: 6.2.2604`, `Location: C:\Program Files\Python312\Lib\site-packages`.  Bump `pyproject.toml` dependency pin to `ngsolve>=6.2.2604` when the FE-direct + ngsolve.bem demo lands.
 
@@ -2667,62 +2601,32 @@ From `src/radia/netgen_mesh_import.py`:
 - **中規模 (500<N<2000)**: BiCGSTAB推奨 (最速)
 - **大規模 (N>2000)**: HACApK推奨 (メモリ効率)
 
-### H-Matrix Route Policy: HDiv/BEM/PEEC + collocation-MMMM COARSE tier Use HACApK (2026-07-02)
+### H-Matrix Route Policy: HDiv/BEM/PEEC Use HACApK (2026-07-05)
 
-**Current policy** (supersedes the 2026-06-28 "MMMM does NOT connect to HACApK"):
-collocation MMMM's **PURE-HEX COARSE tier connects to HACApK, matvec-only**
-(Sugahara 2026-07-02).  A `rad.Solve(..., method=2)` on a pure-hex moment object
-routes to the matrix-free moment BiCGSTAB with the chi-free geometry coupling K
-built once as a `RadHACApKMomentSystem` H-matrix (O(N log N) matvec), reused across
-the nonlinear Picard loop (only the block-diagonal chi changes).  **Loop-free is
-abandoned** for this route: the internal M is field-correct but loop-polluted --
-acceptable for the coarse / optimization tier; accurate + hysteresis work uses the
-loop-free HDiv-VIM.  Verified 2026-07-02 (clean -Rebuild): method-2 == method-0
-dense LU externally (tight eps 6.8e-13 on a 720-DOF bar), `linear_iterations>0`
-(BiCGSTAB, not LU), and ACA is genuinely live (loose `hacapk_eps=0.5` -> 5.5% field
-error + more iters on the long-bar far-field geometry); 34 MMMM/demag goldens pass.
-
-**Still forbidden** (these were the DEAD parts, removed and NOT revived):
-- **NO H-LU** on the moment path (no-pivot H-LU is wrong AND slow at compression<1;
-  see `memory/collocation_loopfree_abandoned.md`).
-- **NO runtime loop-deflation / loop-free** moment API (collocation gives up loop-free).
-- **NO PARDISO coarse-op / two-sided deflation** machinery.
-- The moment H-matrix is **HEX-ONLY**: tet/wedge/mixed method-2 stay on the dense
-  moment LU; method 0 (dense LU) and method 1 (matrix-free dense-K BiCGSTAB) are
-  unchanged for all element classes.
+HACApK is canonical for the Radia routes whose operators are designed as
+H-matrix problems. Retired collocation demag H-matrix adapters are not a supported
+surface and must not be used as a backend-selection reason.
 
 HACApK is canonical for the routes where the operator is designed as an H-matrix problem:
 
 1. **HDiv-VIM**: charge-Gram H-matrix and HDiv system managers are the production
    large-scale / loop-free path.  This is the route for high-mu, loop-heavy, and
    FEEC-coupled demag problems.
-2. **Classic MMM method 2**: the legacy tet/wedge/mixed MMM manager remains the
-   method-2 route for those element classes.  It is not the collocation MMMM
-   moment path.
-3. **Collocation-MMMM coarse tier (pure-hex, matvec-only)**: `RadHACApKMomentSystem`
-   is the chi-free geometry-K H-matrix consumed by the method-2 moment BiCGSTAB
-   (loop-free abandoned; no H-LU, no deflation).
-4. **BEM and PEEC**: the scalar Galerkin BEM and PEEC managers remain maintained
+2. **BEM and PEEC**: the scalar Galerkin BEM and PEEC managers remain maintained
    HACApK adapters.
-5. **Point-kernel / Gauss tools**: point-kernel HACApK support is kept as a
+3. **Point-kernel / Gauss tools**: point-kernel HACApK support is kept as a
    building block for the Gauss-point charge-Gram direction.
 
 **HACApK-connected surface currently kept**:
 
 | Subclass / adapter | Role | Python entry / test surface |
 |---|---|---|
-| `RadHACApKMMMManager` | classic MMM method-2 for tet, wedge, and mixed variable-DOF meshes | `rad.Solve(..., 2)` on classic MMM meshes; retired-guard validation |
-| `RadHACApKMomentSystem` | collocation-MMMM COARSE tier: chi-free geometry-K H-matrix (pure-hex, matvec-only; loop-free abandoned) | `rad.Solve(..., 2)` on pure-hex moment meshes; `test_method2_hacapk_*` |
 | `RadHACApKBEMManager` | BEM / SIBC Laplace Galerkin | `radia.bem_sibc_solver` and BEM HACApK matvec validation |
 | `RadHACApKHDivManager` | HDiv-VIM structured-hex RT0 probe/demo path | `_hdiv_vim_hmatrix_probe` validation |
 | `RadHACApKChargeGram` | production HDiv-VIM charge-Gram H-matrix | HDiv linear/nonlinear charge-Gram validation |
 | `RadHACApKPointKernel` | Gauss-point Laplace kernel building block | charge-Gauss operator path |
 | `RadHACApKHDivSystemTet` | HDiv-VIM tetrahedral system | HDiv tet/system validation |
 | `RadHACApKPEECManager` | PEEC circuit extraction | `radia.peec_hacapk_solver` smoke/solver validation |
-
-**Naming guard**: `demag_backend="collocation_mmmm"` is the explicit override for
-collocation MMMM.  Do not add or preserve a `"yano"` backend alias; it hides the
-retired MSC/EIEM2 naming and causes broken examples.
 ### Solver Configuration (Unified API)
 
 ```python
@@ -2734,7 +2638,7 @@ config = rad.GetSolverConfig()  # Returns dict with all settings
 | Keyword | Default | Description |
 |---------|---------|-------------|
 | `hacapk_eps` | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
-| `hacapk_leaf` | 10 | Minimum cluster size (elements). 10 for MSC 6DOF hex (~66 DOF/leaf) |
+| `hacapk_leaf` | 10 | Minimum cluster size for H-matrix clustering |
 | `hacapk_eta` | 2.0 | Admissibility parameter |
 | `bicgstab_tol` | 1e-4 | BiCGSTAB convergence tolerance |
 | `relax_param` | 0.0 | Under-relaxation (0=full step, <1=damped) |
@@ -2757,7 +2661,8 @@ ComputeEntry(): A_val = -N_val + delta_ij * inv_chi[i]
 H-matrix stores system matrix A = -N + diag(1/chi)
 ```
 
-**Sign convention applies uniformly to ALL DOF types** (MMM 3DOF, MSC 5/6DOF, mixed). No DOF-type-specific sign conditionals.
+**Sign convention applies uniformly to all supported interaction blocks.** No
+DOF-type-specific sign conditionals.
 
 | Layer | Sign | Description |
 |-------|------|-------------|
@@ -2813,18 +2718,10 @@ Golden: `validation_test/hysteresis/test_binput_moment.py::
 test_E_coupled_block_loop_default_anderson` (also locks the default).
 
 **Hantila polarization method (historical)**: Hantila (1975) splits
-`B = mu_0*(1+alpha)*H + mu_0*R` (R = M - alpha*H), giving a CONSTANT LHS
-`(I - alpha*N)` LU-factored once -- guaranteed contraction for any monotone
-constitutive law, but slow (contraction rate (M-m)/(M+m) with GLOBAL slope
-bounds; its own auto-alpha must cover the steepest descending-branch chi x1.5).
-The dense 3-DOF `AutoRelax_BInput_Hantila` (+ B-input Newton) survive in C++
-ONLY for genuine 3-DOF dipole elements; after the tet/RecMag->MSC unification
-no soft-iron 3-DOF elements exist, so `b_input_hantila=True` /
-`b_input_newton=True` on all-moment bodies ROUTE to the moment B-input
-Picard(+Anderson) (verified bit-identical, 2026-07-03).  The Python
-`radia.hantila_solver` PoC was removed with the moment unification.
-MMMM already owns Hantila's one economic advantage (expensive-part-built-once)
-via the chi-free cross-solve K cache.
+`B = mu_0*(1+alpha)*H + mu_0*R` (R = M - alpha*H), giving a constant LHS.
+This remains useful as background for hysteresis solver design, but the
+production soft-iron route is HDiv-VIM plus its current nonlinear iteration and
+preconditioner stack. Do not add a separate public Hantila demag backend.
 
 Reference: F.I. Hantila, Rev. Roum. Sci. Techn. - Electrotechn. et Energ., 1975.
 
@@ -2939,7 +2836,7 @@ IMA produces incorrect results for **boundary elements** (faces ON symmetry plan
 **When IMA is Safe**:
 1. Non-boundary elements only (offset from symmetry planes)
 2. Observation points off-plane
-3. MMM (tetrahedra) -- no limitation
+3. Explicit full-model solve -- use when the symmetry cut is not covered by IMA
 
 ---
 
@@ -3006,7 +2903,7 @@ result = parser.solve()
 
 Supports: `.Units`, `N`/`E` definitions, `.external`, `.freq`, `.default`, `.equiv`, `.magnetic` blocks, line continuation `+`.
 
-### Coupled PEEC + MMM
+### Coupled PEEC + HDiv-VIM
 
 ```python
 from peec_coupled import CoupledPEECSolver
@@ -3071,7 +2968,7 @@ Radia PEEC works alongside ngsolve.bem:
 | DC - 1 MHz | ngsolve.bem (Weggler EFIE, low-freq stable) |
 | 1 MHz - GHz | ngsolve.bem (Helmholtz) |
 
-Radia PEEC unique features: direct circuit extraction (L, R, C), native SPICE netlist, Lanczos MOR, MMM coupling.
+Radia PEEC unique features: direct circuit extraction (L, R, C), native SPICE netlist, Lanczos MOR, and HDiv-VIM core coupling.
 
 ### Integration Architecture
 

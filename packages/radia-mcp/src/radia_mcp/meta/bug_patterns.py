@@ -803,8 +803,7 @@ PATTERNS: list[dict] = [
         "prevention": "Always M = Br/mu_0 in A/m. Never copy Br (Tesla) "
                       "straight into a mag vector. See CLAUDE.md "
                       "'Magnetization Units: A/m (NOT Tesla)'.",
-        "related": ["docs/smco_magnet_array/smco_magnet_array.ipynb",
-                    "packages/radia-mcp/src/radia_mcp/magnetic_materials/permanent_magnet_knowledge.py"],
+        "related": ["packages/radia-mcp/src/radia_mcp/magnetic_materials/permanent_magnet_knowledge.py"],
     },
     {
         "id": "rad-solve-return-4-tuple",

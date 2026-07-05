@@ -1505,8 +1505,8 @@ static void FieldFromChargedTriangleLocal(const double* obs,
 // formulation's quadrupole field-gradient, = the Hessian -grad grad I0 of the single-layer potential)
 // from a UNIFORMLY charged FLAT triangle.  H reproduces FieldFromChargedTriangleLocal exactly; gH is the
 // CLOSED FORM obtained by symbolic differentiation of that H (Mathematica-verified vs the 64pt-Gauss
-// moment kernel: gH rel ~ Gauss accuracy, symmetric + traceless to machine eps; derivation .wls under
-// docs/multipole_moment_mmm/).  gH is assembled from ONLY the tangential (log-term HH1/HH2) derivatives
+// moment kernel: gH rel ~ Gauss accuracy, symmetric + traceless to machine eps.  gH is
+// assembled from ONLY the tangential (log-term HH1/HH2) derivatives
 // plus tracelessness (Gzz = -(Gxx+Gyy)) and symmetry (Gxz = dHH1/de3, Gyz = dHH2/de3) -> NO atan
 // derivative -> well-conditioned near the source plane.  Returns field+grad WITHOUT the 1/4pi factor
 // (caller applies it, as for FieldFromChargedTriangleLocal).  gH order: (xx,yy,zz,xy,xz,yz).

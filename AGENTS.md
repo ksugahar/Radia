@@ -43,7 +43,7 @@ S:\Radia\01_GitHub\
 
 | Package | Install | Purpose |
 |---------|---------|---------|
-| **radia** | `pip install radia` | C++ core + Python (MMM/MSC/PEEC, panels, MCP) |
+| **radia** | `pip install radia` | C++ core + Python (HDiv-VIM/PEEC, panels, MCP) |
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 
 **Installation**:
@@ -214,8 +214,8 @@ repository's knowledge; leaving the dead branch in the tree does not.
    dead snapshot, not the test that documents why the approach failed.
 
 4. **Genuinely co-valid alternatives are NOT iteration snapshots.** Two
-   implementations that are BOTH live and user-selectable (e.g. yano-MSC AND the
-   HDiv-VIM per "KEEP BOTH", or `--coil-solver peec|bem-a`) are separate
+   implementations that are BOTH live and user-selectable (e.g.
+   `--coil-solver peec|bem-a`, or independent FEM/BEM validation paths) are separate
    canonical artifacts. Do not delete one as "superseded" — neither superseded
    the other.
 
@@ -877,7 +877,7 @@ the full investigation record.
 
 **Why FMM failed for Radia**:
 
-1. **Dipole approximation accuracy is poor for MSC elements**: MSC (surface charge) elements have distributed charge on 4-8 faces. A single dipole m=M*V approximates this poorly at intermediate distances (r ~ 2-5 element sizes). The O((a/r)^2) error is unacceptable for engineering accuracy.
+1. **Point multipole approximations are poor for extended element sources**: distributed face/volume sources cannot be collapsed to a single dipole at intermediate distances (r ~ 2-5 element sizes) without unacceptable engineering error.
 
 2. **FMM Solve (Method 3) was useless**: Compact geometries (C-type magnets, iron yokes) have 87% near-field pairs. Near-field correction memory equals the full dense matrix, eliminating FMM's O(N log N) advantage. HACApK (H-matrix, Method 2) is 10-100x faster because ACA+ compression works on the same near-field blocks.
 
@@ -885,7 +885,7 @@ the full investigation record.
 
 4. **HACApK covers all large-scale needs**: H-matrix acceleration (ACA+) provides O(N log N) memory and O(N log^2 N) MatVec for the interaction matrix, which is the actual bottleneck.
 
-**Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body). It is NOT effective for MSC where source distributions are extended (face integrals) and geometries are compact.
+**Lesson**: FMM is effective for point charges/dipoles in unbounded space (N-body) and for smooth BEM kernels. It is not Radia's default for compact core operators with extended element sources and near-field-heavy geometry.
 
 ### GmshBuilder: Removed (2026-03-13)
 
@@ -1089,24 +1089,34 @@ sideset 1 add surface 2             # surface 2 may not be the gap face
 
 ## Architecture Overview
 
-### Terminology: MMM/MSC vs BEM
+### Terminology: HDiv-VIM / BEM / PEEC
 
-**POLICY**: Radia's core solvers (MMM, MSC) are **NOT** BEM (Boundary Element Method). Use precise terminology:
+**POLICY**: Radia's production soft-iron demagnetization route is
+**HDiv-VIM**. Do not revive retired collocation demag backend names or aliases.
+Use precise terminology:
 
 | Term | Method | Library | Description |
 |------|--------|---------|-------------|
-| **MMM** | Magnetic Moment Method | Radia C++ | Volume magnetization M as DOF, dipole interaction |
-| **MSC** | Magnetic Surface Charge | Radia C++ | Surface charge sigma as DOF, solid angle integration |
+| **HDiv-VIM** | FEEC flux / charge-Gram volume integral method | Radia C++ + `radia.vim` | Soft-iron demag path, NGSolve mesh/FES coupled |
 | **BEM** | Boundary Element Method | **ngsolve.bem** | EFIE/MFIE, HDivSurface, Maxwell/Laplace kernels |
 | **PEEC** | Partial Element Equivalent Circuit | Radia Python + C++ | Loop-Star, circuit extraction (L,R,C,M) |
 
-**Do NOT** call MMM/MSC "BEM". They are integral equation methods but with different formulations:
+**Do NOT** blur these:
 - BEM (ngsolve.bem): surface integral equations (EFIE/MFIE) on conductor/dielectric boundaries
-- MMM: volume integral equation for magnetization, solved element-by-element
-- MSC: surface charge on element faces, solved via solid angle kernel
+- HDiv-VIM: volume/mesh-based soft iron demag, charge-Gram/HACApK acceleration,
+  reduced-FEM/NGSolve coupling
+- PEEC: conductor circuit extraction and MQS/Darwin surface-impedance analysis
+
+**Decision (2026-07-05, Sugahara): Radia soft-iron demag is HDiv-VIM only.**
+`demag_backend="auto"` and `"hdiv"` are the supported names; `"auto"` selects
+the HDiv-VIM path for soft iron. Mesh-backed operation goes through `.vol` ->
+NGSolve `Mesh` -> `radia.vim.soft_iron_from_mesh` (or
+`soft_iron_from_vol(...)`). Hand-built element primitives are an internal
+representation detail, not a parallel user-facing demag backend.
 
 **When to use which**:
-- Permanent magnets, soft iron → **MMM/MSC** (Radia)
+- Soft iron, nonlinear demag, reduced-FEM coupling -> **HDiv-VIM** (Radia)
+- Permanent-magnet source fields -> **rad.Fld / analytical Radia field kernels**
 - Eddy currents, shielding, impedance extraction → **BEM** (ngsolve.bem) or **PEEC** (Radia)
 - High-frequency scattering → **BEM** (ngsolve.bem, Helmholtz kernel)
 
@@ -1118,7 +1128,7 @@ Radia's role is to **complement NGSolve**, not compete with it. Focus on areas w
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Electromagnetic Analysis                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  NGSolve (FEM)              │  Radia (MMM/MSC/PEEC)             │
+│  NGSolve (FEM)              │  Radia (HDiv-VIM/PEEC/field)      │
 │  ───────────────────────────│──────────────────────────────────│
 │  OK: Bounded domains        │  OK: Unbounded domains (open BC) │
 │  OK: Complex geometry       │  OK: Permanent magnets (no mesh) │
@@ -1184,27 +1194,17 @@ The complete pipeline for accelerator electromagnet analysis:
 - Custom H-matrix algorithms (use HACApK)
 
 **Radia C++ Core** (maintain and enhance):
-1. MMM - Magnetic Moment Method for permanent magnets and soft iron
-2. MSC - Magnetic Surface Charge for hexahedra/tetrahedra
-3. Field computation - B, H, A, Phi in unbounded domains
+1. HDiv-VIM soft-iron demag and charge-Gram kernels
+2. Field computation - B, H, A, Phi in unbounded domains
+3. PEEC / BEM Laplace-kernel matrix assembly where Radia owns the workflow
 4. NGSolve integration - RadiaField CoefficientFunction
 
-### Solver Methods: MMM and MSC
+### Soft-Iron Solver Method: HDiv-VIM
 
-| Method | Element | DOF | Description |
-|--------|---------|-----|-------------|
-| **MMM** | Tetrahedra (4 faces) | 3 (Mx, My, Mz) | Magnetic dipole distributions |
-| **MSC** | Hexahedra (6 faces) | 6 (sigma/face) | Surface charge solid angle integration |
-| **MSC** | Wedges (5 faces) | 5 (sigma/face) | Transition elements |
-
-**Mixed Element Support**: All solvers (LU, BiCGSTAB, HACApK) support mixed hex+wedge+tet meshes. Variable DOF offset arrays: `m_elemDOF`, `m_elemDOFOffset`, `m_totalDOF`.
-
-**BiCGSTAB Block Jacobi**: Automatically switches to block Jacobi preconditioner when diagonal ratio > 10 or min dominance < 0.1 (distorted elements). Uses LAPACK `dgetrf_`/`dgetri_` for block inversion.
-
-**Interaction Matrix Blocks** (mixed elements):
-- **3x3** (tet-tet), **5x5** (wedge-wedge), **6x6** (hex-hex)
-- **5x6 / 6x5** (wedge-hex cross), **3x6 / 3x5 / 6x3 / 5x3** (tet-hex/wedge cross)
-- Implementation: `SetupInteractMatrix_VariableDOF()`, compile flag `RADIA_MSC_SUPPORT`
+HDiv-VIM is the supported soft-iron demagnetization method. It is built around
+NGSolve mesh/FES concepts, HDiv flux continuity, and Radia's charge-Gram /
+HACApK acceleration path. Retired collocation demag names are not supported as
+public backends.
 
 ### Unified Field Computation Architecture
 
@@ -1229,14 +1229,16 @@ The complete pipeline for accelerator electromagnet analysis:
 ```
 
 
-**Key Features**: Inside/outside classification (solid angle method), TaskManager parallelized batch, complex field support (PEEC+MMM AC).
+**Key Features**: Inside/outside classification, TaskManager parallelized batch, complex field support for PEEC/SIBC workflows.
 
 ### Field Calculation: Surface Current vs Surface Charge
 
 - **ObjRecMag**: Surface current model (rectangular blocks). 8-corner BufVect formula, efficient and non-cancelling on symmetry axes.
 - **ObjHexahedron/ObjTetrahedron**: Surface charge model (general polyhedra). Face-based solid angle integration. A field may be zero on symmetry axes (mathematical cancellation, not a bug).
 
-**rad.Fld() inside materials**: MMM gives dipole approximations inside materials; MSC gives uniform field per element. For validation, compare sigma values or external field points, not internal fields.
+**rad.Fld() inside materials**: Prefer external field probes or HDiv/NGSolve
+state variables for validation. Interior material fields depend on the active
+formulation and should not be compared against retired collocation conventions.
 
 ### Vector Potential A Field
 
@@ -1249,18 +1251,6 @@ A field is **implemented** for all element types using face integration (Wilton 
 - `rad.ObjTetrahedron(vertices, magnetization)` -- Tetrahedra (4 vertices)
 - `rad.ObjWedge(vertices, magnetization)` -- Wedges (6 vertices)
 - Mesh import functions (`netgen_mesh_to_radia`) for complex geometries
-
-### EIEM2 Evaluation Point Convention
-
-**POLICY**: The MSC interaction matrix evaluation point for face `i` is:
-```cpp
-EvalPt = 0.5 * (FaceCenter[i] + ElementCenter)
-```
-Do NOT change this. This matches ELF's EIEM2 convention exactly.
-
-**MSC Source Files**: `rad_polyhedron.cpp` (element dispatch), `rad_poly_analytical.cpp` (triangle/quad integration), `rad_interaction.cpp` (interaction matrix, `PrecomputeHexaGeometry()`).
-
-See `docs/MSC_QUICK_START.md` for quick start guide.
 
 ---
 
@@ -1369,7 +1359,7 @@ NGSolve convention and is caller-wrapped with `with ngsolve.TaskManager():`.
 External threaded kernels are the exception, not an alternative Radia threading model. Dense
 LU (`dgesv_`) uses MKL's internal threading under `radia::MKLThreadGuard` while
 `ngcore::SuspendTaskManager` prevents nested TaskManager/MKL oversubscription. Iterative
-Radia solvers (BiCGSTAB, HACApK/method 2, HDiv VIM, moment-yano) stay TaskManager-native.
+Radia solvers (BiCGSTAB, HACApK/method 2, HDiv VIM) stay TaskManager-native.
 
 ```cpp
 // CORRECT: NGSolve TaskManager
@@ -1389,7 +1379,7 @@ for (int i = 0; i < n; i++) { ... }
 - Interaction matrix assembly
 - BiCGSTAB vector operations and matrix-vector products
 - HACApK H-matrix build/matvec/solve loops
-- HDiv VIM and moment-yano C++ solve loops
+- HDiv VIM C++ solve loops
 - Any embarrassingly parallel loop
 
 **When non-TaskManager threading is acceptable**:
@@ -1553,7 +1543,6 @@ src/radia/
   __init__.py           # DLL path setup + re-export from C++ module
   _radia_pybind.pyd     # Main C++ extension (includes RadiaField CoefficientFunction)
   cln_core.pyd          # CLN transient solver
-  mmm_core.pyd          # MMM solver
   peec_matrices.pyd     # PEEC matrix assembly
   *.py                  # Python utility modules
   # NO .dll files
@@ -1772,7 +1761,7 @@ config = rad.GetSolverConfig()  # Returns dict with all settings
 | Keyword | Default | Description |
 |---------|---------|-------------|
 | `hacapk_eps` | 1e-4 | ACA tolerance (1e-6 to 1e-2) |
-| `hacapk_leaf` | 10 | Minimum cluster size (elements). 10 for MSC 6DOF hex (~66 DOF/leaf) |
+| `hacapk_leaf` | 10 | Minimum cluster size for H-matrix clustering |
 | `hacapk_eta` | 2.0 | Admissibility parameter |
 | `bicgstab_tol` | 1e-4 | BiCGSTAB convergence tolerance |
 | `relax_param` | 0.0 | Under-relaxation (0=full step, <1=damped) |
@@ -1795,7 +1784,8 @@ ComputeEntry(): A_val = -N_val + delta_ij * inv_chi[i]
 H-matrix stores system matrix A = -N + diag(1/chi)
 ```
 
-**Sign convention applies uniformly to ALL DOF types** (MMM 3DOF, MSC 5/6DOF, mixed). No DOF-type-specific sign conditionals.
+**Sign convention applies uniformly to all supported interaction blocks.** No
+DOF-type-specific sign conditionals.
 
 | Layer | Sign | Description |
 |-------|------|-------------|
@@ -1840,7 +1830,8 @@ Hantila (1975) splits the constitutive relation into constant linear part + resi
 B = mu_0*(1+alpha)*H + mu_0*R    where R = M - alpha*H
 ```
 
-For Radia MMM, the interaction matrix N maps M -> H_demag (constant, geometry-only):
+Historically, Hantila polarization split the material law so the geometry-only
+demag operator could be reused across nonlinear iterations:
 
 ```
 H = H_ext + N*M
@@ -1858,7 +1849,9 @@ Substituting M = alpha*H + R:
 | Hysteresis | No | No | **Yes** |
 | Cost per iteration | O(N^3) LU | O(N^3) LU | **O(N^2) back-sub** |
 
-**Current limitation**: MMM (tetrahedra, 3 DOF) only. MSC (hexahedra, 6 DOF) requires sigma-M conversion (future).
+**Current policy**: keep Hantila as solver-design background only. The
+production soft-iron route is HDiv-VIM plus its current nonlinear iteration and
+preconditioner stack; do not add a separate public Hantila demag backend.
 
 **Usage**:
 ```python
@@ -1990,7 +1983,7 @@ IMA produces incorrect results for **boundary elements** (faces ON symmetry plan
 **When IMA is Safe**:
 1. Non-boundary elements only (offset from symmetry planes)
 2. Observation points off-plane
-3. MMM (tetrahedra) -- no limitation
+3. Explicit full-model solve -- use when the symmetry cut is not covered by IMA
 
 ---
 
@@ -2057,7 +2050,7 @@ result = parser.solve()
 
 Supports: `.Units`, `N`/`E` definitions, `.external`, `.freq`, `.default`, `.equiv`, `.magnetic` blocks, line continuation `+`.
 
-### Coupled PEEC + MMM
+### Coupled PEEC + HDiv-VIM
 
 ```python
 from peec_coupled import CoupledPEECSolver
@@ -2122,7 +2115,7 @@ Radia PEEC works alongside ngsolve.bem:
 | DC - 1 MHz | ngsolve.bem (Weggler EFIE, low-freq stable) |
 | 1 MHz - GHz | ngsolve.bem (Helmholtz) |
 
-Radia PEEC unique features: direct circuit extraction (L, R, C), native SPICE netlist, Lanczos MOR, MMM coupling.
+Radia PEEC unique features: direct circuit extraction (L, R, C), native SPICE netlist, Lanczos MOR, and HDiv-VIM core coupling.
 
 ### Integration Architecture
 

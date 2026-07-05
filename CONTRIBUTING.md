@@ -49,7 +49,7 @@ pip install -e ".[dev]"
 - [ ] Code follows the project coding standards
 - [ ] No binary files (.pyd, .dll, .so) committed to git
 - [ ] No `rad.FldUnits()` calls (removed; Radia always uses meters)
-- [ ] No `CblasColMajor` in core source (except MMM/LAPACK)
+- [ ] No `CblasColMajor` in core source (except LAPACK wrapper boundaries)
 - [ ] Tests pass locally: `pytest tests/ -m basic`
 
 ## Testing
@@ -74,7 +74,7 @@ These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
 1. **Unit System**: Radia always uses meters. No `FldUnits()` call needed
 2. **No Binaries in Git**: .pyd/.dll/.so hosted on GitHub Releases
 3. **Laplace Kernel Only**: No Helmholtz in C++ core
-4. **Row-Major Matrices**: No `CblasColMajor` in core (except MMM/LAPACK)
+4. **Row-Major Matrices**: No `CblasColMajor` in core (except LAPACK wrapper boundaries)
 5. **No Generated Files at Root**: .msh/.vtu/.vtk/.vol go next to source scripts
 6. **No Legacy Paths**: Use `src/radia`, not `src/python`
 

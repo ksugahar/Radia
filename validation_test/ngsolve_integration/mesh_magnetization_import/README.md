@@ -192,7 +192,6 @@ Using closed-form solid angle integration for each triangular face.
 
 ## Related Folders
 
-- `../../tetra_field_accuracy_evaluation/` - More tetrahedral accuracy tests
 - `../../cube_uniform_field/` - Radia solver benchmarks
 
 ---

@@ -104,9 +104,9 @@ Unlike general-purpose FEM tools optimized for motors (rotating machinery) with 
 *   **PEEC Circuit Extraction**: C++ MNA solver with MKL LAPACK for L, R, C, M extraction from conductor geometry.
 *   **Multi-filament Skin Effect**: `nwinc`/`nhinc` cross-section subdivision for skin/proximity effect modeling.
 *   **FastHenry Compatibility**: Parse `.inp` files directly with one-step solve.
-*   **Coupled PEEC+MMM**: Conductor-core coupling via Biot-Savart + Radia magnetostatic solver.
+*   **Coupled PEEC + HDiv-VIM**: Conductor-core coupling via Biot-Savart + Radia HDiv-VIM soft-iron solve.
 *   **ESIM (Effective Surface Impedance Method)**: Nonlinear surface impedance for induction heating analysis.
-*   **Templated BiCGSTAB**: Shared between MSC (real) and PEEC (complex) solvers via `rad_bicgstab.h`.
+*   **Templated BiCGSTAB**: Shared real/complex Krylov infrastructure via `rad_bicgstab.h`.
 
 **In Development**:
 *   **HACApK for PEEC**: H-matrix acceleration for large PEEC systems (L matrix compression).
@@ -178,8 +178,8 @@ For specific geometries, this yields **Exact Closed-Form Solutions**:
 *   **Cylindrical Magnets**: Exact field formulas involving elliptic integrals.
 *   **Polyhedral Magnets**: Exact surface charge integration ($\sigma_m = \vec{M} \cdot \vec{n}$).
 
-### 2. Method of Magnetized Methods (MMM) with MSC
-For iron saturation, we employ the **Magnetic Surface Charge (MSC)** formulation. The magnetization $\vec{M}$ inside a volume $\Omega$ creates an equivalent surface charge density:
+### 2. HDiv-VIM Soft-Iron Demagnetization
+For soft iron and saturation, Radia uses **HDiv-VIM** on NGSolve-compatible meshes. The magnetization $\vec{M}$ inside a volume $\Omega$ induces the open-boundary scalar-potential contribution:
 
 $$ \phi_m(\vec{r}) = \frac{1}{4\pi} \oint_{\partial \Omega} \frac{\vec{M} \cdot \vec{n}'}{|\vec{r} - \vec{r}'|} dS' - \frac{1}{4\pi} \int_{\Omega} \frac{\nabla' \cdot \vec{M}}{|\vec{r} - \vec{r}'|} dV' $$
 
@@ -340,8 +340,8 @@ Instead of simple "boundary conditions", Radia provides rich physical sources:
 To handle complex field sources efficiently, the framework employs state-of-the-art acceleration algorithms based on the **Laplace kernel** ($1/r$):
 
 *   **Solver Acceleration (Source Definition)**:
-    *   **$\mathcal{H}$-Matrix ([HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC) ACA+)**: Used for Magnetostatics (MMM). Compresses dense interaction matrices to $O(N \log N)$, enabling large-scale iron/magnet simulations.
-    *   **PEEC + MKL LAPACK**: C++ PEEC solver with Intel MKL LAPACK/BLAS for circuit parameter extraction. SIBC models skin depth effects as surface properties. Templated BiCGSTAB shared between MSC (real) and PEEC (complex) solvers.
+    *   **$\mathcal{H}$-Matrix ([HACApK](https://github.com/RIKENGITHUB/ppOpen-HPC) ACA+)**: Used by HDiv-VIM charge-Gram, BEM, and PEEC matrix paths. Compresses dense Laplace-kernel interactions to $O(N \log N)$ where repeated matvecs dominate.
+    *   **PEEC + MKL LAPACK**: C++ PEEC solver with Intel MKL LAPACK/BLAS for circuit parameter extraction. SIBC models skin depth effects as surface properties, with reusable real/complex Krylov support.
 *   **Field Evaluation Acceleration**:
     *   **FMM (ExaFMM-t)**: Fast Multipole Method using Laplace kernel for rapidly computing fields ($B, H, A$) from massive numbers of source elements. This is critical for the `CoefficientFunction` interface to NGSolve.
 *   **Hybrid FEM**: Reduced Potential coupling with NGSolve.

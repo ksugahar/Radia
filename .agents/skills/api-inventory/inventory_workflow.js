@@ -37,7 +37,7 @@ do NOT list 200 individual functions) into exactly one bucket:
   AS THE USER's hand-built-mesh API (replaced by .vol -> soft_iron_from_mesh + intent objects).
   Give the netgen/ngsolve replacement.
 - **method-keep**: a genuine numerical METHOD NGSolve lacks (Radia's reason to exist):
-  rad.Fld analytic open-boundary field, MMM/MSC, yano-MSC, HDiv-VIM, axifem (Henrotte),
+  rad.Fld analytic open-boundary field, HDiv-VIM, axifem (Henrotte),
   DtN/FEM-Kelvin, PEEC, BEM, sparsesolv, HACApK, analytical_formulas, coil_builder
   (mesh-free Biot-Savart source), levitation/ECB, stream-function. KEEP.
 - **method-demote**: a method that should be KEPT but DEMOTED from a user-facing pybind

@@ -15,7 +15,7 @@ wants it driven toward a **2-layer shape**:
 - a lean **intent-based USER layer** -- `SoftIron("yoke.vol", mu_r=)` / `Magnet` /
   `CoilBuilder` / `rad.Fld` / `rad.Solve` / materials;
 - over an **internal layer** of the genuine METHODS NGSolve lacks -- `rad.Fld`
-  analytic open-boundary field, MMM/MSC, yano-MSC, HDiv-VIM, axifem (Henrotte),
+  analytic open-boundary field, HDiv-VIM, axifem (Henrotte),
   DtN/FEM-Kelvin, PEEC, BEM, sparsesolv, HACApK, analytical_formulas,
   coil_builder, levitation, stream-function;
 - with all **PLUMBING delegated** to netgen/ngsolve (mesh gen/IO, geometry/CAD,

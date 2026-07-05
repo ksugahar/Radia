@@ -2,17 +2,17 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **586 tools** across 43 MCP servers.
+Total: **584 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 38 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 41 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 40 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
-| [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
+| [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 6 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 9 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
@@ -256,7 +256,7 @@ Module: `radia_mcp.fem.server`
 
 ## `mcp-server-bem`
 
-_MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, HACApK, FEM-BEM_
+_MoM/BEM theory: RWG, EFIE/MFIE/CFIE/PMCHWT, Loop-Star, Calderon, Radia HDiv-VIM, HACApK, FEM-BEM_
 
 Module: `radia_mcp.bem.server`
 
@@ -360,10 +360,10 @@ Module: `radia_mcp.motor.server`
 | `motor_em_force_extras` | Forward to `differential_forms_em_force_extras` -- advanced EM force |
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |
+| `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
-| `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
 | `motor_status` | (no description) |

@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:43:29Z",
   "notebook": "docs/peec_integration/peec_showcase.ipynb",
-  "notebook_sha256": "1a22a521f9680590643494a124359dbac370a3c0f07652d6791d2a527436be67",
+  "notebook_sha256": "6a9896ee512b29cd96e9227da549a42e06c90490805bb9382f3fefec6b8cd78a",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -110,7 +110,7 @@
       "cell_index": 7,
       "execution_count": 4,
       "source_sha256": "487c8ced9deb93f40be2dfbc9f065c741221daf754a5553b9ee9970ca88682e0",
-      "source_preview": "\"\"\"\nPaper Figures Generation for PEEC/PRIMA Implementation\n\nGenerates publication-quality figures for:\n1. PEEC Loop-Star matrix verification\n2. PRIMA model order reduction accuracy\n3. Adaptive MSC/dipole error analysis\n4. WPT coil impedance characteristics at 85 kHz\n\nOutput: PDF figures suitable for journal submission\n\"\"\"\n\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom matplotlib import rcParams\n\n# Add Radia to path\nsys.path.insert(0, os.path.join(os.getcwd(), '..', '..', 'src', 'radia'))\n\nimport radia as rad\n\ntry:\n    from peec_matrices import PEECBuilder\n    print(\"Using C++ PEEC implementation\")\nexcept ImportError:\n    print(\"C++ PEEC module not available, using Python fallback\")\n    from radia.peec_matrices import PEECBuilder\n\nfrom lanczos_reduction import LanczosReducer\n\n# Physical constants\nMU_0 = 4 * np.pi * 1e-7\nSIGMA_COPPER = 5.8e7\n\nmm = 1e-3  # 1 mm in meters\n\n# Matplotlib settings for publication quality\nrcParams['font.family'] = 'serif'\nrcParam",
+      "source_preview": "\"\"\"\nPaper Figures Generation for PEEC/PRIMA Implementation\n\nGenerates publication-quality figures for:\n1. PEEC Loop-Star matrix verification\n2. PRIMA model order reduction accuracy\n3. Adaptive HDiv-VIM/dipole error analysis\n4. WPT coil impedance characteristics at 85 kHz\n\nOutput: PDF figures suitable for journal submission\n\"\"\"\n\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom matplotlib import rcParams\n\n# Add Radia to path\nsys.path.insert(0, os.path.join(os.getcwd(), '..', '..', 'src', 'radia'))\n\nimport radia as rad\n\ntry:\n    from peec_matrices import PEECBuilder\n    print(\"Using C++ PEEC implementation\")\nexcept ImportError:\n    print(\"C++ PEEC module not available, using Python fallback\")\n    from radia.peec_matrices import PEECBuilder\n\nfrom lanczos_reduction import LanczosReducer\n\n# Physical constants\nMU_0 = 4 * np.pi * 1e-7\nSIGMA_COPPER = 5.8e7\n\nmm = 1e-3  # 1 mm in meters\n\n# Matplotlib settings for publication quality\nrcParams['font.family'] = 'serif'\nrcParam",
       "outputs": [
         {
           "output_type": "stream",
@@ -141,7 +141,7 @@
           "name": "stdout",
           "text_chars": 239,
           "text_sha256": "7fc1d20241823d49c497890a7f73147852789b2f63c50e14408ced5505185d2c",
-          "text_preview": "Saved: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\\fig2_prima_accuracy.pdf\n\n============================================================\nFigure 3: Adaptive MSC/Dipole Error\n============================================================\n",
+          "text_preview": "Saved: S:\\Radia\\01_GitHub\\docs\\peec_integration\\figures\\fig2_prima_accuracy.pdf\n\n============================================================\nFigure 3: Adaptive HDiv-VIM/Dipole Error\n============================================================\n",
           "text_truncated": false
         },
         {
