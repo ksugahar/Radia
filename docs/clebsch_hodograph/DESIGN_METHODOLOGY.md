@@ -610,6 +610,36 @@ field SHAPE (achromaticity) but not the azimuthal end LENGTH** — a real design
 high-r achromaticity needs the radial reshape (§3.5 Step 3), while the sector ENDS are
 saturation-robust and need no nonlinear end correction.
 
+### 3.13 The bending-magnet end pack, optimized vs saturation — relieve the corner, not the beam
+
+The natural design question for a **bending dipole** end: *does the field stay put as the
+iron saturates?* `bending_endpack_saturation_opt.py` answers it on a small-gap (24 mm),
+near-knee 2D `(s,z)` end pack (Froehlich `μ_r(|B|)`), and the answer is a **two-part
+surprise**:
+
+**(1) The median-plane field the BEAM sees is naturally saturation-invariant.** The
+normalized longitudinal profile `p(s) = B_z(s)/B_body` is the *same* curve linear and
+saturated — `‖p_sat − p_lin‖ ≈ 1e-3`, `L_eff` shift `< 0.2 %` — **even for a hard flat
+cut**. The gap-reluctance-dominated pole face stays equipotential (its `⟨μ_r⟩` at the
+saturated drive is still `~500`), so the EFB / homogeneity / integrated-field SHAPE are all
+excitation-invariant *automatically* (only the overall amplitude softens — bulk saturation,
+handled by calibration). This is the `(s,z)` twin of §3.12's azimuthal-`L_eff` robustness.
+
+**(2) The real saturation problem is the pole-TIP CORNER.** The corner concentrates flux —
+a raw grid max hits `~6 T` iron `|B|` (`κ = peak/body ~ 3.7`), deep past the `1.2 T` knee — a
+hot spot that limits the achievable field and wastes iron, *while the beam-plane field is
+fine*. So the **optimization target is not the (already-invariant) beam profile but the
+corner**: minimize `κ = peak iron |B| / B_body` at the saturated drive over the end chamfer
+`z_face(s) = g/2 + depth·((|s|−s_body)/(s_pole−s_body))^exponent`. The chamfer rounds the tip
+so the flux is not forced through the corner singularity (`κ → ~1.0`, a smooth `L^10`
+end-iron proxy `~1.9 → ~1.0`; peak-proxy `|B| ~ 3.0 → ~1.6 T`), and there is a genuine 2D
+optimum in `(depth, exponent)` — too much chamfer re-concentrates the flux elsewhere.
+
+**Verified (`bending_endpack_saturation_opt.py`, ngsolve + Optuna, golden-tested).** So the
+honest engineering answer to "*flux lines invariant under saturation, is that good?*" is:
+**for the beam it is largely automatic; what you actually optimize is the corner the iron
+saturates** — the chamfer relieves the hot spot without moving the beam field.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -758,6 +788,14 @@ coil = A-side), so the framework is one method, not two.
   `L_eff` is ROBUST (gap-reluctance-dominated; drift `< 0.1 %` even where the high-r iron
   `⟨μ_r⟩` collapses `×0.3`), while the radial field index `k(r)` is FRAGILE (`Δk ≈ −0.26`,
   the §3.5 achromaticity wall). Saturation degrades the field SHAPE, not the end LENGTH.
+- the **bending-magnet end pack optimized vs saturation** (§3.13,
+  `bending_endpack_saturation_opt.py`): on a small-gap near-knee 2D `(s,z)` end pack, the
+  median-plane field the BEAM sees is NATURALLY saturation-invariant (`‖p_sat−p_lin‖ ≈ 1e-3`,
+  `L_eff` shift `< 0.2 %`, even flat-cut); the real saturation problem is the pole-TIP CORNER
+  hot spot (`κ = peak iron |B|/body ~ 3.7` raw, deep past the knee). The optimization
+  minimizes `κ` over the end chamfer `(depth, exponent)` — the chamfer RELIEVES the corner
+  (`κ → ~1.0`, a real 2D optimum) while the beam field stays put. So "flux invariant under
+  saturation" is largely automatic for the beam; what you optimize is the corner it saturates.
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -800,4 +838,5 @@ coil = A-side), so the framework is one method, not two.
 | two planes co-baked into one pole (δ shim + ĝ chamfer) | `examples/clebsch_hodograph/endpack_cobake.py` |
 | co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |
 | saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |
+| bending end pack optimized vs saturation (relieve the tip corner) | `examples/clebsch_hodograph/bending_endpack_saturation_opt.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

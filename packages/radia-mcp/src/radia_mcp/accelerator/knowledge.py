@@ -31,6 +31,14 @@ TOPICS: dict[str, str] = {
         "the radial field index k(r) is FRAGILE (droops, the achromaticity wall) "
         "(scaling_ffag_sector_saturation.py)"
     ),
+    "bending_endpack_saturation": (
+        "The 2D BENDING-magnet end pack optimized vs iron saturation: the median-plane "
+        "field the BEAM sees is NATURALLY saturation-invariant (normalized profile the "
+        "same linear/saturated, even flat-cut); the real problem is the pole-TIP CORNER "
+        "hot spot (kappa=peak iron|B|/body ~3.7). Minimize kappa over the end chamfer "
+        "(depth, exponent) -> the chamfer RELIEVES the corner while the beam field stays "
+        "put (bending_endpack_saturation_opt.py)"
+    ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
@@ -553,6 +561,51 @@ robust.)
 """
 
 
+BENDING_ENDPACK_SATURATION = """
+# The 2D BENDING-magnet end pack, optimized vs iron saturation
+
+The natural design question for a bending dipole end: does the field stay put as the
+iron saturates?  bending_endpack_saturation_opt.py answers it on a small-gap (24 mm),
+near-knee 2D (s, z) end pack (Froehlich mu_r(|B|)), and the answer is a TWO-PART surprise.
+
+## (1) The MEDIAN-plane field the beam sees is NATURALLY saturation-invariant
+
+The normalized longitudinal profile p(s) = B_z(s)/B_body is the SAME curve, linear and
+saturated -- ||p_sat - p_lin|| ~ 1e-3, L_eff shift < 0.2% -- EVEN for a hard flat cut.
+The gap-reluctance-dominated pole face stays equipotential (its <mu_r> at the saturated
+drive is still ~500), so the EFB / homogeneity / integrated-field SHAPE are all
+excitation-invariant AUTOMATICALLY (only the overall amplitude softens = bulk saturation,
+handled by calibration).  This is the (s,z) twin of scaling_ffag_sector_saturation's
+azimuthal-L_eff robustness.
+
+## (2) The real saturation problem is the pole-TIP CORNER
+
+The corner concentrates flux -- a raw grid max hits ~6 T iron |B| (kappa = peak/body
+~ 3.7), deep past the 1.2 T knee -- a hot spot that limits the achievable field and
+wastes iron, WHILE the beam-plane field is fine.
+
+## The optimization: relieve the corner, not the (already-invariant) beam profile
+
+Minimize kappa = peak iron |B| / B_body at the saturated drive over the end chamfer
+
+    z_face(s) = g/2 + depth * ((|s| - s_body)/(s_pole - s_body))^exponent
+
+The chamfer rounds the tip so the flux is not forced through the corner singularity
+(kappa -> ~1.0; a smooth L^10 end-iron proxy ~1.9 -> ~1.0, peak-proxy |B| ~3.0 -> ~1.6 T),
+and there is a GENUINE 2D optimum in (depth, exponent) -- too much chamfer re-concentrates
+the flux elsewhere (kappa is non-monotone in depth).  Optuna TPE if present, else a
+built-in grid + local refine.  Golden-tested (test_bending_endpack_saturation_opt).
+
+## The honest engineering answer
+
+"Flux lines invariant under saturation, is that good?" -> for the BEAM it is largely
+AUTOMATIC (the median-plane field shape is gap-reluctance-robust); what you actually
+optimize is the CORNER the iron saturates.  The regime where the beam field WOULD drift
+needs the whole pole (not just a tip) deep in saturation -- a very-small-gap / necked
+design; a normal bending end is beam-invariant by construction.
+"""
+
+
 BEAM_REFERENCED_TWIST = """
 # The beam-referenced equipotential SURFACE as the design primitive + the TWIST
 
@@ -881,6 +934,10 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("sector_saturation", "saturating_sector", "sector_sat",
                  "ffag_saturation", "gap_reluctance", "leff_robust"):
         return SECTOR_SATURATION
+    if topic in ("bending_endpack_saturation", "bending_endpack", "bending_end",
+                 "endpack_opt", "corner_relief", "saturation_invariant",
+                 "endpack_saturation"):
+        return BENDING_ENDPACK_SATURATION
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
@@ -898,12 +955,12 @@ def get_accelerator_documentation(topic: str = "all") -> str:
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
-            SECTOR_SATURATION, BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE,
-            SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
+            SECTOR_SATURATION, BENDING_ENDPACK_SATURATION, BEAM_REFERENCED_TWIST,
+            ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
-        "sector_saturation, beam_referenced_twist, endpack_two_plane, "
-        "spectrometer_endpack, endpack_cobake."
+        "sector_saturation, bending_endpack_saturation, beam_referenced_twist, "
+        "endpack_two_plane, spectrometer_endpack, endpack_cobake."
     )
