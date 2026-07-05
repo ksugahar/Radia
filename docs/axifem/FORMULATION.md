@@ -302,11 +302,13 @@ For unstructured triangle meshes, `axifem` provides both P1 and P2 triangle
 elements:
 
 - `AxiHenrotteFE_P1_Triangle` (3 DOFs/cell) uses the `{1, r², z}` basis.
-  This reproduces FEMM's `StaticAxisymmetric()` exactly, including the
-  axis-touching cases (1- or 2-vertex on axis) that take special-case
-  stiffness formulas (see `axifem_core.element_matrices` in
-  `tests/axifem/_reference_python/` for the per-element reference
-  implementation).
+  The per-element Python reference under `tests/axifem/_reference_python/`
+  preserves the FEMM `StaticAxisymmetric()` P1 formula lineage, including
+  the axis-touching cases (1- or 2-vertex on axis).  The production C++
+  path is not a line-for-line FEMM port: it is reached through
+  `Mesh("model.vol")` / NGSolve and assembles the V-DOF stiffness lane
+  used by `H1Henrotte`, with regression gates for the uniform-`B_z`
+  identity and degenerate `(r²,z)` triangles.
 - `AxiHenrotteFE_P2_Triangle` (6 DOFs/cell) uses the
   `{1, r², z, r⁴, r² z, z²}` basis at 3 vertices plus 3 edge midnodes.
   The FESpace reads all 6 node coordinates via NGSolve's element
