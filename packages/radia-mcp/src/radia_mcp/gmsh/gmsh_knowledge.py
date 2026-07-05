@@ -48,6 +48,12 @@ GMSH GUI:
   for raw mesh/data inspection. A plain `case.opt` is not auto-loaded.
 - `cubit-mesh-export` `export gmsh "case.msh"` should attach `case.geo`,
   `case.geo.opt`, and `case.msh.opt`; open `case.geo` for normal review.
+- For acoustic/FEM-BEM post artifacts, use the shared
+  `gmsh_post_display_contract` / `write_gmsh_post_launch_artifact` pattern:
+  one MSH v4.1 data file, a `.geo` launch file, exact `.geo.opt` and
+  `.msh.opt` sidecars, named views, Z-up camera metadata, and optional
+  cut-plane metadata (`General.Clip0A/B/C/D`).  This is the cross-language
+  contract shared with the MATLAB/Gypsilab readable acoustic lane.
 """
 
 GMSH_OVERVIEW = """
@@ -495,6 +501,27 @@ For a strict front-on x-z view along the y-axis, use
 `General.RotationX = -90`, but 3-D bodies will look flatter. Keep the same
 camera in `case.msh.opt` for raw mesh inspection, or users will see a different
 orientation after opening the raw `.msh`.
+
+## Shared Acoustic/FEM-BEM Display Contract
+
+Radia acoustic and MATLAB/Gypsilab post artifacts should use the same durable
+launch structure:
+
+```
+case.msh          # single Gmsh MSH v4.1 result/data container
+case.geo          # launch target, Merge "case.msh"
+case.geo.opt      # exact autoload sidecar for post display
+case.msh.opt      # exact autoload sidecar for raw mesh/data inspection
+case.display.json # manifest with camera, cut-plane, views, and schema
+```
+
+Use `gmsh_post_display_contract` to plan or validate this structure from MCP,
+and `write_gmsh_post_launch_artifact` from Python helper code when Radia writes
+the files directly.  The MATLAB/Gypsilab equivalent is
+`writeGmshPostLaunchArtifact`.  Both record named scalar/vector/displacement
+views, the Z-up x-z camera preset (`General.RotationX = -68`,
+`General.RotationZ = 0`), and optional cut planes via
+`General.Clip0A/B/C/D` plus `Mesh.Clip = 1`.
 
 ## Hide / Show Commands
 
