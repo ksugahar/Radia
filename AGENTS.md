@@ -94,6 +94,32 @@ one generic GUI.
   knowledge, support autonomous validation / self-learning, and should reflect
   the same layer boundaries as the source tree.
 
+### MATLAB Agentic Stack Policy (2026-07-06)
+
+**POLICY**: Use MathWorks' official MATLAB MCP Server as the MATLAB execution
+foundation.  Sugahara Lab MATLAB / Gypsilab / acoustic FEM-BEM work should be
+layered above it as domain skills or `radia_mcp` extension tools, not as a
+replacement MATLAB bridge.
+
+| Layer | Responsibility |
+|-------|----------------|
+| MATLAB MCP Server | Start/connect MATLAB, evaluate code, run `.m` files, run MATLAB unit tests, detect toolboxes, and run Code Analyzer checks. |
+| MATLAB Agentic Toolkit skills | Teach agents idiomatic MATLAB workflows: functions/classes, tests, apps, debugging, toolbox-aware coding, and MATLAB style. |
+| Sugahara Lab extensions | Add domain knowledge and gates for `.vol`, P1 FEM/BEM, convolution quadrature, Gypsilab-like APIs, acoustic FEM-BEM, and NGSolve/`ngsolve.bem` cross-validation. |
+
+**Rules**:
+- Do not fork or replace the official MATLAB MCP Server for ordinary MATLAB
+  execution.  If a workflow needs MATLAB code execution or `runtests`, route it
+  through the official server first.
+- Keep lab-specific knowledge in skills and `radia_mcp.<topic>` packages.
+  Tools may call MATLAB, but they should document the domain operation they add
+  above the official execution layer.
+- For any new MATLAB acoustic FEM-BEM / Gypsilab-style workflow, require a
+  MATLAB test entry point plus an independent Python/NGSolve or analytical
+  cross-check whenever feasible.
+- Treat mdx as the compute node for long MATLAB validation runs; LAB and 100
+  remain development / agent hosts.
+
 ---
 
 ## Critical Policies
