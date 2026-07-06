@@ -420,7 +420,8 @@ smooth-helix + Spline path, not CoilBuilder arcs.
 src/radia/panels/calc_stream_coil.py wraps the Gz design as a headless Layer-4
 script (argparse in, JSON out, no Cubit/PySide6); locked by
 tests/panels/test_stream_coil_golden.py (fitted_dBdz in [0.9,1.1],
-gradient_nonlinearity < 0.05).  Stage-3 PySide6 panel = future work.
+gradient_nonlinearity < 0.05).  A future promotion should use the notebook
+workbench + DesignSpec route before adding it to panel_registry.json.
 """
 
 

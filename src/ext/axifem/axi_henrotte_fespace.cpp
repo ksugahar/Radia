@@ -224,7 +224,7 @@ FiniteElement & AxiHenrotteFESpace::GetFE(ElementId ei, Allocator & lh) const {
             // curve.
             //
             // NGSolve's reference triangle (verified 2026-05-12 in
-            // examples/CLN/scripts/axifem/test_ngsolve_ref_tri_vertices.py):
+            // validation_test/maglev/research_cln/axifem/test_ngsolve_ref_tri_vertices.py):
             //   ref (1, 0) <-> mesh vertex 0 (V0)
             //   ref (0, 1) <-> mesh vertex 1 (V1)
             //   ref (0, 0) <-> mesh vertex 2 (V2)

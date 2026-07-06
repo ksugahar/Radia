@@ -161,18 +161,21 @@ SF_PANEL = r"""
 SF coil-design PANEL + FE-direct calc  (calc_streamfunction.py)
 ================================================================
 
-The GUI panel (radia_streamfunction.py, Layer 3) wraps the headless calc
-``src/radia/panels/calc_streamfunction.py`` (Layer 4).  ONE argparser drives
-both, with THREE modes (--method):
+The notebook workbench (``src/radia/panels/notebooks/radia_streamfunction.ipynb``,
+Layer 3) wraps the headless calc
+``src/radia/panels/calc_streamfunction.py`` (Layer 4) through
+``src/radia/streamfunction_design.py`` and
+``src/radia/streamfunction_notebook.py``.  ONE argparser/DesignSpec surface
+drives both, with THREE modes (--method):
 
-Standalone launch:
+Notebook launch:
 
-  radia-streamfunction path/to/coil.vol
+  python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
 
-The Cubit ``Solve -> Radia-NGSolve`` launcher and the standalone entry point
-use the same Layer-3 window and Layer-4 calc scripts.  The command-line
-argument fills the panel's coil/conductor ``.vol`` browse row; each mode keeps
-its own additional inputs such as ``--eval-vol``.
+The Cubit ``Solve -> Radia-NGSolve`` launcher exports the ``.vol`` artifacts
+and opens the same Layer-3 notebook/workbench route.  The notebook settings
+fill the coil/conductor ``.vol`` path; each mode keeps its own additional
+inputs such as ``--eval-vol``.
 
   design       target -> A psi = B (folded-Tikhonov RegularizedTSVD) -> psi,
                field homogeneity over the eval region, peak surface current.
@@ -796,12 +799,12 @@ IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11
            ring-lengths, ergodic).  Moffatt 1969, Enciso-Peralta-Salas 2020.  Only
            honest outputs: vector-T bulk distribution OR multi-patch atlas + cuts.
   Session golden total: Stage A 14 + Stage B 9 + frontier 15 = 38, all green.
-  PANELIZED (examples -> panels, 2026-06-11): Stage A/B shipped as the
+  PANELIZED (validation/docs -> notebook panel): Stage A/B shipped as the
            radia_streamfunction "Volume 3D" mode.  shipped pipeline
            src/radia/streamfunction_volume.py (design_volume_coil); headless
            calc src/radia/panels/calc_streamfunction_volume.py (conductor .vol +
-           --target-bz -> equal-current wires + GMSH wire overlay); PySide6
-           _Volume3DPanel in radia_streamfunction.py; golden
+           --target-bz -> equal-current wires + GMSH wire overlay);
+           StreamFunctionDesignSpec / radia_streamfunction.ipynb route; golden
            tests/panels/test_streamfunction_volume_golden.py reproduces n_wires=59,
            field 4.7%, two-codebase 3.4e-10 on a frozen tube fixture.  Panel
            covers the CLEAN regime only; F1/F2/F3 stay research demos by design.

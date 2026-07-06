@@ -551,7 +551,9 @@ src/radia/
     calc_inductance.py        # Layer 4: BEM-SIBC dispatch
     calc_fem_kelvin.py        # Layer 4: HCurl + Kelvin
     calc_fem_coilmesh.py      # Layer 4: HCurl A-V volumetric coil
-  radia_ih.py                 # Layer 3 GUI (PySide6) that drives all four CLIs
+  ih_design.py                # Layer 3 settings -> CLI command mapping
+  ih_notebook.py              # Layer 3 notebook workbench adapter
+  panels/notebooks/radia_ih.ipynb  # Layer 3 user-facing workbench
 
 docs/
   ih_esim_benchmark/          # benchmark.py + analytical_bessel_baseline.py + results.json

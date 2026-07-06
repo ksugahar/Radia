@@ -47,18 +47,19 @@ OPTIONAL_FILES = {"Coil script": "Python (*.py)"}  # Optional input file browse 
 
 ## Sample Journal Files (required)
 
-Each `radia_*.py` must have a corresponding sample `.jou` file in `src/radia/panels/samples/`.
+Each notebook workbench must have corresponding sample `.jou` files in
+`src/radia/panels/samples/`.
 Only golden-test-locked samples (`tests/panels/test_*_golden.py`) are shipped in the wheel.
 
 Current layout (post-2026-04-23 demotion):
 
 ```
-radia_ih.py   ->  samples/ih_bem_sample.jou            (BEM: cubit-mesh-export smoke test)
-                  samples/ih_peec_bem_coarse.jou       (peec_bem mode, golden-locked)
-                  samples/ih_fem_kelvin_skin_fine.jou  (fem_coilmesh mode, golden-locked)
-                  samples/ih_peec_inductance.jou       (peec_inductance mode, golden-locked)
-radia_em.py   ->  samples/em_sample.jou
-radia_pcb.py  ->  samples/pcb_sample.jou
+radia_ih.ipynb   ->  samples/ih_bem_sample.jou            (BEM: cubit-mesh-export smoke test)
+                     samples/ih_peec_bem_coarse.jou       (peec_bem mode, golden-locked)
+                     samples/ih_fem_kelvin_skin_fine.jou  (fem_coilmesh mode, golden-locked)
+                     samples/ih_peec_inductance.jou       (peec_inductance mode, golden-locked)
+radia_em.ipynb   ->  samples/em_sample.jou
+radia_pcb.ipynb  ->  samples/pcb_sample.jou
 ```
 
 Non-canonical / research-stage IH samples that are still useful for
@@ -68,7 +69,10 @@ directory's README for the demotion history — e.g., the old
 `ih_fem_sample.jou` no-Kelvin baseline and the small-mesh
 `ih_fem_kelvin_sample.jou` with its misleading "auto-Kelvin" comment).
 
-Naming convention: `{stem}_sample.jou` where `{stem}` is the part after `radia_` (e.g., `radia_em.py` -> `em`). Multiple samples per stem are allowed when distinct solver methods need different mesh strategies — radia_ih ships four shipped samples (one per panel mode).
+Naming convention: `{stem}_sample.jou` where `{stem}` is the application name
+(e.g., `radia_em.ipynb` -> `em`). Multiple samples per stem are allowed when
+distinct solver methods need different mesh strategies — the IH workbench ships
+four samples (one per panel mode).
 
 These samples are:
 - Packaged with `pip install radia` (included in wheel)
@@ -77,8 +81,8 @@ These samples are:
 
 ## .vol is Always Required
 
-The launcher always exports `.vol` before launching the analysis window.
-Every analysis window receives `.vol` as its first argument.
+The launcher always exports `.vol` before opening the analysis workbench.
+Every notebook workbench receives `.vol` as a setting.
 There is no `REQUIRES_VOL` flag -- it is always true.
 
 ## Working Folder Memory

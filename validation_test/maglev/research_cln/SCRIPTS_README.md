@@ -3,8 +3,9 @@
 Python scripts (plus their result JSONs, logs, Mathematica `.wls`, etc.)
 that drive the Cauer Ladder Network research line. Migrated from
 `W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/` on 2026-05-12 so the
-NGSolve / `radia.*` consumers live next to the Radia source and ship with
-`pip install radia`.
+NGSolve / `radia.*` consumers live in the repository's validation lane.
+They do not ship as package APIs; reusable pieces should be promoted to
+`src/`.
 
 ## Layout
 
@@ -17,10 +18,16 @@ NGSolve / `radia.*` consumers live next to the Radia source and ship with
 
 ## Why these scripts live here
 
-Per the 2026-05-12 policy decision (memory key `feedback_no_ngsolve_py_in_cln_workdir.md`):
-- Every Python script that imports `ngsolve`, `netgen`, or `radia.*` belongs under `examples/`, NOT in the W:/ research working directory.
-- Result JSONs, log files, and the Mathematica `.wls` scripts that pair with the Python tools came along in the same bulk move so the validation workflow stays runnable from this checkout.
-- LaTeX / research notes / progress PDFs (i.e., the non-code artefacts) stay on W:/.
+Per the current repository policy:
+- `examples/` is retired and must not be recreated.
+- New scratch experiments start in `C:\temp`; CLN material worth tracking
+  belongs here under `validation_test/maglev/research_cln/`, in `docs/` as a
+  result-bearing notebook, or in `src/` once reusable.
+- Result JSONs, log files, and Mathematica `.wls` scripts that pair with the
+  Python tools stay beside the validation driver when they are needed for
+  reproducibility.
+- LaTeX / research notes / progress PDFs (i.e., the non-code artefacts) stay
+  on W:/.
 
 ## Status
 
@@ -33,6 +40,6 @@ memory keys for the verified vs. deprecated lists.
 
 ## Working folder for the CLN paper / digest
 
-The IGTE 2026 digest TeX source and Q&A MEMORY.md live in the parent
-directory (`examples/CLN/`). New CLN scripts should land directly under
-`examples/CLN/scripts/` rather than in W:/.
+The IGTE 2026 digest TeX source and Q&A notes live outside the repository on
+W:/. New tracked CLN validation scripts should land under this
+`validation_test/maglev/research_cln/` tree, not under `examples/`.

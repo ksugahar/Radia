@@ -11,14 +11,12 @@ Filaments are placed on the cross-section **perimeter only** (thin-skin
 regime, d/δ >= 3).  Use ``n_peri`` filaments around the arc-length
 perimeter of each cross-section; no interior volume grid.
 
-Source: src/radia/panels/calc_peec_inductance.py,
+Source: src/radia/panels/calc_inductance.py,
         src/radia/coil_from_cad.py (STEP path -- the only input path
         since 4.13.0; .jou explicit-centerline input was retired
         per CLAUDE.md No-Fallbacks),
-        src/radia/radia_ih.py -- IHWindow with Method = "PEEC inductance
-        (coil only, STEP)" (merged 2026-04-26 from the previously
-        standalone radia_peec_inductance.py wrapper; the wrapper added
-        no behaviour beyond auto-fill, which now lives on IHWindow).
+        src/radia/ih_design.py + src/radia/panels/notebooks/radia_ih.ipynb
+        -- Method = "PEEC inductance (coil only, STEP)".
 """
 
 

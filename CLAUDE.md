@@ -117,12 +117,12 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 
 | Domain | Code | Knowledge | Notes |
 |--------|------|-----------|-------|
-| Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`, and a `radia_heat.py` panel) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
-| Electromagnet | `radia_em.py` panel + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_hdiv.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis, HDiv-VIM. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
+| Induction heating | `radia.ih` + `ih_design.py` / `ih_notebook.py` / `panels/notebooks/radia_ih.ipynb` + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
+| Electromagnet | `em_design.py` / `em_notebook.py` / `panels/notebooks/radia_em.ipynb` + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_hdiv.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis, HDiv-VIM. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `docs/levitation/`, `validation_test/levitation/`, and the IGTE 2026 paper. radia-cln is NOT a separate package. |
-| Motor | `radia_motor.py` panel + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
-| PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
-| Stream-function | `radia_streamfunction.py` panel + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** use the promoted docs/MCP artifacts (`docs/kelvin/`, `docs/stream_function/`, and `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`), not historical `examples/` paths. Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
+| Motor | `motor_design.py` / `motor_notebook.py` / `panels/notebooks/radia_motor.ipynb` + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
+| PCB | `pcb_design.py` / `pcb_notebook.py` / `panels/notebooks/radia_pcb.ipynb` + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
+| Stream-function | `streamfunction_design.py` / `streamfunction_notebook.py` / `panels/notebooks/radia_streamfunction.ipynb` + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** use the promoted docs/MCP artifacts (`docs/kelvin/`, `docs/stream_function/`, and `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`), not historical `examples/` paths. Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
 
 **Installation**:
 ```bash
@@ -2238,9 +2238,8 @@ pip show <pkg> | Select-String "Editable project location"
 + `cubit-plugin-install --all-users` を実行。
 
 **mdx / hibino Cubit plugin (regular file)**:
-- `<Cubit>\bin\radia_cubit.ccl` (regular file from PyPI wheel)
-- `<Cubit>\bin\plugins\radia_cubit.ccm` (regular file from PyPI wheel)
-- `<Cubit>\bin\plugins\radia_cubit_mesh.cp312-win_amd64.pyd` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\cubit_mesh_export.ccm` (regular file from PyPI wheel)
+- `<Cubit>\bin\plugins\cubit_mesh_curver.cp312-win_amd64.pyd` (regular file from PyPI wheel)
 
 LAB の `Build.ps1` 出力は **NAS の `S:\Radia\01_GitHub` に書かれるため、LAB / 100号機
 editable には反映される**。mdx / hibino の PyPI install には反映されないので、C++/plugin
@@ -3350,31 +3349,20 @@ PyQt5, or the old C++ Qt5 `.ccl` Claro component anywhere.
   `<Cubit>/bin/cubit_mesh_export.ccl` is a stale artifact (Cubit 2025.12 ignores
   it; remove on redeploy).
 
-### Panel Layout Policy: 10pt + Vertical Scrollbar, Never Compress (2026-05-29)
+### Notebook Panel Layout Policy (2026-07-06)
 
-**POLICY**: PySide6 panels use a **10pt** base font
-(`PANEL_BASE_FONT_POINT_SIZE = 10` in `radia_gui_base.py`).  When the
-window is too short to show every form row at its natural height, the
-panel MUST present a **vertical scrollbar** -- it must NEVER compress
-rows below their natural height to "fit".  Compression clips the field
-text vertically (the entered values become unreadable / unconfirmable),
-which is worse than scrolling (kubota 2026-05-29: "行が細くなりすぎて
-文字潰れ … 確認が困難").
+**POLICY**: Current Radia analysis panels are notebook workbenches, not
+desktop PySide6 windows.  Settings live in compact `DesignSpec`
+dataclasses and are edited through the notebook surface; long forms must
+remain scrollable in the browser and must not hide CLI flags behind
+ad-hoc widget state.  Cubit itself may use PySide6 for its toolbar/menu,
+but Radia analysis workflows should not add new `ModePanel` /
+`AnalysisWindow` desktop surfaces.
 
-**How it is enforced**:
-- The parameter form (`ModePanel` / `QFormLayout`) is wrapped in a
-  `QScrollArea` in `AnalysisWindow._build_ui`:
-  `setWidgetResizable(True)`, `setFrameShape(QFrame.NoFrame)`,
-  `setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)`.  The form keeps
-  each row at its `sizeHint` height; the scroll area supplies the
-  vertical scrollbar when the pane is shorter than the content.
-- Do NOT remove the scroll-area wrap, and do NOT clamp a row/field to a
-  fixed height below the font's natural line height (`_add_section`'s
-  `setFixedHeight(fm_h + 10)` is computed FROM font metrics -- keep that
-  pattern; never hardcode a smaller pixel height).
-- Combos / spinboxes are **wheel-guarded** (`_NoWheelComboBox` etc.; see
-  the `panel-wheel-guard` skill) so the mouse wheel scrolls the form via
-  the scroll area instead of silently changing a selection.
+Legacy PySide layout notes are historical context only.  If a temporary
+legacy adapter still exists, it must keep 10 pt readable controls,
+scroll instead of compressing rows, and emit the same JSON/log artifacts
+as the notebook workbench.
 
 ### Result Output Policy: ne / DoF / time + analysis integral quantities (2026-05-29)
 
@@ -3387,9 +3375,9 @@ the thermal step, **temperature reported as mean (volume-averaged
 `∫T dV / ∫dV`), max, and min** -- not a single peak value.
 
 **How it is enforced**:
-- `AnalysisWindow._append_standard_summary(result)` renders ne / DoF /
-  all `t_*_s` timings / heat `P_*` / temperature mean-max-min for EVERY
-  result, keyed on the ACTUAL emitted names (`wp_ndof`/`ndof`,
+- Notebook workbenches summarize ne / DoF / all `t_*_s` timings / heat
+  `P_*` / temperature mean-max-min from the JSON result artifact, keyed
+  on the ACTUAL emitted names (`wp_ndof`/`ndof`,
   `t_bem_solve_s`/`t_solve_s`, `P_wp_W`, `T_mean_C`/`T_max_C`/`T_min_C`).
   Do NOT regress to a fixed-spelling per-solver cascade -- it silently
   showed nothing when a calc script used a different key.
@@ -3443,27 +3431,29 @@ set) **MUST** follow the canonical recipe in
 | File | Role |
 |---|---|
 | `src/radia/panels/calc_<topic>.py` | headless CLI: `build_argparser()` + `run(args) -> dict` + `calc_main(run, parser)` |
-| `src/radia/radia_<topic>.py` | PySide6 panel: `ModePanel` subclass with `bind_argparser(build_argparser())` |
-| `tests/panels/test_<topic>_golden.py` | golden-band lock on the canonical sample |
+| `src/radia/<topic>_design.py` | UI-neutral `DesignSpec` dataclass; maps settings to calc CLI argv |
+| `src/radia/<topic>_notebook.py` | `CommandWorkbench` adapter; timeout/cancel/log/result handling |
+| `src/radia/panels/notebooks/radia_<topic>.ipynb` | notebook workbench operating surface |
+| `tests/panels/test_<topic>_golden.py` or `validation_test/panels/` | golden-band/API lock on the canonical sample |
 
 **Why this matters**: the recipe makes argparse the **single source
-of truth** for both panel widgets and CLI flags.  All entire bug
+of truth** for both notebook settings and CLI flags.  All entire bug
 classes are then impossible by construction:
 
-- "widget silently drops a flag" → impossible (widget IS the argparse arg)
-- "argparse rejects a flag the panel sent" → impossible (same)
-- "open-GMSH button stays disabled" → AnalysisWindow auto-matches on
+- "notebook silently drops a flag" → impossible (DesignSpec emits the argparse arg)
+- "argparse rejects a flag the workbench sent" → impossible (same)
+- "open-GMSH button stays disabled" → workbench artifact discovery matches on
   any of `gmsh_file` / `field_gmsh_file` / `msh_output` / `msh_file`
 - ".log not written" → Result Output Persistence Policy fires auto
 - "summary forgets a time" → `_append_standard_summary` matches `t_*_s`
 
 **Enforcement**: `python tools/audit_new_panel_contract.py` is the
-static gate.  It checks 4 calc rules (C1-C6) + 4 panel rules (P1-P4)
-described in `docs/panels/ADDING_NEW_PANEL.md`.  Exit 0 = clean.
-Pre-existing legacy panels are grandfathered in the `LEGACY_*_EXEMPT`
-sets at the top of the audit script — add to those sets ONLY when
-accepting the legacy bug-class risk; remove from them when migrating
-the file to the canonical pattern.
+static gate for the calc/DesignSpec side, and
+`python -m pytest validation_test/panels/test_notebook_workbench.py -q`
+is the runtime notebook-workbench gate.  Exit 0 = clean.  Do not add new
+desktop PySide6 `radia_<topic>.py` panels; the Cubit PySide6 toolbar may
+launch notebook/workbench paths, while Radia analysis settings live in
+DesignSpec + CLI.
 
 **Output convention**: GMSH `.msh` for visualization + the text `.log`
 file from Persistence Policy.  Do NOT add new bespoke output formats
@@ -3481,7 +3471,7 @@ mode-suffix:
 | File | Content | Producer |
 |---|---|---|
 | `<base><suffix>.json` | Structured result dict (per [Result Output Policy 2026-05-29](#result-output-policy-ne--dof--time--analysis-integral-quantities-2026-05-29)) | `calc_*.py --output` |
-| `<base><suffix>.log` | **Verbatim copy of the Output window** (Launching banner + subprocess stdout/stderr + panel-rendered summary + error messages + exit code line) | `AnalysisWindow._persist_output_log` (Layer 3) |
+| `<base><suffix>.log` | **Verbatim copy of the run log** (launching banner + subprocess stdout/stderr + rendered summary + error messages + exit code line) | notebook `CommandWorkbench` / legacy `AnalysisWindow` |
 
 - **Naming**: `<base>` from input path basename (`json_output()` /
   `msh_output()` convention), `<suffix>` from the panel-mode suffix
@@ -3495,21 +3485,21 @@ mode-suffix:
   also leaves a `.log` capturing the failure tail. This is required
   for triage of incident reports ("panel crashed" / "wrong number")
   without asking the user to copy-paste from the Output box.
-- **Scope**: All panels uniformly. Implementation lives in
-  `AnalysisWindow._persist_output_log` (called from `_on_finished` at
-  both the error-return path and the success-return path); per-panel
-  subclasses do not need to opt in. If a panel mode legitimately does
-  not pass `--output` (some debug paths), the helper is a no-op (no
-  log, no exception).
+- **Scope**: All notebook/workbench panels uniformly. Implementation lives
+  in the `CommandWorkbench` artifact contract (legacy `AnalysisWindow`
+  compatibility uses the same file convention). If a panel mode
+  legitimately does not pass `--output` (some debug paths), the helper is
+  a no-op (no log, no exception).
 
 **How it is enforced**:
-- `AnalysisWindow._on_run` captures the `--output` argv value into
-  `self._last_output_json` at launch time.
-- `AnalysisWindow._persist_output_log` writes
-  `self._output.toPlainText()` to `<base><suffix>.log`.
-- `tests/panels/test_panel_output_health.py::test_persist_output_log_*`
-  locks the contract: writes-next-to-json, overwrite-on-rerun,
-  silent-when-no-json, captures-failed-run.
+- Notebook workbenches build commands from `DesignSpec.build_command()`
+  and persist `result.json` / `run.log` artifacts through
+  `CommandWorkbench`.
+- Legacy desktop adapters, if temporarily present, must write the same
+  artifact pair and must not introduce a second persistence convention.
+- `validation_test/panels/test_notebook_workbench.py` locks the current
+  workbench contract: calc argv round-trip, result artifact creation,
+  run-log capture, and no PySide import in notebook-facing code.
 
 **Why**:
 - 1 Run = 1 artifact pair beside the geometry → audit / reproducibility
@@ -3544,12 +3534,12 @@ mode-suffix:
 │  Launches Layer 3 via subprocess.Popen (detached)               │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 3: Radia-NGSolve PySide6 (Python 3.12 + PySide6)        │
+│  Layer 3: Radia notebook workbench (Python 3.12 + Jupyter)     │
 │  ─────────────────────────────────────────────────────────────  │
-│  radia_ih.py (IHWindow) — standalone PySide6 application        │
+│  panels/notebooks/*.ipynb + *_design.py / *_notebook.py         │
 │  Separate process from Cubit. import cubit FORBIDDEN.           │
-│  Receives .vol path as CLI argument.                            │
-│  Launches Layer 4 via subprocess for computation.               │
+│  Receives .vol/.sol paths as notebook settings.                 │
+│  Launches Layer 4 with timeout/cancel/run.log/result.json.      │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
@@ -3580,9 +3570,9 @@ mode-suffix:
 |------|-------|---------|
 | `panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs + Mesh Evaluation |
 | `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
-| `radia_ih.py` | 3 (PySide6) | IH analysis window (PEEC+FEM / FEM) |
-| `panels/calc_peec.py` | 4 (no GUI) | PEEC filament coil inductance |
-| `panels/calc_fem_kelvin.py` | 4 (no GUI) | FEM Kelvin + SIBC (IH workpiece) |
+| `panels/notebooks/radia_*.ipynb` | 3 (notebook) | Application workbench operating surfaces |
+| `*_design.py`, `*_notebook.py` | 3 (notebook adapter) | UI-neutral settings + `CommandWorkbench` wiring |
+| `panels/calc_*.py` | 4 (no GUI) | Headless application computations |
 | `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
 
 ### Cubit Plugin: C++ First, No Python ABI Dependency

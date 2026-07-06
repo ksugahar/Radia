@@ -1,6 +1,6 @@
 """calc_streamfunction_volume.py -- 3D VOLUME stream-function coil designer.
 
-CLI entry point for the radia-streamfunction "Volume 3D" panel mode.  Designs
+CLI entry point for the stream-function notebook "Volume 3D" mode.  Designs
 equal-current solenoid windings inside a hollow cylindrical CONDUCTOR VOLUME by
 the foliated current-Clebsch volume stream function
 

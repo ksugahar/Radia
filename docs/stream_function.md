@@ -195,9 +195,9 @@ It is locked by a golden test,
 [`tests/panels/test_stream_coil_golden.py`](../tests/panels/test_stream_coil_golden.py),
 which runs the CLI with defaults and asserts the discrete wire coil reproduces
 the unit gradient (`fitted_dBdz` in `[0.9, 1.1]`) with on-axis
-`gradient_nonlinearity < 0.05`.  This is a Stage-2 deliverable (validated CLI +
-golden band); a Stage-3 PySide6 panel wrapper is future work, so it is not yet
-registered in `panel_registry.json`.
+`gradient_nonlinearity < 0.05`.  This remains a Stage-2-only utility
+(validated CLI + golden band); a notebook workbench promotion should add a
+DesignSpec/notebook wrapper and then register it in `panel_registry.json`.
 
 ## 5. Validation
 

@@ -147,7 +147,7 @@ PANELS = {
         "ja_name": "Inductance (vacuum + weak-coupled BEM-SIBC)",
         "ja_description": "コイル STEP -> L_coil (vacuum) または L_coil + ΔL (weak-coupled).  --coil-solver peec | bem-a で切替。--vol 指定で workpiece 弱結合 (Telegen φ・B back-reaction)。",
         "method": "PEEC perimeter filaments OR BEM-A Weggler EFIE saddle (RWG); workpiece scalar BIE + SIBC Robin",
-        "command_builder": "radia_ih.py:IHPanel._build_peec_bem_command",
+        "command_builder": "radia.ih_design:IHDesignSpec.build_command",
     },
     "fem_coilmesh": {
         "script": "calc_fem_coilmesh.py",
@@ -155,7 +155,7 @@ PANELS = {
         "ja_name": "FEM A-V (IH、コイル体積メッシュ)",
         "ja_description": "A-V 定式化 (HCurl + H1 phi on coil) + source/sink Dirichlet lift + 体積積分電流抽出 + wp SIBC Robin + Kelvin。gapped torus 専用。L, P_wp, P_coil を出力。",
         "method": "FEM A-V (HCurl A + H1 phi on coil, phi Dirichlet source/sink)",
-        "command_builder": "radia_ih.py:IHPanel._build_fem_coilmesh_command",
+        "command_builder": "radia.ih_design:IHDesignSpec.build_command",
     },
     "volume": {
         "script": "calc_volume.py",
@@ -171,7 +171,7 @@ PANELS = {
         "ja_name": "加速器電磁石 FEM",
         "ja_description": "Omega-reduced/A 定式化 + Kelvin + BH 非線形 + ヒステリシス",
         "method": "FEM (H1 Omega / HCurl A-field)",
-        "command_builder": "radia_em.py:_AccelMagnetPanel.build_command",
+        "command_builder": "radia.em_design:EMDesignSpec.build_command",
     },
     "accel_hdiv": {
         "script": "calc_accel_hdiv.py",
@@ -179,7 +179,7 @@ PANELS = {
         "ja_name": "加速器電磁石 HDiv-VIM",
         "ja_description": "HDiv-VIM + IMA ラベル読取 + HACApK charge Gram",
         "method": "FEEC HDiv-VIM (NGSolve-aligned mesh-backed soft iron)",
-        "command_builder": "radia.em_design:EMDesignSpec._build_hdiv_command",
+        "command_builder": "radia.em_design:EMDesignSpec.build_command",
     },
     "pcb_peec": {
         "script": "calc_pcb_peec.py",
@@ -187,7 +187,7 @@ PANELS = {
         "ja_name": "PCB PEEC インピーダンス",
         "ja_description": "FastHenry 入力 → PEEC 行列 → 周波数スイープ → SPICE 出力",
         "method": "PEEC (Loop-Star + MNA)",
-        "command_builder": "radia_pcb.py:PCBPanel.build_command",
+        "command_builder": "radia.pcb_design:PCBDesignSpec.build_command",
     },
     "streamfunction": {
         "script": "calc_streamfunction.py",
@@ -195,7 +195,7 @@ PANELS = {
         "ja_name": "ストリーム関数コイル設計",
         "ja_description": "コイル面 .vol + 評価領域 .vol + 目標磁場 (CoefficientFunction 式; スカラー→Bz / 3成分→ベクトルB) から表面電流ストリーム関数 ψ を設計。design (均一度・最大電流密度) / pareto (フロント α掃引) / manufacture (一筆書き+板金+STEP+PEEC) の3モード。",
         "method": "FE-direct H1 psi on a surface .vol + surface Biot-Savart + folded-Tikhonov (ACA+TSVD RegularizedTSVD)",
-        "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
+        "command_builder": "radia.streamfunction_design:StreamFunctionDesignSpec.build_command",
     },
     "streamfunction_volume": {
         "script": "calc_streamfunction_volume.py",
@@ -203,7 +203,7 @@ PANELS = {
         "ja_name": "体積ストリーム関数コイル設計 (3D)",
         "ja_description": "中空円筒導体 .vol + 目標軸方向 Bz から、葉層化カレント・クレブシュ体積ストリーム関数 J=grad(lambda)xgrad(mu) (mu=r 固定) を線形最小ノルム逆問題 (ACA+TSVD) で解き、等電流の巻線ワイヤに等高線抽出。ワイヤの Biot-Savart を Radia と二重コード照合。radia_streamfunction パネルの 'Volume 3D' モード。",
         "method": "Foliated current-Clebsch volume stream function (H1 lambda on a conductor volume) + ACA+TSVD least-norm + equal-current contour extraction + two-codebase Biot-Savart check",
-        "command_builder": "radia_streamfunction.py:StreamFunctionPanel.build_command",
+        "command_builder": "radia.streamfunction_design:StreamFunctionDesignSpec.build_command",
     },
     "motor_transient": {
         "script": "calc_motor_transient.py",
@@ -211,7 +211,7 @@ PANELS = {
         "ja_name": "モータ過渡解析 (Lange-Henrotte-Hameyer)",
         "ja_description": "モータ .vol から、非線形 FE + 回路 ODE 連成で過渡応答を解く。PM 回転と Arkkio トルクを含む。radia_motor パネルの 'Transient' モード。",
         "method": "Nonlinear FE (A-formulation) + circuit ODE co-simulation, PM rotation, Arkkio torque (Lange-Henrotte-Hameyer 2009)",
-        "command_builder": "radia_motor.py:MotorPanel.build_command",
+        "command_builder": "radia.motor_design:MotorDesignSpec.build_command",
     },
     "motor_lamination": {
         "script": "calc_motor_lamination.py",
@@ -219,7 +219,7 @@ PANELS = {
         "ja_name": "積層鉄心 等価材料 (Hollaus)",
         "ja_description": "積層鉄心の 1D セル問題で等価材料テーブルを構築し (cell)、それを .vol 上の global FE に適用 (global/full)。radia_motor パネルの 'Lamination' モード。",
         "method": "Hollaus effective-material homogenization (1D cell problem) + global HCurl FE with the effective-material table",
-        "command_builder": "radia_motor.py:MotorPanel.build_command",
+        "command_builder": "radia.motor_design:MotorDesignSpec.build_command",
     },
 }
 

@@ -78,14 +78,21 @@ These are enforced by CI ([policy-lint.yml](.github/workflows/policy-lint.yml)):
 5. **No Generated Files at Root**: .msh/.vtu/.vtk/.vol go next to source scripts
 6. **No Legacy Paths**: Use `src/radia`, not `src/python`
 
-### Example README Policy
+### Examples Retired Policy
 
-Every example directory under `examples/` must have exactly **one README.md** that lists all Python files with descriptions.
+`examples/` is retired and must not be recreated. New exploratory work starts
+outside the repository in `C:\temp`; tracked work enters only after promotion
+to a durable lane:
 
-- **Single-topic folder** (e.g., `vtk_export/`): Place `README.md` directly in the folder.
-- **Multi-topic folder** (e.g., `kelvin_transformation/`): Place one top-level `README.md` that summarizes all sub-themes, plus optionally one `README.md` per subfolder.
-- **README must match code**: Every `.py` file on disk must be listed in the README. Remove entries for deleted files. Update the README when adding or removing scripts.
-- **Keep READMEs concise**: 1-line description per script, plus a brief overview of the folder's purpose.
+- `tests/` for fast CI-friendly regressions
+- `validation_test/` for heavier numerical verification, benchmarks, and
+  golden locks
+- `docs/<topic>/*.ipynb` with synchronized JSON for user-facing explanations
+- `src/` for reusable APIs and solver helpers
+- `panels/` or notebook workbenches for final operating surfaces
+
+Historical references to `examples/` are migration blockers. Migrate the
+owning code/docs to one of the lanes above, then delete the stale reference.
 
 ## Reporting Issues
 

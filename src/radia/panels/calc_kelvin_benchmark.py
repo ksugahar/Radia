@@ -26,7 +26,7 @@ Required sidesets / blocks in the .vol:
                kelvin_ext   (kelvin outer cap)
     bbnodeset: GND          (Kelvin sphere centre, Dirichlet anchor)
 
-Usage (called by `radia_em.py` Kelvin Benchmark mode):
+Usage (called by `radia_em.ipynb` / `EMDesignSpec` Kelvin Benchmark mode):
     python calc_kelvin_benchmark.py --vol model.vol --mu-r 100 \\
         --H0 1.0 --field-axis z --fes-order 2 --R-kelvin 0.20
 

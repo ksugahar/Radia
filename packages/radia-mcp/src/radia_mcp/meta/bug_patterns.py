@@ -92,15 +92,15 @@ PATTERNS: list[dict] = [
                       "ran at that point.  Then the override appended "
                       "150 more lines to _output that never made it "
                       "to the .log.",
-        "detection": "Code review of any AnalysisWindow._on_finished "
-                     "override.  No static gate today; consider adding.",
-        "prevention": "Any subclass that overrides _on_finished and "
-                      "appends additional output AFTER super() must "
-                      "ALSO call self._persist_output_log() at the END "
-                      "of the override.  See radia_ih.py:1784 for the "
-                      "fix template.",
-        "related": ["src/radia/radia_ih.py:1784",
-                    "src/radia/radia_gui_base.py:1252"],
+        "detection": "Code review of any legacy AnalysisWindow._on_finished "
+                     "override; current notebook workbenches are covered by "
+                     "validation_test/panels/test_notebook_workbench.py.",
+        "prevention": "Prefer the notebook CommandWorkbench artifact "
+                      "contract.  Any temporary legacy adapter that appends "
+                      "output after a run must rewrite the final .log at the "
+                      "end of the override.",
+        "related": ["validation_test/panels/test_notebook_workbench.py",
+                    "src/radia/notebook_workbench.py"],
     },
     {
         "id": "calc-result-key-misnamed-time",
@@ -404,9 +404,8 @@ PATTERNS: list[dict] = [
                       "the wheel-build step copied .pyd/.ccm FROM "
                       "src/radia -- but Build.ps1 now propagates them "
                       "into packages/cubit-mesh-export/src/cubit_mesh_"
-                      "export.  The renamed asset (radia_cubit_mesh.pyd "
-                      "-> cubit_mesh_curver.pyd) was also not yet in the "
-                      "binaries release.",
+                      "export.  The renamed curver asset was also not yet "
+                      "in the binaries release.",
         "detection": "ci-verify RED; runner _diag Worker log 'Failed to "
                      "download cubit_mesh_curver.pyd after 6 attempts'.",
         "prevention": "When relocating OR renaming a bundled binary, "

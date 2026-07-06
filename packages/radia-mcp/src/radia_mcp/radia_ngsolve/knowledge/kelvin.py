@@ -2160,7 +2160,7 @@ B_phys = eval_B_physical_from_gf(gf_B, mesh, r_phys=[0, 0, 1.0],
 
 
 KELVIN_BENCHMARK_PANEL = """
-# Kelvin Benchmark Panel Mode (radia_em.py "Kelvin Benchmark")
+# Kelvin Benchmark Notebook Mode (radia_em.ipynb / EMDesignSpec "Kelvin Benchmark")
 
 End-user verification path for the Cubit-meshed Kelvin pipeline.
 The EM panel ships with a 4th formulation -- "Kelvin Benchmark" --

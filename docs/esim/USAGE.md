@@ -240,8 +240,9 @@ relaxation parameter less relevant.
   [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/)
 - Material loader (BH file parser):
   [`src/radia/em_material.py`](../../src/radia/em_material.py)
-- Radia IH panel UI (drives all three CLIs):
-  [`src/radia/radia_ih.py`](../../src/radia/radia_ih.py)
+- Radia IH notebook workbench (drives the CLIs):
+  [`src/radia/panels/notebooks/radia_ih.ipynb`](../../src/radia/panels/notebooks/radia_ih.ipynb)
+  plus [`src/radia/ih_design.py`](../../src/radia/ih_design.py)
 
 ---
 

@@ -586,7 +586,9 @@ work (2006/2013) and the Whitney/source-field machinery (1993/1997).
 - JSON stdout: i(t), θ(t), ω(t), T(t), losses
 - Golden test: antunes-equivalent 8-pole BLAC
 
-**Stage 3 — Panel widget**: `radia_motor.py` wrapping Stage-2 script.
+**Stage 3 — Notebook workbench**: `motor_design.py` /
+`motor_notebook.py` / `panels/notebooks/radia_motor.ipynb` wrapping
+the Stage-2 script.
 
 This module is the **knowledge prerequisite** for Stage 2.
 """

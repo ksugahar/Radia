@@ -114,8 +114,10 @@ i.e. the only allowed differences are Solver and Air field calc.
 Frequency, current, coil sigma, workpiece sigma, mu_r, half thickness,
 SIBC/ESIM choice, BH file are SHARED across methods.
 
-**Reference**: commit ``1aa66ee``, ``radia_ih.py::IHPanel._build_ui``
-("Layout (per user request 2026-04-12)" comment block).
+**Reference**: commit ``1aa66ee`` from the retired desktop-panel era
+("Layout (per user request 2026-04-12)" comment block).  Current panels
+should express the shared settings through `IHDesignSpec` and the notebook
+workbench, not by recreating desktop widgets.
 
 ============================================================
 ## gmsh_viz — Mesh elements obscure the field
@@ -756,9 +758,9 @@ class _NoWheelDoubleSpinBox(QDoubleSpinBox): ...
 ``ModePanel.add_combo`` builds ``_NoWheelComboBox`` and ``add_spin``
 builds ``_NoWheelSpinBox``, so every panel field declared through the
 base class gets the guard for free. Any panel that constructs a raw
-``QComboBox`` / ``QSpinBox`` / ``QDoubleSpinBox`` directly (e.g.
-``radia_motor.py``, ``_heat_panel.py``) MUST import the ``_NoWheel*``
-alias instead of the bare Qt class:
+``QComboBox`` / ``QSpinBox`` / ``QDoubleSpinBox`` directly in a temporary
+legacy adapter MUST import the ``_NoWheel*`` alias instead of the bare Qt
+class:
 
 ```python
 from radia_gui_base import (_NoWheelComboBox as QComboBox,

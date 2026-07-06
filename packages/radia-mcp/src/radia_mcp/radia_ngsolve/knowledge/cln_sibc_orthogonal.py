@@ -28,9 +28,9 @@ Verified analytically with Mathematica on:
     Rong-Cangellaris near-field BC)
 
 Scripts:
-  repo:/examples/CLN/scripts/A1_SIBC_CLN_orthogonal_slab.wls
-  repo:/examples/CLN/scripts/A1_SIBC_CLN_orthogonal_rect2D.wls
-  repo:/examples/CLN/scripts/A1_SIBC_CLN_orthogonal_*.py (plotters)
+  repo:/validation_test/maglev/research_cln/A1_SIBC_CLN_orthogonal_slab.wls
+  repo:/validation_test/maglev/research_cln/A1_SIBC_CLN_orthogonal_rect2D.wls
+  repo:/validation_test/maglev/research_cln/A1_SIBC_CLN_orthogonal_*.py (plotters)
 
 Companion to the rigorous Nagamine et al. (JJIAM 2026 submitted) verified
 N-stage Cauer extraction for a 2D square prism with affine arithmetic;

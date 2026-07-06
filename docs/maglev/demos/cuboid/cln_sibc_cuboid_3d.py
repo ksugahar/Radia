@@ -1,7 +1,8 @@
 """cln_sibc_cuboid_3d.py -- Python port of the lab CLN-SIBC (rank-(1,1) Mixed Galerkin)
 3D cuboid polarizability, for the 3D non-axisymmetric levitation route.
 
-Ports examples/CLN/scripts/cuboid3D_schur_F.wls (Mathematica) to Python and
+Ports validation_test/maglev/research_cln/cuboid3D_schur_F.wls
+(Mathematica) to Python and
 reproduces its documented checks, so the 3D CLN-SIBC building block is
 runnable in-repo (it was Mathematica-only).  Method (Sugahara-Nagamine-Hane
 2026, "Mixed Galerkin Reduction for Eddy-Current Admittance:
