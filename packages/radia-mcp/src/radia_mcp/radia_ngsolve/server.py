@@ -67,6 +67,9 @@ from .knowledge.urn import get_urn_documentation, urn_fit_from_csv
 from .acoustics import (
     acoustic_fembem_cross_learnings as _acoustic_fembem_cross_learnings,
 )
+from ..matlab_acoustic_fembem import (
+    matlab_acoustic_fembem_agent_guide as _matlab_acoustic_fembem_agent_guide,
+)
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -1301,6 +1304,22 @@ def acoustic_fembem_cross_learnings() -> str:
           topic (public teaching-lane counterpart; no proprietary content).
     """
     return _acoustic_fembem_cross_learnings()
+
+
+@mcp.tool()
+def matlab_acoustic_fembem_agent_guide() -> str:
+    """
+    Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows.
+
+    Use this when an agent needs to work on MATLAB acoustic FEM/BEM code while
+    respecting the repository policy that MathWorks' official MATLAB MCP Server
+    is the execution substrate.  The guide records the stack contract
+    (toolbox detection, Code Analyzer, MATLAB unit tests, and mdx fallback),
+    plus lab-specific domain gates for `.vol` meshes, P1 FEM/BEM assembly,
+    convolution quadrature conventions, and NGSolve / `ngsolve.bem`
+    cross-validation.
+    """
+    return _matlab_acoustic_fembem_agent_guide()
 
 
 @mcp.tool()
