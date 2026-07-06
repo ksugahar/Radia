@@ -667,8 +667,9 @@ DEEPER into saturation**: minimizing the saturated `D_dir` over `(depth, exponen
 (`~1.8 → ~1.0`), the *same* corner-relief lever as §3.13 but now judged directly on the
 flux-line geometry across an excitation sweep.
 
-**Verified (`excitation_invariant_field.py`, ngsolve + Optuna, golden-tested).** So "*same
-flux lines when the current rises*" is **largely automatic (it is just linearity)**; what you
+**Verified (`excitation_invariant_field.ipynb` + its helper, ngsolve + Optuna,
+golden-tested).** So "*same flux lines when the current rises*" is **largely automatic (it is
+just linearity)**; what you
 design for is keeping it true DEEP into saturation, which — again — means relieving the pole-tip
 corner. This is the excitation-sweep complement of §3.13's iron-`κ` view: §3.13 minimizes the
 iron hot spot, §3.14 minimizes the air flux-line drift, and the two levers coincide.
@@ -829,8 +830,9 @@ coil = A-side), so the framework is one method, not two.
   minimizes `κ` over the end chamfer `(depth, exponent)` — the chamfer RELIEVES the corner
   (`κ → ~1.0`, a real 2D optimum) while the beam field stays put. So "flux invariant under
   saturation" is largely automatic for the beam; what you optimize is the corner it saturates.
-- the **excitation-invariant flux lines** (§3.14, `excitation_invariant_field.py`): the
-  user's "same flux lines as the current rises" made a direct, optimizable metric — the
+- the **excitation-invariant flux lines** (§3.14,
+  `docs/clebsch_hodograph/excitation_invariant_field.ipynb`): the user's "same flux lines as
+  the current rises" made a direct, optimizable metric — the
   air-region flux-line DIRECTION drift `D_dir(I) = rms‖b̂(I)−b̂(I_lin)‖` across an excitation
   sweep. Below the knee the magnet is LINEAR so `D_dir = 0` at every drive (the **linear
   control is exactly 0** — scaling the current cannot move the flux lines); saturation is the
@@ -881,5 +883,5 @@ coil = A-side), so the framework is one method, not two.
 | co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |
 | saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |
 | bending end pack optimized vs saturation (relieve the tip corner) | `examples/clebsch_hodograph/bending_endpack_saturation_opt.py` |
-| excitation-invariant flux lines (same field-line shape as the drive rises) | `examples/clebsch_hodograph/excitation_invariant_field.py` |
+| excitation-invariant flux lines (same field-line shape as the drive rises) | `docs/clebsch_hodograph/excitation_invariant_field.ipynb` (+ `.py` helper) |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
