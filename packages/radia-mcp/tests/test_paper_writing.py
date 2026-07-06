@@ -436,6 +436,38 @@ def test_check_notation_variants_returns_dict():
     assert isinstance(r, dict)
 
 
+def test_normalize_terminology_preserves_english_and_paths():
+    text = (
+        r"\bicaption{境界固定cubeの検証。}{fixed-boundary cube benchmark.}"
+        "\n"
+        r"\includegraphics{figures/fig_cube_scaling_mdx.pdf}"
+    )
+    r = pw.paper_writing_normalize_terminology(text, rules="cube=>立方体")
+    assert r["n_replacements"] == 1
+    assert "境界固定立方体の検証" in r["normalized_text"]
+    assert "fixed-boundary cube benchmark" in r["normalized_text"]
+    assert "fig_cube_scaling_mdx.pdf" in r["normalized_text"]
+
+
+def test_normalize_terminology_file_dry_run_and_apply(tmp_path):
+    tex = tmp_path / "paper.tex"
+    tex.write_text(
+        "境界固定cubeを調べる。 English cube remains. fig_cube.pdf\n",
+        encoding="utf-8",
+    )
+    preview = pw.paper_writing_normalize_terminology_file(str(tex), dry_run=True)
+    assert preview["changed"] is True
+    assert preview["n_replacements"] == 1
+    assert "境界固定cube" in tex.read_text(encoding="utf-8")
+
+    applied = pw.paper_writing_normalize_terminology_file(str(tex), dry_run=False)
+    assert applied["n_replacements"] == 1
+    updated = tex.read_text(encoding="utf-8")
+    assert "境界固定立方体" in updated
+    assert "English cube remains" in updated
+    assert "fig_cube.pdf" in updated
+
+
 def test_find_undefined_acronyms_in_text():
     r = pw.paper_writing_find_undefined_acronyms(
         "BEM is faster than FEM.  We use BEM for the open boundary."

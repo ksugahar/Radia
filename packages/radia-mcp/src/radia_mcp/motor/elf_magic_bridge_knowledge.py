@@ -235,6 +235,36 @@ rotary surrogate.
 """
 
 
+ROTARY_MOTOR_FAMILY_SWEEP = """\
+## Rotary motor family-sweep replay contract
+
+Rotary motor source-tool examples should train radia-motor as a **family
+sweep**, not as one generic motor bucket. A useful 30-case replay covers at
+least these five families:
+
+| Family | AGE lane focus | HDiv-VIM + reduced FEM focus |
+|---|---|---|
+| SPM / SPMSM | PM flux linkage, back-EMF, cogging/torque periodicity | pickup flux, demag/source-field trend |
+| IPM / hairpin | `Ld/Lq`, MTPA, field-weakening, demag margin | PM plus saliency flux-linkage trend |
+| Induction / rotor bar | slip-frequency eddy response and torque-slip trend | source-field and reduced-response trend |
+| SRM | reluctance torque sign, angle-current map, saturation | coenergy and force-or-torque trend |
+| SynRM | saliency torque, cross-saturation, power-angle checks | coenergy and reduced reluctance trend |
+| BLDC / outer-rotor BLDC | PM flux, cogging order, winding/slot polarity | PM source-field and pickup-flux trend |
+| Fractional SPMSM | sector periodicity, winding factor, harmonic aliasing | reduced flux-linkage periodicity |
+| AFPM / linearized axial flux | unfolded air-gap flux and thrust/torque trend | source-panel flux and demag trend |
+
+The public MCP learning rule is the same as other product-local slots:
+
+1. Record only `product_local_reference` as the source class.
+2. Accept radia-motor learning only when `ngsolve_age` and
+   `hdiv_vim_reduced_fem` are both represented by verification commands.
+3. Keep raw product rows, logs, paths, and benchmark numbers in the private
+   source lane.
+4. Promote only the family coverage, observable names, tolerances, and gate
+   commands to public radia-mcp knowledge.
+"""
+
+
 RUN_ARTIFACT_CONTRACT = """\
 ## Source-tool run artifact contract
 
@@ -269,6 +299,7 @@ SECTIONS = {
     "jmag_coverage_reality": JMAG_COVERAGE_REALITY,
     "age_vs_field_strategy": AGE_VS_FIELD_STRATEGY,
     "linear_motor_dual_lane": LINEAR_MOTOR_DUAL_LANE,
+    "rotary_motor_family_sweep": ROTARY_MOTOR_FAMILY_SWEEP,
     "run_artifact_contract": RUN_ARTIFACT_CONTRACT,
 }
 

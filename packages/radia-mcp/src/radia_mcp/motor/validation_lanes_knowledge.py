@@ -72,11 +72,15 @@ LANES: dict[str, MotorValidationLane] = {
             "dq quantities, MTPA, and field-weakening checks",
             "slip-frequency eddy-current and hysteresis-loss anchors",
             "linear motor air-gap thrust, flux-linkage, and end-effect reduced checks",
+            "rotary motor family sweeps across SPM, BLDC, IPM, induction, SRM, SynRM, and AFPM",
             "nonlinear material iteration once the reduced invariant is clear",
         ),
         observable_families=(
             "airgap_flux",
             "torque",
+            "motor_family_sweep",
+            "rotary_flux_linkage",
+            "reluctance_torque",
             "linear_thrust",
             "linear_pm_flux",
             "cogging_torque",
@@ -133,6 +137,7 @@ LANES: dict[str, MotorValidationLane] = {
         best_for=(
             "passive pickup flux and signed flux-linkage sweeps",
             "linear PM motor pickup-flux and thrust-trend reduced checks",
+            "rotary SPM/BLDC/IPM/IM/SRM/SynRM/AFPM reduced flux and coenergy trend checks",
             "permanent-magnet demagnetizing-field anchors",
             "source-field / surface-current intuition",
             "planar saliency torque sign and scale checks against closed form reluctance torque",
@@ -141,6 +146,8 @@ LANES: dict[str, MotorValidationLane] = {
         observable_families=(
             "pickup_flux",
             "flux_linkage",
+            "motor_family_sweep",
+            "rotary_flux_linkage",
             "linear_pm_flux",
             "linear_force_or_thrust",
             "demag_field",

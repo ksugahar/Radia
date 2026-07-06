@@ -41,7 +41,7 @@ Total: **584 tools** across 43 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 95 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 97 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 18 |
 | [`mcp-server-presentation`](#mcp-server-presentation) | `radia_mcp.presentation` | 72 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
@@ -779,6 +779,8 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 の bedrock 診断 (re-export)。 |
 | `paper_writing_lint_reference_format` | .bib の reference エントリーの完全性と形式を検証。 |
 | `paper_writing_next_5_actions` | paper health_report の priority_issues を impact / effort で再 sort、 |
+| `paper_writing_normalize_terminology` | Known terminology variants を本文中で補正。既定では `cube=>立方体` を日本語文脈だけに適用。 |
+| `paper_writing_normalize_terminology_file` | TeX/text file の用語ゆれ補正。既定は dry-run で、確認後に file へ適用できる。 |
 | `paper_writing_pdf_overlap_recipe` | Return the recipe for PDF overlap/overflow detection. |
 | `paper_writing_related_work_density` | Introduction 内の \cite 密度・自己引用比率・年度分布を診断。 |
 | `paper_writing_render_pages_to_png` | Render PDF pages to PNG files for visual inspection. |
