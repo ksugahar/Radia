@@ -1,0 +1,55 @@
+{
+  "generated_at_utc": "2026-07-06T13:46:50.413000+00:00",
+  "radia_version": "4.95.5",
+  "ngsolve_version": "6.2.2604",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "x0": 2.0,
+  "gap_h": 1.0,
+  "edge_d": 0.9,
+  "d_star": 0.6366197723675814,
+  "feasibility_table": [
+    {
+      "d": 1.4,
+      "y_sing": 2.199114857512855,
+      "feasible": true
+    },
+    {
+      "d": 1.0,
+      "y_sing": 1.5707963267948966,
+      "feasible": true
+    },
+    {
+      "d": 0.8,
+      "y_sing": 1.2566370614359172,
+      "feasible": true
+    },
+    {
+      "d": 0.6366197723675814,
+      "y_sing": 1.0,
+      "feasible": false
+    },
+    {
+      "d": 0.5,
+      "y_sing": 0.7853981633974483,
+      "feasible": false
+    },
+    {
+      "d": 0.35,
+      "y_sing": 0.5497787143782138,
+      "feasible": false
+    }
+  ],
+  "fem_verify": {
+    "d": 0.9,
+    "gap_h": 1.0,
+    "phi0": -1.0151002621057115,
+    "d_star": 0.6366197723675814,
+    "feasible": true,
+    "By_rel_err": 9.782291612936422e-05,
+    "phi_L2_err": 1.1429579782354395e-08,
+    "pole_match_err": 1.3635419988666797e-06,
+    "pole_gap_at_x0": 0.9999999998146583
+  },
+  "notebook_sha256": "1a8d87a49decc0d0b583948b5d0be55e385286921fa899264af876da4d0cd55a"
+}

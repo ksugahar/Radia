@@ -674,6 +674,29 @@ design for is keeping it true DEEP into saturation, which — again — means re
 corner. This is the excitation-sweep complement of §3.13's iron-`κ` view: §3.13 minimizes the
 iron hot spot, §3.14 minimizes the air flux-line drift, and the two levers coincide.
 
+### 3.15 The 2D LINEAR hodograph outlook — a feasibility boundary for a bending magnet
+
+Stepping back from the end-pack rungs to the *linear* ($\mu=$const, Laplace) design outlook the
+hodograph gives on a bending-magnet cross-section (the runnable method note
+`docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb`). Demand a mid-plane field
+`B_y(x,0) = g(x)` (flat over the good-field region, edge width `d`). The gap field is the unique
+*smooth* (harmonic) continuation of `g` upward, and the continuation of a `tanh` edge has its
+nearest singularity at height `y = πd/2`; the field is realizable by an iron pole at gap `h`
+**only if that singularity clears the gap**:
+
+  **`d > d* = (2/π) h ≈ 0.64 h`** — the field edge is no sharper than `~0.64 × gap`.
+
+Below `d*` the continuation is singular *inside* the gap and no single smooth iron pole can
+produce the field — the linear precursor of a gas-dynamics **limit line**, known *before
+building anything*. For a feasible demand the pole is **read off** as the equipotential
+`{φ=φ0}` (inverse design), and the scalar potential has a closed form (`sinh/cosh/sin/cos/atan2`).
+**Verified** by an independent `ngsolve` linear-FEM manufactured-solution solve: the read-off pole
+reproduces `g(x)` to `0.01 %`, and the FEM equipotential matches the analytic pole to `~1e-6`
+(golden `tests/feec/test_hodograph_feasibility_2d.py`). The `2/π` is `tanh`-edge-specific; the
+**universal** statement is the gap scaling ("fringe scale ~ gap", here *proven* as a feasibility
+boundary). This linear outlook is the baseline for the nonlinear Chaplygin hodograph (§3.3), where
+the same field-space view linearises saturation.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -884,4 +907,5 @@ coil = A-side), so the framework is one method, not two.
 | saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |
 | bending end pack optimized vs saturation (relieve the tip corner) | `examples/clebsch_hodograph/bending_endpack_saturation_opt.py` |
 | excitation-invariant flux lines (same field-line shape as the drive rises) | `docs/clebsch_hodograph/excitation_invariant_field.ipynb` (+ `.py` helper) |
+| 2D linear hodograph feasibility (edge no sharper than (2/π)·gap; FEM-verified) | `docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb` (+ `.py` helper) |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |

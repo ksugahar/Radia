@@ -50,6 +50,16 @@ TOPICS: dict[str, str] = {
         "end chamfer keeps flux lines ~6-7x MORE invariant (corner relief, same lever as "
         "bending_endpack_saturation) (docs/clebsch_hodograph/excitation_invariant_field.ipynb)"
     ),
+    "hodograph_feasibility": (
+        "2D LINEAR hodograph outlook for a BENDING magnet: demand a mid-plane field B_y(x,0) "
+        "flat with edge width d; the gap field is the unique SMOOTH (harmonic) continuation, "
+        "and the tanh continuation's singularity at pi*d/2 must clear the gap h -> feasibility "
+        "boundary d* = (2/pi)h ~ 0.64h (edge no sharper than ~0.64 x gap; the linear precursor "
+        "of a gas-dynamics limit line). Feasible -> pole read off as an equipotential (inverse "
+        "design, closed-form phi). ngsolve linear-FEM verified: read-off pole reproduces g(x) "
+        "to 0.01%, FEM equipotential matches pole to ~1e-6 "
+        "(docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb)"
+    ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
@@ -693,6 +703,42 @@ minimizes the air flux-line drift, and the two levers COINCIDE.
 """
 
 
+HODOGRAPH_FEASIBILITY = """
+# 2D LINEAR hodograph -- a feasibility boundary for a bending magnet
+
+The linear (mu=const, Laplace) design outlook the hodograph gives on a bending-magnet
+cross-section (docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb, runnable + golden).
+
+## The demand and the catch
+Demand the mid-plane field B_y(x,0) = g(x): flat over the good-field half-width x0, rolling
+off over an edge width d.  The scalar potential is HARMONIC in the gap, so g must extend
+upward as its UNIQUE SMOOTH (analytic) continuation -- the mid-plane field is NOT free.
+
+## The feasibility boundary (a linear 'limit line')
+The continuation of a tanh edge has its nearest singularity at height y = pi*d/2.  The field
+is realizable by an iron pole at gap h ONLY IF that singularity clears the gap:
+
+    d > d* = (2/pi) h  ~  0.64 h        -- the edge is no sharper than ~0.64 x gap.
+
+Below d* the continuation is singular INSIDE the gap and no single smooth iron pole can make
+the field.  You know what is realizable BEFORE building anything -- the linear precursor of a
+gas-dynamics limit line.  (The 2/pi is tanh-edge-specific; the UNIVERSAL statement is the gap
+scaling "fringe scale ~ gap", here PROVEN as a feasibility boundary from analyticity.)
+
+## Inverse design + verification
+For a feasible demand the iron pole is READ OFF as the equipotential {phi=phi0} (no
+forward-solve loop); phi has a closed form (sinh/cosh/sin/cos/atan2).  Verified by an
+INDEPENDENT ngsolve linear-FEM manufactured-solution solve: (a) interior B_y(x,0) reproduces
+g(x) to 0.01% of B0, (b) FEM phi == analytic phi (L2 ~1e-8), (c) FEM equipotential == read-off
+pole to ~1e-6.  Golden: tests/feec/test_hodograph_feasibility_2d.py.
+
+## Where it sits
+This is the LINEAR baseline of the hodograph 'design in field space' outlook.  The
+hodograph-SPECIFIC payoff (linearising the NONLINEAR saturating PDE) is the Chaplygin
+transformation -- the natural next step from this linear feasibility picture.
+"""
+
+
 BEAM_REFERENCED_TWIST = """
 # The beam-referenced equipotential SURFACE as the design primitive + the TWIST
 
@@ -1029,6 +1075,9 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                  "flux_line_invariant", "flux_line_invariance", "same_flux_lines",
                  "invariant_flux_lines"):
         return EXCITATION_INVARIANT_FIELD
+    if topic in ("hodograph_feasibility", "feasibility", "limit_line", "edge_sharpness",
+                 "field_space_design", "hodograph_2d_linear", "inverse_design"):
+        return HODOGRAPH_FEASIBILITY
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
@@ -1047,12 +1096,13 @@ def get_accelerator_documentation(topic: str = "all") -> str:
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
             SECTOR_SATURATION, BENDING_ENDPACK_SATURATION, EXCITATION_INVARIANT_FIELD,
-            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION,
-            ENDPACK_COBAKE,
+            HODOGRAPH_FEASIBILITY, BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE,
+            SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
         "sector_saturation, bending_endpack_saturation, excitation_invariant_field, "
-        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack, endpack_cobake."
+        "hodograph_feasibility, beam_referenced_twist, endpack_two_plane, "
+        "spectrometer_endpack, endpack_cobake."
     )
