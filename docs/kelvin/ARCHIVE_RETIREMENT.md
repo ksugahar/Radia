@@ -12,6 +12,7 @@ historical source ledgers.
 | `kelvin_dtn_spectrum_archive.*` | `src/radia/open_boundary/{dtn_cln.py,kelvin_dtn.py}`, `src/radia/infinite_element.py`, `validation_test/open_boundary/`, `validation_test/kelvin_dtn_spectrum/` | Deleted after maintained API/validation routing was verified; use these destinations instead. |
 | `kelvin_adaptive_mesh_archive.*` | `docs/kelvin/Supplement/{CG-smoother.md,ErrorEstimator.md}`, `docs/kelvin/Supplement/cg_smoother_demo.ipynb`, memory notes | Deleted after repetitive adaptive-mesh runners were collapsed to distilled method notes. |
 | `kelvin_remaining_examples_archive.*` | `src/radia/kelvin_source.py`, `validation_test/kelvin_source/`, `validation_test/cubit/kelvin_1_4_p_convergence/`, `docs/kelvin/TEAM7_ADAPTIVE_RETIREMENT.md`, `memory/kelvin_remaining_examples_retired_2026_06_28.md` | Deleted after A-formulation pullbacks, Omega-Reduced Omega p-convergence, adaptive-method notes, and TEAM7 retirement rationale were routed to maintained destinations. |
+| `packages/radia-mcp/examples/dtn_spectrum_coarse_mesh_demo.py` | `docs/kelvin/dtn_spectrum_coarse_mesh_demo.py`, `docs/kelvin/DTN_SPECTRUM_COARSE_MESH.md`, `radia_mcp.radia_ngsolve.knowledge.dtn_coarse_mesh` | Promoted out of the retired `examples/` tree during the radia-mcp diet; keep future runnable docs helpers next to their maintained docs. |
 
 ## MCP Rule
 
