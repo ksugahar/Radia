@@ -458,7 +458,7 @@ AxiHenrotteFE_P2_Triangle::AxiHenrotteFE_P2_Triangle(
 
 // Reference-triangle P2 Lagrange shape functions on NGSolve's ET_TRIG
 // reference triangle convention (verified 2026-05-12 via
-// examples/CLN/scripts/axifem/test_ngsolve_ref_tri_vertices.py):
+// validation_test/maglev/research_cln/axifem/test_ngsolve_ref_tri_vertices.py):
 //
 //   Local DOF 0 (= mesh vertex V0) at ref (1, 0)
 //   Local DOF 1 (= mesh vertex V1) at ref (0, 1)

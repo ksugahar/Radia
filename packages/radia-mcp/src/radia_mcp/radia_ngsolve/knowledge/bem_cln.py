@@ -16,7 +16,7 @@ conductor systems with:
 
 Companion files:
   - docs/cln/BEM_CLN.md  (full theoretical exposition)
-  - examples/CLN/scripts/bem_cln_*.wls  (Mathematica verification)
+  - validation_test/maglev/research_cln/bem_cln_*.wls  (Mathematica verification)
 """
 
 BEM_CLN_OVERVIEW = """
@@ -227,7 +227,7 @@ external coupling.
 BEM_CLN_NOTEBOOK_INDEX = """
 # BEM-CLN reference scripts (Mathematica)
 
-Path: examples/CLN/scripts/
+Path: validation_test/maglev/research_cln/
 
   bem_cln_2cylinder.wls               (Phase 1, legacy: 2D phenomenological coupling)
   bem_cln_Ncylinder.wls               (Phase 2, legacy: N-cyl chain phenomenological)

@@ -8,7 +8,7 @@ or `.step`, BH curve `.txt`, hysteresis `.hys`, etc.).
 This README is the index.  See sub-directories for deeper
 documentation (`em/README.md` for the EM-specific corpus).
 
-## IH panel (`radia_ih.py`) — Induction Heating
+## IH notebook workbench (`radia_ih.ipynb`) — Induction Heating
 
 | Method (UI label) | Calc script (Layer 4) | .jou recipe | Canonical .vol | Coil source |
 |---|---|---|---|---|
@@ -47,7 +47,7 @@ built wheels (CI starts from a clean checkout and regenerates only
 the canonical .vol files via Cubit batch).  Local LAB checkouts
 may retain them for research convenience.
 
-## EM panel (`radia_em.py`) — Accelerator electromagnet
+## EM notebook workbench (`radia_em.ipynb`) — Accelerator electromagnet
 
 See `em/README.md` for the full C-yoke corpus (1/1 / 1/2 / 1/4
 / 1/8 reductions, ELF reference, Kelvin Benchmark mode).
@@ -60,13 +60,13 @@ Top-level canonical trio (all shipped):
 | Mesh | `em_sample.jou` -> `em_sample.vol` | `--vol` |
 | BH | `em_sample_bh.txt` (or built-in `STEEL_BH`) | `--bh-file` |
 
-Kelvin Benchmark mode (`radia_em.py` formulation = "Kelvin
+Kelvin Benchmark mode (`radia_em.ipynb` / `EMDesignSpec` formulation = "Kelvin
 Benchmark"): bundled `kelvin_benchmark_sphere_1_2.vol` (1/2
 model) + `kelvin_benchmark_sphere_1_4.vol` (1/4 model).  See
 `tests/panels/test_kelvin_benchmark_golden.py` for the golden
 band (±1.5% at p=2).
 
-## PCB panel (`radia_pcb.py`) — PCB inductance
+## PCB notebook workbench (`radia_pcb.ipynb`) — PCB inductance
 
 | Sample | Role |
 |---|---|

@@ -496,9 +496,10 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 INDUCTION_HEATING_THERMAL = """
 # Transient Thermal Analysis for Induction Heating
 
-## Production path (radia 4.59.0+): integrated in radia-ih panel
+## Production path (radia 4.59.0+): integrated in the IH notebook workbench
 
-Heat analysis is a **Method choice** in the `radia-ih` panel,
+Heat analysis is a **Method choice** in
+`src/radia/panels/notebooks/radia_ih.ipynb` / `IHDesignSpec`,
 alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
 FEM-coilmesh methods.  Pick one of three Thermal Method choices
 (v4.63.0+):
@@ -1798,8 +1799,8 @@ in examples/.
 
 ### Panel UX (2026-04-19 refactored)
 
-`radia_ih.py` presents the above through a widget layout organized
-into sections (Method / Drive / Coil material / Coil geometry /
+`IHDesignSpec` and the IH notebook workbench present the above through
+settings sections (Method / Drive / Coil material / Coil geometry /
 Workpiece material / Workpiece impedance / Linear solver / Advanced).
 
 Non-obvious features:

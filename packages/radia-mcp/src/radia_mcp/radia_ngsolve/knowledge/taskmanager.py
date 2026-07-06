@@ -354,14 +354,15 @@ binding (Phase A).
 
 
 TASKMANAGER_AUDIT_RADIA_IH = r"""
-# Audit: TaskManager coverage in `radia_ih` panel solvers
+# Audit: TaskManager coverage in IH notebook workbench solvers
 
 Audit date: **2026-05-27** (commit ~HEAD).
-Scope: every `calc_*.py` script that `radia_ih.py` (IH panel) can launch.
+Scope: every `calc_*.py` script that `IHDesignSpec` / the IH notebook
+workbench can launch.
 
 ## Result table
 
-| Script | Used by radia_ih? | TaskManager status |
+| Script | Used by IH workbench? | TaskManager status |
 |---|---|---|
 | `calc_inductance.py` | YES (4 modes) | ✅ OK — BIE assembly is in helper `radia.bem_sibc_solver` (line 235 has `with TaskManager():`) |
 | `calc_peec.py` | YES (vacuum coil mode) | ✅ OK — no NGSolve solve (pure scipy/numpy + PEEC topology); MKL provides BLAS parallelism naturally |

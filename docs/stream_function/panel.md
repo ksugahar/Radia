@@ -1,21 +1,22 @@
 # Stream-Function coil-design panel (`calc_streamfunction.py`)
 
-The FE-direct stream-function designer is exposed as a Layer-3 PySide6 panel
-(`src/radia/radia_streamfunction.py`) over a headless Layer-4 calc
-(`src/radia/panels/calc_streamfunction.py`).  ONE `argparse` surface drives
-both; the panel is a composite `ModePanel` (a coil-`.vol` Browse + a Method
-combo + a `QStackedWidget` over three sub-panels).
+The FE-direct stream-function designer is exposed as a Layer-3 notebook
+workbench (`src/radia/panels/notebooks/radia_streamfunction.ipynb`) over a
+headless Layer-4 calc (`src/radia/panels/calc_streamfunction.py`).  ONE
+`argparse` / `StreamFunctionDesignSpec` surface drives both; the workbench
+maps notebook settings to the CLI and writes the standard `result.json` /
+`run.log` artifacts.
 
-Standalone launch is provided by the `radia-streamfunction` console script:
+Notebook launch:
 
 ```bash
-radia-streamfunction path/to/coil.vol
+python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
 ```
 
-The Cubit `Solve -> Radia-NGSolve` launcher and this standalone entry point use
-the same Layer-3 window and Layer-4 calc scripts.  The command-line argument is
-used as the panel's coil/conductor `.vol` path, while each mode keeps its own
-additional browse fields such as `--eval-vol`.
+The Cubit `Solve -> Radia-NGSolve` launcher exports the `.vol` artifacts and
+opens the same notebook/workbench route.  Notebook settings hold the
+coil/conductor `.vol` path, while each mode keeps its own additional browse
+fields such as `--eval-vol`.
 
 This file documents the panel/calc workflow and the boundary-condition /
 contour / flux features.  The math core (the `(ACA+)+TSVD` least-norm solver,

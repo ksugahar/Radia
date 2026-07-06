@@ -3,8 +3,8 @@
 PANEL_REVIEW_NOTEBOOK = """
 # Radia panel review after notebook migration
 
-The old Layer-3 PySide6 desktop panel review chain is retired.  Current Radia
-panel review targets the Jupyter notebook workbench:
+The retired desktop-panel review chain is no longer the production gate.
+Current Radia panel review targets the Jupyter notebook workbench:
 
 ```
 src/radia/panels/notebooks/radia_<app>.ipynb
@@ -40,9 +40,9 @@ protected and must not be removed.
 NOTEBOOK_GUI_BUILD = """
 # Build a Radia Jupyter notebook GUI
 
-Use this when promoting an `examples/<topic>/*.py` script, a former PySide
-panel, or a Cubit-panel prototype into the current browser-native Radia panel
-surface.  The construction target is always:
+Use this when promoting a `C:\temp` prototype, a migrated historical example
+reference, a former PySide panel, or a Cubit-panel prototype into the current
+browser-native Radia panel surface.  The construction target is always:
 
 ```
 panels/calc_<app>.py                  # target layout for panel CLI scripts

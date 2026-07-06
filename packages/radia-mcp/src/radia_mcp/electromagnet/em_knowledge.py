@@ -96,9 +96,10 @@ The coordinate system follows accelerator convention:
 
 Cubit journal files use the SAME coordinate system. No rotation needed.
 
-## radia-em panel modes
+## Electromagnet notebook workbench modes
 
-The standalone `radia-em` panel exposes five Method choices:
+`src/radia/panels/notebooks/radia_em.ipynb` / `EMDesignSpec` exposes
+five Method choices:
 
 | Method | Layer-4 script | Purpose |
 |--------|----------------|---------|

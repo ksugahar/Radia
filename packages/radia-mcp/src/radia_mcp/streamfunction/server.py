@@ -20,7 +20,8 @@ The detailed knowledge lives in this server's own
 tool adds a dedicated SF overview + topic map over that knowledge.
 
 Usage:
-    radia-streamfunction path/to/coil.vol       # Start GUI panel
+    python -m jupyter lab src/radia/panels/notebooks/radia_streamfunction.ipynb
+                                                 # Open notebook workbench
     mcp-server-radia-streamfunction              # Start MCP server (stdio)
     mcp-server-radia-streamfunction --selftest   # Run self-test
 """

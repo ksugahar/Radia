@@ -2,7 +2,7 @@
 # 100 points, saturation at H=318 kA/m, B=2.61 T
 # Format: H[A/m]<TAB>B[T]
 # Loader: numpy.loadtxt (whitespace-separated, comments stripped)
-# Used by: radia_em.py panel 'BH file' browse + calc_accel_magnet.py --bh-file
+# Used by: radia_em.ipynb 'BH file' setting + calc_accel_magnet.py --bh-file
 #
 # H[A/m]	B[T]
 0.0	0.0

@@ -74,7 +74,7 @@ def panel_review(topic: str = "overview") -> str:
 # ============================================================
 
 @mcp.prompt()
-def review_a_panel(panel_path: str = "src/radia/radia_ih.py") -> str:
+def review_a_panel(panel_path: str = "src/radia/panels/notebooks/radia_ih.ipynb") -> str:
     """Run a thorough review of a Radia notebook panel."""
     return (
         f"Please run a thorough notebook panel review for: {panel_path}\n\n"

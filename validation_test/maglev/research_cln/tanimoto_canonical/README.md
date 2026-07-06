@@ -31,14 +31,13 @@ which the radia-ngsolve CLN scripts (`../ngsolve_validation/...`) cross-validate
 6. **Closed-form validation reference** for 1 cm × 1 cm Cu cylinder:
    $R_{\text{theory}}\!=\!(2k+1)/(\pi r^2 \sigma h)$, $L_{\text{theory}}\!=\!\mu/(8(k+1)\pi h)$. These are *long-cylinder asymptotic* (1D radial diffusion) and break down on finite-aspect geometry.
 
-## Why these live in examples/CLN/scripts/
+## Why these live in validation_test/maglev/research_cln/
 
-Per the 2026-05-12 policy (memory: `feedback_no_ngsolve_py_in_cln_workdir.md`)
-all radia-ngsolve consumers live in `examples/CLN/scripts/`. These six
-notebooks are the canonical Tanimoto reference. The validation-stage and
-debug variants from `S:/NGSolve/谷本/{定式_誤差検証,20240910_静止器回転機用}/`
-were intentionally NOT mirrored here -- they are development scratch
-notebooks rather than the final canonical implementation.
+`examples/` is retired. These notebooks are tracked here because they are the
+canonical Tanimoto CLN validation reference. The validation-stage and debug
+variants from `S:/NGSolve/谷本/{定式_誤差検証,20240910_静止器回転機用}/` were
+intentionally NOT mirrored here -- they are development scratch notebooks
+rather than the final canonical implementation.
 
 ## What *not* to read from these as "best practice"
 

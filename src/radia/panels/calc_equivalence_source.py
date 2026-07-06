@@ -51,7 +51,7 @@ Stage promotion:
         validation_test/equivalence_source/.
 
     Stage 3 (PySide panel -- planned):
-        Wrap as a tab in radia_em.py or new radia_nfs.py.  Cubit
+        Wrap as a notebook mode in radia_em.ipynb or a future NFS workbench.  Cubit
         Browse for the .vol, sideset picker for --surface, edit
         boxes for --omega + obs grid, Run button launches this CLI.
 """

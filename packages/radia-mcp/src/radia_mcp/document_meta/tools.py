@@ -1208,7 +1208,7 @@ def document_meta_examples_migration_policy() -> dict:
     """
     return {
         "schema": "radia.document_meta.examples_migration_policy.v1",
-        "updated": "2026-06-28",
+        "updated": "2026-07-06",
         "source_of_truth": [
             "AGENTS.md / Examples Triage",
             "docs/examples_classification/examples_classification.ipynb",
@@ -1216,18 +1216,19 @@ def document_meta_examples_migration_policy() -> dict:
         ],
         "core_policy": {
             "examples_role": (
-                "examples/ is a temporary teaching/research tier, not a "
-                "permanent archive for intermediate attempts."
+                "examples/ is retired and must not be recreated. New "
+                "development experiments start in C:\\temp and are promoted "
+                "only to src/, tests/, validation_test/, docs/, or panels/."
             ),
             "protected_reference": (
                 "protected_* / ho-go-sansho-ari is a blocker, not a final "
-                "destination. Record target_after_unblock and migrate the "
-                "reference away from examples/ before deleting."
+                "destination. Record target_after_unblock and migrate any "
+                "historical examples/ reference before deleting."
             ),
             "long_lived_references": (
                 "Public docs may point to docs artifacts; executable code "
                 "should point to src APIs or validation_test surfaces. Do not "
-                "introduce new long-lived references to examples/."
+                "introduce any new references to examples/."
             ),
             "docs_quality": (
                 "User-facing docs notebooks must combine Markdown theory, "
@@ -1280,11 +1281,11 @@ def document_meta_examples_migration_policy() -> dict:
             },
         ],
         "migration_order": [
-            "inventory examples/<topic> and search references in docs/tests/validation_test/src/packages",
+            "inventory historical examples/ references in docs/tests/validation_test/src/packages",
             "create or refresh result-saved docs notebooks and JSON sidecars for user-facing material",
             "move reusable behavior to src/ and executable validation to validation_test/",
             "rewrite docs/MCP/panel/test references away from examples/",
-            "distill lessons for dead iterations, then delete from examples/",
+            "distill lessons for dead iterations, then remove historical examples/ references",
             "run document_meta_notebook_result_audit and focused tests",
         ],
         "current_agentic_batch": {

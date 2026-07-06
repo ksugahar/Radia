@@ -4,7 +4,7 @@ Compares Cu sphere leading time-constant tau_1 vs Stoll analytical
 (mu_0 sigma R^2 / pi^2 = 738.48 us at R = 10 mm) using:
 
   - canonical z-offset Kelvin geometry (per radia-mcp kelvin knowledge
-    base; same pattern as examples/CLN/scripts/ngsolve_validation/
+    base; same pattern as validation_test/maglev/research_cln/ngsolve_validation/
     sphere_axisym_kelvin.py which uses NGSolve H1 + SymbolicBFI)
   - axifem P2 triangle FE (AxiHenrotteStiffnessBFI + Periodic)
   - mu_eff = mu_0 * (R_K / rho')^2 in the "kelvin" material region
