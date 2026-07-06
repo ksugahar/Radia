@@ -1,9 +1,16 @@
 ---
 name: panel-cli-diff
-description: Static check that each Radia GUI panel's `build_command()` methods emit every CLI flag their target `calc_*.py` accepts — and vice versa — so widgets can't silently discard user input and panels can't pass flags that argparse rejects. Run after editing any `radia_*.py` panel or `calc_*.py` script.
+description: Retired desktop-panel CLI diff notes. Current Radia panels are notebook workbenches; use ipynb-gui-health, tools/audit_new_panel_contract.py, and validation_test/panels/test_notebook_workbench.py instead.
 ---
 
-# panel-cli-diff
+# panel-cli-diff (retired desktop-panel note)
+
+> **CURRENT POLICY (2026-07-06)**: production Radia analysis panels are
+> `src/radia/panels/notebooks/radia_*.ipynb` workbenches backed by
+> `DesignSpec` and `CommandWorkbench`. Do not add new `src/radia/radia_*.py`
+> desktop panels. Use `python tools/audit_new_panel_contract.py` and
+> `python -m pytest validation_test/panels/test_notebook_workbench.py -q`
+> for the active panel contract.
 
 Radia's 4-layer architecture (see AGENTS.md § Cubit Panel Architecture)
 treats each `calc_*.py` as a pure headless CLI, and each

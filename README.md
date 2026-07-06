@@ -387,8 +387,8 @@ We provide built-in formulations for the unique physics of magnetic levitation:
 |-------------|---------|-------|
 | **OS** | **Windows 10 / 11 / Server 2022** | Windows-only (MSVC + MKL build). Linux/macOS not supported. |
 | **Python** | **3.12** | exact (the C++ extension is built for `cp312-win_amd64`) |
-| **Coreform Cubit** | **2025.3+** | optional — only if you want the Cubit plugin / panels |
-| **NGSolve** | **6.2.2603+** | auto-installed from PyPI (curvedelements + Periodic BC fix) |
+| **Coreform Cubit** | **2025.12** | optional — only if you want the Cubit plugin / toolbar |
+| **NGSolve** | **6.2.2604** | auto-installed from PyPI (curvedelements + Periodic BC fix) |
 | **Intel MKL** | auto via `mkl>=2024.2.0` | auto-installed from PyPI (BLAS/LAPACK + Intel OpenMP) |
 
 ### Production install (recommended)
@@ -611,7 +611,7 @@ See **[Quick Start > Production install](#production-install-recommended)** abov
 
 ```bash
 pip install 'radia[cubit]'              # Includes plugin binaries
-cubit-plugin-install --all-users        # Deploy to Cubit (ccm, ccl, panels)
+cubit-plugin-install --all-users        # Deploy to Cubit (.ccm backend + PySide6 toolbar)
 cubit-plugin-install --verify-only      # SHA-256 confirm every deployed binary
 ```
 
@@ -619,8 +619,11 @@ cubit-plugin-install --verify-only      # SHA-256 confirm every deployed binary
 
 | Menu | Items | Provided by |
 |------|-------|-------------|
-| **Export Mesh** | Netgen Vol, GMSH, Nastran, VTK, Mesh Evaluation | C++ .ccl |
-| **Solve** | Radia-NGSolve, Generate Coil, Reload Panels | Python |
+| **Export Mesh** | Netgen Vol, GMSH, Nastran, VTK | Cubit `.ccm` commands + PySide6 toolbar |
+| **Solve** | Open notebook workbenches, Generate Coil, Reload Toolbar | Cubit Python |
+
+Mesh Evaluation is maintained as a docs/notebook workflow, not as an Export
+Mesh toolbar item.
 
 **Important**: When using both NGSolve and Cubit in the same script, import NGSolve **before** Cubit to avoid DLL conflicts.
 

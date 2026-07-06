@@ -23,10 +23,10 @@ tests/panels/test_<topic>_golden.py              # fast gate when practical
 validation_test/panels/test_<topic>_*.py         # heavier gate when needed
 ```
 
-The repository is migrating toward root-level `panels/`, but the existing
-packaged Radia notebook workbenches still live under `src/radia/panels/`.
-Follow the local pattern of the panel family you are editing and keep one live
-copy of each implementation.
+Notebook workbenches intentionally live under `src/radia/panels/notebooks/`
+so they ship with the `radia` wheel and stay next to the packaged
+`calc_*.py` scripts and samples. Do not create a parallel repo-root
+`panels/` tree for the same panel; keep one live copy of each implementation.
 
 ## Stage 2: `calc_<topic>.py`
 

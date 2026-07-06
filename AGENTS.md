@@ -50,7 +50,7 @@ S:\Radia\01_GitHub\
 ```bash
 pip install radia               # Python package (includes Cubit plugin binaries)
 pip install radia[cubit]        # Also installs cubit-mesh-export
-cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit)
+cubit-plugin-install            # Deploy Cubit .ccm backend + PySide6 toolbar (skip if no Cubit)
 ```
 
 **Deleted repositories** (integrated into Radia):
@@ -72,7 +72,7 @@ one generic GUI.
 | Linear algebra | Reuse proven solvers and compression tools such as shifted ICCG, AMS, ACA / TSVD, HACApK, BiCGSTAB, and BDDC. |
 | Physical methods | Primary development focus: ESIM / SIBC, reduced potentials, Kelvin transforms, CLN, stream functions, and related open-region physics. |
 | Application examples | Induction heating, MagLev, electromagnets, printed circuit boards, motors, and similar concrete engineering workflows. |
-| Interfaces | Application-level notebook / Cubit panels and MCP servers; no generic catch-all GUI layer. |
+| Interfaces | Application-level notebook workbenches, Cubit toolbar surfaces, and MCP servers; no generic catch-all GUI layer. |
 
 **Policy**:
 - Follow NGSolve's Python API design wherever possible.  If NGSolve already has
@@ -382,8 +382,7 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — notebook panel (target layout `panels/notebooks/*.ipynb`, legacy
-`src/radia/panels/notebooks/*.ipynb` during staged migration).**
+**Stage 3 — notebook panel (`src/radia/panels/notebooks/*.ipynb`).**
 Wrap the **validated** Stage-2 script with a lightweight notebook
 workbench (`radia.<mode>_design` + `radia.<mode>_notebook`).  In this
 repo, a "panel" means the integrated `.ipynb` surface: CLI arguments
@@ -410,11 +409,17 @@ only maps settings to the Stage-2 CLI and displays ecosystem-native
 outputs.  Use `netgen.webgui` for human-facing notebook visualization
 and durable GMSH `.msh v4.1` artifacts for LLM/headless validation.
 
-PySide windows under `src/radia/radia_*.py` are legacy compatibility
-adapters while existing desktop workflows still need them.  New panel
-work should land in the notebook workbench and
+Notebook workbenches intentionally live under the importable `radia`
+package so they ship in the wheel and stay next to the headless
+`calc_*.py` scripts and packaged samples.  Do not create a parallel
+repo-root `panels/` tree for the same operating surface.  PySide windows
+under `src/radia/radia_*.py` were retired; do not add new
+`ModePanel`/`AnalysisWindow` desktop surfaces.  New panel work lands in
+the notebook workbench and
 `src/radia/panels/notebooks/panel_notebook_manifest.json`; Stage-2-only
-modes remain CLI scripts until this promotion gate is met.
+modes remain CLI scripts until this promotion gate is met.  The Cubit
+Export Mesh toolbar is the separate, allowed PySide6 surface because it
+runs inside Coreform Cubit's embedded Python.
 
 **Why**:
 - Forces the hard thinking about *what is changeable* before any widget
@@ -429,8 +434,8 @@ Related:
 - "Panel Samples Quality Policy" above — Stage 2's validation relies
   on trustworthy samples.
 - "Cubit Panel Architecture" below (§ 4-Layer) — Stage 3 corresponds
-  to the notebook panel or legacy Layer 3 compatibility window, while
-  Stage 2 corresponds to Layer 4 (headless `calc_*.py`).
+  to the notebook panel, while Stage 2 corresponds to Layer 4
+  (headless `calc_*.py`).
 
 ### Panel Visualization Routing Policy (2026-06-26)
 
@@ -759,7 +764,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ### No Fallbacks — Fail Fast, Fail Loud
 
-**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.3, NGSolve 6.2.2603+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
+**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2604, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
 
 **Design philosophy**: this is the **fail-fast** principle (Jim Shore, 2004) combined with **"errors should never pass silently"** (PEP 20, Zen of Python) and **"explicit is better than implicit"**. The deeper rationale is *user agency*: a fallback path performs a computation the user did not ask for and cannot inspect. Silent fallback violates the **Principle of Least Astonishment** — the user gets a number, has no way to know which code path produced it, and trusts it. That trust is unrecoverable when the result turns out to be from the wrong path.
 
@@ -914,8 +919,8 @@ netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロ�
 
 | Component | Output | Purpose |
 |-----------|--------|---------|
-| **Cubit plugin** (`radia_export gmsh`) | `.msh v4.1` | Mesh export → GMSH viewer |
-| **Cubit plugin** (`radia_export netgen`) | `.vol` | NGSolve mesh interchange |
+| **Cubit plugin** (`export gmsh`) | `.msh v4.1` | Mesh export → GMSH viewer |
+| **Cubit plugin** (`export netgen`) | `.vol` | NGSolve mesh interchange |
 | **Radia post** (`GmshPostExport` / `vol2msh`) | `.msh v4.1` | Field post-processing |
 
 **Shared routine layout** (both mesh_export and post_export emit the same v4.1 structure):
@@ -930,7 +935,7 @@ netgen の I/O は常に **`.vol` 経由** を研究室の正式な運用プロ�
 - Cubit → NGSolve: `.vol` only (never `.msh`).  No `ReadGmsh` path.
 - NGSolve → GMSH view: `.vol` + `.sol` → `vol2msh()` → `.msh v4.1`.
 - `.msh v2.2` support has been removed from `GmshPostExport` and
-  `ExportGmshCommand`.  The `version` keyword on `radia_export gmsh` is
+  `ExportGmshCommand`.  The `version` keyword on `export gmsh` is
   accepted for back-compat with old `.jou` files but is ignored
   (always emits v4.1 with a warning if `version 2` is passed).
 
@@ -990,7 +995,7 @@ Cubit Learn Edition prints
 less than 50k elements.` whenever it sees a model larger than 50k. This
 ERROR is **harmless for the Radia workflow**:
 
-- The Radia in-tree `radia_export netgen` plugin **bypasses the cap**
+- The Radia in-tree `export netgen` plugin **bypasses the cap**
   and writes the .vol successfully regardless of the warning. Verified
   2026-04-12 with a 147,234-element coil model:
 
@@ -1320,9 +1325,9 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit panels call via subprocess. |
-| **Coreform Cubit** | 2025.3 | Embedded Python 3.10 + PySide6. Cannot import NGSolve/Radia directly. |
-| **NGSolve** | 6.2.2603+ | curvedelements Load, hex/prism curving, Periodic BC fix |
+| **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit toolbar launches notebook/headless workflows via subprocess. |
+| **Coreform Cubit** | 2025.12 | Embedded Python 3.10 + PySide6. Cannot import NGSolve/Radia directly. |
+| **NGSolve** | 6.2.2604 | pinned by `pyproject.toml`; curvedelements Load, hex/prism curving, Periodic BC fix |
 
 **Cubit panel subprocess constraint**: Cubit embeds Python 3.10; Radia/NGSolve require 3.12. Same-process import is impossible. All computation runs via `subprocess.run([python3.12, calc_*.py])` with JSON output.
 
@@ -1396,20 +1401,20 @@ for (int i = 0; i < n; i++) { ... }
 2. Update `CHANGELOG.md`
 3. `git commit` (do NOT push yet)
 4. `/deploy` — build wheel, deploy to 100号機 (WinRM) & mdx (SSH)
-5. Test on remote machines (Cubit panels, Mesh Evaluation, etc.)
+5. Test on remote machines (Cubit toolbar, notebook workbenches, docs Mesh Evaluation, etc.)
 6. If tests pass: `git push origin main`
-7. Wait for CI to pass: `gh run list --limit 3`
+7. Wait for CI to pass: `python tools/check_ci.py --branch main --watch`
 8. Tag and push (triggers PyPI publish):
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-9. Monitor: `gh run list --workflow release.yml --limit 3`
+9. Monitor with `python tools/check_ci.py --branch main --watch`; for full multi-machine deploy use `release-qud`.
 
 **General User Install** (after PyPI publish):
 ```bash
 pip install radia[cubit]
-cubit-plugin-install       # Cubit plugin + panels
+cubit-plugin-install       # Cubit .ccm backend + PySide6 toolbar
 ```
 
 **CI/CD Pipeline** (`.github/workflows/`):
@@ -1488,12 +1493,12 @@ editable には反映される**。mdx / hibino の PyPI install には反映さ
 
 ### CI Testing Policy
 
-**POLICY**: CI/CD のテストだけでは不十分。Cubit が必要な機能（`export_curved`, panels, BEM extractor）は **Cubit 環境でのローカルテストが必須**。CI は C++ ビルドと基本テスト（Cubit 不要なもの）のみ。
+**POLICY**: CI/CD のテストだけでは不十分。Cubit が必要な機能（`export_curved`, Cubit toolbar, BEM extractor）は **Cubit 環境でのローカルテストが必須**。CI は C++ ビルドと基本テスト（Cubit 不要なもの）のみ。
 
 **リリース前の必須テスト**:
 1. CI: C++ ビルド + pytest（Cubit 不要テスト）
 2. ローカル: Cubit + system Python で `export_curved` テスト（球、トーラス）
-3. ローカル: Cubit パネルの動作確認
+3. ローカル: Cubit toolbar と notebook workbench の動作確認
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
@@ -1508,7 +1513,7 @@ cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
             '-commandplugindir', <plugin_dir>])
 cubit.cmd("create sphere radius 0.05")
 cubit.cmd("mesh volume 1")
-cubit.cmd('radia_export femeem "C:\\tmp\\cub" overwrite')
+cubit.cmd('export femeem "C:\\temp\\cub" overwrite')
 ```
 
 **対象**: `radia_export {gmsh,netgen,nastran,vtk,femeem}`、panels の非 GUI ロジック、BEM extractor、`export_curved`。
@@ -1555,19 +1560,21 @@ src/radia/
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2603** or later. Required for curvedelements .vol Load, hex/prism curving, and Periodic BC fix.
+**CRITICAL**: Use NGSolve **6.2.2604** as pinned by `pyproject.toml`. Required for curvedelements .vol Load, hex/prism curving, and Periodic BC fix.
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
-Official PyPI ngsolve **6.2.2603**+ includes: **MKL**, **PARDISO**, Periodic BC fix,
-**curvedelements Save/Load**, **p-version hex/prism curving**.
+Official PyPI ngsolve **6.2.2604** includes the Periodic BC fix,
+**curvedelements Save/Load**, **p-version hex/prism curving**, and the
+current `ngsolve.bem` APIs used by Radia. Radia links Intel MKL for its own
+BLAS/LAPACK/PARDISO calls; NGSolve's wheel dependencies are managed by PyPI.
 
 **Netgen fork is no longer required.** The ksugahar/netgen repository is historical only.
 All curvedelements, CallbackGeometry, and curving features are now in the official release.
 
 ```bash
-pip install radia[cubit]       # Installs everything (NGSolve, MKL, Cubit plugin binaries)
-cubit-plugin-install           # Deploys Cubit plugin + panels
+pip install radia[cubit]       # Installs Radia + cubit-mesh-export dependency
+cubit-plugin-install           # Deploys Cubit .ccm backend + PySide6 toolbar
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
@@ -1665,7 +1672,7 @@ Both paths produce `.vol` files consumed by `Mesh("model.vol")`:
 
 ```
 Path A: Cubit (recommended for hex)
-  STEP -> Cubit -> radia_export netgen "model.vol" order N -> Mesh("model.vol") -> Radia
+  STEP -> Cubit -> export netgen "model.vol" order N -> Mesh("model.vol") -> Radia
 
 Path B: OCC (recommended for tet)
   STEP -> NGSolve OCC -> Mesh() -> netgen_mesh_import.py -> Radia
@@ -1681,7 +1688,7 @@ Path B: OCC (recommended for tet)
 ### Cubit Mesh Export (cubit-mesh-export)
 
 For high-order curved mesh export from Coreform Cubit, use the **cubit-mesh-export** package.
-Mesh export is C++ only (`radia_export netgen` APREPRO command in the Cubit plugin).
+Mesh export is C++ only (`export netgen` APREPRO command in the Cubit plugin).
 
 **Install**: `pip install cubit-mesh-export` (or `pip install radia[cubit]`)
 **Source**: `packages/cubit-mesh-export/` in the Radia monorepo
@@ -1700,7 +1707,7 @@ from cubit_mesh_export.check import check_consistency  # API
 - `cubit_mesh_curver` — C++ pybind11 module (bundled in cubit_mesh_export)
 - `check_vol_consistency` — thin backward-compat re-export in `src/radia/panels/` (imports from cubit_mesh_export.check)
 
-Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('radia_export gmsh/nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `cubit-plugin-install`).
+Cubit workflow for journal files: define blocks before export, use the Cubit plugin commands (`cubit.cmd('export gmsh/jmag_nastran/vtk ...')`). Requires `CUBIT_PLUGIN_DIR` environment variable (set by `cubit-plugin-install`).
 
 ### PEEC Conductor Mesh
 
@@ -2349,7 +2356,7 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 ### File Management: .jou and .vol Only
 
-**POLICY**: `ensure_jou_path()` (C++ .ccl) saves `.jou` before any export or evaluation. `.jou` basename determines all output filenames. `.cub5` is NOT saved by the pipeline.
+**POLICY**: `ensure_jou_path()` (Layer 2 PySide6 `radia_export_menu.py`) saves `.jou` before any Cubit export action. `.jou` basename determines all output filenames. `.cub5` is NOT saved by the pipeline.
 
 | File | Role |
 |------|------|
@@ -2357,7 +2364,7 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 | `.vol` | **Computation interface**. Sole interface between Cubit and NGSolve. No ABI dependency |
 
 **Design — .jou loaded or saved before proceeding**:
-- Every Export Mesh / Mesh Evaluation operation calls `ensure_jou_path()` first
+- Every Export Mesh operation calls `ensure_jou_path()` first
 - `ensure_jou_path()` resolves in 3 steps:
   1. `.jou` already loaded (via `play` or `get_current_journal_file`) → use it
   2. `.jou` saved earlier in this session (`s_lastJouPath`) → use it
@@ -2372,8 +2379,8 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 
 **Why**: Coreform Cubit is expensive commercial software (annual license). NGSolve/Radia computation must work without Cubit. `.vol` files can also be generated by Netgen standalone (STEP -> Netgen -> `.vol`), so the computation pipeline must not assume Cubit is available.
 
-**Mesh export is C++ only** (`radia_export netgen` APREPRO command):
-- Cubit -> `radia_export netgen "model.vol" order N` -> `.vol` with labels + curving
+**Mesh export is C++ only** (`export netgen` APREPRO command):
+- Cubit -> `export netgen "model.vol" order N` -> `.vol` with labels + curving
 
 **1-Path Computation** (`.vol` only, no Cubit dependency):
 ```python
@@ -2429,7 +2436,7 @@ Executable reference scripts and sweep results live under
 - High-order curving: `curvedelements` text section (upstream Netgen master feature)
 - No external STEP/geometry file needed for computation
 
-**Cubit Plugin Responsibility**: The `radia_export netgen` C++ command handles all label + curving embedding into `.vol`. Higher maintenance cost is acceptable for complete separation.
+**Cubit Plugin Responsibility**: The `export netgen` C++ command handles all label + curving embedding into `.vol`. Higher maintenance cost is acceptable for complete separation.
 
 ---
 
@@ -2443,10 +2450,10 @@ Executable reference scripts and sweep results live under
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 1: C++ .ccm APREPRO backend (no Qt)                      │
 │  ─────────────────────────────────────────────────────────────  │
-│  Export Mesh menu (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)      │
-│  Mesh Evaluation (_p1.vol ... _p5.vol + format QA exports)      │
+│  Export Mesh commands (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)  │
+│  Mesh evaluation is a docs/notebook workflow, not a toolbar item │
 │  ensure_jou_path(): .jou save -> basename for all output files  │
-│  radia_export netgen/gmsh/nastran/vtk (APREPRO commands)        │
+│  export netgen/gmsh/jmag_nastran/vtk (APREPRO commands)         │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 2: Cubit GUI Python (Python 3.10 + PySide6, Cubit 2025.12)│
@@ -2463,7 +2470,7 @@ Executable reference scripts and sweep results live under
 │  Separate process/kernel from Cubit. import cubit FORBIDDEN.    │
 │  Receives .vol/.sol paths as notebook/CLI settings.             │
 │  Launches Layer 4 in background with timeout/cancel/logs.       │
-│  Legacy: radia_*.py PySide6 windows may wrap the same Layer 4.  │
+│  No desktop PySide6 analysis windows in normal Radia Python.     │
 └─────────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 4: Computation (Python 3.12, no GUI)                     │
@@ -2492,14 +2499,14 @@ Executable reference scripts and sweep results live under
 
 | File | Layer | Purpose |
 |------|-------|---------|
-| `panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs + Mesh Evaluation |
+| `src/radia/panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs inside Cubit |
 | `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
-| `panels/notebooks/radia_ih.ipynb` | 3 (notebook panel) | IH analysis workbench (PEEC/BEM/FEM/thermal) |
+| `src/radia/panels/notebooks/radia_ih.ipynb` | 3 (notebook panel) | IH analysis workbench (PEEC/BEM/FEM/thermal) |
 | `ih_design.py`, `ih_notebook.py` | 3 (notebook adapter) | UI-neutral IH settings and ipywidgets command workbench |
-| `panels/notebooks/radia_*.ipynb` | 3 (notebook panel) | Application workbench operating surfaces |
+| `src/radia/panels/notebooks/radia_*.ipynb` | 3 (notebook panel) | Application workbench operating surfaces |
 | `*_design.py`, `*_notebook.py` | 3 (notebook adapter) | UI-neutral settings and command workbench wiring |
-| `panels/calc_*.py` | 4 (no GUI) | Headless application computations |
-| `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
+| `src/radia/panels/calc_*.py` | 4 (no GUI) | Headless application computations |
+| `src/radia/panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA, called from docs/notebooks |
 
 ### Cubit Plugin: C++ First, No Python ABI Dependency
 
@@ -2675,7 +2682,7 @@ Do NOT reintroduce the retired Qt5 `.ccl` / `RadiaComp.cpp` GUI path.
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| `.ccm` (plugins/) | `cubit_mesh_export.ccm` | APREPRO commands: `radia_export gmsh/nastran/vtk/netgen` |
+| `.ccm` (plugins/) | `cubit_mesh_export.ccm` | APREPRO commands: `export gmsh/netgen/vtk/femeem/meg`, `export jmag_nastran` |
 | PySide6 toolbar | `src/radia/panels/radia_export_menu.py` | Export Mesh menu + dialog inside Cubit |
 | `.pyd` (Python 3.12) | `cubit_mesh_curver.pyd` | pybind11: Cubit-free mesh curving |
 
@@ -2683,14 +2690,14 @@ Do NOT reintroduce the retired Qt5 `.ccl` / `RadiaComp.cpp` GUI path.
 
 | Format | Command | Max Order | Notes |
 |--------|---------|-----------|-------|
-| Netgen Vol | `radia_export netgen "f.vol" order 3` | 1-5 | Primary format for NGSolve FEM |
-| GMSH v4.1 | `radia_export gmsh "f.msh"`           | 1-3 | Lab-wide standard; structured entity blocks |
-| Nastran BDF | `radia_export nastran "f.bdf"` | 1-2 | CTETRA/CTETRA(10), nopyramid option |
-| VTK | `radia_export vtk "f.vtk"` | 1-2 | Legacy format, cell types 10/24 |
+| Netgen Vol | `export netgen "f.vol" order 3` | 1-5 | Primary format for NGSolve FEM |
+| GMSH v4.1 | `export gmsh "f.msh"`           | 1-3 | Lab-wide standard; structured entity blocks |
+| Nastran BDF | `export jmag_nastran "f.bdf"` | 1-2 | CTETRA/CTETRA(10), nopyramid option |
+| VTK | `export vtk "f.vtk"` | 1-2 | Legacy format, cell types 10/24 |
 
 **GMSH order limit**: Order 4-5 is an error (not fallback). NetgenCurver face/volume
 interior node extraction is unreliable at p>=4 (linear interpolation fallback causes
-negative Jacobians in GMSH). Use `radia_export netgen` for order 4-5.
+negative Jacobians in GMSH). Use `export netgen` for order 4-5.
 
 **High-order mesh curving** (order >= 2):
 - `NetgenCurver` (compact_netgen, static link): `CallbackGeometry` + `BuildCurvedElements` for order 1-5
@@ -2704,11 +2711,11 @@ negative Jacobians in GMSH). Use `radia_export netgen` for order 4-5.
 
 ### Mesh Export Policy
 
-**POLICY**: Mesh export uses `radia_export netgen` C++ command only. Pure Python reference (`cub5_to_vol.py`) is maintained in the netgen fork, not in Radia. Run `test_vol_multi_geometry.py` (10 shapes) after any NetgenCurver change.
+**POLICY**: Mesh export uses `export netgen` C++ command only. Pure Python reference (`cub5_to_vol.py`) is maintained in the netgen fork, not in Radia. Run `test_vol_multi_geometry.py` (10 shapes) after any NetgenCurver change.
 
 ### Companion JSON (.vol.json)
 
-`radia_export netgen` writes a companion JSON alongside the .vol file:
+`export netgen` writes a companion JSON alongside the .vol file:
 ```json
 {
   "materials": {"sphere": 5.235988e-04},

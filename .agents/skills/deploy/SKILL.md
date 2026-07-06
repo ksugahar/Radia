@@ -1,9 +1,24 @@
 ---
 name: deploy
-description: Deploy Radia + Cubit plugin to remote machines (100号機, mdx) via SSH
+description: Historical deploy notes. Current Radia deploy/release uses release-qud plus cubit-plugin-install; do not follow old .ccl/Cubit-2025.3 recipes except for archaeology.
 ---
 
-# Deploy (2-Stage: LAB editable, 100号機+mdx PyPI)
+# Deploy (historical notes; current flow is release-qud)
+
+> **CURRENT POLICY (2026-07-06)**: use `release-qud` for real Radia
+> deployment. LAB and 100号機 keep `radia`, `cubit-mesh-export`, and
+> `radia-mcp` as editable installs; mdx and hibino consume PyPI wheels.
+> Cubit 2025.12 uses a `.ccm` backend plus the Cubit-embedded PySide6
+> toolbar. The old Qt5 `.ccl` / `radia_cubit.ccl` path and Cubit 2025.3
+> symlink recipes in this file are historical only. Do not copy `.pyd`
+> files by hand, do not revive `.ccl`, and do not install PySide6 into
+> normal Radia Python.
+
+For current work, read `.agents/skills/release-qud/SKILL.md`, run
+`tools/release_qud.py`, and verify Cubit with `cubit-plugin-install
+--verify-only` plus the Cubit smoke tests.
+
+# Historical Deploy (2-Stage: LAB editable, 100号機+mdx PyPI)
 
 **Philosophy**: only the developer (LAB) gets the editable convenience.
 Every other machine receives the **published PyPI wheel** so RECORD /
@@ -73,9 +88,9 @@ become mysterious.  All three stages run the full L0-L4 ladder.
 | **L2** | Subprocess smoke | `python panels/calc_*.py --help` for each | argparse rejects flags, missing helper imports |
 | **L2** | Signature probe | `inspect.getsource(f)` contains expected token | Edit silently reverted by linter / merge |
 | **L3** | Notebook QA | `pytest validation_test/panels/test_notebook_workbench.py` | Notebook contract drift (DesignSpec, result artifact, no-PySide rule) |
-| **L3** | Cubit launcher | .ccl binary contains new regex strings (`grep -a`) | Old .ccl deployed; new TITLE/NEEDS_VOL not parsed |
+| **L3** | Cubit toolbar | `cubit-plugin-install --verify-only` + toolbar source hash check | Old toolbar/plugin deployed; Cubit still loading stale files |
 | **L3** | Launcher widget matrix | Static source check: every mode-specific launcher widget has `setVisible(ms.needsVol)` | "Mesh order: 2" shown for STEP-only mode (2026-04-21 orderRow miss) |
-| **L4** | End-to-end | Cubit -batch .jou → radia_export netgen → .vol | Full pipeline regresses (plugin missing, solver crash) |
+| **L4** | End-to-end | Cubit -batch .jou -> `export netgen` -> .vol | Full pipeline regresses (plugin missing, solver crash) |
 | **L4** | Notebook smoke | Run the notebook workbench/headless calc path with real inputs → JSON | notebook workbench + calc script actually solve |
 | **L4** | Panel mode matrix | For EACH active notebook mode, run its canonical sample E2E on 100号機 | New mode shipped without validation (2026-04-21 PEEC-inductance 4.78 nH regression) |
 | **L4** | Golden-range numeric | Assert `L_coil_nH` / `P_total_W` / ... falls in a known range (NOT just exit 0) | Silently-wrong fallback path (e.g. wrong cross-section area → L 100× off) |
@@ -836,7 +851,7 @@ Stage 1 で以下を通すまで deploy しない:
 | Step | Action |
 |------|--------|
 | 1 | Cubit で `play <sample>.jou` が最後まで通る |
-| 2 | 必要なら `radia_export netgen/.../gmsh` が正しい `.vol` / `.msh` を吐く |
+| 2 | 必要なら `export netgen/.../gmsh` が正しい `.vol` / `.msh` を吐く |
 | 3 | 対応するパネルの Run で期待値が出る (LAB 上で subprocess 実行) |
 | 4 | `tests/panels/test_<feature>_golden.py` が PASS (数値を lock) |
 | 5 | `pyproject.toml` の `package-data` に glob が入っている (wheel manifest audit 7c で確認) |
@@ -941,7 +956,7 @@ compat: radia X.Y.Z <-> cubit-mesh-export A.B.C compatible
 End-to-end smoke (run on the same SSH target after install):
 
 ```bash
-ssh "$TARGET" 'cubit-smoke-test'      # Cubit batch + radia_export netgen + .vol parse
+ssh "$TARGET" 'cubit-smoke-test'      # Cubit batch + export netgen + .vol parse
 ssh "$TARGET" 'python -c "
 from radia.ih_notebook import IHWorkbench
 from radia.em_notebook import EMWorkbench
@@ -1631,7 +1646,7 @@ Assert-InRange $L_nH 400 500 "PEEC 3-turn L_nH (150 kHz Cu)"
 Write-Host "`n=== IH BEM: gapped-torus sample ==="
 $jou = Join-Path $sp 'panels\samples\ih_bem_sample.jou'
 $wrapper = Join-Path $tmp 'test_ih.jou'
-"playback `"$jou`"`r`nradia_export netgen `"$tmp/ih_test.vol`" order 1 overwrite`r`n" |
+"playback `"$jou`"`r`nexport netgen `"$tmp/ih_test.vol`" order 1 overwrite`r`n" |
     Set-Content -Path $wrapper -Encoding ASCII
 & $cubit -batch -nographics -nojournal $wrapper | Out-Null
 $out = python (Join-Path $sp 'panels\calc_heating_bem.py') `
@@ -1731,12 +1746,12 @@ PY
 **Pre-PyPI deploy** (wheel pipe, PyPI 公開前にテストしたい場合):
 ```bash
 # cubit-mesh-export
-cat packages/cubit-mesh-export/dist/cubit_mesh_export-*.whl | ssh mdx 'python -c "import sys; open(r\"C:\tmp\cm.whl\",\"wb\").write(sys.stdin.buffer.read())"'
-ssh mdx 'pip install --force-reinstall C:\tmp\cm.whl'
+cat packages/cubit-mesh-export/dist/cubit_mesh_export-*.whl | ssh mdx 'python -c "import sys; open(r\"C:\temp\cm.whl\",\"wb\").write(sys.stdin.buffer.read())"'
+ssh mdx 'pip install --force-reinstall C:\temp\cm.whl'
 
 # radia
-cat dist/radia-*.whl | ssh mdx 'python -c "import sys; open(r\"C:\tmp\radia.whl\",\"wb\").write(sys.stdin.buffer.read())"'
-ssh mdx 'pip install --force-reinstall --no-deps C:\tmp\radia.whl'
+cat dist/radia-*.whl | ssh mdx 'python -c "import sys; open(r\"C:\temp\radia.whl\",\"wb\").write(sys.stdin.buffer.read())"'
+ssh mdx 'pip install --force-reinstall --no-deps C:\temp\radia.whl'
 
 # Deploy plugin + panels
 ssh mdx 'cubit-plugin-install'
@@ -1754,11 +1769,11 @@ orphan ファイル混入を防ぐ。
 ```bash
 cd S:/Radia/01_GitHub
 rm -rf src/radia.egg-info
-pip wheel . --no-deps --no-build-isolation --no-cache-dir -w C:/tmp/wheel_check
+pip wheel . --no-deps --no-build-isolation --no-cache-dir -w C:/temp/wheel_check
 
 python -c "
 import zipfile, glob, sys
-whl = glob.glob('C:/tmp/wheel_check/*.whl')[0]
+whl = glob.glob('C:/temp/wheel_check/*.whl')[0]
 z = zipfile.ZipFile(whl)
 names = z.namelist()
 print(f'Wheel: {whl.split(\"/\")[-1]} ({len(names)} files)')
