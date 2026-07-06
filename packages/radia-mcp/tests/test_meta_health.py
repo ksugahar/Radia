@@ -225,8 +225,8 @@ def test_meta_catalog_exposes_selftest_and_heavy_audit_commands():
 
     cubit = radia_mcp_get("cubit")
     gmsh = radia_mcp_get("mcp-server-gmsh")
-    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-examples"
-    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-examples"
+    assert cubit["audit_command"] == "mcp-server-cubit --selftest --audit-repo"
+    assert gmsh["audit_command"] == "mcp-server-gmsh --selftest --audit-repo"
     assert "audit_command" not in radia_mcp_get("radia-ngsolve")
 
 

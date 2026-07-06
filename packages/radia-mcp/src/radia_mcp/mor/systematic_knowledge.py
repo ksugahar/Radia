@@ -312,8 +312,7 @@ provable a priori interpolation error bounds.
 
 ### EM/motor application
 
-The HOLLAUS 2023 MSFEM+MOR+DEIM paper (cited in
-KARL_HOLLAUS_INVENTORY.md, IEEE TMAG 2023) is exactly this:
+The HOLLAUS 2023 MSFEM+MOR+DEIM paper (IEEE TMAG 2023) is exactly this:
 - MSFEM reduces 3D-laminated to 2D-1D (geometry hyper-reduction)
 - POD on MSFEM snapshots reduces to r ~ 30
 - DEIM hyper-reduces the nonlinear ν(B) evaluation
