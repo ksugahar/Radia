@@ -187,6 +187,9 @@ mcp-server-research-project = "radia_mcp.research_project.server:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"radia_mcp.matlab_acoustic_fembem" = [
+    "skill.md",
+]
 "radia_mcp.mathematica" = [
     "*.md",
     "basis_functions/*.md",
