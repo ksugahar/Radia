@@ -21,9 +21,10 @@ Lab style standards (Sugahara Lab, Kindai University):
       appears the right point size **at the embedded width**.
     - Double-column digest, side-by-side panels, embedded width 8 cm:
         font 10 pt, legend 8 pt minimum.
-    - Double-column digest, full-width spanning, embedded width 16 cm:
-        font 20 pt (so it remains readable when the page is printed at
-        100 % or shrunk to single-column reprint).
+    - Double-column digest / IEEJ research meeting full-width spanning,
+      embedded width 16.5 cm:
+        font 10 pt when authored at the embed width.  The wider box gives
+        more drawing area, not larger text.
     - Single-column journal paper, embedded width 8.4 cm: font 8-9 pt.
 
   Output
@@ -83,17 +84,18 @@ _PROFILES = {
         ),
     },
     "digest_double_column_full_width": {
-        "embed_width_cm": 16.0,
-        "font_pt": 20,
-        "legend_pt_min": 16,
-        "linewidth_pt": 1.6,
-        "axes_linewidth_pt": 1.2,
-        "marker_size_pt": 10,
+        "embed_width_cm": 16.5,
+        "font_pt": 10,
+        "legend_pt_min": 8,
+        "linewidth_pt": 1.0,
+        "axes_linewidth_pt": 0.8,
+        "marker_size_pt": 6,
+        "subfigure_label_pt": 8,
         "notes": (
             "Single graph spanning both columns of the digest, embedded "
-            "at 16 cm. Use figure* in LaTeX. Fonts inflated so the "
-            "figure is still readable when reduced to half page in a "
-            "single-column reprint."
+            "at 165 mm. Use figure* in LaTeX. Fonts stay at body size "
+            "(10 pt) when the figure is authored at the embed width; do "
+            "not inflate to 20 pt. Use 8 pt for subfigure labels."
         ),
     },
     "matlab_oversized_for_8cm_embed": {
@@ -125,15 +127,17 @@ _PROFILES = {
     },
     "paper_double_column": {
         "embed_width_cm": 18.2,   # IEEE 7.16 in = 182 mm exactly
-        "font_pt": 16,
-        "legend_pt_min": 14,
-        "linewidth_pt": 1.4,
-        "axes_linewidth_pt": 1.0,
-        "marker_size_pt": 8,
+        "font_pt": 10,
+        "legend_pt_min": 8,
+        "linewidth_pt": 1.0,
+        "axes_linewidth_pt": 0.8,
+        "marker_size_pt": 6,
+        "subfigure_label_pt": 8,
         "notes": (
             "Full-page width spanning both columns of IEEE / IEEJ "
             "Transactions: 7.16 in = 182 mm = 43 picas (canonical "
-            "IEEE value). Use with \\begin{figure*} in IEEEtran."
+            "IEEE value). Use with \\begin{figure*} in IEEEtran. Fonts "
+            "stay at body size (10 pt) when authored at this embed width."
         ),
     },
     "presentation_slide": {
@@ -229,7 +233,7 @@ def figure_style_guide(target: str = "all") -> str:
         target: One of:
             "all"                                    full guide
             "digest_double_column_side_by_side"      side-by-side at 8 cm
-            "digest_double_column_full_width"        spanning at 16 cm
+            "digest_double_column_full_width"        spanning at 165 mm
             "paper_single_column"                    journal single column
             "paper_double_column"                    journal double column
             "presentation_slide"                     slide deck

@@ -52,6 +52,10 @@ from .cross_lint import (  # noqa: F401
     paper_writing_suggest_redundancy_fixes,
     paper_writing_check_subject_predicate_distance,
 )
+from ._terminology_normalizer import (  # noqa: F401
+    paper_writing_normalize_terminology,
+    paper_writing_normalize_terminology_file,
+)
 
 # Paper-PDF download tools (v0.25.0, 2026-05-21) — IEEE Xplore + Emerald
 # Cookie-seeded session pattern.  Requires caller's IP to have
@@ -159,6 +163,9 @@ def paper_writing_usage() -> str:
     - paper_writing_lint_bedrock / check_misuse_japanese
     - paper_writing_suggest_redundancy_fixes
     - paper_writing_check_subject_predicate_distance
+    - paper_writing_normalize_terminology / normalize_terminology_file
+      — 既知の表記ゆれを TeX 安全に補正。既定では `cube=>立方体` を
+      日本語文脈だけに適用し、英語 caption と file path は保持。
     """
     return _load_skill()
 

@@ -90,6 +90,13 @@ notation_variants / find_undefined_acronyms / acronym_usage_audit /
 check_kanji_ratio / lint_bedrock / check_misuse_japanese /
 suggest_redundancy_fixes / check_subject_predicate_distance
 
+既知の用語ゆれを直すときは `paper_writing_normalize_terminology` または
+`paper_writing_normalize_terminology_file` を使う。既定 rule は
+`cube=>立方体` で、日本語文脈に接した Latin 語だけを置換するため、
+英語 caption・bibliography・`\includegraphics{fig_cube...}` は保持される。
+ファイルに適用する場合はまず `dry_run=True` で置換例を確認し、問題なければ
+`dry_run=False` にする。
+
 ### Plan B Tier 3 (v0.19.0) — paper 特有の追加診断 6 ツール
 
 grant_writing にはない paper 特有の観点 (truth-claim 軸 / IMRAD 後処理 /

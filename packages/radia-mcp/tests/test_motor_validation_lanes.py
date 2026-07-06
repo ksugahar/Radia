@@ -60,6 +60,8 @@ def test_validation_lane_report_names_independent_radia_paths():
     assert "pickup_flux" in report
     assert "linear_pm_flux" in report
     assert "linear_thrust" in report
+    assert "motor_family_sweep" in report
+    assert "rotary_flux_linkage" in report
     assert "cogging_torque" in report
 
 
@@ -116,6 +118,27 @@ def test_linear_motor_observables_are_dual_lane_training_targets():
     hdiv["coupling_design_status"] = "solver_validated"
     hdiv["solver_ready_artifact"] = {
         "artifact_id": "hdiv_vim_linear_pm_flux_solver_ready_v1",
+        "verification": [
+            "python -m pytest validation_test/feec/test_hdiv_motor_minimal_contract.py -q"
+        ],
+    }
+    hdiv_result = validate_motor_validation_artifact(hdiv, "hdiv_vim_reduced_fem")
+
+    assert age_result["status"] == "pass"
+    assert age_result["accepted_for_mcp_learning"] is True
+    assert hdiv_result["status"] == "pass"
+    assert hdiv_result["accepted_for_mcp_learning"] is True
+
+
+def test_rotary_motor_family_sweep_is_dual_lane_training_target():
+    age = _base_artifact("ngsolve_age", "motor_family_sweep")
+    age["metrics"] = {"quantity_specific_residual": 2.0e-3}
+    age_result = validate_motor_validation_artifact(age, "ngsolve_age")
+
+    hdiv = _base_artifact("hdiv_vim_reduced_fem", "rotary_flux_linkage")
+    hdiv["coupling_design_status"] = "solver_validated"
+    hdiv["solver_ready_artifact"] = {
+        "artifact_id": "hdiv_vim_rotary_motor_family_sweep_solver_ready_v1",
         "verification": [
             "python -m pytest validation_test/feec/test_hdiv_motor_minimal_contract.py -q"
         ],
