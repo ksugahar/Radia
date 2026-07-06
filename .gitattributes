@@ -11,3 +11,5 @@ tools/git-hooks/** text eol=lf
 # bytes).  Scoped narrowly to this artifact.
 docs/clebsch_hodograph/excitation_invariant_field.ipynb text eol=lf
 docs/clebsch_hodograph/excitation_invariant_field.json text eol=lf
+docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb text eol=lf
+docs/clebsch_hodograph/hodograph_feasibility_2d.json text eol=lf
