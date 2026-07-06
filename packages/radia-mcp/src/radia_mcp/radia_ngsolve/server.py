@@ -64,6 +64,9 @@ from .knowledge.fem_bem_schur import get_fem_bem_schur_documentation
 from .knowledge.airgap_motor_workflow import get_airgap_motor_workflow_documentation
 from .knowledge.dtn_coarse_mesh import get_dtn_coarse_mesh_documentation
 from .knowledge.urn import get_urn_documentation, urn_fit_from_csv
+from .acoustics import (
+    acoustic_fembem_cross_learnings as _acoustic_fembem_cross_learnings,
+)
 from .gmsh_post_spec import get_gmsh_post_spec
 from .panel_describer import (
     find_panel_file as _find_panel_file,
@@ -1254,6 +1257,50 @@ def analytical_formulas(topic: str = "all") -> str:
         - PDFs themselves: lab-internal, not redistributed with the repo.
     """
     return get_analytical_formulas_documentation(topic)
+
+
+@mcp.tool()
+def acoustic_fembem_cross_learnings() -> str:
+    """
+    Method-selection and validation cross-learnings for radia-acoustic, distilled
+    from the readable acoustic FEM/BEM teaching lane (Gypsilab-style solvers +
+    their goldens). Tool-agnostic physics only -- no proprietary content.
+
+    This is the acoustic companion to `analytical_formulas`: where that tool gives
+    closed-form magnetostatic baselines, this one gives the *how to choose and
+    validate* rules for exterior acoustic radiation / scattering, plus the closed-
+    form acoustic references in `radia_mcp.radia_ngsolve.acoustics` (pulsating
+    sphere, baffled piston, spherical / planar Helmholtz DtN, impedance-reflection).
+
+    Read this when:
+      * Deciding whether a scatterer needs a FEM interior or is pure BEM
+        (rule: FEM interior ONLY when it carries physics BEM cannot -- elastic /
+        inhomogeneous / lossy interior; rigid / soft = surface BC = pure BEM).
+      * Standing up a time-domain acoustic solver -- the compact convolution-
+        quadrature (Lubich CQ) lane = frequency-domain single-layer operator x a
+        thin generic FFT wrapper, A-stability inherited from the Laplace-domain
+        kernel, anchored by the imaginary-axis golden `V(-i c k) == Helmholtz
+        single layer + coincident-node Delta`.
+      * Validating a scatterer with NO analytic reference -- use the shape-
+        independent invariants: far-field reciprocity `f(x_hat; d) == f(-d; -x_hat)`,
+        Sommerfeld `1/r` radiation decay, radiation-force control-radius
+        independence.
+      * Coupling FEM pressure to an exterior radiation condition -- the spherical
+        Helmholtz DtN eigenvalue is the exact "Kelvin operator on the sphere"
+        fast exterior; the lab wave-boundary policy stays high-order Zs, no PML.
+      * Asked whether the hodograph transform helps 3D acoustic BEM (it does not --
+        acoustic BEM is already linear, 3D does not auto-linearise, and Helmholtz
+        breaks the conformal / Kelvin structure; the tractable dual is the source-
+        side surface-density linear inverse).
+
+    Sources:
+        - packages/radia-mcp/src/radia_mcp/radia_ngsolve/acoustics.py
+          (closed-form helpers + this cross-learning document)
+        - tests/test_acoustics.py (pytest coverage of the helpers + this document)
+        - the Gypsilab `+acoustic_fembem` MCP `convolution_quadrature` knowledge
+          topic (public teaching-lane counterpart; no proprietary content).
+    """
+    return _acoustic_fembem_cross_learnings()
 
 
 @mcp.tool()
