@@ -118,7 +118,7 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 | Domain | Code | Knowledge | Notes |
 |--------|------|-----------|-------|
 | Induction heating | `radia.ih` / `radia_ih.py` panel + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`, and a `radia_heat.py` panel) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
-| Electromagnet | `radia_em.py` panel + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_msc.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
+| Electromagnet | `radia_em.py` panel + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_hdiv.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis, HDiv-VIM. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `docs/levitation/`, `validation_test/levitation/`, and the IGTE 2026 paper. radia-cln is NOT a separate package. |
 | Motor | `radia_motor.py` panel + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
 | PCB | `radia_pcb.py` panel + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
@@ -332,8 +332,8 @@ porting to C++ in the first place.
 ### Research-Heavy Work: Run in C:\temp, Promote Knowledge to docs/ipynb or API to src/ (2026-06-27)
 
 **POLICY** (Sugahara): exploratory, research-heavy work (eigenvalue studies,
-spectrum scans, formulation trials, "does this even work" probes — the
-`mmm_eigenvalue_study` class) is **run in `C:\temp`, NOT committed to the tracked
+spectrum scans, formulation trials, "does this even work" probes) is
+**run in `C:\temp`, NOT committed to the tracked
 tree**. The tracked repo receives only the *outcome*, via one of two promotions:
 
 1. **Consolidated knowledge worth showing users, or knowledge that informs a future

@@ -3325,11 +3325,11 @@ def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_a
             "radia_mcp": "0.82.0",
         },
         "execution": {"run_date_utc": "2026-07-02T12:00:01Z"},
-        "result_artifact_id": "vim_hdiv_mmmm_20260702",
+        "result_artifact_id": "hdiv_vim_curved_showcase_20260702",
         "notebook": {
-            "notebook_source_artifact_id": "vim_hdiv_mmmm_panel_ipynb_v1",
+            "notebook_source_artifact_id": "hdiv_vim_curved_showcase_ipynb_v1",
             "notebook_source_digest": "sha256:notebook-source-v1",
-            "notebook_source_path": "docs/vim_hdiv_mmmm_panel.ipynb",
+            "notebook_source_path": "docs/hdiv_vim/hdiv_curved_showcase.ipynb",
         },
         "result_output_schema_id": "vim_demag_table_v1",
         "result_output_columns": ["method", "dof", "wall_s", "rel_error"],
@@ -3353,8 +3353,8 @@ def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_a
     assert gate["status"] == "ok"
     assert gate["learning_stage"] == "learned"
     assert gate["source_tool_lane_status"] == "candidate"
-    assert gate["result_artifact_id"] == "vim_hdiv_mmmm_20260702"
-    assert gate["notebook_source_artifact_id"] == "vim_hdiv_mmmm_panel_ipynb_v1"
+    assert gate["result_artifact_id"] == "hdiv_vim_curved_showcase_20260702"
+    assert gate["notebook_source_artifact_id"] == "hdiv_vim_curved_showcase_ipynb_v1"
     assert gate["checks"]["public_lesson_recorded_when_required"] is True
     assert gate["checks"]["public_learning_target_recorded_when_required"] is True
     assert gate["checks"]["public_verification_recorded_when_required"] is True

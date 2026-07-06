@@ -237,7 +237,7 @@ def _cuboid_bfield_component(x: float, y: float, z: float,
     zmc2, zpc2 = zmc ** 2, zpc ** 2
 
     # Distance to 8 vertices
-    mmm = np.sqrt(xma2 + ymb2 + zmc2)
+    r000 = np.sqrt(xma2 + ymb2 + zmc2)
     pmp = np.sqrt(xpa2 + ymb2 + zpc2)
     pmm = np.sqrt(xpa2 + ymb2 + zmc2)
     mmp = np.sqrt(xma2 + ymb2 + zpc2)
@@ -252,17 +252,17 @@ def _cuboid_bfield_component(x: float, y: float, z: float,
     # Log terms for field computation
     with np.errstate(divide='ignore', invalid='ignore'):
         # Term for Bx from Jx, By from Jy contributions
-        ff2x = np.log((xma + mmm + eps) * (xpa + ppm + eps) *
+        ff2x = np.log((xma + r000 + eps) * (xpa + ppm + eps) *
                       (xpa + pmp + eps) * (xma + mpp + eps)) - \
                np.log((xpa + pmm + eps) * (xma + mpm + eps) *
                       (xma + mmp + eps) * (xpa + ppp + eps))
 
-        ff2y = np.log((-ymb + mmm + eps) * (-ypb + ppm + eps) *
+        ff2y = np.log((-ymb + r000 + eps) * (-ypb + ppm + eps) *
                       (-ymb + pmp + eps) * (-ypb + mpp + eps)) - \
                np.log((-ymb + pmm + eps) * (-ypb + mpm + eps) *
                       (ymb - mmp + eps) * (ypb - ppp + eps))
 
-        ff2z = np.log((-zmc + mmm + eps) * (-zmc + ppm + eps) *
+        ff2z = np.log((-zmc + r000 + eps) * (-zmc + ppm + eps) *
                       (-zpc + pmp + eps) * (-zpc + mpp + eps)) - \
                np.log((-zmc + pmm + eps) * (zmc - mpm + eps) *
                       (-zpc + mmp + eps) * (zpc - ppp + eps))
@@ -276,7 +276,7 @@ def _cuboid_bfield_component(x: float, y: float, z: float,
         ff2z = 0.0
 
     # Arctan terms for diagonal field contributions
-    ff1x = (np.arctan2(ymb * zmc, xma * mmm + eps) -
+    ff1x = (np.arctan2(ymb * zmc, xma * r000 + eps) -
             np.arctan2(ymb * zmc, xpa * pmm + eps) -
             np.arctan2(ypb * zmc, xma * mpm + eps) +
             np.arctan2(ypb * zmc, xpa * ppm + eps) -
@@ -285,7 +285,7 @@ def _cuboid_bfield_component(x: float, y: float, z: float,
             np.arctan2(ypb * zpc, xma * mpp + eps) -
             np.arctan2(ypb * zpc, xpa * ppp + eps))
 
-    ff1y = (np.arctan2(xma * zmc, ymb * mmm + eps) -
+    ff1y = (np.arctan2(xma * zmc, ymb * r000 + eps) -
             np.arctan2(xpa * zmc, ymb * pmm + eps) -
             np.arctan2(xma * zmc, ypb * mpm + eps) +
             np.arctan2(xpa * zmc, ypb * ppm + eps) -
@@ -294,7 +294,7 @@ def _cuboid_bfield_component(x: float, y: float, z: float,
             np.arctan2(xma * zpc, ypb * mpp + eps) -
             np.arctan2(xpa * zpc, ypb * ppp + eps))
 
-    ff1z = (np.arctan2(xma * ymb, zmc * mmm + eps) -
+    ff1z = (np.arctan2(xma * ymb, zmc * r000 + eps) -
             np.arctan2(xpa * ymb, zmc * pmm + eps) -
             np.arctan2(xma * ypb, zmc * mpm + eps) +
             np.arctan2(xpa * ypb, zmc * ppm + eps) -

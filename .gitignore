@@ -5,7 +5,6 @@
 # ============================================================================
 CLAUDE.md
 AGENTS.md
-ROADMAP.md
 .agents/
 .claude/
 .mcp.json

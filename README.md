@@ -72,7 +72,7 @@ Radia is organized as a layered CAE stack, not as one monolithic solver. The rep
 | Layer | Radia policy |
 |---|---|
 | Differential geometry | Use the de Rham-complex design exposed by NGSolve where possible; keep Radia's collocation and integral-method formulations compatible with that language. |
-| Analysis methods | Use NGSolve / ngsolve.bem for FEM and BEM. Implement Radia-specific magnetic moment, multipole moment, PEEC, and source-provider methods in Radia. |
+| Analysis methods | Use NGSolve / ngsolve.bem for FEM and BEM. Implement Radia-specific HDiv-VIM magnetic-material, PEEC, and source-provider methods in Radia. |
 | Linear algebra | Reuse proven solvers and compression ideas such as AMS, BDDC, shifted ICCG, BiCGSTAB, ACA / TSVD, and HACApK instead of inventing local replacements. |
 | Physical methods | Focus development effort on the physics layer: ESIM / SIBC, reduced potentials, Kelvin transforms, CLN, stream functions, and open-region source models. |
 | Applications | Keep application examples concrete: induction heating, MagLev, electromagnets, printed circuit boards, and motors. |
