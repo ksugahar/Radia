@@ -34,6 +34,21 @@ def test_feasibility_law_analytic():
     assert hf.y_sing(hf.D) > hf.H
 
 
+def test_vonmises_partial_hodograph():
+    import hodograph_feasibility_2d as hf
+    # partial von-Mises (x, s=-phi) chart: the free-boundary iron pole becomes a fixed top edge
+    vm = hf.vonmises_chart(nX=161, nS=121)
+    # (a) single-valued diffeomorphism, no fold: Jacobian y_s > 0 everywhere
+    assert vm["single_valued"] and vm["jac_min"] > 0.3, vm
+    # (b) the closed-form map satisfies the von-Mises PDE (residual is FD-limited)
+    assert vm["pde_resid"] < 3e-3, vm
+    # (c) residual drops ~O(h^2) under refinement -> the PDE is right, not a coincidence
+    vm_c = hf.vonmises_chart(nX=81, nS=61)
+    assert vm["pde_resid"] < 0.6 * vm_c["pde_resid"], (vm["pde_resid"], vm_c["pde_resid"])
+    # (d) the chart's top edge s=s0 IS the equipotential iron pole
+    assert vm["pole_match"] < 1e-6, vm
+
+
 @pytest.mark.slow
 def test_fem_verifies_inverse_design():
     pytest.importorskip("ngsolve")
