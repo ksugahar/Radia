@@ -48,7 +48,7 @@ TOPICS: dict[str, str] = {
         "(scaling current cannot move flux lines), saturation is the SOLE breaker. Even "
         "flat-cut is sub-degree invariant (~1.5 mrad); minimizing saturated D_dir over the "
         "end chamfer keeps flux lines ~6-7x MORE invariant (corner relief, same lever as "
-        "bending_endpack_saturation) (excitation_invariant_field.py)"
+        "bending_endpack_saturation) (docs/clebsch_hodograph/excitation_invariant_field.ipynb)"
     ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
@@ -622,9 +622,10 @@ EXCITATION_INVARIANT_FIELD = """
 
 "Same flux lines when you turn up the drive current" (excitation-invariant) is NOT a
 cyclotron (where the field is MEANT to change with radius) -- it is the opposite: hold
-the field-line PATTERN fixed as the excitation grows.  excitation_invariant_field.py
-makes this a direct, optimizable metric on the small-gap bending end pack (reusing
-bending_endpack_saturation_opt's geometry).
+the field-line PATTERN fixed as the excitation grows.  The result-bearing docs notebook
+docs/clebsch_hodograph/excitation_invariant_field.ipynb (+ its .py helper) makes this a
+direct, optimizable metric on the small-gap bending end pack, and ties it to the hodograph
+design method (see below).
 
 ## Linearity => invariance is AUTOMATIC (the key physics)
 
@@ -660,13 +661,35 @@ corner-relief lever as bending_endpack_saturation, now judged directly on the ai
 flux-line geometry across an excitation sweep.  Optuna TPE if present, else grid+refine.
 Golden-tested (test_excitation_invariant_field + test_excitation_invariant_linear_control_is_zero).
 
+## What the HODOGRAPH buys (is it "just linear"?) -- NO, that is only part
+
+The hodograph design method's payoffs, and where this study sits:
+ 1. DIRECT INVERSE DESIGN (the main payoff; holds even for purely LINEAR problems):
+    instead of searching a pole shape whose forward-solve gives the target field, the
+    hodograph PRESCRIBES the target field and READS the pole off as an equipotential
+    (level set) -- one shot, no forward loop; exact multipole content, the exact geometric
+    twist / n-fold law.  THIS is why a hodograph-designed pole is excitation-invariant in
+    the linear regime: it IS the level set of a linear potential, and linearity => invariant
+    flux lines (this notebook's linear control = 0 proves it).
+ 2. CHAPLYGIN LINEARISATION of SATURATION (the deeper payoff; nonlinear, 2D only): the
+    nonlinear PDE div(nu(|grad A_z|) grad A_z)=0 becomes a LINEAR PDE in hodograph (field)
+    coordinates (the gas-dynamics Chaplygin transform) -> the whole saturation design curve
+    from ONE linear solve, no Picard loop.  3D does NOT auto-linearise.  So "it becomes
+    linear" is real and deep, but it is the SATURATION-specific bonus, not the whole story.
+ 3. UNIFICATION with the Kelvin open boundary (differential forms): hodograph and Kelvin are
+    both pullback / coordinate-transform tools; one machinery serves inverse design AND
+    exact open boundary.
+
 ## The honest engineering answer
 
-"Same flux lines when the current rises" is largely AUTOMATIC -- it is just linearity.
-What you design for is keeping it true DEEP into saturation, which -- again -- means
-relieving the pole-tip corner.  This is the excitation-sweep complement of
-bending_endpack_saturation's iron-kappa view: that one minimizes the iron hot spot, this
-one minimizes the air flux-line drift, and the two levers COINCIDE.
+This notebook does NOT use the hodograph -- it is a FORWARD Froehlich-FEM + shape-optimization
+study.  Its role is to CHARACTERIZE payoff (1)'s linear-regime byproduct (excitation-invariant
+flux lines), show where SATURATION breaks it, and verify the fix is the corner-relief lever that
+payoff (2) linearises.  "Same flux lines when the current rises" is largely AUTOMATIC -- it is
+just linearity; what you design for is keeping it true DEEP into saturation, which -- again --
+means relieving the pole-tip corner.  This is the excitation-sweep complement of
+bending_endpack_saturation's iron-kappa view: that one minimizes the iron hot spot, this one
+minimizes the air flux-line drift, and the two levers COINCIDE.
 """
 
 

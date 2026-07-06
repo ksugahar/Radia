@@ -1351,27 +1351,17 @@ invariant under saturation" is largely automatic for the beam; what you optimize
 it saturates.* Uses Optuna (TPE) if present, else a built-in grid+refine. Golden
 `test_bending_endpack_saturation_opt` (ngsolve only, ~8 s).
 
-### `excitation_invariant_field.py` — same flux lines as the current rises (excitation-invariant)
+### excitation-invariant flux lines → `docs/clebsch_hodograph/excitation_invariant_field.ipynb`
 
-The sharper, user-posed question: *do the flux LINES keep the same shape as you turn up the
-drive current?* (an isochronous-in-excitation magnet — **not** a cyclotron, where the field is
-meant to change). Grounded in linearity: below the iron knee the magnet is LINEAR, so scaling
-the current scales `B` everywhere — the field-LINE pattern (streamlines `b̂ = B/|B|`) is
-IDENTICAL, only the amplitude grows. The metric is the air-region flux-line **direction** drift
-`D_dir(I) = rms‖b̂(I)−b̂(I_lin)‖` across an excitation sweep. With `μ` forced constant the
-**linear control is exactly `D_dir = 0` at every drive** (scaling the current cannot move the
-flux lines); saturation (nonlinear `μ`, dropping first at the pole-tip corner) is the SOLE
-breaker, so `D_dir` grows only once the iron saturates (`⟨μ_r⟩ ~1960 → ~580` as the drive goes
-`0.15 → 1.70 T`). Even a hard flat cut is already sub-degree invariant (`~1.5 mrad`); minimizing
-the saturated `D_dir` over the end chamfer `(depth, exponent)` keeps the flux lines invariant
-`~6–7×` DEEPER into saturation (`~1.5 → ~0.2 mrad`) and drops the corner `κ` (`~1.8 → ~1.0`) in
-lockstep — the same corner-relief lever as `bending_endpack_saturation_opt.py`, now judged
-directly on the flux-line geometry across an excitation sweep. Honest answer: *"same flux lines
-as the current rises" is largely automatic (it is just linearity); you design for keeping it
-true DEEP into saturation, which means relieving the pole-tip corner.* Reuses the bending
-end-pack geometry; Optuna (TPE) if present, else grid+refine. Goldens
-`test_excitation_invariant_field` + `test_excitation_invariant_linear_control_is_zero`
-(ngsolve only, ~11 s).
+The companion question *"do the flux LINES keep the same shape as you turn up the drive
+current?"* (excitation-invariant, **not** a cyclotron) lives as a **result-bearing docs
+notebook**, not an examples script: `docs/clebsch_hodograph/excitation_invariant_field.ipynb`
+(+ `excitation_invariant_field.py` helper + synchronized JSON). It shows that below the iron
+knee the magnet is LINEAR so the flux-line pattern is excitation-invariant by construction (the
+linear control drift is exactly 0 at every drive), saturation is the sole breaker, and the
+corner-relief end chamfer keeps the flux lines invariant `~6–7×` deeper into saturation — the
+same corner lever as `bending_endpack_saturation_opt.py`, tied to the hodograph design method.
+Goldens `test_excitation_invariant_field` + `test_excitation_invariant_linear_control_is_zero`.
 
 ## Run
 
@@ -1408,7 +1398,7 @@ python endpack_cobake.py                      # the two planes CO-BAKED into one
 python endpack_cobake_loft.py                 # the co-bake as a PRECISION tensor LOFT (OCC ThruSections): smooth gap face -> baseline & shim mesh at the SAME density (ne ratio ~0.97 vs staircase ~36) -> resolves the staircase artifact, precision b_3,5 + corner (--no-staircase, --fig)
 python scaling_ffag_sector_saturation.py      # the saturating sector body: scaling sector's azimuthal end made NONLINEAR (Froehlich) -> azimuthal L_eff ROBUST (gap-dominated, drift <0.1% even as high-r mu_r collapses x0.3) while radial k(r) is FRAGILE (droops, achromaticity wall) -- two planes differ (--no-radial, --fig)
 python bending_endpack_saturation_opt.py      # the bending end pack optimized vs saturation: the BEAM-plane field is naturally invariant (J~1e-3); the real problem is the pole-TIP CORNER hot spot (kappa~3.7) -> minimize kappa over the end chamfer (depth, exponent) -> corner relieved to ~1.0, beam field unchanged (--trials, --fig)
-python excitation_invariant_field.py          # same flux lines as the current rises: linearity => flux-line DIRECTION drift D_dir=0 while linear (linear control exactly 0), saturation is the sole breaker; even flat-cut is sub-degree invariant (~1.5 mrad); minimize saturated D_dir over the end chamfer -> flux lines ~6-7x more invariant (corner relief) (--trials, --fig)
+# excitation-invariant flux lines -> docs notebook: docs/clebsch_hodograph/excitation_invariant_field.ipynb
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)

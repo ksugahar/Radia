@@ -1,7 +1,8 @@
 """Golden: EXCITATION-invariant flux lines (same field-line shape as the drive rises).
 
-Locks the finding of examples/clebsch_hodograph/excitation_invariant_field.py on a
-small-gap (24 mm), near-knee bending end pack:
+Locks the finding of the docs notebook + helper
+docs/clebsch_hodograph/excitation_invariant_field.{ipynb,py} on a small-gap (24 mm),
+near-knee bending end pack:
 
   (1) LINEARITY => invariance.  With mu forced constant the flux-line DIRECTION drift
       D_dir(B_drive) is 0 at EVERY drive -- scaling the current scales B everywhere, so
@@ -24,8 +25,9 @@ from pathlib import Path
 
 import pytest
 
-EXDIR = Path(__file__).resolve().parents[2] / "examples" / "clebsch_hodograph"
-sys.path.insert(0, str(EXDIR))
+# The compute helper lives beside the docs notebook (docs/clebsch_hodograph).
+DOCDIR = Path(__file__).resolve().parents[2] / "docs" / "clebsch_hodograph"
+sys.path.insert(0, str(DOCDIR))
 
 
 @pytest.mark.slow
@@ -56,11 +58,11 @@ def test_excitation_invariant_field():
     assert o["corner_kappa_sat"] < 1.35, o
 
     # the optimized chamfer is a real, positive, in-range end profile.
-    assert 0.001 < o["depth_m"] < ei.be.G2, o
+    assert 0.001 < o["depth_m"] < ei.G2, o
     assert 0.4 <= o["exponent"] <= 3.0, o
     assert r["n_evals"] >= 8, r
     # the iron actually saturated at the top drive (so the drift is a real effect).
-    assert o["mur_sat"] < ei.be.MUR0, o
+    assert o["mur_sat"] < ei.MUR0, o
 
 
 @pytest.mark.slow

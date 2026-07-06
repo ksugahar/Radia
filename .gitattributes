@@ -4,3 +4,10 @@
 # keeping the tracked source LF also makes `core.hooksPath tools/git-hooks`
 # safe.  Scoped narrowly so the rest of the repo keeps its current behavior.
 tools/git-hooks/** text eol=lf
+
+# A result-bearing docs notebook records notebook_sha256 in its JSON sidecar
+# (Data Persistence / Documentation Format policy).  Pin the pair to LF so the
+# hash is stable across platforms (autocrlf must not rewrite the checked-out
+# bytes).  Scoped narrowly to this artifact.
+docs/clebsch_hodograph/excitation_invariant_field.ipynb text eol=lf
+docs/clebsch_hodograph/excitation_invariant_field.json text eol=lf
