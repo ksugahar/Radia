@@ -35,7 +35,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["cubit_exec", "cubit_mesh_auto", "cubit_docs",
                           "cubit_audit_summary"],
         "related": ["build123d", "gmsh", "radia-ngsolve"],
-        "audit_command": "mcp-server-cubit --selftest --audit-examples",
+        "audit_command": "mcp-server-cubit --selftest --audit-repo",
         "tags": ["cad", "mesh"],
     },
     "build123d": {
@@ -55,7 +55,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                           "gmsh_numsubedges_remediation_plan",
                           "gmsh_mesh_generation_remediation_plan"],
         "related": ["build123d", "cubit", "radia-ngsolve"],
-        "audit_command": "mcp-server-gmsh --selftest --audit-examples",
+        "audit_command": "mcp-server-gmsh --selftest --audit-repo",
         "tags": ["mesh"],
     },
     # ============================================================

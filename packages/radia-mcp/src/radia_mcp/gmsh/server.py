@@ -13,8 +13,8 @@ not mesh generation. Mesh generation uses Netgen or Cubit.
 Usage:
     mcp-server-gmsh              # Start MCP server (stdio transport)
     mcp-server-gmsh --selftest   # Run self-test
-    mcp-server-gmsh --selftest --audit-examples
-                                  # Run self-test plus repo-wide examples audit
+    mcp-server-gmsh --selftest --audit-repo
+                                  # Run self-test plus durable repo-lane audit
 """
 
 from collections import Counter
@@ -526,8 +526,8 @@ def get_gmsh_lint_rules() -> str:
 # Self-Test
 # ============================================================
 
-def _selftest(audit_examples: bool = False):
-    """Run fixture self-test; optionally run the repo-wide examples audit."""
+def _selftest(audit_repo: bool = False):
+    """Run fixture self-test; optionally audit durable repository lanes."""
     print("=" * 70)
     print("GMSH Lint Self-Test")
     print("=" * 70)
@@ -569,20 +569,26 @@ def _selftest(audit_examples: bool = False):
         print("  fixture validation: PASSED")
         print()
 
-    # --- Examples audit ---
-    examples_dir = PROJECT_ROOT / "examples"
-    if not examples_dir.exists():
+    audit_dirs = [
+        "docs",
+        "validation_test",
+        "src/radia/panels/samples",
+    ]
+    existing_audit_dirs = [PROJECT_ROOT / d for d in audit_dirs if (PROJECT_ROOT / d).exists()]
+    if not existing_audit_dirs:
         if not fixtures_dir.exists():
-            print(f"Examples directory not found: {examples_dir}")
+            print("No durable audit lanes found")
         print("PASSED")
         return
 
-    if not audit_examples:
-        print("  examples audit: SKIPPED (run --selftest --audit-examples)")
+    if not audit_repo:
+        print("  repo audit: SKIPPED (run --selftest --audit-repo)")
         print("PASSED")
         return
 
-    py_files = sorted(examples_dir.rglob("*.py"))
+    py_files = []
+    for audit_dir in existing_audit_dirs:
+        py_files.extend(sorted(audit_dir.rglob("*.py")))
     total = 0
     issues = 0
 
@@ -612,7 +618,7 @@ register_status_tool(
     subpackage='radia_mcp.gmsh',
     related_servers=["cubit"],
     optional_deps=["gmsh"],
-    audit_command="mcp-server-gmsh --selftest --audit-examples",
+    audit_command="mcp-server-gmsh --selftest --audit-repo",
 )
 
 
@@ -630,7 +636,7 @@ def main():
         from radia_mcp.common.utf8_stdout import use_utf8_stdout
         use_utf8_stdout()
         try:
-            _selftest(audit_examples='--audit-examples' in sys.argv[1:])
+            _selftest(audit_repo='--audit-repo' in sys.argv[1:])
         except (BrokenPipeError, OSError) as exc:
             if _is_closed_stdout_error(exc):
                 return

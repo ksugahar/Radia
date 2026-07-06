@@ -102,15 +102,18 @@ _BD_WAREHOUSE_LIST_URL = ("https://api.github.com/repos/gumyr/bd_warehouse/"
 _BD_WAREHOUSE_EXAMPLES_URL = ("https://api.github.com/repos/gumyr/bd_warehouse/"
                                "contents/examples")
 
-# Default local roots walked by refresh_cubit_local_examples. Anything a
-# user wants indexed can also be passed explicitly via `roots=[...]`.
+# Default local roots walked by refresh_cubit_local_examples.  The retired
+# Radia examples/ tree is intentionally absent; durable in-repo material lives
+# in docs/, validation_test/, and panel samples.
 _DEFAULT_LOCAL_CUBIT_ROOTS = [
 	r"public-safe curated corpus",
-	r"repo:/examples",
+	r"repo:/docs",
+	r"repo:/validation_test",
+	r"repo:/src/radia/panels/samples",
 ]
 
 # Source families — `search_examples(family, ...)` unions all sub-sources
-# so a single query sees forum + local + radia examples for Cubit,
+# so a single query sees forum + local + durable Radia docs/validation assets,
 # GitHub examples + bd_warehouse for build123d, etc.
 FAMILIES: dict[str, list[str]] = {
 	"cubit": ["cubit", "cubit_local",
@@ -1179,7 +1182,7 @@ def refresh_bd_warehouse_examples(include_examples_dir: bool = True) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# cubit_local: walks on-disk directories (public-safe curated corpus, Radia/examples, ...)
+# cubit_local: walks on-disk directories (curated corpus + Radia durable lanes)
 # ---------------------------------------------------------------------------
 
 _LOCAL_EXTS = (".jou", ".py")
@@ -1188,6 +1191,21 @@ _LOCAL_SKIP_DIRS = frozenset({
 	"packages",  # don't re-index radia-mcp's own source
 })
 _LOCAL_MAX_FILE_BYTES = 200_000  # skip huge files (data dumps, generated meshes)
+
+
+def _resolve_local_root(root_s: str) -> Path:
+	"""Resolve `repo:/...` roots from an editable Radia checkout."""
+	if root_s.startswith("repo:/"):
+		rel = root_s[len("repo:/"):].lstrip("/\\")
+		here = Path(__file__).resolve()
+		candidates = []
+		if len(here.parents) > 5:
+			candidates.append(here.parents[5] / rel)
+		candidates.append(Path.cwd() / rel)
+		for candidate in candidates:
+			if candidate.exists():
+				return candidate
+	return Path(root_s)
 
 
 def _guess_local_title(body: str, path: Path) -> str:
@@ -1214,9 +1232,9 @@ def refresh_cubit_local_examples(roots: list[str] | None = None,
 	"""Walk local directories and index .jou / .py files as Cubit examples.
 
 	Default roots: `public-safe curated corpus` (the lab's years of curated
-	Cubit projects, ~145 files) and `repo:/examples`
-	(~400 files across radia / build123d / cubit / ngsolve / ih /
-	electromagnet workflows). Users can pass `roots=[...]` to override.
+	Cubit projects, ~145 files), plus Radia's durable docs/,
+	validation_test/, and panel-sample lanes. Users can pass `roots=[...]`
+	to override.
 
 	Each file:
 	  - title from first non-empty comment / docstring line
@@ -1239,7 +1257,7 @@ def refresh_cubit_local_examples(roots: list[str] | None = None,
 	roots_walked: list[str] = []
 
 	for root_s in roots:
-		root = Path(root_s)
+		root = _resolve_local_root(root_s)
 		if not root.exists():
 			continue
 		roots_walked.append(str(root))

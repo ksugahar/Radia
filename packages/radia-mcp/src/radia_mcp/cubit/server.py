@@ -11,8 +11,8 @@ Provides tools for:
 Usage:
     python server.py              # Start MCP server (stdio transport)
     python server.py --selftest   # Run lightweight self-test
-    python server.py --selftest --audit-examples
-                                  # Run self-test plus repo-wide examples audit
+    python server.py --selftest --audit-repo
+                                  # Run self-test plus durable repo-lane audit
 """
 
 from collections import Counter
@@ -2467,8 +2467,8 @@ def cubit_examples(query: str, limit: int = 3,
 	     across years of research projects — twisted wire, claw-pole
 	     alternator, kelvin transformation, TEAM problems, helical
 	     coils, JMAG integration, Mesh AI, Nastran/VTU pipelines)
-	     + `repo:/examples` (~400 .jou/.py covering
-	     build123d→Cubit, ngsolve, ih, electromagnet, peec, kelvin).
+	     + durable Radia repo lanes (`docs/`, `validation_test/`,
+	     `src/radia/panels/samples`).
 	     Lab-curated items get a small score boost.
 
 	First call scrapes forum + walks local dirs; cache lives 7 days.
@@ -2495,7 +2495,7 @@ def cubit_examples_refresh(limit_per_query: int = 5,
 
 	Sub-sources:
 	  * forum (Discourse) — always
-	  * local (public-safe curated corpus + Radia/examples + extras) — always
+	  * local (public-safe curated corpus + Radia durable lanes + extras) — always
 	  * cubit_youtube — if `include_youtube`
 	  * Coreform training .zip → folded into local — if
 	    `include_training_zip`
@@ -4880,8 +4880,8 @@ def cubit_diagnostics_guide(topic: str = "overview") -> str:
 # Self-test
 # ============================================================
 
-def _selftest(audit_examples: bool = False):
-    """Run fixture self-test; optionally run the repo-wide examples audit."""
+def _selftest(audit_repo: bool = False):
+    """Run fixture self-test; optionally audit durable repository lanes."""
     print("=" * 70)
     print("Cubit Export Lint Self-Test")
     print("=" * 70)
@@ -4914,21 +4914,26 @@ def _selftest(audit_examples: bool = False):
         print("  fixture validation: PASSED")
         print()
 
-    # --- Examples audit ---
-    examples_dir = PROJECT_ROOT / "examples"
-    if not examples_dir.exists():
+    audit_dirs = [
+        "docs",
+        "validation_test",
+        "src/radia/panels/samples",
+    ]
+    existing_audit_dirs = [d for d in audit_dirs if (PROJECT_ROOT / d).exists()]
+    if not existing_audit_dirs:
         if not fixtures_dir.exists():
-            print("SKIP: No fixtures or examples/ found")
+            print("SKIP: No fixtures or durable audit lanes found")
         print("PASSED")
         return
 
-    if not audit_examples:
-        print("  examples audit: SKIPPED (run --selftest --audit-examples)")
+    if not audit_repo:
+        print("  repo audit: SKIPPED (run --selftest --audit-repo)")
         print("PASSED")
         return
 
-    result = lint_cubit_directory("examples")
-    print(result)
+    for directory in existing_audit_dirs:
+        result = lint_cubit_directory(directory)
+        print(result)
     print("PASSED")
 
 
@@ -4940,7 +4945,7 @@ register_status_tool(
     description='Cubit mesh scripting, hex/tet workflow, export formats',
     subpackage='radia_mcp.cubit',
     related_servers=["build123d"],
-    audit_command="mcp-server-cubit --selftest --audit-examples",
+    audit_command="mcp-server-cubit --selftest --audit-repo",
 )
 
 
@@ -4958,7 +4963,7 @@ def main():
 		from radia_mcp.common.utf8_stdout import use_utf8_stdout
 		use_utf8_stdout()
 		try:
-			_selftest(audit_examples='--audit-examples' in sys.argv[1:])
+			_selftest(audit_repo='--audit-repo' in sys.argv[1:])
 		except (BrokenPipeError, OSError) as exc:
 			if _is_closed_stdout_error(exc):
 				return
