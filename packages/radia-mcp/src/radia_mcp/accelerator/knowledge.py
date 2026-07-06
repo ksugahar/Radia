@@ -39,6 +39,17 @@ TOPICS: dict[str, str] = {
         "(depth, exponent) -> the chamfer RELIEVES the corner while the beam field stays "
         "put (bending_endpack_saturation_opt.py)"
     ),
+    "excitation_invariant_field": (
+        "'Same flux lines when you turn up the current' (excitation-invariant, NOT a "
+        "cyclotron): below the iron knee the magnet is LINEAR, so scaling the current "
+        "scales B everywhere -> the flux-LINE pattern (streamlines B/|B|) is IDENTICAL. "
+        "Metric = air-region flux-line DIRECTION drift D_dir(I)=rms||bhat(I)-bhat(I_lin)|| "
+        "across an excitation sweep; the LINEAR control is exactly 0 at every drive "
+        "(scaling current cannot move flux lines), saturation is the SOLE breaker. Even "
+        "flat-cut is sub-degree invariant (~1.5 mrad); minimizing saturated D_dir over the "
+        "end chamfer keeps flux lines ~6-7x MORE invariant (corner relief, same lever as "
+        "bending_endpack_saturation) (excitation_invariant_field.py)"
+    ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
@@ -606,6 +617,59 @@ design; a normal bending end is beam-invariant by construction.
 """
 
 
+EXCITATION_INVARIANT_FIELD = """
+# Excitation-INVARIANT flux lines -- same field-line shape as the current rises
+
+"Same flux lines when you turn up the drive current" (excitation-invariant) is NOT a
+cyclotron (where the field is MEANT to change with radius) -- it is the opposite: hold
+the field-line PATTERN fixed as the excitation grows.  excitation_invariant_field.py
+makes this a direct, optimizable metric on the small-gap bending end pack (reusing
+bending_endpack_saturation_opt's geometry).
+
+## Linearity => invariance is AUTOMATIC (the key physics)
+
+Below the iron knee the magnet is a LINEAR magnetostatic system: scale the excitation by
+alpha and B scales by alpha EVERYWHERE, so the field-LINE pattern (streamlines
+bhat = B/|B|) is IDENTICAL -- only the amplitude grows.  So "same flux lines as the
+current rises" is automatic in the linear regime; the ONLY thing that can move the flux
+lines is the NONLINEARITY, i.e. iron SATURATION (mu(|B|) dropping non-uniformly, first at
+the pole-tip corner), which redistributes the flux.
+
+## The metric: air-region flux-line DIRECTION drift vs excitation
+
+D_dir(I) = rms_x || bhat(x; I) - bhat(x; I_lin) ||   over air sampling points near the
+pole end (gap + fringe).  D_dir = 0 while linear, grows once the iron saturates.
+NOTE: the MEDIAN-plane profile p(s)=B_z/B_body does NOT show this (gap-reluctance-robust,
+~1e-3 for any end shape -- see bending_endpack_saturation); the AIR field-line DIRECTION
+near the tip/fringe is where saturation actually moves the pattern, so measure THAT.
+
+Two computed controls (the proof):
+  * LINEAR control (mu forced constant): D_dir = 0 EXACTLY at every drive -- scaling the
+    current cannot move the flux lines (linearity).
+  * SATURATED sweep: D_dir grows monotonically with the drive as <mu_r> falls
+    (~1960 -> ~580 for a 0.15 -> 1.70 T drive), so saturation IS the sole breaker.
+
+## Result + the design lever
+
+Even a hard FLAT cut is already nearly invariant: D_dir < 1e-2 rad (sub-degree, ~1.5 mrad
+at the saturated drive), because the high-mu pole face stays equipotential.  The residual
+drift is pole-tip-corner-dominated, so minimizing the saturated D_dir over the end chamfer
+(depth, exponent) keeps the flux lines invariant ~6-7x DEEPER into saturation
+(~1.5 -> ~0.2 mrad) -- and it drops the corner kappa (~1.8 -> ~1.0) in LOCKSTEP, the SAME
+corner-relief lever as bending_endpack_saturation, now judged directly on the air
+flux-line geometry across an excitation sweep.  Optuna TPE if present, else grid+refine.
+Golden-tested (test_excitation_invariant_field + test_excitation_invariant_linear_control_is_zero).
+
+## The honest engineering answer
+
+"Same flux lines when the current rises" is largely AUTOMATIC -- it is just linearity.
+What you design for is keeping it true DEEP into saturation, which -- again -- means
+relieving the pole-tip corner.  This is the excitation-sweep complement of
+bending_endpack_saturation's iron-kappa view: that one minimizes the iron hot spot, this
+one minimizes the air flux-line drift, and the two levers COINCIDE.
+"""
+
+
 BEAM_REFERENCED_TWIST = """
 # The beam-referenced equipotential SURFACE as the design primitive + the TWIST
 
@@ -938,6 +1002,10 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                  "endpack_opt", "corner_relief", "saturation_invariant",
                  "endpack_saturation"):
         return BENDING_ENDPACK_SATURATION
+    if topic in ("excitation_invariant_field", "excitation_invariant", "excitation_sweep",
+                 "flux_line_invariant", "flux_line_invariance", "same_flux_lines",
+                 "invariant_flux_lines"):
+        return EXCITATION_INVARIANT_FIELD
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
@@ -955,12 +1023,13 @@ def get_accelerator_documentation(topic: str = "all") -> str:
         return "\n\n".join([
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
-            SECTOR_SATURATION, BENDING_ENDPACK_SATURATION, BEAM_REFERENCED_TWIST,
-            ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
+            SECTOR_SATURATION, BENDING_ENDPACK_SATURATION, EXCITATION_INVARIANT_FIELD,
+            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION,
+            ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
-        "sector_saturation, bending_endpack_saturation, beam_referenced_twist, "
-        "endpack_two_plane, spectrometer_endpack, endpack_cobake."
+        "sector_saturation, bending_endpack_saturation, excitation_invariant_field, "
+        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack, endpack_cobake."
     )
