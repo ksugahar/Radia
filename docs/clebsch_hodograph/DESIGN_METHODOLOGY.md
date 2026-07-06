@@ -640,6 +640,39 @@ honest engineering answer to "*flux lines invariant under saturation, is that go
 **for the beam it is largely automatic; what you actually optimize is the corner the iron
 saturates** — the chamfer relieves the hot spot without moving the beam field.
 
+### 3.14 Excitation-invariant flux lines — same field-line shape as the current rises
+
+§3.13 asks whether the *beam* field drifts with saturation. `excitation_invariant_field.py`
+asks the sharper, user-posed question directly: *do the flux LINES keep the same shape as you
+turn up the drive current?* (an isochronous-in-excitation magnet — **not** a cyclotron, where
+the field is meant to change). The answer is grounded in linearity:
+
+**Linearity ⇒ invariance is automatic.** Below the iron knee the magnet is a *linear*
+magnetostatic system: scaling the excitation by `α` scales `B` everywhere by `α`, so the
+field-LINE pattern (the streamlines `b̂ = B/|B|`) is **identical** — only the amplitude grows.
+The measurable quantity is the flux-line **direction** drift over an air region,
+`D_dir(I) = rms_x‖b̂(x;I) − b̂(x;I_lin)‖`. With `μ` forced constant the **linear control is
+exactly `D_dir = 0` at every drive** — the crisp proof that scaling the current cannot move
+the flux lines. Saturation (nonlinear `μ(|B|)`, dropping first at the pole-tip corner) is the
+**sole** thing that rotates them, so `D_dir` grows only once the iron saturates (`⟨μ_r⟩`
+sweeping `~1960 → ~580` as the drive goes `0.15 → 1.70 T`, `D_dir` rising monotonically with
+it).
+
+**Even a flat cut is already nearly invariant** — `D_dir < 1e-2 rad` (sub-degree; `~1.5 mrad`
+at the saturated drive) because the high-`μ` pole face stays equipotential (the same
+gap-reluctance robustness as §3.12/§3.13). The residual drift is pole-tip-corner-dominated,
+so the **end chamfer that relieves the corner keeps the flux lines invariant several-fold
+DEEPER into saturation**: minimizing the saturated `D_dir` over `(depth, exponent)` gives a
+`~6–7×` smaller direction drift (`~1.5 → ~0.2 mrad`) — and it drops the corner `κ` in lockstep
+(`~1.8 → ~1.0`), the *same* corner-relief lever as §3.13 but now judged directly on the
+flux-line geometry across an excitation sweep.
+
+**Verified (`excitation_invariant_field.py`, ngsolve + Optuna, golden-tested).** So "*same
+flux lines when the current rises*" is **largely automatic (it is just linearity)**; what you
+design for is keeping it true DEEP into saturation, which — again — means relieving the pole-tip
+corner. This is the excitation-sweep complement of §3.13's iron-`κ` view: §3.13 minimizes the
+iron hot spot, §3.14 minimizes the air flux-line drift, and the two levers coincide.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -796,6 +829,15 @@ coil = A-side), so the framework is one method, not two.
   minimizes `κ` over the end chamfer `(depth, exponent)` — the chamfer RELIEVES the corner
   (`κ → ~1.0`, a real 2D optimum) while the beam field stays put. So "flux invariant under
   saturation" is largely automatic for the beam; what you optimize is the corner it saturates.
+- the **excitation-invariant flux lines** (§3.14, `excitation_invariant_field.py`): the
+  user's "same flux lines as the current rises" made a direct, optimizable metric — the
+  air-region flux-line DIRECTION drift `D_dir(I) = rms‖b̂(I)−b̂(I_lin)‖` across an excitation
+  sweep. Below the knee the magnet is LINEAR so `D_dir = 0` at every drive (the **linear
+  control is exactly 0** — scaling the current cannot move the flux lines); saturation is the
+  sole breaker, and even a flat cut is already sub-degree invariant (`~1.5 mrad`). Minimizing
+  the saturated `D_dir` over the end chamfer keeps the flux lines invariant `~6–7×` DEEPER into
+  saturation (`~1.5 → ~0.2 mrad`), dropping the corner `κ` (`~1.8 → ~1.0`) in lockstep — the
+  §3.13 corner-relief lever, now judged directly on the air flux-line geometry.
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -839,4 +881,5 @@ coil = A-side), so the framework is one method, not two.
 | co-bake as a PRECISION tensor loft (OCC ThruSections) | `examples/clebsch_hodograph/endpack_cobake_loft.py` |
 | saturating sector body (azimuthal L_eff robust, radial k fragile) | `examples/clebsch_hodograph/scaling_ffag_sector_saturation.py` |
 | bending end pack optimized vs saturation (relieve the tip corner) | `examples/clebsch_hodograph/bending_endpack_saturation_opt.py` |
+| excitation-invariant flux lines (same field-line shape as the drive rises) | `examples/clebsch_hodograph/excitation_invariant_field.py` |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
