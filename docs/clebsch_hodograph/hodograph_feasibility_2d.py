@@ -20,7 +20,25 @@ iron pole at gap h ONLY IF  y_sing > h, i.e.
     d > d* = (2/pi) h ~ 0.64 h        -- the field edge is no sharper than ~0.64 x gap.
 
 The iron pole is the equipotential {phi = phi0}; below d* the continuation is singular inside
-the gap and no single smooth pole can produce the field.
+the gap and no single smooth pole can produce the field.  NOTE the (2/pi) factor is specific
+to the tanh edge; what is UNIVERSAL is the gap scaling (edge sharpness ~ gap).  This bound is
+a HARMONIC-CONTINUATION / analyticity fact (Cauchy-Kovalevskaya flavour), NOT a hodograph
+result and NOT a "limit line": ordinary passive saturation stays ELLIPTIC (mu falls but
+|B|=mu*|H| still rises, d(mu*q)/dq>0), so there is no type change / shock for this problem.
+
+The genuinely hodograph-specific content is the PARTIAL von-Mises transform (the Sugahara-lab
+hodograph: keep one coordinate, transform ONE potential).  Here keep x and replace y by the
+scalar-potential coordinate  s = -phi  (monotone-increasing in y since B_y = -phi_y > 0 across
+the gap: s=0 on the mid-plane, s=s0 at the pole).  The unknown iron-pole SHAPE -- a free
+boundary in physical space -- becomes the FIXED top edge {s=s0} of the rectangle [-xr,xr]x[0,s0]
+in the (x,s) chart; the physical map y(x,s) solves the von-Mises PDE
+
+    y_s^2 y_xx - 2 y_x y_s y_xs + (1 + y_x^2) y_ss = 0            (mu = const, linear)
+
+on that fixed rectangle, with a strictly positive Jacobian y_s>0 (single-valued, no fold).
+This is the "design in field space" transparency: the pole is a coordinate line, and saturation
+would enter as a coefficient mu(q) on the SAME fixed chart (no new free boundary).  vonmises_chart()
+verifies the PDE residual (-> 0 under refinement) and the fold-free Jacobian on the closed form.
 """
 import numpy as np
 
@@ -123,6 +141,46 @@ def fem_verify(d=D, order=4, maxh=0.06, w=3.5):
     }
 
 
+def vonmises_chart(d=D, xr=1.5, nX=161, nS=121, ytop=1.25, ny=80001):
+    """Partial von-Mises hodograph (keep x, transform ONE potential): the (x, s) chart with
+    s = -phi (monotone-increasing scalar potential; s=0 on the mid-plane, s=s0 at the pole).
+
+    Invert phi(x,.) = -s on a fine y-grid to get the physical height y(x,s).  The unknown
+    iron-pole shape -- a FREE BOUNDARY in physical (x,y) space -- becomes the FIXED top edge
+    {s=s0} of the rectangle [-xr,xr] x [0,s0].  Verifies, on the closed-form map:
+      - pde_resid : relative residual of the von-Mises PDE
+                    y_s^2 y_xx - 2 y_x y_s y_xs + (1+y_x^2) y_ss = 0   (-> 0 under refinement)
+      - jac_min   : min of y_s  (>0 => single-valued diffeomorphism, no fold)
+      - pole_match: top edge y(x,s0) vs the equipotential read-off {phi = -s0}
+    """
+    s0 = -float(phi_np(0.0, H, d))
+    xs = np.linspace(-xr, xr, nX)
+    Ss = np.linspace(0.0, s0, nS)
+    Y = np.zeros((nX, nS))
+    for i, xx in enumerate(xs):
+        yy = np.linspace(0.0, ytop, ny)
+        sv = -phi_np(np.full_like(yy, xx), yy, d)          # s = -phi, increasing in y
+        Y[i, :] = np.interp(Ss, sv, yy)
+    dx, dS = xs[1] - xs[0], Ss[1] - Ss[0]
+    yX = np.gradient(Y, dx, axis=0); yS = np.gradient(Y, dS, axis=1)
+    yXX = np.gradient(yX, dx, axis=0); ySS = np.gradient(yS, dS, axis=1)
+    yXS = np.gradient(yX, dS, axis=1)
+    r = yS ** 2 * yXX - 2.0 * yX * yS * yXS + (1.0 + yX ** 2) * ySS
+    sc = yS ** 2 * np.abs(yXX) + 2.0 * np.abs(yX * yS * yXS) + (1.0 + yX ** 2) * np.abs(ySS)
+    rel = np.abs(r) / np.maximum(sc, 1e-30)
+    core = rel[2:-2, 2:-2]                                  # drop the 2-cell FD border
+    poleh = Y[:, -1]
+    yp = analytic_pole(xs, -s0, d, ytop=ytop)
+    m = np.isfinite(yp)
+    return {
+        "d": float(d), "s0": float(s0), "xr": float(xr), "nX": int(nX), "nS": int(nS),
+        "pde_resid": float(core.max()), "pde_resid_median": float(np.median(core)),
+        "jac_min": float(yS.min()), "single_valued": bool(yS.min() > 0.0),
+        "pole_match": float(np.max(np.abs(poleh[m] - yp[m]))) if m.any() else float("nan"),
+        "_xs": xs, "_Ss": Ss, "_Y": Y, "_poleh": poleh,
+    }
+
+
 def figure(res, path):
     import matplotlib
     matplotlib.use("Agg")
@@ -169,6 +227,48 @@ def figure(res, path):
     return os.path.abspath(path)
 
 
+def figure_vonmises(vm, path):
+    """The partial von-Mises hodograph: the curved physical gap (free-boundary iron pole)
+    re-charted onto a FIXED rectangle where the pole is the top coordinate line s=s0."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    BLUE, RED, GREEN, AMBER = "#1f6feb", "#d1495b", "#2e8b57", "#e0851e"
+    xs, Ss, Y, poleh, s0 = vm["_xs"], vm["_Ss"], vm["_Y"], vm["_poleh"], vm["s0"]
+    lv = [int(round(f * (len(Ss) - 1))) for f in (0.25, 0.5, 0.75)]   # interior s-levels
+    fig, ax = plt.subplots(1, 2, figsize=(12.6, 4.9), dpi=140)
+
+    # (left) physical gap: mid-plane, curved pole (free boundary), curved s-level lines
+    ax[0].fill_between(xs, 0, poleh, color=BLUE, alpha=0.06)
+    for k in lv:
+        ax[0].plot(xs, Y[:, k], color="#9aa6b6", lw=1.0)
+    ax[0].plot(xs, np.zeros_like(xs), color="#1a2230", lw=1.8, label="mid-plane  s=0")
+    ax[0].plot(xs, poleh, color=RED, lw=3.0, label="iron pole  s=s0 (free boundary)")
+    ax[0].set_xlabel("x"); ax[0].set_ylabel("y (physical gap)")
+    ax[0].set_xlim(xs.min(), xs.max()); ax[0].set_ylim(0, poleh.max() * 1.12)
+    ax[0].legend(fontsize=9.5, loc="lower center")
+    ax[0].set_title("Physical space: the pole shape is an unknown curve")
+
+    # (right) the (x, s) chart: fixed rectangle, pole = straight top edge
+    ax[1].fill_between([xs.min(), xs.max()], 0, s0, color=GREEN, alpha=0.06)
+    for k in lv:
+        ax[1].plot([xs.min(), xs.max()], [Ss[k], Ss[k]], color="#9aa6b6", lw=1.0)
+    ax[1].plot([xs.min(), xs.max()], [0, 0], color="#1a2230", lw=1.8, label="mid-plane  s=0")
+    ax[1].plot([xs.min(), xs.max()], [s0, s0], color=RED, lw=3.0, label="iron pole  s=s0 (fixed edge)")
+    for xv in (xs.min(), xs.max()):
+        ax[1].plot([xv, xv], [0, s0], color="#41506a", lw=1.2, ls="--")
+    ax[1].set_xlabel("x"); ax[1].set_ylabel(r"scalar potential  $s=-\phi$")
+    ax[1].set_xlim(xs.min() * 1.05, xs.max() * 1.05); ax[1].set_ylim(-0.03 * s0, 1.12 * s0)
+    ax[1].legend(fontsize=9.5, loc="lower center")
+    ax[1].set_title(f"(x,s) chart: free boundary -> fixed edge\n"
+                    f"(PDE resid {vm['pde_resid']:.1e}, Jacobian y_s>0 min {vm['jac_min']:.2f})")
+
+    fig.tight_layout(); fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+    import os
+    return os.path.abspath(path)
+
+
 if __name__ == "__main__":
     tab = feasibility_table([1.4, 1.0, 0.8, d_star(), 0.5, 0.35])
     for r in tab:
@@ -178,3 +278,7 @@ if __name__ == "__main__":
     print(f"\nFEM verify (d={res['d']}, gap {res['gap_h']}): "
           f"By rel err {res['By_rel_err']*100:.3f}%, phi L2 {res['phi_L2_err']:.1e}, "
           f"pole match {res['pole_match_err']:.1e}")
+    vm = vonmises_chart()
+    print(f"\nvon Mises chart (d={vm['d']}, s0={vm['s0']:.3f}, {vm['nX']}x{vm['nS']}): "
+          f"PDE resid {vm['pde_resid']:.2e}, Jacobian y_s>0 {vm['single_valued']} "
+          f"(min {vm['jac_min']:.3f}), pole match {vm['pole_match']:.1e}")

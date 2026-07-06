@@ -51,13 +51,20 @@ TOPICS: dict[str, str] = {
         "bending_endpack_saturation) (docs/clebsch_hodograph/excitation_invariant_field.ipynb)"
     ),
     "hodograph_feasibility": (
-        "2D LINEAR hodograph outlook for a BENDING magnet: demand a mid-plane field B_y(x,0) "
-        "flat with edge width d; the gap field is the unique SMOOTH (harmonic) continuation, "
-        "and the tanh continuation's singularity at pi*d/2 must clear the gap h -> feasibility "
-        "boundary d* = (2/pi)h ~ 0.64h (edge no sharper than ~0.64 x gap; the linear precursor "
-        "of a gas-dynamics limit line). Feasible -> pole read off as an equipotential (inverse "
-        "design, closed-form phi). ngsolve linear-FEM verified: read-off pole reproduces g(x) "
-        "to 0.01%, FEM equipotential matches pole to ~1e-6 "
+        "2D LINEAR hodograph outlook for a BENDING magnet, TWO facts of different kinds. "
+        "(1) FEASIBILITY = harmonic analysis, NOT the hodograph: demand a mid-plane field "
+        "B_y(x,0) flat with edge width d; the gap field is the unique HARMONIC continuation, "
+        "and the tanh continuation's singularity at pi*d/2 must clear the gap h -> d* = (2/pi)h "
+        "~ 0.64h (edge no sharper than ~0.64 x gap). Cauchy-Kovalevskaya/analyticity fact, NOT a "
+        "'limit line' (passive saturation stays ELLIPTIC: mu falls but |B|=mu|H| still rises, "
+        "d(mu q)/dq>0, no type change). ngsolve linear-FEM verified: read-off pole reproduces "
+        "g(x) to 0.01%, FEM equipotential matches pole to ~1e-6. "
+        "(2) TRANSPARENCY = the hodograph proper (partial von Mises, keep x transform ONE "
+        "potential): replace y by s=-phi -> the unknown iron-pole free boundary becomes the "
+        "FIXED top edge s=s0 of a rectangle; map y(x,s) solves the von-Mises PDE "
+        "y_s^2 y_xx - 2 y_x y_s y_xs + (1+y_x^2) y_ss = 0, Jacobian y_s>0 (no fold); residual "
+        "->0 under refinement (2.6e-3->7.2e-4), top edge = read-off pole to ~1e-8. Saturation "
+        "enters as a coefficient mu(q) on the SAME fixed rectangle (no new free boundary). "
         "(docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb)"
     ),
     "beam_referenced_twist": (
@@ -714,28 +721,46 @@ Demand the mid-plane field B_y(x,0) = g(x): flat over the good-field half-width 
 off over an edge width d.  The scalar potential is HARMONIC in the gap, so g must extend
 upward as its UNIQUE SMOOTH (analytic) continuation -- the mid-plane field is NOT free.
 
-## The feasibility boundary (a linear 'limit line')
+## (1) The feasibility boundary -- HARMONIC ANALYSIS, not the hodograph
 The continuation of a tanh edge has its nearest singularity at height y = pi*d/2.  The field
 is realizable by an iron pole at gap h ONLY IF that singularity clears the gap:
 
     d > d* = (2/pi) h  ~  0.64 h        -- the edge is no sharper than ~0.64 x gap.
 
 Below d* the continuation is singular INSIDE the gap and no single smooth iron pole can make
-the field.  You know what is realizable BEFORE building anything -- the linear precursor of a
-gas-dynamics limit line.  (The 2/pi is tanh-edge-specific; the UNIVERSAL statement is the gap
-scaling "fringe scale ~ gap", here PROVEN as a feasibility boundary from analyticity.)
+the field.  This is a Cauchy-Kovalevskaya / analyticity fact about the DEMAND -- the hodograph
+plays NO role, and it is NOT a 'limit line': ordinary passive saturation stays ELLIPTIC (mu
+falls but |B|=mu|H| still RISES, d(mu q)/dq>0), so there is no type change / shock here (unlike
+transonic gas dynamics -- do NOT frame this as a limit-line precursor).  The 2/pi is
+tanh-edge-specific; the UNIVERSAL statement is the gap scaling ("fringe scale ~ gap", here
+PROVEN as a feasibility boundary from analyticity).
 
-## Inverse design + verification
+## Inverse design + FEM verification
 For a feasible demand the iron pole is READ OFF as the equipotential {phi=phi0} (no
 forward-solve loop); phi has a closed form (sinh/cosh/sin/cos/atan2).  Verified by an
 INDEPENDENT ngsolve linear-FEM manufactured-solution solve: (a) interior B_y(x,0) reproduces
 g(x) to 0.01% of B0, (b) FEM phi == analytic phi (L2 ~1e-8), (c) FEM equipotential == read-off
 pole to ~1e-6.  Golden: tests/feec/test_hodograph_feasibility_2d.py.
 
+## (2) What the hodograph ACTUALLY buys -- the partial von-Mises chart
+The Sugahara-lab hodograph is a PARTIAL transform: keep one coordinate, transform ONE
+potential.  Keep x, replace y by the scalar-potential coordinate s = -phi (monotone in y since
+B_y=-phi_y>0; s=0 on the mid-plane, s=s0 at the pole).  The UNKNOWN iron-pole SHAPE -- a FREE
+BOUNDARY in physical space -- becomes the FIXED top edge {s=s0} of the rectangle
+[-xr,xr]x[0,s0].  The physical map y(x,s) solves the (quasi-linear) von-Mises PDE
+
+    y_s^2 y_xx - 2 y_x y_s y_xs + (1 + y_x^2) y_ss = 0        (mu = const)
+
+with Jacobian y_s>0 everywhere (single-valued, no fold).  Verified on the closed-form map:
+PDE residual -> 0 under refinement (2.6e-3 -> 7.2e-4, ~O(h^2)), min y_s ~ 0.78, and the top
+edge reproduces the read-off equipotential to ~1e-8.  THIS is 'design in field space': the
+pole is a coordinate line on a FIXED domain, and saturation enters as a COEFFICIENT mu(q) on
+the SAME rectangle (no new free boundary).
+
 ## Where it sits
-This is the LINEAR baseline of the hodograph 'design in field space' outlook.  The
-hodograph-SPECIFIC payoff (linearising the NONLINEAR saturating PDE) is the Chaplygin
-transformation -- the natural next step from this linear feasibility picture.
+(1) is harmonic analysis; (2) is the genuine hodograph transparency.  The nonlinear (x,s) /
+Chaplygin design (saturation as a coefficient on the fixed chart) is the natural next build
+from this linear baseline.
 """
 
 

@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-06T13:46:50.413000+00:00",
+  "generated_at_utc": "2026-07-06T22:45:17.145238+00:00",
   "radia_version": "4.95.5",
   "ngsolve_version": "6.2.2604",
   "python_version": "3.12.10",
@@ -46,10 +46,23 @@
     "phi0": -1.0151002621057115,
     "d_star": 0.6366197723675814,
     "feasible": true,
-    "By_rel_err": 9.782291612936422e-05,
-    "phi_L2_err": 1.1429579782354395e-08,
-    "pole_match_err": 1.3635419988666797e-06,
+    "By_rel_err": 9.782291612903116e-05,
+    "phi_L2_err": 1.1429579789004044e-08,
+    "pole_match_err": 1.363541998644635e-06,
     "pole_gap_at_x0": 0.9999999998146583
   },
-  "notebook_sha256": "1a8d87a49decc0d0b583948b5d0be55e385286921fa899264af876da4d0cd55a"
+  "vonmises_chart": {
+    "d": 0.9,
+    "s0": 1.0151002621057115,
+    "xr": 1.5,
+    "nX": 161,
+    "nS": 121,
+    "pde_resid": 0.0007191344613510511,
+    "pde_resid_median": 0.00034610141777203894,
+    "jac_min": 0.7816991267189584,
+    "single_valued": true,
+    "pole_match": 2.5394824243463177e-08,
+    "pde_resid_coarse": 0.00261762920912161
+  },
+  "notebook_sha256": "44f8fa95e68f00b9335c46520292c575d593321b3104c87b2db9634af132e391"
 }
