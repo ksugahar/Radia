@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""audit_new_panel_contract.py -- enforce the canonical panel-adding
-recipe in docs/panels/ADDING_NEW_PANEL.md.
+"""audit_new_panel_contract.py -- enforce the panel calc contract.
 
 Pure static AST analysis -- runs in <1 s, no NGSolve/Cubit needed.
 Suitable as a CI gate.
@@ -21,19 +20,12 @@ For every ``src/radia/panels/calc_*.py``:
       Already covered by validation_test/panels/test_taskmanager_scoping.py; we
       re-run it here so this script is a complete one-stop audit.
 
-For every ``src/radia/radia_*.py`` panel module:
+For desktop panel modules:
 
-  P1. Heavy imports (ngsolve, radia.* runtime, cubit, netgen) are NOT
-      at module top.  Panel modules load on every Cubit toolbar launch.
-  P2. At least one class subclasses ``ModePanel`` and calls
-      ``bind_argparser(`` somewhere in its ``__init__``.
-  P3. Every ``build_command`` returns the result of
-      ``build_command_from_parser(...)`` -- hand-assembled argv defeats
-      single-source-of-truth.
-  P4. The mode-suffix string is consistent between ``json_output(...,
-      suffix)`` and ``msh_output(..., suffix)`` calls in the same
-      ``build_command`` (so the Persistence Policy .log lands next to
-      the right .msh).
+  P0. New ``src/radia/radia_*.py`` desktop panel modules are forbidden.
+      Analysis panels now live as notebook workbenches; the active GUI gate is
+      ``validation_test/panels/test_notebook_workbench.py``.  The only
+      allowed ``radia_*.py`` non-panel shim is ``radia_ngsolve.py``.
 
 Exit code 0 = clean; non-zero = violations printed and counted.
 
@@ -55,6 +47,7 @@ from typing import Iterable
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CALC_DIR = ROOT / "src" / "radia" / "panels"
 PANEL_DIR = ROOT / "src" / "radia"
+ALLOWED_RADIA_SHIMS = {"radia_ngsolve.py"}
 
 # Modules that are NEVER allowed at top-of-file in either calc_*.py or
 # radia_*.py panel modules.  Either they trigger long imports
@@ -239,7 +232,7 @@ def _audit_calc(path: pathlib.Path) -> list[str]:
         if isinstance(node, ast.FunctionDef) and node.name == "build_argparser":
             for ln, mod in _function_has_heavy_imports(node):
                 viols.append(f"{rel}:{ln}: C5 heavy import `{mod}` inside "
-                             f"build_argparser() (panel introspects it)")
+                             f"build_argparser() (workbench introspects it)")
 
     # C6
     for node in ast.walk(tree):
@@ -252,94 +245,6 @@ def _audit_calc(path: pathlib.Path) -> list[str]:
                              f"UnboundLocalError trap")
     return viols
 
-
-# Panel modules grandfathered before the canonical recipe was
-# documented.  See same migration policy as LEGACY_CALC_EXEMPT above.
-LEGACY_PANEL_EXEMPT = {
-    "radia_gui_base.py",         # the base class itself
-    "coil_builder.py",     # interactive 3D widget panel
-    "radia_ngsolve.py",          # legacy / not a panel
-    "radia_ih.py",               # custom multi-tab UI predates pattern
-    # radia_motor.py migrated 2026-06-15 to the ModePanel/AnalysisWindow
-    # generator contract (Transient + Lamination sub-panels) -- now audited.
-    # radia_*.py NOT in this set MUST follow the canonical pattern.
-}
-
-
-def _audit_panel(path: pathlib.Path) -> list[str]:
-    """Return list of violation strings for one radia_*.py panel."""
-    if path.name in LEGACY_PANEL_EXEMPT:
-        return []
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    viols = []
-    rel = path.relative_to(ROOT).as_posix()
-
-    # P1: no heavy top imports
-    for lineno, mod in _toplevel_heavy_imports(tree):
-        viols.append(f"{rel}:{lineno}: P1 top-level heavy import `{mod}` "
-                     f"(panel loads on every Cubit toolbar launch)")
-
-    # P2: a class subclasses ModePanel and calls bind_argparser in __init__
-    has_modepanel_class_with_bind = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            bases = {(b.id if isinstance(b, ast.Name) else
-                      (b.attr if isinstance(b, ast.Attribute) else ""))
-                     for b in node.bases}
-            if "ModePanel" not in bases:
-                continue
-            for sub in ast.walk(node):
-                if (isinstance(sub, ast.Call)
-                        and isinstance(sub.func, ast.Attribute)
-                        and sub.func.attr == "bind_argparser"):
-                    has_modepanel_class_with_bind = True
-                    break
-    if not has_modepanel_class_with_bind:
-        viols.append(f"{rel}: P2 no ModePanel subclass calls bind_argparser(...)")
-
-    # P3: every build_command either calls build_command_from_parser(...)
-    # OR delegates to a sub-panel's build_command (composite pattern --
-    # the sub-panel itself is then audited separately).
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "build_command":
-            uses_helper = False
-            delegates_to_sub = False
-            for sub in ast.walk(node):
-                if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute):
-                    if sub.func.attr == "build_command_from_parser":
-                        uses_helper = True
-                        break
-                    if sub.func.attr == "build_command":
-                        # delegate: self._current_sub().build_command(vol_path)
-                        delegates_to_sub = True
-            if not (uses_helper or delegates_to_sub):
-                viols.append(f"{rel}:{node.lineno}: P3 build_command neither "
-                             f"calls self.build_command_from_parser(...) nor "
-                             f"delegates to a sub-panel's build_command()")
-
-    # P4: json_output / msh_output suffix consistency per build_command
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "build_command":
-            suffixes = {"json": set(), "msh": set()}
-            for sub in ast.walk(node):
-                if (isinstance(sub, ast.Call)
-                        and isinstance(sub.func, ast.Name)
-                        and sub.func.id in ("json_output", "msh_output")
-                        and len(sub.args) >= 2
-                        and isinstance(sub.args[1], ast.Constant)
-                        and isinstance(sub.args[1].value, str)):
-                    suffixes[sub.func.id.split("_")[0]].add(sub.args[1].value)
-            if suffixes["json"] and suffixes["msh"]:
-                if suffixes["json"] != suffixes["msh"]:
-                    viols.append(
-                        f"{rel}:{node.lineno}: P4 build_command uses "
-                        f"json_output suffix {suffixes['json']} and "
-                        f"msh_output suffix {suffixes['msh']} -- the "
-                        f"Persistence Policy derives .log from --output "
-                        f"JSON path so the suffix MUST match the .msh path")
-    return viols
-
-
 def main() -> int:
     viols: list[str] = []
     calcs = sorted(CALC_DIR.glob("calc_*.py"))
@@ -348,18 +253,23 @@ def main() -> int:
     for f in calcs:
         viols.extend(_audit_calc(f))
     for f in panels:
-        viols.extend(_audit_panel(f))
+        if f.name not in ALLOWED_RADIA_SHIMS:
+            rel = f.relative_to(ROOT).as_posix()
+            viols.append(
+                f"{rel}: P0 retired desktop panel module present -- "
+                "promote analysis UI through DesignSpec + notebook workbench")
 
     if viols:
         print(f"Panel contract: {len(viols)} VIOLATION(S)")
         for v in viols:
             print(f"  {v}")
         print()
-        print(f"Audited {len(calcs)} calc_*.py + {len(panels)} radia_*.py panels.")
-        print("See docs/panels/ADDING_NEW_PANEL.md for the canonical pattern.")
+        print(f"Audited {len(calcs)} calc_*.py + "
+              f"{len(panels)} radia_*.py guard file(s).")
+        print("See src/radia/CONVENTIONS.md for the notebook panel pattern.")
         return 1
     print(f"Panel contract: CLEAN "
-          f"({len(calcs)} calc_*.py + {len(panels)} radia_*.py panels audited)")
+          f"({len(calcs)} calc_*.py + {len(panels)} radia_*.py guard file(s))")
     return 0
 
 

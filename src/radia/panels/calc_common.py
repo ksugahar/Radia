@@ -982,12 +982,11 @@ def progress(tag, msg):
     History (2026-05-23): historically this only wrote to stderr.
     Keiko's 27-minute BEM-A + BEM run on mdx finished cleanly but the
     panel log file had ZERO intermediate progress lines between start
-    and end -- ``radia_gui_base.py::_read_stderr`` only echoes
-    subprocess stderr to the GUI text widget, not to the file.  For
-    long runs the user had no post-hoc record of WHERE the time was
-    spent.  Mirror every ``progress()`` call to ``panel_log`` so
-    successful long runs leave the same timeline in the file that the
-    GUI shows live.  panel_log gates the file write through its own
+    and end.  For long runs the user had no post-hoc record of WHERE
+    the time was spent.  Mirror every ``progress()`` call to
+    ``panel_log`` so successful long runs leave the same timeline in
+    the file that the notebook/workbench shows live.  panel_log gates
+    the file write through its own
     handle (only opens once per process), so the cost is one
     formatted write per progress line -- negligible vs the work
     those lines are summarising.

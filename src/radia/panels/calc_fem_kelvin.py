@@ -1297,8 +1297,7 @@ def solve_fem(vol_file="", fes_order=1,
         "t_mesh_s": round(t_mesh, 2),
         # Aggregated per-iteration solve time.  Each iteration's t_solve is
         # already captured in history[i]['t_solve']; sum into a single
-        # top-level t_solve_s so the panel's _append_standard_summary
-        # (radia_gui_base.py, Result Output Policy 2026-05-30) shows the
+        # top-level t_solve_s so the notebook/workbench summary shows the
         # solve breakdown alongside t_mesh_s + t_total_s.  Per-iter detail
         # is still available in esim_history for users who want it.
         "t_solve_s": round(sum(h.get("t_solve", 0.0) for h in history), 2),
@@ -1321,8 +1320,7 @@ def solve_fem(vol_file="", fes_order=1,
 
 
 def build_argparser():
-    """argparse factory shared by main() and the panel generator
-    (ModePanel.bind_argparser in radia_gui_base)."""
+    """argparse factory shared by main() and notebook DesignSpec callers."""
     parser = argparse.ArgumentParser(
         description="3D FEM-SIBC with PEEC filament source + optional Kelvin")
     parser.add_argument("--vol", required=True, help="Netgen .vol file")

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Static cross-checker between Radia GUI panels and their `calc_*.py`.
+"""Retired static cross-checker for desktop Radia GUI panels.
+
+The production panel surface is now the notebook workbench
+(`*_design.py` + `*_notebook.py` + `radia_*.ipynb`). Use
+`validation_test/panels/test_notebook_workbench.py` for the active contract.
+This script is kept only for archaeology of the removed `radia_*.py`
+desktop panels and should not be used as a release gate.
 
 Catches four silent-bug classes at the panel/CLI boundary:
 
@@ -21,8 +27,7 @@ bug is in the VALUE the panel sent, not the flag name.
 
 Run:
 
-    python validation_test/panels/check_panel_cli.py
-    python validation_test/panels/check_panel_cli.py --panel radia_ih.py
+    python validation_test/panels/check_panel_cli.py --panel old_desktop_panel.py
     python validation_test/panels/check_panel_cli.py --strict    # fail on (2) too
 
 Exit code:
@@ -495,8 +500,7 @@ def check(panels: List[Path], strict: bool = False) -> int:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--panel", action="append", default=[],
-                    help="Panel file(s) to check (default: all radia_*.py "
-                         "under src/radia/)")
+                    help="Archived desktop panel file(s) to check")
     ap.add_argument("--strict", action="store_true",
                     help="Treat silent-default + orphan widget as a "
                          "failure (exit rc=2)")
@@ -505,10 +509,7 @@ def main():
     if args.panel:
         panels = [RADIA_DIR / p for p in args.panel]
     else:
-        panels = [p for p in sorted(RADIA_DIR.glob("radia_*.py"))
-                  if p.name != "radia_gui_base.py"
-                  and p.name != "coil_builder.py"
-                  and p.name != "radia_ngsolve.py"]
+        panels = []
 
     sys.exit(check(panels, strict=args.strict))
 

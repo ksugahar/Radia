@@ -254,8 +254,7 @@ def solve_kelvin_benchmark(vol_path, mu_r=100.0, H0=1.0,
 
 
 def build_argparser():
-    """argparse factory shared by main() and the panel generator
-    (ModePanel.bind_argparser in radia_gui_base)."""
+    """argparse factory shared by main() and notebook DesignSpec callers."""
     parser = argparse.ArgumentParser(
         description="Kelvin Benchmark: verify Cubit-Kelvin pipeline "
                     "against analytical magnetic-sphere-in-uniform-field.")
