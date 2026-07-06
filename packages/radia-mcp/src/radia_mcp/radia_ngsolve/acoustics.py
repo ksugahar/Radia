@@ -1627,3 +1627,91 @@ def pulsating_sphere_radiation(
         "sample_power": power_from_sample,
         "sample_plane_wave_intensity": plane_wave_intensity_sample,
     }
+
+
+_ACOUSTIC_FEMBEM_CROSS_LEARNINGS = r"""# Acoustic scatterer method selection + validation (readable FEM/BEM lane)
+
+## Should the scatterer be FEM? -- only if the interior carries physics BEM cannot
+- Rigid (sound-hard, dp/dn=0) or soft (sound-soft, p=0): a pure SURFACE boundary
+  condition. Solve by BEM only. FEM would have to mesh AND truncate the exterior
+  (absorbing/PML/Kelvin/DtN) -- exactly what BEM avoids. Do NOT FEM a rigid/soft
+  scatterer.
+- Elastic body: the interior has elastodynamics (compressional + shear resonances
+  a rigid/soft model MISSES). FEM interior (vector elasticity) + BEM exterior =
+  fluid-structure interaction (FSI). This is where coupling earns its keep.
+- Penetrable / inhomogeneous fluid (c(x) varying inside): FEM interior + BEM
+  exterior (a homogeneous penetrable scatterer can also be BEM-BEM transmission).
+Rule: FEM the interior ONLY for elastic or inhomogeneous interiors; otherwise BEM.
+
+## Geometry: BEM meshes the SURFACE only -- no outer truncation
+A circle/sphere is the trivial separable (partial-wave) case used for analytic
+validation. A rectangle/box (corners, non-separable) is the genuine
+arbitrary-geometry test. With BEM the only mesh is the scatterer surface; the
+radiation condition lives in the kernel, so there is no artificial outer circle to
+truncate (unlike FEM). Steer the incident plane-wave direction to probe the
+scattering amplitude f(x_hat; d).
+
+## Time domain = convolution quadrature (CQ); for acoustics it is the strongest
+CQ (Lubich) inherits the Laplace-domain kernel's A-stability, so it stays causal
+and late-time stable where direct marching-on-in-time (MOT) is unstable. It is
+STRUCTURALLY compact: CQ = (frequency-domain operator) x (a thin generic FFT
+wrapper). The retarded single/double layer are never formed as time kernels --
+the Laplace-domain BEM V(s), K(s) are evaluated at s = delta(zeta)/dt on a contour
+and an FFT recovers the time history. So you validate the operator ONCE in the
+frequency domain and the time-domain solve inherits it plus CQ stability.
+
+## Validate the CQ single-layer on the imaginary axis
+The CQ core is the Laplace-domain single layer V(s), kernel exp(-s r/c)/(4 pi r).
+At s = -i c k the kernel is exp(i k r) = the Helmholtz kernel, so V(-i c k) equals
+the frequency-domain Helmholtz single-layer Galerkin matrix (up to the known
+coincident-node quadrature term). That pins the s/c scaling, the exponent sign,
+and the 1/(4 pi) to the analytically-validated (Faran/Anderson/soft-sphere)
+frequency-domain operator -- far stronger than a self-consistent CQ residual.
+
+## Arbitrary-shape scatterer: validate by SHAPE-INDEPENDENT physics invariants
+A box / general scatterer has no analytic reference. Use invariants that hold for
+ANY shape:
+- Far-field reciprocity: f(x_hat; d) = f(-d; -x_hat) (to discretisation error).
+- Sommerfeld 1/r radiation decay of the scattered field.
+- Radiation-force control-radius independence (since div T = 0).
+These are the honest goldens when no partial-wave series exists.
+
+## Fast exterior for a SPHERE: the exact spherical Helmholtz DtN
+Lambda_n = k h_n'(kR)/h_n(kR) (see spherical_helmholtz_dtn_eigenvalue) is the
+"Kelvin operator on the sphere": it replaces the dense Galerkin single/double
+layer for a spherical truncation with a spherical-harmonic-coefficient operator.
+It is an exact radiating-impedance operator, NOT an absorbing/PML boundary and NOT
+a Kelvin (static-inversion) boundary -- the acoustic-wave analogue must be stated
+as BEM, Sommerfeld, DtN, or high-order impedance Zs, never "Kelvin boundary".
+
+## Radia's own acoustic vs this teaching lane
+Radia's core is Laplace-kernel-only (MQS/Darwin); its BEM uses Sauter-Schwab
+singular quadrature (or ngsolve.bem), not the split-analytic-Laplace +
+product-Gauss-smooth-correction scheme of the readable Helmholtz teaching lane. So
+the coincident-node smooth-correction convention above is a teaching-lane detail;
+radia's Laplace BEM has no smooth correction (it vanishes at k=0).
+
+## Hodograph does NOT apply to 3D acoustic BEM
+The (partial / von-Mises) hodograph linearises a NONLINEAR constitutive law in 2D
+(Chaplygin) and rests on conformal structure. 3D acoustic BEM fails all three
+preconditions: it is already LINEAR (no constitutive law to linearise), 3D does
+not auto-linearise, and Helmholtz breaks the conformal/Kelvin structure (the same
+wall as "acoustic Kelvin does not work"). The tractable dual is the source-side
+linear inverse (surface-density design), not a hodograph.
+"""
+
+
+def acoustic_fembem_cross_learnings() -> str:
+    """Method-selection and validation cross-learnings from the readable acoustic
+    FEM/BEM lane, for radia-acoustic to reuse.
+
+    Tool-agnostic physics distilled from the Gypsilab-style teaching solvers and
+    their goldens (no proprietary content). Complements the closed-form reference
+    helpers in this module (pulsating sphere, baffled piston, spherical / planar
+    DtN, impedance-reflection) with *how to choose and validate* a scatterer
+    method: FEM-vs-BEM by interior physics, the compact CQ time-domain lane and its
+    imaginary-axis golden, shape-independent validation invariants (reciprocity,
+    1/r decay), the spherical DtN fast exterior, and why the hodograph does not
+    apply to 3D acoustic BEM.
+    """
+    return _ACOUSTIC_FEMBEM_CROSS_LEARNINGS.strip()

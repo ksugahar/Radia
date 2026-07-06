@@ -805,3 +805,24 @@ def test_baffled_circular_piston_public_fallback_when_scipy_missing(monkeypatch)
     out = baffled_circular_piston_radiation(0.08, 0.025 * 343.0 / (2.0 * math.pi * 0.08))
     assert out["special_function_source"] == "fallback"
     assert out["radiation_efficiency"] == pytest.approx(out["low_ka_resistance_asymptote"], rel=5.0e-4)
+
+
+def test_acoustic_fembem_cross_learnings_covers_method_and_validation():
+    from radia_mcp.radia_ngsolve.acoustics import acoustic_fembem_cross_learnings
+
+    text = acoustic_fembem_cross_learnings()
+    lower = text.lower()
+    assert len(text) > 800
+    # FEM-vs-BEM scatterer decision
+    assert "FEM the interior ONLY for elastic or inhomogeneous" in text
+    assert "do not fem a rigid/soft" in lower
+    # compact CQ time domain + the imaginary-axis golden
+    assert "convolution quadrature" in lower
+    assert "A-stability" in text
+    assert "imaginary axis" in lower
+    # shape-independent validation invariants
+    assert "reciprocity" in lower
+    assert "1/r radiation decay" in lower
+    # spherical DtN fast exterior + hodograph non-applicability
+    assert "spherical_helmholtz_dtn_eigenvalue" in text
+    assert "hodograph does not apply to 3d acoustic bem" in lower
