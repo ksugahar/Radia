@@ -1,4 +1,9 @@
-"""Panel quality-assurance checks.
+"""Retired desktop-panel quality-assurance checks.
+
+Current Radia analysis panels are notebook workbenches and are checked by
+``test_notebook_workbench.py``.  This module is ignored from normal pytest
+collection and remains only as historical reference for the removed PySide6
+``radia_*.py`` windows.
 
 A single entry point ``check_panel_health(window)`` runs a suite of
 layout / accessibility / correctness checks on a Radia PySide6 panel

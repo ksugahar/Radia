@@ -464,8 +464,7 @@ def _write_hdiv_vol_sol_msh(msh_path, elements, model, rad):
 
 
 def build_argparser():
-    """argparse factory shared by main() and the panel generator
-    (ModePanel.bind_argparser in radia_gui_base)."""
+    """argparse factory shared by main() and notebook DesignSpec callers."""
     parser = argparse.ArgumentParser(
         description="Accelerator magnet HDiv-VIM solver")
     parser.add_argument("--coil-script", required=True,

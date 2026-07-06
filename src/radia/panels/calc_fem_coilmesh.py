@@ -701,8 +701,7 @@ def solve_fem_coilmesh(vol, frequency, I_target,
 
 
 def build_argparser():
-    """argparse factory shared by main() and the panel generator
-    (ModePanel.bind_argparser in radia_gui_base)."""
+    """argparse factory shared by main() and notebook DesignSpec callers."""
     parser = argparse.ArgumentParser(
         description="FEM A-V coil + wp SIBC + Kelvin (gapped torus, "
                     "source/sink ports)")

@@ -1,10 +1,12 @@
 """
-argumentize_extract.py -- find variables that should become CLI arguments.
+argumentize_extract.py -- retired helper for old desktop panel migration.
 
-Companion to the `argumentize` skill (.claude/skills/argumentize/SKILL.md).
-Walks a `calc_*.py` and / or a `radia_*.py` panel and reports candidates
-that should be promoted to argparse arguments before the panel can be
-cleanly migrated to ModePanel.bind_argparser (POLICY 2026-05-30).
+Current Radia panels are notebook workbenches backed by DesignSpec classes;
+use `validation_test/panels/test_notebook_workbench.py` for the active
+contract.  This script remains only for archaeology of removed `radia_*.py`
+desktop panels.  It walks a `calc_*.py` and / or an archived `radia_*.py`
+panel and reports candidates that would have needed promotion to argparse
+arguments before the old ModePanel migration.
 
 Severity:
   [A] panel widget WITHOUT an argparse counterpart -- must add to calc
@@ -18,8 +20,8 @@ Severity:
 
 Usage:
   python tools/argumentize_extract.py src/radia/panels/calc_em_table.py
-  python tools/argumentize_extract.py --panel src/radia/radia_em.py
-  python tools/argumentize_extract.py --panel src/radia/radia_em.py \
+  python tools/argumentize_extract.py --panel C:/temp/old_radia_em.py
+  python tools/argumentize_extract.py --panel C:/temp/old_radia_em.py \
                                       --calc  src/radia/panels/calc_em_table.py
 """
 
@@ -239,7 +241,7 @@ def report(panel_path: Path | None, calc_path: Path | None, quiet: bool):
             # this at runtime; surface here for migration planning).
             for dest, info in calc_args.items():
                 if dest == "output":
-                    continue  # output auto-handled by AnalysisWindow
+                    continue  # output auto-handled by the workbench
                 if not any(w["key"] == dest for w in panel_widgets):
                     candidates.append({
                         "severity": "i",

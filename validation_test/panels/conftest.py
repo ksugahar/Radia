@@ -1,20 +1,10 @@
-"""
-Shared pytest fixtures for the Radia panel validation layer.
+"""Shared pytest fixtures for the Radia panel validation layer.
 
-The panel tests run real PySide6 widgets headless via the
-``offscreen`` Qt platform plugin. A single QApplication is created
-session-wide so individual tests can instantiate IHPanel /
-EMPanel / etc. without leaking widgets across runs.
-
-Run from the repo root::
-
-    pytest validation_test/panels/
-
-CI sets ``QT_QPA_PLATFORM=offscreen`` automatically; locally the
-fixture sets it before importing PySide6 so the tests work on a
-machine without an X server.  PySide6 is no longer a required Radia
-runtime dependency, so PySide-specific validations are skipped when it
-is not installed.
+Current Radia analysis panels are notebook workbenches backed by
+``DesignSpec`` and ``CommandWorkbench``.  The old desktop ``radia_*.py``
+PySide6 panels were removed, so tests that instantiate those windows are
+retired unconditionally.  Cubit's embedded PySide6 toolbar is a separate
+surface; its test is skipped only when this interpreter has no PySide6.
 """
 
 from __future__ import annotations
@@ -36,19 +26,26 @@ def _have_pyside6() -> bool:
 
 _HAVE_PYSIDE6 = _have_pyside6()
 
-if not _HAVE_PYSIDE6:
-    collect_ignore = [
-        "test_build_command_parses.py",   # imports panel_qa at module load
-        "test_combo_wheel_guard.py",
-        "test_panel_output_health.py",
-        "test_panel_qa.py",               # imports panel_qa at module load
-        "test_radia_export_menu.py",
-        "test_subprocess_failure_ux.py",
-    ]
+_RETIRED_DESKTOP_PANEL_TESTS = [
+    "test_build_command_parses.py",   # imports retired panel_qa at module load
+    "test_combo_wheel_guard.py",
+    "test_ih_panel_qt.py",
+    "test_open_gmsh_button.py",
+    "test_panel_output_health.py",
+    "test_panel_qa.py",               # imports retired panel_qa at module load
+    "test_panel_state_restore.py",
+    "test_run_button_browse.py",
+    "test_streamfunction_panel_qt.py",
+    "test_subprocess_failure_ux.py",
+]
 
-# Make sure ``import radia_ih`` resolves to ``src/radia/radia_ih.py``
-# (the panel modules are not part of the importable ``radia`` package
-# — register_toolbar.py adds the panels dir to sys.path at runtime).
+collect_ignore = list(_RETIRED_DESKTOP_PANEL_TESTS)
+if not _HAVE_PYSIDE6:
+    # Current Cubit toolbar test.  It is allowed to use PySide6, but normal
+    # Radia Python environments do not need that dependency.
+    collect_ignore.append("test_radia_export_menu.py")
+
+# Make local panel calc helpers importable for validation tests.
 _REPO = Path(__file__).resolve().parents[2]
 _RADIA = _REPO / "src" / "radia"
 _PANELS = _RADIA / "panels"
@@ -60,22 +57,12 @@ for p in (_RADIA, _PANELS, _VALIDATION_PANELS):
 
 @pytest.fixture(scope="session")
 def qapp():
-    """Session-scoped QApplication on the offscreen platform.
-
-    Importing PySide6 binds to whichever QPA plugin is in env at
-    import time, so we set the env var FIRST and import lazily.
-
-    Applies the lab-standard panel font baseline so panel_qa
-    font-size checks see the same QApplication font as the real
-    runtime (apply_panel_base_font runs in run_app).
-    """
+    """Session-scoped QApplication for the Cubit-toolbar test only."""
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     if not _HAVE_PYSIDE6:
-        pytest.skip("PySide6 is not installed; legacy Qt panel validation skipped")
+        pytest.skip("PySide6 is not installed; Cubit toolbar validation skipped")
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
-    from radia_gui_base import apply_panel_base_font
-    apply_panel_base_font(app)
     yield app
     # Do NOT call app.quit() — pytest may share the QApp across
     # tests and the next file's first instantiation would crash.
@@ -83,31 +70,17 @@ def qapp():
 
 @pytest.fixture
 def ih_panel(qapp):
-    """Fresh IHPanel for each test (no leaked widget state)."""
-    from radia_ih import IHPanel
-    panel = IHPanel()
-    yield panel
-    panel.deleteLater()
+    """Retired desktop IH panel fixture."""
+    pytest.skip("retired desktop IH panel was removed; use IHWorkbench")
 
 
 @pytest.fixture
 def sf_panel(qapp):
-    """Fresh StreamFunctionPanel (Design / Pareto / Manufacture) per test.
-    Constructing it does NOT import ngsolve / radia (the calc_streamfunction
-    argparser is pure argparse), so this runs inside pytest unlike the
-    subprocess calc golden."""
-    from radia_streamfunction import StreamFunctionPanel
-    panel = StreamFunctionPanel()
-    yield panel
-    panel.deleteLater()
+    """Retired desktop stream-function panel fixture."""
+    pytest.skip("retired desktop stream-function panel was removed; use StreamFunctionWorkbench")
 
 
 @pytest.fixture
 def ih_window(qapp, tmp_path):
-    """Fresh IHWindow with an empty .vol path. Useful when the test
-    needs the full Run / Stop / Open GMSH button machinery from
-    AnalysisWindow, not just the IHPanel widgets."""
-    from radia_ih import IHWindow
-    win = IHWindow(vol_path="")
-    yield win
-    win.deleteLater()
+    """Retired desktop IH window fixture."""
+    pytest.skip("retired desktop IH window was removed; use IHWorkbench")

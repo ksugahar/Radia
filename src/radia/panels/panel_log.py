@@ -1,8 +1,8 @@
 """Shared panel debug log writer.
 
 All Radia GUI components — Cubit-side ``register_toolbar.py``,
-external-Python ``radia_gui_base.py`` (the IH/EM/PCB analysis windows),
-and the ``calc_*.py`` subprocess scripts — write to the same file:
+notebook workbenches, and the ``calc_*.py`` subprocess scripts — write
+to the same file:
 
     Windows: C:/temp/radia_panel_log_<user>.txt
     Other:   $TMPDIR/radia_panel_log_<user>.txt
@@ -12,10 +12,10 @@ The ``<user>`` suffix is so that on a shared Windows machine (e.g.
 instead of fighting over a single ACL-restricted file that the
 first-to-open user (usually Administrator) effectively monopolises.
 
-This gives the user (and Claude) **one place** to look when something
-goes wrong in the GUI:
+This gives the user (and agents) **one place** to look when something
+goes wrong in the Cubit toolbar, notebook workbench, or calc subprocess:
 
-  - Did the panel dialog open?
+  - Did the Cubit toolbar or notebook workbench open?
   - Did the model labels validate?
   - Was the subprocess command line correct?
   - Did calc_inductance.py print an error?
@@ -32,10 +32,10 @@ Example::
 
     [2026-04-12 14:30:12.345] [ksugahar@LAB         ] (cubit       ) register_toolbar.py loaded
     [2026-04-12 14:30:18.892] [ksugahar@LAB         ] (cubit       ) _launch_radia_ngsolve: ENTER
-    [2026-04-12 14:30:25.103] [ksugahar@LAB         ] (ih-window   ) _on_run: cmd=...
+    [2026-04-12 14:30:25.103] [ksugahar@LAB         ] (ih-workbench) run: cmd=...
     [2026-04-12 14:30:25.567] [ksugahar@LAB         ] (inductance  ) MESH:loaded radia_model.vol
     [2026-04-12 14:30:37.842] [ksugahar@LAB         ] (inductance  ) SOLVE_DONE 12.3s
-    [2026-04-12 14:30:37.901] [ksugahar@LAB         ] (ih-window   ) result: L=87.81 nH
+    [2026-04-12 14:30:37.901] [ksugahar@LAB         ] (ih-workbench) result: L=87.81 nH
 
 The user@host tag is captured **once at process start** (in
 ``init_panel_log``) so it does not change mid-session even if
