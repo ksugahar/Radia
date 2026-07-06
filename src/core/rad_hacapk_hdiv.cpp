@@ -3657,7 +3657,7 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
         return s;
     };
     // b0 = M_mass mu ; Dscal = mu.(N mu)/denom (the uniform-mode demag factor, Rayleigh quotient).
-    std::vector<double> b0, Nmu, Mmm, rhs((size_t)n_face), prec((size_t)n_face);
+    std::vector<double> b0, Nmu, mass_m, rhs((size_t)n_face), prec((size_t)n_face);
     mmass_apply(mu, b0);
     N_apply(mu, Nmu);
     double Dscal = dot(mu, Nmu);
@@ -3675,8 +3675,8 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
         int cg_iters = 0;
         m = SolveLinearMaterial(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
                                 inv_chi, prec, rhs, cg_tol, cg_maxit, cg_iters);
-        mmass_apply(m, Mmm);
-        Mavg = dot(mu, Mmm);
+        mmass_apply(m, mass_m);
+        Mavg = dot(mu, mass_m);
         Mavg /= denom;
         const double Hi = H0 - Dscal * Mavg;
         const double chi_sec = chi0 / (1.0 + chi0 * std::fabs(Hi) / Msat);   // M(H)=chi0 H/(1+chi0|H|/Msat)

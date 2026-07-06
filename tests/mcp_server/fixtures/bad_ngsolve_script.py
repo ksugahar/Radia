@@ -87,8 +87,8 @@ from ngsolve.comp import LaplaceSL
 with TaskManager():
     a_task = BilinearForm(LaplaceSL(3) * u * v * ds)
 
-# Rule: msc-wrong-sign (HIGH)
+# Rule: hdiv-wrong-sign (HIGH)
 N_matrix = -np.diag(inv_chi) - N
 
-# Rule: msc-eval-face-center (MODERATE)
+# Rule: hdiv-eval-face-center (MODERATE)
 eval_point = face_center

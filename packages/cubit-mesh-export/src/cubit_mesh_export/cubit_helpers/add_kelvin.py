@@ -1020,8 +1020,8 @@ def _add_kelvin_cubit_reduction(R, air_block, reduction,
     # 1/8 only: the Kelvin offset-axis cut face becomes the "kelvin_far"
     # sideset.  This is the "infinity plane" that passes through the
     # Kelvin centre, perpendicular to the offset axis -- not a sym
-    # plane of the air.  calc_accel_magnet/msc treat it as a Dirichlet
-    # boundary regardless of formulation (the same way GND works).
+    # plane of the air.  The electromagnet calc paths treat it as a
+    # Dirichlet boundary regardless of formulation (the same way GND works).
     if k_far is not None and "kelvin_far" not in existing_ss_names:
         sid = _next_ss()
         cubit.cmd(f"sideset {sid} add surface {k_far}")

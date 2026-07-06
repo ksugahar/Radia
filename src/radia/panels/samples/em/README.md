@@ -10,7 +10,7 @@ weak-coupled workpiece modes) accepts **only** STEP.
 
 | Panel / calc | Coil input | Loader |
 |--------------|-----------|--------|
-| EM (`calc_accel_{magnet,msc}`) | `.py` module exposing `build_coil() -> CoilBuilder` | `_load_coil_script` (literal import) |
+| EM (`calc_accel_magnet` / `calc_accel_hdiv`) | `.py` module exposing `build_coil() -> CoilBuilder` | `_load_coil_script` (literal import) |
 | PEEC (`calc_inductance.py --coil-solver peec`) | `.step` swept-solid coil | `coil_from_cad.filaments_from_step` (walker + nwinc x nhinc cross-section subdivision) |
 
 Why the split:
