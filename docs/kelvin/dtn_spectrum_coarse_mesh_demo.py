@@ -67,12 +67,15 @@ NB the dense BEM densification (Part A) is O(ndof^2); the default 2-mesh sweep
 (ndof 336 + 564) takes a few minutes. The Kelvin volume solves (Part B) are fast.
 A sphere surface mesh FLOORS at ndof=336, so every maxh >= 0.5 gives the same
 coarsest mesh; use maxh <= 0.5 for distinct levels.
-Run:  python examples/dtn_spectrum_coarse_mesh_demo.py
+Run:  python docs/kelvin/dtn_spectrum_coarse_mesh_demo.py
 """
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_RADIA_MCP_SRC = _REPO_ROOT / "packages" / "radia-mcp" / "src"
+if str(_RADIA_MCP_SRC) not in sys.path:
+    sys.path.insert(0, str(_RADIA_MCP_SRC))
 
 from radia_mcp.radia_ngsolve.bem_integral import exterior_dtn_spectrum  # noqa: E402
 from radia_mcp.radia_ngsolve.fem_bem_coupling import (  # noqa: E402

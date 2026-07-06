@@ -587,8 +587,8 @@ MCP knowledge tool for the live recipe.
   error), `kelvin_openbc_error_vs_exterior_mesh()` (vs exterior mesh),
   `kelvin_twosphere_shell_dipole()` (real two-sphere periodic Kelvin),
   `laplace_fem_bem_schur()` (BEM DtN as an exact open BC).
-- **Example:**
-  [`examples/dtn_spectrum_coarse_mesh_demo.py`](../../packages/radia-mcp/examples/dtn_spectrum_coarse_mesh_demo.py)
+- **Docs-local helper:**
+  [`dtn_spectrum_coarse_mesh_demo.py`](dtn_spectrum_coarse_mesh_demo.py)
   — Part A (BEM spectrum), Part B (Kelvin effective DtN), Part C (exterior-mesh
   sweep). Runs end-to-end.
 - **Retired demos** (routing in [`ARCHIVE_RETIREMENT.md`](ARCHIVE_RETIREMENT.md)):
