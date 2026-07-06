@@ -1334,6 +1334,23 @@ achromaticity needs the radial reshape (Step 3), the sector ends need no nonline
 correction. `--no-radial` skips the radial cross-check. Golden
 `test_scaling_ffag_sector_saturation` (ngsolve only, ~12 s).
 
+### `bending_endpack_saturation_opt.py` — the bending-magnet end pack, optimized vs saturation
+
+The natural design question for a **bending dipole** end: *does the field stay put as the
+iron saturates?* On a small-gap (24 mm), near-knee 2D `(s,z)` end pack (Froehlich `μ_r(|B|)`)
+the answer is a **two-part surprise**: **(1)** the median-plane field the BEAM sees is
+NATURALLY saturation-invariant — the normalized profile `p(s)=B_z/B_body` is the same curve
+linear and saturated (`‖p_sat−p_lin‖ ≈ 1e-3`, `L_eff` shift `< 0.2 %`) even for a hard flat
+cut (the gap-reluctance-dominated pole face stays equipotential); **(2)** the real saturation
+problem is the pole-TIP CORNER, a hot spot that concentrates flux (`κ = peak iron |B|/body ~
+3.7` raw, deep past the `1.2 T` knee). So the optimization minimizes `κ` at the saturated
+drive over the end chamfer `z_face(s)=g/2+depth·((|s|−s_body)/(s_pole−s_body))^exponent` — the
+chamfer RELIEVES the corner (`κ → ~1.0`, a genuine 2D optimum in `(depth, exponent)`; too much
+chamfer re-concentrates) while the beam field stays put. Honest engineering answer: *"flux
+invariant under saturation" is largely automatic for the beam; what you optimize is the corner
+it saturates.* Uses Optuna (TPE) if present, else a built-in grid+refine. Golden
+`test_bending_endpack_saturation_opt` (ngsolve only, ~8 s).
+
 ## Run
 
 ```bash
@@ -1368,6 +1385,7 @@ python endpack_spectrometer_saturation.py     # the spectrometer end pack NONLIN
 python endpack_cobake.py                      # the two planes CO-BAKED into one pole z(x,s)=g/2-delta(x/w)^2+lift(s): x-y shim + s-y Rogowski chamfer in one face -> clean transverse b_3,5 (0.07%) AND rounded corner (tip 1.02) at once (--fig)
 python endpack_cobake_loft.py                 # the co-bake as a PRECISION tensor LOFT (OCC ThruSections): smooth gap face -> baseline & shim mesh at the SAME density (ne ratio ~0.97 vs staircase ~36) -> resolves the staircase artifact, precision b_3,5 + corner (--no-staircase, --fig)
 python scaling_ffag_sector_saturation.py      # the saturating sector body: scaling sector's azimuthal end made NONLINEAR (Froehlich) -> azimuthal L_eff ROBUST (gap-dominated, drift <0.1% even as high-r mu_r collapses x0.3) while radial k(r) is FRAGILE (droops, achromaticity wall) -- two planes differ (--no-radial, --fig)
+python bending_endpack_saturation_opt.py      # the bending end pack optimized vs saturation: the BEAM-plane field is naturally invariant (J~1e-3); the real problem is the pole-TIP CORNER hot spot (kappa~3.7) -> minimize kappa over the end chamfer (depth, exponent) -> corner relieved to ~1.0, beam field unchanged (--trials, --fig)
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
@@ -1382,7 +1400,7 @@ python derham_closure_order_sweep.py          # order vs representation: de Rham
 python clebsch_3d_closing_condition.py        # 3-D frontier: helicity obstructs the global Clebsch pair
 ```
 
-Locked by `tests/feec/test_clebsch_hodograph_research.py` (62 tests; 19 heavy
+Locked by `validation_test/feec/test_clebsch_hodograph_research.py` (62 tests; 19 heavy
 FEM / NGSolve rungs are `@pytest.mark.slow`).  The newly added accelerator
 design rungs -- isochronous scaling, leaf-coupling, two-plane sector reflection,
 twist, combined-function Frenet sweep, end-pack, nonlinear spectrometer corner,
