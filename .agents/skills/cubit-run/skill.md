@@ -1,10 +1,16 @@
 ---
 name: cubit-run
-description: Run Cubit .jou files in a folder and export mesh via the radia Cubit plugin
+description: Run Cubit .jou files in Cubit 2025.12 and export mesh via the current Cubit .ccm export commands
 allowed-tools: Bash(python *), Bash(*coreform_cubit*), Bash(ssh *), Bash(cp *), Bash(sed *), Bash(cat *), Read, Glob, Write
 ---
 
 # Cubit .jou Runner & Tester
+
+> **CURRENT POLICY (2026-07-06)**: target Coreform Cubit 2025.12 and the
+> `cubit_mesh_export.ccm` APREPRO commands (`export netgen/gmsh/vtk/...`
+> and `export jmag_nastran`). The old `radia_export ...` verb and Cubit
+> 2025.3 paths are historical. Prefer
+> `C:\temp` for temporary journals and outputs.
 
 Run Cubit journal (.jou) files and test all export formats.
 
@@ -21,19 +27,18 @@ Run Cubit journal (.jou) files and test all export formats.
 For EVERY .jou file tested, run ALL of these export formats:
 
 ```bash
-CUBIT="C:\Program Files\Coreform Cubit 2025.3\bin\coreform_cubit.exe"
+CUBIT="C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe"
 
 # Generate test .jou from the user's .jou by appending export commands
 # The user's .jou should contain geometry + mesh + blocks only (no export)
 # Append these export lines with output to a temp directory:
 
-export gmsh "{DIR}/test.msh" order 1 version 2 dimension 3 overwrite
-export gmsh "{DIR}/test_o2.msh" order 2 version 2 dimension 3 overwrite
-export radia_nastran "{DIR}/test.bdf" order 1 dimension 3 overwrite
-export radia_nastran "{DIR}/test_o2.bdf" order 2 dimension 3 overwrite
-export vtk "{DIR}/test.vtk" order 1 dimension 3 overwrite
-export vtk "{DIR}/test_o2.vtk" order 2 dimension 3 overwrite
-export meg "{DIR}/test.meg" overwrite
+export gmsh "{DIR}/test.msh" order 1 overwrite
+export gmsh "{DIR}/test_o2.msh" order 2 overwrite
+export jmag_nastran "{DIR}/test.bdf" order 1 overwrite
+export jmag_nastran "{DIR}/test_o2.bdf" order 2 overwrite
+export vtk "{DIR}/test.vtk" order 1 overwrite
+export vtk "{DIR}/test_o2.vtk" order 2 overwrite
 export netgen "{DIR}/test_o1.vol" order 1 overwrite
 export netgen "{DIR}/test_o2.vol" order 2 overwrite
 export netgen "{DIR}/test_o3.vol" order 3 overwrite
@@ -52,10 +57,10 @@ export netgen "{DIR}/test_o5.vol" order 5 overwrite
 
 ```bash
 # Copy .jou to 100号機 via SMB
-cp test.jou "//192.168.11.100/c$/tmp/test.jou"
+cp test.jou "//192.168.11.100/c$/temp/test.jou"
 
 # Run via SSH
-ssh 100 '& "C:\Program Files\Coreform Cubit 2025.3\bin\coreform_cubit.exe" -batch -nographics -nojournal C:\tmp\test.jou 2>&1 | Select-String "Exported|succeed|FAIL|Interrupt"'
+ssh 100 '& "C:\Program Files\Coreform Cubit 2025.12\bin\coreform_cubit.exe" -batch -nographics -nojournal C:\temp\test.jou 2>&1 | Select-String "Exported|succeed|FAIL|Interrupt"'
 
 # Verify: all lines show "Exported" or "succeeded", no "Interrupt"
 ```

@@ -117,12 +117,12 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 
 | Domain | Code | Knowledge | Notes |
 |--------|------|-----------|-------|
-| Induction heating | `radia.ih` + `ih_design.py` / `ih_notebook.py` / `panels/notebooks/radia_ih.ipynb` + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
-| Electromagnet | `em_design.py` / `em_notebook.py` / `panels/notebooks/radia_em.ipynb` + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_hdiv.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis, HDiv-VIM. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
+| Induction heating | `radia.ih` + `ih_design.py` / `ih_notebook.py` / `src/radia/panels/notebooks/radia_ih.ipynb` + `calc_*.py` (incl. the **thermal step**: `calc_heat.py` / `calc_heat_axisym.py` / `calc_heat_with_em_table.py`) | `radia_mcp.ih` | ESIM, SIBC, Karl iteration; eddy-current heating + thermal solve. **The thermal solve stays part of IH -- NOT a separate `thermal`/`heat` domain** (decision 2026-06-15) |
+| Electromagnet | `em_design.py` / `em_notebook.py` / `src/radia/panels/notebooks/radia_em.ipynb` + `calc_em_table.py` / `calc_accel_magnet.py` / `calc_accel_hdiv.py` | `radia_mcp.electromagnet` + `radia_mcp.accelerator` | Omega-reduced, hysteresis, HDiv-VIM. **Accelerator-magnet design** (the CoilBuilder + Omega-reduced + Kelvin pipeline of the "Accelerator Magnet Solver Architecture" section; knowledge in `radia_mcp.accelerator`) and **Clebsch-hodograph pole-face inverse design** (`docs/clebsch_hodograph/demos/`, `docs/clebsch_hodograph/`) are both part of this domain (accelerator magnets are electromagnets -- no separate domain row) |
 | **Levitation / ECB** | **`radia.levitation`** (`src/radia/levitation/`) | **`radia_mcp.maglev`** | mixed-Galerkin α(s), Lorentz force, Simulink LTI, TEAM 28; **absorbs 100% of CLN scope (axifem/CLN incl.)** under `docs/levitation/`, `validation_test/levitation/`, and the IGTE 2026 paper. radia-cln is NOT a separate package. |
-| Motor | `motor_design.py` / `motor_notebook.py` / `panels/notebooks/radia_motor.ipynb` + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
-| PCB | `pcb_design.py` / `pcb_notebook.py` / `panels/notebooks/radia_pcb.ipynb` + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
-| Stream-function | `streamfunction_design.py` / `streamfunction_notebook.py` / `panels/notebooks/radia_streamfunction.ipynb` + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** use the promoted docs/MCP artifacts (`docs/kelvin/`, `docs/stream_function/`, and `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`), not historical `examples/` paths. Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
+| Motor | `motor_design.py` / `motor_notebook.py` / `src/radia/panels/notebooks/radia_motor.ipynb` + `calc_motor_transient.py` / `calc_motor_lamination.py` | `radia_mcp.motor` | transient (Lange-Henrotte-Hameyer) + lamination (Hollaus effective material) |
+| PCB | `pcb_design.py` / `pcb_notebook.py` / `src/radia/panels/notebooks/radia_pcb.ipynb` + `calc_pcb_peec.py` | `radia_mcp.pcb` | planar coils -- **consumes the core PEEC and BEM solvers** (`--coil-solver peec | bem-a`, user-selectable; the application owns neither method); **absorbs the former WPT domain** (coil compensation, FOD, efficiency) -- `radia-wpt` was renamed to `radia-pcb` (2026-06-15) |
+| Stream-function | `streamfunction_design.py` / `streamfunction_notebook.py` / `src/radia/panels/notebooks/radia_streamfunction.ipynb` + `calc_streamfunction.py` / `calc_streamfunction_volume.py` | `radia_mcp.streamfunction` | SF coil design (Design / Pareto / Manufacture); ACA-TSVD. **CROSS-SESSION HANDOFF (Track B, 2026-06-15):** material-aware (iron yoke/shield/core) SF coil design by using the **DtN/FEM-Kelvin core** (core table above) as the design kernel — the free-space Biot-Savart kernel breaks with iron; the Kelvin-FEM Schur-condenses to a material-aware transfer matrix `M`, design = invert `M`. **SHIPPED in production (2026-06-19): `--iron-vol`/`--mu-r`/`--iron-mat` fold the Kelvin-FEM iron reaction into the whole design/pareto/manufacture pipeline (obs-adjoint scalability; opt-in `--iron-exact-source`); MCP topic `material_aware`.** **Low/many-turn manufacture levers (discrete refinement of psi): `--greedy-turns` (greedy constructive, MONOTONE) + `--greedy-connector-weight` (short rungs) + `--pin-tiling` (dense bubble-tiling DRIVEN pin/shim ARRAY) + `--optimize-levels`; MCP topic `low_turn`.** **Self-contained handoff for another lab's Claude session:** use the promoted docs/MCP artifacts (`docs/kelvin/`, `docs/stream_function/`, and `docs/kelvin/kelvin_dtn_spectrum_archive_results.json`), not historical `examples/` paths. Verified bridge demos: `demo_ee`/`demo_ff` (free-space design misses by 77% in iron; material-aware matches ~1e-4). Novelty: **NOVEL conf 0.83** — fuses Sugahara's OWN two threads (Kelvin open-boundary FEM + free-space SF coil design); phrase "to the best of our knowledge", residual Japanese grey-lit / in-press self-check pending. |
 
 **Installation**:
 ```bash
@@ -530,14 +530,14 @@ the **ship/release coupling** that previously forced lockstep releases.
   `cubit-plugin-install`; `register_toolbar.py::_check_plugin_freshness`
   checks the **DEPLOYED** plugin, never a radia-bundled copy — so radia
   has no runtime/deploy dependency on bundling the binary.
-- `Build.ps1` and `tools/release_triple.py phase0` propagate the built
+- `Build.ps1` and `tools/release_qud.py phase0` propagate the built
   binaries to the **cme package only** (not `src/radia/`).
 - The radia↔cme compat window (`COMPAT_CUBIT_MESH_EXPORT_*` /
   `COMPAT_RADIA_*`, enforced by `cubit-plugin-install` at deploy) remains
   the safety net the 2026-04-14 sideset/.ccl drift incident motivated.
 - Release per-package (`v*` / `cubit-mesh-export-v*` / `radia-mcp-v*`);
   bundle all three only when they genuinely co-change (see the
-  `release-triple` skill).
+  `release-qud` skill).
 
 ### File Placement Policy
 
@@ -638,8 +638,7 @@ Stage 2 is considered **合格 (pass)** when:
   produces JSON whose key numbers are inside the golden band
 - `tests/panels/test_<mode>_golden.py` locks the result
 
-**Stage 3 — notebook panel (target layout `panels/notebooks/*.ipynb`, legacy
-`src/radia/panels/notebooks/*.ipynb` during staged migration).**
+**Stage 3 — notebook panel (`src/radia/panels/notebooks/*.ipynb`).**
 Wrap the **validated** Stage-2 script with a lightweight notebook workbench
 (`radia.<mode>_design` + `radia.<mode>_notebook`).  The panel notebook is the
 promoted operating surface: CLI arguments become editable settings,
@@ -1792,7 +1791,7 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit panels call via subprocess. |
+| **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit toolbar launches notebook/headless workflows via subprocess. |
 | **Coreform Cubit** | 2025.12 | Embedded Python 3.10 + PySide6 (Qt6). No Qt5/PyQt5. Cannot import NGSolve/Radia directly. |
 | **NGSolve** | 6.2.2604+ | curvedelements Load, hex/prism curving, Periodic BC fix, `ngsolve.bem` FMM-based Biot-Savart (`BiotSavartCF`, `*MLCF`, `MLExpansion`, `SphericalHarmonicsCF`) |
 
@@ -2083,10 +2082,10 @@ TaskManager via `hacapk_parallel_for` = `ngcore::ParallelFor`.)
 2. Update `CHANGELOG.md`
 3. `git commit` (do NOT push yet)
 4. `/deploy` — build wheel, deploy to 100号機 (WinRM) & mdx (SSH)
-5. Test on remote machines (Cubit panels, Mesh Evaluation, etc.)
+5. Test on remote machines (Cubit toolbar, notebook workbenches, docs Mesh Evaluation, etc.)
 6. If tests pass: `git push origin main`
 7. **Confirm main CI is GREEN before tagging** (gh-free; `gh` is not on LAB):
-   `python tools/release_triple.py ci-verify` — waits for the self-hosted
+   `python tools/release_qud.py ci-verify` — waits for the self-hosted
    runner job to finish, then checks the workspace junit XMLs
    (failures=errors=0). Tag CI = the same `build-test.yml` on the same commit,
    so a green main CI guarantees a green tag CI — and avoids burning a version
@@ -2170,7 +2169,7 @@ LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静か
 **POLICY (2026-05-27 追加): release 後の LAB editable 再確認**
 
 PyPI release (tag push → CI publish) 後、**LAB の editable pointer
-が drift していないか必ず確認する**。これは `release-triple` skill
+が drift していないか必ず確認する**。これは `release-qud` skill
 の Definition of Done の暗黙の前提条件であり、CLAUDE.md「LAB editable
 default」原則を実運用で守るチェック。
 
@@ -2310,7 +2309,7 @@ bypass: `CI_PREFLIGHT_SKIP=1 git push`.  Run the installer once per clone
 `init-py-version-mismatch-vs-pyproject`, etc. — each names ci_preflight as
 the detection tool.
 
-**Release flow** (release-triple) keeps its own Phase 2.5 gates, but
+**Release flow** (release-qud) keeps its own release gates, but
 ci_preflight is the everyday "before any push" gate — run it even for a
 non-release push to `main`.
 
@@ -3244,7 +3243,7 @@ def save_benchmark_results(filename, benchmark_name, problem, results):
 | `.vol` | **Computation interface**. Sole interface between Cubit and NGSolve. No ABI dependency |
 
 **Design — .jou loaded or saved before proceeding**:
-- Every Export Mesh / Mesh Evaluation operation calls `ensure_jou_path()` first
+- Every Export Mesh operation calls `ensure_jou_path()` first
 - `ensure_jou_path()` resolves in 3 steps:
   1. `.jou` already loaded (via `play` or `get_current_journal_file`) → use it
   2. `.jou` saved earlier in this session (`s_lastJouPath`) → use it
@@ -3330,13 +3329,14 @@ PyQt5, or the old C++ Qt5 `.ccl` Claro component anywhere.
 - **Target**: Coreform Cubit **2025.12**, which bundles **PySide6** in its
   embedded Python 3.10.  It does NOT ship PyQt5, and cannot load the old Qt5
   `.ccl` (missing Qt5 DLLs) -- which is why the GUI is now PySide6.
-- **GUI = Python PySide6**, not C++ Qt:
+- **Cubit GUI = Python PySide6**, not C++ Qt:
   - Layer 2 (in-Cubit, Python 3.10): `panels/register_toolbar.py` (Solve
-    menu) + `panels/radia_export_menu.py` (Export Mesh menu + dialogs +
-    Mesh Evaluation).  `from PySide6.QtWidgets import ...`; note `QAction`
+    menu) + `src/radia/panels/radia_export_menu.py` (Export Mesh menu + dialogs).
+    `from PySide6.QtWidgets import ...`; note `QAction`
     is in `PySide6.QtGui` (was `QtWidgets` in Qt5).
-  - Layer 3 (standalone, Python 3.12): `radia_*.py` + `radia_gui_base.py`
-    import PySide6; declared `PySide6>=6.5` in radia `pyproject.toml`.
+  - Layer 3 (normal Radia Python, Python 3.12): notebook workbenches under
+    `src/radia/panels/notebooks/` backed by `*_design.py` and
+    `*_notebook.py`.  Normal Radia Python does **not** depend on PySide6.
 - **No fallback** (per "No Fallbacks -- Fail Fast"): never
   `try PySide6 except PyQt5`.  An old Cubit without PySide6 must raise the
   ImportError loudly so the operator fixes the environment.
@@ -3520,8 +3520,8 @@ mode-suffix:
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 1: C++ .ccm APREPRO backend (no Qt)                      │
 │  ─────────────────────────────────────────────────────────────  │
-│  Export Mesh menu (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)      │
-│  Mesh Evaluation (_p1.vol ... _p5.vol + format QA exports)      │
+│  Export Mesh commands (GMSH/Nastran/VTK/Netgen Vol/FEMEEM/MEG)  │
+│  Mesh evaluation is a docs/notebook workflow, not a toolbar item │
 │  ensure_jou_path(): .jou save -> basename for all output files  │
 │  export netgen/gmsh/jmag_nastran/vtk (APREPRO commands)  │
 └─────────────────────────────────────────────────────────────────┘
@@ -3536,7 +3536,7 @@ mode-suffix:
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 3: Radia notebook workbench (Python 3.12 + Jupyter)     │
 │  ─────────────────────────────────────────────────────────────  │
-│  panels/notebooks/*.ipynb + *_design.py / *_notebook.py         │
+│  src/radia/panels/notebooks/*.ipynb + *_design.py/*_notebook.py │
 │  Separate process from Cubit. import cubit FORBIDDEN.           │
 │  Receives .vol/.sol paths as notebook settings.                 │
 │  Launches Layer 4 with timeout/cancel/run.log/result.json.      │
@@ -3568,12 +3568,12 @@ mode-suffix:
 
 | File | Layer | Purpose |
 |------|-------|---------|
-| `panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs + Mesh Evaluation |
-| `panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + Radia-NGSolve launcher |
-| `panels/notebooks/radia_*.ipynb` | 3 (notebook) | Application workbench operating surfaces |
+| `src/radia/panels/radia_export_menu.py` | 2 (PySide6) | Export Mesh menu + dialogs inside Cubit |
+| `src/radia/panels/register_toolbar.py` | 2 (Cubit Python) | Solve menu + notebook launcher |
+| `src/radia/panels/notebooks/radia_*.ipynb` | 3 (notebook) | Application workbench operating surfaces |
 | `*_design.py`, `*_notebook.py` | 3 (notebook adapter) | UI-neutral settings + `CommandWorkbench` wiring |
-| `panels/calc_*.py` | 4 (no GUI) | Headless application computations |
-| `panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA |
+| `src/radia/panels/calc_*.py` | 4 (no GUI) | Headless application computations |
+| `src/radia/panels/calc_mesh_eval.py` | 4 (no GUI) | p-convergence + format QA called from docs/notebooks |
 
 ### Cubit Plugin: C++ First, No Python ABI Dependency
 
@@ -3726,14 +3726,14 @@ Do not recreate `examples/universal_relaxation_network/`.
 
 ## Cubit Mesh Export Module
 
-**POLICY**: The Export Mesh **backend** is **C++ only** -- all mesh extraction / curving / file writing lives in the `cubit_mesh_export.ccm` APREPRO commands (`export ...`).  The Export Mesh **GUI** is the PySide6 toolbar (`panels/radia_export_menu.py`, Layer 2), which only collects options and calls the C++ `export` command via `cubit.cmd`.  Do NOT re-implement export logic in Python, and do NOT add a second GUI.  (The Qt5 `.ccl` GUI was removed in radia 4.80.0.)
+**POLICY**: The Export Mesh **backend** is **C++ only** -- all mesh extraction / curving / file writing lives in the `cubit_mesh_export.ccm` APREPRO commands (`export ...`).  The Export Mesh **GUI** is the PySide6 toolbar (`src/radia/panels/radia_export_menu.py`, Layer 2), which only collects options and calls the C++ `export` command via `cubit.cmd`.  Do NOT re-implement export logic in Python, and do NOT add a second GUI.  (The Qt5 `.ccl` GUI was removed in radia 4.80.0.)
 
 ### C++ Plugin Architecture
 
 | Component | File | Purpose |
 |-----------|------|---------|
 | `.ccm` (plugins/) | `cubit_mesh_export.ccm` | APREPRO commands: `export gmsh/jmag_nastran/vtk/netgen` |
-| GUI (Layer 2) | `panels/radia_export_menu.py` | PySide6 Export Mesh menu + dialogs (replaced the Qt5 `.ccl`, removed in radia 4.80.0) |
+| GUI (Layer 2) | `src/radia/panels/radia_export_menu.py` | PySide6 Export Mesh menu + dialogs (replaced the Qt5 `.ccl`, removed in radia 4.80.0) |
 | `.pyd` (plugins/) | `cubit_mesh_curver.pyd` | pybind11: Cubit-free mesh curving |
 
 **Export formats** (all in C++, ACIS geometry projection for curving):
@@ -3820,7 +3820,7 @@ python tests/cubit/test_ho_volume_all_formats.py  # Order=2 volume accuracy (sph
 
 Claude does **NOT**: push for release, monitor/poll GitHub Actions CI, wait for
 CI-green, run `tools/check_ci.py` watch-loops, push tags, invoke the
-`release-triple` flow, or publish to PyPI. If asked to "release", Claude prepares
+`release-qud` flow, or publish to PyPI. If asked to "release", Claude prepares
 and commits the work, then hands off to codex.
 
 **Why**: CI monitoring and release driving (queue watching, tag/publish, remote
