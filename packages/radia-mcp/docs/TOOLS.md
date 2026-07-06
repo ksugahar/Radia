@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **584 tools** across 43 MCP servers.
+Total: **586 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -386,7 +386,7 @@ Module: `radia_mcp.accelerator.server`
 |---|---|
 | `accelerator` | Accelerator magnet design with Radia + radia-mcp. |
 | `accelerator_status` | (no description) |
-| `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 12 topics. |
+| `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
 
 ## `mcp-server-fusion-reactor`
 
@@ -779,8 +779,8 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 の bedrock 診断 (re-export)。 |
 | `paper_writing_lint_reference_format` | .bib の reference エントリーの完全性と形式を検証。 |
 | `paper_writing_next_5_actions` | paper health_report の priority_issues を impact / effort で再 sort、 |
-| `paper_writing_normalize_terminology` | Known terminology variants を本文中で補正。既定では `cube=>立方体` を日本語文脈だけに適用。 |
-| `paper_writing_normalize_terminology_file` | TeX/text file の用語ゆれ補正。既定は dry-run で、確認後に file へ適用できる。 |
+| `paper_writing_normalize_terminology` | Normalize known terminology variants in paper text. |
+| `paper_writing_normalize_terminology_file` | Normalize known terminology variants in a TeX/text file. |
 | `paper_writing_pdf_overlap_recipe` | Return the recipe for PDF overlap/overflow detection. |
 | `paper_writing_related_work_density` | Introduction 内の \cite 密度・自己引用比率・年度分布を診断。 |
 | `paper_writing_render_pages_to_png` | Render PDF pages to PNG files for visual inspection. |
