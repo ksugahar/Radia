@@ -826,3 +826,20 @@ def test_acoustic_fembem_cross_learnings_covers_method_and_validation():
     # spherical DtN fast exterior + hodograph non-applicability
     assert "spherical_helmholtz_dtn_eigenvalue" in text
     assert "hodograph does not apply to 3d acoustic bem" in lower
+
+
+def test_matlab_acoustic_fembem_agent_guide_is_exposed_to_mcp():
+    from radia_mcp.matlab_acoustic_fembem import matlab_acoustic_fembem_agent_guide
+    from radia_mcp.radia_ngsolve.server import (
+        matlab_acoustic_fembem_agent_guide as mcp_agent_guide,
+    )
+
+    text = matlab_acoustic_fembem_agent_guide()
+    assert mcp_agent_guide() == text
+    assert len(text) > 1000
+    assert "official MATLAB MCP Server" in text
+    assert "detect_matlab_toolboxes" in text
+    assert "check_matlab_code" in text
+    assert "run_matlab_test_file" in text
+    assert ".vol" in text
+    assert "NGSolve" in text

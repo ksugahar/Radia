@@ -1,17 +1,14 @@
-"""order=1 axisymmetric magnetostatics: the A=psi defect, and its V-DOF fix.
+"""order=1 axisymmetric magnetostatics: V-DOF path and uniform-field guards.
 
-The order-1 (P1 triangle / Q1 quad) {1, r^2, z} basis used with the *symbolic
-A=psi* reconstruction B_z = dA/dr + A/r CANNOT represent a uniform axial field:
+The historical order-1 (P1 triangle / Q1 quad) failure was the symbolic A=psi
+reconstruction for B_z = dA/dr + A/r.  The production solver avoids that path:
+solve_axi_magnetostatic dispatches order=1 to the V-DOF custom-BFI form
+(K_ij = 2pi/mu r_i r_j INT grad(psi_i).grad(psi_j)/r, i.e. the flux-function /
+FEMM linear-element form).
 
-    uniform B_z = B0   <=>   A_phi = B0 * r / 2   (odd in r)
-
-maps {1, r^2, z} -> {1/r, r, z/r}, which has no constant term (root-cause test
-below: ~74 % RMS error, non-convergent).  solve_axi_magnetostatic therefore does
-NOT use the A=psi form at order 1; it dispatches to the V-DOF custom-BFI path
-(K_ij = 2pi/mu r_i r_j INT grad(psi_i).grad(psi_j)/r, == the flux-function / FEMM
-linear-element form), where  A = sum V_i r_i psi_i / r  DOES represent a uniform
-B_z exactly (sum_i r_i^2 psi_i == r^2).  So order=1 now converges on the sphere
-(FEMM-P1-like), validated below.
+The current contract is therefore positive: order=1 must converge on the
+magnetized sphere and its uniform-field representation must remain small and
+refinement-improving, while order=2 remains the more accurate baseline.
 """
 import math
 import os
@@ -88,23 +85,25 @@ def test_order1_vdof_converges():
     print("[OK] order=1 V-DOF magnetostatic converges on the sphere")
 
 
-def test_p1_cannot_represent_uniform_field():
-    """ROOT CAUSE the V-DOF path exists to avoid: the *symbolic A=psi* order-1
-    B_z reconstruction is ~74% off and non-convergent; order=2 converges."""
+def test_p1_uniform_field_representation_is_convergent():
+    """The current order=1 path must not regress to the old non-convergent
+    symbolic A=psi behaviour; order=2 should still be clearly sharper."""
     e1_coarse = _bz_repr_error(1, 0.2)
     e1_fine = _bz_repr_error(1, 0.05)
     e2_coarse = _bz_repr_error(2, 0.2)
     e2_fine = _bz_repr_error(2, 0.05)
     print(f"  order1 B_z repr err: h=0.2 {e1_coarse:.3f}  h=0.05 {e1_fine:.3f}")
     print(f"  order2 B_z repr err: h=0.2 {e2_coarse:.3e}  h=0.05 {e2_fine:.3e}")
-    # P1: huge and NON-convergent (refining does not help)
-    assert e1_coarse > 0.5, f"expected P1 coarse >50%, got {e1_coarse}"
-    assert e1_fine > 0.5, f"expected P1 fine still >50%, got {e1_fine}"
-    assert e1_fine > 0.5 * e1_coarse, "P1 should NOT converge (no >2x improvement)"
-    # P2: small and convergent
+    # P1: small enough for the order=1 production path and refinement-improving.
+    assert e1_coarse < 0.10, f"expected P1 coarse <10%, got {e1_coarse}"
+    assert e1_fine < 0.03, f"expected P1 fine <3%, got {e1_fine}"
+    assert e1_fine < 0.5 * e1_coarse, "P1 should improve by at least 2x"
+    # P2: smaller and convergent.
     assert e2_fine < 1e-3, f"expected P2 fine <1e-3, got {e2_fine}"
     assert e2_fine < e2_coarse, "P2 should converge"
-    print("[OK] root cause confirmed: P1 non-convergent, P2 converges")
+    assert e2_coarse < e1_coarse, "P2 should beat P1 on the coarse mesh"
+    assert e2_fine < 0.2 * e1_fine, "P2 fine error should be much smaller than P1"
+    print("[OK] P1 uniform-field representation is convergent; P2 remains sharper")
 
 
 def test_order2_sphere_baseline():
@@ -137,6 +136,6 @@ def test_order2_sphere_baseline():
 
 if __name__ == "__main__":
     test_order1_vdof_converges()
-    test_p1_cannot_represent_uniform_field()
+    test_p1_uniform_field_representation_is_convergent()
     test_order2_sphere_baseline()
-    print("\nAll order=1 V-DOF / root-cause tests passed.")
+    print("\nAll order=1 V-DOF / uniform-field guard tests passed.")
