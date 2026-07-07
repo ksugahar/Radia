@@ -148,6 +148,37 @@ _KDDI_DIGITAL_AXES = {
     "applicant_fit": ["三菱電機", "EMC", "IH", "Radia", "NGSolve", "LTspice", "実績"],
 }
 
+_BUDGET_POLICY = (
+    "申請予算は遠慮して小さく見せず、助成上限に近い額まで必要な計画として組む。"
+    "ただし、上限近くでも不自然に見えないよう、単価・数量・月数/回数・年度配分・"
+    "見積根拠を具体的に積算し、検証ループと社会実装に直結する経費として説明する。"
+)
+
+_BUDGET_AXIS_COMMENTS = {
+    "ai_agent_costs": (
+        "AI agent / LLM costs are thin. Tie Claude, Codex, Fable, or related tools "
+        "to proposal drafting, design automation, validation, or public deliverables."
+    ),
+    "compute_resources": (
+        "Compute costs are thin. Tie servers, cloud, GPU, or MDX-like resources to "
+        "the verification loop and expected run volume."
+    ),
+    "poc_experiment": (
+        "PoC / experiment costs are thin. Tie boards, parts, consumables, measurement, "
+        "or evaluation work to concrete implementation evidence."
+    ),
+    "dissemination": (
+        "Dissemination costs are thin. Tie travel, presentations, workshops, or reports "
+        "to handoff and social implementation."
+    ),
+    "near_ceiling_strategy": (
+        "予算を遠慮して小さく見せるのではなく、助成上限額に近い申請額が必要である方針を明記する。"
+    ),
+    "itemized_calculation": (
+        "上限近くでも不自然に見えないよう、単価、数量、月数/回数、年度配分、見積根拠を具体的に積算する。"
+    ),
+}
+
 _POWER_ELECTRONICS_FOCUS_TRIGGERS = [
     "パワーエレクトロニクス",
     "パワエレ",
@@ -324,6 +355,30 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
         "compute_resources": ["mdx", "計算資源", "gpu", "クラウド", "サーバ"],
         "poc_experiment": ["試作", "基板", "部品", "消耗品", "計測", "評価"],
         "dissemination": ["旅費", "発表", "技術プレゼン", "ワークショップ", "報告"],
+        "near_ceiling_strategy": [
+            "上限",
+            "助成上限",
+            "上限額",
+            "限度額",
+            "満額",
+            "ほぼ上限",
+            "上限いっぱい",
+            "上限近く",
+        ],
+        "itemized_calculation": [
+            "内訳",
+            "単価",
+            "数量",
+            "月数",
+            "回数",
+            "年度配分",
+            "見積",
+            "積算",
+            "算出",
+            "根拠",
+            "税込",
+            "税抜",
+        ],
     }
     results = {}
     missing = []
@@ -333,7 +388,10 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
         if not matches:
             missing.append(axis)
     score = round(10.0 * (len(axes) - len(missing)) / len(axes), 1)
-    comments = [f"Budget rationale missing or thin: {axis}" for axis in missing]
+    comments = [
+        _BUDGET_AXIS_COMMENTS.get(axis, f"Budget rationale missing or thin: {axis}")
+        for axis in missing
+    ]
     if "効率化" in text and "検証" not in text and "PoC" not in text:
         comments.append("AI費用が一般的な効率化に見える。検証ループの実行経費として説明する。")
         score = max(0.0, score - 1.0)
@@ -343,7 +401,11 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
         "missing_axes": missing,
         "axis_results": results,
         "comments": comments,
-        "target": "every major cost maps to AI/tool execution, compute, PoC, or dissemination",
+        "budget_policy": _BUDGET_POLICY,
+        "target": (
+            "every major cost maps to AI/tool execution, compute, PoC, or dissemination; "
+            "the requested amount may be close to the ceiling when itemized and justified"
+        ),
     }
 
 
