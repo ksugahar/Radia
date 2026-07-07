@@ -13,6 +13,7 @@ KDDI_SAMPLE = (
     "厚銅基板のPoC試作、計測評価、OSSレポジトリ公開、MotorAIを含む導入候補への技術プレゼンを行う。"
     "1年目、2年目、3年目の年度スケジュールを定め、"
     "Claude、Codex、Fable、MDXの計算資源と基板評価費を予算化する。"
+    "予算は助成上限額に近い申請額とし、単価、数量、月数、年度配分、見積根拠を積算する。"
 )
 
 
@@ -42,6 +43,27 @@ def test_grant_writing_kddi_power_electronics_focus_warns_on_generic_cae():
 
     assert result["score"] < 8
     assert result["comments"]
+
+
+def test_grant_writing_budget_alignment_accepts_near_ceiling_itemization():
+    result = gw.grant_writing_budget_alignment_check(KDDI_SAMPLE)
+
+    assert result["score"] >= 9
+    assert result["axis_results"]["near_ceiling_strategy"]["ok"]
+    assert result["axis_results"]["itemized_calculation"]["ok"]
+    assert "上限" in result["budget_policy"]
+
+
+def test_grant_writing_budget_alignment_requires_ceiling_and_calculation():
+    result = gw.grant_writing_budget_alignment_check(
+        "Claude、Codex、Fable、MDXの計算資源と基板試作、計測評価、発表旅費を予算化する。"
+    )
+
+    assert result["score"] < 8
+    assert "near_ceiling_strategy" in result["missing_axes"]
+    assert "itemized_calculation" in result["missing_axes"]
+    assert any("上限" in comment for comment in result["comments"])
+    assert any("単価" in comment for comment in result["comments"])
 
 
 def test_grant_writing_reexports_ja_lint_helpers():

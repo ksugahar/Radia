@@ -18,10 +18,23 @@ servers:
 3. Keep social implementation concrete: user, field, PoC, evaluation method,
    and handoff path.
 4. Budget text must explain why each cost is necessary for the proposal's
-   verification loop, not for generic productivity.
+   verification loop, not for generic productivity.  Do not make the requested
+   budget artificially small: apply close to the program ceiling when the plan
+   genuinely needs it, and make that look natural by showing careful itemized
+   calculations.
 5. Recommendation letters should say only what the recommender can plausibly
    attest: applicant ability, institutional fit, support, feasibility, and
    significance.
+
+## Budget Policy
+
+予算はほぼ上限いっぱいで申請してよい。重要なのは、上限近くであることを
+遠慮して隠すのではなく、研究計画、PoC、計算資源、AI agent 運用、評価、
+発表・社会実装に必要な経費として精査済みに見せることである。
+
+予算欄では、単価 x 数量 x 月数/回数、年度配分、見積根拠、検証ループとの
+対応を具体的に書く。読み手が「この計画なら上限いっぱいになっても不思議
+ではない」と判断できる粒度まで積算する。
 
 ## Useful Tools
 

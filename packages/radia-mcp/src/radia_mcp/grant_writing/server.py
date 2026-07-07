@@ -50,6 +50,8 @@ def main():
             "Python-nativeで現代的なAPIを持つ入口としてPoC基板で実証する。"
             "成果はOSSレポジトリ、技術プレゼン、"
             "予算内訳、年度スケジュールとして公開する。"
+            "予算は助成上限額に近い申請額とし、単価、数量、月数、年度配分、"
+            "見積根拠を積算して検証ループに対応づける。"
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
         assert report["overall_score"] >= 1.0
