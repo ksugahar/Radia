@@ -21,7 +21,7 @@ S:\Radia\01_GitHub\
       radia/server.py     # mcp-server-radia
       ngsolve/server.py   # mcp-server-ngsolve
       cubit/server.py     # mcp-server-cubit
-    panels/               # Cubit GUI panels
+    panels/               # Official panel package: notebook workbenches, calc_*.py, samples, Cubit toolbar
     *.py                  # Python modules
   src/core/               # C++ source
   src/ext/
@@ -247,10 +247,10 @@ deletes protected data, assets, or fixtures):
 - **Golden test fixtures** under `tests/**/fixtures/` and golden-band lock files
   are protected (per the promotion ladder). Distinct tier artifacts of one
   geometry (a `tests/` fixture vs a `docs/` result notebook vs a
-  `panels/samples/` `.jou`) are SEPARATE canonical artifacts, not duplicate
+  `src/radia/panels/samples/` `.jou`) are SEPARATE canonical artifacts, not duplicate
   snapshots — keep all.
 - A **single, explicitly-named frozen reference baseline** (e.g. a
-  `panels/samples/*` loft baseline kept deliberately for regression comparison)
+  `src/radia/panels/samples/*` loft baseline kept deliberately for regression comparison)
   is a protected canonical artifact, not cruft — keep it even though a newer
   variant exists.
 - **Committed figure/table/published-result-backing data** (`.json`/`.csv`/
@@ -263,7 +263,8 @@ deletes protected data, assets, or fixtures):
   **mesh-generation scripts** — are protected by "Mesh File Preservation" and
   are NEVER deleted by this policy, even when a `_v2`/`_old` name makes them look
   like an iteration. Historical tracked meshes formerly under `examples/` should
-  be migrated to their owning `docs/`, `validation_test/`, or `panels/` lane. A
+  be migrated to their owning `docs/`, `validation_test/`, or
+  `src/radia/panels/` lane. A
   file that is BOTH a `_v2`-named snapshot AND a protected asset is governed by
   the preservation policy, not this one.
 - **LAB-local, non-committed authoring references** (e.g. a `.nb` kept beside its
@@ -359,7 +360,7 @@ produced is kept in solver notes, the *lesson* in `memory/`, and nothing else.
 run it in `C:\temp`; promote to `docs/ipynb` (knowledge) or `src/` (API) only when
 it has crossed that bar; otherwise distill to `memory/` and leave the tracked tree
 clean. This is the research-lifecycle complement to the "Promotion Ladder:
-C:\temp -> tests / validation_test / docs / panels" and "No Development Cruft"
+C:\temp -> tests / validation_test / docs / src/radia/panels" and "No Development Cruft"
 policies above.
 
 ### Validation-Class Examples Promotion Lane (2026-06-27)
@@ -543,7 +544,8 @@ the **ship/release coupling** that previously forced lockstep releases.
 
 **POLICY**: Development scratch outputs belong in `C:\temp`.  Committed output
 files (`.png`, `.msh`, `.vtu`, `.vol`, JSON sidecars) must be placed next to
-their owning `tests/`, `validation_test/`, `docs/`, or `panels/` driver.
+their owning `tests/`, `validation_test/`, `docs/`, or `src/radia/panels/`
+driver.
 - Do NOT place generated files at the repository root
 - Build output goes to `build*/` or `dist/` (both gitignored)
 - `docs/<topic>/` MAY contain `.py` **helper modules** that the topic's `*.ipynb`
@@ -561,12 +563,14 @@ their owning `tests/`, `validation_test/`, `docs/`, or `panels/` driver.
   must be synchronized in the same change: after rerunning or editing notebook
   outputs, refresh the JSON sidecar so its recorded `notebook_sha256` matches
   the committed result-bearing `.ipynb`.
-- Panel operating surfaces are moving toward repo-root `panels/`. New or
-  migrated panel-only assets should target `panels/`; reusable computation
-  belongs in `src/`. Existing `src/radia/panels/` paths remain legacy during the
-  staged migration and need compatibility shims/tests before deletion.
+- Radia panel operating surfaces live under the importable package
+  `src/radia/panels/`.  This is the official location, not a legacy staging
+  area: packaged notebook workbenches, headless `calc_*.py` scripts, samples,
+  and panel manifests stay there so they ship in the wheel and resolve through
+  one implementation path.  Do not create a parallel repo-root `panels/` tree.
+  Reusable non-panel computation belongs in ordinary `src/radia/` APIs.
 
-### Promotion Ladder: C:\temp → tests / validation_test / docs / panels (2026-07-04)
+### Promotion Ladder: C:\temp → tests / validation_test / docs / src/radia/panels (2026-07-04)
 
 **POLICY**: New exploratory scripts start outside the repository in `C:\temp`.
 `examples/` is retired forever.  A file enters the source tree only when it has
@@ -579,7 +583,7 @@ a durable role:
 | `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
 | `src/` | Reusable API, parser, formula, solver helper, computation kernel. | package users / panels / validation / MCP | Yes |
-| `panels/` or legacy `src/radia/panels/` | Final engineering operating surface promoted from a mature docs notebook/workbench. | end users | Yes when packaged |
+| `src/radia/panels/` | Final engineering operating surface promoted from a mature docs notebook/workbench. | end users | Yes |
 
 **Promotion gates**:
 
@@ -593,14 +597,15 @@ a durable role:
   with synchronized JSON.
 - **C:\temp → src/**: the code is reusable by more than one notebook,
   validation path, panel, or MCP topic.
-- **docs/ → panels/**: once a result-bearing docs notebook/workbench has become
-  an engineering operating surface, promote it to `panels/` with a validated
-  CLI/workbench path and panel golden.  Do not promote directly from scratch.
+- **docs/ → `src/radia/panels/`**: once a result-bearing docs
+  notebook/workbench has become an engineering operating surface, promote it to
+  the packaged panel path with a validated CLI/workbench path and panel golden.
+  Do not promote directly from scratch.
 
 Same geometry may exist in multiple lanes only when the artifacts have distinct
 roles: e.g. a minimal fixture in `tests/`, a heavy truth run in
 `validation_test/`, a human-facing result notebook in `docs/`, and a packaged
-panel sample in `panels/`.  No lane points back to `examples/`.
+panel sample in `src/radia/panels/`.  No lane points back to `examples/`.
 
 ### Panel Design Workflow Policy (2026-04-23, updated 2026-07-04)
 
@@ -616,8 +621,7 @@ to change.  This is a list, not code.  Pin the solver-specific variables
 **solver-switch variable** itself (e.g. `--impedance-model linear|esim`,
 `--solver pardiso|ams`).
 
-**Stage 2 — CLI Python script (`calc_*.py`; target layout `panels/`, legacy
-`src/radia/panels/` during staged migration).**
+**Stage 2 — CLI Python script (`src/radia/panels/calc_*.py`).**
 Turn the Stage-1 list into an argparse-driven Python script.
 Computation only, no GUI.  JSON on stdout.  The solver switch **must**
 also be a CLI flag so the same script can drive any supported backend.
@@ -844,7 +848,7 @@ LAB-private mcp-server packages have been retired.
 **New research topics**: in-flight WIP lives in `C:\temp` until stable.
 Promotion into a `radia_mcp.<topic>` subpackage requires: feature committed,
 promoted to its durable lane (`src/`, `validation_test/`, `docs/`, or
-`panels/`), deploy-verified, golden-tested, and knowledge stops referencing
+`src/radia/panels/`), deploy-verified, golden-tested, and knowledge stops referencing
 unpublished scratch files. There is **no longer** a separate
 `S:\mcp-server\mcp-server-*\` tree — promote directly into the
 public subpackage when ready.
@@ -3330,7 +3334,7 @@ PyQt5, or the old C++ Qt5 `.ccl` Claro component anywhere.
   embedded Python 3.10.  It does NOT ship PyQt5, and cannot load the old Qt5
   `.ccl` (missing Qt5 DLLs) -- which is why the GUI is now PySide6.
 - **Cubit GUI = Python PySide6**, not C++ Qt:
-  - Layer 2 (in-Cubit, Python 3.10): `panels/register_toolbar.py` (Solve
+  - Layer 2 (in-Cubit, Python 3.10): `src/radia/panels/register_toolbar.py` (Solve
     menu) + `src/radia/panels/radia_export_menu.py` (Export Mesh menu + dialogs).
     `from PySide6.QtWidgets import ...`; note `QAction`
     is in `PySide6.QtGui` (was `QtWidgets` in Qt5).
