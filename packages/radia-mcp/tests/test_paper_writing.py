@@ -367,6 +367,18 @@ def test_check_figure_caption_showing_is_callable():
         "Figure 1 shows the result."
     )
     assert isinstance(r, dict)
+    assert "caption_body_policy" in r
+    assert "caption becomes long" in r["caption_body_policy"]
+    assert "keep the caption concise" in r["caption_body_policy"]
+
+
+def test_em_paper_style_caption_body_policy_topic():
+    from radia_mcp.paper_writing._em_paper_style import (
+        paper_writing_em_paper_style,
+    )
+    topic = paper_writing_em_paper_style("caption_body")
+    assert "main text" in topic
+    assert "If a caption becomes long, prioritize the body text" in topic
 
 
 def test_check_figure_forward_reference_on_minimal_tex(tmp_path):

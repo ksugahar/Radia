@@ -454,6 +454,62 @@ data hybrid PDF, the best of both).
 """
 
 
+FIGURE_CAPTION_BODY_POLICY = r"""
+# Figure caption and body-text consistency
+
+## The rule
+
+Everything important enough to write in a figure or table caption must
+also be stated in the main text.  Captions should help the reader identify
+what is plotted, the essential conditions, and the meaning of symbols or
+series, but they are not the primary place for claims, interpretation, or
+conclusions.
+
+If a caption becomes long, prioritize the body text:
+
+  * keep the caption short enough to identify the plotted quantity,
+    geometry, parameter sweep, and series;
+  * move comparison logic, physical interpretation, numerical scaling
+    claims, and conclusions into the paragraph that cites the figure;
+  * do not leave a number, trend, or "therefore" statement only in the
+    caption;
+  * for dense digests, one body sentence after the figure reference is
+    usually better than a caption that tries to be a mini Results section.
+
+## Good manuscript pattern
+
+Body:
+  "Fig. 5 summarizes the MMPM-HACApK scaling.  The large-DOF-side fit
+  gives memory scaling of about O(n^1.2) and solve-time scaling of about
+  O(n^1.6)."
+
+Caption:
+  "Scaling of MMPM solvers for the fixed-boundary cube benchmark.  Cases
+  above 100,000 DOF were evaluated only with HACApK."
+
+## Bad manuscript pattern
+
+Body:
+  "Fig. 5 shows the scaling."
+
+Caption:
+  "Scaling of MMPM solvers... The large-DOF-side fit gives memory scaling
+  of O(n^1.2) and solve-time scaling of O(n^1.6), demonstrating scalable
+  performance for practical models."
+
+This fails because the main claim appears only in the caption.  Reviewers
+who read the body first miss the conclusion; readers who skim figures get
+a result that is not integrated into the argument.
+
+## Cross-reference
+
+- `paper_writing_check_figure_caption_showing` reports the caption-body
+  policy in its recommendation.
+- `paper_writing_check_digest_human_review_triggers` flags overloaded
+  captions and points interpretation back to the body.
+"""
+
+
 BILINGUAL_WORKFLOW = r"""
 # Bilingual workflow: English paper + Japanese translation
 
@@ -641,7 +697,10 @@ into the paper-writing knowledge layer.
   `figure` environment to the correct source position.
 - Figure readability problems: over-compressed aspect ratio, result
   labels such as `f_N` that do not state what they mark, or captions that
-  carry interpretation that belongs in the text.
+  carry interpretation that belongs in the text.  If a caption contains
+  a factual claim, numerical result, trend, or conclusion, write the same
+  point in the main text too.  If the caption becomes long, prioritize the
+  body and shorten the caption.
 - Reproducibility omissions in standard benchmarks: missing material
   properties, reference solutions, model order, or boundary-condition
   order.
@@ -902,6 +961,11 @@ TOPICS = {
     "figures":                   FIGURE_FORMAT,
     "pdf_not_png":               FIGURE_FORMAT,
     "includegraphics":           FIGURE_FORMAT,
+    "caption_body":              FIGURE_CAPTION_BODY_POLICY,
+    "caption_body_policy":       FIGURE_CAPTION_BODY_POLICY,
+    "caption_body_consistency":  FIGURE_CAPTION_BODY_POLICY,
+    "figure_caption":            FIGURE_CAPTION_BODY_POLICY,
+    "captions":                  FIGURE_CAPTION_BODY_POLICY,
     "abstract":                  ABSTRACT_AND_CONCISENESS,
     "abstract_rules":            ABSTRACT_AND_CONCISENESS,
     "conciseness":               ABSTRACT_AND_CONCISENESS,
@@ -964,6 +1028,12 @@ etc.) are journal-agnostic.  THIS module is EM-paper-specific:
         graph pipeline emits both; the .pdf is the manuscript figure.
         PNG only for inherently-raster content (field maps, photos).
 
+  caption_body / figure_caption / captions
+        Anything important enough to write in a caption must also be in
+        the main text.  If the caption grows long, keep the caption short
+        and move interpretation, numerical claims, and conclusions to the
+        paragraph that cites the figure.
+
   abstract / abstract_rules / conciseness / page_fitting
         Abstract carries NO math and NO citations.  To fit a page
         limit, reduce SCOPE rather than over-compressing (don't shrink
@@ -986,7 +1056,7 @@ etc.) are journal-agnostic.  THIS module is EM-paper-specific:
         the pre-check tool that catches each.
 
   all
-        Concatenate all 6 sections (~25 KB total).
+        Concatenate all topic sections.
 
 Use as a CHECKLIST before submission, alongside the algorithmic checks
 in tools.py and the new v0.88-0.89 layout / arxiv tools.
@@ -1012,6 +1082,8 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
         units / si_units / siunitx            -- SI unit notation
         equations / equation_typesetting      -- align, \\ref, units
         figure_format / pdf_not_png           -- import figures as PDF
+        caption_body / figure_caption         -- claims in captions also
+                                                 belong in the body
         abstract / conciseness / page_fitting -- no math/cite in abstract;
                                                  cut scope, don't over-compress
         bilingual / japanese_translation      -- EN paper + JA translation,
@@ -1033,6 +1105,7 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
             SI_UNITS_NOTATION,
             EQUATION_TYPESETTING,
             FIGURE_FORMAT,
+            FIGURE_CAPTION_BODY_POLICY,
             ABSTRACT_AND_CONCISENESS,
             BILINGUAL_WORKFLOW,
             REFERENCE_BIB_POLICY,
