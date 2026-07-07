@@ -1,0 +1,78 @@
+{
+  "generated_at_utc": "2026-07-07T13:44:00.276116+00:00",
+  "radia_version": "4.95.6",
+  "ngsolve_version": "6.2.2604",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "gap_h": 1.0,
+  "edge_d": 0.9,
+  "s0": 0.0,
+  "d_star": 0.6366197723675814,
+  "feasibility_table": [
+    {
+      "d": 1.4,
+      "y_sing": 2.199114857512855,
+      "feasible": true
+    },
+    {
+      "d": 1.0,
+      "y_sing": 1.5707963267948966,
+      "feasible": true
+    },
+    {
+      "d": 0.8,
+      "y_sing": 1.2566370614359172,
+      "feasible": true
+    },
+    {
+      "d": 0.6366197723675814,
+      "y_sing": 1.0,
+      "feasible": false
+    },
+    {
+      "d": 0.5,
+      "y_sing": 0.7853981633974483,
+      "feasible": false
+    },
+    {
+      "d": 0.35,
+      "y_sing": 0.5497787143782138,
+      "feasible": false
+    }
+  ],
+  "fem_verify": {
+    "d": 0.9,
+    "s0": 0.0,
+    "gap_h": 1.0,
+    "phi0": -1.0,
+    "d_star": 0.6366197723675814,
+    "feasible": true,
+    "By_rel_err": 9.522558497380957e-05,
+    "phi_L2_err": 3.3014328242562305e-09,
+    "pole_match_err": 1.1005599704905222e-06,
+    "pole_gap_deep": 1.0004554108413297
+  },
+  "design_curve": {
+    "avals": [
+      0.4,
+      0.8,
+      1.4,
+      2.2,
+      3.2,
+      4.4
+    ],
+    "b": 1.0,
+    "peaks": [
+      1.708934757294467,
+      1.321492218026455,
+      1.1295489044357108,
+      1.053317685027686,
+      1.0246827524477398,
+      1.0129419903978432
+    ],
+    "best_peak": 1.0129419903978432,
+    "best_a": 4.4,
+    "rogowski_limit": 1.0
+  },
+  "notebook_sha256": "c17cfd2d449e44fa0dfd416f9cffe5eff913dfe9522f16ed245199f9c1d66ea7"
+}

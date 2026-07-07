@@ -67,6 +67,23 @@ TOPICS: dict[str, str] = {
         "enters as a coefficient mu(q) on the SAME fixed rectangle (no new free boundary). "
         "(docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb)"
     ),
+    "hodograph_bending_sy": (
+        "2D bending-magnet END in the s-y (longitudinal) plane: fringe feasibility + "
+        "end-shaping DESIGN. Forward 2D s-y is OPEN-boundary (dipole flux return is out-of-plane) "
+        "so the effective-length integral is LOG-DIVERGENT (g~1/s); a phi=0 box gives a "
+        "box-DEPENDENT fringe. (1) Fringe feasibility (hodograph inverse, box-free): demand "
+        "B_y(s,0)=1/2(1-tanh((s-s0)/d)); nearest singularity pi*d/2 -> same bound d*=(2/pi)h~0.64h, "
+        "now capping the LONGITUDINAL fringe (Enge edge / EFB) sharpness; manufactured-solution FEM "
+        "verifies to 0.01%. (2) End-shaping DESIGN (forward FEM optimization): the pole END is a "
+        "FREE termination, NOT an equipotential (reading {phi=-h} to the end curls into the demand "
+        "singularity, |B| diverges). Square end = reentrant 270deg corner -> |B|~r^-1/3 (saturation "
+        "hot spot). Optimize a forward quarter-ellipse chamfer (length a, rise b) to MINIMIZE peak "
+        "pole-face |B| (a LOCAL, box/mesh-convergent quantity): peak|B|/B0 = 2.14 (near-square) -> "
+        "1.42 (round) -> 1.03 (a=3.2h,b=1.0h) -> 1.01 (a=4.4h), numerically RECOVERING the classic "
+        "Rogowski electrode (no enhancement) without conformal algebra. Honest: 2D L_eff/EFB is "
+        "log-divergent (needs 3D); the END design targets no-enhancement (local). "
+        "(docs/clebsch_hodograph/hodograph_bending_sy.ipynb; golden tests/feec/test_hodograph_bending_sy.py)"
+    ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
@@ -764,6 +781,44 @@ from this linear baseline.
 """
 
 
+HODOGRAPH_BENDING_SY = """
+# 2D bending-magnet END in the s-y (longitudinal) plane: fringe + end-shaping design
+
+s = beam direction, y = gap (half-model, mid-plane symmetry, half-gap h).  The LONGITUDINAL
+plane is where the magnet ENDS and the FRINGE lives -- the home of pole-end / Rogowski design
+(docs/clebsch_hodograph/hodograph_bending_sy.ipynb, runnable + golden).
+
+## Forward 2D s-y is OPEN-boundary
+A dipole's flux return is OUT of this plane (through the x-y yoke), so a pure s-y slice leaks
+flux and the effective-length integral is LOG-DIVERGENT (g(s)~1/s, INT B_y ds ~ INT du).  A
+phi=0 air box gives a box-DEPENDENT fringe (verified: EFB set-back keeps growing with box).  So
+split the work:
+
+## (1) Fringe feasibility (hodograph inverse, box-free)
+Demand B_y(s,0)=g(s)=1/2(1-tanh((s-s0)/d)); the continuation's nearest singularity at y=pi*d/2
+gives the SAME bound d>d*=(2/pi)h~0.64h, now capping the LONGITUDINAL fringe (Enge edge / EFB)
+sharpness.  A manufactured-solution FEM verifies the demanded fringe + pole-FACE equipotential
+to 0.01% / ~1e-6 (box-free).
+
+## (2) End-shaping DESIGN (forward FEM optimization) -- recovers Rogowski
+The pole END is a FREE termination, NOT an equipotential: reading {phi=-h} all the way to the
+end curls it INTO the demand's singularity (|B| diverges) -- the pole FACE is an equipotential,
+the pole END is not.  A SQUARE end has a reentrant 270deg air corner -> |B|~r^-1/3 (saturation
+hot spot).  Parametrize the end as a forward quarter-ellipse chamfer (length a, rise b) and
+MINIMIZE the peak pole-face |B| by a forward FEM sweep -- the peak is a LOCAL quantity, hence
+box/mesh-convergent even though L_eff is log-divergent.  Result:
+    peak |B|/B0 = 2.14 (near-square) -> 1.42 (round) -> 1.03 (a=3.2h, b=1.0h) -> 1.01 (a=4.4h),
+numerically RECOVERING the classic Rogowski electrode (|B|=B0, no enhancement) WITHOUT conformal
+algebra.  The FEM optimization generalizes to arbitrary gaps and tilted ends where the closed
+form is awkward.  Golden: tests/feec/test_hodograph_bending_sy.py.
+
+## Honest scope
+The 2D effective length / EFB is log-divergent (a 3D / finite-magnet quantity); the s-y END
+design targets NO field enhancement (local).  The numerical chamfer optimum IS the (low novelty,
+correct) Rogowski profile.  Pairs with the x-y cross-section note (HODOGRAPH_FEASIBILITY).
+"""
+
+
 BEAM_REFERENCED_TWIST = """
 # The beam-referenced equipotential SURFACE as the design primitive + the TWIST
 
@@ -1103,6 +1158,10 @@ def get_accelerator_documentation(topic: str = "all") -> str:
     if topic in ("hodograph_feasibility", "feasibility", "limit_line", "edge_sharpness",
                  "field_space_design", "hodograph_2d_linear", "inverse_design"):
         return HODOGRAPH_FEASIBILITY
+    if topic in ("hodograph_bending_sy", "bending_sy", "sy_plane", "end_shaping",
+                 "pole_end_design", "chamfer_optimization", "rogowski_recover",
+                 "longitudinal_fringe"):
+        return HODOGRAPH_BENDING_SY
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
@@ -1121,13 +1180,13 @@ def get_accelerator_documentation(topic: str = "all") -> str:
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
             SECTOR_SATURATION, BENDING_ENDPACK_SATURATION, EXCITATION_INVARIANT_FIELD,
-            HODOGRAPH_FEASIBILITY, BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE,
-            SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
+            HODOGRAPH_FEASIBILITY, HODOGRAPH_BENDING_SY, BEAM_REFERENCED_TWIST,
+            ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
         "sector_saturation, bending_endpack_saturation, excitation_invariant_field, "
-        "hodograph_feasibility, beam_referenced_twist, endpack_two_plane, "
-        "spectrometer_endpack, endpack_cobake."
+        "hodograph_feasibility, hodograph_bending_sy, beam_referenced_twist, "
+        "endpack_two_plane, spectrometer_endpack, endpack_cobake."
     )
