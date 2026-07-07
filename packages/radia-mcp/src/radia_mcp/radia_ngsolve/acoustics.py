@@ -1705,6 +1705,20 @@ gmsh via GmshPostExport (.msh v4.1). The gmsh-artifact manifest contract is alre
 gated on this side (acoustic_fembem_gmsh_artifact_manifest_gate), so a gmsh acoustic
 movie is produced and validated by radia-acoustic, never by the MATLAB lane.
 
+## Analytic sphere-scattering references are now in Python (radia.acoustics)
+The partial-wave sphere-scattering series are ported to
+radia.acoustics.scattering (soft_sphere_scattering / rigid_sphere_scattering /
+fluid_sphere_scattering = Anderson 1950 / elastic_sphere_scattering = Faran 1951),
+e^{+ikr} convention, so the analytic truth lives in the Python lane, not only in
+MATLAB. Validated 3-way (validation_test/acoustics): Python analytic == MATLAB
+analytic to ~1e-14 (a committed golden dumped from matlab-acoustic-fembem), and
+analytic == ngsolve.bem numerical (sound-soft sphere, Brakhage-Werner combined
+field, NGSolve tutorial 11.3) to ~2e-5. Use these as the FIRST reference when
+validating any numerical acoustic BEM scattering solve. Notes: elastic/fluid are
+EXTERIOR-only references (h_l(kr) is singular inside a solid); the Brakhage-Werner
+potential i*k*SL - DL returns the NEGATIVE scattered field (its total = uin - uscat),
+so match |bem| against the analytic with the sign resolved.
+
 ## Hodograph does NOT apply to 3D acoustic BEM
 The (partial / von-Mises) hodograph linearises a NONLINEAR constitutive law in 2D
 (Chaplygin) and rests on conformal structure. 3D acoustic BEM fails all three
