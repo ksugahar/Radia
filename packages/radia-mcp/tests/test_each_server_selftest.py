@@ -36,6 +36,8 @@ import sys
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 # Single source of truth for the server list: derive from the meta
 # catalog so this test cannot drift from `radia_mcp_overview()`.
 from radia_mcp.meta import catalog
