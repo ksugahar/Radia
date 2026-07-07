@@ -115,6 +115,11 @@ jobs:
           sys.path.insert(0, "src")
           from radia_mcp.meta import catalog
 
+          slow_servers = {
+              "radia-ngsolve": 120,
+              "literature-index": 120,
+              "mathematica": 90,
+          }
           failed = []
           for short, info in catalog.CATALOG.items():
               cmd = [sys.executable, "-c",
@@ -122,7 +127,12 @@ jobs:
                      f"from {info['subpackage']}.server import main; "
                      f"sys.argv = ['{info['entry_point']}', '--selftest']; "
                      f"main()"]
-              r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+              r = subprocess.run(
+                  cmd,
+                  capture_output=True,
+                  text=True,
+                  timeout=slow_servers.get(short, 60),
+              )
               ok = (r.returncode == 0)
               tag = "OK  " if ok else "FAIL"
               print(f"  {tag}  {short}")
