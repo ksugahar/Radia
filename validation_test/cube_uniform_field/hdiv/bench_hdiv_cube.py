@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """HDiv-VIM cube benchmark driver for the soft-iron uniform-field problem.
 
-This is the HDiv counterpart of the MMMM cube benchmark used in the
+This is the HDiv counterpart of the MMPM cube benchmark used in the
 2026-08-25 static/rotating-machine manuscript:
 
   * 1 m x 1 m x 1 m cube, centered at the origin

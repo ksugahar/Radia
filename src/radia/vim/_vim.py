@@ -848,18 +848,22 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
         # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
-        return _build_charge_gram_2d(fes, eta=eta)
+        return _build_charge_gram_2d(fes, eps=eps, leafsize=leafsize, eta=eta)
     _vtypes = set(len(el.vertices) for el in mesh.Elements(ng.VOL))
     if _vtypes == {8}:
         # PURE-HEX RT1: the hex-mode charge Gram (Q1 volume charge + Q2 geometry; FLAT or Curve(2) one path).
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
-        return _build_charge_gram_hex(fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
+        return _build_charge_gram_hex(
+            fes, eps=eps, leafsize=leafsize, eta=eta,
+            image_masks=image_masks, image_signs=image_signs)
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) RT1: the wedge-mode charge Gram (6-monomial volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
         # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
-        return _build_charge_gram_wedge(fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
+        return _build_charge_gram_wedge(
+            fes, eps=eps, leafsize=leafsize, eta=eta,
+            image_masks=image_masks, image_signs=image_signs)
     if _vtypes != {4}:
         raise ValueError(
             "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "

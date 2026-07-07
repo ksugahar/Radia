@@ -1,10 +1,10 @@
 # HDiv-VIM Cube Benchmark
 
 This directory contains the HDiv-VIM counterpart of the soft-iron cube
-benchmark used in the 2026-08-25 static/rotating-machine MMMM manuscript.
+benchmark used in the 2026-08-25 static/rotating-machine MMPM manuscript.
 
 The driver is intentionally separate from the older hexahedron/tetrahedron
-benchmark scripts because those results came from the retired six-face MMMM
+benchmark scripts because those results came from the retired six-face MMPM
 path.  Current Radia soft-iron demag validation should use the RT1 HDiv-VIM
 entry:
 
