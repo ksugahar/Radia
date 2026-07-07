@@ -1691,6 +1691,20 @@ product-Gauss-smooth-correction scheme of the readable Helmholtz teaching lane. 
 the coincident-node smooth-correction convention above is a teaching-lane detail;
 radia's Laplace BEM has no smooth correction (it vanishes at k=0).
 
+## Visualization: the MATLAB lane is native-only; gmsh field movies are radia-acoustic
+The readable MATLAB acoustic lane makes its animations INSIDE MATLAB: the CQ
+time-domain field is sampled on an x-z plane and written as an indexed-image
+animated GIF (writeSoftSphereScatterGif), headless, with NO gmsh dependency -- the
+soft-sphere pulse (softSphereScatterField), the two-spot drum roll (drumRollField),
+and the drum + sphere scatterer (drumScatterField) all use this native path. The
+gmsh route for acoustic FIELD MOVIES belongs to the radia-acoustic (Python) side,
+where GmshPostExport already writes high-order .msh v4.1 NodeData time series
+(scalar pressure / vector displacement) for the gmsh animation player. Division of
+labor: MATLAB teaching repo -> native MATLAB figures/GIF only; radia-acoustic ->
+gmsh via GmshPostExport (.msh v4.1). The gmsh-artifact manifest contract is already
+gated on this side (acoustic_fembem_gmsh_artifact_manifest_gate), so a gmsh acoustic
+movie is produced and validated by radia-acoustic, never by the MATLAB lane.
+
 ## Hodograph does NOT apply to 3D acoustic BEM
 The (partial / von-Mises) hodograph linearises a NONLINEAR constitutive law in 2D
 (Chaplygin) and rests on conformal structure. 3D acoustic BEM fails all three
@@ -1711,7 +1725,8 @@ def acoustic_fembem_cross_learnings() -> str:
     DtN, impedance-reflection) with *how to choose and validate* a scatterer
     method: FEM-vs-BEM by interior physics, the compact CQ time-domain lane and its
     imaginary-axis golden, shape-independent validation invariants (reciprocity,
-    1/r decay), the spherical DtN fast exterior, and why the hodograph does not
-    apply to 3D acoustic BEM.
+    1/r decay), the spherical DtN fast exterior, the visualization division of labor
+    (MATLAB lane = native GIF only; gmsh field movies = radia-acoustic via
+    GmshPostExport), and why the hodograph does not apply to 3D acoustic BEM.
     """
     return _ACOUSTIC_FEMBEM_CROSS_LEARNINGS.strip()
