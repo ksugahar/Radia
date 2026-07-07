@@ -79,13 +79,11 @@ jobs:
       - name: Pytest (meta health + language features + versioning)
         run: |
           cd packages/radia-mcp
-          # --reruns 2: test_each_server_selftest spawns each of the ~40
-          # server console-scripts as a subprocess; the heavy-ML servers
-          # (e.g. gnn -> torch) can transiently crash (rc=-1, empty
-          # stdout/stderr) under the full-suite resource pressure, then
-          # pass on a clean rerun.  Mirrors build-test.yml's --reruns
-          # flaky-handling.  -r aR surfaces any rerun in the log.
-          python -m pytest -v -r aR -m "not xval" --reruns 2 --reruns-delay 1 tests/
+          # Fast package contract only.  Slow corpus/quality gates
+          # (build123d marathon2, per-server subprocess selftests) are kept
+          # out of this pytest step; per-server --selftest runs below as its
+          # own explicit gate.
+          python -m pytest -v -r aR -m "not xval and not slow" --reruns 2 --reruns-delay 1 tests/
 
       # TOOLS.md drift gate — regenerate the auto-generated inventory
       # and fail if it differs from the committed copy. Catches the
@@ -104,8 +102,11 @@ jobs:
           fi
 
       # Run --selftest for every cataloged server (catches runtime issues
-      # the static checks miss).
+      # the static checks miss).  Run once on the newest matrix Python: the
+      # per-server subprocess harness is a quality gate, not a language-version
+      # compatibility sweep.  Import/meta-health above still runs on 3.10/3.11/3.12.
       - name: Per-server --selftest
+        if: matrix.python-version == '3.12'
         shell: bash
         run: |
           cd packages/radia-mcp

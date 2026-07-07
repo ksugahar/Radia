@@ -21,7 +21,7 @@ Gates:
   1. policy-lint        -- the 7 static policies (CblasColMajor etc.)
   2. version-consistency-- pyproject == __init__ for radia / radia-mcp / cme
   3. tools-md-drift     -- regenerate docs/TOOLS.md and diff (WIP-aware)
-  4. radia-mcp-matrix   -- compile + meta_health + the FULL radia-mcp
+  4. radia-mcp-matrix   -- compile + meta_health + the FAST radia-mcp
                            pytest run UNDER minimal-dep simulation
                            (RADIA_MCP_FORCE_MINIMAL=1), which is what the
                            ubuntu matrix actually runs -- this is the gate
@@ -226,10 +226,12 @@ def gate_radia_mcp_matrix():
     if rc != 0:
         return False, f"meta_health FAILED ({health}): {out[-300:]}"
 
-    # 4c the FULL radia-mcp pytest, UNDER minimal-dep simulation -- this is
-    #     exactly the ubuntu matrix "Pytest" step (the 30x top failure).
+    # 4c the FAST radia-mcp pytest, UNDER minimal-dep simulation -- this is
+    #     exactly the ubuntu matrix "Pytest" step. Slow corpus / subprocess
+    #     selftest gates are explicit validation or dedicated CI steps.
     rc, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q",
                    "-p", "no:cacheprovider", "--no-header",
+                   "-m", "not xval and not slow",
                    "--reruns", "1", "--reruns-delay", "1"],  # match matrix flaky-retry
                   cwd=MCP, env={"RADIA_MCP_FORCE_MINIMAL": "1"})
     tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"
