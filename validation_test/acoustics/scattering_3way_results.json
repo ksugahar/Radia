@@ -1,0 +1,34 @@
+{
+  "schema": "radia.acoustics.scattering-3way.v1",
+  "generated_at_utc": "2026-07-07T21:28:56Z",
+  "problem": {
+    "radius": 1,
+    "wavenumber": 2,
+    "convention": "e^{+ikr}",
+    "fluid_k1": 2.6,
+    "fluid_rho": 2,
+    "elastic_cL": 2,
+    "elastic_cT": 1,
+    "elastic_rho": 1.5
+  },
+  "two_way_python_vs_matlab_relerr": {
+    "rigid": 7.3526334746965255e-16,
+    "soft": 3.001697788006242e-15,
+    "fluid": 1.3118833755381575e-14,
+    "elastic": 1.0578812821669026e-14
+  },
+  "three_way_analytic_vs_ngsbem": {
+    "soft_analytic_vs_ngsbem_relerr": 2.4535389375918916e-05,
+    "formulation": "brakhage_werner_combined_field",
+    "order": 3,
+    "maxh": 0.3,
+    "ndof_sphere": 3080,
+    "n_probes": 15
+  },
+  "versions": {
+    "radia": "4.95.6",
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  }
+}
