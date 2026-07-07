@@ -713,6 +713,36 @@ space": the pole is a coordinate line on a *fixed* domain, and saturation enters
 the baseline for the nonlinear `(x,s)`/Chaplygin design (§3.3). Golden
 `tests/feec/test_hodograph_feasibility_2d.py`.
 
+### 3.16 The s-y (longitudinal) plane — fringe feasibility + end-shaping design
+
+The **longitudinal** plane (`s` = beam direction, `y` = gap) is where the magnet **ends** and the
+**fringe field** lives — the home of pole-end / Rogowski design (the runnable note
+`docs/clebsch_hodograph/hodograph_bending_sy.ipynb`).
+
+**Forward 2D s-y is an OPEN-boundary problem.** A dipole's flux return is *out of this plane*
+(through the x-y yoke), so in a pure s-y slice the flux escapes and the effective-length integral
+is **log-divergent** — `g(s)~1/s`, `∫B_y ds ∝ ∫du` diverges; a `φ=0` air box gives a
+box-*dependent* fringe (verified: EFB set-back keeps growing with box size). So the work splits:
+
+* **Fringe feasibility (hodograph inverse, box-free).** Demand `B_y(s,0)=g(s)=½(1−tanh((s−s₀)/d))`;
+  the continuation's nearest singularity at `y=πd/2` gives the **same** bound `d>d*=(2/π)h≈0.64h`
+  — now capping the *longitudinal fringe* (Enge-edge / EFB) sharpness. Manufactured-solution FEM
+  verifies the demanded fringe + pole-*face* equipotential to `0.01 %` / `~1e-6` (box-free).
+* **End-shaping design (forward FEM optimization).** The pole *end* is a **free termination**, NOT
+  an equipotential — reading `{φ=−h}` all the way to the end curls it *into* the demand's
+  singularity (|B| diverges). A **square** end has a reentrant `270°` air corner `⇒ |B|~r^{−1/3}`
+  (a saturation hot spot). Parametrize the end as a forward quarter-ellipse chamfer (length `a`,
+  rise `b`) and **minimize the peak pole-face |B|** by a forward FEM sweep — the peak is a *local*
+  quantity, hence box/mesh-convergent even though `L_eff` is log-divergent. The optimum drives the
+  peak to `B₀`: **peak |B|/B₀ = 2.14 (near-square) → 1.42 (round) → 1.03 (a=3.2 h, b=1.0 h) →
+  1.01 (a=4.4 h)**, numerically **recovering the classic Rogowski electrode** (no enhancement)
+  without conformal algebra. Golden `tests/feec/test_hodograph_bending_sy.py`.
+
+**Honest scope**: the 2D `L_eff`/EFB is log-divergent (needs 3D / a finite magnet); the s-y END
+design targets **no field enhancement** (local), and the numerical chamfer optimum *is* the (low
+novelty, but correct) Rogowski profile obtained by a robust FEM search that generalizes to
+arbitrary gaps and tilted ends.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -924,4 +954,5 @@ coil = A-side), so the framework is one method, not two.
 | bending end pack optimized vs saturation (relieve the tip corner) | `examples/clebsch_hodograph/bending_endpack_saturation_opt.py` |
 | excitation-invariant flux lines (same field-line shape as the drive rises) | `docs/clebsch_hodograph/excitation_invariant_field.ipynb` (+ `.py` helper) |
 | 2D linear hodograph: feasibility (edge no sharper than (2/π)·gap; FEM-verified) **+ partial von-Mises `(x,s)` chart** (free boundary → fixed edge; PDE-verified) | `docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb` (+ `.py` helper) |
+| s-y (longitudinal) fringe feasibility **+ end-shaping design** (FEM chamfer optimization → peak \|B\|→B₀, Rogowski recovered) | `docs/clebsch_hodograph/hodograph_bending_sy.ipynb` (+ `.py` helper) |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `examples/vim/foliated_solenoid_wires.py` |
