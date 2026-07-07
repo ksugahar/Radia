@@ -1068,6 +1068,9 @@ def paper_writing_check_figure_caption_showing(caption: str) -> dict:
 
     Wallwork §17.9: "Figure 4 shows X" (NG) より "X was observed (Fig. 4)"
     (OK)。caption の主語が figure ではなく主張動詞。
+    ただし、caption にだけ数値・解釈・結論を置かない。caption は図の同定と
+    最小限の読解補助に使い、主張は本文にも必ず書く。caption が長くなる場合は
+    本文を優先し、caption を短くする。
 
     Args:
         caption: 1 つの figure caption テキスト (Fig. 番号から末尾まで)
@@ -1089,9 +1092,21 @@ def paper_writing_check_figure_caption_showing(caption: str) -> dict:
         "recommendation": (
             "Convert to 'claim + (Fig. N)' form. "
             "NG: 'Figure 4 shows the relationship between A and B.' "
-            "OK: 'The abundances of A and B were inversely related (Fig. 4).'"
-        ) if tells else "OK: caption opens with a claim, not a describe verb.",
-        "source": "Wallwork §17.9",
+            "OK: 'The abundances of A and B were inversely related (Fig. 4).' "
+            "Then restate the factual claim, numerical result, or interpretation "
+            "in the body text."
+        ) if tells else (
+            "OK: caption opens with a claim, not a describe verb.  Still ensure "
+            "that any factual claim, numerical result, or interpretation in the "
+            "caption is also stated in the body text."
+        ),
+        "caption_body_policy": (
+            "Captions identify what is plotted and help the figure stand alone, "
+            "but they must not be the only place where results or conclusions "
+            "appear.  If the caption becomes long, move explanation and "
+            "interpretation to the body and keep the caption concise."
+        ),
+        "source": "Wallwork §17.9 + Sugahara caption-body policy 2026-07-07",
     }
 
 
@@ -1888,8 +1903,10 @@ def paper_writing_check_digest_human_review_triggers(
                 "caption_overloaded",
                 f"caption {i} carries {n_words} words or interpretive phrasing",
                 ("For a one-page digest, use the caption to identify the plotted "
-                 "quantity only.  Put problem setup, comparison logic, and "
-                 "interpretation in the body."),
+                 "quantity and minimal conditions.  Any factual claim, numerical "
+                 "result, comparison logic, or interpretation written in the "
+                 "caption must also be stated in the body.  If the caption is "
+                 "long, prioritize the body and shorten the caption."),
                 cap["text"],
             )
 

@@ -28,9 +28,10 @@ IMRAD 構造の字数バランス。
 - English red flags: `paper_writing_check_english_redflags`
 
 ### T4. Figure caption 品質 → ✅ `paper_writing_check_figure_caption_showing`
-Figure caption 単独で図が理解できるか。
-- 目標: caption だけ読めば図の主張が伝わる
-- 推奨: "Fig. 3. <主張の動詞句>: <セットアップ>, <キー数値>"
+Figure caption 単独で図の対象が理解でき、本文側でも主張が回収されているか。
+- 目標: caption は plotted quantity・条件・series を同定し、主張・数値・解釈は本文にも必ず書く
+- 推奨: "Fig. 3. <主張の動詞句>: <セットアップ>, <キー数値>" としつつ、同じ key result を本文の図参照段落にも置く
+- caption が長くなる場合は本文を優先し、比較ロジック・物理解釈・結論を本文へ移して caption を短くする
 
 ### T5. Citation density → ✅ `paper_writing_related_work_density` (v0.13.0)
 Introduction 内の引用密度・自己引用比率・年度分布を診断。
@@ -425,7 +426,7 @@ The main contributions of this paper are:
 4. **fair comparison なし** — 比較対象の条件を揃える (表で明示)
 5. **負の結果を隠す** — 正直に書く方が accept されやすい
 6. **Related work が自己引用だらけ** — 競合他者を 5 件以上
-7. **Figure caption が 1 行** — 図の主張を caption 単独で伝える
+7. **Figure caption だけに主張がある** — caption の数値・傾向・解釈は本文にも書く
 8. **pragmatic な数値なし** — "significantly" だけ → "3.2x (Fig. 7)"
 9. **cover letter で journal への fit が未言及** — "why this journal"
 10. **response letter が箇条書きなし** — reviewer comment を line-by-line で
@@ -438,7 +439,9 @@ The main contributions of this paper are:
     Schur complement, SIBC/HOIBC surface envelope などの差分に置く。
     HOIBC / Warburg などの専門語は
     本文初出で citation を置く。caption は plotted quantity の同定だけに
-    近づけ、問題設定・解釈・比較は本文で説明する。`rank-(1,1)` のような
+    近づけ、問題設定・解釈・比較は本文で説明する。caption に書いた数値・
+    傾向・結論は本文にも必ず書き、caption が長い場合は本文を優先して
+    caption を短くする。`rank-(1,1)` のような
     insider shorthand は "one bulk mode and one surface mode" のように
     物理的に言い換える。ただし "one bulk mode + one surface mode" は
     「円形導体全体が基底 2 個で表せる」と誤読されやすいので、有限次の
@@ -494,7 +497,9 @@ The main contributions of this paper are:
     TeX ソース上も該当 section の直後に置く。`float` package の `[H]`、
     `\refstepcounter{figure}` + 手書き caption、`minipage` による非float図、
     `\clearpage` / `\newpage` による強制配置は最終手段であり、まず本文量・
-    図幅・caption長・figureのソース位置を調整する。full-paper 予告は、実際に検証計画がある場合だけ
+    図幅・caption長・figureのソース位置を調整する。caption にしかない
+    結果説明を残さず、本文の図参照段落に移してから caption を削る。
+    full-paper 予告は、実際に検証計画がある場合だけ
     "will examine extension to three-dimensional conductors" 程度に留め、1-page
     digest の現在成果として 3D 結果を匂わせない。
     In research plans and proposal notes, do not title sections with the
@@ -1033,6 +1038,7 @@ A+B→C が揃って初めて Discussion として機能する。
 - [ ] Limitation が Discussion 末尾ではない
 - [ ] 強調副詞合計 ≤ 2
 - [ ] Figure caption が主張の動詞句で始まる
+- [ ] Caption に書いた数値・傾向・解釈が本文にも書かれている
 - [ ] Methods の tense が過去形 (我々の行為)
 - [ ] Discussion の hypothesis が現在形、自分の結果が過去形
 - [ ] Bullet の文法が並列
@@ -1052,7 +1058,7 @@ A+B→C が揃って初めて Discussion として機能する。
 - `paper_writing_check_ieee_keywords(tex_path)` — **`\begin{IEEEkeywords}` (IEEEtran) or `\keywords{}` (Elsevier/Springer) の存在 + 個数 (3-7 推奨) + 各 keyword 長 (3-50 chars) チェック**。IEEE Transactions / IGTE / COMPUMAG / CEFC digest は必須セクション。`status="missing"` = block 不在 (即追加必要)、`status="warning"` = 個数 or 長さ問題、`status="clean"` = OK。
 - `paper_writing_check_pdf_unresolved_markers(pdf_path)` — **compile 後 PDF を pymupdf で text 抽出し、`[?]` / `[??]` rendered marker を検出**。上 2 tool (cite key / ref label) は pre-compile 静的 check、本 tool は post-compile の safety net (bibtex 再 run 忘れ等で漏れた未解決参照を catch)。各 marker の page 番号 + ±60 char context を返す。digest 提出直前の最終チェックに最適。
 - `paper_writing_check_tense_consistency` — discussion の 3 部時制
-- `paper_writing_check_figure_caption_showing` — caption が showing vs telling か
+- `paper_writing_check_figure_caption_showing` — caption が showing vs telling か、caption の主張を本文にも置く方針を返す
 - `paper_writing_check_strong_adjective_budget` — 強調副詞の過剰
 - **`paper_writing_check_word_repetition`** (v0.8.0) — 同一単語の近接障害 (中島・塚本)
 - **`paper_writing_check_sentence_ending_variety`** (v0.8.0) — 文末表現の単調さ (中島・塚本)
