@@ -1719,6 +1719,24 @@ EXTERIOR-only references (h_l(kr) is singular inside a solid); the Brakhage-Wern
 potential i*k*SL - DL returns the NEGATIVE scattered field (its total = uin - uscat),
 so match |bem| against the analytic with the sign resolved.
 
+## Elastic FSI is in Python too (radia.acoustics.fsi, NGSolve order-p interior)
+The fluid-structure interaction coupled solve (a solid ELASTIC sphere radiating
+into an unbounded fluid) is in radia.acoustics.fsi: a vector NGSolve
+VectorH1(order=p) elasticity interior + the EXACT spherical Helmholtz DtN exterior
+(a radiating impedance / "high-order Zs", NOT Kelvin and NOT PML), reduced block
+system [Kdyn, G'Phi; -rhoF w^2 Phi'G, Gram*lam']. The boundary scattered pressure
+stays P1 (vertex) so the spherical-harmonic DtN needs NO CoefficientFunction
+harmonics (they stay numpy at the boundary vertices); the only NGSolve coupling is
+the mixed G = int_Gamma q (u.n) ds. The exterior field comes straight from the DtN
+coefficients c: p_s(r,dir) = sum_col c_col h_n(kr)/h_n(kR) Y_n^m(dir) -- no dense
+layer-potential assembly. Validated (validation_test/acoustics): converges to the
+analytic Faran (elastic_sphere_scattering); the P2 interior converges ~O(h^2)
+(kR=2 vs-Faran 15%->8.6%->3.7% at maxh 0.4/0.28/0.20) vs P1 ~O(h) (58%->43%->25%),
+so use order>=2 -- the P1 interior elasticity is the accuracy-limiting factor, and
+delegating it to NGSolve makes any order free (Complement NGSolve). Gotchas: the
+FES must be complex (the incident normal-flux load is complex), and the DtN is
+fail-loud off-sphere (algebraic sphere fit, tol 3e-2).
+
 ## Hodograph does NOT apply to 3D acoustic BEM
 The (partial / von-Mises) hodograph linearises a NONLINEAR constitutive law in 2D
 (Chaplygin) and rests on conformal structure. 3D acoustic BEM fails all three
