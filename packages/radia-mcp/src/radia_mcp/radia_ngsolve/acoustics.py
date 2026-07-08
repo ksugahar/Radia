@@ -1737,6 +1737,23 @@ delegating it to NGSolve makes any order free (Complement NGSolve). Gotchas: the
 FES must be complex (the incident normal-flux load is complex), and the DtN is
 fail-loud off-sphere (algebraic sphere fit, tol 3e-2).
 
+## CQ time-domain BEM is in Python too (radia.acoustics.cq)
+The Lubich convolution-quadrature time-domain sound-soft BEM is in radia.acoustics.cq:
+the retarded single layer V(d/dt) q = g becomes N decoupled Laplace-domain solves at
+s = delta(zeta)/dt (BDF2), each an ngsolve.bem Helmholtz single layer at COMPLEX
+kappa = i s / c.  ngsolve.bem accepts complex kappa ONLY via the
+HelmholtzSL(integrand, kappa) * v * ds form -- the direct
+HelmholtzSingleLayerPotentialOperator(fes, ...) constructor SEGFAULTS.  Rigorous
+validation (validation_test/acoustics): each CQ node's frequency-domain BEM equals
+the analytic soft sphere at that COMPLEX wavenumber to ~3.6e-4
+(soft_sphere_scattering_complex_k, complex-argument spherical Bessel via scipy jv /
+hankel1) -- this checks the physics independent of the time-domain FFT; the recovered
+signal is real (imag/scale ~5e-8).  The plane-pulse boundary data is one plane-wave CF
+per node (ghat_l = -A_l exp(i k_l z), A = fft(rho^n * f_inc)) -- O(N), not O(N^2).
+obs must lie in the x-z plane (the potential is evaluated on a flat y=0 screen).  NOTE:
+the "~30% vs analytic-iFFT" one might see at coarse dt is NOT a bug -- it is BDF2
+time-discretization; the per-frequency complex-k check is the clean validation.
+
 ## Hodograph does NOT apply to 3D acoustic BEM
 The (partial / von-Mises) hodograph linearises a NONLINEAR constitutive law in 2D
 (Chaplygin) and rests on conformal structure. 3D acoustic BEM fails all three
