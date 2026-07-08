@@ -1,0 +1,20 @@
+{
+  "schema": "radia.acoustics.cq.v1",
+  "generated_at_utc": "2026-07-08T07:25:51Z",
+  "problem": {
+    "radius": 1.0,
+    "sound_speed": 1.0,
+    "num_time": 16,
+    "time_step": 0.28,
+    "method": "BDF2",
+    "boundary": "sound_soft_sphere"
+  },
+  "worst_frequency_bem_vs_complex_k_analytic": 0.00036315263548343475,
+  "time_signal_max_imag_over_scale": 4.64140778307926e-08,
+  "versions": {
+    "radia": "4.95.6",
+    "ngsolve": "6.2.2604",
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0"
+  }
+}

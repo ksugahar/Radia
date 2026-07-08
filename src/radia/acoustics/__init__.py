@@ -18,10 +18,14 @@ Public API (analytic scattering references, pure numpy/scipy):
   fluid_sphere_scattering    -- penetrable fluid sphere (Anderson 1950)
   elastic_sphere_scattering  -- solid elastic sphere (Faran 1951)
 
-Submodule (needs NGSolve, import explicitly):
+Submodules (need NGSolve / ngsolve.bem, import explicitly):
   radia.acoustics.fsi        -- elastic fluid-structure interaction coupled solve
                                 (NGSolve VectorH1(order=p) interior + spherical DtN
                                 exterior); fsi.fsi_dtn_solve, fsi.sphere_mesh.
+  radia.acoustics.cq         -- Lubich convolution-quadrature time-domain sound-soft
+                                BEM (ngsolve.bem Helmholtz single layer at complex
+                                kappa); cq.cq_soft_sphere_scattering,
+                                cq.soft_sphere_scattering_complex_k.
 """
 
 from .scattering import (
