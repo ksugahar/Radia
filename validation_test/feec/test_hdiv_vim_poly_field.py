@@ -629,6 +629,46 @@ def _vol_field_gauss_fn(V, r, fn, nq=24):
     return F
 
 
+def _tet_potential_polynomial_python(V, r, coeffs):
+    """Exact Python reference for SUM c_a INT_tet x^a y^b z^c / |r-r'| dV'."""
+    from radia.vim._field import _surface_potential_monomial
+
+    V = np.asarray(V, float)
+    r = np.asarray(r, float)
+    degree = max(sum(a) for a in coeffs)
+    cen = V.mean(axis=0)
+    faces = []
+    for tri in ((1, 2, 3), (0, 3, 2), (0, 1, 3), (0, 2, 1)):
+        Pf = V[list(tri)]
+        nf = np.cross(Pf[1] - Pf[0], Pf[2] - Pf[0])
+        nf = nf / np.linalg.norm(nf)
+        if np.dot(nf, cen - Pf[0]) > 0:
+            nf = -nf
+        faces.append((Pf, nf))
+    cache = {}
+    vmemo = {}
+
+    def vol_pot_mono(alpha):
+        alpha = tuple(alpha)
+        d = sum(alpha)
+        if d == 0:
+            return tet_newtonian_potential(V, r)
+        if alpha in vmemo:
+            return vmemo[alpha]
+        s = 0.0
+        for Pf, nf in faces:
+            s -= float(np.dot(r - Pf[0], nf)) * _surface_potential_monomial(Pf, r, alpha, degree, cache)
+        for i in range(3):
+            if alpha[i] >= 1:
+                am = list(alpha)
+                am[i] -= 1
+                s += r[i] * alpha[i] * vol_pot_mono(tuple(am))
+        vmemo[alpha] = s / (d + 2)
+        return vmemo[alpha]
+
+    return sum(cc * vol_pot_mono(a) for a, cc in coeffs.items())
+
+
 # ---------------------------------------------------------------------------------------------------
 # C++ ports of the degree-1/2 kernels (the order<=2 fast path): _hdiv_tri_moment1/2, _hdiv_tet_moment1,
 # _hdiv_{lin,quad}_tri_field, _hdiv_tet_volfield_{linear,quadratic}.  Each must match its Python
@@ -660,6 +700,29 @@ def test_cpp_degree12_kernels_match_python():
                    tet_volume_field_linear(_TET, r, rho0, np.array(g))) < 1e-12
         assert rel(rp._hdiv_tet_volfield_quadratic(Vv, rl, rho0, g, Qf),
                    tet_volume_field_quadratic(_TET, r, rho0, np.array(g), _QSYM)) < 1e-11
+
+
+def test_cpp_tet_potential_polynomial_cubic_matches_python():
+    """C++ generic tet potential moment supports the affine-hex RT1 cubic source polynomial."""
+    import radia._radia_pybind as rp
+    coeffs = {
+        (0, 0, 0): 0.4,
+        (1, 0, 0): 0.7,
+        (0, 1, 0): -0.3,
+        (0, 0, 1): 0.2,
+        (1, 1, 0): 0.11,
+        (1, 0, 1): -0.08,
+        (0, 1, 1): 0.05,
+        (1, 1, 1): 0.03,
+    }
+    exps = [v for a in coeffs for v in a]
+    cvals = list(coeffs.values())
+    Vv = _TET.ravel().tolist()
+    for rr in [[0.25, 0.25, 0.25], [1.7, -0.2, 0.4], [0.35, 0.2, 0.08], [-0.3, 0.4, 0.6]]:
+        r = np.array(rr, float)
+        cpp = rp._hdiv_tet_potential_poly(Vv, r.tolist(), exps, cvals)
+        py = _tet_potential_polynomial_python(_TET, r, coeffs)
+        assert abs(cpp - py) / (abs(py) + 1e-30) < 1e-11
 
 
 # ---------------------------------------------------------------------------------------------------

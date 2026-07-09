@@ -68,3 +68,20 @@ def test_flat_rt1_nonlinear_matches_analytic():
     assert r1["iters"] < 300, r1["iters"]
     assert abs(r1["M_avg"][2] - Man) / abs(Man) < 1e-2, (r1["M_avg"][2], Man)
     assert 0.30 < r1["demag"] < 0.37, r1["demag"]
+
+
+def test_curved_tet_nonlinear_jacobi_inner_matches_mass_riesz():
+    """The large-run Jacobi inner preconditioner is valid on the curved Gram too."""
+    H0 = 5000.0
+    mesh = _sphere(maxh=0.8)
+    with ng.TaskManager():
+        ref = Solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
+                    order=1, curve_order=2)
+        tuned = Solve(mesh, bh_table=_BH, H_ext=ng.CoefficientFunction((0, 0, H0)),
+                      order=1, curve_order=2, preconditioner="jacobi",
+                      newton_continuation=2, newton_reuse_tangent_steps=3,
+                      newton_inner_tol="auto")
+    rel = np.linalg.norm(tuned["M_avg"] - ref["M_avg"]) / max(np.linalg.norm(ref["M_avg"]), 1.0)
+    assert rel < 5e-4, (tuned["M_avg"], ref["M_avg"], rel)
+    assert tuned["curve_order"] == 2
+    assert tuned["nonlinear_solve_stats"]["nonlinear_inner_preconditioner"] == "jacobi"

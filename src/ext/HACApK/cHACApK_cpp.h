@@ -203,6 +203,16 @@ void HACApK_matvec_sym_wrapper(
     double *y,
     int nd);
 
+/* Optional matvec profiler. Enabled by RADIA_HDIV_HMATVEC_STATS=1.
+ * values[0..7] = total_s, zero_s, permute_s, leaf_s, reduce_s, meta_s,
+ *                lowrank_flop_est, dense_flop_est.
+ * counts[0..7] = calls, lowrank_leaves, dense_leaves, mirrored_upper_leaves,
+ *                diagonal_leaves, skipped_lower_leaves, last_nd, last_nthr.
+ */
+void HACApK_matvec_stats_reset(void);
+void HACApK_matvec_stats_get(double *values, int n_values,
+                             int64_t *counts, int n_counts);
+
 /* Free all H-matrix resources (call before HACApK_free_leafmtxp/lcontrol) */
 void HACApK_free_hmatrix_wrapper(
     void *leafmtxp,

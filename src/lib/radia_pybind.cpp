@@ -129,6 +129,23 @@ std::vector<double> to_vector(const py::object& obj) {
     throw std::runtime_error("Expected list, tuple, or numpy array");
 }
 
+template <typename T>
+std::vector<T> to_1d_vector(
+        py::array_t<T, py::array::c_style | py::array::forcecast> arr,
+        const char* name) {
+    auto buf = arr.request();
+    if (buf.ndim != 1)
+        throw std::runtime_error(std::string(name) + " must be a 1D contiguous array");
+    const T* ptr = static_cast<const T*>(buf.ptr);
+    return std::vector<T>(ptr, ptr + buf.size);
+}
+
+py::dict solve_timings_dict(const RadHACApKChargeGram& s) {
+    py::dict timings;
+    for (const auto& kv : s.LastSolveTimings()) timings[py::str(kv.first)] = kv.second;
+    return timings;
+}
+
 /**
  * @brief Convert 2D Python list to flat array with vertex data
  * Returns vertex data and count
@@ -2647,6 +2664,23 @@ std::vector<double> TetMoment1Probe(const std::vector<double>& V, const std::vec
     rad_hdiv::TetMoment1(Vv, rr, out);
     return {out[0], out[1], out[2]};
 }
+double TetPotentialPolynomialProbe(const std::vector<double>& V, const std::vector<double>& r,
+                                   const std::vector<int>& exps_flat,
+                                   const std::vector<double>& coeffs) {
+    if (V.size() != 12) throw std::runtime_error("_hdiv_tet_potential_poly: V must have 12 entries");
+    if (r.size() != 3) throw std::runtime_error("_hdiv_tet_potential_poly: r must have 3 entries");
+    if (exps_flat.size() % 3 != 0)
+        throw std::runtime_error("_hdiv_tet_potential_poly: exps_flat length must be divisible by 3");
+    if (exps_flat.size() / 3 != coeffs.size())
+        throw std::runtime_error("_hdiv_tet_potential_poly: exps and coeffs size mismatch");
+    double Vv[4][3], rr[3];
+    for (int i = 0; i < 3; ++i) rr[i] = r[i];
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
+    std::vector<std::array<int,3>> exps(coeffs.size());
+    for (size_t i = 0; i < coeffs.size(); ++i)
+        exps[i] = {exps_flat[3*i], exps_flat[3*i + 1], exps_flat[3*i + 2]};
+    return rad_hdiv::TetPotentialPolynomial(Vv, rr, exps, coeffs);
+}
 // CURVED P2 triangle charge potential probe (validates the curved-panel Duffy against the Python prototype).
 double CurvedTriPotentialProbe(const std::vector<double>& nodes, int e0, int e1,
                                const std::vector<double>& p, const std::vector<double>& gl,
@@ -2871,6 +2905,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
           "Surface second moment INT_T r'(x)r'/R dS' (V=9, r=3) -> 9 (row-major 3x3).  == triangle_potential_moment2.");
     m.def("_hdiv_tet_moment1", &radia_hdivvim::TetMoment1Probe, py::arg("V"), py::arg("r"),
           "Volume first moment INT_V r'/R dV' (V=12, r=3) -> 3-vector.  == tet_newtonian_moment.");
+    m.def("_hdiv_tet_potential_poly", &radia_hdivvim::TetPotentialPolynomialProbe,
+          py::arg("V"), py::arg("r"), py::arg("exps_flat"), py::arg("coeffs"),
+          "Polynomial volume-charge potential SUM c_a INT_tet x^a y^b z^c / |r-r'| dV' "
+          "(V=12, r=3, exps_flat=[a,b,c,...], coeffs).  No 1/4pi.");
     m.def("_hdiv_curved_tri_potential", &radia_hdivvim::CurvedTriPotentialProbe,
           py::arg("nodes"), py::arg("e0"), py::arg("e1"), py::arg("p"), py::arg("gl"), py::arg("gw"),
           "CURVED P2 triangle surface-charge potential INT xi^e0 eta^e1 /|p-X(xi)| dA_curved via the "
@@ -3545,8 +3583,11 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                                                tol, maxit, iters);
                  double pmin = n_face ? prec[0] : 0.0, pmax = pmin;
                  for (double v : prec) { if (v < pmin) pmin = v; if (v > pmax) pmax = v; }
+                 py::dict timings;
+                 for (const auto& kv : s.LastSolveTimings()) timings[py::str(kv.first)] = kv.second;
                  py::dict d;
                  d["m"] = m; d["iters"] = iters; d["prec_min"] = pmin; d["prec_max"] = pmax;
+                 d["timings"] = timings;
                  return d;
              },
              py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
@@ -3554,6 +3595,82 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
              "M3 production helper: build the exact Jacobi diagonal of ((1/chi)M_mass + B^T G B) in C++ "
              "from sparse B + mass COO, then run SolveLinearMaterial. Returns {m, iters, prec_min, prec_max}.")
+        .def("solve_linear_material_auto_prec_arrays",
+             [](RadHACApKChargeGram& s,
+                py::array_t<int, py::array::c_style | py::array::forcecast> B_indptr_a,
+                py::array_t<int, py::array::c_style | py::array::forcecast> B_indices_a,
+                py::array_t<double, py::array::c_style | py::array::forcecast> B_data_a,
+                int n_face,
+                py::array_t<int, py::array::c_style | py::array::forcecast> mI_a,
+                py::array_t<int, py::array::c_style | py::array::forcecast> mJ_a,
+                py::array_t<double, py::array::c_style | py::array::forcecast> mV_a,
+                double inv_chi,
+                py::array_t<double, py::array::c_style | py::array::forcecast> rhs_a,
+                double tol, int maxit, py::object x0_obj) {
+                 auto B_indptr = to_1d_vector<int>(B_indptr_a, "B_indptr");
+                 auto B_indices = to_1d_vector<int>(B_indices_a, "B_indices");
+                 auto B_data = to_1d_vector<double>(B_data_a, "B_data");
+                 auto mI = to_1d_vector<int>(mI_a, "mI");
+                 auto mJ = to_1d_vector<int>(mJ_a, "mJ");
+                 auto mV = to_1d_vector<double>(mV_a, "mV");
+                 auto rhs = to_1d_vector<double>(rhs_a, "rhs");
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("solve_linear_material_auto_prec_arrays: rhs size mismatch");
+                 if ((int)B_indptr.size() < 1)
+                     throw std::runtime_error("solve_linear_material_auto_prec_arrays: empty B_indptr");
+                 std::vector<double> x0;
+                 const std::vector<double>* x0_ptr = nullptr;
+                 if (!x0_obj.is_none()) {
+                     auto x0_a = py::cast<py::array_t<double, py::array::c_style | py::array::forcecast>>(x0_obj);
+                     x0 = to_1d_vector<double>(x0_a, "x0");
+                     if ((int)x0.size() != n_face)
+                         throw std::runtime_error("solve_linear_material_auto_prec_arrays: x0 size mismatch");
+                     x0_ptr = &x0;
+                 }
+                 std::vector<double> mass_diag((size_t)n_face, 0.0);
+                 for (size_t k = 0; k < mV.size(); ++k) {
+                     if (mI[k] == mJ[k] && mI[k] >= 0 && mI[k] < n_face) mass_diag[(size_t)mI[k]] += mV[k];
+                 }
+                 std::vector<std::vector<int>> supp_id((size_t)n_face);
+                 std::vector<std::vector<double>> supp_val((size_t)n_face);
+                 const int n_charge = (int)B_indptr.size() - 1;
+                 for (int a = 0; a < n_charge; ++a) {
+                     for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k) {
+                         int f = B_indices[(size_t)k];
+                         if (f < 0 || f >= n_face) throw std::runtime_error("solve_linear_material_auto_prec_arrays: B face index out of range");
+                         supp_id[(size_t)f].push_back(a);
+                         supp_val[(size_t)f].push_back(B_data[(size_t)k]);
+                     }
+                 }
+                 std::vector<double> prec((size_t)n_face, 0.0);
+                 for (int f = 0; f < n_face; ++f) {
+                     double ndiag = 0.0;
+                     const auto& ids = supp_id[(size_t)f];
+                     const auto& vals = supp_val[(size_t)f];
+                     for (size_t p = 0; p < ids.size(); ++p)
+                         for (size_t q = 0; q < ids.size(); ++q)
+                             ndiag += vals[p] * vals[q] * s.GetInteractionMatrixElement(ids[p], ids[q]);
+                     double v = inv_chi * mass_diag[(size_t)f] + ndiag;
+                     if (!(v > 0.0) || !std::isfinite(v)) v = 1.0;
+                     prec[(size_t)f] = v;
+                 }
+                 int iters = 0;
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, prec, rhs,
+                                                               tol, maxit, iters,
+                                                               /*mass_riesz=*/false, /*symmetric=*/true,
+                                                               x0_ptr);
+                 double pmin = n_face ? prec[0] : 0.0, pmax = pmin;
+                 for (double v : prec) { if (v < pmin) pmin = v; if (v > pmax) pmax = v; }
+                 py::dict d;
+                 d["m"] = m; d["iters"] = iters; d["prec_min"] = pmin; d["prec_max"] = pmax;
+                 d["timings"] = solve_timings_dict(s);
+                 return d;
+             },
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
+             py::arg("tol") = 1e-9, py::arg("maxit") = 5000, py::arg("x0") = py::none(),
+             "Array-input variant of solve_linear_material_auto_prec; avoids Python list materialization.")
         .def("solve_material_minres",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
@@ -3585,7 +3702,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
                                                                mI, mJ, mV, inv_chi, noprec, rhs,
                                                                tol, maxit, iters, /*mass_riesz=*/true, symmetric);
-                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+                 py::dict timings;
+                 for (const auto& kv : s.LastSolveTimings()) timings[py::str(kv.first)] = kv.second;
+                 py::dict d; d["m"] = m; d["iters"] = iters; d["timings"] = timings; return d;
              },
              py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
              py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
@@ -3594,6 +3713,49 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "by CG preconditioned with a PARDISO SPD factor of the RT0 mass M_mass (the MASS RIESZ map). "
              "symmetric=true (default) applies G via the EXACTLY-symmetric H-matvec so CG sees a symmetric operator; "
              "symmetric=false uses the general (asymmetric ACA) matvec. Returns {m, iters}.")
+        .def("solve_linear_material_mass_riesz_arrays",
+             [](RadHACApKChargeGram& s,
+                py::array_t<int, py::array::c_style | py::array::forcecast> B_indptr_a,
+                py::array_t<int, py::array::c_style | py::array::forcecast> B_indices_a,
+                py::array_t<double, py::array::c_style | py::array::forcecast> B_data_a,
+                int n_face,
+                py::array_t<int, py::array::c_style | py::array::forcecast> mI_a,
+                py::array_t<int, py::array::c_style | py::array::forcecast> mJ_a,
+                 py::array_t<double, py::array::c_style | py::array::forcecast> mV_a,
+                 double inv_chi,
+                 py::array_t<double, py::array::c_style | py::array::forcecast> rhs_a,
+                 double tol, int maxit, bool symmetric, py::object x0_obj) {
+                 auto B_indptr = to_1d_vector<int>(B_indptr_a, "B_indptr");
+                 auto B_indices = to_1d_vector<int>(B_indices_a, "B_indices");
+                 auto B_data = to_1d_vector<double>(B_data_a, "B_data");
+                 auto mI = to_1d_vector<int>(mI_a, "mI");
+                 auto mJ = to_1d_vector<int>(mJ_a, "mJ");
+                 auto mV = to_1d_vector<double>(mV_a, "mV");
+                 auto rhs = to_1d_vector<double>(rhs_a, "rhs");
+                 if ((int)rhs.size() != n_face)
+                     throw std::runtime_error("solve_linear_material_mass_riesz_arrays: rhs size mismatch");
+                 std::vector<double> x0;
+                 const std::vector<double>* x0_ptr = nullptr;
+                 if (!x0_obj.is_none()) {
+                     auto x0_a = py::cast<py::array_t<double, py::array::c_style | py::array::forcecast>>(x0_obj);
+                     x0 = to_1d_vector<double>(x0_a, "x0");
+                     if ((int)x0.size() != n_face)
+                         throw std::runtime_error("solve_linear_material_mass_riesz_arrays: x0 size mismatch");
+                     x0_ptr = &x0;
+                 }
+                 int iters = 0;
+                 std::vector<double> noprec;
+                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
+                                                               mI, mJ, mV, inv_chi, noprec, rhs,
+                                                               tol, maxit, iters, /*mass_riesz=*/true, symmetric,
+                                                               x0_ptr);
+                 py::dict d; d["m"] = m; d["iters"] = iters; d["timings"] = solve_timings_dict(s); return d;
+              },
+              py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
+              py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
+              py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
+              py::arg("x0") = py::none(),
+              "Array-input variant of solve_linear_material_mass_riesz; avoids Python list materialization.")
         .def("solve_material_minres_mass_riesz",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
@@ -3635,8 +3797,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("mu"), py::arg("denom"), py::arg("chi0"), py::arg("Msat"), py::arg("H0"),
              py::arg("picard_iters") = 100, py::arg("cg_tol") = 1e-10, py::arg("cg_maxit") = 5000,
              "M3 (nonlinear): scalar-chi Picard solve of the isotropic nonlinear demag M=Mof(H0-Dscal M) "
-             "entirely in C++ (each step a SolveLinearMaterial + closed-form chi update; G via the analytic "
-             "H-matvec). Returns {m, Mavg, chi, Dscal, iters}.")
+             "entirely in C++ (each step a mass-Riesz SolveLinearMaterial + closed-form chi update; G via "
+             "the analytic H-matvec). Returns {m, Mavg, chi, Dscal, iters}.")
         .def("stats", [](RadHACApKChargeGram& s) {
                  const RadHACApKStats& st = s.GetStats();
                  py::dict d;
@@ -3644,6 +3806,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
                  d["compression"] = st.compression; d["build_time"] = st.build_time;
                  d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
+                 for (const auto& kv : s.HexCacheStats()) d[kv.first.c_str()] = kv.second;
                  return d;
              }, "H-matrix stats dict.");
 
