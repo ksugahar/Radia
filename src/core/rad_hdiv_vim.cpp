@@ -3,6 +3,10 @@
  * validated against the NGSolve prototype golden (3x3x3 -> ndof=108, n_loop=28). */
 #include "rad_hdiv_vim.h"
 #include <cmath>
+#include <array>
+#include <algorithm>
+#include <stdexcept>
+#include <vector>
 
 namespace rad_hdiv {
 
@@ -281,6 +285,298 @@ void TetMoment1(const double V[4][3], const double r[3], double out[3])
         for (int k=0;k<3;k++) out[k]-=hf*M1[k];
     }
     for (int k=0;k<3;k++) out[k]/=3.0;
+}
+
+namespace {
+
+constexpr int POLY_MAX_DEG = 5;
+
+static inline double small_comb(int n, int k)
+{
+    if (k < 0 || k > n) return 0.0;
+    if (k == 0 || k == n) return 1.0;
+    double r = 1.0;
+    for (int i = 1; i <= k; ++i) r = r * (n - k + i) / i;
+    return r;
+}
+
+struct TriPolyEdge {
+    double xiA[2];
+    double t2[2];
+    double m2[2];
+    double L;
+    double l0;
+    double d2;
+};
+
+struct TriPolySetup {
+    double n[3];
+    double h;
+    double rp[3];
+    double e1[3];
+    double e2[3];
+    TriPolyEdge edges[3];
+};
+
+static bool tri_poly_setup(const double P[3][3], const double r[3], TriPolySetup& g)
+{
+    double a1[3], a2[3];
+    for (int k = 0; k < 3; ++k) { a1[k] = P[1][k] - P[0][k]; a2[k] = P[2][k] - P[0][k]; }
+    v3cross(a1, a2, g.n);
+    double nl = v3nrm(g.n);
+    if (nl < 1e-300) return false;
+    for (int k = 0; k < 3; ++k) g.n[k] /= nl;
+    double rv[3]; for (int k = 0; k < 3; ++k) rv[k] = r[k] - P[0][k];
+    g.h = v3dot(rv, g.n);
+    for (int k = 0; k < 3; ++k) g.rp[k] = r[k] - g.h * g.n[k];
+    double e1n = v3nrm(a1);
+    if (e1n < 1e-300) return false;
+    for (int k = 0; k < 3; ++k) g.e1[k] = a1[k] / e1n;
+    v3cross(g.n, g.e1, g.e2);
+    double cen[3] = {0, 0, 0};
+    for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) cen[k] += P[i][k] / 3.0;
+    for (int i = 0; i < 3; ++i) {
+        const double* A = P[i];
+        const double* B = P[(i + 1) % 3];
+        TriPolyEdge& e = g.edges[i];
+        double t[3]; for (int k = 0; k < 3; ++k) t[k] = B[k] - A[k];
+        e.L = v3nrm(t);
+        if (e.L < 1e-300) return false;
+        double th[3]; for (int k = 0; k < 3; ++k) th[k] = t[k] / e.L;
+        double m[3]; v3cross(th, g.n, m);
+        double mid[3]; for (int k = 0; k < 3; ++k) mid[k] = 0.5 * (A[k] + B[k]) - cen[k];
+        if (v3dot(m, mid) < 0.0) for (int k = 0; k < 3; ++k) m[k] = -m[k];
+        e.m2[0] = v3dot(m, g.e1);
+        e.m2[1] = v3dot(m, g.e2);
+        double Amrp[3]; for (int k = 0; k < 3; ++k) Amrp[k] = A[k] - g.rp[k];
+        e.xiA[0] = v3dot(Amrp, g.e1);
+        e.xiA[1] = v3dot(Amrp, g.e2);
+        e.t2[0] = v3dot(th, g.e1);
+        e.t2[1] = v3dot(th, g.e2);
+        double w[3]; for (int k = 0; k < 3; ++k) w[k] = r[k] - A[k];
+        e.l0 = v3dot(w, th);
+        e.d2 = v3dot(w, w) - e.l0 * e.l0;
+        if (e.d2 < 0.0) e.d2 = 0.0;
+    }
+    return true;
+}
+
+static double edge_R_for_poly(const TriPolyEdge& e)
+{
+    const double u1 = -e.l0, u2 = e.L - e.l0, d2 = e.d2;
+    auto F = [d2](double u) {
+        if (d2 < 1e-300) return 0.5 * u * std::fabs(u);
+        const double d = std::sqrt(d2);
+        return 0.5 * (u * std::sqrt(u * u + d2) + d2 * std::asinh(u / d));
+    };
+    return F(u2) - F(u1);
+}
+
+static void edge_l_moments_poly(const TriPolyEdge& e, int nmax, double Jl[POLY_MAX_DEG + 3])
+{
+    nmax = std::min(nmax, POLY_MAX_DEG + 2);
+    const double d2 = e.d2;
+    const double d = std::sqrt(d2);
+    const double u1 = -e.l0, u2 = e.L - e.l0;
+    double W[POLY_MAX_DEG + 3] = {};
+    auto asinh_safe = [d](double u) {
+        if (d > 1e-300) return std::asinh(u / d);
+        if (std::fabs(u) == 0.0) return 0.0;
+        return (u > 0.0 ? 1.0 : -1.0) * std::log(2.0 * std::fabs(u));
+    };
+    W[0] = asinh_safe(u2) - asinh_safe(u1);
+    if (nmax >= 1) W[1] = std::sqrt(u2 * u2 + d2) - std::sqrt(u1 * u1 + d2);
+    for (int n = 2; n <= nmax; ++n) {
+        const double term = (std::pow(u2, n - 1) * std::sqrt(u2 * u2 + d2)
+                           - std::pow(u1, n - 1) * std::sqrt(u1 * u1 + d2)) / n;
+        W[n] = term - ((n - 1.0) * d2 / n) * W[n - 2];
+    }
+    for (int n = 0; n <= nmax; ++n) {
+        double s = 0.0;
+        for (int i = 0; i <= n; ++i) s += small_comb(n, i) * std::pow(e.l0, n - i) * W[i];
+        Jl[n] = s;
+    }
+}
+
+static double edge_inplane_monomial_poly(const TriPolyEdge& e, int a, int b,
+                                         const double Jl[POLY_MAX_DEG + 3])
+{
+    double poly[POLY_MAX_DEG + 3] = {};
+    double tmp[POLY_MAX_DEG + 3] = {};
+    int deg = 0;
+    poly[0] = 1.0;
+    auto mul_linear = [&](double c0, double c1) {
+        std::fill(std::begin(tmp), std::end(tmp), 0.0);
+        for (int i = 0; i <= deg; ++i) {
+            tmp[i] += poly[i] * c0;
+            tmp[i + 1] += poly[i] * c1;
+        }
+        ++deg;
+        for (int i = 0; i <= deg; ++i) poly[i] = tmp[i];
+    };
+    for (int i = 0; i < a; ++i) mul_linear(e.xiA[0], e.t2[0]);
+    for (int i = 0; i < b; ++i) mul_linear(e.xiA[1], e.t2[1]);
+    double s = 0.0;
+    for (int i = 0; i <= deg; ++i) s += poly[i] * Jl[i];
+    return s;
+}
+
+static void triangle_inplane_A_moments(const double P[3][3], const double r[3], int degree,
+                                       double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1],
+                                       TriPolySetup& g)
+{
+    for (int i = 0; i <= POLY_MAX_DEG; ++i)
+        for (int j = 0; j <= POLY_MAX_DEG; ++j) A[i][j] = 0.0;
+    degree = std::min(degree, POLY_MAX_DEG);
+    if (!tri_poly_setup(P, r, g)) return;
+    double Jl[3][POLY_MAX_DEG + 3] = {};
+    for (int i = 0; i < 3; ++i) edge_l_moments_poly(g.edges[i], degree + 2, Jl[i]);
+    A[0][0] = TriPotential(P, r);
+    if (degree >= 1) {
+        double A1[2] = {0.0, 0.0};
+        for (int i = 0; i < 3; ++i) {
+            const double er = edge_R_for_poly(g.edges[i]);
+            A1[0] += g.edges[i].m2[0] * er;
+            A1[1] += g.edges[i].m2[1] * er;
+        }
+        A[1][0] = A1[0];
+        A[0][1] = A1[1];
+    }
+    auto Eedge = [&](int j, int p, int q) {
+        double s = 0.0;
+        for (int i = 0; i < 3; ++i)
+            s += g.edges[i].m2[j] * edge_inplane_monomial_poly(g.edges[i], p, q, Jl[i]);
+        return s;
+    };
+    auto Eneg1 = [&](int a, int b) {
+        return Eedge(0, a + 1, b) + Eedge(1, a, b + 1);
+    };
+    for (int k = 2; k <= degree; ++k) {
+        for (int a = k; a >= 0; --a) {
+            const int b = k - a;
+            double h2B;
+            if (a >= 1) h2B = g.h * g.h * ((a - 1) * (a >= 2 ? A[a - 2][b] : 0.0) - Eedge(0, a - 1, b));
+            else        h2B = g.h * g.h * ((b - 1) * (b >= 2 ? A[a][b - 2] : 0.0) - Eedge(1, a, b - 1));
+            A[a][b] = (Eneg1(a, b) - h2B) / (k + 1.0);
+        }
+    }
+}
+
+static void poly2_mul_linear(double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1], int& deg,
+                             double c0, double c1, double c2)
+{
+    double tmp[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+    for (int a = 0; a <= deg; ++a) {
+        for (int b = 0; b <= deg - a; ++b) {
+            const double v = poly[a][b];
+            tmp[a][b] += v * c0;
+            tmp[a + 1][b] += v * c1;
+            tmp[a][b + 1] += v * c2;
+        }
+    }
+    ++deg;
+    for (int a = 0; a <= deg; ++a)
+        for (int b = 0; b <= deg - a; ++b) poly[a][b] = tmp[a][b];
+}
+
+static double SurfacePotentialMonomial(const double P[3][3], const double r[3],
+                                       const int alpha[3], int degree)
+{
+    double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    TriPolySetup g;
+    triangle_inplane_A_moments(P, r, degree, A, g);
+    double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+    int deg = 0;
+    poly[0][0] = 1.0;
+    for (int coord = 0; coord < 3; ++coord)
+        for (int p = 0; p < alpha[coord]; ++p)
+            poly2_mul_linear(poly, deg, g.rp[coord], g.e1[coord], g.e2[coord]);
+    double s = 0.0;
+    for (int a = 0; a <= deg; ++a)
+        for (int b = 0; b <= deg - a; ++b) s += poly[a][b] * A[a][b];
+    return s;
+}
+
+struct TetMomentMemo {
+    bool seen[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+    double val[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+};
+
+static double TetPotentialMomentRec(const double V[4][3], const double r[3], const int alpha[3],
+                                    int degree, TetMomentMemo& memo)
+{
+    const int d = alpha[0] + alpha[1] + alpha[2];
+    if (d == 0) return PhiTet(V, r);
+    bool& seen = memo.seen[alpha[0]][alpha[1]][alpha[2]];
+    double& cached = memo.val[alpha[0]][alpha[1]][alpha[2]];
+    if (seen) return cached;
+    double cen[3] = {0, 0, 0};
+    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) cen[k] += V[i][k] * 0.25;
+    static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    double s = 0.0;
+    for (int fi = 0; fi < 4; ++fi) {
+        double Fv[3][3];
+        for (int j = 0; j < 3; ++j) for (int k = 0; k < 3; ++k) Fv[j][k] = V[FACES[fi][j]][k];
+        double e1[3], e2[3], nrm[3];
+        for (int k = 0; k < 3; ++k) { e1[k] = Fv[1][k] - Fv[0][k]; e2[k] = Fv[2][k] - Fv[0][k]; }
+        v3cross(e1, e2, nrm);
+        double nl = v3nrm(nrm);
+        if (nl < 1e-300) continue;
+        for (int k = 0; k < 3; ++k) nrm[k] /= nl;
+        double fc[3] = {0,0,0};
+        for (int j = 0; j < 3; ++j) for (int k = 0; k < 3; ++k) fc[k] += Fv[j][k] / 3.0;
+        double ov[3]; for (int k = 0; k < 3; ++k) ov[k] = fc[k] - cen[k];
+        if (v3dot(ov, nrm) < 0.0) for (int k = 0; k < 3; ++k) nrm[k] = -nrm[k];
+        double rmf[3]; for (int k = 0; k < 3; ++k) rmf[k] = r[k] - Fv[0][k];
+        const double h = v3dot(rmf, nrm);
+        s -= h * SurfacePotentialMonomial(Fv, r, alpha, degree);
+    }
+    for (int i = 0; i < 3; ++i) {
+        if (alpha[i] <= 0) continue;
+        int am[3] = {alpha[0], alpha[1], alpha[2]};
+        am[i] -= 1;
+        s += r[i] * alpha[i] * TetPotentialMomentRec(V, r, am, degree, memo);
+    }
+    cached = s / (d + 2.0);
+    seen = true;
+    return cached;
+}
+
+} // namespace
+
+double TetPotentialPolynomial(const double V[4][3], const double r[3],
+                              const std::vector<std::array<int,3>>& exps,
+                              const std::vector<double>& coeffs)
+{
+    const size_t n = std::min(exps.size(), coeffs.size());
+    int degree = 0;
+    for (size_t i = 0; i < n; ++i)
+        degree = std::max(degree, exps[i][0] + exps[i][1] + exps[i][2]);
+    if (degree > POLY_MAX_DEG)
+        throw std::runtime_error("TetPotentialPolynomial: degree exceeds POLY_MAX_DEG");
+    TetMomentMemo memo;
+    double s = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        int a[3] = {exps[i][0], exps[i][1], exps[i][2]};
+        if (a[0] < 0 || a[1] < 0 || a[2] < 0 || a[0] + a[1] + a[2] > POLY_MAX_DEG)
+            throw std::runtime_error("TetPotentialPolynomial: invalid exponent");
+        s += coeffs[i] * TetPotentialMomentRec(V, r, a, degree, memo);
+    }
+    return s;
+}
+
+void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3], double out[20])
+{
+    TetMomentMemo memo;
+    int idx = 0;
+    for (int deg = 0; deg <= 3; ++deg) {
+        for (int ax = 0; ax <= deg; ++ax) {
+            for (int ay = 0; ay <= deg - ax; ++ay) {
+                const int alpha[3] = {ax, ay, deg - ax - ay};
+                out[idx++] = TetPotentialMomentRec(V, r, alpha, 3, memo);
+            }
+        }
+    }
 }
 
 // INT_V (rho0 + g.r')(r-r')/R^3 dV' (linear volume charge) = SUM_f n_f[rho0 I0_f + g.M1_f] - g PhiTet.

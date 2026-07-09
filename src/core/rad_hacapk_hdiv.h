@@ -30,6 +30,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <atomic>
 
 //-------------------------------------------------------------------------
 // RadHACApKHDivManager: builds N = B^T G B (HDiv-type VIM) as a HACApK H-matrix.
@@ -200,6 +201,8 @@ public:
     // have zero monopole, so a monopole far is WRONG); it is just adaptive quadrature order, and the HACApK
     // ACA still compresses the well-separated low-rank blocks (now from cheap entries).  ho_far_factor
     // defaults to 1e30 (=> all pairs NEAR => the original all-high-quad behavior, golden-equivalent).
+    // The FAR low-quad double integral is symmetric in (a,b), so the direct FAR term is one-sided by default;
+    // set RADIA_HDIV_HO_FAR_ONESIDED=0 to restore the diagnostic 0.5*(ab+ba) average.
     RadHACApKChargeGram(std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
                         std::vector<int> charge_host, std::vector<int> charge_kind,
                         std::vector<int> charge_expo,
@@ -382,7 +385,9 @@ public:
         const std::vector<double>& B_data, int n_face,
         const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
         double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-        double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true);
+        double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true,
+        const std::vector<double>* x0 = nullptr);
+    std::vector<std::pair<std::string, double>> LastSolveTimings() const;
 
     // The mu_r-INDEPENDENT production MATERIAL solve in C++: Jacobi-preconditioned MINRES for the
     // SYMMETRIC INDEFINITE system A m = rhs, A = inv_chi*M_mass - B^T G B (eigenvalues vs M_mass =
@@ -405,14 +410,16 @@ public:
         double tol, int maxit, int& iters_out, bool mass_riesz = false, bool symmetric = true);
 
     // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
-    // Each Picard step is a SolveLinearMaterial solve of ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),
+    // Each Picard step is a mass-Riesz SolveLinearMaterial solve of
+    // ((1/chi) M_mass + B^T G B) m = H0*(M_mass mu),
     // then chi <- 0.5 chi + 0.5*chi_sec(|H|) with the closed-form saturating curve
     //   M(H) = chi0 H / (1 + chi0 |H|/Msat)   ->   chi_sec(|H|) = chi0/(1 + chi0|H|/Msat),
     // and the scalar self-consistent field H = H0 - Dscal*M_avg, Dscal = mu.(B^T G B mu)/denom,
     // M_avg = mu.(M_mass m)/denom.  Converges to the scalar fixed point M_avg = M(H0 - Dscal*M_avg)
     // -- the full nonlinear physics for an isotropic body, with NO NGSolve per iteration (the
     // per-element tensor-tangent refinement for non-uniform M stays NGSolve).  All sparse inputs as in
-    // SolveLinearMaterial; Mmass_diag + N_diag build the per-chi Jacobi preconditioner.
+    // SolveLinearMaterial; Mmass_diag + N_diag are retained for API compatibility / diagnostics, but the
+    // active preconditioner is the PARDISO mass-Riesz map, matching the production tet Picard path.
     struct PicardResult { std::vector<double> m; double Mavg; double chi; double Dscal; int iters; };
     PicardResult SolveNonlinearPicard(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
@@ -489,6 +496,7 @@ private:
     // measure come from the Q2 lattice maps.  Entries are served block-wise (GetHexBlock); the inner is the
     // ref-frame radial decomposition (PhiInnerHexRadialVec) for near/self, cached far clouds otherwise.
     bool m_hexmode = false;
+    bool m_hexCacheStatsEnabled = false;                  // opt-in via RADIA_HDIV_HEX_CACHE_STATS=1; hot hits avoid atomics by default
     int  m_hex_n_bf = 0;
     std::vector<double> m_hexNodes, m_quadNodes;        // [n_el*81] 27-node Q2 hex, [n_bf*27] 9-node Q2 quad
     std::vector<double> m_symTetP, m_symTetW;           // regular outer tet rule (bary lam1..3; W sums 1/6)
@@ -500,6 +508,13 @@ private:
     double m_near_grade = 1.5, m_far_inner_factor = 4.0;
     std::vector<double> m_cellSubC, m_cellSubS, m_cellSubV;  // [n_el*6*3] sub-tet centroids, [n_el*6] sizes, [n_el*6*4*3] phys corners
     std::vector<double> m_faceSubC, m_faceSubS, m_faceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3] (sub-tri)
+    std::vector<unsigned char> m_hexAffineCell;              // [n_el] true when the Q2 lattice is affine
+    std::vector<double> m_hexAffineCoeff;                    // [n_el*8*20] ref Q1 monomials -> physical degree<=3 coeffs / |detJ|
+    bool m_hexUniformAffineCells = false;                    // same affine cell map for every cell -> translation block cache
+    std::vector<int> m_hexCellLattice;                       // [n_el*3] integer lattice coordinate for uniform affine cells
+    bool m_hexUniformTransHosts = false;                      // cell/face hosts are translated template copies
+    std::vector<int> m_hexHostTemplate;                       // [n_el+n_bf] template id per host (cell ids and face ids are separate by kind)
+    std::vector<int> m_hexHostLattice2;                       // [3*(n_el+n_bf)] half-cell lattice coordinates of host centers
     double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1 monomial (i,j,k in {0,1})
     // BLOCK-MEMO (the 64x co-location win): the near/far/grading decisions depend ONLY on host+sub geometry
     // (all co-located charges of a (kind,host) share m_cent/m_size), so the WHOLE directed host-pair block is
@@ -509,8 +524,23 @@ private:
     std::vector<int> m_hexLocalOf;                       // [n] local index of charge within its (kind,host) group
     std::vector<std::vector<int>> m_cellCharges;         // [n_el] global charge indices per cell (local order)
     std::vector<std::vector<int>> m_faceCharges;         // [n_bf] global charge indices per boundary face
+    struct SolveTiming {
+        double total_s = 0.0, factor_s = 0.0, prec_s = 0.0, bx_s = 0.0, gmatvec_s = 0.0;
+        double btx_s = 0.0, mass_s = 0.0, dot_s = 0.0, ax_total_s = 0.0, ax_other_s = 0.0;
+        double pcg_update_s = 0.0;
+        double hmatvec_total_s = 0.0, hmatvec_zero_s = 0.0, hmatvec_permute_s = 0.0;
+        double hmatvec_leaf_s = 0.0, hmatvec_reduce_s = 0.0, hmatvec_meta_s = 0.0;
+        double hmatvec_lowrank_flop_est = 0.0, hmatvec_dense_flop_est = 0.0;
+        double hmatvec_calls = 0.0, hmatvec_lowrank_leaves = 0.0, hmatvec_dense_leaves = 0.0;
+        double hmatvec_mirrored_upper_leaves = 0.0, hmatvec_diagonal_leaves = 0.0;
+        double hmatvec_skipped_lower_leaves = 0.0, hmatvec_last_nd = 0.0, hmatvec_last_nthr = 0.0;
+        int apply_count = 0, prec_count = 0, dot_count = 0;
+    };
+    SolveTiming m_lastSolveTiming;
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
+    void PhiInnerHexAffineCellSubVec(int hS, int subB, const double p[3],
+                                     const std::vector<int>& srcG, double* inn) const;
     // SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
     // anchor x0 = xiT, the outer point's OWN ref coords (the pulled-back kernel 1/|p-X(xi)| peaks there --
     // exact, no inverse), CLAMPED into the ref sub-simplex, then 4 signed radial sub-tets (3 signed
@@ -551,15 +581,34 @@ public:
     double HexStateChecksum() const;
     double HexStateCtorChecksum() const { return m_hex_state_sum; }
     std::vector<std::pair<std::string, double>> HexStateBreakdown() const;   // per-array (forensics)
+    std::vector<std::pair<std::string, double>> HexCacheStats() const;       // block-cache hit/miss stats
     const std::vector<double>& HexStoredCellNodes() const { return m_hexNodes; }
     const std::vector<double>& HexStoredFaceNodes() const { return m_quadNodes; }
 private:
     double m_hex_state_sum = 0.0;
+    mutable std::atomic<long long> m_hexBlockLookups{0};
+    mutable std::atomic<long long> m_hexBlockHits{0};
+    mutable std::atomic<long long> m_hexBlockMisses{0};
+    mutable std::atomic<long long> m_hexBlockClears{0};
+    mutable std::atomic<long long> m_hexTransBlockLookups{0};
+    mutable std::atomic<long long> m_hexTransBlockHits{0};
+    mutable std::atomic<long long> m_hexTransBlockMisses{0};
+    mutable std::atomic<long long> m_hexTransBlockClears{0};
+    mutable std::atomic<long long> m_hexSymBlockLookups{0};
+    mutable std::atomic<long long> m_hexSymBlockHits{0};
+    mutable std::atomic<long long> m_hexSymBlockMisses{0};
+    mutable std::atomic<long long> m_hexSymBlockClears{0};
+    mutable std::atomic<long long> m_hexSymTransBlockLookups{0};
+    mutable std::atomic<long long> m_hexSymTransBlockHits{0};
+    mutable std::atomic<long long> m_hexSymTransBlockMisses{0};
+    mutable std::atomic<long long> m_hexSymTransBlockClears{0};
+    void ResetHexCacheStats();
     // mask (IMA): 0 = direct block; >0 = the mirror-image block (target host x the source host REFLECTED on
     // the 3-bit axis mask), for the reduced-symmetry (1/2,1/4,1/8) image method.  Default 0 keeps the direct
     // hex/wedge Gram byte-identical.
     std::vector<double> QuadBlockHex(int kindT, int hT, int kindS, int hS, int mask = 0) const;  // directed [nT*nS] block, INV4PI folded
     const std::vector<double>& GetHexBlock(int kindT, int hT, int kindS, int hS, int mask = 0) const;  // thread_local block cache
+    const std::vector<double>& GetHexSymBlock(int kindA, int hA, int kindB, int hB, int mask = 0) const;  // cached 0.5*(AB+BA^T)
 
     // ---- 2D PLANAR mode (see the dim2 ctor doc) ----
     bool m_d2 = false;

@@ -28,6 +28,13 @@ import ngsolve as ng  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 from radia.vim import Solve, MeshSoftIron  # noqa: E402
+from radia.vim._vim import (  # noqa: E402
+    _Q2_LATTICE_2D,
+    _Q2_LATTICE_3D,
+    _hex_q2_lattice_nodes_ngsolve_linear,
+    _quad_q2_lattice_nodes_ngsolve_linear,
+    _trafo_lattice_nodes,
+)
 
 pytestmark = pytest.mark.slow
 
@@ -46,6 +53,27 @@ BH = [[float(h), float(b)] for h, b in zip(_Hs, MU0 * (_Hs + _Ms))]
 
 def _cube(n):
     return MakeStructured3DMesh(hexes=True, nx=n, ny=n, nz=n, mapping=_mp)
+
+
+def test_ngsolve_vol_linear_hex_lattice_matches_gettrafo():
+    """The flat-hex fast path is NGSolve .vol reference order, not Cubit/GMSH vertex order."""
+    mesh = _cube(2)
+    ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
+    ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
+    max_hex = 0.0
+    for i in range(mesh.GetNE(ng.VOL)):
+        e = ng.ElementId(ng.VOL, i)
+        err = np.max(np.abs(
+            _hex_q2_lattice_nodes_ngsolve_linear(mesh, e) - _trafo_lattice_nodes(mesh, e, ir_hex)))
+        max_hex = max(max_hex, float(err))
+    max_quad = 0.0
+    for i in range(mesh.GetNE(ng.BND)):
+        e = ng.ElementId(ng.BND, i)
+        err = np.max(np.abs(
+            _quad_q2_lattice_nodes_ngsolve_linear(mesh, e) - _trafo_lattice_nodes(mesh, e, ir_quad)))
+        max_quad = max(max_quad, float(err))
+    assert max_hex < 1e-14
+    assert max_quad < 1e-14
 
 
 def _hdiv_hex_retry(mesh, **kw):
@@ -79,6 +107,9 @@ def test_vim_solve_hex_nonlinear():
     """vim.Solve on a pure-hex cube with a BH table: energy-Newton converges."""
     res = _hdiv_hex_retry(_cube(6), bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
     assert res["nonlinear"] is True
+    assert res["preconditioner_requested"] == "auto"
+    assert res["preconditioner"] == "jacobi"
+    assert res["preconditioner_policy"] == "auto:hex-wedge-energy-newton-jacobi"
     assert res["iters"] < 100, f"hex energy-Newton not bounded: {res['iters']}"
     mz = res["M_avg"][2]
     assert 1.0e3 < mz < 1.0e4, f"hex nonlinear HDiv Mz {mz:.1f} outside expected band"

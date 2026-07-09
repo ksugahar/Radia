@@ -35,6 +35,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import ngsolve as ng
+import time
 
 import radia._radia_pybind as _rp
 
@@ -339,6 +340,44 @@ def _change_of_basis_ref(fe, mons, refP, refW, dim):
     return np.linalg.solve(M, C)
 
 
+def _shape_signature_ref(fe, pts, dim):
+    """Small orientation signature for scalar DG FE shapes.
+
+    Computing the full Q1 projection matrix for every hex/quad is pure waste on structured meshes, but blindly
+    reusing one transform would be unsafe if NGSolve changes the local scalar-shape ordering.  A few asymmetric
+    reference points distinguish the orientation/ordering cheaply; a cache miss then computes the exact
+    full-quadrature transform for that signature.
+    """
+    if dim == 3:
+        vals = np.array([fe.CalcShape(float(p[0]), float(p[1]), float(p[2])) for p in pts], dtype=float)
+    else:
+        vals = np.array([fe.CalcShape(float(p[0]), float(p[1])) for p in pts], dtype=float)
+    return fe.ndof, np.round(vals, 14).tobytes()
+
+
+def _ref_monomial_moment_transform(fe, mons, refP, refW, dim):
+    """Direct map from ref-shape moments to ref monomial coefficients.
+
+    Existing code did two dense operations per element:
+      shape moments -> shape coefficients via M_shape^{-1}, then
+      shape coefficients -> monomial coefficients via S.
+    The product S M_shape^{-1} depends only on the scalar DG FE orientation, so the hex path caches this tiny
+    matrix and applies it to each element's sparse moment rows.
+    """
+    if dim == 3:
+        Phi = np.array([fe.CalcShape(float(pt[0]), float(pt[1]), float(pt[2])) for pt in refP], dtype=float)
+        Mono = np.array([[pt[0] ** i * pt[1] ** j * pt[2] ** k for (i, j, k) in mons]
+                         for pt in refP], dtype=float)
+    else:
+        Phi = np.array([fe.CalcShape(float(pt[0]), float(pt[1])) for pt in refP], dtype=float)
+        Mono = np.array([[pt[0] ** i * pt[1] ** j for (i, j) in mons] for pt in refP], dtype=float)
+    M_shape = (Phi * refW[:, None]).T @ Phi
+    M_mono = (Mono * refW[:, None]).T @ Mono
+    cross = (Mono * refW[:, None]).T @ Phi
+    shape_to_mono = np.linalg.solve(M_mono, cross)
+    return np.linalg.solve(M_shape.T, shape_to_mono.T).T
+
+
 def _charge_basis_curved(fes, quad):
     """CURVED (mesh.Curve(2)) analogue of `_charge_basis`: the charge map B is curved-correct (NGSolve
     integrates -div M / M.n on the curved mesh), the change-of-basis is reference-frame (g=pt), and the
@@ -404,6 +443,43 @@ _MONS_QUAD = [(i, j) for j in (0, 1) for i in (0, 1)]                        # 4
 _Q2_LATTICE_3D = [(ix / 2.0, iy / 2.0, iz / 2.0)
                   for iz in range(3) for iy in range(3) for ix in range(3)]  # n = ix + 3*iy + 9*iz
 _Q2_LATTICE_2D = [(iu / 2.0, iv / 2.0) for iv in range(3) for iu in range(3)]  # n = iu + 3*iv
+_HEX_SHAPE_SIG_PTS = np.array([(0.137, 0.239, 0.361), (0.713, 0.211, 0.557),
+                               (0.319, 0.823, 0.173)], dtype=float)
+_QUAD_SHAPE_SIG_PTS = np.array([(0.137, 0.239), (0.713, 0.421), (0.319, 0.823)], dtype=float)
+_HEX_NGSOLVE_LINEAR_ORDER = np.array([0, 1, 3, 2, 4, 5, 7, 6], dtype=int)
+_QUAD_NGSOLVE_LINEAR_ORDER = np.array([0, 1, 3, 2], dtype=int)
+_HEX_Q2_LINEAR_WEIGHTS = np.array([
+    [(1.0-u)*(1.0-v)*(1.0-w), u*(1.0-v)*(1.0-w), (1.0-u)*v*(1.0-w), u*v*(1.0-w),
+     (1.0-u)*(1.0-v)*w,       u*(1.0-v)*w,       (1.0-u)*v*w,       u*v*w]
+    for u, v, w in _Q2_LATTICE_3D
+], dtype=float)
+_QUAD_Q2_LINEAR_WEIGHTS = np.array([
+    [(1.0-u)*(1.0-v), u*(1.0-v), (1.0-u)*v, u*v]
+    for u, v in _Q2_LATTICE_2D
+], dtype=float)
+
+
+def _mesh_vertices_array(mesh, e):
+    return np.array([mesh[v].point for v in mesh[e].vertices], dtype=float)
+
+
+def _hex_q2_lattice_nodes_ngsolve_linear(mesh, e):
+    """27 lattice nodes for a linear NGSolve .vol hex, in the C++ Q2 lattice order.
+
+    This is deliberately NGSolve-reference ordering, not Cubit/GMSH ordering.  Probed against
+    `mesh.GetTrafo(e)` on structured .vol hexes:
+      local vertices 0,1,3,2,4,5,7,6 map to ref corners
+      (0,0,0),(1,0,0),(0,1,0),(1,1,0),(0,0,1),(1,0,1),(0,1,1),(1,1,1).
+    For curved .vol meshes this helper is not used; GetTrafo remains the source of truth.
+    """
+    V = _mesh_vertices_array(mesh, e)[_HEX_NGSOLVE_LINEAR_ORDER]
+    return _HEX_Q2_LINEAR_WEIGHTS @ V
+
+
+def _quad_q2_lattice_nodes_ngsolve_linear(mesh, e):
+    """9 lattice nodes for a linear NGSolve .vol boundary quad, in C++ Q2 face order."""
+    V = _mesh_vertices_array(mesh, e)[_QUAD_NGSOLVE_LINEAR_ORDER]
+    return _QUAD_Q2_LINEAR_WEIGHTS @ V
 
 
 def _ref_prod_gauss(n, dim):
@@ -453,7 +529,8 @@ def _trafo_lattice_nodes(mesh, e, ir, max_tries=16):
 
 def _charge_basis_hex(fes, cob_quad=3):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
-    flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager.
+    flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager.  Flat NGSolve `.vol`
+    hexes use direct NGSolve-reference lattice interpolation; curved meshes keep the GetTrafo source of truth.
 
     PIOLA-EXACT charge model (the warped-hex correctness fix): on a mapped hex the TRUE volume charge is
     rho(x) = q_ref(xi)/J(xi) with q_ref = -div_ref(u_ref) in Q1(xi) (and sigma = (u.n)_ref(u,v)/Js on faces)
@@ -467,6 +544,7 @@ def _charge_basis_hex(fes, cob_quad=3):
     dxi deta  with NO Jacobian factors (they cancel against the two 1/J densities)."""
     mesh = fes.mesh
     assert fes.globalorder == 1, "RT1-hex is HDiv order-1 only"
+    t0 = time.perf_counter()
     nn = ng.specialcf.normal(mesh.dim)
     L2v = ng.L2(mesh, order=1)               # HEX GOTCHA: div_ref(HDiv-hex order1) is Q1 -> L2 order 1
     L2b = ng.SurfaceL2(mesh, order=1)
@@ -477,6 +555,7 @@ def _charge_basis_hex(fes, cob_quad=3):
     Bv = _csr(bv)                            # REF-measure moments of q_ref (the physical J cancels)
     Bb = _csr(bb)
     M_mass = _csr(mh)
+    t_assembly = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
     bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
@@ -484,52 +563,115 @@ def _charge_basis_hex(fes, cob_quad=3):
     rqp, rqw = _ref_prod_gauss(cob_quad, 2)
     ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
     ir_quad = ng.IntegrationRule(_Q2_LATTICE_2D, [1.0] * 9)
+    linear_lattice = (mesh.GetCurveOrder() < 2)
+    t_topology = time.perf_counter()
 
-    Brows, host, kind, expo = [], [], [], []
+    host, kind, expo = [], [], []
     cell_nodes, face_nodes = [], []
+    vol_transform_cache = {}
+    face_transform_cache = {}
+    vol_rows, vol_cols, vol_data = [], [], []
+    face_rows, face_cols, face_data = [], [], []
+    vol_lattice_s = 0.0
+    vol_project_s = 0.0
+    face_lattice_s = 0.0
+    face_project_s = 0.0
     for c, e in enumerate(vels):
-        cell_nodes.append(_trafo_lattice_nodes(mesh, e, ir_hex))
+        _ts = time.perf_counter()
+        cell_nodes.append(_hex_q2_lattice_nodes_ngsolve_linear(mesh, e)
+                          if linear_lattice else _trafo_lattice_nodes(mesh, e, ir_hex))
+        vol_lattice_s += time.perf_counter() - _ts
+        _ts = time.perf_counter()
         fe = L2v.GetFE(e)
-        Phi = np.array([fe.CalcShape(*pt) for pt in rhp])            # (nq, nphi) ref shapes
-        Mref = (Phi * rhw[:, None]).T @ Phi                          # INT_ref phi phi dxi (exact, Q1 shapes)
-        rows = np.linalg.solve(Mref, Bv[list(L2v.GetDofNrs(e)), :].toarray())
-        Sv = _change_of_basis_ref(fe, _MONS_HEX, rhp, rhw, dim=3)
-        blk = sp.csr_matrix(Sv @ rows)
+        key = _shape_signature_ref(fe, _HEX_SHAPE_SIG_PTS, dim=3)
+        T = vol_transform_cache.get(key)
+        if T is None:
+            T = _ref_monomial_moment_transform(fe, _MONS_HEX, rhp, rhw, dim=3)
+            vol_transform_cache[key] = T
+        dofs = list(L2v.GetDofNrs(e))
+        base = c * len(_MONS_HEX)
         for a, (i, j, k) in enumerate(_MONS_HEX):
-            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+            host.append(c); kind.append(0); expo += [i, j, k]
+            for b, col in enumerate(dofs):
+                val = float(T[a, b])
+                if val != 0.0:
+                    vol_rows.append(base + a); vol_cols.append(int(col)); vol_data.append(val)
+        vol_project_s += time.perf_counter() - _ts
     n_el = len(vels)
+    _ts = time.perf_counter()
+    Tv = sp.csr_matrix((vol_data, (vol_rows, vol_cols)), shape=(n_el * len(_MONS_HEX), Bv.shape[0]))
+    Bvol = Tv @ Bv
+    vol_project_s += time.perf_counter() - _ts
     for f, e in enumerate(bels):
-        face_nodes.append(_trafo_lattice_nodes(mesh, e, ir_quad))
+        _ts = time.perf_counter()
+        face_nodes.append(_quad_q2_lattice_nodes_ngsolve_linear(mesh, e)
+                          if linear_lattice else _trafo_lattice_nodes(mesh, e, ir_quad))
+        face_lattice_s += time.perf_counter() - _ts
+        _ts = time.perf_counter()
         fe = L2b.GetFE(e)
-        Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in rqp])
-        Mref = (Phi * rqw[:, None]).T @ Phi
-        rows = np.linalg.solve(Mref, Bb[list(L2b.GetDofNrs(e)), :].toarray())
-        Ss = _change_of_basis_ref(fe, _MONS_QUAD, rqp, rqw, dim=2)
-        blk = sp.csr_matrix(Ss @ rows)
+        key = _shape_signature_ref(fe, _QUAD_SHAPE_SIG_PTS, dim=2)
+        T = face_transform_cache.get(key)
+        if T is None:
+            T = _ref_monomial_moment_transform(fe, _MONS_QUAD, rqp, rqw, dim=2)
+            face_transform_cache[key] = T
+        dofs = list(L2b.GetDofNrs(e))
+        base = f * len(_MONS_QUAD)
         for a, (i, j) in enumerate(_MONS_QUAD):
-            Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
-    B = sp.vstack(Brows).tocsr()
+            host.append(f); kind.append(1); expo += [i, j, 0]
+            for b, col in enumerate(dofs):
+                val = float(T[a, b])
+                if val != 0.0:
+                    face_rows.append(base + a); face_cols.append(int(col)); face_data.append(val)
+        face_project_s += time.perf_counter() - _ts
+    _ts = time.perf_counter()
+    if bels:
+        Tf = sp.csr_matrix((face_data, (face_rows, face_cols)), shape=(len(bels) * len(_MONS_QUAD), Bb.shape[0]))
+        Bface = Tf @ Bb
+    else:
+        Bface = sp.csr_matrix((0, Bb.shape[1]))
+    face_project_s += time.perf_counter() - _ts
+    t_before_vstack = time.perf_counter()
+    B = sp.vstack([Bvol, Bface]).tocsr()
+    t_after_vstack = time.perf_counter()
     return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
                 cell_nodes=np.concatenate([n.ravel() for n in cell_nodes]).tolist(),
-                face_nodes=(np.concatenate([n.ravel() for n in face_nodes]).tolist() if face_nodes else []))
+                face_nodes=(np.concatenate([n.ravel() for n in face_nodes]).tolist() if face_nodes else []),
+                _timings={
+                    "charge_basis_assembly_wall_s": t_assembly - t0,
+                    "charge_basis_topology_wall_s": t_topology - t_assembly,
+                    "charge_basis_vol_lattice_wall_s": vol_lattice_s,
+                    "charge_basis_vol_project_wall_s": vol_project_s,
+                    "charge_basis_face_lattice_wall_s": face_lattice_s,
+                    "charge_basis_face_project_wall_s": face_project_s,
+                    "charge_basis_vstack_wall_s": t_after_vstack - t_before_vstack,
+                    "charge_basis_pack_wall_s": time.perf_counter() - t_after_vstack,
+                    "charge_basis_lattice_mode": "ngsolve-linear-vol" if linear_lattice else "gettrafo",
+                    "charge_basis_vol_transform_cache_size": len(vol_transform_cache),
+                    "charge_basis_face_transform_cache_size": len(face_transform_cache),
+                })
 
 
-def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
+def _build_charge_gram_hex(fes, glout_n=4, glin_n=5, near_grade=0.5, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None):
     """Pure-hex RT1 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
-    mesh for curved).  glin_n = the 1D rule of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
+    mesh for curved).  glout_n = the 1D rule of the REF-frame graded OUTER Duffy rule.  The default 4 was
+    selected by the RT1 hex spectrum/demag gates: 3 breaks the mass-normalized Gram spectrum, while 5/6
+    were slower without improving the accepted affine/distorted regression cases.  glin_n = the 1D rule
+    of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
     -- robust on distorted/curved hexes, where graded clouds left eig > 1 on the real cylinder mesh);
     eig(M_mass^-1 N) <= 1 gated on box AND cylinder meshes; block-memo build (~59x vs naive per-entry).
     far_inner = the PER-OUTER-POINT radial reach: an outer point farther than far_inner*size from a source
-    sub-simplex integrates it with the cheap CACHED far cloud instead of the per-point radial rule.  1.5
-    keeps the radial exactly where the kernel peaks (self + the facing side of touching neighbours); the
-    2026-07-03 cost attribution measured the 4.0 shell as ~60%% of the whole build on the real cylinder
-    for <=1e-4 entry drift.  The far TET cloud is the SAME Keast-15 degree-5 rule as the outer (a degree-3
-    WV rule at reach 1.5 ate the flat-cylinder eig margin, 1.0005 -> 1.0044; Keast-15 restores 1.0006 for
-    +4%% build).  The build also skips the strictly-lower H-matrix leaves (symmetric fill -- every apply of
-    the Gram routes through the exactly-symmetric matvec, so they are never read)."""
+    sub-simplex integrates it with the cheap CACHED far cloud instead of the per-point radial rule.  1.0
+    keeps the radial on self / genuinely touching near geometry while moving smooth shell points onto the
+    cached far cloud; the affine/distorted RT1 spectrum gates and the cube N=8/10 demag regression keep this
+    from silently becoming a coarse approximation.  The far TET cloud is the SAME Keast-15 degree-5 rule as
+    the outer (a degree-3 WV rule at reach 1.5 ate the flat-cylinder eig margin, 1.0005 -> 1.0044; Keast-15
+    restores 1.0006 for +4%% build).  The build also skips the strictly-lower H-matrix leaves (symmetric fill
+    -- every apply of the Gram routes through the exactly-symmetric matvec, so they are never read)."""
+    t0 = time.perf_counter()
     cb = _charge_basis_hex(fes)
+    t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
     ftp = np.asarray(_SYM5_TET[0]); ftw = np.asarray(_SYM5_TET[1])
@@ -546,7 +688,15 @@ def _build_charge_gram_hex(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1
         image_masks=([] if image_masks is None else list(image_masks)),
         image_signs=([] if image_signs is None else list(image_signs)),
         eps=eps, leaf=leafsize, eta=eta)
+    t2 = time.perf_counter()
     chk = G.hex_state_check()
+    t3 = time.perf_counter()
+    build_charge_gram.last_timings = {
+        "charge_basis_wall_s": t1 - t0,
+        "charge_gram_cpp_wall_s": t2 - t1,
+        "hex_state_check_wall_s": t3 - t2,
+    }
+    build_charge_gram.last_timings.update(cb.get("_timings", {}))
     if chk["ctor"] != chk["now"]:
         raise RuntimeError(
             "hex charge Gram instance state was corrupted between construction and use "
@@ -685,6 +835,24 @@ def _build_charge_gram_2d(fes, outer_n=4, glin_n=8, gledge_n=12, near_grade=0.6,
 _MONS_WEDGE = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (0, 1, 1)]   # tri-P1 (x) z-P1
 _MONS_TRI3D = [(0, 0), (1, 0), (0, 1)]                                             # SurfaceL2(order1) on a tri = P1
 _WEDGE_Q2_LATTICE = [(_TRI6_LAT[t][0], _TRI6_LAT[t][1], iz / 2.0) for iz in range(3) for t in range(6)]
+_TRI_SHAPE_SIG_PTS = np.array([(0.137, 0.239), (0.521, 0.211), (0.319, 0.173)], dtype=float)
+_WEDGE_SHAPE_SIG_PTS = np.array([(0.137, 0.239, 0.361), (0.521, 0.211, 0.557),
+                                 (0.319, 0.173, 0.823)], dtype=float)
+_WEDGE_Q2_LINEAR_WEIGHTS = np.array([
+    [(1.0-w)*u, (1.0-w)*v, (1.0-w)*(1.0-u-v), w*u, w*v, w*(1.0-u-v)]
+    for u, v, w in _WEDGE_Q2_LATTICE
+], dtype=float)
+_TRI_Q2_LINEAR_WEIGHTS = np.array([[u, v, 1.0-u-v] for u, v in _TRI6_LAT], dtype=float)
+
+
+def _wedge_q2_lattice_nodes_ngsolve_linear(mesh, e):
+    """18 lattice nodes for a linear NGSolve prism, in the C++ wedge Q2 lattice order."""
+    return _WEDGE_Q2_LINEAR_WEIGHTS @ _mesh_vertices_array(mesh, e)
+
+
+def _tri_q2_lattice_nodes_ngsolve_linear(mesh, e):
+    """6 lattice nodes for a linear NGSolve boundary triangle, in the C++ tri6 lattice order."""
+    return _TRI_Q2_LINEAR_WEIGHTS @ _mesh_vertices_array(mesh, e)
 
 
 def _prism_cob_quad(nz=3):
@@ -705,6 +873,7 @@ def _charge_basis_wedge(fes):
     tri(6-node)/quad(9-node) face nodes (packed in 27-double 9-node slots, a tri fills the first 6) + a
     per-face type array, all via GetTrafo (flat + curved ONE path).  fes = HDiv(prismmesh, order=1).
     CALLER wraps TaskManager.  Piola-exact charge model, exactly as the hex path (the J's cancel)."""
+    t0 = time.perf_counter()
     mesh = fes.mesh
     assert fes.globalorder == 1, "RT1-wedge is HDiv order-1 only"
     nn = ng.specialcf.normal(mesh.dim)
@@ -715,6 +884,7 @@ def _charge_basis_wedge(fes):
     bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
     Bv = _csr(bv); Bb = _csr(bb); M_mass = _csr(mh)
+    t_forms = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
     bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
@@ -727,46 +897,121 @@ def _charge_basis_wedge(fes):
 
     Brows, host, kind, expo = [], [], [], []
     cell_nodes, face_nodes, face_type = [], [], []
+    t_setup = time.perf_counter()
+    linear_lattice = (mesh.GetCurveOrder() < 2)
+    vol_transform_cache = {}
+    face_transform_cache = {}
+    vol_rows, vol_cols, vol_data = [], [], []
+    face_rows, face_cols, face_data = [], [], []
+    vol_lattice_s = 0.0
+    vol_project_s = 0.0
+    face_lattice_s = 0.0
+    face_project_s = 0.0
     for c, e in enumerate(vels):
-        cell_nodes.append(_trafo_lattice_nodes(mesh, e, ir_wedge))    # (18, 3)
+        _ts = time.perf_counter()
+        cell_nodes.append(_wedge_q2_lattice_nodes_ngsolve_linear(mesh, e)
+                          if linear_lattice else _trafo_lattice_nodes(mesh, e, ir_wedge))
+        vol_lattice_s += time.perf_counter() - _ts
+        _ts = time.perf_counter()
         fe = L2v.GetFE(e)
-        Phi = np.array([fe.CalcShape(*pt) for pt in php])
-        Mref = (Phi * phw[:, None]).T @ Phi
-        rows = np.linalg.solve(Mref, Bv[list(L2v.GetDofNrs(e)), :].toarray())
-        Sv = _change_of_basis_ref(fe, _MONS_WEDGE, php, phw, dim=3)
-        blk = sp.csr_matrix(Sv @ rows)
+        key = _shape_signature_ref(fe, _WEDGE_SHAPE_SIG_PTS, dim=3)
+        T = vol_transform_cache.get(key)
+        if T is None:
+            T = _ref_monomial_moment_transform(fe, _MONS_WEDGE, php, phw, dim=3)
+            vol_transform_cache[key] = T
+        dofs = list(L2v.GetDofNrs(e))
+        base = c * len(_MONS_WEDGE)
         for a, (i, j, k) in enumerate(_MONS_WEDGE):
-            Brows.append(blk[a]); host.append(c); kind.append(0); expo += [i, j, k]
+            host.append(c); kind.append(0); expo += [i, j, k]
+            for b, col in enumerate(dofs):
+                val = float(T[a, b])
+                if val != 0.0:
+                    vol_rows.append(base + a); vol_cols.append(int(col)); vol_data.append(val)
+        vol_project_s += time.perf_counter() - _ts
     n_el = len(vels)
+    _ts = time.perf_counter()
+    Tv = sp.csr_matrix((vol_data, (vol_rows, vol_cols)), shape=(n_el * len(_MONS_WEDGE), Bv.shape[0]))
+    Bvol = Tv @ Bv
+    vol_project_s += time.perf_counter() - _ts
+    t_vol = time.perf_counter()
+    face_charge_count = 0
     for f, e in enumerate(bels):
+        _ts = time.perf_counter()
         if len(list(mesh[e].vertices)) == 3:                          # TRI face -> 6-node, P1, 1 sub-tri
-            nd = _trafo_lattice_nodes(mesh, e, ir_tri)                # (6, 3)
+            nd = (_tri_q2_lattice_nodes_ngsolve_linear(mesh, e)
+                  if linear_lattice else _trafo_lattice_nodes(mesh, e, ir_tri))
             slot = np.zeros((9, 3)); slot[:6] = nd
             face_nodes.append(slot); face_type.append(0)
+            face_lattice_s += time.perf_counter() - _ts
+            _ts = time.perf_counter()
             fe = L2b.GetFE(e)
-            Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in tp2])
-            Mref = (Phi * tw2[:, None]).T @ Phi
-            rows = np.linalg.solve(Mref, Bb[list(L2b.GetDofNrs(e)), :].toarray())
-            Ss = _change_of_basis_ref(fe, _MONS_TRI3D, tp2, tw2, dim=2)
-            blk = sp.csr_matrix(Ss @ rows)
+            key = ("tri", _shape_signature_ref(fe, _TRI_SHAPE_SIG_PTS, dim=2))
+            T = face_transform_cache.get(key)
+            if T is None:
+                T = _ref_monomial_moment_transform(fe, _MONS_TRI3D, tp2, tw2, dim=2)
+                face_transform_cache[key] = T
+            dofs = list(L2b.GetDofNrs(e))
+            base = face_charge_count
             for a, (i, j) in enumerate(_MONS_TRI3D):
-                Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
+                host.append(f); kind.append(1); expo += [i, j, 0]
+                for b, col in enumerate(dofs):
+                    val = float(T[a, b])
+                    if val != 0.0:
+                        face_rows.append(base + a); face_cols.append(int(col)); face_data.append(val)
+            face_charge_count += len(_MONS_TRI3D)
+            face_project_s += time.perf_counter() - _ts
         else:                                                         # QUAD face -> 9-node, Q1, 2 sub-tris
-            face_nodes.append(_trafo_lattice_nodes(mesh, e, ir_quad)) # (9, 3)
+            face_nodes.append(_quad_q2_lattice_nodes_ngsolve_linear(mesh, e)
+                              if linear_lattice else _trafo_lattice_nodes(mesh, e, ir_quad))
             face_type.append(1)
+            face_lattice_s += time.perf_counter() - _ts
+            _ts = time.perf_counter()
             fe = L2b.GetFE(e)
-            Phi = np.array([fe.CalcShape(pt[0], pt[1]) for pt in qp2])
-            Mref = (Phi * qw2[:, None]).T @ Phi
-            rows = np.linalg.solve(Mref, Bb[list(L2b.GetDofNrs(e)), :].toarray())
-            Ss = _change_of_basis_ref(fe, _MONS_QUAD, qp2, qw2, dim=2)
-            blk = sp.csr_matrix(Ss @ rows)
+            key = ("quad", _shape_signature_ref(fe, _QUAD_SHAPE_SIG_PTS, dim=2))
+            T = face_transform_cache.get(key)
+            if T is None:
+                T = _ref_monomial_moment_transform(fe, _MONS_QUAD, qp2, qw2, dim=2)
+                face_transform_cache[key] = T
+            dofs = list(L2b.GetDofNrs(e))
+            base = face_charge_count
             for a, (i, j) in enumerate(_MONS_QUAD):
-                Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
-    B = sp.vstack(Brows).tocsr()
+                host.append(f); kind.append(1); expo += [i, j, 0]
+                for b, col in enumerate(dofs):
+                    val = float(T[a, b])
+                    if val != 0.0:
+                        face_rows.append(base + a); face_cols.append(int(col)); face_data.append(val)
+            face_charge_count += len(_MONS_QUAD)
+            face_project_s += time.perf_counter() - _ts
+    _ts = time.perf_counter()
+    if face_charge_count:
+        Tf = sp.csr_matrix((face_data, (face_rows, face_cols)), shape=(face_charge_count, Bb.shape[0]))
+        Bface = Tf @ Bb
+    else:
+        Bface = sp.csr_matrix((0, Bb.shape[1]))
+    face_project_s += time.perf_counter() - _ts
+    t_face = time.perf_counter()
+    B = sp.vstack([Bvol, Bface]).tocsr()
+    t_vstack = time.perf_counter()
     return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
                 cell_nodes=np.concatenate([n.ravel() for n in cell_nodes]).tolist(),
                 face_nodes=np.concatenate([n.ravel() for n in face_nodes]).tolist(),
-                face_type=face_type)
+                face_type=face_type,
+                _timings={
+                    "charge_basis_forms_wall_s": t_forms - t0,
+                    "charge_basis_setup_wall_s": t_setup - t_forms,
+                    "charge_basis_vol_wall_s": t_vol - t_setup,
+                    "charge_basis_face_wall_s": t_face - t_vol,
+                    "charge_basis_vol_lattice_wall_s": vol_lattice_s,
+                    "charge_basis_vol_project_wall_s": vol_project_s,
+                    "charge_basis_face_lattice_wall_s": face_lattice_s,
+                    "charge_basis_face_project_wall_s": face_project_s,
+                    "charge_basis_vstack_wall_s": t_vstack - t_face,
+                    "charge_basis_pack_wall_s": time.perf_counter() - t_vstack,
+                    "charge_basis_lattice_mode": "ngsolve-linear-prism" if linear_lattice else "gettrafo",
+                    "charge_basis_vol_transform_cache_size": len(vol_transform_cache),
+                    "charge_basis_face_transform_cache_size": len(face_transform_cache),
+                    "charge_basis_wall_s": time.perf_counter() - t0,
+                })
 
 
 def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
@@ -775,7 +1020,9 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
     FLAT + Curve(2) share ONE path).  numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3;
     demag_z ~ 1/3.  The wedge mode shares the hex block memo / symmetric-fill build, so the golden hex path
     is byte-for-byte untouched."""
+    t0 = time.perf_counter()
     cb = _charge_basis_wedge(fes)
+    t1 = time.perf_counter()
     glo, gwo = _g01(glout_n); gli, gwi = _g01(glin_n)
     G = _rp._ChargeGramHMatrix(
         wedge_cell_nodes=cb["cell_nodes"], face_nodes=cb["face_nodes"], face_type=list(cb["face_type"]),
@@ -790,7 +1037,15 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
         image_masks=([] if image_masks is None else list(image_masks)),
         image_signs=([] if image_signs is None else list(image_signs)),
         eps=eps, leaf=leafsize, eta=eta)
+    t2 = time.perf_counter()
     chk = G.hex_state_check()
+    t3 = time.perf_counter()
+    build_charge_gram.last_timings = {
+        "charge_basis_wall_s": t1 - t0,
+        "charge_gram_cpp_wall_s": t2 - t1,
+        "hex_state_check_wall_s": t3 - t2,
+    }
+    build_charge_gram.last_timings.update(cb.get("_timings", {}))
     if chk["ctor"] != chk["now"]:
         raise RuntimeError(
             "wedge charge Gram instance state was corrupted between construction and use "
@@ -822,6 +1077,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     all-high-quad build to <1e-3 by tests/feec/test_hdiv_vim_nearfar_highorder.py -- so this is NOT a silent
     approximation, it is a TESTED accuracy-preserving quadrature-order choice (a default param == the user's
     contract).  Pass ho_far_factor=inf to FORCE the exact all-high-quad build (e.g. a golden reference)."""
+    build_charge_gram.last_timings = {}
     mesh = fes.mesh
     p = fes.globalorder
     if p != 1:

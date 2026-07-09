@@ -16,6 +16,15 @@
 #include <atomic>
 #include <functional>
 #include <cstddef>
+#include <cstdint>
+#include <chrono>
+#include <cstdlib>
+
+extern "C" {
+void HACApK_matvec_stats_reset(void);
+void HACApK_matvec_stats_get(double *values, int n_values,
+                             int64_t *counts, int n_counts);
+}
 
 #ifdef HAVE_LAPACK
 #include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the RT0 mass for the MASS RIESZ precond
@@ -555,6 +564,73 @@ static long long NextChargeGramBuildId()
 {
     static std::atomic<long long> s_id{0};
     return s_id.fetch_add(1) + 1;
+}
+
+static bool HexCacheStatsEnabledByEnv()
+{
+    const char* v = std::getenv("RADIA_HDIV_HEX_CACHE_STATS");
+    return v && v[0] != '\0' && v[0] != '0';
+}
+
+static inline void HexStatAdd(bool enabled, std::atomic<long long>& v)
+{
+    if (enabled) v.fetch_add(1, std::memory_order_relaxed);
+}
+
+static size_t HexBlockCacheLimit()
+{
+    static const size_t limit = []() -> size_t {
+        const char* v = std::getenv("RADIA_HDIV_HEX_BLOCK_CACHE_LIMIT");
+        if (!v || v[0] == '\0') return 200000u;
+        const long long parsed = std::atoll(v);
+        return parsed > 0 ? (size_t)parsed : 200000u;
+    }();
+    return limit;
+}
+
+static double HexFarOneSidedThreshold()
+{
+    static const double threshold = []() -> double {
+        const char* v = std::getenv("RADIA_HDIV_HEX_FAR_ONESIDED");
+        if (!v || v[0] == '\0') return 1.0;
+        const double parsed = std::atof(v);
+        return parsed >= 0.0 ? parsed : 1.0;
+    }();
+    return threshold;
+}
+
+static double WedgeFarOneSidedThreshold()
+{
+    static const double threshold = []() -> double {
+        const char* v = std::getenv("RADIA_HDIV_WEDGE_FAR_ONESIDED");
+        if (!v || v[0] == '\0') return 1.0;
+        const double parsed = std::atof(v);
+        return parsed >= 0.0 ? parsed : 1.0;
+    }();
+    return threshold;
+}
+
+// 0/off: disable wedge translation cache, 1: conservative cell-cell subset, 2/all/default: all translated hosts.
+static int WedgeTransCacheScope()
+{
+    static const int scope = []() -> int {
+        const char* v = std::getenv("RADIA_HDIV_WEDGE_TRANS_CACHE");
+        if (!v || v[0] == '\0') return 2;
+        if (v[0] == '0') return 0;
+        if (v[0] == '1') return 1;
+        if (v[0] == '2' || v[0] == 'a' || v[0] == 'A') return 2;
+        return 2;
+    }();
+    return scope;
+}
+
+static bool HOFarOneSidedEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_HO_FAR_ONESIDED");
+        return !v || v[0] == '\0' || v[0] != '0';
+    }();
+    return enabled;
 }
 
 static void ValidateImageVectors(const std::vector<int>& image_masks,
@@ -1527,6 +1603,148 @@ double RadHACApKChargeGram::HexMonoEval(int charge, const double xi[3]) const
     return v;
 }
 
+static inline int HexPolyIdxDeg3(int ax, int ay, int az)
+{
+    const int deg = ax + ay + az;
+    int idx = 0;
+    for (int k = 0; k < deg; ++k) idx += (k + 1) * (k + 2) / 2;
+    for (int a = 0; a < ax; ++a) idx += deg - a + 1;
+    idx += ay;
+    return idx;
+}
+
+static void HexPolyMulLinearDeg3(double poly[20], int& deg, const double lin[4])
+{
+    double tmp[20] = {};
+    for (int total = 0; total <= deg; ++total) {
+        for (int ax = 0; ax <= total; ++ax) {
+            for (int ay = 0; ay <= total - ax; ++ay) {
+                const int az = total - ax - ay;
+                const double c = poly[HexPolyIdxDeg3(ax, ay, az)];
+                if (c == 0.0) continue;
+                tmp[HexPolyIdxDeg3(ax,     ay,     az    )] += c * lin[0];
+                tmp[HexPolyIdxDeg3(ax + 1, ay,     az    )] += c * lin[1];
+                tmp[HexPolyIdxDeg3(ax,     ay + 1, az    )] += c * lin[2];
+                tmp[HexPolyIdxDeg3(ax,     ay,     az + 1)] += c * lin[3];
+            }
+        }
+    }
+    ++deg;
+    for (int i = 0; i < 20; ++i) poly[i] = tmp[i];
+}
+
+static bool HexAffineInverseForms(const double* nd27, double lin[3][4], double& inv_abs_det)
+{
+    const double* o = &nd27[0];
+    const double* px = &nd27[3*2];
+    const double* py = &nd27[3*6];
+    const double* pz = &nd27[3*18];
+    double A[3][3];
+    for (int k = 0; k < 3; ++k) {
+        A[k][0] = px[k] - o[k];
+        A[k][1] = py[k] - o[k];
+        A[k][2] = pz[k] - o[k];
+    }
+    const double det = HexDet3(A);
+    double scale = 0.0;
+    for (int j = 0; j < 3; ++j) {
+        double n2 = 0.0;
+        for (int k = 0; k < 3; ++k) n2 += A[k][j] * A[k][j];
+        scale = std::max(scale, std::sqrt(n2));
+    }
+    if (std::fabs(det) < 1e-300 || scale < 1e-300) return false;
+    const double tol = 1e-10 * scale + 1e-12;
+    for (int iz = 0; iz < 3; ++iz)
+        for (int iy = 0; iy < 3; ++iy)
+            for (int ix = 0; ix < 3; ++ix) {
+                const double xi = 0.5 * ix, eta = 0.5 * iy, zeta = 0.5 * iz;
+                const double* p = &nd27[3*(ix + 3*iy + 9*iz)];
+                double pred[3];
+                for (int k = 0; k < 3; ++k) pred[k] = o[k] + xi*A[k][0] + eta*A[k][1] + zeta*A[k][2];
+                const double err = std::sqrt((p[0]-pred[0])*(p[0]-pred[0]) +
+                                             (p[1]-pred[1])*(p[1]-pred[1]) +
+                                             (p[2]-pred[2])*(p[2]-pred[2]));
+                if (err > tol) return false;
+            }
+    double B[3][3];
+    const double id = 1.0 / det;
+    B[0][0] =  (A[1][1]*A[2][2] - A[1][2]*A[2][1]) * id;
+    B[0][1] = -(A[0][1]*A[2][2] - A[0][2]*A[2][1]) * id;
+    B[0][2] =  (A[0][1]*A[1][2] - A[0][2]*A[1][1]) * id;
+    B[1][0] = -(A[1][0]*A[2][2] - A[1][2]*A[2][0]) * id;
+    B[1][1] =  (A[0][0]*A[2][2] - A[0][2]*A[2][0]) * id;
+    B[1][2] = -(A[0][0]*A[1][2] - A[0][2]*A[1][0]) * id;
+    B[2][0] =  (A[1][0]*A[2][1] - A[1][1]*A[2][0]) * id;
+    B[2][1] = -(A[0][0]*A[2][1] - A[0][1]*A[2][0]) * id;
+    B[2][2] =  (A[0][0]*A[1][1] - A[0][1]*A[1][0]) * id;
+    for (int q = 0; q < 3; ++q) {
+        lin[q][0] = -(B[q][0]*o[0] + B[q][1]*o[1] + B[q][2]*o[2]);
+        lin[q][1] = B[q][0];
+        lin[q][2] = B[q][1];
+        lin[q][3] = B[q][2];
+    }
+    inv_abs_det = 1.0 / std::fabs(det);
+    return true;
+}
+
+static bool HexAffineBasisChecked(const double* nd27, double origin[3], double A[3][3], double& det)
+{
+    const double* o = &nd27[0];
+    const double* px = &nd27[3*2];
+    const double* py = &nd27[3*6];
+    const double* pz = &nd27[3*18];
+    for (int k = 0; k < 3; ++k) {
+        origin[k] = o[k];
+        A[k][0] = px[k] - o[k];
+        A[k][1] = py[k] - o[k];
+        A[k][2] = pz[k] - o[k];
+    }
+    det = HexDet3(A);
+    double scale = 0.0;
+    for (int j = 0; j < 3; ++j) {
+        double n2 = 0.0;
+        for (int k = 0; k < 3; ++k) n2 += A[k][j] * A[k][j];
+        scale = std::max(scale, std::sqrt(n2));
+    }
+    if (std::fabs(det) < 1e-300 || scale < 1e-300) return false;
+    const double tol = 1e-10 * scale + 1e-12;
+    for (int iz = 0; iz < 3; ++iz)
+        for (int iy = 0; iy < 3; ++iy)
+            for (int ix = 0; ix < 3; ++ix) {
+                const double xi = 0.5 * ix, eta = 0.5 * iy, zeta = 0.5 * iz;
+                const double* p = &nd27[3*(ix + 3*iy + 9*iz)];
+                double pred[3];
+                for (int k = 0; k < 3; ++k) pred[k] = origin[k] + xi*A[k][0] + eta*A[k][1] + zeta*A[k][2];
+                const double err = std::sqrt((p[0]-pred[0])*(p[0]-pred[0]) +
+                                             (p[1]-pred[1])*(p[1]-pred[1]) +
+                                             (p[2]-pred[2])*(p[2]-pred[2]));
+                if (err > tol) return false;
+            }
+    return true;
+}
+
+static bool HexInv3(const double A[3][3], double B[3][3])
+{
+    const double det = HexDet3(A);
+    if (std::fabs(det) < 1e-300) return false;
+    const double id = 1.0 / det;
+    B[0][0] =  (A[1][1]*A[2][2] - A[1][2]*A[2][1]) * id;
+    B[0][1] = -(A[0][1]*A[2][2] - A[0][2]*A[2][1]) * id;
+    B[0][2] =  (A[0][1]*A[1][2] - A[0][2]*A[1][1]) * id;
+    B[1][0] = -(A[1][0]*A[2][2] - A[1][2]*A[2][0]) * id;
+    B[1][1] =  (A[0][0]*A[2][2] - A[0][2]*A[2][0]) * id;
+    B[1][2] = -(A[0][0]*A[1][2] - A[0][2]*A[1][0]) * id;
+    B[2][0] =  (A[1][0]*A[2][1] - A[1][1]*A[2][0]) * id;
+    B[2][1] = -(A[0][0]*A[2][1] - A[0][1]*A[2][0]) * id;
+    B[2][2] =  (A[0][0]*A[1][1] - A[0][1]*A[1][0]) * id;
+    return true;
+}
+
+// Exact affine-cell inner is mathematically clean but currently too expensive inside the HACApK entry loop:
+// each outer point triggers several closed-form tet potential recursions.  Keep the verified building block
+// available for future block-level formulas, but leave the production path on the faster shared quadrature.
+static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = false;
+
 // Build a Duffy-graded barycentric rule on a (dim+1)-vertex ref sub-simplex from the 1D rule (gl,gw),
 // graded at LOCAL vertex `corner` (swap-permuted to Duffy vertex 0, matching the validated
 // _ref_duffy_corner / _graded_outer_bary).  Appends (bary[nv], w_ref) pairs; w_ref sums to the ref
@@ -1598,6 +1816,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();
+    m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     // ---- per-host sub-simplex physical geometry (corners, centroid, size) via the Q2 maps ----
     m_cellSubV.assign((size_t)n_el*6*4*3, 0.0); m_cellSubC.assign((size_t)n_el*6*3, 0.0);
     m_cellSubS.assign((size_t)n_el*6, 0.0);
@@ -1691,6 +1910,127 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexLocalOf[a] = (int)grp.size();
         grp.push_back(a);
     }
+    // ---- affine hex source-cell exact path: Q1(ref) -> cubic physical polynomial / |det dX/dxi| ----
+    m_hexAffineCell.assign((size_t)n_el, 0);
+    m_hexAffineCoeff.assign((size_t)n_el * 8 * 20, 0.0);
+    if (HEX_USE_AFFINE_EXACT_CELL_INNER) {
+        for (int c = 0; c < n_el; ++c) {
+            double lin[3][4], inv_abs_det = 0.0;
+            if (!HexAffineInverseForms(&m_hexNodes[(size_t)c*81], lin, inv_abs_det)) continue;
+            m_hexAffineCell[c] = 1;
+            for (int mono = 0; mono < 8; ++mono) {
+                double poly[20] = {};
+                int deg = 0;
+                poly[0] = 1.0;
+                for (int d = 0; d < 3; ++d)
+                    if (mono & (1 << d)) HexPolyMulLinearDeg3(poly, deg, lin[d]);
+                double* dst = &m_hexAffineCoeff[((size_t)c*8 + mono)*20];
+                for (int i = 0; i < 20; ++i) dst[i] = inv_abs_det * poly[i];
+            }
+        }
+    }
+    // Structured affine meshes (e.g. the cube scaling benchmark) repeat the same cell-cell block for
+    // every equal lattice offset.  Detect that case once; GetHexBlock then caches cell-cell blocks by
+    // integer offset instead of absolute host ids, preserving the exact quadrature while avoiding
+    // translation-duplicate entry fills.
+    m_hexUniformAffineCells = false;
+    m_hexCellLattice.assign((size_t)n_el*3, 0);
+    if (n_el > 0) {
+        double o0[3], A0[3][3], det0 = 0.0, B0[3][3];
+        bool ok = HexAffineBasisChecked(&m_hexNodes[0], o0, A0, det0) && HexInv3(A0, B0);
+        double c0[3] = {o0[0] + 0.5*(A0[0][0] + A0[0][1] + A0[0][2]),
+                        o0[1] + 0.5*(A0[1][0] + A0[1][1] + A0[1][2]),
+                        o0[2] + 0.5*(A0[2][0] + A0[2][1] + A0[2][2])};
+        double scale = 0.0;
+        for (int j = 0; j < 3; ++j) {
+            double n2 = 0.0;
+            for (int k = 0; k < 3; ++k) n2 += A0[k][j] * A0[k][j];
+            scale = std::max(scale, std::sqrt(n2));
+        }
+        const double tolA = 1e-10 * scale + 1e-12;
+        for (int c = 0; ok && c < n_el; ++c) {
+            double oc[3], Ac[3][3], detc = 0.0;
+            ok = HexAffineBasisChecked(&m_hexNodes[(size_t)c*81], oc, Ac, detc);
+            for (int i = 0; ok && i < 3; ++i)
+                for (int j = 0; j < 3; ++j)
+                    if (std::fabs(Ac[i][j] - A0[i][j]) > tolA) ok = false;
+            if (!ok) break;
+            double cc[3] = {oc[0] + 0.5*(Ac[0][0] + Ac[0][1] + Ac[0][2]),
+                            oc[1] + 0.5*(Ac[1][0] + Ac[1][1] + Ac[1][2]),
+                            oc[2] + 0.5*(Ac[2][0] + Ac[2][1] + Ac[2][2])};
+            double q[3] = {0.0, 0.0, 0.0};
+            for (int i = 0; i < 3; ++i)
+                for (int k = 0; k < 3; ++k) q[i] += B0[i][k] * (cc[k] - c0[k]);
+            for (int i = 0; i < 3; ++i) {
+                const int qi = (int)std::llround(q[i]);
+                if (std::fabs(q[i] - qi) > 1e-7) ok = false;
+                m_hexCellLattice[(size_t)3*c + i] = qi;
+            }
+        }
+        m_hexUniformAffineCells = ok;
+    }
+    // Extend the structured affine-cache idea from cell-cell blocks to every translated host pair
+    // (cell-face and face-face too).  A host is cacheable when its Q2 lattice nodes, after subtracting the
+    // host center, match one of a small set of templates and its center lies on the half-cell lattice of the
+    // first affine cell.  The template id captures face orientation / parameterization, so blocks are reused
+    // only for true translated copies.
+    m_hexUniformTransHosts = false;
+    m_hexHostTemplate.assign((size_t)n_el + (size_t)m_hex_n_bf, -1);
+    m_hexHostLattice2.assign(((size_t)n_el + (size_t)m_hex_n_bf)*3, 0);
+    if (m_hexUniformAffineCells && n_el > 0) {
+        double o0[3], A0[3][3], det0 = 0.0, B0[3][3];
+        bool ok = HexAffineBasisChecked(&m_hexNodes[0], o0, A0, det0) && HexInv3(A0, B0);
+        double c0[3] = {o0[0] + 0.5*(A0[0][0] + A0[0][1] + A0[0][2]),
+                        o0[1] + 0.5*(A0[1][0] + A0[1][1] + A0[1][2]),
+                        o0[2] + 0.5*(A0[2][0] + A0[2][1] + A0[2][2])};
+        double scale = 0.0;
+        for (int j = 0; j < 3; ++j) {
+            double n2 = 0.0;
+            for (int k = 0; k < 3; ++k) n2 += A0[k][j] * A0[k][j];
+            scale = std::max(scale, std::sqrt(n2));
+        }
+        const double tol = 1e-10 * scale + 1e-12;
+        std::vector<std::vector<double>> cell_templates, face_templates;
+        auto classify_host = [&](int kind, int h, const double* nd, int nnode, size_t host_index) {
+            double ctr[3] = {0.0, 0.0, 0.0};
+            for (int i = 0; i < nnode; ++i)
+                for (int k = 0; k < 3; ++k) ctr[k] += nd[3*i + k];
+            for (int k = 0; k < 3; ++k) ctr[k] /= (double)nnode;
+            double q[3] = {0.0, 0.0, 0.0};
+            for (int i = 0; i < 3; ++i)
+                for (int k = 0; k < 3; ++k) q[i] += B0[i][k] * (ctr[k] - c0[k]);
+            for (int i = 0; i < 3; ++i) {
+                const int qi2 = (int)std::llround(2.0 * q[i]);
+                if (std::fabs(2.0 * q[i] - qi2) > 2e-7) return false;
+                m_hexHostLattice2[3*host_index + i] = qi2;
+            }
+            const std::vector<int>& grp = (kind == 0) ? m_cellCharges[h] : m_faceCharges[h];
+            std::vector<double> sig;
+            sig.reserve((size_t)nnode*3 + 1 + (size_t)grp.size()*3);
+            for (int i = 0; i < nnode; ++i)
+                for (int k = 0; k < 3; ++k) sig.push_back(nd[3*i + k] - ctr[k]);
+            sig.push_back((double)grp.size());
+            for (int g : grp)
+                for (int k = 0; k < 3; ++k) sig.push_back((double)m_expo[(size_t)3*g + k]);
+            auto& templ = (kind == 0) ? cell_templates : face_templates;
+            int tid = -1;
+            for (int t = 0; t < (int)templ.size(); ++t) {
+                if (templ[t].size() != sig.size()) continue;
+                bool same = true;
+                for (size_t i = 0; i < sig.size(); ++i)
+                    if (std::fabs(templ[t][i] - sig[i]) > tol) { same = false; break; }
+                if (same) { tid = t; break; }
+            }
+            if (tid < 0) { tid = (int)templ.size(); templ.push_back(std::move(sig)); }
+            m_hexHostTemplate[host_index] = tid;
+            return true;
+        };
+        for (int c = 0; ok && c < n_el; ++c)
+            ok = classify_host(0, c, &m_hexNodes[(size_t)c*81], 27, (size_t)c);
+        for (int f = 0; ok && f < m_hex_n_bf; ++f)
+            ok = classify_host(1, f, &m_quadNodes[(size_t)f*27], 9, (size_t)n_el + (size_t)f);
+        m_hexUniformTransHosts = ok;
+    }
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
 }
 
@@ -1727,6 +2067,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();
+    m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     // ---- cell sub-tet physical geometry (3 sub-tets per prism) ----
     m_wCellSubV.assign((size_t)n_el*3*4*3, 0.0); m_wCellSubC.assign((size_t)n_el*3*3, 0.0);
     m_wCellSubS.assign((size_t)n_el*3, 0.0);
@@ -1825,6 +2166,100 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         std::vector<int>& grp = (m_kind[a] == 0) ? m_cellCharges[m_host[a]] : m_faceCharges[m_host[a]];
         m_hexLocalOf[a] = (int)grp.size();
         grp.push_back(a);
+    }
+    // Structured prism meshes repeat the same wedge cell / boundary-face blocks under translation, but they
+    // do not have the hex affine basis used above.  Detect only the conservative case: all host centers fit a
+    // rectilinear lattice and each host's node cloud, after subtracting its center, matches one of a small set
+    // of translated templates.  Generic/unstructured wedge meshes simply leave the ordinary host-id cache.
+    m_hexUniformTransHosts = false;
+    m_hexHostTemplate.assign((size_t)n_el + (size_t)n_bf, -1);
+    m_hexHostLattice2.assign(((size_t)n_el + (size_t)n_bf)*3, 0);
+    const int wedge_trans_scope = WedgeTransCacheScope();
+    if (wedge_trans_scope > 0 && n_el > 0) {
+        const size_t nhost = (size_t)n_el + (size_t)n_bf;
+        std::vector<double> centers(nhost*3, 0.0);
+        double lo[3] = {0.0, 0.0, 0.0}, hi[3] = {0.0, 0.0, 0.0};
+        bool have_center = false;
+        auto record_center = [&](size_t idx, const double* nd, int nnode) {
+            double ctr[3] = {0.0, 0.0, 0.0};
+            for (int i = 0; i < nnode; ++i)
+                for (int k = 0; k < 3; ++k) ctr[k] += nd[3*i + k];
+            for (int k = 0; k < 3; ++k) {
+                ctr[k] /= (double)nnode;
+                centers[3*idx + k] = ctr[k];
+                if (!have_center) lo[k] = hi[k] = ctr[k];
+                else { lo[k] = std::min(lo[k], ctr[k]); hi[k] = std::max(hi[k], ctr[k]); }
+            }
+            have_center = true;
+        };
+        for (int c = 0; c < n_el; ++c)
+            record_center((size_t)c, &m_wCellNodes[(size_t)c*54], 18);
+        for (int f = 0; f < n_bf; ++f) {
+            const int nnode = (m_wFaceType[f] == 0) ? 6 : 9;
+            record_center((size_t)n_el + (size_t)f, &m_wFaceNodes[(size_t)f*27], nnode);
+        }
+        double scale = 0.0;
+        for (int k = 0; k < 3; ++k) scale = std::max(scale, hi[k] - lo[k]);
+        const double tol = 1e-10 * scale + 1e-12;
+        double step[3] = {1.0, 1.0, 1.0};
+        bool ok = have_center && scale > 0.0;
+        for (int k = 0; ok && k < 3; ++k) {
+            std::vector<double> coord;
+            coord.reserve(nhost);
+            for (size_t i = 0; i < nhost; ++i) coord.push_back(centers[3*i + k]);
+            std::sort(coord.begin(), coord.end());
+            double min_step = 0.0;
+            for (size_t i = 1; i < coord.size(); ++i) {
+                const double d = coord[i] - coord[i-1];
+                if (d > tol && (min_step == 0.0 || d < min_step)) min_step = d;
+            }
+            step[k] = (min_step > 0.0) ? min_step : 1.0;
+        }
+        std::vector<std::vector<double>> cell_templates, face_templates;
+        const size_t max_templates = 96;
+        auto classify_host = [&](int kind, int h, const double* nd, int nnode, size_t host_index) {
+            const double* ctr = &centers[3*host_index];
+            for (int k = 0; k < 3; ++k) {
+                const double q = 2.0 * (ctr[k] - lo[k]) / step[k];
+                if (q < -2.0e9 || q > 2.0e9) return false;
+                const int qi2 = (int)std::llround(q);
+                if (std::fabs(q - (double)qi2) > 2e-6) return false;
+                m_hexHostLattice2[3*host_index + k] = qi2;
+            }
+            const std::vector<int>& grp = (kind == 0) ? m_cellCharges[h] : m_faceCharges[h];
+            std::vector<double> sig;
+            sig.reserve((size_t)nnode*3 + 1 + (size_t)grp.size()*3);
+            for (int i = 0; i < nnode; ++i)
+                for (int k = 0; k < 3; ++k) sig.push_back(nd[3*i + k] - ctr[k]);
+            sig.push_back((double)grp.size());
+            for (int g : grp)
+                for (int k = 0; k < 3; ++k) sig.push_back((double)m_expo[(size_t)3*g + k]);
+            auto& templ = (kind == 0) ? cell_templates : face_templates;
+            int tid = -1;
+            for (int t = 0; t < (int)templ.size(); ++t) {
+                if (templ[t].size() != sig.size()) continue;
+                bool same = true;
+                for (size_t i = 0; i < sig.size(); ++i)
+                    if (std::fabs(templ[t][i] - sig[i]) > tol) { same = false; break; }
+                if (same) { tid = t; break; }
+            }
+            if (tid < 0) {
+                if (templ.size() >= max_templates) return false;
+                tid = (int)templ.size();
+                templ.push_back(std::move(sig));
+            }
+            m_hexHostTemplate[host_index] = tid;
+            return true;
+        };
+        for (int c = 0; ok && c < n_el; ++c)
+            ok = classify_host(0, c, &m_wCellNodes[(size_t)c*54], 18, (size_t)c);
+        if (wedge_trans_scope >= 2) {
+            for (int f = 0; ok && f < n_bf; ++f) {
+                const int nnode = (m_wFaceType[f] == 0) ? 6 : 9;
+                ok = classify_host(1, f, &m_wFaceNodes[(size_t)f*27], nnode, (size_t)n_el + (size_t)f);
+            }
+        }
+        m_hexUniformTransHosts = ok;
     }
     BuildWedgeSiteTables();
 }
@@ -2004,6 +2439,17 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
     add("farTriP", m_farTriP); add("farTriW", m_farTriW);
     add("cellSubC", m_cellSubC); add("cellSubS", m_cellSubS); add("cellSubV", m_cellSubV);
     add("faceSubC", m_faceSubC); add("faceSubS", m_faceSubS); add("faceSubV", m_faceSubV);
+    {
+        double s = 0.0;
+        for (unsigned char x : m_hexAffineCell) s += (double)x;
+        out.emplace_back("hexAffineCell", s);
+    }
+    add("hexAffineCoeff", m_hexAffineCoeff);
+    out.emplace_back("hexUniformAffineCells", m_hexUniformAffineCells ? 1.0 : 0.0);
+    addi("hexCellLattice", m_hexCellLattice);
+    out.emplace_back("hexUniformTransHosts", m_hexUniformTransHosts ? 1.0 : 0.0);
+    addi("hexHostTemplate", m_hexHostTemplate);
+    addi("hexHostLattice2", m_hexHostLattice2);
     add("cent", m_cent); add("size", m_size);
     addi("host", m_host); addi("kind", m_kind); addi("expo", m_expo); addi("hexLocalOf", m_hexLocalOf);
     {
@@ -2038,6 +2484,63 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
         out.emplace_back("wSiteRad", s);
     }
     add("wCellSiteX", m_wCellSiteX); add("wFaceSiteX", m_wFaceSiteX);
+    return out;
+}
+
+void RadHACApKChargeGram::ResetHexCacheStats()
+{
+    m_hexBlockLookups.store(0, std::memory_order_relaxed);
+    m_hexBlockHits.store(0, std::memory_order_relaxed);
+    m_hexBlockMisses.store(0, std::memory_order_relaxed);
+    m_hexBlockClears.store(0, std::memory_order_relaxed);
+    m_hexTransBlockLookups.store(0, std::memory_order_relaxed);
+    m_hexTransBlockHits.store(0, std::memory_order_relaxed);
+    m_hexTransBlockMisses.store(0, std::memory_order_relaxed);
+    m_hexTransBlockClears.store(0, std::memory_order_relaxed);
+    m_hexSymBlockLookups.store(0, std::memory_order_relaxed);
+    m_hexSymBlockHits.store(0, std::memory_order_relaxed);
+    m_hexSymBlockMisses.store(0, std::memory_order_relaxed);
+    m_hexSymBlockClears.store(0, std::memory_order_relaxed);
+    m_hexSymTransBlockLookups.store(0, std::memory_order_relaxed);
+    m_hexSymTransBlockHits.store(0, std::memory_order_relaxed);
+    m_hexSymTransBlockMisses.store(0, std::memory_order_relaxed);
+    m_hexSymTransBlockClears.store(0, std::memory_order_relaxed);
+}
+
+std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats() const
+{
+    auto ld = [](const std::atomic<long long>& v) { return (double)v.load(std::memory_order_relaxed); };
+    std::vector<std::pair<std::string, double>> out;
+    out.emplace_back("hex_cache_stats_enabled", m_hexCacheStatsEnabled ? 1.0 : 0.0);
+    out.emplace_back("hex_far_one_sided_threshold", HexFarOneSidedThreshold());
+    out.emplace_back("wedge_far_one_sided_threshold", WedgeFarOneSidedThreshold());
+    out.emplace_back("wedge_trans_cache_scope", (double)WedgeTransCacheScope());
+    out.emplace_back("wedge_trans_cache_enabled", WedgeTransCacheScope() > 0 ? 1.0 : 0.0);
+    out.emplace_back("ho_far_one_sided_enabled", HOFarOneSidedEnabled() ? 1.0 : 0.0);
+    out.emplace_back("hex_block_lookups", ld(m_hexBlockLookups));
+    out.emplace_back("hex_block_hits", ld(m_hexBlockHits));
+    out.emplace_back("hex_block_misses", ld(m_hexBlockMisses));
+    out.emplace_back("hex_block_clears", ld(m_hexBlockClears));
+    out.emplace_back("hex_trans_block_lookups", ld(m_hexTransBlockLookups));
+    out.emplace_back("hex_trans_block_hits", ld(m_hexTransBlockHits));
+    out.emplace_back("hex_trans_block_misses", ld(m_hexTransBlockMisses));
+    out.emplace_back("hex_trans_block_clears", ld(m_hexTransBlockClears));
+    out.emplace_back("hex_sym_block_lookups", ld(m_hexSymBlockLookups));
+    out.emplace_back("hex_sym_block_hits", ld(m_hexSymBlockHits));
+    out.emplace_back("hex_sym_block_misses", ld(m_hexSymBlockMisses));
+    out.emplace_back("hex_sym_block_clears", ld(m_hexSymBlockClears));
+    out.emplace_back("hex_sym_trans_block_lookups", ld(m_hexSymTransBlockLookups));
+    out.emplace_back("hex_sym_trans_block_hits", ld(m_hexSymTransBlockHits));
+    out.emplace_back("hex_sym_trans_block_misses", ld(m_hexSymTransBlockMisses));
+    out.emplace_back("hex_sym_trans_block_clears", ld(m_hexSymTransBlockClears));
+    const double btot = ld(m_hexBlockLookups);
+    const double ttot = ld(m_hexTransBlockLookups);
+    const double sbtot = ld(m_hexSymBlockLookups);
+    const double sttot = ld(m_hexSymTransBlockLookups);
+    out.emplace_back("hex_block_hit_rate", btot > 0.0 ? ld(m_hexBlockHits) / btot : 0.0);
+    out.emplace_back("hex_trans_block_hit_rate", ttot > 0.0 ? ld(m_hexTransBlockHits) / ttot : 0.0);
+    out.emplace_back("hex_sym_block_hit_rate", sbtot > 0.0 ? ld(m_hexSymBlockHits) / sbtot : 0.0);
+    out.emplace_back("hex_sym_trans_block_hit_rate", sttot > 0.0 ? ld(m_hexSymTransBlockHits) / sttot : 0.0);
     return out;
 }
 
@@ -2164,10 +2667,34 @@ void RadHACApKChargeGram::PhiInnerHexSiteVec(int kindS, int hS, int subB, const 
     }
 }
 
+void RadHACApKChargeGram::PhiInnerHexAffineCellSubVec(int hS, int subB, const double p[3],
+                                                      const std::vector<int>& srcG, double* inn) const
+{
+    const size_t sid = (size_t)hS*6 + subB;
+    const double* sv = &m_cellSubV[sid*4*3];
+    double V[4][3];
+    for (int i = 0; i < 4; ++i)
+        for (int k = 0; k < 3; ++k) V[i][k] = sv[3*i + k];
+    double moments[20];
+    rad_hdiv::TetPotentialMomentsUpTo3(V, p, moments);
+    for (int ls = 0; ls < (int)srcG.size(); ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        const int mono = e[0] + 2*e[1] + 4*e[2];
+        const double* coeff = &m_hexAffineCoeff[((size_t)hS*8 + mono)*20];
+        double s = 0.0;
+        for (int i = 0; i < 20; ++i) s += coeff[i] * moments[i];
+        inn[ls] += s;
+    }
+}
+
 void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                                             const std::vector<int>& srcG, double* inn) const
 {
     const bool cell = (kindS == 0);
+    if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
+        PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
+        return;
+    }
     const size_t sid = cell ? ((size_t)hS*6 + subB) : ((size_t)hS*2 + subB);
     const double* cs = cell ? &m_cellSubC[sid*3] : &m_faceSubC[sid*3];
     const double  sz = cell ? m_cellSubS[sid] : m_faceSubS[sid];
@@ -2239,6 +2766,10 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
     if (!xiT)
         throw std::logic_error("PhiInnerHexRadialVec: xiT required (SELF-only; non-self near uses the site radial)");
     const bool cell = (kindS == 0);
+    if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
+        PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
+        return;
+    }
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
     const int nR = (int)m_glIn.size();
     const double* GL = m_glIn.data();
@@ -2461,20 +2992,183 @@ struct HexBlockKeyHash {
     }
 };
 
+struct HexTransBlockKey {
+    int kindT;
+    int tmplT;
+    int kindS;
+    int tmplS;
+    int dx2;
+    int dy2;
+    int dz2;
+    int sameHost;
+    bool operator==(const HexTransBlockKey& o) const {
+        return kindT == o.kindT && tmplT == o.tmplT && kindS == o.kindS && tmplS == o.tmplS &&
+               dx2 == o.dx2 && dy2 == o.dy2 && dz2 == o.dz2 && sameHost == o.sameHost;
+    }
+};
+
+struct HexTransBlockKeyHash {
+    std::size_t operator()(const HexTransBlockKey& k) const
+    {
+        std::size_t h = 1469598103934665603ull;
+        auto mix = [&](int v) {
+            h ^= static_cast<std::size_t>(static_cast<unsigned int>(v));
+            h *= 1099511628211ull;
+        };
+        mix(k.kindT); mix(k.tmplT); mix(k.kindS); mix(k.tmplS);
+        mix(k.dx2); mix(k.dy2); mix(k.dz2); mix(k.sameHost);
+        return h;
+    }
+};
+
 static thread_local long long s_hex_block_owner = -1;
 static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_hex_block_cache;
+static thread_local long long s_hex_trans_block_owner = -1;
+static thread_local std::unordered_map<HexTransBlockKey, std::vector<double>, HexTransBlockKeyHash> s_hex_trans_block_cache;
+static thread_local long long s_hex_sym_block_owner = -1;
+static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_hex_sym_block_cache;
+static thread_local long long s_hex_sym_trans_block_owner = -1;
+static thread_local std::unordered_map<HexTransBlockKey, std::vector<double>, HexTransBlockKeyHash> s_hex_sym_trans_block_cache;
 
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int mask) const
 {
-    if (s_hex_block_owner != m_build_id) { s_hex_block_cache.clear(); s_hex_block_owner = m_build_id; }
+    const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
+    const bool use_trans_cache = !m_d2 && m_hexUniformTransHosts && mask == 0 &&
+                                 (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
+    if (use_trans_cache) {
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockLookups);
+        if (s_hex_trans_block_owner != m_build_id) {
+            s_hex_trans_block_cache.clear();
+            s_hex_trans_block_owner = m_build_id;
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockClears);
+        }
+        const size_t itHost = (kindT == 0) ? (size_t)hT : (size_t)m_n_el + (size_t)hT;
+        const size_t isHost = (kindS == 0) ? (size_t)hS : (size_t)m_n_el + (size_t)hS;
+        const int* lt = &m_hexHostLattice2[3*itHost];
+        const int* ls = &m_hexHostLattice2[3*isHost];
+        const HexTransBlockKey tkey{kindT, m_hexHostTemplate[itHost], kindS, m_hexHostTemplate[isHost],
+                                    lt[0] - ls[0], lt[1] - ls[1], lt[2] - ls[2],
+                                    (kindT == kindS && hT == hS) ? 1 : 0};
+        auto it = s_hex_trans_block_cache.find(tkey);
+        if (it == s_hex_trans_block_cache.end()) {
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockMisses);
+            if (s_hex_trans_block_cache.size() > HexBlockCacheLimit()) {
+                s_hex_trans_block_cache.clear();
+                HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockClears);
+            }
+            it = s_hex_trans_block_cache.emplace(tkey,
+                    m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, mask)
+                                : QuadBlockHex(kindT, hT, kindS, hS, mask)).first;
+        } else HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockHits);
+        return it->second;
+    }
+    HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockLookups);
+    if (s_hex_block_owner != m_build_id) {
+        s_hex_block_cache.clear();
+        s_hex_block_owner = m_build_id;
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockClears);
+    }
     const HexBlockKey key{kindT, hT, kindS, hS, mask};
     auto it = s_hex_block_cache.find(key);
     if (it == s_hex_block_cache.end()) {
-        if (s_hex_block_cache.size() > 200000u) s_hex_block_cache.clear();
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockMisses);
+        if (s_hex_block_cache.size() > HexBlockCacheLimit()) {
+            s_hex_block_cache.clear();
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockClears);
+        }
         it = s_hex_block_cache.emplace(key,
                    m_d2        ? QuadBlock2D(kindT, hT, kindS, hS)            // 2D image unsupported (mask==0 guaranteed)
                  : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, mask)
                  :               QuadBlockHex(kindT, hT, kindS, hS, mask)).first;
+    } else HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockHits);
+    return it->second;
+}
+
+const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA, int kindB, int hB, int mask) const
+{
+    auto nlocal = [&](int kind, int host) {
+        return (kind == 0) ? (int)m_cellCharges[host].size() : (int)m_faceCharges[host].size();
+    };
+    const int nA0 = nlocal(kindA, hA);
+    const int nB0 = nlocal(kindB, hB);
+    auto make_sym = [&]() {
+        std::vector<double> ab = GetHexBlock(kindA, hA, kindB, hB, mask);
+        std::vector<double> ba = GetHexBlock(kindB, hB, kindA, hA, mask);
+        std::vector<double> sym((size_t)nA0 * (size_t)nB0);
+        for (int la = 0; la < nA0; ++la)
+            for (int lb = 0; lb < nB0; ++lb)
+                sym[(size_t)la*nB0 + lb] =
+                    0.5 * (ab[(size_t)la*nB0 + lb] + ba[(size_t)lb*nA0 + la]);
+        return sym;
+    };
+    auto far_one_sided = [&]() {
+        // HEX/WEDGE host-pair FAR blocks are smooth low-order double integrals in physical space.  The
+        // directed AB block is therefore the transpose of BA up to quadrature/roundoff, so the symmetric
+        // H-matrix can keep one directed block for sufficiently separated hosts.  NEAR/self and image blocks
+        // still use the explicit symmetrized average.
+        const double threshold = m_wedgemode ? WedgeFarOneSidedThreshold() : HexFarOneSidedThreshold();
+        if (threshold <= 0.0 || mask != 0 || m_d2) return false;
+        const std::vector<int>& aG = (kindA == 0) ? m_cellCharges[hA] : m_faceCharges[hA];
+        const std::vector<int>& bG = (kindB == 0) ? m_cellCharges[hB] : m_faceCharges[hB];
+        if (aG.empty() || bG.empty()) return false;
+        const int a = aG[0], b = bG[0];
+        const double dx = m_cent[3*a] - m_cent[3*b];
+        const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
+        const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
+        return std::sqrt(dx*dx + dy*dy + dz*dz) > threshold * (m_size[a] + m_size[b]);
+    };
+    auto make_one_sided = [&]() {
+        return GetHexBlock(kindA, hA, kindB, hB, mask);
+    };
+
+    const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
+    const bool use_trans_cache = !m_d2 && m_hexUniformTransHosts && mask == 0 &&
+                                 (!m_wedgemode || wedge_scope >= 2 || (kindA == 0 && kindB == 0));
+    if (use_trans_cache) {
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockLookups);
+        if (s_hex_sym_trans_block_owner != m_build_id) {
+            s_hex_sym_trans_block_cache.clear();
+            s_hex_sym_trans_block_owner = m_build_id;
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockClears);
+        }
+        const size_t iaHost = (kindA == 0) ? (size_t)hA : (size_t)m_n_el + (size_t)hA;
+        const size_t ibHost = (kindB == 0) ? (size_t)hB : (size_t)m_n_el + (size_t)hB;
+        const int* la = &m_hexHostLattice2[3*iaHost];
+        const int* lb = &m_hexHostLattice2[3*ibHost];
+        const HexTransBlockKey key{kindA, m_hexHostTemplate[iaHost], kindB, m_hexHostTemplate[ibHost],
+                                   la[0] - lb[0], la[1] - lb[1], la[2] - lb[2],
+                                   (kindA == kindB && hA == hB) ? 1 : 0};
+        auto it = s_hex_sym_trans_block_cache.find(key);
+        if (it == s_hex_sym_trans_block_cache.end()) {
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockMisses);
+            if (s_hex_sym_trans_block_cache.size() > HexBlockCacheLimit()) {
+                s_hex_sym_trans_block_cache.clear();
+                HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockClears);
+            }
+            it = s_hex_sym_trans_block_cache.emplace(key, far_one_sided() ? make_one_sided() : make_sym()).first;
+        } else {
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockHits);
+        }
+        return it->second;
+    }
+
+    HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockLookups);
+    if (s_hex_sym_block_owner != m_build_id) {
+        s_hex_sym_block_cache.clear();
+        s_hex_sym_block_owner = m_build_id;
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockClears);
+    }
+    const HexBlockKey key{kindA, hA, kindB, hB, mask};
+    auto it = s_hex_sym_block_cache.find(key);
+    if (it == s_hex_sym_block_cache.end()) {
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockMisses);
+        if (s_hex_sym_block_cache.size() > HexBlockCacheLimit()) {
+            s_hex_sym_block_cache.clear();
+            HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockClears);
+        }
+        it = s_hex_sym_block_cache.emplace(key, far_one_sided() ? make_one_sided() : make_sym()).first;
+    } else {
+        HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockHits);
     }
     return it->second;
 }
@@ -2568,6 +3262,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
     m_d2FarTriP = std::move(far_tri_pts); m_d2FarTriW = std::move(far_tri_w);
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();
+    m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     // ---- per-sub geometry: centroid/size (near test) + mapped anchor sites ----
     m_d2CellSubC.assign((size_t)n_el*2*2, 0.0); m_d2CellSubS.assign((size_t)n_el*2, 0.0);
     m_d2CellSiteX.assign((size_t)n_el*2*7*2, 0.0);
@@ -2864,6 +3559,7 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     // Symmetric fill: the Gram's applies all route through MatVecSym (see the header doc), so skip the
     // strictly-lower leaves at fill time -- ~2x build, identical upper leaves (MatVecSym bit-identical).
     // Set/reset around this ONE build; base BuildHMatrix returns bool (no exceptions cross the C fill).
+    ResetHexCacheStats();
     cHACApK_set_sym_fill(1);
     const bool ok = RadHACApKBase::BuildHMatrix(params);
     cHACApK_set_sym_fill(0);
@@ -3071,10 +3767,12 @@ void RadHACApKChargeGram::PhiInnerWedgeSiteVec(int kindS, int hS, int subB, cons
                             : &m_wFaceSiteX[(((size_t)hS*2 + subB)*7)*3];
     const int nsite = cell ? 15 : 7;
     int best = 0; double bd = 1e300;
+    const double site_tie_tol = srcG.empty() ? 0.0
+        : 1e-13 * (m_size[srcG[0]] + 1.0) * (m_size[srcG[0]] + 1.0);
     for (int k = 0; k < nsite; ++k) {
         const double dx = p[0]-sx[3*k], dy = p[1]-sx[3*k+1], dz = p[2]-sx[3*k+2];
         const double d = dx*dx + dy*dy + dz*dz;
-        if (d < bd) { bd = d; best = k; }
+        if (d < bd - site_tie_tol) { bd = d; best = k; }
     }
     const HexSiteRad& R = cell ? m_wCellSiteRad[(size_t)subB*15 + best]
                                : (ft == 0 ? m_wFaceSiteRadTri[(size_t)best]
@@ -3268,10 +3966,11 @@ std::vector<double> RadHACApKChargeGram::QuadBlockWedge(int kindT, int hT, int k
                     });
             } else {
                 int corner = 0; double best = 1e300;
+                const double corner_tie_tol = 1e-13 * (szA + szB + 1.0) * (szA + szB + 1.0);
                 for (int i = 0; i < nvT; ++i) {
                     const double ddx = subVA[3*i]-cB[0], ddy = subVA[3*i+1]-cB[1], ddz = subVA[3*i+2]-cB[2];
                     const double d = ddx*ddx + ddy*ddy + ddz*ddz;
-                    if (d < best) { best = d; corner = i; }
+                    if (d < best - corner_tie_tol) { best = d; corner = i; }
                 }
                 oc = HexGetCloud(m_build_id, HexCloudKey(cellT ? 0 : 1, true, true, hT, sA, corner),
                     [&](HexQuadCloud& c) {
@@ -3316,10 +4015,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
         const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
         const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
-        const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
-        const double vAB = GetHexBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
-        const double vBA = GetHexBlock(kB, hB, kA, hA)[(size_t)lb*nA + la];
-        return 0.5*(vAB + vBA);
+        return GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
     }
     if (m_hexmode || m_wedgemode) {
         // HEX / WEDGE RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
@@ -3332,19 +4028,14 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
         const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
         const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
-        const int nA = (kA == 0) ? (int)m_cellCharges[hA].size() : (int)m_faceCharges[hA].size();
-        const double vAB = GetHexBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];   // target A, source B
-        const double vBA = GetHexBlock(kB, hB, kA, hA)[(size_t)lb*nA + la];   // target B, source A
-        double base = 0.5*(vAB + vBA);
+        double base = GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
         // IMA: fold in the mirror-image blocks (the source host REFLECTED on each image mask) so a reduced
         // (1/2,1/4,1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
         // Read each block scalar into a double BEFORE the next GetHexBlock fetch (the memo's capacity clear would
         // otherwise dangle the returned reference -- the same use-after-free family as the direct vAB/vBA above).
         for (size_t i = 0; i < m_image_masks.size(); ++i) {
             const int msk = m_image_masks[i];
-            const double rAB = GetHexBlock(kA, hA, kB, hB, msk)[(size_t)la*nB + lb];
-            const double rBA = GetHexBlock(kB, hB, kA, hA, msk)[(size_t)lb*nA + la];
-            base += m_image_signs[i] * 0.5 * (rAB + rBA);
+            base += m_image_signs[i] * GetHexSymBlock(kA, hA, kB, hB, msk)[(size_t)la*nB + lb];
         }
         return base;
     }
@@ -3362,7 +4053,11 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
                    [&]{ const double dx = m_cent[3*a]-m_cent[3*b], dy = m_cent[3*a+1]-m_cent[3*b+1],
                                      dz = m_cent[3*a+2]-m_cent[3*b+2];
                         return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]); }()) {
-            base = 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));   // FAR: cheap low-quad plain double-Gauss
+            // FAR: cheap low-quad plain double-Gauss.  The plain double integral is symmetric in
+            // (a,b), so one directed evaluation is enough; keep the env switch as an A/B diagnostic.
+            base = HOFarOneSidedEnabled()
+                ? QuadDotFar(a, b)
+                : 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));
         } else {
             base = 0.5 * (QuadDot(a, b) + QuadDot(b, a));         // NEAR: full high-quad subtraction
         }
@@ -3417,8 +4112,16 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<double>& B_data, int n_face,
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
     double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out, bool mass_riesz, bool symmetric)
+    double tol, int maxit, int& iters_out, bool mass_riesz, bool symmetric,
+    const std::vector<double>* x0)
 {
+    using Clock = std::chrono::steady_clock;
+    auto elapsed = [](Clock::time_point a, Clock::time_point b) {
+        return std::chrono::duration<double>(b - a).count();
+    };
+    m_lastSolveTiming = SolveTiming();
+    HACApK_matvec_stats_reset();
+    const auto t_total0 = Clock::now();
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
     // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
@@ -3430,54 +4133,113 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
 #ifdef HAVE_LAPACK
     std::unique_ptr<MassRieszPardiso> mr;
     if (mass_riesz) {
+        const auto t0 = Clock::now();
         mr = std::make_unique<MassRieszPardiso>();
         if (!mr->Factor(mI, mJ, mV, n_face))
             throw std::runtime_error("SolveLinearMaterial: PARDISO SPD factor of the RT0 mass "
                                      "(mass Riesz preconditioner) failed");
+        m_lastSolveTiming.factor_s += elapsed(t0, Clock::now());
     }
 #else
     if (mass_riesz)
         throw std::runtime_error("SolveLinearMaterial: mass Riesz preconditioner requires MKL PARDISO "
                                  "(HAVE_LAPACK)");
 #endif
+    std::vector<int> mass_indptr((size_t)n_face + 1, 0);
+    for (size_t k = 0; k < mV.size(); ++k) {
+        const int i = mI[k];
+        if (i >= 0 && i < n_face && mJ[k] >= 0 && mJ[k] < n_face) ++mass_indptr[(size_t)i + 1];
+    }
+    for (int i = 0; i < n_face; ++i) mass_indptr[(size_t)i + 1] += mass_indptr[(size_t)i];
+    std::vector<int> mass_col((size_t)mass_indptr[(size_t)n_face]);
+    std::vector<double> mass_val((size_t)mass_indptr[(size_t)n_face]);
+    std::vector<int> mass_cur = mass_indptr;
+    for (size_t k = 0; k < mV.size(); ++k) {
+        const int i = mI[k], j = mJ[k];
+        if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
+        const int p = mass_cur[(size_t)i]++;
+        mass_col[(size_t)p] = j;
+        mass_val[(size_t)p] = mV[k];
+    }
     auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
+        const auto t0 = Clock::now();
 #ifdef HAVE_LAPACK
-        if (mass_riesz) { mr->Solve(rr.data(), zz.data()); return; }
+        if (mass_riesz) {
+            mr->Solve(rr.data(), zz.data());
+            m_lastSolveTiming.prec_s += elapsed(t0, Clock::now());
+            ++m_lastSolveTiming.prec_count;
+            return;
+        }
 #endif
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
+        m_lastSolveTiming.prec_s += elapsed(t0, Clock::now());
+        ++m_lastSolveTiming.prec_count;
     };
     // A x = inv_chi*(M_mass x) + B^T (G (B x)), with G applied as the charge-Gram H-matvec.
     std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
     auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
+        const auto ta0 = Clock::now();
         std::fill(q.begin(), q.end(), 0.0);
+        const auto tb0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double s = 0.0;
             for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
             q[a] = s;
         });
+        const auto tb1 = Clock::now();
         std::fill(Gq.begin(), Gq.end(), 0.0);
+        const auto tg0 = Clock::now();
         if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG-valid Gram apply
         else           MatVec(q, Gq);                  // shadowed: also MatVecSym (sym-fill leaves lower empty)
+        const auto tg1 = Clock::now();
         y.assign((size_t)n_face, 0.0);
+        const auto tt0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
             double ga = Gq[a];
             for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
         });
-        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
-            ngcore::AtomicAdd(y[mI[k]], inv_chi * mV[k] * x[mJ[k]]);
+        const auto tt1 = Clock::now();
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t i) {
+            double s = 0.0;
+            for (int k = mass_indptr[i]; k < mass_indptr[i + 1]; ++k)
+                s += mass_val[(size_t)k] * x[mass_col[(size_t)k]];
+            y[i] += inv_chi * s;
         });
+        const auto ta1 = Clock::now();
+        const double bx = elapsed(tb0, tb1);
+        const double gm = elapsed(tg0, tg1);
+        const double bt = elapsed(tt0, tt1);
+        const double ma = elapsed(tt1, ta1);
+        const double total = elapsed(ta0, ta1);
+        m_lastSolveTiming.bx_s += bx;
+        m_lastSolveTiming.gmatvec_s += gm;
+        m_lastSolveTiming.btx_s += bt;
+        m_lastSolveTiming.mass_s += ma;
+        m_lastSolveTiming.ax_total_s += total;
+        m_lastSolveTiming.ax_other_s += total - bx - gm - bt - ma;
+        ++m_lastSolveTiming.apply_count;
     };
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
+        const auto t0 = Clock::now();
         double s = 0.0;
         ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
             double local = 0.0;
             for (auto f : r) local += a[f] * b[f];
             ngcore::AtomicAdd(s, local);
         });
+        m_lastSolveTiming.dot_s += elapsed(t0, Clock::now());
+        ++m_lastSolveTiming.dot_count;
         return s;
     };
     // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
     std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
+    if (x0) {
+        if ((int)x0->size() != n_face)
+            throw std::runtime_error("SolveLinearMaterial: x0 size mismatch");
+        x = *x0;
+        applyA(x, Ap);
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { r[f] = rhs[f] - Ap[f]; });
+    }
     applyPrec(r, z);
     p = z;
     double rz = dot(r, z);
@@ -3490,15 +4252,76 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         applyA(p, Ap);
         double pAp = dot(p, Ap);
         double alpha = rz / pAp;
+        const auto tu0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
         applyPrec(r, z);
         double rz_new = dot(r, z);
         double beta = rz_new / rz;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
+        m_lastSolveTiming.pcg_update_s += elapsed(tu0, Clock::now());
         rz = rz_new;
     }
     iters_out = it;
+    m_lastSolveTiming.total_s = elapsed(t_total0, Clock::now());
+    {
+        double mv[8] = {0.0};
+        int64_t mc[8] = {0};
+        HACApK_matvec_stats_get(mv, 8, mc, 8);
+        m_lastSolveTiming.hmatvec_total_s = mv[0];
+        m_lastSolveTiming.hmatvec_zero_s = mv[1];
+        m_lastSolveTiming.hmatvec_permute_s = mv[2];
+        m_lastSolveTiming.hmatvec_leaf_s = mv[3];
+        m_lastSolveTiming.hmatvec_reduce_s = mv[4];
+        m_lastSolveTiming.hmatvec_meta_s = mv[5];
+        m_lastSolveTiming.hmatvec_lowrank_flop_est = mv[6];
+        m_lastSolveTiming.hmatvec_dense_flop_est = mv[7];
+        m_lastSolveTiming.hmatvec_calls = (double)mc[0];
+        m_lastSolveTiming.hmatvec_lowrank_leaves = (double)mc[1];
+        m_lastSolveTiming.hmatvec_dense_leaves = (double)mc[2];
+        m_lastSolveTiming.hmatvec_mirrored_upper_leaves = (double)mc[3];
+        m_lastSolveTiming.hmatvec_diagonal_leaves = (double)mc[4];
+        m_lastSolveTiming.hmatvec_skipped_lower_leaves = (double)mc[5];
+        m_lastSolveTiming.hmatvec_last_nd = (double)mc[6];
+        m_lastSolveTiming.hmatvec_last_nthr = (double)mc[7];
+    }
     return x;
+}
+
+std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTimings() const
+{
+    const SolveTiming& t = m_lastSolveTiming;
+    return {
+        {"solve_total_s", t.total_s},
+        {"solve_factor_s", t.factor_s},
+        {"solve_prec_s", t.prec_s},
+        {"solve_bx_s", t.bx_s},
+        {"solve_gmatvec_s", t.gmatvec_s},
+        {"solve_btx_s", t.btx_s},
+        {"solve_mass_s", t.mass_s},
+        {"solve_dot_s", t.dot_s},
+        {"solve_ax_total_s", t.ax_total_s},
+        {"solve_ax_other_s", t.ax_other_s},
+        {"solve_pcg_update_s", t.pcg_update_s},
+        {"solve_apply_count", (double)t.apply_count},
+        {"solve_prec_count", (double)t.prec_count},
+        {"solve_dot_count", (double)t.dot_count},
+        {"hmatvec_total_s", t.hmatvec_total_s},
+        {"hmatvec_zero_s", t.hmatvec_zero_s},
+        {"hmatvec_permute_s", t.hmatvec_permute_s},
+        {"hmatvec_leaf_s", t.hmatvec_leaf_s},
+        {"hmatvec_reduce_s", t.hmatvec_reduce_s},
+        {"hmatvec_meta_s", t.hmatvec_meta_s},
+        {"hmatvec_lowrank_flop_est", t.hmatvec_lowrank_flop_est},
+        {"hmatvec_dense_flop_est", t.hmatvec_dense_flop_est},
+        {"hmatvec_calls", t.hmatvec_calls},
+        {"hmatvec_lowrank_leaves", t.hmatvec_lowrank_leaves},
+        {"hmatvec_dense_leaves", t.hmatvec_dense_leaves},
+        {"hmatvec_mirrored_upper_leaves", t.hmatvec_mirrored_upper_leaves},
+        {"hmatvec_diagonal_leaves", t.hmatvec_diagonal_leaves},
+        {"hmatvec_skipped_lower_leaves", t.hmatvec_skipped_lower_leaves},
+        {"hmatvec_last_nd", t.hmatvec_last_nd},
+        {"hmatvec_last_nthr", t.hmatvec_last_nthr},
+    };
 }
 
 std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
@@ -3674,7 +4497,8 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
         });
         int cg_iters = 0;
         m = SolveLinearMaterial(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
-                                inv_chi, prec, rhs, cg_tol, cg_maxit, cg_iters);
+                                inv_chi, prec, rhs, cg_tol, cg_maxit, cg_iters,
+                                /*mass_riesz=*/true, /*symmetric=*/true);
         mmass_apply(m, mass_m);
         Mavg = dot(mu, mass_m);
         Mavg /= denom;

@@ -158,6 +158,11 @@ void TetField(const double V[4][3], const double P[3], double out[3]);
 void TriMoment1(const double V[3][3], const double r[3], double out[3]);          /* INT_T r'/R dS' */
 void TriMoment2(const double V[3][3], const double r[3], double out[3][3]);       /* INT_T r'(x)r'/R dS' */
 void TetMoment1(const double V[4][3], const double r[3], double out[3]);          /* INT_V r'/R dV' */
+double TetPotentialPolynomial(const double V[4][3], const double r[3],
+                              const std::vector<std::array<int,3>>& exps,
+                              const std::vector<double>& coeffs);                 /* SUM c_a INT_V x^a/R dV */
+void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
+                              double out[20]);                                    /* total-degree <= 3 moments */
 void TetVolFieldLinear(const double V[4][3], const double r[3], double rho0,
                        const double g[3], double out[3]);                          /* linear volume charge */
 void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,

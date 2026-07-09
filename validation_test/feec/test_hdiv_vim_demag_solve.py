@@ -83,6 +83,23 @@ def test_default_symmetric_cg_matches_gmres(mu_r):
     assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 5e-9, "auto must equal the explicit cpp-cg alias"
 
 
+def test_jacobi_preconditioner_matches_mass_riesz():
+    """Diagnostic preconditioner switch: Jacobi-CG solves the same SPD +N system as mass-Riesz-CG.
+
+    The default remains mass-Riesz; Jacobi is kept as a hex/H-matrix benchmark probe so we can tell whether
+    a slowdown is Krylov/preconditioner driven or H-matrix build/matvec driven.
+    """
+    mesh = _sphere(h=0.7)
+    with ng.TaskManager():
+        mr = Solve(mesh, 100.0, _HEXT)
+        ja = Solve(mesh, 100.0, _HEXT, preconditioner="jacobi")
+    assert mr["linear_solver"] == "mass-riesz-cg"
+    assert ja["linear_solver"] == "jacobi-cg"
+    assert ja["preconditioner"] == "jacobi"
+    rel = abs(mr["M_avg"][2] - ja["M_avg"][2]) / abs(mr["M_avg"][2])
+    assert rel < 1e-6, f"Jacobi-CG and mass-Riesz-CG solve different systems: rel {rel:.2e}"
+
+
 # (test_explicit_hlu_linear_solver removed 2026-06-29: the 'hlu' system-A H-LU solver was RT0-only and is
 #  retired -- HDiv-VIM (RT1) uses the symmetric mass-Riesz CG.  See test_hdiv_vim_rt1_contract.py.)
 
