@@ -32,6 +32,10 @@
 #include <utility>
 #include <atomic>
 
+// Persistent PARDISO factor of the RT0 mass for the MASS RIESZ preconditioner, cached on
+// RadHACApKChargeGram across solve calls (defined in rad_hacapk_hdiv.cpp next to MassRieszPardiso).
+struct RadMassRieszCache;
+
 //-------------------------------------------------------------------------
 // RadHACApKHDivManager: builds N = B^T G B (HDiv-type VIM) as a HACApK H-matrix.
 //-------------------------------------------------------------------------
@@ -374,8 +378,12 @@ public:
     // Jacobi diagonal of the system (length n_face).  Returns m (length n_face); iters_out = CG iters.
     // mass_riesz=false: diagonal-Jacobi PCG (z = r/prec).  mass_riesz=true (the DEFAULT 'auto' path):
     // PCG preconditioned by a PARDISO SPD factor of the RT0 mass M_mass (z = M_mass^{-1} r, the MASS
-    // RIESZ map) built once from the COO (mI,mJ,mV) -- ~3-5x fewer iters, nearly mu_r-flat; `prec` is
+    // RIESZ map) built from the COO (mI,mJ,mV) -- ~3-5x fewer iters, nearly mu_r-flat; `prec` is
     // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
+    // The factor is PERSISTENT on the object (m_massRieszCache, exact-COO key): constant-mass chains --
+    // the Hantila hysteresis loop (W(nu0) fixed by construction) and the C++ scalar Picard (geometry
+    // M_mass; scalar inv_chi is outside the preconditioner) -- factor once.  Callers that pass a
+    // per-iteration TANGENT mass (the Python nu-secant / Newton W_tan) compare-miss and refactor as before.
     // symmetric=true (DEFAULT): G is applied via the EXACTLY-symmetric H-matvec (MatVecSym, upper-tri
     // leaves define both triangles), so the +N CG operator is machine-symmetric and removes the reported
     // independently-ACA'd off-diagonal asymmetry failure mode.  symmetric=false
@@ -537,6 +545,11 @@ private:
         int apply_count = 0, prec_count = 0, dot_count = 0;
     };
     SolveTiming m_lastSolveTiming;
+    // Persistent mass-Riesz PARDISO factor, keyed on the EXACT (n_face, mI, mJ, mV) COO arrays: reused by
+    // SolveLinearMaterial / SolveMaterialMINRES when the mass is unchanged (any difference refactors), so
+    // constant-mass iteration chains pay the analyze+factor ONCE.  Identical input -> identical factor ->
+    // bit-identical preconditioner: timing-only.  shared_ptr keeps the .h to a forward declaration.
+    std::shared_ptr<RadMassRieszCache> m_massRieszCache;
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
     void PhiInnerHexAffineCellSubVec(int hS, int subB, const double p[3],
