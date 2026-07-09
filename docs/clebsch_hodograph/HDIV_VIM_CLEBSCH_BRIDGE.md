@@ -155,7 +155,7 @@ foliated fields). The concrete open questions:
   - the 3-D closing condition — **helicity** is the obstruction to a global
     Clebsch pair (`clebsch_3d_closing_condition.py`: Clebsch `h = −7e-17`, ABC
     `h = 3(2π)³ ≠ 0` + chaotic Poincaré).
-  (Each locked by a golden in `tests/feec/test_clebsch_hodograph_research.py`.)
+  (Each locked by a golden in `validation_test/feec/test_clebsch_hodograph_research.py`.)
 - **Rung-1 finding (conditioning).** The convex `A⁺` form *is* well-conditioned
   at the knee (the linear field-exact solve gives the sphere `D = 1/3`; the
   committed `solve_nonlinear` outer-χ loop on `A⁺ = (1/χ)M_mass + N` converges).

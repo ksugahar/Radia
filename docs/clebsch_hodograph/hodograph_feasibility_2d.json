@@ -1,0 +1,68 @@
+{
+  "generated_at_utc": "2026-07-06T22:45:17.145238+00:00",
+  "radia_version": "4.95.5",
+  "ngsolve_version": "6.2.2604",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "x0": 2.0,
+  "gap_h": 1.0,
+  "edge_d": 0.9,
+  "d_star": 0.6366197723675814,
+  "feasibility_table": [
+    {
+      "d": 1.4,
+      "y_sing": 2.199114857512855,
+      "feasible": true
+    },
+    {
+      "d": 1.0,
+      "y_sing": 1.5707963267948966,
+      "feasible": true
+    },
+    {
+      "d": 0.8,
+      "y_sing": 1.2566370614359172,
+      "feasible": true
+    },
+    {
+      "d": 0.6366197723675814,
+      "y_sing": 1.0,
+      "feasible": false
+    },
+    {
+      "d": 0.5,
+      "y_sing": 0.7853981633974483,
+      "feasible": false
+    },
+    {
+      "d": 0.35,
+      "y_sing": 0.5497787143782138,
+      "feasible": false
+    }
+  ],
+  "fem_verify": {
+    "d": 0.9,
+    "gap_h": 1.0,
+    "phi0": -1.0151002621057115,
+    "d_star": 0.6366197723675814,
+    "feasible": true,
+    "By_rel_err": 9.782291612903116e-05,
+    "phi_L2_err": 1.1429579789004044e-08,
+    "pole_match_err": 1.363541998644635e-06,
+    "pole_gap_at_x0": 0.9999999998146583
+  },
+  "vonmises_chart": {
+    "d": 0.9,
+    "s0": 1.0151002621057115,
+    "xr": 1.5,
+    "nX": 161,
+    "nS": 121,
+    "pde_resid": 0.0007191344613510511,
+    "pde_resid_median": 0.00034610141777203894,
+    "jac_min": 0.7816991267189584,
+    "single_valued": true,
+    "pole_match": 2.5394824243463177e-08,
+    "pde_resid_coarse": 0.00261762920912161
+  },
+  "notebook_sha256": "44f8fa95e68f00b9335c46520292c575d593321b3104c87b2db9634af132e391"
+}

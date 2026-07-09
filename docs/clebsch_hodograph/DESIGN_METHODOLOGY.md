@@ -640,6 +640,109 @@ honest engineering answer to "*flux lines invariant under saturation, is that go
 **for the beam it is largely automatic; what you actually optimize is the corner the iron
 saturates** — the chamfer relieves the hot spot without moving the beam field.
 
+### 3.14 Excitation-invariant flux lines — same field-line shape as the current rises
+
+§3.13 asks whether the *beam* field drifts with saturation. `excitation_invariant_field.py`
+asks the sharper, user-posed question directly: *do the flux LINES keep the same shape as you
+turn up the drive current?* (an isochronous-in-excitation magnet — **not** a cyclotron, where
+the field is meant to change). The answer is grounded in linearity:
+
+**Linearity ⇒ invariance is automatic.** Below the iron knee the magnet is a *linear*
+magnetostatic system: scaling the excitation by `α` scales `B` everywhere by `α`, so the
+field-LINE pattern (the streamlines `b̂ = B/|B|`) is **identical** — only the amplitude grows.
+The measurable quantity is the flux-line **direction** drift over an air region,
+`D_dir(I) = rms_x‖b̂(x;I) − b̂(x;I_lin)‖`. With `μ` forced constant the **linear control is
+exactly `D_dir = 0` at every drive** — the crisp proof that scaling the current cannot move
+the flux lines. Saturation (nonlinear `μ(|B|)`, dropping first at the pole-tip corner) is the
+**sole** thing that rotates them, so `D_dir` grows only once the iron saturates (`⟨μ_r⟩`
+sweeping `~1960 → ~580` as the drive goes `0.15 → 1.70 T`, `D_dir` rising monotonically with
+it).
+
+**Even a flat cut is already nearly invariant** — `D_dir < 1e-2 rad` (sub-degree; `~1.5 mrad`
+at the saturated drive) because the high-`μ` pole face stays equipotential (the same
+gap-reluctance robustness as §3.12/§3.13). The residual drift is pole-tip-corner-dominated,
+so the **end chamfer that relieves the corner keeps the flux lines invariant several-fold
+DEEPER into saturation**: minimizing the saturated `D_dir` over `(depth, exponent)` gives a
+`~6–7×` smaller direction drift (`~1.5 → ~0.2 mrad`) — and it drops the corner `κ` in lockstep
+(`~1.8 → ~1.0`), the *same* corner-relief lever as §3.13 but now judged directly on the
+flux-line geometry across an excitation sweep.
+
+**Verified (`excitation_invariant_field.ipynb` + its helper, ngsolve + Optuna,
+golden-tested).** So "*same flux lines when the current rises*" is **largely automatic (it is
+just linearity)**; what you
+design for is keeping it true DEEP into saturation, which — again — means relieving the pole-tip
+corner. This is the excitation-sweep complement of §3.13's iron-`κ` view: §3.13 minimizes the
+iron hot spot, §3.14 minimizes the air flux-line drift, and the two levers coincide.
+
+### 3.15 The 2D LINEAR hodograph outlook — feasibility (harmonic analysis) *and* transparency (partial von Mises)
+
+Stepping back from the end-pack rungs to the *linear* ($\mu=$const, Laplace) design outlook on a
+bending-magnet cross-section (the runnable method note
+`docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb`). Demand a mid-plane field
+`B_y(x,0) = g(x)` (flat over the good-field region, edge width `d`). Two facts become legible, and
+they are of **different kinds** — keep them apart:
+
+**(1) A feasibility bound — harmonic analysis, *not* the hodograph.** The gap field is the unique
+harmonic (upward) continuation of `g`; the continuation of a `tanh` edge has its nearest complex
+singularity at height `y = πd/2`, so the field is realizable by an iron pole at gap `h`
+**only if that singularity clears the gap**:
+
+  **`d > d* = (2/π) h ≈ 0.64 h`** — the field edge is no sharper than `~0.64 × gap`.
+
+This is a **Cauchy–Kovalevskaya / analyticity** statement about the *demand* — the hodograph plays
+no role, and it is **not** a "limit line": ordinary passive saturation stays **elliptic** (`μ` falls
+but `|B|=μ|H|` still *rises*, `d(μq)/dq>0`), so there is no type change / shock for this problem.
+The `2/π` is `tanh`-edge-specific; the **universal** statement is the gap scaling ("fringe scale ~
+gap", here *proven* as a feasibility boundary). For a feasible demand (`d=0.9`) the pole is
+**read off** as the equipotential `{φ=φ0}`, the scalar potential has a closed form
+(`sinh/cosh/sin/cos/atan2`), and an independent `ngsolve` linear-FEM manufactured-solution solve
+**verifies** it: the read-off pole reproduces `g(x)` to `0.01 %`, and the FEM equipotential matches
+the analytic pole to `~1e-6`.
+
+**(2) The transparency the hodograph *does* buy — the partial von-Mises chart.** The Sugahara-lab
+hodograph is a **partial** transform (keep one coordinate, transform one potential). Keep `x` and
+replace `y` by the scalar-potential coordinate `s = -φ` (monotone in `y` since `B_y=-φ_y>0`; `s=0`
+on the mid-plane, `s=s0` at the pole). The **unknown iron-pole shape** — a *free boundary* — becomes
+the **fixed top edge** `{s=s0}` of the rectangle `[-x_r,x_r]×[0,s0]`, and the physical map `y(x,s)`
+solves the (quasi-linear) **von-Mises PDE** `y_s² y_xx − 2 y_x y_s y_xs + (1+y_x²) y_ss = 0` with
+Jacobian `y_s>0` everywhere (single-valued, no fold). Checked on the closed-form map: the PDE
+residual `→0` under refinement (`2.6e-3 → 7.2e-4`, `~O(h²)`), the map is fold-free (`min y_s ≈ 0.78`),
+and its top edge reproduces the read-off equipotential to `~1e-8`. **This** is "design in field
+space": the pole is a coordinate line on a *fixed* domain, and saturation enters as a **coefficient**
+`μ(q)` on the *same* rectangle (no new free boundary) — the honest, hodograph-specific payoff, and
+the baseline for the nonlinear `(x,s)`/Chaplygin design (§3.3). Golden
+`validation_test/feec/test_hodograph_feasibility_2d.py`.
+
+### 3.16 The s-y (longitudinal) plane — fringe feasibility + end-shaping design
+
+The **longitudinal** plane (`s` = beam direction, `y` = gap) is where the magnet **ends** and the
+**fringe field** lives — the home of pole-end / Rogowski design (the runnable note
+`docs/clebsch_hodograph/hodograph_bending_sy.ipynb`).
+
+**Forward 2D s-y is an OPEN-boundary problem.** A dipole's flux return is *out of this plane*
+(through the x-y yoke), so in a pure s-y slice the flux escapes and the effective-length integral
+is **log-divergent** — `g(s)~1/s`, `∫B_y ds ∝ ∫du` diverges; a `φ=0` air box gives a
+box-*dependent* fringe (verified: EFB set-back keeps growing with box size). So the work splits:
+
+* **Fringe feasibility (hodograph inverse, box-free).** Demand `B_y(s,0)=g(s)=½(1−tanh((s−s₀)/d))`;
+  the continuation's nearest singularity at `y=πd/2` gives the **same** bound `d>d*=(2/π)h≈0.64h`
+  — now capping the *longitudinal fringe* (Enge-edge / EFB) sharpness. Manufactured-solution FEM
+  verifies the demanded fringe + pole-*face* equipotential to `0.01 %` / `~1e-6` (box-free).
+* **End-shaping design (forward FEM optimization).** The pole *end* is a **free termination**, NOT
+  an equipotential — reading `{φ=−h}` all the way to the end curls it *into* the demand's
+  singularity (|B| diverges). A **square** end has a reentrant `270°` air corner `⇒ |B|~r^{−1/3}`
+  (a saturation hot spot). Parametrize the end as a forward quarter-ellipse chamfer (length `a`,
+  rise `b`) and **minimize the peak pole-face |B|** by a forward FEM sweep — the peak is a *local*
+  quantity, hence box/mesh-convergent even though `L_eff` is log-divergent. The optimum drives the
+  peak to `B₀`: **peak |B|/B₀ = 2.14 (near-square) → 1.42 (round) → 1.03 (a=3.2 h, b=1.0 h) →
+  1.01 (a=4.4 h)**, numerically **recovering the classic Rogowski electrode** (no enhancement)
+  without conformal algebra. Golden `validation_test/feec/test_hodograph_bending_sy.py`.
+
+**Honest scope**: the 2D `L_eff`/EFB is log-divergent (needs 3D / a finite magnet); the s-y END
+design targets **no field enhancement** (local), and the numerical chamfer optimum *is* the (low
+novelty, but correct) Rogowski profile obtained by a robust FEM search that generalizes to
+arbitrary gaps and tilted ends.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
@@ -796,6 +899,16 @@ coil = A-side), so the framework is one method, not two.
   minimizes `κ` over the end chamfer `(depth, exponent)` — the chamfer RELIEVES the corner
   (`κ → ~1.0`, a real 2D optimum) while the beam field stays put. So "flux invariant under
   saturation" is largely automatic for the beam; what you optimize is the corner it saturates.
+- the **excitation-invariant flux lines** (§3.14,
+  `docs/clebsch_hodograph/excitation_invariant_field.ipynb`): the user's "same flux lines as
+  the current rises" made a direct, optimizable metric — the
+  air-region flux-line DIRECTION drift `D_dir(I) = rms‖b̂(I)−b̂(I_lin)‖` across an excitation
+  sweep. Below the knee the magnet is LINEAR so `D_dir = 0` at every drive (the **linear
+  control is exactly 0** — scaling the current cannot move the flux lines); saturation is the
+  sole breaker, and even a flat cut is already sub-degree invariant (`~1.5 mrad`). Minimizing
+  the saturated `D_dir` over the end chamfer keeps the flux lines invariant `~6–7×` DEEPER into
+  saturation (`~1.5 → ~0.2 mrad`), dropping the corner `κ` (`~1.8 → ~1.0`) in lockstep — the
+  §3.13 corner-relief lever, now judged directly on the air flux-line geometry.
 
 **Research program (named, not claimed done):**
 - the end-design loop is **closed in two planes** (§3.9): the longitudinal
@@ -837,4 +950,7 @@ coil = A-side), so the framework is one method, not two.
 | co-bake as a PRECISION tensor loft (OCC ThruSections) | `docs/clebsch_hodograph/demos/endpack_cobake_loft.py` |
 | saturating sector body (azimuthal L_eff robust, radial k fragile) | `docs/clebsch_hodograph/demos/scaling_ffag_sector_saturation.py` |
 | bending end pack optimized vs saturation (relieve the tip corner) | `docs/clebsch_hodograph/demos/bending_endpack_saturation_opt.py` |
+| excitation-invariant flux lines (same field-line shape as the drive rises) | `docs/clebsch_hodograph/excitation_invariant_field.ipynb` (+ `.py` helper) |
+| 2D linear hodograph: feasibility (edge no sharper than (2/π)·gap; FEM-verified) **+ partial von-Mises `(x,s)` chart** (free boundary → fixed edge; PDE-verified) | `docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb` (+ `.py` helper) |
+| s-y (longitudinal) fringe feasibility **+ end-shaping design** (FEM chamfer optimization → peak \|B\|→B₀, Rogowski recovered) | `docs/clebsch_hodograph/hodograph_bending_sy.ipynb` (+ `.py` helper) |
 | A-side coil (stream function) | `src/radia/stream_function.py`, `validation_test/feec/vim_legacy/foliated_solenoid_wires.py` |
