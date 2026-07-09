@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.7"
+version = "4.95.8"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
