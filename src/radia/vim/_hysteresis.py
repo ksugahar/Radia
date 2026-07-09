@@ -7,25 +7,25 @@ every step / nonlinear iteration reuses it -- the per-step cost is the W-CG
 solve chain only.  This module wires the lab's B-input hysteresis models
 (the C++ radTHysteresisMaterial Play/Energy family) into that loop.
 
-Material protocol (duck-typed and deliberately FUNCTIONAL, so lab-local
-research models -- e.g. a numpy vector-stop model -- can plug in without
-touching radia):
+Material protocol (duck-typed, FUNCTIONAL, and BATCHED -- one call evaluates
+every element, so numpy research models vectorize across elements):
 
-    state0()            -> opaque committed state for ONE evaluation point
-    forward(B, state)   -> H (A/m) from flux density B (T); PURE w.r.t. the
-                           committed state (repeated calls with varying B
-                           never advance the magnetic history)
-    commit(B, state)    -> the new committed state after accepting B as the
-                           converged flux density of this quasi-static step
-    nu_B0()             -> small-signal |dH/dB| at the virgin state
+    state0()             -> flat committed state (S,) for ONE evaluation point
+    forward(B, states)   -> H (n,3) from flux densities B (n,3) and committed
+                            states (n,S); PURE w.r.t. the states (repeated
+                            calls with varying B never advance the history)
+    commit(B, states)    -> new committed states (n,S) after accepting B as
+                            the converged flux densities of this step
+    nu_B0()              -> small-signal |dH/dB| at the virgin state
 
-The B-input constitutive relation is inverted POINTWISE per element: solve
+The B-input constitutive relation is inverted POINTWISE per element (batched
+across elements): solve
 
-    B = mu0 * (forward(B, state) + M)
+    B = mu0 * (forward(B, states) + M)
 
 which is a contraction with rate ~ mu0*dH/dB << 1 (play/stop branch slopes
 are positive and bounded below mu0^-1), giving the material field
-H_mat(M) = forward(B(M)) as a full VECTOR (no collinearity assumption).
+H_mat(M) as a full VECTOR field (no collinearity assumption).
 
 Nonlinear outer iteration = the HANTILA POLARIZATION method (Hantila 1975;
 the classical B-input demag iteration): split M = chi0 * H + M_p with a FIXED
@@ -48,10 +48,11 @@ for materials whose branch slopes exceed it.
 
 State discipline (the C++ two-buffer contract, rad_material_def.h): a forward
 evaluation plays from the COMMITTED baseline (m_pk_prev) into scratch
-(m_pk_current); only CommitState promotes scratch -> baseline.  This adapter
-still RESTORES the committed state before EVERY evaluation, (a) to multiplex
-ONE C++ handle across all elements and (b) to keep B |-> H referentially
-transparent regardless of scratch (pinning / last-B warm-start) semantics.
+(m_pk_current); only CommitState promotes scratch -> baseline.  The shipped
+Play adapter still RESTORES the committed state before EVERY evaluation, (a)
+to multiplex ONE C++ handle across all elements and (b) to keep B |-> H
+referentially transparent regardless of scratch (pinning / last-B warm-start)
+semantics.
 
 The CALLER opens `with ngsolve.TaskManager():` (same contract as vim.Solve).
 """
@@ -71,9 +72,11 @@ MU0 = 4.0e-7 * np.pi
 class PlayHysteresisMaterial:
     """rad.MatPlayHysteresis-backed material implementing the duck-typed protocol.
 
-    ONE C++ handle serves every element: the committed state lives Python-side
-    (one flat array per element, from MatHysSaveState) and is restored into the
-    handle before each evaluation, so the handle is a pure evaluator.
+    ONE C++ handle serves every element: the committed states live Python-side
+    (one flat array per element, from MatHysSaveState) and are restored into
+    the handle before each evaluation, so the handle is a pure evaluator.  The
+    batched calls loop the rows internally (a C++ batch entry is a later
+    optimization; the protocol shape stays batched either way).
     """
 
     def __init__(self, K, eta, f_k_tables):
@@ -90,40 +93,56 @@ class PlayHysteresisMaterial:
     def state0(self):
         return self._virgin.copy()
 
-    def forward(self, B, state):
+    def forward(self, B, states):
         rad = self._rad
-        rad.MatHysRestoreState(self._h, np.asarray(state, float))
         B = np.asarray(B, float)
-        H_irr = np.asarray(rad.MatHysIrreversible(self._h, B), float).ravel()[:3]
-        return self._nu_rev * B + H_irr
+        states = np.asarray(states, float)
+        H = np.empty_like(B)
+        for i in range(B.shape[0]):
+            rad.MatHysRestoreState(self._h, states[i])
+            H_irr = np.asarray(rad.MatHysIrreversible(self._h, B[i]), float).ravel()[:3]
+            H[i] = self._nu_rev * B[i] + H_irr
+        return H
 
-    def commit(self, B, state):
+    def commit(self, B, states):
         rad = self._rad
-        rad.MatHysRestoreState(self._h, np.asarray(state, float))
-        rad.MatHysIrreversible(self._h, np.asarray(B, float))   # play from committed -> scratch
-        rad.MatHysCommitState(self._h)                          # scratch -> new committed
-        return np.asarray(rad.MatHysSaveState(self._h), float).copy()
+        B = np.asarray(B, float)
+        states = np.asarray(states, float)
+        out = np.empty_like(states)
+        for i in range(B.shape[0]):
+            rad.MatHysRestoreState(self._h, states[i])
+            rad.MatHysIrreversible(self._h, B[i])   # play from committed -> scratch
+            rad.MatHysCommitState(self._h)          # scratch -> new committed
+            out[i] = np.asarray(rad.MatHysSaveState(self._h), float)
+        return out
 
     def nu_B0(self, eps=1e-9):
-        H = self.forward(np.array([0.0, 0.0, eps]), self.state0())
-        return float(np.linalg.norm(H) / eps)
+        H = self.forward(np.array([[0.0, 0.0, eps]]), self.state0()[None, :])
+        return float(np.linalg.norm(H[0]) / eps)
 
 
-def _solve_pointwise_B(material, state, M, B0, tol=1e-12, maxit=80):
-    """Solve B = mu0*(forward(B, state) + M): fixed point, contraction ~mu0*dH/dB."""
+def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=80):
+    """Solve B = mu0*(forward(B, states) + M) for ALL elements at once.
+
+    Each row is an independent contraction with rate ~mu0*dH/dB; the batch
+    iterates until EVERY row's update is below tolerance."""
     B = np.asarray(B0, float).copy()
-    floor = MU0 * (float(np.linalg.norm(M)) + 1.0)
+    M = np.asarray(M, float)
+    floor = MU0 * (np.linalg.norm(M, axis=1) + 1.0)
     for _ in range(maxit):
-        Bn = MU0 * (material.forward(B, state) + np.asarray(M, float))
-        d = float(np.linalg.norm(Bn - B))
+        H = material.forward(B, states)
+        Bn = MU0 * (H + M)
+        d = np.linalg.norm(Bn - B, axis=1)
         B = Bn
-        if d <= tol * max(float(np.linalg.norm(B)), floor):
-            return B
+        if np.all(d <= tol * np.maximum(np.linalg.norm(B, axis=1), floor)):
+            return B, H
+    worst = int(np.argmax(d))
     raise RuntimeError(
         "vim.SolveHysteresis: pointwise B-inversion did not converge in %d fixed-point "
-        "iterations (|M|=%.3e A/m).  B -> mu0*(H(B)+M) contracts at ~mu0*dH/dB; "
-        "non-convergence means a pathological shape function (mu0*dH/dB >= 1, i.e. "
-        "differential mu_r <= 1)." % (maxit, float(np.linalg.norm(M))))
+        "iterations (worst element %d, |M|=%.3e A/m).  B -> mu0*(H(B)+M) contracts at "
+        "~mu0*dH/dB; non-convergence means a pathological shape function "
+        "(mu0*dH/dB >= 1, i.e. differential mu_r <= 1)."
+        % (maxit, worst, float(np.linalg.norm(M[worst]))))
 
 
 def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
@@ -136,7 +155,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     every step and every nonlinear iteration; each step runs the Hantila
     polarization iteration (constant SPD LHS W(nu0) + N, lagged vector
     polarization source) with the hysteresis material evaluated from the
-    per-element COMMITTED state, then commits the converged flux density.
+    per-element COMMITTED states, then commits the converged flux density.
 
     Parameters
     ----------
@@ -145,8 +164,8 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
               (A/m).  Steps are HISTORY: reversals between consecutive steps
               create the hysteresis branches.
     play    : (K, eta_thresholds_T, f_k_tables) -> builds PlayHysteresisMaterial.
-    material: a duck-typed material (state0/forward/commit/nu_B0) -- exactly
-              one of play / material.
+    material: a duck-typed BATCHED material (state0/forward/commit/nu_B0, see
+              the module docstring) -- exactly one of play / material.
     nu0     : polarization reluctivity (in H = nu0*M terms).  Must upper-bound
               the material's differential dH/dM for guaranteed contraction.
               Default: derived from material.nu_B0() (correct for Play models
@@ -251,7 +270,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         lf.Assemble()
         return rhs_src + lf.vec.FV().NumPy()
 
-    states = [material.state0() for _ in range(n_el)]
+    states = np.tile(material.state0()[None, :], (n_el, 1))
     B_cache = np.zeros((n_el, 3))
     s_el = np.zeros((n_el, 3))          # lagged polarization source nu0*M - H_mat(M)
     m = np.zeros(n_face)
@@ -268,7 +287,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         cg_total = 0
         rel = float("inf")
         M_el = None
-        H_el = np.zeros((n_el, 3))
+        H_el = None
         nit = 0
         warm = (istep > 0)
         for it in range(int(nl_maxit)):
@@ -278,15 +297,12 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
             rel = float(np.linalg.norm(m_new - m)) / (float(np.linalg.norm(m_new)) + 1e-30)
             m = m_new
             M_el = _M_el(m)
-            # material update: pointwise B-inversion from the COMMITTED states -> full-vector
-            # H_mat (no collinearity assumption; recoil anti-parallel H/M is representable).
-            s_new = np.empty((n_el, 3))
-            for e in range(n_el):
-                B0e = B_cache[e] if np.any(B_cache[e]) else MU0 * (M_el[e] + hv)
-                Be = _solve_pointwise_B(material, states[e], M_el[e], B0e)
-                B_cache[e] = Be
-                H_el[e] = material.forward(Be, states[e])
-                s_new[e] = nu0 * M_el[e] - H_el[e]
+            # material update (BATCHED): pointwise B-inversion from the COMMITTED states ->
+            # full-vector H_mat (recoil anti-parallel H/M is representable).
+            fresh = ~np.any(B_cache != 0.0, axis=1)
+            B0 = np.where(fresh[:, None], MU0 * (M_el + hv[None, :]), B_cache)
+            B_cache, H_el = _solve_pointwise_B(material, states, M_el, B0)
+            s_new = nu0 * M_el - H_el
             nit = it + 1
             if rel < nl_tol and it > 0:
                 break
@@ -298,9 +314,8 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                 "only when nu0 upper-bounds the material's dH/dM -- raise nu0, or reduce the "
                 "field-step size." % (istep, np.array2string(hv, precision=3), rel, nl_tol, nit))
 
-        # ---- COMMIT: advance every element's play state at the converged flux density ----
-        for e in range(n_el):
-            states[e] = material.commit(B_cache[e], states[e])
+        # ---- COMMIT: advance every element's state at the converged flux density ----
+        states = material.commit(B_cache, states)
 
         steps_out.append(dict(
             h_applied=hv.copy(),
