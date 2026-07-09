@@ -764,12 +764,17 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
   (pure-numpy, CI-friendly).
 * **Honest partial — the 3D-FEM extraction is not (yet) clean.** The same tracker on a 3D FEM
   tilted-edge dipole (`accel_pole_ends_fem`, reduced-Ω) recovers the right *scaling*
-  `Δ(1/f_z) ∝ tan β/ρ` but not a trustworthy magnitude: the reference orbit is not the closed orbit,
-  so it samples the finite-width pole's `∂B_z/∂x` (odd in `x`) asymmetrically → a large spurious
-  `β=0` baseline; and the near-axis derivatives are noisy at accessible resolution. A clean FEM
-  number needs a proper **closed-orbit** (sector / rectangular design orbit) + a much finer mesh.
-  The tracked-on-analytic result is therefore the durable, trustworthy artifact; the FEM difficulty
-  is `edge_focusing_efb_slope_negative` in stronger form.
+  `Δ(1/f_z) ∝ tan β/ρ` but not a trustworthy magnitude. Even a **wide-pole** variant (so
+  `∂B_z/∂x ≈ 0` on-axis — the orbit stays at `x ≈ 3 mm`) with the tilted−normal **difference**
+  (to cancel the body term) *still* fails: the `β=0` baseline (`−0.17` at `ρ=2 m`) does not cancel
+  and the difference is non-monotone / wrong-sign (`β=15° → −0.03`, `β=30° → +0.017 ≈ 6%` of
+  `tan β/ρ`). The **root reason** is deeper than orbit drift: a real finite-**gap** dipole fringe is
+  *thick and fully 3D* (fringe width `~` the gap), so the hard-edge `tan β/ρ` is not the recoverable
+  target of the naive Hill integral — the tilted and normal fringes differ in *more* than the edge
+  angle. Recovering `tan β/ρ` from a thick FEM fringe needs the **SCOFF / Enge fringe-field-integral**
+  formalism + a proper **closed orbit** + a finer mesh. The tracked-on-analytic result is therefore
+  the durable, trustworthy artifact; the FEM difficulty is `edge_focusing_efb_slope_negative` in
+  stronger form.
 
 ---
 
