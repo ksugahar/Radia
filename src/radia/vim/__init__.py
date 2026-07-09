@@ -13,6 +13,12 @@ Public API (NGSolve-aligned validated solve primitives):
       -> the production one-call HDiv-VIM demag solve.  This is the preferred method-level entry,
          matching the NGSolve convention that solve/operator objects use short CamelCase names inside
          their owning namespace.
+  SolveHysteresis(mesh, h_steps, play=(K, eta, f_k_tables))
+      -> quasi-static B-input hysteresis stepping on the SAME RT1 charge Gram: the chi-free
+         H-matrix is built ONCE and reused by every step / nonlinear iteration; per-element
+         committed play states advance step-by-step (save -> restore-before-eval -> commit).
+         Duck-typed material protocol (state0/forward/commit/nu_B0) so lab-local B-input models
+         plug in without touching radia.
   DemagOperator(HDiv(mesh, order=1), intorder=, eps=, gram_backend=)
       -> an ngsolve.bem-style operator.  `.mat` is the H-matrix-backed NGSolve BaseMatrix
          N = B^T G B, which composes with NGSolve solvers / BlockMatrix exactly like ngsolve.bem's
@@ -70,6 +76,10 @@ from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; vim.S
 from ._radsolve import (  # noqa: F401  (.vol/mesh -> both-backend iron)
     soft_iron_from_mesh as _mesh_soft_iron_impl,
     soft_iron_from_vol as _vol_soft_iron_impl,
+)
+from ._hysteresis import (  # noqa: F401  (B-input hysteresis stepping: ONE Gram build, per-step W-CG)
+    PlayHysteresisMaterial,
+    SolveHysteresis,
 )
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
 from ._field import (  # noqa: F401  (field-at-points from solved M; NOT M_mass^-1 N m)
