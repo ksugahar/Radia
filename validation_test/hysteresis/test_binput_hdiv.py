@@ -84,9 +84,11 @@ def _virgin_bh_table(material, Bmax=1.6, n=80):
     """
     s0 = material.state0()
     rows = [[0.0, 0.0]]
-    for b in np.linspace(0.0, Bmax, n + 1)[1:]:
-        H = material.forward(np.array([0.0, 0.0, float(b)]), s0)
-        rows.append([float(H[2]), float(b)])
+    Bs = np.linspace(0.0, Bmax, n + 1)[1:]
+    Bq = np.zeros((Bs.size, 3)); Bq[:, 2] = Bs
+    Hq = material.forward(Bq, np.tile(s0[None, :], (Bs.size, 1)))
+    for b, h in zip(Bs, Hq[:, 2]):
+        rows.append([float(h), float(b)])
     H_col = np.array([r[0] for r in rows])
     assert np.all(np.diff(H_col) > 0.0), "virgin curve must be strictly H-increasing"
     return rows
