@@ -63,6 +63,9 @@ compute/Cubit verification point and intentionally does not install
   silent mismatch that only surfaces at user clicktime.
 * LAB and 100号機 use NAS editable installs for `radia`,
   `cubit-mesh-export`, and `radia-mcp`.
+  On 100号機 the editable path must be the mapped drive
+  `W:\\00_CAE\\Radia\\01_GitHub`, not the self-referential UNC path, because
+  Windows can crash while loading `_radia_pybind.pyd` from that UNC form.
 * mdx installs pinned PyPI wheels for `radia` and `cubit-mesh-export`
   only; `radia-mcp` is not needed there.
 * hibino installs pinned PyPI wheels including `radia-mcp`; use

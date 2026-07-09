@@ -65,7 +65,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 REPO = Path(__file__).resolve().parent.parent
 NAS_REPO_LAB = "S:/Radia/01_GitHub"
-NAS_REPO_100 = r"\\192.168.11.100\work\00_CAE\Radia\01_GitHub"
+NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
 SSH_100 = "192.168.11.100"
 SSH_MDX = "mdx"
 SSH_HIBINO = "hibino"
