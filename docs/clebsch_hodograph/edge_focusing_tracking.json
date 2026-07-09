@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-09T16:14:19.139014+00:00",
+  "generated_at_utc": "2026-07-09T16:44:02.564993+00:00",
   "radia_version": "4.95.8",
   "ngsolve_version": "6.2.2604",
   "python_version": "3.12.10",
@@ -135,5 +135,5 @@
     "finest_w": 0.005,
     "finest_w_slope": 0.9896295342570783
   },
-  "notebook_sha256": "b42174abae07648af22caca2236a5da93d7751dbced174a18359aadb10260397"
+  "notebook_sha256": "db82f93fab5e6f88996a25e719dbd44016613a8be6576cbdf93ad1f3a557f300"
 }

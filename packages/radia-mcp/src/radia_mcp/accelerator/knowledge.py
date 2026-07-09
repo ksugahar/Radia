@@ -871,13 +871,19 @@ CI-friendly): tests/feec/test_edge_focusing_tracking.py.
 
 ## Honest partial -- the 3D-FEM extraction is NOT (yet) clean
 The SAME tracker on a 3D FEM tilted-edge dipole (accel_pole_ends_fem, reduced-Omega) recovers the
-right SCALING Delta(1/f_z) ~ tan(beta)/rho but NOT a trustworthy magnitude: the reference orbit is
-not the closed orbit, so it samples the finite-width pole's dB_z/dx (odd in x) asymmetrically ->
-a large spurious beta=0 baseline (centering the orbit REDUCES but does not NULL it); and the
-near-axis field derivatives are noisy at accessible mesh/grid resolution.  A clean FEM number
-needs a proper CLOSED-ORBIT (sector / rectangular design orbit) + a much finer mesh.  So the
-tracked-on-analytic result is the durable artifact; the FEM difficulty is
-edge_focusing_efb_slope_negative in stronger form (field-based edge measures are fragile).
+right SCALING Delta(1/f_z) ~ tan(beta)/rho but NOT a trustworthy magnitude.  Two variants both
+fail: (i) narrow pole -> the non-closed reference orbit samples the finite-pole dB_z/dx (odd in x)
+asymmetrically -> large spurious beta=0 baseline (centering the orbit REDUCES but does not NULL it);
+(ii) WIDE pole (dB_z/dx~0 on-axis, orbit stays at x~3mm) + tilted-vs-normal DIFFERENCE STILL fails
+-- beta=0 baseline (-0.17 at rho=2) does not cancel and the difference is non-monotone/wrong-sign
+(beta=15 -> -0.03; beta=30 -> +0.017 ~6% of tan/rho).  ROOT REASON (deeper than orbit drift): a real
+finite-GAP dipole fringe is THICK and fully 3D (fringe width ~ the gap), so the hard-edge tan/rho is
+NOT the recoverable target of the naive Hill integral -- the tilted vs normal fringes differ in MORE
+than the edge angle.  Recovering tan/rho from a thick FEM fringe needs the SCOFF/Enge
+FRINGE-FIELD-INTEGRAL formalism + a proper CLOSED orbit + a finer mesh.  So the tracked-on-analytic
+result is the durable artifact; the FEM difficulty is edge_focusing_efb_slope_negative in stronger
+form (field-based edge measures are fragile).  Do NOT re-attempt the naive wide-pole/difference
+variant.
 """
 
 
