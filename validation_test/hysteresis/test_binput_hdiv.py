@@ -193,6 +193,20 @@ def test_E_strong_coupling_block_loop():
     assert area > 50.0, "4x4x4 block loop lost its hysteresis (area=%.3e)" % area
     assert it_max < 150, "polarization iteration count blew up on a reversal (max %d)" % it_max
 
+    payload = dict(
+        description="HDiv-VIM B-input play hysteresis 4x4x4 strong-coupling loop (gate E)",
+        h_applied_z=[float(v) for v in hz],
+        H_internal_avg_z=[float(v) for v in Hz_int],
+        B_avg_z=[float(v) for v in Bz],
+        M_avg_z=[float(s["M_avg"][2]) for s in res["steps"]],
+        loop_area_A_T_per_m=float(area),
+        ndof=res["ndof"], n_el=res["n_el"],
+        charge_gram_wall_s=res["charge_gram_wall_s"],
+        t_steps_s=res["t_steps_s"],
+        picard_iters=[int(s["iters"]) for s in res["steps"]],
+    )
+    (HERE / "binput_hdiv_loop_4x4x4.json").write_text(json.dumps(payload, indent=1))
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v", "-x"]))
