@@ -105,7 +105,11 @@ do not read the NAS source during the release gate.
 
 100号機 (the lab's shared workstation) receives Radia from the managed
 internal share via editable install. The SSH host is configured outside
-the public package.
+the public package.  Use the workstation's mapped drive form
+`W:\\00_CAE\\Radia\\01_GitHub` for the editable path, not the UNC form
+`\\\\192.168.11.100\\work\\...`: loading `_radia_pybind.pyd` directly from
+the self-referential UNC path can access-violate on Windows even though
+the same binary imports from a local path or PyPI wheel.
 
 After every release or source-side deploy, `release_qud.py phase8
 --target 100` runs the equivalent of:
@@ -119,9 +123,9 @@ Get-Process -ErrorAction SilentlyContinue | Where-Object {
 } | ForEach-Object { Stop-Process -Id $_.Id -Force }
 Start-Sleep -Seconds 2
 
-pip install -e "<managed-internal-share>\\Radia\\01_GitHub" `
-    -e "<managed-internal-share>\\Radia\\01_GitHub\\packages\\cubit-mesh-export" `
-    -e "<managed-internal-share>\\Radia\\01_GitHub\\packages\\radia-mcp" `
+pip install -e "W:\\00_CAE\\Radia\\01_GitHub" `
+    -e "W:\\00_CAE\\Radia\\01_GitHub\\packages\\cubit-mesh-export" `
+    -e "W:\\00_CAE\\Radia\\01_GitHub\\packages\\radia-mcp" `
     --no-deps --no-cache-dir
 
 cubit-plugin-install --all-users
