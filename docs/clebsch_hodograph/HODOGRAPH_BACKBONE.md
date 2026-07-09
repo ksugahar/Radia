@@ -168,7 +168,7 @@ and the conditioning discussion in
 ## 3. The cell map (built vs open — honest)
 
 Reading the axes against the realized examples. `✓` = verified + golden-locked
-(`tests/feec/test_clebsch_hodograph_research.py`); `→` = open / planned.
+(`validation_test/feec/test_clebsch_hodograph_research.py`); `→` = open / planned.
 
 | map (axis 1) | dim | material | cell artifact | status |
 |---|---|---|---|---|

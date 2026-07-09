@@ -1351,6 +1351,18 @@ invariant under saturation" is largely automatic for the beam; what you optimize
 it saturates.* Uses Optuna (TPE) if present, else a built-in grid+refine. Golden
 `test_bending_endpack_saturation_opt` (ngsolve only, ~8 s).
 
+### excitation-invariant flux lines → `docs/clebsch_hodograph/excitation_invariant_field.ipynb`
+
+The companion question *"do the flux LINES keep the same shape as you turn up the drive
+current?"* (excitation-invariant, **not** a cyclotron) lives as a **result-bearing docs
+notebook**, not an examples script: `docs/clebsch_hodograph/excitation_invariant_field.ipynb`
+(+ `excitation_invariant_field.py` helper + synchronized JSON). It shows that below the iron
+knee the magnet is LINEAR so the flux-line pattern is excitation-invariant by construction (the
+linear control drift is exactly 0 at every drive), saturation is the sole breaker, and the
+corner-relief end chamfer keeps the flux lines invariant `~6–7×` deeper into saturation — the
+same corner lever as `bending_endpack_saturation_opt.py`, tied to the hodograph design method.
+Goldens `test_excitation_invariant_field` + `test_excitation_invariant_linear_control_is_zero`.
+
 ## Run
 
 ```bash
@@ -1386,6 +1398,7 @@ python endpack_cobake.py                      # the two planes CO-BAKED into one
 python endpack_cobake_loft.py                 # the co-bake as a PRECISION tensor LOFT (OCC ThruSections): smooth gap face -> baseline & shim mesh at the SAME density (ne ratio ~0.97 vs staircase ~36) -> resolves the staircase artifact, precision b_3,5 + corner (--no-staircase, --fig)
 python scaling_ffag_sector_saturation.py      # the saturating sector body: scaling sector's azimuthal end made NONLINEAR (Froehlich) -> azimuthal L_eff ROBUST (gap-dominated, drift <0.1% even as high-r mu_r collapses x0.3) while radial k(r) is FRAGILE (droops, achromaticity wall) -- two planes differ (--no-radial, --fig)
 python bending_endpack_saturation_opt.py      # the bending end pack optimized vs saturation: the BEAM-plane field is naturally invariant (J~1e-3); the real problem is the pole-TIP CORNER hot spot (kappa~3.7) -> minimize kappa over the end chamfer (depth, exponent) -> corner relieved to ~1.0, beam field unchanged (--trials, --fig)
+# excitation-invariant flux lines -> docs notebook: docs/clebsch_hodograph/excitation_invariant_field.ipynb
 python clebsch_dipole_saturation_2d.py        # saturation in the dipole: iron flux-path B_gap(NI) at linear cost (--fem)
 python clebsch_dipole_saturation_3d.py        # saturation in 3-D, done right: the B-input A-formulation (the cure)
 python clebsch_dipole_saturation_3d_throat.py # B(b): the STRONG 3-D B_gap knee via throat flux-concentration (--fem)
