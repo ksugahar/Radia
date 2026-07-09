@@ -84,6 +84,24 @@ TOPICS: dict[str, str] = {
         "log-divergent (needs 3D); the END design targets no-enhancement (local). "
         "(docs/clebsch_hodograph/hodograph_bending_sy.ipynb; golden validation_test/feec/test_hodograph_bending_sy.py)"
     ),
+    "edge_focusing_tracking": (
+        "Vertical EDGE FOCUSING of a tilted dipole end, measured by PARTICLE TRACKING (the s-y "
+        "end-shaping companion; here the tilt is HORIZONTAL: pole-face rotation beta about the "
+        "vertical axis, x-s bend plane). Hard-edge thin lens |1/f_z|=tan(beta)/rho. CORRECT "
+        "measure = the linearized vertical HILL INTEGRAL along the reference orbit "
+        "1/f_z=(q/p)INT(u_y dBx/dz - u_x dBy/dz)|z=0 ds -- NOT a field-EFB slope (which is "
+        "wrong-sign/blows up on a compact dipole; edge_focusing_efb_slope_negative). VERIFIED on a "
+        "genuinely Maxwellian tilted fringe (curl-free AND div-free: the only vacuum linear-in-z "
+        "continuation is B_s=+B0 z g'(s); a div-free-but-not-curl-free choice has a spurious edge "
+        "current sheet and FLIPS the sign): slope vs the law -> 1 as fringe w->0 (0.84->0.99 for "
+        "w 0.08->0.005), beta=0 baseline = -0.5 w/rho (finite-fringe residual ->0), rho*(1/f_z) "
+        "collapses onto tan(beta). HONEST PARTIAL: the SAME tracker on a 3D FEM tilted-edge dipole "
+        "(accel_pole_ends_fem, reduced-Omega) gets the right SCALING but not a trustworthy "
+        "magnitude -- the reference orbit is not the closed orbit so it samples the finite-pole "
+        "dB_z/dx (odd in x) asymmetrically (large spurious beta=0 baseline) + near-axis derivatives "
+        "noisy; a clean FEM number needs a proper closed-orbit + finer mesh. "
+        "(docs/clebsch_hodograph/edge_focusing_tracking.ipynb; golden tests/feec/test_edge_focusing_tracking.py)"
+    ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
         "the TWIST: rotate the surface by phi <=> multipole phase n*phi "
@@ -819,6 +837,50 @@ correct) Rogowski profile.  Pairs with the x-y cross-section note (HODOGRAPH_FEA
 """
 
 
+EDGE_FOCUSING_TRACKING = """
+# Vertical EDGE FOCUSING of a tilted dipole end -- measured by PARTICLE TRACKING
+
+Companion of the s-y end-shaping note (HODOGRAPH_BENDING_SY shapes the LONGITUDINAL end so the
+pole face stays at B0).  Here the tilt is HORIZONTAL: rotate the pole face about the VERTICAL
+axis by beta (in the x-s bend plane).  That turns the edge into a thin VERTICAL lens
+    |1/f_z| = tan(beta)/rho ,   rho = p/(qB0)  (bend radius).
+(docs/clebsch_hodograph/edge_focusing_tracking.ipynb, runnable + golden.)
+
+## Measure it by tracking, NOT by a field-EFB slope
+Vertical edge focusing is a SECOND-ORDER, off-mid-plane property of the fringe.  The mid-plane
+|B| effective-field-boundary (EFB) slope CANNOT recover it -- it is wrong-sign / blows up on a
+compact dipole (lab finding edge_focusing_efb_slope_negative).  The correct measure is the
+linearized vertical HILL INTEGRAL along the reference orbit:
+    1/f_z = (q/p) INT ( u_y dB_x/dz - u_x dB_y/dz )|_{z=0} ds ,
+with u the mid-plane orbit tangent (RK4).  By Maxwell (curl B=0 in air) dB_x/dz=dB_z/dx and
+dB_y/dz=dB_z/dy, so the kernel can also be read off the clean mid-plane B_z gradients.
+
+## Verified on a closed-form field
+Build a GENUINELY MAXWELLIAN tilted hard-edge fringe (curl-free AND div-free).  Sign trap: with
+mid-plane B_z(s,0)=B0 g(s), edge-normal s=(y-y_edge)cos b + x sin b, the ONLY vacuum linear-in-z
+continuation is B_s=+B0 z g'(s) -> dB_x/dz=+B0 g'(s) sin b.  A div-free-BUT-NOT-curl-free choice
+(B_s=-B0 z g'(s)) is a different field with a spurious current SHEET at the edge and FLIPS the
+focusing sign.  Using the curl-free field, the tracker reproduces the hard-edge law:
+  - slope of tracked 1/f_z vs tan(beta)/rho -> 1 as the fringe narrows: 0.84 -> 0.99 for
+    w = 0.08 -> 0.005 (a finite fringe just spreads the delta-edge);
+  - beta=0 baseline = -0.5 w/rho EXACTLY -- an O(w/rho) finite-fringe residual that vanishes;
+  - rho*(1/f_z) collapses onto tan(beta) (thin lens, 1/rho scaling).
+The magnitude tan(beta)/rho is the invariant; the sign is orientation-dependent (a rectangular
+magnet's edges DEFOCUS; this curl-free entrance-edge orientation FOCUSES).  Golden (pure-numpy,
+CI-friendly): tests/feec/test_edge_focusing_tracking.py.
+
+## Honest partial -- the 3D-FEM extraction is NOT (yet) clean
+The SAME tracker on a 3D FEM tilted-edge dipole (accel_pole_ends_fem, reduced-Omega) recovers the
+right SCALING Delta(1/f_z) ~ tan(beta)/rho but NOT a trustworthy magnitude: the reference orbit is
+not the closed orbit, so it samples the finite-width pole's dB_z/dx (odd in x) asymmetrically ->
+a large spurious beta=0 baseline (centering the orbit REDUCES but does not NULL it); and the
+near-axis field derivatives are noisy at accessible mesh/grid resolution.  A clean FEM number
+needs a proper CLOSED-ORBIT (sector / rectangular design orbit) + a much finer mesh.  So the
+tracked-on-analytic result is the durable artifact; the FEM difficulty is
+edge_focusing_efb_slope_negative in stronger form (field-based edge measures are fragile).
+"""
+
+
 BEAM_REFERENCED_TWIST = """
 # The beam-referenced equipotential SURFACE as the design primitive + the TWIST
 
@@ -1162,6 +1224,10 @@ def get_accelerator_documentation(topic: str = "all") -> str:
                  "pole_end_design", "chamfer_optimization", "rogowski_recover",
                  "longitudinal_fringe"):
         return HODOGRAPH_BENDING_SY
+    if topic in ("edge_focusing_tracking", "edge_focus", "edge_tracking",
+                 "tilted_edge", "vertical_focusing", "hill_integral", "beta_edge",
+                 "edge_focusing_tan"):
+        return EDGE_FOCUSING_TRACKING
     if topic in ("beam_referenced_twist", "twist", "twisting", "design_primitive",
                  "equipotential_surface", "n_fold", "rotating_gradient"):
         return BEAM_REFERENCED_TWIST
@@ -1180,13 +1246,14 @@ def get_accelerator_documentation(topic: str = "all") -> str:
             END_POLE_DESIGN, KOLKATA_CYCLOTRON, ROTATING_COIL_MEASUREMENT,
             ISOCHRONOUS_ENDPACK_DESIGN, FOLIATE_PERTURB, TWO_PLANE_DESIGN,
             SECTOR_SATURATION, BENDING_ENDPACK_SATURATION, EXCITATION_INVARIANT_FIELD,
-            HODOGRAPH_FEASIBILITY, HODOGRAPH_BENDING_SY, BEAM_REFERENCED_TWIST,
-            ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION, ENDPACK_COBAKE,
+            HODOGRAPH_FEASIBILITY, HODOGRAPH_BENDING_SY, EDGE_FOCUSING_TRACKING,
+            BEAM_REFERENCED_TWIST, ENDPACK_TWO_PLANE, SPECTROMETER_ENDPACK_SATURATION,
+            ENDPACK_COBAKE,
         ])
     return (
         f"Unknown topic '{topic}'. Available: all, end_pole, kolkata, "
         "rotating_coil, isochronous_endpack, foliate_perturb, two_plane_design, "
         "sector_saturation, bending_endpack_saturation, excitation_invariant_field, "
-        "hodograph_feasibility, hodograph_bending_sy, beam_referenced_twist, "
-        "endpack_two_plane, spectrometer_endpack, endpack_cobake."
+        "hodograph_feasibility, hodograph_bending_sy, edge_focusing_tracking, "
+        "beam_referenced_twist, endpack_two_plane, spectrometer_endpack, endpack_cobake."
     )

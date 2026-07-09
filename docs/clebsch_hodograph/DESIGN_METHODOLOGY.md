@@ -743,6 +743,34 @@ design targets **no field enhancement** (local), and the numerical chamfer optim
 novelty, but correct) Rogowski profile obtained by a robust FEM search that generalizes to
 arbitrary gaps and tilted ends.
 
+### 3.17 The tilted end — vertical edge focusing, measured by particle tracking
+
+Rotating the pole face about the *vertical* axis by an angle `β` (a **horizontal** tilt, in the
+`x`–`s` bend plane — orthogonal to the s-y end-shaping above) turns the edge into a thin **vertical
+lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
+`docs/clebsch_hodograph/edge_focusing_tracking.ipynb` establishes **how to measure it correctly**.
+
+* **Not a field-EFB slope — a particle-tracking Hill integral.** Vertical edge focusing is a
+  *second-order, off-mid-plane* property; the mid-plane `|B|` EFB slope cannot recover it
+  (wrong-sign / blows up on a compact dipole — lab finding `edge_focusing_efb_slope_negative`). The
+  correct measure is the linearized vertical Hill integral along the reference orbit,
+  `1/f_z = (q/p)∫(u_y ∂B_x/∂z − u_x ∂B_y/∂z)|_{z=0} ds`.
+* **Verified on a closed-form field.** On a genuinely **Maxwellian** tilted hard-edge fringe
+  (curl-free *and* div-free — the only vacuum linear-in-`z` continuation is `B_s = +B₀ z g'(s)`; a
+  div-free-but-not-curl-free choice has a spurious edge current sheet and **flips the sign**), the
+  tracker reproduces `|1/f_z| = tan β/ρ`: the slope vs the law `→ 1` as the fringe narrows
+  (`0.84 → 0.99` for `w: 0.08 → 0.005`), the `β=0` baseline is a finite-fringe residual `−½ w/ρ → 0`,
+  and `ρ·(1/f_z)` collapses onto `tan β`. Golden `tests/feec/test_edge_focusing_tracking.py`
+  (pure-numpy, CI-friendly).
+* **Honest partial — the 3D-FEM extraction is not (yet) clean.** The same tracker on a 3D FEM
+  tilted-edge dipole (`accel_pole_ends_fem`, reduced-Ω) recovers the right *scaling*
+  `Δ(1/f_z) ∝ tan β/ρ` but not a trustworthy magnitude: the reference orbit is not the closed orbit,
+  so it samples the finite-width pole's `∂B_z/∂x` (odd in `x`) asymmetrically → a large spurious
+  `β=0` baseline; and the near-axis derivatives are noisy at accessible resolution. A clean FEM
+  number needs a proper **closed-orbit** (sector / rectangular design orbit) + a much finer mesh.
+  The tracked-on-analytic result is therefore the durable, trustworthy artifact; the FEM difficulty
+  is `edge_focusing_efb_slope_negative` in stronger form.
+
 ---
 
 ## 4. Dual realization — iron (φ) ⟷ coil (A)
