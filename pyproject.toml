@@ -70,6 +70,12 @@ dependencies = [
 cubit = [
     "cubit-mesh-export",
 ]
+spice = [
+    "radia-spice-lab>=0.4.0",
+]
+ltspice = [
+    "radia-spice-lab>=0.4.0",
+]
 build123d = [
     # Pythonic OCCT front-end used by PEEC coil-from-shape helpers
     # (label / color reading, STEP XCAF access). netgen.occ does not

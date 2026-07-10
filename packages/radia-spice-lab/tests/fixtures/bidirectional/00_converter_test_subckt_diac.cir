@@ -1,0 +1,13 @@
+* DIAC subckt round-trip test
+V1 in 0 SINE(0 230 50)
+X1 in 0 mydiac
+R1 in 0 1k
+.tran 20m
+
+.subckt mydiac T1 T2
+* simplified DIAC: two opposing zeners
+.model BD D Bv=30
+D1 T1 T2 BD
+D2 T2 T1 BD
+.ends mydiac
+.end

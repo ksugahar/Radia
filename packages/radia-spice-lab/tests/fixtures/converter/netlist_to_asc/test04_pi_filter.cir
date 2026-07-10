@@ -1,0 +1,8 @@
+* Pi Filter (C-L-C)
+I1 0 in AC 1
+C1 in 0 100n
+L1 in out 1m
+C2 out 0 100n
+R1 out 0 50
+.ac dec 100 1k 1Meg
+.end

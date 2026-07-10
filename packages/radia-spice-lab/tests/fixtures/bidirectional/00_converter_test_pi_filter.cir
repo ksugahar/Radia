@@ -1,0 +1,8 @@
+* Extracted from ASC
+I1 n1 0 AC 1
+C1 n1 0 100n
+L1 n1 out 1m
+C2 out 0 100n
+RL out 0 50
+.ac dec 100 1k 1Meg
+.end
