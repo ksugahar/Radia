@@ -32,6 +32,51 @@ PRIMARY_COMPARISON_LANES = ("ngsolve_age", "hdiv_vim_reduced_fem")
 OPTIONAL_AUXILIARY_LANES: tuple[str, ...] = ()
 
 
+def validate_motor_source_deck_review_packet(packet: Mapping[str, Any] | str) -> dict[str, Any]:
+    """Validate a public source-deck packet before dual-lane motor work."""
+
+    data = json.loads(packet) if isinstance(packet, str) else dict(packet)
+    selected = data.get("selected_decks", [])
+    required_lanes = data.get("required_lanes", [])
+    required_fields = {str(item) for item in data.get("required_result_fields", [])}
+    mandatory_fields = {
+        "observable_id",
+        "observable_unit",
+        "coordinate_frame",
+        "sign_convention",
+        "solver_version",
+        "run_date_utc",
+        "timing_breakdown_s",
+    }
+    checks = {
+        "schema_matches": data.get("schema_version") == "motor-source-deck-review-packet/v1",
+        "observable_id_recorded": bool(str(data.get("observable_id", "")).strip()),
+        "selected_decks_present": isinstance(selected, list) and bool(selected),
+        "selected_deck_identity_complete": isinstance(selected, list) and bool(selected) and all(
+            isinstance(row, Mapping)
+            and bool(str(row.get("family", "")).strip())
+            and bool(str(row.get("case", "")).strip())
+            and str(row.get("mai_path", "")).endswith(".mai")
+            for row in selected
+        ),
+        "both_primary_lanes_required": list(required_lanes) == list(PRIMARY_COMPARISON_LANES),
+        "result_contract_complete": mandatory_fields.issubset(required_fields),
+        "publication_boundary_recorded": bool(str(data.get("publication_boundary", "")).strip()),
+        "raw_solver_results_absent": not any(
+            key in data for key in ("solver_results", "raw_results", "benchmark_values")
+        ),
+    }
+    return {
+        "policy": "motor_source_deck_review_packet_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "observable_id": str(data.get("observable_id", "")).strip(),
+        "selected_deck_count": len(selected) if isinstance(selected, list) else 0,
+        "required_lanes": list(required_lanes) if isinstance(required_lanes, list) else [],
+        "required_result_fields": sorted(required_fields),
+        "checks": checks,
+    }
+
+
 FAMILY_SEEDS: dict[str, dict[str, Any]] = {
     "spm": {
         "source_examples": (
