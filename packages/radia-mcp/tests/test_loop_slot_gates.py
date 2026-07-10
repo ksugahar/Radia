@@ -50,6 +50,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     inverter_dc_bus_voltage_limit_gate,
     jmag_motor_table_column_metadata_gate,
     jmag_symmetry_sweep_coverage_gate,
+    licensed_solver_agentic_profile_gate,
     lcurve_corner_choice,
     lumped_pm_dq_torque,
     maxwell_stress_surface_package_gate,
@@ -2499,6 +2500,32 @@ def test_touchstone_frequency_unit_normalization_gate_keeps_raw_unit_and_selecte
     )
     assert sparse["status"] == "needs_attention"
     assert sparse["grid_contract"]["checks"]["design_spacing_ok"] is False
+
+
+def test_licensed_solver_agentic_profile_gate_requires_seat_safe_owned_cleanup():
+    safe = licensed_solver_agentic_profile_gate(
+        "cae-ai-lab.agentic-mcp-profile.v1",
+        ["solver_status", "solver_license_status", "solver_live_status"],
+        preflight_consumes_license=False,
+        default_gui=False,
+        owned_instance_cleanup_only=True,
+    )
+    assert safe["status"] == "ok"
+    assert safe["checks"]["recommended_first_calls_cover_required_kinds"] is True
+    assert safe["checks"]["preflight_is_seat_non_consuming"] is True
+    assert safe["checks"]["cleanup_is_owned_instance_only"] is True
+
+    unsafe = licensed_solver_agentic_profile_gate(
+        "cae-ai-lab.agentic-mcp-profile.v1",
+        ["solver_run"],
+        preflight_consumes_license=True,
+        default_gui=True,
+        owned_instance_cleanup_only=False,
+    )
+    assert unsafe["status"] == "needs_attention"
+    assert unsafe["checks"]["recommended_first_calls_cover_required_kinds"] is False
+    assert unsafe["checks"]["headless_by_default"] is False
+    assert unsafe["checks"]["cleanup_is_owned_instance_only"] is False
 
 
 def test_shared_solver_session_health_gate_separates_reuse_from_physics():

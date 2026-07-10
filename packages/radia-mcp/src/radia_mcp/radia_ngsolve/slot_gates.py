@@ -4768,6 +4768,56 @@ def cst_touchstone_solver_ready_manifest_gate(
     }
 
 
+def licensed_solver_agentic_profile_gate(
+    agentic_profile_schema,
+    recommended_first_calls,
+    *,
+    required_first_call_kinds=("status", "license", "live"),
+    preflight_consumes_license=None,
+    default_gui=None,
+    owned_instance_cleanup_only=None,
+):
+    """Validate a seat-aware agentic profile for a licensed solver.
+
+    The gate is vendor-neutral. It requires status/license/live discovery before
+    execution, a non-consuming preflight, headless-by-default automation, and
+    cleanup restricted to an instance owned by the helper.
+    """
+
+    schema = str(agentic_profile_schema or "").strip()
+    calls = [str(item).strip() for item in (recommended_first_calls or []) if str(item).strip()]
+    required = [str(item).strip().lower() for item in required_first_call_kinds if str(item).strip()]
+    checks = {
+        "agentic_profile_schema_recorded": bool(schema),
+        "recommended_first_calls_recorded": bool(calls),
+        "required_first_call_kinds_recorded": bool(required),
+        "recommended_first_calls_cover_required_kinds": bool(required) and all(
+            any(kind in call.lower() for call in calls) for kind in required
+        ),
+        "preflight_license_policy_recorded": preflight_consumes_license is not None,
+        "preflight_is_seat_non_consuming": preflight_consumes_license is False,
+        "default_gui_policy_recorded": default_gui is not None,
+        "headless_by_default": default_gui is False,
+        "cleanup_ownership_policy_recorded": owned_instance_cleanup_only is not None,
+        "cleanup_is_owned_instance_only": owned_instance_cleanup_only is True,
+    }
+    return {
+        "policy": "licensed_solver_agentic_profile_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "agentic_profile_schema": schema,
+        "recommended_first_calls": calls,
+        "required_first_call_kinds": required,
+        "preflight_consumes_license": preflight_consumes_license,
+        "default_gui": default_gui,
+        "owned_instance_cleanup_only": owned_instance_cleanup_only,
+        "checks": checks,
+        "notes": [
+            "Discover status and license availability before a licensed live operation.",
+            "Never quit a user-owned solver instance from an MCP smoke helper.",
+        ],
+    }
+
+
 def shared_solver_session_health_gate(
     connected,
     api_visible,
