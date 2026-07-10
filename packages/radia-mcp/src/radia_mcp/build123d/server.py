@@ -158,6 +158,121 @@ def build123d_volume_crosscheck(
 
 
 @mcp.tool()
+def build123d_volume_crosscheck_with_units(
+    reference_rows_json: str,
+    measured_sets_json: str,
+    target_volume_unit: str = "mm^3",
+    rtol: float = 1.0e-5,
+) -> str:
+    """Normalize explicit cubic units before comparing CAD volumes.
+
+    Every row must carry ``volume_unit``. This prevents a numerically plausible
+    comparison from silently mixing build123d's usual millimetre model units
+    with external CAD exports reported in cubic centimetres or cubic metres.
+    """
+
+    factors_to_mm3 = {
+        "mm^3": 1.0,
+        "mm3": 1.0,
+        "cm^3": 1.0e3,
+        "cm3": 1.0e3,
+        "m^3": 1.0e9,
+        "m3": 1.0e9,
+        "in^3": 25.4 ** 3,
+        "in3": 25.4 ** 3,
+    }
+
+    try:
+        reference_rows = json.loads(reference_rows_json)
+        measured_sets = json.loads(measured_sets_json)
+    except json.JSONDecodeError as exc:
+        return json.dumps({
+            "policy": "build123d_volume_crosscheck_with_units",
+            "status": "invalid_input",
+            "error": f"{type(exc).__name__}: {exc}",
+        }, indent=2)
+
+    target = str(target_volume_unit or "").strip().lower()
+    if target not in factors_to_mm3:
+        return json.dumps({
+            "policy": "build123d_volume_crosscheck_with_units",
+            "status": "invalid_input",
+            "error": f"unsupported target_volume_unit: {target_volume_unit}",
+        }, indent=2)
+
+    issues: list[str] = []
+
+    def normalize_rows(rows, source: str):
+        normalized = []
+        for index, row in enumerate(rows or []):
+            item = dict(row)
+            unit = str(item.get("volume_unit", "")).strip().lower()
+            if unit not in factors_to_mm3:
+                issues.append(f"{source}[{index}] missing or unsupported volume_unit")
+                continue
+            try:
+                volume = float(item["volume"])
+            except (KeyError, TypeError, ValueError):
+                issues.append(f"{source}[{index}] missing numeric volume")
+                continue
+            item["source_volume"] = volume
+            item["source_volume_unit"] = unit
+            item["volume"] = volume * factors_to_mm3[unit] / factors_to_mm3[target]
+            item["volume_unit"] = target
+            normalized.append(item)
+        return normalized
+
+    normalized_reference = normalize_rows(reference_rows, "reference")
+    if isinstance(measured_sets, dict):
+        normalized_measured = {
+            str(source): normalize_rows(rows, str(source))
+            for source, rows in measured_sets.items()
+        }
+    elif isinstance(measured_sets, list):
+        normalized_measured = []
+        for index, record in enumerate(measured_sets):
+            item = dict(record)
+            source = str(item.get("source", f"source_{index}"))
+            item["rows"] = normalize_rows(item.get("rows", []), source)
+            normalized_measured.append(item)
+    else:
+        issues.append("measured_sets must be a mapping or list")
+        normalized_measured = {}
+
+    if issues:
+        return json.dumps({
+            "policy": "build123d_volume_crosscheck_with_units",
+            "status": "needs_attention",
+            "target_volume_unit": target,
+            "issues": issues,
+        }, indent=2)
+
+    try:
+        from .modeling import shape_volume_crosscheck_summary
+        summary = shape_volume_crosscheck_summary(
+            normalized_reference,
+            normalized_measured,
+            rtol=rtol,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return json.dumps({
+            "policy": "build123d_volume_crosscheck_with_units",
+            "status": "error",
+            "error": f"{type(exc).__name__}: {exc}",
+        }, indent=2)
+
+    return json.dumps({
+        "policy": "build123d_volume_crosscheck_with_units",
+        "status": summary.get("status", "needs_attention"),
+        "target_volume_unit": target,
+        "normalized_reference_rows": normalized_reference,
+        "normalized_measured_sets": normalized_measured,
+        "crosscheck": summary,
+        "issues": [],
+    }, indent=2)
+
+
+@mcp.tool()
 def build123d_volume_crosscheck_source_coverage_gate(
     volume_summary_json: str,
     required_sources_json: str = "",
