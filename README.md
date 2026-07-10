@@ -18,7 +18,7 @@ Three things in this repository do not, as far as we know, exist anywhere else:
 1. **Analytic EM sources *inside* NGSolve's assembly loop.** `rad.RadiaField()` hands Radia's coils and magnets to NGSolve as a native C++ `CoefficientFunction`, evaluated by a GIL-free Fast Multipole Method *during* finite-element assembly — an **exact** source term, with no air mesh and no grid interpolation.
 2. **Curved high-order *hex* meshes in NGSolve — [`cubit-mesh-export`](packages/cubit-mesh-export/).** Netgen gives NGSolve high-order curved *tetrahedra*; high-order **hexahedral** meshes have had no path in. This exports Coreform Cubit hex meshes to NGSolve `.vol` with ACIS geometry projection at **order 1–5** — the only route we know of to **high-order hex FEM in the NGSolve / Netgen ecosystem**. A curved hex sphere's NGSolve volume converges to the analytic value as the order rises — order 1 **−23 %** → order 2 **−0.2 %** → order 3 **+0.1 %** ([runnable demo](docs/cubit_mesh_export/hex_sphere_highorder/), no Cubit needed to reproduce).
 3. **The first public MCP server suite for CAE meshing — [`radia-mcp`](packages/radia-mcp/).** The first and only [Model Context Protocol](https://modelcontextprotocol.io/) servers for Coreform Cubit, Gmsh, and build123d: an AI agent can generate real meshes, author CAD, and run FEM / BEM / PEEC *correctly* — not just describe them.
-4. **Circuit-aware SPICE/LTspice tooling — [`radia-spice-lab`](packages/radia-spice-lab/).** The former standalone `spice-circuit-lab` repository now lives in this monorepo as a Radia-side circuit lab: `.asc` / `.cir` / schemdraw conversion, topology-preserving round-trip checks, and a public MCP server for agentic circuit workflows.
+4. **Circuit-aware SPICE/LTspice tooling — [`radia-spice-lab`](packages/radia-spice-lab/).** The former standalone `spice-circuit-lab` repository now lives in this monorepo as Radia's public LTspice interoperability library: `.asc` / `.cir` / schemdraw conversion, topology-preserving round-trip checks, `.measure` log summaries, and a public MCP server for agentic circuit workflows. Private RAW-analysis and invention-learning pipelines stay outside the public repository.
 
 ## ✨ Why Radia?
 
@@ -408,7 +408,7 @@ The 3 PyPI packages above are the **full lab-standard install**:
 | `radia[cubit]` | C++ core + NGSolve integration + notebook workbenches + Cubit plugin binaries | Yes |
 | `radia-mcp` | 40+ MCP knowledge servers (340+ tools) led by `radia-ngsolve` (NGSolve FEM/BEM) for Claude / IDE integration | Optional (only for AI-assisted workflows) |
 | `cubit-mesh-export` | High-order curved mesh export Cubit -> NGSolve `.vol` | Bundled by `radia[cubit]`; pin separately for explicit version control |
-| `radia-spice-lab` | SPICE/LTspice `.asc` / `.cir` / schemdraw conversion, topology checks, and public MCP circuit tools | Bundled by `radia[spice]` / `radia[ltspice]` once the sibling package is published; install from `packages/radia-spice-lab` in-tree |
+| `radia-spice-lab` | Public SPICE/LTspice interoperability library: `.asc` / `.cir` / schemdraw conversion, topology checks, `.measure` log summaries, and public MCP circuit tools | Bundled by `radia[spice]` / `radia[ltspice]` once the sibling package is published; install from `packages/radia-spice-lab` in-tree |
 
 **Production deploy uses `[cubit]`, not `[gui]`**:
 - `[cubit]` brings in `cubit-mesh-export` (curved mesh export + `cubit-plugin-install` CLI)

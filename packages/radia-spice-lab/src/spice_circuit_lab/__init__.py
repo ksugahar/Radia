@@ -12,6 +12,12 @@ from ltspice_converter.knowledge import (  # noqa: F401
     buck_seed,
     circuit_knowledge,
 )
+from ltspice_converter.measure import (  # noqa: F401
+    parse_ltspice_measure_lines,
+    parse_ltspice_step_lines,
+    parse_spice_scalar,
+    summarize_measure_log,
+)
 
 __all__ = [
     "netlist_to_schemdraw",
@@ -22,4 +28,8 @@ __all__ = [
     "topology_equivalent",
     "circuit_knowledge",
     "buck_seed",
+    "parse_spice_scalar",
+    "parse_ltspice_measure_lines",
+    "parse_ltspice_step_lines",
+    "summarize_measure_log",
 ]
