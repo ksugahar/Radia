@@ -5399,6 +5399,55 @@ def solver_submodel_boundary_handoff_gate(
     }
 
 
+def owned_solver_model_tag_preflight_gate(
+    existing_tags,
+    requested_tag,
+    owned_prefix,
+    owner,
+    max_tag_length=63,
+):
+    """Reject unsafe or colliding temporary solver tags before mutation."""
+
+    tags = [str(tag).strip() for tag in existing_tags]
+    tag = str(requested_tag or "").strip()
+    prefix = str(owned_prefix or "").strip()
+    owner_text = str(owner or "").strip()
+    limit = int(max_tag_length)
+    if limit <= 0:
+        raise ValueError("max_tag_length must be positive")
+    safe_chars = bool(tag) and all(
+        char.isascii() and (char.isalnum() or char == "_") for char in tag
+    )
+    lower_tags = {item.lower() for item in tags}
+    checks = {
+        "requested_tag_recorded": bool(tag),
+        "owned_prefix_recorded": bool(prefix),
+        "owner_recorded": bool(owner_text),
+        "requested_tag_uses_owned_prefix": bool(prefix) and tag.startswith(prefix),
+        "requested_tag_safe_for_solver": safe_chars and tag[:1].isalpha(),
+        "requested_tag_within_length_limit": bool(tag) and len(tag) <= limit,
+        "requested_tag_collision_free": bool(tag) and tag.lower() not in lower_tags,
+        "existing_tags_unique_case_insensitive": len(lower_tags) == len(tags),
+    }
+    return {
+        "policy": "owned_solver_model_tag_preflight_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "may_create": all(checks.values()),
+        "requested_tag": tag or None,
+        "owned_prefix": prefix or None,
+        "owner": owner_text or None,
+        "existing_tag_count": len(tags),
+        "collision": bool(tag) and tag.lower() in lower_tags,
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "cleanup_contract": {
+            "remove_only_requested_tag": tag or None,
+            "preserve_preexisting_tags": True,
+            "verify_owned_prefix_absent_after_cleanup": True,
+        },
+    }
+
+
 def owned_solver_model_tag_lifecycle_gate(
     artifact,
     expected_artifact_id=None,
