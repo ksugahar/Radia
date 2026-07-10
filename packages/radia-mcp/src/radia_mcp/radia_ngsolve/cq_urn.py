@@ -173,6 +173,54 @@ def next_power_of_two(n: int) -> int:
     return 1 << (int(n) - 1).bit_length()
 
 
+def cq_time_grid_contract_gate(
+    dt: float,
+    n_steps: int,
+    *,
+    method: str = "bdf2",
+    contour_samples: int | None = None,
+    radius: float | None = None,
+) -> dict:
+    """Validate the implementation-neutral Lubich CQ time-grid contract."""
+
+    dt_value = float(dt)
+    n_value = int(n_steps)
+    m_value = int(contour_samples) if contour_samples is not None else next_power_of_two(2 * n_value)
+    rho = float(radius) if radius is not None else np.finfo(float).eps ** (0.5 / m_value)
+    method_key = str(method or "").strip().lower()
+    method_ok = method_key in {"bdf1", "bdf2"}
+    shape_ok = dt_value > 0.0 and n_value >= 2 and m_value >= n_value and 0.0 < rho < 1.0
+    min_real_s = float("nan")
+    if method_ok and shape_ok:
+        j = np.arange(m_value, dtype=float)
+        zeta = rho * np.exp(-2j * np.pi * j / m_value)
+        min_real_s = float(np.min(np.real(bdf_delta(zeta, method=method_key) / dt_value)))
+    checks = {
+        "method_supported": method_ok,
+        "time_step_positive": dt_value > 0.0,
+        "step_count_valid": n_value >= 2,
+        "contour_covers_time_grid": m_value >= n_value,
+        "radius_inside_unit_circle": 0.0 < rho < 1.0,
+        "laplace_nodes_in_right_half_plane": np.isfinite(min_real_s) and min_real_s > 0.0,
+    }
+    return {
+        "policy": "cq_time_grid_contract_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "method": method_key,
+        "time_step": dt_value,
+        "num_time_steps": n_value,
+        "contour_samples": m_value,
+        "radius": rho,
+        "time_end": (n_value - 1) * dt_value,
+        "min_real_laplace_node": min_real_s,
+        "checks": checks,
+        "notes": [
+            "M>=N is shared; M=N and padded power-of-two FFTs are both valid implementations.",
+            "Compare MATLAB and Python CQ on physical observables, not identical FFT padding choices.",
+        ],
+    }
+
+
 def cq_weights_from_laplace(
     laplace_response: Callable[[np.ndarray], np.ndarray],
     dt: float,
