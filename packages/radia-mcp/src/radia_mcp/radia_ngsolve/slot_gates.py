@@ -4818,6 +4818,46 @@ def licensed_solver_agentic_profile_gate(
     }
 
 
+def mcp_artifact_access_behavior_gate(
+    *,
+    path_registered,
+    path_under_allowed_root,
+    access_status,
+    sensitive_payload_visible=False,
+):
+    """Check that an MCP path reader enforces its artifact boundary.
+
+    A path request is allowed only when the artifact is registered or resides
+    below an explicit owned root. Unregistered out-of-root requests must return
+    a denial without echoing data from the requested file.
+    """
+
+    registered = bool(path_registered)
+    under_root = bool(path_under_allowed_root)
+    observed = str(access_status or "").strip().lower()
+    expected = "ok" if registered or under_root else "denied"
+    checks = {
+        "access_status_recorded": observed in {"ok", "denied"},
+        "decision_matches_registration_or_root": observed == expected,
+        "unregistered_out_of_root_path_denied": registered or under_root or observed == "denied",
+        "denied_response_hides_sensitive_payload": observed != "denied" or not bool(sensitive_payload_visible),
+    }
+    return {
+        "policy": "mcp_artifact_access_behavior_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "path_registered": registered,
+        "path_under_allowed_root": under_root,
+        "access_status": observed,
+        "expected_access_status": expected,
+        "sensitive_payload_visible": bool(sensitive_payload_visible),
+        "checks": checks,
+        "notes": [
+            "Prefer text/data inputs for public MCP tools; path readers need owned roots or manifest registration.",
+            "A denial response may report policy and allowed roots but must not echo requested-file payload values.",
+        ],
+    }
+
+
 def shared_solver_session_health_gate(
     connected,
     api_visible,
