@@ -762,19 +762,32 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
   (`0.84 → 0.99` for `w: 0.08 → 0.005`), the `β=0` baseline is a finite-fringe residual `−½ w/ρ → 0`,
   and `ρ·(1/f_z)` collapses onto `tan β`. Golden `tests/feec/test_edge_focusing_tracking.py`
   (pure-numpy, CI-friendly).
-* **Honest partial — the 3D-FEM extraction is not (yet) clean.** The same tracker on a 3D FEM
-  tilted-edge dipole (`accel_pole_ends_fem`, reduced-Ω) recovers the right *scaling*
-  `Δ(1/f_z) ∝ tan β/ρ` but not a trustworthy magnitude. Even a **wide-pole** variant (so
-  `∂B_z/∂x ≈ 0` on-axis — the orbit stays at `x ≈ 3 mm`) with the tilted−normal **difference**
-  (to cancel the body term) *still* fails: the `β=0` baseline (`−0.17` at `ρ=2 m`) does not cancel
-  and the difference is non-monotone / wrong-sign (`β=15° → −0.03`, `β=30° → +0.017 ≈ 6%` of
-  `tan β/ρ`). The **root reason** is deeper than orbit drift: a real finite-**gap** dipole fringe is
-  *thick and fully 3D* (fringe width `~` the gap), so the hard-edge `tan β/ρ` is not the recoverable
-  target of the naive Hill integral — the tilted and normal fringes differ in *more* than the edge
-  angle. Recovering `tan β/ρ` from a thick FEM fringe needs the **SCOFF / Enge fringe-field-integral**
-  formalism + a proper **closed orbit** + a finer mesh. The tracked-on-analytic result is therefore
-  the durable, trustworthy artifact; the FEM difficulty is `edge_focusing_efb_slope_negative` in
-  stronger form.
+* **Matches the full SCOFF/Enge law on the analytic fringe.** With the classical first-order
+  fringe correction `ψ = (K₁g/ρ)(1+sin²β)/cos β` (`K₁g = ∫g(1−g)ds` along the edge normal;
+  `= w/2` for the tanh fringe), the tracked `1/f_z` matches `tan(β−ψ)/ρ` to `≤ 0.7%` at
+  `w = 0.02`, and the `β=0` baseline **is** the Enge correction `−K₁g/ρ²` exactly.
+* **Validated end-to-end on a 3D FEM map (parallelogram dipole).** The same tracker on the
+  reduced-Ω FEM of a **parallelogram** dipole (both edges tilted `β` — the spectrometer
+  configuration — with the **coil following the pole outline** at fixed normal offset; the
+  whole magnet is exactly **C2-symmetric**, so the C2-odd part of the sampled map is removed
+  exactly): the closed-orbit symmetric traversal + window-decomposed Hill integrals give, at
+  `β = 20°`, `ρ = 5 m`, an entrance-window `ΔK_in` of `+0.0690` vs the x-uniform tilted-fringe
+  model `+0.0739` (**0.93**) and the SCOFF/Enge closed form `+0.0732` (**0.94**); the exit
+  window's *defocusing* kick matches to 0.96 and `ΔK·ρ` is constant to 1% over `ρ = 5…40 m`.
+  Error budget: the stable −5…−7% is `β=20` iron-mesh error in the entrance fringe (order-2
+  H1, 8 mm beam box); the `β=0` spurious floor is `+0.0013` (1.8% of signal). Committed
+  results: `edge_focusing_fem_results.json`; machinery: PART B of `edge_focusing_tracking.py`
+  (`fem_scoff_study`, ~25 min).
+* **Magnet-design lessons the measurement exposed** (each a measured failure of the campaign):
+  a straight coil front across a tilted iron edge leaves the iso-field tilt far below the
+  geometric edge angle (`ΔK` deficit 0.55×) — **edge-angle bookkeeping assumes the coil
+  follows the pole contour**; rigidly rotating the whole coil instead breaks the MMF linkage
+  topology (`B₀` collapse 3×); a fully-buried winding shunts its MMF in local iron loops; a
+  long conductor overhang leaves a direct-field plateau ("the magnet has no outside"). Two
+  **verified radia bugs** were isolated en route and flagged for fixes:
+  `CoilBuilder.mirror("xy")` draws every mirrored straight segment backwards out of the loop
+  (the entire spurious `∂ₓB_z` "artifact" of early runs, up to 0.39 T/m), and `rad.RadiaField`
+  on a `TrfOrnt`-wrapped container dies with heap corruption (0xC0000374).
 
 ---
 
