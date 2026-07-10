@@ -3,6 +3,7 @@ import numpy as np
 from radia_mcp.radia_ngsolve.cq_urn import (
     cq_convolve,
     cq_weights_from_laplace,
+    cq_time_grid_contract_gate,
     fit_nonnegative_debye,
     make_cq_urn_bridge_artifact,
     periodic_ifft_response,
@@ -46,6 +47,25 @@ def test_cq_bridge_is_causal_where_periodic_ifft_wraps():
 
     assert np.max(np.abs(y_cq[:hit_index])) < 1.0e-12
     assert np.max(np.abs(y_ifft[:hit_index])) > 1.0e-3
+
+
+def test_cq_time_grid_contract_accepts_padding_choices_and_rejects_undersampling():
+    matlab_style = cq_time_grid_contract_gate(
+        1.0e-3, 100, method="bdf2", contour_samples=100
+    )
+    padded = cq_time_grid_contract_gate(
+        1.0e-3, 100, method="bdf2", contour_samples=256
+    )
+    assert matlab_style["status"] == "ok"
+    assert padded["status"] == "ok"
+    assert matlab_style["time_end"] == 0.099
+    assert matlab_style["min_real_laplace_node"] > 0.0
+
+    undersampled = cq_time_grid_contract_gate(
+        1.0e-3, 100, method="bdf2", contour_samples=64, radius=0.9
+    )
+    assert undersampled["status"] == "needs_attention"
+    assert undersampled["checks"]["contour_covers_time_grid"] is False
 
 
 def test_teaching_artifact_has_feedback_and_output_contract():
