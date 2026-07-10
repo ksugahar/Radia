@@ -1,6 +1,10 @@
 import json
 
-from radia_mcp.cubit.server import cubit_docs, cubit_vol_inventory
+from radia_mcp.cubit.server import (
+    cubit_docs,
+    cubit_mixed_order_series_gate,
+    cubit_vol_inventory,
+)
 from radia_mcp.cubit.knowledge.netgen_workflow import get_netgen_documentation
 from radia_mcp.cubit.vol_inventory import (
     cubit_bnd_area_interface_gate,
@@ -319,6 +323,32 @@ def test_cubit_mixed_order_series_inventory_gate_keeps_routing_topology_invarian
     ])
     assert missing_first["status"] == "needs_attention"
     assert missing_first["checks"]["first_order_inventory_present"] is False
+
+
+def test_cubit_mixed_order_series_mcp_tool_accepts_rows_and_rejects_drift():
+    base = {
+        "volume_kind_counts": {"hex": 4, "pyramid": 8, "tet": 12},
+        "surface_kind_counts": {"quad": 6, "triangle": 10},
+        "routing_hint": "cubit_hex_or_mixed_path",
+        "is_tri_tet_only": False,
+        "has_mixed_hex_transition": True,
+    }
+    rows = [
+        {"order": 1, **base, "curvedelements_present": False},
+        {"order": 2, **base, "curvedelements_present": True},
+    ]
+    ok = json.loads(cubit_mixed_order_series_gate(rows))
+    assert ok["status"] == "ok"
+    assert ok["orders"] == [1, 2]
+
+    drift = [dict(row) for row in rows]
+    drift[1] = {
+        **drift[1],
+        "volume_kind_counts": {"hex": 4, "pyramid": 0, "tet": 20},
+    }
+    bad = json.loads(cubit_mixed_order_series_gate(drift))
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["volume_kind_counts_invariant"] is False
 
 
 def test_cubit_vol_inventory_counts_surfaceelementsuv_from_stock_export_netgen():

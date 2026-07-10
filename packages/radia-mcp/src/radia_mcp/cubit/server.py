@@ -43,7 +43,10 @@ from .knowledge.mesh_diagnostics import get_diagnostics_documentation
 from .knowledge.license import get_license_documentation
 from .knowledge.format_routing import get_format_routing_documentation
 from .knowledge.coreform_webinars import get_coreform_webinar_documentation
-from .vol_inventory import summarize_netgen_vol_inventory
+from .vol_inventory import (
+	cubit_mixed_order_series_inventory_gate,
+	summarize_netgen_vol_inventory,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -658,6 +661,25 @@ def cubit_vol_inventory(path: str = "", text: str = "") -> str:
 			"error": f"{type(exc).__name__}: {exc}",
 		})
 	return json.dumps({"status": "ok", **result}, indent=2)
+
+
+@mcp.tool()
+def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
+	"""Validate mixed-mesh topology and routing across export orders.
+
+	Pass structured inventory rows produced by ``cubit_vol_inventory``. The
+	tool accepts data rather than paths so it does not expand the MCP server's
+	local-file read surface.
+	"""
+	try:
+		result = cubit_mixed_order_series_inventory_gate(rows)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_mixed_order_series_inventory_gate",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
