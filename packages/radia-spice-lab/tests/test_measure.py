@@ -4,9 +4,11 @@ import math
 
 from ltspice_converter.measure import (
     parse_ltspice_measure_lines,
+    parse_ltspice_stepped_measure_tables,
     parse_ltspice_step_lines,
     parse_spice_scalar,
     summarize_measure_log,
+    summarize_stepped_measure_log,
 )
 
 
@@ -71,3 +73,44 @@ def test_summarize_measure_log_requires_measure_rows():
     assert summary["ok"] is False
     assert summary["measure_count"] == 0
     assert summary["warnings"] == ["no LTspice .measure result rows were parsed"]
+
+
+def test_parse_and_summarize_stepped_ac_measure_table():
+    log_text = "\n".join([
+        ".step rval=1000",
+        ".step rval=2000",
+        ".step rval=4000",
+        "Measurement: gain",
+        "  step MAX(mag(V(out)) ) FROM TO",
+        "     1 (-1.2060607353dB,0deg) 90 110",
+        "     2 (-3.57679299092dB,0deg) 90 110",
+        "     3 (-7.85991318292dB,0deg) 90 110",
+    ])
+    tables = parse_ltspice_stepped_measure_tables(log_text.splitlines())
+    assert len(tables) == 1
+    assert tables[0]["row_count"] == 3
+    assert tables[0]["rows"][1]["numeric_step_assignments"]["rval"] == 2000.0
+    assert math.isclose(tables[0]["rows"][2]["value"], -7.85991318292)
+    assert tables[0]["rows"][2]["unit"] == "dB"
+
+    summary = summarize_stepped_measure_log(log_text)
+    assert summary["schema"] == "radia-spice-lab.stepped-measure-log.v1"
+    assert summary["ok"] is True
+    assert summary["checks"] == {
+        "row_counts_match_steps": True,
+        "values_finite": True,
+        "step_assignments_complete": True,
+    }
+
+
+def test_stepped_measure_summary_rejects_missing_result_row():
+    summary = summarize_stepped_measure_log("\n".join([
+        ".step rval=1000",
+        ".step rval=2000",
+        "Measurement: gain",
+        " step MAX(mag(V(out)))",
+        " 1 -1.0",
+    ]))
+    assert summary["ok"] is False
+    assert summary["checks"]["row_counts_match_steps"] is False
+    assert any("row counts" in warning for warning in summary["warnings"])
