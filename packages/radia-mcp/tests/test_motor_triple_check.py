@@ -14,6 +14,7 @@ from radia_mcp.motor.triple_check_knowledge import (  # noqa: E402
     format_motor_triple_check_plan,
     format_triple_check_gate_result,
     route_motor_triple_check,
+    validate_motor_source_deck_review_packet,
     validate_motor_triple_check_artifact,
 )
 
@@ -77,6 +78,29 @@ def test_triple_check_plan_marks_hdiv_reduced_fem_as_experimental():
     assert "experimental_rfc" in text
     assert "primary required lanes" in text
     assert "optional auxiliary lanes: `none`" in text
+
+
+def test_source_deck_review_packet_gate_requires_both_motor_lanes():
+    packet = {
+        "schema_version": "motor-source-deck-review-packet/v1",
+        "observable_id": "torque",
+        "selected_decks": [
+            {"family": "motor/ipm", "case": "case001", "mai_path": "motor/ipm/case001.mai"}
+        ],
+        "required_lanes": ["ngsolve_age", "hdiv_vim_reduced_fem"],
+        "required_result_fields": [
+            "observable_id", "observable_unit", "coordinate_frame", "sign_convention",
+            "solver_version", "run_date_utc", "timing_breakdown_s",
+        ],
+        "publication_boundary": "metadata only",
+    }
+    ok = validate_motor_source_deck_review_packet(packet)
+    assert ok["status"] == "ok"
+
+    age_only = {**packet, "required_lanes": ["ngsolve_age"]}
+    bad = validate_motor_source_deck_review_packet(age_only)
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["both_primary_lanes_required"] is False
 
 
 def test_triple_check_gate_accepts_rfc_learning_before_hdiv_solver_validation():
