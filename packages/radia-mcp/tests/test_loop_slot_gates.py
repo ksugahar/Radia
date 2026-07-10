@@ -63,6 +63,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     netgen_vol_fem_bem_normal_flux_sign_package_gate,
     netgen_vol_first_order_fem_bem_trace_package_handoff,
     owned_solver_model_tag_lifecycle_gate,
+    owned_solver_model_tag_preflight_gate,
     one_port_match_quality_gate,
     parallel_wire_force_per_length,
     pm_bem_surface_normal_metadata_gate,
@@ -3504,6 +3505,31 @@ def test_cross_validation_artifact_to_mcp_feedback_gate_requires_lesson_target_a
     assert annotated_gate["status"] == "needs_attention"
     assert annotated_gate["checks"]["replay_command_recorded_when_required"] is True
     assert annotated_gate["checks"]["replay_commands_normalized_when_required"] is False
+
+
+def test_owned_solver_model_tag_preflight_gate_blocks_collision_before_mutation():
+    clean = owned_solver_model_tag_preflight_gate(
+        [], "slot460_tag_preflight", "slot460_", "loop_slot460"
+    )
+    assert clean["status"] == "ok"
+    assert clean["may_create"] is True
+    assert clean["cleanup_contract"]["preserve_preexisting_tags"] is True
+
+    collision = owned_solver_model_tag_preflight_gate(
+        ["slot460_tag_preflight"],
+        "slot460_tag_preflight",
+        "slot460_",
+        "loop_slot460",
+    )
+    assert collision["status"] == "needs_attention"
+    assert collision["collision"] is True
+    assert collision["checks"]["requested_tag_collision_free"] is False
+
+    unsafe = owned_solver_model_tag_preflight_gate(
+        [], "slot460 bad/tag", "slot460_", "loop_slot460"
+    )
+    assert unsafe["status"] == "needs_attention"
+    assert unsafe["checks"]["requested_tag_safe_for_solver"] is False
 
 
 def test_owned_solver_model_tag_lifecycle_gate_requires_owned_cleanup_before_reuse():
