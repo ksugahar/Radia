@@ -51,6 +51,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     jmag_motor_table_column_metadata_gate,
     jmag_symmetry_sweep_coverage_gate,
     licensed_solver_agentic_profile_gate,
+    mcp_artifact_access_behavior_gate,
     lcurve_corner_choice,
     lumped_pm_dq_torque,
     maxwell_stress_surface_package_gate,
@@ -2526,6 +2527,26 @@ def test_licensed_solver_agentic_profile_gate_requires_seat_safe_owned_cleanup()
     assert unsafe["checks"]["recommended_first_calls_cover_required_kinds"] is False
     assert unsafe["checks"]["headless_by_default"] is False
     assert unsafe["checks"]["cleanup_is_owned_instance_only"] is False
+
+
+def test_mcp_artifact_access_behavior_gate_denies_unregistered_out_of_root_paths():
+    denied = mcp_artifact_access_behavior_gate(
+        path_registered=False,
+        path_under_allowed_root=False,
+        access_status="denied",
+        sensitive_payload_visible=False,
+    )
+    assert denied["status"] == "ok"
+    assert denied["checks"]["unregistered_out_of_root_path_denied"] is True
+
+    leaked = mcp_artifact_access_behavior_gate(
+        path_registered=False,
+        path_under_allowed_root=False,
+        access_status="ok",
+        sensitive_payload_visible=True,
+    )
+    assert leaked["status"] == "needs_attention"
+    assert leaked["checks"]["decision_matches_registration_or_root"] is False
 
 
 def test_shared_solver_session_health_gate_separates_reuse_from_physics():
