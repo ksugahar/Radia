@@ -2170,7 +2170,7 @@ void radTApplication::ClassifyPoints(int* classification, int* nearest_elem, int
 //-------------------------------------------------------------------------
 
 void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_points,
-                                        double* points, int container_handle)
+                                        double* points, int container_handle, bool parallel)
 {
 	try
 	{
@@ -2223,17 +2223,9 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// TaskManager parallelization is safe here because:
-		// 1. Each iteration creates its own thread-local radTField object
-		// 2. Each iteration writes to different output array indices
-		// 3. B_genComp() only reads from the g3dPtr object (no writes)
-		// 4. The FieldKey and ZeroVect are copied by value into each thread's radTField
-		// Self-wrap a TaskManager region so a bare rad.Fld (no caller `with TaskManager()`) still runs
-		// parallel; RegionTaskManager reuses the caller's pool when one is already active (nested = no-op).
-		// (Scales ~23x on 38 cores now that the per-triangle field is allocation-free -- see
-		// RadFieldFromTriangleFaceGlobal.)
-		ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
+		// Per-point evaluation: thread-safe (thread-local radTField, disjoint
+		// output indices, B_genComp reads only).
+		auto eval_one = [&](size_t i) {
 			TVector3d pt;
 			pt.x = points[i * 3 + 0];
 			pt.y = points[i * 3 + 1];
@@ -2261,7 +2253,24 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 				H_out[i * 3 + 1] = Field.H.y;
 				H_out[i * 3 + 2] = Field.H.z;
 			}
-		});
+		};
+
+		if(parallel)
+		{
+			// Self-wrap a TaskManager region so a bare rad.Fld (no caller `with TaskManager()`) still runs
+			// parallel; RegionTaskManager reuses the caller's pool when one is already active (nested = no-op).
+			// (Scales ~23x on 38 cores now that the per-triangle field is allocation-free -- see
+			// RadFieldFromTriangleFaceGlobal.)
+			// parallel=true is only valid when NO TaskManager job is running: ngcore
+			// CreateJob keeps static job state, so callers inside a job (NGSolve
+			// assembly workers) must use parallel=false.
+			ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+			ngcore::ParallelFor(ngcore::IntRange(n_points), eval_one);
+		}
+		else
+		{
+			for(int i = 0; i < n_points; i++) eval_one((size_t)i);
+		}
 
 		// Clear IMA context after computation
 		if(imaWasSet) RadIMAFieldContext::Clear();
@@ -2277,7 +2286,7 @@ void radTApplication::ComputeFieldBatch(double* B_out, double* H_out, int n_poin
 //-------------------------------------------------------------------------
 
 void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
-                                                  double* points, int container_handle)
+                                                  double* points, int container_handle, bool parallel)
 {
 	try
 	{
@@ -2323,10 +2332,7 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// Compute scalar potential at each point (TaskManager parallelized).  Self-wrap so a bare rad.Fld
-		// runs parallel without a caller `with TaskManager()`; nested inside one = no-op.
-		ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
+		auto eval_one = [&](size_t i) {
 			TVector3d pt;
 			pt.x = points[i * 3 + 0];
 			pt.y = points[i * 3 + 1];
@@ -2340,7 +2346,20 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 			g3dPtr->B_genComp(&Field);
 
 			phi_out[i] = Field.Phi;
-		});
+		};
+
+		if(parallel)
+		{
+			// Self-wrap so a bare rad.Fld runs parallel without a caller `with TaskManager()`;
+			// nested inside one = no-op.  Callers inside a running job use parallel=false
+			// (see ComputeFieldBatch).
+			ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+			ngcore::ParallelFor(ngcore::IntRange(n_points), eval_one);
+		}
+		else
+		{
+			for(int i = 0; i < n_points; i++) eval_one((size_t)i);
+		}
 
 		// Clear IMA context after computation
 		if(imaWasSet) RadIMAFieldContext::Clear();
@@ -2356,7 +2375,7 @@ void radTApplication::ComputeScalarPotentialBatch(double* phi_out, int n_points,
 //-------------------------------------------------------------------------
 
 void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
-                                                  double* points, int container_handle)
+                                                  double* points, int container_handle, bool parallel)
 {
 	try
 	{
@@ -2383,10 +2402,7 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 
 		TVector3d ZeroVect(0., 0., 0.);
 
-		// Compute vector potential at each point (TaskManager parallelized).  Self-wrap so a bare rad.Fld
-		// runs parallel without a caller `with TaskManager()`; nested inside one = no-op.
-		ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-		ngcore::ParallelFor(ngcore::IntRange(n_points), [&](size_t i) {
+		auto eval_one = [&](size_t i) {
 			TVector3d pt;
 			pt.x = points[i * 3 + 0];
 			pt.y = points[i * 3 + 1];
@@ -2402,7 +2418,20 @@ void radTApplication::ComputeVectorPotentialBatch(double* A_out, int n_points,
 			A_out[i * 3 + 0] = Field.A.x;
 			A_out[i * 3 + 1] = Field.A.y;
 			A_out[i * 3 + 2] = Field.A.z;
-		});
+		};
+
+		if(parallel)
+		{
+			// Self-wrap so a bare rad.Fld runs parallel without a caller `with TaskManager()`;
+			// nested inside one = no-op.  Callers inside a running job use parallel=false
+			// (see ComputeFieldBatch).
+			ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+			ngcore::ParallelFor(ngcore::IntRange(n_points), eval_one);
+		}
+		else
+		{
+			for(int i = 0; i < n_points; i++) eval_one((size_t)i);
+		}
 	}
 	catch(...)
 	{

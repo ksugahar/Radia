@@ -2661,29 +2661,11 @@ TVector3d radTPolyhedron::FieldFromPointCharge(const TVector3d& obs, double char
 
 
 //-------------------------------------------------------------------------
-// B_genComp: Simplified version without TrfMlt support
-// TrfMlt has been removed from Radia - use explicit element duplication instead
-//-------------------------------------------------------------------------
-void radTPolyhedron::B_genComp(radTField* FieldPtr)
-{
-	radTFieldKey& FieldKey = FieldPtr->FieldKey;
-
-	// Handle special field keys
-	if(FieldKey.Ib_ || FieldKey.Ih_)
-	{
-		B_intComp(FieldPtr);
-		return;
-	}
-	if(FieldKey.Force_)
-	{
-		IntOverShape(FieldPtr);
-		return;
-	}
-
-	// Standard B_comp for all cases
-	B_comp(FieldPtr);
-}
-
+// radTPolyhedron::B_genComp override REMOVED (2026-07-10).  It ignored
+// g3dListOfTransform, so a TrfOrnt applied to a polyhedron element (hex/
+// tet/wedge/pyramid) silently evaluated the UNTRANSFORMED field.  The base
+// radTg3d::B_genComp dispatches identically for the no-transform case and
+// applies the transforms via NestedFor_B otherwise.
 //-------------------------------------------------------------------------
 
 void radTPolyhedron::B_comp_frM(radTField* FieldPtr)

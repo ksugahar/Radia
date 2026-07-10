@@ -40,7 +40,10 @@ public:
 	inline void AddElement(int, const radThg&);
 
 	inline void B_comp(radTField*) override;  // Modified by P. Elleaume 8 Nov 96
-	void B_genComp(radTField* FieldPtr) override;  // Override for transformation propagation
+	// B_genComp is NOT overridden: groups inherit radTg3d::B_genComp, which applies
+	// g3dListOfTransform by transforming the observation point / field (NestedFor_B).
+	// Field evaluation must never mutate shared element state -- batch evaluation
+	// (rad.Fld / RadiaField CF) calls B_genComp concurrently from ParallelFor threads.
 	void B_intComp(radTField* FieldPtr) { B_comp(FieldPtr);} // This is not an Error!!!
 
 	// Dump / DumpPureObjInfo / DumpBin REMOVED (Phase B2b/B2c, 2026-04-15)

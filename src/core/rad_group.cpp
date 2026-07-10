@@ -87,68 +87,14 @@ void radTGroup::SetM(TVector3d& M)
 }
 
 //-------------------------------------------------------------------------
-// B_genComp override for radTGroup
-// Propagates container's transformations to children before computing field.
-//-------------------------------------------------------------------------
-void radTGroup::B_genComp(radTField* FieldPtr)
-{
-	radTFieldKey& FieldKey = FieldPtr->FieldKey;
-
-	// If no transformations, just iterate through children
-	if(g3dListOfTransform.empty())
-	{
-		if(FieldKey.Ib_ || FieldKey.Ih_) B_intComp(FieldPtr);
-		else if(FieldKey.Force_) IntOverShape(FieldPtr);
-		else B_comp(FieldPtr);
-		return;
-	}
-
-	// Handle Force computation with transformations using standard approach
-	if(FieldKey.Force_)
-	{
-		NestedFor_IntOverShape(FieldPtr, g3dListOfTransform.begin());
-		return;
-	}
-
-	// For B/H field computation with transformations:
-	// Propagate transformations to children
-
-	// Save children's original transformation lists
-	std::vector<radTlphg> savedTransforms;
-	savedTransforms.reserve(GroupMapOfHandlers.size());
-
-	for(radTmhg::iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-	{
-		radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
-		savedTransforms.push_back(g3dPtr->g3dListOfTransform);
-
-		// Propagate container's transformations to each child
-		// (prepend in reverse order to maintain correct order)
-		for(radTlphg::reverse_iterator riter = g3dListOfTransform.rbegin();
-			riter != g3dListOfTransform.rend(); ++riter)
-		{
-			g3dPtr->g3dListOfTransform.push_front(*riter);
-		}
-	}
-
-	// Compute field from each child (each will use its own B_genComp)
-	for(radTmhg::const_iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter)
-	{
-		static_cast<radTg3d*>(iter->second.rep)->B_genComp(FieldPtr);
-	}
-
-	// Restore children's original transformation lists
-	size_t idx = 0;
-	for(radTmhg::iterator iter = GroupMapOfHandlers.begin();
-		iter != GroupMapOfHandlers.end(); ++iter, ++idx)
-	{
-		radTg3d* g3dPtr = static_cast<radTg3d*>(iter->second.rep);
-		g3dPtr->g3dListOfTransform = savedTransforms[idx];
-	}
-}
-
+// radTGroup::B_genComp override REMOVED (2026-07-10).  It propagated the
+// group's transforms by push_front/restore on every CHILD's
+// g3dListOfTransform, mutating shared elements during field evaluation --
+// concurrent B_genComp calls from the batch ParallelFor (rad.Fld batch,
+// RadiaField CF assembly) then corrupted the heap (0xC0000374/0xC0000005).
+// Groups now inherit radTg3d::B_genComp (NestedFor_B), which applies the
+// same transforms via observation-point/field transformation without
+// touching any shared state.
 //-------------------------------------------------------------------------
 
 // radTGroup::SubdivideItself REMOVED (Phase C, 2026-04-16)

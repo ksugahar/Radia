@@ -17,25 +17,34 @@
 #ifndef __RADHANDLE_H
 #define __RADHANDLE_H
 
+#include <atomic>
+
 //-------------------------------------------------------------------------
 //-------------------------------------------------------------------------
 
 template<class T> class radTHandle {
 public:
 	T* rep;
-	int* pcount;
+	// ATOMIC reference count (2026-07-11): distinct radTHandle instances
+	// sharing one count are copied/destroyed concurrently -- e.g. every
+	// batch field evaluation copies the container handle out of
+	// GlobalMapOfHandlers, and NGSolve assembly evaluates the RadiaField
+	// CoefficientFunction from parallel TaskManager workers.  A plain int
+	// count loses increments under that race, hits zero early, and deletes
+	// live objects mid-evaluation (0xC0000374 heap corruption).
+	std::atomic<int>* pcount;
 
 	radTHandle () { rep=0; pcount=0;}
-	radTHandle (T* pp) : rep(pp), pcount(new int) { /* (*pcount)=0; */ (*pcount)=1;}
-	radTHandle (const radTHandle& r) : rep(r.rep), pcount(r.pcount) 
-	{ 
-		if(pcount != 0) (*pcount)++;
+	radTHandle (T* pp) : rep(pp), pcount(new std::atomic<int>(1)) {}
+	radTHandle (const radTHandle& r) : rep(r.rep), pcount(r.pcount)
+	{
+		if(pcount != 0) pcount->fetch_add(1, std::memory_order_relaxed);
 	}
 
 	void destroy()
 	{
 		if(pcount!=0)
-			if(--(*pcount)==0)
+			if(pcount->fetch_sub(1, std::memory_order_acq_rel)==1)
 			{
 				delete rep;
 				delete pcount;
@@ -51,10 +60,12 @@ public:
 		{
 			if(r.rep!=0)
 			{
+				// Acquire the new reference BEFORE releasing the old one
+				// (shared_ptr assignment order; rep!=r.rep excludes self-bind).
+				r.pcount->fetch_add(1, std::memory_order_relaxed);
 				destroy();
 				rep = r.rep;
 				pcount = r.pcount;
-				(*pcount)++;
 			}
 			else
 			{

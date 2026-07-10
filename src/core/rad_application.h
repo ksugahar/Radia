@@ -366,15 +366,20 @@ public:
 	// Solve statistics retrieval (always available)
 	void GetSolveStats(double* dOut, int* nOut);
 
-	// Point classification and batch field computation
+	// Point classification and batch field computation.
+	// parallel=false runs the point loop serially in the calling thread --
+	// REQUIRED when the caller is already inside a TaskManager job (e.g.
+	// NGSolve assembly workers evaluating RadiaField): ngcore CreateJob uses
+	// static job state, so a nested ParallelFor from a worker corrupts the
+	// running job (0xC0000374/0xC0000005).
 	void ClassifyPoints(int* classification, int* nearest_elem, int n_points,
 	                    double* points, int container_handle, double near_threshold);
 	void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
-	                       double* points, int container_handle);
+	                       double* points, int container_handle, bool parallel = true);
 	void ComputeScalarPotentialBatch(double* phi_out, int n_points,
-	                                 double* points, int container_handle);
+	                                 double* points, int container_handle, bool parallel = true);
 	void ComputeVectorPotentialBatch(double* A_out, int n_points,
-	                                 double* points, int container_handle);
+	                                 double* points, int container_handle, bool parallel = true);
 
 	void ComputeField(int ElemKey, char* FieldChar, double* StObsPoi, long lenStObsPoi, double* FiObsPoi, long lenFiObsPoi, int Np, char* ShowArgFlag, double StrtArg);
 	void ComputeField(int ElemKey, char* FieldChar, radTVectorOfVector3d& VectorOfVector3d, radTVectInputCell& VectInputCell);

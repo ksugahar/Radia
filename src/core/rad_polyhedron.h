@@ -550,8 +550,10 @@ public:
 
 	int ConvertToPolyhedron(radThg&, radTApplication*, char) { return 1;} // 1 is essential
 
-	// Override B_genComp for field computation
-	void B_genComp(radTField* pField) override;
+	// B_genComp is NOT overridden: the base radTg3d::B_genComp applies
+	// g3dListOfTransform (TrfOrnt on the element) via NestedFor_B.  A former
+	// override skipped the transform list entirely, silently evaluating the
+	// field of the untransformed element.
 
 	void B_comp(radTField* pField)
 	{
