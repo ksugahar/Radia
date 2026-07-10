@@ -2536,6 +2536,12 @@ def test_shared_solver_session_health_gate_separates_reuse_from_physics():
         matlab_mcp_server_count=20,
         livelink_candidate_count=1,
         session_selection_basis="parent process chain plus established port connection",
+        agentic_profile_schema="cae-ai-lab.agentic-mcp-profile.v1",
+        recommended_first_calls=["solver_overview", "solver_health"],
+        required_first_call_kinds=["overview", "health"],
+        session_policy_mode="attach_only_shared_session",
+        profile_allows_new_solver_process=False,
+        profile_allows_kill_solver_process=False,
     )
 
     assert gate["policy"] == "shared_solver_session_health_gate"
@@ -2588,6 +2594,10 @@ def test_shared_solver_session_health_gate_separates_reuse_from_physics():
     assert gate["checks"]["multiple_matlab_processes_do_not_create_ambiguity"] is True
     assert gate["checks"]["selection_uses_parent_or_port_chain"] is True
     assert gate["checks"]["model_tags_are_introspection_only"] is True
+    assert gate["checks"]["recommended_first_calls_cover_required_kinds"] is True
+    assert gate["checks"]["session_policy_prefers_reuse"] is True
+    assert gate["checks"]["profile_prohibits_new_solver_process"] is True
+    assert gate["checks"]["profile_prohibits_killing_solver_process"] is True
     assert "preflight" in " ".join(gate["notes"])
     assert "model tags" in " ".join(gate["notes"])
 
@@ -2602,6 +2612,24 @@ def test_shared_solver_session_health_gate_separates_reuse_from_physics():
     assert bad["checks"]["api_visible"] is False
     assert bad["checks"]["engine_discovered"] is False
     assert bad["checks"]["started_no_new_process"] is False
+
+    unsafe_profile = shared_solver_session_health_gate(
+        connected=True,
+        api_visible=True,
+        discovered_engines=["shared_solver_1"],
+        status="already-connected",
+        agentic_profile_schema="cae-ai-lab.agentic-mcp-profile.v1",
+        recommended_first_calls=["solver_execute"],
+        required_first_call_kinds=["overview", "health"],
+        session_policy_mode="launch_on_demand",
+        profile_allows_new_solver_process=True,
+        profile_allows_kill_solver_process=True,
+    )
+    assert unsafe_profile["status_label"] == "needs_attention"
+    assert unsafe_profile["checks"]["recommended_first_calls_cover_required_kinds"] is False
+    assert unsafe_profile["checks"]["session_policy_prefers_reuse"] is False
+    assert unsafe_profile["checks"]["profile_prohibits_new_solver_process"] is False
+    assert unsafe_profile["checks"]["profile_prohibits_killing_solver_process"] is False
 
     incomplete = shared_solver_session_health_gate(
         connected=True,
