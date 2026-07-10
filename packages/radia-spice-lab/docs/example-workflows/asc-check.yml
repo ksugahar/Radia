@@ -1,0 +1,56 @@
+# =============================================================================
+# Example workflow: round-trip lint your LTspice .asc files on every PR.
+#
+# Copy this file to `.github/workflows/asc-check.yml` in any repository
+# that stores `.asc` schematics under version control.  The workflow
+# installs the converter and runs `ltspice-convert --check --strict` on
+# every `.asc` file under the repo, surfacing topology / vendor-symbol
+# gaps before they reach `main`.
+# =============================================================================
+name: example-asc-check
+
+on:
+  # Trigger only when .asc files actually change.
+  pull_request:
+    paths:
+      - "**.asc"
+  push:
+    paths:
+      - "**.asc"
+  workflow_dispatch:
+
+jobs:
+  asc-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ltspice-converter
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install git+https://github.com/ksugahar/ltspice-converter
+
+      # Optional: vendor `.asy` libraries you ship in your own repo.
+      # Multiple paths are joined with `;` on Windows, `:` on Linux.
+      # Comment this out if you do not have a local symbol library.
+      - name: Configure third-party symbol search path
+        run: |
+          echo "LTSPICE_ASY_SEARCH_PATH=$PWD/sym:$PWD/lib/sym" >> $GITHUB_ENV
+
+      - name: Lint every .asc (round-trip strict)
+        run: |
+          set -e
+          # Collect all .asc files (one-per-line via -print0 to handle
+          # spaces and unicode paths safely).
+          mapfile -d '' files < <(find . -name "*.asc" -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No .asc files found; skipping."
+            exit 0
+          fi
+          echo "Linting ${#files[@]} file(s) with --check --strict ..."
+          ltspice-convert --check --strict "${files[@]}"

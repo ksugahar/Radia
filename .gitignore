@@ -45,6 +45,7 @@ build*/
 dist/
 radia-*/
 !packages/radia-mcp/
+!packages/radia-spice-lab/
 *.egg-info/
 .eggs/
 
