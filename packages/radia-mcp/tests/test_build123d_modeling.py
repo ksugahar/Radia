@@ -3653,6 +3653,32 @@ def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
     assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
 
 
+def test_build123d_volume_crosscheck_with_units_normalizes_and_rejects_implicit_units():
+    from radia_mcp.build123d.server import build123d_volume_crosscheck_with_units
+
+    reference = [{"name": "box", "volume": 6000.0, "volume_unit": "mm^3"}]
+    measured = {
+        "external_cm": [{"name": "box", "volume": 6.0, "volume_unit": "cm^3"}],
+        "external_m": [{"name": "box", "volume": 6.0e-6, "volume_unit": "m^3"}],
+    }
+    payload = json.loads(build123d_volume_crosscheck_with_units(
+        json.dumps(reference),
+        json.dumps(measured),
+        rtol=1.0e-12,
+    ))
+    assert payload["status"] == "ok"
+    assert payload["target_volume_unit"] == "mm^3"
+    assert payload["normalized_measured_sets"]["external_cm"][0]["volume"] == pytest.approx(6000.0)
+    assert payload["normalized_measured_sets"]["external_m"][0]["volume"] == pytest.approx(6000.0)
+
+    missing = json.loads(build123d_volume_crosscheck_with_units(
+        json.dumps([{"name": "box", "volume": 6000.0}]),
+        json.dumps(measured),
+    ))
+    assert missing["status"] == "needs_attention"
+    assert "volume_unit" in " ".join(missing["issues"])
+
+
 def test_build123d_volume_crosscheck_source_gates_mcp_tool_dispatch_json():
     from radia_mcp.build123d.server import (
         build123d_volume_crosscheck,
