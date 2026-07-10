@@ -3,6 +3,7 @@ from radia_mcp.radia_ngsolve.em_force_target import (
     em_force_public_row_for_slot,
     select_em_force_slots,
 )
+from radia_mcp.radia_ngsolve.force import electromagnetic_force_method_selection_gate
 
 
 def _slot(tool, slot_id, lesson_axis="force calculation examples"):
@@ -85,3 +86,33 @@ def test_em_force_public_row_for_slot_uses_tool_specific_gate():
     assert em_force_public_row_for_slot(_slot("JMAG", 11))["target_kind"] == "ipm_dq_torque_components"
     assert em_force_public_row_for_slot(_slot("ELF(MAGIC product)", 12))["target_kind"] == "pm_force_gap_sweep"
     assert em_force_public_row_for_slot(_slot("COMSOL", 13))["target_kind"] == "magnetic_air_gap_pressure"
+
+
+def test_electromagnetic_force_method_selection_prefers_robust_primary_evidence():
+    conductor = electromagnetic_force_method_selection_gate(
+        "current_conductor",
+        "lorentz_body_force",
+        relative_permeability=1.0,
+    )
+    assert conductor["status"] == "ok"
+    assert conductor["recommended_method"] == "lorentz_body_force"
+
+    magnetic = electromagnetic_force_method_selection_gate(
+        "magnetic_body",
+        "weighted_stress_volume",
+        relative_permeability=1000.0,
+        weighted_stress_available=True,
+        virtual_work_samples_available=True,
+    )
+    assert magnetic["status"] == "ok"
+    assert magnetic["recommended_method"] == "weighted_stress_volume"
+
+    contour_only = electromagnetic_force_method_selection_gate(
+        "magnetic_body",
+        "contour_maxwell_stress",
+        relative_permeability=1000.0,
+        weighted_stress_available=True,
+        contour_clearance_mesh_layers=2,
+    )
+    assert contour_only["status"] == "needs_attention"
+    assert contour_only["checks"]["contour_not_used_as_primary"] is False

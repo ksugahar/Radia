@@ -94,6 +94,80 @@ def _metadata_truthy(value):
     return text in {"1", "true", "yes", "y", "ok", "loaded", "solved", "pass", "passed"}
 
 
+def electromagnetic_force_method_selection_gate(
+    target_kind,
+    requested_method,
+    *,
+    relative_permeability=1.0,
+    weighted_stress_available=False,
+    virtual_work_samples_available=False,
+    contour_clearance_mesh_layers=0,
+):
+    """Select a robust electromagnetic-force extraction method.
+
+    Unit-permeability current conductors prefer a Lorentz body-force integral.
+    Magnetic bodies prefer a weighted-stress volume and fall back to coenergy
+    virtual work when a displacement sweep exists. A contour Maxwell-stress
+    integral remains a sensitivity diagnostic, not the primary acceptance
+    method.
+    """
+
+    kind = str(target_kind or "").strip().lower().replace("-", "_").replace(" ", "_")
+    method = str(requested_method or "").strip().lower().replace("-", "_").replace(" ", "_")
+    mu_r = float(relative_permeability)
+    contour_layers = int(contour_clearance_mesh_layers)
+    conductor_kinds = {"conductor", "current_conductor", "coil", "busbar"}
+    magnetic_kinds = {"magnetic_body", "ferromagnetic_body", "magnet", "iron"}
+
+    if kind in conductor_kinds and abs(mu_r - 1.0) <= 1.0e-12:
+        recommended = "lorentz_body_force"
+        reason = "unit-mu current conductor supports a direct J cross B volume integral"
+    elif kind in magnetic_kinds and bool(weighted_stress_available):
+        recommended = "weighted_stress_volume"
+        reason = "magnetic-body force should use a mesh-robust weighted stress volume"
+    elif kind in magnetic_kinds and bool(virtual_work_samples_available):
+        recommended = "coenergy_virtual_work"
+        reason = "displacement samples support a coenergy derivative fallback"
+    else:
+        recommended = "none"
+        reason = "no robust primary force evidence is available"
+
+    contour_requested = method in {
+        "contour_maxwell_stress",
+        "maxwell_stress_contour",
+        "line_maxwell_stress",
+    }
+    checks = {
+        "target_kind_supported": kind in conductor_kinds | magnetic_kinds,
+        "relative_permeability_positive": mu_r > 0.0,
+        "robust_primary_method_available": recommended != "none",
+        "requested_method_matches_recommendation": method == recommended,
+        "contour_not_used_as_primary": not contour_requested,
+        "contour_clearance_recorded_when_requested": not contour_requested or contour_layers > 0,
+        "lorentz_restricted_to_unit_mu_conductor": (
+            method != "lorentz_body_force"
+            or (kind in conductor_kinds and abs(mu_r - 1.0) <= 1.0e-12)
+        ),
+    }
+    return {
+        "policy": "electromagnetic_force_method_selection_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "target_kind": kind,
+        "relative_permeability": mu_r,
+        "requested_method": method,
+        "recommended_method": recommended,
+        "recommendation_reason": reason,
+        "weighted_stress_available": bool(weighted_stress_available),
+        "virtual_work_samples_available": bool(virtual_work_samples_available),
+        "contour_clearance_mesh_layers": contour_layers,
+        "checks": checks,
+        "notes": [
+            "Use contour Maxwell stress as a sensitivity diagnostic, not the sole primary acceptance result.",
+            "Cross-check magnetic-body forces with weighted stress and coenergy when both are available.",
+        ],
+    }
+
+
 def maxwell_stress_tensor_air(B, mu=MU0):
     """Pointwise magnetic Maxwell stress tensor in air.
 
