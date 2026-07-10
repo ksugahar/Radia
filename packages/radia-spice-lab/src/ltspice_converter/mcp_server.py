@@ -19,6 +19,7 @@ from . import conversion
 from . import cli as _cli
 from .knowledge import buck_seed as _buck_seed
 from .knowledge import circuit_knowledge as _circuit_knowledge
+from .measure import summarize_measure_log as _summarize_measure_log
 from .patentability import patentability_search_plan as _patentability_search_plan
 
 
@@ -202,6 +203,22 @@ def compare_topology(netlist_a: str, netlist_b: str) -> dict:
     except Exception as e:
         return {'equivalent': False, 'error': f'{type(e).__name__}: {e}'}
     return {'equivalent': equal, **info}
+
+
+@mcp.tool()
+def parse_measure_log(log_text: str) -> dict:
+    """Parse LTspice `.measure` results from log text into a stable schema.
+
+    Args:
+        log_text: LTspice `.log` text, or the relevant scalar-result lines.
+
+    Returns:
+        Dict with schema ``radia-spice-lab.measure-log.v1``, parsed measure rows,
+        `.step` rows, duplicate-name warnings, and an ``ok`` gate.  This tool
+        intentionally does not read local files, so public MCP callers must pass
+        the log text they intend to summarize.
+    """
+    return _summarize_measure_log(log_text)
 
 
 @mcp.tool()

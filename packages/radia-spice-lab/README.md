@@ -12,6 +12,26 @@ It converts `.asc`, `.cir`, and schemdraw Python, checks whether round-trips
 preserve topology, and exposes MCP tools so AI agents can author, inspect,
 and refine circuits without losing the electrical intent.
 
+## What this library is
+
+`radia-spice-lab` is a public LTspice interoperability layer for Radia, not a
+dump of private simulation corpora.  It provides deterministic, testable tools
+for moving a circuit between the formats engineers actually use:
+
+- LTspice `.asc` schematics.
+- SPICE `.cir` / `.net` netlists.
+- Runnable schemdraw Python scripts for publication figures and review.
+- Topology signatures that catch silent rewiring after conversion.
+- Public-safe LTspice `.measure` log summaries for scalar simulation evidence.
+- MCP tools that let an AI agent convert, inspect, lint, and reason about a
+  circuit without copying private RAW files.
+
+It does **not** redistribute LTspice, LTspice's bundled examples, textbook
+circuits, third-party circuit corpora, private RAW files, or the LAB-private
+invention-learning pipeline.  Those materials may be used locally to improve
+the converter, but only the authored converter, small fixtures, and public-safe
+summary schemas belong in this repository.
+
 The public import names remain:
 
 - `import spice_circuit_lab`
@@ -33,6 +53,8 @@ Core capabilities:
   does not pass as a clean conversion.
 - Preserve difficult SPICE forms such as controlled sources, behavioral
   expressions, switch models, and inline subcircuit parameters.
+- Summarize LTspice `.measure` logs into a public-safe JSON schema without
+  exposing RAW waveforms or private simulation directories.
 - Provide public circuit-knowledge helpers and MCP tools for agentic circuit
   design workflows.
 
@@ -79,7 +101,7 @@ pip install "radia-spice-lab[mcp] @ git+https://github.com/ksugahar/Radia.git#su
 Pinning a specific Radia tag or commit:
 
 ```bash
-pip install "git+https://github.com/ksugahar/Radia.git@v4.95.8#subdirectory=packages/radia-spice-lab"
+pip install "git+https://github.com/ksugahar/Radia.git@v4.95.9#subdirectory=packages/radia-spice-lab"
 ```
 
 For development:
@@ -253,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes ten tools:
+Exposes eleven tools:
 
 | Tool | Purpose |
 |---|---|
@@ -264,6 +286,7 @@ Exposes ten tools:
 | `check_circuit(text, fmt, asy_search_dirs?)` | Lint: round-trip drift (count, GND-pin, **topology**) + static netlist checks. Returns `{ok, info, warnings}`. |
 | `info_circuit(text, fmt, asy_search_dirs?)` | Summary: component counts, symbol kinds, `.subckt` blocks. |
 | `compare_topology(netlist_a, netlist_b)` | Node-rename-invariant connectivity diff of two netlists. Returns `{equivalent, ...}`. |
+| `parse_measure_log(log_text)` | Public-safe LTspice `.measure` log parser. Returns schema `radia-spice-lab.measure-log.v1`, measure rows, `.step` rows, and duplicate-name warnings. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |

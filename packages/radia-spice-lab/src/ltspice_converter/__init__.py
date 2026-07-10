@@ -14,6 +14,7 @@ Public API
 - circuit_knowledge(topic) -> dict
 - buck_seed(vin_v, vout_v, iout_a, fsw_hz=...) -> BuckSeed
 - patentability_search_plan(title, features, effects, domains) -> dict
+- summarize_measure_log(log_text) -> dict
 
 CLI / MCP server
 ----------------
@@ -30,6 +31,12 @@ from .conversion import (
 from .topology import topology_signature, topology_equivalent
 from .knowledge import circuit_knowledge, buck_seed, BuckSeed
 from .patentability import patentability_search_plan
+from .measure import (
+    parse_ltspice_measure_lines,
+    parse_ltspice_step_lines,
+    parse_spice_scalar,
+    summarize_measure_log,
+)
 
 __all__ = [
     "netlist_to_schemdraw",
@@ -42,6 +49,10 @@ __all__ = [
     "buck_seed",
     "BuckSeed",
     "patentability_search_plan",
+    "parse_spice_scalar",
+    "parse_ltspice_measure_lines",
+    "parse_ltspice_step_lines",
+    "summarize_measure_log",
 ]
 
 __version__ = "0.4.0"
