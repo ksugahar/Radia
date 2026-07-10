@@ -15,6 +15,7 @@ Public API
 - buck_seed(vin_v, vout_v, iout_a, fsw_hz=...) -> BuckSeed
 - patentability_search_plan(title, features, effects, domains) -> dict
 - summarize_measure_log(log_text) -> dict
+- summarize_stepped_measure_log(log_text) -> dict
 
 CLI / MCP server
 ----------------
@@ -33,9 +34,11 @@ from .knowledge import circuit_knowledge, buck_seed, BuckSeed
 from .patentability import patentability_search_plan
 from .measure import (
     parse_ltspice_measure_lines,
+    parse_ltspice_stepped_measure_tables,
     parse_ltspice_step_lines,
     parse_spice_scalar,
     summarize_measure_log,
+    summarize_stepped_measure_log,
 )
 
 __all__ = [
@@ -51,8 +54,10 @@ __all__ = [
     "patentability_search_plan",
     "parse_spice_scalar",
     "parse_ltspice_measure_lines",
+    "parse_ltspice_stepped_measure_tables",
     "parse_ltspice_step_lines",
     "summarize_measure_log",
+    "summarize_stepped_measure_log",
 ]
 
 __version__ = "0.4.0"

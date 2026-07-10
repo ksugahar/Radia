@@ -177,6 +177,127 @@ def parse_ltspice_step_lines(lines: list[str]) -> list[dict[str, Any]]:
     return steps
 
 
+def parse_ltspice_stepped_measure_tables(lines: list[str]) -> list[dict[str, Any]]:
+    """Parse the tabular `.measure` output produced by stepped simulations.
+
+    LTspice prints stepped results below ``Measurement: <name>`` instead of
+    repeating the scalar ``name: expression=value`` form.  Each result row is
+    paired with the concrete ``.step name=value`` line having the same
+    one-based step index.
+    """
+
+    step_assignments = parse_ltspice_step_lines(lines)
+    measurement_re = re.compile(r"^\s*Measurement:\s*(?P<name>\S+)\s*$", re.IGNORECASE)
+    row_re = re.compile(r"^\s*(?P<step>\d+)\s+(?P<value>\([^)]*\)|\S+)(?P<rest>.*)$")
+    ac_value_re = re.compile(
+        rf"^\(\s*(?P<value>{_NUMBER})\s*dB\s*,\s*(?P<phase>{_NUMBER})[^)]*\)$",
+        re.IGNORECASE,
+    )
+    tables: list[dict[str, Any]] = []
+    active: dict[str, Any] | None = None
+    for raw_line in lines:
+        line = str(raw_line).strip()
+        measurement = measurement_re.match(line)
+        if measurement:
+            active = {"name": measurement.group("name"), "rows": []}
+            tables.append(active)
+            continue
+        if active is None or not line or line.lower().startswith("step"):
+            continue
+        row_match = row_re.match(line)
+        if not row_match:
+            continue
+        step_index = int(row_match.group("step"))
+        raw_value = row_match.group("value")
+        row: dict[str, Any] = {
+            "step_index": step_index,
+            "raw_value": raw_value,
+        }
+        ac_value = ac_value_re.match(raw_value)
+        if ac_value:
+            row.update({
+                "value": float(ac_value.group("value")),
+                "unit": "dB",
+                "phase_deg": float(ac_value.group("phase")),
+            })
+        else:
+            parsed_value = parse_spice_scalar(raw_value)
+            row["value"] = parsed_value
+        extra_values = [
+            parsed
+            for token in row_match.group("rest").split()
+            if (parsed := parse_spice_scalar(token)) is not None
+        ]
+        if extra_values:
+            row["extra_values"] = extra_values
+        if 1 <= step_index <= len(step_assignments):
+            step = step_assignments[step_index - 1]
+            row["step_assignments"] = dict(step["assignments"])
+            row["numeric_step_assignments"] = dict(step["numeric_assignments"])
+        active["rows"].append(row)
+
+    for table in tables:
+        table["row_count"] = len(table["rows"])
+    return tables
+
+
+def summarize_stepped_measure_log(log_text: str) -> dict[str, Any]:
+    """Summarize stepped LTspice measure tables with explicit step pairing."""
+
+    lines = [line.rstrip() for line in str(log_text or "").splitlines()]
+    steps = parse_ltspice_step_lines(lines)
+    tables = parse_ltspice_stepped_measure_tables(lines)
+    duplicate_names = sorted({
+        table["name"]
+        for table in tables
+        if sum(1 for other in tables if other.get("name") == table.get("name")) > 1
+    })
+    expected_rows = len(steps)
+    row_counts_match = bool(expected_rows) and all(
+        table.get("row_count") == expected_rows for table in tables
+    )
+    values_finite = bool(tables) and all(
+        isinstance(row.get("value"), (int, float)) and math.isfinite(float(row["value"]))
+        for table in tables
+        for row in table.get("rows", [])
+    )
+    assignments_complete = bool(tables) and all(
+        bool(row.get("step_assignments"))
+        for table in tables
+        for row in table.get("rows", [])
+    )
+    warnings: list[str] = []
+    if not steps:
+        warnings.append("no concrete .step assignment rows were parsed")
+    if not tables:
+        warnings.append("no stepped Measurement tables were parsed")
+    if duplicate_names:
+        warnings.append(f"duplicate Measurement table names: {', '.join(duplicate_names)}")
+    if tables and not row_counts_match:
+        warnings.append("Measurement row counts do not match the concrete .step count")
+    if tables and not values_finite:
+        warnings.append("one or more stepped Measurement values are missing or non-finite")
+    if tables and not assignments_complete:
+        warnings.append("one or more Measurement rows could not be paired with a .step assignment")
+    return {
+        "schema": "radia-spice-lab.stepped-measure-log.v1",
+        "ok": bool(tables) and not duplicate_names and row_counts_match
+        and values_finite and assignments_complete,
+        "step_count": expected_rows,
+        "table_count": len(tables),
+        "measurement_names": [str(table.get("name")) for table in tables],
+        "duplicate_measurement_names": duplicate_names,
+        "checks": {
+            "row_counts_match_steps": row_counts_match,
+            "values_finite": values_finite,
+            "step_assignments_complete": assignments_complete,
+        },
+        "steps": steps,
+        "tables": tables,
+        "warnings": warnings,
+    }
+
+
 def summarize_measure_log(log_text: str) -> dict[str, Any]:
     """Summarize LTspice log text as a public-safe measurement evidence table."""
     lines = [line.strip() for line in str(log_text or "").splitlines() if line.strip()]

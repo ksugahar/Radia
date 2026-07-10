@@ -20,6 +20,7 @@ from . import cli as _cli
 from .knowledge import buck_seed as _buck_seed
 from .knowledge import circuit_knowledge as _circuit_knowledge
 from .measure import summarize_measure_log as _summarize_measure_log
+from .measure import summarize_stepped_measure_log as _summarize_stepped_measure_log
 from .patentability import patentability_search_plan as _patentability_search_plan
 
 
@@ -219,6 +220,18 @@ def parse_measure_log(log_text: str) -> dict:
         the log text they intend to summarize.
     """
     return _summarize_measure_log(log_text)
+
+
+@mcp.tool()
+def parse_stepped_measure_log(log_text: str) -> dict:
+    """Pair LTspice stepped ``Measurement`` table rows with `.step` values.
+
+    The caller supplies log text explicitly; this public tool does not read a
+    local file.  The result gate rejects missing steps, incomplete tables,
+    duplicate measurement names, and non-finite values.
+    """
+
+    return _summarize_stepped_measure_log(log_text)
 
 
 @mcp.tool()
