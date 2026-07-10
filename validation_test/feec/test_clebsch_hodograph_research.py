@@ -203,10 +203,15 @@ def test_accel_pole_ends_fem_forward():
     import accel_pole_ends_fem as af
     # faster-than-default knobs for CI; bands are loose so tuning won't break it.
     r = af.solve(maxh_air=0.06, maxh_iron=0.03, n_beam=61, n_theta=24)
-    assert 0.08 < abs(r["bz_body_T"]) < 0.30, r            # a real flat-top dipole
+    # band re-centred 2026-07-11: the CoilBuilder.mirror() straight-heading fix
+    # restored the lower coil's full contribution (CI mesh measures ~0.313 T;
+    # the buggy mirror delivered ~24% of the lower coil and sat near 0.2x T).
+    assert 0.10 < abs(r["bz_body_T"]) < 0.45, r            # a real flat-top dipole
     assert r["bx_over_bz_centre"] < 0.15, r                # x-symmetric -> small skew
     assert r["L_eff_m"] > 0.001 + 0.120, r                 # L_eff > iron L (fringe)
-    assert r["end_overshoot"] > 0.02, r                    # pole-end flux concentration
+    # band re-centred 2026-07-11 (mirror() fix): the corrected symmetric pair
+    # measures end_overshoot ~0.017 at the CI mesh (still a real end bump).
+    assert r["end_overshoot"] > 0.01, r                    # pole-end flux concentration
     assert r["integrated_dipole_bbar1_Tm"] > 0.01, r       # sane integrated dipole
     assert r["integrated_spurious_rel"] < 0.25, r          # ends + finite pole width
     # (B) the equipotential end contour: body recovers the flat pole face g/2
@@ -262,7 +267,9 @@ def test_accel_pole_ends_fem_curved_chamfer():
     assert np.interp(0.5, r["ghat_x"], r["ghat_y"]) > 0.6, r   # Ghat(0.5) >> 0.5
     # the straight pole has an end bump, and the curved chamfer drives it through
     # zero: at the over-deep (~natural) depth it is clearly reduced/over-corrected.
-    assert r["end_overshoot_straight"] > 0.02, r
+    # band re-centred 2026-07-11 (mirror() fix): the corrected symmetric pair
+    # measures end_overshoot_straight ~0.017 at the CI mesh (still a real bump).
+    assert r["end_overshoot_straight"] > 0.01, r
     assert r["end_overshoot_curved_overdeep"] < r["end_overshoot_straight"] - 0.04, r
     # the naive single-pass equipotential depth OVER-corrects (zero-bump depth is
     # a fraction of it): the shape is right, the depth needs one knob/iteration.
@@ -290,8 +297,10 @@ def test_accel_pole_ends_fem_open_boundary():
     # open boundary is adequate here.  Loose band to tolerate coarse-mesh noise.
     assert ob["bbar1_box_spread"] < 0.06, ob
     # both boxes give a sane integrated dipole (same flat-top magnet).
+    # band re-centred 2026-07-11 (mirror() fix): the corrected lower coil
+    # roughly doubles the integrated dipole (~0.050 T*m at this mesh).
     for a, ne, bz, bb in ob["rows"]:
-        assert 0.015 < bb < 0.035, (a, bb)
+        assert 0.03 < bb < 0.08, (a, bb)
 
 
 @pytest.mark.slow
@@ -651,7 +660,9 @@ def test_clebsch_dipole_workflow_fem():
                           n_beam=61, n_theta=24)
     sc = out["stage_c"]
     # clean flat-top dipole (x-symmetric).
-    assert 0.08 < abs(sc["bz_body_T"]) < 0.30, sc
+    # band re-centred 2026-07-11: the CoilBuilder.mirror() straight-heading fix
+    # restored the lower coil's full contribution (see test_accel_pole_ends_fem_forward).
+    assert 0.10 < abs(sc["bz_body_T"]) < 0.45, sc
     assert sc["bx_over_bz_centre"] < 0.15, sc
     # a sane integrated dipole, longer than the iron by the fringes.
     assert sc["integrated_dipole_bbar1_Tm"] > 0.01, sc
@@ -1212,7 +1223,9 @@ def test_leaf_coupling_perturbation_3d():
     assert sw["monotone_decay"], fr
     assert fr[0] > fr[1], fr
     # (ii) the compact magnet (L/gap=2) is strongly NON-perturbative (>100% fringe).
-    assert fr[0] > 1.2, fr
+    # band re-centred 2026-07-11: the CoilBuilder.mirror() straight-heading fix
+    # restored the symmetric coil pair (CI mesh measures fr = [1.084, 0.385]).
+    assert fr[0] > 1.0, fr
     assert fr[1] < 1.1, fr
     # (iii) the coupling scales as ~ gap/L (log-log slope near -1).
     assert -1.5 < sw["fringe_scaling_exponent"] < -0.6, sw["fringe_scaling_exponent"]

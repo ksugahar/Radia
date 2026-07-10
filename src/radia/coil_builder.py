@@ -1473,49 +1473,72 @@ class CoilBuilder:
 	def mirror(self, plane='xz'):
 		"""Create a mirrored copy of the coil.
 
-		Returns a new CoilBuilder containing mirrored segments.
-		The mirror operation reverses current direction.
+		Returns a new CoilBuilder whose segments trace the mirror image
+		M @ p of every point p of the original path, traversed in the
+		same order and carrying the SAME current value.  Every mirrored
+		segment satisfies end_pos == M @ original end_pos.
+
+		The result is the true geometric mirror of the current
+		distribution, so the magnetic moment transforms as a pseudovector
+		(m -> -M @ m).  For a loop with its axis along z:
+		  - mirror('xy') keeps the circulation seen from +z, so an
+		    upper + lower pair ADDS its main field (dipole pair).
+		  - mirror('yz') / mirror('xz') reverse the circulation seen
+		    from +z, so coil + mirror cancels the main field component
+		    (anti / gradient pair).
+
+		Implementation note: mirroring each local axis component-wise
+		flips the frame handedness (det = -1).  Right-handedness is
+		restored by negating row 2 (local Z) only: rows 0 and 1 -- the
+		arc in-plane axes and the straight heading -- keep their true
+		mirrored directions, so straight and arc paths map point-for-
+		point to M @ p with segment parameters (length, radius,
+		arc_angle) and current unchanged.  Row 2 only spans the
+		symmetric cross-section height / the arc axis, where the sign
+		is immaterial.
 
 		Args:
 			plane: Mirror plane ('xz', 'yz', or 'xy')
 
 		Returns:
-			New CoilBuilder with mirrored coil (current reversed)
+			New CoilBuilder with the mirrored coil (same current)
 		"""
 		mirror_matrix = {
-			'xz': np.diag([1, -1, 1]),   # mirror across XZ (flip Y)
-			'yz': np.diag([-1, 1, 1]),    # mirror across YZ (flip X)
-			'xy': np.diag([1, 1, -1]),    # mirror across XY (flip Z)
+			'xz': np.diag([1.0, -1.0, 1.0]),   # mirror across XZ (flip Y)
+			'yz': np.diag([-1.0, 1.0, 1.0]),   # mirror across YZ (flip X)
+			'xy': np.diag([1.0, 1.0, -1.0]),   # mirror across XY (flip Z)
 		}
 		if plane not in mirror_matrix:
 			raise ValueError(f"Unknown plane '{plane}'. Use 'xz', 'yz', or 'xy'.")
 
 		M = mirror_matrix[plane]
-		mirrored = CoilBuilder(current=-self.current)
+		mirrored = CoilBuilder(current=self.current)
 		mirrored._width = self._width
 		mirrored._height = self._height
 
 		for seg in self.segments:
 			new_start = M @ seg.start_pos
-			# Mirror flips handedness. Fix by negating one row to restore
-			# right-handed orientation, then negate arc_angle to compensate.
-			new_orient = M @ seg.orientation
-			# Restore right-handedness: ensure det > 0
-			if np.linalg.det(new_orient) < 0:
-				new_orient = -new_orient  # flip all axes = equivalent rotation
+			# Rows of orientation are the local axes in world components:
+			# mirror each axis component-wise (row_i -> row_i @ M), then
+			# negate row 2 (local Z) to restore a proper rotation.
+			new_orient = seg.orientation @ M
+			new_orient[2, :] *= -1.0
 
 			if isinstance(seg, StraightSegment):
 				new_seg = StraightSegment.__new__(StraightSegment)
-				CoilSegment.__init__(new_seg, -seg.current, new_start,
+				CoilSegment.__init__(new_seg, seg.current, new_start,
 				                     new_orient, seg.width, seg.height)
 				new_seg.length = seg.length
 			elif isinstance(seg, ArcSegment):
 				new_seg = ArcSegment.__new__(ArcSegment)
-				CoilSegment.__init__(new_seg, -seg.current, new_start,
+				CoilSegment.__init__(new_seg, seg.current, new_start,
 				                     new_orient, seg.width, seg.height)
 				new_seg.radius = seg.radius
-				new_seg.arc_angle = -seg.arc_angle
+				new_seg.arc_angle = seg.arc_angle
 				new_seg.arc_center = M @ seg.arc_center
+			else:
+				raise NotImplementedError(
+					f"mirror() does not support {type(seg).__name__} segments")
 
 			mirrored.segments.append(new_seg)
 

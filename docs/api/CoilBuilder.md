@@ -130,7 +130,12 @@ B = mu_0 * H
 
 ### mirror(plane)
 
-Create a mirrored copy with reversed current.
+Create the true geometric mirror of the coil: every path point p maps to
+M @ p (same traversal order, same current value). The magnetic moment
+transforms as a pseudovector (m -> -M @ m), so for a loop with its axis
+along z, `mirror('xy')` builds an upper/lower pair whose main field ADDS,
+while `mirror('yz')` / `mirror('xz')` reverse the circulation seen from +z
+(coil + mirror cancels the main field component).
 
 | Arg | Values | Description |
 |-----|--------|-------------|
@@ -140,7 +145,7 @@ Returns: new `CoilBuilder` instance.
 
 ```python
 upper = coil
-lower = coil.mirror('xy')  # Mirrored coil with -I
+lower = coil.mirror('xy')  # dipole pair partner at -z (same current)
 ```
 
 ### rotate_copies(axis, n_copies)

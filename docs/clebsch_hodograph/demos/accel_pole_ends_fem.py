@@ -188,7 +188,7 @@ def build_mesh(maxh_air=0.05, maxh_iron=0.025, chamfer_depth=0.0, chamfer_len=0.
 def build_coil():
     """Racetrack coil pair (CoilBuilder) -> Radia container.  Biot-Savart only."""
     import radia as rad
-    from coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
 
     rad.UtiDelAll()
     z_coil = GAP / 2 + COIL_H / 2
@@ -202,7 +202,7 @@ def build_coil():
              .add_arc(radius=COIL_R, arc_angle=180)
              .add_straight(COIL_STRAIGHT)
              .add_arc(radius=COIL_R, arc_angle=180))
-    lower = upper.mirror("xy")                       # z -> -z, current reversed
+    lower = upper.mirror("xy")                       # true mirror at -z (same current)
     coils = rad.ObjCnt(upper.to_radia() + lower.to_radia())
     return coils
 

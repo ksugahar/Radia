@@ -97,7 +97,7 @@ def _build_coil_L(L):
     longer than the iron (end-turns OUTSIDE the iron ends so the body sees a
     uniform source).  Adapted from accel_pole_ends_fem.build_coil."""
     import radia as rad
-    from coil_builder import CoilBuilder
+    from radia.coil_builder import CoilBuilder
     rad.UtiDelAll()
     straight = max(COIL_STRAIGHT, 1.6 * L)
     z_coil = GAP / 2 + COIL_H / 2
