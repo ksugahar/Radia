@@ -4804,6 +4804,12 @@ def shared_solver_session_health_gate(
     matlab_mcp_server_count=None,
     livelink_candidate_count=None,
     session_selection_basis="",
+    agentic_profile_schema="",
+    recommended_first_calls=None,
+    required_first_call_kinds=None,
+    session_policy_mode="",
+    profile_allows_new_solver_process=None,
+    profile_allows_kill_solver_process=None,
 ):
     """Check solver-session health without treating it as physics validation.
 
@@ -4840,6 +4846,18 @@ def shared_solver_session_health_gate(
     )
     shared_eval_timeout_mode_text = str(shared_engine_eval_timeout_mode or "").strip()
     selection_basis_text = str(session_selection_basis or "").strip()
+    profile_schema_text = str(agentic_profile_schema or "").strip()
+    first_calls = (
+        []
+        if recommended_first_calls is None
+        else [str(item).strip() for item in recommended_first_calls if str(item).strip()]
+    )
+    required_call_kinds = (
+        []
+        if required_first_call_kinds is None
+        else [str(item).strip().lower() for item in required_first_call_kinds if str(item).strip()]
+    )
+    session_policy_text = str(session_policy_mode or "").strip()
 
     def positive_int_or_none(value):
         if value is None:
@@ -5061,6 +5079,41 @@ def shared_solver_session_health_gate(
                 and matlab_process_count_int >= livelink_candidate_count_int
                 and checks["selection_uses_parent_or_port_chain"]
             )
+    profile_contract_requested = any(
+        (
+            profile_schema_text,
+            first_calls,
+            required_call_kinds,
+            session_policy_text,
+            profile_allows_new_solver_process is not None,
+            profile_allows_kill_solver_process is not None,
+        )
+    )
+    if profile_contract_requested:
+        policy_norm = session_policy_text.lower()
+        checks["agentic_profile_schema_recorded"] = bool(profile_schema_text)
+        checks["recommended_first_calls_recorded"] = bool(first_calls)
+        checks["required_first_call_kinds_recorded"] = bool(required_call_kinds)
+        checks["recommended_first_calls_cover_required_kinds"] = bool(required_call_kinds) and all(
+            any(kind in call.lower() for call in first_calls)
+            for kind in required_call_kinds
+        )
+        checks["session_policy_mode_recorded"] = bool(session_policy_text)
+        checks["session_policy_prefers_reuse"] = any(
+            token in policy_norm for token in ("attach", "reuse", "existing", "shared")
+        )
+        checks["profile_new_process_policy_recorded"] = (
+            profile_allows_new_solver_process is not None
+        )
+        checks["profile_prohibits_new_solver_process"] = (
+            profile_allows_new_solver_process is False
+        )
+        checks["profile_kill_policy_recorded"] = (
+            profile_allows_kill_solver_process is not None
+        )
+        checks["profile_prohibits_killing_solver_process"] = (
+            profile_allows_kill_solver_process is False
+        )
     return {
         "policy": "shared_solver_session_health_gate",
         "connected": bool(connected),
@@ -5098,6 +5151,12 @@ def shared_solver_session_health_gate(
         "matlab_mcp_server_count": matlab_mcp_server_count_int,
         "livelink_candidate_count": livelink_candidate_count_int,
         "session_selection_basis": selection_basis_text,
+        "agentic_profile_schema": profile_schema_text,
+        "recommended_first_calls": first_calls,
+        "required_first_call_kinds": required_call_kinds,
+        "session_policy_mode": session_policy_text,
+        "profile_allows_new_solver_process": profile_allows_new_solver_process,
+        "profile_allows_kill_solver_process": profile_allows_kill_solver_process,
         "checks": checks,
         "status_label": "ok" if all(checks.values()) else "needs_attention",
         "notes": [
@@ -5114,6 +5173,7 @@ def shared_solver_session_health_gate(
             "record the selected shared engine name and verify it matches the LiveLink MATLAB worker PID when available",
             "record matlab.engine.find_matlab() output separately when direct MCP discovery misses a shared MATLAB session",
             "record the COMSOL server -> LiveLink MATLAB -> shared worker MATLAB parent chain when passive diagnostics expose it",
+            "an external solver MCP profile should expose health-first calls and prohibit unrequested process start or kill",
         ],
     }
 
