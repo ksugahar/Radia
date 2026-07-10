@@ -95,12 +95,20 @@ TOPICS: dict[str, str] = {
         "continuation is B_s=+B0 z g'(s); a div-free-but-not-curl-free choice has a spurious edge "
         "current sheet and FLIPS the sign): slope vs the law -> 1 as fringe w->0 (0.84->0.99 for "
         "w 0.08->0.005), beta=0 baseline = -0.5 w/rho (finite-fringe residual ->0), rho*(1/f_z) "
-        "collapses onto tan(beta). HONEST PARTIAL: the SAME tracker on a 3D FEM tilted-edge dipole "
-        "(accel_pole_ends_fem, reduced-Omega) gets the right SCALING but not a trustworthy "
-        "magnitude -- the reference orbit is not the closed orbit so it samples the finite-pole "
-        "dB_z/dx (odd in x) asymmetrically (large spurious beta=0 baseline) + near-axis derivatives "
-        "noisy; a clean FEM number needs a proper closed-orbit + finer mesh. "
-        "(docs/clebsch_hodograph/edge_focusing_tracking.ipynb; golden tests/feec/test_edge_focusing_tracking.py)"
+        "collapses onto tan(beta); matches the FULL SCOFF/Enge law tan(beta-psi)/rho, "
+        "psi=(K1g/rho)(1+sin^2)/cos, to <=0.7 pct. 3D-FEM chain VALIDATED (parallelogram dipole, "
+        "both edges tilted, coil FOLLOWING the pole outline, exactly C2-symmetric -> C2 map "
+        "symmetrization): closed-orbit symmetric traversal + window-decomposed Hill integrals give "
+        "dK_in FEM/model=0.93, FEM/closed-form=0.94 at beta=20 rho=5 (exit DEfocusing matched 0.96; "
+        "dK*rho const to 1 pct over rho 5..40; beta=0 floor +0.0013). DESIGN LESSONS the "
+        "measurement exposed: straight coil front across a tilted edge -> iso-field tilt far below "
+        "the geometric angle (dK 0.55x; edge-angle bookkeeping ASSUMES the coil follows the pole "
+        "contour); rigid whole-coil rotation breaks MMF topology (B0 3x collapse). RADIA PITFALLS "
+        "(verified, flagged): CoilBuilder.mirror('xy') draws mirrored STRAIGHTS backwards out of "
+        "the loop (spurious odd-x dBz/dx up to 0.39 T/m -- build both loops explicitly); "
+        "rad.RadiaField on a TrfOrnt-wrapped container = 0xC0000374 heap corruption. "
+        "(docs/clebsch_hodograph/edge_focusing_tracking.ipynb + edge_focusing_fem_results.json; "
+        "golden tests/feec/test_edge_focusing_tracking.py incl. coil-cleanliness lock)"
     ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
@@ -866,24 +874,54 @@ focusing sign.  Using the curl-free field, the tracker reproduces the hard-edge 
   - beta=0 baseline = -0.5 w/rho EXACTLY -- an O(w/rho) finite-fringe residual that vanishes;
   - rho*(1/f_z) collapses onto tan(beta) (thin lens, 1/rho scaling).
 The magnitude tan(beta)/rho is the invariant; the sign is orientation-dependent (a rectangular
-magnet's edges DEFOCUS; this curl-free entrance-edge orientation FOCUSES).  Golden (pure-numpy,
-CI-friendly): tests/feec/test_edge_focusing_tracking.py.
+magnet's edges DEFOCUS; this curl-free entrance-edge orientation FOCUSES).  With the classical
+first-order fringe correction psi = (K1g/rho)(1+sin^2 beta)/cos beta (K1g = INT g(1-g) ds along
+the edge normal; = w/2 for the tanh fringe) the tracked values match the FULL law
+tan(beta-psi)/rho to <=0.7 pct at w=0.02, and the beta=0 baseline IS -K1g/rho^2 exactly.
+Golden (pure-numpy, CI-friendly): tests/feec/test_edge_focusing_tracking.py.
 
-## Honest partial -- the 3D-FEM extraction is NOT (yet) clean
-The SAME tracker on a 3D FEM tilted-edge dipole (accel_pole_ends_fem, reduced-Omega) recovers the
-right SCALING Delta(1/f_z) ~ tan(beta)/rho but NOT a trustworthy magnitude.  Two variants both
-fail: (i) narrow pole -> the non-closed reference orbit samples the finite-pole dB_z/dx (odd in x)
-asymmetrically -> large spurious beta=0 baseline (centering the orbit REDUCES but does not NULL it);
-(ii) WIDE pole (dB_z/dx~0 on-axis, orbit stays at x~3mm) + tilted-vs-normal DIFFERENCE STILL fails
--- beta=0 baseline (-0.17 at rho=2) does not cancel and the difference is non-monotone/wrong-sign
-(beta=15 -> -0.03; beta=30 -> +0.017 ~6% of tan/rho).  ROOT REASON (deeper than orbit drift): a real
-finite-GAP dipole fringe is THICK and fully 3D (fringe width ~ the gap), so the hard-edge tan/rho is
-NOT the recoverable target of the naive Hill integral -- the tilted vs normal fringes differ in MORE
-than the edge angle.  Recovering tan/rho from a thick FEM fringe needs the SCOFF/Enge
-FRINGE-FIELD-INTEGRAL formalism + a proper CLOSED orbit + a finer mesh.  So the tracked-on-analytic
-result is the durable artifact; the FEM difficulty is edge_focusing_efb_slope_negative in stronger
-form (field-based edge measures are fragile).  Do NOT re-attempt the naive wide-pole/difference
-variant.
+## 3D-FEM chain VALIDATED -- parallelogram dipole, SCOFF/Enge + closed orbit
+A NAIVE Hill integral on a plain tilted-edge dipole is NOT enough (the thick 3D fringe + any
+coil/edge mismatch pollute it -- do NOT re-attempt the wide-pole/difference variant).  The
+protocol that works (PART B of docs/clebsch_hodograph/edge_focusing_tracking.py,
+fem_scoff_study, ~25 min; committed results edge_focusing_fem_results.json):
+  - TESTBED: PARALLELOGRAM dipole (both edges tilted beta -- the spectrometer configuration)
+    with the COIL FOLLOWING the pole outline (rounded-parallelogram loop pair at fixed 20 mm
+    normal offset, sides threading the iron circuit).  Parallelogram poles + centered legs +
+    the C2-symmetric coil make the WHOLE magnet exactly C2-symmetric -> the C2-odd part of the
+    sampled mid-plane map is pure solver error, removed EXACTLY by map symmetrization.
+  - MEASUREMENT: closed-orbit SYMMETRIC traversal (2-pass shooting, |x|max ~ sagitta), Hill
+    integrals window-decomposed (entrance/flat/exit x T1 transverse-gradient + T2
+    edge-crossing), x-uniform model B0*Gin(s_in)*Gout(s_out) from the FEM's OWN mid-line
+    profile, SCOFF/Enge closed form with measured K1g and orbit-corrected beta_eff.
+  - RESULT (beta=20, rho=5): dK_in FEM +0.0690 vs model +0.0739 (0.93) vs closed form +0.0732
+    (0.94) vs hard edge +0.0728; exit DEfocusing matched to 0.96; dK*rho constant to 1 pct over
+    rho 5..40; beta=0 spurious floor +0.0013 (1.8 pct of signal), vanishing faster than 1/rho.
+  - ERROR BUDGET: the stable -5..-7 pct vs the model is beta=20 iron-mesh error in the
+    entrance fringe (order-2 H1, 8 mm beam box) -- tighten with mesh/order, not method.
+
+## Magnet-design lessons the measurement exposed (all measured failures)
+  - A STRAIGHT coil front across a tilted iron edge leaves the iso-field tilt FAR below the
+    geometric edge angle (dK deficit 0.55x at beta=20: coil-front misalignment up to
+    x_side*sin(beta) ~ 29 mm vs a ~60 mm fringe).  Edge-angle bookkeeping ASSUMES the coil
+    follows the pole contour -- and this measurement is sensitive enough to expose it.
+  - Rigidly rotating the WHOLE coil to match the entrance edge breaks the MMF linkage topology
+    (conductor escapes past the return leg; B0 collapses 3x).  Shear the loop, do not rotate it.
+  - A fully-buried winding shunts its MMF in local iron loops (B0 collapse); a long conductor
+    overhang leaves a direct-field plateau ("the magnet has no outside").
+
+## Radia pitfalls isolated en route (verified minimal repros, flagged for fixes 2026-07-10)
+  - CoilBuilder.mirror("xy") emits mirrored STRAIGHT segments running BACKWARDS out of the loop
+    (start mirrored, heading reversed, end unswapped) -> the "lower coil" is garbage geometry
+    carrying spurious odd-in-x odd-in-y dBz/dx up to 0.39 T/m while looking plausible (its
+    breakage is C2-even, so Bz(0,y) stays y-symmetric).  Arcs are fine; straights break.
+    BUILD BOTH LOOPS EXPLICITLY instead of mirroring.
+  - rad.RadiaField on a TrfOrnt-wrapped CONTAINER crashes the process with 0xC0000374 heap
+    corruption (rad.Fld on the same container is fine; TrfOrnt on PRIMITIVES inside a container
+    is fine -- CoilBuilder.to_radia relies on that).  Bake transformations into segment
+    geometry instead.
+Regression lock: tests/feec/test_edge_focusing_tracking.py::test_fem_coil_pair_is_clean
+(closure to 1e-12, x-odd/C2-odd field < 1e-6*B0).
 """
 
 

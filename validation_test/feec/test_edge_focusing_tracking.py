@@ -38,6 +38,21 @@ def test_tracker_recovers_edge_focusing():
             assert abs(r["inv_fz"] - r["hard_edge"]) / abs(r["hard_edge"]) < 0.12, r
 
 
+def test_tracker_matches_enge_fringe_corrected_law():
+    import edge_focusing_tracking as ef
+    # The FULL classical law tan(beta - psi)/rho, psi = (K1g/rho)(1+sin^2)/cos with
+    # K1g = w/2 for the tanh fringe, matches the tracked values to < 1.5 % INCLUDING
+    # the finite fringe (measured 0.03-0.71 % at w=0.02; residual ~ the 2nd-order K2 term).
+    for w in (0.02, 0.04):
+        sw = ef.sweep_beta(w=w)
+        for r in sw:
+            if abs(r["enge"]) > 1e-9:
+                assert abs(r["inv_fz"] - r["enge"]) / abs(r["enge"]) < 0.02, (w, r)
+    # beta=0: the tracked baseline IS the Enge correction -K1g/rho^2 exactly
+    b0 = ef.edge_focus_integral(ef.edge_field(0.0, w=0.02), 1.0)["inv_fz"]
+    assert abs(b0 - ef.scoff_law(0.0, 1.0, 0.01)) < 2e-4, b0
+
+
 def test_converges_to_hard_edge_as_w_shrinks():
     import edge_focusing_tracking as ef
     wc = ef.w_convergence()                      # w: 0.08 -> 0.005
@@ -63,3 +78,39 @@ def test_rho_collapse():
         for tb, y in zip(d["tan_beta"], d["inv_fz_rho"]):
             if tb > 0.05:
                 assert abs(y - tb) < 0.05 + 0.03 * tb, (d["rho"], tb, y)
+
+
+def test_fem_coil_pair_is_clean():
+    """Locks the PART B coil construction against two verified pitfalls (2026-07-10):
+    CoilBuilder.mirror('xy') emits mirrored straights running the wrong way (spurious
+    odd-in-x dBz/dx up to 0.39 T/m), and rad.TrfOrnt-wrapped containers crash
+    rad.RadiaField.  The explicit rounded-parallelogram pair must close to machine
+    precision and its mid-plane Bz must be x-even (beta=0) / C2-even (beta=20) to
+    ~1e-7 of B0."""
+    import pytest
+    rad = pytest.importorskip("radia")
+    import math
+    import numpy as np
+    import edge_focusing_tracking as ef
+
+    for bdeg in (0.0, 20.0):
+        up = ef._fem_coil_path(+1, math.radians(bdeg))
+        gap = np.linalg.norm(np.asarray(up._position)
+                             - np.asarray(up.segments[0].start_pos))
+        assert gap < 1e-12, (bdeg, gap)
+        cnt = ef.fem_build_coil(math.radians(bdeg))
+        b0 = rad.Fld(cnt, "b", [0.0, 0.0, 0.0])[2]
+        assert 0.05 < b0 < 0.2, b0            # both loops contribute (mirror bug gave 0.063->0.103)
+        # C2-odd part must vanish for BOTH beta (the loop pair is C2-symmetric);
+        # the mirror('xy') bug sat at 7.7e-3 T here -- 1e-6*B0 is 4 orders below it
+        for (x, y) in ((0.02, -0.14), (0.02, -0.10), (0.03, 0.0)):
+            c2 = 0.5 * (rad.Fld(cnt, "b", [x, y, 0.0])[2]
+                        - rad.Fld(cnt, "b", [-x, -y, 0.0])[2])
+            assert abs(c2) < 1e-6 * b0, (bdeg, x, y, c2)
+        if bdeg == 0.0:
+            # x-odd part must vanish at beta=0 (rounded rectangle is x-symmetric)
+            for y in (-0.16, -0.12, -0.10):
+                odd = 0.5 * (rad.Fld(cnt, "b", [0.02, y, 0.0])[2]
+                             - rad.Fld(cnt, "b", [-0.02, y, 0.0])[2])
+                assert abs(odd) < 1e-6 * b0, (y, odd)
+        rad.UtiDelAll()

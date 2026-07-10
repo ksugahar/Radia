@@ -104,6 +104,21 @@ def hard_edge_law(beta_deg, rho):
     return np.tan(np.radians(beta_deg)) / rho
 
 
+def psi_enge(beta_rad, K1g, rho):
+    """Classical Enge fringe correction psi = (K1g/rho)(1+sin^2 beta)/cos beta (Brown,
+    SLAC-75 first order), with K1g = INT g(1-g) ds along the edge NORMAL (units m; this
+    is K1*gap with the gap convention divided out).  For the tanh fringe K1g = w/2."""
+    return (K1g / rho) * (1.0 + np.sin(beta_rad) ** 2) / np.cos(beta_rad)
+
+
+def scoff_law(beta_deg, rho, K1g):
+    """SCOFF + Enge fringe-corrected vertical edge focusing for this orientation:
+    1/f_z = tan(beta - psi)/rho.  At beta=0 this is -K1g/rho^2 -- exactly the tracked
+    finite-fringe baseline (-w/(2 rho^2) for the tanh fringe)."""
+    b = np.radians(beta_deg)
+    return np.tan(b - psi_enge(b, K1g, rho)) / rho
+
+
 # ------------------------------------------------------------------ studies
 def sweep_beta(betas_deg=None, rho=RHO_REF, w=W):
     betas_deg = BETAS_DEG if betas_deg is None else betas_deg
@@ -112,6 +127,7 @@ def sweep_beta(betas_deg=None, rho=RHO_REF, w=W):
         r = edge_focus_integral(edge_field(np.radians(bd), w=w), rho)
         rows.append({"beta_deg": float(bd), "inv_fz": r["inv_fz"],
                      "hard_edge": float(hard_edge_law(bd, rho)),
+                     "enge": float(scoff_law(bd, rho, 0.5 * w)),
                      "x_exit": r["x_exit"]})
     return rows
 
@@ -145,14 +161,321 @@ def rho_collapse(rhos=None, betas_deg=None, w=W):
 
 
 def summarize(sweep, wconv):
-    """Max relative error of the tracked 1/f_z vs the hard-edge law over the sweep
-    (beta=0 excluded: the law is 0 there), and the finest-w slope."""
+    """Max relative error of the tracked 1/f_z vs the hard-edge law AND vs the Enge
+    fringe-corrected law over the sweep (beta=0 excluded for the hard-edge ratio: the
+    law is 0 there), and the finest-w slope."""
     rel = [abs(r["inv_fz"] - r["hard_edge"]) / abs(r["hard_edge"])
            for r in sweep if abs(r["hard_edge"]) > 1e-9]
+    rel_e = [abs(r["inv_fz"] - r["enge"]) / abs(r["enge"])
+             for r in sweep if abs(r["enge"]) > 1e-9]
     return {"max_rel_err_vs_law": float(max(rel)),
+            "max_rel_err_vs_enge": float(max(rel_e)),
             "beta0_baseline": float(next(r["inv_fz"] for r in sweep if r["beta_deg"] == 0.0)),
             "finest_w": float(wconv[-1]["w"]),
             "finest_w_slope": float(wconv[-1]["slope_vs_law"])}
+
+
+# ================================================================== PART B: FEM (SCOFF/Enge)
+# 3D reduced-Omega FEM of a PARALLELOGRAM dipole (both edges tilted by beta), measured
+# with the SAME tracker: symmetric (closed-orbit style) traversal + window decomposition
+# + an x-uniform model built from the FEM's own mid-line fringe profile.  The FEM
+# entrance-edge kick is compared window-by-window against the model and the SCOFF/Enge
+# closed form tan(beta_eff - psi)/rho with the FEM-measured K1g.
+#
+# The parallelogram testbed (the standard spectrometer-dipole configuration) is chosen
+# for two reasons learned the hard way:
+#   1. the COIL must follow the pole contour -- a straight coil front across a tilted
+#      iron edge misaligns by up to x_side*tan(beta) ~ 29 mm over a ~60 mm fringe and
+#      the iso-field tilt lands far below the geometric edge angle (measured dK deficit
+#      0.55x); a rigid whole-coil rotation instead breaks the MMF linkage topology
+#      (conductor escaping past the return leg collapsed B0 by 3x).  The sheared
+#      rounded-parallelogram loop follows both edges at a fixed normal offset.
+#   2. parallelogram poles + centered legs + the C2-symmetric coil pair make the WHOLE
+#      magnet exactly C2-symmetric (180-deg rotation about z): Bz(x,y,0)=Bz(-x,-y,0),
+#      so the C2-odd part of the sampled map is pure solver error and is removed
+#      exactly by map symmetrization at BOTH edge angles.
+F_GAP = 0.040            # pole gap (z)
+F_POLE_W = 0.12          # pole half-width (x) -- wide vs the gap
+F_T_LEG = 0.03           # return legs: flux clamp -> short fringe, iron-circuit-uniform field
+F_LEG_HY = 0.05          # legs y in (-F_LEG_HY, +F_LEG_HY): centered -> C2 symmetry
+F_Z_OUT = 0.100
+F_L_BEAM = 0.20          # long magnet -> separated fringes, genuine flat top
+F_AIR = 0.45
+F_COIL_W, F_COIL_H = 0.015, 0.025
+F_COIL_XSIDE = 0.08      # coil side straights at x = +/-F_COIL_XSIDE (thread the iron circuit)
+F_COIL_RC = 0.02         # corner-arc radius of the rounded-parallelogram loop
+F_COIL_NOFF = 0.02       # coil bar offset from the iron edge along the edge NORMAL
+F_NI = 10000.0
+F_MU0 = 4.0 * np.pi * 1e-7
+
+
+def _fem_coil_path(z_sign, beta_rad):
+    """ONE rounded-parallelogram coil loop at z = z_sign*(F_GAP/2 + F_COIL_H/2).
+
+    Front/back bars parallel to the beta-tilted iron edges at F_COIL_NOFF normal
+    offset, side straights at x = +/-F_COIL_XSIDE, F_COIL_RC corner arcs.  The
+    path is C2-symmetric about the origin and closes to machine precision
+    (corner tangent-trim arithmetic; verified closure gap ~3e-17 m).
+    """
+    from radia.coil_builder import CoilBuilder
+    z_coil = z_sign * (F_GAP / 2 + F_COIL_H / 2)  # winding at the pole-face level (a
+    # fully-buried winding shunts its MMF in local iron loops)
+    tb, cbeta = np.tan(beta_rad), np.cos(beta_rad)
+    bdeg = np.degrees(beta_rad)
+    y_off = F_L_BEAM / 2 + F_COIL_NOFF / cbeta
+    t_a = F_COIL_RC * np.tan(np.radians((90 - bdeg) / 2))
+    t_o = F_COIL_RC * np.tan(np.radians((90 + bdeg) / 2))
+    L_side = 2 * y_off - t_o - t_a
+    L_bar = 2 * F_COIL_XSIDE / cbeta - t_a - t_o
+    return (CoilBuilder(current=F_NI)
+            .set_start([F_COIL_XSIDE, -y_off - F_COIL_XSIDE * tb + t_o, z_coil])
+            .set_cross_section(width=F_COIL_W, height=F_COIL_H)
+            .add_straight(L_side).add_arc(radius=F_COIL_RC, arc_angle=90 - bdeg)
+            .add_straight(L_bar).add_arc(radius=F_COIL_RC, arc_angle=90 + bdeg)
+            .add_straight(L_side).add_arc(radius=F_COIL_RC, arc_angle=90 - bdeg)
+            .add_straight(L_bar).add_arc(radius=F_COIL_RC, arc_angle=90 + bdeg))
+
+
+def fem_build_coil(beta_rad=0.0):
+    """Coil pair for the parallelogram magnet.
+
+    BOTH loops are built EXPLICITLY with the same CCW traversal and +NI current
+    (a z-plane pair adds Bz on the mid-plane).  Two verified radia/coil_builder
+    pitfalls dictate this shape (2026-07-10, both flagged for fixes):
+      * do NOT use CoilBuilder.mirror("xy") for the lower coil -- it emits the
+        mirrored STRAIGHT segments with a reversed heading from an un-swapped
+        start point, so every straight extends the wrong way outside the loop
+        (a (0.08,-0.10)->(0.08,+0.10) straight comes back as (0.08,-0.10)->
+        (0.08,-0.30)); the broken lower coil carries a spurious odd-in-x,
+        odd-in-y dBz/dx up to 0.39 T/m -- the explicit pair is clean to ~3e-9;
+      * do NOT wrap the container with rad.TrfOrnt -- rad.RadiaField on a
+        TrfOrnt-wrapped container crashes with 0xC0000374 heap corruption
+        (plain containers assemble fine).
+    """
+    import radia as rad
+    rad.UtiDelAll()
+    up = _fem_coil_path(+1, beta_rad)
+    lo = _fem_coil_path(-1, beta_rad)
+    return rad.ObjCnt(up.to_radia() + lo.to_radia())
+
+
+def _fem_footprint(z0, z1, beta):
+    from netgen.occ import WorkPlane, Axes, Pnt, Z, X
+    hL = F_L_BEAM / 2
+    tb = np.tan(beta)
+    wp = WorkPlane(Axes(Pnt(0, 0, z0), n=Z, h=X))
+    wp.MoveTo(-F_POLE_W, -hL + F_POLE_W * tb)
+    wp.LineTo(F_POLE_W, -hL - F_POLE_W * tb)   # tilted ENTRANCE (-y) edge, pivot at x=0
+    wp.LineTo(F_POLE_W, hL - F_POLE_W * tb)    # PARALLELOGRAM: exit edge tilted the same
+    wp.LineTo(-F_POLE_W, hL + F_POLE_W * tb)   # way -> the whole magnet is C2-symmetric
+    wp.Close()
+    return wp.Face().Extrude(z1 - z0)
+
+
+def fem_build_mesh(beta_deg, maxh_air=0.035, maxh_iron=0.014):
+    import ngsolve as ng
+    from netgen.occ import Box, Pnt, Glue, OCCGeometry
+    beta = np.radians(beta_deg)
+    top = _fem_footprint(F_GAP / 2, F_Z_OUT, beta)
+    bot = _fem_footprint(-F_Z_OUT, -F_GAP / 2, beta)
+    leg_l = Box(Pnt(-F_POLE_W, -F_LEG_HY, -F_GAP / 2), Pnt(-F_POLE_W + F_T_LEG, F_LEG_HY, F_GAP / 2))
+    leg_r = Box(Pnt(F_POLE_W - F_T_LEG, -F_LEG_HY, -F_GAP / 2), Pnt(F_POLE_W, F_LEG_HY, F_GAP / 2))
+    iron = top + bot + leg_l + leg_r            # centered legs -> C2; clear of both edges
+    iron.mat("iron"); iron.maxh = maxh_iron
+    # graded refinement at the gap-facing pole-face EDGE LINES (entrance/exit, top/bot):
+    # the mu->inf corner singularity there drives a smooth mesh-realization-dependent
+    # odd-in-x error field on the mid-plane
+    for e in iron.edges:
+        c = e.center
+        if abs(abs(c.z) - F_GAP / 2) < 1e-4 and abs(c.x) < 0.11 and abs(c.y) > 0.05:
+            e.maxh = 0.004
+    # fine air box around the beam: the tracked mid-plane gradients live on AIR elements;
+    # coarse air (maxh ~ gap) leaves mesh-asymmetry dBz/dx(x=0) ~ 0.1-0.7 T/m (measured)
+    fine = Box(Pnt(-0.05, -0.27, -0.03), Pnt(0.05, 0.27, 0.03)) - iron
+    fine.mat("air"); fine.maxh = 0.008
+    air = Box(Pnt(-F_AIR, -F_AIR, -F_AIR), Pnt(F_AIR, F_AIR, F_AIR)) - iron - fine
+    air.mat("air")
+    for f in air.faces:
+        c = f.center
+        if max(abs(c.x), abs(c.y), abs(c.z)) > 0.9 * F_AIR:
+            f.name = "outer"
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(Glue([air, fine, iron])).GenerateMesh(maxh=maxh_air))
+    return mesh
+
+
+def fem_solve_midplane(beta_deg, mu_r=1000.0, order=2, nx=81, ny=401,
+                       xmax=0.05, ymax=0.26):
+    """Reduced-Omega solve (H = Hs - grad(Omega), Biot-Savart coil source), then sample the
+    MID-PLANE Bz(x,y) map -- by paraxial theory the vertical dynamics depends only on it."""
+    import ngsolve as ng
+    from ngsolve import H1, BilinearForm, LinearForm, GridFunction, grad, dx, TaskManager
+    import radia as rad
+    mesh = fem_build_mesh(beta_deg)
+    coils = fem_build_coil(float(np.radians(beta_deg)))
+    Hs = rad.RadiaField(coils, "h")
+    mu = mesh.MaterialCF({"iron": mu_r * F_MU0}, default=F_MU0)
+    fes = H1(mesh, order=order, dirichlet="outer")
+    u, v = fes.TnT()
+    f = LinearForm(fes); f += mu * Hs * grad(v) * dx; f.Assemble()   # serial (RadiaField)
+    with TaskManager():
+        a = BilinearForm(fes); a += mu * grad(u) * grad(v) * dx; a.Assemble()
+        gfu = GridFunction(fes)
+        gfu.vec.data = a.mat.Inverse(fes.FreeDofs(), inverse="sparsecholesky") * f.vec
+    B = mu * (Hs - grad(gfu))
+    xs = np.linspace(-xmax, xmax, nx)
+    ys = np.linspace(-ymax, ymax, ny)
+    Bz = np.zeros((nx, ny))
+    for i, x in enumerate(xs):
+        for j, y in enumerate(ys):
+            try:
+                Bz[i, j] = float(B(mesh(float(x), float(y), 0.0))[2])
+            except Exception:
+                pass
+    ne = int(mesh.ne)
+    rad.UtiDelAll()
+    return xs, ys, Bz, ne
+
+
+def fem_profile(xs, ys, Bz, beta_deg):
+    """From the x=0 mid-line: flat-top B0, flat window, K1g of each fringe (edge-normal),
+    hard-edge-equivalent EFB positions."""
+    i0 = int(np.argmin(np.abs(xs)))
+    P = Bz[i0, :]
+    B0 = float(np.mean(P[np.abs(ys) < 0.015]))
+    g = P / B0
+    flat = np.where(g > 0.995)[0]
+    y_a, y_b = float(ys[flat[0]]), float(ys[flat[-1]])
+    cb = np.cos(np.radians(beta_deg))
+    dy = ys[1] - ys[0]
+    gin = np.clip(np.where(ys <= 0.0, g, 1.0), 0.0, None)
+    gout = np.clip(np.where(ys >= 0.0, g, 1.0), 0.0, None)
+    K1g_in = float(np.sum(gin * (1 - gin)) * dy * cb)      # ds = dy cos(beta) on x=0
+    K1g_out = float(np.sum(gout * (1 - gout)) * dy * cb)   # exit edge tilted too (C2 magnet)
+    yE_in = y_a - float(np.sum(gin[ys <= y_a]) * dy)
+    yE_out = y_b + float(np.sum(gout[ys >= y_b]) * dy)
+    return {"B0": B0, "y_flat": (y_a, y_b), "K1g_in": K1g_in, "K1g_out": K1g_out,
+            "yE_in": float(yE_in), "yE_out": float(yE_out), "g_line": g, "ys": ys}
+
+
+def fem_model_Bz(prof, beta_deg, xs, ys):
+    """X-UNIFORM model of the same magnet built from the MEASURED mid-line profile:
+    Bz(x,y) = B0 Gin(s_in) Gout(s_out) with BOTH factors re-parameterized to the tilted
+    edge-normal coordinates of the parallelogram (s_in = (y+hL)cb + x sb,
+    s_out = (y-hL)cb + x sb).  Same tilts, same thick fringes, same two edges -- but no
+    transverse structure, so FEM - model isolates the x-nonuniformity contamination."""
+    from scipy.interpolate import interp1d
+    g, yline = prof["g_line"], prof["ys"]
+    beta = np.radians(beta_deg)
+    cb, sb = np.cos(beta), np.sin(beta)
+    ymid = 0.5 * (prof["y_flat"][0] + prof["y_flat"][1])
+    gin_y = np.where(yline <= ymid, g, 1.0)
+    gout_y = np.where(yline >= ymid, g, 1.0)
+    hL = F_L_BEAM / 2
+    Gin = interp1d((yline + hL) * cb, gin_y, bounds_error=False,
+                   fill_value=(float(gin_y[0]), 1.0))
+    Gout = interp1d((yline - hL) * cb, gout_y, bounds_error=False,
+                    fill_value=(1.0, float(gout_y[-1])))
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    return prof["B0"] * Gin((Y + hL) * cb + X * sb) * Gout((Y - hL) * cb + X * sb)
+
+
+def track_midplane(xs, ys, Bz, B0, rho, prof, y0=-0.24, y1=0.24, ds=5e-4,
+                   x0=0.0, a0=0.0):
+    """Reference-orbit RK4 on the mid-plane Bz map + the linearized vertical system:
+    G = kappa (u_y dBz/dx - u_x dBz/dy), 2x2 matrix M_z, and the kick integral K
+    decomposed into entrance / flat / exit windows and into T1 (transverse-gradient)
+    and T2 (edge-crossing) terms."""
+    from scipy.interpolate import RegularGridInterpolator
+    dBzdx = np.gradient(Bz, xs, axis=0)
+    dBzdy = np.gradient(Bz, ys, axis=1)
+    fB = RegularGridInterpolator((xs, ys), Bz, bounds_error=False, fill_value=0.0)
+    fX = RegularGridInterpolator((xs, ys), dBzdx, bounds_error=False, fill_value=0.0)
+    fY = RegularGridInterpolator((xs, ys), dBzdy, bounds_error=False, fill_value=0.0)
+    kap = 1.0 / (B0 * rho)
+    y_a, y_b = prof["y_flat"]
+    r = np.array([x0, y0]); u = np.array([np.sin(a0), np.cos(a0)])
+    M = np.eye(2)
+    K = {"in": 0.0, "flat": 0.0, "out": 0.0}
+    T1 = {"in": 0.0, "flat": 0.0, "out": 0.0}
+    T2 = {"in": 0.0, "flat": 0.0, "out": 0.0}
+    alpha_at_EFB = None
+    x_mid = None
+    x_absmax = 0.0
+    n = 0
+    while r[1] < y1:
+        b = lambda rr: float(fB([rr])[0])
+        f = lambda rr, uu: kap * np.array([uu[1] * b(rr), -uu[0] * b(rr)])
+        k1 = f(r, u); k2 = f(r + 0.5 * ds * u, u + 0.5 * ds * k1)
+        k3 = f(r + 0.5 * ds * (u + 0.5 * ds * k1), u + 0.5 * ds * k2)
+        k4 = f(r + ds * (u + 0.5 * ds * k2), u + ds * k3)
+        r = r + ds * (u + ds / 6 * (k1 + 2 * k2 + 2 * k3))
+        u = u + ds / 6 * (k1 + 2 * k2 + 2 * k3 + k4); u = u / np.linalg.norm(u)
+        t1 = kap * u[1] * float(fX([r])[0])
+        t2 = -kap * u[0] * float(fY([r])[0])
+        G = t1 + t2
+        w = "in" if r[1] < y_a else ("out" if r[1] > y_b else "flat")
+        K[w] += G * ds; T1[w] += t1 * ds; T2[w] += t2 * ds
+        M = M + ds * np.array([[0.0, 1.0], [-G, 0.0]]) @ M
+        if alpha_at_EFB is None and r[1] >= prof["yE_in"]:
+            alpha_at_EFB = np.arctan2(u[0], u[1])
+        if x_mid is None and r[1] >= 0.0:
+            x_mid = float(r[0])
+        x_absmax = max(x_absmax, abs(float(r[0])))
+        n += 1
+        if n > 20000:
+            raise RuntimeError("track_midplane: step cap")
+    if abs(r[0]) > xs[-1] * 0.98:
+        raise RuntimeError(f"orbit left the sampled x-window: x={r[0]:.4f}")
+    return {"K": K, "T1": T1, "T2": T2,
+            "K_total": K["in"] + K["flat"] + K["out"], "M21": float(M[1, 0]),
+            "alpha_EFB_deg": float(np.degrees(alpha_at_EFB or 0.0)),
+            "x_mid": float(x_mid if x_mid is not None else r[0]),
+            "x_absmax": float(x_absmax), "x_exit": float(r[0]),
+            "theta_exit_deg": float(np.degrees(np.arctan2(u[0], u[1])))}
+
+
+def track_symmetric(xs, ys, Bz, B0, rho, prof, ds=5e-4, ds_shoot=2e-3):
+    """CLOSED-ORBIT style symmetric traversal: launch angle -theta/2 and offset so the
+    orbit crosses the magnet centre near x=0 -> max|x| ~ sagitta, and the odd-in-x
+    transverse gradient dBz/dx cancels between the two halves (suppresses T1)."""
+    p1 = track_midplane(xs, ys, Bz, B0, rho, prof, ds=ds_shoot)
+    a0 = -0.5 * np.radians(p1["theta_exit_deg"])
+    p2 = track_midplane(xs, ys, Bz, B0, rho, prof, ds=ds_shoot, a0=a0)
+    return track_midplane(xs, ys, Bz, B0, rho, prof, ds=ds, a0=a0, x0=-p2["x_mid"])
+
+
+def fem_scoff_study(betas_deg=(0.0, 20.0), rho=5.0):
+    """The full SCOFF/Enge + closed-orbit FEM measurement: for each beta, solve the FEM,
+    C2-symmetrize the map, measure the fringe (B0, K1g, EFB), track FEM and x-uniform
+    model symmetrically, and compare the entrance-window kick against the closed form
+    tan(beta_eff - psi)/rho."""
+    cases = []
+    for bd in betas_deg:
+        xs, ys, Bz, ne = fem_solve_midplane(bd)
+        # C2 map symmetrization: the parallelogram magnet satisfies
+        # Bz(x,y,0) = Bz(-x,-y,0) EXACTLY, so the C2-odd part of the sampled map
+        # is pure solver/mesh error (grids are symmetric linspaces).
+        Bz = 0.5 * (Bz + Bz[::-1, ::-1])
+        prof = fem_profile(xs, ys, Bz, bd)
+        fem = track_symmetric(xs, ys, Bz, prof["B0"], rho, prof)
+        mod = track_symmetric(xs, ys, fem_model_Bz(prof, bd, xs, ys),
+                              prof["B0"], rho, prof)
+        b_eff = np.radians(bd) - np.radians(fem["alpha_EFB_deg"])
+        closed = float(np.tan(b_eff - psi_enge(b_eff, prof["K1g_in"], rho)) / rho)
+        cases.append({"beta_deg": float(bd), "ne": ne, "rho": rho,
+                      "B0": prof["B0"], "K1g_in": prof["K1g_in"],
+                      "K1g_out": prof["K1g_out"], "y_flat": list(prof["y_flat"]),
+                      "fem": fem, "model": mod, "closed_form_entrance": closed,
+                      "beta_eff_deg": float(np.degrees(b_eff))})
+    res = {"rho": rho, "cases": cases}
+    if len(cases) >= 2 and cases[0]["beta_deg"] == 0.0:
+        c0 = cases[0]
+        for c in cases[1:]:
+            c["dK_in_fem"] = c["fem"]["K"]["in"] - c0["fem"]["K"]["in"]
+            c["dK_in_model"] = c["model"]["K"]["in"] - c0["model"]["K"]["in"]
+            c["dK_in_closed"] = c["closed_form_entrance"] - c0["closed_form_entrance"]
+    return res
 
 
 # ------------------------------------------------------------------ figure
@@ -166,7 +489,10 @@ def figure_edge_focus(sweep, wconv, rcol, path):
     tb = np.array([np.tan(np.radians(r["beta_deg"])) for r in sweep])
     meas = np.array([r["inv_fz"] for r in sweep])
     law = np.array([r["hard_edge"] for r in sweep])
+    enge = np.array([r["enge"] for r in sweep])
     ax[0].plot(tb, law, color=BLUE, lw=3.0, label=r"hard edge $\tan\beta/\rho$")
+    ax[0].plot(tb, enge, color="#1a2230", ls="--", lw=1.6,
+               label=r"Enge $\tan(\beta-\psi)/\rho$")
     ax[0].plot(tb, meas, "o", color=RED, ms=7, label="tracked (Hill integral)")
     ax[0].set_xlabel(r"$\tan\beta$"); ax[0].set_ylabel(r"$1/f_z$  [1/m]")
     ax[0].legend(fontsize=9.5, loc="upper right")
@@ -197,17 +523,18 @@ def figure_edge_focus(sweep, wconv, rcol, path):
 
 if __name__ == "__main__":
     sw = sweep_beta()
-    print("beta[deg]   tracked 1/f_z    hard-edge -tan/rho    rel.err")
+    print("beta[deg]   tracked 1/f_z    hard tan/rho    enge tan(b-psi)/rho   rel(enge)")
     for r in sw:
-        rel = (abs(r["inv_fz"] - r["hard_edge"]) / abs(r["hard_edge"])
-               if abs(r["hard_edge"]) > 1e-9 else float("nan"))
+        rel = (abs(r["inv_fz"] - r["enge"]) / abs(r["enge"])
+               if abs(r["enge"]) > 1e-9 else float("nan"))
         print(f"  {r['beta_deg']:5.1f}   {r['inv_fz']:+.5f}      {r['hard_edge']:+.5f}"
-              f"       {rel*100:6.2f}%")
+              f"        {r['enge']:+.5f}          {rel*100:6.2f}%")
     wc = w_convergence()
     print("\nw-convergence (slope of 1/f_z vs the hard-edge law):")
     for d in wc:
         print(f"  w={d['w']:.3f}: slope={d['slope_vs_law']:.4f}")
     s = summarize(sw, wc)
-    print(f"\nmax rel err vs law {s['max_rel_err_vs_law']*100:.2f}%, "
-          f"beta=0 baseline {s['beta0_baseline']:.2e}, "
+    print(f"\nmax rel err: vs hard edge {s['max_rel_err_vs_law']*100:.2f}%, "
+          f"vs Enge {s['max_rel_err_vs_enge']*100:.2f}%; "
+          f"beta=0 baseline {s['beta0_baseline']:.2e} (= -K1g/rho^2), "
           f"finest-w slope {s['finest_w_slope']:.4f}")
