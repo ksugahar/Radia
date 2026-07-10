@@ -2,6 +2,7 @@ import json
 
 from radia_mcp.cubit.server import (
     cubit_docs,
+    cubit_journal_reproducibility_gate,
     cubit_mixed_order_series_gate,
     cubit_vol_inventory,
 )
@@ -349,6 +350,39 @@ def test_cubit_mixed_order_series_mcp_tool_accepts_rows_and_rejects_drift():
     bad = json.loads(cubit_mixed_order_series_gate(drift))
     assert bad["status"] == "needs_attention"
     assert bad["checks"]["volume_kind_counts_invariant"] is False
+
+
+def test_cubit_journal_reproducibility_gate_refuses_comment_only_root_cause():
+    failed = """# NG label
+reset
+cylinder height 1 radius 1
+mesh volume 1
+"""
+    passed = """# OK label
+
+reset
+cylinder   height 1   radius 1
+mesh volume 1
+"""
+    same = json.loads(cubit_journal_reproducibility_gate(
+        failed, passed, outcome_a="failed", outcome_b="passed"
+    ))
+    assert same["status"] == "needs_run_provenance"
+    assert same["analysis_complete"] is True
+    assert same["commands_equal"] is True
+    assert same["command_digest_a"] == same["command_digest_b"]
+    assert same["script_difference_explains_outcome"] is False
+    assert "complete_solver_log" in same["required_run_provenance"]
+
+    changed = json.loads(cubit_journal_reproducibility_gate(
+        failed,
+        passed.replace("mesh volume 1", "volume 1 scheme sweep\nmesh volume 1"),
+        outcome_a="failed",
+        outcome_b="passed",
+    ))
+    assert changed["status"] == "commands_differ"
+    assert changed["commands_equal"] is False
+    assert changed["differences"]
 
 
 def test_cubit_vol_inventory_counts_surfaceelementsuv_from_stock_export_netgen():

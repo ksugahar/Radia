@@ -16,6 +16,7 @@ Usage:
 """
 
 from collections import Counter
+import hashlib
 import json
 import errno
 import os
@@ -679,6 +680,87 @@ def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
 			"status": "invalid_input",
 			"error": str(exc),
 		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+def _normalized_cubit_journal_commands(text: str) -> list[str]:
+	commands = []
+	for raw_line in str(text or "").splitlines():
+		line = raw_line.strip()
+		if not line or line.startswith("#"):
+			continue
+		commands.append(" ".join(line.split()))
+	return commands
+
+
+@mcp.tool()
+def cubit_journal_reproducibility_gate(
+	journal_a: str,
+	journal_b: str,
+	outcome_a: str = "",
+	outcome_b: str = "",
+) -> str:
+	"""Compare two Cubit journals without inventing a script root cause.
+
+	Comments and blank lines are removed, then the remaining command streams are
+	compared exactly.  If outcomes differ while commands are identical, the tool
+	requires runtime provenance instead of claiming that the journal explains the
+	difference.  Inputs are text, not paths, so this tool does not expand the MCP
+	server's local-file read surface.
+	"""
+
+	commands_a = _normalized_cubit_journal_commands(journal_a)
+	commands_b = _normalized_cubit_journal_commands(journal_b)
+	digest_a = hashlib.sha256("\n".join(commands_a).encode("utf-8")).hexdigest()
+	digest_b = hashlib.sha256("\n".join(commands_b).encode("utf-8")).hexdigest()
+	commands_equal = commands_a == commands_b
+	outcomes_recorded = bool(str(outcome_a).strip()) and bool(str(outcome_b).strip())
+	outcomes_differ = outcomes_recorded and str(outcome_a).strip().lower() != str(outcome_b).strip().lower()
+	differences = []
+	for index in range(max(len(commands_a), len(commands_b))):
+		left = commands_a[index] if index < len(commands_a) else None
+		right = commands_b[index] if index < len(commands_b) else None
+		if left != right:
+			differences.append({"command_index": index + 1, "journal_a": left, "journal_b": right})
+		if len(differences) >= 20:
+			break
+
+	if commands_equal and outcomes_differ:
+		status = "needs_run_provenance"
+	elif commands_equal:
+		status = "commands_equivalent"
+	else:
+		status = "commands_differ"
+	result = {
+		"policy": "cubit_journal_reproducibility_gate",
+		"status": status,
+		"analysis_complete": True,
+		"commands_equal": commands_equal,
+		"command_count_a": len(commands_a),
+		"command_count_b": len(commands_b),
+		"command_digest_a": digest_a,
+		"command_digest_b": digest_b,
+		"outcome_a": str(outcome_a).strip() or None,
+		"outcome_b": str(outcome_b).strip() or None,
+		"outcomes_recorded": outcomes_recorded,
+		"outcomes_differ": outcomes_differ,
+		"script_difference_explains_outcome": bool(not commands_equal and outcomes_differ),
+		"differences": differences,
+		"required_run_provenance": [
+			"solver_version_and_build",
+			"headless_command_line",
+			"process_exit_code",
+			"complete_solver_log",
+			"initial_session_state",
+			"mesh_artifact_digest",
+			"mesh_quality_summary",
+		],
+		"notes": [
+			"Identical command streams cannot support a journal-source root-cause claim.",
+			"A comment label such as NG or OK is not solver evidence.",
+			"Replay through a clean headless process and bind the runtime evidence to the exported mesh digest.",
+		],
+	}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
