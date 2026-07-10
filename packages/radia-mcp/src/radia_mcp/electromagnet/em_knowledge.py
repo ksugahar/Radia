@@ -211,7 +211,8 @@ upper = (CoilBuilder(current=NI)
     .add_straight(50*mm)
     .add_arc(radius=22.5*mm, arc_angle=90))
 
-# Lower coil (mirror across XZ plane, current reversed)
+# Lower coil: true geometric mirror across the XZ plane (same current;
+# the mirrored circulation reverses as a pseudovector, m -> -M @ m)
 lower = upper.mirror('xz')
 
 # Radia field source
