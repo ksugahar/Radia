@@ -2077,6 +2077,38 @@ SOLVE LOOPS: `RadHACApKChargeGram::SolveLinearMaterial` / `SolveNonlinearPicard`
 `TaskManager` in the same sweep -- HACApK has zero OpenMP; its parallelism IS
 TaskManager via `hacapk_parallel_for` = `ngcore::ParallelFor`.)
 
+### In-Job Code Must Not Nest CreateJob; Evaluation Must Not Mutate Shared State (2026-07-11)
+
+**POLICY**: the self-wrap pattern above is ONLY valid when no TaskManager job
+is running.  `ngcore::TaskManager::CreateJob` keeps STATIC job state, so a
+`ParallelFor` issued from INSIDE a running job (e.g. a CoefficientFunction's
+`Evaluate` called by NGSolve assembly workers) corrupts the running job --
+hard process death (0xC0000374 / 0xC0000005), no Python traceback.  Three
+rules, learned from the 2026-07-10/11 RadiaField heap-corruption incident:
+
+1. **C++ code that can execute inside a TaskManager job must use SERIAL
+   loops** and let the outer job own the parallelism.  The RadiaField CF
+   evaluates via `RadFldBatchSerial` / `RadFldPhiSerial` / `RadFldASerial`
+   (`radTApplication::Compute*Batch(..., parallel=false)`); the parallel
+   self-wrapped entries (`RadFldBatch` etc.) are for callers with no active
+   job (the Python `rad.Fld` path).  A new batch C API needs both variants.
+2. **CoefficientFunction evaluation must be GIL-free**: no
+   `py::gil_scoped_acquire` / Python round-trip inside `Evaluate` --
+   assembly workers + GIL save/restore corrupt the interpreter.  Call the
+   C API directly (single-point `RadFld` is also banned there: it
+   round-trips results through the non-thread-safe global `ioBuffer`).
+3. **Field evaluation must never mutate shared element state**: the
+   mutating `radTGroup::B_genComp` / `radTPolyhedron::B_genComp` overrides
+   were removed (groups/polyhedra inherit the transform-via-point
+   `radTg3d::B_genComp`; the polyhedron override had also silently IGNORED
+   TrfOrnt on hex/tet/wedge elements), and the `radTHandle` refcount is now
+   `std::atomic<int>` (concurrent handle copies during parallel evaluation
+   lost increments and deleted live objects mid-assembly).
+
+Regression lock: `tests/test_radiafield_transformed_container.py` (crash
+paths exercised in subprocesses; values locked vs the rotated-reference
+solution and pointwise `rad.Fld`).
+
 ### PyPI Release Workflow (Automated via GitHub Actions)
 
 **POLICY**: PyPI publishing is automatic. Push a version tag (`v*`) and CI/CD handles the rest.

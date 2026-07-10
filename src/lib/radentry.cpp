@@ -122,8 +122,11 @@ double GetHantilaRelax();
 // SetIMASymmetry, BuildIMAMatrix REMOVED (2026-01-31) - Use BuildMatrix(obj, image) instead
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int );
+void ComputeFieldBatchSerial( double*, double*, int, double*, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
+void ComputeScalarPotentialBatchSerial( double*, int, double*, int );
 void ComputeVectorPotentialBatch( double*, int, double*, int );
+void ComputeVectorPotentialBatchSerial( double*, int, double*, int );
 
 void FieldArbitraryPointsArray( long, const char*, double**, long );
 void Field( int, char*, double,double,double, double,double,double, int, char*, double );
@@ -1532,6 +1535,15 @@ int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
 
 //-------------------------------------------------------------------------
 
+int CALL RadFldBatchSerial(double* B_out, double* H_out, int n_points,
+                           double* points, int container_handle)
+{
+	ComputeFieldBatchSerial(B_out, H_out, n_points, points, container_handle);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
 int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_handle)
 {
 	ComputeScalarPotentialBatch(phi_out, n_points, points, container_handle);
@@ -1540,9 +1552,25 @@ int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_
 
 //-------------------------------------------------------------------------
 
+int CALL RadFldPhiSerial(double* phi_out, int n_points, double* points, int container_handle)
+{
+	ComputeScalarPotentialBatchSerial(phi_out, n_points, points, container_handle);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
 int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle)
 {
 	ComputeVectorPotentialBatch(A_out, n_points, points, container_handle);
+	return ioBuffer.OutErrorStatus();
+}
+
+//-------------------------------------------------------------------------
+
+int CALL RadFldASerial(double* A_out, int n_points, double* points, int container_handle)
+{
+	ComputeVectorPotentialBatchSerial(A_out, n_points, points, container_handle);
 	return ioBuffer.OutErrorStatus();
 }
 

@@ -171,8 +171,11 @@ int SetIMASymmetry(int, const char*);
 int BuildIMAMatrix(int);
 void ClassifyPoints( int*, int*, int, double*, int, double );
 void ComputeFieldBatch( double*, double*, int, double*, int );
+void ComputeFieldBatchSerial( double*, double*, int, double*, int );
 void ComputeScalarPotentialBatch( double*, int, double*, int );
+void ComputeScalarPotentialBatchSerial( double*, int, double*, int );
 void ComputeVectorPotentialBatch( double*, int, double*, int );
+void ComputeVectorPotentialBatchSerial( double*, int, double*, int );
 void ShimSignature( int, char*, double,double,double, double,double,double, double,double,double, int, double,double,double );
 
 void TolForConvergence( double, double, double );
@@ -1965,6 +1968,14 @@ void ComputeFieldBatch(double* B_out, double* H_out, int n_points,
 
 //-------------------------------------------------------------------------
 
+void ComputeFieldBatchSerial(double* B_out, double* H_out, int n_points,
+                             double* points, int container_handle)
+{
+	rad.ComputeFieldBatch(B_out, H_out, n_points, points, container_handle, false);
+}
+
+//-------------------------------------------------------------------------
+
 void ComputeScalarPotentialBatch(double* phi_out, int n_points,
                                  double* points, int container_handle)
 {
@@ -1973,10 +1984,26 @@ void ComputeScalarPotentialBatch(double* phi_out, int n_points,
 
 //-------------------------------------------------------------------------
 
+void ComputeScalarPotentialBatchSerial(double* phi_out, int n_points,
+                                       double* points, int container_handle)
+{
+	rad.ComputeScalarPotentialBatch(phi_out, n_points, points, container_handle, false);
+}
+
+//-------------------------------------------------------------------------
+
 void ComputeVectorPotentialBatch(double* A_out, int n_points,
                                  double* points, int container_handle)
 {
 	rad.ComputeVectorPotentialBatch(A_out, n_points, points, container_handle);
+}
+
+//-------------------------------------------------------------------------
+
+void ComputeVectorPotentialBatchSerial(double* A_out, int n_points,
+                                       double* points, int container_handle)
+{
+	rad.ComputeVectorPotentialBatch(A_out, n_points, points, container_handle, false);
 }
 
 //-------------------------------------------------------------------------

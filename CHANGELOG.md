@@ -5,6 +5,31 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- **Fix native heap corruption (0xC0000374/0xC0000005) in batch field
+  evaluation on TrfOrnt-transformed containers and in RadiaField assembly** —
+  three stacked thread-unsafety bugs fixed:
+  - `radTGroup::B_genComp` no longer propagates the group transform by
+    mutating every child's transform list (raced under the batch ParallelFor);
+    groups now inherit the non-mutating `radTg3d::B_genComp` (NestedFor_B),
+    which applies the same transforms via the observation point/field.
+  - `RadiaField` CoefficientFunction evaluation is now GIL-free and calls the
+    new serial C entries `RadFldBatchSerial` / `RadFldPhiSerial` /
+    `RadFldASerial` (radentry): NGSolve assembly invokes the CF from inside a
+    running TaskManager job, where both the Python round-trip and a nested
+    `ParallelFor` corrupt the process.  Evaluation errors now raise instead of
+    silently zero-filling.
+  - `radTHandle` reference count is now `std::atomic<int>` — concurrent handle
+    copies (every batch call copies the container handle) lost increments and
+    deleted live objects mid-evaluation.
+  - **Behavior fix**: `radTPolyhedron::B_genComp` previously IGNORED the
+    element's own transform list, so `TrfOrnt` on an `ObjHexahedron` /
+    tet / wedge silently evaluated the untransformed field; classic
+    moved-source semantics are restored (and now value-locked in
+    `tests/test_transformations.py`).
+  - Regression suite: `tests/test_radiafield_transformed_container.py`
+    (crash paths exercised in subprocesses; values locked against the
+    rotated-reference solution and pointwise `rad.Fld`).
+
 - **API surface reduction (Phase 0)** — per the "Reduce Proprietary API Surface"
   stock-take (`docs/api_inventory/API_SURFACE_2026-06-26.md`), removed unused
   proprietary APIs:

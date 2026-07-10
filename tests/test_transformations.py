@@ -7,8 +7,14 @@ Tests transformation creation and application:
 - Combined transformations (TrfCmbL)
 - Transformation application (TrfOrnt)
 
-Note: TrfOrnt adds a symmetry copy of the object at the transformed position.
-It does NOT physically move the object. Tests are designed accordingly.
+TrfOrnt(obj, tr) MOVES the field source: subsequent field evaluations see the
+object at the transformed position (classic Radia semantics; the field of the
+moved object, not an extra copy).  Until 2026-07-10 polyhedron elements
+(ObjHexahedron etc., incl. rad.magnet_box) silently IGNORED their transform
+list, which is why older revisions of this file claimed TrfOrnt "adds a
+symmetry copy" -- that description matched the bug, not the intended
+behavior.  See tests/test_radiafield_transformed_container.py for the full
+regression suite of that fix.
 """
 
 import sys
@@ -32,43 +38,43 @@ class TestTranslation:
 		assert tr > 0, "Translation should have valid index"
 
 	def test_apply_translation(self):
-		"""Test translation by comparing magnets at different positions.
-
-		TrfOrnt adds a symmetry copy, so instead we verify translation
-		semantics by creating two separate magnets at original and
-		translated positions and confirming the field at the same
-		relative observation point is identical.
-		"""
+		"""TrfOrnt translation moves the source: the field at the translated
+		observation point equals the field of a magnet built at the
+		translated position."""
 		rad.UtiDelAll()
 
-		# Magnet at origin
-		mag1 = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
-		H1 = rad.Fld(mag1, 'h', [0.05, 0, 0])
+		# Magnet built directly at the translated position (reference)
+		mag_ref = rad.magnet_box([0, 0, 0.05], [0.01, 0.01, 0.01], [0, 0, 954930])
+		H_ref = rad.Fld(mag_ref, 'h', [0.05, 0, 0.05])
 
 		rad.UtiDelAll()
 
-		# Magnet at translated position (same relative geometry)
-		mag2 = rad.magnet_box([0, 0, 0.05], [0.01, 0.01, 0.01], [0, 0, 954930])
-		H2 = rad.Fld(mag2, 'h', [0.05, 0, 0.05])
+		# Magnet at origin, then TrfOrnt-translated by the same offset
+		mag = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
+		rad.TrfOrnt(mag, rad.TrfTrsl([0, 0, 0.05]))
+		H_moved = rad.Fld(mag, 'h', [0.05, 0, 0.05])
 
-		# Same relative geometry -> same field
-		assert np.allclose(H1, H2, rtol=1e-10)
+		assert np.linalg.norm(np.subtract(H_moved, H_ref)) <= \
+			1e-10 * np.linalg.norm(H_ref)
 
 	def test_multiple_translations(self):
-		"""Test applying multiple translations produces valid field"""
+		"""Two successive TrfOrnt translations compose (total offset)."""
+		rad.UtiDelAll()
+
+		mag_ref = rad.magnet_box([0.010, 0.020, 0], [0.01, 0.01, 0.01],
+		                         [0, 0, 954930])
+		H_ref = rad.Fld(mag_ref, 'h', [0.010, 0.020, 0.030])
+
 		rad.UtiDelAll()
 
 		mag = rad.magnet_box([0, 0, 0], [0.01, 0.01, 0.01], [0, 0, 954930])
-
-		# Translate in x (adds symmetry copy)
 		rad.TrfOrnt(mag, rad.TrfTrsl([0.010, 0, 0]))
-
-		# Translate in y (adds another symmetry copy)
 		rad.TrfOrnt(mag, rad.TrfTrsl([0, 0.020, 0]))
 
-		# Verify field computation succeeds and returns 3 components
 		H = rad.Fld(mag, 'h', [0.010, 0.020, 0.030])
 		assert len(H) == 3
+		assert np.linalg.norm(np.subtract(H, H_ref)) <= \
+			1e-10 * np.linalg.norm(H_ref)
 
 
 class TestRotation:
@@ -83,42 +89,43 @@ class TestRotation:
 		assert tr > 0
 
 	def test_apply_rotation_90deg(self):
-		"""Test 90-degree rotation by comparing rotated geometry.
-
-		TrfOrnt adds a symmetry copy, so instead we verify rotation
-		semantics by creating two separate magnets at original and
-		rotated positions and confirming the field magnitudes match.
-		"""
+		"""TrfOrnt 90-degree rotation moves the source: the rotated model
+		reproduces the field of a magnet built directly at the rotated
+		position/orientation."""
 		rad.UtiDelAll()
 
-		# Magnet along x-axis with x-magnetization
-		mag1 = rad.magnet_box([0.01, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
-		H_x = rad.Fld(mag1, 'h', [0.015, 0, 0])
-		H_x_mag = np.linalg.norm(H_x)
+		# Reference: magnet along y-axis with y-magnetization
+		mag_ref = rad.magnet_box([0, 0.01, 0], [0.005, 0.005, 0.005], [0, 1, 0])
+		H_ref = rad.Fld(mag_ref, 'h', [0, 0.015, 0])
 
 		rad.UtiDelAll()
 
-		# Same magnet rotated 90deg around z: along y-axis with y-magnetization
-		mag2 = rad.magnet_box([0, 0.01, 0], [0.005, 0.005, 0.005], [0, 1, 0])
-		H_y = rad.Fld(mag2, 'h', [0, 0.015, 0])
-		H_y_mag = np.linalg.norm(H_y)
+		# Magnet along x-axis with x-magnetization, rotated +90deg about z
+		mag = rad.magnet_box([0.01, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
+		rad.TrfOrnt(mag, rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi / 2))
+		H_rot = rad.Fld(mag, 'h', [0, 0.015, 0])
 
-		# Magnitudes should match (rotational symmetry)
-		assert np.isclose(H_x_mag, H_y_mag, rtol=1e-6)
+		assert np.linalg.norm(np.subtract(H_rot, H_ref)) <= \
+			1e-9 * np.linalg.norm(H_ref)
 
 	def test_rotation_180deg(self):
-		"""Test 180-degree rotation produces valid field"""
+		"""TrfOrnt 180-degree rotation about z moves the magnet to -x."""
+		rad.UtiDelAll()
+
+		mag_ref = rad.magnet_box([-0.010, 0, 0], [0.005, 0.005, 0.005],
+		                         [-1, 0, 0])
+		H_ref = rad.Fld(mag_ref, 'h', [-0.015, 0, 0])
+
 		rad.UtiDelAll()
 
 		mag = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
-
-		# Rotate 180 degrees around z-axis (adds symmetry copy)
 		tr = rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi)
 		rad.TrfOrnt(mag, tr)
 
-		# Verify field computation at symmetry copy position succeeds
 		H = rad.Fld(mag, 'h', [-0.015, 0, 0])
 		assert len(H) == 3
+		assert np.linalg.norm(np.subtract(H, H_ref)) <= \
+			1e-9 * np.linalg.norm(H_ref)
 
 	def test_rotation_around_arbitrary_point(self):
 		"""Test rotation around non-origin point"""
@@ -139,12 +146,8 @@ class TestCombinedTransformations:
 	"""Test combining multiple transformations"""
 
 	def test_combine_two_translations(self):
-		"""Test TrfCmbL with two translations.
-
-		TrfOrnt adds a symmetry copy, so we only verify that
-		combined transform creation succeeds and field computation
-		does not crash.
-		"""
+		"""Test TrfCmbL with two translations: creation succeeds and the
+		combined transform can be applied and evaluated."""
 		rad.UtiDelAll()
 
 		# Create two translations (in meters)
@@ -155,7 +158,7 @@ class TestCombinedTransformations:
 		tr_combined = rad.TrfCmbL(tr1, tr2)
 		assert tr_combined > 0
 
-		# Apply to magnet (adds symmetry copy)
+		# Apply to magnet (moves the source by the combined offset)
 		mag = rad.magnet_box([0, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
 		rad.TrfOrnt(mag, tr_combined)
 
@@ -164,12 +167,8 @@ class TestCombinedTransformations:
 		assert len(H) == 3
 
 	def test_combine_rotation_and_translation(self):
-		"""Test combining rotation and translation.
-
-		TrfOrnt adds a symmetry copy, so we only verify that
-		the combined transform can be created and applied without
-		errors.
-		"""
+		"""Test combining rotation and translation: the combined transform
+		can be created, applied, and evaluated."""
 		rad.UtiDelAll()
 
 		# First rotate, then translate (in meters)
@@ -179,7 +178,7 @@ class TestCombinedTransformations:
 		# Combine
 		tr_combined = rad.TrfCmbL(tr_rot, tr_trsl)
 
-		# Apply to magnet (adds symmetry copy)
+		# Apply to magnet (moves the source)
 		mag = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 		rad.TrfOrnt(mag, tr_combined)
 
@@ -199,45 +198,57 @@ class TestCombinedTransformations:
 
 
 class TestTransformationOnGroups:
-	"""Test transformations applied to groups.
+	"""Test transformations applied to groups (containers).
 
-	TrfOrnt on groups adds symmetry copies of all group members.
-	Tests verify that field computation succeeds (no crash) after
-	applying transformations to containers.
+	TrfOrnt on a group moves ALL members together; field evaluation applies
+	the group transform to the observation point / field without mutating
+	any member (thread-safe for batch evaluation -- see
+	tests/test_radiafield_transformed_container.py).
 	"""
 
 	def test_transform_container(self):
-		"""Test applying translation to entire container"""
+		"""Translating a container moves the fields of all its members."""
 		rad.UtiDelAll()
 
-		# Create group of magnets (in meters)
+		mag1r = rad.magnet_box([0, 0.050, 0], [0.005, 0.005, 0.005],
+		                       [0, 0, 954930])
+		mag2r = rad.magnet_box([0.010, 0.050, 0], [0.005, 0.005, 0.005],
+		                       [0, 0, 954930])
+		group_ref = rad.ObjCnt([mag1r, mag2r])
+		H_ref = rad.Fld(group_ref, 'h', [0.005, 0.050, 0.020])
+
+		rad.UtiDelAll()
+
 		mag1 = rad.magnet_box([0, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
 		mag2 = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [0, 0, 954930])
 		group = rad.ObjCnt([mag1, mag2])
+		rad.TrfOrnt(group, rad.TrfTrsl([0, 0.050, 0]))
 
-		# Translate entire group (adds symmetry copies)
-		tr = rad.TrfTrsl([0, 0.050, 0])
-		rad.TrfOrnt(group, tr)
-
-		# Verify field computation succeeds
 		H = rad.Fld(group, 'h', [0.005, 0.050, 0.020])
 		assert len(H) == 3
+		assert np.linalg.norm(np.subtract(H, H_ref)) <= \
+			1e-10 * np.linalg.norm(H_ref)
 
 	def test_rotate_container(self):
-		"""Test rotating entire container"""
+		"""Rotating a container moves the fields of all its members."""
+		rad.UtiDelAll()
+
+		mag1r = rad.magnet_box([0, 0.010, 0], [0.005, 0.005, 0.005], [0, 1, 0])
+		mag2r = rad.magnet_box([0, 0.020, 0], [0.005, 0.005, 0.005], [0, 1, 0])
+		group_ref = rad.ObjCnt([mag1r, mag2r])
+		H_ref = rad.Fld(group_ref, 'h', [0, 0.015, 0])
+
 		rad.UtiDelAll()
 
 		mag1 = rad.magnet_box([0.010, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 		mag2 = rad.magnet_box([0.020, 0, 0], [0.005, 0.005, 0.005], [1, 0, 0])
 		group = rad.ObjCnt([mag1, mag2])
+		rad.TrfOrnt(group, rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi/2))
 
-		# Rotate 90 degrees (adds symmetry copies)
-		tr = rad.TrfRot([0, 0, 0], [0, 0, 1], np.pi/2)
-		rad.TrfOrnt(group, tr)
-
-		# Verify field computation succeeds
 		H = rad.Fld(group, 'h', [0, 0.015, 0])
 		assert len(H) == 3
+		assert np.linalg.norm(np.subtract(H, H_ref)) <= \
+			1e-9 * np.linalg.norm(H_ref)
 
 
 # TestTransformationSymmetry REMOVED (2026-01-31)

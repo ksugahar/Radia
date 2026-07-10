@@ -1190,6 +1190,16 @@ EXP int CALL RadClassifyPoints(int* classification, int* nearest_elem, int n_poi
 EXP int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
                          double* points, int container_handle);
 
+/** Same as RadFldBatch but evaluates the point loop serially in the calling
+thread (no internal TaskManager job).  REQUIRED when the caller already runs
+inside a TaskManager job (e.g. NGSolve assembly workers evaluating the
+RadiaField CoefficientFunction): ngcore CreateJob keeps static job state, so
+nesting a parallel batch inside a running job corrupts it.
+@return integer error code (0 : no error, >0 : error number, <0 : warning number)
+*/
+EXP int CALL RadFldBatchSerial(double* B_out, double* H_out, int n_points,
+                               double* points, int container_handle);
+
 /** Computes magnetic scalar potential at multiple points.
 @param phi_out [out] scalar potential values (n_points)
 @param n_points [in] number of evaluation points
@@ -1199,6 +1209,9 @@ EXP int CALL RadFldBatch(double* B_out, double* H_out, int n_points,
 */
 EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int container_handle);
 
+/** Serial-loop variant of RadFldPhi (see RadFldBatchSerial). */
+EXP int CALL RadFldPhiSerial(double* phi_out, int n_points, double* points, int container_handle);
+
 /** Computes magnetic vector potential at multiple points.
 @param A_out [out] vector potential values (n_points * 3)
 @param n_points [in] number of evaluation points
@@ -1207,6 +1220,9 @@ EXP int CALL RadFldPhi(double* phi_out, int n_points, double* points, int contai
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 */
 EXP int CALL RadFldA(double* A_out, int n_points, double* points, int container_handle);
+
+/** Serial-loop variant of RadFldA (see RadFldBatchSerial). */
+EXP int CALL RadFldASerial(double* A_out, int n_points, double* points, int container_handle);
 
 
 // Replaced by Python-based PEEC topology solver (peec_topology.py)

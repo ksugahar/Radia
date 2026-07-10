@@ -32,6 +32,7 @@
 
 #include <vector>
 #include <array>
+#include <atomic>
 #include <complex>
 #include <cmath>
 #include <string>
@@ -1968,8 +1969,8 @@ public:
 	mutable std::unordered_map<uint64_t, std::array<double,3>> point_cache_;
 	mutable bool use_cache_;
 	double cache_tolerance_;
-	mutable size_t cache_hits_;
-	mutable size_t cache_misses_;
+	mutable std::atomic<size_t> cache_hits_;
+	mutable std::atomic<size_t> cache_misses_;
 
 	// Cached Radia module
 	mutable py::module_ rad_module_;
@@ -2074,6 +2075,56 @@ private:
 		}
 	}
 
+	static void CheckRadErr(int err) {
+		if (err > 0)
+			throw std::runtime_error(
+				"RadiaField: Radia error " + std::to_string(err) +
+				" during field evaluation");
+	}
+
+	// GIL-free, job-safe field evaluation via the SERIAL direct C API.
+	//
+	// NGSolve assembly calls CoefficientFunction::Evaluate concurrently from
+	// TaskManager worker threads, i.e. from INSIDE a running ngcore job.  Two
+	// things are therefore forbidden here:
+	//  1. Any Python round-trip (py::gil_scoped_acquire + rad.Fld): GIL
+	//     save/restore on worker threads interleaves across the job and
+	//     corrupts the interpreter state.
+	//  2. The PARALLEL batch entries (RadFldBatch etc.): their internal
+	//     ParallelFor issues a nested CreateJob, and ngcore job state is
+	//     static -- nesting corrupts the running assembly job
+	//     (0xC0000374 / 0xC0000005 heap corruption, 2026-07-10 incident).
+	// The RadFld*Serial C entries evaluate the (small, per-integration-rule)
+	// point loop in the calling thread; parallelism stays where it belongs,
+	// in NGSolve's element loop.  Single-point RadFld is also banned: it
+	// round-trips results through the non-thread-safe global ioBuffer.
+	//
+	// pts_local: npts*3 coordinates (already CF-local frame).
+	// vals: filled with npts values for "phi", npts*3 otherwise.
+	void ComputeLocalField(std::vector<double>& pts_local, size_t npts,
+	                       std::vector<double>& vals) const
+	{
+		int n = static_cast<int>(npts);
+		if (field_type == "phi") {
+			vals.assign(npts, 0.0);
+			CheckRadErr(RadFldPhiSerial(vals.data(), n, pts_local.data(), radia_obj));
+		} else if (field_type == "a") {
+			vals.assign(npts * 3, 0.0);
+			CheckRadErr(RadFldASerial(vals.data(), n, pts_local.data(), radia_obj));
+		} else {
+			std::vector<double> B(npts * 3, 0.0), H(npts * 3, 0.0);
+			CheckRadErr(RadFldBatchSerial(B.data(), H.data(), n, pts_local.data(), radia_obj));
+			if (field_type == "b") vals = std::move(B);
+			else if (field_type == "h") vals = std::move(H);
+			else {
+				// "m": M = B/mu0 - H (exact identity; B and H come from one batch call)
+				const double InvMu0 = 1.0 / (4. * 3.1415926535897932 * 1.e-7);
+				vals.resize(npts * 3);
+				for (size_t k = 0; k < npts * 3; k++) vals[k] = B[k] * InvMu0 - H[k];
+			}
+		}
+	}
+
 public:
 	void PrepareCache(py::list points_list) {
 		py::gil_scoped_acquire acquire;
@@ -2135,12 +2186,13 @@ public:
 
 	py::dict GetCacheStats() const {
 		py::dict stats;
+		size_t hits = cache_hits_.load(), misses = cache_misses_.load();
 		stats["enabled"] = use_cache_;
 		stats["size"] = point_cache_.size();
-		stats["hits"] = cache_hits_;
-		stats["misses"] = cache_misses_;
-		double total = cache_hits_ + cache_misses_;
-		stats["hit_rate"] = (total > 0) ? (cache_hits_ / total) : 0.0;
+		stats["hits"] = hits;
+		stats["misses"] = misses;
+		double total = static_cast<double>(hits + misses);
+		stats["hit_rate"] = (total > 0) ? (hits / total) : 0.0;
 		return stats;
 	}
 
@@ -2235,7 +2287,9 @@ public:
 
 	virtual ~RadiaFieldCF() {}
 
-	// Scalar evaluation for 'phi'
+	// Scalar evaluation for 'phi'.
+	// GIL-free: direct C API only (see ComputeLocalField) -- NGSolve may call
+	// this from TaskManager worker threads.
 	virtual double Evaluate(const BaseMappedIntegrationPoint& mip) const override
 	{
 		if (field_type != "phi") return 0.0;
@@ -2243,26 +2297,15 @@ public:
 		auto pnt = mip.GetPoint();
 		int dim = pnt.Size();
 		double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-		double p_local[3];
-		transform_to_local(p_global, p_local);
+		std::vector<double> pts(3);
+		transform_to_local(p_global, pts.data());
 
-		double phi_value = 0.0;
-		{
-			py::gil_scoped_acquire acquire;
-			try {
-				py::list coords;
-				coords.append(p_local[0]); coords.append(p_local[1]); coords.append(p_local[2]);
-				// Use 'p' (not 'phi') to get scalar-only return (faster)
-				py::object result = rad_module_.attr("Fld")(radia_obj, "p", coords);
-				phi_value = result.cast<double>();
-			} catch (std::exception&) {
-				return 0.0;
-			}
-		}
-		return phi_value;
+		std::vector<double> vals;
+		ComputeLocalField(pts, 1, vals);
+		return vals[0];
 	}
 
-	// Single-point vector evaluation
+	// Single-point vector evaluation (GIL-free, direct C API)
 	virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
 	                      FlatVector<> result) const override
 	{
@@ -2289,105 +2332,71 @@ public:
 			cache_misses_++;
 		}
 
-		double p_local[3];
-		transform_to_local(p_global, p_local);
+		std::vector<double> pts(3);
+		transform_to_local(p_global, pts.data());
 
-		double f_local[3];
-		{
-			py::gil_scoped_acquire acquire;
-			try {
-				py::list coords;
-				coords.append(p_local[0]); coords.append(p_local[1]); coords.append(p_local[2]);
-				py::object field_result = rad_module_.attr("Fld")(radia_obj, field_type, coords);
-				f_local[0] = field_result[py::int_(0)].cast<double>();
-				f_local[1] = field_result[py::int_(1)].cast<double>();
-				f_local[2] = field_result[py::int_(2)].cast<double>();
-			} catch (std::exception&) {
-				result(0) = 0.0; result(1) = 0.0; result(2) = 0.0;
-				return;
-			}
-		}
+		std::vector<double> vals;
+		ComputeLocalField(pts, 1, vals);
 
 		double f_global[3];
-		transform_to_global(f_local, f_global);
+		transform_to_global(vals.data(), f_global);
 		result(0) = f_global[0]; result(1) = f_global[1]; result(2) = f_global[2];
 	}
 
-	// Batch evaluation (called by NGSolve for integration rules)
+	// Batch evaluation (called by NGSolve for integration rules).
+	// GIL-free: NGSolve assembly invokes this concurrently from TaskManager
+	// worker threads; any Python/GIL use here corrupts the interpreter (see
+	// ComputeLocalField).  Errors propagate as C++ exceptions (fail fast) --
+	// no silent zero-fill.
 	virtual void Evaluate(const BaseMappedIntegrationRule& mir,
 	                      BareSliceMatrix<> result) const override
 	{
 		size_t npts = mir.Size();
 
-		py::gil_scoped_acquire acquire;
-
-		try {
-			// Try cache first
-			if (use_cache_) {
-				bool all_cached = true;
-				for (size_t i = 0; i < npts; i++) {
-					auto pnt = mir[i].GetPoint();
-					int dim = pnt.Size();
-					double p[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-					uint64_t hash = hash_point(p[0], p[1], p[2]);
-					auto it = point_cache_.find(hash);
-					if (it != point_cache_.end()) {
-						cache_hits_++;
-						result(i,0) = it->second[0];
-						result(i,1) = it->second[1];
-						result(i,2) = it->second[2];
-					} else {
-						cache_misses_++;
-						all_cached = false;
-						break;
-					}
-				}
-				if (all_cached) return;
-			}
-
-			// Build numpy array of local coordinates
-			py::array_t<double> pts_arr({(py::ssize_t)npts, (py::ssize_t)3});
-			auto pts_buf = pts_arr.mutable_unchecked<2>();
-
+		// Try cache first
+		if (use_cache_) {
+			bool all_cached = true;
 			for (size_t i = 0; i < npts; i++) {
 				auto pnt = mir[i].GetPoint();
 				int dim = pnt.Size();
-				double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
-				double p_local[3];
-				transform_to_local(p_global, p_local);
-				pts_buf(i, 0) = p_local[0];
-				pts_buf(i, 1) = p_local[1];
-				pts_buf(i, 2) = p_local[2];
-			}
-
-			// Batch compute via unified Fld(obj, field_type, points_array)
-			py::object fld_result = rad_module_.attr("Fld")(radia_obj, field_type, pts_arr);
-
-			if (field_type == "phi") {
-				// Scalar result: shape (N,)
-				py::array_t<double> phi_arr = fld_result.cast<py::array_t<double>>();
-				auto phi = phi_arr.unchecked<1>();
-				for (size_t i = 0; i < npts; i++) {
-					result(i, 0) = phi(i);
-				}
-			} else {
-				// Vector result: shape (N, 3)
-				py::array_t<double> field_arr = fld_result.cast<py::array_t<double>>();
-				auto fld = field_arr.unchecked<2>();
-				for (size_t i = 0; i < npts; i++) {
-					double f_local[3] = {fld(i, 0), fld(i, 1), fld(i, 2)};
-					double f_global[3];
-					transform_to_global(f_local, f_global);
-					result(i, 0) = f_global[0];
-					result(i, 1) = f_global[1];
-					result(i, 2) = f_global[2];
+				double p[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+				uint64_t hash = hash_point(p[0], p[1], p[2]);
+				auto it = point_cache_.find(hash);
+				if (it != point_cache_.end()) {
+					cache_hits_++;
+					result(i,0) = it->second[0];
+					result(i,1) = it->second[1];
+					result(i,2) = it->second[2];
+				} else {
+					cache_misses_++;
+					all_cached = false;
+					break;
 				}
 			}
-		} catch (std::exception&) {
-			size_t dim = (field_type == "phi") ? 1 : 3;
+			if (all_cached) return;
+		}
+
+		// Local-frame coordinates
+		std::vector<double> pts(npts * 3);
+		for (size_t i = 0; i < npts; i++) {
+			auto pnt = mir[i].GetPoint();
+			int dim = pnt.Size();
+			double p_global[3] = {pnt[0], (dim>=2)?pnt[1]:0.0, (dim>=3)?pnt[2]:0.0};
+			transform_to_local(p_global, pts.data() + i * 3);
+		}
+
+		std::vector<double> vals;
+		ComputeLocalField(pts, npts, vals);
+
+		if (field_type == "phi") {
+			for (size_t i = 0; i < npts; i++) result(i, 0) = vals[i];
+		} else {
 			for (size_t i = 0; i < npts; i++) {
-				for (size_t j = 0; j < dim; j++)
-					result(i, j) = 0.0;
+				double f_global[3];
+				transform_to_global(vals.data() + i * 3, f_global);
+				result(i, 0) = f_global[0];
+				result(i, 1) = f_global[1];
+				result(i, 2) = f_global[2];
 			}
 		}
 	}
