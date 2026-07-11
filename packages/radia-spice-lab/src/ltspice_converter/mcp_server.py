@@ -26,6 +26,7 @@ from .patentability import patentability_search_plan as _patentability_search_pl
 from .filter_gates import sallen_key_filter_family_gate as _sallen_key_filter_family_gate
 from .hysteresis_gate import hysteretic_inductor_cycle_gate as _hysteretic_inductor_cycle_gate
 from .rectifier_gate import half_wave_rectifier_gate as _half_wave_rectifier_gate
+from .voltage_multiplier_gate import cockcroft_walton_stage_gate as _cockcroft_walton_stage_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
@@ -35,6 +36,43 @@ def half_wave_rectifier_gate(vin_peak_v: float, frequency_hz: float, capacitance
     """Gate capacitor-input half-wave rectifier DC, ripple, and current balance."""
     try: return _half_wave_rectifier_gate(vin_peak_v,frequency_hz,capacitance_f,load_ohm,vout_avg_v,vout_pp_v,diode_avg_a)
     except ValueError as exc: return {"policy":"half_wave_rectifier_gate_v1","status":"invalid_input","error":str(exc)}
+
+
+@mcp.tool()
+def cockcroft_walton_stage_gate(
+    vin_peak_v: float,
+    stage1_avg_v: float,
+    stage2_avg_v: float,
+    stage2_previous_avg_v: float,
+    stage1_ripple_vpp: float,
+    stage2_ripple_vpp: float,
+    load_ohm: float,
+    load_avg_a: float,
+    source_power_delivered_w: float,
+    load_power_w: float,
+    max_stage_law_relative_error: float = 0.05,
+    max_settling_relative_drift: float = 0.01,
+    max_ripple_fraction: float = 0.05,
+) -> dict:
+    """Gate a loaded two-stage voltage multiplier from late-window measures."""
+    try:
+        return _cockcroft_walton_stage_gate(
+            vin_peak_v,
+            stage1_avg_v,
+            stage2_avg_v,
+            stage2_previous_avg_v,
+            stage1_ripple_vpp,
+            stage2_ripple_vpp,
+            load_ohm,
+            load_avg_a,
+            source_power_delivered_w,
+            load_power_w,
+            max_stage_law_relative_error,
+            max_settling_relative_drift,
+            max_ripple_fraction,
+        )
+    except ValueError as exc:
+        return {"policy": "cockcroft_walton_stage_gate_v1", "status": "invalid_input", "error": str(exc)}
 
 
 @mcp.tool()

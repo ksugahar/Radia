@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes fifteen tools:
+Exposes seventeen tools:
 
 | Tool | Purpose |
 |---|---|
@@ -291,6 +291,8 @@ Exposes fifteen tools:
 | `parse_stepped_measure_log(log_text)` | Pairs stepped `Measurement` rows with concrete `.step` assignments and rejects incomplete tables. |
 | `sallen_key_filter_family_gate(rows)` | Gates multi-Q low-pass sweeps against the ideal two-pole response. |
 | `hysteretic_inductor_cycle_gate(cycle_rows, expected_current_peak_a, expected_copper_energy_j, voltage_thd)` | Gates settled hysteresis cycles by terminal/copper/flux-loop energy, closure, repeatability, and harmonic evidence. |
+| `half_wave_rectifier_gate(...)` | Gates capacitor-input half-wave DC, ripple, and load/diode current balance. |
+| `cockcroft_walton_stage_gate(...)` | Gates loaded two-stage multiplier scaling, adjacent-window settling, ripple, load current, and real-power bounds. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
