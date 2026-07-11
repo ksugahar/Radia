@@ -68,6 +68,7 @@ from .motion_table_gate import motion_table_coordinate_gate as build_motion_tabl
 from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
 from .variable_magnet_gate import variable_magnet_material_parameter_gate as build_variable_magnet_material_parameter_gate
 from .permanent_magnet_force_pair_gate import permanent_magnet_force_pair_gate as build_permanent_magnet_force_pair_gate
+from .demagnetization_history_gate import permanent_magnet_demagnetization_history_gate as build_permanent_magnet_demagnetization_history_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -82,6 +83,28 @@ mcp = FastMCP("mcp-server-motor")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_permanent_magnet_demagnetization_history_gate(
+    summary_json: str,
+    state_tolerance: float = 1.0e-9,
+    minimum_damage_fraction: float = 1.0e-3,
+) -> str:
+    """Gate irreversible permanent-magnet state across stress and recovery steps."""
+
+    try:
+        result = build_permanent_magnet_demagnetization_history_gate(
+            summary_json,
+            state_tolerance,
+            minimum_damage_fraction,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "permanent_magnet_demagnetization_history_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_permanent_magnet_force_pair_gate(

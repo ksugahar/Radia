@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **632 tools** across 43 MCP servers.
+Total: **633 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **632 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 35 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 36 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
@@ -406,6 +406,7 @@ Module: `radia_mcp.motor.server`
 | `motor_motion_table_coordinate_gate` | Validate independent 3D translation and rotation motion tables. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_periodic_torque_sampling_gate` | Validate periodic torque sampling and FFT endpoint ownership. |
+| `motor_permanent_magnet_demagnetization_history_gate` | Gate irreversible permanent-magnet state across stress and recovery steps. |
 | `motor_permanent_magnet_force_pair_gate` | Gate attraction/repulsion reversal for a facing permanent-magnet pair. |
 | `motor_phase_flux_park_alignment_gate` | Gate a PM-only three-phase flux sweep in the rotating d/q frame. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
