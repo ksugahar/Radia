@@ -29,9 +29,16 @@ from .rectifier_gate import half_wave_rectifier_gate as _half_wave_rectifier_gat
 from .voltage_multiplier_gate import cockcroft_walton_stage_gate as _cockcroft_walton_stage_gate
 from .boost_gate import boost_converter_steady_state_gate as _boost_converter_steady_state_gate
 from .psrr_gate import transient_psrr_gate as _transient_psrr_gate
+from .bandwidth_gate import measure_bandwidth_crossing_gate as _measure_bandwidth_crossing_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+@mcp.tool()
+def measure_bandwidth_crossing_gate(summary: dict) -> dict:
+    """Replay a two-sided -3 dB bandwidth measure from sampled AC magnitude."""
+    try: return _measure_bandwidth_crossing_gate(summary)
+    except (KeyError, TypeError, ValueError) as exc: return {"policy":"measure_bandwidth_crossing_gate_v1","status":"invalid_input","error":str(exc)}
 
 @mcp.tool()
 def half_wave_rectifier_gate(vin_peak_v: float, frequency_hz: float, capacitance_f: float, load_ohm: float, vout_avg_v: float, vout_pp_v: float, diode_avg_a: float) -> dict:
