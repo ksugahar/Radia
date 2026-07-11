@@ -49,6 +49,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "compare_boundary_vector_area_rows",
            "compare_shape_measurement_rows", "shape_measurement_comparison_summary",
            "compare_shape_volume_rows", "shape_volume_crosscheck_summary",
+           "shape_perforated_prism_roundtrip_gate",
            "shape_volume_crosscheck_source_coverage_gate",
            "shape_volume_crosscheck_source_identity_gate",
            "shape_external_cad_volume_evidence_package_gate",
@@ -1325,6 +1326,64 @@ def shape_volume_crosscheck_summary(reference_rows, measured_sets, rtol=1.0e-5):
         "max_volume_rel_error": max(all_errors) if all_errors else 0.0,
         "sources": [item["source"] for item in sets],
         "comparison_sets": sets,
+    }
+
+
+def shape_perforated_prism_roundtrip_gate(
+    *,
+    reference_volume,
+    imported_volume,
+    hole_count,
+    hole_side_count,
+    imported_surface_count,
+    imported_body_count=1,
+    outer_side_count=4,
+    volume_rtol=1.0e-9,
+):
+    """Gate a perforated prism by volume and expected boundary topology."""
+
+    reference = float(reference_volume)
+    imported = float(imported_volume)
+    holes = int(hole_count)
+    hole_sides = int(hole_side_count)
+    imported_surfaces = int(imported_surface_count)
+    imported_bodies = int(imported_body_count)
+    outer_sides = int(outer_side_count)
+    tolerance = float(volume_rtol)
+    if reference <= 0.0 or imported < 0.0:
+        raise ValueError("reference_volume must be > 0 and imported_volume must be >= 0")
+    if holes < 0 or hole_sides < 3 or outer_sides < 3:
+        raise ValueError("hole_count must be >= 0 and polygon side counts must be >= 3")
+    if imported_surfaces < 0 or imported_bodies < 0:
+        raise ValueError("imported counts must be non-negative")
+    if tolerance < 0.0:
+        raise ValueError("volume_rtol must be >= 0")
+
+    expected_surfaces = 2 + outer_sides + holes * hole_sides
+    volume_relative_error = abs(imported - reference) / reference
+    checks = {
+        "volume_agrees": volume_relative_error <= tolerance,
+        "single_body_preserved": imported_bodies == 1,
+        "surface_topology_preserved": imported_surfaces == expected_surfaces,
+    }
+    return {
+        "policy": "build123d_perforated_prism_roundtrip_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "reference_volume": reference,
+        "imported_volume": imported,
+        "volume_relative_error": volume_relative_error,
+        "volume_rtol": tolerance,
+        "hole_count": holes,
+        "hole_side_count": hole_sides,
+        "outer_side_count": outer_sides,
+        "expected_surface_count": expected_surfaces,
+        "imported_surface_count": imported_surfaces,
+        "imported_body_count": imported_bodies,
+        "checks": checks,
+        "lesson": (
+            "Volume agreement is necessary but not sufficient for a perforated CAD "
+            "roundtrip; require the expected cap, outer-wall, and hole-wall faces."
+        ),
     }
 
 
