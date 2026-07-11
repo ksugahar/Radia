@@ -66,6 +66,7 @@ from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_
 from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
 from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
 from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
+from .variable_magnet_gate import variable_magnet_material_parameter_gate as build_variable_magnet_material_parameter_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -80,6 +81,28 @@ mcp = FastMCP("mcp-server-motor")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_variable_magnet_material_gate(
+    parameters: dict,
+    parameter_authority: str,
+    study_label_is_parameter_authority: bool = False,
+) -> str:
+    """Gate variable-PM material parameters and their authoritative source."""
+
+    try:
+        result = build_variable_magnet_material_parameter_gate(
+            parameters,
+            parameter_authority=parameter_authority,
+            study_label_is_parameter_authority=study_label_is_parameter_authority,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "variable_magnet_material_parameter_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_magnet_model_handoff_gate(
