@@ -115,6 +115,37 @@ def build123d_usage(topic: str = "overview") -> str:
 
 
 @mcp.tool()
+def build123d_motor_housing_thermal_reference(
+    inner_radius: float = 42.0,
+    outer_radius: float = 50.0,
+    length: float = 90.0,
+    fin_count: int = 8,
+    fin_height: float = 12.0,
+    fin_thickness: float = 3.0,
+) -> str:
+    """Return analytic volume/area/body-count data for a finned motor housing.
+
+    The result is a multi-body sleeve + radial-fin reference row that can feed
+    ``build123d_volume_crosscheck`` and a Cubit STEP sidecar. Dimensions use
+    millimetres; volume and area are returned in mm^3 and mm^2.
+    """
+    from .modeling import motor_housing_radial_fin_reference_row
+
+    return json.dumps(
+        motor_housing_radial_fin_reference_row(
+            inner_radius,
+            outer_radius,
+            length,
+            fin_count,
+            fin_height,
+            fin_thickness,
+        ),
+        indent=2,
+        sort_keys=True,
+    )
+
+
+@mcp.tool()
 def build123d_volume_crosscheck(
     reference_rows_json: str,
     measured_sets_json: str,

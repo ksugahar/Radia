@@ -30,6 +30,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           rcd_snubber_heat_spreader_reference_row,
                                           rcd_snubber_capacitance_sweep_rows,
                                           thermal_robin_cooling_plate_reference_row,
+                                          motor_housing_radial_fin_reference_row,
                                           v_type_ipm_rotor_coupon_reference_row,
                                           box_face_vector_area_rows,
                                           box_face_pressure_force_rows,
@@ -73,6 +74,33 @@ from radia_mcp.cubit.vol_inventory import (
     cubit_mixed_solver_route_manifest_gate,
 )
 from build123d import Box, Compound, Pos
+from radia_mcp.build123d.server import build123d_motor_housing_thermal_reference
+
+
+def test_motor_housing_radial_fin_reference_closes_live_cubit_roundtrip():
+    row = motor_housing_radial_fin_reference_row(42.0, 50.0, 90.0, 8, 12.0, 3.0)
+    assert row["policy"] == "analytic_motor_housing_radial_fin_multibody_reference"
+    assert row["body_count"] == 9
+    assert row["volume"] == pytest.approx(234019.097373788)
+    assert row["area"] == pytest.approx(78825.19872953116)
+
+    measured = {"cubit": [{"name": row["name"], "volume": 233997.78602906506}]}
+    summary = shape_volume_crosscheck_summary(
+        [row], measured, rtol=row["roundtrip_tolerances"]["curved_step_volume_rtol"]
+    )
+    assert summary["status"] == "ok"
+    assert summary["max_volume_rel_error"] == pytest.approx(9.10666905484026e-5)
+
+    payload = json.loads(build123d_motor_housing_thermal_reference())
+    assert payload["body_count"] == 9
+    assert payload["roundtrip_tolerances"]["body_count_exact"] is True
+
+
+def test_motor_housing_radial_fin_reference_rejects_overlap_and_invalid_radii():
+    with pytest.raises(ValueError, match="outer_radius"):
+        motor_housing_radial_fin_reference_row(50.0, 42.0, 90.0, 8, 12.0, 3.0)
+    with pytest.raises(ValueError, match="separated radial fins"):
+        motor_housing_radial_fin_reference_row(42.0, 50.0, 90.0, 8, 12.0, 40.0)
 
 
 def _vol(obj):

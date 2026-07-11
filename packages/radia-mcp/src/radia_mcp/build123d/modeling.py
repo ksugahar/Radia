@@ -42,6 +42,7 @@ __all__ = ["annular_segment", "tube", "racetrack_coil", "polar_array", "linear_a
            "rcd_snubber_heat_spreader_reference_row",
            "rcd_snubber_capacitance_sweep_rows",
            "thermal_robin_cooling_plate_reference_row",
+           "motor_housing_radial_fin_reference_row",
            "box_face_vector_area_rows", "box_face_pressure_force_rows",
            "box_face_pressure_moment_rows", "box_face_pressure_resultant_summary",
            "box_face_traction_moment_rows",
@@ -5594,6 +5595,91 @@ def thermal_robin_cooling_plate_reference_row(
             "device_pad_pitch": device_pad_pitch,
         },
         "policy": "analytic_thermal_robin_cooling_plate_volume_reference",
+    }
+
+
+def motor_housing_radial_fin_reference_row(
+    inner_radius,
+    outer_radius,
+    length,
+    fin_count,
+    fin_height,
+    fin_thickness,
+    label="motor_housing_radial_fins",
+):
+    """Analytic multi-body row for a cylindrical motor housing and radial fins.
+
+    The sleeve and fins are intentionally separate tangent bodies.  This keeps
+    the component basis readable for thermal contacts and makes the STEP
+    round-trip check independent of boolean healing.  Total area includes all
+    surfaces of the separate bodies; a later tied/contact thermal model decides
+    how shared interfaces are treated.
+    """
+    inner_radius = float(inner_radius)
+    outer_radius = float(outer_radius)
+    length = float(length)
+    fin_count = int(fin_count)
+    fin_height = float(fin_height)
+    fin_thickness = float(fin_thickness)
+    if any(value <= 0.0 for value in (
+        inner_radius, outer_radius, length, fin_height, fin_thickness
+    )):
+        raise ValueError("radii, length, fin height, and fin thickness must be positive")
+    if outer_radius <= inner_radius:
+        raise ValueError("outer_radius must be larger than inner_radius")
+    if fin_count < 3:
+        raise ValueError("fin_count must be at least 3")
+    chord = 2.0 * outer_radius * math.sin(math.pi / fin_count)
+    if fin_thickness >= chord:
+        raise ValueError("fin_thickness must leave separated radial fins")
+
+    sleeve_volume = math.pi * (outer_radius**2 - inner_radius**2) * length
+    one_fin_volume = fin_height * fin_thickness * length
+    volume = sleeve_volume + fin_count * one_fin_volume
+    sleeve_area = (
+        2.0 * math.pi * (outer_radius + inner_radius) * length
+        + 2.0 * math.pi * (outer_radius**2 - inner_radius**2)
+    )
+    one_fin_area = 2.0 * (
+        fin_height * fin_thickness
+        + fin_height * length
+        + fin_thickness * length
+    )
+    area = sleeve_area + fin_count * one_fin_area
+    envelope_radius = outer_radius + fin_height
+    return {
+        "name": str(label),
+        "volume": volume,
+        "area": area,
+        "body_count": fin_count + 1,
+        "units": {"length": "mm", "area": "mm^2", "volume": "mm^3"},
+        "terms": {
+            "sleeve_volume": sleeve_volume,
+            "one_fin_volume": one_fin_volume,
+            "all_fins_volume": fin_count * one_fin_volume,
+            "sleeve_surface_area": sleeve_area,
+            "one_fin_surface_area": one_fin_area,
+            "all_fins_surface_area": fin_count * one_fin_area,
+        },
+        "parameters": {
+            "inner_radius": inner_radius,
+            "outer_radius": outer_radius,
+            "length": length,
+            "fin_count": fin_count,
+            "fin_height": fin_height,
+            "fin_thickness": fin_thickness,
+        },
+        "bounding_box": {
+            "min": [-envelope_radius, -envelope_radius, 0.0],
+            "max": [envelope_radius, envelope_radius, length],
+            "size": [2.0 * envelope_radius, 2.0 * envelope_radius, length],
+        },
+        "roundtrip_tolerances": {
+            "curved_step_volume_rtol": 1.0e-4,
+            "surface_area_rtol": 1.0e-10,
+            "body_count_exact": True,
+        },
+        "policy": "analytic_motor_housing_radial_fin_multibody_reference",
     }
 
 
