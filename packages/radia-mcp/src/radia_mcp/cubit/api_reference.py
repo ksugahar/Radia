@@ -132,7 +132,11 @@ API_GEOMETRY_QUERIES = """
 cubit.get_center_point(entity_type, entity_id) -> tuple[float, float, float]
     # Works for any entity: volume, surface, curve, vertex
     center = cubit.get_center_point("volume", 1)
-    # Returns (x, y, z)
+    # Returns a representative geometric center; do not label it mass centroid.
+
+cubit.volume(volume_id).centroid() -> tuple[float, float, float]
+    # Mass/volume centroid for CAD cross-validation.
+    # Use this when comparing with build123d shape.center(CenterOf.MASS).
 
 cubit.is_point_contained(geometry_type, entity_id, xyz_point) -> int
     # Check if a point is inside a geometry entity.
