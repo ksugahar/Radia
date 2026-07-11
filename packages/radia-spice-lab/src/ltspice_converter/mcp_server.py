@@ -24,6 +24,7 @@ from .measure import summarize_measure_log as _summarize_measure_log
 from .measure import summarize_stepped_measure_log as _summarize_stepped_measure_log
 from .patentability import patentability_search_plan as _patentability_search_plan
 from .filter_gates import sallen_key_filter_family_gate as _sallen_key_filter_family_gate
+from .hysteresis_gate import hysteretic_inductor_cycle_gate as _hysteretic_inductor_cycle_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
@@ -251,6 +252,27 @@ def sallen_key_filter_family_gate(rows: list[dict]) -> dict:
         return _sallen_key_filter_family_gate(rows)
     except (TypeError, ValueError) as exc:
         return {"schema": "radia-spice-lab.sallen-key-filter-family.v1",
+                "status": "invalid_input", "ok": False, "error": str(exc)}
+
+
+@mcp.tool()
+def hysteretic_inductor_cycle_gate(
+    cycle_rows: list[dict],
+    expected_current_peak_a: float,
+    expected_copper_energy_j: float,
+    voltage_thd: float,
+) -> dict:
+    """Gate settled hysteresis cycles by energy, flux closure, and harmonic evidence."""
+
+    try:
+        return _hysteretic_inductor_cycle_gate(
+            cycle_rows,
+            expected_current_peak_a=expected_current_peak_a,
+            expected_copper_energy_j=expected_copper_energy_j,
+            voltage_thd=voltage_thd,
+        )
+    except (TypeError, ValueError) as exc:
+        return {"schema": "radia-spice-lab.hysteretic-inductor-cycle.v1",
                 "status": "invalid_input", "ok": False, "error": str(exc)}
 
 

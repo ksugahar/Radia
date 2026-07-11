@@ -598,12 +598,13 @@ def test_mcp_tools_registered():
             "check_circuit", "info_circuit", "compare_topology",
             "balanced_learning_profile", "parse_measure_log",
             "parse_stepped_measure_log", "sallen_key_filter_family_gate",
+            "hysteretic_inductor_cycle_gate",
             "circuit_knowledge", "buck_seed",
         "patentability_search_plan",
     }
     assert names == expected
 
     readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "Exposes fourteen tools:" in readme
+    assert "Exposes fifteen tools:" in readme
     for name in expected:
         assert f"`{name}" in readme
