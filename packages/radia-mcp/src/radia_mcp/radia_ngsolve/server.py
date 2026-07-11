@@ -43,6 +43,7 @@ from .acoustic_kernel_gate import (
 from .terminal_source_sweep_gate import cyclic_terminal_source_sweep_gate as _cyclic_terminal_source_sweep_gate
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
 from .moving_conductor_brake_gate import moving_conductor_eddy_brake_gate as _moving_conductor_eddy_brake_gate
+from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
@@ -2452,6 +2453,20 @@ def moving_conductor_eddy_brake_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "moving_conductor_eddy_brake_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def complex_vector_field_maximum_gate(summary_json: str) -> str:
+    """Gate complex vector-field magnitudes and per-material maxima."""
+    try:
+        result = _complex_vector_field_maximum_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "complex_vector_field_maximum_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
