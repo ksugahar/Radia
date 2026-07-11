@@ -27,6 +27,7 @@ from ..common import register_status_tool
 from .shape_optimization_knowledge import get_shape_optimization_documentation
 from .topology_derivative_knowledge import get_topology_derivative_documentation
 from .applications_knowledge import get_applications_documentation
+from .cae_ai_contract import cae_ai_artifact_gate as build_cae_ai_artifact_gate
 
 mcp = FastMCP("mcp-server-topology-optimization")
 
@@ -85,6 +86,23 @@ def topology_opt_applications(topic: str = "all") -> str:
                  `bayesian-opt` servers for population / global search.
     """
     return get_applications_documentation(topic)
+
+
+@mcp.tool()
+def topology_opt_cae_ai_artifact_gate(method_family: str, artifact_json: str) -> str:
+    """Gate CAE-AI artifacts before they are promoted as engineering results.
+
+    Supported method families are ``diffusion``, ``normalizing_flow``,
+    ``reinforcement_learning``, and ``pseudoinverse``. Every family must save
+    reproducibility metadata, named metrics with units, and an independent
+    forward-solver verification block with observables and tolerances.
+
+    Args:
+        method_family: One of the four supported family names.
+        artifact_json: JSON object containing the common and family-specific
+            reproducibility fields returned in the gate report.
+    """
+    return build_cae_ai_artifact_gate(method_family, artifact_json)
 
 
 
