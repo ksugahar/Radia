@@ -1445,6 +1445,221 @@ def cubit_partitioned_sweep_compatibility_gate(
     }
 
 
+def cubit_pyramid_degenerate_hex_export_gate(
+    summary: Mapping[str, object],
+    *,
+    min_hex_scaled_jacobian: float = 0.2,
+    min_pyramid_geometric_volume: float = 0.0,
+) -> dict[str, object]:
+    """Gate CPYRAM and degenerate-CHEXA exports from one Cubit mesh.
+
+    The source database can contain more element families than the registered
+    export blocks.  The ``nopyramid`` route also has an order-specific detail:
+    an order-2 PYRAMID13 is emitted as a linear degenerate CHEXA8 while native
+    hexes remain CHEXA20.  This gate makes both facts explicit before a deck is
+    called solver-ready.
+    """
+    if not isinstance(summary, Mapping):
+        raise ValueError("summary must be a mapping")
+    if min_hex_scaled_jacobian <= 0.0 or min_pyramid_geometric_volume < 0.0:
+        raise ValueError("quality thresholds must be nonnegative and hex threshold positive")
+
+    def mapping(name: str) -> Mapping[str, object]:
+        row = summary.get(name, {})
+        if not isinstance(row, Mapping):
+            raise ValueError(f"summary[{name!r}] must be a mapping")
+        return row
+
+    def integer_map(row: Mapping[str, object]) -> dict[str, int]:
+        return {str(key).strip().lower(): int(value) for key, value in row.items()}
+
+    counts = integer_map(mapping("element_counts"))
+    quality = mapping("quality")
+    blocks = mapping("block_inventory")
+    true_order1 = mapping("pyramid_card_deck")
+    false_order1 = mapping("nopyramid_deck")
+    true_order2 = mapping("pyramid_card_deck_order2")
+    false_order2 = mapping("nopyramid_deck_order2")
+
+    def deck_counts(deck: Mapping[str, object]) -> dict[str, int]:
+        row = deck.get("card_counts", {})
+        if not isinstance(row, Mapping):
+            raise ValueError("deck card_counts must be a mapping")
+        return {str(key).upper(): int(value) for key, value in row.items()}
+
+    def int_list(deck: Mapping[str, object], name: str) -> list[int]:
+        row = deck.get(name, [])
+        if isinstance(row, (str, bytes)) or not isinstance(row, Iterable):
+            raise ValueError(f"deck {name} must be an iterable")
+        return [int(value) for value in row]
+
+    block_rows = []
+    for key, value in blocks.items():
+        if not isinstance(value, Mapping):
+            raise ValueError(f"block_inventory[{key!r}] must be a mapping")
+        block_rows.append(integer_map({
+            kind: value.get(kind, 0) for kind in ("hex", "pyramid", "tet", "wedge")
+        }))
+    block_totals = {
+        kind: sum(row.get(kind, 0) for row in block_rows)
+        for kind in ("hex", "pyramid", "tet", "wedge")
+    }
+
+    hex_quality = quality.get("hex", {})
+    pyramid_quality = quality.get("pyramid", {})
+    if not isinstance(hex_quality, Mapping) or not isinstance(pyramid_quality, Mapping):
+        raise ValueError("hex and pyramid quality rows must be mappings")
+    hex_minimum = float(hex_quality.get("minimum", math.nan))
+    pyramid_volume_minimum = float(
+        pyramid_quality.get("geometric_volume_minimum", math.nan)
+    )
+
+    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
+    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
+    allowed_suffixes = ("/plugins", "-commandplugindir")
+    startup_only_allowlisted = bool(diagnostics) and len(diagnostics) <= 2 and all(
+        "Could not open file:" in row and row.rstrip().endswith(allowed_suffixes)
+        for row in diagnostics
+    )
+    process_exit_code = int(summary.get("process_exit_code", -1))
+    result_fresh = summary.get("result_artifact_fresh") is True
+    process_exit_acceptable = process_exit_code == 0 or (
+        process_exit_code in {2, 3}
+        and startup_only_allowlisted
+        and not script_errors
+        and result_fresh
+    )
+
+    hex_count = counts.get("hex", 0)
+    pyramid_count = counts.get("pyramid", 0)
+    exported_count = hex_count + pyramid_count
+    true1_counts = deck_counts(true_order1)
+    false1_counts = deck_counts(false_order1)
+    true2_counts = deck_counts(true_order2)
+    false2_counts = deck_counts(false_order2)
+    expected_order2_nodes = sorted([20] * hex_count + [8] * pyramid_count)
+    expected_order2_unique = sorted([20] * hex_count + [5] * pyramid_count)
+    digests = [
+        str(deck.get("sha256") or "").strip()
+        for deck in (true_order1, false_order1, true_order2, false_order2)
+    ]
+
+    checks = {
+        "source_native_journal_digest_recorded": (
+            Path(str(summary.get("source_journal", ""))).suffix.lower() == ".jou"
+            and len(str(summary.get("source_sha256") or "")) == 64
+        ),
+        "headless_python_api": str(summary.get("execution_mode", "")).lower()
+        == "python_api_headless",
+        "headless_flags_recorded": {"-nographics", "-batch"}.issubset(
+            {str(value).lower() for value in summary.get("headless_flags", [])}
+        ),
+        "persistent_gui_not_started": summary.get("persistent_gui_started") is False,
+        "single_line_compile_wrapper_recorded": summary.get("batch_wrapper_mode")
+        == "single_line_compile_wrapper",
+        "direct_multiline_batch_failure_recorded": summary.get(
+            "direct_multiline_batch_rejected"
+        )
+        is True,
+        "fresh_result_artifact": result_fresh,
+        "script_error_lines_empty": not script_errors,
+        "process_exit_semantics_acceptable": process_exit_acceptable,
+        "full_database_inventory_is_mixed": (
+            hex_count > 0
+            and pyramid_count > 0
+            and counts.get("tet", 0) > 0
+            and counts.get("wedge", 0) > 0
+        ),
+        "registered_blocks_export_only_hex_and_pyramid": (
+            block_totals.get("hex") == hex_count
+            and block_totals.get("pyramid") == pyramid_count
+            and block_totals.get("tet") == 0
+            and block_totals.get("wedge") == 0
+        ),
+        "export_scope_is_registered_blocks_only": summary.get("export_scope_claim")
+        == "registered_blocks_only",
+        "hex_scaled_jacobian_above_threshold": (
+            int(hex_quality.get("count", 0)) == hex_count
+            and isfinite(hex_minimum)
+            and hex_minimum >= float(min_hex_scaled_jacobian)
+        ),
+        "pyramid_quality_fallback_is_positive_geometry": (
+            int(pyramid_quality.get("api_value_count", -1)) == 0
+            and int(pyramid_quality.get("geometric_volume_count", 0)) == pyramid_count
+            and isfinite(pyramid_volume_minimum)
+            and pyramid_volume_minimum > float(min_pyramid_geometric_volume)
+        ),
+        "order1_cpyram_deck_matches_registered_blocks": (
+            true1_counts.get("CHEXA") == hex_count
+            and true1_counts.get("CPYRAM") == pyramid_count
+            and sorted(int_list(true_order1, "chexa_node_counts")) == [8] * hex_count
+            and sorted(int_list(true_order1, "cpyram_node_counts")) == [5] * pyramid_count
+        ),
+        "order1_nopyramid_is_degenerate_chexa8": (
+            false1_counts.get("CHEXA") == exported_count
+            and false1_counts.get("CPYRAM") == 0
+            and int(false_order1.get("regular_chexa_count", -1)) == hex_count
+            and int(false_order1.get("degenerate_chexa_count", -1)) == pyramid_count
+            and sorted(int_list(false_order1, "chexa_unique_node_counts"))
+            == sorted([8] * hex_count + [5] * pyramid_count)
+        ),
+        "order2_cpyram_deck_is_hex20_and_pyramid13": (
+            true2_counts.get("CHEXA") == hex_count
+            and true2_counts.get("CPYRAM") == pyramid_count
+            and sorted(int_list(true_order2, "chexa_node_counts")) == [20] * hex_count
+            and sorted(int_list(true_order2, "cpyram_node_counts")) == [13] * pyramid_count
+        ),
+        "order2_nopyramid_linearization_recorded": (
+            false2_counts.get("CHEXA") == exported_count
+            and false2_counts.get("CPYRAM") == 0
+            and sorted(int_list(false_order2, "chexa_node_counts"))
+            == expected_order2_nodes
+            and sorted(int_list(false_order2, "chexa_unique_node_counts"))
+            == expected_order2_unique
+            and summary.get("pyramid_conversion_order_policy")
+            == "linearized_degenerate_chexa8"
+            and summary.get("order2_nopyramid_uniform_order_claimed") is False
+        ),
+        "four_export_digests_recorded_and_distinct": (
+            all(len(value) == 64 for value in digests) and len(set(digests)) == 4
+        ),
+        "cad_volume_positive": float(summary.get("total_cad_volume", math.nan)) > 0.0,
+    }
+    return {
+        "policy": "cubit_pyramid_degenerate_hex_export_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "database_element_counts": counts,
+            "registered_block_totals": block_totals,
+            "exported_volume_element_count": exported_count,
+            "order2_nopyramid_chexa_node_counts": int_list(
+                false_order2, "chexa_node_counts"
+            ),
+            "order2_nopyramid_chexa_unique_node_counts": int_list(
+                false_order2, "chexa_unique_node_counts"
+            ),
+            "hex_scaled_jacobian_minimum": hex_minimum,
+            "pyramid_geometric_volume_minimum": pyramid_volume_minimum,
+            "process_exit_code": process_exit_code,
+        },
+        "launcher_classification": (
+            "clean_exit"
+            if process_exit_code == 0
+            else "allowlisted_startup_diagnostic_with_clean_script"
+            if process_exit_acceptable
+            else "execution_error"
+        ),
+        "notes": [
+            "Database inventory and registered export-block inventory are different contracts; do not claim unregistered tet or wedge cells are present in the deck.",
+            "nopyramid preserves first-order pyramid count by repeated-node CHEXA8 cards rather than deleting the transition cells.",
+            "At order 2, native hexes remain CHEXA20 but converted pyramids are linearized to degenerate CHEXA8; reject a uniform-order claim.",
+            "Cubit batch reads Python line by line, so multiline implementations require a one-line compile/exec wrapper.",
+        ],
+    }
+
+
 def cubit_mixed_order_series_inventory_gate(
     rows: Iterable[Mapping[str, object]],
     *,
