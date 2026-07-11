@@ -41,6 +41,7 @@ from .acoustic_kernel_gate import (
     helmholtz_double_layer_low_frequency_gate as _helmholtz_double_layer_low_frequency_gate,
 )
 from .terminal_source_sweep_gate import cyclic_terminal_source_sweep_gate as _cyclic_terminal_source_sweep_gate
+from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
@@ -2426,6 +2427,20 @@ def cyclic_terminal_source_sweep_gate(summary_json: str) -> str:
     try: result=_cyclic_terminal_source_sweep_gate(json.loads(summary_json))
     except (TypeError,ValueError) as exc: result={"policy":"cyclic_terminal_source_sweep_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
+
+
+@mcp.tool()
+def cogging_torque_periodicity_gate(summary_json: str) -> str:
+    """Gate a zero-current torque sweep over one slot/pole LCM period."""
+    try:
+        result = _cogging_torque_periodicity_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "cogging_torque_periodicity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
