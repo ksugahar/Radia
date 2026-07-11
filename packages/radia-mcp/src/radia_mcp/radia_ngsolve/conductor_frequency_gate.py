@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
+from typing import Any, Mapping
 
 
 def twin_conductor_skin_effect_frequency_gate(
@@ -73,5 +74,117 @@ def twin_conductor_skin_effect_frequency_gate(
             "A passive conductor frequency sweep should keep R and L positive, show non-decreasing R "
             "and non-increasing L as skin/proximity effects develop, preserve geometric twin symmetry, "
             "and yield increasing |R+j omega L|."
+        ),
+    }
+
+
+def homogenized_bundle_impedance_comparison_gate(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    resistance_rtol: float = 0.03,
+    inductance_rtol: float = 0.005,
+    impedance_rtol: float = 0.01,
+    observable_rtol: float = 1.0e-10,
+    minimum_element_reduction: float = 5.0,
+    minimum_speedup: float = 5.0,
+) -> dict[str, object]:
+    """Compare a homogenized stranded bundle with an explicit reference.
+
+    The gate verifies passive complex impedance, recomputes ``Z=V/I`` and
+    ``L=Im(Z)/omega``, then balances approximation error against mesh and solve
+    cost. It is solver-neutral and suitable for round-wire homogenization,
+    litz-wire surrogates, and explicit-strand reference models.
+    """
+
+    items = [dict(row) for row in rows]
+    if len(items) != 2:
+        raise ValueError("rows must contain one homogenized and one explicit_reference model")
+    by_role = {str(row.get("model_role") or "").strip().lower(): row for row in items}
+    if set(by_role) != {"homogenized", "explicit_reference"}:
+        raise ValueError("model_role values must be homogenized and explicit_reference")
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for role, row in by_role.items():
+        try:
+            frequency = float(row["frequency_hz"])
+            current_pair = [float(value) for value in row["current_a_complex"]]
+            voltage_pair = [float(value) for value in row["voltage_v_complex"]]
+            resistance = float(row["resistance_ohm"])
+            inductance = float(row["inductance_h"])
+            elements = int(row["element_count"])
+            solve_time = float(row["solve_time_s"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"{role} row has missing or invalid observables") from exc
+        if len(current_pair) != 2 or len(voltage_pair) != 2:
+            raise ValueError("complex current and voltage must be [real, imag]")
+        scalars = [frequency, *current_pair, *voltage_pair, resistance, inductance, solve_time]
+        if not all(math.isfinite(value) for value in scalars):
+            raise ValueError("all observables must be finite")
+        current = complex(*current_pair)
+        voltage = complex(*voltage_pair)
+        if frequency <= 0.0 or abs(current) == 0.0 or elements <= 0 or solve_time <= 0.0:
+            raise ValueError("frequency, current magnitude, element count, and solve time must be positive")
+        impedance = voltage / current
+        derived_l = impedance.imag / (2.0 * math.pi * frequency)
+        normalized[role] = {
+            "frequency_hz": frequency,
+            "current": current,
+            "impedance": impedance,
+            "resistance_ohm": resistance,
+            "inductance_h": inductance,
+            "derived_resistance_ohm": impedance.real,
+            "derived_inductance_h": derived_l,
+            "element_count": elements,
+            "solve_time_s": solve_time,
+        }
+
+    approximate = normalized["homogenized"]
+    reference = normalized["explicit_reference"]
+    resistance_error = abs(approximate["resistance_ohm"] - reference["resistance_ohm"]) / abs(reference["resistance_ohm"])
+    inductance_error = abs(approximate["inductance_h"] - reference["inductance_h"]) / abs(reference["inductance_h"])
+    impedance_error = abs(approximate["impedance"] - reference["impedance"]) / abs(reference["impedance"])
+    element_reduction = reference["element_count"] / approximate["element_count"]
+    speedup = reference["solve_time_s"] / approximate["solve_time_s"]
+
+    observable_errors = {}
+    for role, row in normalized.items():
+        observable_errors[role] = {
+            "resistance_relative": abs(row["derived_resistance_ohm"] - row["resistance_ohm"]) / max(abs(row["resistance_ohm"]), 1.0e-300),
+            "inductance_relative": abs(row["derived_inductance_h"] - row["inductance_h"]) / max(abs(row["inductance_h"]), 1.0e-300),
+        }
+
+    checks = {
+        "frequency_matches": approximate["frequency_hz"] == reference["frequency_hz"],
+        "current_phasor_matches": approximate["current"] == reference["current"],
+        "passive_positive_resistance": all(row["resistance_ohm"] > 0.0 for row in normalized.values()),
+        "positive_series_inductance": all(row["inductance_h"] > 0.0 for row in normalized.values()),
+        "reported_observables_match_voltage_current": all(
+            error <= float(observable_rtol)
+            for errors in observable_errors.values()
+            for error in errors.values()
+        ),
+        "homogenized_resistance_accurate": resistance_error <= float(resistance_rtol),
+        "homogenized_inductance_accurate": inductance_error <= float(inductance_rtol),
+        "homogenized_complex_impedance_accurate": impedance_error <= float(impedance_rtol),
+        "explicit_reference_has_more_elements": element_reduction >= float(minimum_element_reduction),
+        "homogenized_model_is_faster": speedup >= float(minimum_speedup),
+    }
+    return {
+        "policy": "homogenized_bundle_impedance_comparison_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "resistance_relative_error": resistance_error,
+            "inductance_relative_error": inductance_error,
+            "complex_impedance_relative_error": impedance_error,
+            "element_count_reduction": element_reduction,
+            "solve_time_speedup": speedup,
+            "observable_reconstruction_errors": observable_errors,
+        },
+        "lesson": (
+            "A strand homogenization is useful only when passive complex impedance agrees with an explicit "
+            "reference and the saved element/time reduction is demonstrated. Compare R, L, and complex Z; "
+            "a small |Z| error can otherwise hide a material resistance error."
         ),
     }
