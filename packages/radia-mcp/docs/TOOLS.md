@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **660 tools** across 43 MCP servers.
+Total: **661 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 57 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 49 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 80 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 81 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -220,6 +220,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `complex_vector_field_maximum_gate` | Gate complex vector-field magnitudes and per-material maxima. |
 | `cq_response_reality_gate` | Gate a coupled CQ solve, including its real time-domain reconstruction. |
 | `cq_scattering_arrival_gate` | Gate CQ scattered-field causality against a geometric ray arrival. |
+| `cyclic_terminal_phasor_balance_gate` | Gate cyclic voltage/current triplets and all-terminal phasor KCL. |
 | `cyclic_terminal_source_sweep_gate` | Gate cyclic terminal charges without assuming formulations are identical. |
 | `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
 | `dual_formulation_force_error_convergence_gate` | Gate force-error convergence envelopes across two or more formulations. |
