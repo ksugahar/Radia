@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **655 tools** across 43 MCP servers.
+Total: **656 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 57 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 49 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 76 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 77 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -216,6 +216,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
+| `cogging_torque_periodicity_gate` | Gate a zero-current torque sweep over one slot/pole LCM period. |
 | `cq_response_reality_gate` | Gate a coupled CQ solve, including its real time-domain reconstruction. |
 | `cq_scattering_arrival_gate` | Gate CQ scattered-field causality against a geometric ray arrival. |
 | `cyclic_terminal_source_sweep_gate` | Gate cyclic terminal charges without assuming formulations are identical. |
