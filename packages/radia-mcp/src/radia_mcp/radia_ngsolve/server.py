@@ -35,6 +35,7 @@ from .field_profile_gate import (
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
+from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2298,6 +2299,37 @@ def force_position_profile_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "force_position_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def multiport_impedance_sweep_gate(
+    frequency_rows: list[list[float]],
+    impedance_real_rows: list[list[float]],
+    impedance_imag_rows: list[list[float]],
+    port_ids: list[str] | None = None,
+    min_sample_count: int = 5,
+    min_frequency_decades: float = 1.0,
+    passive_real_tolerance: float = 1.0e-9,
+) -> str:
+    """Gate common-grid, positive-real, nontrivial complex impedance sweeps."""
+
+    try:
+        result = _multiport_impedance_sweep_gate(
+            frequency_rows,
+            impedance_real_rows,
+            impedance_imag_rows,
+            port_ids=port_ids,
+            min_sample_count=min_sample_count,
+            min_frequency_decades=min_frequency_decades,
+            passive_real_tolerance=passive_real_tolerance,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "multiport_impedance_sweep_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
