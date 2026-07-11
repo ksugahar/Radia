@@ -215,5 +215,64 @@ def test_E_strong_coupling_block_loop():
     (HERE / "binput_hdiv_loop_4x4x4.json").write_text(json.dumps(payload, indent=1))
 
 
+# ==========================================================================
+# (F) INDEPENDENT anchors via the sub-threshold linear limit.
+#
+# Gate A's reference table is sampled from the SAME material object, so a
+# material-wiring bug would cancel on both sides.  Below the first
+# irreversible threshold (|B| < eta_1 = 0.3 T) the synthetic play model is
+# EXACTLY the linear material mu_r = 200 (only the eta=0 reversible operator
+# is active), which pins two independent checks:
+#   (F1) a single sub-threshold step must match the plain LINEAR demag solve
+#        vim.Solve(mesh, mu_r, H_ext) -- a chi-based path that never touches
+#        the MatHys* machinery (and is itself locked against analytic demag
+#        factors elsewhere);
+#   (F2) a full sub-threshold cycle must enclose ~ZERO area (no hysteresis
+#        below the threshold), where the full-drive loop encloses ~1173.
+# ==========================================================================
+H_SMALL = 40.0e3      # keeps every element's |B| below eta_1 (asserted below)
+
+
+def test_F_subthreshold_linear_limit():
+    K, eta, tables = _synthetic_play()
+    with ng.TaskManager():
+        mesh = _hex_cube(3)
+        res = vim.SolveHysteresis(mesh, [[0.0, 0.0, H_SMALL]], play=(K, eta, tables))
+        lin = vim.Solve(mesh, 200.0, ng.CoefficientFunction((0.0, 0.0, H_SMALL)), order=1)
+
+    B_el = np.asarray(res["steps"][0]["B"], float)
+    assert float(np.max(np.linalg.norm(B_el, axis=1))) < 0.30, (
+        "precondition broken: an element exceeded the first play threshold; lower H_SMALL")
+    Mz = float(res["steps"][0]["M_avg"][2])
+    Mz_lin = float(lin["M_avg"][2])
+    rel = abs(Mz - Mz_lin) / abs(Mz_lin)
+    assert Mz_lin > 1.0e4, "linear reference too weak to be meaningful (Mz=%.3e)" % Mz_lin
+    assert rel < 2.0e-3, (
+        "sub-threshold SolveHysteresis disagrees with the INDEPENDENT linear demag solve: "
+        "Mz=%.6e vs mu_r=200 reference %.6e (rel %.2e)" % (Mz, Mz_lin, rel))
+
+
+def test_F_subthreshold_cycle_has_no_hysteresis():
+    K, eta, tables = _synthetic_play()
+    up0 = np.linspace(0.0, H_SMALL, 4)[1:]
+    down = np.linspace(H_SMALL, -H_SMALL, 7)[1:]
+    up1 = np.linspace(-H_SMALL, H_SMALL, 7)[1:]
+    hz = np.concatenate([up0, down, up1])
+    h_steps = np.zeros((hz.size, 3)); h_steps[:, 2] = hz
+    with ng.TaskManager():
+        mesh = _hex_cube(3)
+        res = vim.SolveHysteresis(mesh, h_steps, play=(K, eta, tables))
+
+    B_all = np.concatenate([np.asarray(s["B"], float) for s in res["steps"]])
+    assert float(np.max(np.linalg.norm(B_all, axis=1))) < 0.30, (
+        "precondition broken: the cycle crossed the first play threshold; lower H_SMALL")
+    Hz_int = np.array([s["H_avg"][2] for s in res["steps"]])
+    Bz = np.array([s["B_avg"][2] for s in res["steps"]])
+    area = abs(_loop_area(Hz_int[3:], Bz[3:]))
+    assert area < 2.0, (
+        "a sub-threshold (purely reversible) cycle enclosed area %.3e J/m^3 -- the play "
+        "history advanced where the material is exactly linear" % area)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v", "-x"]))
