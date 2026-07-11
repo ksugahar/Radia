@@ -40,6 +40,7 @@ from .measure import (
     summarize_measure_log,
     summarize_stepped_measure_log,
 )
+from .voltage_multiplier_gate import cockcroft_walton_stage_gate
 
 __all__ = [
     "netlist_to_schemdraw",
@@ -58,6 +59,7 @@ __all__ = [
     "parse_ltspice_step_lines",
     "summarize_measure_log",
     "summarize_stepped_measure_log",
+    "cockcroft_walton_stage_gate",
 ]
 
 __version__ = "0.4.0"
