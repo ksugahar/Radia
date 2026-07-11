@@ -107,6 +107,35 @@ struct RadMassRieszCache {
     int keyN = -1;
     MassRieszPardiso factor;
 };
+
+// The single get-or-build implementation shared by SolveLinearMaterial and SolveMaterialMINRES (see the
+// .h declaration for the pinning / single-resident contracts).  Hits on constant-mass chains: the Hantila
+// hysteresis loop (W(nu0) fixed by construction) and the C++ scalar Picard (geometry-only M_mass; the
+// scalar inv_chi lives outside the preconditioner).  Per-iteration TANGENT masses (the Python nu-secant /
+// Newton W_tan) compare-miss and refactor exactly as the pre-cache code did -- with the old entry released
+// FIRST, so their peak preconditioner memory stays at one factor.  Identical input -> identical factor ->
+// bit-identical preconditioner: a cache hit changes timing only.
+std::shared_ptr<RadMassRieszCache> RadHACApKChargeGram::EnsureMassRieszFactor(
+    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+    int n_face, const char* caller, double* factor_s_accum)
+{
+    std::shared_ptr<RadMassRieszCache> keep = m_massRieszCache;   // pin the current entry
+    const bool hit = keep && keep->keyN == n_face && keep->keyV == mV &&
+                     keep->keyI == mI && keep->keyJ == mJ;
+    if (hit) return keep;
+    keep.reset();
+    m_massRieszCache.reset();          // release the OLD factor before building the new one
+    const auto t0 = std::chrono::steady_clock::now();
+    auto built = std::make_shared<RadMassRieszCache>();
+    if (!built->factor.Factor(mI, mJ, mV, n_face))
+        throw std::runtime_error(std::string(caller) +
+            ": PARDISO SPD factor of the RT0 mass (mass Riesz preconditioner) failed");
+    built->keyN = n_face; built->keyI = mI; built->keyJ = mJ; built->keyV = mV;
+    if (factor_s_accum)
+        *factor_s_accum += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    m_massRieszCache = built;
+    return built;
+}
 #endif // HAVE_LAPACK
 // Per-thread memo for the high-order QuadDot lives inside QuadDot (a function-local static thread_local map):
 // PhiAtHO(src, m_qp[tgt][k]) (the expensive analytic base + inner subtraction loop) depends ONLY on
@@ -4142,29 +4171,14 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // Jacobi (the diag under-resolves the RT0 mass off-diagonal coupling) and nearly mu_r-flat.  When
     // mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
 #ifdef HAVE_LAPACK
-    // PERSISTENT factor (2026-07-10): the PARDISO analyze+factor is reused whenever the EXACT
-    // (n_face, mI, mJ, mV) key matches; any difference refactors.  Hits on constant-mass chains: the
-    // Hantila polarization loop (SolveHysteresis: W(nu0) fixed by construction) and the C++ scalar
-    // Picard (geometry-only M_mass; the scalar inv_chi lives outside the preconditioner).  Callers that
-    // pass a per-iteration TANGENT mass (the Python nu-secant / Newton W_tan) compare-miss and refactor
-    // exactly as before.  Identical input -> identical factor -> bit-identical preconditioner: a cache
-    // hit changes timing only (it leaves factor_s at 0 in the solve timings).
+    // PERSISTENT factor (2026-07-10): get-or-build via EnsureMassRieszFactor (exact-COO key; hit =
+    // reuse, factor_s += 0; miss = release-then-refactor).  mrKeep pins the entry for the CG loop.
+    std::shared_ptr<RadMassRieszCache> mrKeep;
     MassRieszPardiso* mr = nullptr;
     if (mass_riesz) {
-        const bool hit = m_massRieszCache && m_massRieszCache->keyN == n_face &&
-                         m_massRieszCache->keyV == mV && m_massRieszCache->keyI == mI &&
-                         m_massRieszCache->keyJ == mJ;
-        if (!hit) {
-            const auto t0 = Clock::now();
-            auto built = std::make_shared<RadMassRieszCache>();
-            if (!built->factor.Factor(mI, mJ, mV, n_face))
-                throw std::runtime_error("SolveLinearMaterial: PARDISO SPD factor of the RT0 mass "
-                                         "(mass Riesz preconditioner) failed");
-            built->keyN = n_face; built->keyI = mI; built->keyJ = mJ; built->keyV = mV;
-            m_massRieszCache = std::move(built);
-            m_lastSolveTiming.factor_s += elapsed(t0, Clock::now());
-        }
-        mr = &m_massRieszCache->factor;
+        mrKeep = EnsureMassRieszFactor(mI, mJ, mV, n_face, "SolveLinearMaterial",
+                                       &m_lastSolveTiming.factor_s);
+        mr = &mrKeep->factor;
     }
 #else
     if (mass_riesz)
@@ -4364,21 +4378,13 @@ std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
     // (built once, applied per iteration); the bounded -N spectrum (eigenvalues vs M_mass = inv_chi - d,
     // d in [0,1]) makes the mass Riesz especially effective.  mass_riesz=false -> diagonal Jacobi y=r/prec.
 #ifdef HAVE_LAPACK
-    // Same persistent factor as SolveLinearMaterial (one shared cache entry, exact-COO key).
+    // Same persistent factor as SolveLinearMaterial (one shared cache entry via EnsureMassRieszFactor;
+    // this path does not accumulate factor timing).  mrKeep pins the entry for the MINRES loop.
+    std::shared_ptr<RadMassRieszCache> mrKeep;
     MassRieszPardiso* mr = nullptr;
     if (mass_riesz) {
-        const bool hit = m_massRieszCache && m_massRieszCache->keyN == n_face &&
-                         m_massRieszCache->keyV == mV && m_massRieszCache->keyI == mI &&
-                         m_massRieszCache->keyJ == mJ;
-        if (!hit) {
-            auto built = std::make_shared<RadMassRieszCache>();
-            if (!built->factor.Factor(mI, mJ, mV, n_face))
-                throw std::runtime_error("SolveMaterialMINRES: PARDISO SPD factor of the RT0 mass "
-                                         "(mass Riesz preconditioner) failed");
-            built->keyN = n_face; built->keyI = mI; built->keyJ = mJ; built->keyV = mV;
-            m_massRieszCache = std::move(built);
-        }
-        mr = &m_massRieszCache->factor;
+        mrKeep = EnsureMassRieszFactor(mI, mJ, mV, n_face, "SolveMaterialMINRES", nullptr);
+        mr = &mrKeep->factor;
     }
 #else
     if (mass_riesz)
