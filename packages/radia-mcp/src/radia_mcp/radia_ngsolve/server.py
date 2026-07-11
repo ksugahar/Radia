@@ -32,6 +32,7 @@ from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 from .field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
+    symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 
@@ -2231,6 +2232,43 @@ def dual_formulation_symmetric_field_profile_gate(
         max_symmetry_relative=max_symmetry_relative,
         min_sample_count=min_sample_count,
     ), indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def symmetric_axial_field_profile_gate(
+    axis_positions: list[float],
+    axial_field: list[float],
+    expected_center_field: float,
+    transverse_field_1: list[float] | None = None,
+    transverse_field_2: list[float] | None = None,
+    min_sample_count: int = 5,
+    max_center_relative_error: float = 1.0e-6,
+    max_symmetry_relative: float = 1.0e-9,
+    max_transverse_relative: float = 1.0e-9,
+    max_axis_symmetry_relative: float = 1.0e-9,
+) -> str:
+    """Gate an origin-centered axial profile by analytic value and symmetry."""
+
+    try:
+        result = _symmetric_axial_field_profile_gate(
+            axis_positions,
+            axial_field,
+            expected_center_field=expected_center_field,
+            transverse_field_1=transverse_field_1,
+            transverse_field_2=transverse_field_2,
+            min_sample_count=min_sample_count,
+            max_center_relative_error=max_center_relative_error,
+            max_symmetry_relative=max_symmetry_relative,
+            max_transverse_relative=max_transverse_relative,
+            max_axis_symmetry_relative=max_axis_symmetry_relative,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "symmetric_axial_field_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
