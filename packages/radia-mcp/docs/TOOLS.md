@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **645 tools** across 43 MCP servers.
+Total: **646 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 55 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 47 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 70 |
@@ -92,6 +92,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mesh_race_status` | Check the status of a background race launched by |
 | `cubit_mesh_race_with_human` | **The radia-mcp signature workflow.** |
 | `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
+| `cubit_partitioned_sweep_compatibility_gate` | Gate a legacy webcut/partition journal promoted to an all-hex sweep. |
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
 | `cubit_recent_failures` | Return the last N failed Cubit invocations (from persistent log). |
 | `cubit_restore` | Restore a previously-saved Cubit checkpoint by label. |

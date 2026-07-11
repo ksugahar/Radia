@@ -48,6 +48,7 @@ from .vol_inventory import (
 	cubit_hex_geometry_refinement_gate,
 	cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate,
 	cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate,
+	cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -775,6 +776,28 @@ def cubit_sweep_along_curve_gate(
 		)
 	except (TypeError, ValueError) as exc:
 		result = {"policy": "cubit_sweep_along_curve_gate_v1", "status": "invalid_input", "error": str(exc)}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_partitioned_sweep_compatibility_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.2,
+	volume_relative_tolerance: float = 1.0e-12,
+) -> str:
+	"""Gate a legacy webcut/partition journal promoted to an all-hex sweep."""
+	try:
+		result = _cubit_partitioned_sweep_compatibility_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			volume_relative_tolerance=volume_relative_tolerance,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_partitioned_sweep_compatibility_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
