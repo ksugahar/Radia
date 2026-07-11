@@ -13,8 +13,9 @@ with the collocation MMMM in 75a0086f).  Same synthetic play model, adapted phys
       enclosed area (dissipation, not single-valued); committed play states carry the
       branch history across steps.  Loop data saved to binput_hdiv_loop.json.
   (C) covered by parametrizing (A) over hex/tet + the loop run.
-  (E) STRONG-COUPLING reversal robustness (the moment path needed Anderson; the HDiv
-      tensor-tangent Newton variant is the plan) -- DEFERRED, see the skip marker.
+  (E) STRONG-COUPLING reversal robustness: the 4x4x4 block full loop -- the regime
+      where the retired moment path's plain Picard diverged -- runs LIVE and persists
+      binput_hdiv_loop_4x4x4.json.
 
 SolveHysteresis runs the Hantila polarization iteration (constant SPD LHS W(nu0)+N built
 once, lagged VECTOR polarization source nu0*M - H_mat(M)), which represents the recoil-
@@ -24,7 +25,9 @@ path hit with plain Picard).
 """
 
 import json
+import platform
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -106,8 +109,8 @@ def _loop_area(h, b):
 @pytest.mark.parametrize("mesh_builder", [_hex_cube, _tet_cube], ids=["hex", "tet"])
 def test_A_virgin_ramp_matches_anhysteretic_reference(mesh_builder):
     K, eta, tables = _synthetic_play()
-    mesh = mesh_builder()
     with ng.TaskManager():
+        mesh = mesh_builder()
         mat = vim.PlayHysteresisMaterial(K, eta, tables)
         res = vim.SolveHysteresis(mesh, [[0.0, 0.0, H0]], material=mat)
         ref = vim.Solve(mesh, bh_table=_virgin_bh_table(mat),
@@ -126,13 +129,13 @@ def test_A_virgin_ramp_matches_anhysteretic_reference(mesh_builder):
 # ==========================================================================
 def test_B_cyclic_loop_hysteretic():
     K, eta, tables = _synthetic_play()
-    mesh = _hex_cube(3)
     up0 = np.linspace(0.0, H0, 5)[1:]              # virgin ramp     (4 steps)
     down = np.linspace(H0, -H0, 9)[1:]             # descending      (8 steps, includes 0)
     up1 = np.linspace(-H0, H0, 9)[1:]              # ascending       (8 steps, includes 0)
     hz = np.concatenate([up0, down, up1])
     h_steps = np.zeros((hz.size, 3)); h_steps[:, 2] = hz
     with ng.TaskManager():
+        mesh = _hex_cube(3)
         res = vim.SolveHysteresis(mesh, h_steps, play=(K, eta, tables))
 
     Hz_int = np.array([s["H_avg"][2] for s in res["steps"]])
@@ -155,6 +158,8 @@ def test_B_cyclic_loop_hysteretic():
 
     payload = dict(
         description="HDiv-VIM B-input play hysteresis cube loop (gate B)",
+        timestamp=datetime.now().isoformat(),
+        hostname=platform.node(),
         h_applied_z=[float(v) for v in hz],
         H_internal_avg_z=[float(v) for v in Hz_int],
         B_avg_z=[float(v) for v in Bz],
@@ -177,13 +182,13 @@ def test_E_strong_coupling_block_loop():
     polarization iteration must complete the same full loop, stay hysteretic, and
     keep the per-step iteration count bounded."""
     K, eta, tables = _synthetic_play()
-    mesh = _hex_cube(4)
     up0 = np.linspace(0.0, H0, 5)[1:]
     down = np.linspace(H0, -H0, 9)[1:]
     up1 = np.linspace(-H0, H0, 9)[1:]
     hz = np.concatenate([up0, down, up1])
     h_steps = np.zeros((hz.size, 3)); h_steps[:, 2] = hz
     with ng.TaskManager():
+        mesh = _hex_cube(4)
         res = vim.SolveHysteresis(mesh, h_steps, play=(K, eta, tables))
 
     Hz_int = np.array([s["H_avg"][2] for s in res["steps"]])
@@ -195,6 +200,8 @@ def test_E_strong_coupling_block_loop():
 
     payload = dict(
         description="HDiv-VIM B-input play hysteresis 4x4x4 strong-coupling loop (gate E)",
+        timestamp=datetime.now().isoformat(),
+        hostname=platform.node(),
         h_applied_z=[float(v) for v in hz],
         H_internal_avg_z=[float(v) for v in Hz_int],
         B_avg_z=[float(v) for v in Bz],

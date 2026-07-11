@@ -1635,6 +1635,92 @@ py::array_t<double> MatHysIrreversible(int mat, py::array_t<double> B) {
     return result;
 }
 
+/**
+ * @brief Batched Forward evaluation for the HDiv hysteresis stepping:
+ *        H[i] = nu_rev * B[i] + H_irr(B[i]; states[i]) for every row.
+ *
+ * Each row restores its COMMITTED state into the (single) material handle and
+ * evaluates from it, so the call is PURE w.r.t. the states (Irreversible plays
+ * committed -> scratch only; nothing commits).  The loop is a SERIAL C++ loop
+ * with the GIL released: the handle's internal buffers are shared, so rows
+ * must not run concurrently -- the win is removing the n x 2 Python<->C++
+ * crossings of the per-row Python loop, which dominates large-n_el stepping.
+ */
+py::array_t<double> MatHysForwardBatch(
+        int mat,
+        py::array_t<double, py::array::c_style | py::array::forcecast> B,
+        py::array_t<double, py::array::c_style | py::array::forcecast> states) {
+    auto b = B.unchecked<2>();
+    auto s = states.unchecked<2>();
+    if (b.shape(1) != 3) throw std::runtime_error("MatHysForwardBatch: B must be (n, 3)");
+    if (s.shape(0) != b.shape(0))
+        throw std::runtime_error("MatHysForwardBatch: states rows must match B rows");
+    const py::ssize_t n = b.shape(0);
+    const int slen = (int)s.shape(1);
+    double nu_rev = 0;
+    if (RadMatHysGetNuRev(mat, &nu_rev) < 0)
+        throw std::runtime_error("MatHysForwardBatch: not a Play hysteresis material");
+    py::array_t<double> H({n, (py::ssize_t)3});
+    auto h = H.mutable_unchecked<2>();
+    {
+        py::gil_scoped_release release;
+        for (py::ssize_t i = 0; i < n; ++i) {
+            if (RadMatHysRestoreState(mat, s.data(i, 0), slen) < 0)
+                throw std::runtime_error("MatHysForwardBatch: state restore failed (row length mismatch?)");
+            double pB[3] = {b(i, 0), b(i, 1), b(i, 2)};
+            double pHirr[3] = {0, 0, 0};
+            if (RadMatHysIrreversible(mat, pB, pHirr) < 0)
+                throw std::runtime_error("MatHysForwardBatch: irreversible evaluation failed");
+            h(i, 0) = nu_rev * pB[0] + pHirr[0];
+            h(i, 1) = nu_rev * pB[1] + pHirr[1];
+            h(i, 2) = nu_rev * pB[2] + pHirr[2];
+        }
+    }
+    return H;
+}
+
+/**
+ * @brief Batched state commit for the HDiv hysteresis stepping: for every row,
+ *        restore states[i], play to B[i] (committed -> scratch), commit
+ *        (scratch -> committed), and return the new committed state row.
+ */
+py::array_t<double> MatHysCommitBatch(
+        int mat,
+        py::array_t<double, py::array::c_style | py::array::forcecast> B,
+        py::array_t<double, py::array::c_style | py::array::forcecast> states) {
+    auto b = B.unchecked<2>();
+    auto s = states.unchecked<2>();
+    if (b.shape(1) != 3) throw std::runtime_error("MatHysCommitBatch: B must be (n, 3)");
+    if (s.shape(0) != b.shape(0))
+        throw std::runtime_error("MatHysCommitBatch: states rows must match B rows");
+    const py::ssize_t n = b.shape(0);
+    const int slen = (int)s.shape(1);
+    int lenq = 0;
+    if (RadMatHysSaveState(mat, nullptr, &lenq) < 0)
+        throw std::runtime_error("MatHysCommitBatch: invalid material handle");
+    if (lenq != slen)
+        throw std::runtime_error("MatHysCommitBatch: states row length does not match the material state size");
+    py::array_t<double> out({n, (py::ssize_t)slen});
+    auto o = out.mutable_unchecked<2>();
+    {
+        py::gil_scoped_release release;
+        for (py::ssize_t i = 0; i < n; ++i) {
+            if (RadMatHysRestoreState(mat, s.data(i, 0), slen) < 0)
+                throw std::runtime_error("MatHysCommitBatch: state restore failed");
+            double pB[3] = {b(i, 0), b(i, 1), b(i, 2)};
+            double pHirr[3] = {0, 0, 0};
+            if (RadMatHysIrreversible(mat, pB, pHirr) < 0)
+                throw std::runtime_error("MatHysCommitBatch: play evaluation failed");
+            if (RadMatHysCommitState(mat) < 0)
+                throw std::runtime_error("MatHysCommitBatch: commit failed");
+            int len = slen;
+            if (RadMatHysSaveState(mat, o.mutable_data(i, 0), &len) < 0)
+                throw std::runtime_error("MatHysCommitBatch: state save failed");
+        }
+    }
+    return out;
+}
+
 } // namespace radia_material_ext
 
 
@@ -4819,6 +4905,40 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
               Returns:
                   numpy array [Hx_irr, Hy_irr, Hz_irr] in A/m
+          )pbdoc");
+
+    m.def("MatHysForwardBatch", &radia_material_ext::MatHysForwardBatch,
+          py::arg("mat"), py::arg("B"), py::arg("states"),
+          R"pbdoc(
+              Batched Forward: H[i] = nu_rev * B[i] + H_irr(B[i]; states[i]).
+
+              Restores each row's COMMITTED state before evaluating, so the call
+              is pure w.r.t. the states (nothing commits).  Serial C++ loop with
+              the GIL released -- the batched replacement for a per-row Python
+              MatHysRestoreState + MatHysIrreversible loop.
+
+              Args:
+                  mat: Material handle from MatPlayHysteresis()
+                  B: (n, 3) flux densities in Tesla
+                  states: (n, state_len) committed states from MatHysSaveState()
+
+              Returns:
+                  (n, 3) magnetic field H in A/m
+          )pbdoc");
+
+    m.def("MatHysCommitBatch", &radia_material_ext::MatHysCommitBatch,
+          py::arg("mat"), py::arg("B"), py::arg("states"),
+          R"pbdoc(
+              Batched commit: for each row, restore states[i], play to B[i],
+              commit, and return the new committed state row.
+
+              Args:
+                  mat: Material handle from MatPlayHysteresis()
+                  B: (n, 3) converged flux densities in Tesla
+                  states: (n, state_len) committed states to advance
+
+              Returns:
+                  (n, state_len) new committed states
           )pbdoc");
 
     // ========================================================================
