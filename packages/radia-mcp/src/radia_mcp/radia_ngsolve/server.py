@@ -43,6 +43,7 @@ from .capacitance_identity_gate import (
 )
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
+from .radar_range_angle_gate import radar_range_angle_localization_gate as _radar_range_angle_localization_gate
 from .hmatrix_scaling_gate import hmatrix_compression_scaling_gate as _hmatrix_compression_scaling_gate
 from .force_error_convergence_gate import (
     dual_formulation_force_error_convergence_gate as _dual_formulation_force_error_convergence_gate,
@@ -2416,6 +2417,30 @@ def multiport_impedance_sweep_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def radar_range_angle_localization_gate(
+    frequency_hz: list[float],
+    targets_json: str,
+    max_range_resolution_multiples: float = 1.0,
+    max_angle_error_deg: float = 2.0,
+    max_frequency_step_relative_drift: float = 1.0e-7,
+) -> str:
+    """Gate wideband range-angle localization of multiple targets."""
+
+    try:
+        targets = json.loads(targets_json)
+        result = _radar_range_angle_localization_gate(
+            frequency_hz,
+            targets,
+            max_range_resolution_multiples=max_range_resolution_multiples,
+            max_angle_error_deg=max_angle_error_deg,
+            max_frequency_step_relative_drift=max_frequency_step_relative_drift,
+        )
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        result = {"policy": "radar_range_angle_localization_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
