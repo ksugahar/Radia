@@ -59,6 +59,7 @@ from .simple_field_2d import (
     route_motor_validation,
 )
 from .planar_coupling_knowledge import get_planar_coupling
+from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_handoff_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -591,6 +592,37 @@ def motor_validation_router(goal: str) -> str:
     independent motor-physics validation.
     """
     return format_motor_validation_route(route_motor_validation(goal))
+
+
+@mcp.tool()
+def motor_thermal_handoff_gate(
+    loss_buckets_json: str,
+    network_json: str,
+    mesh_regions_json: str,
+    relative_tolerance: float = 1.0e-9,
+) -> str:
+    """Validate one motor-loss table for both LPTN and 3D all-hex thermal paths.
+
+    The gate does not solve the thermal problem. It verifies that the same
+    non-negative regional losses are assigned exactly once to a connected
+    lumped thermal network and exactly once to positive hexahedral mesh
+    regions, with regional and total heat conservation.
+
+    Args:
+        loss_buckets_json: JSON object mapping region names to loss in watts.
+        network_json: JSON object with ``ambient_node``, ``nodes`` and
+            positive-resistance ``branches``. Non-ambient nodes require
+            positive ``capacitance_J_per_K`` and may own ``source_regions``.
+        mesh_regions_json: JSON list of ``region``, ``cell_type``,
+            ``cell_count`` and ``loss_W`` records. Cell type must be hex.
+        relative_tolerance: Positive relative tolerance for loss matching.
+    """
+    return build_motor_thermal_handoff_gate(
+        loss_buckets_json,
+        network_json,
+        mesh_regions_json,
+        relative_tolerance,
+    )
 
 
 # ============================================================
