@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **671 tools** across 43 MCP servers.
+Total: **673 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 60 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 50 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 52 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 83 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -132,6 +132,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_brep_mass_topology_roundtrip_gate` | Gate CAD roundtrips by mass properties, centroid semantics and B-rep Euler topology. |
 | `build123d_cad_handoff_manifest` | Run the final build123d CAD handoff manifest gate from JSON inputs. |
 | `build123d_cad_route_source_contract` | Gate a build123d CAD package before Cubit hex/mixed route promotion. |
+| `build123d_cross_kernel_mass_topology_diagnosis_gate` | Diagnose STEP portability while separating evidence quality from acceptance. |
 | `build123d_cubit_quality_ledger_handoff` | Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate. |
 | `build123d_cubit_solver_route_handoff` | Bind build123d CAD rows to a Cubit mixed solver-route manifest gate. |
 | `build123d_curved_step_topology_crosscheck_gate` | Gate curved STEP mass and exact topology across independent imports. |
@@ -158,6 +159,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
 | `build123d_try_race` | Race N build123d script variants in parallel subprocesses, |
 | `build123d_upstream_example_roundtrip_gate` | Gate source identity and STEP self-roundtrip for an upstream build123d example. |
+| `build123d_upstream_source_external_cad_contract_gate` | Gate immutable upstream execution and an explicit external-CAD decision. |
 | `build123d_usage` | Get build123d CAD modeling documentation for CAE workflows. |
 | `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
 | `build123d_volume_crosscheck_source_coverage_gate` | Require Cubit/external CAD source coverage after a volume crosscheck. |
