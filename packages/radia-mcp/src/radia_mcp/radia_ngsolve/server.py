@@ -52,6 +52,7 @@ from .force_error_convergence_gate import (
 )
 from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_force_flux_sweep_gate
 from .linear_induction_gate import linear_induction_frequency_sweep_gate as _linear_induction_frequency_sweep_gate
+from .conductor_frequency_gate import twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
@@ -2627,6 +2628,31 @@ def linear_induction_frequency_sweep_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "linear_induction_frequency_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def twin_conductor_skin_effect_frequency_gate(
+    frequencies_hz: list[float],
+    resistance_ohm: list[list[float]],
+    inductance_h: list[list[float]],
+    symmetry_rtol: float = 5.0e-4,
+) -> str:
+    """Gate passive twin-conductor R/L and impedance trends over frequency."""
+
+    try:
+        result = _twin_conductor_skin_effect_frequency_gate(
+            frequencies_hz,
+            resistance_ohm,
+            inductance_h,
+            symmetry_rtol=symmetry_rtol,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "twin_conductor_skin_effect_frequency_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
