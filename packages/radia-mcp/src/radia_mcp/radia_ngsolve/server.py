@@ -45,6 +45,9 @@ from .terminal_phasor_balance_gate import (
     cyclic_terminal_phasor_balance_gate as _cyclic_terminal_phasor_balance_gate,
 )
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
+from .eddy_levitation_force_gate import (
+    linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
+)
 from .moving_conductor_brake_gate import moving_conductor_eddy_brake_gate as _moving_conductor_eddy_brake_gate
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
@@ -2471,6 +2474,20 @@ def cogging_torque_periodicity_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "cogging_torque_periodicity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def linear_eddy_levitation_force_gate(summary_json: str) -> str:
+    """Gate linear harmonic levitation force by dual extraction and I-squared laws."""
+    try:
+        result = _linear_eddy_levitation_force_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "linear_eddy_levitation_force_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
