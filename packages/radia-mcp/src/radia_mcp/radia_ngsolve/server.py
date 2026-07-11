@@ -33,6 +33,7 @@ from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 from .field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
 )
+from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2230,6 +2231,39 @@ def dual_formulation_symmetric_field_profile_gate(
         max_symmetry_relative=max_symmetry_relative,
         min_sample_count=min_sample_count,
     ), indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def force_position_profile_gate(
+    positions: list[float],
+    forces: list[float],
+    node_counts: list[int] | None = None,
+    element_counts: list[int] | None = None,
+    min_sample_count: int = 5,
+    max_mesh_count_relative_span: float = 0.02,
+    require_interior_peak: bool = False,
+    require_nonnegative: bool = False,
+) -> str:
+    """Gate a force-position sweep without assuming it is monotonic."""
+
+    try:
+        result = _force_position_profile_gate(
+            positions,
+            forces,
+            node_counts=node_counts,
+            element_counts=element_counts,
+            min_sample_count=min_sample_count,
+            max_mesh_count_relative_span=max_mesh_count_relative_span,
+            require_interior_peak=require_interior_peak,
+            require_nonnegative=require_nonnegative,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "force_position_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 register_status_tool(
