@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **635 tools** across 43 MCP servers.
+Total: **636 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 54 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 45 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 63 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 64 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -223,6 +223,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
 | `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
+| `inductance_energy_mutual_gate` | Gate L=2W/I^2 and an analytic one-direction mutual inductance. |
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
