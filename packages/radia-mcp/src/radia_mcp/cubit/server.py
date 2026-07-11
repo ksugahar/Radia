@@ -53,6 +53,10 @@ from .gmsh_v41 import (
 	gmsh_v41_mixed_order_series_gate,
 	summarize_gmsh_v41_ascii,
 )
+from .high_order_export_gate import (
+	cubit_headless_netgen_export_gate as _cubit_headless_netgen_export_gate,
+	cubit_loft_high_order_vol_series_gate as _cubit_loft_high_order_vol_series_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -747,6 +751,42 @@ def cubit_hex_refinement_geometry_gate(
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_hex_geometry_refinement_plateau_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_loft_high_order_vol_series_gate(
+	rows: list[dict],
+	min_quality: float = 0.2,
+) -> str:
+	"""Gate all-hex loft topology, curved payload, sidecars, and quality for orders 1-5."""
+
+	try:
+		result = _cubit_loft_high_order_vol_series_gate(rows, min_quality=min_quality)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_loft_high_order_vol_series_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_headless_netgen_export_gate(
+	summary: dict,
+	min_quality: float = 0.2,
+) -> str:
+	"""Gate migration from a GUI plugin export command to native headless Netgen export."""
+
+	try:
+		result = _cubit_headless_netgen_export_gate(summary, min_quality=min_quality)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_headless_netgen_export_command_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
