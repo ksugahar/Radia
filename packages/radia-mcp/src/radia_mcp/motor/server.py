@@ -65,6 +65,7 @@ from .force_report_gate import force_report_method_metadata_gate as build_force_
 from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
 from .two_run_ldlq_gate import ipm_two_run_ldlq_gate as build_ipm_two_run_ldlq_gate
 from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
+from .rotating_circuit_transient_gate import rotating_circuit_transient_gate as build_rotating_circuit_transient_gate
 from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
 from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
 from .variable_magnet_gate import variable_magnet_material_parameter_gate as build_variable_magnet_material_parameter_gate
@@ -257,6 +258,20 @@ def motor_periodic_torque_sampling_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "periodic_torque_sampling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def motor_rotating_circuit_transient_gate(summary_json: str) -> str:
+    """Gate rotating-circuit identities and endpoint state before FFT use."""
+    try:
+        result = build_rotating_circuit_transient_gate(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "rotating_circuit_transient_endpoint_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

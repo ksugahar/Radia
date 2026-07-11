@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **674 tools** across 43 MCP servers.
+Total: **675 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **674 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 38 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 39 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -448,6 +448,7 @@ Module: `radia_mcp.motor.server`
 | `motor_permanent_magnet_force_pair_gate` | Gate attraction/repulsion reversal for a facing permanent-magnet pair. |
 | `motor_phase_flux_park_alignment_gate` | Gate a PM-only three-phase flux sweep in the rotating d/q frame. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
+| `motor_rotating_circuit_transient_gate` | Gate rotating-circuit identities and endpoint state before FFT use. |
 | `motor_status` | (no description) |
 | `motor_thermal_handoff_gate` | Validate one motor-loss table for both LPTN and 3D all-hex thermal paths. |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
