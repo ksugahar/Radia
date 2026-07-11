@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **588 tools** across 43 MCP servers.
+Total: **618 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 46 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 38 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 51 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 42 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 42 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 55 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -18,13 +18,13 @@ Total: **588 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 26 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 33 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
-| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 4 |
+| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 5 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 3 |
@@ -72,6 +72,10 @@ Module: `radia_mcp.cubit.server`
 | `cubit_exec_safely` | Execute commands against the live GUI **with a pre-save and a |
 | `cubit_forum_tips` | Get practical Cubit meshing tips sourced from the Coreform forum. |
 | `cubit_generate_dialog` | Generate a single complete PySide6 dialog script for a Cubit toolbar |
+| `cubit_gmsh_v41_inventory` | Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity. |
+| `cubit_gmsh_v41_mixed_order_gate` | Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority. |
+| `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
+| `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
 | `cubit_list_checkpoints` | List all saved Cubit checkpoints with size + mtime. |
 | `cubit_lookup` | Retrieve relevant sections from the bundled Cubit knowledge base. |
 | `cubit_mesh_apply_choice` | Apply the human's chosen variant from a previous |
@@ -84,6 +88,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mesh_race_smart_async` | **Background variant of `cubit_mesh_race_smart`** — AI inspects |
 | `cubit_mesh_race_status` | Check the status of a background race launched by |
 | `cubit_mesh_race_with_human` | **The radia-mcp signature workflow.** |
+| `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
 | `cubit_recent_failures` | Return the last N failed Cubit invocations (from persistent log). |
 | `cubit_restore` | Restore a previously-saved Cubit checkpoint by label. |
@@ -115,6 +120,7 @@ Module: `radia_mcp.build123d.server`
 |---|---|
 | `build123d_api` | Search the bundled build123d API reference (auto-generated from |
 | `build123d_ask` | One-shot search across every build123d knowledge surface. |
+| `build123d_brep_mass_topology_roundtrip_gate` | Gate CAD roundtrips by mass properties, centroid semantics and B-rep Euler topology. |
 | `build123d_cad_handoff_manifest` | Run the final build123d CAD handoff manifest gate from JSON inputs. |
 | `build123d_cad_route_source_contract` | Gate a build123d CAD package before Cubit hex/mixed route promotion. |
 | `build123d_cubit_quality_ledger_handoff` | Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate. |
@@ -127,6 +133,8 @@ Module: `radia_mcp.build123d.server`
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
 | `build123d_mass_property_crosscheck` | Compare build123d volume/area/bbox rows with one or more CAD sources. |
+| `build123d_motor_housing_thermal_reference` | Return analytic volume/area/body-count data for a finned motor housing. |
+| `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
 | `build123d_status` | (no description) |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
@@ -137,6 +145,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
 | `build123d_volume_crosscheck_source_coverage_gate` | Require Cubit/external CAD source coverage after a volume crosscheck. |
 | `build123d_volume_crosscheck_source_identity_gate` | Require source identity metadata after an external CAD volume crosscheck. |
+| `build123d_volume_crosscheck_with_units` | Normalize explicit cubic units before comparing CAD volumes. |
 | `build123d_web_docs` | Fetch live build123d documentation (readthedocs) and grep for `query`. |
 | `cadquery_to_cubit_hex` | End-to-end: cadquery script → STEP → Cubit `cubit_mesh_auto` |
 | `execute_build123d` | Execute a build123d Python script and return geometry information. |
@@ -182,23 +191,30 @@ Module: `radia_mcp.radia_ngsolve.server`
 | Tool | Description |
 |---|---|
 | `acoustic_fembem_cross_learnings` | Method-selection and validation cross-learnings for radia-acoustic, distilled |
+| `adjoint_gradient_scaling_gate` | Gate reverse-mode solve scaling, FD agreement and ascent direction. |
 | `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
 | `axifem_documentation` | Get radia-core axifem documentation: Henrotte axisymmetric FE |
+| `balanced_mcp_learning_profile` | Return the ten-stage equal public/source MCP learning contract. |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
 | `bem_cln` | Get BEM-CLN (per-element multipole CLN with Schur-F termination) |
 | `cln_3d` | Get 3D Cauer Ladder Network (CLN) / Kameari-Tanimoto iteration |
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
+| `cq_response_reality_gate` | Gate a coupled CQ solve, including its real time-domain reconstruction. |
 | `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
+| `dual_formulation_force_error_convergence_gate` | Gate force-error convergence envelopes across two or more formulations. |
+| `dual_formulation_symmetric_field_profile_gate` | Gate full-profile agreement and symmetry for two field formulations. |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
+| `force_position_profile_gate` | Gate a force-position sweep without assuming it is monotonic. |
 | `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
+| `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
@@ -207,6 +223,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
 | `matlab_acoustic_fembem_agent_guide` | Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
+| `multiport_impedance_sweep_gate` | Gate common-grid, positive-real, nontrivial complex impedance sweeps. |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
 | `panel_add_param` | Plan where to add a new parameter to a Radia-NGSolve panel. |
@@ -214,13 +231,18 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `panel_gui_pitfalls` | Pitfalls and lessons learned from Radia GUI / Cubit panel development. |
 | `panel_schema` | Show Radia-NGSolve panel definitions with Japanese labels and physics. |
 | `panel_widget_locations` | Return file:line locations for everything that touches a widget. |
+| `parallel_wire_force_refinement_gate` | Gate a reciprocal two-wire force refinement sweep without requiring monotone error. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
+| `radar_range_rcs_profile_gate` | Gate wideband range-RCS localization, method agreement, and analytic amplitude. |
 | `radia_ngsolve_status` | (no description) |
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
+| `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
+| `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
+| `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
 
@@ -363,12 +385,19 @@ Module: `radia_mcp.motor.server`
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |
 | `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
+| `motor_force_report_method_metadata_gate` | Gate a force report using independent methods and action-reaction. |
+| `motor_force_rotation_covariance_gate` | Check that a planar force vector follows a rotated excitation/geometry. |
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
+| `motor_magnet_model_handoff_gate` | Gate a converged source result and two-file downstream magnet model. |
+| `motor_motion_table_coordinate_gate` | Validate independent 3D translation and rotation motion tables. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
+| `motor_periodic_torque_sampling_gate` | Validate periodic torque sampling and FFT endpoint ownership. |
+| `motor_phase_flux_park_alignment_gate` | Gate a PM-only three-phase flux sweep in the rotating d/q frame. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
 | `motor_status` | (no description) |
+| `motor_thermal_handoff_gate` | Validate one motor-loss table for both LPTN and 3D all-hex thermal paths. |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 autoencoder + level-set). |
 | `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-VIM/RFEM motor comparison artifact. |
 | `motor_triple_check_plan` | Plan the standard radia-motor comparison. |
@@ -451,6 +480,7 @@ Module: `radia_mcp.topology_optimization.server`
 | Tool | Description |
 |---|---|
 | `topology_opt_applications` | Practical applications. |
+| `topology_opt_cae_ai_artifact_gate` | Gate CAE-AI artifacts before they are promoted as engineering results. |
 | `topology_opt_shape_optimization` | Shape optimization for nonlinear magnetostatics. |
 | `topology_opt_topology_derivative` | Topological derivative for changing topology (adding/removing material). |
 | `topology_optimization_status` | (no description) |
