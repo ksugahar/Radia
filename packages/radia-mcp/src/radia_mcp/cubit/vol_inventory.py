@@ -1331,6 +1331,120 @@ def cubit_sweep_along_curve_gate(
     }
 
 
+def cubit_partitioned_sweep_compatibility_gate(
+    summary: Mapping[str, object],
+    *,
+    min_scaled_jacobian: float = 0.2,
+    volume_relative_tolerance: float = 1.0e-12,
+) -> dict[str, object]:
+    """Gate a legacy partition/webcut journal promoted to an all-hex sweep."""
+    if not isinstance(summary, Mapping):
+        raise ValueError("summary must be a mapping")
+    if min_scaled_jacobian <= 0.0 or volume_relative_tolerance < 0.0:
+        raise ValueError("quality threshold must be positive and volume tolerance nonnegative")
+    counts_raw = summary.get("element_counts", {})
+    quality_raw = summary.get("quality", {})
+    volumes_raw = summary.get("cad_volume_by_body", {})
+    transforms_raw = summary.get("compatibility_transforms", {})
+    if not all(isinstance(row, Mapping) for row in (counts_raw, quality_raw, volumes_raw, transforms_raw)):
+        raise ValueError("counts, quality, volumes, and compatibility transforms must be mappings")
+    counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
+    transforms = {str(key).strip().lower(): str(value).strip().lower() for key, value in transforms_raw.items()}
+    volumes = {int(key): float(value) for key, value in volumes_raw.items()}
+    ids = sorted(volumes)
+    base_volume_count = int(summary.get("base_volume_count", 0))
+    final_volume_count = int(summary.get("volume_count", 0))
+    base_hex_count = int(summary.get("base_hex_count", 0))
+    copy_factor = int(summary.get("mesh_copy_factor", 0))
+    command_count = int(summary.get("source_command_count", 0))
+    executed_count = int(summary.get("executed_command_count", 0))
+    webcut_count = int(summary.get("webcut_count", 0))
+    scaled = quality_raw.get("scaled_jacobian", {})
+    shape = quality_raw.get("shape", {})
+    if not isinstance(scaled, Mapping) or not isinstance(shape, Mapping):
+        raise ValueError("quality rows must be mappings")
+    scaled_min = float(scaled.get("min", math.nan))
+    shape_min = float(shape.get("min", math.nan))
+    total_volume = float(summary.get("total_cad_volume", math.nan))
+    volume_sum_error = abs(sum(volumes.values()) - total_volume) / max(abs(total_volume), 1.0e-300)
+    base_ids = ids[:base_volume_count]
+    copy_ids = ids[base_volume_count:]
+    base_volume = sum(volumes[key] for key in base_ids)
+    copy_volume = sum(volumes[key] for key in copy_ids)
+    copy_volume_error = abs(copy_volume - base_volume * max(copy_factor - 1, 0)) / max(abs(base_volume), 1.0e-300)
+    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
+    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
+    allowed_suffixes = ("/plugins", "-commandplugindir")
+    startup_only_allowlisted = bool(diagnostics) and len(diagnostics) <= 2 and all(
+        "Could not open file:" in row and row.rstrip().endswith(allowed_suffixes)
+        for row in diagnostics
+    )
+    process_exit_code = int(summary.get("process_exit_code", -1))
+    result_fresh = summary.get("result_artifact_fresh") is True
+    process_exit_acceptable = process_exit_code == 0 or (
+        process_exit_code in {2, 3}
+        and startup_only_allowlisted
+        and not script_errors
+        and result_fresh
+    )
+    checks = {
+        "source_native_journal_digest_recorded": Path(str(summary.get("source_journal", ""))).suffix.lower() == ".jou"
+        and bool(str(summary.get("source_sha256") or "").strip()),
+        "headless_python_api": str(summary.get("execution_mode", "")).lower() == "python_api_headless",
+        "persistent_gui_not_started": summary.get("persistent_gui_started") is False,
+        "fresh_result_artifact": result_fresh,
+        "script_error_lines_empty": not script_errors,
+        "process_exit_semantics_acceptable": process_exit_acceptable,
+        "all_source_commands_replayed": command_count > 0 and command_count == executed_count,
+        "legacy_quad_dominant_promoted_to_pave": transforms.get(
+            "surface 22 scheme quad_dominant"
+        ) == "surface 22 scheme pave",
+        "partition_webcuts_recorded": webcut_count == 11,
+        "mesh_copy_factor_recorded": copy_factor == 2,
+        "volume_copy_count_conserved": base_volume_count > 0
+        and final_volume_count == base_volume_count * copy_factor
+        and len(volumes) == final_volume_count,
+        "hex_copy_count_conserved": base_hex_count > 0
+        and counts.get("hex", 0) == base_hex_count * copy_factor,
+        "hex_only_volume_mesh": counts.get("hex", 0) > 0 and all(
+            counts.get(kind, 0) == 0 for kind in ("pyramid", "wedge", "tet")
+        ),
+        "scaled_jacobian_above_threshold": scaled_min >= float(min_scaled_jacobian),
+        "shape_positive": shape_min > 0.0,
+        "cad_body_volumes_positive": bool(volumes) and all(value > 0.0 for value in volumes.values()),
+        "cad_volume_sum_matches": volume_sum_error <= volume_relative_tolerance,
+        "copied_cad_volume_matches_base": copy_volume_error <= volume_relative_tolerance,
+    }
+    return {
+        "policy": "cubit_partitioned_sweep_compatibility_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "hex_count": counts.get("hex", 0),
+            "base_hex_count": base_hex_count,
+            "volume_count": final_volume_count,
+            "scaled_jacobian_min": scaled_min,
+            "shape_min": shape_min,
+            "cad_volume_sum_relative_error": volume_sum_error,
+            "copy_volume_relative_error": copy_volume_error,
+            "process_exit_code": process_exit_code,
+        },
+        "launcher_classification": (
+            "clean_exit"
+            if process_exit_code == 0
+            else "allowlisted_startup_diagnostic_with_clean_script"
+            if process_exit_acceptable
+            else "execution_error"
+        ),
+        "notes": [
+            "Promote an obsolete meshing scheme through an explicit compatibility map; never silently skip it.",
+            "A mesh-carrying copy must conserve both hex count and CAD volume.",
+            "A nonzero launcher exit is acceptable only for allowlisted startup diagnostics with a fresh artifact and no script errors.",
+        ],
+    }
+
+
 def cubit_mixed_order_series_inventory_gate(
     rows: Iterable[Mapping[str, object]],
     *,
