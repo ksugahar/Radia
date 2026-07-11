@@ -49,6 +49,10 @@ from .vol_inventory import (
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
+from .gmsh_v41 import (
+	gmsh_v41_mixed_order_series_gate,
+	summarize_gmsh_v41_ascii,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -624,6 +628,42 @@ def cubit_docs(topic: str = "all") -> str:
 		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
 		f"Examples: export_overview, scripting_blocks, api_core"
 	)
+
+
+@mcp.tool()
+def cubit_gmsh_v41_inventory(text: str) -> str:
+	"""Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity."""
+
+	try:
+		result = summarize_gmsh_v41_ascii(text)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "gmsh_v41_ascii_inventory_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_gmsh_v41_mixed_order_gate(
+	rows: list[dict],
+	authoritative_vol_inventory: dict | None = None,
+) -> str:
+	"""Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority."""
+
+	try:
+		result = gmsh_v41_mixed_order_series_gate(
+			rows,
+			authoritative_vol_inventory=authoritative_vol_inventory,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "gmsh_v41_mixed_order_series_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
