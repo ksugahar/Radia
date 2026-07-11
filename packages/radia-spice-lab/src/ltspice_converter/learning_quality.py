@@ -9,7 +9,7 @@ _STAGE_IDS = (
 
 
 def build_balanced_learning_profile() -> dict:
-    return {
+    profile = {
         "schema": "cae-ai-lab.balanced-mcp-learning-profile.v1",
         "policy": "equal_capability_gain_v1",
         "server": "radia-spice-lab",
@@ -38,4 +38,31 @@ def build_balanced_learning_profile() -> dict:
             "fallback": "Record why a direct FastMCP/protocol probe was used instead.",
         },
         "completion_rule": "Both public and source lanes need behavior, controls, tests, and non-pending commits.",
+    }
+    profile["self_check"] = validate_balanced_learning_profile(profile)
+    return profile
+
+
+def validate_balanced_learning_profile(profile: dict) -> dict:
+    stages = profile.get("stages") if isinstance(profile, dict) else None
+    if not isinstance(stages, list):
+        stages = []
+    ids = [str(row.get("capability_id") or "") for row in stages if isinstance(row, dict)]
+    controls_complete = len(stages) == 10 and all(
+        isinstance(row, dict)
+        and str(row.get("positive_control") or "").strip()
+        and str(row.get("negative_control") or "").strip()
+        for row in stages
+    )
+    checks = {
+        "stage_ids_match": ids == list(_STAGE_IDS),
+        "rounds_ordered": [row.get("round") for row in stages] == list(range(1, 11)),
+        "controls_complete": controls_complete,
+        "workflow_roles_complete": set(profile.get("workflow_roles") or {})
+        == {"detect", "check", "run", "test"},
+    }
+    return {
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
     }

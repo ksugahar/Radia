@@ -19,6 +19,11 @@ def test_balanced_learning_profile_has_ten_unique_controlled_stages():
     assert profile["stage_count"] == 10
     assert len({row["capability_id"] for row in profile["stages"]}) == 10
     assert all(row["positive_control"] and row["negative_control"] for row in profile["stages"])
+    assert profile["self_check"]["status"] == "ok"
+    from ltspice_converter.learning_quality import validate_balanced_learning_profile
+    bad = {**profile, "stages": [dict(row) for row in profile["stages"]]}
+    bad["stages"][7]["negative_control"] = ""
+    assert validate_balanced_learning_profile(bad)["status"] == "needs_attention"
 
 
 def test_parse_spice_scalar_engineering_suffixes():
