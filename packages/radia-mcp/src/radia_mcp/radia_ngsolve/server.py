@@ -63,6 +63,9 @@ from .fsi_scattering_invariants_gate import (
 )
 from .inductance_energy_gate import inductance_energy_mutual_gate as _inductance_energy_mutual_gate
 from .loss_temperature_coupling_gate import loss_temperature_coupling_gate as _loss_temperature_coupling_gate
+from .transient_coupled_coil_gate import (
+    transient_coupled_coil_response_gate as _transient_coupled_coil_response_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2801,6 +2804,35 @@ def loss_temperature_coupling_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "loss_temperature_coupling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def transient_coupled_coil_response_gate(
+    times_s: list[float],
+    primary_current_a: list[float],
+    secondary_current_a: list[float],
+    secondary_resistance_ohm: float,
+    secondary_turns: float,
+    maximum_relative_residual: float = 1.0e-3,
+) -> str:
+    """Gate a passive shorted-secondary transient induced-current history."""
+
+    try:
+        result = _transient_coupled_coil_response_gate(
+            times_s,
+            primary_current_a,
+            secondary_current_a,
+            secondary_resistance_ohm=secondary_resistance_ohm,
+            secondary_turns=secondary_turns,
+            maximum_relative_residual=maximum_relative_residual,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "transient_coupled_coil_response_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

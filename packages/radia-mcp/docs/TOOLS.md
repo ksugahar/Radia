@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **641 tools** across 43 MCP servers.
+Total: **642 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 55 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 47 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 66 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 67 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -260,6 +260,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
 | `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
+| `transient_coupled_coil_response_gate` | Gate a passive shorted-secondary transient induced-current history. |
 | `twin_conductor_skin_effect_frequency_gate` | Gate passive twin-conductor R/L and impedance trends over frequency. |
 | `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
