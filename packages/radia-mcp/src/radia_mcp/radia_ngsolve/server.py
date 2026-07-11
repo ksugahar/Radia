@@ -54,6 +54,7 @@ from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_for
 from .linear_induction_gate import linear_induction_frequency_sweep_gate as _linear_induction_frequency_sweep_gate
 from .conductor_frequency_gate import twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
+from .one_port_power_gate import one_port_power_balance_gate as _one_port_power_balance_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2457,6 +2458,27 @@ def multiport_impedance_sweep_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def one_port_power_balance_sweep_gate(
+    summary_json: str,
+    max_power_relative_residual: float = 1.0e-9,
+    max_balance_abs_residual: float = 1.0e-9,
+    max_reference_impedance_relative_drift: float = 1.0e-9,
+) -> str:
+    """Gate passive one-port accepted power against S11 and reference impedance."""
+
+    try:
+        result = _one_port_power_balance_gate(
+            summary_json,
+            max_power_relative_residual=max_power_relative_residual,
+            max_balance_abs_residual=max_balance_abs_residual,
+            max_reference_impedance_relative_drift=max_reference_impedance_relative_drift,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        result = {"policy": "one_port_power_balance_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
