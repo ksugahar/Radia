@@ -62,6 +62,7 @@ from .fsi_scattering_invariants_gate import (
     fsi_scattering_invariants_gate as _fsi_scattering_invariants_gate,
 )
 from .inductance_energy_gate import inductance_energy_mutual_gate as _inductance_energy_mutual_gate
+from .loss_temperature_coupling_gate import loss_temperature_coupling_gate as _loss_temperature_coupling_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2769,6 +2770,37 @@ def homogenized_bundle_impedance_comparison_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "homogenized_bundle_impedance_comparison_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def loss_temperature_coupling_gate(
+    magnetic_rows: list[dict],
+    thermal_rows: list[dict],
+    loss_to_heat_scale: float,
+    coupling_rtol: float = 2.0e-5,
+    decomposition_rtol: float = 1.0e-12,
+    minimum_power_coverage: float = 0.90,
+    initial_temperature_c: float = 20.0,
+) -> str:
+    """Gate an electromagnetic-loss to transient-temperature handoff."""
+
+    try:
+        result = _loss_temperature_coupling_gate(
+            magnetic_rows,
+            thermal_rows,
+            loss_to_heat_scale=loss_to_heat_scale,
+            coupling_rtol=coupling_rtol,
+            decomposition_rtol=decomposition_rtol,
+            minimum_power_coverage=minimum_power_coverage,
+            initial_temperature_c=initial_temperature_c,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "loss_temperature_coupling_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
