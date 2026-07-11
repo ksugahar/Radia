@@ -23,6 +23,7 @@ from .learning_quality import build_balanced_learning_profile as _build_balanced
 from .measure import summarize_measure_log as _summarize_measure_log
 from .measure import summarize_stepped_measure_log as _summarize_stepped_measure_log
 from .patentability import patentability_search_plan as _patentability_search_plan
+from .filter_gates import sallen_key_filter_family_gate as _sallen_key_filter_family_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
@@ -240,6 +241,17 @@ def parse_stepped_measure_log(log_text: str) -> dict:
     """
 
     return _summarize_stepped_measure_log(log_text)
+
+
+@mcp.tool()
+def sallen_key_filter_family_gate(rows: list[dict]) -> dict:
+    """Gate multiple unity-gain low-pass variants against two-pole theory."""
+
+    try:
+        return _sallen_key_filter_family_gate(rows)
+    except (TypeError, ValueError) as exc:
+        return {"schema": "radia-spice-lab.sallen-key-filter-family.v1",
+                "status": "invalid_input", "ok": False, "error": str(exc)}
 
 
 @mcp.tool()
