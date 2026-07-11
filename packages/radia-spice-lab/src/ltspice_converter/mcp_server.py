@@ -30,9 +30,16 @@ from .voltage_multiplier_gate import cockcroft_walton_stage_gate as _cockcroft_w
 from .boost_gate import boost_converter_steady_state_gate as _boost_converter_steady_state_gate
 from .psrr_gate import transient_psrr_gate as _transient_psrr_gate
 from .bandwidth_gate import measure_bandwidth_crossing_gate as _measure_bandwidth_crossing_gate
+from .bipolar_startup_gate import bipolar_supply_startup_gate as _bipolar_supply_startup_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+@mcp.tool()
+def bipolar_supply_startup_gate(summary: dict) -> dict:
+    """Gate signed dual-rail startup, balance, ripple, overshoot, and power-good timing."""
+    try: return _bipolar_supply_startup_gate(summary)
+    except (KeyError, TypeError, ValueError) as exc: return {"policy":"bipolar_supply_startup_gate_v1","status":"invalid_input","error":str(exc)}
 
 @mcp.tool()
 def measure_bandwidth_crossing_gate(summary: dict) -> dict:
