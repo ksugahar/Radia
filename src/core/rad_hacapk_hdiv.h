@@ -550,6 +550,15 @@ private:
     // constant-mass iteration chains pay the analyze+factor ONCE.  Identical input -> identical factor ->
     // bit-identical preconditioner: timing-only.  shared_ptr keeps the .h to a forward declaration.
     std::shared_ptr<RadMassRieszCache> m_massRieszCache;
+    // Get-or-build the persistent factor (the single shared implementation for both solve methods,
+    // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
+    // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to
+    // free a factor in use.  On a key MISS the old entry is released BEFORE the new factor is built, so
+    // at most ONE factor is resident at any instant (the pre-cache peak-memory contract).  When
+    // factor_s_accum is non-null it accumulates the fresh-factor wall time (a hit adds 0).
+    std::shared_ptr<RadMassRieszCache> EnsureMassRieszFactor(
+        const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
+        int n_face, const char* caller, double* factor_s_accum);
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
     void PhiInnerHexAffineCellSubVec(int hS, int subB, const double p[3],
