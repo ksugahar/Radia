@@ -2136,6 +2136,16 @@ the playback file; Cubit evaluates the file line-by-line in this mode, so write
 JSON records either as one-line dict assignments or by building the dictionary
 incrementally.
 
+Motor-housing thermal handoff gate (2026-07-11):
+`build123d_motor_housing_thermal_reference` returns the analytic multi-body
+volume, total separate-body surface area, body count, and curved-STEP
+tolerances for a cylindrical sleeve plus radial cooling fins.  The verified
+42/50/90 mm sleeve with eight 12 x 3 x 90 mm fins has nine bodies, volume
+`234019.097373788 mm^3`, and area `78825.19872953116 mm^2`.  Headless Cubit
+measured `233997.78602906506 mm^3` and the same area to `1.4e-14` relative;
+use the recorded `1e-4` curved-STEP volume tolerance and exact body-count gate.
+Keep the bodies separate until thermal contact/tie semantics are explicit.
+
 V-type IPM rotor-coupon continuous-loop gate (2026-06-29): a rectangular
 lamination coupon with two mirrored angled magnet pockets and a central bore
 is a readable public-safe proxy for IPM rotor CAD before a full rotor sector.
