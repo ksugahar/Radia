@@ -38,6 +38,7 @@ from .field_profile_gate import (
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
+from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
 from .parallel_wire_force_refinement_gate import (
     parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
 )
@@ -2524,6 +2525,36 @@ def force_coenergy_displacement_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "force_coenergy_displacement_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def rotational_kinematics_time_axis_gate(
+    time_values: list[float],
+    angles_deg: list[float],
+    speeds_rpm: list[float],
+    reported_time_unit: str,
+    time_value_basis: str = "si_seconds",
+    max_central_relative_error: float = 1.0e-8,
+    min_sample_count: int = 5,
+) -> str:
+    """Gate a result-table time axis using angle/speed kinematics."""
+    try:
+        result = _rotational_kinematics_time_axis_gate(
+            time_values,
+            angles_deg,
+            speeds_rpm,
+            reported_time_unit=reported_time_unit,
+            time_value_basis=time_value_basis,
+            max_central_relative_error=max_central_relative_error,
+            min_sample_count=min_sample_count,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "rotational_kinematics_time_axis_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
