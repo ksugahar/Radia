@@ -20,6 +20,9 @@ from .silicon_steel_knowledge import get_silicon_steel_knowledge
 from .permanent_magnet_knowledge import get_permanent_magnet_knowledge
 from .demagnetization_knowledge import get_demagnetization_knowledge
 from .radia_status_knowledge import get_radia_status_knowledge
+from .periodic_hysteresis_loss_gate import (
+    periodic_hysteresis_loss_energy_gate as _periodic_hysteresis_loss_energy_gate,
+)
 
 
 mcp = FastMCP("mcp-server-magnetic-materials")
@@ -205,6 +208,22 @@ def magnetic_materials_iron_loss(topic: str = "decision") -> str:
             "all"              - Everything
     """
     return get_iron_loss_knowledge(topic)
+
+
+@mcp.tool()
+def periodic_hysteresis_loss_energy_gate(summary_json: str) -> str:
+    """Gate periodic hysteresis power by cycle energy and loss closure."""
+    import json
+
+    try:
+        result = _periodic_hysteresis_loss_energy_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "periodic_hysteresis_loss_energy_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
