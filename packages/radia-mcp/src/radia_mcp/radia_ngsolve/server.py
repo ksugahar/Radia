@@ -41,6 +41,9 @@ from .acoustic_kernel_gate import (
     helmholtz_double_layer_low_frequency_gate as _helmholtz_double_layer_low_frequency_gate,
 )
 from .terminal_source_sweep_gate import cyclic_terminal_source_sweep_gate as _cyclic_terminal_source_sweep_gate
+from .terminal_phasor_balance_gate import (
+    cyclic_terminal_phasor_balance_gate as _cyclic_terminal_phasor_balance_gate,
+)
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
 from .moving_conductor_brake_gate import moving_conductor_eddy_brake_gate as _moving_conductor_eddy_brake_gate
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
@@ -2430,6 +2433,34 @@ def cyclic_terminal_source_sweep_gate(summary_json: str) -> str:
     try: result=_cyclic_terminal_source_sweep_gate(json.loads(summary_json))
     except (TypeError,ValueError) as exc: result={"policy":"cyclic_terminal_source_sweep_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
+
+
+@mcp.tool()
+def cyclic_terminal_phasor_balance_gate(
+    summary_json: str,
+    max_magnitude_relative_spread: float = 1.0e-5,
+    max_phase_step_error_deg: float = 1.0e-2,
+    max_zero_sequence_residual: float = 1.0e-5,
+    max_terminal_kcl_residual: float = 1.0e-5,
+    max_reference_current_relative_error: float = 2.0e-2,
+) -> str:
+    """Gate cyclic voltage/current triplets and all-terminal phasor KCL."""
+    try:
+        result = _cyclic_terminal_phasor_balance_gate(
+            json.loads(summary_json),
+            max_magnitude_relative_spread=max_magnitude_relative_spread,
+            max_phase_step_error_deg=max_phase_step_error_deg,
+            max_zero_sequence_residual=max_zero_sequence_residual,
+            max_terminal_kcl_residual=max_terminal_kcl_residual,
+            max_reference_current_relative_error=max_reference_current_relative_error,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "cyclic_terminal_phasor_balance_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
