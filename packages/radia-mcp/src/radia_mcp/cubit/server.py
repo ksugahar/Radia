@@ -47,6 +47,7 @@ from .knowledge.coreform_webinars import get_coreform_webinar_documentation
 from .vol_inventory import (
 	cubit_hex_geometry_refinement_gate,
 	cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate,
+	cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -756,6 +757,24 @@ def cubit_live_mixed_mesh_gate(
 			"status": "invalid_input",
 			"error": str(exc),
 		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_sweep_along_curve_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.2,
+	volume_relative_tolerance: float = 1.0e-12,
+) -> str:
+	"""Gate an all-hex mesh-carrying curve sweep and headless launcher evidence."""
+	try:
+		result = _cubit_sweep_along_curve_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			volume_relative_tolerance=volume_relative_tolerance,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {"policy": "cubit_sweep_along_curve_gate_v1", "status": "invalid_input", "error": str(exc)}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
