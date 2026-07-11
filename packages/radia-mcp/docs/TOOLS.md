@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **640 tools** across 43 MCP servers.
+Total: **641 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 55 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 47 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 65 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 66 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -235,6 +235,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
+| `loss_temperature_coupling_gate` | Gate an electromagnetic-loss to transient-temperature handoff. |
 | `matlab_acoustic_fembem_agent_guide` | Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
 | `multiport_impedance_sweep_gate` | Gate common-grid, positive-real, nontrivial complex impedance sweeps. |
