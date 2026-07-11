@@ -63,6 +63,7 @@ from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_h
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
 from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
 from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
+from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -77,6 +78,39 @@ mcp = FastMCP("mcp-server-motor")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_periodic_torque_sampling_gate(
+    period_deg: float,
+    sample_count: int,
+    endpoint_included: bool,
+    spectrum_excludes_duplicate_endpoint: bool,
+    torque_min_Nm: float,
+    torque_max_Nm: float,
+    speed_rps: float,
+    expected_step_deg: float | None = None,
+    step_tolerance_deg: float = 1.0e-9,
+) -> str:
+    """Validate periodic torque sampling and FFT endpoint ownership."""
+    try:
+        result = build_periodic_torque_sampling_gate(
+            period_deg=period_deg,
+            sample_count=sample_count,
+            endpoint_included=endpoint_included,
+            spectrum_excludes_duplicate_endpoint=spectrum_excludes_duplicate_endpoint,
+            torque_min_Nm=torque_min_Nm,
+            torque_max_Nm=torque_max_Nm,
+            speed_rps=speed_rps,
+            expected_step_deg=expected_step_deg,
+            step_tolerance_deg=step_tolerance_deg,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "periodic_torque_sampling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_onelab(topic: str = "overview") -> str:
