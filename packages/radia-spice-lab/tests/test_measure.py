@@ -52,6 +52,24 @@ def test_parse_ltspice_measure_value_event_ac_and_window_rows():
     assert by_name["low_gain"]["unit"] == "dB"
     assert math.isclose(by_name["low_gain"]["phase_deg"], -45.0)
     assert math.isclose(by_name["low_gain"]["at"], 1591.55)
+    assert math.isclose(by_name["low_gain"]["linear_value"], 10 ** (-3.0103 / 20.0))
+    assert by_name["low_gain"]["ac_measure_semantics_safe"] is True
+
+
+def test_ac_scalar_phase_measure_is_rejected_because_sign_is_lost():
+    log_text = "\n".join([
+        "mag_vout_1k: mag(V(out)) =(44.0364026328dB,0deg) at 1000",
+        "phase_vout_1k: ph(V(out)) =(39.0848501888dB,0deg) at 1000",
+    ])
+    summary = summarize_measure_log(log_text)
+    rows = {row["name"]: row for row in summary["measures"]}
+
+    assert summary["ok"] is False
+    assert summary["unsafe_ac_measure_names"] == ["phase_vout_1k"]
+    assert math.isclose(rows["mag_vout_1k"]["linear_value"], 159.1549430919, rel_tol=1e-10)
+    assert math.isclose(rows["phase_vout_1k"]["encoded_abs_phase_deg"], 90.0, rel_tol=1e-10)
+    assert rows["phase_vout_1k"]["ac_measure_semantics_safe"] is False
+    assert any("complex RAW" in warning for warning in summary["warnings"])
 
 
 def test_parse_ltspice_step_lines_with_numeric_assignments():

@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes eleven tools:
+Exposes thirteen tools:
 
 | Tool | Purpose |
 |---|---|
@@ -286,7 +286,9 @@ Exposes eleven tools:
 | `check_circuit(text, fmt, asy_search_dirs?)` | Lint: round-trip drift (count, GND-pin, **topology**) + static netlist checks. Returns `{ok, info, warnings}`. |
 | `info_circuit(text, fmt, asy_search_dirs?)` | Summary: component counts, symbol kinds, `.subckt` blocks. |
 | `compare_topology(netlist_a, netlist_b)` | Node-rename-invariant connectivity diff of two netlists. Returns `{equivalent, ...}`. |
-| `parse_measure_log(log_text)` | Public-safe LTspice `.measure` log parser. Returns schema `radia-spice-lab.measure-log.v1`, measure rows, `.step` rows, and duplicate-name warnings. |
+| `balanced_learning_profile()` | Equal-capability public/source MCP learning contract and self-check. |
+| `parse_measure_log(log_text)` | Public-safe LTspice `.measure` log parser. It recovers linear `mag()` values from the AC dB wrapper and rejects scalar `ph()` evidence whose sign was lost. |
+| `parse_stepped_measure_log(log_text)` | Pairs stepped `Measurement` rows with concrete `.step` assignments and rejects incomplete tables. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |

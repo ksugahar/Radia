@@ -57,6 +57,35 @@ def _as_float(value: str) -> float:
     return parsed
 
 
+def _annotate_ac_measure_semantics(item: dict[str, Any]) -> None:
+    """Annotate LTspice's AC tuple encoding without guessing lost signs.
+
+    LTspice formats even scalar ``mag(...)`` and ``ph(...)`` FIND results as
+    ``(x dB, 0deg)``.  Magnitude is recoverable from the dB wrapper, but a
+    scalar phase has already been converted to its absolute dB magnitude, so
+    its sign is gone.  Callers must use the complex RAW trace for phase.
+    """
+
+    expression = str(item.get("expression") or "").strip().lower()
+    function = expression.split("(", 1)[0].strip()
+    if function in {"mag", "abs"}:
+        item["measurement_semantics"] = "magnitude_linear_from_db_wrapper"
+        item["linear_value"] = 10.0 ** (float(item["value"]) / 20.0)
+        item["linear_unit"] = "ratio"
+        item["ac_measure_semantics_safe"] = True
+    elif function in {"ph", "phase"}:
+        item["measurement_semantics"] = "phase_scalar_sign_lost"
+        item["encoded_abs_phase_deg"] = 10.0 ** (float(item["value"]) / 20.0)
+        item["ac_measure_semantics_safe"] = False
+        item["semantic_warning"] = (
+            "LTspice AC .measure ph()/phase() dB wrapping loses the phase sign; "
+            "derive phase from the complex RAW trace instead."
+        )
+    else:
+        item["measurement_semantics"] = "complex_db_phase"
+        item["ac_measure_semantics_safe"] = True
+
+
 def parse_ltspice_measure_lines(lines: list[str]) -> list[dict[str, Any]]:
     """Parse scalar LTspice `.measure` result lines from log text lines.
 
@@ -123,6 +152,7 @@ def parse_ltspice_measure_lines(lines: list[str]) -> list[dict[str, Any]]:
             if window:
                 item["from"] = _as_float(window.group("from"))
                 item["to"] = _as_float(window.group("to"))
+            _annotate_ac_measure_semantics(item)
             measures.append(item)
             continue
         match = value_re.match(line) or scalar_re.match(line)
@@ -308,18 +338,34 @@ def summarize_measure_log(log_text: str) -> dict[str, Any]:
         for item in measures
         if sum(1 for other in measures if other.get("name") == item.get("name")) > 1
     })
+    unsafe_ac_measure_names = [
+        str(item.get("name"))
+        for item in measures
+        if item.get("ac_measure_semantics_safe") is False
+    ]
     warnings: list[str] = []
     if not measures:
         warnings.append("no LTspice .measure result rows were parsed")
     if duplicate_names:
         warnings.append(f"duplicate .measure result names: {', '.join(duplicate_names)}")
+    if unsafe_ac_measure_names:
+        warnings.append(
+            "phase sign is not recoverable from scalar AC ph()/phase() .measure rows: "
+            + ", ".join(unsafe_ac_measure_names)
+            + "; use the complex RAW trace"
+        )
     return {
         "schema": "radia-spice-lab.measure-log.v1",
-        "ok": bool(measures) and not duplicate_names,
+        "ok": bool(measures) and not duplicate_names and not unsafe_ac_measure_names,
         "measure_count": len(measures),
         "step_count": len(steps),
         "measure_names": [str(item.get("name")) for item in measures],
         "duplicate_measure_names": duplicate_names,
+        "unsafe_ac_measure_names": unsafe_ac_measure_names,
+        "checks": {
+            "unique_measure_names": not duplicate_names,
+            "ac_measure_semantics_safe": not unsafe_ac_measure_names,
+        },
         "measures": measures,
         "steps": steps,
         "warnings": warnings,
