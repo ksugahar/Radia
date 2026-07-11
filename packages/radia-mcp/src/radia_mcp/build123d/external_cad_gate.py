@@ -158,3 +158,87 @@ def external_cad_mass_topology_crosscheck_gate(
             "centroid validation while retaining volume, area, bbox, STEP digest, and Euler topology checks."
         ),
     }
+
+
+def step_portability_diagnosis_gate(
+    result: Mapping[str, Any],
+    *,
+    self_roundtrip_rtol: float = 1.0e-12,
+    external_volume_rtol: float = 2.0e-6,
+    import_mode_rtol: float = 1.0e-12,
+    required_import_modes: tuple[str, ...] = ("heal", "noheal"),
+) -> dict[str, Any]:
+    """Locate STEP volume loss in export, an external translator, or import mode."""
+
+    if not isinstance(result, Mapping):
+        raise ValueError("result must be a mapping")
+    tolerances = (self_roundtrip_rtol, external_volume_rtol, import_mode_rtol)
+    if any(not math.isfinite(float(value)) or float(value) < 0.0 for value in tolerances):
+        raise ValueError("tolerances must be finite and non-negative")
+
+    native_volume = _positive_metric(result, "native_volume")
+    self_volume = _positive_metric(result, "self_roundtrip_volume")
+    imports_raw = result.get("external_imports")
+    if not isinstance(imports_raw, list) or not imports_raw:
+        raise ValueError("external_imports must be a non-empty list")
+
+    imports: list[dict[str, Any]] = []
+    for index, row in enumerate(imports_raw):
+        if not isinstance(row, Mapping):
+            raise ValueError(f"external_imports[{index}] must be a mapping")
+        mode = str(row.get("mode") or "").strip().lower()
+        volume = _positive_metric(row, "volume")
+        imports.append({
+            "mode": mode,
+            "volume": volume,
+            "volume_count": int(row.get("volume_count", -1)),
+            "relative_error": abs(volume - native_volume) / native_volume,
+        })
+
+    self_error = abs(self_volume - native_volume) / native_volume
+    modes = [row["mode"] for row in imports]
+    required_modes = {str(mode).strip().lower() for mode in required_import_modes}
+    import_spread = (
+        max(row["volume"] for row in imports) - min(row["volume"] for row in imports)
+    ) / native_volume
+    self_ok = self_error <= float(self_roundtrip_rtol)
+    external_ok = all(row["relative_error"] <= float(external_volume_rtol) for row in imports)
+    modes_invariant = import_spread <= float(import_mode_rtol)
+
+    if not self_ok:
+        diagnosis = "step_self_roundtrip_loss"
+    elif not modes_invariant:
+        diagnosis = "external_import_mode_inconsistency"
+    elif not external_ok:
+        diagnosis = "external_kernel_translation_loss"
+    else:
+        diagnosis = "portable"
+
+    checks = {
+        "upstream_native_source_recorded": result.get("source_kind") == "upstream_native_example",
+        "upstream_commit_recorded": len(str(result.get("upstream_commit") or "")) == 40,
+        "source_digest_recorded": len(str(result.get("source_sha256") or "")) == 64,
+        "step_digest_recorded": len(str(result.get("step_sha256") or "")) == 64,
+        "self_roundtrip_matches": self_ok,
+        "required_import_modes_present": required_modes.issubset(set(modes)),
+        "import_modes_unique": len(modes) == len(set(modes)),
+        "single_volume_preserved": all(row["volume_count"] == 1 for row in imports),
+        "external_volume_matches": external_ok,
+        "external_import_modes_invariant": modes_invariant,
+    }
+    return {
+        "policy": "build123d_step_portability_diagnosis_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "diagnosis": diagnosis,
+        "healing_not_root_cause": diagnosis == "external_kernel_translation_loss" and modes_invariant,
+        "native_volume": native_volume,
+        "self_roundtrip_relative_error": self_error,
+        "external_imports": imports,
+        "external_import_mode_spread_relative": import_spread,
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "lesson": (
+            "A STEP file is solver-ready only after native-to-STEP self-roundtrip and independent-kernel "
+            "mass properties agree. Equal heal/noheal failures implicate translation compatibility, not healing."
+        ),
+    }

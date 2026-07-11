@@ -280,6 +280,37 @@ def build123d_external_cad_mass_topology_gate(
 
 
 @mcp.tool()
+def build123d_step_portability_diagnosis_gate(
+    result_json: str,
+    self_roundtrip_rtol: float = 1.0e-12,
+    external_volume_rtol: float = 2.0e-6,
+    import_mode_rtol: float = 1.0e-12,
+) -> str:
+    """Diagnose whether STEP mass loss occurs in export or external import.
+
+    The structured input records native and same-kernel STEP volumes plus
+    independent ``heal`` and ``noheal`` import rows.
+    """
+
+    try:
+        from .external_cad_gate import step_portability_diagnosis_gate
+
+        result = step_portability_diagnosis_gate(
+            json.loads(result_json),
+            self_roundtrip_rtol=self_roundtrip_rtol,
+            external_volume_rtol=external_volume_rtol,
+            import_mode_rtol=import_mode_rtol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_step_portability_diagnosis_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def build123d_perforated_prism_roundtrip_gate(
     reference_volume: float,
     imported_volume: float,
