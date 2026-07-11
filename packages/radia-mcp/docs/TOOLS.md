@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **659 tools** across 43 MCP servers.
+Total: **660 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **659 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 36 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 37 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
@@ -419,6 +419,7 @@ Module: `radia_mcp.motor.server`
 | `motor_dual_lane_training_catalog` | Return the public-safe wide motor learning catalog. |
 | `motor_dual_lane_training_gate` | Check that the public motor catalog is complete and provenance-scrubbed. |
 | `motor_dual_lane_training_route` | Route a motor prompt to one catalog case and both radia-motor lanes. |
+| `motor_dual_torque_method_curve_gate` | Gate two independently evaluated static-torque curves. |
 | `motor_em_force_extras` | Forward to `differential_forms_em_force_extras` -- advanced EM force |
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |

@@ -69,6 +69,7 @@ from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet
 from .variable_magnet_gate import variable_magnet_material_parameter_gate as build_variable_magnet_material_parameter_gate
 from .permanent_magnet_force_pair_gate import permanent_magnet_force_pair_gate as build_permanent_magnet_force_pair_gate
 from .demagnetization_history_gate import permanent_magnet_demagnetization_history_gate as build_permanent_magnet_demagnetization_history_gate
+from .dual_torque_curve_gate import dual_torque_method_curve_gate as build_dual_torque_method_curve_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -83,6 +84,19 @@ mcp = FastMCP("mcp-server-motor")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_dual_torque_method_curve_gate(summary_json: str) -> str:
+    """Gate two independently evaluated static-torque curves."""
+    try:
+        result = build_dual_torque_method_curve_gate(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "dual_torque_method_curve_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_permanent_magnet_demagnetization_history_gate(
