@@ -35,6 +35,9 @@ from .field_profile_gate import (
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
+from .parallel_wire_force_refinement_gate import (
+    parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
+)
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
@@ -2267,6 +2270,45 @@ def symmetric_axial_field_profile_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "symmetric_axial_field_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def parallel_wire_force_refinement_gate(
+    refinement_levels: list[float],
+    force_wire1_rows: list[list[float]],
+    force_wire2_rows: list[list[float]],
+    expected_force_magnitude: float,
+    separation_direction: list[float] | None = None,
+    expected_wire2_radial_sign: int | None = None,
+    min_sample_count: int = 3,
+    max_final_relative_error: float = 0.01,
+    max_final_pair_relative_residual: float = 0.01,
+    max_final_transverse_relative_force: float = 0.01,
+    min_initial_to_final_error_ratio: float = 1.2,
+) -> str:
+    """Gate a reciprocal two-wire force refinement sweep without requiring monotone error."""
+
+    try:
+        result = _parallel_wire_force_refinement_gate(
+            refinement_levels,
+            force_wire1_rows,
+            force_wire2_rows,
+            expected_force_magnitude=expected_force_magnitude,
+            separation_direction=separation_direction or [1.0, 0.0],
+            expected_wire2_radial_sign=expected_wire2_radial_sign,
+            min_sample_count=min_sample_count,
+            max_final_relative_error=max_final_relative_error,
+            max_final_pair_relative_residual=max_final_pair_relative_residual,
+            max_final_transverse_relative_force=max_final_transverse_relative_force,
+            min_initial_to_final_error_ratio=min_initial_to_final_error_ratio,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "parallel_wire_force_refinement_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
