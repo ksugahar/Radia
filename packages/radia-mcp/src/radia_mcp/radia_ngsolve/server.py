@@ -67,6 +67,7 @@ from .transient_coupled_coil_gate import (
     transient_coupled_coil_response_gate as _transient_coupled_coil_response_gate,
 )
 from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
+from .global_local_optimization_gate import global_local_optimization_replay_gate as _global_local_optimization_replay_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2854,6 +2855,16 @@ def skin_effect_adaptive_energy_loss_gate(
         )
     except (TypeError, ValueError, KeyError) as exc:
         result = {"policy": "skin_effect_adaptive_energy_loss_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def global_local_optimization_replay_gate(summary_json: str) -> str:
+    """Gate a stochastic global-search to derivative-checked local-polish replay."""
+    try:
+        result = _global_local_optimization_replay_gate(summary_json)
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {"policy":"global_local_optimization_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
