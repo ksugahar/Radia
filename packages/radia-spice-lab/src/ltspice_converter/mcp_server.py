@@ -27,6 +27,7 @@ from .filter_gates import sallen_key_filter_family_gate as _sallen_key_filter_fa
 from .hysteresis_gate import hysteretic_inductor_cycle_gate as _hysteretic_inductor_cycle_gate
 from .rectifier_gate import half_wave_rectifier_gate as _half_wave_rectifier_gate
 from .voltage_multiplier_gate import cockcroft_walton_stage_gate as _cockcroft_walton_stage_gate
+from .boost_gate import boost_converter_steady_state_gate as _boost_converter_steady_state_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
@@ -73,6 +74,13 @@ def cockcroft_walton_stage_gate(
         )
     except ValueError as exc:
         return {"policy": "cockcroft_walton_stage_gate_v1", "status": "invalid_input", "error": str(exc)}
+
+
+@mcp.tool()
+def boost_converter_steady_state_gate(summary: dict) -> dict:
+    """Gate periodic boost conversion, power, volt-second and charge balance."""
+    try: return _boost_converter_steady_state_gate(summary)
+    except ValueError as exc: return {"policy":"boost_converter_steady_state_gate_v1","status":"invalid_input","error":str(exc)}
 
 
 @mcp.tool()
