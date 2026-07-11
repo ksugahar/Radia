@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **647 tools** across 43 MCP servers.
+Total: **651 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 48 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 70 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 74 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -222,6 +222,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
+| `force_coenergy_displacement_gate` | Gate direct force against the central derivative of magnetic coenergy. |
 | `force_position_profile_gate` | Gate a force-position sweep without assuming it is monotonic. |
 | `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
 | `fsi_scattering_invariants_gate` | Gate lossless FSI reciprocity, energy closure, and exterior-method agreement. |
@@ -232,6 +233,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
 | `homogenized_bundle_impedance_comparison_gate` | Gate a stranded-bundle approximation against an explicit reference. |
 | `inductance_energy_mutual_gate` | Gate L=2W/I^2 and an analytic one-direction mutual inductance. |
+| `inductance_matrix_family_gate` | Gate a family of linear two-winding inductance matrices. |
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
@@ -260,10 +262,12 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
+| `rotational_kinematics_time_axis_gate` | Gate a result-table time axis using angle/speed kinematics. |
 | `skin_effect_adaptive_energy_loss_gate` | Gate current-port identities and adaptive skin-effect loss convergence. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
 | `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
+| `symmetric_complex_field_curve_gate` | Gate an even- or odd-sampled complex field curve by mirror symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
 | `transient_coupled_coil_response_gate` | Gate a passive shorted-secondary transient induced-current history. |
 | `twin_conductor_skin_effect_frequency_gate` | Gate passive twin-conductor R/L and impedance trends over frequency. |

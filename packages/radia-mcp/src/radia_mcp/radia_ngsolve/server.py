@@ -34,6 +34,7 @@ from .cq_scattering_arrival_gate import cq_scattering_arrival_gate as _cq_scatte
 from .physics_result_preflight_gate import physics_result_preflight_gate as _physics_result_preflight_gate
 from .field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
+    symmetric_complex_field_curve_gate as _symmetric_complex_field_curve_gate,
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2361,6 +2362,43 @@ def dual_formulation_symmetric_field_profile_gate(
         max_symmetry_relative=max_symmetry_relative,
         min_sample_count=min_sample_count,
     ), indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def symmetric_complex_field_curve_gate(
+    axis_positions: list[float],
+    field_real: list[float],
+    log10_relative_residual: float,
+    field_imag: list[float] | None = None,
+    axis_unit: str = "m",
+    field_unit: str = "A/m",
+    min_sample_count: int = 9,
+    max_axis_symmetry_relative: float = 1.0e-9,
+    max_field_symmetry_relative: float = 2.0e-3,
+    max_log10_relative_residual: float = -8.0,
+) -> str:
+    """Gate an even- or odd-sampled complex field curve by mirror symmetry."""
+
+    try:
+        result = _symmetric_complex_field_curve_gate(
+            axis_positions,
+            field_real,
+            field_imag,
+            axis_unit=axis_unit,
+            field_unit=field_unit,
+            log10_relative_residual=log10_relative_residual,
+            min_sample_count=min_sample_count,
+            max_axis_symmetry_relative=max_axis_symmetry_relative,
+            max_field_symmetry_relative=max_field_symmetry_relative,
+            max_log10_relative_residual=max_log10_relative_residual,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "symmetric_complex_field_curve_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()

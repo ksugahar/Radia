@@ -6,6 +6,137 @@ import math
 from typing import Any
 
 
+def symmetric_complex_field_curve_gate(
+    axis_positions: list[float],
+    field_real: list[float],
+    field_imag: list[float] | None = None,
+    *,
+    axis_unit: str = "m",
+    field_unit: str = "A/m",
+    log10_relative_residual: float,
+    min_sample_count: int = 9,
+    max_axis_symmetry_relative: float = 1.0e-9,
+    max_field_symmetry_relative: float = 2.0e-3,
+    max_log10_relative_residual: float = -8.0,
+) -> dict[str, Any]:
+    """Gate an origin-centered complex field curve by mirror symmetry.
+
+    Unlike :func:`symmetric_axial_field_profile_gate`, this gate accepts even
+    sample counts and does not require an analytic center value.  It is useful
+    for result readers that sample a full line without placing a node exactly
+    at the origin.
+    """
+
+    positions = [float(value) for value in axis_positions]
+    real = [float(value) for value in field_real]
+    imag = (
+        [float(value) for value in field_imag]
+        if field_imag is not None
+        else [0.0] * len(real)
+    )
+    count = len(positions)
+    if int(min_sample_count) < 5:
+        raise ValueError("min_sample_count must be at least 5")
+    if len(real) != count or len(imag) != count:
+        raise ValueError("axis and field arrays must have equal length")
+    if not str(axis_unit).strip() or not str(field_unit).strip():
+        raise ValueError("axis_unit and field_unit must be non-empty")
+    if not all(
+        math.isfinite(value)
+        for values in (positions, real, imag)
+        for value in values
+    ):
+        raise ValueError("axis and field values must be finite")
+    residual = float(log10_relative_residual)
+    axis_tol = float(max_axis_symmetry_relative)
+    field_tol = float(max_field_symmetry_relative)
+    residual_limit = float(max_log10_relative_residual)
+    if not math.isfinite(residual):
+        raise ValueError("log10_relative_residual must be finite")
+    if any(not math.isfinite(value) or value < 0.0 for value in (axis_tol, field_tol)):
+        raise ValueError("relative tolerances must be finite and nonnegative")
+    if not math.isfinite(residual_limit) or residual_limit >= 0.0:
+        raise ValueError("max_log10_relative_residual must be finite and negative")
+
+    axis_scale = max((abs(value) for value in positions), default=0.0)
+    field_scale = max(
+        (abs(complex(real[index], imag[index])) for index in range(count)),
+        default=0.0,
+    )
+    pair_count = count // 2
+    axis_symmetry_relative = (
+        max(
+            (abs(positions[index] + positions[-1 - index]) for index in range(pair_count)),
+            default=0.0,
+        )
+        / axis_scale
+        if axis_scale > 0.0
+        else math.inf
+    )
+    field_symmetry_relative = (
+        max(
+            (
+                abs(
+                    complex(real[index], imag[index])
+                    - complex(real[-1 - index], imag[-1 - index])
+                )
+                for index in range(pair_count)
+            ),
+            default=0.0,
+        )
+        / field_scale
+        if field_scale > 0.0
+        else math.inf
+    )
+    strictly_increasing = all(
+        positions[index + 1] > positions[index]
+        for index in range(max(0, count - 1))
+    )
+    if count % 2:
+        center_bracketed = count > 0 and abs(positions[count // 2]) <= axis_tol * axis_scale
+    else:
+        center_bracketed = count >= 2 and positions[count // 2 - 1] < 0.0 < positions[count // 2]
+
+    checks = {
+        "sample_count_sufficient": count >= int(min_sample_count),
+        "axis_strictly_increasing": strictly_increasing,
+        "axis_straddles_origin": count > 1 and positions[0] < 0.0 < positions[-1],
+        "origin_sampled_or_bracketed": center_bracketed,
+        "axis_is_antisymmetric": axis_symmetry_relative <= axis_tol,
+        "complex_field_nonzero": field_scale > 0.0,
+        "complex_field_is_mirror_symmetric": field_symmetry_relative <= field_tol,
+        "solver_residual_converged": residual <= residual_limit,
+    }
+    return {
+        "policy": "symmetric_complex_field_curve_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "sample_count": count,
+            "pair_count": pair_count,
+            "axis_min": positions[0] if count else None,
+            "axis_max": positions[-1] if count else None,
+            "field_scale": field_scale,
+            "axis_symmetry_relative": axis_symmetry_relative,
+            "field_symmetry_relative": field_symmetry_relative,
+            "log10_relative_residual": residual,
+        },
+        "units": {"axis": str(axis_unit), "field": str(field_unit)},
+        "tolerances": {
+            "min_sample_count": int(min_sample_count),
+            "max_axis_symmetry_relative": axis_tol,
+            "max_field_symmetry_relative": field_tol,
+            "max_log10_relative_residual": residual_limit,
+        },
+        "notes": [
+            "even sample counts are valid when the origin is bracketed by the central pair",
+            "the complex field is compared directly, so magnitude-only phase errors cannot pass",
+            "mirror symmetry is a validation identity, not an independent absolute-field reference",
+        ],
+    }
+
+
 def symmetric_axial_field_profile_gate(
     axis_positions: list[float],
     axial_field: list[float],
