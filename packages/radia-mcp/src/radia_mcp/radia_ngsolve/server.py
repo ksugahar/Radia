@@ -48,6 +48,9 @@ from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _coggin
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
+from .harmonic_zero_net_circuit_gate import (
+    harmonic_zero_net_circuit_gate as _harmonic_zero_net_circuit_gate,
+)
 from .moving_conductor_brake_gate import moving_conductor_eddy_brake_gate as _moving_conductor_eddy_brake_gate
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
@@ -2489,6 +2492,20 @@ def linear_eddy_levitation_force_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "linear_eddy_levitation_force_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def harmonic_zero_net_circuit_gate(summary_json: str) -> str:
+    """Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata."""
+    try:
+        result = _harmonic_zero_net_circuit_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "harmonic_zero_net_circuit_faraday_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
