@@ -28,6 +28,7 @@ from .shape_optimization_knowledge import get_shape_optimization_documentation
 from .topology_derivative_knowledge import get_topology_derivative_documentation
 from .applications_knowledge import get_applications_documentation
 from .cae_ai_contract import cae_ai_artifact_gate as build_cae_ai_artifact_gate
+from .simplex_stationarity_gate import simplex_stationarity_audit_gate as build_simplex_stationarity_audit_gate
 
 mcp = FastMCP("mcp-server-topology-optimization")
 
@@ -103,6 +104,17 @@ def topology_opt_cae_ai_artifact_gate(method_family: str, artifact_json: str) ->
             reproducibility fields returned in the gate report.
     """
     return build_cae_ai_artifact_gate(method_family, artifact_json)
+
+
+@mcp.tool()
+def topology_opt_simplex_stationarity_audit_gate(summary_json: str) -> str:
+    """Audit derivative-free convergence using independent stationarity checks.
+
+    A method can report convergence because its simplex or objective spread is
+    small while stopping at a nonstationary point. This gate requires an
+    independently evaluated gradient and trusted reference/control evidence.
+    """
+    return build_simplex_stationarity_audit_gate(summary_json)
 
 
 
