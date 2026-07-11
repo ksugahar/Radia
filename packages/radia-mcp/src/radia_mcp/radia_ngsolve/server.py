@@ -43,6 +43,7 @@ from .capacitance_identity_gate import (
 )
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
+from .hmatrix_scaling_gate import hmatrix_compression_scaling_gate as _hmatrix_compression_scaling_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
@@ -2451,6 +2452,34 @@ def radar_range_rcs_profile_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "radar_range_rcs_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def hmatrix_compression_scaling_gate(
+    rows_json: str,
+    max_matvec_relative_error: float = 1.0e-8,
+    max_rank: int = 20,
+    max_storage_growth_exponent: float = 1.25,
+    min_dense_growth_exponent: float = 1.9,
+) -> str:
+    """Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling."""
+
+    try:
+        rows = json.loads(rows_json)
+        result = _hmatrix_compression_scaling_gate(
+            rows,
+            max_matvec_relative_error=max_matvec_relative_error,
+            max_rank=max_rank,
+            max_storage_growth_exponent=max_storage_growth_exponent,
+            min_dense_growth_exponent=min_dense_growth_exponent,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "hmatrix_compression_scaling_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
