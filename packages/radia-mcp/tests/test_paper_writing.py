@@ -357,6 +357,32 @@ of the bulk CLN.}
     assert r["n_findings"] == 0
 
 
+def test_digest_human_review_triggers_flag_overclaim_and_ambiguous_method_subject():
+    tex = r"""
+\section{Results}
+The finite parameter sweep is a strong evidence for the general mechanism.
+低透磁率での数値例は，高透磁率での安定性の基礎的な証拠である。
+導出したモーメント条件はFortran実装に組み込んだ。
+"""
+    r = pw.paper_writing_check_digest_human_review_triggers(tex, max_report=20)
+    rules = {f["rule"] for f in r["findings"]}
+    assert "overstated_numerical_evidence" in rules
+    assert "ambiguous_derived_method_subject" in rules
+
+
+def test_digest_human_review_triggers_accept_scoped_claim_and_named_method_subject():
+    tex = r"""
+\section{Results}
+The finite parameter sweep supports the proposed interpretation.
+低透磁率での数値例は，高透磁率での安定性を考察するための知見を与える。
+導出したMMPMのモーメント条件はFortran実装に組み込んだ。
+"""
+    r = pw.paper_writing_check_digest_human_review_triggers(tex, max_report=20)
+    rules = {f["rule"] for f in r["findings"]}
+    assert "overstated_numerical_evidence" not in rules
+    assert "ambiguous_derived_method_subject" not in rules
+
+
 # =====================================================================
 # Figure / equation / table tools
 # =====================================================================
