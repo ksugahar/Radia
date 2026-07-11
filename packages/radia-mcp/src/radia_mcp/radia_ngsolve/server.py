@@ -51,6 +51,7 @@ from .force_error_convergence_gate import (
     dual_formulation_force_error_convergence_gate as _dual_formulation_force_error_convergence_gate,
 )
 from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_force_flux_sweep_gate
+from .linear_induction_gate import linear_induction_frequency_sweep_gate as _linear_induction_frequency_sweep_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
@@ -2601,6 +2602,31 @@ def voice_coil_force_flux_sweep_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "voice_coil_force_flux_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def linear_induction_frequency_sweep_gate(
+    rows: list[dict],
+    thrust_abs_tol_n: float = 0.75,
+    thrust_rel_tol: float = 2.0e-3,
+    phase_balance_atol_a: float = 1.0e-9,
+) -> str:
+    """Gate a linear-induction frequency sweep by thrust, loss, and phase balance."""
+
+    try:
+        result = _linear_induction_frequency_sweep_gate(
+            rows,
+            thrust_abs_tol_n=thrust_abs_tol_n,
+            thrust_rel_tol=thrust_rel_tol,
+            phase_balance_atol_a=phase_balance_atol_a,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "linear_induction_frequency_sweep_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
