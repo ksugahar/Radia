@@ -55,6 +55,9 @@ from .linear_induction_gate import linear_induction_frequency_sweep_gate as _lin
 from .conductor_frequency_gate import twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 from .one_port_power_gate import one_port_power_balance_gate as _one_port_power_balance_gate
+from .fsi_scattering_invariants_gate import (
+    fsi_scattering_invariants_gate as _fsi_scattering_invariants_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2256,6 +2259,36 @@ def cq_scattering_arrival_gate(
         )
     except (TypeError, ValueError) as exc:
         result = {"policy": "cq_scattering_arrival_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def fsi_scattering_invariants_gate(
+    reciprocity_relative_error: float,
+    optical_theorem_relative_error: float,
+    bem_dtn_relative_error: float,
+    max_solver_residual: float,
+    lossless_material: bool,
+    time_convention: str,
+    max_invariant_error: float = 0.05,
+    max_bem_dtn_error: float = 0.05,
+    max_solver_residual_allowed: float = 1.0e-8,
+) -> str:
+    """Gate lossless FSI reciprocity, energy closure, and exterior-method agreement."""
+    try:
+        result = _fsi_scattering_invariants_gate(
+            reciprocity_relative_error=reciprocity_relative_error,
+            optical_theorem_relative_error=optical_theorem_relative_error,
+            bem_dtn_relative_error=bem_dtn_relative_error,
+            max_solver_residual=max_solver_residual,
+            lossless_material=lossless_material,
+            time_convention=time_convention,
+            max_invariant_error=max_invariant_error,
+            max_bem_dtn_error=max_bem_dtn_error,
+            max_solver_residual_allowed=max_solver_residual_allowed,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {"policy": "fsi_scattering_invariants_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
