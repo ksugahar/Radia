@@ -343,6 +343,34 @@ def build123d_step_portability_diagnosis_gate(
 
 
 @mcp.tool()
+def build123d_curved_step_topology_crosscheck_gate(
+    result_json: str,
+    self_mass_rtol: float = 1.0e-7,
+    external_volume_rtol: float = 1.0e-4,
+    import_mode_rtol: float = 1.0e-10,
+    bbox_atol: float = 1.0e-9,
+) -> str:
+    """Gate curved STEP mass and exact topology across independent imports."""
+    try:
+        from .external_cad_gate import curved_step_topology_crosscheck_gate
+
+        result = curved_step_topology_crosscheck_gate(
+            json.loads(result_json),
+            self_mass_rtol=self_mass_rtol,
+            external_volume_rtol=external_volume_rtol,
+            import_mode_rtol=import_mode_rtol,
+            bbox_atol=bbox_atol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_curved_step_topology_crosscheck_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def build123d_path_sweep_handoff_gate(
     result_json: str,
     path_length_rtol: float = 1.0e-12,

@@ -242,3 +242,153 @@ def step_portability_diagnosis_gate(
             "mass properties agree. Equal heal/noheal failures implicate translation compatibility, not healing."
         ),
     }
+
+
+def curved_step_topology_crosscheck_gate(
+    result: Mapping[str, Any],
+    *,
+    self_mass_rtol: float = 1.0e-7,
+    external_volume_rtol: float = 1.0e-4,
+    import_mode_rtol: float = 1.0e-10,
+    bbox_atol: float = 1.0e-9,
+) -> dict[str, Any]:
+    """Gate a curved single-solid STEP across same and independent kernels.
+
+    A wider curved-surface volume tolerance is accepted only when source
+    identity is bound, same-kernel STEP mass/topology closes, two independent
+    import modes agree, and external body/face/edge counts remain exact.
+    """
+    if not isinstance(result, Mapping):
+        raise ValueError("result must be a mapping")
+    tolerances = (self_mass_rtol, external_volume_rtol, import_mode_rtol, bbox_atol)
+    if any(not math.isfinite(float(value)) or float(value) < 0.0 for value in tolerances):
+        raise ValueError("tolerances must be finite and nonnegative")
+
+    native = result.get("native")
+    roundtrip = result.get("roundtrip")
+    imports_raw = result.get("external_imports")
+    if not isinstance(native, Mapping) or not isinstance(roundtrip, Mapping):
+        raise ValueError("native and roundtrip mappings are required")
+    if not isinstance(imports_raw, list) or len(imports_raw) < 2:
+        raise ValueError("at least two external import modes are required")
+
+    native_volume = _positive_metric(native, "volume")
+    native_area = _positive_metric(native, "area")
+    roundtrip_volume = _positive_metric(roundtrip, "volume")
+    roundtrip_area = _positive_metric(roundtrip, "area")
+    native_bbox = _vector(native, "bbox_size")
+    roundtrip_bbox = _vector(roundtrip, "bbox_size")
+    native_faces = int(native.get("faces", 0))
+    native_edges = int(native.get("edges", 0))
+    native_solids = int(native.get("solids", 0))
+    roundtrip_faces = int(roundtrip.get("faces", 0))
+    roundtrip_edges = int(roundtrip.get("edges", 0))
+    roundtrip_solids = int(roundtrip.get("solids", 0))
+
+    self_volume_error = abs(roundtrip_volume - native_volume) / native_volume
+    self_area_error = abs(roundtrip_area - native_area) / native_area
+    bbox_error = max(abs(left - right) for left, right in zip(native_bbox, roundtrip_bbox))
+
+    imports = []
+    for index, row in enumerate(imports_raw):
+        if not isinstance(row, Mapping):
+            raise ValueError(f"external_imports[{index}] must be a mapping")
+        volume = _positive_metric(row, "volume")
+        imports.append({
+            "mode": str(row.get("mode") or "").strip().lower(),
+            "volume": volume,
+            "volume_relative_error": abs(volume - native_volume) / native_volume,
+            "body_count": int(row.get("body_count", -1)),
+            "volume_count": int(row.get("volume_count", -1)),
+            "surface_count": int(row.get("surface_count", -1)),
+            "curve_count": int(row.get("curve_count", -1)),
+            "step_sha256": str(row.get("step_sha256") or ""),
+        })
+    modes = [row["mode"] for row in imports]
+    external_volumes = [row["volume"] for row in imports]
+    import_spread = (max(external_volumes) - min(external_volumes)) / native_volume
+    max_external_error = max(row["volume_relative_error"] for row in imports)
+    classified_bias = max_external_error > self_mass_rtol
+    classification_ok = (
+        not classified_bias
+        or (
+            result.get("external_volume_bias_classification")
+            == "cross_kernel_curved_surface_translation"
+            and bool(str(result.get("external_volume_bias_tolerance_basis") or "").strip())
+        )
+    )
+    step_sha = str(result.get("step_sha256") or "")
+    checks = {
+        "upstream_native_source_recorded": result.get("source_kind")
+        == "upstream_native_example",
+        "upstream_commit_recorded": len(str(result.get("upstream_commit") or "")) == 40,
+        "source_digest_recorded": len(str(result.get("source_sha256") or "")) == 64,
+        "build123d_version_recorded": bool(str(result.get("build123d_version") or "").strip()),
+        "step_digest_recorded": len(step_sha) == 64,
+        "native_and_roundtrip_valid_single_solid": (
+            native.get("is_valid") is True
+            and roundtrip.get("is_valid") is True
+            and native_solids == roundtrip_solids == 1
+        ),
+        "same_kernel_volume_matches": self_volume_error <= self_mass_rtol,
+        "same_kernel_area_matches": self_area_error <= self_mass_rtol,
+        "same_kernel_bbox_matches": bbox_error <= bbox_atol,
+        "same_kernel_topology_matches": (
+            native_faces == roundtrip_faces and native_edges == roundtrip_edges
+        ),
+        "external_import_modes_recorded_and_unique": (
+            {"heal", "noheal"}.issubset(set(modes)) and len(modes) == len(set(modes))
+        ),
+        "same_step_digest_used_by_external_imports": all(
+            row["step_sha256"] == step_sha for row in imports
+        ),
+        "external_single_body_single_volume": all(
+            row["body_count"] == row["volume_count"] == 1 for row in imports
+        ),
+        "external_face_edge_topology_matches": all(
+            row["surface_count"] == native_faces and row["curve_count"] == native_edges
+            for row in imports
+        ),
+        "external_volume_within_curved_step_tolerance": (
+            max_external_error <= external_volume_rtol
+        ),
+        "external_import_modes_volume_invariant": import_spread <= import_mode_rtol,
+        "cross_kernel_volume_bias_explicitly_classified": classification_ok,
+        "timings_recorded": all(
+            float((result.get("timings_s") or {}).get(name, -1.0)) >= 0.0
+            for name in ("source_build", "step_export", "step_reimport", "external_import")
+        ),
+    }
+    return {
+        "policy": "build123d_curved_step_topology_crosscheck_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "diagnosis": (
+            "portable_with_classified_cross_kernel_bias"
+            if all(checks.values()) and classified_bias
+            else "portable"
+            if all(checks.values())
+            else "needs_attention"
+        ),
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "self_volume_relative_error": self_volume_error,
+            "self_area_relative_error": self_area_error,
+            "bbox_absolute_error": bbox_error,
+            "maximum_external_volume_relative_error": max_external_error,
+            "external_import_mode_volume_spread": import_spread,
+            "native_face_count": native_faces,
+            "native_edge_count": native_edges,
+        },
+        "external_imports": imports,
+        "tolerances": {
+            "self_mass_rtol": self_mass_rtol,
+            "external_volume_rtol": external_volume_rtol,
+            "import_mode_rtol": import_mode_rtol,
+            "bbox_atol": bbox_atol,
+        },
+        "lesson": (
+            "A curved STEP tolerance may be wider only when body, face, edge, "
+            "source, digest, and independent import-mode invariants stay exact."
+        ),
+    }
