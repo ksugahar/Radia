@@ -189,6 +189,41 @@ def build123d_volume_crosscheck(
 
 
 @mcp.tool()
+def build123d_brep_mass_topology_roundtrip_gate(
+    reference_json: str,
+    measured_rows_json: str,
+    expected_volume: float | None = None,
+    expected_volume_rtol: float = 1.0e-6,
+    volume_rtol: float = 1.0e-4,
+    area_rtol: float = 2.0e-3,
+    bbox_atol: float = 0.11,
+    centroid_atol: float = 2.0e-4,
+) -> str:
+    """Gate CAD roundtrips by mass properties, centroid semantics and B-rep Euler topology."""
+
+    try:
+        from .brep_roundtrip_gate import brep_mass_topology_roundtrip_gate
+
+        result = brep_mass_topology_roundtrip_gate(
+            json.loads(reference_json),
+            json.loads(measured_rows_json),
+            expected_volume=expected_volume,
+            expected_volume_rtol=expected_volume_rtol,
+            volume_rtol=volume_rtol,
+            area_rtol=area_rtol,
+            bbox_atol=bbox_atol,
+            centroid_atol=centroid_atol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_brep_mass_topology_roundtrip_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def build123d_perforated_prism_roundtrip_gate(
     reference_volume: float,
     imported_volume: float,
