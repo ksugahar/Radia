@@ -58,6 +58,7 @@ from .one_port_power_gate import one_port_power_balance_gate as _one_port_power_
 from .fsi_scattering_invariants_gate import (
     fsi_scattering_invariants_gate as _fsi_scattering_invariants_gate,
 )
+from .inductance_energy_gate import inductance_energy_mutual_gate as _inductance_energy_mutual_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2289,6 +2290,32 @@ def fsi_scattering_invariants_gate(
         )
     except (TypeError, ValueError) as exc:
         result = {"policy": "fsi_scattering_invariants_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def inductance_energy_mutual_gate(
+    self_inductance: float,
+    energy_inductance: float,
+    mutual_inductance: float,
+    analytic_mutual_inductance: float,
+    inductance_unit: str,
+    max_energy_relative_error: float = 0.01,
+    max_mutual_relative_error: float = 0.05,
+) -> str:
+    """Gate L=2W/I^2 and an analytic one-direction mutual inductance."""
+    try:
+        result = _inductance_energy_mutual_gate(
+            self_inductance=self_inductance,
+            energy_inductance=energy_inductance,
+            mutual_inductance=mutual_inductance,
+            analytic_mutual_inductance=analytic_mutual_inductance,
+            inductance_unit=inductance_unit,
+            max_energy_relative_error=max_energy_relative_error,
+            max_mutual_relative_error=max_mutual_relative_error,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {"policy": "inductance_energy_mutual_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
