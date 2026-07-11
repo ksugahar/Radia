@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **643 tools** across 43 MCP servers.
+Total: **644 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 55 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 47 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 68 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 69 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -223,6 +223,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
 | `fsi_scattering_invariants_gate` | Gate lossless FSI reciprocity, energy closure, and exterior-method agreement. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
+| `global_local_optimization_replay_gate` | Gate a stochastic global-search to derivative-checked local-polish replay. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
 | `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
