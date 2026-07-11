@@ -16,7 +16,10 @@ every element, so numpy research models vectorize across elements):
                             calls with varying B never advance the history)
     commit(B, states)    -> new committed states (n,S) after accepting B as
                             the converged flux densities of this step
-    nu_B0()              -> small-signal |dH/dB| at the virgin state
+    nu_bound()           -> an UPPER BOUND on the material's dH/dB over the
+                            operating range (NOT merely the origin slope --
+                            the Hantila contraction requirement derives from
+                            this bound)
 
 The B-input constitutive relation is inverted POINTWISE per element (batched
 across elements): solve
@@ -34,17 +37,23 @@ solves the SPD system
 
     ( W(nu0) + N ) m^{k+1} = M_mass h_ext + INT (nu0 M^k - H_mat(M^k)) . v dx
 
-whose LHS is CONSTANT across iterations AND steps (assembled once).  At the
-fixed point the true constitutive equation INT H_mat(M).v + N m = M_mass h_ext
-holds with H_mat unrestricted in direction -- in particular ANTI-PARALLEL
-H/M on recoil branches beyond remanence, which a scalar secant nu = |H|/|M|
+whose LHS is CONSTANT across iterations AND steps (assembled once).  The
+material law is evaluated as a ONE POINT PER ELEMENT closure: M^k and
+H_mat(M^k) are the ELEMENT-AVERAGED fields (elementwise constant), so the
+fixed point satisfies the constitutive equation in the element-averaged sense
+
+    INT H_mat(M_avg).v + N m = M_mass h_ext - nu0 INT (m - M_avg).v dx
+
+-- intra-element RT1 fluctuations are closed LINEARLY at nu0, a single-point
+discretization choice whose closure term vanishes under mesh refinement.
+H_mat is unrestricted in direction -- in particular ANTI-PARALLEL H/M on
+recoil branches beyond remanence, which a scalar secant nu = |H|/|M|
 cannot represent (that structural failure is exactly the descending-branch
 Picard divergence the retired moment path saw).  Contraction: the update map
-has rate |1 - (dH/dM)/nu0| per mode, so nu0 must be an UPPER BOUND on the
-differential reluctivity dH/dM.  For the lab's Play models with the
-Hane-Sugahara (negative irreversible shape) convention the maximum slope is
-the small-signal one, so nu0 defaults to the virgin value; override `nu0`
-for materials whose branch slopes exceed it.
+has rate |1 - (dH/dM)/nu0| per mode, so nu0 must be an UPPER BOUND on
+dH/dM (the inverse differential susceptibility).  The default derives from
+material.nu_bound(), the material's own certified sup of dH/dB; override
+`nu0` only when that bound is not trustworthy.
 
 State discipline (the C++ two-buffer contract, rad_material_def.h): a forward
 evaluation plays from the COMMITTED baseline (m_pk_prev) into scratch
@@ -63,7 +72,9 @@ import numpy as np
 import scipy.sparse as sp
 import ngsolve as ng
 
-from ._solve import _i32, _f64, _h_solve_mass_riesz, _resolve_gram_params
+from . import _solve as _solvemod
+from ._solve import (_i32, _f64, _h_solve_mass_riesz, _resolve_gram_params,
+                     _clear_cpp_solve_timings, _capture_cpp_solve_timings)
 from ._vim import build_charge_gram
 
 MU0 = 4.0e-7 * np.pi
@@ -74,9 +85,10 @@ class PlayHysteresisMaterial:
 
     ONE C++ handle serves every element: the committed states live Python-side
     (one flat array per element, from MatHysSaveState) and are restored into
-    the handle before each evaluation, so the handle is a pure evaluator.  The
-    batched calls loop the rows internally (a C++ batch entry is a later
-    optimization; the protocol shape stays batched either way).
+    the handle row-by-row INSIDE the C++ batch entries (MatHysForwardBatch /
+    MatHysCommitBatch), so a batched call costs two Python<->C++ crossings in
+    total instead of two per element.  The handle stays a pure evaluator:
+    forward never commits; commit advances every row exactly once.
     """
 
     def __init__(self, K, eta, f_k_tables):
@@ -94,38 +106,28 @@ class PlayHysteresisMaterial:
         return self._virgin.copy()
 
     def forward(self, B, states):
-        rad = self._rad
-        B = np.asarray(B, float)
-        states = np.asarray(states, float)
-        H = np.empty_like(B)
-        for i in range(B.shape[0]):
-            rad.MatHysRestoreState(self._h, states[i])
-            H_irr = np.asarray(rad.MatHysIrreversible(self._h, B[i]), float).ravel()[:3]
-            H[i] = self._nu_rev * B[i] + H_irr
-        return H
+        return np.asarray(self._rad.MatHysForwardBatch(
+            self._h, _f64(B), _f64(states)), float)
 
     def commit(self, B, states):
-        rad = self._rad
-        B = np.asarray(B, float)
-        states = np.asarray(states, float)
-        out = np.empty_like(states)
-        for i in range(B.shape[0]):
-            rad.MatHysRestoreState(self._h, states[i])
-            rad.MatHysIrreversible(self._h, B[i])   # play from committed -> scratch
-            rad.MatHysCommitState(self._h)          # scratch -> new committed
-            out[i] = np.asarray(rad.MatHysSaveState(self._h), float)
-        return out
+        return np.asarray(self._rad.MatHysCommitBatch(
+            self._h, _f64(B), _f64(states)), float)
 
-    def nu_B0(self, eps=1e-9):
-        H = self.forward(np.array([[0.0, 0.0, eps]]), self.state0()[None, :])
-        return float(np.linalg.norm(H[0]) / eps)
+    def nu_bound(self):
+        """Certified upper bound on dH/dB: the C++ ComputeNuRev scan of the
+        virgin curve's maximum total slope.  Forward decomposes as
+        H = nu_rev*B + H_irr with every H_irr slope <= 0 by construction, so
+        nu_rev bounds dH/dB on every branch, not just at the origin."""
+        return self._nu_rev
 
 
-def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=80):
+def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=200):
     """Solve B = mu0*(forward(B, states) + M) for ALL elements at once.
 
     Each row is an independent contraction with rate ~mu0*dH/dB; the batch
-    iterates until EVERY row's update is below tolerance."""
+    iterates until EVERY row's update is below tolerance.  Deep saturation
+    (differential mu_r -> 1) pushes the rate toward 1 and legitimately needs
+    more iterations, hence the generous default budget."""
     B = np.asarray(B0, float).copy()
     M = np.asarray(M, float)
     floor = MU0 * (np.linalg.norm(M, axis=1) + 1.0)
@@ -140,22 +142,25 @@ def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=80):
     raise RuntimeError(
         "vim.SolveHysteresis: pointwise B-inversion did not converge in %d fixed-point "
         "iterations (worst element %d, |M|=%.3e A/m).  B -> mu0*(H(B)+M) contracts at "
-        "~mu0*dH/dB; non-convergence means a pathological shape function "
-        "(mu0*dH/dB >= 1, i.e. differential mu_r <= 1)."
+        "rate ~mu0*dH/dB, so deep saturation (differential mu_r -> 1) legitimately "
+        "needs many iterations -- raise maxit for such drives; mu0*dH/dB >= 1 "
+        "(differential mu_r <= 1) cannot converge at all."
         % (maxit, worst, float(np.linalg.norm(M[worst]))))
 
 
 def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                     nu0=None, gram_eps=None, leaf=32, eta=2.0, far_quad=None,
                     ho_far_factor=None, tol=1e-8, maxit=4000,
-                    nl_maxit=200, nl_tol=1e-3, relax=1.0):
+                    nl_maxit=200, nl_tol=1e-3):
     """Quasi-static B-input hysteresis stepping on the RT1 HDiv-VIM charge Gram.
 
     The charge-Gram H-matrix is built ONCE (chi-free geometry) and reused by
     every step and every nonlinear iteration; each step runs the Hantila
-    polarization iteration (constant SPD LHS W(nu0) + N, lagged vector
+    polarization iteration (constant SPD LHS nu0*M_mass + N, lagged vector
     polarization source) with the hysteresis material evaluated from the
     per-element COMMITTED states, then commits the converged flux density.
+    The constant system's mass-Riesz PARDISO factor is warmed up during setup
+    (booked in t_setup_s), so per-step wall times measure the reuse regime.
 
     Parameters
     ----------
@@ -164,21 +169,22 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
               (A/m).  Steps are HISTORY: reversals between consecutive steps
               create the hysteresis branches.
     play    : (K, eta_thresholds_T, f_k_tables) -> builds PlayHysteresisMaterial.
-    material: a duck-typed BATCHED material (state0/forward/commit/nu_B0, see
-              the module docstring) -- exactly one of play / material.
+    material: a duck-typed BATCHED material (state0/forward/commit/nu_bound,
+              see the module docstring) -- exactly one of play / material.
     nu0     : polarization reluctivity (in H = nu0*M terms).  Must upper-bound
               the material's differential dH/dM for guaranteed contraction.
-              Default: derived from material.nu_B0() (correct for Play models
-              with the Hane-Sugahara negative-irreversible-shape convention,
-              whose maximum branch slope is the small-signal one).
-    nl_tol  : relative outer-step tolerance on m (engineering default 1e-3).
-    relax   : under-relaxation on the polarization-source update (default 1.0;
-              the iteration is a contraction, damping is a safety knob only).
+              Default: derived from material.nu_bound(), the material's own
+              certified upper bound on dH/dB.
+    nl_tol  : outer-step tolerance on m, measured against the running maximum
+              of ||m|| over the loop (a uniform ABSOLUTE accuracy across the
+              cycle) with a contraction-corrected acceptance (see the module
+              docstring).  Engineering default 1e-3.
 
     Returns dict with `steps` = per-step records (M (n_el,3), B, H, M_avg,
     B_avg, H_avg, iters, cg_iters, rel_step, t_step_s) + build info (ndof,
-    n_el, n_charge, charge_gram_wall_s, t_setup_s, hmat_stats).  The CALLER
-    opens `with ngsolve.TaskManager():`.
+    n_el, n_charge, charge_gram_wall_s, t_setup_s, hmat_stats) + the summed
+    C++ inner-solve timing breakdown (cpp_solve_timings).  The CALLER opens
+    `with ngsolve.TaskManager():`.
     """
     if mesh.dim != 3:
         raise ValueError("vim.SolveHysteresis: 3D meshes only (the 2D planar hysteresis "
@@ -197,14 +203,16 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     if h_steps.ndim != 2 or h_steps.shape[1] != 3 or h_steps.shape[0] < 1:
         raise ValueError("vim.SolveHysteresis: h_steps must be (n_steps, 3) applied H (A/m)")
 
-    # polarization reluctivity nu0 (H = nu0*M terms): from the small-signal slope
-    # H = nu_B B (linear), B = mu0 (H + M)  =>  H = [mu0 nu_B / (1 - mu0 nu_B)] M.
+    # polarization reluctivity nu0 (H = nu0*M terms) from the material's certified
+    # UPPER BOUND on dH/dB: with H = nu_B B and B = mu0 (H + M),
+    # H = [mu0 nu_B / (1 - mu0 nu_B)] M, and nu_B -> dH/dM is monotone increasing,
+    # so a sup bound on dH/dB maps to the sup bound on dH/dM that contraction needs.
     if nu0 is None:
-        x = MU0 * material.nu_B0()
+        x = MU0 * float(material.nu_bound())
         if not (0.0 < x < 1.0):
-            raise ValueError("vim.SolveHysteresis: the material's small-signal slope gives "
-                             "mu0*dH/dB = %.3e; a soft-iron hysteresis model needs "
-                             "0 < mu0*dH/dB < 1 (differential mu_r > 1)" % x)
+            raise ValueError("vim.SolveHysteresis: material.nu_bound() gives "
+                             "mu0*sup(dH/dB) = %.3e; the Hantila iteration needs "
+                             "0 < mu0*dH/dB < 1 everywhere (differential mu_r > 1)" % x)
         nu0 = x / (1.0 - x)
     nu0 = float(nu0)
     if nu0 <= 0.0:
@@ -212,6 +220,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
 
     # ---- ONE-TIME setup: fes + charge-Gram H-matrix (chi-free -> reused by every step) ----
     t_total = time.perf_counter()
+    _clear_cpp_solve_timings()
     _gp = _resolve_gram_params(order=1, gram_backend="analytic", linear_solver="auto",
                                uniform_linear=False, gram_eps=gram_eps,
                                near_factor=None, far_quad=far_quad, ho_far_factor=ho_far_factor)
@@ -236,24 +245,28 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     vol_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True), float)
     w_el = vol_el / float(np.sum(vol_el))
 
-    # CONSTANT SPD LHS: W(nu0) + N -- assembled once, reused by every iteration of every step.
-    gfNu0 = ng.GridFunction(l2)
-    gfNu0.vec.FV().NumPy()[:] = nu0
-    a0 = ng.BilinearForm(fes)
-    a0 += gfNu0 * uf * vf * ng.dx
-    a0.Assemble()
-    _r, _c, _v = a0.mat.COO()
-    W0 = sp.coo_matrix((np.array(_v), (np.array(_r), np.array(_c))), shape=(n_face, n_face))
+    # CONSTANT SPD LHS: nu0*M_mass + N.  The mass is uniform, so instead of assembling a
+    # separate nu0-weighted BilinearForm we pass the ALREADY-BUILT M_mass with the scalar
+    # inv_chi = nu0 (the same system; PCG is invariant under the preconditioner's scale,
+    # and factoring M_mass itself shares the persistent factor with any other M_mass user).
+    Mm_coo = Mm.tocoo()
+    Wrow = _i32(Mm_coo.row); Wcol = _i32(Mm_coo.col); Wdat = _f64(Mm_coo.data)
 
     def _solve_W0(rhs, x0=None):
         res = _h_solve_mass_riesz(H, Bptr, Bidx, Bdat, int(n_face),
-                                  W0.row, W0.col, W0.data, 1.0, rhs, tol, int(maxit), x0=x0)
+                                  Wrow, Wcol, Wdat, float(nu0), rhs, tol, int(maxit), x0=x0)
+        _capture_cpp_solve_timings(res)
         it = int(res["iters"])
         if it >= int(maxit):
             raise RuntimeError(
                 "vim.SolveHysteresis (inner W-CG): did NOT converge in %d iters (n_face=%d); "
                 "tighten gram_eps or raise maxit." % (maxit, n_face))
         return np.asarray(res["m"], float), it
+
+    # FACTOR WARMUP: the persistent mass-Riesz PARDISO factor of the constant mass is
+    # built here (a zero-RHS solve converges in 0 CG iterations), so the one-time
+    # analyze+factor lands in t_setup_s instead of the first step's t_step_s.
+    _solve_W0(np.zeros(n_face))
 
     def _M_el(m):
         gfM.vec.FV().NumPy()[:] = m
@@ -262,18 +275,22 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
             for i in range(3)
         ]).T.copy()
 
+    # The polarization load is linear in the elementwise-constant source, so the FORM is
+    # constructed once and only re-Assembled per iteration (cfS wraps the mutable gfS).
+    lf_pol = ng.LinearForm(fes)
+    lf_pol += ng.InnerProduct(cfS, vf) * ng.dx
+
     def _polarization_rhs(rhs_src, s_el):
         for i in range(3):
             gfS[i].vec.FV().NumPy()[:] = s_el[:, i]
-        lf = ng.LinearForm(fes)
-        lf += ng.InnerProduct(cfS, vf) * ng.dx
-        lf.Assemble()
-        return rhs_src + lf.vec.FV().NumPy()
+        lf_pol.Assemble()
+        return rhs_src + lf_pol.vec.FV().NumPy()
 
     states = np.tile(material.state0()[None, :], (n_el, 1))
-    B_cache = np.zeros((n_el, 3))
+    B_cache = None                      # previous converged B per element (None until the first solve)
     s_el = np.zeros((n_el, 3))          # lagged polarization source nu0*M - H_mat(M)
     m = np.zeros(n_face)
+    m_scale = 0.0                       # running max ||m|| -> uniform absolute stop across the cycle
     t_setup_s = time.perf_counter() - t_total
 
     steps_out = []
@@ -289,29 +306,37 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         M_el = None
         H_el = None
         nit = 0
-        warm = (istep > 0)
+        d_prev = None
         for it in range(int(nl_maxit)):
-            m_new, cg_it = _solve_W0(_polarization_rhs(rhs_src, s_el),
-                                     x0=m if (warm or it > 0) else None)
+            m_new, cg_it = _solve_W0(_polarization_rhs(rhs_src, s_el), x0=m)
             cg_total += cg_it
-            rel = float(np.linalg.norm(m_new - m)) / (float(np.linalg.norm(m_new)) + 1e-30)
+            d_now = float(np.linalg.norm(m_new - m))
             m = m_new
+            m_scale = max(m_scale, float(np.linalg.norm(m_new)))
+            rel = d_now / (m_scale + 1e-30)
             M_el = _M_el(m)
             # material update (BATCHED): pointwise B-inversion from the COMMITTED states ->
             # full-vector H_mat (recoil anti-parallel H/M is representable).
-            fresh = ~np.any(B_cache != 0.0, axis=1)
-            B0 = np.where(fresh[:, None], MU0 * (M_el + hv[None, :]), B_cache)
+            B0 = MU0 * (M_el + hv[None, :]) if B_cache is None else B_cache
             B_cache, H_el = _solve_pointwise_B(material, states, M_el, B0)
-            s_new = nu0 * M_el - H_el
+            s_el = nu0 * M_el - H_el
             nit = it + 1
-            if rel < nl_tol and it > 0:
-                break
-            s_el = relax * s_new + (1.0 - relax) * s_el
+            if it > 0 and rel < nl_tol:
+                # Contraction-corrected acceptance: the Cauchy increment under-estimates the
+                # distance to the fixed point by ~q/(1-q).  Estimate q from successive
+                # increments and require the corrected error below nl_tol as well -- never
+                # LOOSER than the raw criterion (the correction factor is clamped >= 1), and
+                # binding only for slow contractions q > 0.5.
+                q = (d_now / d_prev) if (d_prev is not None and d_prev > 0.0) else 0.0
+                if q < 1.0 and rel * max(1.0, q / (1.0 - q)) < nl_tol:
+                    break
+            d_prev = d_now
         else:
             raise RuntimeError(
                 "vim.SolveHysteresis: step %d (H_ext=%s) did NOT converge -- rel step %.2e > "
                 "nl_tol %.1e after %d polarization iters.  The Hantila iteration contracts "
-                "only when nu0 upper-bounds the material's dH/dM -- raise nu0, or reduce the "
+                "only when nu0 upper-bounds the material's dH/dM -- raise nu0 (is "
+                "material.nu_bound() a true upper bound for this drive?), or reduce the "
                 "field-step size." % (istep, np.array2string(hv, precision=3), rel, nl_tol, nit))
 
         # ---- COMMIT: advance every element's state at the converged flux density ----
@@ -335,7 +360,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
         charge_gram_wall_s=float(charge_gram_wall_s),
         t_steps_s=float(sum(s["t_step_s"] for s in steps_out)),
         total_wall_s_internal=float(time.perf_counter() - t_total),
+        cpp_solve_timings=dict(_solvemod._LAST_CPP_SOLVE_TIMINGS),
+        hmat_stats=dict(H.stats()),
     )
-    if hasattr(H, "stats"):
-        out["hmat_stats"] = dict(H.stats())
     return out

@@ -206,5 +206,6 @@ __all__ = [
     "make_t6_surface_map", "curved_triangle_charge_field",
     "make_t10_tet_map", "curved_tet_volume_field", "assemble_demag_field",
     "solve_demag_picard", "solve_demag_newton", "saturating_tangent",
-    "_core", "_nonlinear", "_vim", "_field", "_solve", "_radsolve",
+    "SolveHysteresis", "PlayHysteresisMaterial",
+    "_core", "_nonlinear", "_vim", "_field", "_solve", "_radsolve", "_hysteresis",
 ]
