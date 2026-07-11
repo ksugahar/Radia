@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **653 tools** across 43 MCP servers.
+Total: **654 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 57 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 48 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 76 |
@@ -94,6 +94,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
 | `cubit_partitioned_sweep_compatibility_gate` | Gate a legacy webcut/partition journal promoted to an all-hex sweep. |
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
+| `cubit_pyramid_degenerate_hex_export_gate` | Gate CPYRAM versus nopyramid decks, including order-2 linearization. |
 | `cubit_recent_failures` | Return the last N failed Cubit invocations (from persistent log). |
 | `cubit_restore` | Restore a previously-saved Cubit checkpoint by label. |
 | `cubit_scaffold_toolbar` | Generate a complete Coreform-Cubit custom-toolbar skeleton on disk. |
