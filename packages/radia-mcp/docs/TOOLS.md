@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **652 tools** across 43 MCP servers.
+Total: **653 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 48 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 75 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 76 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -216,6 +216,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
 | `cq_response_reality_gate` | Gate a coupled CQ solve, including its real time-domain reconstruction. |
 | `cq_scattering_arrival_gate` | Gate CQ scattered-field causality against a geometric ray arrival. |
+| `cyclic_terminal_source_sweep_gate` | Gate cyclic terminal charges without assuming formulations are identical. |
 | `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
 | `dual_formulation_force_error_convergence_gate` | Gate force-error convergence envelopes across two or more formulations. |
 | `dual_formulation_symmetric_field_profile_gate` | Gate full-profile agreement and symmetry for two field formulations. |
