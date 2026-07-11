@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **654 tools** across 43 MCP servers.
+Total: **655 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 57 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 48 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 49 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 76 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -132,6 +132,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_cubit_quality_ledger_handoff` | Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate. |
 | `build123d_cubit_solver_route_handoff` | Bind build123d CAD rows to a Cubit mixed solver-route manifest gate. |
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
+| `build123d_dual_api_perforated_board_gate` | Gate equivalent Builder/Algebra perforated boards through two CAD imports. |
 | `build123d_examples` | Search build123d + **bd_warehouse** + **GitHub Issues** (unioned). |
 | `build123d_examples_refresh` | Force-refresh all build123d sources from GitHub + YouTube. |
 | `build123d_external_cad_mass_topology_gate` | Crosscheck two CAD kernels without confusing entity centers with mass centroids. |
