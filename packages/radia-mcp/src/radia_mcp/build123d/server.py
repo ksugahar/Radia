@@ -240,6 +240,22 @@ def build123d_platonic_solid_family_gate(summary_json: str) -> str:
 
 
 @mcp.tool()
+def build123d_dual_api_perforated_board_gate(summary_json: str) -> str:
+    """Gate equivalent Builder/Algebra perforated boards through two CAD imports."""
+    try:
+        from .dual_api_board_gate import dual_api_perforated_board_gate
+
+        result = dual_api_perforated_board_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_dual_api_perforated_board_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def build123d_upstream_example_roundtrip_gate(
     result_json: str,
     mass_property_rtol: float = 1.0e-12,
