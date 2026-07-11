@@ -27,7 +27,7 @@ def build_balanced_learning_profile(server: str, public_owner: str, source_owner
         for index, (capability_id, objective, positive, negative)
         in enumerate(_STAGE_SPECS, start=1)
     ]
-    return {
+    profile = {
         "schema": "cae-ai-lab.balanced-mcp-learning-profile.v1",
         "policy": "equal_capability_gain_v1",
         "server": server,
@@ -51,4 +51,37 @@ def build_balanced_learning_profile(server: str, public_owner: str, source_owner
             "pass positive and negative probes, pass focused verification, and record "
             "a non-pending commit."
         ),
+    }
+    profile["self_check"] = validate_balanced_learning_profile(profile)
+    return profile
+
+
+def validate_balanced_learning_profile(profile: dict) -> dict:
+    expected_ids = [row[0] for row in _STAGE_SPECS]
+    stages = profile.get("stages") if isinstance(profile, dict) else None
+    if not isinstance(stages, list):
+        stages = []
+    ids = [str(row.get("capability_id") or "") for row in stages if isinstance(row, dict)]
+    rounds = [row.get("round") for row in stages if isinstance(row, dict)]
+    controls_complete = len(stages) == 10 and all(
+        isinstance(row, dict)
+        and str(row.get("positive_control") or "").strip()
+        and str(row.get("negative_control") or "").strip()
+        for row in stages
+    )
+    roles = profile.get("workflow_roles") if isinstance(profile, dict) else None
+    protocol = profile.get("protocol_policy") if isinstance(profile, dict) else None
+    checks = {
+        "stage_ids_match": ids == expected_ids,
+        "rounds_ordered": rounds == list(range(1, 11)),
+        "controls_complete": controls_complete,
+        "workflow_roles_complete": isinstance(roles, dict)
+        and set(roles) == {"detect", "check", "run", "test"},
+        "protocol_policy_complete": isinstance(protocol, dict)
+        and all(str(protocol.get(key) or "").strip() for key in ("inspector_cli", "conformance", "fallback")),
+    }
+    return {
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
     }
