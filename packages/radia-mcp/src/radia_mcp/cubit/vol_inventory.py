@@ -85,6 +85,141 @@ def cubit_hex_quality_gate(
     }
 
 
+def cubit_hex_geometry_refinement_gate(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    min_quality: float = 0.2,
+    max_final_volume_relative_error: float = 0.05,
+    min_error_reduction_fraction: float = 0.25,
+) -> dict[str, object]:
+    """Separate hex-count refinement from curved-boundary convergence.
+
+    ``volume ... size`` can add interior hexes without changing the faceted
+    boundary that controls a curved solid's mesh volume.  This replay gate
+    therefore requires both a real refinement attempt and an improving
+    geometry observable before it reports convergence.
+    """
+
+    records = [dict(row) for row in rows]
+    quality_limit = float(min_quality)
+    final_error_limit = float(max_final_volume_relative_error)
+    reduction_limit = float(min_error_reduction_fraction)
+    if len(records) < 2:
+        raise ValueError("rows must contain at least two refinement levels")
+    if quality_limit <= 0.0:
+        raise ValueError("min_quality must be > 0")
+    if final_error_limit < 0.0:
+        raise ValueError("max_final_volume_relative_error must be >= 0")
+    if reduction_limit < 0.0 or reduction_limit > 1.0:
+        raise ValueError("min_error_reduction_fraction must be in [0, 1]")
+
+    required = {
+        "target_size",
+        "hex_count",
+        "mesh_volume",
+        "expected_volume",
+        "volume_relative_error",
+        "quality_min",
+        "quality_q05",
+    }
+    normalized = []
+    for index, row in enumerate(records):
+        missing = sorted(required - row.keys())
+        if missing:
+            raise ValueError(f"row {index} is missing: {', '.join(missing)}")
+        item = {
+            "target_size": float(row["target_size"]),
+            "hex_count": int(row["hex_count"]),
+            "tet_count": int(row.get("tet_count", 0)),
+            "pyramid_count": int(row.get("pyramid_count", 0)),
+            "wedge_count": int(row.get("wedge_count", 0)),
+            "mesh_volume": float(row["mesh_volume"]),
+            "expected_volume": float(row["expected_volume"]),
+            "volume_relative_error": float(row["volume_relative_error"]),
+            "quality_min": float(row["quality_min"]),
+            "quality_q05": float(row["quality_q05"]),
+        }
+        if not all(isfinite(value) for key, value in item.items() if key not in {
+            "hex_count", "tet_count", "pyramid_count", "wedge_count"
+        }):
+            raise ValueError(f"row {index} contains a non-finite value")
+        if item["target_size"] <= 0.0 or item["hex_count"] <= 0:
+            raise ValueError(f"row {index} target_size and hex_count must be positive")
+        if item["expected_volume"] <= 0.0 or item["volume_relative_error"] < 0.0:
+            raise ValueError(f"row {index} has invalid volume evidence")
+        normalized.append(item)
+
+    sizes = [row["target_size"] for row in normalized]
+    counts = [row["hex_count"] for row in normalized]
+    errors = [row["volume_relative_error"] for row in normalized]
+    first_error = errors[0]
+    final_error = errors[-1]
+    error_reduction_fraction = (
+        (first_error - final_error) / first_error if first_error > 0.0
+        else (1.0 if final_error == 0.0 else 0.0)
+    )
+    if abs(error_reduction_fraction) < 1.0e-12:
+        error_reduction_fraction = 0.0
+    count_increased = any(right > left for left, right in zip(counts, counts[1:]))
+    checks = {
+        "target_sizes_decrease": all(right < left for left, right in zip(sizes, sizes[1:])),
+        "hex_counts_nondecreasing": all(right >= left for left, right in zip(counts, counts[1:])),
+        "hex_count_increased": count_increased,
+        "hex_only": all(
+            row["tet_count"] == row["pyramid_count"] == row["wedge_count"] == 0
+            for row in normalized
+        ),
+        "quality_ok": all(
+            min(row["quality_min"], row["quality_q05"]) >= quality_limit
+            for row in normalized
+        ),
+        "geometry_error_reduced": error_reduction_fraction >= reduction_limit,
+        "final_geometry_error_ok": final_error <= final_error_limit,
+    }
+    refinement_attempted = (
+        checks["target_sizes_decrease"]
+        and checks["hex_counts_nondecreasing"]
+        and checks["hex_count_increased"]
+    )
+    plateau_detected = (
+        refinement_attempted
+        and checks["hex_only"]
+        and checks["quality_ok"]
+        and not checks["geometry_error_reduced"]
+    )
+    if plateau_detected:
+        status = "needs_geometry_refinement"
+    elif all(checks.values()):
+        status = "ok"
+    else:
+        status = "needs_attention"
+
+    return {
+        "policy": "cubit_hex_geometry_refinement_plateau_gate_v1",
+        "status": status,
+        "level_count": len(normalized),
+        "rows": normalized,
+        "thresholds": {
+            "min_quality": quality_limit,
+            "max_final_volume_relative_error": final_error_limit,
+            "min_error_reduction_fraction": reduction_limit,
+        },
+        "checks": checks,
+        "refinement_attempted": refinement_attempted,
+        "plateau_detected": plateau_detected,
+        "initial_volume_relative_error": first_error,
+        "final_volume_relative_error": final_error,
+        "error_reduction_fraction": error_reduction_fraction,
+        "recommendation": (
+            "Refine the boundary topology or export curved/high-order geometry; "
+            "interior hex-count growth alone is not evidence of curved-volume "
+            "convergence."
+            if plateau_detected
+            else "Keep the geometry observable and quality distribution in the refinement gate."
+        ),
+    }
+
+
 def cubit_element_quality_gate(
     values: Iterable[float],
     *,

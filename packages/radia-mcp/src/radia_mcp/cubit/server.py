@@ -45,6 +45,7 @@ from .knowledge.license import get_license_documentation
 from .knowledge.format_routing import get_format_routing_documentation
 from .knowledge.coreform_webinars import get_coreform_webinar_documentation
 from .vol_inventory import (
+	cubit_hex_geometry_refinement_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -677,6 +678,35 @@ def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_mixed_order_series_inventory_gate",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_hex_refinement_geometry_gate(
+	rows: list[dict],
+	min_quality: float = 0.2,
+	max_final_volume_relative_error: float = 0.05,
+	min_error_reduction_fraction: float = 0.25,
+) -> str:
+	"""Detect curved-geometry error plateaus in an all-hex refinement series.
+
+	Pass archived headless-Cubit rows rather than a local file path.  Increasing
+	hex count is not accepted as convergence unless the independent mesh-volume
+	error also improves while scaled-Jacobian quality remains acceptable.
+	"""
+	try:
+		result = cubit_hex_geometry_refinement_gate(
+			rows,
+			min_quality=min_quality,
+			max_final_volume_relative_error=max_final_volume_relative_error,
+			min_error_reduction_fraction=min_error_reduction_fraction,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_hex_geometry_refinement_plateau_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}

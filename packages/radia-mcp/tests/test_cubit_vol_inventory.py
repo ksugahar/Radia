@@ -2,6 +2,7 @@ import json
 
 from radia_mcp.cubit.server import (
     cubit_docs,
+    cubit_hex_refinement_geometry_gate,
     cubit_journal_reproducibility_gate,
     cubit_mixed_order_series_gate,
     cubit_vol_inventory,
@@ -14,6 +15,7 @@ from radia_mcp.cubit.vol_inventory import (
     cubit_export_package_identity_gate,
     cubit_headless_batch_quality_package_gate,
     cubit_headless_installation_route_gate,
+    cubit_hex_geometry_refinement_gate,
     cubit_hex_quality_gate,
     cubit_meshing_scheme_trace_gate,
     cubit_mesh_quality_ledger_identity_gate,
@@ -489,6 +491,49 @@ def test_cubit_hex_quality_gate_replays_mapped_hex_quality_slot():
     assert bad["status"] == "needs_attention"
     assert bad["checks"]["min_scaled_jacobian_ok"] is False
     assert bad["checks"]["expected_hex_count_ok"] is False
+
+
+def test_cubit_hex_geometry_refinement_gate_separates_count_from_convergence():
+    convergent_rows = [
+        {
+            "target_size": size,
+            "hex_count": count,
+            "tet_count": 0,
+            "pyramid_count": 0,
+            "wedge_count": 0,
+            "mesh_volume": volume,
+            "expected_volume": 4.0,
+            "volume_relative_error": error,
+            "quality_min": 0.58,
+            "quality_q05": 0.62,
+        }
+        for size, count, volume, error in [
+            (0.5, 32, 3.2, 0.20),
+            (0.35, 64, 3.68, 0.08),
+            (0.25, 128, 3.92, 0.02),
+        ]
+    ]
+    good = cubit_hex_geometry_refinement_gate(convergent_rows)
+    assert good["status"] == "ok"
+    assert good["refinement_attempted"] is True
+    assert good["plateau_detected"] is False
+
+    plateau_rows = [dict(row) for row in convergent_rows]
+    for row in plateau_rows:
+        row["mesh_volume"] = 3.064
+        row["volume_relative_error"] = 0.234
+    bad = cubit_hex_geometry_refinement_gate(plateau_rows)
+    assert bad["status"] == "needs_geometry_refinement"
+    assert bad["plateau_detected"] is True
+    assert bad["checks"]["quality_ok"] is True
+    assert bad["checks"]["geometry_error_reduced"] is False
+    assert "curved/high-order geometry" in bad["recommendation"]
+
+
+def test_cubit_hex_refinement_geometry_mcp_tool_reports_invalid_input():
+    result = json.loads(cubit_hex_refinement_geometry_gate([]))
+    assert result["status"] == "invalid_input"
+    assert "at least two" in result["error"]
 
 
 def test_cubit_element_quality_gate_replays_tetra10_tri6_metrics():
