@@ -1127,6 +1127,112 @@ def cubit_mixed_transition_metadata_gate(
     }
 
 
+def cubit_live_mixed_mesh_python_gate(
+    summary: Mapping[str, object],
+    *,
+    expected_total_volume: float | None = None,
+    volume_relative_tolerance: float = 1.0e-9,
+    min_scaled_jacobian: float = 0.0,
+) -> dict[str, object]:
+    """Gate source-journal mixed-mesh evidence from a headless Python run.
+
+    This complements the exported-mesh inventory gates: it checks that a
+    source-native ``.jou``/``.py`` case was actually replayed without a GUI,
+    produced the hex-pyramid-tet transition, retained positive element
+    quality, and preserved independently known CAD volume.
+    """
+
+    if not isinstance(summary, Mapping):
+        raise ValueError("summary must be a mapping")
+    if volume_relative_tolerance < 0.0:
+        raise ValueError("volume_relative_tolerance must be non-negative")
+
+    def finite_number(value: object, field: str) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{field} must be a finite number") from exc
+        if not isfinite(number):
+            raise ValueError(f"{field} must be a finite number")
+        return number
+
+    counts_raw = summary.get("element_counts", {})
+    quality_raw = summary.get("quality", {})
+    volumes_raw = summary.get("volumes", {})
+    if not isinstance(counts_raw, Mapping):
+        raise ValueError("summary['element_counts'] must be a mapping")
+    if not isinstance(quality_raw, Mapping):
+        raise ValueError("summary['quality'] must be a mapping")
+    if not isinstance(volumes_raw, Mapping):
+        raise ValueError("summary['volumes'] must be a mapping")
+
+    counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
+    volumes = {
+        str(key): finite_number(value, f"volumes[{key!r}]")
+        for key, value in volumes_raw.items()
+    }
+    total_volume = finite_number(summary.get("total_volume"), "total_volume")
+    mesh_s = finite_number(summary.get("mesh_s"), "mesh_s")
+    source_journal = Path(str(summary.get("source_journal", ""))).name
+    execution_mode = str(summary.get("execution_mode", "")).strip().lower()
+    version = str(summary.get("version", "")).strip()
+
+    quality_minima: dict[str, float] = {}
+    quality_metrics: dict[str, str] = {}
+    for kind in ("hex", "tet"):
+        row = quality_raw.get(kind, {})
+        if not isinstance(row, Mapping):
+            raise ValueError(f"summary['quality']['{kind}'] must be a mapping")
+        quality_minima[kind] = finite_number(row.get("min"), f"quality.{kind}.min")
+        quality_metrics[kind] = str(row.get("metric", "")).strip().lower()
+
+    reference_volume = (
+        total_volume
+        if expected_total_volume is None
+        else finite_number(expected_total_volume, "expected_total_volume")
+    )
+    denominator = max(abs(reference_volume), 1.0)
+    relative_error = abs(total_volume - reference_volume) / denominator
+    component_sum_error = abs(sum(volumes.values()) - total_volume) / max(abs(total_volume), 1.0)
+    checks = {
+        "source_native_journal": Path(source_journal).suffix.lower() in {".jou", ".py"},
+        "headless_python_api": execution_mode == "python_api_headless",
+        "version_recorded": bool(version),
+        "mesh_time_nonnegative": mesh_s >= 0.0,
+        "hex_present": counts.get("hex", 0) > 0,
+        "pyramid_present": counts.get("pyramid", 0) > 0,
+        "tet_present": counts.get("tet", 0) > 0,
+        "scaled_jacobian_metrics": all(
+            quality_metrics[kind] == "scaled jacobian" for kind in ("hex", "tet")
+        ),
+        "quality_above_threshold": all(
+            quality_minima[kind] > min_scaled_jacobian for kind in ("hex", "tet")
+        ),
+        "cad_volumes_positive": bool(volumes) and all(value > 0.0 for value in volumes.values()),
+        "cad_volume_sum_matches": component_sum_error <= volume_relative_tolerance,
+        "expected_volume_matches": relative_error <= volume_relative_tolerance,
+    }
+    return {
+        "policy": "cubit_live_mixed_mesh_python_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "source_journal": source_journal,
+        "execution_mode": execution_mode,
+        "version": version,
+        "element_counts": counts,
+        "quality_minima": quality_minima,
+        "total_volume": total_volume,
+        "expected_total_volume": reference_volume,
+        "volume_relative_error": relative_error,
+        "component_volume_sum_relative_error": component_sum_error,
+        "checks": checks,
+        "notes": [
+            "Cubit owns the hex-led mixed route; a tet-only case belongs to the Netgen route.",
+            "Use the documented Python entity families for inventory queries; unsupported aliases must not be treated as empty mesh sets.",
+            "This gate validates execution evidence, while exported .vol/Gmsh gates validate downstream topology and labels.",
+        ],
+    }
+
+
 def cubit_mixed_order_series_inventory_gate(
     rows: Iterable[Mapping[str, object]],
     *,

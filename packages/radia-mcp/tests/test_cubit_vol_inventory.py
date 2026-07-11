@@ -4,6 +4,7 @@ from radia_mcp.cubit.server import (
     cubit_docs,
     cubit_hex_refinement_geometry_gate,
     cubit_journal_reproducibility_gate,
+    cubit_live_mixed_mesh_gate,
     cubit_mixed_order_series_gate,
     cubit_vol_inventory,
 )
@@ -17,6 +18,7 @@ from radia_mcp.cubit.vol_inventory import (
     cubit_headless_installation_route_gate,
     cubit_hex_geometry_refinement_gate,
     cubit_hex_quality_gate,
+    cubit_live_mixed_mesh_python_gate,
     cubit_meshing_scheme_trace_gate,
     cubit_mesh_quality_ledger_identity_gate,
     cubit_mixed_interface_adjacency_gate,
@@ -31,6 +33,51 @@ from radia_mcp.cubit.vol_inventory import (
     cubit_vol_label_metadata_gate,
     summarize_netgen_vol_inventory,
 )
+
+
+LIVE_MIXED_SUMMARY = {
+    "version": "2025.12",
+    "source_journal": "mixed_hex_pyramid_tet.jou",
+    "execution_mode": "python_api_headless",
+    "mesh_s": 0.113,
+    "element_counts": {"hex": 1, "pyramid": 1, "tet": 10, "tri": 10},
+    "quality": {
+        "hex": {"metric": "scaled jacobian", "min": 1.0, "max": 1.0, "count": 1},
+        "tet": {"metric": "scaled jacobian", "min": 0.382, "max": 0.5, "count": 10},
+    },
+    "volumes": {"1": 1.0, "2": 1.0},
+    "total_volume": 2.0,
+}
+
+
+def test_cubit_live_mixed_mesh_python_gate_accepts_headless_source_journal_replay():
+    gate = cubit_live_mixed_mesh_python_gate(
+        LIVE_MIXED_SUMMARY,
+        expected_total_volume=2.0,
+    )
+    assert gate["status"] == "ok"
+    assert all(gate["checks"].values())
+
+
+def test_cubit_live_mixed_mesh_python_gate_rejects_gui_missing_bridge_and_bad_volume():
+    bad = {
+        **LIVE_MIXED_SUMMARY,
+        "execution_mode": "gui",
+        "element_counts": {"hex": 1, "pyramid": 0, "tet": 10},
+        "total_volume": 1.8,
+    }
+    gate = cubit_live_mixed_mesh_python_gate(bad, expected_total_volume=2.0)
+    assert gate["status"] == "needs_attention"
+    assert gate["checks"]["headless_python_api"] is False
+    assert gate["checks"]["pyramid_present"] is False
+    assert gate["checks"]["cad_volume_sum_matches"] is False
+    assert gate["checks"]["expected_volume_matches"] is False
+
+
+def test_cubit_live_mixed_mesh_mcp_tool_dispatches_structured_evidence():
+    result = json.loads(cubit_live_mixed_mesh_gate(LIVE_MIXED_SUMMARY, 2.0))
+    assert result["policy"] == "cubit_live_mixed_mesh_python_gate_v1"
+    assert result["status"] == "ok"
 
 
 MIXED_VOL = """
