@@ -30,6 +30,9 @@ from ..common import register_status_tool
 from ..common.learning_quality import build_balanced_learning_profile
 from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
+from .field_profile_gate import (
+    dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2208,6 +2211,25 @@ def cq_response_reality_gate(
     return json.dumps(_cq_response_reality_gate(
         json.loads(summary_json), residual_tolerance=residual_tolerance,
         imaginary_tolerance=imaginary_tolerance), indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def dual_formulation_symmetric_field_profile_gate(
+    summary_json: str,
+    max_profile_relative_difference: float = 0.01,
+    max_center_relative_difference: float = 0.01,
+    max_symmetry_relative: float = 0.01,
+    min_sample_count: int = 21,
+) -> str:
+    """Gate full-profile agreement and symmetry for two field formulations."""
+
+    return json.dumps(_dual_formulation_symmetric_field_profile_gate(
+        json.loads(summary_json),
+        max_profile_relative_difference=max_profile_relative_difference,
+        max_center_relative_difference=max_center_relative_difference,
+        max_symmetry_relative=max_symmetry_relative,
+        min_sample_count=min_sample_count,
+    ), indent=2, sort_keys=True)
 
 
 register_status_tool(
