@@ -4442,3 +4442,48 @@ def _quality_histogram(values: list[float], edges: list[float]) -> dict[str, obj
         "underflow": underflow,
         "overflow": overflow,
     }
+
+
+def cubit_webcut_conformal_hex_gate(summary: Mapping[str, object], *, max_webcut_volume_relative_drift: float = 1.0e-5, max_partition_relative_spread: float = 1.0e-12, min_scaled_jacobian: float = 0.2) -> dict[str, object]:
+    """Gate a webcut decomposition by conservation and conformal interfaces."""
+    counts = summary.get("element_counts") or {}
+    interfaces = summary.get("interfaces") or []
+    drift = float(summary.get("webcut_volume_relative_drift", math.inf))
+    spread = float(summary.get("quarter_volume_relative_spread", math.inf))
+    quality = summary.get("quality") or {}
+    sj = float((quality.get("scaled_jacobian") or {}).get("min", -math.inf))
+    shape = float((quality.get("shape") or {}).get("min", -math.inf))
+    checks = {
+        "four_partition_volumes": len(summary.get("volume_ids") or []) == 4,
+        "all_hex_mesh": int(counts.get("hex", 0)) > 0 and all(int(counts.get(name, 0)) == 0 for name in ("tet", "wedge", "pyramid")),
+        "partition_volume_spread_bounded": spread <= float(max_partition_relative_spread),
+        "webcut_volume_drift_bounded": drift <= float(max_webcut_volume_relative_drift),
+        "four_internal_interfaces": len(interfaces) == 4,
+        "interfaces_shared_and_meshed": all(len(row.get("adjacent_volumes") or []) == 2 and int(row.get("face_count", 0)) > 0 for row in interfaces),
+        "interface_area_positive": all(float(row.get("area", 0.0)) > 0.0 for row in interfaces),
+        "boundary_face_block_occupied": int(summary.get("boundary_block_face_count", 0)) > 0,
+        "scaled_jacobian_ok": sj >= float(min_scaled_jacobian),
+        "shape_positive": shape > 0.0,
+    }
+    return {"policy":"cubit_webcut_conformal_hex_gate_v1","status":"ok" if all(checks.values()) else "needs_attention","checks":checks,"issues":[name for name,ok in checks.items() if not ok],"metrics":{"hex_count":int(counts.get("hex",0)),"webcut_volume_relative_drift":drift,"partition_relative_spread":spread,"interface_count":len(interfaces),"interface_face_count":sum(int(row.get("face_count",0)) for row in interfaces),"minimum_scaled_jacobian":sj,"minimum_shape":shape}}
+
+
+def cubit_webcut_journal_execution_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    """Gate source-journal ordering and the shared-owner headless process lane."""
+    commands = [str(value).lower() for value in summary.get("commands", [])]
+    def first(token):
+        return next((i for i,row in enumerate(commands) if token in row), -1)
+    process = _headless_process_evidence(summary)
+    checks = {
+        "source_journal_digest_recorded": len(str(summary.get("source_sha256", ""))) == 64,
+        "source_native_journal": summary.get("source_kind") == "source_native_local_journal",
+        "headless_python_api": summary.get("execution_mode") == "python_api_headless" and {"-nographics","-batch"}.issubset(set(summary.get("headless_flags") or [])),
+        "persistent_gui_disabled": summary.get("gui_daemon_enabled") is False,
+        "two_orthogonal_webcuts": first("xplane") >= 0 and first("yplane") >= 0,
+        "imprint_merge_before_mesh": 0 <= first("imprint all") < first("merge all") < first("mesh volume"),
+        "boundary_selection_is_geometric": any("surface with area" in row and "z_min" in row and "z_max" in row for row in commands),
+        "process_exit_acceptable": process["process_exit_acceptable"],
+        "owned_processes_closed": int(summary.get("owned_processes_remaining", 0)) == 0,
+        "public_geometry_gate_passed": summary.get("public_gate_status") == "ok",
+    }
+    return {"policy":"cubit_webcut_journal_execution_gate_v1","status":"ok" if all(checks.values()) else "needs_attention","checks":checks,"issues":[name for name,ok in checks.items() if not ok],"process":process}
