@@ -224,6 +224,62 @@ def build123d_brep_mass_topology_roundtrip_gate(
 
 
 @mcp.tool()
+def build123d_upstream_example_roundtrip_gate(
+    result_json: str,
+    mass_property_rtol: float = 1.0e-12,
+    centroid_atol: float = 1.0e-12,
+) -> str:
+    """Gate source identity and STEP self-roundtrip for an upstream build123d example."""
+
+    try:
+        from .external_cad_gate import build123d_upstream_example_roundtrip_gate as gate
+
+        result = gate(
+            json.loads(result_json),
+            mass_property_rtol=mass_property_rtol,
+            centroid_atol=centroid_atol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_upstream_example_roundtrip_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def build123d_external_cad_mass_topology_gate(
+    reference_json: str,
+    external_json: str,
+    volume_rtol: float = 2.0e-6,
+    area_rtol: float = 1.0e-10,
+    bbox_atol: float = 1.0e-10,
+    centroid_atol: float = 1.0e-6,
+) -> str:
+    """Crosscheck two CAD kernels without confusing entity centers with mass centroids."""
+
+    try:
+        from .external_cad_gate import external_cad_mass_topology_crosscheck_gate
+
+        result = external_cad_mass_topology_crosscheck_gate(
+            json.loads(reference_json),
+            json.loads(external_json),
+            volume_rtol=volume_rtol,
+            area_rtol=area_rtol,
+            bbox_atol=bbox_atol,
+            centroid_atol=centroid_atol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "external_cad_mass_topology_crosscheck_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def build123d_perforated_prism_roundtrip_gate(
     reference_volume: float,
     imported_volume: float,

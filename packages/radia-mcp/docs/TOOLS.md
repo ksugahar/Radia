@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **620 tools** across 43 MCP servers.
+Total: **622 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 53 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 42 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 44 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 55 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -130,6 +130,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
 | `build123d_examples` | Search build123d + **bd_warehouse** + **GitHub Issues** (unioned). |
 | `build123d_examples_refresh` | Force-refresh all build123d sources from GitHub + YouTube. |
+| `build123d_external_cad_mass_topology_gate` | Crosscheck two CAD kernels without confusing entity centers with mass centroids. |
 | `build123d_external_cad_volume_evidence_package` | Bundle dual-source CAD volume evidence before reuse. |
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
@@ -143,6 +144,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
 | `build123d_try_race` | Race N build123d script variants in parallel subprocesses, |
+| `build123d_upstream_example_roundtrip_gate` | Gate source identity and STEP self-roundtrip for an upstream build123d example. |
 | `build123d_usage` | Get build123d CAD modeling documentation for CAE workflows. |
 | `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
 | `build123d_volume_crosscheck_source_coverage_gate` | Require Cubit/external CAD source coverage after a volume crosscheck. |
