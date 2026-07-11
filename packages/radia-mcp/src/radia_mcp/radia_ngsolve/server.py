@@ -47,6 +47,7 @@ from .hmatrix_scaling_gate import hmatrix_compression_scaling_gate as _hmatrix_c
 from .force_error_convergence_gate import (
     dual_formulation_force_error_convergence_gate as _dual_formulation_force_error_convergence_gate,
 )
+from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_force_flux_sweep_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
@@ -2512,6 +2513,31 @@ def dual_formulation_force_error_convergence_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "dual_formulation_force_error_convergence_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def voice_coil_force_flux_sweep_gate(
+    rows: list[dict],
+    max_zero_force_relative: float = 0.01,
+    max_odd_residual_relative: float = 0.10,
+    max_force_constant_relative_span: float = 0.12,
+) -> str:
+    """Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence."""
+
+    try:
+        result = _voice_coil_force_flux_sweep_gate(
+            rows,
+            max_zero_force_relative=max_zero_force_relative,
+            max_odd_residual_relative=max_odd_residual_relative,
+            max_force_constant_relative_span=max_force_constant_relative_span,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "voice_coil_force_flux_sweep_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

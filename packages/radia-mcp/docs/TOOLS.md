@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **622 tools** across 43 MCP servers.
+Total: **623 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 53 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 44 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 55 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 56 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -249,6 +249,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
+| `voice_coil_force_flux_sweep_gate` | Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence. |
 
 ## `mcp-server-radia-streamfunction`
 
