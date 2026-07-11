@@ -60,6 +60,7 @@ from .simple_field_2d import (
 )
 from .planar_coupling_knowledge import get_planar_coupling
 from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_handoff_gate
+from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -621,6 +622,27 @@ def motor_thermal_handoff_gate(
         loss_buckets_json,
         network_json,
         mesh_regions_json,
+        relative_tolerance,
+    )
+
+
+@mcp.tool()
+def motor_force_rotation_covariance_gate(
+    reference_force_json: str,
+    rotated_force_json: str,
+    rotation_deg: float,
+    relative_tolerance: float = 1.0e-3,
+) -> str:
+    """Check that a planar force vector follows a rotated excitation/geometry.
+
+    This is solver-independent and is useful for symmetric motors, magnetic
+    bearings, and actuators. Force objects contain global ``Fx`` and ``Fy``.
+    ``rotation_deg`` follows the standard counter-clockwise convention.
+    """
+    return build_force_rotation_covariance_gate(
+        reference_force_json,
+        rotated_force_json,
+        rotation_deg,
         relative_tolerance,
     )
 
