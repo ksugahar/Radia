@@ -68,6 +68,7 @@ from .transient_coupled_coil_gate import (
 )
 from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
 from .global_local_optimization_gate import global_local_optimization_replay_gate as _global_local_optimization_replay_gate
+from .eddy_loss_formulation_gate import alternate_eddy_loss_formulation_gate as _alternate_eddy_loss_formulation_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2865,6 +2866,20 @@ def global_local_optimization_replay_gate(summary_json: str) -> str:
         result = _global_local_optimization_replay_gate(summary_json)
     except (TypeError, ValueError, KeyError) as exc:
         result = {"policy":"global_local_optimization_replay_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def alternate_eddy_loss_formulation_gate(summary_json: str) -> str:
+    """Gate volume-resolved and surface-impedance losses as non-additive alternatives."""
+    try:
+        result = _alternate_eddy_loss_formulation_gate(json.loads(summary_json))
+    except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "alternate_eddy_loss_formulation_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
     return json.dumps(result, indent=2, sort_keys=True)
 
 
