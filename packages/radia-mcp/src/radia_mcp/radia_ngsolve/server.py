@@ -37,6 +37,7 @@ from .field_profile_gate import (
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
+from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .parallel_wire_force_refinement_gate import (
     parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
 )
@@ -2494,6 +2495,35 @@ def force_position_profile_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "force_position_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def force_coenergy_displacement_gate(
+    positions_m: list[float],
+    coenergy_j: list[float],
+    forces_along_displacement_n: list[float],
+    energy_kind: str = "constant_current_coenergy",
+    max_central_relative_error: float = 0.02,
+    min_sample_count: int = 5,
+) -> str:
+    """Gate direct force against the central derivative of magnetic coenergy."""
+
+    try:
+        result = _force_coenergy_displacement_gate(
+            positions_m,
+            coenergy_j,
+            forces_along_displacement_n,
+            energy_kind=energy_kind,
+            max_central_relative_error=max_central_relative_error,
+            min_sample_count=min_sample_count,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "force_coenergy_displacement_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
