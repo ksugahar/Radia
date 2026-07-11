@@ -44,6 +44,9 @@ from .capacitance_identity_gate import (
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
 from .hmatrix_scaling_gate import hmatrix_compression_scaling_gate as _hmatrix_compression_scaling_gate
+from .force_error_convergence_gate import (
+    dual_formulation_force_error_convergence_gate as _dual_formulation_force_error_convergence_gate,
+)
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
@@ -2480,6 +2483,35 @@ def hmatrix_compression_scaling_gate(
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "hmatrix_compression_scaling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def dual_formulation_force_error_convergence_gate(
+    formulation_rows: list[dict],
+    reference_force: float,
+    max_final_relative_error: float = 0.02,
+    min_initial_to_final_improvement: float = 1.1,
+    max_final_to_best_error_ratio: float = 1.5,
+    max_tail_relative_span: float = 0.005,
+) -> str:
+    """Gate force-error convergence envelopes across two or more formulations."""
+
+    try:
+        result = _dual_formulation_force_error_convergence_gate(
+            formulation_rows,
+            reference_force=reference_force,
+            max_final_relative_error=max_final_relative_error,
+            min_initial_to_final_improvement=min_initial_to_final_improvement,
+            max_final_to_best_error_ratio=max_final_to_best_error_ratio,
+            max_tail_relative_span=max_tail_relative_span,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "dual_formulation_force_error_convergence_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
