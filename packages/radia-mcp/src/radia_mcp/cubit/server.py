@@ -46,6 +46,7 @@ from .knowledge.format_routing import get_format_routing_documentation
 from .knowledge.coreform_webinars import get_coreform_webinar_documentation
 from .vol_inventory import (
 	cubit_hex_geometry_refinement_gate,
+	cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -722,6 +723,36 @@ def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_mixed_order_series_inventory_gate",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_live_mixed_mesh_gate(
+	summary: dict,
+	expected_total_volume: float | None = None,
+	volume_relative_tolerance: float = 1.0e-9,
+	min_scaled_jacobian: float = 0.0,
+) -> str:
+	"""Gate a source-journal hex+pyramid+tet replay from headless Cubit Python.
+
+	Pass structured LIVE evidence rather than a local path. The gate binds the
+	headless execution mode, element inventory, scaled-Jacobian quality, and CAD
+	volume conservation without exposing machine-specific paths.
+	"""
+
+	try:
+		result = _cubit_live_mixed_mesh_python_gate(
+			summary,
+			expected_total_volume=expected_total_volume,
+			volume_relative_tolerance=volume_relative_tolerance,
+			min_scaled_jacobian=min_scaled_jacobian,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_live_mixed_mesh_python_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}

@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **628 tools** across 43 MCP servers.
+Total: **629 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 53 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 54 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 44 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 59 |
@@ -78,6 +78,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
 | `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
 | `cubit_list_checkpoints` | List all saved Cubit checkpoints with size + mtime. |
+| `cubit_live_mixed_mesh_gate` | Gate a source-journal hex+pyramid+tet replay from headless Cubit Python. |
 | `cubit_loft_high_order_vol_series_gate` | Gate all-hex loft topology, curved payload, sidecars, and quality for orders 1-5. |
 | `cubit_lookup` | Retrieve relevant sections from the bundled Cubit knowledge base. |
 | `cubit_mesh_apply_choice` | Apply the human's chosen variant from a previous |
