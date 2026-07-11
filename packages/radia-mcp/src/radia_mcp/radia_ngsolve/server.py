@@ -31,6 +31,7 @@ from ..common.learning_quality import build_balanced_learning_profile
 from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 from .cq_scattering_arrival_gate import cq_scattering_arrival_gate as _cq_scattering_arrival_gate
+from .physics_result_preflight_gate import physics_result_preflight_gate as _physics_result_preflight_gate
 from .field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
@@ -2217,6 +2218,14 @@ def rf_sweep_artifact_summary_gate(
             summary_json, passivity_tolerance, reciprocity_tolerance
         ), indent=2, sort_keys=True
     )
+
+
+@mcp.tool()
+def physics_result_preflight_gate(summary_json: str) -> str:
+    """Gate physics namespace, selection, solution, and license metadata before result evaluation."""
+    try: result=_physics_result_preflight_gate(summary_json)
+    except (json.JSONDecodeError,TypeError,ValueError) as exc: result={"policy":"physics_result_preflight_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
 
 
 @mcp.tool()
