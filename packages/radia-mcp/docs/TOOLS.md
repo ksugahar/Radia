@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **634 tools** across 43 MCP servers.
+Total: **635 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 54 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 45 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 62 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 63 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -218,6 +218,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
 | `force_position_profile_gate` | Gate a force-position sweep without assuming it is monotonic. |
 | `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
+| `fsi_scattering_invariants_gate` | Gate lossless FSI reciprocity, energy closure, and exterior-method agreement. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
