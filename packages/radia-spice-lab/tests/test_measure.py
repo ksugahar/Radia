@@ -10,6 +10,15 @@ from ltspice_converter.measure import (
     summarize_measure_log,
     summarize_stepped_measure_log,
 )
+from ltspice_converter.mcp_server import balanced_learning_profile
+
+
+def test_balanced_learning_profile_has_ten_unique_controlled_stages():
+    profile = balanced_learning_profile()
+    assert profile["policy"] == "equal_capability_gain_v1"
+    assert profile["stage_count"] == 10
+    assert len({row["capability_id"] for row in profile["stages"]}) == 10
+    assert all(row["positive_control"] and row["negative_control"] for row in profile["stages"])
 
 
 def test_parse_spice_scalar_engineering_suffixes():

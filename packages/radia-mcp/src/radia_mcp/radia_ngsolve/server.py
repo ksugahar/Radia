@@ -26,6 +26,7 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
+from ..common.learning_quality import build_balanced_learning_profile
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -203,6 +204,15 @@ def _format_findings(filepath: str, findings: list[dict]) -> str:
             f"  L{f['line']:>4d} [{f['severity']}] {f['rule']}: {f['message']}"
         )
     return '\n'.join(lines)
+
+
+@mcp.tool()
+def balanced_mcp_learning_profile() -> dict:
+    """Return the ten-stage equal public/source MCP learning contract."""
+
+    return build_balanced_learning_profile(
+        "radia-mcp", "radia-mcp", "source-tool MCP or shared open-tool owner"
+    )
 
 
 @mcp.tool()

@@ -8,6 +8,7 @@ from radia_mcp.radia_ngsolve.slot_gates import (
     acoustic_plane_wave_intensity_convention_gate,
     acoustic_normal_incidence_interface_gate,
     balanced_back_emf_line_voltage_handoff_gate,
+    balanced_mcp_learning_profile_gate,
     box_projected_gradient_least_squares_gate,
     branch_line_hybrid_gate,
     carter_slot_opening_sweep_gate,
@@ -2502,6 +2503,28 @@ def test_touchstone_frequency_unit_normalization_gate_keeps_raw_unit_and_selecte
     )
     assert sparse["status"] == "needs_attention"
     assert sparse["grid_contract"]["checks"]["design_spacing_ok"] is False
+
+
+def test_balanced_mcp_learning_profile_gate_requires_all_ten_stages_and_controls():
+    from radia_mcp.common.learning_quality import build_balanced_learning_profile
+
+    profile = build_balanced_learning_profile("probe", "radia-mcp", "source-mcp")
+    gate = balanced_mcp_learning_profile_gate(profile)
+    assert gate["status"] == "ok"
+    assert len(gate["capability_ids"]) == 10
+    assert all(gate["checks"].values())
+
+    missing_negative = {**profile, "stages": [dict(row) for row in profile["stages"]]}
+    missing_negative["stages"][3]["negative_control"] = ""
+    bad = balanced_mcp_learning_profile_gate(missing_negative)
+    assert bad["status"] == "needs_attention"
+    assert bad["checks"]["controls_complete"] is False
+
+    reordered = {**profile, "stages": list(reversed(profile["stages"]))}
+    wrong_order = balanced_mcp_learning_profile_gate(reordered)
+    assert wrong_order["status"] == "needs_attention"
+    assert wrong_order["checks"]["capability_ids_match"] is False
+    assert wrong_order["checks"]["rounds_ordered"] is False
 
 
 def test_licensed_solver_agentic_profile_gate_requires_seat_safe_owned_cleanup():

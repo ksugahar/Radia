@@ -19,6 +19,7 @@ from . import conversion
 from . import cli as _cli
 from .knowledge import buck_seed as _buck_seed
 from .knowledge import circuit_knowledge as _circuit_knowledge
+from .learning_quality import build_balanced_learning_profile as _build_balanced_learning_profile
 from .measure import summarize_measure_log as _summarize_measure_log
 from .measure import summarize_stepped_measure_log as _summarize_stepped_measure_log
 from .patentability import patentability_search_plan as _patentability_search_plan
@@ -204,6 +205,13 @@ def compare_topology(netlist_a: str, netlist_b: str) -> dict:
     except Exception as e:
         return {'equivalent': False, 'error': f'{type(e).__name__}: {e}'}
     return {'equivalent': equal, **info}
+
+
+@mcp.tool()
+def balanced_learning_profile() -> dict:
+    """Return the ten-stage equal public/source MCP learning contract."""
+
+    return _build_balanced_learning_profile()
 
 
 @mcp.tool()
