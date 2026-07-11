@@ -4768,6 +4768,62 @@ def cst_touchstone_solver_ready_manifest_gate(
     }
 
 
+def balanced_mcp_learning_profile_gate(profile):
+    """Validate the ten-stage equal public/source MCP learning profile."""
+
+    if not isinstance(profile, dict):
+        raise ValueError("profile must be a mapping")
+    expected_ids = [
+        "baseline_gap",
+        "source_controls",
+        "structured_output",
+        "input_validation",
+        "security_boundary",
+        "timeout_cancel_progress",
+        "source_provenance",
+        "artifact_feedback",
+        "protocol_smoke",
+        "balance_audit",
+    ]
+    stages = profile.get("stages")
+    if not isinstance(stages, list):
+        stages = []
+    ids = [str(row.get("capability_id") or "") for row in stages if isinstance(row, dict)]
+    rounds = [row.get("round") for row in stages if isinstance(row, dict)]
+    controls_complete = all(
+        str(row.get("positive_control") or "").strip()
+        and str(row.get("negative_control") or "").strip()
+        for row in stages
+        if isinstance(row, dict)
+    ) and len(stages) == 10
+    roles = profile.get("workflow_roles")
+    role_names = set(roles) if isinstance(roles, dict) else set()
+    protocol = profile.get("protocol_policy")
+    checks = {
+        "schema_matches": profile.get("schema") == "cae-ai-lab.balanced-mcp-learning-profile.v1",
+        "policy_matches": profile.get("policy") == "equal_capability_gain_v1",
+        "stage_count_is_ten": profile.get("stage_count") == 10 and len(stages) == 10,
+        "capability_ids_match": ids == expected_ids,
+        "capability_ids_unique": len(set(ids)) == 10,
+        "rounds_ordered": rounds == list(range(1, 11)),
+        "controls_complete": controls_complete,
+        "workflow_roles_complete": role_names == {"detect", "check", "run", "test"},
+        "protocol_policy_complete": isinstance(protocol, dict)
+        and all(str(protocol.get(key) or "").strip() for key in ("inspector_cli", "conformance", "fallback")),
+        "owners_recorded": bool(str(profile.get("public_owner") or "").strip())
+        and bool(str(profile.get("source_owner") or "").strip()),
+        "completion_rule_recorded": bool(str(profile.get("completion_rule") or "").strip()),
+    }
+    return {
+        "policy": "balanced_mcp_learning_profile_gate",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "server": profile.get("server"),
+        "capability_ids": ids,
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+    }
+
+
 def licensed_solver_agentic_profile_gate(
     agentic_profile_schema,
     recommended_first_calls,
