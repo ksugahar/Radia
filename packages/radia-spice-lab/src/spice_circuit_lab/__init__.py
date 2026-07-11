@@ -18,6 +18,7 @@ from ltspice_converter.measure import (  # noqa: F401
     parse_spice_scalar,
     summarize_measure_log,
 )
+from ltspice_converter.filter_gates import sallen_key_filter_family_gate  # noqa: F401
 
 __all__ = [
     "netlist_to_schemdraw",
@@ -32,4 +33,5 @@ __all__ = [
     "parse_ltspice_measure_lines",
     "parse_ltspice_step_lines",
     "summarize_measure_log",
+    "sallen_key_filter_family_gate",
 ]

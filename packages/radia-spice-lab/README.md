@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes thirteen tools:
+Exposes fourteen tools:
 
 | Tool | Purpose |
 |---|---|
@@ -289,6 +289,7 @@ Exposes thirteen tools:
 | `balanced_learning_profile()` | Equal-capability public/source MCP learning contract and self-check. |
 | `parse_measure_log(log_text)` | Public-safe LTspice `.measure` log parser. It recovers linear `mag()` values from the AC dB wrapper and rejects scalar `ph()` evidence whose sign was lost. |
 | `parse_stepped_measure_log(log_text)` | Pairs stepped `Measurement` rows with concrete `.step` assignments and rejects incomplete tables. |
+| `sallen_key_filter_family_gate(rows)` | Gates multi-Q low-pass sweeps against the ideal two-pole response. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
