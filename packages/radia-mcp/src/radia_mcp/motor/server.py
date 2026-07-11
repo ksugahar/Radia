@@ -65,6 +65,7 @@ from .force_report_gate import force_report_method_metadata_gate as build_force_
 from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
 from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
 from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
+from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -79,6 +80,43 @@ mcp = FastMCP("mcp-server-motor")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_magnet_model_handoff_gate(
+    residual_phases: list[list[float]],
+    nonlinear_tolerance: float,
+    source_result_artifact_id: str,
+    source_result_digest: str,
+    magnet_control_artifact_id: str,
+    magnet_control_digest: str,
+    magnet_geometry_artifact_id: str,
+    magnet_geometry_digest: str,
+    numbering_policy: str,
+    element_id_offset: int,
+    node_id_offset: int,
+    material_mapping_count: int,
+    geometry_transform: str,
+) -> str:
+    """Gate a converged source result and two-file downstream magnet model."""
+    try:
+        result = build_magnet_model_handoff_gate(
+            residual_phases,
+            nonlinear_tolerance=nonlinear_tolerance,
+            source_result_artifact_id=source_result_artifact_id,
+            source_result_digest=source_result_digest,
+            magnet_control_artifact_id=magnet_control_artifact_id,
+            magnet_control_digest=magnet_control_digest,
+            magnet_geometry_artifact_id=magnet_geometry_artifact_id,
+            magnet_geometry_digest=magnet_geometry_digest,
+            numbering_policy=numbering_policy,
+            element_id_offset=element_id_offset,
+            node_id_offset=node_id_offset,
+            material_mapping_count=material_mapping_count,
+            geometry_transform=geometry_transform,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {"policy": "magnet_model_handoff_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_motion_table_coordinate_gate(
