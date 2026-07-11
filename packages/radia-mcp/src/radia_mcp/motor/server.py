@@ -63,6 +63,7 @@ from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_h
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
 from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
 from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
+from .two_run_ldlq_gate import ipm_two_run_ldlq_gate as build_ipm_two_run_ldlq_gate
 from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
 from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
 from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
@@ -863,6 +864,17 @@ def motor_phase_flux_park_alignment_gate(
         q_relative_tolerance,
         d_ripple_relative_tolerance,
     )
+
+
+@mcp.tool()
+def motor_ipm_two_run_ldlq_gate(summary_json: str) -> str:
+    """Gate same-angle PM-only/current-on runs and extract ``Ld``/``Lq``.
+
+    Both runs must provide explicit angle grids and canonical phase order. The
+    gate subtracts PM-only phase flux before Park projection and rejects stale
+    total-flux shortcuts, phase-order mismatches, or implausible saliency.
+    """
+    return build_ipm_two_run_ldlq_gate(summary_json)
 
 
 # ============================================================
