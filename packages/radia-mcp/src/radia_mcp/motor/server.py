@@ -62,6 +62,7 @@ from .planar_coupling_knowledge import get_planar_coupling
 from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_handoff_gate
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
 from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
+from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -661,6 +662,24 @@ def motor_force_report_method_metadata_gate(
     law closure must agree within ``relative_tolerance``.
     """
     return build_force_report_method_metadata_gate(report_json, relative_tolerance)
+
+
+@mcp.tool()
+def motor_phase_flux_park_alignment_gate(
+    mechanical_angles_deg_json: str,
+    phase_flux_wb_json: str,
+    pole_pairs: int,
+    q_relative_tolerance: float = 3.0e-2,
+    d_ripple_relative_tolerance: float = 2.0e-2,
+) -> str:
+    """Gate a PM-only three-phase flux sweep in the rotating d/q frame."""
+    return build_phase_flux_park_alignment_gate(
+        mechanical_angles_deg_json,
+        phase_flux_wb_json,
+        pole_pairs,
+        q_relative_tolerance,
+        d_ripple_relative_tolerance,
+    )
 
 
 # ============================================================
