@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **663 tools** across 43 MCP servers.
+Total: **671 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 58 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 60 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 50 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 81 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 83 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -18,13 +18,13 @@ Total: **663 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 37 |
-| [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 3 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 38 |
+| [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
-| [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 7 |
+| [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
-| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 5 |
+| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 6 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 3 |
@@ -109,6 +109,8 @@ Module: `radia_mcp.cubit.server`
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
 | `cubit_vol_inventory` | Return semantic element inventory for a Netgen `.vol` export. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
+| `cubit_webcut_conformal_hex_gate` | Gate webcut volume drift, partition balance, interfaces, and hex quality. |
+| `cubit_webcut_journal_execution_gate` | Gate source-journal operation order and headless process evidence. |
 | `generate_cubit_script` | Generate a template Cubit Python script for common workflows. |
 | `get_lint_rules` | List all available Cubit export lint rules with descriptions. |
 | `lint_cubit_directory` | Lint all Python scripts in a directory for Cubit export convention violations. |
@@ -246,6 +248,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
+| `linear_eddy_levitation_force_gate` | Gate linear harmonic levitation force by dual extraction and I-squared laws. |
 | `linear_induction_frequency_sweep_gate` | Gate a linear-induction frequency sweep by thrust, loss, and phase balance. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
@@ -283,6 +286,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `transient_coupled_coil_response_gate` | Gate a passive shorted-secondary transient induced-current history. |
 | `twin_conductor_skin_effect_frequency_gate` | Gate passive twin-conductor R/L and impedance trends over frequency. |
 | `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
+| `two_conductor_capacitance_matrix_gate` | Gate reciprocal Maxwell and mutual capacitance matrix representations. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
 | `voice_coil_force_flux_sweep_gate` | Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence. |
@@ -432,6 +436,7 @@ Module: `radia_mcp.motor.server`
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
+| `motor_ipm_two_run_ldlq_gate` | Gate same-angle PM-only/current-on runs and extract ``Ld``/``Lq``. |
 | `motor_magnet_model_handoff_gate` | Gate a converged source result and two-file downstream magnet model. |
 | `motor_motion_table_coordinate_gate` | Validate independent 3D translation and rotation motion tables. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
@@ -461,6 +466,7 @@ Module: `radia_mcp.accelerator.server`
 | Tool | Description |
 |---|---|
 | `accelerator` | Accelerator magnet design with Radia + radia-mcp. |
+| `accelerator_magnetic_trajectory_pair_gate` | Gate paired charged-particle trajectories with magnetic field off/on. |
 | `accelerator_status` | (no description) |
 | `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 16 topics. |
 
@@ -491,6 +497,7 @@ Module: `radia_mcp.magnetic_materials.server`
 | `magnetic_materials_radia_status` | Radia magnetic material implementation status (Mat classes). |
 | `magnetic_materials_silicon_steel` | JIS silicon steel grade database + processing/handling notes. |
 | `magnetic_materials_status` | (no description) |
+| `periodic_hysteresis_loss_energy_gate` | Gate periodic hysteresis power by cycle energy and loss closure. |
 
 ## `mcp-server-litz-transmission`
 
@@ -527,6 +534,7 @@ Module: `radia_mcp.topology_optimization.server`
 | `topology_opt_applications` | Practical applications. |
 | `topology_opt_cae_ai_artifact_gate` | Gate CAE-AI artifacts before they are promoted as engineering results. |
 | `topology_opt_shape_optimization` | Shape optimization for nonlinear magnetostatics. |
+| `topology_opt_simplex_stationarity_audit_gate` | Audit derivative-free convergence using independent stationarity checks. |
 | `topology_opt_topology_derivative` | Topological derivative for changing topology (adding/removing material). |
 | `topology_optimization_status` | (no description) |
 

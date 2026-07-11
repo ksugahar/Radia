@@ -51,6 +51,8 @@ from .vol_inventory import (
 	cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate,
 	cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate,
 	cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate,
+	cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate,
+	cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -848,6 +850,22 @@ def cubit_pyramid_degenerate_hex_export_gate(
 			"status": "invalid_input",
 			"error": str(exc),
 		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_webcut_conformal_hex_gate(summary: dict) -> str:
+	"""Gate webcut volume drift, partition balance, interfaces, and hex quality."""
+	try: result = _cubit_webcut_conformal_hex_gate(summary)
+	except (TypeError, ValueError) as exc: result = {"policy":"cubit_webcut_conformal_hex_gate_v1","status":"invalid_input","error":str(exc)}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_webcut_journal_execution_gate(summary: dict) -> str:
+	"""Gate source-journal operation order and headless process evidence."""
+	try: result = _cubit_webcut_journal_execution_gate(summary)
+	except (TypeError, ValueError) as exc: result = {"policy":"cubit_webcut_journal_execution_gate_v1","status":"invalid_input","error":str(exc)}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
