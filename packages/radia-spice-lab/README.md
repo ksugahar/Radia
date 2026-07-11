@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes nineteen tools:
+Exposes twenty tools:
 
 | Tool | Purpose |
 |---|---|
@@ -295,6 +295,7 @@ Exposes nineteen tools:
 | `cockcroft_walton_stage_gate(...)` | Gates loaded two-stage multiplier scaling, adjacent-window settling, ripple, load current, and real-power bounds. |
 | `boost_converter_steady_state_gate(...)` | Gates periodic boost ratio, passive power, inductor volt-second balance, and capacitor charge balance. |
 | `transient_psrr_gate(...)` | Gates transient input/output ripple attenuation against independent RAW replay and the PSRR definition. |
+| `measure_bandwidth_crossing_gate(summary)` | Replays two-sided rise/fall `-3 dB` bandwidth measures from sampled AC magnitude, using dB interpolation on each linear-frequency interval. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
