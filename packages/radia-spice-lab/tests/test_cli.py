@@ -602,8 +602,9 @@ def test_mcp_tools_registered():
                 "half_wave_rectifier_gate", "cockcroft_walton_stage_gate",
                 "boost_converter_steady_state_gate",
                     "transient_psrr_gate",
-                    "measure_bandwidth_crossing_gate",
-                    "circuit_knowledge", "buck_seed",
+                        "measure_bandwidth_crossing_gate",
+                        "bipolar_supply_startup_gate",
+                        "circuit_knowledge", "buck_seed",
         "patentability_search_plan",
     }
     assert names == expected

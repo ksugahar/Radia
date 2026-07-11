@@ -296,6 +296,7 @@ Exposes twenty tools:
 | `boost_converter_steady_state_gate(...)` | Gates periodic boost ratio, passive power, inductor volt-second balance, and capacitor charge balance. |
 | `transient_psrr_gate(...)` | Gates transient input/output ripple attenuation against independent RAW replay and the PSRR definition. |
 | `measure_bandwidth_crossing_gate(summary)` | Replays two-sided rise/fall `-3 dB` bandwidth measures from sampled AC magnitude, using dB interpolation on each linear-frequency interval. |
+| `bipolar_supply_startup_gate(summary)` | Gates signed dual-rail startup by final regulation, rail balance, tail ripple, overshoot, 10-90% timing skew, and power-good ordering. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
