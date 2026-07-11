@@ -21,12 +21,14 @@ Usage:
 """
 
 import os
+import json
 import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
 from ..common.learning_quality import build_balanced_learning_profile
+from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2179,6 +2181,20 @@ def _selftest():
         print("SKIP: No fixtures found.")
 
 
+
+
+@mcp.tool()
+def rf_sweep_artifact_summary_gate(
+    summary_json: str,
+    passivity_tolerance: float = 1.0e-3,
+    reciprocity_tolerance: float = 1.0e-3,
+) -> str:
+    """Gate a solved two-port sweep artifact and its process-neutral metadata."""
+    return json.dumps(
+        _rf_sweep_artifact_summary_gate(
+            summary_json, passivity_tolerance, reciprocity_tolerance
+        ), indent=2, sort_keys=True
+    )
 
 
 register_status_tool(
