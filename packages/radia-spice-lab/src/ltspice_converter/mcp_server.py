@@ -25,9 +25,16 @@ from .measure import summarize_stepped_measure_log as _summarize_stepped_measure
 from .patentability import patentability_search_plan as _patentability_search_plan
 from .filter_gates import sallen_key_filter_family_gate as _sallen_key_filter_family_gate
 from .hysteresis_gate import hysteretic_inductor_cycle_gate as _hysteretic_inductor_cycle_gate
+from .rectifier_gate import half_wave_rectifier_gate as _half_wave_rectifier_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+@mcp.tool()
+def half_wave_rectifier_gate(vin_peak_v: float, frequency_hz: float, capacitance_f: float, load_ohm: float, vout_avg_v: float, vout_pp_v: float, diode_avg_a: float) -> dict:
+    """Gate capacitor-input half-wave rectifier DC, ripple, and current balance."""
+    try: return _half_wave_rectifier_gate(vin_peak_v,frequency_hz,capacitance_f,load_ohm,vout_avg_v,vout_pp_v,diode_avg_a)
+    except ValueError as exc: return {"policy":"half_wave_rectifier_gate_v1","status":"invalid_input","error":str(exc)}
 
 
 @mcp.tool()
