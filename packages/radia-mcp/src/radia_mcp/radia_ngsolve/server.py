@@ -29,6 +29,7 @@ from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
 from ..common.learning_quality import build_balanced_learning_profile
 from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
+from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2195,6 +2196,18 @@ def rf_sweep_artifact_summary_gate(
             summary_json, passivity_tolerance, reciprocity_tolerance
         ), indent=2, sort_keys=True
     )
+
+
+@mcp.tool()
+def cq_response_reality_gate(
+    summary_json: str,
+    residual_tolerance: float = 1.0e-10,
+    imaginary_tolerance: float = 1.0e-10,
+) -> str:
+    """Gate a coupled CQ solve, including its real time-domain reconstruction."""
+    return json.dumps(_cq_response_reality_gate(
+        json.loads(summary_json), residual_tolerance=residual_tolerance,
+        imaginary_tolerance=imaginary_tolerance), indent=2, sort_keys=True)
 
 
 register_status_tool(
