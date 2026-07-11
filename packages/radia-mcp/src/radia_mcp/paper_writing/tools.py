@@ -1272,6 +1272,9 @@ def paper_writing_check_digest_human_review_triggers(
       instead of a numbered section;
     - a figure marker such as f_N appears without saying what it marks;
     - a one-page digest expands from one benchmark to sphere/cube/polyhedra.
+    - a numerical example is called proof/evidence beyond its validation scope;
+    - an implementation sentence uses "the derived conditions" without
+      repeating the method name whose conditions were derived.
     """
     raw_src, source_path = _paper_writing_text_or_path(text_or_path)
     looks_like_tex = bool(source_path or "\\" in raw_src)
@@ -1346,6 +1349,46 @@ def paper_writing_check_digest_human_review_triggers(
         rec for rec in section_records
         if numerical_section_re.search(_paper_writing_plain_text(rec["text"]))
     ]
+
+    overclaim_re = re.compile(
+        r"(?:基礎的|決定的|直接的|明白な|強力な)(?:な)?証拠|"
+        r"\b(?:conclusive|definitive|strong)\s+evidence\b",
+        flags=re.IGNORECASE,
+    )
+    for m in overclaim_re.finditer(full_plain):
+        add(
+            "overstated_numerical_evidence",
+            "a result is described as evidence stronger than the stated validation scope",
+            ("For a finite numerical sweep or single benchmark, prefer "
+             "'supports', 'suggests', 'provides a finding', or '知見を与える'. "
+             "Reserve 'proof/証拠' for a mathematical derivation or a validation "
+             "program whose scope justifies that strength."),
+            full_plain[max(0, m.start() - 120):m.end() + 120],
+        )
+
+    derived_subject_re = re.compile(
+        r"(?:導出した|得られた)[^。．\n]{0,60}(?:条件|式|係数)(?:は|を)"
+        r"[^。．\n]{0,120}[。．]|"
+        r"\b(?:the\s+)?derived\s+(?:conditions?|equations?|coefficients?)\s+"
+        r"(?:is|are|was|were|has|have)\b[^.]{0,120}\.",
+        flags=re.IGNORECASE,
+    )
+    named_method_re = re.compile(
+        r"(?<![A-Za-z0-9])[A-Z][A-Z0-9-]{1,}(?![A-Za-z0-9-])|"
+        r"[一-龯ぁ-んァ-ン]{2,}(?:法|モデル|定式化)の"
+    )
+    for m in derived_subject_re.finditer(full_plain):
+        sentence = m.group(0)
+        if named_method_re.search(sentence):
+            continue
+        add(
+            "ambiguous_derived_method_subject",
+            "an implementation statement does not name the method that owns the derived conditions",
+            ("Repeat the method name in the same sentence, especially at a paragraph "
+             "boundary: for example, 'the derived MMPM moment conditions were "
+             "implemented in Fortran' / '導出したMMPMのモーメント条件は...'."),
+            sentence,
+        )
 
     over_narrow_galerkin_re = re.compile(
         r"(transition\s+frequency|crossover|connection\s+frequency).{0,80}"

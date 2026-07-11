@@ -721,6 +721,11 @@ into the paper-writing knowledge layer.
   gone" without saying what is invariant and what changed.  State the
   unchanged operator / conservation law and the changed metric, Hodge
   operator, coefficient, or unknown immediately after the equation.
+- Claim strength and antecedent problems: a finite numerical sweep should
+  normally "support", "suggest", or "provide a finding", not serve as
+  "proof/証拠" of a broader mechanism.  At paragraph boundaries, repeat the
+  named method in phrases such as "the derived MMPM moment conditions";
+  do not make the reader infer what "the derived conditions" belong to.
 
 ## Required action
 
