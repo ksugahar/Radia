@@ -61,6 +61,7 @@ from .simple_field_2d import (
 from .planar_coupling_knowledge import get_planar_coupling
 from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_handoff_gate
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
+from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -645,6 +646,21 @@ def motor_force_rotation_covariance_gate(
         rotation_deg,
         relative_tolerance,
     )
+
+
+@mcp.tool()
+def motor_force_report_method_metadata_gate(
+    report_json: str,
+    relative_tolerance: float = 2.0e-2,
+) -> str:
+    """Gate a force report using independent methods and action-reaction.
+
+    The JSON report records ``force_unit``, ``component_frame``, at least two
+    ``methods`` (each with ``family``, ``domain`` and ``vector``), plus
+    ``action_force`` and ``reaction_force``. Method vectors and Newton's-third-
+    law closure must agree within ``relative_tolerance``.
+    """
+    return build_force_report_method_metadata_gate(report_json, relative_tolerance)
 
 
 # ============================================================
