@@ -28,6 +28,7 @@ from .hysteresis_gate import hysteretic_inductor_cycle_gate as _hysteretic_induc
 from .rectifier_gate import half_wave_rectifier_gate as _half_wave_rectifier_gate
 from .voltage_multiplier_gate import cockcroft_walton_stage_gate as _cockcroft_walton_stage_gate
 from .boost_gate import boost_converter_steady_state_gate as _boost_converter_steady_state_gate
+from .psrr_gate import transient_psrr_gate as _transient_psrr_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
@@ -81,6 +82,13 @@ def boost_converter_steady_state_gate(summary: dict) -> dict:
     """Gate periodic boost conversion, power, volt-second and charge balance."""
     try: return _boost_converter_steady_state_gate(summary)
     except ValueError as exc: return {"policy":"boost_converter_steady_state_gate_v1","status":"invalid_input","error":str(exc)}
+
+
+@mcp.tool()
+def transient_psrr_gate(summary: dict, minimum_psrr_db: float = 40.0) -> dict:
+    """Gate transient ripple attenuation against raw and measured PSRR."""
+    try: return _transient_psrr_gate(summary, minimum_psrr_db)
+    except ValueError as exc: return {"policy":"transient_psrr_gate_v1","status":"invalid_input","error":str(exc)}
 
 
 @mcp.tool()
