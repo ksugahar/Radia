@@ -311,6 +311,57 @@ def build123d_step_portability_diagnosis_gate(
 
 
 @mcp.tool()
+def build123d_path_sweep_handoff_gate(
+    result_json: str,
+    path_length_rtol: float = 1.0e-12,
+    external_volume_rtol: float = 5.0e-5,
+    external_area_rtol: float = 1.0e-10,
+    bbox_atol: float = 1.0e-10,
+) -> str:
+    """Gate a curved build123d sweep through analytic path and STEP/CAD checks.
+
+    The analytic ``section area * path length`` value is reported only as a
+    diagnostic. The finished trimmed solid must agree with an independent CAD
+    kernel in volume, area, bounding box, STEP digest, and closed topology.
+    """
+
+    try:
+        from .path_sweep_gate import build123d_path_sweep_handoff_gate as gate
+
+        result = gate(
+            json.loads(result_json),
+            path_length_rtol=path_length_rtol,
+            external_volume_rtol=external_volume_rtol,
+            external_area_rtol=external_area_rtol,
+            bbox_atol=bbox_atol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_path_sweep_handoff_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def build123d_path_sweep_source_contract_gate(result_json: str) -> str:
+    """Gate the source-native build123d sweep idiom and ``is_valid`` API form."""
+
+    try:
+        from .path_sweep_gate import build123d_path_sweep_source_contract_gate as gate
+
+        result = gate(json.loads(result_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_path_sweep_source_contract_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def build123d_perforated_prism_roundtrip_gate(
     reference_volume: float,
     imported_volume: float,
