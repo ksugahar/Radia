@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **618 tools** across 43 MCP servers.
+Total: **620 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 51 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 53 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 42 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 55 |
@@ -74,9 +74,11 @@ Module: `radia_mcp.cubit.server`
 | `cubit_generate_dialog` | Generate a single complete PySide6 dialog script for a Cubit toolbar |
 | `cubit_gmsh_v41_inventory` | Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity. |
 | `cubit_gmsh_v41_mixed_order_gate` | Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority. |
+| `cubit_headless_netgen_export_gate` | Gate migration from a GUI plugin export command to native headless Netgen export. |
 | `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
 | `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
 | `cubit_list_checkpoints` | List all saved Cubit checkpoints with size + mtime. |
+| `cubit_loft_high_order_vol_series_gate` | Gate all-hex loft topology, curved payload, sidecars, and quality for orders 1-5. |
 | `cubit_lookup` | Retrieve relevant sections from the bundled Cubit knowledge base. |
 | `cubit_mesh_apply_choice` | Apply the human's chosen variant from a previous |
 | `cubit_mesh_auto` | Find a working mesh recipe by trying a scheme ladder in batch, |
