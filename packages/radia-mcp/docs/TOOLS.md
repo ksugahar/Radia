@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **642 tools** across 43 MCP servers.
+Total: **643 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 55 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 47 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 67 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 68 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -256,6 +256,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
+| `skin_effect_adaptive_energy_loss_gate` | Gate current-port identities and adaptive skin-effect loss convergence. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
 | `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
