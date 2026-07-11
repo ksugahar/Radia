@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **646 tools** across 43 MCP servers.
+Total: **647 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 47 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 48 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 70 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -143,6 +143,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_path_sweep_handoff_gate` | Gate a curved build123d sweep through analytic path and STEP/CAD checks. |
 | `build123d_path_sweep_source_contract_gate` | Gate the source-native build123d sweep idiom and ``is_valid`` API form. |
 | `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
+| `build123d_platonic_solid_family_gate` | Gate all five Platonic solids by topology, analytic volume and CAD replay. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
 | `build123d_status` | (no description) |
 | `build123d_step_portability_diagnosis_gate` | Diagnose whether STEP mass loss occurs in export or external import. |
