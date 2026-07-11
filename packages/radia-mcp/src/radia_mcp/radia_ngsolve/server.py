@@ -30,6 +30,7 @@ from ..common import register_status_tool
 from ..common.learning_quality import build_balanced_learning_profile
 from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
+from .cq_scattering_arrival_gate import cq_scattering_arrival_gate as _cq_scattering_arrival_gate
 from .field_profile_gate import (
     dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
@@ -2216,6 +2217,34 @@ def rf_sweep_artifact_summary_gate(
             summary_json, passivity_tolerance, reciprocity_tolerance
         ), indent=2, sort_keys=True
     )
+
+
+@mcp.tool()
+def cq_scattering_arrival_gate(
+    time_step_s: float,
+    geometric_arrival_s: float,
+    measured_peak_s: float,
+    max_relative_residual: float,
+    finite_response: bool,
+    real_time_response: bool,
+    max_peak_lag_steps: float = 3.0,
+    max_residual: float = 1.0e-6,
+) -> str:
+    """Gate CQ scattered-field causality against a geometric ray arrival."""
+    try:
+        result = _cq_scattering_arrival_gate(
+            time_step_s=time_step_s,
+            geometric_arrival_s=geometric_arrival_s,
+            measured_peak_s=measured_peak_s,
+            max_relative_residual=max_relative_residual,
+            finite_response=finite_response,
+            real_time_response=real_time_response,
+            max_peak_lag_steps=max_peak_lag_steps,
+            max_residual=max_residual,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {"policy": "cq_scattering_arrival_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 @mcp.tool()
