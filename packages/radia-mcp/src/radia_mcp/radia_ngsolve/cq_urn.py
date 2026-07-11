@@ -221,6 +221,27 @@ def cq_time_grid_contract_gate(
     }
 
 
+def cq_response_reality_gate(summary: dict, *, residual_tolerance: float = 1e-10,
+                             imaginary_tolerance: float = 1e-10) -> dict:
+    """Gate a coupled CQ run beyond its time-grid metadata."""
+    n_time = int(summary.get("num_time_steps", 0))
+    n_solves = int(summary.get("num_laplace_solves", 0))
+    method = str(summary.get("method", "")).upper()
+    coupling = str(summary.get("coupling_form", ""))
+    checks = {
+        "method_supported": method in {"BDF1", "BDF2"},
+        "one_laplace_solve_per_cq_node": n_time >= 2 and n_solves == n_time,
+        "laplace_nodes_right_half_plane": float(summary.get("min_real_laplace_parameter", -1)) > 0,
+        "coupled_residual_small": float(summary.get("max_relative_residual", float("inf"))) <= residual_tolerance,
+        "interior_response_real": float(summary.get("interior_imag_relative", float("inf"))) <= imaginary_tolerance,
+        "exterior_response_real": float(summary.get("exterior_imag_relative", float("inf"))) <= imaginary_tolerance,
+        "calderon_double_layer_present": coupling != "JohnsonNedelec" or summary.get("double_layer_included") is True,
+    }
+    return {"schema": "radia-cq-response-reality/v1", "status": "ok" if all(checks.values()) else "needs_attention",
+            "checks": checks, "method": method, "coupling_form": coupling,
+            "residual_tolerance": residual_tolerance, "imaginary_tolerance": imaginary_tolerance}
+
+
 def cq_weights_from_laplace(
     laplace_response: Callable[[np.ndarray], np.ndarray],
     dt: float,
