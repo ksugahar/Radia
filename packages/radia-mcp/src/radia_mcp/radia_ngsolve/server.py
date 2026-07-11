@@ -52,7 +52,10 @@ from .force_error_convergence_gate import (
 )
 from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_force_flux_sweep_gate
 from .linear_induction_gate import linear_induction_frequency_sweep_gate as _linear_induction_frequency_sweep_gate
-from .conductor_frequency_gate import twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate
+from .conductor_frequency_gate import (
+    homogenized_bundle_impedance_comparison_gate as _homogenized_bundle_impedance_comparison_gate,
+    twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate,
+)
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 from .one_port_power_gate import one_port_power_balance_gate as _one_port_power_balance_gate
 from .fsi_scattering_invariants_gate import (
@@ -2735,6 +2738,37 @@ def twin_conductor_skin_effect_frequency_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "twin_conductor_skin_effect_frequency_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def homogenized_bundle_impedance_comparison_gate(
+    rows: list[dict],
+    resistance_rtol: float = 0.03,
+    inductance_rtol: float = 0.005,
+    impedance_rtol: float = 0.01,
+    observable_rtol: float = 1.0e-10,
+    minimum_element_reduction: float = 5.0,
+    minimum_speedup: float = 5.0,
+) -> str:
+    """Gate a stranded-bundle approximation against an explicit reference."""
+
+    try:
+        result = _homogenized_bundle_impedance_comparison_gate(
+            rows,
+            resistance_rtol=resistance_rtol,
+            inductance_rtol=inductance_rtol,
+            impedance_rtol=impedance_rtol,
+            observable_rtol=observable_rtol,
+            minimum_element_reduction=minimum_element_reduction,
+            minimum_speedup=minimum_speedup,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "homogenized_bundle_impedance_comparison_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
