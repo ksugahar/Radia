@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **661 tools** across 43 MCP servers.
+Total: **662 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 57 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 58 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 49 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 81 |
@@ -81,6 +81,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_live_mixed_mesh_gate` | Gate a source-journal hex+pyramid+tet replay from headless Cubit Python. |
 | `cubit_loft_high_order_vol_series_gate` | Gate all-hex loft topology, curved payload, sidecars, and quality for orders 1-5. |
 | `cubit_lookup` | Retrieve relevant sections from the bundled Cubit knowledge base. |
+| `cubit_mapped_boundary_layer_shell_gate` | Gate mapped all-hex boundary layers by nodal shells, quality, and scale. |
 | `cubit_mesh_apply_choice` | Apply the human's chosen variant from a previous |
 | `cubit_mesh_auto` | Find a working mesh recipe by trying a scheme ladder in batch, |
 | `cubit_mesh_diagnose` | Per-volume meshing diagnostic. |
