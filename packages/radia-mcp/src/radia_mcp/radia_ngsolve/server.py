@@ -42,6 +42,7 @@ from .capacitance_identity_gate import (
     two_conductor_capacitance_identity_gate as _two_conductor_capacitance_identity_gate,
 )
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
+from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
@@ -2407,6 +2408,49 @@ def multiport_impedance_sweep_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "multiport_impedance_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def radar_range_rcs_profile_gate(
+    frequency_hz: list[float],
+    target_range_m: float,
+    radar_peak_range_m: float,
+    radar_peak_rcs_m2: float,
+    generalized_peak_range_m: float,
+    generalized_peak_rcs_m2: float,
+    analytic_peak_rcs_m2: float,
+    profile_relative_l2: float,
+    max_frequency_step_relative_drift: float = 1.0e-7,
+    max_peak_range_resolution_multiples: float = 1.0,
+    max_profile_relative_l2: float = 1.0e-4,
+    max_method_peak_relative_error: float = 1.0e-4,
+    max_analytic_peak_relative_error: float = 0.05,
+) -> str:
+    """Gate wideband range-RCS localization, method agreement, and analytic amplitude."""
+
+    try:
+        result = _radar_range_rcs_profile_gate(
+            frequency_hz,
+            target_range_m=target_range_m,
+            radar_peak_range_m=radar_peak_range_m,
+            radar_peak_rcs_m2=radar_peak_rcs_m2,
+            generalized_peak_range_m=generalized_peak_range_m,
+            generalized_peak_rcs_m2=generalized_peak_rcs_m2,
+            analytic_peak_rcs_m2=analytic_peak_rcs_m2,
+            profile_relative_l2=profile_relative_l2,
+            max_frequency_step_relative_drift=max_frequency_step_relative_drift,
+            max_peak_range_resolution_multiples=max_peak_range_resolution_multiples,
+            max_profile_relative_l2=max_profile_relative_l2,
+            max_method_peak_relative_error=max_method_peak_relative_error,
+            max_analytic_peak_relative_error=max_analytic_peak_relative_error,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "radar_range_rcs_profile_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
