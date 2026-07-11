@@ -36,6 +36,7 @@ from .field_profile_gate import (
 )
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
+from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2330,6 +2331,32 @@ def multiport_impedance_sweep_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "multiport_impedance_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def adjoint_gradient_scaling_gate(
+    rows_json: str,
+    max_gradient_relative_error: float = 1.0e-6,
+    max_forward_affine_residual: float = 1.0e-10,
+    min_final_objective_ratio: float = 1.0,
+) -> str:
+    """Gate reverse-mode solve scaling, FD agreement and ascent direction."""
+
+    try:
+        rows = json.loads(rows_json)
+        result = _adjoint_gradient_scaling_gate(
+            rows,
+            max_gradient_relative_error=max_gradient_relative_error,
+            max_forward_affine_residual=max_forward_affine_residual,
+            min_final_objective_ratio=min_final_objective_ratio,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "adjoint_gradient_scaling_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
