@@ -38,6 +38,9 @@ from .force_position_profile_gate import force_position_profile_gate as _force_p
 from .parallel_wire_force_refinement_gate import (
     parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
 )
+from .capacitance_identity_gate import (
+    two_conductor_capacitance_identity_gate as _two_conductor_capacitance_identity_gate,
+)
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 
@@ -2309,6 +2312,37 @@ def parallel_wire_force_refinement_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "parallel_wire_force_refinement_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def two_conductor_capacitance_identity_gate(
+    conductor_voltages_v: list[float],
+    conductor_charges_c: list[float],
+    stored_energy_j: float,
+    driven_conductor_index: int = 1,
+    planar_depth_m: float | None = None,
+    max_capacitance_relative_error: float = 1.0e-5,
+    max_charge_balance_relative_error: float = 1.0e-5,
+) -> str:
+    """Gate two-conductor capacitance using terminal charge and field energy."""
+
+    try:
+        result = _two_conductor_capacitance_identity_gate(
+            conductor_voltages_v,
+            conductor_charges_c,
+            stored_energy_j,
+            driven_conductor_index=driven_conductor_index,
+            planar_depth_m=planar_depth_m,
+            max_capacitance_relative_error=max_capacitance_relative_error,
+            max_charge_balance_relative_error=max_charge_balance_relative_error,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "two_conductor_capacitance_identity_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
