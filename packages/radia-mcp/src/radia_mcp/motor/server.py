@@ -64,6 +64,7 @@ from .force_covariance import force_rotation_covariance_gate as build_force_rota
 from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
 from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
 from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
+from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -78,6 +79,33 @@ mcp = FastMCP("mcp-server-motor")
 # ============================================================
 # MCP Tools
 # ============================================================
+
+@mcp.tool()
+def motor_motion_table_coordinate_gate(
+    translation_times_s: list[float],
+    translation_vectors: list[list[float]],
+    rotation_times_s: list[float],
+    rotation_vectors: list[list[float]],
+    coordinate_frame_id: str,
+    translation_unit: str = "mm",
+    rotation_unit: str = "deg",
+    motion_semantics: str = "cumulative_displacement",
+) -> str:
+    """Validate independent 3D translation and rotation motion tables."""
+    try:
+        result = build_motion_table_coordinate_gate(
+            translation_times_s,
+            translation_vectors,
+            rotation_times_s,
+            rotation_vectors,
+            coordinate_frame_id=coordinate_frame_id,
+            translation_unit=translation_unit,
+            rotation_unit=rotation_unit,
+            motion_semantics=motion_semantics,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {"policy": "motion_table_coordinate_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def motor_periodic_torque_sampling_gate(
