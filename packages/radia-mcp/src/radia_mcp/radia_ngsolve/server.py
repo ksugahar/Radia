@@ -66,6 +66,7 @@ from .loss_temperature_coupling_gate import loss_temperature_coupling_gate as _l
 from .transient_coupled_coil_gate import (
     transient_coupled_coil_response_gate as _transient_coupled_coil_response_gate,
 )
+from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2836,6 +2837,23 @@ def transient_coupled_coil_response_gate(
             "status": "invalid_input",
             "error": str(exc),
         }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def skin_effect_adaptive_energy_loss_gate(
+    frequency_hz: float, current: dict, voltage: dict, impedance: dict, power: dict,
+    flux_linkage: dict, total_energy_j: float, total_loss_w: float, adaptive_rows: list[dict],
+) -> str:
+    """Gate current-port identities and adaptive skin-effect loss convergence."""
+    try:
+        result = _skin_effect_adaptive_energy_loss_gate(
+            frequency_hz=frequency_hz, current=current, voltage=voltage, impedance=impedance,
+            power=power, flux_linkage=flux_linkage, total_energy_j=total_energy_j,
+            total_loss_w=total_loss_w, adaptive_rows=adaptive_rows,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {"policy": "skin_effect_adaptive_energy_loss_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
