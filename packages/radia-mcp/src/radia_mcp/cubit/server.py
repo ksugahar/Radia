@@ -47,6 +47,7 @@ from .knowledge.coreform_webinars import get_coreform_webinar_documentation
 from .vol_inventory import (
 	cubit_hex_geometry_refinement_gate,
 	cubit_live_mixed_mesh_python_gate as _cubit_live_mixed_mesh_python_gate,
+	cubit_mapped_boundary_layer_shell_gate as _cubit_mapped_boundary_layer_shell_gate,
 	cubit_sweep_along_curve_gate as _cubit_sweep_along_curve_gate,
 	cubit_partitioned_sweep_compatibility_gate as _cubit_partitioned_sweep_compatibility_gate,
 	cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate,
@@ -796,6 +797,32 @@ def cubit_partitioned_sweep_compatibility_gate(
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_partitioned_sweep_compatibility_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_mapped_boundary_layer_shell_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.2,
+	min_shape: float = 0.0,
+	shell_radius_tolerance: float = 1.0e-9,
+	volume_relative_tolerance: float = 1.0e-12,
+) -> str:
+	"""Gate mapped all-hex boundary layers by nodal shells, quality, and scale."""
+	try:
+		result = _cubit_mapped_boundary_layer_shell_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			min_shape=min_shape,
+			shell_radius_tolerance=shell_radius_tolerance,
+			volume_relative_tolerance=volume_relative_tolerance,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_mapped_boundary_layer_shell_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}

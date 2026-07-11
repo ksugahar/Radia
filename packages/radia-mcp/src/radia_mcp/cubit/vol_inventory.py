@@ -31,6 +31,60 @@ SURFACE_KIND_BY_NP = {
 }
 
 
+_HEADLESS_STARTUP_DIAGNOSTIC_SUFFIXES = (
+    "/plugins",
+    "-commandplugindir",
+    "-nojournal",
+)
+
+
+def _headless_process_evidence(summary: Mapping[str, object]) -> dict[str, object]:
+    """Classify Cubit's known startup diagnostics without hiding script errors."""
+    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
+    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
+    normalized_suffixes = [
+        next(
+            (
+                suffix
+                for suffix in _HEADLESS_STARTUP_DIAGNOSTIC_SUFFIXES
+                if row.rstrip().endswith(suffix)
+            ),
+            "",
+        )
+        for row in diagnostics
+    ]
+    startup_only_allowlisted = (
+        bool(diagnostics)
+        and len(diagnostics) <= len(_HEADLESS_STARTUP_DIAGNOSTIC_SUFFIXES)
+        and all("Could not open file:" in row for row in diagnostics)
+        and all(normalized_suffixes)
+        and len(set(normalized_suffixes)) == len(normalized_suffixes)
+    )
+    process_exit_code = int(summary.get("process_exit_code", -1))
+    result_fresh = summary.get("result_artifact_fresh") is True
+    process_exit_acceptable = process_exit_code == 0 or (
+        process_exit_code in {2, 3}
+        and startup_only_allowlisted
+        and not script_errors
+        and result_fresh
+    )
+    return {
+        "diagnostics": diagnostics,
+        "script_errors": script_errors,
+        "startup_only_allowlisted": startup_only_allowlisted,
+        "process_exit_code": process_exit_code,
+        "result_fresh": result_fresh,
+        "process_exit_acceptable": process_exit_acceptable,
+        "launcher_classification": (
+            "clean_exit"
+            if process_exit_code == 0
+            else "allowlisted_startup_diagnostic_with_clean_script"
+            if process_exit_acceptable
+            else "execution_error"
+        ),
+    }
+
+
 def read_netgen_vol_inventory(path: str | Path) -> dict[str, object]:
     """Read a Netgen ``.vol`` file and return a semantic element inventory."""
 
@@ -1234,6 +1288,172 @@ def cubit_live_mixed_mesh_python_gate(
     }
 
 
+def cubit_mapped_boundary_layer_shell_gate(
+    summary: Mapping[str, object],
+    *,
+    min_scaled_jacobian: float = 0.2,
+    min_shape: float = 0.0,
+    shell_radius_tolerance: float = 1.0e-9,
+    volume_relative_tolerance: float = 1.0e-12,
+) -> dict[str, object]:
+    """Gate a mapped all-hex boundary layer by its nodal radial shells.
+
+    Curved boundary-layer hex centroids lie inside the arithmetic radial
+    midpoint because straight chords approximate the cylinder.  Therefore the
+    layer contract is checked from the min/max nodal radii of each shell, not
+    from centroid-distance thresholds.
+    """
+    if not isinstance(summary, Mapping):
+        raise ValueError("summary must be a mapping")
+    tolerances = (
+        float(min_scaled_jacobian),
+        float(min_shape),
+        float(shell_radius_tolerance),
+        float(volume_relative_tolerance),
+    )
+    if not all(math.isfinite(value) for value in tolerances):
+        raise ValueError("all tolerances must be finite")
+    if min_scaled_jacobian <= 0.0 or min_shape < 0.0:
+        raise ValueError("quality thresholds must be nonnegative and scaled Jacobian positive")
+    if shell_radius_tolerance < 0.0 or volume_relative_tolerance < 0.0:
+        raise ValueError("geometry tolerances must be nonnegative")
+
+    counts_raw = summary.get("element_counts", {})
+    quality_raw = summary.get("quality", {})
+    boundary_raw = summary.get("boundary_layer", {})
+    if not all(isinstance(row, Mapping) for row in (counts_raw, quality_raw, boundary_raw)):
+        raise ValueError("element_counts, quality, and boundary_layer must be mappings")
+    counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
+    hex_count = counts.get("hex", 0)
+    first_height = float(boundary_raw.get("first_height", math.nan))
+    growth = float(boundary_raw.get("growth", math.nan))
+    layer_count = int(boundary_raw.get("layers", 0))
+    outer_radius = float(boundary_raw.get("outer_radius", math.nan))
+    radial_levels = sorted(float(value) for value in boundary_raw.get("radial_node_levels", []))
+    shell_counts_raw = boundary_raw.get("radial_shell_element_counts", {})
+    if not isinstance(shell_counts_raw, Mapping):
+        raise ValueError("radial_shell_element_counts must be a mapping")
+    shell_counts = [
+        int(shell_counts_raw.get(f"wall_layer_{index}", 0))
+        for index in range(1, layer_count + 1)
+    ]
+    core_count = int(shell_counts_raw.get("core", 0))
+
+    cumulative = []
+    total = 0.0
+    if first_height > 0.0 and growth > 0.0 and layer_count > 0:
+        for index in range(layer_count):
+            total += first_height * growth**index
+            cumulative.append(total)
+    expected_levels = sorted([outer_radius] + [outer_radius - value for value in cumulative])
+    level_errors = [
+        min((abs(observed - expected) for observed in radial_levels), default=math.inf)
+        for expected in expected_levels
+    ]
+
+    scaled = quality_raw.get("scaled_jacobian", {})
+    shape = quality_raw.get("shape", {})
+    if not isinstance(scaled, Mapping) or not isinstance(shape, Mapping):
+        raise ValueError("scaled_jacobian and shape quality rows must be mappings")
+    scaled_count = int(scaled.get("count", 0))
+    scaled_min = float(scaled.get("min", math.nan))
+    shape_count = int(shape.get("count", 0))
+    shape_minimum = float(shape.get("min", math.nan))
+
+    volume_before = float(summary.get("cad_volume_before_scale", math.nan))
+    analytic_volume = float(summary.get("analytic_volume_before_scale", math.nan))
+    volume_after = float(summary.get("cad_volume_after_scale", math.nan))
+    unit_scale = float(summary.get("unit_scale", math.nan))
+    coordinate_scale_error = float(summary.get("coordinate_scale_max_abs_error", math.nan))
+    volume_error = abs(volume_before - analytic_volume) / max(abs(analytic_volume), 1.0e-300)
+    scale_error = abs(volume_after / volume_before - unit_scale**3) if volume_before else math.inf
+
+    process = _headless_process_evidence(summary)
+    script_errors = process["script_errors"]
+    checks = {
+        "source_native_journal_digest_recorded": (
+            Path(str(summary.get("source_journal", ""))).suffix.lower() == ".jou"
+            and len(str(summary.get("source_sha256") or "")) == 64
+        ),
+        "headless_python_api": str(summary.get("execution_mode", "")).lower()
+        == "python_api_headless",
+        "headless_flags_recorded": {"-nographics", "-batch"}.issubset(
+            {str(value).lower() for value in summary.get("headless_flags", [])}
+        ),
+        "persistent_gui_not_started": summary.get("persistent_gui_started") is False,
+        "single_line_compile_wrapper_recorded": summary.get("batch_wrapper_mode")
+        == "single_line_compile_wrapper",
+        "direct_multiline_batch_failure_recorded": summary.get(
+            "direct_multiline_batch_rejected"
+        )
+        is True,
+        "fresh_result_artifact": process["result_fresh"] is True,
+        "script_error_lines_empty": not script_errors,
+        "process_exit_semantics_acceptable": process["process_exit_acceptable"] is True,
+        "hex_only_volume_mesh": hex_count > 0 and all(
+            counts.get(kind, 0) == 0 for kind in ("pyramid", "wedge", "tet")
+        ),
+        "boundary_layer_parameters_valid": (
+            first_height > 0.0
+            and growth >= 1.0
+            and layer_count > 0
+            and outer_radius > sum(first_height * growth**index for index in range(layer_count))
+        ),
+        "every_requested_radial_interface_present": (
+            len(level_errors) == layer_count + 1
+            and all(error <= shell_radius_tolerance for error in level_errors)
+        ),
+        "every_boundary_layer_shell_occupied": (
+            len(shell_counts) == layer_count and all(value > 0 for value in shell_counts)
+        ),
+        "interior_core_occupied": core_count > 0,
+        "all_hexes_classified_by_shell_or_core": sum(shell_counts) + core_count == hex_count,
+        "scaled_jacobian_above_threshold": (
+            scaled_count == hex_count
+            and math.isfinite(scaled_min)
+            and scaled_min >= min_scaled_jacobian
+        ),
+        "shape_above_threshold": (
+            shape_count == hex_count
+            and math.isfinite(shape_minimum)
+            and shape_minimum > min_shape
+        ),
+        "cad_volume_matches_analytic_geometry": volume_error <= volume_relative_tolerance,
+        "uniform_scale_preserves_cubic_volume_law": (
+            unit_scale > 0.0 and scale_error <= volume_relative_tolerance
+        ),
+        "node_coordinates_follow_uniform_scale": (
+            math.isfinite(coordinate_scale_error)
+            and coordinate_scale_error <= shell_radius_tolerance
+        ),
+    }
+    return {
+        "policy": "cubit_mapped_boundary_layer_shell_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "hex_count": hex_count,
+            "boundary_layer_shell_counts": shell_counts,
+            "core_hex_count": core_count,
+            "expected_radial_levels": expected_levels,
+            "radial_level_absolute_errors": level_errors,
+            "scaled_jacobian_min": scaled_min,
+            "shape_min": shape_minimum,
+            "cad_volume_relative_error": volume_error,
+            "cubic_scale_absolute_error": scale_error,
+            "process_exit_code": process["process_exit_code"],
+        },
+        "launcher_classification": process["launcher_classification"],
+        "notes": [
+            "Validate curved boundary-layer thickness from nodal radial interfaces; polygon-chord centroids are not radial midpoints.",
+            "Cubit is the hex-led boundary-layer route; tet-only educational meshes belong to the Netgen route.",
+            "A nonzero launcher exit is acceptable only for a fresh passing artifact, no script errors, and exact allowlisted startup diagnostics.",
+            "Cubit batch reads Python line by line, so multiline implementations require a one-line compile/exec wrapper.",
+        ],
+    }
+
+
 def cubit_sweep_along_curve_gate(
     summary: Mapping[str, object],
     *,
@@ -1267,21 +1487,11 @@ def cubit_sweep_along_curve_gate(
     scaled_min = float(scaled.get("min", math.nan))
     shape_min = float(shape.get("min", math.nan))
 
-    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
-    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
-    allowed_suffixes = ("/plugins", "-commandplugindir")
-    startup_only_allowlisted = bool(diagnostics) and len(diagnostics) <= 2 and all(
-        "Could not open file:" in row and row.rstrip().endswith(allowed_suffixes)
-        for row in diagnostics
-    )
-    process_exit_code = int(summary.get("process_exit_code", -1))
-    result_fresh = summary.get("result_artifact_fresh") is True
-    process_exit_acceptable = process_exit_code == 0 or (
-        process_exit_code in {2, 3}
-        and startup_only_allowlisted
-        and not script_errors
-        and result_fresh
-    )
+    process = _headless_process_evidence(summary)
+    script_errors = process["script_errors"]
+    process_exit_code = int(process["process_exit_code"])
+    result_fresh = process["result_fresh"] is True
+    process_exit_acceptable = process["process_exit_acceptable"] is True
     volume_error = abs(total_volume - analytic_volume) / max(abs(analytic_volume), 1.0)
     volume_sum_error = abs(sum(float(value) for value in volumes_raw.values()) - total_volume) / max(abs(total_volume), 1.0)
     checks = {
@@ -1317,16 +1527,11 @@ def cubit_sweep_along_curve_gate(
             "component_volume_sum_relative_error": volume_sum_error,
             "process_exit_code": process_exit_code,
         },
-        "launcher_classification": (
-            "clean_exit" if process_exit_code == 0
-            else "allowlisted_startup_diagnostic_with_clean_script"
-            if process_exit_acceptable
-            else "execution_error"
-        ),
+        "launcher_classification": process["launcher_classification"],
         "notes": [
             "For a mesh-carrying sweep, hex count must equal mapped source quads times path intervals.",
             "Do not treat an unsupported Python entity alias as an empty element family.",
-            "A nonzero launcher exit is accepted only for the two known startup plugin-path diagnostics, with no script errors and a fresh passing artifact.",
+            "A nonzero launcher exit is accepted only for allowlisted startup option/path diagnostics, with no script errors and a fresh passing artifact.",
         ],
     }
 
@@ -1372,21 +1577,11 @@ def cubit_partitioned_sweep_compatibility_gate(
     base_volume = sum(volumes[key] for key in base_ids)
     copy_volume = sum(volumes[key] for key in copy_ids)
     copy_volume_error = abs(copy_volume - base_volume * max(copy_factor - 1, 0)) / max(abs(base_volume), 1.0e-300)
-    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
-    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
-    allowed_suffixes = ("/plugins", "-commandplugindir")
-    startup_only_allowlisted = bool(diagnostics) and len(diagnostics) <= 2 and all(
-        "Could not open file:" in row and row.rstrip().endswith(allowed_suffixes)
-        for row in diagnostics
-    )
-    process_exit_code = int(summary.get("process_exit_code", -1))
-    result_fresh = summary.get("result_artifact_fresh") is True
-    process_exit_acceptable = process_exit_code == 0 or (
-        process_exit_code in {2, 3}
-        and startup_only_allowlisted
-        and not script_errors
-        and result_fresh
-    )
+    process = _headless_process_evidence(summary)
+    script_errors = process["script_errors"]
+    process_exit_code = int(process["process_exit_code"])
+    result_fresh = process["result_fresh"] is True
+    process_exit_acceptable = process["process_exit_acceptable"] is True
     checks = {
         "source_native_journal_digest_recorded": Path(str(summary.get("source_journal", ""))).suffix.lower() == ".jou"
         and bool(str(summary.get("source_sha256") or "").strip()),
@@ -1430,13 +1625,7 @@ def cubit_partitioned_sweep_compatibility_gate(
             "copy_volume_relative_error": copy_volume_error,
             "process_exit_code": process_exit_code,
         },
-        "launcher_classification": (
-            "clean_exit"
-            if process_exit_code == 0
-            else "allowlisted_startup_diagnostic_with_clean_script"
-            if process_exit_acceptable
-            else "execution_error"
-        ),
+        "launcher_classification": process["launcher_classification"],
         "notes": [
             "Promote an obsolete meshing scheme through an explicit compatibility map; never silently skip it.",
             "A mesh-carrying copy must conserve both hex count and CAD volume.",
@@ -1514,21 +1703,11 @@ def cubit_pyramid_degenerate_hex_export_gate(
         pyramid_quality.get("geometric_volume_minimum", math.nan)
     )
 
-    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
-    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
-    allowed_suffixes = ("/plugins", "-commandplugindir")
-    startup_only_allowlisted = bool(diagnostics) and len(diagnostics) <= 2 and all(
-        "Could not open file:" in row and row.rstrip().endswith(allowed_suffixes)
-        for row in diagnostics
-    )
-    process_exit_code = int(summary.get("process_exit_code", -1))
-    result_fresh = summary.get("result_artifact_fresh") is True
-    process_exit_acceptable = process_exit_code == 0 or (
-        process_exit_code in {2, 3}
-        and startup_only_allowlisted
-        and not script_errors
-        and result_fresh
-    )
+    process = _headless_process_evidence(summary)
+    script_errors = process["script_errors"]
+    process_exit_code = int(process["process_exit_code"])
+    result_fresh = process["result_fresh"] is True
+    process_exit_acceptable = process["process_exit_acceptable"] is True
 
     hex_count = counts.get("hex", 0)
     pyramid_count = counts.get("pyramid", 0)
@@ -1644,13 +1823,7 @@ def cubit_pyramid_degenerate_hex_export_gate(
             "pyramid_geometric_volume_minimum": pyramid_volume_minimum,
             "process_exit_code": process_exit_code,
         },
-        "launcher_classification": (
-            "clean_exit"
-            if process_exit_code == 0
-            else "allowlisted_startup_diagnostic_with_clean_script"
-            if process_exit_acceptable
-            else "execution_error"
-        ),
+        "launcher_classification": process["launcher_classification"],
         "notes": [
             "Database inventory and registered export-block inventory are different contracts; do not claim unregistered tet or wedge cells are present in the deck.",
             "nopyramid preserves first-order pyramid count by repeated-node CHEXA8 cards rather than deleting the transition cells.",
