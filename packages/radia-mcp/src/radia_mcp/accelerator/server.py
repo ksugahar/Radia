@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
 
 from .knowledge import get_accelerator_documentation, TOPICS
+from .magnetic_trajectory_gate import magnetic_trajectory_pair_gate as build_magnetic_trajectory_pair_gate
 
 mcp = FastMCP("mcp-server-accelerator")
 
@@ -29,6 +30,17 @@ def accelerator(topic: str = "all") -> str:
                         examples used by the radia-em Clebsch hodograph line
     """
     return get_accelerator_documentation(topic)
+
+
+@mcp.tool()
+def accelerator_magnetic_trajectory_pair_gate(summary_json: str) -> str:
+    """Gate paired charged-particle trajectories with magnetic field off/on.
+
+    The gate requires measurable transverse deflection while speed, kinetic
+    energy, transported current, boundary hits, and collision power remain
+    closed, expressing that the magnetic Lorentz force does no work.
+    """
+    return build_magnetic_trajectory_pair_gate(summary_json)
 
 
 
