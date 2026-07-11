@@ -37,6 +37,9 @@ from .field_profile_gate import (
     symmetric_complex_field_curve_gate as _symmetric_complex_field_curve_gate,
     symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
 )
+from .acoustic_kernel_gate import (
+    helmholtz_double_layer_low_frequency_gate as _helmholtz_double_layer_low_frequency_gate,
+)
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
@@ -2395,6 +2398,21 @@ def symmetric_complex_field_curve_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "symmetric_complex_field_curve_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def helmholtz_double_layer_low_frequency_gate(summary_json: str) -> str:
+    """Gate the quadratic low-frequency correction of a Helmholtz double layer."""
+
+    try:
+        result = _helmholtz_double_layer_low_frequency_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "helmholtz_double_layer_low_frequency_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
