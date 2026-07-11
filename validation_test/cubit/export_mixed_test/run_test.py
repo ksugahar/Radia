@@ -11,6 +11,12 @@ import os
 import subprocess
 import sys
 
+from radia_mcp.cubit.gmsh_v41 import (
+    gmsh_v41_mixed_order_series_gate,
+    summarize_gmsh_v41_ascii,
+)
+from radia_mcp.cubit.vol_inventory import summarize_netgen_vol_inventory
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -40,7 +46,7 @@ def run_jou(cubit_exe, jou_template, out_dir, expected_files):
 
     result = subprocess.run(
         [cubit_exe, "-batch", "-nographics", "-nojournal", tmp_jou],
-        capture_output=True, text=True, timeout=300
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300
     )
 
     # Print important lines
@@ -50,7 +56,7 @@ def run_jou(cubit_exe, jou_template, out_dir, expected_files):
             if any(k in line.lower() for k in
                    ["error", "netgencurver", "exported", "build_high",
                     "interrupt"]):
-                print(f"  {line}")
+                print(f"  {line.encode('ascii', errors='replace').decode('ascii')}")
 
     if result.returncode != 0:
         print(f"  NOTE: Cubit exited with code {result.returncode}")
@@ -105,6 +111,27 @@ def main():
     total_passed += p
     total_failed += f
 
+    mixed_rows = []
+    for order in (1, 2):
+        path = os.path.join(out_dir, f"mixed_o{order}.msh")
+        with open(path, encoding="utf-8") as stream:
+            mixed_rows.append({
+                "order": order,
+                "inventory": summarize_gmsh_v41_ascii(stream.read(), source=path),
+            })
+    with open(os.path.join(out_dir, "mixed_o2.vol"), encoding="utf-8") as stream:
+        vol_inventory = summarize_netgen_vol_inventory(stream.read(), source="mixed_o2.vol")
+    mixed_gate = gmsh_v41_mixed_order_series_gate(
+        mixed_rows,
+        authoritative_vol_inventory=vol_inventory,
+    )
+    if mixed_gate["success"]:
+        print(f"  OK:   Gmsh v4.1 mixed order series ({mixed_gate['status']})")
+        total_passed += 1
+    else:
+        print(f"  FAIL: Gmsh v4.1 mixed order series: {mixed_gate}")
+        total_failed += 1
+
     # --- Test 2: Hex cylinder (order 2, HEX20 connectivity) ---
     print("=== Test 2: Hex cylinder order 2 ===")
     p, f = run_jou(cubit_exe,
@@ -117,21 +144,18 @@ def main():
     total_passed += p
     total_failed += f
 
-    # Verify HEX20 has 20 nodes (not 8)
+    # Verify HEX20 from the Gmsh 4.1 element block, not with a v2 row parser.
     msh_path = os.path.join(out_dir, "hex_cyl_o2.msh")
     if os.path.isfile(msh_path):
-        with open(msh_path) as fh:
-            for line in fh:
-                parts = line.split()
-                if len(parts) > 5 and parts[1] == "17":  # GMSH HEX20
-                    n_nodes = len(parts) - 5
-                    if n_nodes == 20:
-                        print(f"  OK:   HEX20 connectivity = {n_nodes} nodes")
-                        total_passed += 1
-                    else:
-                        print(f"  FAIL: HEX20 has {n_nodes} nodes (expected 20)")
-                        total_failed += 1
-                    break
+        with open(msh_path, encoding="utf-8") as fh:
+            inventory = summarize_gmsh_v41_ascii(fh.read(), source=msh_path)
+        hex20_count = int(inventory["element_type_counts"].get("17", 0))
+        if hex20_count > 0 and not inventory["connectivity_mismatches"]:
+            print(f"  OK:   {hex20_count} HEX20 elements with 20-node connectivity")
+            total_passed += 1
+        else:
+            print(f"  FAIL: invalid HEX20 Gmsh v4.1 inventory: {inventory}")
+            total_failed += 1
 
     # --- Test 3: p-convergence (sphere, order 1-5 via export netgen) ---
     print("=== Test 3: p-convergence (sphere order 1-5) ===")
