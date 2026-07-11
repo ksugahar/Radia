@@ -39,6 +39,7 @@ from .field_profile_gate import (
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
+from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
 from .parallel_wire_force_refinement_gate import (
     parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
 )
@@ -2555,6 +2556,30 @@ def rotational_kinematics_time_axis_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "rotational_kinematics_time_axis_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def inductance_matrix_family_gate(
+    cases: list[dict],
+    expected_strongest_coupling_case: str | None = None,
+    max_reciprocity_relative_error: float = 0.02,
+    psd_relative_tolerance: float = 1.0e-12,
+) -> str:
+    """Gate a family of linear two-winding inductance matrices."""
+    try:
+        result = _inductance_matrix_family_gate(
+            cases,
+            expected_strongest_coupling_case=expected_strongest_coupling_case,
+            max_reciprocity_relative_error=max_reciprocity_relative_error,
+            psd_relative_tolerance=psd_relative_tolerance,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "inductance_matrix_family_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
