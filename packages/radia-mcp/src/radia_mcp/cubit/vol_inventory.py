@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
+import math
 from math import isfinite
 from pathlib import Path
 from typing import Iterable, Mapping
@@ -1229,6 +1230,103 @@ def cubit_live_mixed_mesh_python_gate(
             "Cubit owns the hex-led mixed route; a tet-only case belongs to the Netgen route.",
             "Use the documented Python entity families for inventory queries; unsupported aliases must not be treated as empty mesh sets.",
             "This gate validates execution evidence, while exported .vol/Gmsh gates validate downstream topology and labels.",
+        ],
+    }
+
+
+def cubit_sweep_along_curve_gate(
+    summary: Mapping[str, object],
+    *,
+    min_scaled_jacobian: float = 0.2,
+    volume_relative_tolerance: float = 1.0e-12,
+) -> dict[str, object]:
+    """Gate a source-quad x sweep-interval all-hex replay and launcher status."""
+
+    if not isinstance(summary, Mapping):
+        raise ValueError("summary must be a mapping")
+    if min_scaled_jacobian <= 0.0 or volume_relative_tolerance < 0.0:
+        raise ValueError("quality threshold must be positive and volume tolerance nonnegative")
+
+    counts_raw = summary.get("element_counts", {})
+    quality_raw = summary.get("quality", {})
+    volumes_raw = summary.get("cad_volume_by_body", {})
+    if not isinstance(counts_raw, Mapping) or not isinstance(quality_raw, Mapping):
+        raise ValueError("element_counts and quality must be mappings")
+    if not isinstance(volumes_raw, Mapping):
+        raise ValueError("cad_volume_by_body must be a mapping")
+
+    counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
+    source_quads = int(summary.get("source_quad_count", 0))
+    sweep_intervals = int(summary.get("sweep_interval_count", 0))
+    total_volume = float(summary.get("total_cad_volume", math.nan))
+    analytic_volume = float(summary.get("analytic_volume", math.nan))
+    scaled = quality_raw.get("scaled_jacobian", {})
+    shape = quality_raw.get("shape", {})
+    if not isinstance(scaled, Mapping) or not isinstance(shape, Mapping):
+        raise ValueError("quality rows must be mappings")
+    scaled_min = float(scaled.get("min", math.nan))
+    shape_min = float(shape.get("min", math.nan))
+
+    diagnostics = [str(value) for value in summary.get("startup_diagnostics", [])]
+    script_errors = [str(value) for value in summary.get("script_error_lines", [])]
+    allowed_suffixes = ("/plugins", "-commandplugindir")
+    startup_only_allowlisted = bool(diagnostics) and len(diagnostics) <= 2 and all(
+        "Could not open file:" in row and row.rstrip().endswith(allowed_suffixes)
+        for row in diagnostics
+    )
+    process_exit_code = int(summary.get("process_exit_code", -1))
+    result_fresh = summary.get("result_artifact_fresh") is True
+    process_exit_acceptable = process_exit_code == 0 or (
+        process_exit_code in {2, 3}
+        and startup_only_allowlisted
+        and not script_errors
+        and result_fresh
+    )
+    volume_error = abs(total_volume - analytic_volume) / max(abs(analytic_volume), 1.0)
+    volume_sum_error = abs(sum(float(value) for value in volumes_raw.values()) - total_volume) / max(abs(total_volume), 1.0)
+    checks = {
+        "source_native_journal": Path(str(summary.get("source_journal", ""))).suffix.lower() == ".jou",
+        "headless_python_api": str(summary.get("execution_mode", "")).lower() == "python_api_headless",
+        "persistent_gui_not_started": summary.get("persistent_gui_started") is False,
+        "version_recorded": bool(str(summary.get("version", "")).strip()),
+        "fresh_result_artifact": result_fresh,
+        "script_error_lines_empty": not script_errors,
+        "process_exit_semantics_acceptable": process_exit_acceptable,
+        "hex_only_volume_mesh": counts.get("hex", 0) > 0 and all(
+            counts.get(kind, 0) == 0 for kind in ("pyramid", "wedge", "tet")
+        ),
+        "source_quads_and_sweep_intervals_positive": source_quads > 0 and sweep_intervals > 0,
+        "sweep_layer_count_conserved": counts.get("hex", 0) == source_quads * sweep_intervals,
+        "scaled_jacobian_above_threshold": scaled_min >= float(min_scaled_jacobian),
+        "shape_positive": shape_min > 0.0,
+        "cad_body_volumes_positive": bool(volumes_raw) and all(float(value) > 0.0 for value in volumes_raw.values()),
+        "cad_volume_sum_matches": volume_sum_error <= volume_relative_tolerance,
+        "analytic_volume_matches": volume_error <= volume_relative_tolerance,
+    }
+    return {
+        "policy": "cubit_sweep_along_curve_gate_v1",
+        "status": "ok" if all(checks.values()) else "needs_attention",
+        "checks": checks,
+        "issues": [name for name, ok in checks.items() if not ok],
+        "metrics": {
+            "hex_count": counts.get("hex", 0),
+            "expected_hex_count": source_quads * sweep_intervals,
+            "scaled_jacobian_min": scaled_min,
+            "shape_min": shape_min,
+            "volume_relative_error": volume_error,
+            "component_volume_sum_relative_error": volume_sum_error,
+            "process_exit_code": process_exit_code,
+        },
+        "launcher_classification": (
+            "clean_exit" if process_exit_code == 0
+            else "allowlisted_startup_diagnostic_with_clean_script"
+            if process_exit_acceptable
+            else "execution_error"
+        ),
+        "notes": [
+            "For a mesh-carrying sweep, hex count must equal mapped source quads times path intervals.",
+            "Do not treat an unsupported Python entity alias as an empty element family.",
+            "A nonzero launcher exit is accepted only for the two known startup plugin-path diagnostics, with no script errors and a fresh passing artifact.",
         ],
     }
 

@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **636 tools** across 43 MCP servers.
+Total: **637 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 54 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 55 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 45 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 64 |
@@ -102,6 +102,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
 | `cubit_status` | (no description) |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
+| `cubit_sweep_along_curve_gate` | Gate an all-hex mesh-carrying curve sweep and headless launcher evidence. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
 | `cubit_vol_inventory` | Return semantic element inventory for a Netgen `.vol` export. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
