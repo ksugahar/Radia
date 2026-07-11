@@ -189,6 +189,41 @@ def build123d_volume_crosscheck(
 
 
 @mcp.tool()
+def build123d_perforated_prism_roundtrip_gate(
+    reference_volume: float,
+    imported_volume: float,
+    hole_count: int,
+    hole_side_count: int,
+    imported_surface_count: int,
+    imported_body_count: int = 1,
+    outer_side_count: int = 4,
+    volume_rtol: float = 1.0e-9,
+) -> str:
+    """Check STEP roundtrip volume and through-hole boundary topology."""
+
+    try:
+        from .modeling import shape_perforated_prism_roundtrip_gate
+
+        result = shape_perforated_prism_roundtrip_gate(
+            reference_volume=reference_volume,
+            imported_volume=imported_volume,
+            hole_count=hole_count,
+            hole_side_count=hole_side_count,
+            imported_surface_count=imported_surface_count,
+            imported_body_count=imported_body_count,
+            outer_side_count=outer_side_count,
+            volume_rtol=volume_rtol,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "build123d_perforated_prism_roundtrip_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 def build123d_volume_crosscheck_with_units(
     reference_rows_json: str,
     measured_sets_json: str,

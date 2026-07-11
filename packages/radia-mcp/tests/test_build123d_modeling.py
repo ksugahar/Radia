@@ -46,6 +46,7 @@ from radia_mcp.build123d.modeling import (annular_segment, tube, racetrack_coil,
                                           shape_cubit_meshing_scheme_intent_gate,
                                           cst_cad_volume_export_manifest_gate,
                                           shape_volume_crosscheck_summary,
+                                          shape_perforated_prism_roundtrip_gate,
                                           shape_volume_crosscheck_source_coverage_gate,
                                           shape_volume_crosscheck_source_identity_gate,
                                           shape_external_cad_volume_evidence_package_gate,
@@ -3679,6 +3680,48 @@ def test_build123d_volume_crosscheck_mcp_tool_dispatches_json():
     assert payload["n_sources"] == 1
     assert payload["comparison_sets"][0]["source"] == "cubit"
     assert payload["comparison_sets"][0]["rows"][0]["passed"] is True
+
+
+def test_perforated_prism_roundtrip_requires_volume_and_boundary_topology():
+    gate = shape_perforated_prism_roundtrip_gate(
+        reference_volume=168472.3918002237,
+        imported_volume=168472.39180031797,
+        hole_count=625,
+        hole_side_count=6,
+        imported_surface_count=3756,
+        imported_body_count=1,
+        volume_rtol=1.0e-12,
+    )
+    assert gate["status"] == "ok"
+    assert gate["expected_surface_count"] == 3756
+    assert gate["volume_relative_error"] < 1.0e-12
+
+    same_volume_missing_holes = shape_perforated_prism_roundtrip_gate(
+        reference_volume=168472.3918002237,
+        imported_volume=168472.3918002237,
+        hole_count=625,
+        hole_side_count=6,
+        imported_surface_count=6,
+        imported_body_count=1,
+    )
+    assert same_volume_missing_holes["status"] == "needs_attention"
+    assert same_volume_missing_holes["checks"]["volume_agrees"] is True
+    assert same_volume_missing_holes["checks"]["surface_topology_preserved"] is False
+
+
+def test_perforated_prism_roundtrip_mcp_tool_dispatches_json():
+    from radia_mcp.build123d.server import build123d_perforated_prism_roundtrip_gate
+
+    payload = json.loads(build123d_perforated_prism_roundtrip_gate(
+        168472.3918002237,
+        168472.39180031797,
+        625,
+        6,
+        3756,
+        volume_rtol=1.0e-12,
+    ))
+    assert payload["status"] == "ok"
+    assert payload["checks"]["surface_topology_preserved"] is True
 
 
 def test_build123d_volume_crosscheck_with_units_normalizes_and_rejects_implicit_units():
