@@ -4,9 +4,11 @@ import json
 from radia_mcp.build123d.external_cad_gate import (
     build123d_upstream_example_roundtrip_gate,
     external_cad_mass_topology_crosscheck_gate,
+    step_portability_diagnosis_gate,
 )
 from radia_mcp.build123d.server import (
     build123d_external_cad_mass_topology_gate as mcp_external_gate,
+    build123d_step_portability_diagnosis_gate as mcp_portability_gate,
     build123d_upstream_example_roundtrip_gate as mcp_upstream_gate,
 )
 
@@ -97,3 +99,38 @@ def test_external_kernel_rejects_ambiguous_center_and_topology_drift():
     result = external_cad_mass_topology_crosscheck_gate(_reference(), bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["brep_topology_matches"] is False
+
+
+def _portability(external_volume=5767.508755516695):
+    return {
+        "source_kind": "upstream_native_example",
+        "upstream_commit": "c" * 40,
+        "source_sha256": "b" * 64,
+        "step_sha256": "a" * 64,
+        "native_volume": 5767.5000452165295,
+        "self_roundtrip_volume": 5767.50004521653,
+        "external_imports": [
+            {"mode": "heal", "volume": external_volume, "volume_count": 1},
+            {"mode": "noheal", "volume": external_volume, "volume_count": 1},
+        ],
+    }
+
+
+def test_step_portability_diagnosis_accepts_cross_kernel_control_and_dispatches():
+    payload = _portability()
+    result = step_portability_diagnosis_gate(payload)
+    assert result["status"] == "ok"
+    assert result["diagnosis"] == "portable"
+    assert json.loads(mcp_portability_gate(json.dumps(payload)))["status"] == "ok"
+
+
+def test_step_portability_diagnosis_locates_external_translation_loss():
+    payload = _portability(external_volume=282701.24890846136)
+    payload["native_volume"] = 363795.07369811134
+    payload["self_roundtrip_volume"] = 363795.073698225
+    result = step_portability_diagnosis_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert result["diagnosis"] == "external_kernel_translation_loss"
+    assert result["healing_not_root_cause"] is True
+    assert result["checks"]["self_roundtrip_matches"] is True
+    assert result["checks"]["external_volume_matches"] is False

@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **629 tools** across 43 MCP servers.
+Total: **630 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 54 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 44 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 45 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 59 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -141,6 +141,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
 | `build123d_status` | (no description) |
+| `build123d_step_portability_diagnosis_gate` | Diagnose whether STEP mass loss occurs in export or external import. |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
