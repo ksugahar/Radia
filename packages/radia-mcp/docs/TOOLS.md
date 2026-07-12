@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **735 tools** across 43 MCP servers.
+Total: **736 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 72 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 64 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 113 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 114 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -343,6 +343,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
 | `two_conductor_capacitance_matrix_gate` | Gate reciprocal Maxwell and mutual capacitance matrix representations. |
 | `two_terminal_dc_conduction_power_gate` | Gate current closure, Joule power, adaptive convergence, and replay. |
+| `two_winding_frequency_faraday_gate` | Gate two-winding complex response against linked-flux Faraday identity. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
 | `voice_coil_force_flux_sweep_gate` | Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence. |
