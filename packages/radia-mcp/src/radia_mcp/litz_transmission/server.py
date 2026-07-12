@@ -17,6 +17,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
+from .proximity_pair_gate import litz_proximity_approximation_pair_gate as _proximity_pair_gate
 
 mcp = FastMCP("mcp-server-litz-transmission")
 
@@ -34,6 +35,13 @@ def litz_transmission(topic: str = "overview") -> str:
             "all"           - Everything
     """
     return get_knowledge(topic)
+
+
+@mcp.tool()
+def litz_proximity_approximation_pair_gate(summary_json: str) -> dict:
+    """Validate a reduced proximity-effect bundle against an explicit model."""
+
+    return _proximity_pair_gate(summary_json)
 
 
 

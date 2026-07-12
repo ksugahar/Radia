@@ -11,5 +11,6 @@ Distilled from public-safe curated corpus (44 files, 743 MB) +
 """
 
 from .knowledge import get_knowledge
+from .proximity_pair_gate import litz_proximity_approximation_pair_gate
 
-__all__ = ["get_knowledge"]
+__all__ = ["get_knowledge", "litz_proximity_approximation_pair_gate"]
