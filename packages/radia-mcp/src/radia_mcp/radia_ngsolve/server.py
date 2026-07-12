@@ -53,6 +53,9 @@ from .source_free_static_gate import source_free_static_null_solution_gate as _s
 from .harmonic_force_triplet_gate import (
     harmonic_magnetic_force_triplet_closure_gate as _harmonic_magnetic_force_triplet_closure_gate,
 )
+from .harmonic_port_identity_gate import (
+    harmonic_current_port_power_energy_identity_gate as _harmonic_current_port_power_energy_identity_gate,
+)
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
@@ -2622,6 +2625,28 @@ def harmonic_magnetic_force_triplet_closure_gate(
     except (TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "harmonic_magnetic_force_triplet_closure_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def harmonic_current_port_power_energy_identity_gate(
+    summary_json: str,
+    maximum_identity_relative_error: float = 1.0e-9,
+    maximum_cross_run_relative_error: float = 1.0e-9,
+) -> str:
+    """Gate peak-phasor port, loss, energy, flux, and profile identities."""
+    try:
+        result = _harmonic_current_port_power_energy_identity_gate(
+            json.loads(summary_json),
+            maximum_identity_relative_error=maximum_identity_relative_error,
+            maximum_cross_run_relative_error=maximum_cross_run_relative_error,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "harmonic_current_port_power_energy_identity_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
