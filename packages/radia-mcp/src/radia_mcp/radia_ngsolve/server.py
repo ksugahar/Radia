@@ -56,6 +56,9 @@ from .harmonic_force_triplet_gate import (
 from .harmonic_port_identity_gate import (
     harmonic_current_port_power_energy_identity_gate as _harmonic_current_port_power_energy_identity_gate,
 )
+from .periodic_pm_machine_gate import (
+    periodic_unwrapped_pm_machine_replay_gate as _periodic_unwrapped_pm_machine_replay_gate,
+)
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
@@ -2647,6 +2650,32 @@ def harmonic_current_port_power_energy_identity_gate(
     except (TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "harmonic_current_port_power_energy_identity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def periodic_unwrapped_pm_machine_replay_gate(
+    summary_json: str,
+    maximum_field_symmetry_relative_error: float = 0.05,
+    maximum_energy_replay_relative_error: float = 1.0e-3,
+    maximum_field_replay_relative_error: float = 5.0e-3,
+    maximum_mesh_cardinality_relative_difference: float = 0.05,
+) -> str:
+    """Gate topology-aware PM-machine field symmetry and replay stability."""
+    try:
+        result = _periodic_unwrapped_pm_machine_replay_gate(
+            json.loads(summary_json),
+            maximum_field_symmetry_relative_error=maximum_field_symmetry_relative_error,
+            maximum_energy_replay_relative_error=maximum_energy_replay_relative_error,
+            maximum_field_replay_relative_error=maximum_field_replay_relative_error,
+            maximum_mesh_cardinality_relative_difference=maximum_mesh_cardinality_relative_difference,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "periodic_unwrapped_pm_machine_replay_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
