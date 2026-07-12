@@ -4765,3 +4765,229 @@ def cubit_boundary_layer_journal_recovery_gate(summary: Mapping[str, object]) ->
             "A nonzero launcher exit may be allowlisted only when the fresh result artifact, diagnostics, and zero leaked processes are recorded together.",
         ],
     }
+
+
+def cubit_embedded_region_mixed_transition_gate(
+    summary: Mapping[str, object],
+    *,
+    min_scaled_jacobian: float = 0.1,
+    max_volume_relative_error: float = 1.0e-5,
+    max_swept_volume_relative_error: float = 5.0e-4,
+) -> dict[str, object]:
+    """Gate a hex-led embedded-region mesh recovered with tet and pyramids.
+
+    The gate consumes archived LIVE evidence rather than opening a local file.
+    It binds topology, interface conformity, per-family quality, analytic CAD
+    closure, and an ASCII Gmsh 4.1 handoff in one decision.
+    """
+
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    thresholds = (
+        float(min_scaled_jacobian),
+        float(max_volume_relative_error),
+        float(max_swept_volume_relative_error),
+    )
+    if not all(isfinite(value) for value in thresholds):
+        raise ValueError("all thresholds must be finite")
+    if min_scaled_jacobian <= 0.0:
+        raise ValueError("min_scaled_jacobian must be > 0")
+    if max_volume_relative_error < 0.0 or max_swept_volume_relative_error < 0.0:
+        raise ValueError("volume tolerances must be nonnegative")
+
+    counts_raw = summary.get("element_counts") or {}
+    quality_raw = summary.get("quality") or {}
+    geometry = summary.get("geometry") or {}
+    export = summary.get("gmsh_export") or {}
+    header = export.get("header") or {}
+    upstream_checks = summary.get("checks") or {}
+    if not all(
+        isinstance(row, Mapping)
+        for row in (counts_raw, quality_raw, geometry, export, header, upstream_checks)
+    ):
+        raise ValueError("counts, quality, geometry, export, header, and checks must be mappings")
+
+    counts = {str(key).lower(): int(value) for key, value in counts_raw.items()}
+    if any(value < 0 for value in counts.values()):
+        raise ValueError("element counts must be nonnegative")
+    quality_minima: dict[str, float] = {}
+    quality_counts: dict[str, int] = {}
+    for kind in ("hex", "tet", "pyramid"):
+        family = quality_raw.get(kind) or {}
+        metric = family.get("scaled_jacobian") if isinstance(family, Mapping) else None
+        if not isinstance(metric, Mapping):
+            raise ValueError(f"quality.{kind}.scaled_jacobian must be a mapping")
+        quality_minima[kind] = float(metric.get("min", math.nan))
+        quality_counts[kind] = int(metric.get("count", -1))
+
+    def interface_rows(name: str) -> list[Mapping[str, object]]:
+        rows = list(summary.get(name) or [])
+        if not all(isinstance(row, Mapping) for row in rows):
+            raise ValueError(f"{name} must contain mappings")
+        return rows
+
+    pipe_interfaces = interface_rows("pipe_soil_interfaces")
+    transition_interfaces = interface_rows("recovery_transition_surfaces")
+    cad_volume = float(geometry.get("cad_volume", math.nan))
+    reference_volume = float(geometry.get("analytic_brick_volume", math.nan))
+    swept_volume = float(geometry.get("pipe_volume", math.nan))
+    swept_reference = float(geometry.get("analytic_pipe_volume", math.nan))
+    volume_error = abs(cad_volume - reference_volume) / max(abs(reference_volume), 1.0)
+    swept_error = abs(swept_volume - swept_reference) / max(abs(swept_reference), 1.0)
+    upstream_values = list(upstream_checks.values())
+
+    checks = {
+        "live_report_self_consistent": summary.get("pass") is True
+        and bool(upstream_values)
+        and all(value is True for value in upstream_values),
+        "all_cad_volumes_meshed": int(summary.get("volume_count", 0)) > 0
+        and not list(summary.get("unmeshed_volumes_after") or []),
+        "hex_led_mixed_topology": counts.get("hex", 0) > counts.get("tet", 0) > 0
+        and counts.get("pyramid", 0) > 0
+        and counts.get("wedge", 0) == 0,
+        "quality_count_matches_topology": all(
+            quality_counts[kind] == counts.get(kind, 0)
+            for kind in ("hex", "tet", "pyramid")
+        ),
+        "all_volume_families_above_quality_threshold": all(
+            isfinite(quality_minima[kind])
+            and quality_minima[kind] >= float(min_scaled_jacobian)
+            for kind in ("hex", "tet", "pyramid")
+        ),
+        "embedded_boundary_is_conformal_quad_mesh": bool(pipe_interfaces)
+        and all(
+            len(list(row.get("adjacent_volumes") or [])) == 2
+            and int(row.get("face_count", 0)) > 0
+            and int(row.get("face_count", 0)) == int(row.get("quad_count", 0))
+            and int(row.get("tri_count", 0)) == 0
+            for row in pipe_interfaces
+        ),
+        "hex_tet_transition_is_conformal_quad_mesh": bool(transition_interfaces)
+        and all(
+            len(list(row.get("adjacent_volumes") or [])) == 2
+            and int(row.get("face_count", 0)) > 0
+            and int(row.get("face_count", 0)) == int(row.get("quad_count", 0))
+            and int(row.get("tri_count", 0)) == 0
+            for row in transition_interfaces
+        ),
+        "cad_union_volume_matches_reference": isfinite(volume_error)
+        and volume_error <= float(max_volume_relative_error),
+        "swept_embedded_volume_matches_path_area": isfinite(swept_error)
+        and swept_error <= float(max_swept_volume_relative_error),
+        "gmsh_ascii_v41_handoff_complete": int(export.get("bytes", 0)) > 0
+        and len(str(export.get("sha256", ""))) == 64
+        and str(header.get("version", "")) == "4.1"
+        and int(header.get("file_type", -1)) == 0
+        and all(
+            header.get(name) is True
+            for name in ("has_entities_section", "has_nodes_section", "has_elements_section")
+        ),
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cubit_embedded_region_mixed_transition_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "checks": checks,
+        "issues": issues,
+        "element_counts": counts,
+        "quality_minima": quality_minima,
+        "minimum_scaled_jacobian_threshold": float(min_scaled_jacobian),
+        "cad_volume_relative_error": volume_error,
+        "swept_volume_relative_error": swept_error,
+        "pipe_interface_count": len(pipe_interfaces),
+        "transition_interface_count": len(transition_interfaces),
+        "gmsh_version": str(header.get("version", "")),
+        "notes": [
+            "Keep Cubit as the hex-led route; recover only unsweepable partitions with tetmesh.",
+            "Mesh the hex regions first so Cubit can insert pyramids against their quad interfaces.",
+            "Do not infer success from a nonempty export: bind every volume, each quality family, interfaces, and CAD closure.",
+        ],
+    }
+
+
+def cubit_embedded_pipe_source_recovery_gate(
+    summary: Mapping[str, object],
+    *,
+    expected_unmeshed_volumes: Iterable[int] = (8, 12, 17, 21, 26, 28, 31, 33),
+) -> dict[str, object]:
+    """Gate source-native embedded-pipe replay and version-drift recovery."""
+
+    if not isinstance(summary, Mapping):
+        raise TypeError("summary must be a mapping")
+    expected = sorted({int(value) for value in expected_unmeshed_volumes})
+    if not expected or any(value <= 0 for value in expected):
+        raise ValueError("expected_unmeshed_volumes must contain positive IDs")
+    recovery = summary.get("recovery") or {}
+    process = summary.get("process") or {}
+    timing = summary.get("timing") or {}
+    upstream = summary.get("checks") or {}
+    if not all(isinstance(row, Mapping) for row in (recovery, process, timing, upstream)):
+        raise ValueError("recovery, process, timing, and checks must be mappings")
+
+    source_sha = str(summary.get("source_sha256", "")).lower()
+    actual = sorted({int(value) for value in recovery.get("unmeshed_soil_before") or []})
+    error_categories = {str(value) for value in process.get("error_categories") or []}
+    exit_code = int(process.get("exit_code", -1))
+    public_gate = cubit_embedded_region_mixed_transition_gate(summary)
+    nonzero_exit_explained = exit_code == 0 or (
+        exit_code > 0
+        and {
+            "acis_webcut_version_drift",
+            "source_unmeshed_volumes_recovered",
+            "session_error_summary",
+        }.issubset(error_categories)
+        and int(process.get("unexpected_error_count", -1)) == 0
+        and process.get("result_artifact_fresh") is True
+        and public_gate["status"] == "ok"
+    )
+    timing_values = list(timing.values())
+    checks = {
+        "source_native_forum_journal_identified": str(summary.get("source_kind", "")).startswith(
+            "source_native_coreform_forum_journal"
+        )
+        and Path(str(summary.get("source_journal", ""))).suffix.lower() == ".jou"
+        and "forum.coreform.com/t/meshing-an-embedded-pipe/2759" in str(
+            summary.get("source_url", "")
+        ),
+        "source_digest_is_sha256": len(source_sha) == 64
+        and all(character in "0123456789abcdef" for character in source_sha),
+        "headless_combined_replay_recorded": summary.get("execution_mode")
+        == "headless_combined_journal_then_python_inventory"
+        and {"-nographics", "-batch"}.issubset(set(summary.get("headless_flags") or []))
+        and summary.get("gui_daemon_enabled") is False,
+        "source_hex_stage_completed_before_recovery": int(summary.get("preexisting_hex_count", 0)) > 0
+        and upstream.get("source_hex_stage_completed") is True,
+        "version_drift_volume_set_matches": actual == expected,
+        "targeted_tetmesh_recovery_recorded": str(recovery.get("fallback_scheme", "")).lower()
+        == "tetmesh"
+        and float(recovery.get("fallback_size", 0.0)) > 0.0
+        and recovery.get("pyramid_transition_required") is True,
+        "all_failed_source_partitions_recovered": not list(
+            summary.get("unmeshed_volumes_after") or []
+        )
+        and upstream.get("all_source_volumes_recovered") is True,
+        "nonzero_exit_semantically_explained": nonzero_exit_explained,
+        "fresh_result_and_no_owned_process_leak": process.get("result_artifact_fresh") is True
+        and int(process.get("owned_processes_remaining", -1)) == 0,
+        "exactly_four_timing_stages_recorded": len(timing_values) == 4
+        and all(isfinite(float(value)) and float(value) >= 0.0 for value in timing_values),
+        "independent_mixed_transition_gate_passed": public_gate["status"] == "ok",
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cubit_embedded_pipe_source_recovery_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "checks": checks,
+        "issues": issues,
+        "expected_unmeshed_volumes": expected,
+        "observed_unmeshed_volumes": actual,
+        "process_exit_code": exit_code,
+        "error_categories": sorted(error_categories),
+        "public_gate_status": public_gate["status"],
+        "notes": [
+            "A playback command can return before a journal has finished; use a combined journal or an explicit completion sentinel.",
+            "Do not allowlist an exit code by number alone. Require classified source-version errors, a fresh passing artifact, and no unexpected errors.",
+            "Cubit 2025.12 batch quality may require per-element fallback for pyramids when the vector API returns no values.",
+            "Surface mesh entities are faces; classify tri versus quad from face connectivity instead of unsupported list aliases.",
+        ],
+    }
