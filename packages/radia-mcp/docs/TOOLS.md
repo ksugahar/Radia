@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **716 tools** across 43 MCP servers.
+Total: **717 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 68 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 60 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 102 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 103 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -308,6 +308,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `reciprocal_two_port_power_sweep_gate` | Gate complex two-port reciprocity, symmetry, passivity, and power closure. |
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
+| `rotating_conductor_transient_gate` | Gate moving-axis migration, rotational kinematics, and loss partition. |
 | `rotational_kinematics_time_axis_gate` | Gate a result-table time axis using angle/speed kinematics. |
 | `rwg_hcurl_trace_consistency_gate` | Gate RWG/HCurl trace topology, de Rham closure, and reference matrices. |
 | `skin_effect_adaptive_energy_loss_gate` | Gate current-port identities and adaptive skin-effect loss convergence. |
