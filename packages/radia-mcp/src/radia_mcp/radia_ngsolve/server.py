@@ -88,6 +88,9 @@ from .loss_temperature_coupling_gate import loss_temperature_coupling_gate as _l
 from .transient_coupled_coil_gate import (
     transient_coupled_coil_response_gate as _transient_coupled_coil_response_gate,
 )
+from .source_off_relaxation_gate import (
+    source_off_linear_relaxation_gate as _source_off_linear_relaxation_gate,
+)
 from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
 from .global_local_optimization_gate import global_local_optimization_replay_gate as _global_local_optimization_replay_gate
 from .eddy_loss_formulation_gate import alternate_eddy_loss_formulation_gate as _alternate_eddy_loss_formulation_gate
@@ -3123,6 +3126,29 @@ def transient_coupled_coil_response_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "transient_coupled_coil_response_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def source_off_linear_relaxation_gate(
+    summary: dict,
+    max_decay_ratio_relative_span: float = 1.0e-3,
+    max_field_current_scale_relative_span: float = 1.0e-3,
+) -> str:
+    """Gate a linear source-off RL relaxation using total current and field decay."""
+
+    try:
+        result = _source_off_linear_relaxation_gate(
+            summary,
+            max_decay_ratio_relative_span=max_decay_ratio_relative_span,
+            max_field_current_scale_relative_span=max_field_current_scale_relative_span,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "linear_source_off_total_current_field_decay_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
