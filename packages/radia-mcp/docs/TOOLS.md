@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **709 tools** across 43 MCP servers.
+Total: **711 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 66 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 68 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 58 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 101 |
@@ -79,6 +79,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_gmsh_v41_inventory` | Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity. |
 | `cubit_gmsh_v41_mixed_order_gate` | Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority. |
 | `cubit_headless_netgen_export_gate` | Gate migration from a GUI plugin export command to native headless Netgen export. |
+| `cubit_helical_conductor_source_gate` | Gate a helical-conductor source replay and classified tet fallback. |
 | `cubit_helical_partition_mesh_gate` | Gate a many-body helical mesh against quality and parsed .vol inventory. |
 | `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
 | `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
@@ -102,6 +103,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
 | `cubit_pyramid_degenerate_hex_export_gate` | Gate CPYRAM versus nopyramid decks, including order-2 linearization. |
 | `cubit_recent_failures` | Return the last N failed Cubit invocations (from persistent log). |
+| `cubit_region_owned_mixed_mesh_gate` | Gate region-owned conductor hex and air tet/pyramid topology. |
 | `cubit_restore` | Restore a previously-saved Cubit checkpoint by label. |
 | `cubit_scaffold_toolbar` | Generate a complete Coreform-Cubit custom-toolbar skeleton on disk. |
 | `cubit_session_shutdown` | Stop the persistent Cubit daemon. Next `cubit_show` relaunches. |

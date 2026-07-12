@@ -70,6 +70,10 @@ from .high_order_export_gate import (
 	cubit_headless_netgen_export_gate as _cubit_headless_netgen_export_gate,
 	cubit_loft_high_order_vol_series_gate as _cubit_loft_high_order_vol_series_gate,
 )
+from .helical_conductor_gate import (
+	cubit_helical_conductor_source_gate as _cubit_helical_conductor_source_gate,
+	cubit_region_owned_mixed_mesh_gate as _cubit_region_owned_mixed_mesh_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -965,6 +969,42 @@ def cubit_embedded_pipe_source_recovery_gate(
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_embedded_pipe_source_recovery_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_region_owned_mixed_mesh_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.1,
+	max_volume_relative_error: float = 5.0e-8,
+) -> str:
+	"""Gate region-owned conductor hex and air tet/pyramid topology."""
+	try:
+		result = _cubit_region_owned_mixed_mesh_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			max_volume_relative_error=max_volume_relative_error,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_region_owned_mixed_mesh_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_helical_conductor_source_gate(summary: dict) -> str:
+	"""Gate a helical-conductor source replay and classified tet fallback."""
+	try:
+		result = _cubit_helical_conductor_source_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_helical_conductor_source_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
