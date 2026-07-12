@@ -32,9 +32,24 @@ from .boost_gate import boost_converter_steady_state_gate as _boost_converter_st
 from .psrr_gate import transient_psrr_gate as _transient_psrr_gate
 from .bandwidth_gate import measure_bandwidth_crossing_gate as _measure_bandwidth_crossing_gate
 from .bipolar_startup_gate import bipolar_supply_startup_gate as _bipolar_supply_startup_gate
+from .monte_carlo_gate import monte_carlo_tolerance_family_gate as _monte_carlo_tolerance_family_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def monte_carlo_tolerance_family_gate(summary: dict) -> dict:
+    """Gate uniform tolerance statistics and independent root-N averaging."""
+
+    try:
+        return _monte_carlo_tolerance_family_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "uniform_tolerance_root_n_statistics_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
