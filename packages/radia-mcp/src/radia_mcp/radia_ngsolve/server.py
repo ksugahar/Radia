@@ -139,6 +139,7 @@ from .two_terminal_dc_conduction_gate import (
 from .rwg_hcurl_trace_gate import (
     rwg_hcurl_trace_consistency_gate as _rwg_hcurl_trace_consistency_gate,
 )
+from .hartmann_profile_gate import hartmann_profile_gate as _hartmann_profile_gate
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3394,6 +3395,21 @@ def helmholtz_dual_formulation_axis_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "helmholtz_dual_formulation_axis_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def hartmann_profile_gate(summary_json: str) -> str:
+    """Gate a Hartmann-number sweep against an independent channel profile."""
+
+    try:
+        result = _hartmann_profile_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "hartmann_profile_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
