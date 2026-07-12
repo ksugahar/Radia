@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **686 tools** across 43 MCP servers.
+Total: **687 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 54 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 89 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 90 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -292,6 +292,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `source_off_linear_relaxation_gate` | Gate a linear source-off RL relaxation using total current and field decay. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
+| `static_field_shim_family_gate` | Gate static-field scale, ROI uniformity, shim sensitivity, and map quality. |
 | `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
 | `symmetric_complex_field_curve_gate` | Gate an even- or odd-sampled complex field curve by mirror symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |

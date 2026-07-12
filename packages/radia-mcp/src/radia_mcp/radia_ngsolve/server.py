@@ -106,6 +106,9 @@ from .pwm_controlled_motor_loss_gate import (
 from .material_contrast_force_gate import (
     material_contrast_force_gate as _material_contrast_force_gate,
 )
+from .static_field_shim_family_gate import (
+    static_field_shim_family_gate as _static_field_shim_family_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3067,6 +3070,37 @@ def material_contrast_force_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "material_contrast_force_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def static_field_shim_family_gate(
+    cases: list[dict],
+    interaction_axis: str = "z",
+    min_paired_source_field_ratio: float = 1.2,
+    max_paired_source_uniformity_ratio: float = 0.5,
+    min_shim_center_field_delta_relative: float = 0.01,
+    max_center_transverse_relative: float = 1.0e-4,
+    max_central_divergence_relative: float = 0.05,
+) -> str:
+    """Gate static-field scale, ROI uniformity, shim sensitivity, and map quality."""
+
+    try:
+        result = _static_field_shim_family_gate(
+            cases,
+            interaction_axis=interaction_axis,
+            min_paired_source_field_ratio=min_paired_source_field_ratio,
+            max_paired_source_uniformity_ratio=max_paired_source_uniformity_ratio,
+            min_shim_center_field_delta_relative=min_shim_center_field_delta_relative,
+            max_center_transverse_relative=max_center_transverse_relative,
+            max_central_divergence_relative=max_central_divergence_relative,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "static_field_shim_family_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
