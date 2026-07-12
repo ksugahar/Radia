@@ -112,6 +112,9 @@ from .static_field_shim_family_gate import (
 from .energy_budgeted_trace_kkt_gate import (
     energy_budgeted_trace_kkt_gate as _energy_budgeted_trace_kkt_gate,
 )
+from .finite_solenoid_surface_current_gate import (
+    finite_solenoid_surface_current_gate as _finite_solenoid_surface_current_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2606,6 +2609,21 @@ def symmetric_axial_field_profile_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "symmetric_axial_field_profile_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def finite_solenoid_surface_current_gate(summary_json: str) -> str:
+    """Gate a finite-solenoid surface-current profile and signed linearity."""
+
+    try:
+        result = _finite_solenoid_surface_current_gate(json.loads(summary_json))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        result = {
+            "policy": "finite_solenoid_surface_current_profile_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

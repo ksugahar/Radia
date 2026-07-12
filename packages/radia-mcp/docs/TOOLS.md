@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **688 tools** across 43 MCP servers.
+Total: **689 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 54 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 91 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 92 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -239,6 +239,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
+| `finite_solenoid_surface_current_gate` | Gate a finite-solenoid surface-current profile and signed linearity. |
 | `force_coenergy_displacement_gate` | Gate direct force against the central derivative of magnetic coenergy. |
 | `force_position_profile_gate` | Gate a force-position sweep without assuming it is monotonic. |
 | `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
