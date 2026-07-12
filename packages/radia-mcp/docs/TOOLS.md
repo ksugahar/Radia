@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **707 tools** across 43 MCP servers.
+Total: **708 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 66 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 58 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 99 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 100 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -304,6 +304,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
 | `rotational_kinematics_time_axis_gate` | Gate a result-table time axis using angle/speed kinematics. |
+| `rwg_hcurl_trace_consistency_gate` | Gate RWG/HCurl trace topology, de Rham closure, and reference matrices. |
 | `skin_effect_adaptive_energy_loss_gate` | Gate current-port identities and adaptive skin-effect loss convergence. |
 | `source_off_linear_relaxation_gate` | Gate a linear source-off RL relaxation using total current and field decay. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
