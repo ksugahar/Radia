@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **721 tools** across 43 MCP servers.
+Total: **723 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 70 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 60 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 62 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 105 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -145,6 +145,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_cross_kernel_mass_topology_diagnosis_gate` | Diagnose STEP portability while separating evidence quality from acceptance. |
 | `build123d_cubit_quality_ledger_handoff` | Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate. |
 | `build123d_cubit_solver_route_handoff` | Bind build123d CAD rows to a Cubit mixed solver-route manifest gate. |
+| `build123d_curved_shell_step_semantics_gate` | Diagnose topology-preserving curved STEP mass loss across CAD kernels. |
 | `build123d_curved_step_topology_crosscheck_gate` | Gate curved STEP mass and exact topology across independent imports. |
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
 | `build123d_dual_api_perforated_board_gate` | Gate equivalent Builder/Algebra perforated boards through two CAD imports. |
@@ -172,6 +173,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_status` | (no description) |
 | `build123d_step_portability_diagnosis_gate` | Diagnose whether STEP mass loss occurs in export or external import. |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
+| `build123d_tea_cup_source_contract_gate` | Gate the upstream tea-cup source and headless portability diagnosis. |
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
 | `build123d_try_race` | Race N build123d script variants in parallel subprocesses, |
