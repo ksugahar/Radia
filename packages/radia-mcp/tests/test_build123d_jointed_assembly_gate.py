@@ -2,9 +2,39 @@ import copy
 import json
 
 from radia_mcp.build123d.server import (
+    build123d_jointed_assembly_heal_invariance_gate,
     build123d_jointed_assembly_source_replay_gate,
     build123d_jointed_assembly_step_closure_gate,
 )
+
+
+def heal_summary():
+    return {
+        "components": [
+            {
+                "name": "body",
+                "native_volume_mm3": 6000.0,
+                "expected_disposition": "reject_persistent_solid_closure_loss",
+            },
+            {
+                "name": "cab",
+                "native_volume_mm3": 500.0,
+                "expected_disposition": "portable_control",
+            },
+        ],
+        "external_rows": [
+            {"name": "body.step", "import_mode": "noheal", "positive_volume_count": 0, "total_volume_mm3": 0.0},
+            {"name": "body.step", "import_mode": "heal", "positive_volume_count": 0, "total_volume_mm3": 0.0},
+            {"name": "cab.step", "import_mode": "noheal", "positive_volume_count": 1, "total_volume_mm3": 500.001},
+            {"name": "cab.step", "import_mode": "heal", "positive_volume_count": 1, "total_volume_mm3": 500.001},
+            {"name": "assembly.step", "import_mode": "noheal", "positive_volume_count": 1, "total_volume_mm3": 500.001},
+            {"name": "assembly.step", "import_mode": "heal", "positive_volume_count": 1, "total_volume_mm3": 500.001},
+        ],
+        "assembly": {
+            "step_name": "assembly.step",
+            "native_total_volume_mm3": 6500.0,
+        },
+    }
 
 
 def summary():
@@ -90,6 +120,25 @@ def test_component_gate_rejects_missing_tessellated_support_or_wrong_disposition
     assert result["status"] == "needs_attention"
     assert result["checks"]["native_brep_supported_by_tessellated_volume"] is False
     assert result["checks"]["solid_closure_loss_component_present"] is False
+
+
+def test_heal_gate_rejects_persistent_zero_volume_entity_with_control():
+    result = json.loads(build123d_jointed_assembly_heal_invariance_gate(json.dumps(heal_summary())))
+    assert result["status"] == "ok"
+    assert result["diagnosis"] == "persistent_solid_closure_loss"
+    assert result["solver_ready"] is False
+    assert result["components"][0]["observed_disposition"] == "reject_persistent_solid_closure_loss"
+
+
+def test_heal_gate_flags_heal_sensitive_or_missing_mode_evidence():
+    row = heal_summary()
+    row["external_rows"][1]["positive_volume_count"] = 1
+    row["external_rows"][1]["total_volume_mm3"] = 6000.0
+    row["external_rows"] = [item for item in row["external_rows"] if not (item["name"] == "cab.step" and item["import_mode"] == "noheal")]
+    result = json.loads(build123d_jointed_assembly_heal_invariance_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["both_import_modes_cover_every_artifact"] is False
+    assert result["checks"]["component_dispositions_match_expectations"] is False
 
 
 def test_source_replay_accepts_joint_graph_and_headless_diagnosis():

@@ -162,6 +162,139 @@ def jointed_assembly_step_closure_gate(
     }
 
 
+def jointed_assembly_heal_invariance_gate(
+    summary: Mapping[str, object],
+    *,
+    volume_rtol: float = 2.0e-5,
+) -> dict[str, object]:
+    """Check whether external STEP healing changes a component closure diagnosis.
+
+    A CAD import may create a nominal ``volume`` entity whose measured volume is
+    zero.  The gate therefore uses positive measured volume, not entity count,
+    and requires both ``noheal`` and ``heal`` evidence for every component.
+    """
+
+    tolerance = float(volume_rtol)
+    if tolerance < 0.0 or not math.isfinite(tolerance):
+        raise ValueError("volume_rtol must be finite and nonnegative")
+    components = summary.get("components") or []
+    rows = summary.get("external_rows") or []
+    if not isinstance(components, list) or len(components) < 2:
+        raise ValueError("components must contain at least two rows")
+    if not isinstance(rows, list):
+        raise ValueError("external_rows must be a list")
+
+    indexed = {
+        (str(row.get("name", "")), str(row.get("import_mode", ""))): row
+        for row in rows
+    }
+    observed = []
+    portable_total = 0.0
+    rejected_total = 0.0
+    for component in components:
+        name = str(component.get("name", "")).strip()
+        native_volume = float(component.get("native_volume_mm3", math.nan))
+        expected = str(component.get("expected_disposition", ""))
+        mode_rows = [indexed.get((f"{name}.step", mode), {}) for mode in ("noheal", "heal")]
+        measured = [float(row.get("total_volume_mm3", math.nan)) for row in mode_rows]
+        positive_counts = [
+            int(row.get("positive_volume_count", -1)) for row in mode_rows
+        ]
+        errors = [_relative_error(value, native_volume) for value in measured]
+        portable = (
+            native_volume > 0.0
+            and all(count >= 1 for count in positive_counts)
+            and all(error <= tolerance for error in errors)
+        )
+        persistent_loss = (
+            native_volume > 0.0
+            and positive_counts == [0, 0]
+            and measured == [0.0, 0.0]
+        )
+        disposition = (
+            "portable_control"
+            if portable
+            else "reject_persistent_solid_closure_loss"
+            if persistent_loss
+            else "heal_sensitive_or_unresolved"
+        )
+        if portable:
+            portable_total += native_volume
+        if persistent_loss:
+            rejected_total += native_volume
+        observed.append(
+            {
+                "name": name,
+                "expected_disposition": expected,
+                "observed_disposition": disposition,
+                "native_volume_mm3": native_volume,
+                "noheal_volume_mm3": measured[0],
+                "heal_volume_mm3": measured[1],
+                "noheal_relative_error": errors[0],
+                "heal_relative_error": errors[1],
+                "disposition_matches": disposition == expected,
+            }
+        )
+
+    assembly = summary.get("assembly") or {}
+    assembly_name = str(assembly.get("step_name", ""))
+    assembly_native = float(assembly.get("native_total_volume_mm3", math.nan))
+    assembly_rows = [indexed.get((assembly_name, mode), {}) for mode in ("noheal", "heal")]
+    assembly_measured = [
+        float(row.get("total_volume_mm3", math.nan)) for row in assembly_rows
+    ]
+    names = [str(row["name"]) for row in observed]
+    checks = {
+        "component_names_are_nonempty_and_unique": all(names)
+        and len(set(names)) == len(names),
+        "both_import_modes_cover_every_artifact": all(
+            (f"{name}.step", mode) in indexed
+            for name in names
+            for mode in ("noheal", "heal")
+        )
+        and all((assembly_name, mode) in indexed for mode in ("noheal", "heal")),
+        "portable_control_present": portable_total > 0.0,
+        "persistent_closure_loss_present": rejected_total > 0.0,
+        "component_dispositions_match_expectations": all(
+            bool(row["disposition_matches"]) for row in observed
+        ),
+        "native_assembly_is_component_sum": _relative_error(
+            portable_total + rejected_total, assembly_native
+        )
+        <= tolerance,
+        "assembly_loss_persists_after_heal": all(
+            _relative_error(value, portable_total) <= tolerance
+            for value in assembly_measured
+        ),
+        "assembly_lost_volume_matches_rejected_components": all(
+            _relative_error(assembly_native - value, rejected_total) <= tolerance
+            for value in assembly_measured
+        ),
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "build123d_jointed_assembly_heal_invariance_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "diagnosis": "persistent_solid_closure_loss"
+        if not issues
+        else "heal_sensitive_or_incomplete_evidence",
+        "solver_ready": False,
+        "checks": checks,
+        "issues": issues,
+        "components": observed,
+        "assembly": {
+            "native_total_volume_mm3": assembly_native,
+            "noheal_total_volume_mm3": assembly_measured[0],
+            "heal_total_volume_mm3": assembly_measured[1],
+            "portable_component_volume_mm3": portable_total,
+            "rejected_component_volume_mm3": rejected_total,
+        },
+        "notes": [
+            "A nominal external volume entity with measured volume zero is not a closed solver-ready solid.",
+            "Do not assume an import heal option repairs a closure loss; measure both paths.",
+            "Keep a portable component in the same assembly as a translation control.",
+        ],
+    }
 def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[str, object]:
     """Gate immutable source replay, joint identity, and headless CAD diagnosis."""
 
