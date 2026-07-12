@@ -94,7 +94,11 @@ class PlayHysteresisMaterial:
     def __init__(self, K, eta, f_k_tables):
         import radia as rad
         self._rad = rad
-        self._h = rad.MatPlayHysteresis(int(K), np.asarray(eta, float), f_k_tables)
+        self._eta = np.asarray(eta, float).copy()
+        # Valid |B| range = the smallest shape-function table extent: the eta=0 operator sees
+        # |p_0| = |B| directly, and every f_k is EXTRAPOLATED beyond its table's largest r.
+        self._r_max = float(min(np.max(np.asarray(r, float)) for r, _ in f_k_tables))
+        self._h = rad.MatPlayHysteresis(int(K), self._eta, f_k_tables)
         self._nu_rev = float(rad.MatHysGetNuRev(self._h))
         self._virgin = np.asarray(rad.MatHysSaveState(self._h), float).copy()
 
@@ -119,6 +123,13 @@ class PlayHysteresisMaterial:
         H = nu_rev*B + H_irr with every H_irr slope <= 0 by construction, so
         nu_rev bounds dH/dB on every branch, not just at the origin."""
         return self._nu_rev
+
+    def b_max(self):
+        """Largest |B| (Tesla) the model was identified for -- the extent of the
+        shape-function tables (the eta=0 operator evaluates f_0 at |p_0|=|B|).
+        Beyond it every f_k EXTRAPOLATES, carrying no identified information, so
+        SolveHysteresis raises rather than trusting an out-of-domain evaluation."""
+        return self._r_max
 
 
 def _solve_pointwise_B(material, states, M, B0, tol=1e-12, maxit=200):
@@ -217,6 +228,19 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     nu0 = float(nu0)
     if nu0 <= 0.0:
         raise ValueError("vim.SolveHysteresis: nu0 must be positive (got %r)" % nu0)
+
+    # Optional out-of-range guard: a material identified only up to some |B|_max (e.g. the
+    # play model's largest threshold) EXTRAPOLATES beyond it, and the demag-limited coupled
+    # solve can be driven there (M runs away, unphysical B).  If the material exposes b_max(),
+    # fail loud when a converged step exceeds it rather than trusting an out-of-domain law.
+    b_max = None
+    if hasattr(material, "b_max"):
+        try:
+            b_max = float(material.b_max())
+        except Exception:
+            b_max = None
+        if b_max is not None and not (b_max > 0.0):
+            b_max = None
 
     # ---- ONE-TIME setup: fes + charge-Gram H-matrix (chi-free -> reused by every step) ----
     t_total = time.perf_counter()
@@ -338,6 +362,18 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                 "only when nu0 upper-bounds the material's dH/dM -- raise nu0 (is "
                 "material.nu_bound() a true upper bound for this drive?), or reduce the "
                 "field-step size." % (istep, np.array2string(hv, precision=3), rel, nl_tol, nit))
+
+        # ---- out-of-range guard: the converged flux density must stay within the material's
+        # identified range, else the material law was extrapolated (No-Fallbacks: fail loud). ----
+        if b_max is not None:
+            b_peak = float(np.max(np.linalg.norm(B_cache, axis=1)))
+            if b_peak > b_max * (1.0 + 1e-6):
+                raise RuntimeError(
+                    "vim.SolveHysteresis: step %d (H_ext=%s) drove |B|=%.3f T past the material's "
+                    "identified range b_max=%.3f T -- the material law would be EXTRAPOLATED there. "
+                    "Reduce the applied field so peak |B| stays <= b_max, or supply a material "
+                    "identified to higher B."
+                    % (istep, np.array2string(hv, precision=3), b_peak, b_max))
 
         # ---- COMMIT: advance every element's state at the converged flux density ----
         states = material.commit(B_cache, states)
