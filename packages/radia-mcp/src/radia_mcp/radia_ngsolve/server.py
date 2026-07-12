@@ -115,6 +115,9 @@ from .energy_budgeted_trace_kkt_gate import (
 from .finite_solenoid_surface_current_gate import (
     finite_solenoid_surface_current_gate as _finite_solenoid_surface_current_gate,
 )
+from .linked_study_noop_gate import (
+    linked_study_silent_noop_gate as _linked_study_silent_noop_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3288,6 +3291,27 @@ def loss_temperature_coupling_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "loss_temperature_coupling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def linked_study_silent_noop_gate(
+    summary: dict,
+    maximum_noop_seconds: float = 1.0,
+) -> str:
+    """Verify a linked native run that returned without creating solver results."""
+
+    try:
+        result = _linked_study_silent_noop_gate(
+            summary,
+            maximum_noop_seconds=maximum_noop_seconds,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "linked_study_silent_noop_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
