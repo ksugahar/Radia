@@ -4487,3 +4487,104 @@ def cubit_webcut_journal_execution_gate(summary: Mapping[str, object]) -> dict[s
         "public_geometry_gate_passed": summary.get("public_gate_status") == "ok",
     }
     return {"policy":"cubit_webcut_journal_execution_gate_v1","status":"ok" if all(checks.values()) else "needs_attention","checks":checks,"issues":[name for name,ok in checks.items() if not ok],"process":process}
+
+
+def cubit_helical_partition_mesh_gate(
+    summary: Mapping[str, object],
+    *,
+    max_webcut_volume_relative_drift: float = 1.0e-5,
+    max_analytic_volume_relative_error: float = 5.0e-4,
+    min_scaled_jacobian: float = 0.2,
+    min_partitioned_volume_count: int = 1000,
+) -> dict[str, object]:
+    """Gate a many-body helical webcut mesh and its exported volume inventory."""
+
+    counts = summary.get("element_counts") or {}
+    quality = summary.get("quality") or {}
+    hex_quality = (quality.get("hex") or {}).get("scaled_jacobian") or {}
+    inventory = summary.get("export_inventory") or {}
+    inventory_counts = inventory.get("volume_kind_counts") or {}
+    hex_count = int(counts.get("hex", 0))
+    volume_element_count = int(inventory.get("volume_elements", 0))
+    drift = float(summary.get("webcut_volume_relative_drift", math.inf))
+    analytic_error = float(summary.get("analytic_volume_relative_error", math.inf))
+    minimum_scaled_jacobian = float(hex_quality.get("min", -math.inf))
+    checks = {
+        "many_body_partition_present": int(summary.get("volume_count", 0)) >= int(min_partitioned_volume_count),
+        "hex_led_mesh_present": hex_count > 0,
+        "webcut_volume_drift_bounded": drift <= float(max_webcut_volume_relative_drift),
+        "analytic_enclosure_volume_bounded": analytic_error <= float(max_analytic_volume_relative_error),
+        "scaled_jacobian_acceptable": minimum_scaled_jacobian >= float(min_scaled_jacobian),
+        "shared_interfaces_present": int(summary.get("shared_surface_count", 0)) > 0,
+        "shared_interfaces_meshed": int(summary.get("shared_meshed_surface_count", 0)) > 0,
+        "export_volume_elements_present": volume_element_count > 0,
+        "export_volume_count_matches_cubit": volume_element_count == sum(int(value) for value in counts.values()),
+        "export_hex_count_matches_cubit": int(inventory_counts.get("hex", 0)) == hex_count,
+        "export_routes_to_cubit_hex_or_mixed": inventory.get("routing_hint") == "cubit_hex_or_mixed_path",
+        "export_points_present": int(inventory.get("points", 0)) > 0,
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cubit_helical_partition_mesh_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "checks": checks,
+        "issues": issues,
+        "metrics": {
+            "volume_count": int(summary.get("volume_count", 0)),
+            "hex_count": hex_count,
+            "webcut_volume_relative_drift": drift,
+            "analytic_volume_relative_error": analytic_error,
+            "minimum_scaled_jacobian": minimum_scaled_jacobian,
+            "shared_surface_count": int(summary.get("shared_surface_count", 0)),
+            "shared_meshed_surface_count": int(summary.get("shared_meshed_surface_count", 0)),
+            "export_volume_elements": volume_element_count,
+            "export_hex_count": int(inventory_counts.get("hex", 0)),
+        },
+        "notes": [
+            "A positive Cubit hex count is not solver-ready evidence by itself.",
+            "Bind Boolean/webcut conservation, non-inverted quality, shared interfaces, and parsed .vol inventory in one gate.",
+            "A surface-only .vol export must be rejected even when Cubit still holds volume hexes in memory.",
+        ],
+    }
+
+
+def cubit_source_journal_replay_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    """Gate safe synchronous replay of a heavy source-native Cubit journal."""
+
+    process = _headless_process_evidence(summary)
+    operations = summary.get("operations") or {}
+    selection_counts = [int(value) for value in operations.get("webcut_intersection_selection_counts", [])]
+    timing = summary.get("timing_breakdown_s") or {}
+    async_probe = summary.get("playback_async_probe") or {}
+    expected_status = str(summary.get("expected_public_gate_status", ""))
+    actual_status = str(summary.get("public_gate_status", ""))
+    checks = {
+        "source_digest_recorded": len(str(summary.get("source_sha256", ""))) == 64,
+        "source_native_seed": str(summary.get("source_kind", "")).startswith("source_native_local_journal"),
+        "synchronous_python_replay": summary.get("execution_mode") == "python_api_headless_synchronous_commands",
+        "headless_flags_present": {"-nographics", "-batch"}.issubset(set(summary.get("headless_flags") or [])),
+        "persistent_gui_disabled": summary.get("gui_daemon_enabled") is False,
+        "early_playback_artifact_rejected": async_probe.get("unsafe_zero_entity_artifact_rejected") is True,
+        "playback_replaced_by_synchronous_commands": "synchronous" in str(async_probe.get("replacement", "")).lower(),
+        "all_cut_planes_use_nonempty_selection": len(selection_counts) == 15 and min(selection_counts, default=0) > 0,
+        "four_stage_timing_recorded": len(timing) == 4 and all(float(value) >= 0.0 for value in timing.values()),
+        "process_exit_acceptable": process["process_exit_acceptable"],
+        "owned_processes_closed": int(summary.get("owned_processes_remaining", 0)) == 0,
+        "expected_mesh_disposition_recorded": expected_status in {"ok", "needs_attention"},
+        "expected_mesh_disposition_matched": expected_status == actual_status,
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cubit_source_journal_replay_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "checks": checks,
+        "issues": issues,
+        "process": process,
+        "selection_count_range": [min(selection_counts, default=0), max(selection_counts, default=0)],
+        "public_gate_status": actual_status,
+        "notes": [
+            "Do not query or write result JSON immediately after queuing a playback command; use synchronous command execution or a completion sentinel.",
+            "Treat an expected mesh rejection as a valid source-workflow lesson only when the public quality/export gate independently explains it.",
+            "Select only volumes intersecting each cut plane and record geometry, cut/merge, mesh, and export timing separately.",
+        ],
+    }
