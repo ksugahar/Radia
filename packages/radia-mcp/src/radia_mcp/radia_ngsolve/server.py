@@ -77,6 +77,9 @@ from .linear_axisymmetric_circuit_energy_gate import (
 from .manual_auto_mixed_mesh_gate import (
     manual_auto_mixed_mesh_preservation_gate as _manual_auto_mixed_mesh_preservation_gate,
 )
+from .two_winding_frequency_gate import (
+    two_winding_frequency_faraday_gate as _two_winding_frequency_faraday_gate,
+)
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2809,6 +2812,20 @@ def manual_auto_mixed_mesh_preservation_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "manual_auto_mixed_mesh_preservation_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def two_winding_frequency_faraday_gate(summary_json: str) -> str:
+    """Gate two-winding complex response against linked-flux Faraday identity."""
+    try:
+        result = _two_winding_frequency_faraday_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "two_winding_frequency_faraday_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
