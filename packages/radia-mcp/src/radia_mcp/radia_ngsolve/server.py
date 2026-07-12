@@ -130,6 +130,9 @@ from .helmholtz_dual_formulation_gate import (
 from .lossy_dielectric_power_gate import (
     lossy_dielectric_complex_power_refinement_gate as _lossy_power_refinement_gate,
 )
+from .heterogeneous_mesh_replay_gate import (
+    heterogeneous_part_mesh_replay_gate as _heterogeneous_part_mesh_replay_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3400,6 +3403,21 @@ def lossy_dielectric_complex_power_refinement_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "lossy_dielectric_complex_power_refinement_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def heterogeneous_part_mesh_replay_gate(summary_json: str) -> str:
+    """Diagnose deterministic heterogeneous part-mesh replay drift."""
+
+    try:
+        result = _heterogeneous_part_mesh_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "heterogeneous_part_mesh_replay_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
