@@ -121,6 +121,9 @@ from .linked_study_noop_gate import (
 from .two_port_power_gate import (
     reciprocal_two_port_power_sweep_gate as _reciprocal_two_port_power_sweep_gate,
 )
+from .fem_bem_capstone_gate import (
+    fem_bem_capstone_suite_gate as _fem_bem_capstone_suite_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3346,6 +3349,21 @@ def reciprocal_two_port_power_sweep_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "reciprocal_two_port_power_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def fem_bem_capstone_suite_gate(payload: dict) -> str:
+    """Gate a ten-case first-order FEM/BEM reference capstone suite."""
+
+    try:
+        result = _fem_bem_capstone_suite_gate(payload)
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "fem_bem_capstone_suite_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
