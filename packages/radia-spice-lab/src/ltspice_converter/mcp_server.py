@@ -33,9 +33,24 @@ from .psrr_gate import transient_psrr_gate as _transient_psrr_gate
 from .bandwidth_gate import measure_bandwidth_crossing_gate as _measure_bandwidth_crossing_gate
 from .bipolar_startup_gate import bipolar_supply_startup_gate as _bipolar_supply_startup_gate
 from .monte_carlo_gate import monte_carlo_tolerance_family_gate as _monte_carlo_tolerance_family_gate
+from .bipolar_efficiency_gate import bipolar_converter_efficiency_gate as _bipolar_converter_efficiency_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def bipolar_converter_efficiency_gate(summary: dict) -> dict:
+    """Gate signed input power, dual-output balance, and efficiency closure."""
+
+    try:
+        return _bipolar_converter_efficiency_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "bipolar_converter_efficiency_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
