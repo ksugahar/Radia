@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **684 tools** across 43 MCP servers.
+Total: **685 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 54 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 87 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 88 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -279,6 +279,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `parallel_wire_force_refinement_gate` | Gate a reciprocal two-wire force refinement sweep without requiring monotone error. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `physics_result_preflight_gate` | Gate physics namespace, selection, solution, and license metadata before result evaluation. |
+| `pwm_controlled_motor_loss_gate` | Gate PWM current-control and aggregate/harmonic loss-table identities. |
 | `radar_range_angle_localization_gate` | Gate wideband range-angle localization of multiple targets. |
 | `radar_range_rcs_profile_gate` | Gate wideband range-RCS localization, method agreement, and analytic amplitude. |
 | `radia_ngsolve_status` | (no description) |
