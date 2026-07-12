@@ -71,6 +71,9 @@ from .harmonic_zero_net_circuit_gate import (
 from .moving_conductor_brake_gate import moving_conductor_eddy_brake_gate as _moving_conductor_eddy_brake_gate
 from .rotating_conductor_transient_gate import rotating_conductor_transient_gate as _rotating_conductor_transient_gate
 from .linear_magnetization_scaling_gate import linear_magnetization_scaling_gate as _linear_magnetization_scaling_gate
+from .linear_axisymmetric_circuit_energy_gate import (
+    linear_axisymmetric_circuit_energy_gate as _linear_axisymmetric_circuit_energy_gate,
+)
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2775,6 +2778,20 @@ def linear_magnetization_scaling_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "linear_magnetization_scaling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def linear_axisymmetric_circuit_energy_gate(summary_json: str) -> str:
+    """Gate current, flux, field, and energy identities on one fixed mesh."""
+    try:
+        result = _linear_axisymmetric_circuit_energy_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "linear_axisymmetric_circuit_energy_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
