@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes twenty tools:
+Exposes twenty-two tools:
 
 | Tool | Purpose |
 |---|---|
@@ -292,6 +292,7 @@ Exposes twenty tools:
 | `sallen_key_filter_family_gate(rows)` | Gates multi-Q low-pass sweeps against the ideal two-pole response. |
 | `hysteretic_inductor_cycle_gate(cycle_rows, expected_current_peak_a, expected_copper_energy_j, voltage_thd)` | Gates settled hysteresis cycles by terminal/copper/flux-loop energy, closure, repeatability, and harmonic evidence. |
 | `half_wave_rectifier_gate(...)` | Gates capacitor-input half-wave DC, ripple, and load/diode current balance. |
+| `bridge_rectifier_gate(summary)` | Gates single-phase full-wave frequency doubling, diagonal-pair conduction, four-diode/load current balance, and output-node KCL. |
 | `cockcroft_walton_stage_gate(...)` | Gates loaded two-stage multiplier scaling, adjacent-window settling, ripple, load current, and real-power bounds. |
 | `boost_converter_steady_state_gate(...)` | Gates periodic boost ratio, passive power, inductor volt-second balance, and capacitor charge balance. |
 | `transient_psrr_gate(...)` | Gates transient input/output ripple attenuation against independent RAW replay and the PSRR definition. |

@@ -26,6 +26,7 @@ from .patentability import patentability_search_plan as _patentability_search_pl
 from .filter_gates import sallen_key_filter_family_gate as _sallen_key_filter_family_gate
 from .hysteresis_gate import hysteretic_inductor_cycle_gate as _hysteretic_inductor_cycle_gate
 from .rectifier_gate import half_wave_rectifier_gate as _half_wave_rectifier_gate
+from .bridge_rectifier_gate import bridge_rectifier_gate as _bridge_rectifier_gate
 from .voltage_multiplier_gate import cockcroft_walton_stage_gate as _cockcroft_walton_stage_gate
 from .boost_gate import boost_converter_steady_state_gate as _boost_converter_steady_state_gate
 from .psrr_gate import transient_psrr_gate as _transient_psrr_gate
@@ -34,6 +35,19 @@ from .bipolar_startup_gate import bipolar_supply_startup_gate as _bipolar_supply
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def bridge_rectifier_gate(summary: dict) -> dict:
+    """Gate full-wave bridge frequency doubling, pair conduction, and KCL."""
+    try:
+        return _bridge_rectifier_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "full_wave_bridge_frequency_pair_and_kcl_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 @mcp.tool()
 def bipolar_supply_startup_gate(summary: dict) -> dict:
