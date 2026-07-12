@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **724 tools** across 43 MCP servers.
+Total: **725 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 70 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 62 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 106 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 107 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -319,6 +319,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `rotational_kinematics_time_axis_gate` | Gate a result-table time axis using angle/speed kinematics. |
 | `rwg_hcurl_trace_consistency_gate` | Gate RWG/HCurl trace topology, de Rham closure, and reference matrices. |
 | `skin_effect_adaptive_energy_loss_gate` | Gate current-port identities and adaptive skin-effect loss convergence. |
+| `source_free_static_null_solution_gate` | Gate a source-free static Maxwell solve against the exact zero solution. |
 | `source_off_linear_relaxation_gate` | Gate a linear source-off RL relaxation using total current and field decay. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Retired standalone PySide panel topic.  The canonical Radia panel surface |
