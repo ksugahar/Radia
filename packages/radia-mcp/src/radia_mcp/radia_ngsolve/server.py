@@ -136,6 +136,9 @@ from .heterogeneous_mesh_replay_gate import (
 from .two_terminal_dc_conduction_gate import (
     two_terminal_dc_conduction_power_gate as _two_terminal_dc_conduction_power_gate,
 )
+from .rwg_hcurl_trace_gate import (
+    rwg_hcurl_trace_consistency_gate as _rwg_hcurl_trace_consistency_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3436,6 +3439,21 @@ def two_terminal_dc_conduction_power_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "two_terminal_dc_conduction_power_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def rwg_hcurl_trace_consistency_gate(summary_json: str) -> str:
+    """Gate RWG/HCurl trace topology, de Rham closure, and reference matrices."""
+
+    try:
+        result = _rwg_hcurl_trace_consistency_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "rwg_hcurl_trace_consistency_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
