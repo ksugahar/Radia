@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **685 tools** across 43 MCP servers.
+Total: **686 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 54 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 88 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 89 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -262,6 +262,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
 | `loss_temperature_coupling_gate` | Gate an electromagnetic-loss to transient-temperature handoff. |
 | `magnetostatic_open_boundary_equivalence_gate` | Gate gauge-invariant equivalence of two magnetostatic open-boundary solutions. |
+| `material_contrast_force_gate` | Gate null, attraction, and increasing-repulsion material-force cases. |
 | `matlab_acoustic_fembem_agent_guide` | Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
 | `moving_conductor_eddy_brake_gate` | Gate motion, Lorentz-force, and Joule-loss table identities. |
