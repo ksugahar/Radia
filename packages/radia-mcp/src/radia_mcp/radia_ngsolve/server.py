@@ -74,6 +74,9 @@ from .linear_magnetization_scaling_gate import linear_magnetization_scaling_gate
 from .linear_axisymmetric_circuit_energy_gate import (
     linear_axisymmetric_circuit_energy_gate as _linear_axisymmetric_circuit_energy_gate,
 )
+from .manual_auto_mixed_mesh_gate import (
+    manual_auto_mixed_mesh_preservation_gate as _manual_auto_mixed_mesh_preservation_gate,
+)
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2792,6 +2795,20 @@ def linear_axisymmetric_circuit_energy_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "linear_axisymmetric_circuit_energy_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def manual_auto_mixed_mesh_preservation_gate(summary_json: str) -> str:
+    """Gate exact manual-region preservation and bounded automatic remeshing."""
+    try:
+        result = _manual_auto_mixed_mesh_preservation_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "manual_auto_mixed_mesh_preservation_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
