@@ -49,6 +49,7 @@ from .three_phase_winding_power_gate import (
 )
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
 from .nonlinear_actuator_gate import nonlinear_actuator_saturation_knee_gate as _nonlinear_actuator_saturation_knee_gate
+from .source_free_static_gate import source_free_static_null_solution_gate as _source_free_static_null_solution_gate
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
@@ -2577,6 +2578,26 @@ def nonlinear_actuator_saturation_knee_gate(summary_json: str) -> str:
         result = _nonlinear_actuator_saturation_knee_gate(json.loads(summary_json))
     except (TypeError, ValueError, KeyError) as exc:
         result = {"policy": "nonlinear_actuator_saturation_knee_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def source_free_static_null_solution_gate(
+    summary_json: str,
+    absolute_tolerance: float = 1.0e-14,
+) -> str:
+    """Gate a source-free static Maxwell solve against the exact zero solution."""
+    try:
+        result = _source_free_static_null_solution_gate(
+            json.loads(summary_json),
+            absolute_tolerance=absolute_tolerance,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "source_free_static_null_solution_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
     return json.dumps(result, indent=2, sort_keys=True)
 
 
