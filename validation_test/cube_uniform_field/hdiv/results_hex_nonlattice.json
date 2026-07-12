@@ -1,0 +1,210 @@
+{
+ "timestamp": "2026-07-12T12:20:11",
+ "hostname": "mdx",
+ "benchmark": "hex_gram_build_ablation",
+ "problem": {
+  "cube_size_m": 1.0,
+  "H0_A_per_m": 200000.0,
+  "mu_r": 1000.0,
+  "warp_amplitude": 0.35,
+  "mesh": "structured hex NxNxN",
+  "order": "RT1"
+ },
+ "translation_cache": [
+  {
+   "N": 8,
+   "ndof": 13056,
+   "lattice": {
+    "N": 8,
+    "mode": "lattice",
+    "ndof": 13056,
+    "n_el": 512,
+    "n_charge": 5632,
+    "charge_gram_wall_s": 0.8410332000057679,
+    "iters": 19,
+    "M_avg_z": 725613.5472825661,
+    "peak_memory_mb": 532.2734375
+   },
+   "nonlattice": {
+    "N": 8,
+    "mode": "nonlattice",
+    "ndof": 13056,
+    "n_el": 512,
+    "n_charge": 5632,
+    "charge_gram_wall_s": 7.34612920001382,
+    "iters": 21,
+    "M_avg_z": 724931.0041703761,
+    "peak_memory_mb": 931.4609375
+   },
+   "nonlattice_over_lattice": 8.734648287324971,
+   "M_avg_z_rel_diff": 0.0009406427357180817
+  },
+  {
+   "N": 12,
+   "ndof": 43200,
+   "lattice": {
+    "N": 12,
+    "mode": "lattice",
+    "ndof": 43200,
+    "n_el": 1728,
+    "n_charge": 17280,
+    "charge_gram_wall_s": 2.285995800019009,
+    "iters": 20,
+    "M_avg_z": 725805.9017515106,
+    "peak_memory_mb": 1576.03515625
+   },
+   "nonlattice": {
+    "N": 12,
+    "mode": "nonlattice",
+    "ndof": 43200,
+    "n_el": 1728,
+    "n_charge": 17280,
+    "charge_gram_wall_s": 33.91897570001311,
+    "iters": 21,
+    "M_avg_z": 725408.2820040677,
+    "peak_memory_mb": 4209.70703125
+   },
+   "nonlattice_over_lattice": 14.837724417398778,
+   "M_avg_z_rel_diff": 0.0005478320670627755
+  },
+  {
+   "N": 16,
+   "ndof": 101376,
+   "lattice": {
+    "N": 16,
+    "mode": "lattice",
+    "ndof": 101376,
+    "n_el": 4096,
+    "n_charge": 38912,
+    "charge_gram_wall_s": 6.148699699988356,
+    "iters": 20,
+    "M_avg_z": 725903.1815646589,
+    "peak_memory_mb": 3913.07421875
+   },
+   "nonlattice": {
+    "N": 16,
+    "mode": "nonlattice",
+    "ndof": 101376,
+    "n_el": 4096,
+    "n_charge": 38912,
+    "charge_gram_wall_s": 138.96487280001747,
+    "iters": 21,
+    "M_avg_z": 725617.5997138842,
+    "peak_memory_mb": 7955.49609375
+   },
+   "nonlattice_over_lattice": 22.60069276115089,
+   "M_avg_z_rel_diff": 0.0003934158962620069
+  },
+  {
+   "N": 20,
+   "ndof": 196800,
+   "lattice": {
+    "N": 20,
+    "mode": "lattice",
+    "ndof": 196800,
+    "n_el": 8000,
+    "n_charge": 73600,
+    "charge_gram_wall_s": 13.951551100006327,
+    "iters": 20,
+    "M_avg_z": 725915.7521204157,
+    "peak_memory_mb": 7880.01171875
+   },
+   "nonlattice": {
+    "N": 20,
+    "mode": "nonlattice",
+    "ndof": 196800,
+    "n_el": 8000,
+    "n_charge": 73600,
+    "charge_gram_wall_s": 360.67636120002135,
+    "iters": 21,
+    "M_avg_z": 725715.8983018948,
+    "peak_memory_mb": 11530.0546875
+   },
+   "nonlattice_over_lattice": 25.852061796903556,
+   "M_avg_z_rel_diff": 0.00027531269012571536
+  }
+ ],
+ "naive_baseline": [
+  {
+   "N": 6,
+   "ndof": 5616,
+   "full": {
+    "N": 6,
+    "mode": "lattice",
+    "ndof": 5616,
+    "n_el": 216,
+    "n_charge": 2592,
+    "charge_gram_wall_s": 0.4319050000049174,
+    "iters": 19,
+    "M_avg_z": 725311.9216747761,
+    "peak_memory_mb": 298.31640625
+   },
+   "naive": {
+    "N": 6,
+    "mode": "naive",
+    "ndof": 5616,
+    "n_el": 216,
+    "n_charge": 2592,
+    "charge_gram_wall_s": 11.008367000002181,
+    "iters": 19,
+    "M_avg_z": 725314.2861651995,
+    "peak_memory_mb": 281.81640625
+   },
+   "naive_over_full": 25.487936004160282
+  },
+  {
+   "N": 8,
+   "ndof": 13056,
+   "full": {
+    "N": 8,
+    "mode": "lattice",
+    "ndof": 13056,
+    "n_el": 512,
+    "n_charge": 5632,
+    "charge_gram_wall_s": 0.7008917999919504,
+    "iters": 19,
+    "M_avg_z": 725613.5472825661,
+    "peak_memory_mb": 532.0078125
+   },
+   "naive": {
+    "N": 8,
+    "mode": "naive",
+    "ndof": 13056,
+    "n_el": 512,
+    "n_charge": 5632,
+    "charge_gram_wall_s": 27.7111507000227,
+    "iters": 19,
+    "M_avg_z": 725614.3470471799,
+    "peak_memory_mb": 483.59375
+   },
+   "naive_over_full": 39.536988020605975
+  },
+  {
+   "N": 10,
+   "ndof": 25200,
+   "full": {
+    "N": 10,
+    "mode": "lattice",
+    "ndof": 25200,
+    "n_el": 1000,
+    "n_charge": 10400,
+    "charge_gram_wall_s": 1.6286252999852877,
+    "iters": 20,
+    "M_avg_z": 725715.5122243545,
+    "peak_memory_mb": 936.0390625
+   },
+   "naive": {
+    "N": 10,
+    "mode": "naive",
+    "ndof": 25200,
+    "n_el": 1000,
+    "n_charge": 10400,
+    "charge_gram_wall_s": 70.00591790000908,
+    "iters": 20,
+    "M_avg_z": 725727.1219271193,
+    "peak_memory_mb": 858.05859375
+   },
+   "naive_over_full": 42.98466805141826
+  }
+ ]
+}
