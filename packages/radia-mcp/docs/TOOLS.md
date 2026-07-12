@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **741 tools** across 43 MCP servers.
+Total: **742 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 74 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 64 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 65 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 117 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -162,6 +162,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
 | `build123d_heat_exchanger_source_recovery_gate` | Gate the upstream heat-exchanger replay and rotation recovery. |
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
+| `build123d_jointed_assembly_heal_invariance_gate` | Verify that STEP solid closure loss persists across heal/noheal imports. |
 | `build123d_jointed_assembly_source_replay_gate` | Gate immutable source, joint graph, and headless external-CAD evidence. |
 | `build123d_jointed_assembly_step_closure_gate` | Diagnose a component-level solid closure loss in a jointed STEP assembly. |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
