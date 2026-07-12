@@ -35,9 +35,24 @@ from .bipolar_startup_gate import bipolar_supply_startup_gate as _bipolar_supply
 from .monte_carlo_gate import monte_carlo_tolerance_family_gate as _monte_carlo_tolerance_family_gate
 from .bipolar_efficiency_gate import bipolar_converter_efficiency_gate as _bipolar_converter_efficiency_gate
 from .bipolar_rail_gate import bipolar_rail_power_quality_gate as _bipolar_rail_power_quality_gate
+from .series_rlc_gate import series_rlc_complex_impedance_gate as _series_rlc_complex_impedance_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def series_rlc_complex_impedance_gate(summary: dict) -> dict:
+    """Gate series-RLC complex impedance, resonance, and conversion semantics."""
+
+    try:
+        return _series_rlc_complex_impedance_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "series_rlc_complex_impedance_and_conversion_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
