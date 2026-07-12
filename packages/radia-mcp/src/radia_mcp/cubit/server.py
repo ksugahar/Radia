@@ -82,6 +82,10 @@ from .structured_hex_gate import (
 	cubit_structured_hex_lattice_gate as _cubit_structured_hex_lattice_gate,
 	cubit_structured_hex_source_replay_gate as _cubit_structured_hex_source_replay_gate,
 )
+from .symmetric_mixed_gate import (
+	cubit_symmetric_swept_mixed_mesh_gate as _cubit_symmetric_swept_mixed_mesh_gate,
+	cubit_symmetric_swept_source_replay_gate as _cubit_symmetric_swept_source_replay_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -1013,6 +1017,34 @@ def cubit_helical_conductor_source_gate(summary: dict) -> str:
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_helical_conductor_source_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_symmetric_swept_mixed_mesh_gate(summary: dict) -> str:
+	"""Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure."""
+	try:
+		result = _cubit_symmetric_swept_mixed_mesh_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_symmetric_swept_mixed_mesh_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_symmetric_swept_source_replay_gate(summary: dict) -> str:
+	"""Gate source-journal headless replay and public mixed-mesh closure."""
+	try:
+		result = _cubit_symmetric_swept_source_replay_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_symmetric_swept_source_replay_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}

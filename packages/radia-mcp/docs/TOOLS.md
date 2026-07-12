@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **739 tools** across 43 MCP servers.
+Total: **741 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 72 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 74 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 64 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 117 |
@@ -118,6 +118,8 @@ Module: `radia_mcp.cubit.server`
 | `cubit_structured_hex_source_replay_gate` | Gate source commands, license diagnostics, and headless exit semantics. |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
 | `cubit_sweep_along_curve_gate` | Gate an all-hex mesh-carrying curve sweep and headless launcher evidence. |
+| `cubit_symmetric_swept_mixed_mesh_gate` | Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure. |
+| `cubit_symmetric_swept_source_replay_gate` | Gate source-journal headless replay and public mixed-mesh closure. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
 | `cubit_vol_inventory` | Return semantic element inventory for a Netgen `.vol` export. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
