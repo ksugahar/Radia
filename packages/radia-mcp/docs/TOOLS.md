@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **699 tools** across 43 MCP servers.
+Total: **701 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 64 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 66 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 56 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 96 |
@@ -68,6 +68,8 @@ Module: `radia_mcp.cubit.server`
 | `cubit_curate_learned_recipes` | **Lab maintainer tool**: read accumulated `learned_recipes.jsonl`, |
 | `cubit_diagnostics_guide` | Get the foundational mesh-diagnostics + cleanup + quality playbook. |
 | `cubit_docs` | Get Cubit documentation: export formats, scripting guide, and API reference. |
+| `cubit_embedded_pipe_source_recovery_gate` | Gate source-journal replay and semantically classified version recovery. |
+| `cubit_embedded_region_mixed_transition_gate` | Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.1. |
 | `cubit_examples` | Search Cubit journal examples from **multiple unioned sources**. |
 | `cubit_examples_refresh` | Force-refresh every Cubit example sub-source. |
 | `cubit_exec` | Send arbitrary Cubit commands to the persistent viewer session. |

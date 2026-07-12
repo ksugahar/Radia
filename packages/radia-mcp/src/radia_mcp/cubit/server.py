@@ -57,6 +57,8 @@ from .vol_inventory import (
 	cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate,
 	cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate,
 	cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate,
+	cubit_embedded_region_mixed_transition_gate as _cubit_embedded_region_mixed_transition_gate,
+	cubit_embedded_pipe_source_recovery_gate as _cubit_embedded_pipe_source_recovery_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -919,6 +921,50 @@ def cubit_boundary_layer_journal_recovery_gate(summary: dict) -> str:
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_boundary_layer_journal_recovery_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_embedded_region_mixed_transition_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.1,
+	max_volume_relative_error: float = 1.0e-5,
+	max_swept_volume_relative_error: float = 5.0e-4,
+) -> str:
+	"""Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.1."""
+	try:
+		result = _cubit_embedded_region_mixed_transition_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			max_volume_relative_error=max_volume_relative_error,
+			max_swept_volume_relative_error=max_swept_volume_relative_error,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_embedded_region_mixed_transition_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_embedded_pipe_source_recovery_gate(
+	summary: dict,
+	expected_unmeshed_volumes: list[int] | None = None,
+) -> str:
+	"""Gate source-journal replay and semantically classified version recovery."""
+	try:
+		kwargs = {}
+		if expected_unmeshed_volumes is not None:
+			kwargs["expected_unmeshed_volumes"] = expected_unmeshed_volumes
+		result = _cubit_embedded_pipe_source_recovery_gate(summary, **kwargs)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_embedded_pipe_source_recovery_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
