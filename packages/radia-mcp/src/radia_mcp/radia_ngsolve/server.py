@@ -91,6 +91,9 @@ from .transient_coupled_coil_gate import (
 from .source_off_relaxation_gate import (
     source_off_linear_relaxation_gate as _source_off_linear_relaxation_gate,
 )
+from .nonlinear_bh_curve_gate import (
+    nonlinear_bh_piecewise_material_gate as _nonlinear_bh_piecewise_material_gate,
+)
 from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
 from .global_local_optimization_gate import global_local_optimization_replay_gate as _global_local_optimization_replay_gate
 from .eddy_loss_formulation_gate import alternate_eddy_loss_formulation_gate as _alternate_eddy_loss_formulation_gate
@@ -3149,6 +3152,27 @@ def source_off_linear_relaxation_gate(
     except (KeyError, TypeError, ValueError) as exc:
         result = {
             "policy": "linear_source_off_total_current_field_decay_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def nonlinear_bh_piecewise_material_gate(
+    summary: dict,
+    maximum_relative_identity_error: float = 1.0e-8,
+) -> str:
+    """Gate secant and left-interval differential permeability from B-H rows."""
+
+    try:
+        result = _nonlinear_bh_piecewise_material_gate(
+            summary,
+            maximum_relative_identity_error=maximum_relative_identity_error,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "piecewise_bh_secant_and_left_interval_differential_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
