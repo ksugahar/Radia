@@ -31,10 +31,12 @@ import sys
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
-REPO_ROOT = _HERE.parents[2]
-_SRC = REPO_ROOT / "src"
-if _SRC.is_dir() and str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+# In-repo runs resolve radia from the source tree; a copied script (e.g. the
+# C:\temp\ mdx deployment) falls back to the installed package.
+if len(_HERE.parents) > 2:
+    _SRC = _HERE.parents[2] / "src"
+    if _SRC.is_dir() and str(_SRC) not in sys.path:
+        sys.path.insert(0, str(_SRC))
 
 MU0 = 4.0e-7 * math.pi
 H0 = 200.0e3
