@@ -103,6 +103,9 @@ from .open_boundary_magnetostatic_gate import (
 from .pwm_controlled_motor_loss_gate import (
     pwm_controlled_motor_loss_gate as _pwm_controlled_motor_loss_gate,
 )
+from .material_contrast_force_gate import (
+    material_contrast_force_gate as _material_contrast_force_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3037,6 +3040,33 @@ def pwm_controlled_motor_loss_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "pwm_controlled_motor_loss_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def material_contrast_force_gate(
+    cases: list[dict],
+    interaction_axis: str = "x",
+    max_background_relative_force: float = 0.01,
+    max_transverse_relative_force: float = 1.0e-6,
+    min_stronger_repulsion_ratio: float = 1.5,
+) -> str:
+    """Gate null, attraction, and increasing-repulsion material-force cases."""
+
+    try:
+        result = _material_contrast_force_gate(
+            cases,
+            interaction_axis=interaction_axis,
+            max_background_relative_force=max_background_relative_force,
+            max_transverse_relative_force=max_transverse_relative_force,
+            min_stronger_repulsion_ratio=min_stronger_repulsion_ratio,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "material_contrast_force_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
