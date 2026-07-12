@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **693 tools** across 43 MCP servers.
+Total: **694 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **693 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 39 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 40 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -476,6 +476,7 @@ Module: `radia_mcp.motor.server`
 | `motor_validation_lanes` | Cross-validation lane policy for radia-motor. |
 | `motor_validation_router` | Route a motor prompt to a public deck, field quick check, and NGSolve AGE validation. |
 | `motor_variable_magnet_material_gate` | Gate variable-PM material parameters and their authoritative source. |
+| `motor_virtual_work_width_ladder_gate` | Select a coenergy-difference angle width against independent torque. |
 
 ## `mcp-server-accelerator`
 
