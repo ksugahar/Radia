@@ -25,10 +25,14 @@ Usage:
     mcp-server-maglev              # stdio
     mcp-server-maglev --selftest   # self-test
 """
+import json
 import sys
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
 from .knowledge import get_knowledge, TOPICS
+from .periodic_settling_gate import (
+    rotating_conductor_periodic_settling_gate as _rotating_conductor_periodic_settling_gate,
+)
 
 mcp = FastMCP("mcp-server-maglev")
 
@@ -63,6 +67,37 @@ def maglev(topic: str = "overview") -> str:
             "all"                 - Everything
     """
     return get_knowledge(topic)
+
+
+@mcp.tool()
+def rotating_conductor_periodic_settling_gate(
+    response: list[float],
+    steps_per_period: int,
+    angle_step_deg: float,
+    reference_response: list[float] | None = None,
+    maximum_final_period_relative_l2: float = 2.0e-3,
+    maximum_contraction_factor: float = 0.35,
+    reference_relative_l2_tolerance: float = 1.0e-8,
+) -> str:
+    """Gate full-turn convergence of a rotating-conductor eddy response."""
+
+    try:
+        result = _rotating_conductor_periodic_settling_gate(
+            response,
+            steps_per_period=steps_per_period,
+            angle_step_deg=angle_step_deg,
+            reference_response=reference_response,
+            maximum_final_period_relative_l2=maximum_final_period_relative_l2,
+            maximum_contraction_factor=maximum_contraction_factor,
+            reference_relative_l2_tolerance=reference_relative_l2_tolerance,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "rotating_conductor_periodic_settling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 
 
