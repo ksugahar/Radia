@@ -80,6 +80,9 @@ from .manual_auto_mixed_mesh_gate import (
 from .two_winding_frequency_gate import (
     two_winding_frequency_faraday_gate as _two_winding_frequency_faraday_gate,
 )
+from .single_loop_normalized_field_gate import (
+    single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
+)
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2826,6 +2829,20 @@ def two_winding_frequency_faraday_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "two_winding_frequency_faraday_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def single_loop_source_normalized_field_gate(summary_json: str) -> str:
+    """Gate a single-loop field transfer across two port formulations."""
+    try:
+        result = _single_loop_source_normalized_field_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "single_loop_source_normalized_field_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
