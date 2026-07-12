@@ -100,6 +100,9 @@ from .eddy_loss_formulation_gate import alternate_eddy_loss_formulation_gate as 
 from .open_boundary_magnetostatic_gate import (
     magnetostatic_open_boundary_equivalence_gate as _magnetostatic_open_boundary_equivalence_gate,
 )
+from .pwm_controlled_motor_loss_gate import (
+    pwm_controlled_motor_loss_gate as _pwm_controlled_motor_loss_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3003,6 +3006,37 @@ def magnetostatic_open_boundary_equivalence_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "magnetostatic_open_boundary_equivalence_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def pwm_controlled_motor_loss_gate(
+    payload: dict,
+    max_three_phase_kcl_relative_error: float = 1.0e-3,
+    max_tail_control_tracking_rms_relative_error: float = 0.05,
+    max_angle_speed_integral_relative_error: float = 2.0e-4,
+    max_power_sum_relative_error: float = 1.0e-10,
+    max_loss_identity_relative_error: float = 1.0e-10,
+    max_frequency_step_relative_span: float = 1.0e-10,
+) -> str:
+    """Gate PWM current-control and aggregate/harmonic loss-table identities."""
+
+    try:
+        result = _pwm_controlled_motor_loss_gate(
+            payload,
+            max_three_phase_kcl_relative_error=max_three_phase_kcl_relative_error,
+            max_tail_control_tracking_rms_relative_error=max_tail_control_tracking_rms_relative_error,
+            max_angle_speed_integral_relative_error=max_angle_speed_integral_relative_error,
+            max_power_sum_relative_error=max_power_sum_relative_error,
+            max_loss_identity_relative_error=max_loss_identity_relative_error,
+            max_frequency_step_relative_span=max_frequency_step_relative_span,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "pwm_controlled_motor_loss_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
