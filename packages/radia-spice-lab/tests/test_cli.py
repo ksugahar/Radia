@@ -616,6 +616,7 @@ def test_mcp_tools_registered():
         "bipolar_rail_power_quality_gate",
         "monte_carlo_tolerance_family_gate",
         "series_rlc_complex_impedance_gate",
+        "rc_thermal_noise_psd_gate",
         "circuit_knowledge",
         "buck_seed",
         "patentability_search_plan",
@@ -623,6 +624,6 @@ def test_mcp_tools_registered():
     assert names == expected
 
     readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "Exposes twenty-six tools:" in readme
+    assert "Exposes twenty-seven tools:" in readme
     for name in expected:
         assert f"`{name}" in readme
