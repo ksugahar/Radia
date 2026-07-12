@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **687 tools** across 43 MCP servers.
+Total: **688 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 54 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 90 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 91 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -235,6 +235,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
 | `dual_formulation_force_error_convergence_gate` | Gate force-error convergence envelopes across two or more formulations. |
 | `dual_formulation_symmetric_field_profile_gate` | Gate full-profile agreement and symmetry for two field formulations. |
+| `energy_budgeted_trace_kkt_gate` | Gate KKT closure for an energy-budgeted FEM/BEM trace fit. |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
 | `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |

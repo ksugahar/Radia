@@ -109,6 +109,9 @@ from .material_contrast_force_gate import (
 from .static_field_shim_family_gate import (
     static_field_shim_family_gate as _static_field_shim_family_gate,
 )
+from .energy_budgeted_trace_kkt_gate import (
+    energy_budgeted_trace_kkt_gate as _energy_budgeted_trace_kkt_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3101,6 +3104,35 @@ def static_field_shim_family_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "static_field_shim_family_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def energy_budgeted_trace_kkt_gate(
+    payload: dict,
+    max_gradient_relative_error: float = 1.0e-6,
+    max_solution_relative_error: float = 1.0e-5,
+    max_stationarity_inf: float = 1.0e-6,
+    max_complementarity_abs: float = 1.0e-7,
+    max_constraint_relative: float = 1.0e-8,
+) -> str:
+    """Gate KKT closure for an energy-budgeted FEM/BEM trace fit."""
+
+    try:
+        result = _energy_budgeted_trace_kkt_gate(
+            payload,
+            max_gradient_relative_error=max_gradient_relative_error,
+            max_solution_relative_error=max_solution_relative_error,
+            max_stationarity_inf=max_stationarity_inf,
+            max_complementarity_abs=max_complementarity_abs,
+            max_constraint_relative=max_constraint_relative,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "energy_budgeted_trace_kkt_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
