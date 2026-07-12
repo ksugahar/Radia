@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **723 tools** across 43 MCP servers.
+Total: **724 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 70 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 62 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 105 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 106 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -295,6 +295,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `multiport_impedance_sweep_gate` | Gate common-grid, positive-real, nontrivial complex impedance sweeps. |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
+| `nonlinear_actuator_saturation_knee_gate` | Gate an axisymmetric nonlinear actuator by a shared L/F saturation knee. |
 | `nonlinear_bh_piecewise_material_gate` | Gate secant and left-interval differential permeability from B-H rows. |
 | `one_port_power_balance_sweep_gate` | Gate passive one-port accepted power against S11 and reference impedance. |
 | `one_port_vi_s_impedance_gate` | Gate one-port S, V/I, impedance-transform, and power identities. |
