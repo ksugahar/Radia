@@ -97,6 +97,9 @@ from .nonlinear_bh_curve_gate import (
 from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
 from .global_local_optimization_gate import global_local_optimization_replay_gate as _global_local_optimization_replay_gate
 from .eddy_loss_formulation_gate import alternate_eddy_loss_formulation_gate as _alternate_eddy_loss_formulation_gate
+from .open_boundary_magnetostatic_gate import (
+    magnetostatic_open_boundary_equivalence_gate as _magnetostatic_open_boundary_equivalence_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -2963,6 +2966,43 @@ def dual_formulation_force_error_convergence_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "dual_formulation_force_error_convergence_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def magnetostatic_open_boundary_equivalence_gate(
+    formulation_rows: list[dict],
+    physics_regime: str = "magnetostatic_open_boundary",
+    axis_sample_indices: list[int] | None = None,
+    max_dominant_b_relative_error: float = 0.01,
+    max_axis_transverse_b_residual: float = 0.015,
+    max_a_offset_relative_spread: float = 0.005,
+    max_energy_coenergy_relative_error: float = 0.001,
+    max_dominant_force_relative_error: float = 0.001,
+    max_force_balance_relative: float = 0.002,
+    max_transverse_force_difference_relative: float = 0.001,
+) -> str:
+    """Gate gauge-invariant equivalence of two magnetostatic open-boundary solutions."""
+
+    try:
+        result = _magnetostatic_open_boundary_equivalence_gate(
+            formulation_rows,
+            physics_regime=physics_regime,
+            axis_sample_indices=axis_sample_indices,
+            max_dominant_b_relative_error=max_dominant_b_relative_error,
+            max_axis_transverse_b_residual=max_axis_transverse_b_residual,
+            max_a_offset_relative_spread=max_a_offset_relative_spread,
+            max_energy_coenergy_relative_error=max_energy_coenergy_relative_error,
+            max_dominant_force_relative_error=max_dominant_force_relative_error,
+            max_force_balance_relative=max_force_balance_relative,
+            max_transverse_force_difference_relative=max_transverse_force_difference_relative,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "magnetostatic_open_boundary_equivalence_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
