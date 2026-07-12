@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **701 tools** across 43 MCP servers.
+Total: **703 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 66 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 56 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 58 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 96 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -159,6 +159,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_motor_housing_thermal_reference` | Return analytic volume/area/body-count data for a finned motor housing. |
 | `build123d_path_sweep_handoff_gate` | Gate a curved build123d sweep through analytic path and STEP/CAD checks. |
 | `build123d_path_sweep_source_contract_gate` | Gate the source-native build123d sweep idiom and ``is_valid`` API form. |
+| `build123d_patterned_compound_translation_gate` | Diagnose dominant curved-body STEP bias without solver-ready overclaim. |
 | `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
 | `build123d_platonic_solid_family_gate` | Gate all five Platonic solids by topology, analytic volume and CAD replay. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
@@ -176,6 +177,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_volume_crosscheck_source_identity_gate` | Require source identity metadata after an external CAD volume crosscheck. |
 | `build123d_volume_crosscheck_with_units` | Normalize explicit cubic units before comparing CAD volumes. |
 | `build123d_web_docs` | Fetch live build123d documentation (readthedocs) and grep for `query`. |
+| `build123d_wrap_faces_rotational_source_replay_gate` | Gate immutable wrap_faces, thicken, and rotational-pattern replay. |
 | `cadquery_to_cubit_hex` | End-to-end: cadquery script → STEP → Cubit `cubit_mesh_auto` |
 | `execute_build123d` | Execute a build123d Python script and return geometry information. |
 | `execute_cadquery` | Execute a **CadQuery** Python script (sibling OCCT CAD lib). |

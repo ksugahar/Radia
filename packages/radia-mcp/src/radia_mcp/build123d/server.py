@@ -44,6 +44,7 @@ from .build123d_knowledge import get_build123d_documentation
 from .mass_topology_diagnosis_gate import cross_kernel_mass_topology_diagnosis_gate as _cross_kernel_mass_topology_diagnosis_gate, upstream_source_external_cad_contract_gate as _upstream_source_external_cad_contract_gate
 from .dual_api_prismatic_gate import dual_api_prismatic_pattern_gate as _dual_api_prismatic_pattern_gate, dual_api_source_replay_gate as _dual_api_source_replay_gate
 from .jointed_assembly_gate import jointed_assembly_step_closure_gate as _jointed_assembly_step_closure_gate, jointed_assembly_source_replay_gate as _jointed_assembly_source_replay_gate
+from .patterned_compound_gate import patterned_compound_translation_gate as _patterned_compound_translation_gate, wrap_faces_rotational_source_replay_gate as _wrap_faces_rotational_source_replay_gate
 from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
@@ -91,6 +92,20 @@ def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
     """Gate immutable source, joint graph, and headless external-CAD evidence."""
     try: result=_jointed_assembly_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_patterned_compound_translation_gate(summary_json: str) -> str:
+    """Diagnose dominant curved-body STEP bias without solver-ready overclaim."""
+    try: result=_patterned_compound_translation_gate(json.loads(summary_json))
+    except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_patterned_compound_translation_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_wrap_faces_rotational_source_replay_gate(summary_json: str) -> str:
+    """Gate immutable wrap_faces, thicken, and rotational-pattern replay."""
+    try: result=_wrap_faces_rotational_source_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_wrap_faces_rotational_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
 
 
