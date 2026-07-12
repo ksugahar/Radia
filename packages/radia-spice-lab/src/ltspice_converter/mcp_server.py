@@ -37,9 +37,24 @@ from .bipolar_efficiency_gate import bipolar_converter_efficiency_gate as _bipol
 from .bipolar_rail_gate import bipolar_rail_power_quality_gate as _bipolar_rail_power_quality_gate
 from .series_rlc_gate import series_rlc_complex_impedance_gate as _series_rlc_complex_impedance_gate
 from .noise_gate import rc_thermal_noise_psd_gate as _rc_thermal_noise_psd_gate
+from .distributed_line_gate import distributed_line_delay_loss_gate as _distributed_line_delay_loss_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def distributed_line_delay_loss_gate(summary: dict) -> dict:
+    """Gate distributed-line LC delay, resistance loss, and replay."""
+
+    try:
+        return _distributed_line_delay_loss_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "distributed_line_delay_loss_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
