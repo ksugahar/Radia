@@ -48,6 +48,7 @@ from .three_phase_winding_power_gate import (
     three_phase_winding_power_balance_gate as _three_phase_winding_power_balance_gate,
 )
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
+from .nonlinear_actuator_gate import nonlinear_actuator_saturation_knee_gate as _nonlinear_actuator_saturation_knee_gate
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
@@ -2566,6 +2567,16 @@ def cogging_torque_periodicity_gate(summary_json: str) -> str:
             "status": "invalid_input",
             "error": str(exc),
         }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def nonlinear_actuator_saturation_knee_gate(summary_json: str) -> str:
+    """Gate an axisymmetric nonlinear actuator by a shared L/F saturation knee."""
+    try:
+        result = _nonlinear_actuator_saturation_knee_gate(json.loads(summary_json))
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {"policy": "nonlinear_actuator_saturation_knee_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
 
