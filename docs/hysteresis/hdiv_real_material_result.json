@@ -1,0 +1,150 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-07-12T14:33:07Z",
+  "notebook": "docs/hysteresis/hdiv_real_material.ipynb",
+  "notebook_sha256": "ee9a73bf76110936e63ceef19c3ce6a97bb9ffedfc82f91e00e93febb2ff5d09",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.4",
+    "radia_version": "4.95.9"
+  },
+  "summary": {
+    "path": "docs/hysteresis/hdiv_real_material.ipynb",
+    "cells": 11,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 8,
+    "error_output_count": 0,
+    "result_saved": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "6b338b0e06879473bb887a63f730c62451967f9748068e218fe85686fed5f8cf",
+      "source_preview": "import sys, json\nfrom pathlib import Path\nimport numpy as np\nimport matplotlib.pyplot as plt   # nbconvert supplies the inline backend -> figures embed as PNG\n\nREPO = next(p for p in Path.cwd().resolve().parents if (p / \"src\" / \"radia\").exists())\nsys.path.insert(0, str(REPO / \"src\"))\nimport ngsolve as ng\nfrom ngsolve.meshes import MakeStructured3DMesh\nimport radia.vim as vim\n\nMU0 = 4.0e-7 * np.pi\nRHO_STEEL = 7650.0\nFIX = REPO / \"validation_test\" / \"hysteresis\" / \"binput_play_fixture.npz\"\n\ndef load_play():\n    d = np.load(FIX, allow_pickle=True)\n    K = int(d[\"K\"]); eta = np.asarray(d[\"eta\"], float)\n    tables = [(np.asarray(d[f\"r_{k}\"], float), np.asarray(d[f\"f_{k}\"], float)) for k in range(K)]\n    return K, eta, tables\n\ndef loop_area(H, B):\n    H = np.asarray(H, float); B = np.asarray(B, float)\n    return 0.5 * float(abs(np.sum(H * np.roll(B, -1) - np.roll(H, -1) * B)))\n\nK, eta, tables = load_play()\nmat = vim.PlayHysteresisMaterial(K, eta, tables)\nprint(f\"K = {K} play operators, thres",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 70,
+          "text_sha256": "37e576494418767fd522fe799df860270e7d2eeaa02dc972d3da28f5f63a945e",
+          "text_preview": "K = 40 play operators, threshold range 0..1.85 T, valid |B| <= 1.90 T\n",
+          "text_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "f17e9ffe96bffbeb32f62de9893a3064c0903a3d589a0aae49d38d780bd4500b",
+      "source_preview": "# virgin H(B)\ns0 = mat.state0()\nBs = np.linspace(0.02, 1.8, 40); Bq = np.zeros((Bs.size, 3)); Bq[:, 2] = Bs\nHv = mat.forward(Bq, np.tile(s0[None, :], (Bs.size, 1)))[:, 2]\nmur = Bs / (MU0 * Hv)\n\n# intrinsic major loop (B sweep) -> Hc, Br, loss\ndef intrinsic_loop(Bmax, nseg=300):\n    st = mat.state0()[None, :].copy()\n    Bseq = np.concatenate([np.linspace(0, Bmax, nseg), np.linspace(Bmax, -Bmax, 2*nseg),\n                           np.linspace(-Bmax, Bmax, 2*nseg)])\n    H = []\n    for bz in Bseq:\n        B = np.array([[0., 0., bz]]); H.append(mat.forward(B, st)[0, 2]); st = mat.commit(B, st)\n    return np.array(H)[nseg:], Bseq[nseg:]\nHc_loop, Bc_loop = intrinsic_loop(1.6)\nHc = abs(np.interp(0.0, Bc_loop[:600][::-1], Hc_loop[:600][::-1]))\nBr = abs(np.interp(0.0, Hc_loop[:600], Bc_loop[:600]))\nprint(f\"peak mu_r ~ {mur.max():.0f}  |  coercivity Hc ~ {Hc:.0f} A/m  |  remanence Br ~ {Br:.2f} T\")\nprint(f\"intrinsic major-loop loss (Bmax=1.6 T) = {loop_area(Hc_loop, Bc_loop):.0f} J/m^3 \"\n      f\"",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 143,
+          "text_sha256": "05edd8659ce8ba04003041431929c754c2230cc56550b2bc6a70ad991ab5c601",
+          "text_preview": "peak mu_r ~ 1424  |  coercivity Hc ~ 469 A/m  |  remanence Br ~ 1.60 T\nintrinsic major-loop loss (Bmax=1.6 T) = 2797 J/m^3 = 18.3 W/kg @ 50 Hz\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_mime_types": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_chars": 33,
+          "text_sha256": "85f3da8da18a2d4c2dbec4f4a4486b189bcd3048c1df7fcb220affc4cee5658d",
+          "text_preview": "<Figure size 840x320 with 2 Axes>",
+          "text_truncated": false,
+          "image_png_base64_chars": 40572
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "7ef6c31dbb5e4c2024a3f1f2c688049b3e2bbffd7fc9028e3b98d76b3399c51c",
+      "source_preview": "def rod(nz=16, a=0.1, aspect=10.0):\n    L = aspect*a\n    return MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=nz,\n                                mapping=lambda x, y, z: (a*(x-0.5), a*(y-0.5), L*(z-0.5)))\ndef drive(H0, nb):\n    up0 = np.linspace(0, H0, nb//2+1)[1:]; dn = np.linspace(H0, -H0, nb+1)[1:]\n    up1 = np.linspace(-H0, H0, nb+1)[1:]; hz = np.concatenate([up0, dn, up1])\n    h = np.zeros((hz.size, 3)); h[:, 2] = hz; return h, nb//2\n\nh_steps, n0 = drive(16.0e3, 48)\nwith ng.TaskManager():\n    res = vim.SolveHysteresis(rod(), h_steps, material=vim.PlayHysteresisMaterial(K, eta, tables))\nHz = np.array([s[\"H_avg\"][2] for s in res[\"steps\"]]); Bz = np.array([s[\"B_avg\"][2] for s in res[\"steps\"]])\npeakB = float(np.abs(Bz).max()); area = loop_area(Hz[n0:], Bz[n0:])\nHi, Bi = intrinsic_loop(peakB); area0 = loop_area(Hi, Bi)\nrel = abs(area-area0)/area0\nprint(f\"coupled peak B = {peakB:.3f} T, {max(s['iters'] for s in res['steps'])} max iters/step\")\nprint(f\"coupled loss  = {area:.0f} J/m^3 =",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 146,
+          "text_sha256": "545ddba029ae3d3a292c18ff18bd2c4ed3e0a6d3d29ce15f5b215f5e5bcf5e30",
+          "text_preview": "coupled peak B = 0.828 T, 7 max iters/step\ncoupled loss  = 989 J/m^3 = 6.46 W/kg @50Hz\n0D intrinsic  = 1011 J/m^3   ->  loop-area agreement 2.21%\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_mime_types": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_chars": 33,
+          "text_sha256": "4a5f9f027c6773a5b61d3b67dfdc8d3112ae5c60c384ad1efb0cc1b4d174317d",
+          "text_preview": "<Figure size 500x380 with 1 Axes>",
+          "text_truncated": false,
+          "image_png_base64_chars": 33744
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "9fb868d0fcbd877d351db8d9d18fa748a5c747623763cc2f510c6f38cc4c4746",
+      "source_preview": "N = 5\nh_steps, n0 = drive(2.0e5, 16)   # cube demag ~0.27 -> peak ~1.35 T, under b_max\nwith ng.TaskManager():\n    mesh = MakeStructured3DMesh(hexes=True, nx=N, ny=N, nz=N,\n                                mapping=lambda x, y, z: (x-0.5, y-0.5, z-0.5))\n    res = vim.SolveHysteresis(mesh, h_steps, material=vim.PlayHysteresisMaterial(K, eta, tables))\n    vol = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True), float)\n    cx = np.asarray(ng.Integrate(ng.x, mesh, element_wise=True), float)/vol\n    cy = np.asarray(ng.Integrate(ng.y, mesh, element_wise=True), float)/vol\n    cz = np.asarray(ng.Integrate(ng.z, mesh, element_wise=True), float)/vol\n\nsteps = res[\"steps\"][n0:]\nHseq = np.stack([np.asarray(s[\"H\"], float) for s in steps])\nBseq = np.stack([np.asarray(s[\"B\"], float) for s in steps])\ndB = np.roll(Bseq, -1, 0) - Bseq; Hmid = 0.5*(Hseq + np.roll(Hseq, -1, 0))\nloss_el = np.abs(np.sum(np.sum(Hmid*dB, axis=2), axis=0))\ntotal = float(np.sum(loss_el*vol)); spread = fl",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 151,
+          "text_sha256": "9b82a811343ac5a410a0be4b11df4e678304d4148023c7881b079d68f623edb7",
+          "text_preview": "peak |B| = 1.347 T, 125 elements\nloss density: min 519 / max 2110 J/m^3/cycle  (x4.06 spread)\ntotal = 1261 J/cycle,  volume-average density 1261 J/m^3\n",
+          "text_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_mime_types": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_chars": 33,
+          "text_sha256": "049aa305021dd5dc9a53512fd8d037b48420c769a6684f4438a230201db62227",
+          "text_preview": "<Figure size 520x360 with 2 Axes>",
+          "text_truncated": false,
+          "image_png_base64_chars": 30476
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "be0d8bbf2fefa505add533a0748e33a7e00618d71fe2e6d0780128cbcf9b0649",
+      "source_preview": "with ng.TaskManager():\n    cube = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3,\n                                mapping=lambda x, y, z: (x-0.5, y-0.5, z-0.5))\n    try:\n        vim.SolveHysteresis(cube, [[0.0, 0.0, 8.0e5]], material=vim.PlayHysteresisMaterial(K, eta, tables))\n        print(\"NO GUARD -- this should not happen\")\n    except RuntimeError as e:\n        print(\"guard fired as expected:\\n \", str(e).split(\" -- \")[0])",
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text_chars": 158,
+          "text_sha256": "1c311b003ce9b17cab25b4dc9a666f7fb6d5e8fd433db01f9b9d1a7328ca63e5",
+          "text_preview": "guard fired as expected:\n  vim.SolveHysteresis: step 0 (H_ext=[     0.      0. 800000.]) drove |B|=4.522 T past the material's identified range b_max=1.900 T\n",
+          "text_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}
