@@ -274,5 +274,24 @@ def test_F_subthreshold_cycle_has_no_hysteresis():
         "history advanced where the material is exactly linear" % area)
 
 
+# ==========================================================================
+# (G) Out-of-range fail-loud guard: driving past the material's identified
+# table extent (b_max) must RAISE, not silently extrapolate the shape
+# functions (a demag-limited coupled solve otherwise runs M away -- a real
+# incident: B_avg = 4.886 T on a low-demag rod driven too hard).
+# ==========================================================================
+def test_G_out_of_range_drive_fails_loud():
+    K, eta, tables = _synthetic_play()
+    mat = vim.PlayHysteresisMaterial(K, eta, tables)
+    b_max = mat.b_max()
+    assert b_max > 1.5, "synthetic play table extent unexpectedly small (%.3f T)" % b_max
+    # A huge single step: the cube demag caps B, but mu_r=200 with no saturation
+    # is driven well past the 2 T table extent -> the guard must fire.
+    with ng.TaskManager():
+        mesh = _hex_cube(3)
+        with pytest.raises(RuntimeError, match="identified range"):
+            vim.SolveHysteresis(mesh, [[0.0, 0.0, 8.0e5]], material=mat)
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v", "-x"]))
