@@ -407,6 +407,19 @@ def test_em_paper_style_caption_body_policy_topic():
     assert "If a caption becomes long, prioritize the body text" in topic
 
 
+def test_em_paper_style_iteration_fairness_policy_topic():
+    from radia_mcp.paper_writing._em_paper_style import (
+        paper_writing_em_paper_style,
+    )
+    topic = paper_writing_em_paper_style("iteration_fairness")
+    assert "fixed computational budget" in topic
+    assert "same update definition" in topic
+    assert "not evidence" in topic
+    assert "nonlinear convergence cost" in topic
+    assert "does not establish absolute accuracy" in topic
+    assert "independent reference solution" in topic
+
+
 def test_check_figure_forward_reference_on_minimal_tex(tmp_path):
     """\\ref{fig:one} comes BEFORE \\begin{figure} -- forward reference."""
     tex = tmp_path / "p.tex"
@@ -1038,7 +1051,8 @@ def test_em_paper_style_aliases_resolve():
     )
     for alias in ["sign", "vector", "tensor", "b_vs_h",
                     "si_units", "siunitx", "equations", "reviewer_patterns",
-                    "phase_convention", "magnetic_field_terminology"]:
+                    "phase_convention", "magnetic_field_terminology",
+                    "fixed_iteration", "stopping_criteria"]:
         r = paper_writing_em_paper_style(alias)
         assert len(r) > 100, f"alias {alias!r} returned too little"
         assert "Unknown topic" not in r

@@ -510,6 +510,69 @@ a result that is not integrated into the argument.
 """
 
 
+ITERATION_COMPARISON_POLICY = r"""
+# Fixed-iteration reporting and fair solver comparison
+
+## Disclose a fixed iteration budget
+
+A fixed linear or nonlinear iteration count is a legitimate experimental
+protocol, but it must not be hidden.  State in the Methods section:
+
+  * the update sequence and count (for example, quasi-Newton followed by
+    two Picard blocks);
+  * the number of inner linear iterations, damping/relaxation, and
+    preconditioner;
+  * the residual or physical-observable acceptance threshold; and
+  * how the reported state is selected when the best state seen so far is
+    retained.
+
+Describe the count as a **fixed computational budget**, not as a
+convergence count.  Report an acceptance check as well: a fixed budget by
+itself does not show that the physical solution is sufficiently accurate.
+
+Observable-based selection can support a claim of iteration stability or
+mesh-to-mesh consistency when the residual gate and observable change are
+reported.  It does not establish absolute accuracy without an analytical
+solution, independent reference solution, or measurement.  Do not turn
+"the observable is less iteration-sensitive than the internal state" into
+"the observable is exact."
+
+## Compare iteration counts only under identical semantics
+
+Iteration counts are directly comparable only when the methods use the
+same update definition, initial state, residual norm, tolerance, stopping
+rule, and maximum-iteration policy.  If one method stops on a residual and
+another uses a fixed budget or an observable-based best-state rule:
+
+  * do not place the counts in one performance-comparison column;
+  * do not claim that the smaller count is faster or more robust;
+  * report the protocols separately in Methods or supplementary material;
+  * compare physical quantities, accuracy, measured time, and measured
+    memory under the declared protocols.
+
+## Interpret scaling with a fixed outer count carefully
+
+When every problem size uses the same outer iteration budget, say why:
+the experiment removes problem-size-dependent nonlinear iteration growth
+to isolate matrix assembly, factorization, or matrix-vector-product
+scaling.  A fitted exponent from that experiment is the scaling of the
+measured fixed-budget workload.  It is not evidence that the complete
+nonlinear convergence cost has the same asymptotic exponent.
+
+## Recommended manuscript pattern
+
+Methods:
+  "To isolate matrix-operation scaling, the same outer-update budget was
+  used for all problem sizes.  Among states satisfying the nonlinear
+  residual threshold, the state with the smallest physical-observable
+  change was retained."
+
+Results table:
+  Show the physical quantities and accuracy.  Omit an iteration-count
+  column when the compared formulations use different stopping semantics.
+"""
+
+
 BILINGUAL_WORKFLOW = r"""
 # Bilingual workflow: English paper + Japanese translation
 
@@ -726,6 +789,12 @@ into the paper-writing knowledge layer.
   "proof/証拠" of a broader mechanism.  At paragraph boundaries, repeat the
   named method in phrases such as "the derived MMPM moment conditions";
   do not make the reader infer what "the derived conditions" belong to.
+- Iteration-reporting fairness: disclose fixed linear/nonlinear budgets,
+  relaxation and accepted-state criteria.  Do not compare a fixed budget
+  with a residual-based convergence count in one iteration column.  For a
+  fixed-budget scaling sweep, state that the design isolates matrix-work
+  scaling and does not establish end-to-end nonlinear convergence
+  complexity.
 
 ## Required action
 
@@ -971,6 +1040,13 @@ TOPICS = {
     "caption_body_consistency":  FIGURE_CAPTION_BODY_POLICY,
     "figure_caption":            FIGURE_CAPTION_BODY_POLICY,
     "captions":                  FIGURE_CAPTION_BODY_POLICY,
+    "iteration":                 ITERATION_COMPARISON_POLICY,
+    "iterations":                ITERATION_COMPARISON_POLICY,
+    "iteration_fairness":        ITERATION_COMPARISON_POLICY,
+    "fixed_iteration":           ITERATION_COMPARISON_POLICY,
+    "fixed_iterations":          ITERATION_COMPARISON_POLICY,
+    "nonlinear_solver_reporting": ITERATION_COMPARISON_POLICY,
+    "stopping_criteria":         ITERATION_COMPARISON_POLICY,
     "abstract":                  ABSTRACT_AND_CONCISENESS,
     "abstract_rules":            ABSTRACT_AND_CONCISENESS,
     "conciseness":               ABSTRACT_AND_CONCISENESS,
@@ -1039,6 +1115,12 @@ etc.) are journal-agnostic.  THIS module is EM-paper-specific:
         and move interpretation, numerical claims, and conclusions to the
         paragraph that cites the figure.
 
+  iteration_fairness / fixed_iteration / stopping_criteria
+        Disclose fixed linear/nonlinear budgets and accepted-state rules.
+        Compare iteration counts only under identical stopping semantics;
+        interpret fixed-budget scaling as matrix-work scaling, not complete
+        nonlinear convergence complexity.
+
   abstract / abstract_rules / conciseness / page_fitting
         Abstract carries NO math and NO citations.  To fit a page
         limit, reduce SCOPE rather than over-compressing (don't shrink
@@ -1088,7 +1170,9 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
         equations / equation_typesetting      -- align, \\ref, units
         figure_format / pdf_not_png           -- import figures as PDF
         caption_body / figure_caption         -- claims in captions also
-                                                 belong in the body
+                                                  belong in the body
+        iteration_fairness / fixed_iteration  -- fixed-budget disclosure
+                                                  and fair count comparison
         abstract / conciseness / page_fitting -- no math/cite in abstract;
                                                  cut scope, don't over-compress
         bilingual / japanese_translation      -- EN paper + JA translation,
@@ -1111,6 +1195,7 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
             EQUATION_TYPESETTING,
             FIGURE_FORMAT,
             FIGURE_CAPTION_BODY_POLICY,
+            ITERATION_COMPARISON_POLICY,
             ABSTRACT_AND_CONCISENESS,
             BILINGUAL_WORKFLOW,
             REFERENCE_BIB_POLICY,
