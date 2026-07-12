@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **705 tools** across 43 MCP servers.
+Total: **706 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -18,7 +18,7 @@ Total: **705 tools** across 43 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 4 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 3 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 40 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 41 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -467,6 +467,7 @@ Module: `radia_mcp.motor.server`
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
 | `motor_ipm_two_run_ldlq_gate` | Gate same-angle PM-only/current-on runs and extract ``Ld``/``Lq``. |
 | `motor_magnet_model_handoff_gate` | Gate a converged source result and two-file downstream magnet model. |
+| `motor_mirror_symmetric_three_magnet_handoff_gate` | Gate grouped magnetization vectors, mirror symmetry, and fresh replay. |
 | `motor_motion_table_coordinate_gate` | Validate independent 3D translation and rotation motion tables. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_periodic_torque_sampling_gate` | Validate periodic torque sampling and FFT endpoint ownership. |
