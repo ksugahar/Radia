@@ -59,6 +59,9 @@ from .harmonic_port_identity_gate import (
 from .periodic_pm_machine_gate import (
     periodic_unwrapped_pm_machine_replay_gate as _periodic_unwrapped_pm_machine_replay_gate,
 )
+from .permanent_magnet_recoil_state_gate import (
+    permanent_magnet_recoil_state_gate as _permanent_magnet_recoil_state_gate,
+)
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
@@ -2676,6 +2679,32 @@ def periodic_unwrapped_pm_machine_replay_gate(
     except (TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "periodic_unwrapped_pm_machine_replay_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def permanent_magnet_recoil_state_gate(
+    summary_json: str,
+    maximum_replay_relative_error: float = 1.0e-3,
+    minimum_initial_axis_concentration: float = 100.0,
+    maximum_open_axis_concentration: float = 2.0,
+    minimum_recoil_axis_concentration: float = 10.0,
+) -> str:
+    """Gate nonlinear, open-circuit, and partial-recoil PM field states."""
+    try:
+        result = _permanent_magnet_recoil_state_gate(
+            json.loads(summary_json),
+            maximum_replay_relative_error=maximum_replay_relative_error,
+            minimum_initial_axis_concentration=minimum_initial_axis_concentration,
+            maximum_open_axis_concentration=maximum_open_axis_concentration,
+            minimum_recoil_axis_concentration=minimum_recoil_axis_concentration,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "permanent_magnet_recoil_state_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
