@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **694 tools** across 43 MCP servers.
+Total: **695 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 64 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 56 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 92 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 93 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -263,6 +263,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
 | `linear_eddy_levitation_force_gate` | Gate linear harmonic levitation force by dual extraction and I-squared laws. |
 | `linear_induction_frequency_sweep_gate` | Gate a linear-induction frequency sweep by thrust, loss, and phase balance. |
+| `linked_study_silent_noop_gate` | Verify a linked native run that returned without creating solver results. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
