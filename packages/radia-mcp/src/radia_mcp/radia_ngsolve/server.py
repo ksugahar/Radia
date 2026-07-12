@@ -124,6 +124,9 @@ from .two_port_power_gate import (
 from .fem_bem_capstone_gate import (
     fem_bem_capstone_suite_gate as _fem_bem_capstone_suite_gate,
 )
+from .helmholtz_dual_formulation_gate import (
+    helmholtz_dual_formulation_axis_gate as _helmholtz_dual_formulation_axis_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3364,6 +3367,21 @@ def fem_bem_capstone_suite_gate(payload: dict) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "fem_bem_capstone_suite_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def helmholtz_dual_formulation_axis_gate(summary_json: str) -> str:
+    """Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement."""
+
+    try:
+        result = _helmholtz_dual_formulation_axis_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "helmholtz_dual_formulation_axis_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
