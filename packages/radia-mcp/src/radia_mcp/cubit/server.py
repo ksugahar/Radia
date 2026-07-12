@@ -78,6 +78,10 @@ from .mixed_transition_gate import (
 	cubit_conformal_hex_pyramid_tet_interface_gate as _cubit_conformal_hex_pyramid_tet_interface_gate,
 	cubit_mixed_transition_source_gate as _cubit_mixed_transition_source_gate,
 )
+from .structured_hex_gate import (
+	cubit_structured_hex_lattice_gate as _cubit_structured_hex_lattice_gate,
+	cubit_structured_hex_source_replay_gate as _cubit_structured_hex_source_replay_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -1057,6 +1061,42 @@ def cubit_mixed_transition_source_gate(
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_mixed_transition_source_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_structured_hex_lattice_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.2,
+	max_volume_relative_error: float = 1.0e-10,
+) -> str:
+	"""Gate structured all-hex counts, quality, and Gmsh volume closure."""
+	try:
+		result = _cubit_structured_hex_lattice_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			max_volume_relative_error=max_volume_relative_error,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_structured_hex_lattice_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_structured_hex_source_replay_gate(summary: dict) -> str:
+	"""Gate source commands, license diagnostics, and headless exit semantics."""
+	try:
+		result = _cubit_structured_hex_source_replay_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_structured_hex_source_replay_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
