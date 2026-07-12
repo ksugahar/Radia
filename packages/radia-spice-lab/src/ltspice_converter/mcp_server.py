@@ -36,6 +36,7 @@ from .monte_carlo_gate import monte_carlo_tolerance_family_gate as _monte_carlo_
 from .bipolar_efficiency_gate import bipolar_converter_efficiency_gate as _bipolar_converter_efficiency_gate
 from .bipolar_rail_gate import bipolar_rail_power_quality_gate as _bipolar_rail_power_quality_gate
 from .series_rlc_gate import series_rlc_complex_impedance_gate as _series_rlc_complex_impedance_gate
+from .noise_gate import rc_thermal_noise_psd_gate as _rc_thermal_noise_psd_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
@@ -50,6 +51,20 @@ def series_rlc_complex_impedance_gate(summary: dict) -> dict:
     except (TypeError, ValueError) as exc:
         return {
             "policy": "series_rlc_complex_impedance_and_conversion_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+
+
+@mcp.tool()
+def rc_thermal_noise_psd_gate(summary: dict) -> dict:
+    """Gate RC thermal-noise density, finite-band RMS, and measure semantics."""
+
+    try:
+        return _rc_thermal_noise_psd_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "rc_thermal_noise_psd_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
