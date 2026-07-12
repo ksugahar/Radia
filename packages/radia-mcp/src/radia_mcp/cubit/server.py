@@ -53,6 +53,8 @@ from .vol_inventory import (
 	cubit_pyramid_degenerate_hex_export_gate as _cubit_pyramid_degenerate_hex_export_gate,
 	cubit_webcut_conformal_hex_gate as _cubit_webcut_conformal_hex_gate,
 	cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate,
+	cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate,
+	cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -866,6 +868,22 @@ def cubit_webcut_journal_execution_gate(summary: dict) -> str:
 	"""Gate source-journal operation order and headless process evidence."""
 	try: result = _cubit_webcut_journal_execution_gate(summary)
 	except (TypeError, ValueError) as exc: result = {"policy":"cubit_webcut_journal_execution_gate_v1","status":"invalid_input","error":str(exc)}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_helical_partition_mesh_gate(summary: dict) -> str:
+	"""Gate a many-body helical mesh against quality and parsed .vol inventory."""
+	try: result = _cubit_helical_partition_mesh_gate(summary)
+	except (TypeError, ValueError) as exc: result = {"policy":"cubit_helical_partition_mesh_gate_v1","status":"invalid_input","error":str(exc)}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_source_journal_replay_gate(summary: dict) -> str:
+	"""Gate synchronous, headless replay and expected mesh disposition."""
+	try: result = _cubit_source_journal_replay_gate(summary)
+	except (TypeError, ValueError) as exc: result = {"policy":"cubit_source_journal_replay_gate_v1","status":"invalid_input","error":str(exc)}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 

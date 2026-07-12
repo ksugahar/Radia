@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **679 tools** across 43 MCP servers.
+Total: **681 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 60 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 52 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 86 |
@@ -75,6 +75,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_gmsh_v41_inventory` | Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity. |
 | `cubit_gmsh_v41_mixed_order_gate` | Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority. |
 | `cubit_headless_netgen_export_gate` | Gate migration from a GUI plugin export command to native headless Netgen export. |
+| `cubit_helical_partition_mesh_gate` | Gate a many-body helical mesh against quality and parsed .vol inventory. |
 | `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
 | `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
 | `cubit_list_checkpoints` | List all saved Cubit checkpoints with size + mtime. |
@@ -103,6 +104,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_session_status` | Return diagnostic info about the Cubit session (pid, alive, bin_dir). |
 | `cubit_show` | Load a file into the **persistent Cubit viewer** and optionally run |
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
+| `cubit_source_journal_replay_gate` | Gate synchronous, headless replay and expected mesh disposition. |
 | `cubit_status` | (no description) |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
 | `cubit_sweep_along_curve_gate` | Gate an all-hex mesh-carrying curve sweep and headless launcher evidence. |
