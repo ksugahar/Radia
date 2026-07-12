@@ -29,6 +29,7 @@ from .topology_derivative_knowledge import get_topology_derivative_documentation
 from .applications_knowledge import get_applications_documentation
 from .cae_ai_contract import cae_ai_artifact_gate as build_cae_ai_artifact_gate
 from .simplex_stationarity_gate import simplex_stationarity_audit_gate as build_simplex_stationarity_audit_gate
+from .nonlinear_lsq_multistart_gate import nonlinear_lsq_multistart_gate as build_nonlinear_lsq_multistart_gate
 
 mcp = FastMCP("mcp-server-topology-optimization")
 
@@ -115,6 +116,12 @@ def topology_opt_simplex_stationarity_audit_gate(summary_json: str) -> str:
     independently evaluated gradient and trusted reference/control evidence.
     """
     return build_simplex_stationarity_audit_gate(summary_json)
+
+
+@mcp.tool()
+def topology_opt_nonlinear_lsq_multistart_gate(summary_json: str) -> str:
+    """Gate nonlinear least-squares multistart, Jacobian, and KKT evidence."""
+    return build_nonlinear_lsq_multistart_gate(summary_json)
 
 
 
