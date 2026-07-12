@@ -130,17 +130,25 @@ HEXT_NL = ng.CoefficientFunction((0.0, 0.0, 1.0e5))   # drive that genuinely sat
 @pytest.mark.slow
 def test_per_region_nl_equal_table_matches_single():
     """A {lo: BH, hi: BH} dict with the SAME table in both regions must reproduce the single-table
-    nonlinear solve bit-for-bit (the per-element constitutive law + per-region warmstart both collapse to
-    the single-region path when every region shares one curve)."""
+    nonlinear solve up to the INDEPENDENT-CONVERGENCE scatter of two energy-Newton paths.
+
+    The two runs take different assembly/warmstart code paths and each stops at nl_tol=1e-6, so
+    their difference is the Newton-endpoint scatter, NOT Krylov precision -- and that scatter is
+    thread-schedule dependent (TaskManager reduction order feeds the nonlinear iteration).  Measured
+    2026-07-12 (LAB, 38 threads, 5 runs): worst per-element relative difference 6.7e-5 .. 1.0e-3,
+    worst absolute 5.8 .. 44 A/m at |M|_max ~ 1.5e6; volume-averaged M agrees to <= 2.5e-5 relative.
+    The previous gate (rtol=1e-5, atol=1.0) sat INSIDE that band and flipped with the machine's idle
+    thread count (~50% failure rate when idle).  Gates below sit ~5x above the observed scatter and
+    ~2 orders below a real per-region wiring bug (the different-tables physics test measures >= 0.85%
+    region contrast), so silent table-collapse regressions still fail loudly."""
     mesh = _two_region_mesh()
     with ng.TaskManager():
         rd = Solve(mesh, bh_table={"lo": BH_SOFT, "hi": BH_SOFT}, H_ext=HEXT_NL, nl_tol=1e-6)
         rs = Solve(mesh, bh_table=BH_SOFT, H_ext=HEXT_NL, nl_tol=1e-6)
     assert rd["nonlinear"] and rs["nonlinear"]
-    # RT1 (more charge DOF than RT0) -> the dict and single energy-Newton paths agree to ~1e-7 relative
-    # (the Newton nl_tol=1e-6 + tiny PCHIP/quadrature path differences), not the old RT0 ~1e-9.
-    assert np.allclose(rd["M"], rs["M"], rtol=1e-5, atol=1.0)
-    assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-5, atol=1.0)
+    scale = float(np.max(np.abs(np.asarray(rs["M"], float))))
+    assert np.allclose(rd["M"], rs["M"], rtol=5e-3, atol=1e-4 * scale)
+    assert np.allclose(rd["M_avg"], rs["M_avg"], rtol=1e-4, atol=1e-4 * scale)
 
 
 @pytest.mark.slow
