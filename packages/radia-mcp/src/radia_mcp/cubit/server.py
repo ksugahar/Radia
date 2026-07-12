@@ -55,6 +55,8 @@ from .vol_inventory import (
 	cubit_webcut_journal_execution_gate as _cubit_webcut_journal_execution_gate,
 	cubit_helical_partition_mesh_gate as _cubit_helical_partition_mesh_gate,
 	cubit_source_journal_replay_gate as _cubit_source_journal_replay_gate,
+	cubit_boundary_layer_candidate_gate as _cubit_boundary_layer_candidate_gate,
+	cubit_boundary_layer_journal_recovery_gate as _cubit_boundary_layer_journal_recovery_gate,
 	cubit_mixed_order_series_inventory_gate,
 	summarize_netgen_vol_inventory,
 )
@@ -884,6 +886,42 @@ def cubit_source_journal_replay_gate(summary: dict) -> str:
 	"""Gate synchronous, headless replay and expected mesh disposition."""
 	try: result = _cubit_source_journal_replay_gate(summary)
 	except (TypeError, ValueError) as exc: result = {"policy":"cubit_source_journal_replay_gate_v1","status":"invalid_input","error":str(exc)}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_boundary_layer_candidate_gate(
+	candidates: list[dict],
+	min_scaled_jacobian: float = 0.2,
+	max_volume_relative_error: float = 1.0e-5,
+) -> str:
+	"""Select a non-inverted boundary-layer sweep candidate with export closure."""
+	try:
+		result = _cubit_boundary_layer_candidate_gate(
+			candidates,
+			min_scaled_jacobian=min_scaled_jacobian,
+			max_volume_relative_error=max_volume_relative_error,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_boundary_layer_candidate_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_boundary_layer_journal_recovery_gate(summary: dict) -> str:
+	"""Gate three-parameter, pairwise, headless recovery of a failed journal."""
+	try:
+		result = _cubit_boundary_layer_journal_recovery_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_boundary_layer_journal_recovery_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 

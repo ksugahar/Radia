@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **689 tools** across 43 MCP servers.
+Total: **691 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 62 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 64 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 54 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 92 |
@@ -61,6 +61,8 @@ Module: `radia_mcp.cubit.server`
 | `cubit_ask` | One-shot search across every Cubit knowledge surface we have. |
 | `cubit_audit_summary` | Return a machine-readable Cubit export-lint audit summary. |
 | `cubit_batch_try` | Dry-run a recipe in a fresh headless Cubit subprocess. |
+| `cubit_boundary_layer_candidate_gate` | Select a non-inverted boundary-layer sweep candidate with export closure. |
+| `cubit_boundary_layer_journal_recovery_gate` | Gate three-parameter, pairwise, headless recovery of a failed journal. |
 | `cubit_checkpoint` | Save the current Cubit session state as a named checkpoint. |
 | `cubit_cpp_sdk_guide` | Get documentation on building Cubit C++ SDK plugins. |
 | `cubit_curate_learned_recipes` | **Lab maintainer tool**: read accumulated `learned_recipes.jsonl`, |
