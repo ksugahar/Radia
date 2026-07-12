@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **677 tools** across 43 MCP servers.
+Total: **678 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -24,7 +24,7 @@ Total: **677 tools** across 43 MCP servers.
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 3 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 3 |
-| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 6 |
+| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 7 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 3 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 3 |
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 3 |
@@ -539,6 +539,7 @@ Module: `radia_mcp.topology_optimization.server`
 |---|---|
 | `topology_opt_applications` | Practical applications. |
 | `topology_opt_cae_ai_artifact_gate` | Gate CAE-AI artifacts before they are promoted as engineering results. |
+| `topology_opt_nonlinear_lsq_multistart_gate` | Gate nonlinear least-squares multistart, Jacobian, and KKT evidence. |
 | `topology_opt_shape_optimization` | Shape optimization for nonlinear magnetostatics. |
 | `topology_opt_simplex_stationarity_audit_gate` | Audit derivative-free convergence using independent stationarity checks. |
 | `topology_opt_topology_derivative` | Topological derivative for changing topology (adding/removing material). |
