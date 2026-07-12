@@ -127,6 +127,9 @@ from .fem_bem_capstone_gate import (
 from .helmholtz_dual_formulation_gate import (
     helmholtz_dual_formulation_axis_gate as _helmholtz_dual_formulation_axis_gate,
 )
+from .lossy_dielectric_power_gate import (
+    lossy_dielectric_complex_power_refinement_gate as _lossy_power_refinement_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3382,6 +3385,21 @@ def helmholtz_dual_formulation_axis_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "helmholtz_dual_formulation_axis_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def lossy_dielectric_complex_power_refinement_gate(summary_json: str) -> str:
+    """Gate lossy-dielectric constitutive, energy, complex-power, and mesh closure."""
+
+    try:
+        result = _lossy_power_refinement_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "lossy_dielectric_complex_power_refinement_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

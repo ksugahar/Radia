@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **703 tools** across 43 MCP servers.
+Total: **704 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 66 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 58 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 96 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 97 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -274,6 +274,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
 | `loss_temperature_coupling_gate` | Gate an electromagnetic-loss to transient-temperature handoff. |
+| `lossy_dielectric_complex_power_refinement_gate` | Gate lossy-dielectric constitutive, energy, complex-power, and mesh closure. |
 | `magnetostatic_open_boundary_equivalence_gate` | Gate gauge-invariant equivalence of two magnetostatic open-boundary solutions. |
 | `material_contrast_force_gate` | Gate null, attraction, and increasing-repulsion material-force cases. |
 | `matlab_acoustic_fembem_agent_guide` | Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows. |
