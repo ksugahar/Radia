@@ -49,6 +49,10 @@ from .reflection_handoff_gate import (
     build123d_heat_exchanger_source_recovery_gate as _build123d_heat_exchanger_source_recovery_gate,
     build123d_reflection_rotation_handoff_gate as _build123d_reflection_rotation_handoff_gate,
 )
+from .curved_shell_step_gate import (
+    build123d_curved_shell_step_semantics_gate as _build123d_curved_shell_step_semantics_gate,
+    build123d_tea_cup_source_contract_gate as _build123d_tea_cup_source_contract_gate,
+)
 from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
@@ -137,6 +141,34 @@ def build123d_heat_exchanger_source_recovery_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "build123d_heat_exchanger_source_recovery_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def build123d_curved_shell_step_semantics_gate(summary_json: str) -> str:
+    """Diagnose topology-preserving curved STEP mass loss across CAD kernels."""
+    try:
+        result = _build123d_curved_shell_step_semantics_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "build123d_curved_shell_step_semantics_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def build123d_tea_cup_source_contract_gate(summary_json: str) -> str:
+    """Gate the upstream tea-cup source and headless portability diagnosis."""
+    try:
+        result = _build123d_tea_cup_source_contract_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "build123d_tea_cup_source_contract_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
