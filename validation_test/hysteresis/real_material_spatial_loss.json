@@ -1,0 +1,12 @@
+{
+ "description": "Real K=40 Potter-Schmulian per-element hysteresis loss density, cube demag",
+ "timestamp": "2026-07-12T16:33:58.958153",
+ "hostname": "lab",
+ "peakB_T": 1.3472485197842776,
+ "n_el": 125,
+ "loss_density_min": 519.1157545054413,
+ "loss_density_max": 2109.757373055477,
+ "loss_density_mean": 1260.7292890927035,
+ "spatial_spread": 4.064136668449662,
+ "total_loss_J_per_cycle": 1260.7292890926924
+}
