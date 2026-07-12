@@ -133,6 +133,9 @@ from .lossy_dielectric_power_gate import (
 from .heterogeneous_mesh_replay_gate import (
     heterogeneous_part_mesh_replay_gate as _heterogeneous_part_mesh_replay_gate,
 )
+from .two_terminal_dc_conduction_gate import (
+    two_terminal_dc_conduction_power_gate as _two_terminal_dc_conduction_power_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3418,6 +3421,21 @@ def heterogeneous_part_mesh_replay_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "heterogeneous_part_mesh_replay_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def two_terminal_dc_conduction_power_gate(summary_json: str) -> str:
+    """Gate current closure, Joule power, adaptive convergence, and replay."""
+
+    try:
+        result = _two_terminal_dc_conduction_power_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "two_terminal_dc_conduction_power_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
