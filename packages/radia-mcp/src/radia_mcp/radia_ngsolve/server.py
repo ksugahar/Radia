@@ -70,6 +70,9 @@ from .capacitance_identity_gate import (
     two_conductor_capacitance_identity_gate as _two_conductor_capacitance_identity_gate,
 )
 from .capacitance_matrix_gate import two_conductor_capacitance_matrix_gate as _two_conductor_capacitance_matrix_gate
+from .multiconductor_capacitance_gate import (
+    multiconductor_capacitance_cross_formulation_gate as _multiconductor_capacitance_cross_formulation_gate,
+)
 from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
 from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
 from .radar_range_angle_gate import radar_range_angle_localization_gate as _radar_range_angle_localization_gate
@@ -2793,6 +2796,23 @@ def two_conductor_capacitance_matrix_gate(summary_json: str) -> str:
         result = _two_conductor_capacitance_matrix_gate(json.loads(summary_json))
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {"policy":"two_conductor_capacitance_matrix_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def multiconductor_capacitance_cross_formulation_gate(summary_json: str) -> str:
+    """Gate N-conductor Maxwell matrices across volume and boundary formulations."""
+
+    try:
+        result = _multiconductor_capacitance_cross_formulation_gate(
+            json.loads(summary_json)
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "multiconductor_capacitance_cross_formulation_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
     return json.dumps(result, indent=2, sort_keys=True)
 
 
