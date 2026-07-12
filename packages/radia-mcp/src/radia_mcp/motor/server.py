@@ -68,6 +68,9 @@ from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as buil
 from .rotating_circuit_transient_gate import rotating_circuit_transient_gate as build_rotating_circuit_transient_gate
 from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
 from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
+from .magnetization_group_symmetry_gate import (
+    mirror_symmetric_three_magnet_handoff_gate as build_mirror_magnet_handoff_gate,
+)
 from .variable_magnet_gate import variable_magnet_material_parameter_gate as build_variable_magnet_material_parameter_gate
 from .permanent_magnet_force_pair_gate import permanent_magnet_force_pair_gate as build_permanent_magnet_force_pair_gate
 from .demagnetization_history_gate import permanent_magnet_demagnetization_history_gate as build_permanent_magnet_demagnetization_history_gate
@@ -215,6 +218,21 @@ def motor_magnet_model_handoff_gate(
         )
     except (TypeError, ValueError) as exc:
         result = {"policy": "magnet_model_handoff_gate_v1", "status": "invalid_input", "error": str(exc)}
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def motor_mirror_symmetric_three_magnet_handoff_gate(summary_json: str) -> str:
+    """Gate grouped magnetization vectors, mirror symmetry, and fresh replay."""
+
+    try:
+        result = build_mirror_magnet_handoff_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "mirror_symmetric_three_magnet_handoff_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
     return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
