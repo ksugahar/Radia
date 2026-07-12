@@ -1,0 +1,27 @@
+{
+ "description": "HDiv-VIM cross-element cube validation (hex/wedge/tet, same 1 m cube, mu_r=1000, +z 200 kA/m)",
+ "timestamp": "2026-07-12T11:27:23.493568",
+ "hostname": "lab",
+ "H_ext_A_per_m": 200000.0,
+ "mu_r": 1000.0,
+ "cube_size_m": 1.0,
+ "results": {
+  "hex": {
+   "M_avg_z": 725804.9232538103,
+   "ndof": 43200,
+   "n_el": 1728
+  },
+  "wedge": {
+   "M_avg_z": 725040.4820137983,
+   "ndof": 64224,
+   "n_el": 3456
+  },
+  "tet": {
+   "M_avg_z": 724979.6520515613,
+   "ndof": 36678,
+   "n_el": 5690
+  }
+ },
+ "M_avg_z_mean_A_per_m": 725275.01910639,
+ "mutual_spread_rel": 0.0011378734693851748
+}
