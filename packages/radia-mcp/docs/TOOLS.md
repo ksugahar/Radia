@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **719 tools** across 43 MCP servers.
+Total: **721 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 68 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 70 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 60 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 105 |
@@ -64,6 +64,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_boundary_layer_candidate_gate` | Select a non-inverted boundary-layer sweep candidate with export closure. |
 | `cubit_boundary_layer_journal_recovery_gate` | Gate three-parameter, pairwise, headless recovery of a failed journal. |
 | `cubit_checkpoint` | Save the current Cubit session state as a named checkpoint. |
+| `cubit_conformal_hex_pyramid_tet_interface_gate` | Gate a conformal hex-pyramid-tet interface and independent volume sum. |
 | `cubit_cpp_sdk_guide` | Get documentation on building Cubit C++ SDK plugins. |
 | `cubit_curate_learned_recipes` | **Lab maintainer tool**: read accumulated `learned_recipes.jsonl`, |
 | `cubit_diagnostics_guide` | Get the foundational mesh-diagnostics + cleanup + quality playbook. |
@@ -99,6 +100,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mesh_race_status` | Check the status of a background race launched by |
 | `cubit_mesh_race_with_human` | **The radia-mcp signature workflow.** |
 | `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
+| `cubit_mixed_transition_source_gate` | Gate source commands, headless diagnostics, and quality API recovery. |
 | `cubit_partitioned_sweep_compatibility_gate` | Gate a legacy webcut/partition journal promoted to an all-hex sweep. |
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
 | `cubit_pyramid_degenerate_hex_export_gate` | Gate CPYRAM versus nopyramid decks, including order-2 linearization. |
