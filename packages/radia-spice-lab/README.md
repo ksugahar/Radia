@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes twenty-five tools:
+Exposes twenty-six tools:
 
 | Tool | Purpose |
 |---|---|
@@ -301,6 +301,7 @@ Exposes twenty-five tools:
 | `bipolar_converter_efficiency_gate(summary)` | Gates signed source power, positive dual-output power, passivity, output balance, and recomputation of reported late-window efficiency. |
 | `bipolar_rail_power_quality_gate(summary)` | Gates signed bipolar rails, target regulation, ripple, balance, passivity, and late-window efficiency closure. |
 | `monte_carlo_tolerance_family_gate(summary)` | Gates independent uniform component-tolerance statistics against the expected standard deviation and `1/sqrt(N)` averaging of equivalent resistors and symmetric dividers. |
+| `series_rlc_complex_impedance_gate(summary)` | Gates a current-driven series RLC using source orientation, three full-complex voltage traces, analytic resonance, minimum impedance, generated-netlist semantics, and converted/reference RAW equivalence. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
