@@ -45,8 +45,15 @@ from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation
 from .forces_knowledge import get_forces_documentation
 from .em_force_ngsolve_recipe_knowledge import get_em_force_ngsolve_recipe
 from .em_force_extras_knowledge import get_em_force_extras
+from .gauge_invariance_gate import gauge_invariance_gate as build_gauge_invariance_gate
 
 mcp = FastMCP("mcp-server-differential-forms")
+
+
+@mcp.tool()
+def differential_forms_gauge_invariance_gate(summary_json: str) -> str:
+    """Gate physical B/loss invariance without treating A as invariant."""
+    return build_gauge_invariance_gate(summary_json)
 
 
 # ============================================================
