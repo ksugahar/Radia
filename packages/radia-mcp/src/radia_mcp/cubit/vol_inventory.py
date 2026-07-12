@@ -4588,3 +4588,180 @@ def cubit_source_journal_replay_gate(summary: Mapping[str, object]) -> dict[str,
             "Select only volumes intersecting each cut plane and record geometry, cut/merge, mesh, and export timing separately.",
         ],
     }
+
+
+def cubit_boundary_layer_candidate_gate(
+    candidates: Iterable[Mapping[str, object]],
+    *,
+    min_scaled_jacobian: float = 0.2,
+    max_volume_relative_error: float = 1.0e-5,
+) -> dict[str, object]:
+    """Select a boundary-layer sweep candidate using quality and export closure.
+
+    Geometry conservation and a nonempty export are necessary but not sufficient:
+    a thick first layer can preserve both while producing inverted hexes.  This
+    gate therefore requires a small candidate ledger containing at least one
+    accepted and one rejected setting before it recommends a height.
+    """
+
+    threshold = float(min_scaled_jacobian)
+    volume_tolerance = float(max_volume_relative_error)
+    if threshold <= 0.0:
+        raise ValueError("min_scaled_jacobian must be > 0")
+    if volume_tolerance < 0.0:
+        raise ValueError("max_volume_relative_error must be nonnegative")
+
+    rows: list[dict[str, object]] = []
+    for raw in candidates:
+        if not isinstance(raw, Mapping):
+            raise TypeError("each candidate must be a mapping")
+        recovery = raw.get("recovery") or {}
+        parameters = recovery.get("boundary_layer_parameters") or {}
+        counts = raw.get("element_counts") or {}
+        inventory = raw.get("export_inventory") or {}
+        quality = raw.get("quality") or {}
+        hex_quality = (quality.get("hex") or {}).get("scaled_jacobian") or {}
+        height = float(parameters.get("height", math.nan))
+        minimum = float(raw.get("minimum_scaled_jacobian", hex_quality.get("min", -math.inf)))
+        volume_error = float(raw.get("volume_relative_error", math.inf))
+        quarter_error = float(raw.get("quarter_volume_relative_error", math.inf))
+        rotation_error = float(raw.get("rotational_copy_volume_relative_error", math.inf))
+        hex_count = int(counts.get("hex", 0))
+        export_count = int(inventory.get("volume_element_count", 0))
+        histogram = inventory.get("volume_node_count_histogram") or {}
+        shared_count = int(raw.get("shared_surface_count", 0))
+        shared_meshed_count = int(raw.get("shared_meshed_surface_count", 0))
+        checks = {
+            "height_is_positive": isfinite(height) and height > 0.0,
+            "all_hex_volume_mesh": hex_count > 0 and all(
+                int(counts.get(name, 0)) == 0 for name in ("tet", "wedge", "pyramid")
+            ),
+            "scaled_jacobian_above_threshold": isfinite(minimum) and minimum >= threshold,
+            "analytic_volume_conserved": volume_error <= volume_tolerance,
+            "quarter_volume_conserved": quarter_error <= volume_tolerance,
+            "rotational_copy_volume_conserved": rotation_error <= volume_tolerance,
+            "shared_interfaces_all_meshed": shared_count > 0 and shared_meshed_count == shared_count,
+            "export_volume_inventory_matches": export_count == hex_count,
+            "export_volume_elements_are_hex8": int(histogram.get("8", histogram.get(8, 0))) == hex_count,
+        }
+        issues = [name for name, ok in checks.items() if not ok]
+        rows.append(
+            {
+                "height": height,
+                "status": "accepted" if not issues else "rejected",
+                "checks": checks,
+                "issues": issues,
+                "minimum_scaled_jacobian": minimum,
+                "hex_count": hex_count,
+                "export_volume_element_count": export_count,
+                "volume_relative_error": volume_error,
+            }
+        )
+
+    accepted = [row for row in rows if row["status"] == "accepted"]
+    rejected = [row for row in rows if row["status"] == "rejected"]
+    selected = max(accepted, key=lambda row: float(row["minimum_scaled_jacobian"]), default=None)
+    heights = [float(row["height"]) for row in rows]
+    checks = {
+        "candidate_pair_or_series_present": len(rows) >= 2,
+        "candidate_heights_are_distinct": len(set(heights)) == len(heights),
+        "accepted_candidate_present": bool(accepted),
+        "rejected_candidate_present": bool(rejected),
+        "selection_uses_noninverted_quality": selected is not None
+        and float(selected["minimum_scaled_jacobian"]) >= threshold,
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cubit_boundary_layer_candidate_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "checks": checks,
+        "issues": issues,
+        "selected_height": None if selected is None else selected["height"],
+        "selected_minimum_scaled_jacobian": None
+        if selected is None
+        else selected["minimum_scaled_jacobian"],
+        "candidates": rows,
+        "notes": [
+            "Do not select a boundary-layer height from CAD conservation or element count alone.",
+            "Require an explicit rejected candidate so the ledger proves that the quality gate can discriminate inverted hexes.",
+            "Keep Cubit as the hex-led route and bind the accepted in-memory mesh to the parsed Netgen volume inventory.",
+        ],
+    }
+
+
+def cubit_boundary_layer_journal_recovery_gate(summary: Mapping[str, object]) -> dict[str, object]:
+    """Gate the reproducible recovery contract for a failed boundary-layer journal."""
+
+    candidates = list(summary.get("candidates") or [])
+    process_runs = list(summary.get("process_runs") or [])
+    parameter_sets = []
+    pair_flags = []
+    timings_are_four_stage = []
+    for candidate in candidates:
+        recovery = candidate.get("recovery") or {}
+        parameters = recovery.get("boundary_layer_parameters") or {}
+        parameter_sets.append(set(parameters))
+        pair_flags.append(recovery.get("one_surface_volume_pair_per_command") is True)
+        timing = candidate.get("timing_breakdown_s") or {}
+        timings_are_four_stage.append(
+            len(timing) == 4 and all(float(value) >= 0.0 for value in timing.values())
+        )
+
+    process_checks = []
+    for index, run in enumerate(process_runs):
+        evidence = _headless_process_evidence(run)
+        script_errors = [str(value).lower() for value in run.get("script_error_lines", [])]
+        candidate_status = ""
+        if index < len(candidates):
+            candidate_status = str(candidates[index].get("candidate_status", ""))
+        expected_quality_rejection = (
+            int(run.get("process_exit_code", -1)) == 4
+            and run.get("expected_quality_rejection") is True
+            and candidate_status == "rejected"
+            and bool(script_errors)
+            and all("bad quality" in row or "shear hex" in row for row in script_errors)
+            and not list(run.get("unexpected_script_error_lines") or [])
+        )
+        process_checks.append(
+            (evidence["process_exit_acceptable"] or expected_quality_rejection)
+            and run.get("result_artifact_fresh") is True
+            and int(run.get("owned_processes_remaining", -1)) == 0
+        )
+
+    source_failure = str(summary.get("source_failure", "")).lower()
+    checks = {
+        "source_digest_recorded": len(str(summary.get("source_sha256", ""))) == 64,
+        "failed_source_journal_recorded": str(summary.get("source_kind", "")).startswith(
+            "source_native_failed_journal"
+        ),
+        "failure_cause_is_actionable": "height" in source_failure and "pair" in source_failure,
+        "synchronous_headless_python_replay": summary.get("execution_mode")
+        == "python_api_headless_synchronous_commands"
+        and {"-nographics", "-batch"}.issubset(set(summary.get("headless_flags") or [])),
+        "persistent_gui_disabled": summary.get("gui_daemon_enabled") is False,
+        "candidate_ledger_present": len(candidates) >= 2,
+        "exactly_three_boundary_layer_parameters": bool(parameter_sets)
+        and all(keys == {"height", "growth", "layers"} for keys in parameter_sets),
+        "one_surface_volume_pair_per_command": bool(pair_flags) and all(pair_flags),
+        "four_stage_timing_per_candidate": bool(timings_are_four_stage)
+        and all(timings_are_four_stage),
+        "block_registered_netgen_export": summary.get("block_registered_netgen_export") is True,
+        "all_live_processes_closed_with_fresh_artifacts": len(process_checks) == len(candidates)
+        and bool(process_checks)
+        and all(process_checks),
+        "public_candidate_gate_passed": summary.get("public_gate_status") == "ok",
+    }
+    issues = [name for name, ok in checks.items() if not ok]
+    return {
+        "policy": "cubit_boundary_layer_journal_recovery_gate_v1",
+        "status": "ok" if not issues else "needs_attention",
+        "checks": checks,
+        "issues": issues,
+        "candidate_count": len(candidates),
+        "process_run_count": len(process_runs),
+        "notes": [
+            "Cubit accepts any three of height, growth, layers, and depth; record exactly the three intentionally used.",
+            "Issue one surface-volume association per boundary-layer command when replaying an ambiguous source journal.",
+            "A nonzero launcher exit may be allowlisted only when the fresh result artifact, diagnostics, and zero leaked processes are recorded together.",
+        ],
+    }
