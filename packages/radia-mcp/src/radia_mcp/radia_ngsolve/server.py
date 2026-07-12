@@ -50,6 +50,9 @@ from .three_phase_winding_power_gate import (
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
 from .nonlinear_actuator_gate import nonlinear_actuator_saturation_knee_gate as _nonlinear_actuator_saturation_knee_gate
 from .source_free_static_gate import source_free_static_null_solution_gate as _source_free_static_null_solution_gate
+from .harmonic_force_triplet_gate import (
+    harmonic_magnetic_force_triplet_closure_gate as _harmonic_magnetic_force_triplet_closure_gate,
+)
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
@@ -2595,6 +2598,30 @@ def source_free_static_null_solution_gate(
     except (TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "source_free_static_null_solution_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def harmonic_magnetic_force_triplet_closure_gate(
+    summary_json: str,
+    maximum_body_method_relative_difference: float = 0.05,
+    maximum_action_reaction_relative_residual: float = 0.01,
+    maximum_transverse_relative: float = 1.0e-8,
+) -> str:
+    """Gate harmonic body-force methods and source/body action-reaction closure."""
+    try:
+        result = _harmonic_magnetic_force_triplet_closure_gate(
+            json.loads(summary_json),
+            maximum_body_method_relative_difference=maximum_body_method_relative_difference,
+            maximum_action_reaction_relative_residual=maximum_action_reaction_relative_residual,
+            maximum_transverse_relative=maximum_transverse_relative,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "harmonic_magnetic_force_triplet_closure_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
