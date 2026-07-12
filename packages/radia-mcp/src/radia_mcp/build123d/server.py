@@ -43,6 +43,7 @@ from mcp.server.fastmcp import FastMCP
 from .build123d_knowledge import get_build123d_documentation
 from .mass_topology_diagnosis_gate import cross_kernel_mass_topology_diagnosis_gate as _cross_kernel_mass_topology_diagnosis_gate, upstream_source_external_cad_contract_gate as _upstream_source_external_cad_contract_gate
 from .dual_api_prismatic_gate import dual_api_prismatic_pattern_gate as _dual_api_prismatic_pattern_gate, dual_api_source_replay_gate as _dual_api_source_replay_gate
+from .drafted_housing_gate import drafted_housing_cross_kernel_gate as _drafted_housing_cross_kernel_gate, drafted_housing_source_replay_gate as _drafted_housing_source_replay_gate
 from .jointed_assembly_gate import jointed_assembly_heal_invariance_gate as _jointed_assembly_heal_invariance_gate, jointed_assembly_step_closure_gate as _jointed_assembly_step_closure_gate, jointed_assembly_source_replay_gate as _jointed_assembly_source_replay_gate
 from .patterned_compound_gate import patterned_compound_translation_gate as _patterned_compound_translation_gate, wrap_faces_rotational_source_replay_gate as _wrap_faces_rotational_source_replay_gate
 from .reflection_handoff_gate import (
@@ -90,6 +91,20 @@ def build123d_dual_api_source_replay_gate(summary_json: str) -> str:
     """Gate immutable upstream dual-API execution and headless CAD replay."""
     try: result=_dual_api_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_dual_api_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_drafted_housing_cross_kernel_gate(summary_json: str) -> str:
+    """Gate drafted housing mass/topology across B-rep, STEP, Cubit, and Gmsh."""
+    try: result=_drafted_housing_cross_kernel_gate(json.loads(summary_json))
+    except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_drafted_housing_cross_kernel_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_drafted_housing_source_replay_gate(summary_json: str) -> str:
+    """Gate tagged draft/fillet/hole source and headless mesh-companion replay."""
+    try: result=_drafted_housing_source_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_drafted_housing_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()

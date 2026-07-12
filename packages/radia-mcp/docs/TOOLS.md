@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **742 tools** across 43 MCP servers.
+Total: **744 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 74 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 65 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 67 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 117 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -152,6 +152,8 @@ Module: `radia_mcp.build123d.server`
 | `build123d_curved_shell_step_semantics_gate` | Diagnose topology-preserving curved STEP mass loss across CAD kernels. |
 | `build123d_curved_step_topology_crosscheck_gate` | Gate curved STEP mass and exact topology across independent imports. |
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
+| `build123d_drafted_housing_cross_kernel_gate` | Gate drafted housing mass/topology across B-rep, STEP, Cubit, and Gmsh. |
+| `build123d_drafted_housing_source_replay_gate` | Gate tagged draft/fillet/hole source and headless mesh-companion replay. |
 | `build123d_dual_api_perforated_board_gate` | Gate equivalent Builder/Algebra perforated boards through two CAD imports. |
 | `build123d_dual_api_prismatic_pattern_gate` | Gate native dual-API parity separately from external STEP-kernel bias. |
 | `build123d_dual_api_source_replay_gate` | Gate immutable upstream dual-API execution and headless CAD replay. |
