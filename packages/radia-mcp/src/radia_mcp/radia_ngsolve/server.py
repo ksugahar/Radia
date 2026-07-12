@@ -116,6 +116,7 @@ from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_for
 from .linear_induction_gate import linear_induction_frequency_sweep_gate as _linear_induction_frequency_sweep_gate
 from .conductor_frequency_gate import (
     homogenized_bundle_impedance_comparison_gate as _homogenized_bundle_impedance_comparison_gate,
+    opposed_busbar_skin_force_gate as _opposed_busbar_skin_force_gate,
     twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate,
 )
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
@@ -3576,6 +3577,37 @@ def twin_conductor_skin_effect_frequency_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "twin_conductor_skin_effect_frequency_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def opposed_busbar_skin_force_gate(
+    rows: list[dict],
+    conductor_thickness_mm: float,
+    conductivity_s_per_m: float,
+    commanded_current_a: float,
+    replay_rtol: float = 1.0e-12,
+    identity_rtol: float = 5.0e-8,
+    force_balance_rtol: float = 5.0e-5,
+) -> str:
+    """Gate AC skin/proximity, phasor identities, and Lorentz action-reaction."""
+
+    try:
+        result = _opposed_busbar_skin_force_gate(
+            rows,
+            conductor_thickness_mm=conductor_thickness_mm,
+            conductivity_s_per_m=conductivity_s_per_m,
+            commanded_current_a=commanded_current_a,
+            replay_rtol=replay_rtol,
+            identity_rtol=identity_rtol,
+            force_balance_rtol=force_balance_rtol,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "opposed_busbar_skin_force_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
