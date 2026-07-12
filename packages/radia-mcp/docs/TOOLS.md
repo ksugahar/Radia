@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **678 tools** across 43 MCP servers.
+Total: **679 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -36,7 +36,7 @@ Total: **678 tools** across 43 MCP servers.
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
 | [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 3 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
-| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 12 |
+| [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 13 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 11 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-figure`](#mcp-server-figure) | `radia_mcp.figure` | 12 |
@@ -701,6 +701,7 @@ Module: `radia_mcp.differential_forms.server`
 | `differential_forms_em_force_recipe` | PRACTICAL NGSolve recipe for EM force computation (2026-05-22). |
 | `differential_forms_feec` | Finite Element Exterior Calculus (Arnold-Falk-Winther 2006). |
 | `differential_forms_forces` | Electromagnetic forces in differential-form language. |
+| `differential_forms_gauge_invariance_gate` | Gate physical B/loss invariance without treating A as invariant. |
 | `differential_forms_homology` | Chain complex, homology, Betti numbers, tree-cotree gauge. |
 | `differential_forms_mathematica_recipes` | Wolfram Language recipes for symbolic verification, pairing |
 | `differential_forms_maxwell` | Maxwell's equations in differential-form language. |
