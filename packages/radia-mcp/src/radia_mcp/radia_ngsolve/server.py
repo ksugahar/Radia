@@ -44,6 +44,9 @@ from .terminal_source_sweep_gate import cyclic_terminal_source_sweep_gate as _cy
 from .terminal_phasor_balance_gate import (
     cyclic_terminal_phasor_balance_gate as _cyclic_terminal_phasor_balance_gate,
 )
+from .three_phase_winding_power_gate import (
+    three_phase_winding_power_balance_gate as _three_phase_winding_power_balance_gate,
+)
 from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
@@ -2513,6 +2516,34 @@ def cyclic_terminal_phasor_balance_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "cyclic_terminal_phasor_balance_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def three_phase_winding_power_balance_gate(
+    summary_json: str,
+    max_voltage_relative_spread: float = 1.0e-5,
+    max_current_relative_spread: float = 5.0e-3,
+    max_phase_step_error_deg: float = 1.0,
+    max_star_kcl_residual: float = 1.0e-5,
+    max_active_power_relative_residual: float = 1.0e-3,
+) -> str:
+    """Gate three-phase balance, STAR KCL, and coupled-winding copper power."""
+    try:
+        result = _three_phase_winding_power_balance_gate(
+            json.loads(summary_json),
+            max_voltage_relative_spread=max_voltage_relative_spread,
+            max_current_relative_spread=max_current_relative_spread,
+            max_phase_step_error_deg=max_phase_step_error_deg,
+            max_star_kcl_residual=max_star_kcl_residual,
+            max_active_power_relative_residual=max_active_power_relative_residual,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "three_phase_winding_power_balance_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
