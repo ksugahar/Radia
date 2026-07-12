@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **711 tools** across 43 MCP servers.
+Total: **713 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 68 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 58 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 60 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 101 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -153,6 +153,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_external_cad_mass_topology_gate` | Crosscheck two CAD kernels without confusing entity centers with mass centroids. |
 | `build123d_external_cad_volume_evidence_package` | Bundle dual-source CAD volume evidence before reuse. |
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
+| `build123d_heat_exchanger_source_recovery_gate` | Gate the upstream heat-exchanger replay and rotation recovery. |
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
 | `build123d_jointed_assembly_source_replay_gate` | Gate immutable source, joint graph, and headless external-CAD evidence. |
 | `build123d_jointed_assembly_step_closure_gate` | Diagnose a component-level solid closure loss in a jointed STEP assembly. |
@@ -165,6 +166,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
 | `build123d_platonic_solid_family_gate` | Gate all five Platonic solids by topology, analytic volume and CAD replay. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
+| `build123d_reflection_rotation_handoff_gate` | Gate reflection failures and a proper-rotation two-body STEP handoff. |
 | `build123d_status` | (no description) |
 | `build123d_step_portability_diagnosis_gate` | Diagnose whether STEP mass loss occurs in export or external import. |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
