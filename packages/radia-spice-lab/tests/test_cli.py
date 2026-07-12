@@ -604,13 +604,14 @@ def test_mcp_tools_registered():
                 "boost_converter_steady_state_gate",
                     "transient_psrr_gate",
                         "measure_bandwidth_crossing_gate",
-                        "bipolar_supply_startup_gate",
-                        "circuit_knowledge", "buck_seed",
+                            "bipolar_supply_startup_gate",
+                            "monte_carlo_tolerance_family_gate",
+                            "circuit_knowledge", "buck_seed",
         "patentability_search_plan",
     }
     assert names == expected
 
     readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "Exposes twenty-two tools:" in readme
+    assert "Exposes twenty-three tools:" in readme
     for name in expected:
         assert f"`{name}" in readme
