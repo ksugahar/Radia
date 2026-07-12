@@ -34,9 +34,24 @@ from .bandwidth_gate import measure_bandwidth_crossing_gate as _measure_bandwidt
 from .bipolar_startup_gate import bipolar_supply_startup_gate as _bipolar_supply_startup_gate
 from .monte_carlo_gate import monte_carlo_tolerance_family_gate as _monte_carlo_tolerance_family_gate
 from .bipolar_efficiency_gate import bipolar_converter_efficiency_gate as _bipolar_converter_efficiency_gate
+from .bipolar_rail_gate import bipolar_rail_power_quality_gate as _bipolar_rail_power_quality_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def bipolar_rail_power_quality_gate(summary: dict) -> dict:
+    """Gate signed bipolar rails, ripple, target regulation, and power closure."""
+
+    try:
+        return _bipolar_rail_power_quality_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "bipolar_rail_power_quality_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()

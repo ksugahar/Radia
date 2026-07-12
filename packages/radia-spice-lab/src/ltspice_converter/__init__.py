@@ -43,6 +43,7 @@ from .measure import (
 from .voltage_multiplier_gate import cockcroft_walton_stage_gate
 from .monte_carlo_gate import monte_carlo_tolerance_family_gate
 from .bipolar_efficiency_gate import bipolar_converter_efficiency_gate
+from .bipolar_rail_gate import bipolar_rail_power_quality_gate
 
 __all__ = [
     "netlist_to_schemdraw",
@@ -64,6 +65,7 @@ __all__ = [
     "cockcroft_walton_stage_gate",
     "monte_carlo_tolerance_family_gate",
     "bipolar_converter_efficiency_gate",
+    "bipolar_rail_power_quality_gate",
 ]
 
 __version__ = "0.4.0"

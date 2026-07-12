@@ -593,26 +593,35 @@ def test_mcp_tools_registered():
         for t in mcp_server.mcp._tool_manager._tools.values()
     }
     expected = {
-        "netlist_to_schemdraw", "schemdraw_to_netlist",
-        "netlist_to_asc", "asc_to_netlist",
-            "check_circuit", "info_circuit", "compare_topology",
-            "balanced_learning_profile", "parse_measure_log",
-            "parse_stepped_measure_log", "sallen_key_filter_family_gate",
-            "hysteretic_inductor_cycle_gate",
-                    "half_wave_rectifier_gate", "bridge_rectifier_gate",
-                    "cockcroft_walton_stage_gate",
-                "boost_converter_steady_state_gate",
-                    "transient_psrr_gate",
-                        "measure_bandwidth_crossing_gate",
-                            "bipolar_supply_startup_gate",
-                            "bipolar_converter_efficiency_gate",
-                            "monte_carlo_tolerance_family_gate",
-                            "circuit_knowledge", "buck_seed",
+        "netlist_to_schemdraw",
+        "schemdraw_to_netlist",
+        "netlist_to_asc",
+        "asc_to_netlist",
+        "check_circuit",
+        "info_circuit",
+        "compare_topology",
+        "balanced_learning_profile",
+        "parse_measure_log",
+        "parse_stepped_measure_log",
+        "sallen_key_filter_family_gate",
+        "hysteretic_inductor_cycle_gate",
+        "half_wave_rectifier_gate",
+        "bridge_rectifier_gate",
+        "cockcroft_walton_stage_gate",
+        "boost_converter_steady_state_gate",
+        "transient_psrr_gate",
+        "measure_bandwidth_crossing_gate",
+        "bipolar_supply_startup_gate",
+        "bipolar_converter_efficiency_gate",
+        "bipolar_rail_power_quality_gate",
+        "monte_carlo_tolerance_family_gate",
+        "circuit_knowledge",
+        "buck_seed",
         "patentability_search_plan",
     }
     assert names == expected
 
     readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "Exposes twenty-four tools:" in readme
+    assert "Exposes twenty-five tools:" in readme
     for name in expected:
         assert f"`{name}" in readme

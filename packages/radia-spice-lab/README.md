@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes twenty-four tools:
+Exposes twenty-five tools:
 
 | Tool | Purpose |
 |---|---|
@@ -299,6 +299,7 @@ Exposes twenty-four tools:
 | `measure_bandwidth_crossing_gate(summary)` | Replays two-sided rise/fall `-3 dB` bandwidth measures from sampled AC magnitude, using dB interpolation on each linear-frequency interval. |
 | `bipolar_supply_startup_gate(summary)` | Gates signed dual-rail startup by final regulation, rail balance, tail ripple, overshoot, 10-90% timing skew, and power-good ordering. |
 | `bipolar_converter_efficiency_gate(summary)` | Gates signed source power, positive dual-output power, passivity, output balance, and recomputation of reported late-window efficiency. |
+| `bipolar_rail_power_quality_gate(summary)` | Gates signed bipolar rails, target regulation, ripple, balance, passivity, and late-window efficiency closure. |
 | `monte_carlo_tolerance_family_gate(summary)` | Gates independent uniform component-tolerance statistics against the expected standard deviation and `1/sqrt(N)` averaging of equivalent resistors and symmetric dividers. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
