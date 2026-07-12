@@ -83,6 +83,9 @@ from .two_winding_frequency_gate import (
 from .single_loop_normalized_field_gate import (
     single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
 )
+from .coupled_cq_refinement_gate import (
+    coupled_cq_refinement_gate as _coupled_cq_refinement_gate,
+)
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2843,6 +2846,20 @@ def single_loop_source_normalized_field_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "single_loop_source_normalized_field_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def coupled_cq_refinement_gate(summary_json: str) -> str:
+    """Gate coupled FEM/BEM CQ symbols, contour balance, and refinement."""
+    try:
+        result = _coupled_cq_refinement_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "coupled_cq_refinement_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
