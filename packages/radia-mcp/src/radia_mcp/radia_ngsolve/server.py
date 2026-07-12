@@ -118,6 +118,9 @@ from .finite_solenoid_surface_current_gate import (
 from .linked_study_noop_gate import (
     linked_study_silent_noop_gate as _linked_study_silent_noop_gate,
 )
+from .two_port_power_gate import (
+    reciprocal_two_port_power_sweep_gate as _reciprocal_two_port_power_sweep_gate,
+)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -3312,6 +3315,37 @@ def linked_study_silent_noop_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "linked_study_silent_noop_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def reciprocal_two_port_power_sweep_gate(
+    rows: list[dict],
+    adaptive_power_rows: list[dict],
+    reference_impedance_ohm: float,
+    reciprocity_atol: float = 5.0e-6,
+    reflection_symmetry_atol: float = 2.0e-4,
+    passivity_atol: float = 1.0e-10,
+    power_balance_atol: float = 5.0e-8,
+) -> str:
+    """Gate complex two-port reciprocity, symmetry, passivity, and power closure."""
+
+    try:
+        result = _reciprocal_two_port_power_sweep_gate(
+            rows,
+            adaptive_power_rows,
+            reference_impedance_ohm=reference_impedance_ohm,
+            reciprocity_atol=reciprocity_atol,
+            reflection_symmetry_atol=reflection_symmetry_atol,
+            passivity_atol=passivity_atol,
+            power_balance_atol=power_balance_atol,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "reciprocal_two_port_power_sweep_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
