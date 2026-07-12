@@ -702,8 +702,82 @@ Use this `mcp-server-differential-forms` tool for the map:
 - `differential_forms_mathematica_recipes("surface_derham")`
 - `differential_forms_mathematica_recipes("dtn_geometry")`
 
-Cross-reference: `docs/clebsch_hodograph/DIFFERENTIAL_GEOMETRY_WLS.md`
-is the human-readable docs twin.
+Cross-reference:
+
+- `docs/clebsch_hodograph/DIFFERENTIAL_GEOMETRY_WLS.md` is the
+  human-readable docs twin.
+- `packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/curve_surface_reading_guide.md`
+  maps the local Mathematica curve/surface differential-geometry textbook to
+  the hodograph and stream-function anchors without copying book text.
+"""
+
+CURVE_SURFACE_DG_READING_GUIDE = """
+# Reading guide: Mathematica curve/surface differential geometry
+
+Local source: `Mathematica 曲線と曲面の微分幾何.pdf`.
+
+The PDF is a local literature asset, not package data.  Do not paste scanned
+page text into MCP knowledge.  Use it as background reading, then promote only
+distilled Radia-specific claims: a small Mathematica identity, a self-tested
+`.wls` assertion, or a short mapping from a geometric concept to a Radia API,
+validation test, or notebook.
+
+Packaged guide:
+`packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/curve_surface_reading_guide.md`
+
+## Hodograph route
+
+Read curve/surface coordinate transformations through the split:
+
+- `d` / pullback / closedness are topology and commute with smooth coordinate
+  changes.
+- metric / area / inner product / Hodge star are geometry and become explicit
+  weights in the weak form.
+
+Then run:
+
+```powershell
+wolframscript -file hodograph.wls
+wolframscript -file canonical.wls
+wolframscript -file weakform_hodge.wls
+```
+
+Use `hodograph.wls` for the Kelvin/Clebsch/Chaplygin backbone,
+`canonical.wls` for the Hamiltonian-Legendre reading, and
+`weakform_hodge.wls` for the material/Hodge weight.
+
+## Stream-function route
+
+For stream-function coil design, the surface identity is:
+
+```text
+K = n x grad_Gamma psi
+```
+
+The book's surface parametrization, normal vector, first fundamental form, and
+area-element material should be read as the geometry behind `grad_Gamma`,
+`|K|`, contour extraction, and single-stroke wiring on curved formers.
+
+Radia anchors:
+
+- `radia_mcp.streamfunction.streamfunction("single_stroke")`
+- `radia_mcp.streamfunction.streamfunction("regularized")`
+- `radia_mcp.streamfunction.streamfunction("fusion")`
+- `surface_derham.wls`
+- `dtn_geometry.wls`
+
+## Local search terms
+
+Search the OCR text locally for:
+
+```text
+曲線, 曲率, 接ベクトル, 法線, 曲面, 接平面, 第一基本形式,
+第二基本形式, 測地線, ガウス曲率, 平均曲率, パラメータ表示,
+面積要素, 座標変換, Mathematica
+```
+
+Every useful result should be mapped back to one of the executable anchors
+above before it becomes MCP guidance.
 """
 
 WEAKFORM_HODGE_RECIPE = """
@@ -940,6 +1014,8 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
       "dtn_geometry"       - Committed .wls: DtN/Steklov as condensed exterior
                               Hodge star / shifted sqrt(-Delta_Gamma)
       "differential_geometry" - Index for the full committed .wls suite
+      "curve_surface"      - Local Mathematica curve/surface textbook reading
+                              guide for hodograph and stream-function work
       "tex"                - LaTeX (TeXForm) output for paper writing
       "lorentz"            - Lorentz boost of the EM 2-form F
       "hex_dga"            - Codecasa DGA basis functions for polyhedra
@@ -972,6 +1048,10 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
     if topic in ("differential_geometry", "diffgeo", "wls", "runbook",
                  "hodograph_runbook"):
         return DIFFERENTIAL_GEOMETRY_WLS_RUNBOOK
+    if topic in ("curve_surface", "curve_surface_geometry", "curves_surfaces",
+                 "surface_geometry", "streamfunction_geometry",
+                 "mathematica_curve_surface_textbook"):
+        return CURVE_SURFACE_DG_READING_GUIDE
     if topic in ("tex", "latex"):
         return TEX_OUTPUT_FOR_PAPER
     if topic == "lorentz":
@@ -995,6 +1075,7 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
             CANONICAL_HODOGRAPH_RECIPE,
             SURFACE_DERHAM_HOIBC_RECIPE,
             DTN_GEOMETRY_RECIPE,
+            CURVE_SURFACE_DG_READING_GUIDE,
             TEX_OUTPUT_FOR_PAPER,
             LORENTZ_TRANSFORMATION,
             WHITNEY_HEXAHEDRAL,
@@ -1005,5 +1086,6 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
         f"Unknown topic '{topic}'. Available: "
         "all, dsquared, stokes, whitney_edge, maxwell, hodge, tex, "
         "weakform_hodge, hodograph, canonical, surface_derham, dtn_geometry, "
-        "differential_geometry, lorentz, hex_dga, kelvin, maxwell_stress."
+        "differential_geometry, curve_surface, lorentz, hex_dga, kelvin, "
+        "maxwell_stress."
     )

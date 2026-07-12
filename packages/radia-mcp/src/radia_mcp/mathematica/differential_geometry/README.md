@@ -20,6 +20,14 @@ forms are assembled on).
 premetric EM, with the volume × exterior × surface master table and the
 `.wls`-evidence map for weak form / Kelvin / IE / PML / HOIBC / hodograph.
 
+**Local textbook guide:**
+[`curve_surface_reading_guide.md`](curve_surface_reading_guide.md)
+maps the local Mathematica curve/surface differential-geometry textbook
+(`Mathematica 曲線と曲面の微分幾何.pdf`) to the hodograph, stream-function,
+surface-de-Rham, and Hodge-weight `.wls` anchors.  The PDF is a local
+literature asset, not package data; the guide records study routes and search
+terms without copying book text or machine-local paths.
+
 ## The one idea
 
 Magnetostatics is a **closed 2-form with a Hodge-star constitutive law**:
