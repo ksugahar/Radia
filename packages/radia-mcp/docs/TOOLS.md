@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **729 tools** across 43 MCP servers.
+Total: **731 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 70 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 72 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 62 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 111 |
@@ -114,6 +114,8 @@ Module: `radia_mcp.cubit.server`
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
 | `cubit_source_journal_replay_gate` | Gate synchronous, headless replay and expected mesh disposition. |
 | `cubit_status` | (no description) |
+| `cubit_structured_hex_lattice_gate` | Gate structured all-hex counts, quality, and Gmsh volume closure. |
+| `cubit_structured_hex_source_replay_gate` | Gate source commands, license diagnostics, and headless exit semantics. |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
 | `cubit_sweep_along_curve_gate` | Gate an all-hex mesh-carrying curve sweep and headless launcher evidence. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
