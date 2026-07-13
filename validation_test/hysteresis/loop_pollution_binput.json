@@ -1,0 +1,49 @@
+{
+ "description": "Controlled loop injection into the B-input constitutive law (collocation failure mode reproduced on the loop-free HDiv solver)",
+ "timestamp": "2026-07-13T21:33:11.345357",
+ "hostname": "lab",
+ "nx": 3,
+ "H0_A_per_m": 200000.0,
+ "seed": 20260713,
+ "eps_cases": [
+  {
+   "eps": 0.0,
+   "status": "ok",
+   "area": 1080.8819078268455,
+   "b_peak": 1.1147389223142197,
+   "iters_sum": 186,
+   "iters_max": 16
+  },
+  {
+   "eps": 0.05,
+   "status": "ok",
+   "area": 1067.7814317931768,
+   "b_peak": 1.3266484771082567,
+   "iters_sum": 377,
+   "iters_max": 25
+  },
+  {
+   "eps": 0.1,
+   "status": "ok",
+   "area": 1052.980523362909,
+   "b_peak": 1.697852129516762,
+   "iters_sum": 453,
+   "iters_max": 31
+  },
+  {
+   "eps": 0.2,
+   "status": "runaway_out_of_range",
+   "fail_step": 3,
+   "b_peak": 2.6744769409624327
+  },
+  {
+   "eps": 0.3,
+   "status": "no_converge",
+   "fail_step": 0,
+   "b_peak": null
+  }
+ ],
+ "production_area": 1080.8261332591837,
+ "production_b_peak": 1.1146510765802535,
+ "production_iters_sum": 186
+}
