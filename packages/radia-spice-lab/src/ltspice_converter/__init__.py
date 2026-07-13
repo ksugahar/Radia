@@ -74,4 +74,4 @@ __all__ = [
     "balanced_three_phase_delta_rl_gate",
 ]
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
