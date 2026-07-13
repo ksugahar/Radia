@@ -211,6 +211,9 @@ from .lossy_dielectric_power_gate import (
 from .heterogeneous_current_flow_gate import (
     heterogeneous_current_flow_p1_reintegration_gate as _heterogeneous_current_flow_gate,
 )
+from .thermal_robin_balance_gate import (
+    thermal_robin_boundary_balance_gate as _thermal_robin_boundary_balance_gate,
+)
 from .heterogeneous_mesh_replay_gate import (
     heterogeneous_part_mesh_replay_gate as _heterogeneous_part_mesh_replay_gate,
 )
@@ -4059,6 +4062,21 @@ def heterogeneous_current_flow_p1_reintegration_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "heterogeneous_current_flow_p1_reintegration_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def thermal_robin_boundary_balance_gate(summary_json: str) -> str:
+    """Gate signed Robin heat balance, mesh plateau, replay, and reflection."""
+
+    try:
+        result = _thermal_robin_boundary_balance_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "thermal_robin_boundary_balance_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
