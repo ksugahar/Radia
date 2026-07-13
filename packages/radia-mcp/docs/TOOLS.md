@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **757 tools** across 43 MCP servers.
+Total: **758 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 76 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 69 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 126 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 127 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -259,6 +259,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cogging_torque_periodicity_gate` | Gate a zero-current torque sweep over one slot/pole LCM period. |
 | `coil_self_resonance_sweep_gate` | Gate complex coil impedance, self-resonance, and sweep replay. |
 | `complex_vector_field_maximum_gate` | Gate complex vector-field magnitudes and per-material maxima. |
+| `conductive_network_resistance_monotonicity_gate` | Gate Rayleigh resistance monotonicity for conductive contact networks. |
 | `coupled_cq_refinement_gate` | Gate coupled FEM/BEM CQ symbols, contour balance, and refinement. |
 | `cq_response_reality_gate` | Gate a coupled CQ solve, including its real time-domain reconstruction. |
 | `cq_scattering_arrival_gate` | Gate CQ scattered-field causality against a geometric ray arrival. |

@@ -86,6 +86,9 @@ from .conductive_shield_frequency_gate import (
 from .cylindrical_conductor_skin_gate import (
     cylindrical_conductor_skin_bessel_gate as _cylindrical_conductor_skin_bessel_gate,
 )
+from .conductive_network_monotonicity_gate import (
+    conductive_network_resistance_monotonicity_gate as _conductive_network_resistance_monotonicity_gate,
+)
 from .single_loop_normalized_field_gate import (
     single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
 )
@@ -2886,6 +2889,22 @@ def cylindrical_conductor_skin_bessel_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "cylindrical_conductor_skin_bessel_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def conductive_network_resistance_monotonicity_gate(summary_json: str) -> str:
+    """Gate Rayleigh resistance monotonicity for conductive contact networks."""
+    try:
+        result = _conductive_network_resistance_monotonicity_gate(
+            json.loads(summary_json)
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "conductive_network_resistance_monotonicity_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
