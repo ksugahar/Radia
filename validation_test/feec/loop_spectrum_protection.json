@@ -1,0 +1,33 @@
+{
+ "description": "HDiv charge-Gram loop-eigenvalue protection vs ACA compression",
+ "timestamp": "2026-07-13T20:51:20.161413",
+ "hostname": "lab",
+ "nx": 6,
+ "nu0": 0.005025125628140704,
+ "eps_cases": [
+  {
+   "eps": 1e-10,
+   "n_lowrank": 832,
+   "compression": 0.6027181212848651,
+   "at_point": 3025,
+   "below_point": 0,
+   "loop_smear_over_nu0": 5.207092968720786e-14,
+   "first_charge_eig": 0.18678411829955366,
+   "eig_max": 1.0163207671947196,
+   "kappa_eff_charge": 5.441151937579632
+  },
+  {
+   "eps": 0.0001,
+   "n_lowrank": 832,
+   "compression": 0.22819858824874256,
+   "at_point": 3025,
+   "below_point": 0,
+   "loop_smear_over_nu0": 5.188254629067939e-14,
+   "first_charge_eig": 0.18677789027662278,
+   "eig_max": 1.6285919347001387,
+   "kappa_eff_charge": 8.7194042736437
+  }
+ ],
+ "ndof": 5616,
+ "nloop": 3025
+}
