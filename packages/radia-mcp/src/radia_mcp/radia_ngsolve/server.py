@@ -125,6 +125,9 @@ from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance
 from .nonlinear_inductance_sweep_gate import (
     nonlinear_inductance_sweep_gate as _nonlinear_inductance_sweep_gate,
 )
+from .regularized_trace_inverse_gate import (
+    regularized_trace_inverse_path_gate as _regularized_trace_inverse_path_gate,
+)
 from .sphere_mesh_convergence_gate import (
     linear_sphere_geometry_convergence_gate as _linear_sphere_geometry_convergence_gate,
 )
@@ -3393,6 +3396,20 @@ def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "nonlinear_inductance_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def regularized_trace_inverse_path_gate(summary_json: str) -> str:
+    """Gate a P1 trace Tikhonov path, L-curve, Morozov, and replay."""
+    try:
+        result = _regularized_trace_inverse_path_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "regularized_trace_inverse_path_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
