@@ -43,9 +43,26 @@ from .complex_zero_gate import second_order_complex_zero_gate as _second_order_c
 from .three_phase_delta_gate import (
     balanced_three_phase_delta_rl_gate as _balanced_three_phase_delta_rl_gate,
 )
+from .ideal_transformer_gate import (
+    ideal_transformer_identity_gate as _ideal_transformer_identity_gate,
+)
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def ideal_transformer_identity_gate(summary: dict) -> dict:
+    """Gate turns ratio, reflected load, source network, power, and replay."""
+
+    try:
+        return _ideal_transformer_identity_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "ideal_transformer_identity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
