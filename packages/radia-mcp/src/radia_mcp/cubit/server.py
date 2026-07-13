@@ -90,6 +90,10 @@ from .pyramid_export_replay_gate import (
 	cubit_pyramid_mixed_export_gate as _cubit_pyramid_mixed_export_gate,
 	cubit_pyramid_source_plugin_replay_gate as _cubit_pyramid_source_plugin_replay_gate,
 )
+from .mesh_carrying_sweep_gate import (
+	cubit_mesh_carrying_straight_sweep_gate as _cubit_mesh_carrying_straight_sweep_gate,
+	cubit_mesh_carrying_straight_sweep_source_replay_gate as _cubit_mesh_carrying_straight_sweep_source_replay_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -806,6 +810,42 @@ def cubit_sweep_along_curve_gate(
 		)
 	except (TypeError, ValueError) as exc:
 		result = {"policy": "cubit_sweep_along_curve_gate_v1", "status": "invalid_input", "error": str(exc)}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_mesh_carrying_straight_sweep_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.2,
+	volume_relative_tolerance: float = 1.0e-12,
+) -> str:
+	"""Gate a straight include_mesh sweep, topology lattice, and Gmsh export."""
+	try:
+		result = _cubit_mesh_carrying_straight_sweep_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+			volume_relative_tolerance=volume_relative_tolerance,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_mesh_carrying_straight_sweep_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_mesh_carrying_straight_sweep_source_replay_gate(summary: dict) -> str:
+	"""Gate official Help provenance, headless replay, and no-mesh control."""
+	try:
+		result = _cubit_mesh_carrying_straight_sweep_source_replay_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_mesh_carrying_straight_sweep_source_replay_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 

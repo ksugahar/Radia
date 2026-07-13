@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **760 tools** across 43 MCP servers.
+Total: **762 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 76 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 78 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 69 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 129 |
@@ -91,6 +91,8 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mapped_boundary_layer_shell_gate` | Gate mapped all-hex boundary layers by nodal shells, quality, and scale. |
 | `cubit_mesh_apply_choice` | Apply the human's chosen variant from a previous |
 | `cubit_mesh_auto` | Find a working mesh recipe by trying a scheme ladder in batch, |
+| `cubit_mesh_carrying_straight_sweep_gate` | Gate a straight include_mesh sweep, topology lattice, and Gmsh export. |
+| `cubit_mesh_carrying_straight_sweep_source_replay_gate` | Gate official Help provenance, headless replay, and no-mesh control. |
 | `cubit_mesh_diagnose` | Per-volume meshing diagnostic. |
 | `cubit_mesh_race` | Race N recipes in parallel batch Cubits, replay the first/best |
 | `cubit_mesh_race_review` | Race N AI variants + observe live human, **wait for all** to |
