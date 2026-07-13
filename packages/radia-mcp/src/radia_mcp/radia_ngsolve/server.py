@@ -92,6 +92,9 @@ from .conductive_network_monotonicity_gate import (
 from .autodiff_harmonic_balance_gate import (
     autodiff_harmonic_balance_convergence_gate as _autodiff_harmonic_balance_convergence_gate,
 )
+from .hall_effect_gate import (
+    hall_effect_transverse_voltage_gate as _hall_effect_transverse_voltage_gate,
+)
 from .single_loop_normalized_field_gate import (
     single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
 )
@@ -2924,6 +2927,20 @@ def autodiff_harmonic_balance_convergence_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "autodiff_harmonic_balance_convergence_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def hall_effect_transverse_voltage_gate(summary_json: str) -> str:
+    """Gate Hall voltage by coefficient, drive, field, and replay controls."""
+    try:
+        result = _hall_effect_transverse_voltage_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "hall_effect_transverse_voltage_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
