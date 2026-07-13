@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **775 tools** across 43 MCP servers.
+Total: **776 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 80 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 72 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 136 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 137 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -357,6 +357,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `radial_bearing_force_symmetry_gate` | Gate magnetic-body force with equal and mirrored excitation controls. |
 | `reciprocal_two_port_power_sweep_gate` | Gate complex two-port reciprocity, symmetry, passivity, and power closure. |
+| `regularized_trace_inverse_path_gate` | Gate a P1 trace Tikhonov path, L-curve, Morozov, and replay. |
 | `release_workflow` | Release-QUD workflow for the Radia monorepo |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
 | `rotating_conductor_transient_gate` | Gate moving-axis migration, rotational kinematics, and loss partition. |
