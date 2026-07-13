@@ -89,6 +89,9 @@ from .cylindrical_conductor_skin_gate import (
 from .conductive_network_monotonicity_gate import (
     conductive_network_resistance_monotonicity_gate as _conductive_network_resistance_monotonicity_gate,
 )
+from .autodiff_harmonic_balance_gate import (
+    autodiff_harmonic_balance_convergence_gate as _autodiff_harmonic_balance_convergence_gate,
+)
 from .single_loop_normalized_field_gate import (
     single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
 )
@@ -2905,6 +2908,22 @@ def conductive_network_resistance_monotonicity_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "conductive_network_resistance_monotonicity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def autodiff_harmonic_balance_convergence_gate(summary_json: str) -> str:
+    """Gate AD harmonic balance without mean-only false convergence."""
+    try:
+        result = _autodiff_harmonic_balance_convergence_gate(
+            json.loads(summary_json)
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "autodiff_harmonic_balance_convergence_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **758 tools** across 43 MCP servers.
+Total: **759 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 76 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 69 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 127 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 128 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -248,6 +248,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
 | `alternate_eddy_loss_formulation_gate` | Gate volume-resolved and surface-impedance losses as non-additive alternatives. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
+| `autodiff_harmonic_balance_convergence_gate` | Gate AD harmonic balance without mean-only false convergence. |
 | `axifem_documentation` | Get radia-core axifem documentation: Henrotte axisymmetric FE |
 | `balanced_mcp_learning_profile` | Return the ten-stage equal public/source MCP learning contract. |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
