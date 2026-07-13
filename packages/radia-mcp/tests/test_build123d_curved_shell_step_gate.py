@@ -4,6 +4,7 @@ import json
 from radia_mcp.build123d.server import (
     build123d_curved_shell_step_semantics_gate,
     build123d_tea_cup_source_contract_gate,
+    build123d_vase_external_solid_contract_gate,
 )
 
 
@@ -148,3 +149,139 @@ def test_server_rejects_missing_external_imports():
     result = json.loads(build123d_curved_shell_step_semantics_gate(json.dumps(row)))
     assert result["status"] == "invalid_input"
     assert "external.imports" in result["error"]
+
+
+def vase_summary() -> dict:
+    row = summary()
+    native = {
+        "solid_count": 1,
+        "shell_count": 1,
+        "face_count": 19,
+        "edge_count": 34,
+        "vertex_count": 18,
+        "is_valid": True,
+        "volume": 7560.7,
+        "area": 15208.4,
+    }
+    row["source_kind"] = "upstream-tagged-example-exact-replay"
+    row["build"] = {
+        "pass": True,
+        "source_native_example": {
+            "repository": "gumyr/build123d",
+            "tag": "v0.10.0",
+            "path": "examples/vase.py",
+            "source_sha256": "c" * 64,
+            "viewer_bridge": (
+                "no-op ocp_vscode show/show_object module; source text unchanged"
+            ),
+        },
+        "native": native,
+        "step_reimport": {**native, "volume": 7560.6992, "area": 15208.3999},
+        "errors": {
+            "volume_relative": 1.1e-7,
+            "surface_area_relative": 4.0e-9,
+        },
+        "checks": {
+            "source_runs_are_deterministic_with_kernel_tolerance": True,
+            "native_shape_valid": True,
+            "single_solid_shell": True,
+            "compound_step_shape_valid": True,
+            "solid_step_shape_valid": True,
+            "brep_shape_valid": True,
+            "compound_step_volume_matches_native": True,
+            "solid_step_volume_matches_native": True,
+            "brep_volume_matches_native": True,
+            "compound_step_area_matches_native": True,
+            "solid_step_area_matches_native": True,
+            "brep_area_matches_native": True,
+            "compound_step_topology_matches_native": True,
+            "solid_step_topology_matches_native": True,
+            "brep_topology_matches_native": True,
+        },
+    }
+    row["external"] = {
+        "pass": True,
+        "execution_mode": "combined_journal_headless",
+        "headless_flags": ["-nographics", "-batch"],
+        "gui_daemon_enabled": False,
+        "imports": [
+            {
+                "export_kind": export_kind,
+                "mode": mode,
+                "volume_count": 1,
+                "surface_count": 19,
+                "curve_count": 34,
+                "vertex_count": 18,
+                "api_volume": 0.0,
+                "wrapper_volume": 0.0,
+                "surface_area": 135985.0,
+                "native_volume_relative_error": 1.0,
+                "native_area_relative_error": 0.888,
+                "self_roundtrip_volume": 7560.6992,
+                "self_roundtrip_valid": True,
+            }
+            for export_kind in ("compound", "solid")
+            for mode in ("noheal", "heal")
+        ],
+        "mode_volume_relative_spread": 0.0,
+        "mode_area_relative_spread": 0.0,
+        "disposition": (
+            "external_kernel_mass_loss_with_topology_preserved_not_solver_ready"
+        ),
+        "external_cad_volume_valid": False,
+        "solver_ready": False,
+        "mesh_attempted": False,
+        "process": {
+            "acceptable": True,
+            "result_artifact_fresh": True,
+            "unexpected_error_lines": [],
+            "owned_processes_remaining": 0,
+        },
+    }
+    row["timing_breakdown_s"] = {
+        "source_replay": 1.0,
+        "same_kernel_roundtrip": 0.8,
+        "external_four_path_import": 2.7,
+        "diagnosis": 0.01,
+    }
+    return row
+
+
+def test_public_gate_accepts_four_path_zero_volume_diagnosis():
+    result = json.loads(
+        build123d_curved_shell_step_semantics_gate(json.dumps(vase_summary()))
+    )
+    assert result["status"] == "ok"
+    assert result["solver_ready"] is False
+    assert result["checks"]["external_export_variants_are_complete"] is True
+    assert result["metrics"]["external_export_kinds"] == ["compound", "solid"]
+
+
+def test_vase_source_gate_accepts_rejection_and_suppressed_meshing():
+    result = json.loads(
+        build123d_vase_external_solid_contract_gate(json.dumps(vase_summary()))
+    )
+    assert result["status"] == "ok"
+    assert result["solver_ready"] is False
+    assert result["diagnosis"] == (
+        "external_kernel_zero_volume_despite_positive_same_kernel_roundtrip"
+    )
+    assert result["checks"]["invalid_external_solid_is_not_meshed_or_promoted"]
+
+
+def test_vase_source_gate_rejects_meshing_or_solver_ready_overclaim():
+    row = vase_summary()
+    row["external"]["mesh_attempted"] = True
+    row["external"]["solver_ready"] = True
+    result = json.loads(build123d_vase_external_solid_contract_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["invalid_external_solid_is_not_meshed_or_promoted"] is False
+
+
+def test_vase_source_gate_rejects_incomplete_external_matrix():
+    row = vase_summary()
+    row["external"]["imports"] = row["external"]["imports"][:-1]
+    result = json.loads(build123d_vase_external_solid_contract_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["four_external_import_paths_complete"] is False
+    assert result["checks"]["public_semantics_gate_passed"] is False

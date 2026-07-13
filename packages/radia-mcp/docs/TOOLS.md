@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **762 tools** across 43 MCP servers.
+Total: **763 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 78 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 69 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 70 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 129 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -195,6 +195,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_upstream_example_roundtrip_gate` | Gate source identity and STEP self-roundtrip for an upstream build123d example. |
 | `build123d_upstream_source_external_cad_contract_gate` | Gate immutable upstream execution and an explicit external-CAD decision. |
 | `build123d_usage` | Get build123d CAD modeling documentation for CAE workflows. |
+| `build123d_vase_external_solid_contract_gate` | Gate an exact vase replay and reject zero-volume external solids. |
 | `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
 | `build123d_volume_crosscheck_source_coverage_gate` | Require Cubit/external CAD source coverage after a volume crosscheck. |
 | `build123d_volume_crosscheck_source_identity_gate` | Require source identity metadata after an external CAD volume crosscheck. |
