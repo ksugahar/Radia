@@ -17,11 +17,20 @@ import platform
 import sys
 import time
 from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
+
+
+def _numpy():
+    import numpy as np
+
+    return np
 
 
 def _real_1d(name: str, values: Sequence[float]) -> np.ndarray:
+    np = _numpy()
     arr = np.asarray(values, dtype=float).ravel()
     if arr.size == 0:
         raise ValueError(f"{name} must contain at least one value")
@@ -45,6 +54,7 @@ def relaxation_response(
     which is the same structure used by ADE/SPICE realizations.
     """
 
+    np = _numpy()
     w = _real_1d("weights", weights)
     tau = _real_1d("taus", taus)
     if w.shape != tau.shape:
@@ -101,6 +111,7 @@ def fit_nonnegative_debye(
     squares solution so the teaching example remains runnable.
     """
 
+    np = _numpy()
     freq = _real_1d("freq_hz", freq_hz)
     tau = _real_1d("tau_grid", tau_grid)
     if np.any(freq <= 0.0):
@@ -156,6 +167,7 @@ def fit_nonnegative_debye(
 def bdf_delta(zeta: np.ndarray | complex | float, method: str = "bdf2") -> np.ndarray:
     """Return the BDF generating polynomial ``delta(zeta)`` used by CQ."""
 
+    np = _numpy()
     z = np.asarray(zeta, dtype=complex)
     m = method.strip().lower()
     if m in {"bdf1", "backward_euler", "be"}:
@@ -183,6 +195,7 @@ def cq_time_grid_contract_gate(
 ) -> dict:
     """Validate the implementation-neutral Lubich CQ time-grid contract."""
 
+    np = _numpy()
     dt_value = float(dt)
     n_value = int(n_steps)
     m_value = int(contour_samples) if contour_samples is not None else next_power_of_two(2 * n_value)
@@ -259,6 +272,7 @@ def cq_weights_from_laplace(
     kernels.
     """
 
+    np = _numpy()
     if dt <= 0.0:
         raise ValueError("dt must be positive")
     if n_steps <= 0:
@@ -284,6 +298,7 @@ def cq_weights_from_laplace(
 def cq_convolve(weights: Sequence[complex], input_signal: Sequence[float]) -> np.ndarray:
     """Apply CQ weights to a sampled input by causal discrete convolution."""
 
+    np = _numpy()
     w = np.asarray(weights, dtype=complex).ravel()
     u = np.asarray(input_signal, dtype=float).ravel()
     if w.size == 0 or u.size == 0:
@@ -298,6 +313,7 @@ def periodic_ifft_response(
 ) -> np.ndarray:
     """Naive periodic frequency-domain response used only as a teaching contrast."""
 
+    np = _numpy()
     u = np.asarray(input_signal, dtype=float).ravel()
     omega = 2.0 * np.pi * np.fft.fftfreq(u.size, d=dt)
     values = np.asarray(laplace_response(1j * omega), dtype=complex)
@@ -331,6 +347,7 @@ def make_cq_urn_bridge_artifact(
 ) -> dict:
     """Build a compact URN -> CQ teaching artifact with numerical checks."""
 
+    np = _numpy()
     start = time.perf_counter()
     if hit_index < 0 or hit_index >= n_steps:
         raise ValueError("hit_index must lie within the sampled time window")

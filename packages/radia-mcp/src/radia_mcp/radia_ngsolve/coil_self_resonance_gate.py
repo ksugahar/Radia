@@ -6,10 +6,16 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import numpy as np
 
 
-def _array(value: object, name: str) -> np.ndarray:
+def _numpy():
+    import numpy as np
+
+    return np
+
+
+def _array(value: object, name: str):
+    np = _numpy()
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise ValueError(f"{name} must be an array")
     result = np.asarray(value, dtype=float).ravel()
@@ -30,6 +36,7 @@ def _finite(value: object, name: str) -> float:
 
 def coil_self_resonance_sweep_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate passivity, reactance sign change, equivalent LC, and replay."""
+    np = _numpy()
     if not isinstance(summary, Mapping):
         raise ValueError("summary must be an object")
     frequency = _array(summary.get("frequency_hz"), "frequency_hz")

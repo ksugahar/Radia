@@ -6,9 +6,13 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import numpy as np
-
 from .cq_urn import bdf_delta
+
+
+def _numpy():
+    import numpy as np
+
+    return np
 
 
 def _finite(value: object, name: str, *, positive: bool = False) -> float:
@@ -22,7 +26,8 @@ def _finite(value: object, name: str, *, positive: bool = False) -> float:
     return parsed
 
 
-def _array(value: object, name: str, count: int) -> np.ndarray:
+def _array(value: object, name: str, count: int):
+    np = _numpy()
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise ValueError(f"{name} must be an array")
     result = np.asarray(value, dtype=float).ravel()
@@ -33,6 +38,7 @@ def _array(value: object, name: str, count: int) -> np.ndarray:
 
 def coupled_cq_refinement_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Validate CQ symbols, contour balance, refinement trend, and replay."""
+    np = _numpy()
     if not isinstance(summary, Mapping):
         raise ValueError("summary must be an object")
     contract = summary.get("model_contract")

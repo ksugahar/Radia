@@ -6,10 +6,16 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import numpy as np
 
 
-def _array(value: object, name: str) -> np.ndarray:
+def _numpy():
+    import numpy as np
+
+    return np
+
+
+def _array(value: object, name: str):
+    np = _numpy()
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise ValueError(f"{name} must be an array")
     result = np.asarray(value, dtype=float).ravel()
@@ -32,6 +38,7 @@ def passive_axial_bearing_stiffness_gate(
     summary: Mapping[str, object],
 ) -> dict[str, Any]:
     """Gate symmetry, action-reaction, local stability sign, and replay."""
+    np = _numpy()
     if not isinstance(summary, Mapping):
         raise ValueError("summary must be an object")
     position = _array(summary.get("position_m"), "position_m")
