@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes thirty-one tools:
+Exposes thirty-two tools:
 
 | Tool | Purpose |
 |---|---|
@@ -307,6 +307,7 @@ Exposes thirty-one tools:
 | `second_order_allpass_phase_group_delay_gate(summary)` | Gates flat all-pass magnitude together with the full complex transfer, monotone phase winding, reciprocal-frequency phase symmetry, center group delay `4Q/omega0`, pole-zero mirroring, and replay. |
 | `second_order_complex_zero_transfer_gate(summary)` | Gates a two-pole/two-complex-zero transfer using root-recovered frequencies and Q, DC/high-frequency gain ratio, finite real-axis dip, full complex response, and replay. |
 | `balanced_three_phase_delta_load_gate(summary)` | Gates a balanced Y source feeding an equal delta-connected RL load using ABC sequence, sqrt(3) voltage/current identities, branch impedance, complex-power conservation, constant instantaneous three-phase power, and replay. |
+| `ideal_transformer_identity_gate(summary)` | Gates a two-winding ideal transformer using signed voltage/current ratios, reflected load, source-resistance KVL, complex and instantaneous power conservation, and replay. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
