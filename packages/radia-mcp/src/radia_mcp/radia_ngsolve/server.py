@@ -119,6 +119,9 @@ from .conductor_frequency_gate import (
     opposed_busbar_skin_force_gate as _opposed_busbar_skin_force_gate,
     twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate,
 )
+from .transient_conductor_replay_gate import (
+    transient_conductor_replay_identity_gate as _transient_conductor_replay_identity_gate,
+)
 from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
 from .one_port_power_gate import one_port_power_balance_gate as _one_port_power_balance_gate
 from .fsi_scattering_invariants_gate import (
@@ -3608,6 +3611,29 @@ def opposed_busbar_skin_force_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "opposed_busbar_skin_force_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def transient_conductor_replay_identity_gate(
+    summary_json: str,
+    identity_rtol: float = 1.0e-10,
+    equivalence_rtol: float = 1.0e-12,
+) -> str:
+    """Gate full transient conductor histories, identities, and independent replay."""
+
+    try:
+        result = _transient_conductor_replay_identity_gate(
+            json.loads(summary_json),
+            identity_rtol=identity_rtol,
+            equivalence_rtol=equivalence_rtol,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "transient_conductor_replay_identity_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
