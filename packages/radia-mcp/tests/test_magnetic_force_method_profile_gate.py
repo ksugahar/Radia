@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+import copy
+import json
+
+import pytest
+
+from radia_mcp.radia_ngsolve.magnetic_force_method_profile_gate import (
+    magnetic_force_method_profile_gate,
+)
+from radia_mcp.radia_ngsolve.server import (
+    magnetic_force_method_profile_gate as mcp_magnetic_force_method_profile_gate,
+)
+
+
+def _summary() -> dict:
+    return {
+        "quantity_dimension": "3d_total",
+        "force_unit": "N",
+        "position_unit": "m",
+        "comparison_axis": "z",
+        "positions": [0.0, 0.001, 0.002, 0.003, 0.004, 0.005],
+        "moving_body_element_force": [10.0, 11.0, 12.5, 14.0, 16.0, 18.0],
+        "closed_surface_maxwell_stress_force": [10.2, 11.2, 12.7, 14.2, 16.2, 18.2],
+        "independent_closed_surface_force": [10.1, 11.1, 12.6, 14.1, 16.1, 18.1],
+        "all_body_element_force": [3.0, 3.1, 3.2, 3.4, 3.6, 3.8],
+        "replay": {
+            "parsed_max_abs": 0.0,
+            "binary_nonlog_outputs_exact": True,
+        },
+    }
+
+
+def test_accepts_pinned_target_body_and_closed_surface_profiles() -> None:
+    result = magnetic_force_method_profile_gate(_summary())
+    assert result["status"] == "ok"
+    assert result["metrics"]["maximum_method_relative_difference"] < 0.05
+    assert result["metrics"]["minimum_selection_scope_relative_difference"] > 0.25
+
+
+def test_mcp_tool_dispatches_json() -> None:
+    result = json.loads(mcp_magnetic_force_method_profile_gate(json.dumps(_summary())))
+    assert result["status"] == "ok"
+    assert result["policy"] == "magnetic_force_method_profile_gate_v1"
+
+
+def test_rejects_unpinned_all_body_selection() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["all_body_element_force"] = list(summary["moving_body_element_force"])
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["selection_scope_is_materially_distinct"] is False
+    assert result["checks"]["all_body_control_is_not_target_body_force"] is False
+
+
+def test_rejects_method_disagreement_and_nonexact_replay() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["closed_surface_maxwell_stress_force"][2] = 20.0
+    summary["replay"]["parsed_max_abs"] = 1.0e-6
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["target_method_closure_within_tolerance"] is False
+    assert result["checks"]["parsed_replay_is_exact_enough"] is False
+
+
+def test_rejects_profile_length_mismatch() -> None:
+    summary = _summary()
+    summary["all_body_element_force"].pop()
+    with pytest.raises(ValueError, match="same length"):
+        magnetic_force_method_profile_gate(summary)
