@@ -116,6 +116,9 @@ from .force_position_profile_gate import force_position_profile_gate as _force_p
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
 from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
+from .sphere_mesh_convergence_gate import (
+    linear_sphere_geometry_convergence_gate as _linear_sphere_geometry_convergence_gate,
+)
 from .leakage_inductance_closure_gate import (
     leakage_inductance_closure_gate as _leakage_inductance_closure_gate,
 )
@@ -3313,6 +3316,38 @@ def inductance_matrix_family_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "inductance_matrix_family_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def linear_sphere_geometry_convergence_gate(
+    rows: list[dict],
+    analytic_volume: float,
+    analytic_surface_area: float,
+    replay: dict,
+    max_reader_relative_error: float = 1.0e-12,
+    max_surface_radius_error: float = 1.0e-12,
+    max_final_geometry_relative_error: float = 3.0e-3,
+    min_asymptotic_order: float = 1.8,
+) -> str:
+    """Gate first-order sphere tri/tet geometry convergence and replay."""
+    try:
+        result = _linear_sphere_geometry_convergence_gate(
+            rows,
+            analytic_volume=analytic_volume,
+            analytic_surface_area=analytic_surface_area,
+            replay=replay,
+            max_reader_relative_error=max_reader_relative_error,
+            max_surface_radius_error=max_surface_radius_error,
+            max_final_geometry_relative_error=max_final_geometry_relative_error,
+            min_asymptotic_order=min_asymptotic_order,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "linear_sphere_geometry_convergence_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
