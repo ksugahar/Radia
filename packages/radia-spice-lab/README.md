@@ -275,7 +275,7 @@ Install with the `[mcp]` extra and add to your MCP client config:
 }
 ```
 
-Exposes twenty-eight tools:
+Exposes twenty-nine tools:
 
 | Tool | Purpose |
 |---|---|
@@ -304,6 +304,7 @@ Exposes twenty-eight tools:
 | `series_rlc_complex_impedance_gate(summary)` | Gates a current-driven series RLC using source orientation, three full-complex voltage traces, analytic resonance, minimum impedance, generated-netlist semantics, and converted/reference RAW equivalence. |
 | `rc_thermal_noise_psd_gate(summary)` | Gates RC thermal-noise density, finite-band RMS from squared-PSD integration, capacitance scaling, units, and noise-analysis-specific `INTEG` semantics. |
 | `distributed_line_delay_loss_gate(summary)` | Separates distributed-line `length*sqrt(LC)` first-arrival delay from series-resistance attenuation, catches the SPICE `m` = milli suffix, and requires observable replay. |
+| `second_order_allpass_phase_group_delay_gate(summary)` | Gates flat all-pass magnitude together with the full complex transfer, monotone phase winding, reciprocal-frequency phase symmetry, center group delay `4Q/omega0`, pole-zero mirroring, and replay. |
 | `circuit_knowledge(topic)` | Compact public circuit-design and conversion rules by topic. |
 | `buck_seed(vin_v, vout_v, iout_a, fsw_hz?, ripple_fraction?)` | First-pass asynchronous buck sizing plus an LTspice-ready open-loop netlist. |
 | `patentability_search_plan(title, features, effects?, domains?, include_japanese?)` | Non-legal prior-art search plan for Google Scholar, Google Patents, J-PlatPat, and web searches. |
