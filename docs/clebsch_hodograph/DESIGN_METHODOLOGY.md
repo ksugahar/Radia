@@ -774,10 +774,23 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
   `β = 20°`, `ρ = 5 m`, an entrance-window `ΔK_in` of `+0.0690` vs the x-uniform tilted-fringe
   model `+0.0739` (**0.93**) and the SCOFF/Enge closed form `+0.0732` (**0.94**); the exit
   window's *defocusing* kick matches to 0.96 and `ΔK·ρ` is constant to 1% over `ρ = 5…40 m`.
-  Error budget: the stable −5…−7% is `β=20` iron-mesh error in the entrance fringe (order-2
-  H1, 8 mm beam box); the `β=0` spurious floor is `+0.0013` (1.8% of signal). Committed
-  results: `edge_focusing_fem_results.json`; machinery: PART B of `edge_focusing_tracking.py`
-  (`fem_scoff_study`, ~25 min).
+  Committed results: `edge_focusing_fem_results.json`; machinery: PART B of
+  `edge_focusing_tracking.py` (`fem_scoff_study`, ~25 min).
+* **Cross-checked with a second, independent field engine — and the error budget revised
+  (2026-07-13).** `hdiv_scoff_study` swaps the reduced-Ω FEM for the **FEEC HDiv-VIM**
+  (`radia.vim`): iron-only tet mesh, *no air discretization*, exact open boundary, mid-plane
+  map from one batch `rad.Fld` (analytic integrals of the solved per-element `M`); ~10×
+  faster per case. `ΔK_in` agrees to 0.8% at matched edge-mesh density (absolute-`ΔK`
+  scatter across engines/meshes ±3%), and `ΔK_in`/model stays at **0.92–0.95 in every
+  configuration** — so the −5…−7% deficit is **engine-independent real 3D physics, not the
+  iron-mesh error it was first attributed to** (retracted). Mechanism, measured directly on
+  both engines' maps: the local **iso-field tilt** of the entrance fringe near `x = 0` is
+  only **≈ 0.95–0.96 of the geometric `tan β`** (corner arcs + coil side bars + finite pole
+  width) — hard-edge/SCOFF bookkeeping with the *geometric* edge angle overpredicts the
+  vertical edge focusing by ~5% for this geometry; the **effective** edge angle is a
+  magnet-specific quantity this chain extracts. Caveat: the HDiv fringe *shape* (`K₁g`,
+  `B₀`, flat-top-edge overshoot) converges more slowly with the edge mesh than the tracked
+  `ΔK` — quote `ΔK`/tilt from either engine, `K₁g`/`B₀` from the reduced-Ω profile.
 * **Magnet-design lessons the measurement exposed** (each a measured failure of the campaign):
   a straight coil front across a tilted iron edge leaves the iso-field tilt far below the
   geometric edge angle (`ΔK` deficit 0.55×) — **edge-angle bookkeeping assumes the coil

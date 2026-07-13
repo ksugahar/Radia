@@ -184,6 +184,132 @@
   "fem_over_model": 0.9326485199442295,
   "fem_over_closed": 0.9416036342961007,
   "spurious_T1_in_beta0": 0.0012687395204439196,
-  "error_budget": "stable -5..-7 pct deficit vs the x-uniform model = beta=20 iron-mesh discretization error in the entrance fringe (order-2 FES); dK_in*rho constant to ~1 pct over rho 5..40, beta=0 spurious floor +0.0013 (1.8 pct of signal) vanishing faster than 1/rho"
+  "error_budget": "the -5..-7 pct deficit vs the x-uniform model is ENGINE-INDEPENDENT (dK_in/model = 0.933 reduced-Omega, 0.919/0.948 HDiv-VIM at edge mesh 4/2.5 mm; absolute dK_in scatter across engines/meshes ~+-3 pct) and is REAL 3D physics, not mesh error: the local iso-field tilt of the entrance fringe near x=0 is only ~0.95-0.96 of the geometric tan(beta) -- measured directly on both engines' maps (corner arcs + coil side bars + finite pole width) -- so the x-uniform tilted-fringe model and hard-edge/SCOFF bookkeeping with the geometric beta overpredict the edge focusing by ~5 pct; dK_in*rho constant to ~1 pct over rho 5..40 (fixed mesh), beta=0 spurious floor +0.0013 reduced-Omega / +0.0002 HDiv-fine (2026-07-13 HDiv-VIM cross-check; the earlier iron-mesh-error attribution is RETRACTED)"
+ },
+ "hdiv_vim_cross_check": {
+  "generated_at_utc": "2026-07-13T13:20:50.107831+00:00",
+  "engine": "FEEC HDiv-VIM (radia.vim.MeshSoftIron, rad.Solve auto dispatch, RT1): iron-only tet mesh, no air discretization, exact open boundary; mid-plane map by one batch rad.Fld (analytic surface-charge integrals of the solved per-element M + coil Biot-Savart); same explicit CoilBuilder pair and identical downstream measurement chain (hdiv_scoff_study in edge_focusing_tracking.py)",
+  "runs": {
+   "hdiv2": {
+    "cases": {
+     "0.0": {
+      "ne": 20464,
+      "maxh_iron": 0.014,
+      "edge_maxh": 0.004,
+      "ndof": 131559,
+      "n_charge": 38014,
+      "iters": 49,
+      "linear_solver": "mass-riesz-cg",
+      "preconditioner": "mass-riesz",
+      "t_mesh_s": 8.9,
+      "t_solve_s": 93.8,
+      "t_fld_s": 140.1,
+      "B0_T": 0.4394627526619028,
+      "K1g_in_m": 0.00712360202257034,
+      "K_in": 0.0027722303508619516,
+      "T1_in": -0.0014991285604944496,
+      "K_out": 0.005684905280401062
+     },
+     "20.0": {
+      "ne": 16803,
+      "maxh_iron": 0.014,
+      "edge_maxh": 0.004,
+      "ndof": 110112,
+      "n_charge": 35391,
+      "iters": 51,
+      "linear_solver": "mass-riesz-cg",
+      "preconditioner": "mass-riesz",
+      "t_mesh_s": 2.6,
+      "t_solve_s": 69.3,
+      "t_fld_s": 130.8,
+      "B0_T": 0.44359924401904705,
+      "K1g_in_m": 0.006056087444831222,
+      "K_in": 0.07116392044613604,
+      "T1_in": 0.06689968520977288,
+      "K_out": -0.06148239677487189
+     }
+    },
+    "dK_in_hdiv": 0.06839169009527409,
+    "dK_in_model": 0.07438222450797699,
+    "dK_in_closed_form": 0.07328255044725152,
+    "hdiv_over_model": 0.9194628225718032,
+    "hdiv_over_closed": 0.9332602328640588
+   },
+   "hdiv3": {
+    "cases": {
+     "0.0": {
+      "ne": 37156,
+      "maxh_iron": 0.011,
+      "edge_maxh": 0.0025,
+      "ndof": 237663,
+      "n_charge": 66610,
+      "iters": 222,
+      "linear_solver": "mass-riesz-cg",
+      "preconditioner": "mass-riesz",
+      "t_mesh_s": 1.6,
+      "t_solve_s": 125.1,
+      "t_fld_s": 239.0,
+      "B0_T": 0.42943843857902464,
+      "K1g_in_m": 0.007847208843856621,
+      "K_in": 0.0044991058469575915,
+      "T1_in": 0.00022814863827123503,
+      "K_out": 0.003942264080357303
+     },
+     "20.0": {
+      "ne": 49024,
+      "maxh_iron": 0.011,
+      "edge_maxh": 0.0025,
+      "ndof": 309240,
+      "n_charge": 79216,
+      "iters": 1093,
+      "linear_solver": "mass-riesz-cg",
+      "preconditioner": "mass-riesz",
+      "t_mesh_s": 2.4,
+      "t_solve_s": 350.5,
+      "t_fld_s": 339.0,
+      "B0_T": 0.42729883087111037,
+      "K1g_in_m": 0.006871986677544308,
+      "K_in": 0.0753538551652242,
+      "T1_in": 0.07097626829271945,
+      "K_out": -0.06550758097615798
+     }
+    },
+    "dK_in_hdiv": 0.07085474931826662,
+    "dK_in_model": 0.0747449500993594,
+    "dK_in_closed_form": 0.07338332936701303,
+    "hdiv_over_model": 0.9479536640813662,
+    "hdiv_over_closed": 0.9655428546162005
+   }
+  },
+  "engine_agreement": {
+   "dK_in_reduced_omega": 0.06896118818956398,
+   "dK_in_hdiv2_matched_edge_mesh": 0.06839169009527409,
+   "dK_in_hdiv3_fine_edge_mesh": 0.07085474931826662,
+   "rel_diff_hdiv2": 0.008258240747308935,
+   "rel_diff_hdiv3": 0.02745835996180225,
+   "note": "two independent field engines (different formulation, mesh, boundary treatment) reproduce the entrance-window dK_in to 0.8% at matched edge-mesh density (2.7% at the finer HDiv edge mesh -- the cross-engine/mesh scatter of the absolute dK is ~+-3%); the deficit vs the x-uniform model persists in ALL configurations (ratio 0.92-0.95), so it is physics, not solver discretization error"
+  },
+  "iso_field_tilt_probe_beta20": {
+   "definition": "entrance-fringe iso-field line slope dy/dx fitted over |x|<=10.5 mm at g=0.2/0.5/0.8, divided by -tan(beta); the x-uniform model assumes exactly 1.0",
+   "values": {
+    "reduced_omega_scoff9": {
+     "g02": 0.9507979593248937,
+     "g05": 0.9601477749861378,
+     "g08": 0.9514310842187083
+    },
+    "hdiv2": {
+     "g02": 0.8288183587012974,
+     "g05": 0.888140280326533,
+     "g08": 0.9680056180790871
+    },
+    "hdiv3": {
+     "g02": 0.9159063650265771,
+     "g05": 0.9514587493161575,
+     "g08": 0.9840919083761709
+    }
+   },
+   "note": "the real magnet's local iso-field tilt near the beam is only ~0.95-0.96 of the geometric edge angle (reduced-Omega 0.95-0.96 level-independent; HDiv converges to the same value with edge refinement, g=0.5: 0.89 -> 0.95) -- corner arcs + coil side bars + finite pole width; this reduced effective edge angle is the deficit mechanism, and it is a real magnet-design quantity: hard-edge/SCOFF bookkeeping with the GEOMETRIC beta overpredicts the vertical edge focusing by ~5 pct for this geometry"
+  },
+  "fringe_shape_caveat": "the HDiv fringe SHAPE converges more slowly with edge_maxh than the tracked dK: K1g (6.06 -> 6.87 mm), B0 (0.4436 -> 0.4273 T, non-monotone) and the flat-top-edge overshoot still move between the edge 4 mm and 2.5 mm meshes; quote dK and the tilt from either engine, quote K1g/B0 from the reduced-Omega profile (or push the HDiv edge mesh further)"
  }
 }

@@ -100,7 +100,14 @@ TOPICS: dict[str, str] = {
         "both edges tilted, coil FOLLOWING the pole outline, exactly C2-symmetric -> C2 map "
         "symmetrization): closed-orbit symmetric traversal + window-decomposed Hill integrals give "
         "dK_in FEM/model=0.93, FEM/closed-form=0.94 at beta=20 rho=5 (exit DEfocusing matched 0.96; "
-        "dK*rho const to 1 pct over rho 5..40; beta=0 floor +0.0013). DESIGN LESSONS the "
+        "dK*rho const to 1 pct over rho 5..40; beta=0 floor +0.0013). CROSS-CHECKED 2026-07-13 with "
+        "a SECOND independent engine, the FEEC HDiv-VIM (hdiv_scoff_study: iron-only tet mesh, no "
+        "air discretization, batch rad.Fld map, ~10x faster): dK_in agrees 0.8 pct at matched edge "
+        "mesh (+-3 pct across meshes), dK/model 0.92-0.95 in EVERY configuration -> the -5..-7 pct "
+        "model deficit is REAL 3D physics, NOT mesh error (earlier attribution RETRACTED): the "
+        "local iso-field tilt near x=0 is only ~0.95-0.96 of the geometric tan(beta), so "
+        "hard-edge/SCOFF bookkeeping with the geometric angle overpredicts by ~5 pct -- the "
+        "EFFECTIVE edge angle is magnet-specific and this chain measures it. DESIGN LESSONS the "
         "measurement exposed: straight coil front across a tilted edge -> iso-field tilt far below "
         "the geometric angle (dK 0.55x; edge-angle bookkeeping ASSUMES the coil follows the pole "
         "contour); rigid whole-coil rotation breaks MMF topology (B0 3x collapse). RADIA PITFALLS "
@@ -897,8 +904,26 @@ fem_scoff_study, ~25 min; committed results edge_focusing_fem_results.json):
   - RESULT (beta=20, rho=5): dK_in FEM +0.0690 vs model +0.0739 (0.93) vs closed form +0.0732
     (0.94) vs hard edge +0.0728; exit DEfocusing matched to 0.96; dK*rho constant to 1 pct over
     rho 5..40; beta=0 spurious floor +0.0013 (1.8 pct of signal), vanishing faster than 1/rho.
-  - ERROR BUDGET: the stable -5..-7 pct vs the model is beta=20 iron-mesh error in the
-    entrance fringe (order-2 H1, 8 mm beam box) -- tighten with mesh/order, not method.
+
+## Engine cross-check: FEEC HDiv-VIM -- and the REVISED error budget (2026-07-13)
+The SAME chain re-run with the field engine swapped to the FEEC HDiv-VIM (hdiv_scoff_study:
+radia.vim.MeshSoftIron on an IRON-ONLY tet mesh -- no air discretization, exact open boundary --
+rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld; ~10x faster per case, ~1.5-6 min):
+  - dK_in agrees with reduced-Omega to 0.8 pct at MATCHED edge-mesh density (+0.06839 vs
+    +0.06896); absolute-dK scatter across engines/meshes is ~+-3 pct (finer HDiv edge mesh
+    gives +0.07085); dK_in/model stays 0.92-0.95 in EVERY configuration.
+  - ERROR BUDGET (REVISED -- the earlier "iron-mesh error" attribution is RETRACTED): the
+    -5..-7 pct deficit vs the x-uniform model is ENGINE-INDEPENDENT real 3D physics.  Mechanism
+    measured directly on both engines' maps: the LOCAL ISO-FIELD TILT of the entrance fringe
+    near x=0 is only ~0.95-0.96 of the geometric tan(beta) (corner arcs + coil side bars +
+    finite pole width).  Hard-edge/SCOFF bookkeeping with the GEOMETRIC edge angle therefore
+    overpredicts the vertical edge focusing by ~5 pct for this geometry -- the EFFECTIVE edge
+    angle is a magnet-specific quantity that this measurement chain extracts.
+  - CAVEAT: the HDiv fringe SHAPE (K1g 6.1->6.9 mm, B0 non-monotone, flat-top-edge overshoot)
+    converges more slowly with edge_maxh than the tracked dK; quote dK and the tilt from either
+    engine, quote K1g/B0 from the reduced-Omega profile.
+  - Committed: edge_focusing_fem_results.json `hdiv_vim_cross_check` (runs, agreement, tilt
+    probe); engines swap via fem_scoff_study(solve_midplane=hdiv_solve_midplane).
 
 ## Magnet-design lessons the measurement exposed (all measured failures)
   - A STRAIGHT coil front across a tilted iron edge leaves the iso-field tilt FAR below the

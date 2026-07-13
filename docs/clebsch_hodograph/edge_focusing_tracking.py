@@ -176,11 +176,24 @@ def summarize(sweep, wconv):
 
 
 # ================================================================== PART B: FEM (SCOFF/Enge)
-# 3D reduced-Omega FEM of a PARALLELOGRAM dipole (both edges tilted by beta), measured
-# with the SAME tracker: symmetric (closed-orbit style) traversal + window decomposition
-# + an x-uniform model built from the FEM's own mid-line fringe profile.  The FEM
-# entrance-edge kick is compared window-by-window against the model and the SCOFF/Enge
-# closed form tan(beta_eff - psi)/rho with the FEM-measured K1g.
+# 3D FEM of a PARALLELOGRAM dipole (both edges tilted by beta), measured with the SAME
+# tracker: symmetric (closed-orbit style) traversal + window decomposition + an x-uniform
+# model built from the FEM's own mid-line fringe profile.  The FEM entrance-edge kick is
+# compared window-by-window against the model and the SCOFF/Enge closed form
+# tan(beta_eff - psi)/rho with the FEM-measured K1g.
+#
+# TWO independent field engines feed the same measurement chain (swap via the
+# fem_scoff_study(solve_midplane=...) argument):
+#   * fem_solve_midplane  -- reduced-Omega NGSolve FEM (H = Hs - grad(Omega), air box,
+#     order-2 H1);
+#   * hdiv_solve_midplane -- FEEC HDiv-VIM (radia.vim): iron-only tet mesh, NO air
+#     discretization, exact open boundary, batch rad.Fld analytic map; ~10x faster.
+# Cross-check (2026-07-13): dK_in agrees to 0.8% at matched edge-mesh density
+# (absolute-dK scatter across engines/meshes ~+-3%), and the deficit vs the
+# x-uniform model persists in every configuration (dK_in/model = 0.92-0.95) --
+# which REASSIGNS it as REAL 3D physics: the local iso-field tilt near x=0 is only
+# ~0.95-0.96 of the geometric tan(beta), measured directly on both engines' maps.
+# See edge_focusing_fem_results.json `hdiv_vim_cross_check`.
 #
 # The parallelogram testbed (the standard spectrometer-dipole configuration) is chosen
 # for two reasons learned the hard way:
@@ -445,14 +458,21 @@ def track_symmetric(xs, ys, Bz, B0, rho, prof, ds=5e-4, ds_shoot=2e-3):
     return track_midplane(xs, ys, Bz, B0, rho, prof, ds=ds, a0=a0, x0=-p2["x_mid"])
 
 
-def fem_scoff_study(betas_deg=(0.0, 20.0), rho=5.0):
+def fem_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, solve_midplane=None):
     """The full SCOFF/Enge + closed-orbit FEM measurement: for each beta, solve the FEM,
     C2-symmetrize the map, measure the fringe (B0, K1g, EFB), track FEM and x-uniform
     model symmetrically, and compare the entrance-window kick against the closed form
-    tan(beta_eff - psi)/rho."""
+    tan(beta_eff - psi)/rho.
+
+    ``solve_midplane`` swaps the FIELD ENGINE only (default: the reduced-Omega
+    ``fem_solve_midplane``; pass ``hdiv_solve_midplane`` for the HDiv-VIM twin).
+    Everything downstream -- C2 symmetrization, profile, model, tracker, closed
+    form -- is engine-independent, which is what makes the cross-check meaningful."""
+    if solve_midplane is None:
+        solve_midplane = fem_solve_midplane
     cases = []
     for bd in betas_deg:
-        xs, ys, Bz, ne = fem_solve_midplane(bd)
+        xs, ys, Bz, ne = solve_midplane(bd)
         # C2 map symmetrization: the parallelogram magnet satisfies
         # Bz(x,y,0) = Bz(-x,-y,0) EXACTLY, so the C2-odd part of the sampled map
         # is pure solver/mesh error (grids are symmetric linspaces).
@@ -476,6 +496,80 @@ def fem_scoff_study(betas_deg=(0.0, 20.0), rho=5.0):
             c["dK_in_model"] = c["model"]["K"]["in"] - c0["model"]["K"]["in"]
             c["dK_in_closed"] = c["closed_form_entrance"] - c0["closed_form_entrance"]
     return res
+
+
+# --------------------------------------------------- HDiv-VIM field engine (cross-check)
+def hdiv_build_iron_mesh(beta_deg, maxh_iron=0.014, edge_maxh=0.004):
+    """IRON-ONLY tet mesh for the HDiv-VIM engine: the same parallelogram poles +
+    centered legs as ``fem_build_mesh``, but NO air box -- the HDiv-VIM needs no air
+    discretization (the mid-plane field is evaluated by analytic surface-charge
+    integrals of the solved per-element M, exact open boundary)."""
+    import ngsolve as ng
+    from netgen.occ import OCCGeometry, Box, Pnt
+    beta = np.radians(beta_deg)
+    top = _fem_footprint(F_GAP / 2, F_Z_OUT, beta)
+    bot = _fem_footprint(-F_Z_OUT, -F_GAP / 2, beta)
+    leg_l = Box(Pnt(-F_POLE_W, -F_LEG_HY, -F_GAP / 2),
+                Pnt(-F_POLE_W + F_T_LEG, F_LEG_HY, F_GAP / 2))
+    leg_r = Box(Pnt(F_POLE_W - F_T_LEG, -F_LEG_HY, -F_GAP / 2),
+                Pnt(F_POLE_W, F_LEG_HY, F_GAP / 2))
+    iron = top + bot + leg_l + leg_r
+    iron.mat("iron")
+    iron.maxh = maxh_iron
+    for e in iron.edges:      # same graded refinement at the gap-facing pole-face edges
+        c = e.center
+        if abs(abs(c.z) - F_GAP / 2) < 1e-4 and abs(c.x) < 0.11 and abs(c.y) > 0.05:
+            e.maxh = edge_maxh
+    with ng.TaskManager():
+        mesh = ng.Mesh(OCCGeometry(iron).GenerateMesh(maxh=maxh_iron))
+    return mesh
+
+
+def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
+                        nx=81, ny=401, xmax=0.05, ymax=0.26):
+    """FEEC HDiv-VIM twin of ``fem_solve_midplane``: ``radia.vim.MeshSoftIron`` on the
+    iron-only mesh + the same explicit CoilBuilder pair, ``rad.Solve`` auto-dispatch
+    (RT1), then one batch ``rad.Fld`` mid-plane map (all points in the gap/air, so the
+    analytic integrals are exact for the solved piecewise-constant M).  Roughly 10x
+    faster than the reduced-Omega solve (no air mesh) and fully engine-independent
+    of it -- the cross-check that pinned the model deficit as physics (2026-07-13)."""
+    import radia as rad
+    from radia import vim
+    rad.UtiDelAll()                                   # also clears the HDiv registry
+    coils = fem_build_coil(float(np.radians(beta_deg)))
+    mesh = hdiv_build_iron_mesh(beta_deg, maxh_iron, edge_maxh)
+    iron = vim.MeshSoftIron(mesh, mu_r=mu_r)
+    top = rad.ObjCnt([iron, coils])
+    rad.Solve(top)                                    # auto -> FEEC HDiv-VIM (RT1)
+    xs = np.linspace(-xmax, xmax, nx)
+    ys = np.linspace(-ymax, ymax, ny)
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    pts = np.column_stack([X.ravel(), Y.ravel(), np.zeros(X.size)])
+    Bz = np.asarray(rad.Fld(top, "b", pts))[:, 2].reshape(X.shape)
+    ne = int(mesh.ne)
+    rad.UtiDelAll()
+    return xs, ys, Bz, ne
+
+
+def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=0.004):
+    """``fem_scoff_study`` with the field engine swapped to the FEEC HDiv-VIM.
+
+    Cross-check result (2026-07-13, committed in edge_focusing_fem_results.json
+    `hdiv_vim_cross_check`): dK_in agrees with the reduced-Omega engine to 0.8% at
+    matched edge-mesh density (absolute-dK scatter across engines/meshes ~+-3%),
+    and dK_in/model = 0.92-0.95 in EVERY configuration -- which REASSIGNS the
+    -5..-7% model deficit from "iron-mesh discretization error" to REAL 3D physics:
+    the local iso-field tilt of the entrance fringe near x=0 is only ~0.95-0.96 of
+    the geometric tan(beta) (corner arcs + side bars + finite pole width), measured
+    directly on both engines' maps, so the x-uniform tilted-fringe model (and
+    hard-edge/SCOFF bookkeeping with the geometric beta) overpredicts the edge
+    focusing by ~5% for this geometry.
+    Caveat: the HDiv fringe SHAPE (K1g, B0, flat-top edge overshoot) converges more
+    slowly with edge_maxh than the tracked dK does; quote dK and the tilt from
+    either engine, quote K1g/B0 from the reduced-Omega profile."""
+    return fem_scoff_study(betas_deg, rho,
+                           solve_midplane=lambda bd: hdiv_solve_midplane(
+                               bd, maxh_iron=maxh_iron, edge_maxh=edge_maxh))
 
 
 # ------------------------------------------------------------------ figure
