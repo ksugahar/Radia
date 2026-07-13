@@ -163,6 +163,9 @@ from .pwm_controlled_motor_loss_gate import (
 from .material_contrast_force_gate import (
     material_contrast_force_gate as _material_contrast_force_gate,
 )
+from .two_body_force_magnitude_gate import (
+    two_body_force_magnitude_replay_gate as _two_body_force_magnitude_replay_gate,
+)
 from .static_field_shim_family_gate import (
     static_field_shim_family_gate as _static_field_shim_family_gate,
 )
@@ -3529,6 +3532,20 @@ def material_contrast_force_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "material_contrast_force_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def two_body_force_magnitude_replay_gate(summary_json: str) -> str:
+    """Gate unsigned two-body force balance and two fresh solver replays."""
+    try:
+        result = _two_body_force_magnitude_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "two_body_force_magnitude_replay_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
