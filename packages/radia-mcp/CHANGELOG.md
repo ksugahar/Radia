@@ -7,6 +7,19 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-07-13
+
+- **radia-ngsolve gates**: added heterogeneous P1 current-flow,
+  transformer inductance identity, and sphere `.vol` convergence gates
+  with focused pytest coverage.
+- **motor gates**: added electrothermal result-handoff and replayed
+  demagnetization-history validation gates.
+- **build123d gate**: strengthened external solid validation by rejecting
+  zero-volume curved shell STEP inputs before Cubit handoff.
+- **FEEC / hysteresis validation**: locked HDiv charge-Gram
+  loop-eigenvalue protection and B-input loop-pollution regression
+  records.
+
 - **motor / AGE validation routing**: added public-safe `motor_age_quality`
   and `motor_age_validation_plan` tools, plus the ELF/MAGIC motor bridge
   and field quick-check router.  Motor prompts now route from SPM/IPM/IM/SRM/
