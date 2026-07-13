@@ -2,11 +2,28 @@
 from __future__ import annotations
 
 import json
+import math
+import re
 from collections import Counter, deque
 from typing import Any
 
 
 HEX_CELL_TYPES = {"hex", "hex8", "hex20", "hex27", "hexahedron"}
+ELECTROTHERMAL_STAGE_ORDER = (
+    "electromagnetic",
+    "stator_core_loss",
+    "rotor_core_loss",
+    "thermal",
+)
+ELECTROTHERMAL_SOURCE_OWNERS = {
+    "rotor_conductor_joule": "electromagnetic",
+    "phase_u_joule": "electromagnetic",
+    "phase_v_joule": "electromagnetic",
+    "phase_w_joule": "electromagnetic",
+    "stator_core_loss": "stator_core_loss",
+    "rotor_core_loss": "rotor_core_loss",
+}
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _load_json(value: str, expected: type, name: str) -> Any:
@@ -242,4 +259,240 @@ def motor_thermal_handoff_gate(
     network = _load_json(network_json, dict, "network_json")
     mesh = _load_json(mesh_regions_json, list, "mesh_regions_json")
     result = evaluate_motor_thermal_handoff(losses, network, mesh, relative_tolerance)
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+def _finite_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
+def _close_power(
+    actual: float,
+    expected: float,
+    *,
+    absolute_tolerance_W: float,
+    relative_tolerance: float,
+) -> bool:
+    return abs(actual - expected) <= max(
+        absolute_tolerance_W,
+        relative_tolerance * max(abs(actual), abs(expected), 1.0),
+    )
+
+
+def evaluate_motor_electrothermal_result_chain(
+    chain: dict,
+    absolute_tolerance_W: float = 1.1e-2,
+    relative_tolerance: float = 1.0e-3,
+) -> dict:
+    """Gate a fresh four-stage motor electrothermal result handoff.
+
+    The gate is intentionally solver-neutral.  It checks result identity and
+    dependency digests before checking physics: three-phase winding and rotor
+    Joule losses plus stator/rotor core losses must be owned exactly once, and
+    the thermal input must equal the upstream full-model loss multiplied by an
+    explicit symmetry fraction.  A steady thermal result must then show a
+    finite temperature rise above ambient.
+    """
+    if absolute_tolerance_W <= 0 or relative_tolerance <= 0:
+        raise ValueError("power tolerances must be positive")
+
+    errors: list[str] = []
+    stages = chain.get("stages")
+    if not isinstance(stages, list):
+        stages = []
+        errors.append("stages must be a list")
+    stage_names = [str(row.get("stage") or "") for row in stages if isinstance(row, dict)]
+    stage_order_ok = stage_names == list(ELECTROTHERMAL_STAGE_ORDER)
+    if not stage_order_ok:
+        errors.append("stages must follow electromagnetic, stator loss, rotor loss, thermal order")
+
+    stage_by_name = {
+        str(row.get("stage")): row
+        for row in stages
+        if isinstance(row, dict) and str(row.get("stage") or "")
+    }
+    artifact_ids: list[str] = []
+    result_digests: list[str] = []
+    stage_evidence_ok = len(stages) == len(ELECTROTHERMAL_STAGE_ORDER)
+    for stage_name in ELECTROTHERMAL_STAGE_ORDER:
+        row = stage_by_name.get(stage_name)
+        if not isinstance(row, dict):
+            stage_evidence_ok = False
+            continue
+        artifact_id = str(row.get("artifact_id") or "").strip()
+        digest = str(row.get("result_digest") or "").strip().lower()
+        solve_s = _finite_float(row.get("solve_s"))
+        artifact_ids.append(artifact_id)
+        result_digests.append(digest)
+        if (
+            not artifact_id
+            or not SHA256_PATTERN.fullmatch(digest)
+            or row.get("completed") is not True
+            or row.get("fresh") is not True
+            or solve_s is None
+            or solve_s <= 0
+        ):
+            stage_evidence_ok = False
+    stage_identity_ok = (
+        stage_evidence_ok
+        and len(set(artifact_ids)) == len(ELECTROTHERMAL_STAGE_ORDER)
+        and len(set(result_digests)) == len(ELECTROTHERMAL_STAGE_ORDER)
+    )
+    if not stage_identity_ok:
+        errors.append("every stage needs a unique fresh result digest and positive solve time")
+
+    dependency_ok = stage_identity_ok and stage_order_ok
+    if dependency_ok:
+        em = stage_by_name["electromagnetic"]
+        stator = stage_by_name["stator_core_loss"]
+        rotor = stage_by_name["rotor_core_loss"]
+        thermal = stage_by_name["thermal"]
+        em_dependency = {}
+        stator_dependency = {em["artifact_id"]: em["result_digest"].lower()}
+        rotor_dependency = {em["artifact_id"]: em["result_digest"].lower()}
+        thermal_dependency = {
+            em["artifact_id"]: em["result_digest"].lower(),
+            stator["artifact_id"]: stator["result_digest"].lower(),
+            rotor["artifact_id"]: rotor["result_digest"].lower(),
+        }
+        dependency_ok = (
+            em.get("input_result_digests") == em_dependency
+            and stator.get("input_result_digests") == stator_dependency
+            and rotor.get("input_result_digests") == rotor_dependency
+            and thermal.get("input_result_digests") == thermal_dependency
+        )
+    if not dependency_ok:
+        errors.append("downstream stages must pin the exact upstream result digests")
+
+    raw_sources = chain.get("source_buckets")
+    if not isinstance(raw_sources, list):
+        raw_sources = []
+        errors.append("source_buckets must be a list")
+    source_rows = [row for row in raw_sources if isinstance(row, dict)]
+    channel_counts = Counter(str(row.get("channel") or "") for row in source_rows)
+    source_channels_ok = (
+        len(source_rows) == len(ELECTROTHERMAL_SOURCE_OWNERS)
+        and set(channel_counts) == set(ELECTROTHERMAL_SOURCE_OWNERS)
+        and all(count == 1 for count in channel_counts.values())
+    )
+    source_values_ok = source_channels_ok and stage_identity_ok
+    source_total_W = 0.0
+    for row in source_rows:
+        channel = str(row.get("channel") or "")
+        expected_owner = ELECTROTHERMAL_SOURCE_OWNERS.get(channel)
+        power_W = _finite_float(row.get("power_W"))
+        owner = stage_by_name.get(expected_owner or "")
+        if (
+            expected_owner is None
+            or owner is None
+            or row.get("upstream_stage") != expected_owner
+            or row.get("upstream_artifact_id") != owner.get("artifact_id")
+            or str(row.get("upstream_result_digest") or "").lower()
+            != str(owner.get("result_digest") or "").lower()
+            or power_W is None
+            or power_W < 0
+        ):
+            source_values_ok = False
+        elif power_W is not None:
+            source_total_W += power_W
+    if not source_channels_ok:
+        errors.append("the six motor loss channels must each be owned exactly once")
+    if not source_values_ok:
+        errors.append("loss channels need non-negative power and matching upstream identity")
+
+    symmetry_fraction = _finite_float(chain.get("symmetry_fraction"))
+    symmetry_ok = symmetry_fraction is not None and 0 < symmetry_fraction <= 1
+    if not symmetry_ok:
+        errors.append("symmetry_fraction must be in (0, 1]")
+    expected_thermal_input_W = (
+        source_total_W * symmetry_fraction if symmetry_fraction is not None else math.nan
+    )
+    thermal_summary = chain.get("thermal_summary")
+    if not isinstance(thermal_summary, dict):
+        thermal_summary = {}
+        errors.append("thermal_summary must be an object")
+    thermal_input_W = _finite_float(thermal_summary.get("input_power_W"))
+    power_closure_ok = (
+        source_values_ok
+        and symmetry_ok
+        and thermal_input_W is not None
+        and thermal_input_W >= 0
+        and _close_power(
+            thermal_input_W,
+            expected_thermal_input_W,
+            absolute_tolerance_W=absolute_tolerance_W,
+            relative_tolerance=relative_tolerance,
+        )
+    )
+    if not power_closure_ok:
+        errors.append("thermal input must close to symmetry-scaled upstream losses")
+
+    ambient_C = _finite_float(thermal_summary.get("ambient_temperature_C"))
+    maximum_C = _finite_float(thermal_summary.get("maximum_temperature_C"))
+    temperature_ok = (
+        thermal_summary.get("steady_state") is True
+        and ambient_C is not None
+        and maximum_C is not None
+        and maximum_C > ambient_C
+    )
+    if not temperature_ok:
+        errors.append("steady thermal result must have a finite positive temperature rise")
+
+    checks = {
+        "schema_matches": chain.get("schema") == "motor-electrothermal-result-chain/v1",
+        "four_stage_order": stage_order_ok,
+        "fresh_unique_stage_results": stage_identity_ok,
+        "upstream_result_digests_pinned": dependency_ok,
+        "six_loss_channels_owned_once": source_channels_ok,
+        "loss_channel_values_and_identity_valid": source_values_ok,
+        "symmetry_fraction_explicit": symmetry_ok,
+        "symmetry_scaled_power_closure": power_closure_ok,
+        "steady_temperature_rise_present": temperature_ok,
+    }
+    if not checks["schema_matches"]:
+        errors.append("schema must be motor-electrothermal-result-chain/v1")
+
+    return {
+        "schema": "radia-motor-electrothermal-result-chain/v1",
+        "policy": "fresh_digest_pinned_symmetry_scaled_power_handoff",
+        "status": "ok" if all(checks.values()) and not errors else "needs_attention",
+        "checks": checks,
+        "metrics": {
+            "source_total_loss_W": source_total_W,
+            "symmetry_fraction": symmetry_fraction,
+            "expected_thermal_input_W": expected_thermal_input_W,
+            "thermal_input_W": thermal_input_W,
+            "power_closure_error_W": (
+                abs(thermal_input_W - expected_thermal_input_W)
+                if thermal_input_W is not None and math.isfinite(expected_thermal_input_W)
+                else None
+            ),
+            "ambient_temperature_C": ambient_C,
+            "maximum_temperature_C": maximum_C,
+            "temperature_rise_C": (
+                maximum_C - ambient_C
+                if maximum_C is not None and ambient_C is not None
+                else None
+            ),
+        },
+        "errors": errors,
+    }
+
+
+def motor_electrothermal_result_chain_gate(
+    chain_json: str,
+    absolute_tolerance_W: float = 1.1e-2,
+    relative_tolerance: float = 1.0e-3,
+) -> str:
+    """JSON wrapper for the fresh electrothermal result-chain gate."""
+    chain = _load_json(chain_json, dict, "chain_json")
+    result = evaluate_motor_electrothermal_result_chain(
+        chain,
+        absolute_tolerance_W=absolute_tolerance_W,
+        relative_tolerance=relative_tolerance,
+    )
     return json.dumps(result, indent=2, sort_keys=True)
