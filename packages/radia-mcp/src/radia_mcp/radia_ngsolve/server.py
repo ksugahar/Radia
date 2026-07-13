@@ -107,6 +107,9 @@ from .force_position_profile_gate import force_position_profile_gate as _force_p
 from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
 from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
 from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
+from .leakage_inductance_closure_gate import (
+    leakage_inductance_closure_gate as _leakage_inductance_closure_gate,
+)
 from .parallel_wire_force_refinement_gate import (
     parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
 )
@@ -3246,6 +3249,20 @@ def inductance_matrix_family_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "inductance_matrix_family_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def leakage_inductance_closure_gate(summary_json: str) -> str:
+    """Gate compensated-energy and unit-current-matrix leakage inductance."""
+    try:
+        result = _leakage_inductance_closure_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "leakage_inductance_closure_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **756 tools** across 43 MCP servers.
+Total: **757 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 76 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 69 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 125 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 126 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -296,6 +296,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
+| `leakage_inductance_closure_gate` | Gate compensated-energy and unit-current-matrix leakage inductance. |
 | `linear_axisymmetric_circuit_energy_gate` | Gate current, flux, field, and energy identities on one fixed mesh. |
 | `linear_eddy_levitation_force_gate` | Gate linear harmonic levitation force by dual extraction and I-squared laws. |
 | `linear_induction_frequency_sweep_gate` | Gate a linear-induction frequency sweep by thrust, loss, and phase balance. |
