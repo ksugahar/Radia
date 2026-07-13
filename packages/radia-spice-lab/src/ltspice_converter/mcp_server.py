@@ -38,9 +38,24 @@ from .bipolar_rail_gate import bipolar_rail_power_quality_gate as _bipolar_rail_
 from .series_rlc_gate import series_rlc_complex_impedance_gate as _series_rlc_complex_impedance_gate
 from .noise_gate import rc_thermal_noise_psd_gate as _rc_thermal_noise_psd_gate
 from .distributed_line_gate import distributed_line_delay_loss_gate as _distributed_line_delay_loss_gate
+from .allpass_gate import second_order_allpass_gate as _second_order_allpass_gate
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def second_order_allpass_phase_group_delay_gate(summary: dict) -> dict:
+    """Gate all-pass complex response, phase winding, group delay, and poles/zeros."""
+
+    try:
+        return _second_order_allpass_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "second_order_allpass_phase_group_delay_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
