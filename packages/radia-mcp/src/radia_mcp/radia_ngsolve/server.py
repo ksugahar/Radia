@@ -115,6 +115,7 @@ from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_i
 from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
 from .radar_range_angle_gate import radar_range_angle_localization_gate as _radar_range_angle_localization_gate
 from .hmatrix_scaling_gate import hmatrix_compression_scaling_gate as _hmatrix_compression_scaling_gate
+from .acoustic_duct_band_gap_gate import acoustic_duct_band_gap_gate as _acoustic_duct_band_gap_gate
 from .force_error_convergence_gate import (
     dual_formulation_force_error_convergence_gate as _dual_formulation_force_error_convergence_gate,
 )
@@ -3355,6 +3356,21 @@ def hmatrix_compression_scaling_gate(
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "hmatrix_compression_scaling_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def acoustic_duct_band_gap_gate(summary_json: str) -> str:
+    """Gate a confined acoustic band gap against empty and free-space controls."""
+
+    try:
+        result = _acoustic_duct_band_gap_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "acoustic_duct_band_gap_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
