@@ -45,6 +45,7 @@ from .mass_topology_diagnosis_gate import cross_kernel_mass_topology_diagnosis_g
 from .dual_api_prismatic_gate import dual_api_prismatic_pattern_gate as _dual_api_prismatic_pattern_gate, dual_api_source_replay_gate as _dual_api_source_replay_gate
 from .drafted_housing_gate import drafted_housing_cross_kernel_gate as _drafted_housing_cross_kernel_gate, drafted_housing_source_replay_gate as _drafted_housing_source_replay_gate
 from .jointed_assembly_gate import jointed_assembly_heal_invariance_gate as _jointed_assembly_heal_invariance_gate, jointed_assembly_step_closure_gate as _jointed_assembly_step_closure_gate, jointed_assembly_source_replay_gate as _jointed_assembly_source_replay_gate
+from .nested_assembly_volume_gate import nested_assembly_volume_gate as _nested_assembly_volume_gate, stud_wall_source_replay_gate as _stud_wall_source_replay_gate
 from .patterned_compound_gate import patterned_compound_translation_gate as _patterned_compound_translation_gate, wrap_faces_rotational_source_replay_gate as _wrap_faces_rotational_source_replay_gate
 from .reflection_handoff_gate import (
     build123d_heat_exchanger_source_recovery_gate as _build123d_heat_exchanger_source_recovery_gate,
@@ -145,6 +146,20 @@ def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
     """Gate immutable source, joint graph, and headless external-CAD evidence."""
     try: result=_jointed_assembly_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_nested_assembly_volume_gate(summary_json: str) -> str:
+    """Distinguish a zero parent Compound from an empty CAD handoff."""
+    try: result=_nested_assembly_volume_gate(json.loads(summary_json))
+    except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_nested_assembly_volume_gate_v1","status":"invalid_input","error":str(exc)}
+    return json.dumps(result,indent=2,sort_keys=True)
+
+@mcp.tool()
+def build123d_stud_wall_source_replay_gate(summary_json: str) -> str:
+    """Gate exact stud-wall source, RigidJoints, and headless CAD replay."""
+    try: result=_stud_wall_source_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_stud_wall_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return json.dumps(result,indent=2,sort_keys=True)
 
 @mcp.tool()
