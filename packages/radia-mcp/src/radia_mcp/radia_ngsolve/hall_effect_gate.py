@@ -6,14 +6,19 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import numpy as np
 
-
-def _array(value: object, name: str) -> np.ndarray:
+def _array(value: object, name: str):
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise ValueError(f"{name} must be an array")
-    result = np.asarray(value, dtype=float).ravel()
-    if result.size < 9 or result.size % 2 == 0 or not np.all(np.isfinite(result)):
+    try:
+        result = [float(item) for item in value]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain finite numeric values") from exc
+    if (
+        len(result) < 9
+        or len(result) % 2 == 0
+        or not all(math.isfinite(item) for item in result)
+    ):
         raise ValueError(f"{name} must contain an odd number of at least nine finite values")
     return result
 
@@ -26,6 +31,81 @@ def _positive_fraction(value: object, name: str) -> float:
     if not math.isfinite(result) or not 0.0 < result < 1.0:
         raise ValueError(f"{name} must be finite and between zero and one")
     return result
+
+
+def _l2(values: Sequence[float]) -> float:
+    return math.sqrt(sum(value * value for value in values))
+
+
+def _max_abs(values: Sequence[float]) -> float:
+    return max(abs(value) for value in values)
+
+
+def _diff(values: Sequence[float]) -> list[float]:
+    return [right - left for left, right in zip(values, values[1:])]
+
+
+def _median(values: Sequence[float]) -> float:
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return 0.5 * (ordered[middle - 1] + ordered[middle])
+
+
+def _subtract(left: Sequence[float], right: Sequence[float]) -> list[float]:
+    return [a - b for a, b in zip(left, right)]
+
+
+def _add(left: Sequence[float], right: Sequence[float]) -> list[float]:
+    return [a + b for a, b in zip(left, right)]
+
+
+def _scale(value: float, items: Sequence[float]) -> list[float]:
+    return [value * item for item in items]
+
+
+def _solve_3x3(matrix: list[list[float]], rhs: list[float]) -> list[float]:
+    augmented = [row[:] + [rhs[index]] for index, row in enumerate(matrix)]
+    for column in range(3):
+        pivot = max(range(column, 3), key=lambda row: abs(augmented[row][column]))
+        if abs(augmented[pivot][column]) <= 1.0e-30:
+            raise ValueError("first-harmonic basis is singular")
+        if pivot != column:
+            augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
+        divisor = augmented[column][column]
+        augmented[column] = [value / divisor for value in augmented[column]]
+        for row in range(3):
+            if row == column:
+                continue
+            factor = augmented[row][column]
+            augmented[row] = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(augmented[row], augmented[column])
+            ]
+    return [augmented[row][3] for row in range(3)]
+
+
+def _first_harmonic_fit(
+    angle_deg: Sequence[float], values: Sequence[float]
+) -> tuple[list[float], list[float]]:
+    rows = [
+        [1.0, math.sin(math.radians(angle)), math.cos(math.radians(angle))]
+        for angle in angle_deg
+    ]
+    normal = [[0.0, 0.0, 0.0] for _ in range(3)]
+    rhs = [0.0, 0.0, 0.0]
+    for row, value in zip(rows, values):
+        for i in range(3):
+            rhs[i] += row[i] * value
+            for j in range(3):
+                normal[i][j] += row[i] * row[j]
+    coefficients = _solve_3x3(normal, rhs)
+    fitted = [
+        coefficients[0] + coefficients[1] * row[1] + coefficients[2] * row[2]
+        for row in rows
+    ]
+    return coefficients, fitted
 
 
 def hall_effect_transverse_voltage_gate(
@@ -49,43 +129,45 @@ def hall_effect_transverse_voltage_gate(
         "magnetic_flux_density_scaled_drive_t",
     )
     arrays = {name: _array(summary.get(name), name) for name in names}
-    sizes = {value.size for value in arrays.values()}
+    sizes = {len(value) for value in arrays.values()}
     if len(sizes) != 1:
         raise ValueError("all Hall sweep arrays must have equal length")
 
     angle = arrays["angle_deg"]
-    if not np.all(np.diff(angle) > 0.0):
+    if not all(value > 0.0 for value in _diff(angle)):
         raise ValueError("angle_deg must be strictly increasing")
     drive_ratio = _positive_fraction(summary.get("drive_scale_ratio"), "drive_scale_ratio")
     baseline = arrays["hall_voltage_baseline_v"]
-    voltage_norm = max(float(np.linalg.norm(baseline)), 1.0e-30)
-    voltage_scale = max(float(np.max(np.abs(baseline))), 1.0e-30)
+    voltage_norm = max(_l2(baseline), 1.0e-30)
+    voltage_scale = max(_max_abs(baseline), 1.0e-30)
     field_baseline = arrays["magnetic_flux_density_baseline_t"]
-    field_scale = max(float(np.max(np.abs(field_baseline))), 1.0e-30)
+    field_scale = max(_max_abs(field_baseline), 1.0e-30)
 
-    def relative_l2(residual: np.ndarray) -> float:
-        return float(np.linalg.norm(residual) / voltage_norm)
+    def relative_l2(residual: Sequence[float]) -> float:
+        return _l2(residual) / voltage_norm
 
-    def relative_max(residual: np.ndarray) -> float:
-        return float(np.max(np.abs(residual)) / voltage_scale)
+    def relative_max(residual: Sequence[float]) -> float:
+        return _max_abs(residual) / voltage_scale
 
-    angle_scale = max(float(np.max(np.abs(angle))), 1.0)
-    axis_symmetry = float(np.max(np.abs(angle + angle[::-1])) / angle_scale)
-    spacing = np.diff(angle)
-    spacing_error = float(
-        np.max(np.abs(spacing - np.median(spacing)))
-        / max(abs(float(np.median(spacing))), 1.0)
+    angle_scale = max(_max_abs(angle), 1.0)
+    axis_symmetry = (
+        _max_abs([a + b for a, b in zip(angle, reversed(angle))]) / angle_scale
     )
-    replay_error = relative_l2(arrays["hall_voltage_replay_v"] - baseline)
+    spacing = _diff(angle)
+    median_spacing = _median(spacing)
+    spacing_error = _max_abs([value - median_spacing for value in spacing]) / max(
+        abs(median_spacing), 1.0
+    )
+    replay_error = relative_l2(_subtract(arrays["hall_voltage_replay_v"], baseline))
     zero_error = relative_max(arrays["hall_voltage_zero_coefficient_v"])
     reversal_error = relative_l2(
-        arrays["hall_voltage_reversed_coefficient_v"] + baseline
+        _add(arrays["hall_voltage_reversed_coefficient_v"], baseline)
     )
     drive_error = relative_l2(
-        arrays["hall_voltage_scaled_drive_v"] - drive_ratio * baseline
+        _subtract(arrays["hall_voltage_scaled_drive_v"], _scale(drive_ratio, baseline))
     )
     field_drift = max(
-        float(np.max(np.abs(arrays[name] - field_baseline)) / field_scale)
+        _max_abs(_subtract(arrays[name], field_baseline)) / field_scale
         for name in (
             "magnetic_flux_density_replay_t",
             "magnetic_flux_density_zero_coefficient_t",
@@ -94,16 +176,9 @@ def hall_effect_transverse_voltage_gate(
         )
     )
 
-    theta = np.deg2rad(angle)
-    first_harmonic_basis = np.column_stack(
-        (np.ones_like(theta), np.sin(theta), np.cos(theta))
-    )
-    coefficients, *_ = np.linalg.lstsq(first_harmonic_basis, baseline, rcond=None)
-    first_harmonic = first_harmonic_basis @ coefficients
-    first_harmonic_residual = float(
-        np.linalg.norm(baseline - first_harmonic) / voltage_norm
-    )
-    dynamic_range = float(np.ptp(baseline))
+    coefficients, first_harmonic = _first_harmonic_fit(angle, baseline)
+    first_harmonic_residual = _l2(_subtract(baseline, first_harmonic)) / voltage_norm
+    dynamic_range = max(baseline) - min(baseline)
 
     checks = {
         "angle_sweep_is_symmetric_and_uniform": axis_symmetry <= 1.0e-12
@@ -124,13 +199,13 @@ def hall_effect_transverse_voltage_gate(
         "checks": checks,
         "issues": [name for name, ok in checks.items() if not ok],
         "metrics": {
-            "point_count": int(angle.size),
-            "angle_start_deg": float(angle[0]),
-            "angle_stop_deg": float(angle[-1]),
+            "point_count": len(angle),
+            "angle_start_deg": angle[0],
+            "angle_stop_deg": angle[-1],
             "angle_axis_symmetry_relative": axis_symmetry,
             "angle_spacing_relative_error": spacing_error,
-            "hall_voltage_min_v": float(np.min(baseline)),
-            "hall_voltage_max_v": float(np.max(baseline)),
+            "hall_voltage_min_v": min(baseline),
+            "hall_voltage_max_v": max(baseline),
             "hall_voltage_dynamic_range_v": dynamic_range,
             "fresh_replay_relative_l2": replay_error,
             "zero_coefficient_relative_max": zero_error,
@@ -139,7 +214,7 @@ def hall_effect_transverse_voltage_gate(
             "drive_scaling_relative_l2": drive_error,
             "magnetic_field_case_relative_max": field_drift,
             "first_harmonic_relative_residual": first_harmonic_residual,
-            "first_harmonic_coefficients_v": coefficients.tolist(),
+            "first_harmonic_coefficients_v": coefficients,
         },
         "lesson": (
             "Validate a Hall sensor with constitutive controls rather than assuming "

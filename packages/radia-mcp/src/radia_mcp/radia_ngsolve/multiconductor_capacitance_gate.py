@@ -4,10 +4,16 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
-import numpy as np
+
+
+def _numpy():
+    import numpy as np
+
+    return np
 
 
 def _matrix_family(value: object, name: str) -> list[np.ndarray]:
+    np = _numpy()
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or len(value) < 2:
         raise ValueError(f"{name} must contain at least two matrices")
     matrices: list[np.ndarray] = []
@@ -38,6 +44,7 @@ def multiconductor_capacitance_cross_formulation_gate(
 ) -> dict[str, object]:
     """Gate reciprocal passive Maxwell matrices from two formulations."""
 
+    np = _numpy()
     if not isinstance(summary, Mapping):
         raise TypeError("summary must be a mapping")
     positions = summary.get("positions")

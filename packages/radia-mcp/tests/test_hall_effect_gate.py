@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
-
-import numpy as np
+import math
 
 from radia_mcp.radia_ngsolve.hall_effect_gate import (
     hall_effect_transverse_voltage_gate as gate,
@@ -12,22 +11,22 @@ from radia_mcp.radia_ngsolve.server import hall_effect_transverse_voltage_gate
 
 
 def _summary() -> dict:
-    angle = np.linspace(-90.0, 90.0, 37)
-    field = 0.045 * np.exp(-(angle / 28.0) ** 2) - 0.002
-    voltage = 4.8 * field
+    angle = [-90.0 + 180.0 * index / 36.0 for index in range(37)]
+    field = [0.045 * math.exp(-((value / 28.0) ** 2)) - 0.002 for value in angle]
+    voltage = [4.8 * value for value in field]
     return {
-        "angle_deg": angle.tolist(),
-        "hall_voltage_baseline_v": voltage.tolist(),
-        "hall_voltage_replay_v": voltage.tolist(),
-        "hall_voltage_zero_coefficient_v": (1.0e-6 * voltage).tolist(),
-        "hall_voltage_reversed_coefficient_v": (-voltage).tolist(),
-        "hall_voltage_scaled_drive_v": (0.5 * voltage).tolist(),
+        "angle_deg": list(angle),
+        "hall_voltage_baseline_v": list(voltage),
+        "hall_voltage_replay_v": list(voltage),
+        "hall_voltage_zero_coefficient_v": [1.0e-6 * value for value in voltage],
+        "hall_voltage_reversed_coefficient_v": [-value for value in voltage],
+        "hall_voltage_scaled_drive_v": [0.5 * value for value in voltage],
         "drive_scale_ratio": 0.5,
-        "magnetic_flux_density_baseline_t": field.tolist(),
-        "magnetic_flux_density_replay_t": field.tolist(),
-        "magnetic_flux_density_zero_coefficient_t": field.tolist(),
-        "magnetic_flux_density_reversed_coefficient_t": field.tolist(),
-        "magnetic_flux_density_scaled_drive_t": field.tolist(),
+        "magnetic_flux_density_baseline_t": list(field),
+        "magnetic_flux_density_replay_t": list(field),
+        "magnetic_flux_density_zero_coefficient_t": list(field),
+        "magnetic_flux_density_reversed_coefficient_t": list(field),
+        "magnetic_flux_density_scaled_drive_t": list(field),
     }
 
 
