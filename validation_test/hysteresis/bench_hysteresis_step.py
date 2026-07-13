@@ -47,7 +47,12 @@ def _now() -> str:
     return _dt.datetime.now().isoformat(timespec="seconds")
 
 
-def _synthetic_play(mu_r=200.0, irr1=0.30, irr2=0.15, eta=(0.0, 0.3, 0.7), rmax=2.0, n=41):
+def _synthetic_play(mu_r=200.0, irr1=0.30, irr2=0.15, eta=(0.0, 0.3, 0.7), rmax=4.0, n=81):
+    # rmax must exceed the peak per-ELEMENT |B|: cube corner elements concentrate flux
+    # under refinement (N=16 reaches ~2.4 T although the volume average peaks at 0.9 T).
+    # The tables are exact lines, so widening the range changes nothing in-range -- it
+    # makes the linear law genuinely defined where the C++ table lookup would otherwise
+    # CLAMP (flat extrapolation) and the SolveHysteresis b_max guard rightly refuses.
     import numpy as np
     r = np.linspace(0.0, rmax, n)
     a0 = 1.0 / (MU0 * mu_r)
