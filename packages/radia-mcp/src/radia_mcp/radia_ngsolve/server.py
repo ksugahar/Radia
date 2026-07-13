@@ -71,6 +71,9 @@ from .eddy_levitation_force_gate import (
 from .motion_coupled_levitation_gate import (
     motion_coupled_eddy_levitation_transient_gate as _motion_coupled_eddy_levitation_transient_gate,
 )
+from .rotational_eddy_brake_energy_gate import (
+    rotational_eddy_brake_energy_gate as _rotational_eddy_brake_energy_gate,
+)
 from .harmonic_zero_net_circuit_gate import (
     harmonic_zero_net_circuit_gate as _harmonic_zero_net_circuit_gate,
 )
@@ -2841,6 +2844,20 @@ def motion_coupled_eddy_levitation_transient_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "motion_coupled_eddy_levitation_transient_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def rotational_eddy_brake_energy_gate(summary_json: str) -> str:
+    """Gate free rotational braking with angular impulse and field energy."""
+    try:
+        result = _rotational_eddy_brake_energy_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "rotational_eddy_brake_energy_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
