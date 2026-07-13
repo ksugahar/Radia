@@ -65,6 +65,9 @@ from .permanent_magnet_recoil_state_gate import (
 from .eddy_levitation_force_gate import (
     linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
 )
+from .motion_coupled_levitation_gate import (
+    motion_coupled_eddy_levitation_transient_gate as _motion_coupled_eddy_levitation_transient_gate,
+)
 from .harmonic_zero_net_circuit_gate import (
     harmonic_zero_net_circuit_gate as _harmonic_zero_net_circuit_gate,
 )
@@ -2775,6 +2778,22 @@ def linear_eddy_levitation_force_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "linear_eddy_levitation_force_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def motion_coupled_eddy_levitation_transient_gate(summary_json: str) -> str:
+    """Gate motion-coupled lift while detecting aliased force output times."""
+    try:
+        result = _motion_coupled_eddy_levitation_transient_gate(
+            json.loads(summary_json)
+        )
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "motion_coupled_eddy_levitation_transient_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
