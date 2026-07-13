@@ -339,9 +339,8 @@ def differential_forms_mathematica_recipes(topic: str = "all") -> str:
                         Hodge star, Schur/Riccati flow, and shifted sqrt
       "differential_geometry" - Runbook/index for the committed hodograph
                                 differential-geometry `.wls` suite
-      "curve_surface" - Reading guide for the local Mathematica curve/surface
-                        differential-geometry textbook; maps it to hodograph,
-                        stream-function, surface de Rham, and Hodge weights
+      "curve_surface" - Committed `.wls`: curve/surface DG basics for
+                        hodograph charts and stream-function surfaces
       "tex"           - TeXForm output for paper writing
       "lorentz"       - Lorentz boost of the EM 2-form F  (E ↔ B mixing)
       "hex_dga"       - Codecasa-Specogna-Trevisan basis functions for

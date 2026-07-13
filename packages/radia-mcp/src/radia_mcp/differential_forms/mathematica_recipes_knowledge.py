@@ -664,6 +664,7 @@ which symbolic file should I run before changing the FEM formulation?"
 | file | question it answers | assertions |
 |---|---|---:|
 | `weakform_hodge.wls` | Is the weak form a Hodge pairing, and does a coordinate map move only the material/Hodge weight? | 20 |
+| `curve_surface_basics.wls` | What curve/surface differential-geometry identities support hodograph charts and stream-function surfaces? | 23 |
 | `hodograph.wls` | How do Kelvin, Clebsch, Chaplygin, and the `A_z` potential fit into one hodograph diagram? | 21 |
 | `canonical.wls` | What is the Hamiltonian / Legendre / canonical-transform reading of the weak form and hodograph? | 12 |
 | `surface_derham.wls` | How do HOIBC global modes split into surface topology plus the analytic exterior DtN? | 12 |
@@ -679,6 +680,7 @@ the harmonic-loop count lives in `d`, not in the Hodge/material tensor.
 ```powershell
 cd packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry
 wolframscript -file weakform_hodge.wls
+wolframscript -file curve_surface_basics.wls
 wolframscript -file hodograph.wls
 wolframscript -file canonical.wls
 wolframscript -file surface_derham.wls
@@ -697,6 +699,7 @@ mathematica_evaluate(code=<contents of the .wls file>, timeout=120)
 Use this `mcp-server-differential-forms` tool for the map:
 
 - `differential_forms_mathematica_recipes("weakform_hodge")`
+- `differential_forms_mathematica_recipes("curve_surface")`
 - `differential_forms_mathematica_recipes("hodograph")`
 - `differential_forms_mathematica_recipes("canonical")`
 - `differential_forms_mathematica_recipes("surface_derham")`
@@ -712,63 +715,75 @@ Cross-reference:
 """
 
 CURVE_SURFACE_DG_READING_GUIDE = """
-# Reading guide: Mathematica curve/surface differential geometry
+# Recipe: curve_surface_basics.wls -- curve/surface DG for hodograph and SF
 
-Local source: `Mathematica 曲線と曲面の微分幾何.pdf`.
+Executable anchor:
+`packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/curve_surface_basics.wls`
 
-The PDF is a local literature asset, not package data.  Do not paste scanned
-page text into MCP knowledge.  Use it as background reading, then promote only
-distilled Radia-specific claims: a small Mathematica identity, a self-tested
-`.wls` assertion, or a short mapping from a geometric concept to a Radia API,
-validation test, or notebook.
+Local background source: `Mathematica 曲線と曲面の微分幾何.pdf`.
+The PDF is NOT required for `pip install radia-mcp` users.  The shipped
+knowledge is the `.wls` file and this summary; the book is only a local study
+source for improving the assertions.
 
 Packaged guide:
 `packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry/curve_surface_reading_guide.md`
 
-## Hodograph route
+## What the `.wls` proves
+
+`curve_surface_basics.wls` is self-contained and prints `ALL PASS`.  It checks
+23 assertions:
+
+- curve speed, curvature, and torsion for a circle and helix;
+- surface first fundamental form, area density, unit normal, second fundamental
+  form, Gaussian curvature, and mean curvature for sphere/cylinder;
+- the chart identity `g = J^T J`;
+- surface gradient on a sphere;
+- stream-function current `K = n x grad_Gamma psi` is tangential and
+  `div_Gamma K = 0` on sphere and plane;
+- `Delta_Gamma psi = div_Gamma grad_Gamma psi` and
+  `Delta_Gamma cos(theta) = -2 cos(theta)/R^2` on a sphere.
+
+## Run
+
+```powershell
+cd packages/radia-mcp/src/radia_mcp/mathematica/differential_geometry
+wolframscript -file curve_surface_basics.wls
+```
+
+Use it before changing:
+
+- stream-function contour extraction on curved surfaces;
+- `K = n x grad_Gamma psi` sign/orientation conventions;
+- curved-surface current-density norms;
+- surface Laplace-Beltrami / DtN / HOIBC logic;
+- hodograph chart geometry.
+
+## How it connects to hodograph
 
 Read curve/surface coordinate transformations through the split:
 
 - `d` / pullback / closedness are topology and commute with smooth coordinate
-  changes.
+  changes;
 - metric / area / inner product / Hodge star are geometry and become explicit
   weights in the weak form.
 
-Then run:
+Then run `hodograph.wls`, `canonical.wls`, and `weakform_hodge.wls`.
 
-```powershell
-wolframscript -file hodograph.wls
-wolframscript -file canonical.wls
-wolframscript -file weakform_hodge.wls
-```
+## How it connects to stream-function
 
-Use `hodograph.wls` for the Kelvin/Clebsch/Chaplygin backbone,
-`canonical.wls` for the Hamiltonian-Legendre reading, and
-`weakform_hodge.wls` for the material/Hodge weight.
+The surface identity is `K = n x grad_Gamma psi`.  The first fundamental form
+controls `grad_Gamma`; the oriented normal controls the sign; the area density
+controls norms and integration.  `curve_surface_basics.wls` verifies the core
+contracts symbolically before the numerical SF code uses them.
 
-## Stream-function route
-
-For stream-function coil design, the surface identity is:
-
-```text
-K = n x grad_Gamma psi
-```
-
-The book's surface parametrization, normal vector, first fundamental form, and
-area-element material should be read as the geometry behind `grad_Gamma`,
-`|K|`, contour extraction, and single-stroke wiring on curved formers.
-
-Radia anchors:
-
-- `radia_mcp.streamfunction.streamfunction("single_stroke")`
-- `radia_mcp.streamfunction.streamfunction("regularized")`
-- `radia_mcp.streamfunction.streamfunction("fusion")`
-- `surface_derham.wls`
-- `dtn_geometry.wls`
+Related anchors:
+`surface_derham.wls`, `dtn_geometry.wls`,
+`radia_mcp.streamfunction.streamfunction("single_stroke")`, and
+`radia_mcp.streamfunction.streamfunction("regularized")`.
 
 ## Local search terms
 
-Search the OCR text locally for:
+When improving this `.wls` from the local OCR text, search for:
 
 ```text
 曲線, 曲率, 接ベクトル, 法線, 曲面, 接平面, 第一基本形式,
@@ -776,8 +791,8 @@ Search the OCR text locally for:
 面積要素, 座標変換, Mathematica
 ```
 
-Every useful result should be mapped back to one of the executable anchors
-above before it becomes MCP guidance.
+Every useful result should be turned into a Radia-owned assertion before it
+becomes MCP guidance.
 """
 
 WEAKFORM_HODGE_RECIPE = """
@@ -1014,8 +1029,8 @@ def get_mathematica_recipes_documentation(topic: str = "all") -> str:
       "dtn_geometry"       - Committed .wls: DtN/Steklov as condensed exterior
                               Hodge star / shifted sqrt(-Delta_Gamma)
       "differential_geometry" - Index for the full committed .wls suite
-      "curve_surface"      - Local Mathematica curve/surface textbook reading
-                              guide for hodograph and stream-function work
+      "curve_surface"      - Committed .wls: curve/surface DG basics for
+                              hodograph and stream-function surfaces
       "tex"                - LaTeX (TeXForm) output for paper writing
       "lorentz"            - Lorentz boost of the EM 2-form F
       "hex_dga"            - Codecasa DGA basis functions for polyhedra
