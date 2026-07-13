@@ -59,7 +59,10 @@ from .simple_field_2d import (
     route_motor_validation,
 )
 from .planar_coupling_knowledge import get_planar_coupling
-from .thermal_handoff import motor_thermal_handoff_gate as build_motor_thermal_handoff_gate
+from .thermal_handoff import (
+    motor_electrothermal_result_chain_gate as build_motor_electrothermal_result_chain_gate,
+    motor_thermal_handoff_gate as build_motor_thermal_handoff_gate,
+)
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
 from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
 from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
@@ -873,6 +876,26 @@ def motor_thermal_handoff_gate(
         network_json,
         mesh_regions_json,
         relative_tolerance,
+    )
+
+
+@mcp.tool()
+def motor_electrothermal_result_chain_gate(
+    chain_json: str,
+    absolute_tolerance_W: float = 1.1e-2,
+    relative_tolerance: float = 1.0e-3,
+) -> str:
+    """Gate a four-stage motor electrothermal result handoff.
+
+    The stage artifacts must be fresh, uniquely identified, and pin exact
+    upstream result digests.  The six three-phase motor loss channels are
+    owned once, then scaled by an explicit geometry-symmetry fraction before
+    comparison with the steady thermal input and temperature rise.
+    """
+    return build_motor_electrothermal_result_chain_gate(
+        chain_json,
+        absolute_tolerance_W=absolute_tolerance_W,
+        relative_tolerance=relative_tolerance,
     )
 
 
