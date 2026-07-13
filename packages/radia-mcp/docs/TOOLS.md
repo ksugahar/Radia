@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **779 tools** across 43 MCP servers.
+Total: **781 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 82 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 72 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 138 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -177,6 +177,8 @@ Module: `radia_mcp.build123d.server`
 | `build123d_jointed_assembly_heal_invariance_gate` | Verify that STEP solid closure loss persists across heal/noheal imports. |
 | `build123d_jointed_assembly_source_replay_gate` | Gate immutable source, joint graph, and headless external-CAD evidence. |
 | `build123d_jointed_assembly_step_closure_gate` | Diagnose a component-level solid closure loss in a jointed STEP assembly. |
+| `build123d_loft_example_source_replay_gate` | Gate the immutable upstream loft source and headless CAD replay. |
+| `build123d_lofted_shell_handoff_gate` | Gate a bounded lofted-shell CAD handoff without solver overclaim. |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
 | `build123d_mass_property_crosscheck` | Compare build123d volume/area/bbox rows with one or more CAD sources. |
 | `build123d_motor_housing_thermal_reference` | Return analytic volume/area/body-count data for a finned motor housing. |
