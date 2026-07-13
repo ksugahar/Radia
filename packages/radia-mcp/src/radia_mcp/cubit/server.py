@@ -86,6 +86,10 @@ from .symmetric_mixed_gate import (
 	cubit_symmetric_swept_mixed_mesh_gate as _cubit_symmetric_swept_mixed_mesh_gate,
 	cubit_symmetric_swept_source_replay_gate as _cubit_symmetric_swept_source_replay_gate,
 )
+from .pyramid_export_replay_gate import (
+	cubit_pyramid_mixed_export_gate as _cubit_pyramid_mixed_export_gate,
+	cubit_pyramid_source_plugin_replay_gate as _cubit_pyramid_source_plugin_replay_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -1093,6 +1097,34 @@ def cubit_mixed_transition_source_gate(
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_mixed_transition_source_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_pyramid_mixed_export_gate(summary: dict) -> str:
+	"""Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran."""
+	try:
+		result = _cubit_pyramid_mixed_export_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_pyramid_mixed_export_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_pyramid_source_plugin_replay_gate(summary: dict) -> str:
+	"""Gate legacy source migration through executable-owned plugin startup."""
+	try:
+		result = _cubit_pyramid_source_plugin_replay_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_pyramid_source_plugin_replay_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
