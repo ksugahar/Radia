@@ -620,6 +620,7 @@ def test_mcp_tools_registered():
         "distributed_line_delay_loss_gate",
         "second_order_allpass_phase_group_delay_gate",
         "second_order_complex_zero_transfer_gate",
+        "balanced_three_phase_delta_load_gate",
         "circuit_knowledge",
         "buck_seed",
         "patentability_search_plan",
@@ -627,6 +628,6 @@ def test_mcp_tools_registered():
     assert names == expected
 
     readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
-    assert "Exposes thirty tools:" in readme
+    assert "Exposes thirty-one tools:" in readme
     for name in expected:
         assert f"`{name}" in readme
