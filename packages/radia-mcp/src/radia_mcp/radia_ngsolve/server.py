@@ -95,6 +95,9 @@ from .coupled_cq_refinement_gate import (
 from .coil_self_resonance_gate import (
     coil_self_resonance_sweep_gate as _coil_self_resonance_sweep_gate,
 )
+from .passive_axial_bearing_gate import (
+    passive_axial_bearing_stiffness_gate as _passive_axial_bearing_stiffness_gate,
+)
 from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
 from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
 from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
@@ -2916,6 +2919,20 @@ def coil_self_resonance_sweep_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "coil_self_resonance_sweep_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def passive_axial_bearing_stiffness_gate(summary_json: str) -> str:
+    """Gate signed force, action-reaction, axial stability, and sweep replay."""
+    try:
+        result = _passive_axial_bearing_stiffness_gate(json.loads(summary_json))
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "passive_axial_bearing_stiffness_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }

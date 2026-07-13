@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **745 tools** across 43 MCP servers.
+Total: **750 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 74 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 67 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 118 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 123 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -238,6 +238,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
+| `acoustic_duct_band_gap_gate` | Gate a confined acoustic band gap against empty and free-space controls. |
 | `acoustic_fembem_cross_learnings` | Method-selection and validation cross-learnings for radia-acoustic, distilled |
 | `adjoint_gradient_scaling_gate` | Gate reverse-mode solve scaling, FD agreement and ascent direction. |
 | `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
@@ -259,6 +260,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cq_scattering_arrival_gate` | Gate CQ scattered-field causality against a geometric ray arrival. |
 | `cyclic_terminal_phasor_balance_gate` | Gate cyclic voltage/current triplets and all-terminal phasor KCL. |
 | `cyclic_terminal_source_sweep_gate` | Gate cyclic terminal charges without assuming formulations are identical. |
+| `cylindrical_conductor_skin_bessel_gate` | Gate cylindrical skin-effect identities and exact Bessel structure. |
 | `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
 | `dual_formulation_force_error_convergence_gate` | Gate force-error convergence envelopes across two or more formulations. |
 | `dual_formulation_symmetric_field_profile_gate` | Gate full-profile agreement and symmetry for two field formulations. |
@@ -300,6 +302,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
 | `loss_temperature_coupling_gate` | Gate an electromagnetic-loss to transient-temperature handoff. |
 | `lossy_dielectric_complex_power_refinement_gate` | Gate lossy-dielectric constitutive, energy, complex-power, and mesh closure. |
+| `magnetic_conductive_shield_frequency_gate` | Gate low-frequency magnetic loading and high-frequency eddy shielding. |
 | `magnetostatic_open_boundary_equivalence_gate` | Gate gauge-invariant equivalence of two magnetostatic open-boundary solutions. |
 | `manual_auto_mixed_mesh_preservation_gate` | Gate exact manual-region preservation and bounded automatic remeshing. |
 | `material_contrast_force_gate` | Gate null, attraction, and increasing-repulsion material-force cases. |
@@ -321,6 +324,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `panel_schema` | Show Radia-NGSolve panel definitions with Japanese labels and physics. |
 | `panel_widget_locations` | Return file:line locations for everything that touches a widget. |
 | `parallel_wire_force_refinement_gate` | Gate a reciprocal two-wire force refinement sweep without requiring monotone error. |
+| `passive_axial_bearing_stiffness_gate` | Gate signed force, action-reaction, axial stability, and sweep replay. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `periodic_unwrapped_pm_machine_replay_gate` | Gate topology-aware PM-machine field symmetry and replay stability. |
 | `permanent_magnet_recoil_state_gate` | Gate nonlinear, open-circuit, and partial-recoil PM field states. |
@@ -347,6 +351,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `symmetric_complex_field_curve_gate` | Gate an even- or odd-sampled complex field curve by mirror symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
 | `three_phase_winding_power_balance_gate` | Gate three-phase balance, STAR KCL, and coupled-winding copper power. |
+| `transient_conductor_replay_identity_gate` | Gate full transient conductor histories, identities, and independent replay. |
 | `transient_coupled_coil_response_gate` | Gate a passive shorted-secondary transient induced-current history. |
 | `twin_conductor_skin_effect_frequency_gate` | Gate passive twin-conductor R/L and impedance trends over frequency. |
 | `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
