@@ -919,11 +919,20 @@ rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld; ~10x faster per
     finite pole width).  Hard-edge/SCOFF bookkeeping with the GEOMETRIC edge angle therefore
     overpredicts the vertical edge focusing by ~5 pct for this geometry -- the EFFECTIVE edge
     angle is a magnet-specific quantity that this measurement chain extracts.
-  - CAVEAT: the HDiv fringe SHAPE (K1g 6.1->6.9 mm, B0 non-monotone, flat-top-edge overshoot)
-    converges more slowly with edge_maxh than the tracked dK; quote dK and the tilt from either
-    engine, quote K1g/B0 from the reduced-Omega profile.
+  - FRINGE-SHAPE MESH SENSITIVITY: DIAGNOSED AND CURED (2026-07-14 separation runs, JSON
+    `mesh_dependence_diagnosis`).  The culprit is the piecewise-constant-M ripple of BULK-size
+    GAP-FACE elements at 20 mm standoff (rad.Fld write-back collapses the RT1 solution to
+    per-element constant M) -- NOT the edge lines (edge 1.5 mm does not remove the flat-top
+    overshoot).  PRESCRIPTION: refine the gap-facing pole faces to face_maxh ~ standoff/3
+    (0.006 here) -> overshoot g_max 1.0245->1.0001, K1g 7.84->8.80 mm = reduced-Omega 8.85 to
+    0.6 pct (the 12 pct cross-engine K1g gap was entirely this ripple).  LIMITS: keep the
+    face/bulk size contrast <= ~2.5x (4 mm faces at 14 mm bulk push the mass-Riesz CG past its
+    4000-iter cap, fail-loud); B0 stays RELATIVE-ONLY (+-3.5 pct near-field-evaluation scatter
+    across all configurations while the global demag probe is constant to 5 digits; it
+    first-order-cancels in the B0-normalized dK).
   - Committed: edge_focusing_fem_results.json `hdiv_vim_cross_check` (runs, agreement, tilt
-    probe); engines swap via fem_scoff_study(solve_midplane=hdiv_solve_midplane).
+    probe, mesh_dependence_diagnosis); engines swap via
+    fem_scoff_study(solve_midplane=hdiv_solve_midplane); hdiv_* take face_maxh.
 
 ## Magnet-design lessons the measurement exposed (all measured failures)
   - A STRAIGHT coil front across a tilted iron edge leaves the iso-field tilt FAR below the

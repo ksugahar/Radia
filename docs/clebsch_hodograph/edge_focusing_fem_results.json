@@ -310,6 +310,99 @@
    },
    "note": "the real magnet's local iso-field tilt near the beam is only ~0.95-0.96 of the geometric edge angle (reduced-Omega 0.95-0.96 level-independent; HDiv converges to the same value with edge refinement, g=0.5: 0.89 -> 0.95) -- corner arcs + coil side bars + finite pole width; this reduced effective edge angle is the deficit mechanism, and it is a real magnet-design quantity: hard-edge/SCOFF bookkeeping with the GEOMETRIC beta overpredicts the vertical edge focusing by ~5 pct for this geometry"
   },
-  "fringe_shape_caveat": "the HDiv fringe SHAPE converges more slowly with edge_maxh than the tracked dK: K1g (6.06 -> 6.87 mm), B0 (0.4436 -> 0.4273 T, non-monotone) and the flat-top-edge overshoot still move between the edge 4 mm and 2.5 mm meshes; quote dK and the tilt from either engine, quote K1g/B0 from the reduced-Omega profile (or push the HDiv edge mesh further)"
+  "fringe_shape_caveat": "RESOLVED 2026-07-14 (see mesh_dependence_diagnosis): the slow fringe-shape convergence was the piecewise-constant-M ripple of bulk-size gap-face elements at 20 mm standoff; gap-face refinement face_maxh=0.006 cures it (g_max 1.0001, K1g 8.80 vs reduced-Omega 8.85 mm).  B0 remains relative-only (+-3.5% near-field-evaluation scatter, global demag constant to 5 digits).",
+  "mesh_dependence_diagnosis": {
+   "generated_at_utc": "2026-07-14T00:00:00+00:00",
+   "method": "separation runs at beta=0 varying maxh_iron / edge_maxh / gap-face face_maxh independently (identical chain); reference reduced-Omega scoff9: B0=0.4412 T, K1g=8.85 mm, g_max=1.0004",
+   "runs_beta0": {
+    "hdiv_coarse": {
+     "maxh_iron": 0.025,
+     "edge_maxh": 0.008,
+     "face_maxh": null,
+     "ne": 5102,
+     "cg_iters": 41,
+     "demag": 0.45024860554327606,
+     "B0_T": 0.40625841756172276,
+     "K1g_in_mm": 9.200729911759817,
+     "g_max": 1.0090577817309403
+    },
+    "hdiv2": {
+     "maxh_iron": 0.014,
+     "edge_maxh": 0.004,
+     "face_maxh": null,
+     "ne": 20464,
+     "cg_iters": 49,
+     "demag": 0.4502279852871925,
+     "B0_T": 0.4394627526619028,
+     "K1g_in_mm": 7.12360202257034,
+     "g_max": 1.0244563673767537
+    },
+    "hdiv3": {
+     "maxh_iron": 0.011,
+     "edge_maxh": 0.0025,
+     "face_maxh": null,
+     "ne": 37156,
+     "cg_iters": 222,
+     "demag": 0.4502232444062366,
+     "B0_T": 0.42943843857902464,
+     "K1g_in_mm": 7.847208843856621,
+     "g_max": 1.0163303227656877
+    },
+    "hx_a": {
+     "maxh_iron": 0.014,
+     "edge_maxh": 0.0025,
+     "face_maxh": null,
+     "ne": 25898,
+     "cg_iters": 45,
+     "demag": 0.45022770197105133,
+     "B0_T": 0.44213780501115113,
+     "K1g_in_mm": 7.840177682675382,
+     "g_max": 1.0216523612342288
+    },
+    "hx_b": {
+     "maxh_iron": 0.011,
+     "edge_maxh": 0.004,
+     "face_maxh": null,
+     "ne": 30448,
+     "cg_iters": 211,
+     "demag": 0.45022377093130356,
+     "B0_T": 0.42496852163010773,
+     "K1g_in_mm": 6.452273422764226,
+     "g_max": 1.0407010655574986
+    },
+    "hx_c": {
+     "maxh_iron": 0.014,
+     "edge_maxh": 0.0015,
+     "face_maxh": null,
+     "ne": 40401,
+     "cg_iters": 47,
+     "demag": 0.45022699807388744,
+     "B0_T": 0.4370707450522318,
+     "K1g_in_mm": 7.781293534994879,
+     "g_max": 1.0256853978064684
+    },
+    "hx_f": {
+     "maxh_iron": 0.014,
+     "edge_maxh": 0.0025,
+     "face_maxh": 0.006,
+     "ne": 49527,
+     "cg_iters": 614,
+     "demag": 0.45022021071469237,
+     "B0_T": 0.4559483057368709,
+     "K1g_in_mm": 8.803234530192325,
+     "g_max": 1.0000570625059895
+    }
+   },
+   "findings": [
+    "K1g is EDGE-resolution dominated and converges within HDiv at edge_maxh<=2.5 mm (7.84/7.85/7.78 mm for maxh 14/11 and edge 2.5/1.5) -- but sticks ~12% below the reduced-Omega value until the gap FACE is refined.",
+    "The flat-top-edge overshoot (g_max 1.02-1.04) does NOT respond to edge refinement (1.026 at edge 1.5 mm): it sits 30 mm inside the pole end, above BULK-size gap-face elements.  It is the piecewise-constant-M ripple of those elements at 20 mm standoff (rad.Fld write-back collapses the RT1 solution to per-element constant M).",
+    "CURE: refining the gap-facing pole faces to face_maxh=0.006 (~standoff/3) removes the ripple: g_max 1.0245 -> 1.0001 and K1g 7.84 -> 8.80 mm, matching the reduced-Omega 8.85 mm to 0.6% (run hx_f).  The 12% cross-engine K1g gap was entirely this ripple.",
+    "LIMIT: face_maxh=0.004 at bulk 14 mm (size contrast ~3.5x) drives the mass-Riesz CG past its 4000-iteration cap (fail-loud RuntimeError, n_face=598650).  Keep the face/bulk contrast <= ~2.5x, or lower maxh_iron together with face_maxh.",
+    "RESIDUAL: B0 scatters +-3.5% across ALL configurations (0.425..0.456 T; non-monotone) while the global demag probe is constant to 5 digits (0.45022..0.45025) -- the global M is mesh-independent and the scatter is a NEAR-FIELD-EVALUATION sensitivity of the gap field.  It first-order-cancels in the B0-normalized dK measurement (kappa=1/(B0 rho) rescales tracked and model kicks alike); do not quote the HDiv B0 absolute value.",
+    "CG conditioning degrades on graded meshes: iters 45-49 (uniform maxh 14), 211-222 (maxh 11), 614 (face 6 mm at bulk 14 mm)."
+   ],
+   "prescription": "for near-surface map evaluation (standoff ~ GAP/2), set face_maxh ~ standoff/3 on the source faces facing the map, keep face/bulk size contrast <= ~2.5x, and treat B0 as relative-only; dK and the iso-field tilt are robust without any of this (+-3%)",
+   "root_cause_note": "the ripple is ultimately the per-element constant-M collapse in the rad.Fld write-back (ObjSetM) of the RT1 solution; evaluating the field from the RT1 (linear-M) solution directly -- radia.vim already ships arbitrary-degree charge kernels (tet_volume_field_polynomial / polynomial_triangle_charge_field) -- would remove the O(h) collapse error without mesh prescriptions; flagged as a radia improvement task"
+  }
  }
 }

@@ -499,11 +499,20 @@ def fem_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, solve_midplane=None):
 
 
 # --------------------------------------------------- HDiv-VIM field engine (cross-check)
-def hdiv_build_iron_mesh(beta_deg, maxh_iron=0.014, edge_maxh=0.004):
+def hdiv_build_iron_mesh(beta_deg, maxh_iron=0.014, edge_maxh=0.004, face_maxh=None):
     """IRON-ONLY tet mesh for the HDiv-VIM engine: the same parallelogram poles +
     centered legs as ``fem_build_mesh``, but NO air box -- the HDiv-VIM needs no air
     discretization (the mid-plane field is evaluated by analytic surface-charge
-    integrals of the solved per-element M, exact open boundary)."""
+    integrals of the solved per-element M, exact open boundary).
+
+    ``face_maxh`` refines the GAP-FACING pole faces (|z| = F_GAP/2).  The mid-plane
+    field is dominated by the surface sources on those faces at only F_GAP/2 = 20 mm
+    standoff, so bulk-size (11-14 mm) elements there leave a piecewise-constant-M
+    ripple on the map (flat-top-edge bumps g~1.02-1.04, K1g biased low by ~12%).
+    face_maxh=0.006 (~standoff/3) removes the ripple (g_max 1.0001, K1g matches the
+    reduced-Omega profile to 0.6%).  Do NOT push it much finer at fixed maxh_iron:
+    a face/bulk size contrast of ~3.5x (face 4 mm vs bulk 14 mm) drives the
+    mass-Riesz CG past its 4000-iteration cap (measured 2026-07-13)."""
     import ngsolve as ng
     from netgen.occ import OCCGeometry, Box, Pnt
     beta = np.radians(beta_deg)
@@ -520,13 +529,18 @@ def hdiv_build_iron_mesh(beta_deg, maxh_iron=0.014, edge_maxh=0.004):
         c = e.center
         if abs(abs(c.z) - F_GAP / 2) < 1e-4 and abs(c.x) < 0.11 and abs(c.y) > 0.05:
             e.maxh = edge_maxh
+    if face_maxh is not None:
+        for f in iron.faces:
+            c = f.center
+            if abs(abs(c.z) - F_GAP / 2) < 1e-4:
+                f.maxh = face_maxh
     with ng.TaskManager():
         mesh = ng.Mesh(OCCGeometry(iron).GenerateMesh(maxh=maxh_iron))
     return mesh
 
 
 def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
-                        nx=81, ny=401, xmax=0.05, ymax=0.26):
+                        face_maxh=None, nx=81, ny=401, xmax=0.05, ymax=0.26):
     """FEEC HDiv-VIM twin of ``fem_solve_midplane``: ``radia.vim.MeshSoftIron`` on the
     iron-only mesh + the same explicit CoilBuilder pair, ``rad.Solve`` auto-dispatch
     (RT1), then one batch ``rad.Fld`` mid-plane map (all points in the gap/air, so the
@@ -537,7 +551,7 @@ def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
     from radia import vim
     rad.UtiDelAll()                                   # also clears the HDiv registry
     coils = fem_build_coil(float(np.radians(beta_deg)))
-    mesh = hdiv_build_iron_mesh(beta_deg, maxh_iron, edge_maxh)
+    mesh = hdiv_build_iron_mesh(beta_deg, maxh_iron, edge_maxh, face_maxh)
     iron = vim.MeshSoftIron(mesh, mu_r=mu_r)
     top = rad.ObjCnt([iron, coils])
     rad.Solve(top)                                    # auto -> FEEC HDiv-VIM (RT1)
@@ -551,7 +565,8 @@ def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
     return xs, ys, Bz, ne
 
 
-def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=0.004):
+def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=0.004,
+                     face_maxh=None):
     """``fem_scoff_study`` with the field engine swapped to the FEEC HDiv-VIM.
 
     Cross-check result (2026-07-13, committed in edge_focusing_fem_results.json
@@ -564,12 +579,21 @@ def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=
     directly on both engines' maps, so the x-uniform tilted-fringe model (and
     hard-edge/SCOFF bookkeeping with the geometric beta) overpredicts the edge
     focusing by ~5% for this geometry.
-    Caveat: the HDiv fringe SHAPE (K1g, B0, flat-top edge overshoot) converges more
-    slowly with edge_maxh than the tracked dK does; quote dK and the tilt from
-    either engine, quote K1g/B0 from the reduced-Omega profile."""
+
+    Mesh-dependence diagnosis (separation runs, 2026-07-13, recorded in the JSON's
+    `mesh_dependence_diagnosis`): the fringe-SHAPE mesh sensitivity is the
+    piecewise-constant-M ripple of the bulk-size GAP-FACING pole-face elements at
+    20 mm standoff -- NOT the edge lines.  Prescription: face_maxh=0.006
+    (~standoff/3) cures it (g_max 1.0245 -> 1.0001; K1g 7.8 -> 8.80 mm, matching
+    reduced-Omega 8.85 to 0.6%); face 4 mm at bulk 14 mm exceeds the mass-Riesz CG
+    limit (4000-iter non-convergence).  Residual: B0 scatters +-3.5% across all
+    configurations (0.425..0.456 T) while the global demag stays constant to 5
+    digits -- a near-field-evaluation sensitivity that first-order-cancels in the
+    B0-normalized dK measurement; do not quote the HDiv B0 absolute value."""
     return fem_scoff_study(betas_deg, rho,
                            solve_midplane=lambda bd: hdiv_solve_midplane(
-                               bd, maxh_iron=maxh_iron, edge_maxh=edge_maxh))
+                               bd, maxh_iron=maxh_iron, edge_maxh=edge_maxh,
+                               face_maxh=face_maxh))
 
 
 # ------------------------------------------------------------------ figure
