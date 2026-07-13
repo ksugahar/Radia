@@ -83,6 +83,9 @@ from .two_winding_frequency_gate import (
 from .conductive_shield_frequency_gate import (
     magnetic_conductive_shield_frequency_gate as _magnetic_conductive_shield_frequency_gate,
 )
+from .cylindrical_conductor_skin_gate import (
+    cylindrical_conductor_skin_bessel_gate as _cylindrical_conductor_skin_bessel_gate,
+)
 from .single_loop_normalized_field_gate import (
     single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
 )
@@ -2856,6 +2859,20 @@ def magnetic_conductive_shield_frequency_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "magnetic_conductive_shield_frequency_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def cylindrical_conductor_skin_bessel_gate(summary_json: str) -> str:
+    """Gate cylindrical skin-effect identities and exact Bessel structure."""
+    try:
+        result = _cylindrical_conductor_skin_bessel_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "cylindrical_conductor_skin_bessel_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
