@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-spice-lab"
-version = "0.4.0"
+version = "0.4.1"
 description = "Radia monorepo SPICE/LTspice lab bench for ASC/CIR/schemdraw conversion, topology checks, and MCP agent workflows"
 readme = "README.md"
 license = "MIT"

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-13
+
+### Added (balanced three-phase delta gate)
+
+Added `balanced_three_phase_delta_rl_gate()` and MCP/CLI exposure for
+checking balanced three-phase delta RL loads.  The gate reports line and
+phase currents, active/reactive/apparent power, and topology hints for
+publication-safe circuit validation.
+
 ### Added (prior-art search planning)
 
 Added `patentability_search_plan()`, also exposed through MCP, to create
