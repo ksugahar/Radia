@@ -14,7 +14,8 @@ $env:LAB_MATHEMATICA_CURVE_SURFACE_DG_PDF = "<local path to the PDF>"
 
 Do not commit extracted book text or machine-local absolute paths.  Use the
 book as background reading, then encode Radia-facing claims as original notes,
-small symbolic Mathematica checks, or self-tested `.wls` assertions.
+small symbolic Mathematica checks, or self-tested `.wls` assertions.  The
+current executable distillation is `curve_surface_basics.wls`.
 
 ## Why this book belongs here
 
@@ -29,6 +30,16 @@ language:
 | Second fundamental form / curvature | curved elements, geometric error, and whether a surface model is faithful | curved-mesh validation and HOIBC geometry notes |
 | Coordinate transforms and pullbacks | Kelvin maps, hodograph charts, and transformation-optics style material modulation | `weakform_hodge.wls`, `hodograph.wls` |
 | Differential operators on surfaces | `grad_Gamma`, `div_Gamma`, Laplace-Beltrami, and surface DtN spectra | `surface_derham.wls`, `dtn_geometry.wls` |
+
+Start by running:
+
+```powershell
+wolframscript -file curve_surface_basics.wls
+```
+
+It locks the curve/surface identities this guide relies on: first and second
+fundamental forms, curvature, `K = n x grad_Gamma psi`, and
+`Delta_Gamma = div_Gamma grad_Gamma`.
 
 ## Hodograph reading route
 
