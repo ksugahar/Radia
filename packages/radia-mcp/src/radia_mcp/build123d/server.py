@@ -64,12 +64,46 @@ from .faceted_edit_gate import (
     build123d_faceted_edit_portability_gate as _build123d_faceted_edit_portability_gate,
     build123d_faceted_source_replay_gate as _build123d_faceted_source_replay_gate,
 )
+from .lofted_shell_handoff_gate import (
+    build123d_loft_example_source_replay_gate as _build123d_loft_example_source_replay_gate,
+    build123d_lofted_shell_handoff_gate as _build123d_lofted_shell_handoff_gate,
+)
 from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
 
 mcp = FastMCP("mcp-server-build123d")
+
+
+@mcp.tool()
+def build123d_lofted_shell_handoff_gate(summary_json: str) -> str:
+    """Gate a bounded lofted-shell CAD handoff without solver overclaim."""
+    try:
+        result = _build123d_lofted_shell_handoff_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "build123d_lofted_shell_handoff_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def build123d_loft_example_source_replay_gate(summary_json: str) -> str:
+    """Gate the immutable upstream loft source and headless CAD replay."""
+    try:
+        result = _build123d_loft_example_source_replay_gate(
+            json.loads(summary_json)
+        )
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "build123d_loft_example_source_replay_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
 
 @mcp.tool()
 def build123d_faceted_edit_portability_gate(summary_json: str) -> str:
