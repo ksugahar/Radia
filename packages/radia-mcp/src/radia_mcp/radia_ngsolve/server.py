@@ -80,6 +80,9 @@ from .manual_auto_mixed_mesh_gate import (
 from .two_winding_frequency_gate import (
     two_winding_frequency_faraday_gate as _two_winding_frequency_faraday_gate,
 )
+from .conductive_shield_frequency_gate import (
+    magnetic_conductive_shield_frequency_gate as _magnetic_conductive_shield_frequency_gate,
+)
 from .single_loop_normalized_field_gate import (
     single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
 )
@@ -2839,6 +2842,20 @@ def two_winding_frequency_faraday_gate(summary_json: str) -> str:
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "two_winding_frequency_faraday_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def magnetic_conductive_shield_frequency_gate(summary_json: str) -> str:
+    """Gate low-frequency magnetic loading and high-frequency eddy shielding."""
+    try:
+        result = _magnetic_conductive_shield_frequency_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "magnetic_conductive_shield_frequency_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
