@@ -2,12 +2,12 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **769 tools** across 43 MCP servers.
+Total: **771 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 80 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 70 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 72 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 132 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -178,6 +178,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
 | `build123d_mass_property_crosscheck` | Compare build123d volume/area/bbox rows with one or more CAD sources. |
 | `build123d_motor_housing_thermal_reference` | Return analytic volume/area/body-count data for a finned motor housing. |
+| `build123d_nested_assembly_volume_gate` | Distinguish a zero parent Compound from an empty CAD handoff. |
 | `build123d_path_sweep_handoff_gate` | Gate a curved build123d sweep through analytic path and STEP/CAD checks. |
 | `build123d_path_sweep_source_contract_gate` | Gate the source-native build123d sweep idiom and ``is_valid`` API form. |
 | `build123d_patterned_compound_translation_gate` | Diagnose dominant curved-body STEP bias without solver-ready overclaim. |
@@ -189,6 +190,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_repeated_cavity_source_replay_gate` | Gate immutable dual sources, STEP identities, and headless CAD replay. |
 | `build123d_status` | (no description) |
 | `build123d_step_portability_diagnosis_gate` | Diagnose whether STEP mass loss occurs in export or external import. |
+| `build123d_stud_wall_source_replay_gate` | Gate exact stud-wall source, RigidJoints, and headless CAD replay. |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
 | `build123d_tea_cup_source_contract_gate` | Gate the upstream tea-cup source and headless portability diagnosis. |
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
