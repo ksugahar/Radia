@@ -53,6 +53,9 @@ from .source_free_static_gate import source_free_static_null_solution_gate as _s
 from .harmonic_force_triplet_gate import (
     harmonic_magnetic_force_triplet_closure_gate as _harmonic_magnetic_force_triplet_closure_gate,
 )
+from .magnetic_force_method_profile_gate import (
+    magnetic_force_method_profile_gate as _magnetic_force_method_profile_gate,
+)
 from .harmonic_port_identity_gate import (
     harmonic_current_port_power_energy_identity_gate as _harmonic_current_port_power_energy_identity_gate,
 )
@@ -2696,6 +2699,38 @@ def harmonic_magnetic_force_triplet_closure_gate(
     except (TypeError, ValueError, KeyError) as exc:
         result = {
             "policy": "harmonic_magnetic_force_triplet_closure_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def magnetic_force_method_profile_gate(
+    summary_json: str,
+    maximum_method_relative_difference: float = 0.05,
+    maximum_independent_stress_relative_difference: float = 0.02,
+    minimum_selection_scope_relative_difference: float = 0.25,
+    maximum_all_body_to_target_magnitude_ratio: float = 0.75,
+    maximum_work_relative_difference: float = 0.05,
+    maximum_parsed_replay_absolute_difference: float = 1.0e-12,
+    minimum_sample_count: int = 5,
+) -> str:
+    """Gate magnetic-force profiles with explicit body/surface selection scope."""
+    try:
+        result = _magnetic_force_method_profile_gate(
+            json.loads(summary_json),
+            maximum_method_relative_difference=maximum_method_relative_difference,
+            maximum_independent_stress_relative_difference=maximum_independent_stress_relative_difference,
+            minimum_selection_scope_relative_difference=minimum_selection_scope_relative_difference,
+            maximum_all_body_to_target_magnitude_ratio=maximum_all_body_to_target_magnitude_ratio,
+            maximum_work_relative_difference=maximum_work_relative_difference,
+            maximum_parsed_replay_absolute_difference=maximum_parsed_replay_absolute_difference,
+            minimum_sample_count=minimum_sample_count,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
+        result = {
+            "policy": "magnetic_force_method_profile_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
