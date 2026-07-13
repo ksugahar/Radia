@@ -94,6 +94,10 @@ from .mesh_carrying_sweep_gate import (
 	cubit_mesh_carrying_straight_sweep_gate as _cubit_mesh_carrying_straight_sweep_gate,
 	cubit_mesh_carrying_straight_sweep_source_replay_gate as _cubit_mesh_carrying_straight_sweep_source_replay_gate,
 )
+from .power_tools_replay_gate import (
+	cubit_partial_volume_hex_diagnosis_gate as _cubit_partial_volume_hex_diagnosis_gate,
+	cubit_power_tools_cleanup_source_replay_gate as _cubit_power_tools_cleanup_source_replay_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -843,6 +847,40 @@ def cubit_mesh_carrying_straight_sweep_source_replay_gate(summary: dict) -> str:
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_mesh_carrying_straight_sweep_source_replay_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_partial_volume_hex_diagnosis_gate(
+	summary: dict,
+	min_scaled_jacobian: float = 0.2,
+) -> str:
+	"""Gate a truthful partial-volume/low-quality hex rejection."""
+	try:
+		result = _cubit_partial_volume_hex_diagnosis_gate(
+			summary,
+			min_scaled_jacobian=min_scaled_jacobian,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_partial_volume_hex_diagnosis_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_power_tools_cleanup_source_replay_gate(summary: dict) -> str:
+	"""Gate an official Power Tools cleanup trace and console diagnosis."""
+	try:
+		result = _cubit_power_tools_cleanup_source_replay_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_power_tools_cleanup_source_replay_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}

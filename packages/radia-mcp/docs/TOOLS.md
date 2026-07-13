@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **767 tools** across 43 MCP servers.
+Total: **769 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 78 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 80 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 70 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 132 |
@@ -103,7 +103,9 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mesh_race_with_human` | **The radia-mcp signature workflow.** |
 | `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
 | `cubit_mixed_transition_source_gate` | Gate source commands, headless diagnostics, and quality API recovery. |
+| `cubit_partial_volume_hex_diagnosis_gate` | Gate a truthful partial-volume/low-quality hex rejection. |
 | `cubit_partitioned_sweep_compatibility_gate` | Gate a legacy webcut/partition journal promoted to an all-hex sweep. |
+| `cubit_power_tools_cleanup_source_replay_gate` | Gate an official Power Tools cleanup trace and console diagnosis. |
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
 | `cubit_pyramid_degenerate_hex_export_gate` | Gate CPYRAM versus nopyramid decks, including order-2 linearization. |
 | `cubit_pyramid_mixed_export_gate` | Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran. |
