@@ -214,6 +214,9 @@ from .heterogeneous_current_flow_gate import (
 from .thermal_robin_balance_gate import (
     thermal_robin_boundary_balance_gate as _thermal_robin_boundary_balance_gate,
 )
+from .hysteresis_minor_loop_gate import (
+    hysteresis_minor_loop_replay_gate as _hysteresis_minor_loop_replay_gate,
+)
 from .heterogeneous_mesh_replay_gate import (
     heterogeneous_part_mesh_replay_gate as _heterogeneous_part_mesh_replay_gate,
 )
@@ -4077,6 +4080,21 @@ def thermal_robin_boundary_balance_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "thermal_robin_boundary_balance_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def hysteresis_minor_loop_replay_gate(summary_json: str) -> str:
+    """Gate history, knot normalization, signed loss, and exact loop replay."""
+
+    try:
+        result = _hysteresis_minor_loop_replay_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "hysteresis_minor_loop_replay_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
