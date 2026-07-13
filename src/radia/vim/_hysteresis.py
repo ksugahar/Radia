@@ -260,14 +260,30 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     n_el = mesh.GetNE(ng.VOL)
     Bptr = _i32(Bc.indptr); Bidx = _i32(Bc.indices); Bdat = _f64(Bc.data)
 
-    uf, vf = fes.TnT()
+    uf = fes.TrialFunction()
     l2 = ng.L2(mesh, order=0)
-    gfM = ng.GridFunction(fes)
     gfHext = ng.GridFunction(fes)
-    gfS = [ng.GridFunction(l2) for _ in range(3)]           # lagged polarization source (per component)
-    cfS = ng.CoefficientFunction(tuple(gfS))
     vol_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True), float)
     w_el = vol_el / float(np.sum(vol_el))
+
+    # Mixed element-integral matrix P (built once): row c*n_el + e holds INT_e u_c dx, so both
+    # per-iteration material couplings are sparse mat-vecs instead of NGSolve assembly calls --
+    # the element average M_el = (P m)/vol and the polarization load P^T s (exact, since the
+    # lagged source is constant per element).  bonus_intorder=4 sets the quadrature to order
+    # 1+0+4 = 5, the ng.Integrate default this replaces (matches to <=2e-14 on warped hexes);
+    # L2(order=0) dof numbering is the element numbering, which the vstack layout relies on.
+    assert l2.ndof == n_el
+    wl2 = l2.TestFunction()
+    _P_blocks = []
+    for _c in range(3):
+        _blf = ng.BilinearForm(trialspace=fes, testspace=l2)
+        _blf += uf[_c] * wl2 * ng.dx(bonus_intorder=4)
+        _blf.Assemble()
+        _pr, _pc, _pv = _blf.mat.COO()
+        _P_blocks.append(sp.csr_matrix((_f64(_pv), (np.asarray(_pr), np.asarray(_pc))),
+                                       shape=(l2.ndof, n_face)))
+    P = sp.vstack(_P_blocks).tocsr()
+    PT = P.T.tocsr()
 
     # CONSTANT SPD LHS: nu0*M_mass + N.  The mass is uniform, so instead of assembling a
     # separate nu0-weighted BilinearForm we pass the ALREADY-BUILT M_mass with the scalar
@@ -293,22 +309,10 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     _solve_W0(np.zeros(n_face))
 
     def _M_el(m):
-        gfM.vec.FV().NumPy()[:] = m
-        return np.vstack([
-            np.asarray(ng.Integrate(gfM[i], mesh, element_wise=True), float) / vol_el
-            for i in range(3)
-        ]).T.copy()
-
-    # The polarization load is linear in the elementwise-constant source, so the FORM is
-    # constructed once and only re-Assembled per iteration (cfS wraps the mutable gfS).
-    lf_pol = ng.LinearForm(fes)
-    lf_pol += ng.InnerProduct(cfS, vf) * ng.dx
+        return (P @ m).reshape(3, n_el).T / vol_el[:, None]
 
     def _polarization_rhs(rhs_src, s_el):
-        for i in range(3):
-            gfS[i].vec.FV().NumPy()[:] = s_el[:, i]
-        lf_pol.Assemble()
-        return rhs_src + lf_pol.vec.FV().NumPy()
+        return rhs_src + PT @ s_el.T.ravel()
 
     states = np.tile(material.state0()[None, :], (n_el, 1))
     B_cache = None                      # previous converged B per element (None until the first solve)
