@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **763 tools** across 43 MCP servers.
+Total: **764 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 78 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 70 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 129 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 130 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -294,6 +294,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) RT |
 | `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
 | `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
+| `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
 | `heterogeneous_part_mesh_replay_gate` | Diagnose deterministic heterogeneous part-mesh replay drift. |
 | `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
 | `homogenized_bundle_impedance_comparison_gate` | Gate a stranded-bundle approximation against an explicit reference. |

@@ -202,6 +202,9 @@ from .helmholtz_dual_formulation_gate import (
 from .lossy_dielectric_power_gate import (
     lossy_dielectric_complex_power_refinement_gate as _lossy_power_refinement_gate,
 )
+from .heterogeneous_current_flow_gate import (
+    heterogeneous_current_flow_p1_reintegration_gate as _heterogeneous_current_flow_gate,
+)
 from .heterogeneous_mesh_replay_gate import (
     heterogeneous_part_mesh_replay_gate as _heterogeneous_part_mesh_replay_gate,
 )
@@ -3981,6 +3984,21 @@ def lossy_dielectric_complex_power_refinement_gate(summary_json: str) -> str:
     except (json.JSONDecodeError, TypeError, ValueError) as exc:
         result = {
             "policy": "lossy_dielectric_complex_power_refinement_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def heterogeneous_current_flow_p1_reintegration_gate(summary_json: str) -> str:
+    """Gate heterogeneous current-flow P1 reintegration and sign covariance."""
+
+    try:
+        result = _heterogeneous_current_flow_gate(json.loads(summary_json))
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "heterogeneous_current_flow_p1_reintegration_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
