@@ -299,7 +299,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
 | `homogenized_bundle_impedance_comparison_gate` | Gate a stranded-bundle approximation against an explicit reference. |
 | `inductance_energy_mutual_gate` | Gate L=2W/I^2 and an analytic one-direction mutual inductance. |
-| `inductance_matrix_family_gate` | Gate a family of linear two-winding inductance matrices. |
+| `inductance_matrix_family_gate` | Gate two-winding matrices, identities, replay, and turn scaling. |
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |

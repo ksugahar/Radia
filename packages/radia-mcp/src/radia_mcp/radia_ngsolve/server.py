@@ -3295,14 +3295,20 @@ def inductance_matrix_family_gate(
     expected_strongest_coupling_case: str | None = None,
     max_reciprocity_relative_error: float = 0.02,
     psd_relative_tolerance: float = 1.0e-12,
+    max_identity_relative_error: float = 1.0e-6,
+    max_replay_relative_error: float = 1.0e-9,
+    max_turn_scaling_relative_error: float = 0.02,
 ) -> str:
-    """Gate a family of linear two-winding inductance matrices."""
+    """Gate two-winding matrices, identities, replay, and turn scaling."""
     try:
         result = _inductance_matrix_family_gate(
             cases,
             expected_strongest_coupling_case=expected_strongest_coupling_case,
             max_reciprocity_relative_error=max_reciprocity_relative_error,
             psd_relative_tolerance=psd_relative_tolerance,
+            max_identity_relative_error=max_identity_relative_error,
+            max_replay_relative_error=max_replay_relative_error,
+            max_turn_scaling_relative_error=max_turn_scaling_relative_error,
         )
     except (TypeError, ValueError) as exc:
         result = {
