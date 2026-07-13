@@ -2,11 +2,11 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **777 tools** across 43 MCP servers.
+Total: **779 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 80 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 82 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 72 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 138 |
@@ -59,6 +59,7 @@ Module: `radia_mcp.cubit.server`
 | Tool | Description |
 |---|---|
 | `cubit_ask` | One-shot search across every Cubit knowledge surface we have. |
+| `cubit_ato_levelset_sculpt_source_replay_gate` | Gate official ATO provenance, MBG migration, and headless replay. |
 | `cubit_audit_summary` | Return a machine-readable Cubit export-lint audit summary. |
 | `cubit_batch_try` | Dry-run a recipe in a fresh headless Cubit subprocess. |
 | `cubit_boundary_layer_candidate_gate` | Select a non-inverted boundary-layer sweep candidate with export closure. |
@@ -84,6 +85,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_helical_partition_mesh_gate` | Gate a many-body helical mesh against quality and parsed .vol inventory. |
 | `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
 | `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
+| `cubit_levelset_sculpt_hex_validation_gate` | Gate coarse/fine Sculpt all-hex quality and Gmsh volume closure. |
 | `cubit_list_checkpoints` | List all saved Cubit checkpoints with size + mtime. |
 | `cubit_live_mixed_mesh_gate` | Gate a source-journal hex+pyramid+tet replay from headless Cubit Python. |
 | `cubit_loft_high_order_vol_series_gate` | Gate all-hex loft topology, curved payload, sidecars, and quality for orders 1-5. |
