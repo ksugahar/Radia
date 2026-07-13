@@ -143,7 +143,7 @@ def motor_permanent_magnet_demagnetization_history_gate(
     state_tolerance: float = 1.0e-9,
     minimum_damage_fraction: float = 1.0e-3,
 ) -> str:
-    """Gate irreversible permanent-magnet state across stress and recovery steps."""
+    """Gate irreversible PM state across one history or a replayed case family."""
 
     try:
         result = build_permanent_magnet_demagnetization_history_gate(

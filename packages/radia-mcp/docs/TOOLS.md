@@ -528,7 +528,7 @@ Module: `radia_mcp.motor.server`
 | `motor_motion_table_coordinate_gate` | Validate independent 3D translation and rotation motion tables. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_periodic_torque_sampling_gate` | Validate periodic torque sampling and FFT endpoint ownership. |
-| `motor_permanent_magnet_demagnetization_history_gate` | Gate irreversible permanent-magnet state across stress and recovery steps. |
+| `motor_permanent_magnet_demagnetization_history_gate` | Gate irreversible PM state across one history or a replayed case family. |
 | `motor_permanent_magnet_force_pair_gate` | Gate attraction/repulsion reversal for a facing permanent-magnet pair. |
 | `motor_phase_flux_park_alignment_gate` | Gate a PM-only three-phase flux sweep in the rotating d/q frame. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
