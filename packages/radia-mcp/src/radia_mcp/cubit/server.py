@@ -98,6 +98,10 @@ from .power_tools_replay_gate import (
 	cubit_partial_volume_hex_diagnosis_gate as _cubit_partial_volume_hex_diagnosis_gate,
 	cubit_power_tools_cleanup_source_replay_gate as _cubit_power_tools_cleanup_source_replay_gate,
 )
+from .ato_sculpt_gate import (
+	cubit_ato_levelset_sculpt_source_replay_gate as _cubit_ato_levelset_sculpt_source_replay_gate,
+	cubit_levelset_sculpt_hex_validation_gate as _cubit_levelset_sculpt_hex_validation_gate,
+)
 from ..common import failure_log as _fl, register_status_tool
 from ..common import web_docs as _wd
 from ..common import examples as _ex
@@ -881,6 +885,42 @@ def cubit_power_tools_cleanup_source_replay_gate(summary: dict) -> str:
 	except (TypeError, ValueError) as exc:
 		result = {
 			"policy": "cubit_power_tools_cleanup_source_replay_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_levelset_sculpt_hex_validation_gate(
+	summary: dict,
+	quality_floor: float = 0.2,
+	volume_relative_tolerance: float = 0.03,
+) -> str:
+	"""Gate coarse/fine Sculpt all-hex quality and Gmsh volume closure."""
+	try:
+		result = _cubit_levelset_sculpt_hex_validation_gate(
+			summary,
+			quality_floor=quality_floor,
+			volume_relative_tolerance=volume_relative_tolerance,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_levelset_sculpt_hex_validation_gate_v1",
+			"status": "invalid_input",
+			"error": str(exc),
+		}
+	return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def cubit_ato_levelset_sculpt_source_replay_gate(summary: dict) -> str:
+	"""Gate official ATO provenance, MBG migration, and headless replay."""
+	try:
+		result = _cubit_ato_levelset_sculpt_source_replay_gate(summary)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_ato_levelset_sculpt_source_replay_gate_v1",
 			"status": "invalid_input",
 			"error": str(exc),
 		}
