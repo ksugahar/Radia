@@ -40,9 +40,26 @@ from .noise_gate import rc_thermal_noise_psd_gate as _rc_thermal_noise_psd_gate
 from .distributed_line_gate import distributed_line_delay_loss_gate as _distributed_line_delay_loss_gate
 from .allpass_gate import second_order_allpass_gate as _second_order_allpass_gate
 from .complex_zero_gate import second_order_complex_zero_gate as _second_order_complex_zero_gate
+from .three_phase_delta_gate import (
+    balanced_three_phase_delta_rl_gate as _balanced_three_phase_delta_rl_gate,
+)
 
 
 mcp = FastMCP("mcp-spice-circuit-lab")
+
+
+@mcp.tool()
+def balanced_three_phase_delta_load_gate(summary: dict) -> dict:
+    """Gate a balanced Y-source/delta-RL load, phasors, and three-phase power."""
+
+    try:
+        return _balanced_three_phase_delta_rl_gate(summary)
+    except (TypeError, ValueError) as exc:
+        return {
+            "policy": "balanced_three_phase_delta_rl_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
 
 
 @mcp.tool()
