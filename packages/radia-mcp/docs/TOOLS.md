@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **755 tools** across 43 MCP servers.
+Total: **756 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 76 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 69 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 124 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 125 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -359,6 +359,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `transient_conductor_replay_identity_gate` | Gate full transient conductor histories, identities, and independent replay. |
 | `transient_coupled_coil_response_gate` | Gate a passive shorted-secondary transient induced-current history. |
 | `twin_conductor_skin_effect_frequency_gate` | Gate passive twin-conductor R/L and impedance trends over frequency. |
+| `two_body_force_magnitude_replay_gate` | Gate unsigned two-body force balance and two fresh solver replays. |
 | `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
 | `two_conductor_capacitance_matrix_gate` | Gate reciprocal Maxwell and mutual capacitance matrix representations. |
 | `two_terminal_dc_conduction_power_gate` | Gate current closure, Joule power, adaptive convergence, and replay. |
