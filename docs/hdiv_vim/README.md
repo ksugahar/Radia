@@ -30,6 +30,18 @@ For a geometrically and topologically symmetric reduced/full hex
 pair, `rad.Fld` after an image solve must agree with the explicit full solve at
 the roundoff contract (`< 10 eps` relative error), not merely within a percent.
 
+An RT1 solve also materializes one immutable C++ field evaluator.  TET sources
+retain analytic volume/triangle kernels; HEX/WEDGE and curved sources retain the
+NGSolve quadrature cloud.  Repeated `rad.Fld` calls pass contiguous NumPy target
+arrays directly to that evaluator, with no repeated source packing.  IMA terms
+are accumulated inside the same TaskManager region.  Ordinary batches use the
+exact direct source sum.  Only very large source-target work is considered for
+the quadrupole source tree, and auto selection requires both a direct-reference
+probe below the configured tolerance and a measured speed benefit.  The result
+records `field_evaluator_stats` and `field_evaluator_build_wall_s`.  IMA stays
+on the direct evaluator in automatic mode so the reduced/full roundoff contract
+is not weakened by different source-tree truncations.
+
 The production 3D solve uses symmetric C++ CG on the SPD `W + B^T G B`
 system.  The public default is `preconditioner="auto"`: linear solves and
 small tet nonlinear solves use the exact mass-Riesz map, while nonlinear
@@ -152,6 +164,9 @@ host (`mdx` or `hibino`).  Required HDiv gates:
 - image symmetry checked against an explicitly mirrored full model on truly
   symmetric meshes;
 - `rad.Fld` after `rad.Solve(..., demag_backend="hdiv")`;
+- persistent-field direct/tree accuracy and scaling through
+  `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` on an idle
+  compute host;
 - RT1/RT2 flat pure-TET accuracy and cost, plus charge-Gram H-matrix build stats and
   memory/timing on idle `mdx` or `hibino`
   for large runs;

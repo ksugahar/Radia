@@ -161,10 +161,11 @@ foliated fields). The concrete open questions:
   committed `solve_nonlinear` outer-χ loop on `A⁺ = (1/χ)M_mass + N` converges).
   The remaining obstacle to a *practical* field-exact nonlinear solve is **not
   conditioning but cost**: the exact-field operator is assembled by an
-  element-by-element charge field, which is `O(N²)`.  The production
-  `FieldFromSolution` path batches the RT1 charge field in C++ and owns its
-  TaskManager region; large observation sets still need an H-matrix/FMM-style
-  field evaluator before field evaluation itself is asymptotically scalable.
+  element-by-element charge field, which is `O(N²)`.  Production solve results
+  now own a persistent C++ RT1 field evaluator: NumPy target buffers, one-pass
+  IMA, TaskManager observation parallelism, exact analytic tet leaves, and a
+  direct-probed quadrupole source tree for large non-IMA maps.  IMA automatic
+  evaluation remains direct to preserve the reduced/full roundoff contract.
 - **Open (the hard prize):** the 3-D saturation linearisation — a 3-D
   Chaplygin-analogue valid where the helicity obstruction vanishes.
 

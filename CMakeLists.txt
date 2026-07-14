@@ -225,6 +225,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_hacapk_peec.cpp           # HACApK PEEC adapter (Ruehli filament kernel)
 	${CORE_DIR}/rad_hacapk_bem.cpp            # HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 	${CORE_DIR}/rad_hdiv_vim.cpp              # Symmetric HDiv-type VIM demag operator (N = B^T G B)
+	${CORE_DIR}/rad_hdiv_field_evaluator.cpp  # Persistent direct/tree RT1 exterior-field evaluator
 	${CORE_DIR}/rad_hacapk_hdiv.cpp           # HACApK H-matrix for the HDiv-type VIM demag operator
 	${CORE_DIR}/rad_bem_galerkin.cpp          # Fast Galerkin SL/DL assembler (Sauter-Schwab + OpenMP)
 	${CORE_DIR}/rad_biot_savart_filaments.cpp # Fast Biot-Savart H/A from finite-segment filaments (complex I)

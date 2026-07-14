@@ -770,6 +770,15 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         out["M_avg_reduced"] = M_avg_reduced
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
+    if int(order) == 1:
+        # rad.Fld is part of the solved-object contract.  Materialize its
+        # immutable C++ charge source and source tree now, while gfM/mesh are
+        # hot, instead of charging the first observation request and repeating
+        # Python source packing on every subsequent request.
+        from ._field_batch import _materialize_field_evaluator
+        _materialize_field_evaluator(out)
+    out["post_wall_s"] = time.perf_counter() - t_post
+    out["total_wall_s_internal"] = time.perf_counter() - t_total
     return out
 
 

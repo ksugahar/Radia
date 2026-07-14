@@ -10,6 +10,10 @@ production checklist, not a migration archive.
 - TET/HEX/WEDGE and 2D planar paths have validation coverage under
   `validation_test/feec/`.
 - `rad.Fld` is part of the public contract after HDiv write-back.
+- RT1 solve results own a persistent C++ field evaluator: NumPy target buffers,
+  one-pass IMA, TaskManager observation parallelism, analytic tet near kernels,
+  and a guarded large-map quadrupole tree.  IMA auto evaluation remains direct
+  to preserve the reduced/full roundoff contract.
 - On geometrically and topologically symmetric full/reduced hex meshes,
   `rad.Fld` image parity is locked to the explicit full solve at the
   roundoff-level contract (`< 10 eps` relative error).
@@ -30,6 +34,8 @@ Before release or `mdx`/`hibino` deployment:
 - record the actual validation host in the result JSON/log;
 - record charge count, HDiv DoF, H-matrix compression, build time, solve time,
   iteration count, and machine label;
+- record field source count, evaluator build time, selected direct/tree route,
+  observation count, direct-reference error, and public `rad.Fld` wall time;
 - verify image symmetry with an explicit full model when the mesh is truly
   symmetric and enforce the roundoff contract;
 - keep public docs free of obsolete backend names and local validation
@@ -37,6 +43,6 @@ Before release or `mdx`/`hibino` deployment:
 
 ## Open Work
 
-- extend `rad.Fld` and force/energy tests around motor workflows;
+- extend force/energy tests around motor workflows;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
 - continue mdx scaling measurements for charge-Gram build and solve time.
