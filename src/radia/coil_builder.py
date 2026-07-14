@@ -1570,10 +1570,16 @@ class CoilBuilder:
 		Returns:
 			List of CoilBuilder objects
 		"""
+		axis_vectors = {'x': np.array([1, 0, 0]),
+		                'y': np.array([0, 1, 0]),
+		                'z': np.array([0, 0, 1])}
+		if axis not in axis_vectors:
+			raise ValueError(f"Unknown axis '{axis}'. Use 'x', 'y', or 'z'.")
+		if not isinstance(n_copies, int) or n_copies < 1:
+			raise ValueError("n_copies must be a positive integer")
+
 		angle_step = 360.0 / n_copies
-		axis_vec = {'x': np.array([1, 0, 0]),
-		            'y': np.array([0, 1, 0]),
-		            'z': np.array([0, 0, 1])}[axis]
+		axis_vec = axis_vectors[axis]
 
 		copies = [self]
 		for i in range(1, n_copies):
@@ -1586,15 +1592,22 @@ class CoilBuilder:
 
 			for seg in self.segments:
 				new_start = R @ seg.start_pos
-				new_orient = R @ seg.orientation
+				# Orientation stores local axes as rows.  A world-space active
+				# rotation therefore maps each row v to (R @ v.T).T = v @ R.T.
+				new_orient = seg.orientation @ R.T
 				if isinstance(seg, StraightSegment):
 					new_seg = StraightSegment(
 						seg.current, new_start, new_orient,
-						seg.width, seg.height, seg.length)
+						seg.width, seg.height, seg.length,
+						profile=seg.profile)
 				elif isinstance(seg, ArcSegment):
 					new_seg = ArcSegment(
 						seg.current, new_start, new_orient,
-						seg.width, seg.height, seg.radius, seg.arc_angle)
+						seg.width, seg.height, seg.radius, seg.arc_angle,
+						profile=seg.profile)
+				else:
+					raise NotImplementedError(
+						f"rotate_copies() does not support {type(seg).__name__} segments")
 				rotated.segments.append(new_seg)
 
 			if len(rotated.segments) > 0:
