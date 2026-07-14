@@ -10,25 +10,33 @@ production checklist, not a migration archive.
 - TET/HEX/WEDGE and 2D planar paths have validation coverage under
   `validation_test/feec/`.
 - `rad.Fld` is part of the public contract after HDiv write-back.
+- On geometrically and topologically symmetric full/reduced hex meshes,
+  `rad.Fld` image parity is locked to the explicit full solve at the
+  roundoff-level contract (`< 10 eps` relative error).
+- RT1 is public for pure TET/HEX/WEDGE, planar 2D, IMA, and field evaluation.
+- RT2 is public for flat pure-TET linear/nonlinear material solves and the NGSolve
+  `ChargeGram`/`DemagOperator` surface.  RT2 topology/image/field extensions
+  and curved RT2 remain fail-loud until separately implemented and validated.
 - MCP `hdiv_vim` documents the live API and reduced-FEM coupling policy.
 
 ## Release Gate
 
-Before release or mdx deployment:
+Before release or `mdx`/`hibino` deployment:
 
-- run focused HDiv smoke tests on LAB;
-- run heavy validation/benchmark sweeps on mdx when idle;
+- run focused HDiv smoke tests on LAB/100号機;
+- run heavy validation/benchmark sweeps on an idle `mdx` or `hibino` host
+  (`mdx` by default, `hibino` for MATLAB, large-memory, long-running, or
+  mdx-occupied jobs);
+- record the actual validation host in the result JSON/log;
 - record charge count, HDiv DoF, H-matrix compression, build time, solve time,
   iteration count, and machine label;
 - verify image symmetry with an explicit full model when the mesh is truly
-  symmetric;
+  symmetric and enforce the roundoff contract;
 - keep public docs free of obsolete backend names and local validation
   provenance.
 
 ## Open Work
 
-- tighten image-symmetry roundoff contracts, especially for full-model hex
-  comparisons;
 - extend `rad.Fld` and force/energy tests around motor workflows;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
 - continue mdx scaling measurements for charge-Gram build and solve time.

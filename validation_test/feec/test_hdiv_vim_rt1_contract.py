@@ -1,21 +1,20 @@
-"""Golden: the HDiv-VIM RT1 production CONTRACT (Sugahara 2026-07-04).
+"""Golden: the HDiv-VIM RT1/RT2 production contract.
 
-HDiv-VIM is the RT1 (HDiv order=1) high-order element of the soft-iron demag stack, on a pure-TET,
-pure-HEX, or pure-WEDGE mesh.  RT0 is retired (per-element INACCURATE -- the demag factor is right ~1/3
-but the per-element M leaks; RT1 is what fixes it); RT2+ is retired (no per-element gain over RT1, slower).
-Pyramid / mixed meshes, pm_M mixing,
-curved IMA, the 'gauss' point Gram and the 'hlu' system-A solver are not in the HDiv-VIM production path.
+RT1 supports pure-TET, pure-HEX, pure-WEDGE, 2D, IMA, and field evaluation.
+RT2 is a production pure-TET material/operator route; its specialized topology,
+image, and field kernels fail loud until implemented and validated.
+Pyramid / mixed meshes, pm_M mixing, and curved IMA are not in the HDiv-VIM
+production path.
 
 HEX/WEDGE were UNLOCKED 2026-07-04: the wired RT1 charge Grams + the Gram-agnostic solve path already
 solve them, so the auto guard is now pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
 lock lives in test_hdiv_vim_hex_public_solve.py; wedge spectrum/cube locks live in
 test_hdiv_vim_wedge_spectrum.py.
 
-This test LOCKS the fail-loud retirement (No-Fallbacks: the raise IS the feature) + the RT1 happy path
-+ the rad.Solve 'auto' split.  It replaces the per-feature golden tests
-for the retired paths (gauss / hlu / pm / curved image).
+This test LOCKS the production fail-loud boundaries (No-Fallbacks: the raise IS
+the feature), the RT1/RT2 happy paths, and the rad.Solve 'auto' split.
 
-NGSolve + Netgen required.  See memory/hdiv_vim_tet_rt1_only.md.
+NGSolve + Netgen required.  See memory/hdiv_rt1_field_production.md.
 """
 import numpy as np
 import pytest
@@ -55,21 +54,13 @@ def test_rt1_nonlinear_solves():
     assert r["nonlinear"] and r["M_avg"][2] > 1e3
 
 
-# ---------------------------------------------------------------- retired-from-HDiv-VIM (fail-loud)
-def test_rt0_retired():
-    """order=0 (RT0) is retired -- per-element inaccurate."""
+def test_public_rt2_pure_tet_solves():
+    """RT2 is a supported public material solve on pure tetrahedra."""
     mesh = _sphere()
-    with pytest.raises(ValueError, match="RT1"):
-        with ng.TaskManager():
-            Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=0)
-
-
-def test_rt2_retired():
-    """order>1 (RT2+) is retired (no per-element gain over RT1)."""
-    mesh = _sphere()
-    with pytest.raises(ValueError, match="RT1"):
-        with ng.TaskManager():
-            Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2)
+    with ng.TaskManager():
+        result = Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2)
+    assert result["order"] == 2
+    assert 0.31 < result["demag"] < 0.345, result["demag"]
 
 
 def test_pm_mixing_retired():
@@ -88,28 +79,33 @@ def test_curved_image_symmetry_retired():
             Solve(mesh, mu_r=100.0, H_ext=_HEXT, image="+x", curve_order=2)
 
 
-def test_gauss_and_hlu_backends_retired():
-    """The 'gauss' point Gram and the 'hlu' system-A solver were RT0 experiments -- both retired."""
-    mesh = _sphere()
-    with pytest.raises(ValueError):
-        with ng.TaskManager():
-            Solve(mesh, mu_r=100.0, H_ext=_HEXT, gram_backend="gauss")
-    with pytest.raises(ValueError):
-        with ng.TaskManager():
-            Solve(mesh, mu_r=100.0, H_ext=_HEXT, linear_solver="hlu")
-
-
-def test_operator_and_gram_are_rt1_only():
-    """The ngsolve.bem-style DemagOperator + build_charge_gram reject order!=1 (RT0/RT2 retired)."""
+def test_operator_and_gram_support_pure_tet_rt1_rt2():
+    """The NGSolve-style operator and charge builder expose both production TET orders."""
     mesh = _sphere()
     with ng.TaskManager():
-        with pytest.raises(ValueError, match="RT1"):
-            DemagOperator(ng.HDiv(mesh, order=0))
-        with pytest.raises(ValueError, match="RT1"):
-            ChargeGram(ng.HDiv(mesh, order=0))
-        # RT1 is accepted
-        D = DemagOperator(ng.HDiv(mesh, order=1)).DemagFactor(ng.CF((0, 0, 1)))
-    assert 0.31 < D < 0.345, D
+        values = {}
+        for order in (1, 2):
+            fes = ng.HDiv(mesh, order=order)
+            B, G, M = ChargeGram(fes)
+            assert B.shape[1] == fes.ndof and M.shape == (fes.ndof, fes.ndof)
+            assert G.ndof() == B.shape[0]
+            values[order] = DemagOperator(fes).DemagFactor(ng.CF((0, 0, 1)))
+    assert all(0.31 < value < 0.345 for value in values.values()), values
+    assert abs(values[2] - 1.0 / 3.0) < abs(values[1] - 1.0 / 3.0), values
+    assert abs(values[2] - values[1]) < 2e-3, values
+
+
+def test_rt2_rejects_ima_until_the_high_order_image_contract_is_validated():
+    mesh = _sphere(maxh=0.8)
+    with pytest.raises(NotImplementedError, match="RT2.*IMA"):
+        Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2, image="+x")
+
+
+def test_rt2_rejects_curved_geometry_until_the_high_order_build_is_fast_enough():
+    mesh = _sphere(maxh=0.8)
+    mesh.Curve(2)
+    with pytest.raises(NotImplementedError, match="flat pure-TET"):
+        Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2)
 
 
 # ---------------------------------------------------------------- pure HEX/WEDGE -> HDiv-VIM eligibility
@@ -126,6 +122,8 @@ def test_hex_soft_iron_auto_is_hdiv_eligible():
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
     with ng.TaskManager():
         hexm = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3, mapping=mp)
+    with pytest.raises(NotImplementedError, match="RT2.*pure-TET"):
+        Solve(hexm, mu_r=100.0, H_ext=_HEXT, order=2)
     iron = MeshSoftIron(hexm, mu_r=1000.0)
     top = rad.ObjCnt([iron])
     assert _radsolve.is_hdiv_eligible(top)

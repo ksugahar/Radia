@@ -300,7 +300,7 @@ def gate_validation_collect():
 def gate_validation_run():
     cmd = [sys.executable, "-m", "pytest", "validation_test/", "-q",
            "--no-header", "-p", "no:cacheprovider",
-           "--reruns", "1", "--reruns-delay", "1"]
+           "-m", "not compute_host"]
     rc, out = _sh(cmd, timeout=7200)
     tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"
     if rc != 0:

@@ -27,9 +27,23 @@ void HACApK_matvec_stats_get(double *values, int n_values,
 }
 
 #ifdef HAVE_LAPACK
-#include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the RT0 mass for the MASS RIESZ precond
+#include "mkl_pardiso.h"          // PARDISO sparse-direct factor of the HDiv mass for the MASS RIESZ precond
 namespace {
-// RAII PARDISO SPD (mtype=2 real symmetric positive definite) factor of the RT0 H(div) mass M_mass,
+// PARDISO is entered from the Python-facing solve while NGSolve may already
+// own a TaskManager pool.  MKL's process-wide thread setting is insufficient
+// here: NGSolve or another MKL caller can replace it between factor and solve.
+// Use MKL's per-calling-thread setting and restore the previous local value.
+class PardisoMKLThreadGuard {
+    int saved_;
+public:
+    explicit PardisoMKLThreadGuard(int nthreads)
+        : saved_(mkl_set_num_threads_local(std::max(1, nthreads))) {}
+    ~PardisoMKLThreadGuard() { mkl_set_num_threads_local(saved_); }
+    PardisoMKLThreadGuard(const PardisoMKLThreadGuard&) = delete;
+    PardisoMKLThreadGuard& operator=(const PardisoMKLThreadGuard&) = delete;
+};
+
+// RAII PARDISO SPD (mtype=2 real symmetric positive definite) factor of the HDiv mass M_mass,
 // used as the MASS RIESZ preconditioner (z = M_mass^{-1} r) of the HDiv-VIM material CG / MINRES.  The
 // mass is supplied as the FULL symmetric COO (mI,mJ,mV); only the UPPER triangle (j>=i) is assembled
 // into the 0-based CSR PARDISO mtype=2 expects.  Follows the established sparse-direct PARDISO pattern in
@@ -47,6 +61,12 @@ struct MassRieszPardiso {
     MassRieszPardiso& operator=(const MassRieszPardiso&) = delete;
     ~MassRieszPardiso() {
         if (factored) {
+            // PARDISO is called from the HDiv Krylov loop while an NGSolve
+            // TaskManager may be active.  Suspend its workers while PARDISO
+            // owns the configured thread count; this avoids nested pools while
+            // retaining parallel sparse factor/solve performance.
+            ngcore::SuspendTaskManager stm;
+            PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
             MKL_INT phase = -1, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
             pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, &ddum, ia.data(), ja.data(),
                     &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
@@ -57,6 +77,8 @@ struct MassRieszPardiso {
     // mass would be a setup bug, not a soft condition to paper over).
     bool Factor(const std::vector<int>& mI, const std::vector<int>& mJ,
                 const std::vector<double>& mV, int n_face) {
+        ngcore::SuspendTaskManager stm;
+        PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
         n = n_face;
         std::vector<std::map<int, double>> row((size_t)n_face);   // std::map keeps columns ascending
         for (size_t k = 0; k < mV.size(); ++k) {
@@ -74,6 +96,11 @@ struct MassRieszPardiso {
         for (int i = 0; i < n_face; ++i)
             for (const auto& kv : row[(size_t)i]) { ja[(size_t)k] = (MKL_INT)kv.first; a[(size_t)k] = kv.second; ++k; }
         pardisoinit(pt, &mtype, iparm);
+        // PARDISO's own worker pool must not overlap the surrounding NGSolve
+        // TaskManager.  iparm[2] is the C zero-based slot for the documented
+        // number-of-processors control (Fortran iparm(3)).  The workers are
+        // suspended above, so PARDISO may use the configured Radia count.
+        iparm[2] = std::max<MKL_INT>(1, (MKL_INT)radia::GetMaxThreads());
         iparm[34] = 1;                                           // 0-based (C) indexing
         MKL_INT phase = 11, nrhs = 1, idum = 0, error = 0; double ddum = 0.0;
         pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
@@ -88,6 +115,8 @@ struct MassRieszPardiso {
         return true;
     }
     void Solve(const double* rhs, double* x) {                   // M_mass x = rhs (phase 33, single rhs)
+        ngcore::SuspendTaskManager stm;
+        PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
         MKL_INT phase = 33, nrhs = 1, idum = 0, error = 0;
         pardiso(pt, &maxfct, &mnum, &mtype, &phase, &n, a.data(), ia.data(), ja.data(),
                 &idum, &nrhs, iparm, &msglvl, const_cast<double*>(rhs), x, &error);
@@ -108,8 +137,8 @@ struct RadMassRieszCache {
     MassRieszPardiso factor;
 };
 
-// The single get-or-build implementation shared by SolveLinearMaterial and SolveMaterialMINRES (see the
-// .h declaration for the pinning / single-resident contracts).  Hits on constant-mass chains: the Hantila
+// The single get-or-build implementation used by SolveLinearMaterial (see the .h declaration for the
+// pinning / single-resident contracts).  Hits on constant-mass chains: the Hantila
 // hysteresis loop (W(nu0) fixed by construction) and the C++ scalar Picard (geometry-only M_mass; the
 // scalar inv_chi lives outside the preconditioner).  Per-iteration TANGENT masses (the Python nu-secant /
 // Newton W_tan) compare-miss and refactor exactly as the pre-cache code did -- with the old entry released
@@ -117,23 +146,25 @@ struct RadMassRieszCache {
 // bit-identical preconditioner: a cache hit changes timing only.
 std::shared_ptr<RadMassRieszCache> RadHACApKChargeGram::EnsureMassRieszFactor(
     const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
-    int n_face, const char* caller, double* factor_s_accum)
+    int n_face, const char* caller, double* factor_s_accum, bool geometry_cache)
 {
-    std::shared_ptr<RadMassRieszCache> keep = m_massRieszCache;   // pin the current entry
+    std::shared_ptr<RadMassRieszCache>& slot =
+        geometry_cache ? m_geometryMassRieszCache : m_massRieszCache;
+    std::shared_ptr<RadMassRieszCache> keep = slot;   // pin the current entry
     const bool hit = keep && keep->keyN == n_face && keep->keyV == mV &&
                      keep->keyI == mI && keep->keyJ == mJ;
     if (hit) return keep;
     keep.reset();
-    m_massRieszCache.reset();          // release the OLD factor before building the new one
+    slot.reset();                      // release the OLD factor before building the new one
     const auto t0 = std::chrono::steady_clock::now();
     auto built = std::make_shared<RadMassRieszCache>();
     if (!built->factor.Factor(mI, mJ, mV, n_face))
         throw std::runtime_error(std::string(caller) +
-            ": PARDISO SPD factor of the RT0 mass (mass Riesz preconditioner) failed");
+            ": PARDISO SPD factor of the HDiv mass (mass Riesz preconditioner) failed");
     built->keyN = n_face; built->keyI = mI; built->keyJ = mJ; built->keyV = mV;
     if (factor_s_accum)
         *factor_s_accum += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    m_massRieszCache = built;
+    slot = built;
     return built;
 }
 #endif // HAVE_LAPACK
@@ -141,104 +172,6 @@ std::shared_ptr<RadMassRieszCache> RadHACApKChargeGram::EnsureMassRieszFactor(
 // PhiAtHO(src, m_qp[tgt][k]) (the expensive analytic base + inner subtraction loop) depends ONLY on
 // (kind,host of tgt, src) -- IDENTICAL across the co-located monomials that share a host's outer points -- so
 // the H-matrix fill otherwise recomputes it n_mono(host) times per source.  See QuadDot for the rationale.
-
-RadHACApKHDivManager::RadHACApKHDivManager(int nx, int ny, int nz,
-                                           double h, double distort, int nsub)
-    : m_nx(nx), m_ny(ny), m_nz(nz), m_nsub(nsub), m_h(h), m_distort(distort)
-{
-}
-
-void RadHACApKHDivManager::ExtractCoordinates()
-{
-    m_mesh = rad_hdiv::BuildStructuredRT0(m_nx, m_ny, m_nz, m_h, m_distort);
-    const int nf = m_mesh.n_face();
-    m_n_elem = nf;   // one "element" per face (the clustering granularity)
-    m_ndof   = nf;   // one normal-flux DOF per face
-    m_coordinates.assign((size_t)nf * 3, 0.0);
-    for (int f = 0; f < nf; ++f) {
-        const rad_hdiv::Vec3& c = m_mesh.faces[f].c;
-        m_coordinates[(size_t)f * 3 + 0] = c[0];
-        m_coordinates[(size_t)f * 3 + 1] = c[1];
-        m_coordinates[(size_t)f * 3 + 2] = c[2];
-    }
-}
-
-void RadHACApKHDivManager::OnBeforeBuild()
-{
-    rad_hdiv::BuildChargeMapCSC(m_mesh, m_csc);
-    rad_hdiv::BuildChargeQuad(m_mesh, m_nsub, m_quad);
-    rad_hdiv::BuildMassCOO(m_mesh, m_mI, m_mJ, m_mV, m_mass_diag);
-    // System-A H-LU mode: build the O(1) (i,j)->M_mass[i][j] lookup from the COO (RT0 mass couples
-    // a face with the other faces of its 1-2 incident cells -> sparse, ~12 nnz/row).
-    if (m_system_mode) {
-        m_mass_map.clear();
-        m_mass_map.reserve(m_mV.size() * 2);
-        for (size_t k = 0; k < m_mV.size(); ++k) {
-            long long key = (long long)m_mI[k] * (long long)m_ndof + (long long)m_mJ[k];
-            m_mass_map[key] += m_mV[k];
-        }
-    }
-}
-
-double RadHACApKHDivManager::ComputeSystemEntry(int dof_i, int dof_j) const
-{
-    // Default (+N) for the matvec path; system-A (M_mass + chi*N) when SetSystemMode(chi>0) was called.
-    double N = GetInteractionMatrixElement(dof_i, dof_j);
-    if (!m_system_mode) return N;
-    double mass = 0.0;
-    auto it = m_mass_map.find((long long)dof_i * (long long)m_ndof + (long long)dof_j);
-    if (it != m_mass_map.end()) mass = it->second;
-    return mass + m_system_chi * N;
-}
-
-void RadHACApKHDivManager::InitializeInvChi()
-{
-    // The +N H-matrix does not fold in 1/chi (ComputeSystemEntry = default = +N); the material
-    // system A = (1/chi) M_mass - N is applied by the caller.  Still must size m_inv_chi.
-    m_inv_chi.assign(m_ndof, 0.0);
-}
-
-void RadHACApKHDivManager::ApplySystem(const std::vector<double>& x, double inv_chi,
-                                       std::vector<double>& y)
-{
-    // y = N x  (O(N log N) H-matvec via the base)
-    y.assign(m_ndof, 0.0);
-    MatVec(x, y);
-    // y = inv_chi * (M_mass x) - N x
-    for (int f = 0; f < m_ndof; ++f) y[f] = -y[f];
-    for (size_t k = 0; k < m_mV.size(); ++k)
-        y[m_mI[k]] += inv_chi * m_mV[k] * x[m_mJ[k]];
-}
-
-std::vector<double> RadHACApKHDivManager::DiagSystem(double inv_chi) const
-{
-    std::vector<double> d((size_t)m_ndof, 0.0);
-    for (int f = 0; f < m_ndof; ++f)
-        d[f] = inv_chi * m_mass_diag[f] - GetInteractionMatrixElement(f, f);
-    return d;
-}
-
-double RadHACApKHDivManager::GetInteractionMatrixElement(int dof_i, int dof_j) const
-{
-    // N[i][j] = sum_{a in supp(i)} sum_{b in supp(j)} B[a][i] G[a][b] B[b][j].  Each face's
-    // support has <= 2 charges -> <= 4 Gram evaluations per matrix entry.
-    double acc = 0.0;
-    const std::array<int, 2>&    ri = m_csc.rows[dof_i];
-    const std::array<double, 2>& ci = m_csc.coef[dof_i];
-    const std::array<int, 2>&    rj = m_csc.rows[dof_j];
-    const std::array<double, 2>& cj = m_csc.coef[dof_j];
-    for (int p = 0; p < 2; ++p) {
-        int a = ri[p];
-        if (a < 0) continue;
-        double ca = ci[p];
-        for (int q = 0; q < 2; ++q) {
-            int b = rj[q];
-            if (b < 0) continue;
-            acc += ca * cj[q] * rad_hdiv::CoulombGramEntry(m_quad, a, b);
-        }
-    }
-    return acc;
-}
 
 //=========================================================================
 // RadHACApKChargeGram -- charge-charge Coulomb Gram G as a HACApK H-matrix
@@ -267,7 +200,7 @@ static void rad_inv2x2(const double A[4], double Ai[4])    // inverse of a row-m
 // Built-in 64-node Gauss-Duffy collapsed-cube tet rule (4 Gauss-Legendre pts/dim).  ref pts are
 // barycentric (lam1,lam2,lam3) flat in `pts`, weights summing to 1/6 in `w` -> phys weight = w*|J|,
 // |J| = 6*vol.  This is the SAME rule as radia.vim._core._gauss_duffy_tet(4) (so the C++ analytic
-// charge-Gram matches the dense Python reference).  Shared by the tet analytic ctor (outer quad on the
+// charge-Gram matches the independent analytic reference).  Shared by the tet analytic ctor (outer quad on the
 // tet itself) and the polytope ctor (outer quad on each centroid-fan sub-tet).
 static void rad_gl4_duffy_tet(std::vector<double>& pts, std::vector<double>& w)
 {
@@ -411,8 +344,8 @@ RadHACApKChargeGram::RadHACApKChargeGram(std::vector<double> cell_verts,
 // as the tet/triangle ctor, generalized to any flat-faced convex cell: cell outer quad = centroid-fan
 // sub-tets (apex = cell_cent) each filled by the 64-node Gauss-Duffy rule; face outer quad = Dunavant-5
 // per sub-triangle.  The source potential (PhiAt) is the divergence-theorem polytope potential (cell) /
-// sum-of-sub-triangle Wilton potential (face), evaluated from m_srcTris.  Matches the dense Python
-// radia.vim._core.analytic_charge_gram polytope path entry-by-entry (same tris, same quad rules).
+// sum-of-sub-triangle Wilton potential (face), evaluated from m_srcTris.  Matches the independent analytic
+// polytope reference entry-by-entry (same tris, same quad rules).
 RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<double> cell_tris, std::vector<int> cell_troff,
     std::vector<double> cell_cent, std::vector<double> cell_meas,
@@ -518,7 +451,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
 
 // CURVED POLYTOPE constructor (FULLY curved): curved CELL volume charge (sub-tets, CurvedTetMapMeasure outer
 // quad + CurvedTetPotential in PhiAt) + curved FACE surface charge (sub-tris, CurvedTriMapMeasure +
-// CurvedTriPotential).  The cell volume charge is DOMINANT (curved RT0 cannot represent uniform M exactly,
+// CurvedTriPotential).  The cell volume charge is DOMINANT (the lowest-order curved charge cannot represent uniform M exactly,
 // div M != 0), so the cell MUST be curved.  cell_curved_nodes [n_cell_subtet*30] = 10 P2 nodes/sub-tet,
 // cell_subtet_off [n_cell+1] CSR; ditto face_curved_nodes [n_bf_subtri*18] + face_subtri_off [n_bf+1].
 RadHACApKChargeGram::RadHACApKChargeGram(
@@ -1287,7 +1220,7 @@ double RadHACApKChargeGram::PhiAt(int src, const double p[3]) const
                     tot += rad_hdiv::CurvedTriPotential(nd, 0, 0, p, m_gl.data(), m_gw.data(), nq);
                 }
             }
-            return tot;          // constant RT0 charge -> monomial exponent 0
+            return tot;          // constant charge -> monomial exponent 0
         }
         const std::vector<std::array<rad_hdiv::Vec3, 3>>& tris = m_srcTris[src];
         if (src < m_n_el) {
@@ -1783,7 +1716,7 @@ static bool HexInv3(const double A[3][3], double B[3][3])
 // Exact affine-cell inner is mathematically clean but currently too expensive inside the HACApK entry loop:
 // each outer point triggers several closed-form tet potential recursions.  Keep the verified building block
 // available for future block-level formulas, but leave the production path on the faster shared quadrature.
-static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = false;
+static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = true;
 
 // Build a Duffy-graded barycentric rule on a (dim+1)-vertex ref sub-simplex from the 1D rule (gl,gw),
 // graded at LOCAL vertex `corner` (swap-permuted to Duffy vertex 0, matching the validated
@@ -2726,14 +2659,137 @@ void RadHACApKChargeGram::PhiInnerHexAffineCellSubVec(int hS, int subB, const do
         inn[ls] += s;
     }
 }
+void RadHACApKChargeGram::PhiInnerHexAffineFaceSubVec(int hS, int subB, const double p[3],
+                                                      const std::vector<int>& srcG, double* inn) const
+{
+    // A flat Q2 face is affine on the whole quad.  On either reference sub-triangle, every Q1 face
+    // monomial is therefore an affine physical-coordinate polynomial of degree at most two.  Evaluate its
+    // potential from the exact triangle moments instead of the static-site near rule.  Besides removing the
+    // near quadrature bias, this makes a reflection of an affine face commute with the Gram entry to
+    // roundoff, which is required by the full-vs-IMA rad.Fld contract.
+    const int* tv = QUADREF_TRIS[subB];
+    double U[3][2], V[3][3];
+    for (int i = 0; i < 3; ++i) {
+        U[i][0] = QUADREF_V[tv[i]][0];
+        U[i][1] = QUADREF_V[tv[i]][1];
+        const double* v = &m_faceSubV[(((size_t)hS * 2 + subB) * 3 + i) * 3];
+        for (int k = 0; k < 3; ++k) V[i][k] = v[k];
+    }
+
+    double e1[3], e2[3];
+    for (int k = 0; k < 3; ++k) { e1[k] = V[1][k] - V[0][k]; e2[k] = V[2][k] - V[0][k]; }
+    const double g00 = e1[0]*e1[0] + e1[1]*e1[1] + e1[2]*e1[2];
+    const double g01 = e1[0]*e2[0] + e1[1]*e2[1] + e1[2]*e2[2];
+    const double g11 = e2[0]*e2[0] + e2[1]*e2[1] + e2[2]*e2[2];
+    const double det = g00*g11 - g01*g01;
+    if (det <= 1e-300) return;
+    const double ref_e1[2] = {U[1][0] - U[0][0], U[1][1] - U[0][1]};
+    const double ref_e2[2] = {U[2][0] - U[0][0], U[2][1] - U[0][1]};
+    const double ref_jac = std::fabs(ref_e1[0]*ref_e2[1] - ref_e1[1]*ref_e2[0]);
+    const double phys_jac = std::sqrt(det);
+    const double ref_over_phys = ref_jac / phys_jac;
+    const double i00 = g11 / det, i01 = -g01 / det, i11 = g00 / det;
+    double qa[3], qb[3];
+    for (int k = 0; k < 3; ++k) {
+        qa[k] = i00*e1[k] + i01*e2[k];
+        qb[k] = i01*e1[k] + i11*e2[k];
+    }
+
+    // u(y) and v(y) on the source sub-triangle, in the form alpha + beta.y.
+    double beta[2][3] = {{0,0,0},{0,0,0}}, alpha[2] = {U[0][0], U[0][1]};
+    const double du1 = U[1][0] - U[0][0], du2 = U[2][0] - U[0][0];
+    const double dv1 = U[1][1] - U[0][1], dv2 = U[2][1] - U[0][1];
+    for (int k = 0; k < 3; ++k) {
+        beta[0][k] = du1*qa[k] + du2*qb[k];
+        beta[1][k] = dv1*qa[k] + dv2*qb[k];
+        alpha[0] -= beta[0][k] * V[0][k];
+        alpha[1] -= beta[1][k] * V[0][k];
+    }
+
+    const double I0 = rad_hdiv::TriPotential(V, p);
+    double M1[3]; rad_hdiv::TriMoment1(V, p, M1);
+    double M2[3][3]; rad_hdiv::TriMoment2(V, p, M2);
+    for (size_t idx = 0; idx < srcG.size(); ++idx) {
+        const int ls = srcG[idx];
+        const int* ex = &m_expo[(size_t)3*ls];
+        double polyA = 1.0, polyB[3] = {0,0,0}, polyC[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+        for (int factor = 0; factor < 2; ++factor) {
+            const int power = ex[factor];
+            for (int repeat = 0; repeat < power; ++repeat) {
+                const double* be = beta[factor];
+                const double al = alpha[factor];
+                const double nextA = polyA * al;
+                double nextB[3], nextC[3][3];
+                for (int k = 0; k < 3; ++k) nextB[k] = polyA*be[k] + al*polyB[k];
+                for (int k = 0; k < 3; ++k)
+                    for (int j = 0; j < 3; ++j)
+                        nextC[k][j] = al*polyC[k][j]
+                                    + 0.5*(polyB[k]*be[j] + be[k]*polyB[j]);
+                polyA = nextA;
+                for (int k = 0; k < 3; ++k) {
+                    polyB[k] = nextB[k];
+                    for (int j = 0; j < 3; ++j) polyC[k][j] = nextC[k][j];
+                }
+            }
+        }
+        double value = polyA*I0;
+        for (int k = 0; k < 3; ++k) value += polyB[k]*M1[k];
+        if (ex[0] + ex[1] >= 2)
+            for (int k = 0; k < 3; ++k)
+                for (int j = 0; j < 3; ++j) value += polyC[k][j]*M2[k][j];
+        // TriMoment* integrates physical surface measure.  The Piola charge basis uses reference face
+        // measure (surface Jacobian cancels in sigma = (u.n)_ref / J_s), so restore the reference scaling.
+        inn[idx] += ref_over_phys * value;
+    }
+}
+
+void RadHACApKChargeGram::PhiInnerHexAffineCellVec(int hS, const double p[3],
+                                                   const std::vector<int>& srcG, double* inn) const
+{
+    for (int subB = 0; subB < 6; ++subB)
+        PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
+}
+
+void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
+                                                   const std::vector<int>& srcG, double* inn) const
+{
+    for (int subB = 0; subB < 2; ++subB)
+        PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
+}
 
 void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                                             const std::vector<int>& srcG, double* inn) const
 {
     const bool cell = (kindS == 0);
+    const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
     if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
         PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
         return;
+    }
+    if (!cell) {
+        bool affine = true;
+        const double* p0 = &nd[0];
+        const double* px = &nd[6];
+        const double* py = &nd[18];
+        const double tol = 1e-10 * std::max({std::sqrt((px[0]-p0[0])*(px[0]-p0[0])
+                                                       + (px[1]-p0[1])*(px[1]-p0[1])
+                                                       + (px[2]-p0[2])*(px[2]-p0[2])),
+                                             std::sqrt((py[0]-p0[0])*(py[0]-p0[0])
+                                                       + (py[1]-p0[1])*(py[1]-p0[1])
+                                                       + (py[2]-p0[2])*(py[2]-p0[2]))}) + 1e-12;
+        for (int j = 0; affine && j < 3; ++j)
+            for (int i = 0; i < 3; ++i) {
+                const double xi = 0.5*i, eta = 0.5*j;
+                const double* q = &nd[3*(i + 3*j)];
+                const double dx = q[0] - (p0[0] + xi*(px[0]-p0[0]) + eta*(py[0]-p0[0]));
+                const double dy = q[1] - (p0[1] + xi*(px[1]-p0[1]) + eta*(py[1]-p0[1]));
+                const double dz = q[2] - (p0[2] + xi*(px[2]-p0[2]) + eta*(py[2]-p0[2]));
+                affine = dx*dx + dy*dy + dz*dz <= tol*tol;
+            }
+        if (affine) {
+            PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
+            return;
+        }
     }
     const size_t sid = cell ? ((size_t)hS*6 + subB) : ((size_t)hS*2 + subB);
     const double* cs = cell ? &m_cellSubC[sid*3] : &m_faceSubC[sid*3];
@@ -2744,7 +2800,6 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
         PhiInnerHexSiteVec(kindS, hS, subB, p, srcG, inn);
         return;
     }
-    const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
     const std::shared_ptr<const HexQuadCloud> cl =
         HexGetCloud(m_build_id, HexCloudKey(cell ? 0 : 1, false, false, hS, subB, 3),
         [&](HexQuadCloud& c) {
@@ -2763,6 +2818,58 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
         const double* xi = &cl->xi[3*q];
         for (int ls = 0; ls < nS; ++ls) inn[ls] += gr*HexMonoEval(srcG[ls], xi);
     }
+}
+
+// Affine-only product rule for the hex charge block.  The legacy path partitions the target cell/face
+// along fixed diagonals before applying a barycentric rule; those diagonals are not invariant under mirror
+// reflection.  For flat Q2 hosts the geometry map is affine, so integrating over the complete reference
+// cube/quad with a symmetric tensor rule removes that artificial choice.  The source potential is summed
+// over all reference sub-tets/sub-triangles using the exact polynomial moment kernels above.  Curved hosts
+// continue through QuadBlockHex's graded path.
+std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int mask) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> blk((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return blk;
+
+    auto reflpt = [mask](const double* v, double* o) {
+        o[0] = (mask & 1) ? -v[0] : v[0];
+        o[1] = (mask & 2) ? -v[1] : v[1];
+        o[2] = (mask & 4) ? -v[2] : v[2];
+    };
+    const double* ndT = (kindT == 0) ? &m_hexNodes[(size_t)hT*81] : &m_quadNodes[(size_t)hT*27];
+    std::vector<double> inn((size_t)nS, 0.0);
+    std::vector<double> xi(3, 0.0);
+    const int nq = (int)m_glOut.size();
+    for (int iz = 0; iz < (kindT == 0 ? nq : 1); ++iz) {
+        xi[2] = (kindT == 0) ? m_glOut[iz] : 0.0;
+        for (int iy = 0; iy < nq; ++iy) {
+            xi[1] = m_glOut[iy];
+            for (int ix = 0; ix < nq; ++ix) {
+                xi[0] = m_glOut[ix];
+                double p[3];
+                if (kindT == 0) HexQ2MapX(ndT, xi.data(), p);
+                else {
+                    const double uv[2] = {xi[0], xi[1]};
+                    QuadQ2MapX(ndT, uv, p);
+                }
+                double peval[3]; reflpt(p, peval);
+                std::fill(inn.begin(), inn.end(), 0.0);
+                if (kindS == 0) PhiInnerHexAffineCellVec(hS, peval, srcG, inn.data());
+                else            PhiInnerHexAffineFaceVec(hS, peval, srcG, inn.data());
+                const double wg = m_gwOut[ix] * m_gwOut[iy] * ((kindT == 0) ? m_gwOut[iz] : 1.0);
+                for (int lt = 0; lt < nT; ++lt) {
+                    const double wl = wg * HexMonoEval(tgtG[lt], xi.data());
+                    double* row = &blk[(size_t)lt*nS];
+                    for (int ls = 0; ls < nS; ++ls) row[ls] += wl * inn[ls];
+                }
+            }
+        }
+    }
+    for (double& v : blk) v *= RAD_INV_FOUR_PI;
+    return blk;
 }
 
 // 2D closest point on a (ref-space) triangle -- the clamp for the radial anchor on faces.
@@ -2908,6 +3015,31 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     const int nT = (int)tgtG.size(), nS = (int)srcG.size();
     std::vector<double> blk((size_t)nT*nS, 0.0);
     if (nT == 0 || nS == 0) return blk;
+    auto face_affine = [this](int h) {
+        const double* nd = &m_quadNodes[(size_t)h*27];
+        const double* p0 = &nd[0];
+        const double* px = &nd[6];
+        const double* py = &nd[18];
+        const double tol = 1e-10 * std::max({
+            std::sqrt((px[0]-p0[0])*(px[0]-p0[0]) + (px[1]-p0[1])*(px[1]-p0[1]) + (px[2]-p0[2])*(px[2]-p0[2])),
+            std::sqrt((py[0]-p0[0])*(py[0]-p0[0]) + (py[1]-p0[1])*(py[1]-p0[1]) + (py[2]-p0[2])*(py[2]-p0[2]))}) + 1e-12;
+        for (int j = 0; j < 3; ++j)
+            for (int i = 0; i < 3; ++i) {
+                const double u = 0.5*i, v = 0.5*j;
+                const double* q = &nd[3*(i + 3*j)];
+                const double dx = q[0] - (p0[0] + u*(px[0]-p0[0]) + v*(py[0]-p0[0]));
+                const double dy = q[1] - (p0[1] + u*(px[1]-p0[1]) + v*(py[1]-p0[1]));
+                const double dz = q[2] - (p0[2] + u*(px[2]-p0[2]) + v*(py[2]-p0[2]));
+                if (dx*dx + dy*dy + dz*dz > tol*tol) return false;
+            }
+        return true;
+    };
+    const bool affineT = kindT == 0 && hT >= 0 && hT < (int)m_hexAffineCell.size() && m_hexAffineCell[hT]
+                       || kindT != 0 && face_affine(hT);
+    const bool affineS = kindS == 0 && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]
+                       || kindS != 0 && face_affine(hS);
+    if (affineT && affineS)
+        return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, mask);
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
     // IMA (mask>0): couple the TARGET host with the source host REFLECTED on the 3-bit axis mask.  By the
@@ -3073,7 +3205,8 @@ static thread_local std::unordered_map<HexTransBlockKey, std::vector<double>, He
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int mask) const
 {
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
-    const bool use_trans_cache = !m_d2 && m_hexUniformTransHosts && mask == 0 &&
+    const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
+                                 !m_d2 && m_hexUniformTransHosts && mask == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
     if (use_trans_cache) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexTransBlockLookups);
@@ -3162,7 +3295,8 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
     };
 
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
-    const bool use_trans_cache = !m_d2 && m_hexUniformTransHosts && mask == 0 &&
+    const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
+                                 !m_d2 && m_hexUniformTransHosts && mask == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindA == 0 && kindB == 0));
     if (use_trans_cache) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexSymTransBlockLookups);
@@ -4121,7 +4255,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
             // (far_quad=0, O((size/r)^2) -- breaks symmetry slightly) or a low-order DOUBLE-QUADRATURE of 1/r
             // (far_quad>0, O((size/r)^4) -- reproduces the all-analytic Gram, the precision-preserving speedup).
             // near_factor = 1e30 (default) => all pairs NEAR => all-analytic (matches the dense
-            // build_demag(analytic_gram=True) golden); near_factor ~ 2 gives the fast split.
+            // analytic reference golden); near_factor ~ 2 gives the fast split.
             const double dx = m_cent[3*a]     - m_cent[3*b];
             const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
             const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
@@ -4166,9 +4300,18 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
     // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+#ifdef HAVE_LAPACK
+    // The solve is entered from an active NGSolve TaskManager.  Keep MKL's
+    // process setting serial for the non-PARDISO part of this solve; each
+    // PARDISO phase temporarily installs its configured local thread count
+    // while SuspendTaskManager keeps the NGSolve workers asleep.  HACApK's
+    // outer matvec therefore remains TaskManager-parallel without nested
+    // worker pools, while the sparse factor/solve can still scale.
+    radia::MKLThreadGuard solve_mkl_guard(1);
+#endif
     // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via a single PARDISO SPD
-    // factor of the RT0 mass (built once, applied per iteration).  ~3-5x fewer iters than the diagonal
-    // Jacobi (the diag under-resolves the RT0 mass off-diagonal coupling) and nearly mu_r-flat.  When
+    // factor of the HDiv mass (built once, applied per iteration).  ~3-5x fewer iters than the diagonal
+    // Jacobi (the diagonal under-resolves the HDiv mass off-diagonal coupling) and nearly mu_r-flat.  When
     // mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
 #ifdef HAVE_LAPACK
     // PERSISTENT factor (2026-07-10): get-or-build via EnsureMassRieszFactor (exact-COO key; hit =
@@ -4327,6 +4470,67 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     return x;
 }
 
+std::vector<double> RadHACApKChargeGram::ApplyDemagOperator(
+    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
+    const std::vector<double>& B_data, int n_face,
+    const std::vector<double>& x, bool symmetric)
+{
+    const int n_charge = static_cast<int>(B_indptr.size()) - 1;
+    if (n_charge != m_ndof)
+        throw std::runtime_error("ApplyDemagOperator: B row count must equal charge-Gram ndof");
+    if (n_face < 0 || static_cast<int>(x.size()) != n_face)
+        throw std::runtime_error("ApplyDemagOperator: x size mismatch");
+    if (B_indices.size() != B_data.size() || B_indptr.empty() ||
+        B_indptr.front() != 0 || B_indptr.back() != static_cast<int>(B_data.size()))
+        throw std::runtime_error("ApplyDemagOperator: invalid B CSR arrays");
+    for (int col : B_indices)
+        if (col < 0 || col >= n_face)
+            throw std::runtime_error("ApplyDemagOperator: B column index out of range");
+
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    std::vector<double> q(static_cast<size_t>(n_charge), 0.0);
+    std::vector<double> Gq(static_cast<size_t>(n_charge), 0.0);
+    std::vector<double> y(static_cast<size_t>(n_face), 0.0);
+    ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
+        double sum = 0.0;
+        for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
+            sum += B_data[static_cast<size_t>(k)] * x[static_cast<size_t>(B_indices[static_cast<size_t>(k)])];
+        q[a] = sum;
+    });
+    if (symmetric) MatVecSym(q, Gq);
+    else MatVec(q, Gq);
+    ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
+        const double ga = Gq[a];
+        for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
+            ngcore::AtomicAdd(y[static_cast<size_t>(B_indices[static_cast<size_t>(k)])],
+                              B_data[static_cast<size_t>(k)] * ga);
+    });
+    return y;
+}
+
+std::vector<double> RadHACApKChargeGram::ApplyMassRiesz(
+    const std::vector<int>& mI, const std::vector<int>& mJ,
+    const std::vector<double>& mV, int n_face,
+    const std::vector<double>& rhs)
+{
+    if (n_face < 0 || static_cast<int>(rhs.size()) != n_face)
+        throw std::runtime_error("ApplyMassRiesz: rhs size mismatch");
+    if (mI.size() != mJ.size() || mI.size() != mV.size())
+        throw std::runtime_error("ApplyMassRiesz: mass COO array size mismatch");
+#ifdef HAVE_LAPACK
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    radia::MKLThreadGuard solve_mkl_guard(1);
+    auto keep = EnsureMassRieszFactor(mI, mJ, mV, n_face,
+                                      "ApplyMassRiesz", nullptr,
+                                      /*geometry_cache=*/true);
+    std::vector<double> x(static_cast<size_t>(n_face), 0.0);
+    keep->factor.Solve(rhs.data(), x.data());
+    return x;
+#else
+    throw std::runtime_error("ApplyMassRiesz requires MKL PARDISO (HAVE_LAPACK)");
+#endif
+}
+
 std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTimings() const
 {
     const SolveTiming& t = m_lastSolveTiming;
@@ -4362,120 +4566,6 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"hmatvec_last_nd", t.hmatvec_last_nd},
         {"hmatvec_last_nthr", t.hmatvec_last_nthr},
     };
-}
-
-std::vector<double> RadHACApKChargeGram::SolveMaterialMINRES(
-    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
-    const std::vector<double>& B_data, int n_face,
-    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
-    double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out, bool mass_riesz, bool symmetric)
-{
-    const int n_charge = (int)B_indptr.size() - 1;
-    // Stand up (or reuse the caller's) TaskManager pool so the HACApK H-matvec runs multi-threaded.
-    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-    // MASS RIESZ preconditioner: y = M_mass^{-1} r via a single PARDISO SPD factor of the RT0 mass
-    // (built once, applied per iteration); the bounded -N spectrum (eigenvalues vs M_mass = inv_chi - d,
-    // d in [0,1]) makes the mass Riesz especially effective.  mass_riesz=false -> diagonal Jacobi y=r/prec.
-#ifdef HAVE_LAPACK
-    // Same persistent factor as SolveLinearMaterial (one shared cache entry via EnsureMassRieszFactor;
-    // this path does not accumulate factor timing).  mrKeep pins the entry for the MINRES loop.
-    std::shared_ptr<RadMassRieszCache> mrKeep;
-    MassRieszPardiso* mr = nullptr;
-    if (mass_riesz) {
-        mrKeep = EnsureMassRieszFactor(mI, mJ, mV, n_face, "SolveMaterialMINRES", nullptr);
-        mr = &mrKeep->factor;
-    }
-#else
-    if (mass_riesz)
-        throw std::runtime_error("SolveMaterialMINRES: mass Riesz preconditioner requires MKL PARDISO "
-                                 "(HAVE_LAPACK)");
-#endif
-    auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
-#ifdef HAVE_LAPACK
-        if (mass_riesz) { mr->Solve(rr.data(), zz.data()); return; }
-#endif
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
-    };
-
-    // A x = inv_chi*(M_mass x) - B^T (G (B x))  -- symmetric INDEFINITE -> MINRES.
-    std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
-    auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
-        std::fill(q.begin(), q.end(), 0.0);
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-            double s = 0.0;
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
-            q[a] = s;
-        });
-        std::fill(Gq.begin(), Gq.end(), 0.0);
-        if (symmetric) MatVecSym(q, Gq);                           // EXACTLY symmetric -> MINRES-valid Gram apply
-        else           MatVec(q, Gq);                              // shadowed: also MatVecSym (sym-fill leaves lower empty)
-        y.assign((size_t)n_face, 0.0);
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) { // y = -B^T (G B x)
-            double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], -B_data[k] * ga);
-        });
-        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
-            ngcore::AtomicAdd(y[mI[k]], inv_chi * mV[k] * x[mJ[k]]);  // + inv_chi M_mass x
-        });
-    };
-    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
-        double s = 0.0;
-        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
-            double local = 0.0;
-            for (auto f : r) local += a[f] * b[f];
-            ngcore::AtomicAdd(s, local);
-        });
-        return s;
-    };
-
-    // ---- Jacobi-preconditioned MINRES (Paige-Saunders 1975; scipy.sparse.linalg.minres recurrence) ----
-    std::vector<double> x((size_t)n_face, 0.0), r1 = rhs, r2 = rhs, y((size_t)n_face);
-    applyPrec(r1, y);                                               // y = M^{-1} b
-    double beta1 = dot(r1, y);                                      // b . M^{-1} b
-    iters_out = 0;
-    if (beta1 <= 0.0) return x;                                     // b = 0 (or M not SPD) -> x = 0
-    beta1 = std::sqrt(beta1);
-    double oldb = 0.0, beta = beta1, dbar = 0.0, epsln = 0.0, phibar = beta1, cs = -1.0, sn = 0.0;
-    std::vector<double> v((size_t)n_face), Av((size_t)n_face),
-                        w((size_t)n_face, 0.0), w1((size_t)n_face, 0.0), w2((size_t)n_face, 0.0);
-    int it = 0;
-    for (; it < maxit; ++it) {
-        const double s = 1.0 / beta;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { v[f] = s * y[f]; }); // Lanczos vector
-        applyA(v, Av);
-        if (it >= 1) {
-            const double c = beta / oldb;
-            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { Av[f] -= c * r1[f]; });
-        }
-        const double alfa = dot(v, Av);
-        {
-            const double c = alfa / beta;
-            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { Av[f] -= c * r2[f]; });
-        }
-        r1 = r2; r2 = Av;
-        applyPrec(r2, y);                                          // y = M^{-1} r2
-        oldb = beta; beta = dot(r2, y);
-        if (beta < 0.0) break;                                      // preconditioner not SPD
-        beta = std::sqrt(beta);
-        // previous + next Givens rotation
-        const double oldeps = epsln;
-        const double delta  = cs * dbar + sn * alfa;
-        const double gbar   = sn * dbar - cs * alfa;
-        epsln = sn * beta;
-        dbar  = -cs * beta;
-        double gamma = std::sqrt(gbar * gbar + beta * beta);
-        if (gamma < 1e-300) gamma = 1e-300;
-        cs = gbar / gamma; sn = beta / gamma;
-        const double phi = cs * phibar; phibar = sn * phibar;
-        const double denom = 1.0 / gamma;
-        w1 = w2; w2 = w;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { w[f] = (v[f] - oldeps * w1[f] - delta * w2[f]) * denom; });
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += phi * w[f]; });
-        iters_out = it + 1;
-        if (phibar <= tol * beta1) break;                          // relative preconditioned residual
-    }
-    return x;
 }
 
 RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
@@ -4553,272 +4643,4 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     PicardResult r;
     r.m = m; r.Mavg = Mavg; r.chi = chi; r.Dscal = Dscal; r.iters = done;
     return r;
-}
-
-//=========================================================================
-// RadHACApKPointKernel / RadHACApKChargeGaussOperator
-//=========================================================================
-
-RadHACApKPointKernel::RadHACApKPointKernel(std::vector<double> points)
-    : m_points(std::move(points))
-{
-}
-
-void RadHACApKPointKernel::ExtractCoordinates()
-{
-    m_n_elem = (int)(m_points.size() / 3);
-    m_ndof = m_n_elem;
-    m_coordinates = m_points;
-}
-
-double RadHACApKPointKernel::GetInteractionMatrixElement(int i, int j) const
-{
-    if (i == j) return 0.0;  // self singularity is carried by the charge-level near correction.
-    const double dx = m_points[(size_t)3*i]     - m_points[(size_t)3*j];
-    const double dy = m_points[(size_t)3*i + 1] - m_points[(size_t)3*j + 1];
-    const double dz = m_points[(size_t)3*i + 2] - m_points[(size_t)3*j + 2];
-    const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-    return (r > 1e-300) ? (RAD_INV_FOUR_PI / r) : 0.0;
-}
-
-RadHACApKChargeGaussOperator::RadHACApKChargeGaussOperator(
-    std::vector<double> point_coords,
-    std::vector<int> P_pt,
-    std::vector<int> P_chg,
-    std::vector<double> P_coef,
-    int n_charge,
-    std::vector<int> corr_i,
-    std::vector<int> corr_j,
-    std::vector<double> corr_v)
-    : m_ncharge(n_charge),
-      m_point_coords(std::move(point_coords)),
-      m_corr_i(std::move(corr_i)),
-      m_corr_j(std::move(corr_j)),
-      m_corr_v(std::move(corr_v))
-{
-    m_npoint = (int)(m_point_coords.size() / 3);
-    if ((int)m_point_coords.size() != 3 * m_npoint)
-        throw std::runtime_error("RadHACApKChargeGaussOperator: point_coords size not a multiple of 3");
-    const size_t nnz = P_coef.size();
-    if (P_pt.size() != nnz || P_chg.size() != nnz)
-        throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent P-scatter array sizes");
-    if ((int)m_corr_i.size() != (int)m_corr_j.size() || (int)m_corr_i.size() != (int)m_corr_v.size())
-        throw std::runtime_error("RadHACApKChargeGaussOperator: inconsistent correction array sizes");
-    // Build BOTH CSR orientations of the scatter P from the COO triple (counting-sort by point, by charge).
-    m_pt_indptr.assign((size_t)m_npoint + 1, 0);
-    m_chg_indptr.assign((size_t)m_ncharge + 1, 0);
-    for (size_t k = 0; k < nnz; ++k) {
-        const int p = P_pt[k], a = P_chg[k];
-        if (p < 0 || p >= m_npoint) throw std::runtime_error("RadHACApKChargeGaussOperator: P_pt out of range");
-        if (a < 0 || a >= m_ncharge) throw std::runtime_error("RadHACApKChargeGaussOperator: P_chg out of range");
-        ++m_pt_indptr[(size_t)p + 1];
-        ++m_chg_indptr[(size_t)a + 1];
-    }
-    for (int p = 0; p < m_npoint; ++p)  m_pt_indptr[(size_t)p + 1]  += m_pt_indptr[(size_t)p];
-    for (int a = 0; a < m_ncharge; ++a) m_chg_indptr[(size_t)a + 1] += m_chg_indptr[(size_t)a];
-    m_pt_charge.resize(nnz);  m_pt_coef.resize(nnz);
-    m_chg_point.resize(nnz);  m_chg_coef.resize(nnz);
-    std::vector<int> pcur(m_pt_indptr.begin(), m_pt_indptr.end() - 1);
-    std::vector<int> ccur(m_chg_indptr.begin(), m_chg_indptr.end() - 1);
-    for (size_t k = 0; k < nnz; ++k) {
-        const int p = P_pt[k], a = P_chg[k];
-        const double c = P_coef[k];
-        const int ip = pcur[(size_t)p]++;  m_pt_charge[(size_t)ip] = a; m_pt_coef[(size_t)ip] = c;
-        const int ic = ccur[(size_t)a]++;  m_chg_point[(size_t)ic] = p; m_chg_coef[(size_t)ic] = c;
-    }
-    m_corr_map.reserve(m_corr_v.size() * 2 + 1);
-    for (size_t k = 0; k < m_corr_v.size(); ++k) {
-        const int i = m_corr_i[k], j = m_corr_j[k];
-        if (i < 0 || i >= m_ncharge || j < 0 || j >= m_ncharge)
-            throw std::runtime_error("RadHACApKChargeGaussOperator: correction index out of range");
-        m_corr_map[(long long)i * (long long)m_ncharge + (long long)j] += m_corr_v[k];
-    }
-}
-
-bool RadHACApKChargeGaussOperator::BuildHMatrix(const RadHACApKParams& params)
-{
-    m_kernel.reset(new RadHACApKPointKernel(m_point_coords));
-    return m_kernel->BuildHMatrix(params);
-}
-
-double RadHACApKChargeGaussOperator::PointDirectEntry(int a, int b) const
-{
-    // (1/4pi) sum_{p in supp(a)} sum_{q in supp(b), q!=p} coef_a(p) coef_b(q) / |x_p - x_q|.
-    double s = 0.0;
-    for (int ka = m_chg_indptr[(size_t)a]; ka < m_chg_indptr[(size_t)a + 1]; ++ka) {
-        const int p = m_chg_point[(size_t)ka];
-        const double ca = m_chg_coef[(size_t)ka];
-        const double x0 = m_point_coords[(size_t)3*p];
-        const double x1 = m_point_coords[(size_t)3*p + 1];
-        const double x2 = m_point_coords[(size_t)3*p + 2];
-        for (int kb = m_chg_indptr[(size_t)b]; kb < m_chg_indptr[(size_t)b + 1]; ++kb) {
-            const int q = m_chg_point[(size_t)kb];
-            if (p == q) continue;
-            const double dx = x0 - m_point_coords[(size_t)3*q];
-            const double dy = x1 - m_point_coords[(size_t)3*q + 1];
-            const double dz = x2 - m_point_coords[(size_t)3*q + 2];
-            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r > 1e-300) s += ca * m_chg_coef[(size_t)kb] * RAD_INV_FOUR_PI / r;
-        }
-    }
-    return s;
-}
-
-double RadHACApKChargeGaussOperator::GetChargeEntry(int a, int b) const
-{
-    double v = PointDirectEntry(a, b);
-    auto it = m_corr_map.find((long long)a * (long long)m_ncharge + (long long)b);
-    if (it != m_corr_map.end()) v += it->second;
-    return v;
-}
-
-void RadHACApKChargeGaussOperator::MatVec(const std::vector<double>& q, std::vector<double>& y)
-{
-    if (!m_kernel || !m_kernel->IsValid())
-        throw std::runtime_error("RadHACApKChargeGaussOperator.MatVec: H-matrix is not built");
-    if ((int)q.size() != m_ncharge)
-        throw std::runtime_error("RadHACApKChargeGaussOperator.MatVec: q size mismatch");
-    std::vector<double> point_rhs((size_t)m_npoint, 0.0), point_phi((size_t)m_npoint, 0.0);
-    // scatter: point_rhs[p] = sum_{(a,coef) at p} coef * q[a]   (per-point CSR -> lock-free)
-    ngcore::ParallelFor(ngcore::IntRange(m_npoint), [&](size_t p) {
-        double s = 0.0;
-        for (int k = m_pt_indptr[p]; k < m_pt_indptr[p + 1]; ++k) s += m_pt_coef[(size_t)k] * q[(size_t)m_pt_charge[(size_t)k]];
-        point_rhs[p] = s;
-    });
-    m_kernel->MatVec(point_rhs, point_phi);
-    y.assign((size_t)m_ncharge, 0.0);
-    // gather: y[a] = sum_{(p,coef) of a} coef * point_phi[p]   (per-charge CSR -> lock-free)
-    ngcore::ParallelFor(ngcore::IntRange(m_ncharge), [&](size_t a) {
-        double s = 0.0;
-        for (int k = m_chg_indptr[a]; k < m_chg_indptr[a + 1]; ++k) s += m_chg_coef[(size_t)k] * point_phi[(size_t)m_chg_point[(size_t)k]];
-        y[a] = s;
-    });
-    ngcore::ParallelFor(ngcore::IntRange((int)m_corr_v.size()), [&](size_t k) {
-        ngcore::AtomicAdd(y[(size_t)m_corr_i[k]], m_corr_v[k] * q[(size_t)m_corr_j[k]]);
-    });
-}
-
-std::vector<double> RadHACApKChargeGaussOperator::SolveLinearMaterial(
-    const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
-    const std::vector<double>& B_data, int n_face,
-    const std::vector<int>& mI, const std::vector<int>& mJ, const std::vector<double>& mV,
-    double inv_chi, const std::vector<double>& prec, const std::vector<double>& rhs,
-    double tol, int maxit, int& iters_out, bool mass_riesz)
-{
-    const int n_charge = (int)B_indptr.size() - 1;
-    if (n_charge != m_ncharge) throw std::runtime_error("ChargeGauss SolveLinearMaterial: B row count mismatch");
-    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-    // MASS RIESZ preconditioner (default 'auto'): z = M_mass^{-1} r via one PARDISO SPD factor of the RT0
-    // mass; mass_riesz=false keeps the diagonal Jacobi z = r/prec.  Same path as RadHACApKChargeGram.
-#ifdef HAVE_LAPACK
-    std::unique_ptr<MassRieszPardiso> mr;
-    if (mass_riesz) {
-        mr = std::make_unique<MassRieszPardiso>();
-        if (!mr->Factor(mI, mJ, mV, n_face))
-            throw std::runtime_error("ChargeGauss SolveLinearMaterial: PARDISO SPD factor of the RT0 mass "
-                                     "(mass Riesz preconditioner) failed");
-    }
-#else
-    if (mass_riesz)
-        throw std::runtime_error("ChargeGauss SolveLinearMaterial: mass Riesz preconditioner requires MKL "
-                                 "PARDISO (HAVE_LAPACK)");
-#endif
-    auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
-#ifdef HAVE_LAPACK
-        if (mass_riesz) { mr->Solve(rr.data(), zz.data()); return; }
-#endif
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { zz[f] = rr[f] / prec[f]; });
-    };
-    std::vector<double> q((size_t)n_charge), Gq((size_t)n_charge);
-    auto applyA = [&](const std::vector<double>& x, std::vector<double>& y) {
-        std::fill(q.begin(), q.end(), 0.0);
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-            double s = 0.0;
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
-            q[a] = s;
-        });
-        MatVec(q, Gq);
-        y.assign((size_t)n_face, 0.0);
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-            const double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
-                ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
-        });
-        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
-            ngcore::AtomicAdd(y[mI[k]], inv_chi * mV[k] * x[mJ[k]]);
-        });
-    };
-    auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
-        double s = 0.0;
-        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
-            double local = 0.0;
-            for (auto f : r) local += a[f] * b[f];
-            ngcore::AtomicAdd(s, local);
-        });
-        return s;
-    };
-    std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
-    applyPrec(r, z);
-    p = z;
-    double rz = dot(r, z);
-    double bnorm = std::sqrt(dot(rhs, rhs)); if (bnorm == 0.0) bnorm = 1.0;
-    int it = 0;
-    for (; it < maxit; ++it) {
-        if (std::sqrt(dot(r, r)) <= tol * bnorm) break;
-        applyA(p, Ap);
-        const double pAp = dot(p, Ap);
-        const double alpha = rz / pAp;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
-        applyPrec(r, z);
-        const double rz_new = dot(r, z);
-        const double beta = rz_new / rz;
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
-        rz = rz_new;
-    }
-    iters_out = it;
-    return x;
-}
-
-//=========================================================================
-// RadHACApKHDivSystemTet -- unstructured face-DOF system A = M_mass + chi*N (Phase 2)
-//=========================================================================
-
-RadHACApKHDivSystemTet::RadHACApKHDivSystemTet(
-    std::vector<double> face_centroids, double chi,
-    std::vector<int> face_charge, std::vector<double> face_coef,
-    std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-    std::vector<double> cell_verts, std::vector<double> face_verts,
-    int n_el, double gram_near_factor)
-    : m_chi(chi),
-      m_face_cent(std::move(face_centroids)),
-      m_face_charge(std::move(face_charge)),
-      m_face_coef(std::move(face_coef)),
-      // embedded analytic charge Gram (constructed -> geometry ready -> G(a,b) via entry, NOT built)
-      m_G(std::move(cell_verts), std::move(face_verts), n_el, gram_near_factor)
-{
-    m_nface = (int)(m_face_cent.size() / 3);
-    // O(1) (i,j)->M_mass[i][j] lookup from the COO (RT0 mass is sparse: ~couples within incident cells)
-    m_mass_map.reserve(mV.size() * 2);
-    for (size_t k = 0; k < mV.size(); ++k)
-        m_mass_map[(long long)mI[k] * (long long)m_nface + (long long)mJ[k]] += mV[k];
-}
-
-double RadHACApKHDivSystemTet::GetInteractionMatrixElement(int dof_i, int dof_j) const
-{
-    // N[i][j] = sum_{a in supp(i)} sum_{b in supp(j)} B[a][i] G[a][b] B[b][j]  (<=2 charges/face)
-    double N = 0.0;
-    for (int p = 0; p < 2; ++p) {
-        int a = m_face_charge[(size_t)dof_i * 2 + p];
-        if (a < 0) continue;
-        double ca = m_face_coef[(size_t)dof_i * 2 + p];
-        for (int q = 0; q < 2; ++q) {
-            int b = m_face_charge[(size_t)dof_j * 2 + q];
-            if (b < 0) continue;
-            N += ca * m_face_coef[(size_t)dof_j * 2 + q] * m_G.GetInteractionMatrixElement(a, b);
-        }
-    }
-    double mass = 0.0;
-    auto it = m_mass_map.find((long long)dof_i * (long long)m_nface + (long long)dof_j);
-    if (it != m_mass_map.end()) mass = it->second;
-    return mass + m_chi * N;   // A = M_mass + chi*N
 }

@@ -15,6 +15,8 @@ from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 from radia.vim import Solve  # noqa: E402
 
+pytestmark = pytest.mark.compute_host
+
 
 def _hex_cube(n):
     return MakeStructured3DMesh(
@@ -23,7 +25,6 @@ def _hex_cube(n):
     )
 
 
-@pytest.mark.flaky(reruns=2, reruns_delay=1)
 def test_hex_chargegram_hacapk_build_enters_lowrank_regime():
     """A 4^3 hex RT1 cube is large enough for HACApK ACA leaves and still small enough for validation."""
     with ng.TaskManager():
@@ -39,7 +40,6 @@ def test_hex_chargegram_hacapk_build_enters_lowrank_regime():
     assert np.isfinite(res["demag"]) and 0.30 < res["demag"] < 0.36
 
 
-@pytest.mark.flaky(reruns=2, reruns_delay=1)
 def test_hex_chargegram_build_stats_scale_monotonically():
     """The validation lane records build stats on two sizes without using a brittle exact timing ratio."""
     rows = []

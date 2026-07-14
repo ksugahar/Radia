@@ -1,9 +1,9 @@
 """HDiv-VIM production contract: ``rad.Solve`` write-back makes ``rad.Fld`` quantitative.
 
 These tests sit above the pure VIM math tests.  They lock the Radia-facing
-contract that matters to applications: solve the mesh-backed soft iron, write
-the per-element M back to Radia objects, then use Radia's analytic field kernel
-for design quantities.
+contract that matters to applications: solve the mesh-backed soft iron and
+evaluate the full RT1 charge field through ``rad.Fld``.  Per-element constant-M
+write-back remains metadata/visualization only and is not a field oracle.
 """
 from __future__ import annotations
 
@@ -60,9 +60,8 @@ def _radia_container_from_mesh_M(mesh, M):
     return rad.ObjCnt(objs)
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
-def test_radsolve_hdiv_writeback_radfld_matches_explicit_rebuild():
-    """After HDiv solve, Radia's field from the MeshSoftIron equals an explicit rebuild from ``res['M']``."""
+def test_radsolve_hdiv_radfld_uses_full_rt1_solution():
+    """rad.Fld on a solved MeshSoftIron is exactly vim.FieldFromSolution, not constant-M write-back."""
     rad.UtiDelAll()
     from radia.vim import _radsolve
     _radsolve.clear_registry()
@@ -71,24 +70,20 @@ def test_radsolve_hdiv_writeback_radfld_matches_explicit_rebuild():
         iron = vim.MeshSoftIron(mesh, mu_r=MU_R)
         top = rad.ObjCnt([iron, rad.ObjBckg(lambda _p: [0.0, 0.0, MU0 * H0])])
         res = rad.Solve(top, 1e-6, 2000, 0)
-        bref = _field(_radia_container_from_mesh_M(mesh, res["M"]))
+        bcollapsed = _field(_radia_container_from_mesh_M(mesh, res["M"]))
         bgot = _field(iron)
+        bref = MU0 * vim.FieldFromSolution(res, PROBES)
         m_from_cells = np.mean(np.asarray(res["M"], float), axis=0)
     rel = np.linalg.norm(bgot - bref) / max(np.linalg.norm(bref), 1e-30)
-    assert rel < 1e-12, f"rad.Fld(writeback iron) != explicit rebuild from res['M'] (rel {rel:.2e})"
+    assert rel < 1e-13, f"rad.Fld(HDiv) != C++ RT1 field (rel {rel:.2e})"
+    assert np.all(np.isfinite(bcollapsed))
     assert np.allclose(m_from_cells, res["M_avg"], rtol=1e-13, atol=1e-9)
     assert "field_contract" in res
     rad.UtiDelAll(); _radsolve.clear_registry()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
-def test_radsolve_hdiv_image_radfld_redirect_is_roundoff_exact():
-    """``image=`` solve redirects ``rad.Fld(iron)`` to the explicit full-field image container.
-
-    This is the field contract: the same reduced HDiv solution, explicitly mirrored for field evaluation,
-    must agree to roundoff.  The independent full HDiv solve is checked separately below; it is the target
-    contract, but the current hex RT1 ChargeGram still has a small reflection-symmetry defect.
-    """
+def test_radsolve_hdiv_image_radfld_is_repeatable_rt1_field():
+    """An image solve evaluates the reflected RT1 solution and is repeatable to roundoff."""
     rad.UtiDelAll()
     from radia.vim import _radsolve
     _radsolve.clear_registry()
@@ -99,20 +94,18 @@ def test_radsolve_hdiv_image_radfld_redirect_is_roundoff_exact():
         half_res = rad.Solve(top,
                              1e-6, 2000, 0, image="-z")
         b_half = _field(half_iron)
-        b_field_object = _field(half_res["field_object"])
+        b_direct = MU0 * vim.FieldFromSolution(half_res, PROBES)
         again = rad.Solve(top, 1e-6, 2000, 0, image="-z")
         b_again = _field(half_iron)
-    assert np.array_equal(b_half, b_field_object) or np.allclose(b_half, b_field_object, rtol=1e-14, atol=1e-18)
+    assert np.array_equal(b_half, b_direct) or np.allclose(b_half, b_direct, rtol=1e-14, atol=1e-18)
     assert np.array_equal(b_half, b_again) or np.allclose(b_half, b_again, rtol=1e-14, atol=1e-18)
-    assert half_res.get("image_field_handles"), "image solve did not materialize field-image handles"
-    assert len(again.get("image_field_handles", [])) == len(half_res["image_field_handles"])
+    assert half_res["image"] == "-z"
     assert "M_avg_reduced" in half_res
     assert np.allclose(np.mean(np.asarray(half_res["M"], float), axis=0), half_res["M_avg_reduced"],
                        rtol=1e-13, atol=1e-9)
     rad.UtiDelAll(); _radsolve.clear_registry()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_hdiv_image_demag_matches_explicit_full_to_roundoff():
     """The IMA Gram/energy itself equals the explicit full-domain Gram to roundoff on the matching mesh."""
     Hz = ng.CoefficientFunction((0.0, 0.0, H0))
@@ -124,17 +117,11 @@ def test_hdiv_image_demag_matches_explicit_full_to_roundoff():
     assert abs(half["demag"] - full["demag"]) < 10.0 * np.finfo(float).eps
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "full hex RT1 ChargeGram still has a small reflection-symmetry defect; image-vs-explicit-full "
-    "rad.Fld must become a roundoff contract before claiming explicit-full field equivalence"
-))
 def test_hdiv_image_radfld_matches_unconstrained_explicit_full_to_roundoff():
     """Target contract: ``image=`` field and an explicit full solve should agree to ~10 eps.
 
-    The Gram/energy already satisfies this on the matching 1x1x2 vs 1x1x1 image mesh.  This xfail keeps the
-    remaining application-level gap visible: the unconstrained full solve currently carries small transverse
-    components whose sign/size follows the hex ChargeGram quadrature details, so this is treated as a
-    symmetry-preservation bug rather than as an acceptable tolerance.
+    The matching full and half meshes use the same affine hex reference rule.  This locks the stronger
+    application-level contract rather than accepting a tolerance for a reflection defect in ChargeGram.
     """
     rad.UtiDelAll()
     from radia.vim import _radsolve

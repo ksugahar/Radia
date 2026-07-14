@@ -282,19 +282,51 @@ if "Solve" in globals():
 if "Fld" in globals():
     _cpp_Fld = globals()["Fld"]
 
-    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv IMA field-container redirect)
+    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv RT1 field dispatch)
         """Evaluate Radia fields.
 
-        Mesh-backed HDiv-VIM solves with ``image=`` run on a reduced mesh but need an explicit mirror object
-        for field evaluation of that reduced solution.  The HDiv bridge records that full-field container,
-        and this wrapper redirects only those solved handles.  All ordinary Radia objects call the C++
-        ``Fld`` unchanged.
+        A solved mesh-backed HDiv-VIM object is evaluated from its full RT1
+        polynomial by the C++ charge-field kernel.  Other Radia objects call
+        the ordinary C++ ``Fld`` unchanged.
         """
         try:
             from radia.vim import _radsolve
-            obj = _radsolve.field_object_for(obj)
+            record = _radsolve.field_solution_for(obj)
         except Exception:
-            pass
+            record = None
+        if record is not None:
+            if kwargs or len(args) != 2:
+                raise TypeError("rad.Fld(HDiv): expected Fld(obj, field_type, points)")
+            import numpy as _np
+            from radia.vim._field_batch import field_from_solution, magnetization_from_solution
+            field_type, points = args
+            field_type = str(field_type).lower()
+            pts = _np.asarray(points, dtype=float)
+            single = pts.ndim == 1
+            pts2 = pts.reshape(-1, 3)
+            result = record["result"]
+            h_iron = field_from_solution(result, pts2)
+            source_obj = record.get("source_object")
+            if field_type in ("h", "hx", "hy", "hz"):
+                value = h_iron
+                if source_obj is not None:
+                    value = value + _np.asarray(_cpp_Fld(source_obj, "h", pts2), float).reshape(-1, 3)
+            elif field_type in ("b", "bx", "by", "bz"):
+                value = (4.0e-7 * _np.pi) * (h_iron + magnetization_from_solution(result, pts2))
+                if source_obj is not None:
+                    value = value + _np.asarray(_cpp_Fld(source_obj, "b", pts2), float).reshape(-1, 3)
+            elif field_type == "m":
+                value = magnetization_from_solution(result, pts2)
+            else:
+                raise NotImplementedError(
+                    "rad.Fld on an HDiv-VIM solution supports b/h/m and Cartesian components; "
+                    f"{field_type!r} has no RT1 field contract"
+                )
+            if len(field_type) == 2 and field_type[1] in "xyz":
+                value = value[:, "xyz".index(field_type[1])]
+            if single:
+                return float(value[0]) if value.ndim == 1 else value[0]
+            return value
         return _cpp_Fld(obj, *args, **kwargs)
 
 

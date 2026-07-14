@@ -66,8 +66,9 @@ def test_per_region_equal_mu_matches_scalar():
 def test_per_region_default_is_cpp_symmetric_cg():
     """Per-region linear (RT1) uses the all-C++ SYMMETRIC mass-Riesz CG on the Galerkin system
     (M_{1/chi} + N) m = M_mass h_ext (W = the 1/chi-weighted HDiv mass is both the system mass and the Riesz
-    preconditioner).  (The RT0-era form-1 GMRES per-region cross-check is retired with RT0; the per-region
-    path's correctness is locked by test_per_region_equal_mu_matches_scalar.)"""
+    preconditioner).  The per-region path's correctness is locked by
+    test_per_region_equal_mu_matches_scalar; the legacy form-1 cross-check is retired.
+    """
     mesh = _two_region_mesh()
     with ng.TaskManager():
         cg = Solve(mesh, mu_r={"lo": 200.0, "hi": 200.0}, H_ext=HEXT,

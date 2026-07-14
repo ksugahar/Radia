@@ -448,8 +448,7 @@ def cage_coupled_slip(body, omega, max_stag=25, tol=1e-3, relax=0.7):
     Returns (T_avg, history)."""
     ib = (-1.05 * R_CORE, -1.05 * R_CORE, 1.05 * R_CORE, 1.05 * R_CORE)
     m_re, chi_e, _, _ = body.solve_nonlinear(M_of_h, chi_sec, body.project(H_ROT_RE))
-    m_im = np.linalg.solve(body.weighted_mass(1.0 / chi_e) + body.N,
-                           body.Md @ body.project(H_ROT_IM))
+    m_im = body.solve_weighted(1.0 / chi_e, body.project(H_ROT_IM))
     hist = []
     Pk = Ik = None
     for it in range(max_stag):
@@ -457,8 +456,8 @@ def cage_coupled_slip(body, omega, max_stag=25, tol=1e-3, relax=0.7):
         Hre_cf, Him_cf = _H_voxels_complex(Pk, Ik, ib)
         m_re_new, chi_e, itn, _ = body.solve_nonlinear(
             M_of_h, chi_sec, body.project(H_ROT_RE + Hre_cf))
-        m_im_new = np.linalg.solve(body.weighted_mass(1.0 / chi_e) + body.N,
-                                   body.Md @ body.project(H_ROT_IM + Him_cf))
+        m_im_new = body.solve_weighted(
+            1.0 / chi_e, body.project(H_ROT_IM + Him_cf), x0=m_im)
         dM = (np.linalg.norm(m_re_new - m_re) + np.linalg.norm(m_im_new - m_im)) \
             / max(np.linalg.norm(m_re_new), 1e-300)
         m_re = (1 - relax) * m_re + relax * m_re_new

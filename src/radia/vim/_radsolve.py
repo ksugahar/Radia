@@ -31,14 +31,14 @@ import radia as rad
 
 _DEMAG_REGISTRY = {}   # iron container handle -> dict(mesh, mu_r, bh_table, handles)
 _KNOWN_CONTAINER_MEMBERS = {}  # container handle -> member handles known to be safe for ObjCntStuf-free lookup
-_FIELD_REDIRECTS = {}  # solved reduced container/top handle -> full field container handle for rad.Fld
+_FIELD_SOLUTIONS = {}  # solved handle -> dict(result=<vim.Solve dict>, sources=[Radia handles])
 
 
 def clear_registry():
     """Drop all mesh<->container associations (call when Radia handles are invalidated)."""
     _DEMAG_REGISTRY.clear()
     _KNOWN_CONTAINER_MEMBERS.clear()
-    _FIELD_REDIRECTS.clear()
+    _FIELD_SOLUTIONS.clear()
 
 
 def register_container(container, members):
@@ -86,41 +86,17 @@ def _delete_handles(handles):
 def _clear_image_field_handles(iron, reg):
     _delete_handles(reg.get("image_handles", []))
     reg["image_handles"] = []
-    for key in reg.get("field_redirect_keys", []):
-        _FIELD_REDIRECTS.pop(key, None)
-    reg["field_redirect_keys"] = []
+    for key in reg.get("field_solution_keys", []):
+        _FIELD_SOLUTIONS.pop(key, None)
+    reg["field_solution_keys"] = []
     reg["field_container"] = None
     reg["field_top_container"] = None
     register_container(iron, reg["handles"])
 
 
-def _materialize_image_field_handles(iron, reg, image, top=None, sources=None):
-    """Add explicit IMA images so ``rad.Fld(iron, ...)`` evaluates the reduced solution's full field."""
-    _clear_image_field_handles(iron, reg)
-    if image is None:
-        return [], iron
-    from radia.ima_field import add_ima_images
-
-    images = add_ima_images(reg["handles"], reg["vertices"], image, container=None)
-    field_iron = rad.ObjCnt(list(reg["handles"]) + list(images))
-    reg["image_handles"] = list(images)
-    reg["field_container"] = field_iron
-    _FIELD_REDIRECTS[iron] = field_iron
-    keys = [iron]
-    field_top = field_iron
-    if top is not None:
-        members = [field_iron] + list(sources or [])
-        field_top = rad.ObjCnt(members)
-        reg["field_top_container"] = field_top
-        _FIELD_REDIRECTS[top] = field_top
-        keys.append(top)
-    reg["field_redirect_keys"] = keys
-    return images, field_iron
-
-
-def field_object_for(handle):
-    """Return the full-field object for a solved HDiv IMA handle, else the handle itself."""
-    return _FIELD_REDIRECTS.get(handle, handle)
+def field_solution_for(handle):
+    """Return the solved RT1 field record for ``handle``, or ``None``."""
+    return _FIELD_SOLUTIONS.get(handle)
 
 
 def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, verbose=False):
@@ -155,7 +131,7 @@ def soft_iron_from_mesh(mesh, mu_r=None, bh_table=None, material_filter=None, ve
     register_container(cont, handles)
     _DEMAG_REGISTRY[cont] = dict(mesh=mesh, mu_r=mu_r, bh_table=bh_table,
                                   handles=list(handles), vertices=vertices, image_handles=[],
-                                  field_redirect_keys=[], field_container=None, field_top_container=None)
+                                  field_solution_keys=[], field_container=None, field_top_container=None)
     return cont
 
 
@@ -277,11 +253,20 @@ def dispatch(top, *solve_args, **solve_kwargs):
             f"{len(M)} HDiv elements) -- mesh and registered handles are out of sync.")
     for h, m in zip(handles, M):
         rad.ObjSetM(h, [float(m[0]), float(m[1]), float(m[2])])
-    if image is not None:
-        image_handles, field_iron = _materialize_image_field_handles(iron, reg, image, top=top, sources=sources)
-        res["image_field_handles"] = image_handles
-        res["field_object"] = field_iron
-        res["field_contract"] = "rad.Fld on the MeshSoftIron container redirects to explicit IMA mirror images of the reduced solution"
-    else:
-        res["field_contract"] = "rad.Fld on the MeshSoftIron container uses the solved reduced/full mesh"
+    # Register the full RT1 solution for rad.Fld.  The iron handle contributes
+    # only its solved magnetization; the top handle also includes its Radia
+    # source objects.  IMA is evaluated from the RT1 field itself.
+    _FIELD_SOLUTIONS[iron] = {"result": res, "source_object": None}
+    keys = [iron]
+    if top != iron:
+        source_object = None
+        if sources:
+            source_object = sources[0] if len(sources) == 1 else rad.ObjCnt(list(sources))
+        _FIELD_SOLUTIONS[top] = {"result": res, "source_object": source_object}
+        keys.append(top)
+    reg["field_solution_keys"] = keys
+    res["field_contract"] = (
+        "rad.Fld evaluates the C++ RT1 charge field; IMA reflects the RT1 solution without "
+        "piecewise-constant image objects"
+    )
     return res

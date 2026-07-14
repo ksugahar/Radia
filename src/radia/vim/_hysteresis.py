@@ -245,9 +245,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     # ---- ONE-TIME setup: fes + charge-Gram H-matrix (chi-free -> reused by every step) ----
     t_total = time.perf_counter()
     _clear_cpp_solve_timings()
-    _gp = _resolve_gram_params(order=1, gram_backend="analytic", linear_solver="auto",
-                               uniform_linear=False, gram_eps=gram_eps,
-                               near_factor=None, far_quad=far_quad, ho_far_factor=ho_far_factor)
+    _gp = _resolve_gram_params(gram_eps=gram_eps, far_quad=far_quad, ho_far_factor=ho_far_factor)
     fes = ng.HDiv(mesh, order=1)
     t_before_gram = time.perf_counter()
     B, H, M_mass = build_charge_gram(fes, eps=_gp["eps"], leafsize=leaf, eta=eta,

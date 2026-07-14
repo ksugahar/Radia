@@ -485,16 +485,14 @@ jobs:
             '-r', 'aR',
             '--junitxml=golden-test-results.xml',
             '--durations=50',
-            '--durations-min=1.0',
-            '--reruns', '2',
-            '--reruns-delay', '1'
+            '--durations-min=1.0'
           )
-          $markerExpr = 'not slow'
+          $markerExpr = 'not slow and not compute_host'
           if ($env:RUN_SLOW_TESTS -ne 'true') {
             Write-Host "Manual validation gate -- excluding @pytest.mark.slow tests. Use full_slow=true for the full validation set."
           } else {
-            $markerExpr = ''
-            Write-Host "Manual full validation gate -- running all validation_test tests, including @pytest.mark.slow."
+            $markerExpr = 'not compute_host'
+            Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain mdx/hibino-only."
           }
           if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
           python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-golden-stdout.log

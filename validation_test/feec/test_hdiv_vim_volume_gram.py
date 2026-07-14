@@ -37,4 +37,4 @@ def test_volume_gram_demag_sphere():
 
 def test_volume_gram_demag_cube():
     D = _demag("cube")
-    assert abs(D - 1.0 / 3) < 0.06, f"C++ analytic-Gram cube demag {D:.4f} not ~1/3 (RT0 coarse band)"
+    assert abs(D - 1.0 / 3) < 0.06, f"C++ analytic-Gram cube demag {D:.4f} not ~1/3 (coarse band)"

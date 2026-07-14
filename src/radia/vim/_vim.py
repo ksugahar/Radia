@@ -1,23 +1,22 @@
 """radia.vim._vim -- an ngsolve.bem-STYLE API for the HDiv-type VIM demag operator.
 
 Mirrors the ngsolve.bem design (SingleLayerPotentialOperator etc.): construct the operator from an NGSolve
-FESpace -- the polynomial ORDER comes from the fes, exactly like `HDiv(mesh, order=p)` -- and expose
+FESpace -- the production space is `HDiv(mesh, order=1)` -- and expose
 `.mat`, an H-matrix-backed NGSolve `BaseMatrix` that composes with NGSolve's solvers / BlockMatrix just
-like `SingleLayerPotentialOperator(fes, ...).mat`.  RT0 (order=0) and order=p go through ONE call (order=0
-is the degenerate constant-monomial case):
+like `SingleLayerPotentialOperator(fes, ...).mat`:
 
     from ngsolve import *
     from ngsolve.krylovspace import GMRes
     from radia.vim import DemagOperator
 
     mesh = Mesh(...)
-    fes  = HDiv(mesh, order=p)                       # order from the fes (NGSolve idiom)
+    fes  = HDiv(mesh, order=1)
     with TaskManager():
-        N = DemagOperator(fes, intorder=3*p+6, eps=1e-7)   # like SingleLayerPotentialOperator(fes, ...)
+        N = DemagOperator(fes, eps=1e-7)             # like SingleLayerPotentialOperator(fes, ...)
         # N.mat : BaseMatrix == the demag operator B^T G B (G = the C++ charge-Gram H-matrix)
         u, v = fes.TnT()
         M = BilinearForm(u*v*dx).Assemble()          # the HDiv mass
-        A = (1.0/chi)*M.mat - N.mat                  # BaseMatrix composition (NGSolve)
+        A = (1.0/chi)*M.mat + N.mat                  # physical SPD +N system
         gfm = GridFunction(fes)
         gfm.vec.data = GMRes(A=A, b=rhs.vec, tol=1e-8, maxsteps=400)
 
@@ -151,13 +150,33 @@ def _monos_surf(p):
 
 def _ngsolve_affine(trafo, eltype, ndim):
     """Reconstruct the (affine) NGSolve element map P = P0 + Jng @ pt from its ElementTransformation, by fitting
-    a few IntegrationRule evaluations.  pt is in NGSolve's reference frame."""
+    a few IntegrationRule evaluations.  pt is in NGSolve's reference frame.
+
+    NGSolve's scalar ``ElementTransformation`` path can return a transient,
+    uninitialised point on its first touch after a different element topology
+    was used in the same TaskManager.  Accept two consecutive finite,
+    bit-identical fits only; the retry is cheap compared with the subsequent
+    per-element change-of-basis and prevents a bad affine map from poisoning
+    the HDiv charge basis.
+    """
     ir = ng.IntegrationRule(eltype, 2)
     rp = np.array([list(p.point)[:ndim] for p in ir])
-    Pp = np.array([list(trafo(p).point) for p in ir])
     A = np.hstack([rp, np.ones((len(rp), 1))])
-    X, *_ = np.linalg.lstsq(A, Pp, rcond=None)             # [Jng^T (ndim rows) ; P0]
-    return X[ndim, :], X[:ndim, :].T                        # (P0, Jng 3xndim)
+    previous = None
+    for attempt in range(16):
+        Pp = np.array([list(trafo(p).point) for p in ir])
+        X, *_ = np.linalg.lstsq(A, Pp, rcond=None)           # [Jng^T (ndim rows) ; P0]
+        fitted = np.hstack([X[ndim, :], X[:ndim, :].T.ravel()])
+        if (previous is not None and np.all(np.isfinite(fitted))
+                and np.array_equal(previous, fitted)):
+            return X[ndim, :], X[:ndim, :].T                  # (P0, Jng 3xndim)
+        previous = fitted
+        if attempt:
+            time.sleep(0.002)
+    raise RuntimeError(
+        "NGSolve affine ElementTransformation remained unstable after 16 "
+        "finite/consecutive retries; refusing to build a non-deterministic "
+        "HDiv charge basis.")
 
 
 def _change_of_basis(fe, mons, refP, refW, dim, trafo, Vmesh):
@@ -237,8 +256,9 @@ def _blockdiag_density_map(M, Bx, fes_dg, vorb, mesh):
 
 
 def _charge_basis(fes, quad):
-    """Shared geometry + monomial charge-density map for the order-p HDiv-VIM charge operators
-    (vim.ChargeGram's analytic Gram AND vim.ChargeGramGauss's point operator): returns B (CSR
+    """Shared geometry + monomial charge-density map for the RT1 HDiv-VIM operator.
+
+    Returns B (CSR
     n_charge x ndof), M_mass (CSR), the per-charge (host, kind, flat expo) in the cell_verts reference
     frame, and the host vertex geometry.  `quad` only sets the change-of-basis quadrature (exact for the
     polynomial degree).  CALLER wraps in TaskManager.  Charge order = [cell monomials..., face monomials...]
@@ -524,7 +544,7 @@ def _trafo_lattice_nodes(mesh, e, ir, max_tries=16):
     raise RuntimeError(
         f"GetTrafo lattice evaluation unstable for element {e} after {max_tries} tries "
         "(NGSolve scalar trafo path returned differing node coordinates -- do not trust this mesh "
-        "extraction; rerun, and report the incident).")
+        "extraction; abort and report the incident).")
 
 
 def _charge_basis_hex(fes, cob_quad=3):
@@ -701,7 +721,7 @@ def _build_charge_gram_hex(fes, glout_n=4, glin_n=5, near_grade=0.5, far_inner=1
         raise RuntimeError(
             "hex charge Gram instance state was corrupted between construction and use "
             f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption "
-            "(0xc0000374 class) -- do NOT trust this Gram; rerun, and report the incident.")
+            "(0xc0000374 class) -- do NOT trust this Gram; abort and report the incident.")
     return cb["B"], G, cb["M_mass"]
 
 
@@ -824,7 +844,7 @@ def _build_charge_gram_2d(fes, outer_n=4, glin_n=8, gledge_n=12, near_grade=0.6,
         raise RuntimeError(
             "2D charge Gram instance state was corrupted between construction and use "
             f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption "
-            "(0xc0000374 class) -- do NOT trust this Gram; rerun, and report the incident.")
+            "(0xc0000374 class) -- do NOT trust this Gram; abort and report the incident.")
     return cb["B"], G, cb["M_mass"]
 
 
@@ -1050,7 +1070,7 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
         raise RuntimeError(
             "wedge charge Gram instance state was corrupted between construction and use "
             f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption (0xc0000374 class) -- "
-            "do NOT trust this Gram; rerun, and report the incident.")
+            "do NOT trust this Gram; abort and report the incident.")
     return cb["B"], G, cb["M_mass"]
 
 
@@ -1059,7 +1079,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                       image_masks=None, image_signs=None):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
-    order=0 is the degenerate constant-monomial case (== RT0).  The CALLER wraps in TaskManager.
+    The CALLER wraps in TaskManager.
 
     curve_order (None=flat, or 2=isoparametric P2): when set, build the CURVED charge Gram on the
     mesh.Curve(curve_order) geometry -- curved charge map B (reference-frame change-of-basis) + the C++ curved
@@ -1079,13 +1099,13 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     contract).  Pass ho_far_factor=inf to FORCE the exact all-high-quad build (e.g. a golden reference)."""
     build_charge_gram.last_timings = {}
     mesh = fes.mesh
-    p = fes.globalorder
-    if p != 1:
-        raise ValueError(
-            "vim.ChargeGram: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
-            "inaccurate) and RT2+ is retired (no "
-            "per-element gain over RT1, slower).  Build the FESpace as HDiv(mesh, order=1).  (The geometry "
-            "curve_order is a SEPARATE knob: curve_order=2 isoparametric P2 is still allowed.)")
+    p = int(fes.globalorder)
+    if p not in (1, 2):
+        raise ValueError("vim.ChargeGram: production supports HDiv order in {1,2}; got order=%r." % (p,))
+    if p == 2 and (curve_order is not None or mesh.GetCurveOrder() >= 2):
+        raise NotImplementedError(
+            "vim.ChargeGram: RT2 is currently supported on flat pure-TET meshes only; use RT1 for "
+            "isoparametric P2 curved geometry.")
     image_masks = [] if image_masks is None else list(image_masks)   # robust for NumPy arrays (truth-value)
     image_signs = [] if image_signs is None else list(image_signs)
     if len(image_masks) != len(image_signs):
@@ -1103,10 +1123,15 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                 "(got dim=%s, vtypes=%s, curve_order=%r)."
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
+        if p != 1:
+            raise NotImplementedError(
+                "vim.ChargeGram: the planar kernel is order 1 only; RT2 is supported on pure tetrahedral 3D meshes.")
         # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
         return _build_charge_gram_2d(fes, eps=eps, leafsize=leafsize, eta=eta)
     _vtypes = set(len(el.vertices) for el in mesh.Elements(ng.VOL))
     if _vtypes == {8}:
+        if p != 1:
+            raise NotImplementedError("vim.ChargeGram: pure-HEX uses the specialized RT1 charge kernel.")
         # PURE-HEX RT1: the hex-mode charge Gram (Q1 volume charge + Q2 geometry; FLAT or Curve(2) one path).
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
@@ -1114,6 +1139,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             fes, eps=eps, leafsize=leafsize, eta=eta,
             image_masks=image_masks, image_signs=image_signs)
     if _vtypes == {6}:
+        if p != 1:
+            raise NotImplementedError("vim.ChargeGram: pure-WEDGE uses the specialized RT1 charge kernel.")
         # PURE-WEDGE (PRISM) RT1: the wedge-mode charge Gram (6-monomial volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
         # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
@@ -1181,158 +1208,30 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
     rtp, rtw = _outer_tet(quad)
     rsp, rsw = _outer_tri(quad)
-    if p == 0:
-        # order-0 = CONSTANT charges -> use the FAST ANALYTIC Gram (Wilton/PhiTet, exact), NOT quadrature.
-        # The high-order QUADRATURE constructor (Sauter-Schwab over charge pairs) is ~100x slower per
-        # H-matrix entry and is pure waste for constant charges -- it was THE DemagOperator build bottleneck
-        # (>195s @ 5310 tets; the change-of-basis is only ~4s).  Charge order [cells..., faces...] matches B's
-        # row order, so this is the same B^T G B as the validated solve_nonlinear_newton_scalable order-0 path.
-        G = _rp._ChargeGramHMatrix(cell_verts=cell_verts, face_verts=face_verts, n_el=n_el,
-                                   eps=eps, leaf=leafsize, eta=eta, near_factor=1e30)
-    else:
-        # order p>0: monomial-charge quadrature Gram.  By DEFAULT (ho_far_factor=2.0) the near/far split is
-        # ON -- well-separated pairs use the cheap LOW-quad QuadDotFar, near/self keep the full high-quad
-        # subtraction (validated accuracy-preserving by the nearfar golden).  Pass ho_far_factor=inf to
-        # DISABLE the split (every pair high-quad = the exact reference build; the _lo rules are then not
-        # built or passed, binding the same way the pre-far-split overload did).
-        kw = dict(cell_verts=cell_verts, face_verts=face_verts,
-                  n_el=n_el, charge_host=host, charge_kind=kind, charge_expo=expo,
-                  ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
-                  ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
-                  eps=eps, leaf=leafsize, eta=eta)
-        if np.isfinite(ho_far_factor):
-            rtp_lo, rtw_lo = _outer_tet(far_quad)      # symmetric degree-5 at far_quad in {3,4}, else product
-            rsp_lo, rsw_lo = _outer_tri(far_quad)
-            kw.update(ref_tet_pts_lo=rtp_lo.ravel().tolist(), ref_tet_w_lo=rtw_lo.tolist(),
-                      ref_tri_pts_lo=rsp_lo.ravel().tolist(), ref_tri_w_lo=rsw_lo.tolist(),
-                      ho_far_factor=ho_far_factor)
-        if iq < quad:
-            rtp_in, rtw_in = _tet_ref(iq)
-            rsp_in, rsw_in = _tri_ref(iq)
-            kw.update(ref_tet_pts_in=rtp_in.ravel().tolist(), ref_tet_w_in=rtw_in.tolist(),
-                      ref_tri_pts_in=rsp_in.ravel().tolist(), ref_tri_w_in=rsw_in.tolist())
-        if image_masks:                                    # IMA (flat pure-tet): fold mirror-image charges
-            kw.update(image_masks=list(image_masks), image_signs=list(image_signs))
-        G = _rp._ChargeGramHMatrix(**kw)
-    return B, G, M_mass
-
-
-def _gauss_point_cloud(cb, qpts):
-    """High-order Gauss point cloud from the shared charge basis cb (=_charge_basis output).  Places
-    qpts/dim Gauss-Duffy points per HOST element; the scatter coefficient of charge a (host h, expo) onto
-    its host point p is coef[a][p] = W_p * lam_p^expo (W_p the physical quad weight, lam_p the ref point).
-
-    Returns (point_coords [n_point*3], P_pt, P_chg, P_coef  -- the COO scatter for _ChargeGaussHMatrix),
-    plus per-charge (centroid, size) for the near criterion and per-charge (point idx, coef) arrays for the
-    point-quadrature near reference."""
-    host, kind, expo = cb["host"], cb["kind"], cb["expo"]
-    vV, bV = cb["vV"], cb["bV"]
-    n_charge = len(host)
-    rtp, rtw = _tet_ref(qpts)
-    rsp, rsw = _tri_ref(qpts)
-    # per (kind,host) point block, built once and shared by all that host's monomial charges
-    pt_coords, host_block = [], {}      # (kind,h) -> (base, lam, W)
-    for a in range(n_charge):
-        key = (kind[a], host[a])
-        if key in host_block:
-            continue
-        V = (vV if kind[a] == 0 else bV)[host[a]]
-        if kind[a] == 0:
-            lam, rw = rtp, rtw
-            X = V[0] + lam @ (V[1:] - V[0])
-            W = rw * 6.0 * abs(np.linalg.det(V[1:] - V[0])) / 6.0
-        else:
-            lam, rw = rsp, rsw
-            X = V[0] + lam @ (V[1:] - V[0])
-            W = rw * 2.0 * (0.5 * np.linalg.norm(np.cross(V[1] - V[0], V[2] - V[0])))
-        host_block[key] = (len(pt_coords) // 3, lam, W)
-        pt_coords.extend(X.ravel().tolist())
-    point_coords = np.asarray(pt_coords, float).reshape(-1, 3)
-    P_pt, P_chg, P_coef = [], [], []
-    chg_pts, chg_coef, cent, size = [], [], np.zeros((n_charge, 3)), np.zeros(n_charge)
-    for a in range(n_charge):
-        base, lam, W = host_block[(kind[a], host[a])]
-        e = expo[3 * a:3 * a + 3]
-        if kind[a] == 0:
-            mon = lam[:, 0] ** e[0] * lam[:, 1] ** e[1] * lam[:, 2] ** e[2]
-        else:
-            mon = lam[:, 0] ** e[0] * lam[:, 1] ** e[1]
-        coef = W * mon
-        idx = np.arange(base, base + len(lam))
-        P_pt.extend(idx.tolist()); P_chg.extend([a] * len(lam)); P_coef.extend(coef.tolist())
-        chg_pts.append(idx); chg_coef.append(coef)
-        Xh = point_coords[idx]
-        cent[a] = Xh.mean(0); size[a] = float(np.max(np.linalg.norm(Xh - cent[a], axis=1)))
-    return dict(point_coords=point_coords, P_pt=P_pt, P_chg=P_chg, P_coef=P_coef,
-                chg_pts=chg_pts, chg_coef=chg_coef, cent=cent, size=size)
-
-
-def build_charge_gauss(fes, qpts=3, near_factor=1.0, eps=1e-5, leafsize=64, eta=2.0):
-    """High-order HDiv-VIM charge Gram as a GAUSS POINT operator (G ~= P^T K_point P + sparse near
-    correction) -- the scalable alternative to vim.ChargeGram's analytic Gram for high order, where the
-    analytic per-pair entry cost O((3p)^6) explodes.  Returns (B, G_gauss, M_mass) with the SAME B / M_mass
-    as vim.ChargeGram (so N = B^T G_gauss B is the same demag operator, validated to ~1e-4 at p<=2).
-
-    The point H-matrix carries the FAR field (cheap 1/r); the sparse near correction (pairs within
-    near_factor*(size_a+size_b)) restores the exact analytic entry via a build=False oracle.  qpts = the
-    Gauss-Duffy points/dim of the point cloud (qpts=3 validated ~1e-4 at near_factor=1.0); scope: tet meshes.
-    CALLER wraps in TaskManager."""
-    from scipy.spatial import cKDTree
-    raise NotImplementedError(
-        "vim.ChargeGramGauss is RETIRED: the Gauss point-operator charge Gram was an RT0 build-speed "
-        "experiment.  HDiv-VIM (RT1, tet) uses the analytic charge Gram (vim.ChargeGram).")
-    p = fes.globalorder
-    quad = max(3 * p, 4)
-    cb = _charge_basis(fes, quad)
-    B, M_mass = cb["B"], cb["M_mass"]
-    n_charge = len(cb["host"])
-    pc = _gauss_point_cloud(cb, qpts)
-    cent, size = pc["cent"], pc["size"]
-    chg_pts, chg_coef = pc["chg_pts"], pc["chg_coef"]
-    X = pc["point_coords"]
-    inv4pi = 1.0 / (4.0 * np.pi)
-
-    # exact analytic ENTRY ORACLE (build=False -> no full H-matrix build): p==0 analytic, p>0 high-order.
-    if p == 0:
-        oracle = _rp._ChargeGramHMatrix(cell_verts=cb["cell_verts"], face_verts=cb["face_verts"],
-                                        n_el=cb["n_el"], near_factor=1e30, build=False)
-    else:
-        rtp, rtw = _tet_ref(quad); rsp, rsw = _tri_ref(quad)
-        oracle = _rp._ChargeGramHMatrix(
-            cell_verts=cb["cell_verts"], face_verts=cb["face_verts"], n_el=cb["n_el"],
-            charge_host=cb["host"], charge_kind=cb["kind"], charge_expo=cb["expo"],
-            ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
-            ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(), build=False)
-
-    def point_entry(a, b):
-        ia, ib = chg_pts[a], chg_pts[b]
-        Xa, Xb = X[ia], X[ib]
-        D = np.linalg.norm(Xa[:, None, :] - Xb[None, :, :], axis=2)
-        with np.errstate(divide="ignore"):
-            K = np.where(D > 1e-300, inv4pi / D, 0.0)
-        if a == b:
-            np.fill_diagonal(K, 0.0)               # self pair excludes coincident points (carried by oracle)
-        return float(chg_coef[a] @ (K @ chg_coef[b]))
-
-    # near pairs (O(N)): exact analytic - point quadrature.  Same KDTree neighbourhood as _solve.
-    tree = cKDTree(cent)
-    max_size = float(np.max(size)) if n_charge else 0.0
-    corr_i, corr_j, corr_v = [], [], []
-    for a in range(n_charge):
-        for b in tree.query_ball_point(cent[a], near_factor * (size[a] + max_size)):
-            if b < a:
-                continue
-            r = float(np.linalg.norm(cent[a] - cent[b]))
-            if a == b or r <= near_factor * (size[a] + size[b]):
-                delta = float(oracle.entry(int(a), int(b))) - point_entry(a, b)
-                corr_i.append(int(a)); corr_j.append(int(b)); corr_v.append(delta)
-                if a != b:
-                    corr_i.append(int(b)); corr_j.append(int(a)); corr_v.append(delta)
-    G = _rp._ChargeGaussHMatrix(
-        point_coords=X.ravel().tolist(), P_pt=list(map(int, pc["P_pt"])),
-        P_chg=list(map(int, pc["P_chg"])), P_coef=list(map(float, pc["P_coef"])),
-        n_charge=n_charge, corr_i=corr_i, corr_j=corr_j, corr_v=corr_v,
-        eps=eps, leaf=leafsize, eta=eta)
+    # RT1/RT2 monomial-charge quadrature Gram.  By default, well-separated pairs
+    # use the low-order rule while near/self pairs keep subtraction quadrature.
+    kw = dict(cell_verts=cell_verts, face_verts=face_verts,
+              n_el=n_el, charge_host=host, charge_kind=kind, charge_expo=expo,
+              ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
+              ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
+              eps=eps, leaf=leafsize, eta=eta)
+    if np.isfinite(ho_far_factor):
+        rtp_lo, rtw_lo = _outer_tet(far_quad)
+        rsp_lo, rsw_lo = _outer_tri(far_quad)
+        kw.update(ref_tet_pts_lo=rtp_lo.ravel().tolist(), ref_tet_w_lo=rtw_lo.tolist(),
+                  ref_tri_pts_lo=rsp_lo.ravel().tolist(), ref_tri_w_lo=rsw_lo.tolist(),
+                  ho_far_factor=ho_far_factor)
+    if iq < quad:
+        rtp_in, rtw_in = _tet_ref(iq)
+        rsp_in, rsw_in = _tri_ref(iq)
+        kw.update(ref_tet_pts_in=rtp_in.ravel().tolist(), ref_tet_w_in=rtw_in.tolist(),
+                  ref_tri_pts_in=rsp_in.ravel().tolist(), ref_tri_w_in=rsw_in.tolist())
+    if image_masks:
+        if p != 1:
+            raise NotImplementedError(
+                "vim.ChargeGram: IMA image folding is RT1-only; RT2 requires a full pure-TET model.")
+        kw.update(image_masks=list(image_masks), image_signs=list(image_signs))
+    G = _rp._ChargeGramHMatrix(**kw)
     return B, G, M_mass
 
 
@@ -1378,53 +1277,42 @@ class _DemagMat(ng.BaseMatrix):
 
 
 class DemagOperator:
-    """ngsolve.bem-style HDiv-type VIM demag operator.  Construct from an HDiv FESpace; `.mat` is the
-    H-matrix-backed NGSolve BaseMatrix N = B^T G B.  See the module docstring for the idiom.  The CALLER
-    wraps construction + DemagFactor in `with TaskManager():`.
+    """ngsolve.bem-style production HDiv-VIM demag operator.
 
-    gram_backend selects the charge-Gram H-matrix:
-      "analytic" (default) -- the exact analytic charge Gram (vim.ChargeGram); the per-pair entry cost is
-        O((3p)^6) at order p (the singular outer x inner subtraction quadrature), so the BUILD explodes with p.
-      "gauss" -- the Gauss POINT operator (vim.ChargeGramGauss): G ~= P^T K_point P + sparse near correction,
-        the cheap-1/r point H-matrix carrying the far field, the analytic entry used ONLY on the O(N) near
-        pairs.  Validated to match "analytic" demag to ~1e-4 at p<=2 (qpts/gauss_near_factor control the
-        accuracy).  Aimed at the high-order / curved regime where the analytic build is the bottleneck.
-    Both backends produce the SAME B / M_mass and a backend-agnostic `.mat` (N = B^T G B); DemagFactor and
-    the NGSolve-composability are identical."""
+    Construct from an order-1 or order-2 HDiv FESpace; ``.mat`` is the analytic C++
+    charge-Gram operator ``N = B^T G B``.  The same operator is used by
+    :func:`radia.vim.Solve`, so the diagnostic and material paths cannot drift
+    into separate research backends.  The caller wraps construction and
+    ``DemagFactor`` in ``with TaskManager():``.
+    """
 
     def __init__(self, fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0,
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
-                 gram_backend="analytic", qpts=3, gauss_near_factor=1.0,
                  curve_order=None, curve_gauss=8):
-        if gram_backend != "analytic":
-            raise ValueError(
-                "DemagOperator: gram_backend must be 'analytic' -- the 'gauss' point-operator backend is "
-                "retired (RT0 build-speed experiment).  (got %r)" % (gram_backend,))
-        if fes.globalorder != 1:
-            raise ValueError(
-                "DemagOperator: HDiv-VIM is RT1 (HDiv order=1) only -- RT0 (order=0) is retired (per-element "
-                "inaccurate) and RT2+ is retired (no gain over RT1).  Build the FESpace as HDiv(mesh, order=1).")
+        p = int(fes.globalorder)
+        if p not in (1, 2):
+            raise ValueError("DemagOperator: production supports HDiv order in {1,2}; got order=%r." % (p,))
+        vtypes = {len(el.vertices) for el in fes.mesh.Elements(ng.VOL)}
+        if p == 2 and vtypes != {4}:
+            raise NotImplementedError(
+                "DemagOperator: RT2 is supported on pure-TET meshes only; got vertex counts %s."
+                % sorted(vtypes))
         self.space = fes
-        self.gram_backend = gram_backend
         # AUTO-MATCH the Gram curve order to the MESH geometry order (mesh.GetCurveOrder()).  A STRAIGHT Gram on
         # a CURVED mesh (where B/M_mass are NGSolve curved integrals) is geometry-inconsistent and the demag
         # factor DRIFTS with geometry order (sphere: straight-Gram 0.336/0.308/0.279 at curve 1/2/3; the matched
         # curved Gram restores ~1/3 -- 0.338 at curve 2).  curve_order=None => auto from GetCurveOrder(); pass an
         # explicit int to override (curve_order=0 forces the STRAIGHT Gram, e.g. a deliberate flat-Gram probe).
-        if curve_order is None and gram_backend == "analytic":
+        if curve_order is None:
             _k = fes.mesh.GetCurveOrder()
             curve_order = _k if _k >= 2 else None
         elif curve_order == 0:
             curve_order = None
         self.curve_order = curve_order
-        if gram_backend == "gauss":
-            self._B, self._G, self._Mmass = build_charge_gauss(
-                fes, qpts=qpts, near_factor=gauss_near_factor, eps=eps, leafsize=leafsize, eta=eta)
-        else:
-            self._B, self._G, self._Mmass = build_charge_gram(
-                fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
-                far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
-                curve_order=curve_order, curve_gauss=curve_gauss)
+        self._B, self._G, self._Mmass = build_charge_gram(
+            fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
+            far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
+            curve_order=curve_order, curve_gauss=curve_gauss)
         self.mat = _DemagMat(fes, self._B, self._G)
 
     @property

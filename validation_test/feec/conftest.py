@@ -23,30 +23,20 @@ def hdiv_vim_dense_N_and_loops(mesh, eps=1e-9, leaf=64):
     This is the structural-test helper: symmetry (||N - N^T||) and loop-nullity (||N @ loop||) of the
     C++-Gram operator on a small mesh.  Callers must open `with ng.TaskManager():`."""
     import numpy as np
-    import radia._radia_pybind as _rp
-    from radia.vim import _core as _tet
+    import ngsolve as ng
+    from radia.vim import ChargeGram
 
-    d = _tet.build_demag(mesh)
-    B = d["B_csr"]
-    n_el = int(d["n_el"])
-    all_tet = len(d["cell_verts"]) > 0 and len(d["face_verts"]) > 0 and d["poly"] is None
-    if all_tet:
-        H = _rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                                   n_el=n_el, eps=eps, leaf=leaf, eta=2.0)
-    else:
-        p = d["poly"]
-        H = _rp._ChargeGramHMatrix(
-            cell_tris=list(p["cell_tris"]), cell_troff=list(p["cell_troff"]),
-            cell_cent=list(p["cell_cent"]), cell_meas=list(p["cell_meas"]),
-            face_tris=list(p["face_tris"]), face_troff=list(p["face_troff"]),
-            face_cent=list(p["face_cent"]), face_meas=list(p["face_meas"]),
-            n_el=n_el, eps=eps, leaf=leaf, eta=2.0)
+    fes = ng.HDiv(mesh, order=1)
+    B, H, _ = ChargeGram(
+        fes, eps=eps, leafsize=leaf, eta=2.0,
+        ho_far_factor=float("inf"),
+    )
 
     def N_apply(v):
         v = np.asarray(v, float)
         return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
 
-    ndof = int(d["ndof"])
+    ndof = int(fes.ndof)
     N = np.column_stack([N_apply(np.eye(ndof)[:, k]) for k in range(ndof)])
     # loops = right null space of the (small) dense charge map B
     Bd = B.toarray()

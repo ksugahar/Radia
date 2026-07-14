@@ -26,6 +26,8 @@ import radia.vim as vim  # noqa: E402
 import ngsolve as ng  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
+pytestmark = pytest.mark.compute_host
+
 A = 0.01
 MU_R = 1000.0
 H0 = 1.0e4
@@ -43,7 +45,6 @@ def _rel(a, b):
     return float(np.linalg.norm(np.asarray(a) - np.asarray(b)) / np.linalg.norm(np.asarray(b)))
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)   # NGSolve GetTrafo lattice first-touch flake under contention
 def test_hex_image_half_reproduces_full():
     """hex half (x in [0,A]) + image='+x' == full cube."""
     rad.UtiDelAll()
@@ -56,7 +57,6 @@ def test_hex_image_half_reproduces_full():
     rad.UtiDelAll()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_hex_image_quarter_reproduces_full():
     """hex quarter (x,y in [0,A]) + image='+x+y' == full cube (multi-image fold: 3 masks)."""
     rad.UtiDelAll()
@@ -69,7 +69,6 @@ def test_hex_image_quarter_reproduces_full():
     rad.UtiDelAll()
 
 
-@pytest.mark.flaky(reruns=4, reruns_delay=1)
 def test_wedge_image_half_reproduces_full():
     """wedge (prism) half (x in [0,A]) + image='+x' == full cube."""
     rad.UtiDelAll()
@@ -84,7 +83,6 @@ def test_wedge_image_half_reproduces_full():
     rad.UtiDelAll()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_radsolve_auto_hex_uses_hdiv_with_image():
     """rad.Solve auto-routes a mesh-backed HEX soft iron to the HDiv-VIM (CLAUDE.md DIRECTION 2026-07-04),
     including with image= (the reflected-block IMA)."""

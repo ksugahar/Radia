@@ -1,13 +1,9 @@
-"""Validation: HACApK ACA COMPRESSION accuracy is controlled by the ACA tolerance eps, measured against the
-EXACT analytic charge Gram as ground truth.
+"""Validation: RT1 ChargeGram ACA accuracy tracks the requested tolerance.
 
-The analytic charge-Gram mode (`_ChargeGramHMatrix(cell_verts=, face_verts=, ...)`, the constant-charge
-Wilton/PhiTet Gram) is kept as a DEBUG/REFERENCE fixture (decision A, 2026-07-04; memory
-hdiv-vim-tet-rt1-only): it exposes BOTH
-  * `.entry(i,j)` = the EXACT analytic kernel (uncompressed, eps-independent), and
-  * `.matvec(x)`  = the COMPRESSED HACApK H-matrix apply (ACA at tolerance eps).
-So the relative matvec error  ||H x - Dexact x|| / ||Dexact x||  (Dexact assembled from `.entry`) is a
-DIRECT measurement of the ACA compression error.  This validation locks the two HACApK guarantees:
+The public ``ChargeGram(HDiv(mesh, order=1))`` result exposes both the
+uncompressed quadrature entry oracle and the compressed symmetric H-matrix
+apply.  Materializing the former on a small mesh isolates ACA compression
+error without retaining the retired RT0 assembly or private constructor.
 
   1. ACCURACY TRACKS eps -- the compression error decreases with tighter eps (err(eps) <~ 100*eps), so the
      ACA tolerance is a meaningful accuracy knob, not a nominal one.
@@ -24,31 +20,30 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 import ngsolve as ng                                       # noqa: E402
 from netgen.csg import CSGeometry, Sphere, Pnt             # noqa: E402
-import radia._radia_pybind as _rp                          # noqa: E402
-from radia.vim import _core                                # noqa: E402
+from radia.vim import ChargeGram                           # noqa: E402
 
 _EPS_SWEEP = (1e-2, 1e-4, 1e-6, 1e-8)
 
 
-def _analytic_gram_geometry(maxh=0.35):
-    """A tet sphere -> the RT0 analytic charge-Gram geometry (cell_verts / face_verts), sized for enough
-    far-field admissible blocks that ACA actually compresses (~hundreds of charges)."""
+def _rt1_fes(maxh=0.35):
+    """RT1 tetrahedral sphere with enough charge modes for ACA blocks."""
     g = CSGeometry(); g.Add(Sphere(Pnt(0, 0, 0), 1.0))
     with ng.TaskManager():
         mesh = ng.Mesh(g.GenerateMesh(maxh=maxh))
-        d = _core.build_demag(mesh)
-    return list(d["cell_verts"]), list(d["face_verts"]), int(d["n_el"])
+        return ng.HDiv(mesh, order=1)
 
 
 def _compression_errors():
     """rel matvec error vs the exact analytic Gram, per ACA eps (Dexact from .entry, built once)."""
-    cv, fv, n_el = _analytic_gram_geometry()
+    fes = _rt1_fes()
     Dexact = n = X = Yref = None
     errs = {}
     for eps in _EPS_SWEEP:
         with ng.TaskManager():
-            G = _rp._ChargeGramHMatrix(cell_verts=cv, face_verts=fv, n_el=n_el, eps=eps,
-                                       leaf=32, eta=2.0, build=True)
+            _, G, _ = ChargeGram(
+                fes, eps=eps, leafsize=32, eta=2.0,
+                ho_far_factor=float("inf"),
+            )
             if n is None:
                 n = G.ndof()
                 Dexact = np.array([[G.entry(i, j) for j in range(n)] for i in range(n)])  # EXACT (eps-indep)

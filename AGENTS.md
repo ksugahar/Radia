@@ -156,11 +156,14 @@ surface.  If historical material has `validation_*.py`, `validate_*.py`,
 `validation_test` / protected-validation-corpus material; add a docs notebook
 only as the synchronized showcase layer.
 
-Heavy `validation_test/` runs are mdx-first.  Use LAB for fast import/path
-smoke checks and small correctness probes while migrating files, but run
-solver-heavy sweeps, timing claims, and research-grade validation on `mdx`
-when it is idle (see Benchmark Policy).  Record whether a number is LAB smoke
-or mdx validation so docs/MCP do not overclaim timing or robustness.
+Heavy `validation_test/` runs are compute-host-only.  Use LAB/100号機 for fast
+import/path smoke checks, small correctness probes, and build checks, but run
+solver-heavy sweeps, timing claims, memory/scaling runs, and research-grade
+validation on an idle compute host: `mdx` by default, or `hibino` for MATLAB,
+large-memory, or long-running jobs, or when `mdx` is occupied.  Confirm the
+remote host is idle before launch, and record the hostname and runtime in the
+result JSON/log.  LAB/100号機 timings are smoke observations only and must not
+be presented as benchmark data in docs, MCP, or papers.
 
 ### Retired Examples / Promotion Triage (2026-06-28, updated 2026-07-04)
 
@@ -351,7 +354,7 @@ a durable role:
 | Lane | Purpose (intent) | Audience | Ships in wheel? |
 |------|------------------|----------|-----------------|
 | `tests/**` | **実装の基本機能の確認** — fast regression, fixture, API contract, CI-friendly. | CI / Codex / developer | No |
-| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, mdx-first for large runs. | developer / agent / research validation | No |
+| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, executed on idle `mdx` or `hibino` for large runs. | developer / agent / research validation | No |
 | `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
 | `src/` | Reusable API, parser, formula, solver helper, computation kernel. | package users / panels / validation / MCP | Yes |
@@ -363,7 +366,8 @@ a durable role:
   fast regression.
 - **C:\temp → validation_test/**: the run is a numerical validation,
   benchmark, convergence sweep, golden lock, or regression corpus; heavy runs
-  are executed on mdx when idle and labelled as mdx validation.
+  are executed on an idle `mdx` or `hibino` host and labelled with the actual
+  validation host.
 - **C:\temp → docs/**: the result teaches a method or workflow to humans; the
   notebook must be executed, output-bearing, Markdown-integrated, and paired
   with synchronized JSON.
@@ -1240,6 +1244,13 @@ HDiv-VIM is the supported soft-iron demagnetization method. It is built around
 NGSolve mesh/FES concepts, HDiv flux continuity, and Radia's charge-Gram /
 HACApK acceleration path. Retired collocation demag names are not supported as
 public backends.
+
+Element-order scope is fail-loud. RT1 is the full production route for
+TET/HEX/WEDGE, planar 2D, IMA, and `rad.Fld` reconstruction. RT2 is a public
+flat pure-TET material/operator route (`Solve`, `ChargeGram`,
+`DemagOperator`). Curved geometry uses RT1 on an isoparametric P2 mesh;
+curved RT2 and RT2 HEX/WEDGE/2D/IMA/field paths stay rejected until their own
+accuracy and compute-host performance gates pass.
 
 ### Unified Field Computation Architecture
 

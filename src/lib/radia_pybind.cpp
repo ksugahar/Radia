@@ -2491,348 +2491,12 @@ public:
 } // namespace ngfem
 
 
-// ============================================================================
-// HDiv-type VIM demag operator (N = B^T G B) -- thin binding for golden testing.
-// Returns the assembled N and charge map B as flat row-major lists; the Python golden
-// test (tests/feec/) reshapes and checks symmetry + loops-field-null (loops = ker B).
-// ============================================================================
 namespace radia_hdivvim {
-py::dict HDivVimAssemble(int nx, int ny, int nz, int nsub, double distort) {
-    rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0, distort);
-    std::vector<double> B, N, M_mass;
-    int n_charge = 0, n_bnd = 0;
-    rad_hdiv::AssembleChargeMap(m, B, n_charge, n_bnd);
-    rad_hdiv::AssembleN(m, N, nsub);   // nsub=0 centroid-monopole (fast); >=1 accurate sub-point
-    rad_hdiv::AssembleMass(m, M_mass);
-    py::dict d;
-    d["nf"]       = m.n_face();
-    d["n_cell"]   = m.n_cell;
-    d["n_charge"] = n_charge;
-    d["n_bnd"]    = n_bnd;
-    d["N"]        = N;        // row-major (nf x nf)
-    d["B"]        = B;        // row-major (n_charge x nf)
-    d["M_mass"]   = M_mass;   // row-major (nf x nf), RT0 HDiv mass
-    return d;
-}
-
-
-// Build the HDiv-type VIM demag operator N as a HACApK H-matrix and PROBE it against the dense
-// reference (rad_hdiv::AssembleN) -- the production verification that the symmetric operator now
-// scales as an H-matrix.  Self-contained (the C++ holds both the H-matrix and the dense N, and
-// returns the comparison): for a few deterministic probe vectors x, compares H-matvec(x) vs
-// N_dense*x (matvec_relerr) and checks H-matvec symmetry (x^T N y == y^T N x).  Returns the
-// H-matrix stats (compression / n_lowrank / build_time) too.  Golden sizes only (dense N formed).
-py::dict HDivVimHMatrixProbe(int nx, int ny, int nz, int nsub, double distort,
-                             double eps, int leaf, double eta) {
-    rad_hdiv::Mesh m = rad_hdiv::BuildStructuredRT0(nx, ny, nz, 1.0, distort);
-    const int nf = m.n_face();
-    std::vector<double> Nd;
-    rad_hdiv::AssembleN(m, Nd, nsub);                 // dense reference (same nsub)
-
-    RadHACApKHDivManager mgr(nx, ny, nz, 1.0, distort, nsub);
-    RadHACApKParams prm;
-    prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
-    bool ok = mgr.BuildHMatrix(prm);
-
-    py::dict d;
-    d["ok"] = ok;
-    d["nf"] = nf;
-    if (!ok) return d;
-
-    const RadHACApKStats& st = mgr.GetStats();
-    d["n_dof"]           = st.n_dof;
-    d["n_leaves"]        = st.n_leaves;
-    d["n_lowrank"]       = st.n_lowrank;
-    d["n_dense"]         = st.n_dense;
-    d["max_rank"]        = st.max_rank;
-    d["compression"]     = st.compression;
-    d["build_time"]      = st.build_time;
-    d["memory_mb"]       = st.memory_mb;
-    d["dense_memory_mb"] = st.dense_memory_mb;
-
-    auto densemv = [&](const std::vector<double>& x, std::vector<double>& y) {
-        y.assign(nf, 0.0);
-        for (int i = 0; i < nf; ++i) {
-            const double* Nr = &Nd[(size_t)i * nf];
-            double s = 0.0;
-            for (int j = 0; j < nf; ++j) s += Nr[j] * x[j];
-            y[i] = s;
-        }
-    };
-
-    // matvec relerr vs dense N over a few deterministic probe vectors
-    double max_rel = 0.0;
-    for (int k = 0; k < 4; ++k) {
-        std::vector<double> x(nf);
-        for (int f = 0; f < nf; ++f)
-            x[f] = std::sin(0.7 * (f + 1) + 1.3 * k) + 0.3 * std::cos(0.21 * (f + 1) * (k + 1));
-        std::vector<double> yd, yh(nf, 0.0);
-        densemv(x, yd);
-        mgr.MatVec(x, yh);
-        double num = 0.0, den = 0.0;
-        for (int f = 0; f < nf; ++f) {
-            num = std::max(num, std::fabs(yh[f] - yd[f]));
-            den = std::max(den, std::fabs(yd[f]));
-        }
-        if (den > 0.0) max_rel = std::max(max_rel, num / den);
-    }
-    d["matvec_relerr"] = max_rel;
-
-    // symmetry of the H-matvec: |x^T (N y) - y^T (N x)| / |x^T (N y)|
-    std::vector<double> xv(nf), yv(nf), Nx(nf, 0.0), Ny(nf, 0.0);
-    for (int f = 0; f < nf; ++f) { xv[f] = std::sin(0.3 * (f + 1)); yv[f] = std::cos(0.17 * (f + 1)); }
-    mgr.MatVec(xv, Nx);
-    mgr.MatVec(yv, Ny);
-    double xtNy = 0.0, ytNx = 0.0;
-    for (int f = 0; f < nf; ++f) { xtNy += xv[f] * Ny[f]; ytNx += yv[f] * Nx[f]; }
-    d["symmetry_relerr"] = std::fabs(xtNy - ytNx) / (std::fabs(xtNy) + 1e-300);
-    return d;
-}
-
-// SYSTEM-A H-LU on the HDiv-VIM operator: build A = M_mass + chi*N as a HACApK H-matrix on the FACE
-// DOFs (SetSystemMode), then factor via cHACApK_hlu_decomp and round-trip A^-1(A x_orig)=x_orig.
-// This proves the materialize-free H-LU is a scalable DIRECT solve / strong preconditioner for the
-// soft-iron material system, ON the actual HDiv-VIM operator.  Returns round-trip rel err + the materialize split
-// (n_internal must be 0 = no cubic-driving densification) + decomp time + stats.
-#ifdef RADIA_USE_HACAPK
-py::dict HDivVimHLUProbe(int nx, int ny, int nz, int nsub, double distort,
-                         double chi, double eps, int leaf, double eta, double trunc_tol) {
-    py::dict d;
-    RadHACApKHDivManager mgr(nx, ny, nz, 1.0, distort, nsub);
-    mgr.SetSystemMode(chi);                       // store A = M_mass + chi*N (BEFORE build)
-    RadHACApKParams prm;
-    prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
-    if (!mgr.BuildHMatrix(prm)) { d["ok"] = false; return d; }
-    const int nf = mgr.GetNDOF();
-    d["ok"] = true; d["ndof"] = nf;
-
-    // deterministic x_orig; y = A x_orig via the H-matvec (the H-matrix IS A in system mode)
-    std::vector<double> x_orig((size_t)nf), y_orig((size_t)nf, 0.0);
-    unsigned long long seed = 13579ULL;
-    for (int i = 0; i < nf; ++i) {
-        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
-        x_orig[i] = (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
-    }
-    mgr.MatVec(x_orig, y_orig);
-
-    cHACApK_hlu_set_trunc_tol(trunc_tol);
-    double err = cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(),
-                                           x_orig.data(), y_orig.data(), 1);  // nffc=1 (one DOF/face)
-    d["roundtrip_relerr"] = err;
-    double t_decomp = 0, t_solve = 0; long n_lu = 0, n_gemm = 0;
-    cHACApK_hlu_get_timings(&t_decomp, &t_solve, &n_lu, &n_gemm);
-    d["t_decomp_sec"] = t_decomp; d["t_solve_sec"] = t_solve;
-    long n_internal = 0, n_leaf = 0;
-    cHACApK_hlu_get_materialize_split(&n_internal, &n_leaf);
-    d["n_internal"] = n_internal; d["n_leaf"] = n_leaf;
-    const RadHACApKStats& st = mgr.GetStats();
-    d["compression"] = st.compression; d["max_rank"] = st.max_rank; d["build_time"] = st.build_time;
-    return d;
-}
-
-// Phase-2 UNSTRUCTURED (real tet mesh) system-A H-LU: build A = M_mass + chi*N on the RT0 face DOFs of
-// an arbitrary mesh (geometry from radia.vim build_demag), H-LU, round-trip A^-1(A x)=x.  This is the
-// production-path operator (the C-type tet mesh); proves the materialize-free H-LU is a scalable
-// direct-solve / Mprec for the soft-iron material system on unstructured geometry.
-py::dict HDivVimTetHLUProbe(std::vector<double> face_centroids, double chi,
-                            std::vector<int> face_charge, std::vector<double> face_coef,
-                            std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                            std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
-                            double eps, int leaf, double eta, double trunc_tol, double gram_near_factor) {
-    py::dict d;
-    RadHACApKHDivSystemTet mgr(std::move(face_centroids), chi, std::move(face_charge), std::move(face_coef),
-                               std::move(mI), std::move(mJ), std::move(mV),
-                               std::move(cell_verts), std::move(face_verts), n_el, gram_near_factor);
-    RadHACApKParams prm; prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
-    if (!mgr.BuildHMatrix(prm)) { d["ok"] = false; return d; }
-    const int nf = mgr.GetNDOF();
-    d["ok"] = true; d["ndof"] = nf;
-    std::vector<double> x_orig((size_t)nf), y_orig((size_t)nf, 0.0);
-    unsigned long long seed = 13579ULL;
-    for (int i = 0; i < nf; ++i) {
-        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
-        x_orig[i] = (double)((seed >> 33) & 0x7fffffff) / 2147483647.0 - 0.5;
-    }
-    mgr.MatVec(x_orig, y_orig);
-    cHACApK_hlu_set_trunc_tol(trunc_tol);
-    double err = cHACApK_hlu_run_on_hacapk(mgr.GetLeafmtxp(), mgr.GetLcontrol(),
-                                           x_orig.data(), y_orig.data(), 1);
-    d["roundtrip_relerr"] = err;
-    double t_decomp = 0, t_solve = 0; long n_lu = 0, n_gemm = 0;
-    cHACApK_hlu_get_timings(&t_decomp, &t_solve, &n_lu, &n_gemm);
-    d["t_decomp_sec"] = t_decomp; d["t_solve_sec"] = t_solve;
-    long n_internal = 0, n_leaf = 0;
-    cHACApK_hlu_get_materialize_split(&n_internal, &n_leaf);
-    d["n_internal"] = n_internal; d["n_leaf"] = n_leaf;
-    const RadHACApKStats& st = mgr.GetStats();
-    d["compression"] = st.compression; d["max_rank"] = st.max_rank; d["build_time"] = st.build_time;
-    return d;
-}
-
-// Persistent factored H-LU(A) for the unstructured HDiv-VIM material system: build A = M_mass + chi*N on
-// the RT0 face DOFs, H-LU-factor it ONCE, then apply A^-1 repeatedly (per GMRES iteration).  This is the
-// production Mprec for the soft-iron demag solve -- A^-1 A ~ I -> N-INDEPENDENT outer iteration count
-// (vs the M_mass^-1 preconditioner whose count grows with N).  factor in the ctor, apply via solve(),
-// free in the dtor.
-struct PyHDivVimTetSolver {
-    std::unique_ptr<RadHACApKHDivSystemTet> mgr;
-    void* root = nullptr;
-    int   nd   = 0;
-    PyHDivVimTetSolver(std::vector<double> face_centroids, double chi,
-                       std::vector<int> face_charge, std::vector<double> face_coef,
-                       std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                       std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
-                       double eps, int leaf, double eta, double trunc_tol, double gram_near_factor) {
-        mgr.reset(new RadHACApKHDivSystemTet(std::move(face_centroids), chi,
-                  std::move(face_charge), std::move(face_coef), std::move(mI), std::move(mJ), std::move(mV),
-                  std::move(cell_verts), std::move(face_verts), n_el, gram_near_factor));
-        RadHACApKParams prm; prm.aca_eps = eps; prm.leaf_size = leaf; prm.eta = eta; prm.print_level = 0;
-        if (!mgr->BuildHMatrix(prm)) throw std::runtime_error("HDivVimTetSolver: H-matrix build failed");
-        cHACApK_hlu_set_trunc_tol(trunc_tol);
-        nd = mgr->GetNDOF();
-        root = cHACApK_hlu_factor_leafmtxp(mgr->GetLeafmtxp(), mgr->GetLcontrol(), 1);
-        if (!root) throw std::runtime_error("HDivVimTetSolver: H-LU factor failed (singular block?)");
-    }
-    ~PyHDivVimTetSolver() { if (root) cHACApK_hlu_free_factors(root); }
-    std::vector<double> solve(const std::vector<double>& rhs) const {
-        if ((int)rhs.size() != nd) throw std::runtime_error("HDivVimTetSolver.solve: rhs size mismatch");
-        std::vector<double> z((size_t)nd, 0.0);
-        int rc = cHACApK_hlu_apply(root, mgr->GetLcontrol(), rhs.data(), z.data(), nd);
-        if (rc != 0) throw std::runtime_error("HDivVimTetSolver.solve: H-LU apply failed");
-        return z;
-    }
-    py::dict stats() const {
-        const RadHACApKStats& st = mgr->GetStats();
-        py::dict d;
-        d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
-        d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
-        d["compression"] = st.compression; d["build_time"] = st.build_time;
-        d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
-        return d;
-    }
-    int ndof() const { return nd; }
-};
-#endif
-
-// M2 verification probes: the C++ analytic charge-Gram potentials vs the dense Python reference.
-double TriPotentialProbe(const std::vector<double>& V, const std::vector<double>& r) {
-    double Vv[3][3], rr[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
-    return rad_hdiv::TriPotential(Vv, rr);
-}
-double PhiTetProbe(const std::vector<double>& V, const std::vector<double>& P) {
-    double Vv[4][3], PP[3];
-    for (int i = 0; i < 3; ++i) PP[i] = P[i];
-    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    return rad_hdiv::PhiTet(Vv, PP);
-}
-std::vector<double> TriFieldProbe(const std::vector<double>& V, const std::vector<double>& r) {
-    double Vv[3][3], rr[3], out[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
-    rad_hdiv::TriField(Vv, rr, out);
-    return {out[0], out[1], out[2]};
-}
-std::vector<double> TetFieldProbe(const std::vector<double>& V, const std::vector<double>& P) {
-    double Vv[4][3], PP[3], out[3];
-    for (int i = 0; i < 3; ++i) PP[i] = P[i];
-    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    rad_hdiv::TetField(Vv, PP, out);
-    return {out[0], out[1], out[2]};
-}
-// ---- degree-1/2 polynomial-charge field kernel probes (entry-by-entry validation vs Python) ----
-std::vector<double> TriMoment1Probe(const std::vector<double>& V, const std::vector<double>& r) {
-    double Vv[3][3], rr[3], out[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
-    rad_hdiv::TriMoment1(Vv, rr, out);
-    return {out[0], out[1], out[2]};
-}
-std::vector<double> TriMoment2Probe(const std::vector<double>& V, const std::vector<double>& r) {
-    double Vv[3][3], rr[3], out[3][3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
-    rad_hdiv::TriMoment2(Vv, rr, out);
-    return {out[0][0],out[0][1],out[0][2], out[1][0],out[1][1],out[1][2], out[2][0],out[2][1],out[2][2]};
-}
-std::vector<double> TetMoment1Probe(const std::vector<double>& V, const std::vector<double>& r) {
-    double Vv[4][3], rr[3], out[3];
-    for (int i = 0; i < 3; ++i) rr[i] = r[i];
-    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    rad_hdiv::TetMoment1(Vv, rr, out);
-    return {out[0], out[1], out[2]};
-}
-double TetPotentialPolynomialProbe(const std::vector<double>& V, const std::vector<double>& r,
-                                   const std::vector<int>& exps_flat,
-                                   const std::vector<double>& coeffs) {
-    if (V.size() != 12) throw std::runtime_error("_hdiv_tet_potential_poly: V must have 12 entries");
-    if (r.size() != 3) throw std::runtime_error("_hdiv_tet_potential_poly: r must have 3 entries");
-    if (exps_flat.size() % 3 != 0)
-        throw std::runtime_error("_hdiv_tet_potential_poly: exps_flat length must be divisible by 3");
-    if (exps_flat.size() / 3 != coeffs.size())
-        throw std::runtime_error("_hdiv_tet_potential_poly: exps and coeffs size mismatch");
-    double Vv[4][3], rr[3];
-    for (int i = 0; i < 3; ++i) rr[i] = r[i];
-    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    std::vector<std::array<int,3>> exps(coeffs.size());
-    for (size_t i = 0; i < coeffs.size(); ++i)
-        exps[i] = {exps_flat[3*i], exps_flat[3*i + 1], exps_flat[3*i + 2]};
-    return rad_hdiv::TetPotentialPolynomial(Vv, rr, exps, coeffs);
-}
-// CURVED P2 triangle charge potential probe (validates the curved-panel Duffy against the Python prototype).
-double CurvedTriPotentialProbe(const std::vector<double>& nodes, int e0, int e1,
-                               const std::vector<double>& p, const std::vector<double>& gl,
-                               const std::vector<double>& gw) {
-    double nn[6][3], pp[3];
-    for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k) nn[i][k] = nodes[3*i+k];
-    for (int k = 0; k < 3; ++k) pp[k] = p[k];
-    return rad_hdiv::CurvedTriPotential(nn, e0, e1, pp, gl.data(), gw.data(), (int)gl.size());
-}
-double CurvedTetPotentialProbe(const std::vector<double>& nodes, int e0, int e1, int e2,
-                               const std::vector<double>& p, const std::vector<double>& gl,
-                               const std::vector<double>& gw) {
-    double nn[10][3], pp[3];
-    for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k) nn[i][k] = nodes[3*i+k];
-    for (int k = 0; k < 3; ++k) pp[k] = p[k];
-    return rad_hdiv::CurvedTetPotential(nn, e0, e1, e2, pp, gl.data(), gw.data(), (int)gl.size());
-}
-std::vector<double> TetVolFieldLinearProbe(const std::vector<double>& V, const std::vector<double>& r,
-                                           double rho0, const std::vector<double>& g) {
-    double Vv[4][3], rr[3], gg[3], out[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; gg[i] = g[i]; }
-    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    rad_hdiv::TetVolFieldLinear(Vv, rr, rho0, gg, out);
-    return {out[0], out[1], out[2]};
-}
-std::vector<double> TetVolFieldQuadraticProbe(const std::vector<double>& V, const std::vector<double>& r,
-                                              double rho0, const std::vector<double>& g,
-                                              const std::vector<double>& Q) {
-    double Vv[4][3], rr[3], gg[3], QQ[3][3], out[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; gg[i] = g[i]; for (int k=0;k<3;++k) QQ[i][k]=Q[3*i+k]; }
-    for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    rad_hdiv::TetVolFieldQuadratic(Vv, rr, rho0, gg, QQ, out);
-    return {out[0], out[1], out[2]};
-}
-std::vector<double> LinTriFieldProbe(const std::vector<double>& V, const std::vector<double>& r,
-                                     double sigma0, const std::vector<double>& s) {
-    double Vv[3][3], rr[3], ss[3], out[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; ss[i] = s[i]; for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k]; }
-    rad_hdiv::LinTriField(Vv, rr, sigma0, ss, out);
-    return {out[0], out[1], out[2]};
-}
-std::vector<double> QuadTriFieldProbe(const std::vector<double>& V, const std::vector<double>& r,
-                                      double sigma0, const std::vector<double>& s,
-                                      const std::vector<double>& S) {
-    double Vv[3][3], rr[3], ss[3], SS[3][3], out[3];
-    for (int i = 0; i < 3; ++i) { rr[i] = r[i]; ss[i] = s[i]; for (int k=0;k<3;++k) SS[i][k]=S[3*i+k]; }
-    for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k) Vv[i][k] = V[3*i+k];
-    rad_hdiv::QuadTriField(Vv, rr, sigma0, ss, SS, out);
-    return {out[0], out[1], out[2]};
-}
-
 // Batched HDiv-VIM demag field: the analytic charge field of ALL volume (linear-rho tet) + surface
 // (quadratic-sigma tri) sources summed at ALL obs points, ngcore::ParallelFor OVER OBS (each obs is an
-// independent sum -> no race).  This is the order_p / assemble_demag_field hot loop moved out of Python:
-// one C++ call instead of O(n_obs x n_src) per-pair pybind crossings, and it honours the CALLER's
-// `with TaskManager()` (bare ParallelFor falls back to serial when there is no active TaskManager -- per
-// the caller-wraps policy, this function does NOT create its own RegionTaskManager).
+// independent sum -> no race).  This is the RT1 field-evaluation hot loop moved out of Python: one C++
+// call instead of O(n_obs x n_src) Python work.  rad.Fld is a user-intent API and cannot require callers
+// to know the implementation's parallel region, so this production entry owns a RegionTaskManager.
 //   vol  : n_vol  blocks of 16 doubles  [v0x..v3z (12), rho0 (1), gx,gy,gz (3)]
 //   surf : n_surf blocks of 22 doubles  [v0x..v2z (9),  sigma0 (1), sx,sy,sz (3), S00..S22 (9 row-major)]
 //   obs  : n_obs * 3.  Returns n_obs * 3, NO 1/(4pi) (applied in Python, matching the per-pair kernels).
@@ -2842,6 +2506,7 @@ std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const st
     const long n_surf = (long)(surf.size() / 22);
     const long n_obs  = (long)(obs.size()  / 3);
     std::vector<double> out((size_t)n_obs * 3, 0.0);
+    ngcore::RegionTaskManager task_manager;
     ngcore::ParallelFor(ngcore::IntRange((size_t)n_obs), [&](size_t jj) {
         const long j = (long)jj;
         double r[3] = { obs[3*j], obs[3*j+1], obs[3*j+2] };
@@ -2862,6 +2527,38 @@ std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const st
             acc[0]+=o[0]; acc[1]+=o[1]; acc[2]+=o[2];
         }
         out[3*j+0] = acc[0]; out[3*j+1] = acc[1]; out[3*j+2] = acc[2];
+    });
+    return out;
+}
+
+// Element-agnostic RT field from an NGSolve-generated charge quadrature cloud.
+// xyz [nq*3], strength [nq] already contains rho/sigma * physical quadrature
+// weight.  The expensive nq*nobs sum is entirely C++ and parallel over obs.
+// The analytic tet path above remains the exact near/self route; this cloud
+// route covers hex, wedge and curved geometries with their native NGSolve map.
+std::vector<double> HDivChargeCloudField(const std::vector<double>& xyz,
+                                         const std::vector<double>& strength,
+                                         const std::vector<double>& obs) {
+    if (xyz.size() != strength.size() * 3)
+        throw std::runtime_error("_hdiv_charge_cloud_field: xyz/strength size mismatch");
+    if (obs.size() % 3 != 0)
+        throw std::runtime_error("_hdiv_charge_cloud_field: obs length must be divisible by 3");
+    const size_t nq = strength.size();
+    const size_t np = obs.size() / 3;
+    std::vector<double> out(np * 3, 0.0);
+    ngcore::RegionTaskManager task_manager;
+    ngcore::ParallelFor(ngcore::IntRange(np), [&](size_t ip) {
+        const double* r = &obs[ip * 3];
+        double h[3] = {0.0, 0.0, 0.0};
+        for (size_t iq = 0; iq < nq; ++iq) {
+            const double* q = &xyz[iq * 3];
+            const double dx = r[0] - q[0], dy = r[1] - q[1], dz = r[2] - q[2];
+            const double r2 = dx*dx + dy*dy + dz*dz;
+            if (r2 <= 1e-300) continue; // principal-value point; analytic tet handles exact self evaluation
+            const double scale = strength[iq] / (r2 * std::sqrt(r2));
+            h[0] += scale * dx; h[1] += scale * dy; h[2] += scale * dz;
+        }
+        out[ip*3] = h[0]; out[ip*3+1] = h[1]; out[ip*3+2] = h[2];
     });
     return out;
 }
@@ -2968,293 +2665,20 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Version info
     m.attr("__version__") = "1.4.0";
 
-    // ========================================================================
-    // HDiv-type VIM (symmetric demag operator) -- golden-test entry
-    // ========================================================================
-    m.def("_hdiv_vim_assemble", &radia_hdivvim::HDivVimAssemble,
-          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
-          R"pbdoc(
-              Assemble the symmetric HDiv-type VIM demag operator N = B^T G B on a structured
-              nx*ny*nz hex grid (RT0 faces).  nsub=0 (default) uses the fast centroid-monopole Gram;
-              nsub>=1 uses accurate sub-point quadrature (positive semi-definite N, true demag
-              factors -- O(n_charge^2 nsub^6), golden sizes only).  Returns a dict with nf, n_cell,
-              n_charge, n_bnd, and the row-major flat lists N (nf x nf), B (n_charge x nf), M_mass
-              (nf x nf).  For testing: symmetry, loops field-null (ker B), demag factors (N, M_mass).
-          )pbdoc");
-
-    m.def("_hdiv_tri_potential", &radia_hdivvim::TriPotentialProbe, py::arg("V"), py::arg("r"),
-          "M2 verify: Wilton triangle 1/r potential INT_T 1/|r-r'| dA' (V = 9 flat doubles = 3 verts, "
-          "r = 3).  Pure 1/r integral (no 1/4pi).  Should match radia.vim._core.tri_potential.");
-    m.def("_hdiv_phi_tet", &radia_hdivvim::PhiTetProbe, py::arg("V"), py::arg("P"),
-          "M2 verify: tet Newtonian potential INT_tet 1/|P-r'| dV' (V = 12 flat doubles = 4 verts, "
-          "P = 3) via the divergence theorem.  Should match radia.vim._core.phi_tet.");
-    m.def("_hdiv_tri_field", &radia_hdivvim::TriFieldProbe, py::arg("V"), py::arg("r"),
-          "Wilton triangle FIELD INT_T (r-r')/|r-r'|^3 dA' (V = 9 flat doubles, r = 3) -> 3-vector, no "
-          "1/4pi.  = -grad TriPotential.  Should match radia.vim.flat_triangle_charge_field.");
-    m.def("_hdiv_tet_field", &radia_hdivvim::TetFieldProbe, py::arg("V"), py::arg("P"),
-          "Tet volume-charge FIELD INT_tet (P-r')/|P-r'|^3 dV' (V = 12 flat doubles, P = 3) -> 3-vector, "
-          "no 1/4pi.  = -grad PhiTet.  Should match radia.vim.tet_self_volume_field * 4pi.");
-    m.def("_hdiv_tri_moment1", &radia_hdivvim::TriMoment1Probe, py::arg("V"), py::arg("r"),
-          "Surface first moment INT_T r'/R dS' (V=9, r=3) -> 3-vector.  == triangle_potential_moment.");
-    m.def("_hdiv_tri_moment2", &radia_hdivvim::TriMoment2Probe, py::arg("V"), py::arg("r"),
-          "Surface second moment INT_T r'(x)r'/R dS' (V=9, r=3) -> 9 (row-major 3x3).  == triangle_potential_moment2.");
-    m.def("_hdiv_tet_moment1", &radia_hdivvim::TetMoment1Probe, py::arg("V"), py::arg("r"),
-          "Volume first moment INT_V r'/R dV' (V=12, r=3) -> 3-vector.  == tet_newtonian_moment.");
-    m.def("_hdiv_tet_potential_poly", &radia_hdivvim::TetPotentialPolynomialProbe,
-          py::arg("V"), py::arg("r"), py::arg("exps_flat"), py::arg("coeffs"),
-          "Polynomial volume-charge potential SUM c_a INT_tet x^a y^b z^c / |r-r'| dV' "
-          "(V=12, r=3, exps_flat=[a,b,c,...], coeffs).  No 1/4pi.");
-    m.def("_hdiv_curved_tri_potential", &radia_hdivvim::CurvedTriPotentialProbe,
-          py::arg("nodes"), py::arg("e0"), py::arg("e1"), py::arg("p"), py::arg("gl"), py::arg("gw"),
-          "CURVED P2 triangle surface-charge potential INT xi^e0 eta^e1 /|p-X(xi)| dA_curved via the "
-          "reference Duffy (nodes=18 P2 nodes row-major, p=3, gl/gw = nq-pt Gauss-Legendre on [0,1]).");
-    m.def("_hdiv_curved_tet_potential", &radia_hdivvim::CurvedTetPotentialProbe,
-          py::arg("nodes"), py::arg("e0"), py::arg("e1"), py::arg("e2"), py::arg("p"), py::arg("gl"), py::arg("gw"),
-          "CURVED P2 tetrahedron volume-charge potential INT xi^e0 eta^e1 zeta^e2 /|p-X(xi)| dV_curved via the "
-          "reference Duffy (nodes=30 P2 nodes row-major, p=3, gl/gw = nq-pt Gauss-Legendre on [0,1]).");
-    m.def("_hdiv_tet_volfield_linear", &radia_hdivvim::TetVolFieldLinearProbe,
-          py::arg("V"), py::arg("r"), py::arg("rho0"), py::arg("g"),
-          "Linear volume-charge field (V=12, r=3, rho0 scalar, g=3) -> 3-vector.  == tet_volume_field_linear.");
-    m.def("_hdiv_tet_volfield_quadratic", &radia_hdivvim::TetVolFieldQuadraticProbe,
-          py::arg("V"), py::arg("r"), py::arg("rho0"), py::arg("g"), py::arg("Q"),
-          "Quadratic volume-charge field (V=12, r=3, rho0, g=3, Q=9 row-major) -> 3-vector.  == tet_volume_field_quadratic.");
-    m.def("_hdiv_lin_tri_field", &radia_hdivvim::LinTriFieldProbe,
-          py::arg("V"), py::arg("r"), py::arg("sigma0"), py::arg("s"),
-          "Linear surface-charge field (V=9, r=3, sigma0, s=3) -> 3-vector.  == linear_triangle_charge_field.");
-    m.def("_hdiv_quad_tri_field", &radia_hdivvim::QuadTriFieldProbe,
-          py::arg("V"), py::arg("r"), py::arg("sigma0"), py::arg("s"), py::arg("S"),
-          "Quadratic surface-charge field (V=9, r=3, sigma0, s=3, S=9 row-major) -> 3-vector.  == quadratic_triangle_charge_field.");
     m.def("_hdiv_demag_field_batch", &radia_hdivvim::HDivDemagFieldBatch,
           py::arg("vol"), py::arg("surf"), py::arg("obs"),
-          "Batched HDiv-VIM demag field, ngcore::ParallelFor OVER OBS (honours the caller's TaskManager; "
-          "serial fallback if none).  vol = n_vol x 16 [verts12, rho0, g3], surf = n_surf x 22 "
-          "[verts9, sigma0, s3, S9 row-major], obs = n_obs x 3 -> n_obs x 3 (NO 1/4pi).  == the per-pair "
-          "sum of _hdiv_tet_volfield_linear + _hdiv_quad_tri_field, the assemble_demag_field hot loop in C++.");
+          "Batched RT1 HDiv-VIM demag field, RegionTaskManager + ParallelFor OVER OBS. "
+          "vol = n_vol x 16 [verts12, rho0, g3], surf = n_surf x 22 "
+          "[verts9, sigma0, s3, S9 row-major], obs = n_obs x 3 -> n_obs x 3 (NO 1/4pi).");
+    m.def("_hdiv_charge_cloud_field", &radia_hdivvim::HDivChargeCloudField,
+          py::arg("xyz"), py::arg("strength"), py::arg("obs"),
+          "Element-agnostic C++ RT charge-cloud field. xyz=nq x 3; strength includes charge density and "
+          "physical quadrature weight; obs=np x 3. RegionTaskManager-parallel over observations; no 1/(4pi).");
 
-
-    m.def("_hdiv_vim_hmatrix_probe", &radia_hdivvim::HDivVimHMatrixProbe,
-          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
-          py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-          R"pbdoc(
-              Build the HDiv-type VIM demag operator N = B^T G B as a HACApK H-matrix (DOFs = RT0
-              faces; ACA entry function = on-demand charge-cluster Coulomb sum) and probe it against
-              the dense rad_hdiv::AssembleN(nsub) reference.  Returns a dict: ok, nf, n_dof, n_leaves,
-              n_lowrank, n_dense, max_rank, compression (H-bytes/dense-bytes), build_time, memory_mb,
-              dense_memory_mb, matvec_relerr (max over deterministic probe vectors of ||H x - N x||/||N x||),
-              and symmetry_relerr (|x^T N y - y^T N x| from the H-matvec).  Golden sizes only (forms dense N).
-          )pbdoc");
-
-#ifdef RADIA_USE_HACAPK
-    m.def("_hdiv_vim_hlu_probe", &radia_hdivvim::HDivVimHLUProbe,
-          py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
-          py::arg("chi") = 999.0, py::arg("eps") = 1e-5, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-          py::arg("trunc_tol") = 1e-4,
-          R"pbdoc(
-              SYSTEM-A H-LU on the HDiv-VIM operator: build A = M_mass + chi*N as a HACApK H-matrix on
-              the RT0 face DOFs, factor via the materialize-free H-LU, and round-trip A^-1(A x)=x.
-              Returns: ok, ndof, roundtrip_relerr, t_decomp_sec, t_solve_sec, n_internal (cubic-driver
-              materialize, must be 0), n_leaf, compression, max_rank, build_time.  Proves the H-LU is a
-              scalable direct-solve / strong preconditioner for the soft-iron material system on the
-              actual HDiv operator (not just collocation).
-          )pbdoc");
-
-    m.def("_hdiv_vim_tet_hlu_probe", &radia_hdivvim::HDivVimTetHLUProbe,
-          py::arg("face_centroids"), py::arg("chi"), py::arg("face_charge"), py::arg("face_coef"),
-          py::arg("mI"), py::arg("mJ"), py::arg("mV"),
-          py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
-          py::arg("eps") = 1e-5, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-          py::arg("trunc_tol") = 1e-8, py::arg("gram_near_factor") = 2.0,
-          R"pbdoc(
-              UNSTRUCTURED (real tet mesh) system-A H-LU: build A = M_mass + chi*N on the RT0 face DOFs
-              from radia.vim build_demag geometry (face centroids; per-face <=2 charge map
-              face_charge/face_coef; mass COO mI/mJ/mV; cell_verts/face_verts/n_el for the embedded
-              analytic charge Gram), H-LU it, round-trip A^-1(A x)=x.  Returns ok, ndof, roundtrip_relerr,
-              t_decomp_sec, n_internal (must be 0), n_leaf, compression, max_rank.  The production-path
-              operator (the C-type); proves the materialize-free H-LU scales on unstructured geometry.
-          )pbdoc");
-#endif
-
-    // Build-once HACApK H-matrix operator for the HDiv-type VIM demag operator -- the production
-    // API: build N as an H-matrix ONCE, then drive a scalable symmetric solve (MINRES) over the
-    // O(N log N) matvec.  matvec(x)=N x; apply_system(x,inv_chi)=inv_chi M_mass x - N x (the
-    // material system operator); diag_system(inv_chi) is the Jacobi preconditioner diagonal.
-    py::class_<RadHACApKHDivManager>(m, "_HDivVimHMatrix")
-        .def(py::init([](int nx, int ny, int nz, int nsub, double distort,
-                         double eps, int leaf, double eta) {
-                 auto mgr = std::unique_ptr<RadHACApKHDivManager>(
-                     new RadHACApKHDivManager(nx, ny, nz, 1.0, distort, nsub));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("HDiv VIM H-matrix build failed");
-                 return mgr;
-             }),
-             py::arg("nx"), py::arg("ny"), py::arg("nz"), py::arg("nsub") = 0, py::arg("distort") = 0.0,
-             py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-             "Build the HDiv-type VIM demag operator N as a HACApK H-matrix on a structured "
-             "nx*ny*nz RT0 hex grid (nsub Gram quadrature, optional distortion; ACA eps/leaf/eta).")
-        .def("ndof", [](RadHACApKHDivManager& s) { return s.GetNDOF(); })
-        .def("matvec", [](RadHACApKHDivManager& s, const std::vector<double>& x) {
-                 std::vector<double> y((size_t)s.GetNDOF(), 0.0);
-                 s.MatVec(x, y);
-                 return y;
-             }, py::arg("x"), "N x (the O(N log N) H-matvec).")
-        .def("apply_system", [](RadHACApKHDivManager& s, const std::vector<double>& x, double inv_chi) {
-                 std::vector<double> y;
-                 s.ApplySystem(x, inv_chi, y);
-                 return y;
-             }, py::arg("x"), py::arg("inv_chi"),
-             "A x = inv_chi * (M_mass x) - (N x), the symmetric-indefinite material system operator.")
-        .def("diag_system", [](RadHACApKHDivManager& s, double inv_chi) { return s.DiagSystem(inv_chi); },
-             py::arg("inv_chi"), "diag(A) = inv_chi M_mass_ff - N_ff (Jacobi preconditioner).")
-        .def("stats", [](RadHACApKHDivManager& s) {
-                 const RadHACApKStats& st = s.GetStats();
-                 py::dict d;
-                 d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
-                 d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
-                 d["compression"] = st.compression; d["build_time"] = st.build_time;
-                 d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
-                 return d;
-             }, "H-matrix stats dict (n_dof, n_leaves, n_lowrank, compression, build_time, ...).");
-
-#ifdef RADIA_USE_HACAPK
-    // Persistent factored H-LU(A) preconditioner for the unstructured HDiv-VIM material system.
-    // Factor A = M_mass + chi*N ONCE (ctor), apply A^-1 per GMRES iteration (solve) -> N-independent
-    // outer iters (the production Mprec replacing M_mass^-1).
-    py::class_<radia_hdivvim::PyHDivVimTetSolver>(m, "_HDivVimTetSolver")
-        .def(py::init([](std::vector<double> face_centroids, double chi,
-                         std::vector<int> face_charge, std::vector<double> face_coef,
-                         std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                         std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
-                         double eps, int leaf, double eta, double trunc_tol, double gram_near_factor) {
-                 return std::unique_ptr<radia_hdivvim::PyHDivVimTetSolver>(
-                     new radia_hdivvim::PyHDivVimTetSolver(std::move(face_centroids), chi,
-                         std::move(face_charge), std::move(face_coef), std::move(mI), std::move(mJ),
-                         std::move(mV), std::move(cell_verts), std::move(face_verts), n_el,
-                         eps, leaf, eta, trunc_tol, gram_near_factor));
-             }),
-             py::arg("face_centroids"), py::arg("chi"), py::arg("face_charge"), py::arg("face_coef"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"),
-             py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
-             py::arg("eps") = 1e-5, py::arg("leaf") = 32, py::arg("eta") = 2.0,
-             py::arg("trunc_tol") = 1e-6, py::arg("gram_near_factor") = 2.0,
-             "Build + H-LU-factor A = M_mass + chi*N on the RT0 face DOFs (factor once).")
-        .def("solve", &radia_hdivvim::PyHDivVimTetSolver::solve, py::arg("rhs"),
-             "Apply A^-1 to rhs (per-GMRES-iteration preconditioner application).")
-        .def("stats", &radia_hdivvim::PyHDivVimTetSolver::stats,
-             "H-matrix stats for the system-A matrix.")
-        .def("ndof", &radia_hdivvim::PyHDivVimTetSolver::ndof);
-#endif
-
-    py::class_<RadHACApKChargeGaussOperator>(m, "_ChargeGaussHMatrix")
-        .def(py::init([](std::vector<double> point_coords, std::vector<int> P_pt,
-                         std::vector<int> P_chg, std::vector<double> P_coef, int n_charge,
-                         std::vector<int> corr_i, std::vector<int> corr_j, std::vector<double> corr_v,
-                         double eps, int leaf, double eta) {
-                 auto op = std::unique_ptr<RadHACApKChargeGaussOperator>(
-                     new RadHACApKChargeGaussOperator(std::move(point_coords), std::move(P_pt),
-                         std::move(P_chg), std::move(P_coef), n_charge, std::move(corr_i), std::move(corr_j),
-                         std::move(corr_v)));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!op->BuildHMatrix(p)) throw std::runtime_error("charge Gauss-point H-matrix build failed");
-                 return op;
-             }),
-             py::arg("point_coords"), py::arg("P_pt"), py::arg("P_chg"), py::arg("P_coef"), py::arg("n_charge"),
-             py::arg("corr_i"), py::arg("corr_j"), py::arg("corr_v"),
-             py::arg("eps") = 1e-5, py::arg("leaf") = 64, py::arg("eta") = 2.0,
-             "Build K_point as a HACApK H-matrix over quadrature/Gauss points and expose the charge-Gram "
-             "apply G ~= P^T K_point P + sparse near correction.  P is the GENERAL sparse scatter as a COO "
-             "triple (P_pt[k] <- charge P_chg[k], coefficient P_coef[k]); order-0 callers pass the trivial P "
-             "(P_pt = 0..n_point-1, P_chg = owner charge, P_coef = quadrature weight), high-order callers pass "
-             "coef = weight_p * monomial_a(x_p) so a point scatters from every charge on its host.")
-        .def("ncharge", &RadHACApKChargeGaussOperator::GetNCharge)
-        .def("npoint", &RadHACApKChargeGaussOperator::GetNPoint)
-        .def("matvec", [](RadHACApKChargeGaussOperator& s, const std::vector<double>& x) {
-                 std::vector<double> y;
-                 s.MatVec(x, y);
-                 return y;
-             }, py::arg("x"), "Charge-space matvec y = (P^T K_point P + correction) x.")
-        .def("entry", &RadHACApKChargeGaussOperator::GetChargeEntry, py::arg("i"), py::arg("j"),
-             "Charge-space entry, evaluated as direct point quadrature plus sparse correction.")
-        .def("solve_linear_material_auto_prec",
-             [](RadHACApKChargeGaussOperator& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> rhs,
-                double tol, int maxit) {
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("ChargeGauss.solve_linear_material_auto_prec: rhs size mismatch");
-                 std::vector<double> mass_diag((size_t)n_face, 0.0);
-                 for (size_t k = 0; k < mV.size(); ++k) {
-                     if (mI[k] == mJ[k] && mI[k] >= 0 && mI[k] < n_face) mass_diag[(size_t)mI[k]] += mV[k];
-                 }
-                 std::vector<std::vector<int>> supp_id((size_t)n_face);
-                 std::vector<std::vector<double>> supp_val((size_t)n_face);
-                 const int n_charge = (int)B_indptr.size() - 1;
-                 for (int a = 0; a < n_charge; ++a) {
-                     for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k) {
-                         int f = B_indices[(size_t)k];
-                         if (f < 0 || f >= n_face)
-                             throw std::runtime_error("ChargeGauss.solve_linear_material_auto_prec: B face index out of range");
-                         supp_id[(size_t)f].push_back(a);
-                         supp_val[(size_t)f].push_back(B_data[(size_t)k]);
-                     }
-                 }
-                 std::vector<double> prec((size_t)n_face, 0.0);
-                 for (int f = 0; f < n_face; ++f) {
-                     double ndiag = 0.0;
-                     const auto& ids = supp_id[(size_t)f];
-                     const auto& vals = supp_val[(size_t)f];
-                     for (size_t p = 0; p < ids.size(); ++p)
-                         for (size_t q = 0; q < ids.size(); ++q)
-                             ndiag += vals[p] * vals[q] * s.GetChargeEntry(ids[p], ids[q]);
-                     double v = inv_chi * mass_diag[(size_t)f] + ndiag;
-                     if (!(v > 0.0) || !std::isfinite(v)) v = 1.0;
-                     prec[(size_t)f] = v;
-                 }
-                 int iters = 0;
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, prec, rhs,
-                                                               tol, maxit, iters);
-                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
-             },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
-             py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
-             "Solve ((1/chi)M_mass + B^T G_gauss B)m = rhs in C++; G_gauss applies P^T K_point P "
-             "plus the sparse near correction.")
-        .def("solve_linear_material_mass_riesz",
-             [](RadHACApKChargeGaussOperator& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> rhs, double tol, int maxit) {
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("ChargeGauss.solve_linear_material_mass_riesz: rhs size mismatch");
-                 int iters = 0;
-                 std::vector<double> noprec;   // mass_riesz=true ignores the diagonal prec
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, noprec, rhs,
-                                                               tol, maxit, iters, /*mass_riesz=*/true);
-                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
-             },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
-             py::arg("tol") = 1e-8, py::arg("maxit") = 5000,
-             "Default linear demag solve in C++: ((1/chi)M_mass + B^T G_gauss B)m = rhs by CG with a PARDISO "
-             "SPD factor of the RT0 mass (mass Riesz). Returns {m, iters}.")
-        .def("stats", [](RadHACApKChargeGaussOperator& s) {
-                 const RadHACApKStats& st = s.GetStats();
-                 py::dict d;
-                 d["n_dof"] = st.n_dof; d["n_leaves"] = st.n_leaves; d["n_lowrank"] = st.n_lowrank;
-                 d["n_dense"] = st.n_dense; d["max_rank"] = st.max_rank;
-                 d["compression"] = st.compression; d["build_time"] = st.build_time;
-                 d["memory_mb"] = st.memory_mb; d["dense_memory_mb"] = st.dense_memory_mb;
-                 return d;
-             }, "Point H-matrix stats dict.");
 
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
-    // Charges (cell rho + boundary-face sigma) extracted from ANY RT0 mesh (e.g. NGSolve tet
-    // HDiv(0)); pass charge centroids/measures + the caller-computed diagonal self-energies.  The
+    // Charges (cell rho + boundary-face sigma) extracted from an HDiv mesh; pass charge
+    // centroids/measures + the caller-computed diagonal self-energies.  The
     // demag operator N = B^T G B is applied as B^T (matvec(B m)) with B the sparse charge map.
     py::class_<RadHACApKChargeGram>(m, "_ChargeGramHMatrix")
         .def(py::init([](std::vector<double> centroids, std::vector<double> measures,
@@ -3295,7 +2719,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("build") = true, py::arg("far_quad") = 0,
              "ANALYTIC mode (M2b): build the EXACT charge Gram as a HACApK H-matrix from per-charge "
              "geometry (cell_verts [n_el*12] tets, face_verts [n_bf*9] triangles). Entry = analytic "
-             "PhiTet/TriPotential inner x outer quadrature (matches dense build_demag(analytic_gram=True)). "
+             "PhiTet/TriPotential inner x outer quadrature (matches the independent analytic reference). "
              "near_factor (default 1e30 = all-analytic) gives the NEAR/FAR build speedup. far_quad selects the "
              "FAR evaluation: 0 = centroid-monopole (O((size/r)^2), slightly breaks symmetry); >0 = a low-order "
              "double-quadrature of 1/r (degree-2 4-pt tet / 3-pt tri, O((size/r)^4)) that reproduces the "
@@ -3330,7 +2754,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "CSR offsets (in triangles), cell_cent [n_el*3] the vertex-mean centroid (fan apex + outward "
              "normal ref), cell_meas [n_el] the cell volume; face_tris/face_troff/face_cent/face_meas the "
              "boundary faces' sub-triangles (quad->2).  Entry = divergence-theorem polytope potential x "
-             "centroid-fan / Dunavant outer quadrature (matches dense analytic_charge_gram polytope path). "
+             "centroid-fan / Dunavant outer quadrature (matches the independent analytic polytope reference). "
              "near_factor (default 1e30 = all-analytic); pass ~2 for the NEAR/FAR build speedup. far_quad>0 "
              "uses the precision-preserving low-order double-quad far (degree-2 on the sub-tets/sub-tris).")
         .def(py::init([](std::vector<double> cell_curved_nodes, std::vector<int> cell_subtet_off,
@@ -3361,7 +2785,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              "CURVED POLYTOPE mode (curved hex/wedge): FULLY curved -- curved CELL volume charge (sub-tets, "
              "CurvedTetPotential) + curved FACE surface charge (sub-tris, CurvedTriPotential). The cell volume "
-             "charge is DOMINANT for the demag (curved RT0 cannot represent uniform M exactly -> div M != 0). "
+             "charge is DOMINANT for the demag (the lowest-order curved charge cannot represent uniform M exactly -> div M != 0). "
              "cell_curved_nodes [n_cell_subtet*30] + cell_subtet_off [n_cell+1]; face_curved_nodes "
              "[n_bf_subtri*18] + face_subtri_off [n_bf+1]; ref_tet_pts/w + ref_tri_pts/w the outer quads; "
              "curve_gl/gw the inner Duffy rule. Both reuse the golden curved-tet/tri kernels.")
@@ -3408,7 +2832,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "HIGH-ORDER (order-p) mode: POLYNOMIAL charges (monomial basis per host). charge_host[c]/"
              "charge_kind[c] (0=cell,1=face)/charge_expo[3c] define each charge; ref_tet_pts[nqt*3]/ref_tet_w "
              "(sum 1/6) + ref_tri_pts[nqr*2]/ref_tri_w (sum 1/2) are the reference Gauss-Duffy rules. Entry = "
-             "monomial-weighted outer quad x the subtraction inner potential (matches dense build_demag_highorder). "
+             "monomial-weighted outer quad x the subtraction inner potential (matches the independent high-order analytic reference). "
              "ref_*_lo + ho_far_factor (<inf) enable the accuracy-preserving NEAR/FAR adaptive quadrature: far "
              "pairs (|c_a-c_b| > ho_far_factor*(size_a+size_b)) use the cheap LOW-quad plain double-Gauss.")
         .def(py::init([](std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
@@ -3766,24 +3190,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
              py::arg("tol") = 1e-9, py::arg("maxit") = 5000, py::arg("x0") = py::none(),
              "Array-input variant of solve_linear_material_auto_prec; avoids Python list materialization.")
-        .def("solve_material_minres",
-             [](RadHACApKChargeGram& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> prec, std::vector<double> rhs,
-                double tol, int maxit) {
-                 int iters = 0;
-                 std::vector<double> m = s.SolveMaterialMINRES(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, prec, rhs,
-                                                               tol, maxit, iters);
-                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
-             },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("prec"),
-             py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000,
-             "mu_r-INDEPENDENT material solve: Jacobi-preconditioned MINRES for the SYMMETRIC INDEFINITE "
-             "A m = rhs, A = inv_chi*M_mass - B^T G B (G via the analytic charge-Gram H-matvec, "
-             "HACApK-parallel under ngcore::RegionTaskManager). Returns {m, iters}.")
         .def("solve_linear_material_mass_riesz",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
@@ -3805,7 +3211,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
              py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
              "DEFAULT linear demag solve ENTIRELY in C++: SPD +N system ((1/chi)M_mass + B^T G B) m = rhs "
-             "by CG preconditioned with a PARDISO SPD factor of the RT0 mass M_mass (the MASS RIESZ map). "
+             "by CG preconditioned with a PARDISO SPD factor of the HDiv mass M_mass (the MASS RIESZ map). "
              "symmetric=true (default) applies G via the EXACTLY-symmetric H-matvec so CG sees a symmetric operator; "
              "symmetric=false uses the general (asymmetric ACA) matvec. Returns {m, iters}.")
         .def("solve_linear_material_mass_riesz_arrays",
@@ -3849,29 +3255,41 @@ PYBIND11_MODULE(_radia_pybind, m) {
               py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
               py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
               py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
-              py::arg("x0") = py::none(),
-              "Array-input variant of solve_linear_material_mass_riesz; avoids Python list materialization.")
-        .def("solve_material_minres_mass_riesz",
+               py::arg("x0") = py::none(),
+               "Array-input variant of solve_linear_material_mass_riesz; avoids Python list materialization.")
+        .def("apply_demag_arrays",
              [](RadHACApKChargeGram& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> rhs,
-                double tol, int maxit, bool symmetric) {
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("solve_material_minres_mass_riesz: rhs size mismatch");
-                 int iters = 0;
-                 std::vector<double> noprec;   // mass_riesz=true ignores the diagonal prec
-                 std::vector<double> m = s.SolveMaterialMINRES(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, noprec, rhs,
-                                                               tol, maxit, iters, /*mass_riesz=*/true, symmetric);
-                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+                py::array_t<int, py::array::c_style | py::array::forcecast> B_indptr_a,
+                py::array_t<int, py::array::c_style | py::array::forcecast> B_indices_a,
+                py::array_t<double, py::array::c_style | py::array::forcecast> B_data_a,
+                int n_face,
+                py::array_t<double, py::array::c_style | py::array::forcecast> x_a,
+                bool symmetric) {
+                 return s.ApplyDemagOperator(
+                     to_1d_vector<int>(B_indptr_a, "B_indptr"),
+                     to_1d_vector<int>(B_indices_a, "B_indices"),
+                     to_1d_vector<double>(B_data_a, "B_data"), n_face,
+                     to_1d_vector<double>(x_a, "x"), symmetric);
              },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
-             py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
-             "mu_r-INDEPENDENT material solve, mass Riesz variant: MINRES for the SYMMETRIC INDEFINITE "
-             "A = inv_chi*M_mass - B^T G B, preconditioned with the PARDISO SPD factor of M_mass (vs the "
-             "diagonal Jacobi). symmetric=true (default) uses the EXACTLY-symmetric H-matvec. Returns {m, iters}.")
+             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"),
+             py::arg("n_face"), py::arg("x"), py::arg("symmetric") = true,
+             "Apply the matrix-free HDiv demagnetizing operator B^T G B to x in C++.")
+        .def("apply_mass_riesz_arrays",
+             [](RadHACApKChargeGram& s,
+                py::array_t<int, py::array::c_style | py::array::forcecast> mI_a,
+                py::array_t<int, py::array::c_style | py::array::forcecast> mJ_a,
+                py::array_t<double, py::array::c_style | py::array::forcecast> mV_a,
+                int n_face,
+                py::array_t<double, py::array::c_style | py::array::forcecast> rhs_a) {
+                 return s.ApplyMassRiesz(
+                     to_1d_vector<int>(mI_a, "mI"),
+                     to_1d_vector<int>(mJ_a, "mJ"),
+                     to_1d_vector<double>(mV_a, "mV"), n_face,
+                     to_1d_vector<double>(rhs_a, "rhs"));
+             },
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"),
+             py::arg("n_face"), py::arg("rhs"),
+             "Apply the persistent C++ PARDISO mass-Riesz map M_mass^{-1} rhs.")
         .def("solve_nonlinear_picard",
              [](RadHACApKChargeGram& s,
                 std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,

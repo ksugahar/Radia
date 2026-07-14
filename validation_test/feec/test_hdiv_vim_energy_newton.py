@@ -70,7 +70,7 @@ def _sphere(maxh=0.6):
 def test_default_nonlinear_is_energy_newton_cpp(monkeypatch):
     """The default iron-only nonlinear solve routes to the all-C++ symmetric energy-Newton (RT1): it is the
     default solver, converges, and gives a sane +z M with the sphere demag ~1/3 at moderate AND knee drive.
-    RT0 is retired, so the former forward-Newton (scipy splu + GMRES) cross-check is gone -- the energy-Newton
+    The former forward-Newton (scipy splu + GMRES) cross-check is gone -- the energy-Newton
     is validated against the closed-form spheroid fixed point in test_hdiv_vim_curved_solve_nonlinear."""
     monkeypatch.delenv("RADIA_HDIV_AUTO_JACOBI_TET_NFACE", raising=False)
     mesh = _sphere()

@@ -9,7 +9,8 @@ mass-Riesz PARDISO factor are paid once (t_setup_s / charge_gram_wall_s),
 after which every quasi-static step costs only CG applies + the batched
 material update (per-step t_step_s ~ flat across the loop).
 
-Benchmark Policy: publication timings run on mdx (idle-gated); LAB runs are
+Benchmark Policy: publication timings run on idle mdx or hibino (mdx default,
+idle-gated); LAB runs are
 correctness smoke only.  Each case runs in its OWN subprocess so peak memory
 (psutil peak working set) is per-case accurate.
 

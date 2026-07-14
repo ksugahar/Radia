@@ -4,11 +4,11 @@ The curved tet charge Gram (ChargeGram(curve_order=2), CurvedTri/TetPotential --
 test_hdiv_vim_curved_gram.py) is now wired to the symmetric energy-Newton nonlinear solver
 (_solve_nonlinear_energy_cpp): Solve(mesh, bh_table=..., curve_order=2) lifts the former
 order>0-nonlinear NotImplementedError for the CURVED path.  The FLAT order>0 nonlinear path is now wired too
-(verified, see test_flat_rt1_nonlinear_matches_rt0 below).  No new C++ -- the energy-Newton is Gram-AGNOSTIC
+(verified against the analytic fixed point below).  No new C++ -- the energy-Newton is Gram-AGNOSTIC
 (it consumes only H.matvec + H.solve_linear_material_mass_riesz, present on every high-order Gram object).
 
 Locks: (1) curve_order=2 + bh_table runs + reports nonlinear=True, solver='energy-newton-cpp', curve_order=2;
-(2) a uniform sphere magnetizes to the analytic spheroid fixed point (~1e-2); (3) matches the RT0 (order=0)
+(2) a uniform sphere magnetizes to the analytic spheroid fixed point (~1e-2); (3) matches the analytic
 nonlinear solve on the same geometry (the demag factor is curving-insensitive); (4) the curved (Duffy) Gram
 stays PSD enough for the energy slide-down -- the solve CONVERGES (iters < maxit).
 """
@@ -56,9 +56,9 @@ def test_curved_tet_nonlinear_runs_and_matches_analytic():
 
 def test_flat_rt1_nonlinear_matches_analytic():
     """FLAT (non-curved) RT1 nonlinear (energy-Newton on the flat high-order Gram): a uniform sphere magnetizes
-    to the analytic spheroid fixed point.  RT0 is retired, so RT1 is the production nonlinear path and the
+    to the analytic spheroid fixed point.  Order 1 is the production nonlinear path and the
     reference is the closed-form fixed point (the former 'flat order>0 blocked' guard was removed; flat RT1
-    nonlinear was verified ~7e-4 vs the old RT0 nonlinear before RT0 was dropped)."""
+    nonlinear was verified against the analytic fixed point before promotion)."""
     H0 = 5000.0
     Man = nl._scalar_fixed_point(_Mof, 1.0 / 3.0, H0)
     with ng.TaskManager():

@@ -13,7 +13,6 @@ def test_ngsolve_style_hdiv_vim_names_are_public():
         "Solve",
         "DemagOperator",
         "ChargeGram",
-        "ChargeGramGauss",
         "MeshSoftIron",
         "VolSoftIron",
         "PlanarSolve",
@@ -26,7 +25,6 @@ def test_legacy_hdiv_vim_names_are_not_public_aliases():
     for name in (
         "hdiv_demag_solve",
         "build_charge_gram",
-        "build_charge_gauss",
         "soft_iron_from_mesh",
         "soft_iron_from_vol",
         "solve_planar_demag",
