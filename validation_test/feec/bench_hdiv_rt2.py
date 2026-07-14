@@ -86,7 +86,7 @@ def _run(mesh, order: int, mu_r: float) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--maxh", default="1.2,0.9,0.7")
+    parser.add_argument("--maxh", default="0.6,0.4,0.3")
     parser.add_argument("--mu-r", type=float, default=100.0)
     parser.add_argument(
         "--output",
