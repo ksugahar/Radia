@@ -575,10 +575,12 @@ def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=
     hard-edge/SCOFF bookkeeping with the geometric beta) overpredicts the edge
     focusing by ~5% for this geometry.
 
-    Mesh-dependence diagnosis (separation runs, 2026-07-13, recorded in the JSON's
-    `mesh_dependence_diagnosis`): the fringe-SHAPE mesh sensitivity is the
-    piecewise-constant-M ripple of the bulk-size GAP-FACING pole-face elements at
-    20 mm standoff -- NOT the edge lines.  Prescription: face_maxh=0.006
+    Historical mesh-dependence diagnosis (separation runs, 2026-07-13, recorded
+    in the JSON's `mesh_dependence_diagnosis`): the then-used write-back field had
+    a piecewise-constant-M ripple over bulk-size GAP-FACING pole-face elements at
+    20 mm standoff -- NOT the edge lines.  The current production `rad.Fld`
+    redirects solved HDiv objects to the full RT1 C++ evaluator, so this collapse
+    is no longer its field path.  In the historical run, face_maxh=0.006
     (~standoff/3) cures it (g_max 1.0245 -> 1.0001; K1g 7.8 -> 8.80 mm, matching
     reduced-Omega 8.85 to 0.6%); face 4 mm at bulk 14 mm exceeds the mass-Riesz CG
     limit (4000-iter non-convergence).  Residual: B0 scatters +-3.5% across all

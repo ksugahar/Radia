@@ -1,7 +1,7 @@
 # Radia Unified Field API Design
 
 **Date**: 2026-01-08 (updated 2026-02-22)
-**Status**: Phase 2 completed — `rad.Fld()` dispatches to static and PEEC solvers
+**Status**: Production — `rad.Fld()` dispatches to fixed sources, solved HDiv, and PEEC
 
 ## Overview
 
@@ -83,6 +83,10 @@ B_batch = rad.Fld(obj, 'b', points)   # returns (N, 3) array
 - **Unified RadFld()**: Detects conductor handles (>= 10000) and dispatches
 - **IsConductorHandle()**: Helper function for object type detection
 - **ComputeConductorField()**: PEEC conductor field with complex return values
+- **Solved HDiv dispatch**: a solve-time persistent C++ evaluator retains the
+  RT1 charge source, accepts NumPy target buffers, accumulates IMA in one
+  TaskManager region, and guards the large-map treecode with direct accuracy
+  and timing probes.  IMA automatic evaluation remains exact-direct.
 
 ### Return Value Convention
 
@@ -115,6 +119,7 @@ Radia field providers. Field computation uses ngbem's `GridFunction.Evaluate()`.
 | Domain | Solver | Language | API |
 |--------|--------|----------|-----|
 | Static magnets | Radia fixed-magnet field | C++ | `rad.Fld()` |
+| Solved soft iron | Radia HDiv-VIM RT1 field evaluator | C++/NGSolve | `rad.Fld()` |
 | PEEC conductors | Radia PEEC | C++ | `rad.Fld()` |
 | Surface BEM | ngbem | Python | `ngbem_peec.py` |
 | Coupled (all) | Python glue | Python | application-specific coupling |

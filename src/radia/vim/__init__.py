@@ -99,9 +99,11 @@ def PlanarSolve(*args, **kwargs):
 
 
 def FieldFromSolution(*args, **kwargs):
-    """Batch demagnetizing H (A/m) at points from the ORDER-1 HDiv solution directly
-    (no per-element constant-M collapse -- none of the near-surface ripple of
-    ``rad.Fld`` on the write-back elements).  Pass ``vim.Solve``'s result dict.
+    """Batch demagnetizing H (A/m) from the full ORDER-1 HDiv solution.
+
+    Pass ``vim.Solve``'s result dict.  The solve owns a persistent C++ source
+    evaluator; ordinary batches use the exact analytic/cloud sum, while very
+    large target-source work may use the accuracy- and timing-probed treecode.
     """
     return _field_from_solution_impl(*args, **kwargs)
 

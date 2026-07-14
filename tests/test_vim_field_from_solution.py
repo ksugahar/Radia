@@ -52,8 +52,14 @@ def test_uniform_box_matches_radia_cpp():
         {"gfM": gfM, "order": 1, "curve_order": None}, pts)
     rel = (np.linalg.norm(H_rt - H_rad, axis=1)
            / np.maximum(np.linalg.norm(H_rad, axis=1), 1e-30))
+    mixed = np.array([[0.01, 0.02, 0.01], [0.20, 0.20, 0.20],
+                      [0.03, 0.01, 0.02]])
+    got_m = fb.magnetization_from_solution(
+        {"gfM": gfM, "order": 1, "curve_order": None}, mixed)
+    expected_m = np.array([M0, [0.0, 0.0, 0.0], M0])
     rad.UtiDelAll()
     assert rel.max() < 2e-8
+    assert np.allclose(got_m, expected_m, rtol=2e-14, atol=2e-10)
 
 
 def test_sphere_end_to_end_and_fail_loud():
@@ -67,6 +73,9 @@ def test_sphere_end_to_end_and_fail_loud():
     top = rad.ObjCnt([iron, bkg])
     res = rad.Solve(top)
     assert "gfM" in res
+    assert "_field_evaluator" in res
+    evaluator = res["_field_evaluator"]
+    assert res["field_evaluator_stats"]["source_kind"] == "analytic-tet"
     with ng.TaskManager():
         V_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, ng.VOL,
                                        element_wise=True), float)
@@ -79,6 +88,7 @@ def test_sphere_end_to_end_and_fail_loud():
     mz = np.array([0.0, 0.0, m_dip])
     H_an = (3.0 * (rh @ mz)[:, None] * rh - mz[None, :]) / (4.0 * np.pi * r ** 3)[:, None]
     H_lin = vim.FieldFromSolution(res, far)
+    assert res["_field_evaluator"] is evaluator
     H_col = np.asarray(rad.Fld(iron, "h", far))
     scale = np.linalg.norm(H_an, axis=1).mean()
     assert np.linalg.norm(H_lin - H_an, axis=1).max() / scale < 2e-2   # facet multipole tail

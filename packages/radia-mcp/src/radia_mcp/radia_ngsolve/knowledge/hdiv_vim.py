@@ -42,18 +42,18 @@ Primary Python entry points:
   diagnostic operator, or `radia.vim.ChargeGram(...)` for its charge map and
   C++ H-matrix components
 - `radia.vim.FieldFromSolution(res, points)` -- batch demagnetizing H (A/m) at
-  points from the ORDER-1 (tet) solution directly, WITHOUT the per-element
-  constant-M collapse of the `rad.Fld` write-back.  Use it whenever the map
-  standoff is comparable to the source-face element size: the collapse breaks
-  HDiv normal continuity and leaves an O(h) piecewise-constant ripple there
-  (measured: flat-top bumps up to +4%, fringe integral K1g biased -12% at
-  20 mm standoff over 14 mm faces -- docs/clebsch_hodograph/
-  edge_focusing_fem_results.json `mesh_dependence_diagnosis`), while the
-  order-1 solution itself is closed-form evaluable: internal faces carry no
-  charge (HDiv conformity), boundary faces carry linear sigma = M.n, each tet
-  a constant -div M.  `res` is the dict from `vim.Solve`/`rad.Solve` (carries
-  `gfM`).  B outside the iron = MU0*(H_ext + H_demag); locked by
-  tests/test_vim_field_from_solution.py.
+  points from the full ORDER-1 solution.  `rad.Fld` on a solved mesh-backed
+  object dispatches to this same evaluator; per-element constant-M write-back
+  is metadata/visualization only, not the field oracle.  Solve materializes an
+  immutable C++ source evaluator once.  TET keeps analytic volume/triangle
+  near kernels; HEX/WEDGE/curved RT1 keeps an NGSolve quadrature cloud.  Calls
+  pass contiguous NumPy target arrays without rebuilding source lists, and all
+  IMA terms are accumulated in one TaskManager region.  Ordinary work uses the
+  exact direct sum.  Very large non-IMA maps may use a quadrupole source tree
+  only after representative direct probes satisfy the configured error bound
+  and show a measured speed benefit.  IMA auto remains direct to preserve the
+  reduced/full roundoff contract.  `algorithm="direct"` is available on
+  `FieldFromSolution` for strict validation.
 
 Core pieces:
 
@@ -61,6 +61,8 @@ Core pieces:
   symmetry contracts, and field reconstruction.
 - `src/core/rad_hdiv_vim.*` contains structured and unstructured HDiv assembly
   helpers.
+- `src/core/rad_hdiv_field_evaluator.*` contains the persistent direct/tree RT1
+  field source and NumPy-facing batch evaluator.
 - `src/core/rad_hacapk_hdiv.*` contains `_ChargeGramHMatrix`, the C++ H-matrix
   backend for the Coulomb Gram.
 - `src/radia/planar_geometry.py`, `planar_materials.py`, `planar_charges.py`,
@@ -86,6 +88,8 @@ Record these quantities in validation and benchmark artifacts:
 - H-matrix build time and compression;
 - solve iterations and residual;
 - peak memory when available;
+- field source count, evaluator build time, observation count, selected
+  direct/tree route, and direct-reference field error;
 - machine label (`LAB` smoke vs `mdx` validation).
 
 Small problems are allowed to be simply "interactive".  The scaling question
@@ -102,6 +106,8 @@ Fast tests should cover API contracts and small deterministic checks:
 - pure TET/HEX/WEDGE mesh-backed soft iron dispatches to HDiv;
 - `rad.Fld` after `rad.Solve(..., image=...)` matches an explicitly mirrored
   full model for truly symmetric meshes to near roundoff;
+- solve results already own `_field_evaluator`, repeated field calls reuse it,
+  and large non-IMA auto-tree output stays within its direct-probe contract;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
 - RT2 flat pure-TET linear/nonlinear solves remain consistent with the analytic
@@ -215,6 +221,8 @@ Open work:
 - keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
 - continue RT1/RT2 pure-TET accuracy, memory, and timing measurements on mdx;
 - continue charge-Gram H-matrix performance checks on mdx;
+- run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
+  normal release to measure public `rad.Fld` on mdx/hibino;
 - keep Cubit/GMSH mesh-export artifacts aligned with the HDiv API.
 """
 

@@ -94,6 +94,7 @@ extern "C" {
 #include "rad_stream_function.h" // (ACA+)+TSVD stream-function coil solver
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
+#include "rad_hdiv_field_evaluator.h" // Persistent RT1 field source + target tree
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
@@ -2491,79 +2492,6 @@ public:
 } // namespace ngfem
 
 
-namespace radia_hdivvim {
-// Batched HDiv-VIM demag field: the analytic charge field of ALL volume (linear-rho tet) + surface
-// (quadratic-sigma tri) sources summed at ALL obs points, ngcore::ParallelFor OVER OBS (each obs is an
-// independent sum -> no race).  This is the RT1 field-evaluation hot loop moved out of Python: one C++
-// call instead of O(n_obs x n_src) Python work.  rad.Fld is a user-intent API and cannot require callers
-// to know the implementation's parallel region, so this production entry owns a RegionTaskManager.
-//   vol  : n_vol  blocks of 16 doubles  [v0x..v3z (12), rho0 (1), gx,gy,gz (3)]
-//   surf : n_surf blocks of 22 doubles  [v0x..v2z (9),  sigma0 (1), sx,sy,sz (3), S00..S22 (9 row-major)]
-//   obs  : n_obs * 3.  Returns n_obs * 3, NO 1/(4pi) (applied in Python, matching the per-pair kernels).
-std::vector<double> HDivDemagFieldBatch(const std::vector<double>& vol, const std::vector<double>& surf,
-                                        const std::vector<double>& obs) {
-    const long n_vol  = (long)(vol.size()  / 16);
-    const long n_surf = (long)(surf.size() / 22);
-    const long n_obs  = (long)(obs.size()  / 3);
-    std::vector<double> out((size_t)n_obs * 3, 0.0);
-    ngcore::RegionTaskManager task_manager;
-    ngcore::ParallelFor(ngcore::IntRange((size_t)n_obs), [&](size_t jj) {
-        const long j = (long)jj;
-        double r[3] = { obs[3*j], obs[3*j+1], obs[3*j+2] };
-        double acc[3] = {0.0, 0.0, 0.0};
-        for (long e = 0; e < n_vol; ++e) {
-            const double* b = &vol[(size_t)e * 16];
-            double V[4][3]; for (int i=0;i<4;++i) for(int k=0;k<3;++k) V[i][k] = b[3*i+k];
-            double g[3] = { b[13], b[14], b[15] };
-            double o[3]; rad_hdiv::TetVolFieldLinear(V, r, b[12], g, o);
-            acc[0]+=o[0]; acc[1]+=o[1]; acc[2]+=o[2];
-        }
-        for (long e = 0; e < n_surf; ++e) {
-            const double* b = &surf[(size_t)e * 22];
-            double V[3][3]; for (int i=0;i<3;++i) for(int k=0;k<3;++k) V[i][k] = b[3*i+k];
-            double s[3] = { b[10], b[11], b[12] };
-            double S[3][3]; for (int i=0;i<3;++i) for(int k=0;k<3;++k) S[i][k] = b[13 + 3*i + k];
-            double o[3]; rad_hdiv::QuadTriField(V, r, b[9], s, S, o);
-            acc[0]+=o[0]; acc[1]+=o[1]; acc[2]+=o[2];
-        }
-        out[3*j+0] = acc[0]; out[3*j+1] = acc[1]; out[3*j+2] = acc[2];
-    });
-    return out;
-}
-
-// Element-agnostic RT field from an NGSolve-generated charge quadrature cloud.
-// xyz [nq*3], strength [nq] already contains rho/sigma * physical quadrature
-// weight.  The expensive nq*nobs sum is entirely C++ and parallel over obs.
-// The analytic tet path above remains the exact near/self route; this cloud
-// route covers hex, wedge and curved geometries with their native NGSolve map.
-std::vector<double> HDivChargeCloudField(const std::vector<double>& xyz,
-                                         const std::vector<double>& strength,
-                                         const std::vector<double>& obs) {
-    if (xyz.size() != strength.size() * 3)
-        throw std::runtime_error("_hdiv_charge_cloud_field: xyz/strength size mismatch");
-    if (obs.size() % 3 != 0)
-        throw std::runtime_error("_hdiv_charge_cloud_field: obs length must be divisible by 3");
-    const size_t nq = strength.size();
-    const size_t np = obs.size() / 3;
-    std::vector<double> out(np * 3, 0.0);
-    ngcore::RegionTaskManager task_manager;
-    ngcore::ParallelFor(ngcore::IntRange(np), [&](size_t ip) {
-        const double* r = &obs[ip * 3];
-        double h[3] = {0.0, 0.0, 0.0};
-        for (size_t iq = 0; iq < nq; ++iq) {
-            const double* q = &xyz[iq * 3];
-            const double dx = r[0] - q[0], dy = r[1] - q[1], dz = r[2] - q[2];
-            const double r2 = dx*dx + dy*dy + dz*dz;
-            if (r2 <= 1e-300) continue; // principal-value point; analytic tet handles exact self evaluation
-            const double scale = strength[iq] / (r2 * std::sqrt(r2));
-            h[0] += scale * dx; h[1] += scale * dy; h[2] += scale * dz;
-        }
-        out[ip*3] = h[0]; out[ip*3+1] = h[1]; out[ip*3+2] = h[2];
-    });
-    return out;
-}
-} // namespace radia_hdivvim
-
 // ============================================================================
 // Shared 2D planar exterior field + Maxwell torque -- rad_planar_charges
 // (method-agnostic: planar solvers feed a charge cloud)
@@ -2665,15 +2593,109 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Version info
     m.attr("__version__") = "1.4.0";
 
-    m.def("_hdiv_demag_field_batch", &radia_hdivvim::HDivDemagFieldBatch,
-          py::arg("vol"), py::arg("surf"), py::arg("obs"),
-          "Batched RT1 HDiv-VIM demag field, RegionTaskManager + ParallelFor OVER OBS. "
-          "vol = n_vol x 16 [verts12, rho0, g3], surf = n_surf x 22 "
-          "[verts9, sigma0, s3, S9 row-major], obs = n_obs x 3 -> n_obs x 3 (NO 1/4pi).");
-    m.def("_hdiv_charge_cloud_field", &radia_hdivvim::HDivChargeCloudField,
-          py::arg("xyz"), py::arg("strength"), py::arg("obs"),
-          "Element-agnostic C++ RT charge-cloud field. xyz=nq x 3; strength includes charge density and "
-          "physical quadrature weight; obs=np x 3. RegionTaskManager-parallel over observations; no 1/(4pi).");
+    using FieldEvaluator = rad_hdiv::HDivFieldEvaluator;
+    py::class_<FieldEvaluator, std::shared_ptr<FieldEvaluator>>(m, "_HDivFieldEvaluator")
+        .def_static("from_tet", [](
+                py::array_t<double, py::array::c_style | py::array::forcecast> volume,
+                py::array_t<double, py::array::c_style | py::array::forcecast> surface,
+                py::array_t<int, py::array::c_style | py::array::forcecast> image_masks,
+                py::array_t<double, py::array::c_style | py::array::forcecast> image_signs,
+                int leaf_size, double theta, std::size_t tree_min_sources,
+                std::size_t auto_min_work, double tree_relative_tolerance,
+                int probe_count) {
+            auto v = volume.request(), s = surface.request();
+            if (v.ndim != 2 || v.shape[1] != 16)
+                throw std::runtime_error("_HDivFieldEvaluator.from_tet: volume must have shape (n,16)");
+            if (s.ndim != 2 || s.shape[1] != 22)
+                throw std::runtime_error("_HDivFieldEvaluator.from_tet: surface must have shape (n,22)");
+            const double* vp = static_cast<const double*>(v.ptr);
+            const double* sp = static_cast<const double*>(s.ptr);
+            rad_hdiv::FieldEvaluatorOptions options;
+            options.leaf_size = leaf_size; options.theta = theta;
+            options.tree_min_sources = tree_min_sources; options.auto_min_work = auto_min_work;
+            options.tree_relative_tolerance = tree_relative_tolerance; options.probe_count = probe_count;
+            return FieldEvaluator::FromTet(
+                std::vector<double>(vp, vp+v.size), std::vector<double>(sp, sp+s.size),
+                to_1d_vector<int>(image_masks, "image_masks"),
+                to_1d_vector<double>(image_signs, "image_signs"), options);
+        }, py::arg("volume"), py::arg("surface"),
+           py::arg("image_masks") = py::array_t<int>(0),
+           py::arg("image_signs") = py::array_t<double>(0),
+           py::arg("leaf_size") = 32, py::arg("theta") = 0.05,
+           py::arg("tree_min_sources") = 256, py::arg("auto_min_work") = 500000000,
+           py::arg("tree_relative_tolerance") = 1.0e-5, py::arg("probe_count") = 16,
+           "Materialize an immutable RT1 tet/triangle source evaluator. Source arrays are copied once.")
+        .def_static("from_cloud", [](
+                py::array_t<double, py::array::c_style | py::array::forcecast> xyz,
+                py::array_t<double, py::array::c_style | py::array::forcecast> strength,
+                py::array_t<int, py::array::c_style | py::array::forcecast> image_masks,
+                py::array_t<double, py::array::c_style | py::array::forcecast> image_signs,
+                int leaf_size, double theta, std::size_t tree_min_sources,
+                std::size_t auto_min_work, double tree_relative_tolerance,
+                int probe_count) {
+            auto x = xyz.request(), q = strength.request();
+            if (x.ndim != 2 || x.shape[1] != 3)
+                throw std::runtime_error("_HDivFieldEvaluator.from_cloud: xyz must have shape (n,3)");
+            if (q.ndim != 1 || q.shape[0] != x.shape[0])
+                throw std::runtime_error("_HDivFieldEvaluator.from_cloud: strength must have shape (n,)");
+            const double* xp = static_cast<const double*>(x.ptr);
+            const double* qp = static_cast<const double*>(q.ptr);
+            rad_hdiv::FieldEvaluatorOptions options;
+            options.leaf_size = leaf_size; options.theta = theta;
+            options.tree_min_sources = tree_min_sources; options.auto_min_work = auto_min_work;
+            options.tree_relative_tolerance = tree_relative_tolerance; options.probe_count = probe_count;
+            return FieldEvaluator::FromCloud(
+                std::vector<double>(xp, xp+x.size), std::vector<double>(qp, qp+q.size),
+                to_1d_vector<int>(image_masks, "image_masks"),
+                to_1d_vector<double>(image_signs, "image_signs"), options);
+        }, py::arg("xyz"), py::arg("strength"),
+           py::arg("image_masks") = py::array_t<int>(0),
+           py::arg("image_signs") = py::array_t<double>(0),
+           py::arg("leaf_size") = 32, py::arg("theta") = 0.05,
+           py::arg("tree_min_sources") = 256, py::arg("auto_min_work") = 500000000,
+           py::arg("tree_relative_tolerance") = 1.0e-5, py::arg("probe_count") = 16,
+           "Materialize an immutable RT1 quadrature-cloud evaluator. Source arrays are copied once.")
+        .def("field", [](const FieldEvaluator& evaluator,
+                py::array_t<double, py::array::c_style | py::array::forcecast> observations,
+                const std::string& algorithm) {
+            auto input = observations.request();
+            if (input.ndim != 2 || input.shape[1] != 3)
+                throw std::runtime_error("_HDivFieldEvaluator.field: observations must have shape (n,3)");
+            const std::size_t count = static_cast<std::size_t>(input.shape[0]);
+            py::array_t<double> output({static_cast<py::ssize_t>(count), py::ssize_t(3)});
+            auto output_buffer = output.request();
+            const double* in = static_cast<const double*>(input.ptr);
+            double* out = static_cast<double*>(output_buffer.ptr);
+            const auto selected = FieldEvaluator::ParseAlgorithm(algorithm);
+            {
+                py::gil_scoped_release release;
+                evaluator.Evaluate(in, count, out, selected);
+            }
+            return output;
+        }, py::arg("observations"), py::arg("algorithm") = "auto",
+           "Evaluate all physical and IMA sources in one TaskManager-parallel call; returns NO 1/(4pi).")
+        .def("candidate_algorithm_for", [](const FieldEvaluator& evaluator, std::size_t n_observations) {
+            return std::string(FieldEvaluator::AlgorithmName(evaluator.AlgorithmFor(n_observations)));
+        }, "Return the work-threshold candidate; auto still probes accuracy and measured cost.")
+        .def("last_algorithm", [](const FieldEvaluator& evaluator) {
+            return std::string(FieldEvaluator::AlgorithmName(evaluator.LastAlgorithm()));
+        }, "Return the algorithm selected by the most recent field call.")
+        .def("stats", [](const FieldEvaluator& evaluator) {
+            double lower[3], upper[3]; evaluator.Bounds(lower, upper);
+            py::dict result;
+            result["source_count"] = evaluator.SourceCount();
+            result["image_count"] = evaluator.ImageCount();
+            result["tree_nodes"] = evaluator.TreeNodeCount();
+            result["leaf_size"] = evaluator.LeafSize();
+            result["theta"] = evaluator.Theta();
+            result["tree_min_sources"] = evaluator.TreeMinSources();
+            result["auto_min_work"] = evaluator.AutoMinWork();
+            result["tree_relative_tolerance"] = evaluator.TreeRelativeTolerance();
+            result["probe_count"] = evaluator.ProbeCount();
+            result["bounds_min"] = py::make_tuple(lower[0], lower[1], lower[2]);
+            result["bounds_max"] = py::make_tuple(upper[0], upper[1], upper[2]);
+            return result;
+        });
 
 
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.
