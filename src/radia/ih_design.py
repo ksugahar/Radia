@@ -426,6 +426,7 @@ class IHDesignSpec:
             *coil_arg,
             "--coil-solver", "bem-a",
             "--coil-bem-solver", bem_size["coil_bem_solver"],
+            "--wp-bem-backend", bem_size["wp_bem_backend"],
             "--frequency", self.frequency,
             "--current", self.current,
             "--coil-sigma", self.coil_sigma,

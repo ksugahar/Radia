@@ -113,6 +113,8 @@ def test_designspec_strong_build_command_parses():
     cmd = [str(c) for c in spec.build_command(python="python", panels_dir=None)]
     assert cmd[cmd.index("--coupling-mode") + 1] == "strong"
     assert cmd[cmd.index("--coil-solver") + 1] == "bem-a"
+    # wp BIE backend is surfaced (HACApK by default -> scalable workpiece).
+    assert "--wp-bem-backend" in cmd
     emitted = [c for c in cmd if c.startswith("--")]
     unknown = [f for f in emitted if f not in known]
     assert not unknown, f"strong build_command emits flags argparse rejects: {unknown}"
@@ -187,3 +189,53 @@ def test_strong_end_to_end_self_consistent(tmp_path):
     for key in ("coupled_L_air_nH", "coupled_L_total_nH", "wp_ndof",
                 "coupled_n_J_coil", "H_t_rms_A_per_m", "t_coupled_solve_s"):
         assert key in d, f"missing coupled key {key!r}"
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_wp_hacapk_matches_dense(tmp_path):
+    """Q1: the workpiece HACApK backend reproduces the dense result.
+
+    CoupledBEMSolver's workpiece BIE gained an O(N log N) intree-HACApK
+    backend (--wp-bem-backend hacapk, the default) so the coupled solve
+    scales past the ~12k-tri dense-assembly wall (e.g. the 20k-tri
+    Takahashi workpiece).  On the demo it must agree with the dense path
+    (--wp-bem-backend intree-dense) to within the ACA compression accuracy.
+    """
+    from _bema_coil_vol_helper import coil_vol_for
+
+    coil_vol = coil_vol_for(str(_DEMO_COIL_STEP), cache_dir=str(tmp_path))
+
+    def _run(backend):
+        out_json = tmp_path / f"strong_{backend}.json"
+        cmd = [
+            sys.executable, str(_CALC),
+            "--coil-solver", "bem-a", "--coupling-mode", "strong",
+            "--coil-vol", coil_vol,
+            "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+            "--frequency", "7000", "--current", "1",
+            "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+            "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+            "--wp-bem-backend", backend,
+            "--output", str(out_json),
+        ]
+        env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=1200, env=env)
+        assert proc.returncode == 0, \
+            f"[{backend}]\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+        return json.loads(out_json.read_text(encoding="utf-8"))
+
+    dense = _run("intree-dense")
+    hac = _run("hacapk")
+    assert dense["wp_bem_backend"] == "intree-dense"
+    assert hac["wp_bem_backend"] == "hacapk"
+
+    # Same physics to well within the HACApK ACA compression accuracy
+    # (measured worst rel.diff ~7e-4 on the demo's tiny P_wp).
+    for k in ("L_total_nH", "coupled_L_total_nH", "R_total_mOhm",
+              "P_wp_W", "H_t_rms_A_per_m"):
+        a, b = float(dense[k]), float(hac[k])
+        rel = abs(a - b) / max(abs(a), 1e-30)
+        assert rel < 5e-3, f"{k}: dense={a:.6e} hacapk={b:.6e} rel={rel:.2e}"

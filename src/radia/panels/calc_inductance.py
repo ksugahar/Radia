@@ -1602,9 +1602,14 @@ def _solve_workpiece_strong_coupled(args):
     delta_wp = mat_wp.skin_depth(args.frequency)
     Z_s = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
 
+    # Workpiece BIE backend: HACApK (O(N log N), scales past the ~12k-tri
+    # dense wall) by default; --wp-bem-backend intree-dense forces the dense
+    # path (small wp / debug).  Uses the existing weak-path flag.
+    wp_hacapk = (args.wp_bem_backend == "hacapk")
     progress("COUPLED",
         f"strong coupling: coil {coil_mesh.nv}v / wp {wp_mesh.nv}v, "
         f"f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
+        f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
         f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
         f"relax={args.coupling_relax:g}")
     t0 = time.perf_counter()
@@ -1612,7 +1617,9 @@ def _solve_workpiece_strong_coupled(args):
         coil_mesh, wp_mesh,
         source_label=args.coil_source_name,
         sink_label=args.coil_sink_name,
-        fes_order=0)
+        fes_order=0,
+        wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
+        wp_gmres_tol=args.wp_gmres_tol)
     sol = solver.solve(
         Z_s=Z_s, omega=omega,
         max_iter=int(args.coupling_max_iter),
@@ -1631,6 +1638,7 @@ def _solve_workpiece_strong_coupled(args):
     sol["delta_wp_mm"] = float(delta_wp * 1e3)
     sol["t_wp_mesh_s"] = float(t_wp_mesh)
     sol["t_coupled_solve_s"] = float(t_solve)
+    sol["wp_hacapk"] = bool(wp_hacapk)
     return sol
 
 
@@ -1669,6 +1677,7 @@ def _assemble_strong_output(args, coil_data, strong):
     out["Z_s_wp_imag"] = float(strong["Z_s"].imag)
     out["skin_depth_wp_mm"] = float(strong["delta_wp_mm"])
     out["impedance_model"] = "sibc"
+    out["wp_bem_backend"] = "hacapk" if strong.get("wp_hacapk") else "intree-dense"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
     return out
