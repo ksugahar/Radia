@@ -2,14 +2,14 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **781 tools** across 43 MCP servers.
+Total: **782 tools** across 43 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 82 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 74 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 12 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 138 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 139 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
 | [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 11 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 7 |
@@ -294,6 +294,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
 | `global_local_optimization_replay_gate` | Gate a stochastic global-search to derivative-checked local-polish replay. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
+| `grounded_sphere_capacitance_convergence_gate` | Gate grounded-sphere image-series convergence and mixed-boundary energy. |
 | `hall_effect_transverse_voltage_gate` | Gate Hall voltage by coefficient, drive, field, and replay controls. |
 | `harmonic_current_port_power_energy_identity_gate` | Gate peak-phasor port, loss, energy, flux, and profile identities. |
 | `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
