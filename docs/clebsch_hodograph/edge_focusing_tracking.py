@@ -1,7 +1,7 @@
 r"""Vertical EDGE FOCUSING of a tilted dipole end -- measured by PARTICLE TRACKING.
 
 Imported by edge_focusing_tracking.ipynb and by the golden
-tests/feec/test_edge_focusing_tracking.py.  Companion of hodograph_bending_sy.py:
+validation_test/feec/test_edge_focusing_tracking.py.  Companion of hodograph_bending_sy.py:
 that unit shapes the s-y (longitudinal) end so the pole face stays at B0; THIS unit
 answers the orthogonal question -- what a HORIZONTAL edge tilt (angle beta, a rotation
 of the pole face about the vertical axis, in the x-s bend plane) does to the VERTICAL
@@ -187,7 +187,7 @@ def summarize(sweep, wconv):
 #   * fem_solve_midplane  -- reduced-Omega NGSolve FEM (H = Hs - grad(Omega), air box,
 #     order-2 H1);
 #   * hdiv_solve_midplane -- FEEC HDiv-VIM (radia.vim): iron-only tet mesh, NO air
-#     discretization, exact open boundary, batch rad.Fld analytic map; ~10x faster.
+#     discretization, exact open boundary, batch rad.Fld analytic map.
 # Cross-check (2026-07-13): dK_in agrees to 0.8% at matched edge-mesh density
 # (absolute-dK scatter across engines/meshes ~+-3%), and the deficit vs the
 # x-uniform model persists in every configuration (dK_in/model = 0.92-0.95) --
@@ -253,17 +253,12 @@ def fem_build_coil(beta_rad=0.0):
     """Coil pair for the parallelogram magnet.
 
     BOTH loops are built EXPLICITLY with the same CCW traversal and +NI current
-    (a z-plane pair adds Bz on the mid-plane).  Two verified radia/coil_builder
-    pitfalls dictate this shape (2026-07-10, both flagged for fixes):
-      * do NOT use CoilBuilder.mirror("xy") for the lower coil -- it emits the
-        mirrored STRAIGHT segments with a reversed heading from an un-swapped
-        start point, so every straight extends the wrong way outside the loop
-        (a (0.08,-0.10)->(0.08,+0.10) straight comes back as (0.08,-0.10)->
-        (0.08,-0.30)); the broken lower coil carries a spurious odd-in-x,
-        odd-in-y dBz/dx up to 0.39 T/m -- the explicit pair is clean to ~3e-9;
-      * do NOT wrap the container with rad.TrfOrnt -- rad.RadiaField on a
+    (a z-plane pair adds Bz on the mid-plane).  Explicit construction keeps this
+    validation geometry independent of the CoilBuilder.mirror() implementation;
+    mirror() itself is covered by tests/test_coil_builder_mirror.py.  Do not wrap
+    the container with rad.TrfOrnt: rad.RadiaField on a
         TrfOrnt-wrapped container crashes with 0xC0000374 heap corruption
-        (plain containers assemble fine).
+    (plain containers assemble fine).
     """
     import radia as rad
     rad.UtiDelAll()
@@ -544,9 +539,9 @@ def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
     """FEEC HDiv-VIM twin of ``fem_solve_midplane``: ``radia.vim.MeshSoftIron`` on the
     iron-only mesh + the same explicit CoilBuilder pair, ``rad.Solve`` auto-dispatch
     (RT1), then one batch ``rad.Fld`` mid-plane map (all points in the gap/air, so the
-    analytic integrals are exact for the solved piecewise-constant M).  Roughly 10x
-    faster than the reduced-Omega solve (no air mesh) and fully engine-independent
-    of it -- the cross-check that pinned the model deficit as physics (2026-07-13)."""
+    analytic integrals are exact for the solved piecewise-constant M).  This is fully
+    engine-independent of the reduced-Omega solve, which makes it a useful cross-check
+    for separating the model deficit from discretization error (2026-07-13)."""
     import radia as rad
     from radia import vim
     rad.UtiDelAll()                                   # also clears the HDiv registry

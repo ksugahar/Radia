@@ -102,7 +102,7 @@ TOPICS: dict[str, str] = {
         "dK_in FEM/model=0.93, FEM/closed-form=0.94 at beta=20 rho=5 (exit DEfocusing matched 0.96; "
         "dK*rho const to 1 pct over rho 5..40; beta=0 floor +0.0013). CROSS-CHECKED 2026-07-13 with "
         "a SECOND independent engine, the FEEC HDiv-VIM (hdiv_scoff_study: iron-only tet mesh, no "
-        "air discretization, batch rad.Fld map, ~10x faster): dK_in agrees 0.8 pct at matched edge "
+        "air discretization, batch rad.Fld map): dK_in agrees 0.8 pct at matched edge "
         "mesh (+-3 pct across meshes), dK/model 0.92-0.95 in EVERY configuration -> the -5..-7 pct "
         "model deficit is REAL 3D physics, NOT mesh error (earlier attribution RETRACTED): the "
         "local iso-field tilt near x=0 is only ~0.95-0.96 of the geometric tan(beta), so "
@@ -110,12 +110,12 @@ TOPICS: dict[str, str] = {
         "EFFECTIVE edge angle is magnet-specific and this chain measures it. DESIGN LESSONS the "
         "measurement exposed: straight coil front across a tilted edge -> iso-field tilt far below "
         "the geometric angle (dK 0.55x; edge-angle bookkeeping ASSUMES the coil follows the pole "
-        "contour); rigid whole-coil rotation breaks MMF topology (B0 3x collapse). RADIA PITFALLS "
-        "(verified, flagged): CoilBuilder.mirror('xy') draws mirrored STRAIGHTS backwards out of "
-        "the loop (spurious odd-x dBz/dx up to 0.39 T/m -- build both loops explicitly); "
-        "rad.RadiaField on a TrfOrnt-wrapped container = 0xC0000374 heap corruption. "
+        "contour); rigid whole-coil rotation breaks MMF topology (B0 3x collapse). RADIA NOTE: "
+        "CoilBuilder.mirror('xy') now performs a true geometric mirror and is locked by a "
+        "pointwise geometry/field regression; rad.RadiaField on a TrfOrnt-wrapped container "
+        "still causes 0xC0000374 heap corruption, so bake transforms into primitives. "
         "(docs/clebsch_hodograph/edge_focusing_tracking.ipynb + edge_focusing_fem_results.json; "
-        "golden tests/feec/test_edge_focusing_tracking.py incl. coil-cleanliness lock)"
+        "golden validation_test/feec/test_edge_focusing_tracking.py incl. coil-cleanliness lock)"
     ),
     "beam_referenced_twist": (
         "The beam-referenced equipotential SURFACE as the design primitive + "
@@ -885,13 +885,14 @@ magnet's edges DEFOCUS; this curl-free entrance-edge orientation FOCUSES).  With
 first-order fringe correction psi = (K1g/rho)(1+sin^2 beta)/cos beta (K1g = INT g(1-g) ds along
 the edge normal; = w/2 for the tanh fringe) the tracked values match the FULL law
 tan(beta-psi)/rho to <=0.7 pct at w=0.02, and the beta=0 baseline IS -K1g/rho^2 exactly.
-Golden (pure-numpy, CI-friendly): tests/feec/test_edge_focusing_tracking.py.
+Golden (pure-numpy optics plus a small Radia coil check):
+validation_test/feec/test_edge_focusing_tracking.py.
 
 ## 3D-FEM chain VALIDATED -- parallelogram dipole, SCOFF/Enge + closed orbit
 A NAIVE Hill integral on a plain tilted-edge dipole is NOT enough (the thick 3D fringe + any
 coil/edge mismatch pollute it -- do NOT re-attempt the wide-pole/difference variant).  The
 protocol that works (PART B of docs/clebsch_hodograph/edge_focusing_tracking.py,
-fem_scoff_study, ~25 min; committed results edge_focusing_fem_results.json):
+fem_scoff_study; committed results edge_focusing_fem_results.json):
   - TESTBED: PARALLELOGRAM dipole (both edges tilted beta -- the spectrometer configuration)
     with the COIL FOLLOWING the pole outline (rounded-parallelogram loop pair at fixed 20 mm
     normal offset, sides threading the iron circuit).  Parallelogram poles + centered legs +
@@ -908,7 +909,7 @@ fem_scoff_study, ~25 min; committed results edge_focusing_fem_results.json):
 ## Engine cross-check: FEEC HDiv-VIM -- and the REVISED error budget (2026-07-13)
 The SAME chain re-run with the field engine swapped to the FEEC HDiv-VIM (hdiv_scoff_study:
 radia.vim.MeshSoftIron on an IRON-ONLY tet mesh -- no air discretization, exact open boundary --
-rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld; ~10x faster per case, ~1.5-6 min):
+rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld):
   - dK_in agrees with reduced-Omega to 0.8 pct at MATCHED edge-mesh density (+0.06839 vs
     +0.06896); absolute-dK scatter across engines/meshes is ~+-3 pct (finer HDiv edge mesh
     gives +0.07085); dK_in/model stays 0.92-0.95 in EVERY configuration.
@@ -944,18 +945,17 @@ rad.Solve auto dispatch RT1, mid-plane map by ONE batch rad.Fld; ~10x faster per
   - A fully-buried winding shunts its MMF in local iron loops (B0 collapse); a long conductor
     overhang leaves a direct-field plateau ("the magnet has no outside").
 
-## Radia pitfalls isolated en route (verified minimal repros, flagged for fixes 2026-07-10)
-  - CoilBuilder.mirror("xy") emits mirrored STRAIGHT segments running BACKWARDS out of the loop
-    (start mirrored, heading reversed, end unswapped) -> the "lower coil" is garbage geometry
-    carrying spurious odd-in-x odd-in-y dBz/dx up to 0.39 T/m while looking plausible (its
-    breakage is C2-even, so Bz(0,y) stays y-symmetric).  Arcs are fine; straights break.
-    BUILD BOTH LOOPS EXPLICITLY instead of mirroring.
+## Radia implementation status
+  - CoilBuilder.mirror() is a true geometric mirror: path points map pointwise, current is
+    unchanged, and the magnetic moment follows the axial-vector rule.  Its geometry and field
+    symmetry are locked by tests/test_coil_builder_mirror.py.  This study still builds both
+    loops explicitly so its reference geometry does not depend on that helper.
   - rad.RadiaField on a TrfOrnt-wrapped CONTAINER crashes the process with 0xC0000374 heap
     corruption (rad.Fld on the same container is fine; TrfOrnt on PRIMITIVES inside a container
     is fine -- CoilBuilder.to_radia relies on that).  Bake transformations into segment
     geometry instead.
-Regression lock: tests/feec/test_edge_focusing_tracking.py::test_fem_coil_pair_is_clean
-(closure to 1e-12, x-odd/C2-odd field < 1e-6*B0).
+Regression locks: tests/test_coil_builder_mirror.py and
+validation_test/feec/test_edge_focusing_tracking.py::test_fem_coil_pair_is_clean.
 """
 
 

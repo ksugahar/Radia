@@ -1,6 +1,7 @@
 {
-  "generated_at_utc": "2026-07-13T13:23:23.959625+00:00",
-  "radia_version": "4.95.9",
+  "generated_at_utc": "2026-07-14T09:55:47.129438+00:00",
+  "notebook_sha256": "e5e1bbcc282324012c9da8fde289a0929d4167aa4e0473ad97701ff4f1140de2",
+  "radia_version": "4.95.10",
   "ngsolve_version": "6.2.2604",
   "python_version": "3.12.10",
   "platform": "Windows-2022Server-10.0.20348-SP0",

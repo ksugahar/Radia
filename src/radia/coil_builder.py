@@ -30,6 +30,8 @@ Example:
 	>>> coil.write_step("racetrack.step")    # STEP export
 """
 
+import warnings
+
 import numpy as np
 from scipy.spatial.transform import Rotation
 from abc import ABC, abstractmethod
@@ -76,7 +78,13 @@ class CoilSegment(ABC):
 
 		# Extract Euler angles for Radia transformations
 		rot = Rotation.from_matrix(self.orientation)
-		self.euler_angles = rot.as_euler('ZXZ', degrees=True) * (-1)
+		# ZXZ angles are non-unique at the expected zero-tilt orientations.
+		# SciPy still returns a valid representative, so keep that value without
+		# leaking a benign gimbal-lock warning into user notebooks or strict tests.
+		with warnings.catch_warnings():
+			warnings.filterwarnings(
+				"ignore", message="Gimbal lock detected.*", category=UserWarning)
+			self.euler_angles = rot.as_euler('ZXZ', degrees=True) * (-1)
 
 	@property
 	@abstractmethod
