@@ -1606,9 +1606,14 @@ def _solve_workpiece_strong_coupled(args):
     # dense wall) by default; --wp-bem-backend intree-dense forces the dense
     # path (small wp / debug).  Uses the existing weak-path flag.
     wp_hacapk = (args.wp_bem_backend == "hacapk")
+    # Coil EFIE backend: dense-LU by default (fastest below ~12k n_J);
+    # --coil-saddle-solver hacapk_cocr compresses the coil SL to an O(N log N)
+    # H-matrix + loop-COCR saddle solve (O(N r) storage, for large coils).
+    coil_hacapk = (args.coil_saddle_solver == "hacapk_cocr")
     progress("COUPLED",
         f"strong coupling: coil {coil_mesh.nv}v / wp {wp_mesh.nv}v, "
         f"f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
+        f"coil_backend={'hacapk' if coil_hacapk else 'dense-lu'}, "
         f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
         f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
         f"relax={args.coupling_relax:g}")
@@ -1619,7 +1624,8 @@ def _solve_workpiece_strong_coupled(args):
         sink_label=args.coil_sink_name,
         fes_order=0,
         wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
-        wp_gmres_tol=args.wp_gmres_tol)
+        wp_gmres_tol=args.wp_gmres_tol,
+        coil_hacapk=coil_hacapk, coil_aca_eps=args.coil_aca_eps)
     sol = solver.solve(
         Z_s=Z_s, omega=omega,
         max_iter=int(args.coupling_max_iter),
@@ -1639,6 +1645,7 @@ def _solve_workpiece_strong_coupled(args):
     sol["t_wp_mesh_s"] = float(t_wp_mesh)
     sol["t_coupled_solve_s"] = float(t_solve)
     sol["wp_hacapk"] = bool(wp_hacapk)
+    sol["coil_hacapk"] = bool(coil_hacapk)
     return sol
 
 
@@ -1678,6 +1685,7 @@ def _assemble_strong_output(args, coil_data, strong):
     out["skin_depth_wp_mm"] = float(strong["delta_wp_mm"])
     out["impedance_model"] = "sibc"
     out["wp_bem_backend"] = "hacapk" if strong.get("wp_hacapk") else "intree-dense"
+    out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
     return out

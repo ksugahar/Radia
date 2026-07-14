@@ -115,9 +115,22 @@ def test_designspec_strong_build_command_parses():
     assert cmd[cmd.index("--coil-solver") + 1] == "bem-a"
     # wp BIE backend is surfaced (HACApK by default -> scalable workpiece).
     assert "--wp-bem-backend" in cmd
+    # coil saddle backend is surfaced so the "HACApK (large)" preset can
+    # select loop-COCR for the CoupledBEMSolver coil EFIE.
+    assert cmd[cmd.index("--coil-saddle-solver") + 1] == "auto"
     emitted = [c for c in cmd if c.startswith("--")]
     unknown = [f for f in emitted if f not in known]
     assert not unknown, f"strong build_command emits flags argparse rejects: {unknown}"
+
+    large = ihd.IHDesignSpec(
+        method=ihd.METHOD_BEMA_BEM_STRONG,
+        solver="HACApK (large)",
+        coil_vol="coil.vol", wp_vol="wp.vol",
+        frequency="7000", current="6700", coil_sigma="5.8e7",
+        wp_sigma="5.8e6", mu_r="100", half_thickness="0.005")
+    large_cmd = [str(c) for c in large.build_command(
+        python="python", panels_dir=None)]
+    assert large_cmd[large_cmd.index("--coil-saddle-solver") + 1] == "hacapk_cocr"
 
     # strong is linear-SIBC only: no ESIM / fes-order / impedance-model.
     vf = spec.visible_fields()
@@ -239,3 +252,54 @@ def test_strong_wp_hacapk_matches_dense(tmp_path):
         a, b = float(dense[k]), float(hac[k])
         rel = abs(a - b) / max(abs(a), 1e-30)
         assert rel < 5e-3, f"{k}: dense={a:.6e} hacapk={b:.6e} rel={rel:.2e}"
+
+
+@pytest.mark.skipif(
+    not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file()),
+    reason="demo coil STEP / workpiece .vol fixtures not present")
+def test_strong_coil_hacapk_matches_dense(tmp_path):
+    """Q1: the coil HACApK (loop-COCR) saddle backend reproduces dense LU.
+
+    CoupledBEMSolver's coil EFIE gained an O(N log N) H-matrix + loop-COCR
+    saddle solve (--coil-saddle-solver hacapk_cocr; O(N r) storage, built
+    once and re-solved each Picard iteration).  Holding the workpiece
+    backend fixed (intree-dense), the coil H-matrix path must reproduce the
+    dense-LU coil solve to loop-COCR tolerance (~1e-8).
+    """
+    from _bema_coil_vol_helper import coil_vol_for
+
+    coil_vol = coil_vol_for(str(_DEMO_COIL_STEP), cache_dir=str(tmp_path))
+
+    def _run(coil_saddle):
+        out_json = tmp_path / f"strong_coil_{coil_saddle}.json"
+        cmd = [
+            sys.executable, str(_CALC),
+            "--coil-solver", "bem-a", "--coupling-mode", "strong",
+            "--coil-vol", coil_vol,
+            "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
+            "--frequency", "7000", "--current", "1",
+            "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+            "--coupling-max-iter", "4", "--coupling-tol", "5e-3",
+            "--wp-bem-backend", "intree-dense",   # hold wp fixed -> isolate coil
+            "--coil-saddle-solver", coil_saddle,
+            "--output", str(out_json),
+        ]
+        env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=1200, env=env)
+        assert proc.returncode == 0, \
+            f"[{coil_saddle}]\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
+        return json.loads(out_json.read_text(encoding="utf-8"))
+
+    dense = _run("auto")            # auto -> dense LU on this small coil
+    hac = _run("hacapk_cocr")
+    assert dense["coil_bem_backend"] == "dense-lu"
+    assert hac["coil_bem_backend"] == "hacapk_cocr"
+
+    # The coil H-matrix matvec (aca_eps 1e-10) is tighter than the loop-COCR
+    # tolerance, so the coil solve matches dense LU to ~1e-8 (measured ~4e-11).
+    for k in ("L_coil_nH", "L_total_nH", "coupled_L_total_nH", "R_total_mOhm",
+              "P_wp_W", "H_t_rms_A_per_m"):
+        a, b = float(dense[k]), float(hac[k])
+        rel = abs(a - b) / max(abs(a), 1e-30)
+        assert rel < 1e-6, f"{k}: dense={a:.6e} hacapk={b:.6e} rel={rel:.2e}"
