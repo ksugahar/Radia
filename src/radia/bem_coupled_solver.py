@@ -172,7 +172,10 @@ class CoupledBEMSolver:
     """Iterative coil EFIE + workpiece scalar BIE + SIBC."""
 
     def __init__(self, mesh_coil, mesh_wp, source_label="source",
-                 sink_label="sink", fes_order=0, wp_order=1):
+                 sink_label="sink", fes_order=0, wp_order=1,
+                 wp_hacapk=False, wp_aca_eps=1e-10, wp_hacapk_leaf=64,
+                 wp_hacapk_eta=2.0, wp_gmres_tol=1e-8, wp_gmres_maxiter=500,
+                 wp_gmres_restart=80):
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
                              TaskManager, ds, BND, div)
         from ngsolve.bem import LaplaceSL
@@ -244,7 +247,26 @@ class CoupledBEMSolver:
         self.t_coil_assembly = time.perf_counter() - t0
 
         # === Workpiece BIE setup ===
-        self.wp_solver = ScalarBIESIBCSolver(mesh_wp, order=wp_order)
+        # Default: dense ngsolve.bem scalar BIE (fine for small/moderate wp).
+        # wp_hacapk=True: the in-tree Sauter-Schwab Galerkin assembler with an
+        # O(N log N) HACApK H-matrix (the weak-path pattern), which scales the
+        # workpiece BIE past the ~12k-tri dense-assembly wall (e.g. the 20k-tri
+        # Takahashi workpiece).  At order=1 the intree path still creates
+        # ``self.fes`` (H1 P1), so the scattered-current extraction in
+        # ``_extract_wp_J`` is unchanged; only the SL/DL storage + solve differ.
+        self.wp_hacapk = bool(wp_hacapk)
+        self._wp_gmres = dict(tol=float(wp_gmres_tol),
+                              maxiter=int(wp_gmres_maxiter),
+                              restart=int(wp_gmres_restart))
+        if self.wp_hacapk:
+            self.wp_solver = ScalarBIESIBCSolver(
+                mesh_wp, order=wp_order, assemble_dense=True,
+                use_intree_bem=True, intree_geom_order=1,
+                intree_singular_n_q=6, intree_regular_quad_degree=7,
+                use_intree_hacapk=True, hacapk_aca_eps=float(wp_aca_eps),
+                hacapk_leaf=int(wp_hacapk_leaf), hacapk_eta=float(wp_hacapk_eta))
+        else:
+            self.wp_solver = ScalarBIESIBCSolver(mesh_wp, order=wp_order)
         self.wp_nodes = np.array(
             [[mesh_wp.vertices[i].point[j] for j in range(3)]
              for i in range(mesh_wp.nv)])
@@ -258,13 +280,18 @@ class CoupledBEMSolver:
                 - **complex scalar**: legacy uniform-Z_s SIBC.
                 - **ndarray of length self.wp_solver.ndof (complex)**:
                   per-node Z_s for the per-panel curvature SIBC.
-                  The caller (``calc_inductance.py::_run_coupled_bem``)
-                  builds this array by computing per-panel local
+                  A caller that wants per-node SIBC (e.g. the
+                  validation-lane
+                  ``validation_test/induction_heating/bem_reference/
+                  calc_inductance.py::_run_coupled_bem`` local-curvature
+                  path) builds this array by computing per-panel local
                   curvature from the workpiece mesh and projecting the
                   resulting per-panel Z_s onto H1 nodes via vertex
                   averaging. The ScalarBIESIBCSolver assembles the
                   Robin term with diag(gamma) so each node sees its
-                  own SIBC coefficient.
+                  own SIBC coefficient.  The production
+                  ``panels/calc_inductance.py`` ``--coupling-mode strong``
+                  path passes a single global scalar Z_s.
             omega: angular frequency [rad/s]
             max_iter: Picard iteration cap
             tol: relative L_total convergence
@@ -315,8 +342,15 @@ class CoupledBEMSolver:
             phi_inc_cplx = phi_inc_re + 1j * phi_inc_im
 
             # --- Workpiece scalar BIE + SIBC (returns complex phi_vec) ---
-            wp_result = self.wp_solver.solve(
-                phi_inc_cplx, Z_s=Z_s, omega=omega)
+            if self.wp_hacapk:
+                wp_result = self.wp_solver.solve_hacapk(
+                    phi_inc_cplx, Z_s=Z_s, omega=omega,
+                    tol=self._wp_gmres["tol"],
+                    maxiter=self._wp_gmres["maxiter"],
+                    restart=self._wp_gmres["restart"])
+            else:
+                wp_result = self.wp_solver.solve(
+                    phi_inc_cplx, Z_s=Z_s, omega=omega)
             phi_vec = wp_result['phi_vec']
 
             # --- Extract scattered surface current J_wp ---

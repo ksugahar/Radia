@@ -1544,6 +1544,146 @@ def _assemble_full_output(args, coil_data, wp_data):
 
 
 # ======================================================================
+# Strong-coupled workpiece block (iterative CoupledBEMSolver)
+#
+# Re-exposes the validated per-DOF back-reaction solver
+# (radia.bem_coupled_solver.CoupledBEMSolver) as the --coupling-mode
+# strong path.  Unlike the weak Telegen path, the coil surface current is
+# recomputed each Picard iteration in response to the workpiece reaction
+# field (A_wp projected per-DOF onto the coil), so ΔL includes the
+# workpiece magnetic-energy term (the term the weak Telegen form drops)
+# and P_wp is self-consistent.  Coil L/R still come from the BEM-A
+# impedance-EFIE coil solve (coil_data); the coupled solver contributes
+# ΔL, ΔR (from P_wp) and H_t.  Cross-checked vs FEM-Kelvin SIBC in
+# validation_test/induction_heating (copper +0.3%, steel μr=100 +1.7% on L).
+# ======================================================================
+def _solve_workpiece_strong_coupled(args):
+    """Iterative coil<->workpiece BEM coupling via CoupledBEMSolver.
+
+    Requires ``--coil-solver bem-a`` (the coupled solver needs a coil
+    SURFACE mesh with source/sink labels to drive the coil EFIE; PEEC
+    filaments cannot).  Returns a dict with the coupled quantities
+    (L_air, L_total, Delta_L, P_total, H_t_rms, iterations, ...) plus mesh
+    and timing context, ready for ``_assemble_strong_output``.
+    """
+    from ngsolve import Mesh, BND
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    from radia.bem_coupled_solver import CoupledBEMSolver
+    from em_material import EMMaterial
+
+    omega = 2.0 * math.pi * args.frequency
+
+    # --- coil surface mesh (CoupledBEMSolver re-assembles the coil EFIE
+    #     saddle internally; we only hand it the mesh + source/sink names) ---
+    t0 = time.perf_counter()
+    progress("COUPLED", f"load coil surface from {os.path.basename(args.coil_vol)}")
+    coil_mesh = Mesh(args.coil_vol)
+
+    # --- workpiece surface mesh (same extraction convention as the weak
+    #     path: --wp-label may name a material or a boundary sideset) ---
+    progress("COUPLED", f"load wp surface from {os.path.basename(args.vol)}")
+    vol_mesh = Mesh(args.vol)
+    mats = set(vol_mesh.GetMaterials())
+    bnds = set(vol_mesh.GetBoundaries())
+    if args.wp_label in mats:
+        wp_mesh, _ = _extract_surface_mesh_filtered(
+            vol_mesh, keep_label=args.wp_label, return_vertex_map=True)
+    elif args.wp_label in bnds:
+        wp_mesh = _extract_bnd_only_inline(vol_mesh, args.wp_label)
+    else:
+        raise ValueError(
+            f"wp_label {args.wp_label!r} not found in materials "
+            f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
+    t_wp_mesh = time.perf_counter() - t0
+
+    # --- global Leontovich Z_s (delta includes mu_r), same convention as
+    #     the linear weak path: Z_s = (1+j) * rho / delta ---
+    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
+    delta_wp = mat_wp.skin_depth(args.frequency)
+    Z_s = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+
+    # Workpiece BIE backend: HACApK (O(N log N), scales past the ~12k-tri
+    # dense wall) by default; --wp-bem-backend intree-dense forces the dense
+    # path (small wp / debug).  Uses the existing weak-path flag.
+    wp_hacapk = (args.wp_bem_backend == "hacapk")
+    progress("COUPLED",
+        f"strong coupling: coil {coil_mesh.nv}v / wp {wp_mesh.nv}v, "
+        f"f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
+        f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
+        f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
+        f"relax={args.coupling_relax:g}")
+    t0 = time.perf_counter()
+    solver = CoupledBEMSolver(
+        coil_mesh, wp_mesh,
+        source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name,
+        fes_order=0,
+        wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
+        wp_gmres_tol=args.wp_gmres_tol)
+    sol = solver.solve(
+        Z_s=Z_s, omega=omega,
+        max_iter=int(args.coupling_max_iter),
+        tol=float(args.coupling_tol),
+        relax=float(args.coupling_relax))
+    t_solve = time.perf_counter() - t0
+    progress("COUPLED",
+        f"converged in {int(sol['iterations'])} iter: "
+        f"L_total={sol['L_total'] * 1e9:.2f} nH "
+        f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
+        f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
+        f"({t_solve:.1f}s)")
+
+    sol["wp_mesh_nv"] = int(wp_mesh.nv)
+    sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
+    sol["delta_wp_mm"] = float(delta_wp * 1e3)
+    sol["t_wp_mesh_s"] = float(t_wp_mesh)
+    sol["t_coupled_solve_s"] = float(t_solve)
+    sol["wp_hacapk"] = bool(wp_hacapk)
+    return sol
+
+
+def _assemble_strong_output(args, coil_data, strong):
+    """L_coil + R_coil (BEM-A) + strong-coupled ΔL / ΔR / P_wp / H_t.
+
+    Mirrors the key names of ``_assemble_full_output`` (L_total_nH,
+    R_total_mOhm, delta_L_nH, delta_R_mOhm, P_wp_W, H_t_rms_A_per_m) so the
+    panel summary renders strong-coupling runs the same way as weak ones,
+    with ``coupling_mode = "strong"``.
+    """
+    out = _assemble_vacuum_output(args, coil_data)
+    out["method"] = f"{args.coil_solver}-bem-strong"
+    out["coupling_mode"] = "strong"
+    I = float(args.current)
+    P_wp = float(strong["P_total"])
+    dL_nH = float(strong["Delta_L"] * 1e9)
+    # ΔR from the self-consistent workpiece dissipation: P_wp = 1/2 I^2 ΔR.
+    dR_mOhm = (2.0 * P_wp / (I * I) * 1e3) if I else 0.0
+    out["L_total_nH"] = float(coil_data["L_coil"] * 1e9) + dL_nH
+    out["R_total_mOhm"] = float(coil_data["R_coil"] * 1e3) + dR_mOhm
+    out["delta_L_nH"] = dL_nH
+    out["delta_R_mOhm"] = dR_mOhm
+    out["P_wp_W"] = P_wp
+    out["H_t_rms_A_per_m"] = float(strong["H_t_rms"])
+    # Coupled-solver-native quantities (PEC-coil vacuum L + self-consistent
+    # total L) for cross-checking against the impedance-EFIE coil L_coil.
+    out["coupled_L_air_nH"] = float(strong["L_air"] * 1e9)
+    out["coupled_L_total_nH"] = float(strong["L_total"] * 1e9)
+    out["coupling_iterations"] = int(strong["iterations"])
+    out["wp_ndof"] = int(strong["n_phi_wp"])
+    out["coupled_n_J_coil"] = int(strong["n_J_coil"])
+    out["wp_mesh_nv"] = int(strong["wp_mesh_nv"])
+    out["wp_mesh_n_tris"] = int(strong["wp_mesh_n_tris"])
+    out["Z_s_wp_real"] = float(strong["Z_s"].real)
+    out["Z_s_wp_imag"] = float(strong["Z_s"].imag)
+    out["skin_depth_wp_mm"] = float(strong["delta_wp_mm"])
+    out["impedance_model"] = "sibc"
+    out["wp_bem_backend"] = "hacapk" if strong.get("wp_hacapk") else "intree-dense"
+    out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
+    out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
+    return out
+
+
+# ======================================================================
 # Coil viz: filament .msh + B-on-bbox / B-on-air-volume .msh
 #
 # Restored 2026-05-08 -- v4.25.0 unification refactor (commit 16e7e6e7)
@@ -1748,6 +1888,20 @@ def run_inductance(args):
         return {"status": "error",
                 "error": "--coil-vol is required for --coil-solver bem-a"}
 
+    # Strong coupling (iterative CoupledBEMSolver) needs a coil SURFACE mesh
+    # to drive the coil EFIE and a workpiece to couple to -- fail fast on a
+    # bad contract before the expensive coil solve.
+    if args.coupling_mode == "strong":
+        if args.coil_solver != "bem-a":
+            return {"status": "error",
+                    "error": "--coupling-mode strong requires --coil-solver "
+                             "bem-a (the coupled solver drives the coil EFIE "
+                             "from a surface mesh; PEEC filaments cannot)."}
+        if args.coil_only or not args.vol:
+            return {"status": "error",
+                    "error": "--coupling-mode strong requires a workpiece "
+                             "--vol (there is nothing to couple to)."}
+
     # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
     # / PEEC) in TaskManager so it runs in parallel: the helpers were
     # de-wrapped under the "caller wraps, helper does NOT" policy
@@ -1778,10 +1932,18 @@ def run_inductance(args):
             out["filament_msh"] = viz["filament_msh"]
         return out
 
-    # Weak-coupled branch (workpiece BEM-SIBC; parallel under TaskManager)
+    # Coupled workpiece branch (workpiece BEM-SIBC; parallel under
+    # TaskManager).  --coupling-mode strong routes to the iterative
+    # CoupledBEMSolver (per-DOF back-reaction: the coil current is
+    # recomputed against the workpiece reaction field); weak keeps the
+    # one-way Telegen ΔL path.
     with TaskManager():
-        wp_data = _solve_workpiece_weak_coupled(args, coil_data)
-    out = _assemble_full_output(args, coil_data, wp_data)
+        if args.coupling_mode == "strong":
+            strong = _solve_workpiece_strong_coupled(args)
+            out = _assemble_strong_output(args, coil_data, strong)
+        else:
+            wp_data = _solve_workpiece_weak_coupled(args, coil_data)
+            out = _assemble_full_output(args, coil_data, wp_data)
     if viz.get("coil_field_msh"):
         # Promote bbox B msh to gmsh_file -- it has volumetric B vectors
         # (Air-volume B viz the user can merge interactively).  The wp
@@ -1963,8 +2125,23 @@ def build_argparser():
 
     # ----- Coupling -----
     parser.add_argument("--coupling-mode", default="weak",
-                        choices=["weak"],
-                        help="weak: back-reacted Telegen ΔL (only mode)")
+                        choices=["weak", "strong"],
+                        help="weak: one-way coil->wp with back-reacted Telegen "
+                             "ΔL (coil current NOT recomputed).  strong: "
+                             "iterative CoupledBEMSolver (per-DOF back-reaction; "
+                             "coil current recomputed against the workpiece "
+                             "reaction field, so ΔL includes the wp magnetic-"
+                             "energy term and P_wp is self-consistent -- "
+                             "requires --coil-solver bem-a).")
+    parser.add_argument("--coupling-max-iter", type=int, default=10,
+                        help="strong: max Picard iterations for the coupled "
+                             "coil<->wp back-reaction solve.")
+    parser.add_argument("--coupling-tol", type=float, default=1e-3,
+                        help="strong: relative L_total convergence tolerance "
+                             "for the coupled Picard loop.")
+    parser.add_argument("--coupling-relax", type=float, default=0.5,
+                        help="strong: under-relaxation factor (0<relax<=1) on "
+                             "the coupled back-reaction RHS.")
     parser.add_argument("--telegen-form", default="phi-B",
                         choices=["phi-B"],
                         help="Telegen form (only phi.B currently)")
