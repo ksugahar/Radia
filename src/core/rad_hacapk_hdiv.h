@@ -424,7 +424,7 @@ private:
     // measure come from the Q2 lattice maps.  Entries are served block-wise (GetHexBlock); the inner is the
     // ref-frame radial decomposition (PhiInnerHexRadialVec) for near/self, cached far clouds otherwise.
     bool m_hexmode = false;
-    bool m_hexCacheStatsEnabled = false;                  // opt-in via RADIA_HDIV_HEX_CACHE_STATS=1; hot hits avoid atomics by default
+    bool m_hexCacheStatsEnabled = false;                  // opt-in block-cache stats; hot hits avoid atomics by default
     int  m_hex_n_bf = 0;
     std::vector<double> m_hexNodes, m_quadNodes;        // [n_el*81] 27-node Q2 hex, [n_bf*27] 9-node Q2 quad
     std::vector<double> m_symTetP, m_symTetW;           // regular outer tet rule (bary lam1..3; W sums 1/6)
@@ -552,6 +552,10 @@ private:
     mutable std::atomic<long long> m_hexSymTransBlockHits{0};
     mutable std::atomic<long long> m_hexSymTransBlockMisses{0};
     mutable std::atomic<long long> m_hexSymTransBlockClears{0};
+    mutable std::atomic<long long> m_hoSymBlockLookups{0};
+    mutable std::atomic<long long> m_hoSymBlockHits{0};
+    mutable std::atomic<long long> m_hoSymBlockMisses{0};
+    mutable std::atomic<long long> m_hoSymBlockClears{0};
     void ResetHexCacheStats();
     // mask (IMA): 0 = direct block; >0 = the mirror-image block (target host x the source host REFLECTED on
     // the 3-bit axis mask), for the reduced-symmetry (1/2,1/4,1/8) image method.  Default 0 keeps the direct
@@ -614,9 +618,15 @@ private:
     bool m_highorder = false;
     std::vector<int> m_host, m_kind, m_expo;           // [n] host elem, [n] 0=cell/1=face, [n*3] monomial exponents
     std::vector<int> m_nmono;                          // [n] # co-located charges per (kind,host) group -- QuadDot memo gating (skip groups of 1)
+    std::vector<int> m_hoLocalOf;                      // [n] local charge index within the flat high-order host
+    std::vector<std::vector<int>> m_hoCellCharges;     // [n_el] flat high-order charge indices per tetrahedron
+    std::vector<std::vector<int>> m_hoFaceCharges;     // [n_bf] flat high-order charge indices per boundary triangle
     long long m_build_id = 0;                          // monotonic per-build id -> the QuadDot thread_local memo owner key (pointer-reuse-safe)
     std::vector<double> m_cellInv;                     // [n_el*9] physical->ref affine inverse per cell (row-major)
     std::vector<double> m_faceGinv;                    // [n_bf*4] 2x2 (a.a) Gram inverse per face (for 2D ref coords)
+    std::vector<int> m_hoPolyDegree;                   // [n] physical-polynomial degree (flat order<=2)
+    std::vector<double> m_hoPolyA, m_hoPolyB, m_hoPolyC; // [n], [n*3], [n*9]: A + B.y + y^T C y
+    bool m_hoAnalyticBlock = false;                    // flat RT2: all charges covered and quadratic face modes present
     std::vector<std::vector<rad_hdiv::Vec3>> m_inP;    // [n] FIXED inner-potential Gauss points per HOST (cell/face)
     std::vector<std::vector<double>>          m_inW;   // [n] inner-potential Gauss weights (sum = host measure)
     std::vector<std::vector<double>>          m_srcval; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP points -- bit-exact hoist of EvalMono out of the PhiAtHO inner loop (value depends only on (src,q))
@@ -628,6 +638,11 @@ private:
     std::vector<std::vector<double>>          m_inW_lo;// [n] LOW-quad inner weights (plain, NOT monomial-folded)
     std::vector<std::vector<double>>          m_srcval_lo; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP_lo points (for QuadDotFar)
     double EvalMono(int charge, const double p[3]) const;   // charge's monomial at physical p (host ref-coord map)
+    void InitHOPolynomialCoefficients();                    // flat order<=2 reference monomials -> physical A/B/C
+    void PhiInnerHOHostVec(int kind, int host, const double p[3],
+                           const std::vector<int>& charges, double* values) const;
+    std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
+    const std::vector<double>& GetHOTetSymBlock(int kindA, int hostA, int kindB, int hostB) const;
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2
     double PhiAtHO_Analytic(int src, const double p[3]) const; // EXACT analytic poly-charge potential (moment kernels, flat order<=2; machine precision, all pair types)
     double PhiAtHO_Duffy(int src, const double p[3]) const;    // Duffy singular-quadrature poly-charge potential (order>=3 / curved; ~1e-4)
