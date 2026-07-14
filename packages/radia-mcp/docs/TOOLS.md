@@ -575,7 +575,7 @@ Module: `radia_mcp.accelerator.server`
 | `accelerator` | Accelerator magnet design with Radia + radia-mcp. |
 | `accelerator_magnetic_trajectory_pair_gate` | Gate paired charged-particle trajectories with magnetic field off/on. |
 | `accelerator_status` | (no description) |
-| `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 16 topics. |
+| `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 17 topics. |
 
 ## `mcp-server-fusion-reactor`
 
