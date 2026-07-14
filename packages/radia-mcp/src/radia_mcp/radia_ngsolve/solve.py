@@ -10,6 +10,12 @@ tool. Cross-validated against an independent reference solve (sphere field
 import cmath
 import math
 
+from .air_gap import (
+    carter_coefficient,
+    effective_air_gap,
+    slotted_air_gap_permeance_factor,
+)
+
 from ngsolve import (HCurl, H1, Periodic, NumberSpace, FESpace, BilinearForm,
                      LinearForm, GridFunction, CoefficientFunction, InnerProduct,
                      curl, grad, dx, Integrate, Conj, Variation, Preconditioner,
@@ -2178,42 +2184,6 @@ def lamination_eddy_loss_density(sigma, thickness, frequency, B_peak, mu_r=1.0):
     delta = math.sqrt(2.0 / (omega * MU0 * mu_r * sigma))
     return classical_eddy_loss_density(sigma, thickness, frequency, B_peak) \
         * lamination_eddy_skin_factor(thickness, delta)
-
-
-def carter_coefficient(slot_pitch, gap, slot_opening):
-    """Carter coefficient k_C of a slotted air gap -- the factor by which the slot openings make
-    the gap behave MAGNETICALLY LARGER:
-
-        gamma = (b_o/g)^2/(5 + b_o/g),   k_C = tau_s/(tau_s - gamma * g)   (>= 1),
-
-    tau_s = slot pitch, g = gap length, b_o = slot opening. A slot opening adds reluctance (the
-    flux spreads as it crosses the opening), so the AVERAGE gap flux for a given MMF drops as if
-    the gap were k_C*g (:func:`effective_air_gap`). The standard machine-design correction that
-    feeds the magnetising inductance, the no-load flux, and the slot-ripple permeance. Carter's
-    1901 conformal-mapping result; the (b_o/g)^2/(5+b_o/g) form is the textbook fit (validated
-    against the scalar-potential gap permeance to < 0.3 %)."""
-    gamma = (slot_opening / gap) ** 2 / (5.0 + slot_opening / gap)
-    return slot_pitch / (slot_pitch - gamma * gap)
-
-
-def effective_air_gap(slot_pitch, gap, slot_opening):
-    """Effective (Carter) air gap g_eff = k_C * g of a slotted machine -- the SMOOTH gap that has
-    the same magnetising permeance as the real slotted gap (:func:`carter_coefficient`). Use it in
-    place of the physical gap in the air-gap permeance / magnetising-inductance / no-load-flux
-    calculations; the slot openings effectively lengthen the gap by a few to ~30 %."""
-    return carter_coefficient(slot_pitch, gap, slot_opening) * gap
-
-
-def slotted_air_gap_permeance_factor(slot_pitch, gap, slot_opening):
-    """Mean air-gap permeance factor of a slotted gap relative to a smooth gap.
-
-    Carter's coefficient is defined as ``k_C = P_smooth / P_slot`` and
-    ``g_eff = k_C * g``. This helper returns the companion ratio
-    ``P_slot / P_smooth = 1/k_C`` (<= 1): a compact way to apply slotting to
-    average gap flux, magnetising permeance, or simple load-line estimates while
-    keeping the physical gap ``g`` explicit.
-    """
-    return 1.0 / carter_coefficient(slot_pitch, gap, slot_opening)
 
 
 def magnetizing_inductance_per_phase(gap_diameter, stack_length, effective_gap, pole_pairs,
