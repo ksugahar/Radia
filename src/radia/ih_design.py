@@ -20,6 +20,7 @@ METHOD_THERMAL_3D_ROTATING = "Thermal: 3D + rotation (q_surf re-sampled per step
 METHOD_THERMAL_AXISYM = "Thermal: 2D axisymmetric (rotation implicit)"
 METHOD_PEEC_BEM = "PEEC + BEM weak coupling (workpiece)"
 METHOD_BEMA_BEM = "BEM-A + BEM weak coupling (workpiece)"
+METHOD_BEMA_BEM_STRONG = "BEM-A + BEM strong coupling (workpiece, CoupledBEMSolver)"
 METHOD_PEEC_FEM_KELVIN = "PEEC coil + FEM wp (SIBC) + Kelvin"
 METHOD_FEM_FULL = "Full simulation (FEM A-V + wp SIBC + Kelvin)"
 
@@ -28,6 +29,7 @@ IH_METHODS = (
     METHOD_BEMA_IND,
     METHOD_PEEC_BEM,
     METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
     METHOD_PEEC_FEM_KELVIN,
     METHOD_FEM_FULL,
     METHOD_THERMAL_3D_STATIC,
@@ -42,6 +44,7 @@ THERMAL_METHODS = frozenset({
 WORKPIECE_METHODS = frozenset({
     METHOD_PEEC_BEM,
     METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
     METHOD_PEEC_FEM_KELVIN,
     METHOD_FEM_FULL,
     *THERMAL_METHODS,
@@ -54,6 +57,7 @@ PEEC_STEP_METHODS = frozenset({
 BEMA_COIL_VOL_METHODS = frozenset({
     METHOD_BEMA_IND,
     METHOD_BEMA_BEM,
+    METHOD_BEMA_BEM_STRONG,
 })
 
 HEAT_SRC_UNIFORM = "Uniform q_surf [W/m^2]"
@@ -179,7 +183,8 @@ class IHDesignSpec:
         return "esim" if self.impedance_model.startswith("Nonlinear ESIM") else "sibc"
 
     def coil_solver_cli(self) -> str:
-        if self.method in (METHOD_BEMA_IND, METHOD_BEMA_BEM):
+        if self.method in (METHOD_BEMA_IND, METHOD_BEMA_BEM,
+                            METHOD_BEMA_BEM_STRONG):
             return "bem-a"
         return "peec"
 
@@ -220,6 +225,14 @@ class IHDesignSpec:
                     fields.update({"esim_tol", "esim_relax"})
                 if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
                     fields.add("esim_anderson_m")
+        if self.method == METHOD_BEMA_BEM_STRONG:
+            # Strong coupling (CoupledBEMSolver) is linear-SIBC only:
+            # workpiece material + Leontovich Z_s knobs, no impedance-model /
+            # fes-order / ESIM (the coupled solver fixes wp_order=1 and passes
+            # a single global scalar Z_s).
+            fields.update({
+                "wp_material", "wp_sigma", "mu_r", "half_thickness",
+            })
         if thermal:
             fields.update({
                 "thermal_mesh_type", "heat_source", "surface_label",
@@ -300,6 +313,8 @@ class IHDesignSpec:
             raise ValueError("No workpiece .vol file specified.")
         if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
             return self._build_weak_bem_command(wp_vol, py, panels_dir)
+        if self.method == METHOD_BEMA_BEM_STRONG:
+            return self._build_strong_bem_command(wp_vol, py, panels_dir)
         if self.method == METHOD_PEEC_FEM_KELVIN:
             return self._build_fem_kelvin_command(wp_vol, py, panels_dir)
         if self.method == METHOD_FEM_FULL:
@@ -388,6 +403,41 @@ class IHDesignSpec:
             cmd += ["--peec-n-peri", str(self.peec_n_peri)]
         self._append_esim_args(cmd, include_anderson=True, kelvin=False)
         return cmd
+
+    def _build_strong_bem_command(
+        self,
+        vol_path: str,
+        py: str,
+        panels_dir: str | Path | None,
+    ) -> list[str]:
+        """BEM-A coil + iterative CoupledBEMSolver strong coupling.
+
+        Linear-SIBC only (a single global Leontovich Z_s); the coupled
+        solver recomputes the coil surface current against the workpiece
+        reaction field each Picard iteration, so ΔL includes the workpiece
+        magnetic-energy term and P_wp is self-consistent.  Requires a BEM-A
+        coil .vol (source/sink labels) -- no PEEC, no ESIM.
+        """
+        coil_arg, _coil_in = self._coil_input_args()
+        bem_size = self._bem_size()
+        return [
+            py,
+            calc_script("calc_inductance.py", panels_dir),
+            *coil_arg,
+            "--coil-solver", "bem-a",
+            "--coil-bem-solver", bem_size["coil_bem_solver"],
+            "--frequency", self.frequency,
+            "--current", self.current,
+            "--coil-sigma", self.coil_sigma,
+            "--vol", vol_path,
+            "--wp-label", "sibc",
+            "--sigma", self.wp_sigma,
+            "--half-thickness", self.half_thickness,
+            "--mu-r", self.mu_r,
+            "--coupling-mode", "strong",
+            "--msh-output", msh_output(vol_path, "_bema_bem_strong"),
+            "--output", json_output(vol_path, "_bema_bem_strong"),
+        ]
 
     def _build_fem_kelvin_command(
         self,
