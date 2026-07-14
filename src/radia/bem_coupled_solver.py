@@ -258,13 +258,18 @@ class CoupledBEMSolver:
                 - **complex scalar**: legacy uniform-Z_s SIBC.
                 - **ndarray of length self.wp_solver.ndof (complex)**:
                   per-node Z_s for the per-panel curvature SIBC.
-                  The caller (``calc_inductance.py::_run_coupled_bem``)
-                  builds this array by computing per-panel local
+                  A caller that wants per-node SIBC (e.g. the
+                  validation-lane
+                  ``validation_test/induction_heating/bem_reference/
+                  calc_inductance.py::_run_coupled_bem`` local-curvature
+                  path) builds this array by computing per-panel local
                   curvature from the workpiece mesh and projecting the
                   resulting per-panel Z_s onto H1 nodes via vertex
                   averaging. The ScalarBIESIBCSolver assembles the
                   Robin term with diag(gamma) so each node sees its
-                  own SIBC coefficient.
+                  own SIBC coefficient.  The production
+                  ``panels/calc_inductance.py`` ``--coupling-mode strong``
+                  path passes a single global scalar Z_s.
             omega: angular frequency [rad/s]
             max_iter: Picard iteration cap
             tol: relative L_total convergence
