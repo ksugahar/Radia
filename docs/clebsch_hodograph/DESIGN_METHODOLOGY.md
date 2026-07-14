@@ -760,7 +760,7 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
   div-free-but-not-curl-free choice has a spurious edge current sheet and **flips the sign**), the
   tracker reproduces `|1/f_z| = tan β/ρ`: the slope vs the law `→ 1` as the fringe narrows
   (`0.84 → 0.99` for `w: 0.08 → 0.005`), the `β=0` baseline is a finite-fringe residual `−½ w/ρ → 0`,
-  and `ρ·(1/f_z)` collapses onto `tan β`. Golden `tests/feec/test_edge_focusing_tracking.py`
+  and `ρ·(1/f_z)` collapses onto `tan β`. Golden `validation_test/feec/test_edge_focusing_tracking.py`
   (pure-numpy, CI-friendly).
 * **Matches the full SCOFF/Enge law on the analytic fringe.** With the classical first-order
   fringe correction `ψ = (K₁g/ρ)(1+sin²β)/cos β` (`K₁g = ∫g(1−g)ds` along the edge normal;

@@ -5,7 +5,8 @@ Hill integral recovers the hard-edge vertical edge-focusing law |1/f_z| = tan(be
 on a genuinely Maxwellian (curl-free) tilted fringe -- the CORRECT measurement of edge
 focusing (the field-EFB slope cannot; see memory/edge_focusing_efb_slope_negative).
 
-Pure-numpy + deterministic (no ngsolve): CI-friendly.  The claims locked here are:
+The optics claims are pure-numpy and deterministic (no ngsolve); the final test
+adds a small Radia coil-symmetry regression.  The claims locked here are:
   (1) the tracked 1/f_z tracks +tan(beta)/rho over a beta sweep (this fringe orientation
       focuses; magnitude tan/rho is the invariant);
   (2) it CONVERGES to the hard-edge law as the fringe width w -> 0 (slope c(w) -> 1);
@@ -81,12 +82,13 @@ def test_rho_collapse():
 
 
 def test_fem_coil_pair_is_clean():
-    """Locks the PART B coil construction against two verified pitfalls (2026-07-10):
-    CoilBuilder.mirror('xy') emits mirrored straights running the wrong way (spurious
-    odd-in-x dBz/dx up to 0.39 T/m), and rad.TrfOrnt-wrapped containers crash
-    rad.RadiaField.  The explicit rounded-parallelogram pair must close to machine
-    precision and its mid-plane Bz must be x-even (beta=0) / C2-even (beta=20) to
-    ~1e-7 of B0."""
+    """Lock the explicitly built PART B pair and its mid-plane symmetry.
+
+    CoilBuilder.mirror() has its own pointwise regression test.  This validation
+    deliberately builds both loops so its reference geometry remains independent
+    of that helper.  The pair must close to machine precision and its mid-plane Bz
+    must be x-even (beta=0) / C2-even (beta=20) to about 1e-7 of B0.
+    """
     import pytest
     rad = pytest.importorskip("radia")
     import math
@@ -100,9 +102,8 @@ def test_fem_coil_pair_is_clean():
         assert gap < 1e-12, (bdeg, gap)
         cnt = ef.fem_build_coil(math.radians(bdeg))
         b0 = rad.Fld(cnt, "b", [0.0, 0.0, 0.0])[2]
-        assert 0.05 < b0 < 0.2, b0            # both loops contribute (mirror bug gave 0.063->0.103)
-        # C2-odd part must vanish for BOTH beta (the loop pair is C2-symmetric);
-        # the mirror('xy') bug sat at 7.7e-3 T here -- 1e-6*B0 is 4 orders below it
+        assert 0.05 < b0 < 0.2, b0            # both explicit loops contribute
+        # C2-odd part must vanish for both beta (the loop pair is C2-symmetric).
         for (x, y) in ((0.02, -0.14), (0.02, -0.10), (0.03, 0.0)):
             c2 = 0.5 * (rad.Fld(cnt, "b", [x, y, 0.0])[2]
                         - rad.Fld(cnt, "b", [-x, -y, 0.0])[2])
