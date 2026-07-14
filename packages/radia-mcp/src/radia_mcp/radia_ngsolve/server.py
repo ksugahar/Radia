@@ -143,6 +143,9 @@ from .parallel_wire_force_refinement_gate import (
 from .capacitance_identity_gate import (
     two_conductor_capacitance_identity_gate as _two_conductor_capacitance_identity_gate,
 )
+from .grounded_sphere_capacitance_gate import (
+    grounded_sphere_capacitance_convergence_gate as _grounded_sphere_capacitance_convergence_gate,
+)
 from .capacitance_matrix_gate import two_conductor_capacitance_matrix_gate as _two_conductor_capacitance_matrix_gate
 from .multiconductor_capacitance_gate import (
     multiconductor_capacitance_cross_formulation_gate as _multiconductor_capacitance_cross_formulation_gate,
@@ -3250,6 +3253,33 @@ def two_conductor_capacitance_identity_gate(
     except (TypeError, ValueError) as exc:
         result = {
             "policy": "two_conductor_capacitance_identity_gate_v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def grounded_sphere_capacitance_convergence_gate(
+    summary_json: str,
+    max_final_analytic_relative_error: float = 5.0e-4,
+    max_corrected_energy_relative_error: float = 1.0e-5,
+    max_replay_relative_error: float = 1.0e-13,
+    max_sign_covariance_relative_error: float = 1.0e-13,
+) -> str:
+    """Gate grounded-sphere image-series convergence and mixed-boundary energy."""
+
+    try:
+        result = _grounded_sphere_capacitance_convergence_gate(
+            json.loads(summary_json),
+            max_final_analytic_relative_error=max_final_analytic_relative_error,
+            max_corrected_energy_relative_error=max_corrected_energy_relative_error,
+            max_replay_relative_error=max_replay_relative_error,
+            max_sign_covariance_relative_error=max_sign_covariance_relative_error,
+        )
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        result = {
+            "policy": "grounded_sphere_capacitance_convergence_gate_v1",
             "status": "invalid_input",
             "error": str(exc),
         }
