@@ -68,15 +68,25 @@ def test_argparse_accepts_strong_and_knobs():
 # ----------------------------------------------------------------------
 # 2. fail-fast guards (return before any heavy solve)
 # ----------------------------------------------------------------------
-def test_strong_requires_bem_a_coil():
+def test_strong_accepts_peec_coil():
+    """strong now supports the peec coil (CoupledPEECBEMSolver) as well as
+    bem-a; the coil-solver guard no longer rejects peec (2026-07-15).  With
+    dummy inputs the run still errors -- but DOWNSTREAM (STEP read), not at
+    the old ``requires --coil-solver bem-a`` guard.
+    """
     p = ci.build_argparser()
     ns = p.parse_args([
         "--coil-solver", "peec", "--frequency", "7000", "--sigma", "5.8e6",
         "--coupling-mode", "strong", "--coil-step", "c.step", "--vol", "w.vol",
     ])
-    r = ci.run_inductance(ns)
-    assert r.get("status") == "error"
-    assert "requires --coil-solver bem-a" in r["error"]
+    # peec passes the coil-solver guard and proceeds to the coil build,
+    # which raises on the dummy STEP -- proving it got PAST the guard
+    # (the old contract returned an error dict rejecting peec here).
+    with pytest.raises(Exception) as exc:
+        ci.run_inductance(ns)
+    msg = str(exc.value)
+    assert "requires --coil-solver bem-a" not in msg
+    assert "c.step" in msg or "STEP" in msg
 
 
 def test_strong_requires_workpiece_vol():
