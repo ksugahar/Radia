@@ -11,7 +11,7 @@ import cmath
 import math
 from datetime import datetime, timezone
 
-from radia_mcp.radia_ngsolve.solve import (
+from .air_gap import (
     carter_coefficient,
     effective_air_gap,
     slotted_air_gap_permeance_factor,
