@@ -40,12 +40,6 @@ if _SRC not in sys.path:
 
 from radia import coil_builder as cb
 
-# Axis-aligned racetrack frames hit the ZXZ Euler gimbal-lock UserWarning in
-# CoilSegment.__init__; the decomposition stays exact (established benign
-# warning, same marker as validation_test/feec and validation_test/panels).
-pytestmark = pytest.mark.filterwarnings(
-	"ignore:Gimbal lock detected:UserWarning")
-
 MIRROR_MATRICES = {
 	'xz': np.diag([1.0, -1.0, 1.0]),
 	'yz': np.diag([-1.0, 1.0, 1.0]),

@@ -150,7 +150,9 @@ lower = coil.mirror('xy')  # dipole pair partner at -z (same current)
 
 ### rotate_copies(axis, n_copies)
 
-Create rotational copies around an axis.
+Create rotational copies around an axis. Each copy is a true active rotation
+of the complete wire path and preserves segment order, current, cross-section
+profile, and length.
 
 | Arg | Type | Description |
 |-----|------|-------------|

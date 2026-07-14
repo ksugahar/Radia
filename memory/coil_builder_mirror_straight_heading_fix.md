@@ -49,13 +49,14 @@ Traps recorded for the next session:
   The sharp detectors are the per-segment end_pos invariant and the
   lower-only == upper-only central-Bz equality; the regression test
   asserts all of them.
-- `rotate_copies()` has the SAME frame-transform disease (`R @ O`
-  instead of `O @ R.T`): a 90-deg z-copy shows 6e-2 wire-path error vs
-  R @ p (probed 2026-07-11, NOT yet fixed -- separate task).
-- scipy 'Gimbal lock detected' UserWarnings from CoilSegment.__init__
-  (ZXZ as_euler on axis-aligned frames) are benign / exact; pytest
-  filterwarnings=error requires the established marker
-  `ignore:Gimbal lock detected:UserWarning` (same as validation_test).
+- `rotate_copies()` had the same frame-transform disease (`R @ O`
+  instead of `O @ R.T`): a 90-deg z-copy showed 6e-2 wire-path error vs
+  `R @ p`.  The integration review fixed it and added pointwise x/y/z
+  rotation coverage in `tests/test_coil_builder_rotate_copies.py`.
+- scipy `Gimbal lock detected` warnings from `CoilSegment.__init__`
+  (ZXZ `as_euler` on axis-aligned frames) are benign because the returned
+  representative is valid.  The implementation now suppresses only that
+  known warning locally instead of requiring pytest-wide filters.
 - docs/clebsch_hodograph demo result JSONs (accel_pole_ends_fem,
   leaf_coupling_perturbation_3d) were generated with the BUGGY mirror
   lower coil and are stale until the demos are rerun.  Several docs
