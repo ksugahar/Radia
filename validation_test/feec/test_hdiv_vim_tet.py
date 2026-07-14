@@ -1,7 +1,7 @@
-"""Golden test: HDiv-type VIM demag on UNSTRUCTURED TET meshes (production step #1a -- the critical
-path from synthetic structured hex grids to REAL geometry).  Uses NGSolve HDiv(order=0) on Netgen
-tet meshes (element-agnostic extraction: B = -div [volume charge] + Trace.n [surface charge];
-M_mass = HDiv mass) with the tet/triangle Gram self-energy.
+"""Golden test: HDiv-VIM demag on unstructured tetrahedral RT1 meshes.
+
+Uses the public ``vim.Solve`` and ``vim.ChargeGram(HDiv(order=1))`` production
+path on Netgen meshes.
 
 Locks:
   - SYMMETRY exact on tets (asym ~ machine eps) -- N = B^T G B is Galerkin;
@@ -13,15 +13,11 @@ NGSolve + Netgen CSG required (importorskip); meshing is non-deterministic acros
 demag is checked against a BAND around 1/3 + a refinement (monotone-toward-1/3) trend, while the
 structural properties (symmetry, loop-nullity) are exact and version-robust.
 """
-import os
-import sys
-
 import pytest
 
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.csg")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "vim_legacy"))
 import numpy as np  # noqa: E402
 from radia.vim import Solve  # noqa: E402
 

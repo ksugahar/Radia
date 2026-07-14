@@ -38,7 +38,22 @@ Primary Python entry points:
 - `radia.vim.MeshSoftIron(mesh, mu_r=... | bh_table=...)`
 - `radia.Solve(model, prec, maxiter, method, demag_backend="hdiv")`
 - `radia.vim.Solve(mesh, mu_r=... | bh_table=..., H_ext=..., image=...)`
-- `radia.vim.build_demag(mesh, order=..., image=...)` for diagnostics
+- `radia.vim.DemagOperator(HDiv(mesh, order=1|2), ...)` for the NGSolve-style
+  diagnostic operator, or `radia.vim.ChargeGram(...)` for its charge map and
+  C++ H-matrix components
+- `radia.vim.FieldFromSolution(res, points)` -- batch demagnetizing H (A/m) at
+  points from the ORDER-1 (tet) solution directly, WITHOUT the per-element
+  constant-M collapse of the `rad.Fld` write-back.  Use it whenever the map
+  standoff is comparable to the source-face element size: the collapse breaks
+  HDiv normal continuity and leaves an O(h) piecewise-constant ripple there
+  (measured: flat-top bumps up to +4%, fringe integral K1g biased -12% at
+  20 mm standoff over 14 mm faces -- docs/clebsch_hodograph/
+  edge_focusing_fem_results.json `mesh_dependence_diagnosis`), while the
+  order-1 solution itself is closed-form evaluable: internal faces carry no
+  charge (HDiv conformity), boundary faces carry linear sigma = M.n, each tet
+  a constant -div M.  `res` is the dict from `vim.Solve`/`rad.Solve` (carries
+  `gfM`).  B outside the iron = MU0*(H_ext + H_demag); locked by
+  tests/test_vim_field_from_solution.py.
 
 Core pieces:
 
@@ -89,6 +104,9 @@ Fast tests should cover API contracts and small deterministic checks:
   full model for truly symmetric meshes to near roundoff;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
+- RT2 flat pure-TET linear/nonlinear solves remain consistent with the analytic
+  cube/sphere gates; RT2 on HEX/WEDGE, 2D, IMA, or field reconstruction fails
+  loudly rather than falling back to RT1.
 
 Validation-class tests live under `validation_test/feec/` and should cover:
 
@@ -134,8 +152,8 @@ _SYMMETRY = r"""
 # Image Symmetry
 
 Image symmetry is part of the HDiv field contract.  A reduced model and an
-explicit full model should agree to near roundoff when the mesh is geometrically
-and topologically symmetric.  Percent-level agreement is a warning sign for
+explicit full model should agree below `10 eps` relative error when the mesh is
+geometrically and topologically symmetric.  Percent-level agreement is a warning sign for
 asymmetric mesh cuts, incorrect image signs, wrong materialization of images, or
 quadrature/charge-basis mismatch.
 
@@ -184,6 +202,9 @@ _STATUS = r"""
 Current direction:
 
 - Radia soft iron: HDiv-VIM.
+- RT1: pure TET/HEX/WEDGE, planar 2D, IMA, and field evaluation.
+- RT2: public flat pure-TET material/operator path.  Curved geometry uses RT1
+  on an isoparametric P2 mesh until curved RT2 build cost is accepted.
 - Planar 2D support: HDiv/planar shared geometry and material helpers.
 - Public docs: result-bearing HDiv notebooks plus synchronized JSON.
 - MCP: teach the live HDiv API and reduced-FEM coupling path.
@@ -191,7 +212,8 @@ Current direction:
 Open work:
 
 - extend 2D and 3D validation coverage around `rad.Fld`;
-- harden image-symmetry roundoff contracts;
+- keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
+- continue RT1/RT2 pure-TET accuracy, memory, and timing measurements on mdx;
 - continue charge-Gram H-matrix performance checks on mdx;
 - keep Cubit/GMSH mesh-export artifacts aligned with the HDiv API.
 """

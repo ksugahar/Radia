@@ -98,7 +98,7 @@ def test_demag_factor_unaffected_by_frame_fix():
     from radia.vim import DemagOperator
     mesh = _mesh()
     with ng.TaskManager():
-        fes = ng.HDiv(mesh, order=1)   # RT2+ abolished; RT1 still exercises the per-element change-of-basis
+        fes = ng.HDiv(mesh, order=1)   # order-1 path exercises the per-element change-of-basis
         N = DemagOperator(fes)
         D = N.DemagFactor(ng.CF((0, 0, 1)))
     assert 0.31 < D < 0.345, f"demag factor {D:.5f} not ~1/3 after the change-of-basis frame fix"

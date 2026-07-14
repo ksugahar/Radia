@@ -24,18 +24,17 @@ pytest.importorskip("netgen.occ")
 import ngsolve as ng  # noqa: E402
 from netgen.occ import Box, OCCGeometry, Pnt  # noqa: E402
 
-import radia._radia_pybind as rp  # noqa: E402
-from radia.vim._core import build_demag  # noqa: E402
-from radia.vim import Solve  # noqa: E402
+from radia.vim import ChargeGram, Solve  # noqa: E402
 
 
-def _gram(maxh=0.45, near_factor=2.0, far_quad=4):
+def _gram(maxh=0.45):
     with ng.TaskManager():
         mesh = ng.Mesh(OCCGeometry(Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))).GenerateMesh(maxh=maxh))
-        d = build_demag(mesh)
-    H = rp._ChargeGramHMatrix(cell_verts=list(d["cell_verts"]), face_verts=list(d["face_verts"]),
-                              n_el=int(d["n_el"]), eps=1e-12, leaf=32, eta=2.0,
-                              near_factor=near_factor, image_masks=[], image_signs=[], far_quad=int(far_quad))
+        fes = ng.HDiv(mesh, order=1)
+        _, H, _ = ChargeGram(
+            fes, eps=1e-12, leafsize=32, eta=2.0,
+            ho_far_factor=float("inf"),
+        )
     return H
 
 

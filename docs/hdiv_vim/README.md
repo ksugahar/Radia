@@ -20,6 +20,16 @@ field = rad.Fld(model, "b", [0, 0, 0.02])
 For direct VIM use, call `radia.vim.Solve(mesh, mu_r=... | bh_table=...,
 H_ext=..., image=...)`.
 
+The public three-dimensional VIM contract supports RT1 on pure TET/HEX/WEDGE
+meshes and RT2 on flat pure TET meshes.  RT2 uses the same C++ charge-Gram,
+mass-Riesz CG, and energy-Newton material paths; HEX/WEDGE, 2D, IMA, and
+`rad.Fld` field reconstruction remain RT1-only and fail loudly at RT2.
+Curved geometry remains a production route through RT1 on an isoparametric P2
+mesh; curved RT2 is gated until its Duffy-build cost is acceptable.
+For a geometrically and topologically symmetric reduced/full hex
+pair, `rad.Fld` after an image solve must agree with the explicit full solve at
+the roundoff contract (`< 10 eps` relative error), not merely within a percent.
+
 The production 3D solve uses symmetric C++ CG on the SPD `W + B^T G B`
 system.  The public default is `preconditioner="auto"`: linear solves and
 small tet nonlinear solves use the exact mass-Riesz map, while nonlinear
@@ -34,7 +44,7 @@ The result artifact records both `preconditioner_requested` and the resolved
 `preconditioner="mass-riesz"` and `preconditioner="jacobi"` remain explicit
 diagnostic overrides.
 
-For flat pure-hex `.vol` meshes, the RT1 charge-basis path now follows the
+For flat pure-hex `.vol` meshes, the order-1 charge-basis path now follows the
 NGSolve reference ordering directly: the Q2 geometry lattice is built from the
 linear `.vol` vertices, and the Q1 shape-moment to monomial map is applied as a
 cached block-diagonal sparse transform.  Curved `.vol` meshes still use
@@ -134,14 +144,17 @@ universal default for all wedge geometries.
 ## Validation Expectations
 
 Fast tests belong in `tests/`; heavier numerical checks belong in
-`validation_test/feec/` and mdx-labelled JSON artifacts.  Required HDiv gates:
+`validation_test/feec/` and JSON artifacts labelled with the actual validation
+host (`mdx` or `hibino`).  Required HDiv gates:
 
 - analytic demag factors where available;
 - nonlinear BH convergence metadata;
 - image symmetry checked against an explicitly mirrored full model on truly
   symmetric meshes;
 - `rad.Fld` after `rad.Solve(..., demag_backend="hdiv")`;
-- charge-Gram H-matrix build stats and memory/timing on mdx for large runs;
+- RT1/RT2 flat pure-TET accuracy and cost, plus charge-Gram H-matrix build stats and
+  memory/timing on idle `mdx` or `hibino`
+  for large runs;
 - 2D planar motor saliency checks for the motor lane.
 
 ## Public Docs

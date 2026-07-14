@@ -36,7 +36,7 @@ def _dense_N(B, G):
 @pytest.mark.parametrize("p", [1])
 def test_highorder_demag_spectrum_in_unit_interval(p):
     """eig(M_mass^{-1} N) in [0, 1] for the order-p charge-Gram demag operator (was max ~1.2 (p1) with the
-    single-element-0 change-of-basis bug).  RT2+ abolished, so only p=1 (RT1) is exercised."""
+    single-element-0 change-of-basis bug).  The public production path exercises p=1."""
     mesh = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.8))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=p)
@@ -53,7 +53,7 @@ def test_highorder_demag_spectrum_in_unit_interval(p):
 def test_rt1_material_solve_is_consistent_fixed_point():
     """The RT1 uniform-field cube material solve sits at the consistent linear fixed point
     M_avg ~ chi*H0/(1+chi*D) (D = the demag factor = Rayleigh quotient of N for uniform M) -- NOT the old
-    ~1.8x blow-up.  RT0 is retired, so the reference is the analytic fixed point, not the order-0 solve.
+    ~1.8x blow-up.  The reference is the analytic fixed point.
     (The strong M4 guard is the eig-in-[0,1] spectrum test above; this is the end-to-end material-solve check.)"""
     mesh = ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=0.7))
     H0, mu_r = 1000.0, 100.0

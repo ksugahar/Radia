@@ -18,6 +18,8 @@ import radia as rad  # noqa: E402
 import radia.vim as vim  # noqa: E402
 import ngsolve as ng  # noqa: E402
 
+pytestmark = pytest.mark.compute_host
+
 A = 0.01
 MU_R = 1000.0
 MU0 = 4.0e-7 * math.pi
@@ -25,7 +27,6 @@ H0 = 1.0e4
 PROBE = [0.0, 0.0, 3 * A]
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)   # NGSolve GetTrafo lattice first-touch flake under contention
 def test_soft_iron_box_auto_routes_to_hdiv():
     """soft_iron_box -> rad.Solve auto -> HDiv-VIM (dict return with demag), cube demag ~1/3, Mz_avg
     matches a direct full-hex HDiv solve; rad.Fld reflects the resolved field."""
@@ -44,7 +45,6 @@ def test_soft_iron_box_auto_routes_to_hdiv():
     rad.UtiDelAll()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_soft_iron_hex_box_corners_equals_box():
     """soft_iron_hex given the 8 corners of the SAME box == soft_iron_box -- locks the trilinear CHEXA
     corner ordering (a twisted order would change the mesh -> a different demag)."""
@@ -62,7 +62,6 @@ def test_soft_iron_hex_box_corners_equals_box():
     rad.UtiDelAll()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_soft_iron_box_nonlinear():
     """soft_iron_box with a bh_table (nonlinear) auto-routes to the HDiv-VIM energy-Newton path."""
     rad.UtiDelAll()
@@ -110,7 +109,6 @@ def test_multiple_irons_auto_fails_loud():
     rad.UtiDelAll(); _radsolve.clear_registry()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_hex_antisymmetric_image_plane_matches_full_cube():
     """hex IMA supports an ANTISYMMETRIC (negative-sign, field-perpendicular) mirror plane.
 
@@ -154,7 +152,6 @@ def test_magnet_box_field():
     rad.UtiDelAll()
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_magnet_drives_soft_iron_via_hdiv():
     """A magnet_box (PM source) + soft_iron_box in one container: rad.Solve auto-routes the iron to the
     HDiv-VIM with the magnet's field as the applied H_ext; the iron magnetizes (non-zero M)."""
@@ -177,7 +174,6 @@ def test_magnet_input_validation():
         vim.magnet_hex(np.zeros((4, 3)), M=(0, 0, 1.0))                        # not 8x3
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=1)
 def test_hex_mixed_symmetric_antisymmetric_image_planes():
     """hex IMA with a MIXED reduction combining a SYMMETRIC ('+', field-parallel) and an ANTISYMMETRIC
     ('-', field-perpendicular) plane -- the quarter '+x-z' and the standard octant '+x+y-z' of a cube in a

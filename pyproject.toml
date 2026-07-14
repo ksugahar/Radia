@@ -199,6 +199,7 @@ markers = [
     "slow: Tests that take more than 10 seconds",
     "benchmark: Performance benchmarks (not run by default)",
     "validation: Heavy validation_test suite (manual / release validation)",
+    "compute_host: Solver-heavy validation restricted to mdx or hibino",
 ]
 minversion = "7.0"
 norecursedirs = [

@@ -1,5 +1,5 @@
-"""Golden test (productionization M1): radia.vim.Solve -- the consolidated LINEAR
-soft-iron applied-field demag solve (the candidate six-face surface-charge replacement for rad.Solve).
+"""Golden test: radia.vim.Solve -- the production linear/nonlinear HDiv-VIM
+soft-iron applied-field demag solve used by rad.Solve.
 
 Locks:
   (1) PHYSICS: on a uniform-field sphere the volume-average M matches the analytic linear
@@ -57,7 +57,7 @@ def test_per_element_M_uniform_and_aligned():
     M = res["M"]
     assert M.shape == (res["n_el"], 3)
     mz = M[:, 2]
-    # +z dominant, low relative spread (RT0 on a coarse sphere -> a few % element-to-element)
+    # +z dominant, low relative spread on the coarse sphere
     assert mz.mean() > 0 and np.std(mz) / abs(mz.mean()) < 0.1, \
         f"per-element Mz not uniform: mean {mz.mean():.1f}, std {np.std(mz):.1f}"
     assert np.abs(M[:, :2]).mean() < 0.05 * abs(mz.mean()), "spurious transverse per-element M"
@@ -100,10 +100,6 @@ def test_jacobi_preconditioner_matches_mass_riesz():
     assert rel < 1e-6, f"Jacobi-CG and mass-Riesz-CG solve different systems: rel {rel:.2e}"
 
 
-# (test_explicit_hlu_linear_solver removed 2026-06-29: the 'hlu' system-A H-LU solver was RT0-only and is
-#  retired -- HDiv-VIM (RT1) uses the symmetric mass-Riesz CG.  See test_hdiv_vim_rt1_contract.py.)
-
-
 def test_fail_loud_on_nonmagnetic():
     """mu_r <= 1 is not a soft-iron demag problem -> RAISE (no silent fallback)."""
     mesh = _sphere()
@@ -114,7 +110,7 @@ def test_fail_loud_on_nonmagnetic():
 
 def test_rt1_linear_solve_is_physically_sane():
     """The RT1 LINEAR material solve on the uniform-field sphere gives the sphere demag ~1/3 and a +z M_avg
-    (no ~2-4x blow-up -- the per-element change-of-basis fix, 2026-06-28).  RT0 is retired; RT1 is the demag
+    (no ~2-4x blow-up -- the per-element change-of-basis fix, 2026-06-28).  Order 1 is the demag
     spectrum reference (eig in [0,1] locked by test_hdiv_vim_demag_spectrum_psd)."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
@@ -129,13 +125,14 @@ def test_rt1_linear_solve_is_physically_sane():
 #  test_hdiv_vim_rt1_contract.py.)
 
 
-def test_order_gt1_rt2_abolished():
-    """RT2+ (HDiv solution order >= 2) is abolished -- order>1 must RAISE ValueError (RT2 gave no per-element
-    magnetization gain over RT1 and was slower; No-Fallbacks)."""
+def test_public_rt2_linear_solve():
+    """The public pure-TET RT2 solve is a production material path."""
     mesh = _sphere(h=0.7)
-    with pytest.raises(ValueError, match="RT2"):
-        with ng.TaskManager():
-            Solve(mesh, 100.0, _HEXT, order=2)
+    with ng.TaskManager():
+        result = Solve(mesh, 100.0, _HEXT, order=2)
+    assert result["order"] == 2
+    assert abs(result["demag"] - 1.0 / 3.0) < 1e-2
+    assert result["M_avg"][2] > 0
 
 
 def test_requires_exactly_one_material_spec():

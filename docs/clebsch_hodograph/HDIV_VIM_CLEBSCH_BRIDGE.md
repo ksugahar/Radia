@@ -161,12 +161,10 @@ foliated fields). The concrete open questions:
   committed `solve_nonlinear` outer-χ loop on `A⁺ = (1/χ)M_mass + N` converges).
   The remaining obstacle to a *practical* field-exact nonlinear solve is **not
   conditioning but cost**: the exact-field operator is assembled by an
-  element-by-element charge field, which is `O(N²)` (the C++ per-element kernels
-  `_hdiv_tet_volfield_linear` / `_hdiv_tri_field` are ~7× faster than the numpy
-  vectorised path and machine-identical, but still `O(N²)`). The concrete
-  enabler is the **batched H-matrix charge-field assembler** (the field-version
-  of the charge Gram `B`, `docs/hdiv_vim/polynomial_charge_field.ipynb` item d) —
-  the parallel C++ work is heading there.
+  element-by-element charge field, which is `O(N²)`.  The production
+  `FieldFromSolution` path batches the RT1 charge field in C++ and owns its
+  TaskManager region; large observation sets still need an H-matrix/FMM-style
+  field evaluator before field evaluation itself is asymptotically scalable.
 - **Open (the hard prize):** the 3-D saturation linearisation — a 3-D
   Chaplygin-analogue valid where the helicity obstruction vanishes.
 

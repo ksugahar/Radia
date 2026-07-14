@@ -13,9 +13,9 @@ This locks:
   * hex NONLINEAR (BH table): converges with bounded iterations;
   * wedge: direct HDiv-VIM solve works; mixed / pyramid remain outside this path.
 
-The known bursty NGSolve GetTrafo first-touch flake in the hex-charge extraction (memory
-ngsolve-gettrafo-first-touch-garbage) is retried (the determinism contract fail-LOUD raises; rerun is the
-documented remedy) so the gate is CI-robust.
+The affine extraction contains an internal finite/consecutive-sample guard for
+NGSolve first-touch state.  This gate deliberately runs once: a failure must
+remain visible instead of being masked by a whole-solve retry.
 """
 import math
 
@@ -76,25 +76,15 @@ def test_ngsolve_vol_linear_hex_lattice_matches_gettrafo():
     assert max_quad < 1e-14
 
 
-def _hdiv_hex_retry(mesh, **kw):
-    """vim.Solve with retries on the KNOWN bursty GetTrafo first-touch flake (fail-loud, rerun is the
-    documented remedy).  Each attempt re-draws the hex-charge extraction."""
-    last = None
-    for _ in range(5):
-        try:
-            with ng.TaskManager():
-                return Solve(mesh, **kw)
-        except RuntimeError as e:
-            if "GetTrafo lattice evaluation unstable" in str(e):
-                last = e
-                continue
-            raise
-    raise last
+def _hdiv_hex_run(mesh, **kw):
+    """Run one production solve; internal geometry stabilization is fail-loud."""
+    with ng.TaskManager():
+        return Solve(mesh, **kw)
 
 
 def test_vim_solve_hex_linear():
     """vim.Solve on a pure-hex cube: exact demag 1/3 and transverse ~0."""
-    res = _hdiv_hex_retry(_cube(6), mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))
+    res = _hdiv_hex_run(_cube(6), mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))
     assert res["nonlinear"] is False
     assert abs(res["demag"] - 1.0 / 3.0) < 5e-3, f"hex cube demag {res['demag']} off 1/3"
     mz = res["M_avg"][2]
@@ -105,7 +95,7 @@ def test_vim_solve_hex_linear():
 
 def test_vim_solve_hex_nonlinear():
     """vim.Solve on a pure-hex cube with a BH table: energy-Newton converges."""
-    res = _hdiv_hex_retry(_cube(6), bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
+    res = _hdiv_hex_run(_cube(6), bh_table=BH, H_ext=ng.CoefficientFunction((0, 0, H0)))
     assert res["nonlinear"] is True
     assert res["preconditioner_requested"] == "auto"
     assert res["preconditioner"] == "jacobi"
@@ -125,7 +115,7 @@ def test_vim_solve_wedge_linear():
     verts = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
     if verts != {6}:
         pytest.skip(f"prism mesh did not produce pure wedges (got {sorted(verts)})")
-    res = _hdiv_hex_retry(mesh, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))   # H field, A/m
+    res = _hdiv_hex_run(mesh, mu_r=MU_R, H_ext=ng.CoefficientFunction((0, 0, H0)))   # H field, A/m
     mz = res["M_avg"][2]
     assert abs(res["demag"] - 1.0 / 3.0) < 6e-2, f"wedge cube demag {res['demag']} off 1/3"
     assert 2.0e3 < mz < 4.0e3, f"wedge HDiv Mz {mz:.1f} outside cube demag band"
@@ -140,19 +130,8 @@ def test_rad_solve_demag_backend_hdiv_on_hex():
         iron = MeshSoftIron(_cube(4), mu_r=MU_R)
     src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     top = rad.ObjCnt([iron, src])
-    last = None
-    for _ in range(5):
-        try:
-            with ng.TaskManager():
-                rad.Solve(top, 1e-6, 3000, 0, demag_backend="hdiv")    # explicit hdiv on hex -> now solves
-            break
-        except RuntimeError as e:
-            if "GetTrafo lattice evaluation unstable" in str(e):
-                last = e
-                continue
-            raise
-    else:
-        raise last
+    with ng.TaskManager():
+        rad.Solve(top, 1e-6, 3000, 0, demag_backend="hdiv")    # explicit hdiv on hex -> now solves
     M = np.array([m for (_c, m) in rad.ObjM(iron)], float)             # hdiv-solved M written back via ObjSetM
     assert M.shape[0] == 64, f"expected 64 hex, got {M.shape[0]}"
     mz = float(M[:, 2].mean())
@@ -170,19 +149,8 @@ def test_rad_solve_auto_on_hex_uses_hdiv():
         iron = MeshSoftIron(_cube(3), mu_r=MU_R)
     src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
     top = rad.ObjCnt([iron, src])
-    last = None
-    for _ in range(5):
-        try:
-            with ng.TaskManager():
-                res = rad.Solve(top, 1e-6, 3000, 0)
-            break
-        except RuntimeError as e:
-            if "GetTrafo lattice evaluation unstable" in str(e):
-                last = e
-                continue
-            raise
-    else:
-        raise last
+    with ng.TaskManager():
+        res = rad.Solve(top, 1e-6, 3000, 0)
 
     assert isinstance(res, dict), type(res)
     assert res["n_el"] == 27

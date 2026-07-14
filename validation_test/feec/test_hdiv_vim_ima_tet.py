@@ -5,7 +5,7 @@ FULL model's demag factor (a z-magnetised sphere = 1/3), while the reduced model
 The C++ highorder charge Gram folds the mirror-image charge interactions into every entry
   G_IMA(a,b) = G(a,b) + sum_i sign_i * 0.5*(QuadDotRefl(a,b,mask_i) + QuadDotRefl(b,a,mask_i))
 with QuadDotRefl(tgt,src,mask) = the source's PhiInner potential at tgt's outer points reflected on the mask
-axes (mirror isometry).  Physics + reflection/sign convention validated against the existing RT0 analytic
+axes (mirror isometry).  Physics + reflection/sign convention validated against the analytic
 IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for the FLAT pure-TET RT1 path, and the
 HEX/WEDGE RT1 image-fold is locked separately by the low-level charge-Gram smoke tests.  Curved reduced
 models still fail loud (locked below).

@@ -1,11 +1,9 @@
 """Golden: the ngsolve.bem-style HDiv-VIM DemagOperator (radia.vim.DemagOperator).
 
 Mirrors ngsolve.bem: construct from an HDiv FESpace (order from the fes), expose `.mat` -- an H-matrix-
-backed NGSolve BaseMatrix N = B^T G B that composes with NGSolve solvers.  order=0 (RT0) and order=p go
-through ONE call.  Locks:
-  * DemagFactor (the Rayleigh quotient) ~ 1/3 on a cube; order-0 uses the exact analytic Gram (fast),
-    order>0 the Sauter-Schwab quadrature, agreeing to within the high-order quad error (the unified API
-    gives the same physics at every order; RT0 is just order=0);
+backed NGSolve BaseMatrix N = B^T G B that composes with NGSolve solvers.  Pure-TET RT1 and RT2 are public.
+Locks:
+  * DemagFactor (the Rayleigh quotient) ~ 1/3 on a cube for both orders;
   * `.mat` is a real NGSolve BaseMatrix: a matvec works AND it composes into (M + N) which a NGSolve GMRes
     solve runs to convergence -- i.e. the operator plugs into NGSolve's framework like ngsolve.bem's
     SingleLayerPotentialOperator.mat.
@@ -30,17 +28,19 @@ def _cube(h):
     return ng.Mesh(OCCGeometry(Box(Pnt(0, 0, 0), Pnt(1, 1, 1))).GenerateMesh(maxh=h))
 
 
-def test_demagoperator_factor_rt1():
-    """DemagOperator(HDiv(mesh, order=1)).DemagFactor -> ~1/3 on a cube.  HDiv-VIM is RT1-only: RT0 (order=0)
-    is retired (per-element inaccurate) and RT2+ is retired, so only RT1 is exercised (and RT0/RT2 must raise)."""
+def test_demagoperator_factor_rt1_rt2():
+    """DemagOperator gives the cube factor at both supported pure-TET orders."""
     mesh = _cube(0.8)
     with ng.TaskManager():
-        D = DemagOperator(ng.HDiv(mesh, order=1), eps=1e-7).DemagFactor(ng.CF((0, 0, 1)))
-        # RT0 + RT2 are retired -> the operator rejects them (No-Fallbacks)
-        for bad in (0, 2):
-            with pytest.raises(ValueError, match="RT1"):
-                DemagOperator(ng.HDiv(mesh, order=bad), eps=1e-7)
-    assert 0.31 < D < 0.345, f"RT1 DemagFactor {D:.5f} not ~1/3"
+        values = {
+            p: DemagOperator(ng.HDiv(mesh, order=p), eps=1e-7).DemagFactor(ng.CF((0, 0, 1)))
+            for p in (1, 2)
+        }
+        with pytest.raises(ValueError, match="order in"):
+            DemagOperator(ng.HDiv(mesh, order=0), eps=1e-7)
+    assert all(0.31 < value < 0.345 for value in values.values()), values
+    assert abs(values[2] - 1.0 / 3.0) < abs(values[1] - 1.0 / 3.0), values
+    assert abs(values[2] - values[1]) < 2e-3, values
 
 
 def test_demagoperator_mat_composes_with_ngsolve():
@@ -67,4 +67,4 @@ def test_demagoperator_mat_composes_with_ngsolve():
 
 
 # (test_demagoperator_gauss_backend_matches_analytic removed 2026-06-29: the 'gauss' point-operator backend
-#  is retired -- HDiv-VIM (RT1, tet) uses the analytic charge Gram only.  See test_hdiv_vim_rt1_contract.py.)
+#  is retired -- HDiv-VIM uses the analytic charge Gram only.  See test_hdiv_vim_rt1_contract.py.)

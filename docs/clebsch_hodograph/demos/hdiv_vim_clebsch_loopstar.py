@@ -53,7 +53,7 @@ import numpy as np
 import ngsolve as ng
 from netgen.csg import CSGeometry, Sphere, Pnt
 
-from radia.vim import DemagOperator, reconstruct_field_polynomial
+from radia.vim import DemagOperator, FieldFromSolution
 
 x, y, z = ng.x, ng.y, ng.z
 
@@ -96,15 +96,15 @@ def analyze(maxh=0.5, order=1, ext_pts=((0, 0, 2.0), (2.0, 0, 0), (0, 2.0, 1.0))
         # charge-free -> ~0 external field.
         gf_cl = ng.GridFunction(fes); gf_cl.Set(CF_CLEBSCH)
         gf_un = ng.GridFunction(fes); gf_un.Set(CF_UNIFORM)
-        H_cl = reconstruct_field_polynomial(mesh, gf_cl, obs, quad=4)
-        H_un = reconstruct_field_polynomial(mesh, gf_un, obs, quad=4)
+        H_cl = FieldFromSolution({"gfM": gf_cl, "order": 1, "curve_order": None}, obs)
+        H_un = FieldFromSolution({"gfM": gf_un, "order": 1, "curve_order": None}, obs)
         ext_cl = float(np.linalg.norm(H_cl)); ext_un = float(np.linalg.norm(H_un))
 
         # (3) gauge / superposition: external field of (uniform star) + t*Clebsch vs t=0 -- unchanged.
         gauge = []
         for t in (0.5, 1.0, 2.0, 5.0):
             gf = ng.GridFunction(fes); gf.Set(CF_UNIFORM + t * CF_CLEBSCH)
-            H = reconstruct_field_polynomial(mesh, gf, obs, quad=4)
+            H = FieldFromSolution({"gfM": gf, "order": 1, "curve_order": None}, obs)
             gauge.append((t, float(np.linalg.norm(H - H_un) / ext_un)))
     return {
         "ne": int(mesh.GetNE(ng.VOL)), "order": order, "maxh": maxh,

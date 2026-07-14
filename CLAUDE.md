@@ -51,7 +51,7 @@ S:\Radia\01_GitHub\
                           # and validation_test/ as durable promoted lanes.
   tests/                  # Radia tests + tests/mcp/
   examples/               # retired; do not add new files
-  validation_test/         # heavier validation, mdx-first for large runs
+  validation_test/         # heavier validation, executed on idle mdx/hibino
   docs/
   Build.ps1               # MSVC + MKL build
   install_full.py          # One-command full setup
@@ -579,7 +579,7 @@ a durable role:
 | Lane | Purpose (intent) | Audience | Ships in wheel? |
 |------|------------------|----------|-----------------|
 | `tests/**` | **実装の基本機能の確認** — fast regression, fixture, API contract, CI-friendly. | CI / Claude / developer | No |
-| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, mdx-first for large runs. | developer / agent / research validation | No |
+| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, executed on idle `mdx` or `hibino` for large runs. | developer / agent / research validation | No |
 | `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
 | `src/` | Reusable API, parser, formula, solver helper, computation kernel. | package users / panels / validation / MCP | Yes |
@@ -591,7 +591,8 @@ a durable role:
   fast regression.
 - **C:\temp → validation_test/**: the run is a numerical validation,
   benchmark, convergence sweep, golden lock, or regression corpus; heavy runs
-  are executed on mdx when idle and labelled as mdx validation.
+  are executed on an idle `mdx` or `hibino` host and labelled with the actual
+  validation host.
 - **C:\temp → docs/**: the result teaches a method or workflow to humans; the
   notebook must be executed, output-bearing, Markdown-integrated, and paired
   with synchronized JSON.
@@ -1681,6 +1682,13 @@ NGSolve mesh/FES concepts, HDiv flux continuity, and Radia's charge-Gram /
 HACApK acceleration path. Retired collocation demag names are not supported as
 public backends.
 
+Element-order scope is fail-loud. RT1 is the full production route for
+TET/HEX/WEDGE, planar 2D, IMA, and `rad.Fld` reconstruction. RT2 is a public
+flat pure-TET material/operator route (`Solve`, `ChargeGram`,
+`DemagOperator`). Curved geometry uses RT1 on an isoparametric P2 mesh;
+curved RT2 and RT2 HEX/WEDGE/2D/IMA/field paths stay rejected until their own
+accuracy and compute-host performance gates pass.
+
 ### Unified Field Computation Architecture
 
 **POLICY**: All field computation MUST use `rad_field_unified.h/cpp`.
@@ -2656,7 +2664,6 @@ HACApK is canonical for the routes where the operator is designed as an H-matrix
 | Subclass / adapter | Role | Python entry / test surface |
 |---|---|---|
 | `RadHACApKBEMManager` | BEM / SIBC Laplace Galerkin | `radia.bem_sibc_solver` and BEM HACApK matvec validation |
-| `RadHACApKHDivManager` | HDiv-VIM structured-hex RT0 probe/demo path | `_hdiv_vim_hmatrix_probe` validation |
 | `RadHACApKChargeGram` | production HDiv-VIM charge-Gram H-matrix | HDiv linear/nonlinear charge-Gram validation |
 | `RadHACApKPointKernel` | Gauss-point Laplace kernel building block | charge-Gauss operator path |
 | `RadHACApKHDivSystemTet` | HDiv-VIM tetrahedral system | HDiv tet/system validation |
@@ -3196,24 +3203,29 @@ digest): `sweep_heatmap.png` は commit されていたが、その
 
 ### Benchmark Policy
 
-**POLICY (MUST: 計算時間の測定は mdx で、2026-07-04 Sugahara)**: **壁時計 / タイミング /
-スケーラビリティ計測は `mdx`(静音計算ホスト)で行うことが MUST**。LAB での timing は codex の
+**POLICY (MUST: 重い検証・計算時間の測定は mdx または hibino で、2026-07-14 Sugahara)**:
+**壁時計 / タイミング / スケーラビリティ計測と solver-heavy な `validation_test/` の実行は、
+アイドル状態の `mdx` または `hibino` で行うことが MUST**。`mdx`を既定の静音計算ホストとし、
+MATLAB、大規模メモリ、長時間ジョブ、またはmdx混雑時は`hibino`を使う。LAB での timing は codex の
 並列 build / pytest / 他計算に汚染され無意味なので、**論文・docs・意思決定に用いる時間データは LAB で
 測ってはならない**。LAB で許されるのは correctness / smoke(数値一致・収束確認)のみ。mdx が塞がって
-いれば timing はアイドルまで延期する(下記)。この MUST は benchmark script (`bench_*.py`) だけでなく、
+いれば `hibino`へ振り分けるか、両方が塞がっていれば timing は延期する(下記)。この MUST は benchmark script (`bench_*.py`) だけでなく、
 ad-hoc な timing 計測・scaling sweep・build-time 測定すべてに適用される。
 
-**POLICY (mdx = 静音計算ホスト、他ジョブ終了後にのみ走らせる、2026-07-04)**: `mdx` は
-研究室の **計算用・静音マシン**。壁時計 / タイミング計測および重い計算ジョブは mdx で走らせるが、
+**POLICY (mdx/hibino = 静音計算ホスト、他ジョブ終了後にのみ走らせる、2026-07-14)**: `mdx` と
+`hibino` は研究室の **計算用・静音マシン**。壁時計 / タイミング計測および重い計算ジョブは、
 **他のプロセス（別の計算ジョブ・build・CI・pytest・他ユーザ / codex の計算）が終わってから**＝
-mdx が **アイドルのときだけ** 開始する。実行中の別ジョブと **並走させない** — 並走は mdx の
+選択したホストが **アイドルのときだけ** 開始する。実行中の別ジョブと **並走させない** — 並走は
+計算ホストの
 "静音で再現可能" という唯一の価値を壊し、かつ他人のジョブを汚染する。
-- **開始前に必ず mdx の稼働状況を確認**する：`ssh mdx pwsh` で `Get-Process python` の本数 /
-  CPU 負荷 / build・CI の有無を見る。重いジョブが走っていれば **待つ**（横入りしない）。
-- mdx が塞がっているとき：**正しさ照合 (correctness / smoke — 数値が一致するか・収束するか) は
-  LAB で可**（LAB は codex 競合下でも一致確認は問題ない）。**タイミング計測は mdx がアイドルに
-  なるまで延期**する。LAB のタイミングは codex の並列 build / pytest に汚染されて無意味
-  （crash / hang / SIGKILL / noise）なので信用しない。
+- **開始前に必ず選択したホストの稼働状況を確認**する：`ssh mdx pwsh` または `ssh hibino pwsh` で
+  `Get-Process python` の本数 / CPU負荷 / build・CIの有無を見る。重いジョブが走っていれば **待つ**
+  （横入りしない）。
+- `mdx` と `hibino` がともに塞がっているとき：**正しさ照合 (correctness / smoke — 数値が一致するか・
+  収束するか) は LAB で可**（LAB は codex 競合下でも一致確認は問題ない）。**タイミング計測は
+  いずれかがアイドルになるまで延期**する。LAB のタイミングは codex の並列 build / pytest に汚染されて
+  無意味（crash / hang / SIGKILL / noise）なので信用しない。
+- 重い `validation_test/` は実行したホスト名、開始時刻、実行時間、メモリ条件を結果JSONまたはログに残す。
 - これは codex↔claude の **共有ポリシー**（AGENTS.md の Benchmark Policy にも同文を置く）。
   背景と過去インシデントは memory `benchmark_on_mdx_quiet_machine.md`。
 

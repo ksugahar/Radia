@@ -61,7 +61,8 @@ def test_2d_linear_disk_clausius_mossotti():
     mesh = _disk_mesh()
     with ng.TaskManager():
         res = Solve(mesh, 1000.0, ng.CoefficientFunction((1.0, 0.0)))
-    assert res["linear_solver"] == "dense-2d" and not res["nonlinear"]
+    assert res["linear_solver"] == "mass-riesz-cg-2d" and not res["nonlinear"]
+    assert res["linear_iterations"] > 0
     chi = 999.0
     ref = chi / (1.0 + chi / 2.0)
     rel = abs(res["M_avg"][0] - ref) / ref
