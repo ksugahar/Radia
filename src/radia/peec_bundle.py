@@ -237,16 +237,25 @@ def build_loop_bundle_impedance(solver, seg_of_filament):
     return R_f, L_f
 
 
-def solve_loop_bundle(R_f, L_f, frequency, I_port=1.0, Zs_fil=None):
+def solve_loop_bundle(R_f, L_f, frequency, I_port=1.0, Zs_fil=None, emf=None):
     """Solve the K x K Loop-form bundle system at one frequency.
 
     Extended system (K+1 x K+1) with port voltage V_port as an unknown:
 
-        [ Z_fil  -1 ] [I_f   ]   [0     ]
+        [ Z_fil  -1 ] [I_f   ]   [-emf  ]
         [ 1^T     0 ] [V_port] = [I_port]
 
     Z_fil = R_f + jw * L_f + diag(Zs_fil) (optional per-filament SIBC
     surface impedance, e.g. Dowell).
+
+    ``emf`` (optional, length K complex) is a per-filament externally
+    induced EMF (voltage) added to the filament KVL row, so the filament
+    equation becomes ``Z_fil I_f = V_port 1 - emf``.  This is the entry
+    point for a workpiece back-reaction: emf[k] = jw * flux_wp,k where
+    flux_wp,k = integral over filament k of A_wp . dl is the flux linked
+    by filament k from the workpiece reaction vector potential (see
+    ``peec_coupled_bem_solver.CoupledPEECBEMSolver``).  Default None
+    reproduces the uncoupled air solve exactly.
 
     Returns (I_f, V_port) where I_f is (K,) complex.
     """
@@ -261,6 +270,8 @@ def solve_loop_bundle(R_f, L_f, frequency, I_port=1.0, Zs_fil=None):
     M[:K, K] = -1.0
     M[K, :K] = 1.0
     b = np.zeros(K + 1, dtype=complex)
+    if emf is not None:
+        b[:K] = -np.asarray(emf, dtype=complex)
     b[K] = I_port
     x = np.linalg.solve(M, b)
     return x[:K], complex(x[K])

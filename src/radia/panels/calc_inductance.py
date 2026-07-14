@@ -1649,6 +1649,107 @@ def _solve_workpiece_strong_coupled(args):
     return sol
 
 
+def _solve_workpiece_strong_coupled_peec(args, coil_data):
+    """Iterative PEEC filament coil <-> workpiece BEM coupling.
+
+    The PEEC analogue of ``_solve_workpiece_strong_coupled``: rebuilds the
+    filament loop-bundle from ``--coil-step`` and drives
+    ``CoupledPEECBEMSolver`` (back-EMF from the workpiece reaction field
+    redistributes the filament currents self-consistently).  Returns the
+    same key set as the BEM-A strong path so ``_assemble_strong_output``
+    renders both uniformly; R is taken from ``2 P_wp / I^2`` (energy),
+    ``Delta_L`` from the coupled solve.
+
+    EXPERIMENTAL: the strong P_wp reduction is not yet validated vs FEM /
+    the Takahashi model (the committed demo is weakly coupled).  See
+    ``radia.peec_coupled_bem_solver`` module docstring.
+    """
+    from ngsolve import Mesh, BND
+    from surface_mesh_extract import _extract_surface_mesh_filtered
+    from radia.coil_from_cad import filaments_from_step
+    from radia.peec_bundle import build_loop_bundle_impedance
+    from radia.peec_coupled_bem_solver import CoupledPEECBEMSolver
+    from em_material import EMMaterial
+
+    omega = 2.0 * math.pi * args.frequency
+
+    # --- PEEC coil loop-bundle (same construction as _solve_coil_peec, but
+    #     proximity-iterative is OFF for the coupled solve: the workpiece
+    #     back-reaction is the coupling of interest here) ---
+    progress("COUPLED", f"PEEC bundle from {os.path.basename(args.coil_step)} "
+                        f"(n_peri={args.peec_n_peri})")
+    t0 = time.perf_counter()
+    topo = filaments_from_step(args.coil_step, sigma=args.coil_sigma,
+                               n_peri=args.peec_n_peri, use_coil_builder=True)
+    paths = topo["filament_paths"]
+    R_f, L_f = build_loop_bundle_impedance(topo["solver"],
+                                           topo["seg_of_filament"])
+    a_eq = _equivalent_wire_radius_m(topo, args.peec_n_peri)
+    Zs_fil = _peec_skin_impedance_per_filament(
+        paths, a_eq, args.coil_sigma, omega, args.peec_n_peri)
+
+    # --- workpiece surface mesh (same convention as the BEM-A strong path) ---
+    vol_mesh = Mesh(args.vol)
+    mats = set(vol_mesh.GetMaterials())
+    bnds = set(vol_mesh.GetBoundaries())
+    if args.wp_label in mats:
+        wp_mesh, _ = _extract_surface_mesh_filtered(
+            vol_mesh, keep_label=args.wp_label, return_vertex_map=True)
+    elif args.wp_label in bnds:
+        wp_mesh = _extract_bnd_only_inline(vol_mesh, args.wp_label)
+    else:
+        raise ValueError(
+            f"wp_label {args.wp_label!r} not found in materials "
+            f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
+    t_wp_mesh = time.perf_counter() - t0
+
+    mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
+    delta_wp = mat_wp.skin_depth(args.frequency)
+    Z_s = (1.0 + 1j) * (1.0 / args.sigma) / delta_wp
+    wp_hacapk = (args.wp_bem_backend == "hacapk")
+
+    progress("COUPLED",
+        f"strong PEEC coupling [EXPERIMENTAL]: {len(paths)} filaments / "
+        f"wp {wp_mesh.nv}v, f={args.frequency:g} Hz, Z_s={Z_s:.3e}, "
+        f"wp_backend={'hacapk' if wp_hacapk else 'dense'}, "
+        f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
+        f"relax={args.coupling_relax:g}")
+    progress("COUPLED",
+        "WARNING: strong PEEC P_wp reduction not yet validated vs FEM / "
+        "Takahashi (demo is weakly coupled) -- treat absolute P_wp/dL as "
+        "unverified.")
+    t0 = time.perf_counter()
+    solver = CoupledPEECBEMSolver(
+        paths, R_f, L_f, wp_mesh, Zs_fil=Zs_fil, wp_order=1,
+        wp_hacapk=wp_hacapk, wp_aca_eps=args.wp_aca_eps,
+        wp_gmres_tol=args.wp_gmres_tol)
+    sol = solver.solve(
+        Z_s=Z_s, omega=omega, I_port=float(args.current),
+        max_iter=int(args.coupling_max_iter),
+        tol=float(args.coupling_tol),
+        relax=float(args.coupling_relax))
+    t_solve = time.perf_counter() - t0
+    progress("COUPLED",
+        f"converged in {int(sol['iterations'])} iter: "
+        f"L_total={sol['L_total'] * 1e9:.2f} nH "
+        f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
+        f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
+        f"({t_solve:.1f}s)")
+
+    # Context keys expected by _assemble_strong_output (mirror the BEM-A
+    # driver).  n_J_coil -> filament count; the coil backend is the PEEC
+    # loop-bundle (no H-matrix coil), so coil_hacapk is always False.
+    sol["n_J_coil"] = int(sol["n_filaments"])
+    sol["wp_mesh_nv"] = int(wp_mesh.nv)
+    sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
+    sol["delta_wp_mm"] = float(delta_wp * 1e3)
+    sol["t_wp_mesh_s"] = float(t_wp_mesh)
+    sol["t_coupled_solve_s"] = float(t_solve)
+    sol["wp_hacapk"] = bool(wp_hacapk)
+    sol["coil_hacapk"] = False
+    return sol
+
+
 def _assemble_strong_output(args, coil_data, strong):
     """L_coil + R_coil (BEM-A) + strong-coupled ΔL / ΔR / P_wp / H_t.
 
@@ -1688,6 +1789,22 @@ def _assemble_strong_output(args, coil_data, strong):
     out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
+    # PEEC filament coil: relabel the coil backend and flag the path as
+    # experimental (the strong P_wp reduction is not yet validated vs FEM /
+    # the Takahashi model; the committed demo is weakly coupled).  Delta_R
+    # from the coupled Z_port is surfaced only as a diagnostic (R itself is
+    # taken from 2 P_wp / I^2 above, like the BEM-A path).
+    if coil_data.get("source_type") == "filament":
+        out["coil_bem_backend"] = "peec-loop-bundle"
+        out["coupled_n_filaments"] = int(strong.get("n_filaments", 0))
+        if "Delta_R" in strong:
+            out["coupled_delta_R_reaction_mOhm"] = float(strong["Delta_R"] * 1e3)
+        out["experimental"] = True
+        out["experimental_note"] = (
+            "strong PEEC coupling: the ~2.2x weak-path P_wp over-estimate "
+            "fix (coil-current redistribution) is NOT yet validated vs FEM "
+            "/ the Takahashi model -- the committed demo is weakly coupled. "
+            "Treat absolute P_wp / delta_L as unverified.")
     return out
 
 
@@ -1900,11 +2017,12 @@ def run_inductance(args):
     # to drive the coil EFIE and a workpiece to couple to -- fail fast on a
     # bad contract before the expensive coil solve.
     if args.coupling_mode == "strong":
-        if args.coil_solver != "bem-a":
+        if args.coil_solver not in ("bem-a", "peec"):
             return {"status": "error",
-                    "error": "--coupling-mode strong requires --coil-solver "
-                             "bem-a (the coupled solver drives the coil EFIE "
-                             "from a surface mesh; PEEC filaments cannot)."}
+                    "error": f"--coupling-mode strong supports --coil-solver "
+                             f"bem-a (CoupledBEMSolver, EFIE coil) or peec "
+                             f"(CoupledPEECBEMSolver, filament coil); got "
+                             f"{args.coil_solver!r}."}
         if args.coil_only or not args.vol:
             return {"status": "error",
                     "error": "--coupling-mode strong requires a workpiece "
@@ -1947,7 +2065,10 @@ def run_inductance(args):
     # one-way Telegen ΔL path.
     with TaskManager():
         if args.coupling_mode == "strong":
-            strong = _solve_workpiece_strong_coupled(args)
+            if args.coil_solver == "peec":
+                strong = _solve_workpiece_strong_coupled_peec(args, coil_data)
+            else:
+                strong = _solve_workpiece_strong_coupled(args)
             out = _assemble_strong_output(args, coil_data, strong)
         else:
             wp_data = _solve_workpiece_weak_coupled(args, coil_data)

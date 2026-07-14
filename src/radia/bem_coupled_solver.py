@@ -168,6 +168,62 @@ def assemble_back_reaction_RHS(fes_J, wp_c, wp_a, wp_J):
     return f_form.vec.FV().NumPy().copy()
 
 
+def extract_scattered_wp_J(mesh_wp, wp_fes, phi_vec_complex, phi_inc_complex):
+    """Scattered workpiece surface current ``J_wp = n x H_scat`` per BND panel.
+
+    ``H_scat = -grad_s(phi_total - phi_inc)`` computed per element via
+    NGSolve element-wise integration of the surface-gradient components.
+    Returns ``(centroids, areas, J_re, J_im)`` arrays of shape (M, 3) /
+    (M,) over the workpiece boundary elements.
+
+    Shared by ``CoupledBEMSolver`` (EFIE coil) and
+    ``CoupledPEECBEMSolver`` (PEEC filament coil): the workpiece side of
+    both coupled solvers is identical, so the scattered-current extraction
+    lives here as a free function rather than being duplicated.
+    """
+    from ngsolve import GridFunction, Integrate, CF, BND, grad
+
+    gf_re = GridFunction(wp_fes)
+    gf_im = GridFunction(wp_fes)
+    gf_re.vec.FV().NumPy()[:] = phi_vec_complex.real - phi_inc_complex.real
+    gf_im.vec.FV().NumPy()[:] = phi_vec_complex.imag - phi_inc_complex.imag
+
+    elem_A = Integrate(CF(1), mesh_wp, BND, element_wise=True)
+    grad_re = [Integrate(grad(gf_re)[i], mesh_wp, BND,
+                         element_wise=True) for i in range(3)]
+    grad_im = [Integrate(grad(gf_im)[i], mesh_wp, BND,
+                         element_wise=True) for i in range(3)]
+
+    c_list, a_list, jr_list, ji_list = [], [], [], []
+    for el in mesh_wp.Elements(BND):
+        area = abs(elem_A[el.nr])
+        if area < 1e-30:
+            continue
+        ht_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
+        ht_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
+        verts = [np.array(mesh_wp.vertices[v.nr].point)
+                 for v in el.vertices]
+        e1 = verts[1] - verts[0]
+        e2 = verts[2] - verts[0]
+        n_vec = np.cross(e1, e2)
+        n_mag = np.linalg.norm(n_vec)
+        if n_mag > 1e-30:
+            n_vec /= n_mag
+        centroid = np.mean(verts, axis=0)
+        if np.dot(n_vec, centroid) < 0:
+            n_vec = -n_vec
+        j_re = np.cross(n_vec, ht_re)
+        j_im = np.cross(n_vec, ht_im)
+        c_list.append(np.mean([(v[0], v[1], v[2]) for v in verts],
+                              axis=0))
+        a_list.append(area)
+        jr_list.append(j_re)
+        ji_list.append(j_im)
+
+    return (np.array(c_list), np.array(a_list),
+            np.array(jr_list), np.array(ji_list))
+
+
 class CoupledBEMSolver:
     """Iterative coil EFIE + workpiece scalar BIE + SIBC."""
 
@@ -487,49 +543,9 @@ class CoupledBEMSolver:
 
     def _extract_wp_J(self, phi_vec_complex, phi_inc_complex):
         """Extract scattered surface current ``J_wp = n x H_scat`` from the
-        SIBC scalar BIE solution.
-
-        ``H_scat = -grad_s(phi_total - phi_inc)``, computed per element via
-        NGSolve element-wise integration of grad components.
+        SIBC scalar BIE solution.  Thin wrapper over the shared free
+        function ``extract_scattered_wp_J`` (behaviour unchanged).
         """
-        from ngsolve import GridFunction, Integrate, CF, BND, grad
-
-        gf_re = GridFunction(self.wp_solver.fes)
-        gf_im = GridFunction(self.wp_solver.fes)
-        gf_re.vec.FV().NumPy()[:] = phi_vec_complex.real - phi_inc_complex.real
-        gf_im.vec.FV().NumPy()[:] = phi_vec_complex.imag - phi_inc_complex.imag
-
-        elem_A = Integrate(CF(1), self.mesh_wp, BND, element_wise=True)
-        grad_re = [Integrate(grad(gf_re)[i], self.mesh_wp, BND,
-                             element_wise=True) for i in range(3)]
-        grad_im = [Integrate(grad(gf_im)[i], self.mesh_wp, BND,
-                             element_wise=True) for i in range(3)]
-
-        c_list, a_list, jr_list, ji_list = [], [], [], []
-        for el in self.mesh_wp.Elements(BND):
-            area = abs(elem_A[el.nr])
-            if area < 1e-30:
-                continue
-            ht_re = np.array([-grad_re[k][el.nr] / area for k in range(3)])
-            ht_im = np.array([-grad_im[k][el.nr] / area for k in range(3)])
-            verts = [np.array(self.mesh_wp.vertices[v.nr].point)
-                     for v in el.vertices]
-            e1 = verts[1] - verts[0]
-            e2 = verts[2] - verts[0]
-            n_vec = np.cross(e1, e2)
-            n_mag = np.linalg.norm(n_vec)
-            if n_mag > 1e-30:
-                n_vec /= n_mag
-            centroid = np.mean(verts, axis=0)
-            if np.dot(n_vec, centroid) < 0:
-                n_vec = -n_vec
-            j_re = np.cross(n_vec, ht_re)
-            j_im = np.cross(n_vec, ht_im)
-            c_list.append(np.mean([(v[0], v[1], v[2]) for v in verts],
-                                  axis=0))
-            a_list.append(area)
-            jr_list.append(j_re)
-            ji_list.append(j_im)
-
-        return (np.array(c_list), np.array(a_list),
-                np.array(jr_list), np.array(ji_list))
+        return extract_scattered_wp_J(
+            self.mesh_wp, self.wp_solver.fes,
+            phi_vec_complex, phi_inc_complex)
