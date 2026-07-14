@@ -541,7 +541,8 @@ static long long NextChargeGramBuildId()
 
 static bool HexCacheStatsEnabledByEnv()
 {
-    const char* v = std::getenv("RADIA_HDIV_HEX_CACHE_STATS");
+    const char* v = std::getenv("RADIA_HDIV_BLOCK_CACHE_STATS");
+    if (!v || v[0] == '\0') v = std::getenv("RADIA_HDIV_HEX_CACHE_STATS");
     return v && v[0] != '\0' && v[0] != '0';
 }
 
@@ -606,6 +607,15 @@ static bool HOFarOneSidedEnabled()
     return enabled;
 }
 
+static bool HOAnalyticBlockEnabled()
+{
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK");
+        return !v || v[0] == '\0' || v[0] == '0';
+    }();
+    return enabled;
+}
+
 static void ValidateImageVectors(const std::vector<int>& image_masks,
                                  const std::vector<double>& image_signs)
 {
@@ -633,6 +643,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
     ValidateImageVectors(m_image_masks, m_image_signs);
+    m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     const int n_cell = n_el;
     const int n_bf   = (int)(m_faceV.size() / 9);
     m_n = (int)m_host.size();                       // number of polynomial CHARGES (the H-matrix dofs)
@@ -644,6 +655,15 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         std::unordered_map<long long, int> cnt;
         for (int a = 0; a < m_n; ++a) cnt[(long long)m_host[a]*2 + m_kind[a]]++;
         for (int a = 0; a < m_n; ++a) m_nmono[a] = cnt[(long long)m_host[a]*2 + m_kind[a]];
+    }
+    m_hoLocalOf.assign((size_t)m_n, 0);
+    m_hoCellCharges.assign((size_t)n_cell, {});
+    m_hoFaceCharges.assign((size_t)n_bf, {});
+    for (int a = 0; a < m_n; ++a) {
+        std::vector<int>& group = (m_kind[a] == 0) ? m_hoCellCharges[m_host[a]]
+                                                   : m_hoFaceCharges[m_host[a]];
+        m_hoLocalOf[a] = (int)group.size();
+        group.push_back(a);
     }
     const int nqt = (int)ref_tet_w.size();
     const int nqr = (int)ref_tri_w.size();
@@ -721,6 +741,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             faceQW[f][q] = ref_tri_w[q] * (2.0 * area);     // phys weight = ref_w * |J|, |J| = 2*area
         }
     }
+    InitHOPolynomialCoefficients();
     // INNER subtraction rule (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
     // singular part is carried EXACTLY by base = m_src(p)*PhiTet/TriPotential), so the inner sum tolerates a
     // COARSER rule than the outer (which must resolve the degree-p target monomial folded into m_qw).  When
@@ -996,6 +1017,79 @@ double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
     return rad_ipow(l0, e[0]) * rad_ipow(l1, e[1]);
 }
 
+void RadHACApKChargeGram::InitHOPolynomialCoefficients()
+{
+    m_hoPolyDegree.assign((size_t)m_n, 0);
+    m_hoPolyA.assign((size_t)m_n, 0.0);
+    m_hoPolyB.assign((size_t)m_n * 3, 0.0);
+    m_hoPolyC.assign((size_t)m_n * 9, 0.0);
+    m_hoAnalyticBlock = true;
+    bool has_quadratic_face_mode = false;
+    for (int src = 0; src < m_n; ++src) {
+        const int host = m_host[src];
+        const int* e = &m_expo[(size_t)3*src];
+        const int deg = e[0] + e[1] + e[2];
+        m_hoPolyDegree[src] = deg;
+        const int max_degree = (m_kind[src] == 0) ? 1 : 2;
+        if (deg > max_degree) {
+            m_hoAnalyticBlock = false;
+            continue;
+        }
+        if (m_kind[src] == 1 && deg == 2) has_quadratic_face_mode = true;
+
+        double beta[3][3] = {{0,0,0},{0,0,0},{0,0,0}}, V0[3];
+        int ncoord;
+        if (m_kind[src] == 0) {
+            const double* V = &m_cellV[(size_t)host*12];
+            const double* Inv = &m_cellInv[(size_t)host*9];
+            for (int i = 0; i < 3; ++i) {
+                beta[i][0]=Inv[3*i]; beta[i][1]=Inv[3*i+1]; beta[i][2]=Inv[3*i+2];
+            }
+            V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 3;
+        } else {
+            const double* V = &m_faceV[(size_t)host*9];
+            const double* Gi = &m_faceGinv[(size_t)host*4];
+            double a1[3], a2[3];
+            for (int k=0;k<3;++k){ a1[k]=V[3+k]-V[k]; a2[k]=V[6+k]-V[k]; }
+            for (int k=0;k<3;++k){
+                beta[0][k]=Gi[0]*a1[k]+Gi[1]*a2[k];
+                beta[1][k]=Gi[2]*a1[k]+Gi[3]*a2[k];
+            }
+            V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 2;
+        }
+
+        double facA[2], facB[2][3]; int nf = 0;
+        for (int i = 0; i < ncoord; ++i) {
+            for (int c = 0; c < e[i]; ++c) {
+                facB[nf][0]=beta[i][0]; facB[nf][1]=beta[i][1]; facB[nf][2]=beta[i][2];
+                facA[nf] = -(beta[i][0]*V0[0]+beta[i][1]*V0[1]+beta[i][2]*V0[2]);
+                ++nf;
+            }
+        }
+        double A = 1.0, B[3] = {0,0,0}, C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+        for (int f = 0; f < nf; ++f) {
+            const double al = facA[f]; const double* be = facB[f];
+            const double nA = A*al; double nB[3], nC[3][3];
+            for (int k=0;k<3;++k) nB[k] = A*be[k] + al*B[k];
+            for (int k=0;k<3;++k) for (int l=0;l<3;++l)
+                nC[k][l] = al*C[k][l] + 0.5*(B[k]*be[l] + be[k]*B[l]);
+            A = nA;
+            for (int k=0;k<3;++k) {
+                B[k]=nB[k];
+                for (int l=0;l<3;++l) C[k][l]=nC[k][l];
+            }
+        }
+        m_hoPolyA[src] = A;
+        for (int k=0;k<3;++k) {
+            m_hoPolyB[(size_t)3*src+k] = B[k];
+            for (int l=0;l<3;++l) m_hoPolyC[(size_t)9*src+3*k+l] = C[k][l];
+        }
+    }
+    // RT1's one/three-charge groups are already cheap on the scalar memo path; whole-host blocks add more
+    // cache bookkeeping than kernel work there.  The production win starts at RT2's six quadratic face modes.
+    m_hoAnalyticBlock = m_hoAnalyticBlock && has_quadratic_face_mode;
+}
+
 // EXACT analytic high-order inner potential INT_host(src) m_src(y)/|p-y| dy for FLAT panels, charge degree
 // <= 2 (the hybrid's machine-precision branch -- replaces the point-subtraction PhiAtHO for order<=2, and is
 // EXACT for self/adjacent/far alike, faster than the subtraction since there is NO inner quadrature loop).
@@ -1009,46 +1103,10 @@ double RadHACApKChargeGram::EvalMono(int charge, const double p[3]) const
 double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
 {
     const int host = m_host[src];
-    const int* e = &m_expo[(size_t)3*src];
-    const int deg = e[0] + e[1] + e[2];
-    // (1) the host barycentric gradients beta_i (l_i = beta_i . (y - V0)) and V0
-    double beta[3][3] = {{0,0,0},{0,0,0},{0,0,0}}, V0[3];
-    int ncoord;
-    if (m_kind[src] == 0) {                                  // tet cell: l_i = Inv_i . (y - V0)
-        const double* V = &m_cellV[(size_t)host*12];
-        const double* Inv = &m_cellInv[(size_t)host*9];
-        for (int i = 0; i < 3; ++i) { beta[i][0]=Inv[3*i]; beta[i][1]=Inv[3*i+1]; beta[i][2]=Inv[3*i+2]; }
-        V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 3;
-    } else {                                                 // tri face: l_i = Gi-combination of a_k . (y - V0)
-        const double* V = &m_faceV[(size_t)host*9];
-        const double* Gi = &m_faceGinv[(size_t)host*4];
-        double a1[3], a2[3];
-        for (int k=0;k<3;++k){ a1[k]=V[3+k]-V[k]; a2[k]=V[6+k]-V[k]; }
-        for (int k=0;k<3;++k){ beta[0][k]=Gi[0]*a1[k]+Gi[1]*a2[k]; beta[1][k]=Gi[2]*a1[k]+Gi[3]*a2[k]; }
-        V0[0]=V[0]; V0[1]=V[1]; V0[2]=V[2]; ncoord = 2;
-    }
-    // (2) collect the (at most 2 for deg<=2) affine factors l_i = alpha_i + beta_i . y
-    double facA[2], facB[2][3]; int nf = 0;
-    for (int i = 0; i < ncoord; ++i) {
-        for (int c = 0; c < e[i]; ++c) {
-            if (nf < 2) {
-                facB[nf][0]=beta[i][0]; facB[nf][1]=beta[i][1]; facB[nf][2]=beta[i][2];
-                facA[nf] = -(beta[i][0]*V0[0]+beta[i][1]*V0[1]+beta[i][2]*V0[2]);
-            }
-            ++nf;
-        }
-    }
-    // (3) multiply the affine factors -> physical polynomial A + B.y + y^T C y  (nf <= 2)
-    double A = 1.0, B[3] = {0,0,0}, C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-    for (int f = 0; f < nf; ++f) {
-        const double al = facA[f]; const double* be = facB[f];
-        const double nA = A*al; double nB[3], nC[3][3];
-        for (int k=0;k<3;++k) nB[k] = A*be[k] + al*B[k];
-        for (int k=0;k<3;++k) for (int l=0;l<3;++l) nC[k][l] = al*C[k][l] + 0.5*(B[k]*be[l] + be[k]*B[l]);
-        A = nA;
-        for (int k=0;k<3;++k) { B[k]=nB[k]; for (int l=0;l<3;++l) C[k][l]=nC[k][l]; }
-    }
-    // (4) contract with the exact moment potentials
+    const int deg = m_hoPolyDegree[src];
+    const double A = m_hoPolyA[src];
+    const double* B = &m_hoPolyB[(size_t)3*src];
+    const double* C = &m_hoPolyC[(size_t)9*src];
     if (m_kind[src] == 0) {                                  // cell: degree <= 1 for order<=2 (no TetMoment2 needed)
         double V[4][3]; const double* s=&m_cellV[(size_t)host*12];
         for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k];
@@ -1065,9 +1123,66 @@ double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
     double res = A*I0 + B[0]*M1[0] + B[1]*M1[1] + B[2]*M1[2];
     if (deg >= 2) {
         double M2[3][3]; rad_hdiv::TriMoment2(V, p, M2);
-        for (int k=0;k<3;++k) for (int l=0;l<3;++l) res += C[k][l]*M2[k][l];
+        for (int k=0;k<3;++k) for (int l=0;l<3;++l) res += C[3*k+l]*M2[k][l];
     }
     return res;
+}
+
+void RadHACApKChargeGram::PhiInnerHOHostVec(
+    int kind, int host, const double p[3], const std::vector<int>& charges, double* values) const
+{
+    if (charges.empty()) return;
+    int max_degree = 0;
+    for (int src : charges) max_degree = std::max(max_degree, m_hoPolyDegree[src]);
+
+    double I0, M1[3] = {0,0,0}, M2[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+    if (kind == 0) {
+        double V[4][3]; const double* stored = &m_cellV[(size_t)host*12];
+        for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
+        I0 = rad_hdiv::PhiTet(V, p);
+        if (max_degree >= 1) rad_hdiv::TetMoment1(V, p, M1);
+    } else {
+        double V[3][3]; const double* stored = &m_faceV[(size_t)host*9];
+        for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
+        I0 = rad_hdiv::TriPotential(V, p);
+        if (max_degree >= 1) rad_hdiv::TriMoment1(V, p, M1);
+        if (max_degree >= 2) rad_hdiv::TriMoment2(V, p, M2);
+    }
+
+    for (size_t local = 0; local < charges.size(); ++local) {
+        const int src = charges[local];
+        const double* B = &m_hoPolyB[(size_t)3*src];
+        const double* C = &m_hoPolyC[(size_t)9*src];
+        double value = m_hoPolyA[src]*I0;
+        if (m_hoPolyDegree[src] >= 1)
+            value += B[0]*M1[0] + B[1]*M1[1] + B[2]*M1[2];
+        if (m_hoPolyDegree[src] >= 2)
+            for (int k=0;k<3;++k) for (int l=0;l<3;++l) value += C[3*k+l]*M2[k][l];
+        values[local] = value;
+    }
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
+    int kindT, int hostT, int kindS, int hostS) const
+{
+    const std::vector<int>& targets = (kindT == 0) ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
+    const std::vector<int>& sources = (kindS == 0) ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
+    const int nT = (int)targets.size(), nS = (int)sources.size();
+    std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+
+    const std::vector<rad_hdiv::Vec3>& points = m_qp[targets[0]];
+    for (size_t q = 0; q < points.size(); ++q) {
+        const double p[3] = {points[q][0], points[q][1], points[q][2]};
+        PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
+        for (int lt = 0; lt < nT; ++lt) {
+            const double weight = m_qw[targets[lt]][q];
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += weight*inner[ls];
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
 }
 
 // Duffy singular-quadrature inner potential INT_host(src) m_src(y)/|p-y| dy for the order>=3 / curved path
@@ -2478,6 +2593,10 @@ void RadHACApKChargeGram::ResetHexCacheStats()
     m_hexSymTransBlockHits.store(0, std::memory_order_relaxed);
     m_hexSymTransBlockMisses.store(0, std::memory_order_relaxed);
     m_hexSymTransBlockClears.store(0, std::memory_order_relaxed);
+    m_hoSymBlockLookups.store(0, std::memory_order_relaxed);
+    m_hoSymBlockHits.store(0, std::memory_order_relaxed);
+    m_hoSymBlockMisses.store(0, std::memory_order_relaxed);
+    m_hoSymBlockClears.store(0, std::memory_order_relaxed);
 }
 
 std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats() const
@@ -2490,6 +2609,9 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("wedge_trans_cache_scope", (double)WedgeTransCacheScope());
     out.emplace_back("wedge_trans_cache_enabled", WedgeTransCacheScope() > 0 ? 1.0 : 0.0);
     out.emplace_back("ho_far_one_sided_enabled", HOFarOneSidedEnabled() ? 1.0 : 0.0);
+    out.emplace_back("ho_analytic_block_available", m_hoAnalyticBlock ? 1.0 : 0.0);
+    out.emplace_back("ho_analytic_block_enabled",
+                     m_hoAnalyticBlock && HOAnalyticBlockEnabled() ? 1.0 : 0.0);
     out.emplace_back("hex_block_lookups", ld(m_hexBlockLookups));
     out.emplace_back("hex_block_hits", ld(m_hexBlockHits));
     out.emplace_back("hex_block_misses", ld(m_hexBlockMisses));
@@ -2506,14 +2628,20 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_sym_trans_block_hits", ld(m_hexSymTransBlockHits));
     out.emplace_back("hex_sym_trans_block_misses", ld(m_hexSymTransBlockMisses));
     out.emplace_back("hex_sym_trans_block_clears", ld(m_hexSymTransBlockClears));
+    out.emplace_back("ho_sym_block_lookups", ld(m_hoSymBlockLookups));
+    out.emplace_back("ho_sym_block_hits", ld(m_hoSymBlockHits));
+    out.emplace_back("ho_sym_block_misses", ld(m_hoSymBlockMisses));
+    out.emplace_back("ho_sym_block_clears", ld(m_hoSymBlockClears));
     const double btot = ld(m_hexBlockLookups);
     const double ttot = ld(m_hexTransBlockLookups);
     const double sbtot = ld(m_hexSymBlockLookups);
     const double sttot = ld(m_hexSymTransBlockLookups);
+    const double hotot = ld(m_hoSymBlockLookups);
     out.emplace_back("hex_block_hit_rate", btot > 0.0 ? ld(m_hexBlockHits) / btot : 0.0);
     out.emplace_back("hex_trans_block_hit_rate", ttot > 0.0 ? ld(m_hexTransBlockHits) / ttot : 0.0);
     out.emplace_back("hex_sym_block_hit_rate", sbtot > 0.0 ? ld(m_hexSymBlockHits) / sbtot : 0.0);
     out.emplace_back("hex_sym_trans_block_hit_rate", sttot > 0.0 ? ld(m_hexSymTransBlockHits) / sttot : 0.0);
+    out.emplace_back("ho_sym_block_hit_rate", hotot > 0.0 ? ld(m_hoSymBlockHits) / hotot : 0.0);
     return out;
 }
 
@@ -3201,6 +3329,8 @@ static thread_local long long s_hex_sym_block_owner = -1;
 static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_hex_sym_block_cache;
 static thread_local long long s_hex_sym_trans_block_owner = -1;
 static thread_local std::unordered_map<HexTransBlockKey, std::vector<double>, HexTransBlockKeyHash> s_hex_sym_trans_block_cache;
+static thread_local long long s_ho_tet_sym_block_owner = -1;
+static thread_local std::unordered_map<HexBlockKey, std::vector<double>, HexBlockKeyHash> s_ho_tet_sym_block_cache;
 
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int mask) const
 {
@@ -3344,6 +3474,39 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
     } else {
         HexStatAdd(m_hexCacheStatsEnabled, m_hexSymBlockHits);
     }
+    return it->second;
+}
+
+const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
+    int kindA, int hostA, int kindB, int hostB) const
+{
+    HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockLookups);
+    if (s_ho_tet_sym_block_owner != m_build_id) {
+        s_ho_tet_sym_block_cache.clear();
+        s_ho_tet_sym_block_owner = m_build_id;
+        HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockClears);
+    }
+    const HexBlockKey key{kindA, hostA, kindB, hostB, 0};
+    auto it = s_ho_tet_sym_block_cache.find(key);
+    if (it == s_ho_tet_sym_block_cache.end()) {
+        HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockMisses);
+        if (s_ho_tet_sym_block_cache.size() > HexBlockCacheLimit()) {
+            s_ho_tet_sym_block_cache.clear();
+            HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockClears);
+        }
+        const int nA = (kindA == 0) ? (int)m_hoCellCharges[hostA].size()
+                                    : (int)m_hoFaceCharges[hostA].size();
+        const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
+                                    : (int)m_hoFaceCharges[hostB].size();
+        std::vector<double> ab = QuadBlockHOTet(kindA, hostA, kindB, hostB);
+        std::vector<double> ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
+        std::vector<double> sym((size_t)nA*nB);
+        for (int localA = 0; localA < nA; ++localA)
+            for (int localB = 0; localB < nB; ++localB)
+                sym[(size_t)localA*nB + localB] =
+                    0.5*(ab[(size_t)localA*nB + localB] + ba[(size_t)localB*nA + localA]);
+        it = s_ho_tet_sym_block_cache.emplace(key, std::move(sym)).first;
+    } else HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockHits);
     return it->second;
 }
 
@@ -4220,13 +4383,23 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         // unnecessary; NEAR/self pairs keep the full QuadDot.  This is NOT a monopole far (zero-mean modes
         // have zero monopole) -- it is just a lower quadrature order where the integrand is smooth.
         // m_ho_far_factor = 1e30 (no LOW rule supplied) => every pair NEAR => original all-high-quad path.
+        const bool far_pair = a != b && m_ho_far_factor < 1e29 &&
+            [&]{ const double dx = m_cent[3*a]-m_cent[3*b], dy = m_cent[3*a+1]-m_cent[3*b+1],
+                              dz = m_cent[3*a+2]-m_cent[3*b+2];
+                 return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]); }();
         double base;
-        if (a == b) {
-            base = QuadDot(a, a);                                // self: always the full high-quad subtraction
-        } else if (m_ho_far_factor < 1e29 &&
-                   [&]{ const double dx = m_cent[3*a]-m_cent[3*b], dy = m_cent[3*a+1]-m_cent[3*b+1],
-                                     dz = m_cent[3*a+2]-m_cent[3*b+2];
-                        return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]); }()) {
+        if (!m_curved && m_hoAnalyticBlock && HOAnalyticBlockEnabled() && !far_pair) {
+            // Flat order<=2 NEAR/self: all monomial charges on a host share the same geometric moments at
+            // every outer point.  Build and memoize the complete symmetrized host-pair block so PhiTet /
+            // TriPotential / Moment1/2 are evaluated once, then contracted with every local monomial.
+            const int kindA = m_kind[a], hostA = m_host[a], kindB = m_kind[b], hostB = m_host[b];
+            const int localA = m_hoLocalOf[a], localB = m_hoLocalOf[b];
+            const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
+                                       : (int)m_hoFaceCharges[hostB].size();
+            base = GetHOTetSymBlock(kindA, hostA, kindB, hostB)[(size_t)localA*nB + localB];
+        } else if (a == b) {
+            base = QuadDot(a, a);                                // curved self fallback
+        } else if (far_pair) {
             // FAR: cheap low-quad plain double-Gauss.  The plain double integral is symmetric in
             // (a,b), so one directed evaluation is enough; keep the env switch as an A/B diagnostic.
             base = HOFarOneSidedEnabled()
