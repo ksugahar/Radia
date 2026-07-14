@@ -200,113 +200,163 @@ def _edge_midpoint_coords(mesh, n_J):
     return coords
 
 
-def _loop_cocr_solve(SL, M, D_red, g_red, omega, Z_s, matvec_backend,
-                     coords=None, tol=_LOOP_COCR_TOL,
-                     maxiter=_LOOP_COCR_MAXITER, hacapk_aca_eps=1e-8,
-                     hacapk_leaf=64, hacapk_eta=2.0, log_fn=None):
-    """Loop-reduced COCR solve of the impedance-EFIE saddle (scalable path).
+class _LoopReducedSaddle:
+    """Build-once / solve-many divergence-free reduction of the BEM saddle.
 
-    Reduces ``[[A11, D_red^T],[D_red, 0]] [J;p] = [0; g_red]`` to the
+    Reduces ``[[A11, D_red^T],[D_red, 0]] [J;p] = [rhs_J; g_red]`` to the
     divergence-free (loop / stream-function) subspace via the sparse
     orthogonal projector onto ker(D_red)::
 
         Pi = I - D_red^T (D_red D_red^T)^-1 D_red            (sparse splu)
         J  = J_p + J_loop,  J_p = D_red^T (D_red D_red^T)^-1 g_red,
-        (Pi A11 Pi) J_loop = -Pi A11 J_p                     (J_loop in ker D_red)
+        (Pi A11 Pi) J_loop = Pi (rhs_J - A11 J_p)            (J_loop in ker D_red)
 
     with ``A11 = jw*mu0*SL + Z_s*M`` (omega>0) or ``SL`` (omega==0).  ``Pi A11
     Pi`` is complex-symmetric and A11-like (SPD-dominated single layer), so
     COCR converges in ~20-30 MESH-INDEPENDENT iterations, replacing the dense
-    saddle LU (O(N^3) work, O(N^2) complex memory) with ~24 matvecs.  The
-    reduction is EXACT: on the gapped-torus fixture it reproduces the dense-LU
-    R/L to < 0.01 %.
+    saddle LU (O(N^3) work, O(N^2) memory) with ~24 matvecs.  The reduction is
+    EXACT: on the gapped-torus fixture it reproduces the dense-LU R/L to <0.01%.
+
+    The projector splu, ``J_p`` and (optionally HACApK-compressed) A11 are all
+    built ONCE in ``__init__``; ``solve(rhs_J)`` then reuses them for any
+    J-block right-hand side.  This is what the coupled Picard loop
+    (CoupledBEMSolver) needs -- the coil H-matrix is built once and re-solved
+    each iteration against the workpiece back-reaction ``rhs_J = -f_back`` --
+    and what the standalone impedance-EFIE (``_loop_cocr_solve``, rhs_J=0) uses.
 
     Why the loop reduction (not the raw saddle): COCR breaks down on the
     indefinite saddle -- rhs = [0; g] lives entirely in the constraint block so
     the initial ``r^T A r = 0`` -- and diverges on the Schur complement; the
-    div-free subspace is where the complex-symmetric short-recurrence method
-    actually fits.  ``D_red`` (one redundant row dropped) is REQUIRED: the full
-    D is rank-deficient and ``(D D^T)^-1`` then amplifies g's null component,
-    blowing J_p up ~1e7x.
+    div-free subspace is where the short-recurrence method actually fits.
+    ``D_red`` (one redundant row dropped) is REQUIRED: the full D is
+    rank-deficient and ``(D D^T)^-1`` then amplifies g's null component.
 
     ``matvec_backend``: ``"dense"`` (``SL @ v``, reuses the already-assembled
-    dense SL -- default, zero extra dependency) or ``"hacapk"`` (compress SL to
-    an O(N log N) H-matrix via ``HACApKBEMManager``, the ``bem_sibc_solver``
-    pattern; fes_order==0 only, needs ``coords``).  HACApK MatVec accuracy is
-    ~3e-7 (>> the FMM backend's ~1e-3), so it preserves the accuracy-sensitive R.
-
-    Returns ``(J, info)``; raises RuntimeError if COCR does not converge
-    (No-Fallbacks: a stall means a degenerate mesh or mislabelled ports, not a
-    reason to silently return a wrong current).
+    dense SL) or ``"hacapk"`` (compress SL to an O(N log N) H-matrix via
+    ``HACApKBEMManager``, the ``bem_sibc_solver`` pattern; fes_order==0 only,
+    needs ``coords``).  HACApK MatVec accuracy is ~3e-7 (>> the FMM backend's
+    ~1e-3), so it preserves the accuracy-sensitive R.
     """
-    import scipy.sparse as sp
-    import scipy.sparse.linalg as spla
-    _log = log_fn if log_fn is not None else (lambda _t, _m: None)
-    ac = omega > 0.0
-    jwm = 1j * omega * MU_0
 
-    if matvec_backend == "hacapk":
-        if coords is None:
-            raise ValueError("hacapk loop matvec requires edge-midpoint coords")
-        from radia import _radia_pybind as _rpb
-        t0 = time.perf_counter()
-        SL_h = _rpb.HACApKBEMManager(np.ascontiguousarray(coords),
-                                     np.ascontiguousarray(SL))
-        SL_h.BuildHMatrix(aca_eps=hacapk_aca_eps, leaf_size=int(hacapk_leaf),
-                          eta=hacapk_eta, max_rank=-1, print_level=0)
-        st = SL_h.GetStats()
-        _log("BEMA",
-            f"loop-COCR HACApK H-matrix built "
-            f"(compression={st['compression']:.3f}, O(N log N) matvec, "
-            f"{time.perf_counter()-t0:.1f}s)")
+    def __init__(self, SL, M, D_red, g_red, omega, Z_s, matvec_backend,
+                 coords=None, hacapk_aca_eps=1e-8, hacapk_leaf=64,
+                 hacapk_eta=2.0, log_fn=None):
+        import scipy.sparse as sp
+        import scipy.sparse.linalg as spla
+        _log = log_fn if log_fn is not None else (lambda _t, _m: None)
+        self.ac = omega > 0.0
+        jwm = 1j * omega * MU_0
 
-        def _sl(v):
-            return (SL_h.MatVec(np.ascontiguousarray(v.real))
-                    + 1j * SL_h.MatVec(np.ascontiguousarray(v.imag)))
-    elif matvec_backend == "dense":
-        def _sl(v):
-            return SL @ v
-    else:
-        raise ValueError(
-            f"unknown loop matvec backend {matvec_backend!r} "
-            f"(choices: dense, hacapk)")
+        if matvec_backend == "hacapk":
+            if coords is None:
+                raise ValueError(
+                    "hacapk loop matvec requires edge-midpoint coords")
+            from radia import _radia_pybind as _rpb
+            t0 = time.perf_counter()
+            SL_h = _rpb.HACApKBEMManager(np.ascontiguousarray(coords),
+                                         np.ascontiguousarray(SL))
+            SL_h.BuildHMatrix(aca_eps=hacapk_aca_eps,
+                              leaf_size=int(hacapk_leaf),
+                              eta=hacapk_eta, max_rank=-1, print_level=0)
+            st = SL_h.GetStats()
+            _log("BEMA",
+                f"loop-COCR HACApK H-matrix built "
+                f"(compression={st['compression']:.3f}, O(N log N) matvec, "
+                f"{time.perf_counter()-t0:.1f}s)")
 
-    if ac:
-        def _a11(v):
-            return jwm * _sl(v) + Z_s * (M @ v)
-    else:
-        def _a11(v):
-            return _sl(v)
-
-    Dr = sp.csr_matrix(D_red)
-    Drt = Dr.T.tocsr()
-    lu_DDt = spla.splu((Dr @ Drt).tocsc())
-
-    def _proj(v):
-        Dv = Dr @ v
-        if np.iscomplexobj(v):
-            y = lu_DDt.solve(Dv.real) + 1j * lu_DDt.solve(Dv.imag)
+            def _sl(v):
+                return (SL_h.MatVec(np.ascontiguousarray(v.real))
+                        + 1j * SL_h.MatVec(np.ascontiguousarray(v.imag)))
+        elif matvec_backend == "dense":
+            def _sl(v):
+                return SL @ v
         else:
-            y = lu_DDt.solve(Dv)
-        return v - (Drt @ y)
+            raise ValueError(
+                f"unknown loop matvec backend {matvec_backend!r} "
+                f"(choices: dense, hacapk)")
 
-    J_p = Drt @ lu_DDt.solve(g_red)
-    if ac:
-        J_p = J_p.astype(complex)
+        if self.ac:
+            def _a11(v):
+                return jwm * _sl(v) + Z_s * (M @ v)
+        else:
+            def _a11(v):
+                return _sl(v)
+        self._a11 = _a11
 
-    def _mop(v):
-        return _proj(_a11(_proj(v)))
+        Dr = sp.csr_matrix(D_red)
+        Drt = Dr.T.tocsr()
+        lu_DDt = spla.splu((Dr @ Drt).tocsc())
 
-    b_red = -_proj(_a11(J_p))
-    J_loop, iters, status = _cocr(_mop, b_red, tol=tol, maxiter=maxiter)
-    if status != "converged":
-        raise RuntimeError(
-            f"loop-COCR did not converge (status={status!r}, iters={iters}, "
-            f"tol={tol}).  The impedance-EFIE loop operator is SPD-dominated "
-            f"and converges in ~20-30 iters on a well-formed coil surface; a "
-            f"stall indicates a degenerate mesh or mislabelled source/sink.")
-    J = J_p + J_loop
-    if not ac:
+        def _proj(v):
+            Dv = Dr @ v
+            if np.iscomplexobj(v):
+                y = lu_DDt.solve(Dv.real) + 1j * lu_DDt.solve(Dv.imag)
+            else:
+                y = lu_DDt.solve(Dv)
+            return v - (Drt @ y)
+        self._proj = _proj
+
+        self.J_p = Drt @ lu_DDt.solve(g_red)
+        if self.ac:
+            self.J_p = self.J_p.astype(complex)
+        self._c0 = _a11(self.J_p)                 # A11 J_p, reused every solve
+
+        def _mop(v):
+            return _proj(_a11(_proj(v)))
+        self._mop = _mop
+        self._backend = matvec_backend
+
+    def a11(self, v):
+        """Apply the (H-matrix or dense) A11 operator -- used for the
+        magnetic energy ``J^H A11 J`` in the coupled solver."""
+        return self._a11(v)
+
+    def solve(self, rhs_J=None, include_particular=True,
+              tol=_LOOP_COCR_TOL, maxiter=_LOOP_COCR_MAXITER):
+        """Solve the saddle for a J-block right-hand side ``rhs_J`` (default 0).
+
+        ``include_particular`` selects the constraint-block RHS: True (default)
+        uses ``g_red`` (the terminal drive -> adds the particular solution
+        ``J_p``); False uses ``0`` (a zero-net-current solve, e.g. the imaginary
+        back-reaction current whose terminal current is zero).
+
+        Returns ``(J, iters, status)``; raises RuntimeError on non-convergence
+        (No-Fallbacks: a stall means a degenerate mesh or mislabelled ports).
+        """
+        if include_particular:
+            b_red = -self._proj(self._c0)
+        else:
+            b_red = np.zeros_like(self.J_p)
+        if rhs_J is not None:
+            b_red = b_red + self._proj(rhs_J)
+        J_loop, iters, status = _cocr(self._mop, b_red, tol=tol,
+                                      maxiter=maxiter)
+        if status != "converged":
+            raise RuntimeError(
+                f"loop-COCR did not converge (status={status!r}, "
+                f"iters={iters}, tol={tol}).  The loop operator is "
+                f"SPD-dominated and converges in ~20-30 iters on a well-formed "
+                f"coil surface; a stall indicates a degenerate mesh or "
+                f"mislabelled source/sink.")
+        J = (self.J_p + J_loop) if include_particular else J_loop
+        return J, iters, status
+
+
+def _loop_cocr_solve(SL, M, D_red, g_red, omega, Z_s, matvec_backend,
+                     coords=None, tol=_LOOP_COCR_TOL,
+                     maxiter=_LOOP_COCR_MAXITER, hacapk_aca_eps=1e-8,
+                     hacapk_leaf=64, hacapk_eta=2.0, log_fn=None):
+    """Loop-reduced COCR solve of the impedance-EFIE saddle (rhs = [0; g_red]).
+
+    Thin wrapper over :class:`_LoopReducedSaddle` for the standalone coil
+    solver.  See that class for the full derivation.  Returns ``(J, info)``.
+    """
+    saddle = _LoopReducedSaddle(
+        SL, M, D_red, g_red, omega, Z_s, matvec_backend, coords=coords,
+        hacapk_aca_eps=hacapk_aca_eps, hacapk_leaf=hacapk_leaf,
+        hacapk_eta=hacapk_eta, log_fn=log_fn)
+    J, iters, _status = saddle.solve(tol=tol, maxiter=maxiter)
+    if not saddle.ac:
         J = J.real.copy()
     info = {"method": f"cocr[{matvec_backend}]",
             "iterations": int(iters), "residual": 0.0,

@@ -175,7 +175,9 @@ class CoupledBEMSolver:
                  sink_label="sink", fes_order=0, wp_order=1,
                  wp_hacapk=False, wp_aca_eps=1e-10, wp_hacapk_leaf=64,
                  wp_hacapk_eta=2.0, wp_gmres_tol=1e-8, wp_gmres_maxiter=500,
-                 wp_gmres_restart=80):
+                 wp_gmres_restart=80,
+                 coil_hacapk=False, coil_aca_eps=1e-8, coil_hacapk_leaf=64,
+                 coil_hacapk_eta=2.0):
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
                              TaskManager, ds, BND, div)
         from ngsolve.bem import LaplaceSL
@@ -232,18 +234,44 @@ class CoupledBEMSolver:
 
         self.g = g_src / A_src - g_snk / A_snk
 
-        # LU factorize the saddle-point matrix (reused each iteration)
+        # Coil saddle solve backend.
+        #   dense (default): LU-factor [[SL, Dr^T],[Dr, 0]] once and reuse the
+        #     factor for every Picard right-hand side (fastest below ~12k n_J).
+        #   coil_hacapk: compress SL to an O(N log N) H-matrix and solve the
+        #     saddle by loop-COCR (div-free reduction), built ONCE and re-solved
+        #     each iteration against the back-reaction rhs_J.  O(N r) storage
+        #     instead of the dense LU's O(N^2) -- lifts the coil past the dense
+        #     LU memory wall (the dense SL assembly itself still caps at ~12k
+        #     n_J; beyond that needs an on-demand H-matrix fill).
         D_red = self.D[:-1, :]
         g_red = self.g[:-1]
-        n_J = self.n_J
         n_c = self.n_f - 1
-        self.K_saddle = np.block([
-            [self.SL_coil, D_red.T],
-            [D_red, np.zeros((n_c, n_c))]
-        ])
-        self.K_lu = lu_factor(self.K_saddle)
         self.g_red = g_red
         self.n_constraint = n_c
+        self.coil_hacapk = bool(coil_hacapk)
+        if self.coil_hacapk:
+            from radia.bem.coil_inductance_ngsolve import (
+                _LoopReducedSaddle, _edge_midpoint_coords)
+            if fes_order != 0:
+                raise ValueError(
+                    "coil_hacapk requires fes_order==0 (RT0) for the "
+                    "edge-midpoint HACApK cluster tree.")
+            coords = _edge_midpoint_coords(mesh_coil, self.n_J)
+            self._coil_loop = _LoopReducedSaddle(
+                self.SL_coil, None, D_red, g_red, 0.0, None, "hacapk",
+                coords=coords, hacapk_aca_eps=float(coil_aca_eps),
+                hacapk_leaf=int(coil_hacapk_leaf),
+                hacapk_eta=float(coil_hacapk_eta))
+            # The dense SL is now redundant (the H-matrix holds the compressed
+            # operator and serves the energy matvec); free the O(N^2) array.
+            self.SL_coil = None
+            self.K_lu = None
+        else:
+            self.K_saddle = np.block([
+                [self.SL_coil, D_red.T],
+                [D_red, np.zeros((n_c, n_c))]
+            ])
+            self.K_lu = lu_factor(self.K_saddle)
         self.t_coil_assembly = time.perf_counter() - t0
 
         # === Workpiece BIE setup ===
@@ -306,12 +334,33 @@ class CoupledBEMSolver:
         n_J = self.n_J
         n_c = self.n_constraint
 
+        # Coil saddle solve + magnetic-energy, dispatched to the dense-LU or
+        # the loop-COCR (HACApK) backend.  ``include_particular`` picks the
+        # constraint RHS: True = terminal drive g_red (the real current);
+        # False = zero net current (the imaginary back-reaction current).
+        if self.coil_hacapk:
+            def _coil_solve(rhs_J, include_particular):
+                J, _it, _st = self._coil_loop.solve(
+                    rhs_J=rhs_J, include_particular=include_particular)
+                return np.real(J)
+
+            def _sl_energy(J):
+                return float(np.real(J @ self._coil_loop.a11(J)))
+        else:
+            def _coil_solve(rhs_J, include_particular):
+                rhs = np.zeros(n_J + n_c)
+                if rhs_J is not None:
+                    rhs[:n_J] = rhs_J
+                if include_particular:
+                    rhs[n_J:] = self.g_red
+                return lu_solve(self.K_lu, rhs)[:n_J]
+
+            def _sl_energy(J):
+                return float(J @ self.SL_coil @ J)
+
         # === Step 0: uncoupled coil solution (air-only L) ===
-        rhs0 = np.zeros(n_J + n_c)
-        rhs0[n_J:] = self.g_red
-        x0 = lu_solve(self.K_lu, rhs0)
-        J_re_air = x0[:n_J].copy()
-        L_air = MU_0 * (J_re_air @ self.SL_coil @ J_re_air)
+        J_re_air = _coil_solve(None, True).copy()
+        L_air = MU_0 * _sl_energy(J_re_air)
 
         J_re = J_re_air.copy()
         J_im = np.zeros(n_J)
@@ -373,18 +422,10 @@ class CoupledBEMSolver:
                              + (1 - relax) * f_back_im)
 
             # --- Re-solve coil EFIE saddle point (real and imag parts) ---
-            # SL J_re + D^T p_re = -f_back_re;  D J_re = g_red
-            rhs_re = np.zeros(n_J + n_c)
-            rhs_re[:n_J] = -f_back_re
-            rhs_re[n_J:] = self.g_red
-            sol_re = lu_solve(self.K_lu, rhs_re)
-            J_re = sol_re[:n_J]
-
-            # SL J_im + D^T p_im = -f_back_im;  D J_im = 0
-            rhs_im = np.zeros(n_J + n_c)
-            rhs_im[:n_J] = -f_back_im
-            sol_im = lu_solve(self.K_lu, rhs_im)
-            J_im = sol_im[:n_J]
+            # SL J_re + D^T p_re = -f_back_re;  D J_re = g_red (terminal drive)
+            J_re = _coil_solve(-f_back_re, True)
+            # SL J_im + D^T p_im = -f_back_im;  D J_im = 0 (zero net current)
+            J_im = _coil_solve(-f_back_im, False)
 
             gf_J_re.vec.FV().NumPy()[:] = J_re
             gf_J_im.vec.FV().NumPy()[:] = J_im
@@ -392,8 +433,7 @@ class CoupledBEMSolver:
             # --- Inductance from total magnetic energy ---
             # Self contribution from BOTH real and imag back-reacted current.
             # Mutual contribution from per-DOF back-reaction inner product.
-            L_self_now = MU_0 * (J_re @ self.SL_coil @ J_re
-                                 + J_im @ self.SL_coil @ J_im)
+            L_self_now = MU_0 * (_sl_energy(J_re) + _sl_energy(J_im))
             mutual = float(f_back_re @ J_re + f_back_im @ J_im)
             L_total = L_self_now + mutual
             Delta_L = L_total - L_air

@@ -81,10 +81,12 @@ TIME_SCHEME_TO_CLI = {
 PEEC_SOLVERS = {
     "Dense LU (small)": {
         "coil_bem_solver": "dense-lu",
+        "coil_saddle_solver": "auto",
         "wp_bem_backend": "intree-dense",
     },
     "HACApK (large)": {
         "coil_bem_solver": "hacapk-gmres",
+        "coil_saddle_solver": "hacapk_cocr",
         "wp_bem_backend": "hacapk",
     },
 }
@@ -340,7 +342,9 @@ class IHDesignSpec:
     def _bem_size(self) -> dict[str, str]:
         return PEEC_SOLVERS.get(
             self.solver,
-            {"coil_bem_solver": "auto", "wp_bem_backend": "hacapk"},
+            {"coil_bem_solver": "auto",
+             "coil_saddle_solver": "auto",
+             "wp_bem_backend": "hacapk"},
         )
 
     def _fem_solver(self) -> str:
@@ -426,6 +430,7 @@ class IHDesignSpec:
             *coil_arg,
             "--coil-solver", "bem-a",
             "--coil-bem-solver", bem_size["coil_bem_solver"],
+            "--coil-saddle-solver", bem_size["coil_saddle_solver"],
             "--wp-bem-backend", bem_size["wp_bem_backend"],
             "--frequency", self.frequency,
             "--current", self.current,
