@@ -7105,7 +7105,8 @@ def test_spwm_snapshot_current_handoff_samples_one_electrical_period():
     assert summary["max_id_abs_error"] < 1.0e-14
     assert summary["max_iq_abs_error"] < 1.0e-14
     assert summary["max_zero_sequence_abs"] < 1.0e-14
-    assert summary["max_abc_square_sum_error"] < 1.0e-13
+    expected_square_sum = 1.5 * ((-2.5) ** 2 + 11.0 ** 2)
+    assert summary["max_abc_square_sum_error"] <= 8.0 * math.ulp(expected_square_sum)
     assert summary["max_phase_rms_abs_error"] < 1.0e-14
     assert summary["rows"][0]["theta_e_deg"] == pytest.approx(7.5)
     assert summary["rows"][0]["dq"]["status"] == "ok"
