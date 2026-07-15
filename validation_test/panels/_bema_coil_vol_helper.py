@@ -57,25 +57,64 @@ def step_to_coil_vol(step_path, vol_path, maxh=0.012,
         elif nm == sink_name and snk_idx is None:
             snk_idx = i
 
-    if src_idx is None or snk_idx is None:
+    src_ids, snk_ids = (None if src_idx is None else [src_idx],
+                        None if snk_idx is None else [snk_idx])
+    if src_ids is None or snk_ids is None:
+        # Auto-detect the two current-injection caps.
+        #
+        # A cap may be SPLIT into several sub-faces: the ih_fem_kelvin demo
+        # coil's caps are each split into a z<0 / z>0 pair.  The old
+        # "two smallest faces by mass" rule then labelled the two HALVES OF
+        # THE SAME cap as source/sink, so the EFIE drove current through the
+        # 2.6 mm thickness instead of around the 66 mm ring and returned
+        # L = 0.28 nH instead of ~90 nH (PEEC on the same coil: 104.9 nH) --
+        # a 373x error that passed silently (2026-07-15).
+        #
+        # Sub-faces of ONE cap share their VERTEX centroid exactly, while the
+        # two caps have distinct ones -- and unlike face centres / pairwise
+        # distances (all ~2.6 mm on that coil, hence useless) this separates
+        # them cleanly.  So: group every face by vertex centroid, then take
+        # the two groups of least total area as the caps and label ALL
+        # sub-faces of each.
+        import numpy as np
+
+        def _vertex_centroid(f):
+            P = np.array([[v.p[0], v.p[1], v.p[2]] for v in f.vertices],
+                         dtype=float)
+            return P.mean(axis=0)
+
         try:
-            fs_sorted = sorted(enumerate(faces), key=lambda x: x[1].mass)
+            groups = {}
+            for i, f in enumerate(faces):
+                key = tuple(np.round(_vertex_centroid(f), 9))
+                groups.setdefault(key, []).append(i)
+            ranked = sorted(
+                groups.items(),
+                key=lambda kv: sum(faces[i].mass for i in kv[1]))
         except Exception as exc:
             raise ValueError(
                 f"could not auto-detect source/sink faces in {step_path}: "
                 f"{exc}.  Add face.name = {source_name!r}/{sink_name!r} "
                 f"in build123d before export.") from exc
-        ca, fa = fs_sorted[0]
-        cb, fb = fs_sorted[1]
-        if abs(fa.center[1]) < abs(fb.center[1]):
-            src_idx, snk_idx = ca, cb
+        if len(ranked) < 2:
+            raise ValueError(
+                f"could not auto-detect source/sink faces in {step_path}: "
+                f"found {len(ranked)} distinct face group(s), need 2 caps.  "
+                f"Add face.name = {source_name!r}/{sink_name!r} in build123d "
+                f"before export.")
+        (ca, ga), (cb, gb) = ranked[0], ranked[1]
+        # Keep the historical tie-break: the cap nearer the y=0 plane is
+        # the source.
+        if abs(ca[1]) <= abs(cb[1]):
+            src_ids, snk_ids = ga, gb
         else:
-            src_idx, snk_idx = cb, ca
+            src_ids, snk_ids = gb, ga
 
+    src_set, snk_set = set(src_ids), set(snk_ids)
     for i, f in enumerate(faces):
-        if i == src_idx:
+        if i in src_set:
             f.name = source_name
-        elif i == snk_idx:
+        elif i in snk_set:
             f.name = sink_name
         else:
             f.name = "body"
@@ -86,7 +125,23 @@ def step_to_coil_vol(step_path, vol_path, maxh=0.012,
                                   segmentsperedge=1))
         vol_path = os.path.abspath(vol_path)
         ngmesh.Save(vol_path)
-        return vol_path
+
+    # Self-validate: the cap grouping above is a heuristic, so verify the
+    # labels actually give a current path AROUND the coil rather than a
+    # shortcut across it.  Fail loud here instead of writing a .vol that
+    # silently poisons every BEM-A solve consuming it (the 0.28 nH vs
+    # 90 nH incident, 2026-07-15).
+    from ngsolve import Mesh
+    from calc_inductance import _arrays_from_bema_coil_mesh
+    from radia.bem.coil_inductance_ngsolve import (
+        check_source_sink_current_path)
+
+    _m = Mesh(vol_path)
+    _v, _t, _sm, _km = _arrays_from_bema_coil_mesh(
+        _m, source_name=source_name, sink_name=sink_name)
+    check_source_sink_current_path(
+        _v, _t, _sm, _km, source_label=source_name, sink_label=sink_name)
+    return vol_path
 
 
 def coil_vol_for(step_path, *, maxh=0.012, cache_dir=None):

@@ -429,7 +429,8 @@ def _solve_coil_bem_a(args):
       * coil_residual, coil_mesh_nv, coil_mesh_n_tris
     """
     from radia.bem.coil_inductance_ngsolve import (
-        compute_inductance_source_sink, compute_centroids_areas_J)
+        compute_inductance_source_sink, compute_centroids_areas_J,
+        check_source_sink_current_path)
 
     omega = 2.0 * math.pi * args.frequency
     progress("BEMA", f"loading pre-meshed coil .vol: "
@@ -456,6 +457,19 @@ def _solve_coil_bem_a(args):
             f"Check that the {args.coil_source_name!r}/"
             f"{args.coil_sink_name!r} sidesets in --coil-vol contain "
             f"surface elements (not just labelled but empty).")
+
+    # Fail loud BEFORE the expensive EFIE solve when the source/sink labels
+    # let the current shortcut across the conductor instead of running
+    # around the coil (silently returns a tiny, meaningless L -- see the
+    # ih_fem_kelvin 0.28 nH vs 90 nH incident, 2026-07-15).
+    path_info = check_source_sink_current_path(
+        coil_verts, coil_tris, src_mask, snk_mask,
+        source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name)
+    if path_info:
+        progress("BEMA",
+            f"source->sink current path {path_info['geodesic_m'] * 1e3:.1f} mm "
+            f"({path_info['ratio']:.1f}x coil extent) -- OK")
 
     # Complex Leontovich surface impedance for the impedance-EFIE
     # (the sole AC formulation).  omega == 0 -> DC vacuum-L solve.
@@ -1578,6 +1592,16 @@ def _solve_workpiece_strong_coupled(args):
     t0 = time.perf_counter()
     progress("COUPLED", f"load coil surface from {os.path.basename(args.coil_vol)}")
     coil_mesh = Mesh(args.coil_vol)
+    # Same fail-loud source/sink check as the vacuum BEM-A path: the coupled
+    # solver drives the coil EFIE from these labels, so a shortcut placement
+    # would silently poison L_air / Delta_L / P_wp too.
+    from radia.bem.coil_inductance_ngsolve import check_source_sink_current_path
+    _cv, _ct, _sm, _km = _arrays_from_bema_coil_mesh(
+        coil_mesh, source_name=args.coil_source_name,
+        sink_name=args.coil_sink_name)
+    check_source_sink_current_path(
+        _cv, _ct, _sm, _km, source_label=args.coil_source_name,
+        sink_label=args.coil_sink_name)
 
     # --- workpiece surface mesh (same extraction convention as the weak
     #     path: --wp-label may name a material or a boundary sideset) ---

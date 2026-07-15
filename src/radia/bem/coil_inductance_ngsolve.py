@@ -364,6 +364,130 @@ def _loop_cocr_solve(SL, M, D_red, g_red, omega, Z_s, matvec_backend,
     return J, info
 
 
+def check_source_sink_current_path(verts, tris, src_mask, snk_mask,
+                                   source_label="source", sink_label="sink",
+                                   min_ratio=0.5):
+    """Fail loud when the source/sink labels let the EFIE current SHORTCUT.
+
+    The BEM-A impedance-EFIE injects current at ``source_label`` and
+    extracts it at ``sink_label``.  It solves for the minimum-energy
+    surface current joining them -- so if the two labels are reachable
+    along a SHORT path over the conductor surface, the current takes that
+    shortcut instead of going around the coil, and the solve silently
+    returns a meaningless (tiny) inductance.
+
+    Real incident (2026-07-15, ih_fem_kelvin demo coil): the coil's two
+    end-cap faces are each SPLIT in z, and the test helper's
+    "two smallest faces" auto-detect labelled the z<0 and z>0 HALVES OF
+    THE SAME end-cap as source/sink.  The EFIE then drove current through
+    the 2.6 mm thickness instead of around the 66 mm ring and returned
+    **L = 0.28 nH instead of ~90-105 nH** (PEEC on the same coil: 104.9 nH)
+    -- a 373x error that passed silently into a method comparison.  With
+    the caps grouped correctly the same mesh gives 89.96 nH.
+
+    Straight-line distance CANNOT detect this: on that coil the broken
+    (through-thickness) separation is 2.4 mm and the correct (across-the-
+    gap) separation is 2.6 mm.  What discriminates is the path ALONG THE
+    CONDUCTOR SURFACE -- the actual current path:
+
+      * correct : the two caps are separated by the coil's air gap, so the
+        surface geodesic must run around the coil  (~186 mm on the demo).
+      * broken  : the two labels sit on one cross-section, so the geodesic
+        is a couple of mm (~2 mm on the demo) -- a ~90x difference.
+
+    This computes the surface geodesic (Dijkstra over the triangle
+    adjacency graph, centroid-to-centroid weights) and raises when it is
+    shorter than ``min_ratio`` x the coil's bounding-box extent.  A coil
+    whose current genuinely traverses it (cut ring, lead-terminated coil,
+    straight bar) has geodesic >= its extent, so the default 0.5 leaves a
+    wide margin.
+
+    Args:
+        verts: (n_v, 3) coil surface vertices [m].
+        tris:  (n_t, 3) triangle vertex indices.
+        src_mask, snk_mask: (n_t,) bool triangle masks.
+        source_label, sink_label: names, for the diagnostic only.
+        min_ratio: geodesic / bbox-extent floor.
+
+    Returns:
+        dict with ``geodesic_m``, ``extent_m``, ``ratio`` on success.
+
+    Raises:
+        ValueError: the source->sink current path is a shortcut.
+    """
+    from collections import defaultdict
+    from scipy.sparse.csgraph import dijkstra
+
+    verts = np.asarray(verts, dtype=np.float64)
+    tris = np.asarray(tris, dtype=np.int64)
+    src_mask = np.asarray(src_mask, dtype=bool)
+    snk_mask = np.asarray(snk_mask, dtype=bool)
+    n_t = len(tris)
+    if n_t == 0 or not src_mask.any() or not snk_mask.any():
+        # Empty mesh / empty labels are the caller's own fail-fast checks.
+        return None
+
+    cent = verts[tris].mean(axis=1)                       # (n_t, 3)
+    extent = float(np.max(verts.max(axis=0) - verts.min(axis=0)))
+    if extent <= 0.0:
+        return None
+
+    # Triangle adjacency: two triangles are neighbours iff they share an edge.
+    edge_tris = defaultdict(list)
+    for t in range(n_t):
+        a, b, c = int(tris[t, 0]), int(tris[t, 1]), int(tris[t, 2])
+        for u, v in ((a, b), (b, c), (c, a)):
+            edge_tris[(u, v) if u < v else (v, u)].append(t)
+    rows, cols, wts = [], [], []
+    for ts in edge_tris.values():
+        for i in range(len(ts)):
+            for j in range(i + 1, len(ts)):
+                d = float(np.linalg.norm(cent[ts[i]] - cent[ts[j]]))
+                rows += [ts[i], ts[j]]
+                cols += [ts[j], ts[i]]
+                wts += [d, d]
+    if not rows:
+        return None
+    graph = coo_matrix((wts, (rows, cols)), shape=(n_t, n_t)).tocsr()
+
+    src_idx = np.flatnonzero(src_mask)
+    snk_idx = np.flatnonzero(snk_mask)
+    dist = dijkstra(graph, indices=src_idx, min_only=True)
+    d_geo = float(np.min(dist[snk_idx]))
+    if not np.isfinite(d_geo):
+        # Disconnected source/sink -- the current cannot flow at all.
+        raise ValueError(
+            f"BEM-A coil: no surface path connects {source_label!r} to "
+            f"{sink_label!r} -- the labelled faces are on disconnected "
+            f"components, so no terminal current can flow.  Check that "
+            f"--coil-vol is a single connected conductor surface.")
+
+    ratio = d_geo / extent
+    if ratio < min_ratio:
+        raise ValueError(
+            f"BEM-A source/sink placement is degenerate: the shortest "
+            f"current path along the coil surface from {source_label!r} to "
+            f"{sink_label!r} is only {d_geo * 1e3:.2f} mm = {ratio:.1%} of "
+            f"the coil's {extent * 1e3:.1f} mm extent (floor: "
+            f"{min_ratio:.0%}).\n"
+            f"The EFIE minimises energy, so it will drive the current "
+            f"through this SHORTCUT instead of around the coil and return a "
+            f"meaningless (tiny) inductance -- silently.  Measured on the "
+            f"ih_fem_kelvin demo coil (2026-07-15): L = 0.28 nH instead of "
+            f"~90 nH (PEEC: 104.9 nH), a 373x error.\n"
+            f"TYPICAL CAUSE: {source_label!r} and {sink_label!r} sit on the "
+            f"SAME cross-section -- e.g. the z<0 and z>0 HALVES of one "
+            f"end-cap when the cap face is split, or the conductor's top "
+            f"and bottom surface at the same station -- instead of on the "
+            f"two OPPOSITE current-injection faces.\n"
+            f"FIX: label the caps at the OPPOSITE ends of the conductor -- "
+            f"ALL sub-faces of one cap -> {source_label!r}, ALL sub-faces of "
+            f"the other -> {sink_label!r}.  Sanity check: the two label "
+            f"centroids must be separated ALONG the current direction, not "
+            f"across the conductor thickness.")
+    return {"geodesic_m": d_geo, "extent_m": extent, "ratio": ratio}
+
+
 def compute_inductance_source_sink(
         mesh, source_label="source", sink_label="sink",
         fes_order=0, solver="lu", omega=0.0, Z_s_complex=None,
