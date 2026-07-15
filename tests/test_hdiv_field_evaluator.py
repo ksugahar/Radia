@@ -83,6 +83,29 @@ def test_auto_rejects_inaccurate_signed_tree():
     assert np.array_equal(automatic, direct)
 
 
+def test_large_cloud_parallel_batch_matches_serial_sized_chunks():
+    rng = np.random.default_rng(17)
+    xyz = rng.uniform(-0.5, 0.5, (500, 3))
+    strength = rng.normal(size=500)
+    obs = rng.uniform(1.0, 2.0, (2100, 3))
+    evaluator = _cloud(
+        xyz, strength,
+        masks=np.array([1, 2, 4], dtype=np.int32),
+        signs=np.array([1.0, -1.0, 1.0]),
+    )
+
+    # 500 sources * 2100 targets * (physical + 3 images) exceeds the
+    # production parallel threshold.  Chunks of 100 targets take the serial
+    # cloud path.  Each target retains the same source summation order, so the
+    # two execution policies must be bitwise identical.
+    bulk = np.asarray(evaluator.field(obs, "direct"))
+    chunked = np.vstack([
+        np.asarray(evaluator.field(obs[start:start+100], "direct"))
+        for start in range(0, len(obs), 100)
+    ])
+    assert np.array_equal(bulk, chunked)
+
+
 def test_field_input_shape_is_checked():
     evaluator = _cloud(np.array([[0.0, 0.0, 0.0]]), np.array([1.0]))
     with pytest.raises(RuntimeError, match="shape"):
