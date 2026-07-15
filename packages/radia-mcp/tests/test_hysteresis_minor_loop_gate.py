@@ -122,3 +122,28 @@ def test_generalization_v3s_rejects_historical_response_drift() -> None:
     bad["historical_reference"]["response_magnitude"][20] *= 1.5
     result = evaluate_gate(bad)
     assert result["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_fresh_time_duplicate", "v4_repeat_drive_drift", "v4_saved_drive_drift", "v4_loss_time_nonmonotone", "v4_saved_response_drift"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    if case_id == "v4_fresh_time_duplicate":
+        bad["fresh"]["time_s"][10] = bad["fresh"]["time_s"][9]
+    elif case_id == "v4_repeat_drive_drift":
+        bad["repeat"]["drive"][21] *= 1.1
+    elif case_id == "v4_saved_drive_drift":
+        bad["saved_reference"]["drive"][14] *= 1.1
+    elif case_id == "v4_loss_time_nonmonotone":
+        bad["losses"]["time_s"][20] = bad["losses"]["time_s"][19]
+    else:
+        bad["saved_reference"]["response"][15] *= 1.3
+    assert evaluate_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_historical_time_grid_drift() -> None:
+    bad = copy.deepcopy(_summary())
+    bad["historical_reference"]["time_s"][20] *= 1.1
+    assert evaluate_gate(bad)["status"] == "needs_attention"

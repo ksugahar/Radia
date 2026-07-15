@@ -101,6 +101,16 @@ def summary() -> dict:
                     "volume_mm3": 1306.3405290340188,
                 },
             },
+            "same_kernel_errors": {
+                "step_volume_relative": 3.459467227099325e-08,
+                "step_area_relative": 1.7736179428847976e-09,
+                "brep_volume_relative": 1.3924312712634862e-15,
+                "brep_area_relative": 0.0,
+            },
+            "files": {
+                "step": {"bytes": 4096, "sha256": "c" * 64},
+                "brep": {"bytes": 8192, "sha256": "d" * 64},
+            },
             "checks": source_checks,
         },
         "external": {
@@ -262,5 +272,59 @@ def test_generalization_v3s_rejects_nonpositive_external_surfaces():
 def test_generalization_v3s_rejects_nonstubbed_viewer_claim():
     row = summary()
     row["build"]["source"]["display_stubbed_only"] = False
+    result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_native_validity", "v4_step_area_error", "v4_brep_volume_error", "v4_source_replay_topology", "v4_mesh_attempt"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id):
+    row = summary()
+    if case_id == "v4_native_validity":
+        row["build"]["native"]["is_valid"] = False
+    elif case_id == "v4_step_area_error":
+        row["build"]["same_kernel_errors"]["step_area_relative"] = 0.1
+    elif case_id == "v4_brep_volume_error":
+        row["build"]["same_kernel_errors"]["brep_volume_relative"] = 0.1
+    elif case_id == "v4_source_replay_topology":
+        row["build"]["replays"][1]["metrics"]["face_count"] += 1
+    else:
+        row["external"]["mesh_attempted"] = True
+    result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_commit_shape", "v4_empty_step", "v4_brep_digest", "v4_external_gui", "v4_external_process_leak"],
+)
+def test_counterfactual_curriculum90_v4_source(case_id):
+    row = summary()
+    if case_id == "v4_commit_shape":
+        row["build"]["source"]["commit"] = "bad"
+    elif case_id == "v4_empty_step":
+        row["build"]["files"]["step"]["bytes"] = 0
+    elif case_id == "v4_brep_digest":
+        row["build"]["files"]["brep"]["sha256"] = "0" * 63
+    elif case_id == "v4_external_gui":
+        row["external"]["gui_daemon_enabled"] = True
+    else:
+        row["external"]["process"]["owned_processes_remaining"] = 1
+    result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_cleared_cad_handoff_flag():
+    row = summary()
+    row["external"]["cad_handoff_ready"] = False
+    result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_stale_official_assertion_delta():
+    row = summary()
+    row["build"]["replays"][0]["official_assertion_delta_mm3"] = 1.0
     result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
     assert result["status"] == "needs_attention"

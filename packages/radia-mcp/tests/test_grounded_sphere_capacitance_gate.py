@@ -130,3 +130,30 @@ def test_generalization_v3s_rejects_open_boundary_not_enclosing_conductor():
     bad["problem_contract"]["outer_radius_m"] = 50.0
     result = json.loads(mcp_gate(json.dumps(bad)))
     assert result["status"] in {"needs_attention", "invalid_input"}
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_ground_voltage", "v4_length_units", "v4_analytic_capacitance", "v4_refinement_elements", "v4_negative_stored_energy"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "v4_ground_voltage":
+        bad["problem_contract"]["ground_plane_voltage_V"] = 1.0
+    elif case_id == "v4_length_units":
+        bad["problem_contract"]["length_units"] = "millimeters"
+    elif case_id == "v4_analytic_capacitance":
+        bad["analytic"]["capacitance_F"] *= 1.2
+    elif case_id == "v4_refinement_elements":
+        bad["cases"][2]["element_count"] = bad["cases"][1]["element_count"]
+    else:
+        bad["cases"][2]["stored_energy_J"] = -1.0
+    result = json.loads(mcp_gate(json.dumps(bad)))
+    assert result["status"] in {"needs_attention", "invalid_input"}
+
+
+def test_generalization_v5_rejects_stale_radius_dependent_analytic_value():
+    bad = copy.deepcopy(_summary())
+    bad["problem_contract"]["sphere_radius_m"] *= 1.5
+    result = json.loads(mcp_gate(json.dumps(bad)))
+    assert result["status"] in {"needs_attention", "invalid_input"}

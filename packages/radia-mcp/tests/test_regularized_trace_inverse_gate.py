@@ -121,3 +121,28 @@ def test_generalization_v3s_rejects_trace_sparsity_mismatch():
     bad = copy.deepcopy(_summary())
     bad["mesh"]["trace_nnz"] = 1
     assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_volume_element", "v4_polynomial_order", "v4_fem_unknown_count", "v4_normal_equation_residual", "v4_morozov_alpha"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "v4_volume_element":
+        bad["mesh"]["volume_element"] = "hexahedron"
+    elif case_id == "v4_polynomial_order":
+        bad["mesh"]["polynomial_order"] = 2
+    elif case_id == "v4_fem_unknown_count":
+        bad["mesh"]["fem_unknowns"] = 4
+    elif case_id == "v4_normal_equation_residual":
+        bad["path"]["normal_equation_residuals"][2] = 1.0e-2
+    else:
+        bad["morozov"]["selected_alpha"] = 1.0
+    assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_surface_node_trace_mismatch():
+    bad = copy.deepcopy(_summary())
+    bad["mesh"]["surface_nodes"] = 3
+    assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"

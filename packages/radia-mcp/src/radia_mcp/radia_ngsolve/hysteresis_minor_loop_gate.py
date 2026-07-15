@@ -188,6 +188,7 @@ def hysteresis_minor_loop_replay_gate(
         "historical_reference_time_grid_is_owned": len(matched) == len(reference_time),
         "historical_response_magnitude_agrees": reference_relative_error <= float(maximum_reference_relative_error),
         "eddy_free_joule_power_is_zero": maximum_joule <= float(maximum_joule_power),
+        "loss_time_is_strictly_increasing": _strictly_increasing(loss_time),
         "iron_power_equals_hysteresis_power": maximum_loss_difference <= float(maximum_loss_identity_error),
         "signed_hysteresis_power_integrates_to_positive_loss": min(hysteresis_power) < 0.0 < max(hysteresis_power)
         and hysteresis_energy > 0.0
