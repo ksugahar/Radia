@@ -11,13 +11,10 @@ Why this exists
 The weak Telegen path (``calc_inductance.py`` ``--coupling-mode weak``)
 evaluates the workpiece surface field from the INCIDENT (bare-coil
 Biot-Savart) field, so it misses the magnetic workpiece's flux
-redistribution / eddy screening.  On the Takahashi 7 kHz IH model (Kubota
-2026-07-14) that made the weak workpiece heating P_wp = 38.2 kW where the
-self-consistent FEM truth is ~17 kW -- a factor ~2.2 over-estimate
-(H_t_rms x1.5 over, P_wp ~ H^2 -> x2.2).  The BEM-A coil got a strong
-(self-consistent) path via ``CoupledBEMSolver``; the PEEC coil shares the
-SAME incident-field weak path, so its P_wp is over by the same ~2.2x.
-This module gives the PEEC coil the same strong coupling.
+redistribution / eddy screening and can over-estimate heating under strong
+loading.  The BEM-A coil has a self-consistent path via
+``CoupledBEMSolver``; this module gives the PEEC coil the corresponding
+strong-coupling formulation.
 
 Coupling structure (mirrors CoupledBEMSolver, in impedance space)
 =================================================================
@@ -51,10 +48,10 @@ R comes from energy, not the terminal reaction (like CoupledBEMSolver)
 =====================================================================
 
 The terminal reflected resistance ``Delta_R = Re(Z_port) - R_air`` from
-the coupled loop solve does NOT equal ``2 P_wp / |I_port|^2`` (the
-workpiece SIBC dissipation): measured ~3.8x apart on the ih_fem_kelvin
-demo.  This is NOT a bug in the wiring -- the coupled solve is internally
-consistent (``Delta_R == 1/2 Re(I_f^H . emf)`` to <1%).  It is the same
+the coupled loop solve does NOT generally equal
+``2 P_wp / |I_port|^2`` (the workpiece SIBC dissipation).  The coupled
+solve remains internally reciprocal through the filament back-EMF.  This
+is the same
 SIBC reaction-vs-power adjoint mismatch that ``CoupledBEMSolver`` faces:
 the scalar-potential forward / vector-potential back reaction is a correct
 adjoint for the REACTIVE coupling (Delta_L) but not for the DISSIPATIVE
@@ -68,14 +65,11 @@ as a diagnostic.
 VALIDATION STATUS (EXPERIMENTAL)
 ===============================
 
-The strong-coupling P_wp reduction (the ~2.2x Kubota over-estimate fix)
-is driven by the coil-current REDISTRIBUTION under the back-EMF.  The
-committed ih_fem_kelvin demo is WEAKLY coupled (BEM-A weak == strong to
-~2%; the coil current barely moves), so it CANNOT exercise or validate
-that reduction -- it only locks the wiring + self-consistency.  The
-physics validation (does PEEC-strong reduce P_wp by ~2.2x and match the
-FEM truth, like BEM-A strong does) requires the strongly-coupled Takahashi
-IH model on an idle mdx.  Until that cross-check passes, treat absolute
+The strong-coupling heating change is driven by coil-current redistribution
+under the back-EMF.  The committed demo is weakly coupled, so it cannot
+exercise that effect; it locks only wiring and self-consistency.  A durable
+strong-loading reference case still needs to be added to the validation
+lane on a compute host.  Until that check passes, treat absolute
 strong-PEEC P_wp / Delta_L as UNVERIFIED.
 
 Part of the Radia project.
@@ -233,6 +227,13 @@ class CoupledPEECBEMSolver:
         """
         from radia.bem_sibc_solver import compute_phi_inc_from_filaments
 
+        if max_iter < 2:
+            raise ValueError("max_iter must be >= 2 for coupling convergence")
+        if tol <= 0.0:
+            raise ValueError("tol must be > 0 for coupling convergence")
+        if not 0.0 < relax <= 1.0:
+            raise ValueError("relax must satisfy 0 < relax <= 1")
+
         # --- Step 0: uncoupled (air) loop-bundle ---
         _, Z_air = self._bundle_solve(omega, I_port, emf=None)
         L_air = Z_air.imag / omega if omega > 0 else 0.0
@@ -244,6 +245,8 @@ class CoupledPEECBEMSolver:
         wp_result = None
         wp_c = wp_a = wp_J_re = wp_J_im = None
         iteration = 0
+        dZ_rel = float("inf")
+        converged = False
 
         for iteration in range(max_iter):
             # --- Forward: filament currents -> phi_inc at workpiece ---
@@ -285,7 +288,15 @@ class CoupledPEECBEMSolver:
                       f"dZ={dZ_rel:.3e}")
             Z_prev = Z_port
             if dZ_rel < tol and iteration > 0:
+                converged = True
                 break
+
+        if not converged:
+            raise RuntimeError(
+                "PEEC-workpiece strong coupling did not converge: "
+                f"relative terminal-impedance change={dZ_rel:.3e}, "
+                f"tol={tol:.3e}, max_iter={max_iter}.  Increase "
+                "--coupling-max-iter or reduce --coupling-relax.")
 
         L_total = Z_port.imag / omega if omega > 0 else 0.0
         R_total = Z_port.real
@@ -307,6 +318,8 @@ class CoupledPEECBEMSolver:
             'P_total': float(P_total),
             'H_t_rms': float(H_t_rms),
             'iterations': iteration + 1,
+            'converged': True,
+            'coupling_residual': float(dZ_rel),
             'n_filaments': int(self.n_filaments),
             'n_phi_wp': int(self.wp_solver.ndof),
             'I_f': I_f,

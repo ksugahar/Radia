@@ -78,6 +78,7 @@ def test_strong_accepts_peec_coil():
     ns = p.parse_args([
         "--coil-solver", "peec", "--frequency", "7000", "--sigma", "5.8e6",
         "--coupling-mode", "strong", "--coil-step", "c.step", "--vol", "w.vol",
+        "--no-peec-proximity",
     ])
     # peec passes the coil-solver guard and proceeds to the coil build,
     # which raises on the dummy STEP -- proving it got PAST the guard
