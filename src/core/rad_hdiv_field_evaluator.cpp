@@ -714,6 +714,28 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
     if (automatic && algorithm == Algorithm::Tree && !m_impl->TreePassesProbe(observations, n_observations))
         algorithm = Algorithm::Direct;
     m_impl->last_algorithm.store(algorithm == Algorithm::Tree ? 1 : 0, std::memory_order_relaxed);
+
+    // HEX/WEDGE are retained as a point cloud.  For a small target batch, the
+    // point-source loop is cheaper than opening a fresh TaskManager region,
+    // especially on the first field call after a large solve.  Keep large field
+    // maps parallel; express the threshold in physical+IMA interactions rather
+    // than target count so reduced-domain solves follow the same cost model.
+    constexpr std::size_t kSerialCloudInteractions = 4'000'000;
+    const long double cloud_interactions = static_cast<long double>(m_impl->points.size())
+        * static_cast<long double>(n_observations)
+        * static_cast<long double>(1+m_impl->images.size());
+    if (!m_impl->points.empty()
+            && cloud_interactions <= static_cast<long double>(kSerialCloudInteractions)) {
+        for (std::size_t index = 0; index < n_observations; ++index) {
+            const double* r = observations+3*index;
+            double total[3];
+            m_impl->EvaluatePhysical(r, total, algorithm);
+            output[3*index] = total[0];
+            output[3*index+1] = total[1];
+            output[3*index+2] = total[2];
+        }
+        return;
+    }
     ngcore::RegionTaskManager task_manager;
     ngcore::ParallelFor(ngcore::IntRange(n_observations), [&](std::size_t index) {
         const double* r = observations+3*index;
