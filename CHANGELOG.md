@@ -42,6 +42,17 @@ All notable changes to the `radia` package.  Format: each release lists
     field-contributing symmetry replication (the stock-take's delete suggestion
     was corrected after caller verification; 23 transformation tests pass).
 
+## 4.95.12 - Planar HDiv reduced motor analysis
+
+Released 2026-07-15.
+
+- Added a native planar HDiv field evaluator and a reduced motor solver that
+  reuses one charge Gram factorization across the rotor-angle sweep.
+- Added the `HDiv Reduced` mode to the motor notebook workbench, with dedicated
+  rotor-only 2D mesh, material, excitation, and torque-sweep inputs.
+- Cross-check Maxwell-stress, virtual-work, and co-energy torque routes in the
+  headless CLI and lock the real `.vol` round trip in regression tests.
+
 ## 4.95.11 - HDiv production magnet model stack
 
 Released 2026-07-15.
