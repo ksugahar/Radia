@@ -42,6 +42,16 @@ All notable changes to the `radia` package.  Format: each release lists
     field-contributing symmetry replication (the stock-take's delete suggestion
     was corrected after caller verification; 23 transformation tests pass).
 
+## 4.95.11 - HDiv production magnet model stack
+
+Released 2026-07-15.
+
+- Added fixed/given magnetization sources, linear-recoil permanent magnets,
+  and the native energy-stop hysteresis material to the HDiv-VIM API.
+- Added persistent native NGSolve matrices and field evaluators, with RT2/IMA
+  coverage and fail-loud API contracts.
+- Refreshed the native-path hysteresis validation records after review.
+
 ## 4.95.2 — TaskManager thread-count import fix
 
 Released 2026-06-26.
