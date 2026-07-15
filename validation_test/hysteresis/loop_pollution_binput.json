@@ -1,6 +1,6 @@
 {
  "description": "Controlled loop injection into the B-input constitutive law (collocation failure mode reproduced on the loop-free HDiv solver)",
- "timestamp": "2026-07-13T21:33:11.345357",
+ "timestamp": "2026-07-15T11:29:17.983769",
  "hostname": "lab",
  "nx": 3,
  "H0_A_per_m": 200000.0,
@@ -9,41 +9,41 @@
   {
    "eps": 0.0,
    "status": "ok",
-   "area": 1080.8819078268455,
-   "b_peak": 1.1147389223142197,
+   "area": 1072.7265995274174,
+   "b_peak": 1.1101980611774789,
    "iters_sum": 186,
    "iters_max": 16
   },
   {
    "eps": 0.05,
    "status": "ok",
-   "area": 1067.7814317931768,
-   "b_peak": 1.3266484771082567,
-   "iters_sum": 377,
-   "iters_max": 25
+   "area": 1066.5766696972498,
+   "b_peak": 1.227081195382818,
+   "iters_sum": 351,
+   "iters_max": 23
   },
   {
    "eps": 0.1,
    "status": "ok",
-   "area": 1052.980523362909,
-   "b_peak": 1.697852129516762,
-   "iters_sum": 453,
-   "iters_max": 31
+   "area": 1056.2231136429282,
+   "b_peak": 1.398436556047316,
+   "iters_sum": 422,
+   "iters_max": 28
   },
   {
    "eps": 0.2,
    "status": "runaway_out_of_range",
-   "fail_step": 3,
-   "b_peak": 2.6744769409624327
+   "fail_step": 11,
+   "b_peak": 2.0678547414668107
   },
   {
    "eps": 0.3,
-   "status": "no_converge",
-   "fail_step": 0,
-   "b_peak": null
+   "status": "runaway_out_of_range",
+   "fail_step": 2,
+   "b_peak": 2.1490040704424453
   }
  ],
- "production_area": 1080.8261332591837,
- "production_b_peak": 1.1146510765802535,
+ "production_area": 1072.7265995274179,
+ "production_b_peak": 1.1101980611774769,
  "production_iters_sum": 186
 }

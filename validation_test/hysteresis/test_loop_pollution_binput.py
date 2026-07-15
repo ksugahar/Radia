@@ -23,11 +23,11 @@ match the production vim.SolveHysteresis result (fidelity gate) -- this also
 self-polices harness drift: if the production iteration changes, eps = 0
 fails first.  Material: the committed real K=40 Potter-Schmulian play fixture.
 
-Locked findings (3^3 cube, H0 = 200 kA/m, 20-step loop, measured 2026-07-13):
-  eps = 0.05 -> peak|B| +19% spurious saturation, ~2.0x polarization iters
-  eps = 0.10 -> peak|B| +52%, ~2.4x iters
+Locked findings (3^3 cube, H0 = 200 kA/m, 20-step loop, measured 2026-07-15):
+  eps = 0.05 -> peak|B| +10% spurious saturation, ~1.9x polarization iters
+  eps = 0.10 -> peak|B| +26%, ~2.3x iters
   eps = 0.20 -> RUNAWAY past the material's identified range (b_max guard)
-  eps = 0.30 -> polarization iteration diverges outright
+  eps = 0.30 -> RUNAWAY past the material's identified range (b_max guard)
 This is the quantitative backing for the journal claim that complete loop
 freedom is a hysteresis-correctness requirement, not solver hygiene.
 Runtime ~3 min (validation_test lane).  Results: loop_pollution_binput.json.
@@ -227,8 +227,8 @@ def test_loop_pollution_corrupts_binput_hysteresis():
     # INDEPENDENTLY converged nl_tol=1e-3 solves scatter by up to ~1e-3 in a
     # thread-schedule-dependent way (the per-region flake lesson: never gate
     # inside the outer-tolerance band), so the fidelity tolerance sits above
-    # that band and far below the smallest injection effect (eps=0.05 shifts
-    # the area by 1.2e-2 and peak |B| by +19%).
+    # that band and below the smallest injection effect (eps=0.05 shifts the
+    # area by about 0.6% and peak |B| by about +10%).
     c0 = by_eps[0.0]
     assert c0["status"] == "ok"
     assert abs(c0["area"] - area_ref) / area_ref < 2e-3, (
