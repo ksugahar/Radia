@@ -22,6 +22,7 @@ LAMINATION_DRIVES = ("meanB", "current", "voltage")
 class MotorDesignSpec:
     analysis: str = ANALYSIS_TRANSIENT
     vol: str = ""
+    rotor_vol: str = ""
     method: str = "linearization"
     fes_order: int = 1
     linear_solver: str = "pardiso"
@@ -66,6 +67,8 @@ class MotorDesignSpec:
     circle_points: int = 1440
     center_x: str = "0.0"
     center_y: str = "0.0"
+    hdiv_mu_r: str = "1000.0"
+    hdiv_h_amplitude: str = "80000.0"
     hdiv_eta: str = "2.0"
 
     def visible_fields(self) -> set[str]:
@@ -92,7 +95,7 @@ class MotorDesignSpec:
                 fields.add("em_table")
         elif self.analysis == ANALYSIS_HDIV_REDUCED:
             fields.update({
-                "vol", "mu_r_iron", "h_amplitude", "field_angle_deg",
+                "rotor_vol", "hdiv_mu_r", "hdiv_h_amplitude", "field_angle_deg",
                 "rotor_angle_start_deg", "rotor_angle_stop_deg",
                 "rotor_angle_steps", "r_airgap_mid", "stack_length",
                 "energy_delta_deg", "circle_points", "center_x", "center_y",
@@ -106,7 +109,7 @@ class MotorDesignSpec:
         if self.analysis == ANALYSIS_TRANSIENT:
             return [] if self.vol.strip() else ["Motor .vol"]
         if self.analysis == ANALYSIS_HDIV_REDUCED:
-            return [] if self.vol.strip() else ["Rotor .vol"]
+            return [] if self.rotor_vol.strip() else ["Rotor-only 2D .vol"]
         if self.analysis == ANALYSIS_LAMINATION:
             if self.lamination_mode in ("global", "full") and not self.vol.strip():
                 return ["Motor .vol"]
@@ -193,14 +196,14 @@ class MotorDesignSpec:
         return cmd
 
     def _build_hdiv_reduced(self, py: str, panels_dir) -> list[str]:
-        if not self.vol:
+        if not self.rotor_vol:
             raise ValueError("HDiv Reduced motor analysis requires a rotor-only 2D .vol mesh.")
         return [
             py,
             calc_script("calc_motor_hdiv_reduced.py", panels_dir),
-            "--vol", self.vol,
-            "--mu-r", str(self.mu_r_iron),
-            "--H-amplitude", str(self.h_amplitude),
+            "--vol", self.rotor_vol,
+            "--mu-r", str(self.hdiv_mu_r),
+            "--H-amplitude", str(self.hdiv_h_amplitude),
             "--field-angle-deg", str(self.field_angle_deg),
             "--rotor-angle-start-deg", str(self.rotor_angle_start_deg),
             "--rotor-angle-stop-deg", str(self.rotor_angle_stop_deg),
@@ -212,5 +215,5 @@ class MotorDesignSpec:
             "--center-x", str(self.center_x),
             "--center-y", str(self.center_y),
             "--eta", str(self.hdiv_eta),
-            "--output", json_output(self.vol, "_motor_hdiv_reduced"),
+            "--output", json_output(self.rotor_vol, "_motor_hdiv_reduced"),
         ]
