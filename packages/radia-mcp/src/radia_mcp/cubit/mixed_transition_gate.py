@@ -240,13 +240,21 @@ def cubit_mixed_transition_source_gate(
             required_raw, Sequence
         ):
             raise ValueError("export_artifacts.required must be a sequence")
-        required = list(required_raw)
+        required = [str(name) for name in required_raw]
         artifact_rows = _rows(
             export_artifacts_value.get("artifacts"), "export_artifacts.artifacts"
         )
-        required_names = {str(name) for name in required}
-        artifact_by_name = {str(row.get("name", "")): row for row in artifact_rows}
-        export_artifacts_ok = bool(required_names) and set(artifact_by_name) == required_names
+        artifact_names = [str(row.get("name", "")) for row in artifact_rows]
+        required_names = set(required)
+        artifact_by_name = dict(zip(artifact_names, artifact_rows, strict=True))
+        export_artifacts_ok = (
+            bool(required_names)
+            and all(required)
+            and all(artifact_names)
+            and len(required_names) == len(required)
+            and len(artifact_by_name) == len(artifact_rows)
+            and set(artifact_by_name) == required_names
+        )
         export_artifacts_ok = export_artifacts_ok and all(
             row.get("fresh") is True
             and int(row.get("bytes", 0)) > 0
