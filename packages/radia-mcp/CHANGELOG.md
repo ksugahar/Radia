@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-07-15
+
+- **HDiv-VIM production stack**: documented the fixed/given magnetization,
+  linear-recoil permanent-magnet, native energy-stop hysteresis, persistent
+  matrix, field-evaluator, RT2, and IMA interfaces with focused knowledge tests.
+
 ## [1.4.5] - 2026-07-13
 
 - **radia-ngsolve gates**: added heterogeneous P1 current-flow,
