@@ -3480,7 +3480,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(far_tri_pts), std::move(far_tri_w),
                          near_grade, far_inner_factor,
                          std::move(image_masks), std::move(image_signs)); },
-                     eps, leaf, eta, build, "hex RT1 charge Gram H-matrix build failed");
+                     eps, leaf, eta, build, "hex RT1/RT2 charge Gram H-matrix build failed");
              }),
              py::arg("hex_cell_nodes"), py::arg("quad_face_nodes"), py::arg("n_el"), py::arg("n_bf"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
@@ -3490,7 +3490,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 1.5,
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
-             "HEX RT1 mode: Q1 monomial charges (8/hex volume + 4/quad-face surface) on the DIRECT Q2 "
+             "HEX RT1/RT2 mode: Q1/Q2 monomial charges (8/27 per hex volume + 4/9 per quad-face) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
              "[n_bf*27] = 9-node lattice, both from GetTrafo at the reference lattice, so ONE path covers "
              "flat AND curved (mesh.Curve(2)) hexes.  Quadrature = the numpy-validated eig<=1 scheme: "
@@ -3543,7 +3543,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(far_tri_pts), std::move(far_tri_w),
                          near_grade, far_inner_factor,
                          std::move(image_masks), std::move(image_signs)); },
-                     eps, leaf, eta, build, "wedge RT1 charge Gram H-matrix build failed");
+                     eps, leaf, eta, build, "wedge RT1/RT2 charge Gram H-matrix build failed");
              }),
              py::arg("wedge_cell_nodes"), py::arg("face_nodes"), py::arg("face_type"),
              py::arg("n_el"), py::arg("n_bf"),
@@ -3554,16 +3554,16 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
-             "WEDGE (PRISM) RT1 mode: L2(prism,order=1) volume charges (6/prism = {1,x,y,z,xz,yz}, the "
-             "prism div-image = a subset of the hex's 8 Q1 monomials) + SurfaceL2 face charges (tri P1 3, "
-             "quad Q1 4) on the direct 18-node tri-P2(x)z-P2 (wedge_cell_nodes [n_el*54]) + mixed-face "
+             "WEDGE (PRISM) RT1/RT2 mode: tri-Pp by z-Pp volume charges (6/18 per prism) + SurfaceL2 "
+             "face charges (tri P1/P2 3/6, quad Q1/Q2 4/9) on the direct 18-node tri-P2(x)z-P2 "
+             "(wedge_cell_nodes [n_el*54]) + mixed-face "
              "(face_nodes [n_bf*27] 9-node slots, a tri fills the first 6; face_type [n_bf] 0=tri/1=quad) "
              "isoparametric geometry via GetTrafo -> ONE path flat + curved.  Quadrature = the hex-mode "
              "both-domains-graded Duffy scheme on the 3-sub-tet / mixed 1-2 sub-tri decomposition "
              "(numpy de-risk eig(M^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3; demag_z ~ 1/3).  Shares the "
              "hex block memo / symmetric-fill build; the golden hex path is byte-for-byte untouched.")
-        .def(py::init([](int dim2, F64Array cell_nodes9_a, I32Array cell_type_a,
-                         F64Array edge_nodes3_a, int n_el, int n_be,
+        .def(py::init([](int dim2, int geometry_order, F64Array cell_map_a, I32Array cell_type_a,
+                         F64Array edge_map_a, int n_el, int n_be,
                          I32Array charge_host_a, I32Array charge_kind_a,
                          I32Array charge_expo_a,
                          F64Array sym_tri_pts_a, F64Array sym_tri_w_a,
@@ -3574,9 +3574,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          double near_grade, double far_inner_factor,
                          I32Array image_masks_a, F64Array image_signs_a,
                          double eps, int leaf, double eta, bool build) {
-                 auto cell_nodes9 = to_1d_vector<double>(cell_nodes9_a, "cell_nodes9");
+                 auto cell_map = to_1d_vector<double>(cell_map_a, "cell_map");
                  auto cell_type = to_1d_vector<int>(cell_type_a, "cell_type");
-                 auto edge_nodes3 = to_1d_vector<double>(edge_nodes3_a, "edge_nodes3");
+                 auto edge_map = to_1d_vector<double>(edge_map_a, "edge_map");
                  auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
                  auto charge_kind = to_1d_vector<int>(charge_kind_a, "charge_kind");
                  auto charge_expo = to_1d_vector<int>(charge_expo_a, "charge_expo");
@@ -3594,7 +3594,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
                  return build_charge_gram_released(
                      [&]() { return std::make_shared<RadHACApKChargeGram>(
-                         dim2, std::move(cell_nodes9), std::move(cell_type), std::move(edge_nodes3),
+                         dim2, geometry_order, std::move(cell_map), std::move(cell_type), std::move(edge_map),
                          n_el, n_be, std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
                          std::move(sym_tri_pts), std::move(sym_tri_w),
                          std::move(gl_quad), std::move(gw_quad),
@@ -3604,7 +3604,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(image_masks), std::move(image_signs)); },
                      eps, leaf, eta, build, "2D charge Gram H-matrix build failed");
              }),
-             py::arg("dim2"), py::arg("cell_nodes9"), py::arg("cell_type"), py::arg("edge_nodes3"),
+             py::arg("dim2"), py::arg("geometry_order"), py::arg("cell_map"),
+             py::arg("cell_type"), py::arg("edge_map"),
              py::arg("n_el"), py::arg("n_be"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
              py::arg("sym_tri_pts"), py::arg("sym_tri_w"),
@@ -3615,10 +3616,10 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
              "2D PLANAR mode (motor cross-sections; memory hdiv-vim-tri-quad-motor): charges rho = -div M "
-             "on tri/quad cells (tri P0, quad Q1 -- the 2D hex-gotcha twin) + sigma = M.n on boundary "
-             "EDGES (P1), Piola-exact REF measures, kernel -ln(r)/(2pi) (the ln-scale shift is killed by "
-             "the zero-total-charge dof columns).  Geometry = P2 lattices via GetTrafo (tri 6-node in "
-             "9-node slots, quad 9-node, edge 3-node; cell_type 0=tri 1=quad) -> flat + curved one path.  "
+             "on tri/quad cells (RT1: tri P0/quad Q1; RT2: tri P1/quad Q2) + sigma = M.n on boundary "
+             "EDGES (P1/P2), Piola-exact REF measures, kernel -ln(r)/(2pi) (the ln-scale shift is killed by "
+             "the zero-total-charge dof columns).  Geometry = polynomial maps of order 1..3 fitted from "
+             "GetTrafo (cell_type 0=tri 1=quad) -> flat + curved one path.  "
              "Regular symmetric outer everywhere (the log kernel needs NO graded outer -- numpy-validated); "
              "radial-cone inner for near/self, cheap far cloud otherwise.  Gates: eig(M^-1 N) in [0,1]; "
              "disk demag == 1/2 exact; ellipse a:b -> b/(a+b); 2D Clausius-Mossotti chi/(1+chi/2).")

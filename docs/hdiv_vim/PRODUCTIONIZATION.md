@@ -17,11 +17,14 @@ production checklist, not a migration archive.
 - On geometrically and topologically symmetric full/reduced hex meshes,
   `rad.Fld` image parity is locked to the explicit full solve at the
   roundoff-level contract (`< 10 eps` relative error).
-- RT1 is public for pure TET/HEX/WEDGE, planar 2D, IMA, and field evaluation.
-- RT2 is public for flat and isoparametric-P2 pure-TET linear/nonlinear material
-  solves, IMA, persistent field evaluation, and the NGSolve
-  `ChargeGram`/`DemagOperator` surface.  RT2 remains fail-loud on HEX/WEDGE and
-  planar 2D; those production kernels are RT1.
+- RT1 and RT2 are public for flat and isoparametric-P2 pure TET/HEX/WEDGE
+  linear/nonlinear material solves, IMA, persistent field evaluation, and the
+  NGSolve `ChargeGram`/`DemagOperator` surface.  Planar RT1 is public through
+  Q2 geometry and planar RT2 through Q3, including IMA and the persistent
+  planar field evaluator.
+- `radia.vim.hdiv_capabilities()` is the sole field/geometry-order table.  Do
+  not derive geometry order from HDiv order with one cross-dimensional p+1
+  rule; Policy 8 rejects duplicated arithmetic guards.
 - NGSolve spaces, coefficient functions, and bilinear forms are declared in
   Python, as in NGSolve itself.  Their assembled sparse matrices pass directly
   to C++ without SciPy/list materialization.  The persistent C++ operator owns
@@ -38,7 +41,7 @@ production checklist, not a migration archive.
   CoefficientFunction.  `vim.Solve(..., magnetization_sources=[...])` assembles
   that field into the iron weak form; source coefficients stay immutable and
   PM/iron normal jumps remain representable because their spaces are separate.
-- Prescribed sources cover RT1 TET/HEX/WEDGE, RT2 pure TET, Curve(2), and IMA.
+- Prescribed sources cover RT1/RT2 TET/HEX/WEDGE, Curve(2), and IMA.
   Planar 2D continues to use `magnets=[(mesh, M), ...]`.
 - The permanent-magnet material ladder is one canonical four-level contract:
   (1) fixed/given `MagnetizationSource`; (2) linear recoil

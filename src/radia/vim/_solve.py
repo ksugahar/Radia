@@ -9,9 +9,9 @@ Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunct
 Biot-Savart field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
 ## Formulation (verified-first, 2026-06-15)
-ONE projected weak form everywhere -- the magnetization M is the RT1 primary, the constitutive law
+ONE projected weak form everywhere -- the magnetization M is the RT1/RT2 primary, the constitutive law
 M = M(H) is imposed in the L2 sense (M_mass m = INT M(H).v dx), and H = h_ext - M_mass^-1 N m is the
-weak total field (N = B^T G B, h_ext = H_ext L2-projected onto HDiv order 1).  LINEAR soft iron is the
+weak total field (N = B^T G B, h_ext = H_ext L2-projected onto the selected HDiv order).  LINEAR soft iron is the
 CONSTANT-chi special case M = chi H, giving the form-1 system
 
     (M_mass + M_chi M_mass^-1 N) m = M_chi h_ext ,   M_chi = INT chi(x) u.v dx   (the chi-weighted mass),
@@ -108,6 +108,7 @@ import ngsolve as ng
 import radia._radia_pybind as _rp
 from . import _image
 from ._vim import build_charge_gram, _volume_vertex_counts
+from ._capabilities import validate_hdiv_configuration
 from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi,
                          _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi)
 
@@ -469,25 +470,22 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
         # M = chi*H + B_r/mu0 is exactly the existing symmetric linear HDiv system with
         # H_ext shifted by B_r/(mu0*chi).  The unknown and returned field remain total M.
         H_ext = H_ext + B_r_cf / (_MU0 * (recoil_mu_r - 1.0))
-    # ---- HDiv-VIM scope: RT1 on TET/HEX/WEDGE and RT2 on pure TET ----
+    # ---- HDiv-VIM scope: RT1/RT2 on pure TET/HEX/WEDGE/planar meshes ----
     # The tetrahedral monomial-charge Gram, IMA fold, and field evaluator are exact
-    # for orders 1 and 2.  Specialized HEX/WEDGE and planar kernels remain RT1.
+    # for orders 1 and 2.  The planar log kernel also supports RT1/Q2 and RT2/Q3;
+    # specialized HEX/WEDGE kernels use the same order without fallback.
     order = int(order)
-    if order not in (1, 2):
-        raise ValueError("HDiv-VIM production supports HDiv order in {1,2}; got order=%r." % (order,))
     if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
         curve_order = int(mesh.GetCurveOrder())
-    # IMA mirror symmetry is wired for flat/curved pure-TET RT1/RT2 and pure-HEX/WEDGE RT1.
+    _vtx = _volume_vertex_counts(mesh)
+    validate_hdiv_configuration(mesh.dim, _vtx, order, mesh.GetCurveOrder())
+    # IMA mirror symmetry is wired for flat/curved pure-TET/HEX/WEDGE RT1/RT2.
     # Mixed and pyramid cases fail loud downstream instead of silently dropping the image.
     if mesh.dim == 2:
         if sources:
             raise NotImplementedError(
                 "vim.Solve (2D): use the established magnets=[(mesh, M), ...] planar source path; "
                 "vim.MagnetizationSource is the 3D prescribed-source API.")
-        if order != 1:
-            raise NotImplementedError(
-                "vim.Solve (2D): the planar HDiv-VIM kernel is order 1 only; RT2 is currently supported "
-                "on pure tetrahedral 3D meshes.")
         image_masks, image_signs = [], []
         if image is not None:
             for axes, sign in _image.image_group(_image.parse_image_string(image)):
@@ -514,7 +512,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
         from ._vim2d import solve_planar_demag
         result = solve_planar_demag(
             mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
-            eta=eta, nl_tol=nl_tol, nl_maxit=nl_maxit,
+            order=order, eta=eta, cg_tol=tol, cg_maxit=maxit,
+            nl_tol=nl_tol, nl_maxit=nl_maxit,
             image_masks=image_masks, image_signs=image_signs)
         result["image"] = image
         if linear_recoil_pm:
@@ -534,16 +533,6 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                 "vim.Solve: a prescribed magnetization source and soft iron must use separate mesh "
                 "objects/HDiv spaces; using the same mesh would erase the PM/iron normal jump.")
         H_ext = H_ext + source.field_cf
-    _vtx = _volume_vertex_counts(mesh)
-    if _vtx not in ({4}, {8}, {6}):
-        raise ValueError(
-            "HDiv-VIM (order 1) supports a pure-TET (4-vertex), pure-HEX (8-vertex), or pure-WEDGE/prism "
-            "(6-vertex) mesh; got vertex counts %s.  Pyramid / MIXED-element soft-iron demag is not "
-            "supported until HDiv transition elements are available." % sorted(_vtx))
-    if order == 2 and _vtx != {4}:
-        raise NotImplementedError(
-            "HDiv-VIM RT2 is supported on pure-TET meshes only; HEX and WEDGE use their specialized RT1 "
-            "charge kernels (got vertex counts %s)." % sorted(_vtx))
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("vim.Solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
@@ -570,9 +559,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
 
     # ---- RT1/RT2 material solve ----
     # The per-element change-of-basis in `_vim._charge_basis` (2026-06-28, [[hdiv-highorder-material-solve-wrong]])
-    # makes the order-1 demag operator N = B^T G B valid (eig(M_mass^-1 N) in [0,1]; per-element M p-converges).
+    # makes the order-p demag operator N = B^T G B valid (eig(M_mass^-1 N) in [0,1]; per-element M p-converges).
     # LINEAR (uniform-scalar OR per-region dict) mu_r AND flat/curved NONLINEAR (bh_table) are wired via the same
-    # all-C++ symmetric mass-Riesz CG / energy-Newton.  RT2 reaches this path only on a pure-TET mesh.
+    # all-C++ symmetric mass-Riesz CG / energy-Newton on each supported pure topology.
     # Golden: validation_test/feec/test_hdiv_vim_demag_solve*, test_hdiv_vim_highorder_cpp.py.
     result = _solve_highorder(mesh, int(order), mu_r, bh_table, H_ext, image, linear_solver,
                               gram_eps, leaf, eta, far_quad, tol, maxit,
@@ -605,7 +594,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
     t_total = time.perf_counter()
     vertex_counts = (_volume_vertex_counts(mesh) if vertex_counts is None
                      else frozenset(vertex_counts))
-    # IMA mirror symmetry: WIRED for the FLAT pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
+    # IMA mirror symmetry: wired for flat/Curve(2) pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
     # pure-WEDGE (the C++ QuadBlockHex/Wedge(mask) reflected block) paths -- the Gram folds the mirror-image
     # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  The same fold is used
     # on P2-curved TET/HEX/WEDGE geometry; MIXED / pyramid still fail loud.
@@ -615,8 +604,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         _ivtx = vertex_counts
         if _ivtx not in ({4}, {8}, {6}):
             raise NotImplementedError(
-                "vim.Solve: IMA image symmetry is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
-                "RT1 Gram; MIXED / pyramid reduced models are not supported.  Got vertex counts %s."
+                "vim.Solve: IMA image symmetry is wired for flat/Curve(2) pure-TET / pure-HEX / pure-WEDGE "
+                "RT1/RT2 Gram; MIXED / pyramid reduced models are not supported.  Got vertex counts %s."
                 % sorted(_ivtx))
         _planes = _image.parse_image_string(image)
         image_planes = list(_planes)

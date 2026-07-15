@@ -91,8 +91,8 @@ use separate mesh objects/spaces; this preserves the physical normal jump and
 surface charge even when the bodies touch.  Multiple sources superpose, and
 the result retains them in `_magnetization_sources`.
 
-The 3D source supports RT1 TET/HEX/WEDGE, RT2 pure TET, Curve(2), and IMA on the
-same geometry/field kernels as the solve.  Planar 2D keeps its established
+The 3D source supports RT1/RT2 TET/HEX/WEDGE, Curve(2), and IMA on the same
+geometry/field kernels as the solve.  Planar 2D keeps its established
 `magnets=[(mesh, M), ...]` path.  This API represents a fixed prescribed
 magnetization; it does not advance a material history.
 If `M_given` itself has an internal normal discontinuity (for example, distinct
@@ -152,19 +152,28 @@ bounded domain, derives the branch update from a convex energy/proximal law,
 and exposes the explicit manufacturing/restart state used for irreversible
 demagnetization studies.
 
-The public three-dimensional VIM contract supports RT1 on pure TET/HEX/WEDGE
-meshes and RT2 on pure TET meshes.  RT2 uses the same C++ charge-Gram,
-mass-Riesz CG, energy-Newton, IMA, and persistent-field paths on flat and
-isoparametric-P2 TET meshes.  HEX/WEDGE and planar 2D remain RT1 and fail
-loudly at RT2 instead of falling back to a lower order.
+The public VIM contract supports RT1 and RT2 on pure TET/HEX/WEDGE meshes.
+Both orders use the same C++ charge-Gram, mass-Riesz CG, energy-Newton, IMA,
+and persistent-field paths on flat and isoparametric-P2 geometry.  Flat HEX
+RT2 uses batched analytic source moments for its Q2 volume/face charge blocks;
+WEDGE RT2 uses the corresponding tri-P2 by z-P2 charge basis.  Curve(2)
+HEX/WEDGE retain their mapped high-order integration path.
+
+Geometry order and HDiv order are independent Piola-FEM choices.  The
+authoritative table is `radia.vim.hdiv_capabilities()`: in 2D, RT1 supports
+geometry orders 1/2 (Q2 recommended) and RT2 supports 1/2/3 (Q3 recommended);
+in 3D, TET/HEX/WEDGE RT1 and RT2 support geometry orders 1/2 (P2/Q2
+recommended).  A combination outside that table fails loudly.  In particular,
+RT1/Q3 is intentionally excluded in 2D: under the Q3 contravariant Piola map,
+the RT1 space does not reproduce a uniform physical field to roundoff, and an
+ellipse torque check showed no accuracy gain over RT1/Q2.
 For a geometrically and topologically symmetric reduced/full hex
 pair, `rad.Fld` after an image solve must agree with the explicit full solve at
 the roundoff contract (`< 10 eps` relative error), not merely within a percent.
 
 Every supported 3D solve also materializes one immutable C++ field evaluator.
-TET RT1/RT2 sources
-retain analytic volume/triangle kernels; HEX/WEDGE and curved sources retain the
-NGSolve quadrature cloud.  Repeated `rad.Fld` calls pass contiguous NumPy target
+TET RT1/RT2 sources retain analytic volume/triangle kernels; HEX/WEDGE and
+curved sources retain the NGSolve quadrature cloud.  Repeated `rad.Fld` calls pass contiguous NumPy target
 arrays directly to that evaluator, with no repeated source packing.  IMA terms
 are accumulated inside the same TaskManager region.  Ordinary batches use the
 exact direct source sum.  Only very large source-target work is considered for
@@ -197,9 +206,9 @@ The result artifact records both `preconditioner_requested` and the resolved
 `preconditioner="mass-riesz"` and `preconditioner="jacobi"` remain explicit
 diagnostic overrides.
 
-For flat pure-hex `.vol` meshes, the order-1 charge-basis path now follows the
+For flat pure-hex `.vol` meshes, the RT1/RT2 charge-basis path follows the
 NGSolve reference ordering directly: the Q2 geometry lattice is built from the
-linear `.vol` vertices, and the Q1 shape-moment to monomial map is applied as a
+linear `.vol` vertices, and the Q1/Q2 shape-moment to monomial map is applied as a
 cached block-diagonal sparse transform.  Curved `.vol` meshes still use
 `GetTrafo` as the geometry source of truth.
 
@@ -306,7 +315,7 @@ host (`mdx` or `hibino`).  Required HDiv gates:
   immutability, superposition, and iron-response equality;
 - energy-Stop hard projection/proximal stationarity, non-negative vector-loop
   dissipation, reverse-field remanence loss, and state-restart reproducibility;
-- RT1/RT2 flat/curved pure-TET accuracy and cost, plus charge-Gram H-matrix build stats and
+- RT1/RT2 flat/curved TET/HEX/WEDGE accuracy and cost, plus charge-Gram H-matrix build stats and
   memory/timing on idle `mdx` or `hibino`
   for large runs;
 - 2D planar motor saliency checks for the motor lane.

@@ -59,7 +59,8 @@ class HDivReducedMotor:
 
     def __init__(self, mesh, mu_r: float, *, stack_length: float = 1.0,
                  center=(0.0, 0.0), eta: float = 2.0,
-                 cg_tol: float = 1e-10, cg_maxit: int = 5000):
+                 cg_tol: float = 1e-10, cg_maxit: int = 5000,
+                 order: int = 1):
         if mesh.dim != 2:
             raise ValueError(f"HDivReducedMotor: mesh.dim must be 2 (got {mesh.dim})")
         if not float(mu_r) > 1.0:
@@ -72,7 +73,8 @@ class HDivReducedMotor:
         self.stack_length = float(stack_length)
         self.center = _vector2(center, "center")
         self.body = PlanarDemagBody(
-            mesh, eta=eta, cg_tol=cg_tol, cg_maxit=cg_maxit)
+            mesh, order=order, eta=eta, cg_tol=cg_tol, cg_maxit=cg_maxit)
+        self.order = self.body.order
         self.area = float(np.sum(self.body.areas))
         self.gram_build_count = 1
 
@@ -184,7 +186,9 @@ class HDivReducedMotor:
             })
         return {
             "analysis": "hdiv_reduced_motor",
-            "formulation": "planar RT1 HDiv-VIM reluctance motor",
+            "formulation": f"planar RT{self.order} HDiv-VIM reluctance motor",
+            "hdiv_order": self.order,
+            "geometry_order": self.body.geometry_order,
             "mu_r": self.mu_r,
             "stack_length_m": self.stack_length,
             "center_m": self.center.tolist(),

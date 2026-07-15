@@ -194,9 +194,8 @@ public:
                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
                         std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el);
 
-    // HEX RT1 mode (2026-07-02): the RT1-hex (HDiv(hexmesh, order=1)) charge Gram -- Q1 monomial charges
-    // (volume: xi^i eta^j zeta^k, (i,j,k) in {0,1}^3, 8/hex, the L2(order=1) test space -- NOT the tet's
-    // order p-1; surface: u^i v^j, (i,j) in {0,1}^2, 4/quad face) over the DIRECT Q2 isoparametric geometry:
+    // HEX RT1/RT2 mode: the HDiv(hexmesh, order=p) charge Gram uses tensor Qp monomial charges
+    // (8/27 per volume and 4/9 per quad face at p=1/2) over the DIRECT Q2 isoparametric geometry:
     // hex_cell_nodes [n_el*81] = 27-node triquadratic lattice (n = ix + 3*iy + 9*iz, ref (ix/2,iy/2,iz/2)),
     // quad_face_nodes [n_bf*27] = 9-node biquadratic lattice (n = iu + 3*iv), both extracted via GetTrafo at
     // the reference lattice -> ONE code path for FLAT (trilinear subset of Q2, machine-exact incl. distorted)
@@ -210,9 +209,8 @@ public:
     //   INNER: field point far from the source sub (> far_inner_factor*size) -> the cheap far rule
     //          (far_tet_*/far_tri_*); else the FINE corner-graded Duffy (gl_in/gw_in, graded toward the
     //          source-sub vertex nearest the field point) -- effectively exact.
-    // All rules are consumed as tables (Python owns the constants).  A future PYRAMID transition element
-    // (NGSolve HDiv-pyramid, tet/hex coupling) slots in as one more (ref-domain sub-tet table + nodal
-    // lattice map + monomial set) row -- no structural change.
+    // All rules are consumed as tables (Python owns the constants).  Mixed and pyramid meshes remain
+    // outside this pure-topology production constructor and fail before dispatch.
     RadHACApKChargeGram(std::vector<double> hex_cell_nodes, std::vector<double> quad_face_nodes,
                         int n_el, int n_bf,
                         std::vector<int> charge_host, std::vector<int> charge_kind,
@@ -227,22 +225,22 @@ public:
                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
-    // charges rho = -div M on 2D cells (TRI: P0, 1 monomial -- probed; QUAD: Q1, 4 monomials -- the 2D
-    // twin of the hex gotcha) + sigma = M.n on boundary EDGES (P1, 2 monomials), all in the NGSolve REF
+    // charges rho = -div M on 2D cells (RT1: TRI P0 / QUAD Q1; RT2: TRI P1 / QUAD Q2)
+    // + sigma = M.n on boundary EDGES (P1/P2), all in the NGSolve REF
     // frame with the Piola-exact extraction (the dimension-independent J-cancellation identity).  Kernel
     // = the 2D Laplace Green's function -ln(r)/(2*pi); the ln-scale shift is killed because every HDiv
     // dof's total charge is zero (divergence theorem), so N = B^T G B is scale-invariant.  Geometry =
-    // P2 lattices via GetTrafo (tri 6-node, quad 9-node, edge 3-node; cells stored in 9-node slots with
-    // cell_type 0=tri/1=quad) -> ONE path flat/curved, mirroring the hex-RT1 architecture.  Quadrature
+    // Q1..Q3 polynomial maps fitted from GetTrafo (cell_type 0=tri/1=quad) -> ONE path flat/curved.
+    // RT1 admits geometry through Q2; RT2 admits geometry through Q3.  Quadrature
     // (numpy-validated, C:\temp\vim2d_proto.py): REGULAR symmetric outer everywhere (the log kernel's
     // single-layer potentials are continuous, so NO graded outer is needed -- simpler than 3D); inner =
     // signed radial cones from the nearest anchor SITE for near field points, cheap far cloud otherwise.
     // Gates: eig(M^-1 N) in [0,1]; DISK demag == 1/2 exact; ellipse a:b -> N=b/(a+b); 2D Clausius-
     // Mossotti M = chi H/(1+chi/2).  The 2D-mode flag is the FIRST argument (dim2 tag) to keep the
     // overload set unambiguous.
-    RadHACApKChargeGram(int dim2_tag,
-                        std::vector<double> cell_nodes9, std::vector<int> cell_type,
-                        std::vector<double> edge_nodes3,
+    RadHACApKChargeGram(int dim2_tag, int geometry_order,
+                        std::vector<double> cell_map, std::vector<int> cell_type,
+                        std::vector<double> edge_map,
                         int n_el, int n_be,
                         std::vector<int> charge_host, std::vector<int> charge_kind,
                         std::vector<int> charge_expo,
@@ -254,20 +252,18 @@ public:
                         double near_grade, double far_inner_factor,
                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
-    // WEDGE (PRISM) RT1 mode (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated): the RT1-prism
-    // (HDiv(prismmesh, order=1)) charge Gram.  Volume charge = L2(prism,order=1) = tri-P1 (x) z-P1 =
-    // {1,x,y,z,xz,yz} (6/prism -- a SUBSET of the hex's 8 Q1 monomials, exactly the prism div-image; the
-    // "hex gotcha" prism twin) over the 18-node tri-P2 (x) z-P2 lattice (WedgeQ2Map: node n = t + 6*iz,
+    // WEDGE (PRISM) RT1/RT2 mode: the HDiv(prismmesh, order=p) charge Gram uses tri-Pp (x) z-Pp
+    // volume charges (6/18 per prism) over the 18-node tri-P2 (x) z-P2 lattice (node n = t + 6*iz,
     // t = the Tri6 node 0..5, iz = the z level 0..2).  Boundary faces are MIXED (2 tri caps + 3 quad
-    // sides per prism): a tri face -> SurfaceL2 P1 (3 monomials, TriSurfMap 6-node, 1 sub-tri), a quad
-    // face -> SurfaceL2 Q1 (4 monomials, QuadQ2Map 9-node reused from the hex mode, 2 sub-tris).  Faces
+    // sides per prism): a tri face -> SurfaceL2 P1/P2 (3/6 monomials, 1 sub-tri), a quad
+    // face -> SurfaceL2 Q1/Q2 (4/9 monomials, 2 sub-tris).  Faces
     // are stored in 9-node slots (a tri fills the first 6) + a per-face type array (0=tri/1=quad),
     // mirroring the 2D mode's mixed-cell storage.  The cell 3-sub-tet decomposition (WEDGEREF_TETS) + the
     // per-face-type 1/2 sub-tri decomposition drive the SAME both-domains-graded Duffy singular quadrature
     // as the hex mode (numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3, demag_z ~ 1/3).
     // Served through the hex block memo / GetHexBlock dispatch (m_wedgemode -> QuadBlockWedge); the leaf
-    // helpers (HexMonoEval, HexDuffyBary, the HexSiteRad tables, HexGetCloud / HexQuadCloud) are shared,
-    // so the golden hex path is byte-for-byte untouched.  Arg 3 (vector<int> face_type) disambiguates the
+    // helpers (HexMonoEval, HexDuffyBary, the HexSiteRad tables, HexGetCloud / HexQuadCloud) are shared.
+    // Arg 3 (vector<int> face_type) disambiguates the
     // overload from the hex ctor (whose arg 3 is int n_el).
     RadHACApKChargeGram(std::vector<double> wedge_cell_nodes, std::vector<double> face_nodes,
                         std::vector<int> face_type, int n_el, int n_bf,
@@ -489,7 +485,7 @@ private:
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 6>>> m_srcCurvedTris;  // [n] curved-face P2 sub-tri nodes
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 10>>> m_srcCurvedTets; // [n] curved-cell P2 sub-tet nodes
 
-    // HEX RT1 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
+    // HEX RT1/RT2 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
     // the HEX/QUAD REFERENCE frame (evaluated directly at ref coords -- no physical->ref inverse), geometry +
     // measure come from the Q2 lattice maps.  Entries are served block-wise (GetHexBlock); the inner is the
     // ref-frame radial decomposition (PhiInnerHexRadialVec) for near/self, cached far clouds otherwise.
@@ -507,13 +503,17 @@ private:
     std::vector<double> m_cellSubC, m_cellSubS, m_cellSubV;  // [n_el*6*3] sub-tet centroids, [n_el*6] sizes, [n_el*6*4*3] phys corners
     std::vector<double> m_faceSubC, m_faceSubS, m_faceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3] (sub-tri)
     std::vector<unsigned char> m_hexAffineCell;              // [n_el] true when the Q2 lattice is affine
-    std::vector<double> m_hexAffineCoeff;                    // [n_el*8*20] ref Q1 monomials -> physical degree<=3 coeffs / |detJ|
+    int m_hexAffineOrder = 1, m_hexAffineMonoCount = 8, m_hexAffinePolyCount = 20;
+    std::vector<double> m_hexAffineCoeff;                    // [n_el*mono*moment], RT1 8x20; RT2 27x84
+    std::vector<unsigned char> m_quadAffineFace;             // [n_bf] true when the Q2 face lattice is affine
+    int m_quadAffineMonoCount = 4, m_quadAffinePolyCount = 10;
+    std::vector<double> m_quadAffineCoeff;                   // [n_bf*mono*moment], RT1 4x10; RT2 9x35
     bool m_hexUniformAffineCells = false;                    // same affine cell map for every cell -> translation block cache
     std::vector<int> m_hexCellLattice;                       // [n_el*3] integer lattice coordinate for uniform affine cells
     bool m_hexUniformTransHosts = false;                      // cell/face hosts are translated template copies
     std::vector<int> m_hexHostTemplate;                       // [n_el+n_bf] template id per host (cell ids and face ids are separate by kind)
     std::vector<int> m_hexHostLattice2;                       // [3*(n_el+n_bf)] half-cell lattice coordinates of host centers
-    double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1 monomial (i,j,k in {0,1})
+    double HexMonoEval(int charge, const double xi[3]) const;   // ref-frame Q1/Q2 monomial
     // BLOCK-MEMO (the 64x co-location win): the near/far/grading decisions depend ONLY on host+sub geometry
     // (all co-located charges of a (kind,host) share m_cent/m_size), so the WHOLE directed host-pair block is
     // computed in ONE pass -- the 1/r sqrt is shared across all nT*nS monomial combos (the numpy-proto
@@ -660,9 +660,12 @@ private:
     // ---- 2D PLANAR mode (see the dim2 ctor doc) ----
     bool m_d2 = false;
     int  m_d2_n_be = 0;
-    std::vector<double> m_d2CellNodes;   // [n_el*18] 9-node lattice slots x 2D (tri fills the first 6)
+    int  m_d2GeometryOrder = 1;
+    int  m_d2CellMapStride = 0;
+    int  m_d2EdgeMapStride = 0;
+    std::vector<double> m_d2CellMap;     // polynomial map coefficients; Qq slot x 2D (tri uses Pq prefix)
     std::vector<int>    m_d2CellType;    // [n_el] 0=tri, 1=quad
-    std::vector<double> m_d2EdgeNodes;   // [n_be*6]  3-node lattice x 2D
+    std::vector<double> m_d2EdgeMap;     // polynomial map coefficients; (q+1) x 2D
     std::vector<double> m_d2SymTriP, m_d2SymTriW;   // OUTER tri rule (bary lam1..2; W sums 1/2)
     std::vector<double> m_d2GlQ, m_d2GwQ;           // 1D [0,1] tensor outer rule for quads
     std::vector<double> m_d2GlE, m_d2GwE;           // 1D [0,1] edge outer rule
@@ -673,9 +676,9 @@ private:
     std::vector<double> m_d2EdgeC, m_d2EdgeS;         // [n_be*2],   [n_be]
     std::vector<double> m_d2CellSiteX;                // [n_el*4*7*2]
     std::vector<double> m_d2EdgeSiteX;                // [n_be*3*2]
-    static void Tri6Map(const double* nd12, const double xi[2], double X[2]);
-    static void Quad9Map(const double* nd18, const double xi[2], double X[2]);
-    static void Edge3Map(const double* nd6, double t, double X[2]);
+    void D2CellMap(int cell_type, const double* coeff, const double xi[2], double X[2]) const;
+    void D2EdgeMap(const double* coeff, double t, double X[2]) const;
+    void D2EdgeTangent(const double* coeff, double t, double T[2]) const;
     // inner INT over sub subB of source (kindS,hS) of m_b(eta)*(-ln|p-X(eta)|) d(ref eta): radial cones
     // from the anchor (xiT = the outer point's own ref coords on the SELF host; else the nearest SITE)
     // for near field points, the cached-rule far cloud otherwise.
@@ -684,7 +687,7 @@ private:
     std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS,
                                     int mask = 0) const;  // directed block, 1/(2pi) folded
 
-    // ---- WEDGE (PRISM) RT1 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
+    // ---- WEDGE (PRISM) RT1/RT2 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
     // (m_symTetP/W, m_symTriP/W, m_glOut/gwOut, m_glIn/gwIn, m_farTetP/W, m_farTriP/W, m_near_grade,
     // m_far_inner_factor) and the block-serving infra (m_hexLocalOf, m_cellCharges, m_faceCharges,
     // m_cent, m_size) verbatim; only the geometry (prism cells + mixed tri/quad faces) is wedge-specific.
