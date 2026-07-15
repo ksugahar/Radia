@@ -1,9 +1,8 @@
 """Minimal radia-motor contract for planar HDiv-VIM.
 
-This is not a full motor model.  It is the smallest rotating-machine-style
-gate: a saliency body, a rotating applied field in the rotor frame, one cached
-body operator, and torque that is odd in electrical angle and matches the
-closed-form reluctance torque.
+This is the production reduced reluctance-motor gate: a saliency rotor, one
+cached body operator, and torque read independently from Maxwell stress,
+magnetization volume coupling, and fixed-current coenergy.
 """
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 from netgen.occ import OCCGeometry, WorkPlane  # noqa: E402
 
-from radia.vim import Solve  # noqa: E402
+from radia.motor_hdiv import HDivReducedMotor  # noqa: E402
 
 MU0 = 4.0e-7 * np.pi
 
@@ -34,23 +33,29 @@ def test_planar_hdiv_motor_saliency_angle_sweep_contract():
         Mb = chi * Hb / (1.0 + chi * Nb)
         return MU0 * area * (Ma * Hb - Mb * Ha)
 
-    body = None
-    torques = []
+    torque_sets = []
     with ng.TaskManager():
-        for th in (theta, -theta):
-            Ha, Hb = H0 * np.cos(th), H0 * np.sin(th)
-            if body is None:
-                res = Solve(mesh, chi + 1.0, ng.CoefficientFunction((Ha, Hb)))
-                body = res["body"]
-                m = res["m"]
-            else:
-                m = body.solve_linear(chi, body.project(ng.CoefficientFunction((Ha, Hb))))
-            Mx, My = body.M_avg(m)
-            torques.append(MU0 * area * (Mx * Hb - My * Ha))
+        motor = HDivReducedMotor(mesh, chi + 1.0)
+        # A fixed global field and rotor angles -/+theta correspond to local
+        # field angles +/-theta.
+        for rotor_angle in (-theta, theta):
+            state = motor.solve_angle(rotor_angle, (H0, 0.0))
+            torque_sets.append((
+                motor.maxwell_torque(state, 0.28, circle_points=1440),
+                state.torque_volume_Nm,
+                motor.virtual_work_torque(
+                    rotor_angle, (H0, 0.0), delta_angle=np.radians(0.1)),
+            ))
 
-    assert torques[0] * torques[1] < 0.0, f"saliency torque must reverse with angle: {torques}"
-    odd_rel = abs(torques[0] + torques[1]) / max(abs(torques[0]), 1e-30)
-    assert odd_rel < 2e-3, f"torque is not odd in rotor angle: {torques}"
+    assert motor.gram_build_count == 1
+    positive, negative = torque_sets
+    assert positive[0] * negative[0] < 0.0, \
+        f"saliency torque must reverse with angle: {torque_sets}"
+    odd_rel = abs(positive[0] + negative[0]) / max(abs(positive[0]), 1e-30)
+    assert odd_rel < 2e-3, f"torque is not odd in rotor angle: {torque_sets}"
+    for routes in torque_sets:
+        spread = max(routes)-min(routes)
+        assert spread / max(abs(value) for value in routes) < 5e-5, routes
     ref = closed_form_torque(theta)
-    assert abs(torques[0] - ref) / abs(ref) < 2e-2, \
-        f"HDiv motor torque {torques[0]:.3g} vs closed form {ref:.3g}"
+    assert abs(positive[0] - ref) / abs(ref) < 2e-2, \
+        f"HDiv motor torque {positive[0]:.3g} vs closed form {ref:.3g}"

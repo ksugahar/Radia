@@ -18,5 +18,20 @@ The solver behind `planar_vim_motor.ipynb` is the promoted 2D layer in `radia.vi
 (`PlanarDemagBody` / `Solve` on a 2D mesh / `maxwell_torque_circle`), golden-locked in
 `validation_test/feec/test_hdiv_vim_2d_solve.py`.
 
+The production reduced reluctance-motor API is `radia.motor_hdiv.HDivReducedMotor`.
+It keeps the rotor mesh in a local frame, builds the symmetric RT1 charge Gram
+once, and reuses it over a mechanical-angle sweep.  The public torque contract
+compares the air-gap Maxwell stress, the magnetization-volume coupling, and the
+fixed-current coenergy derivative.  The notebook panel exposes the same path as
+the **HDiv Reduced** study through
+`src/radia/panels/calc_motor_hdiv_reduced.py`; its input mesh is a rotor-only 2D
+`.vol`, not the full-motor mesh used by the transient A-formulation.
+
+`PlanarDemagBody.field_cf(...)` is the native C++/NGSolve source-field bridge.
+It rotates a solved source from its local frame into a target body's local
+frame without a Python point loop.  This is the interface primitive for the
+next fixed-stator reduced-FEM/AGE coupling increment; that full coupled machine
+path is not claimed by the current single-rotor reduced solver.
+
 The executable validation corpus is
 `validation_test/electric_machine/`; this directory is the rendered docs layer.
