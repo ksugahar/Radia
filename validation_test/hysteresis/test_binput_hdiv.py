@@ -231,7 +231,7 @@ def test_E_strong_coupling_block_loop():
 #        the MatHys* machinery (and is itself locked against analytic demag
 #        factors elsewhere);
 #   (F2) a full sub-threshold cycle must enclose ~ZERO area (no hysteresis
-#        below the threshold), where the full-drive loop encloses ~1173.
+#        below the threshold), where the full-drive loop encloses ~1.16e3.
 # ==========================================================================
 H_SMALL = 40.0e3      # keeps every element's |B| below eta_1 (asserted below)
 
