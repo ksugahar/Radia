@@ -83,6 +83,7 @@ def rotational_eddy_brake_energy_gate(
     maximum_angular_impulse_residual: float = 0.01,
     maximum_total_energy_residual: float = 0.01,
     maximum_replay_error_over_span: float = 1.0e-6,
+    maximum_field_energy_time_misalignment_s: float = 1.0e-12,
     maximum_field_energy_adjacent_jump_fraction: float = 0.1,
     maximum_field_energy_curvature_outlier_ratio: float = 50.0,
     minimum_decay_fraction: float = 0.5,
@@ -221,10 +222,20 @@ def rotational_eddy_brake_energy_gate(
         len({len(value) for key, value in energy.items() if isinstance(value, list)}) == 1
         and len(field_time) == len(magnetic_energy) >= 2
     )
+    maximum_field_energy_time_misalignment_s_observed = (
+        max(
+            abs(field_sample - primary_sample)
+            for field_sample, primary_sample in zip(
+                field_time, energy_times, strict=True
+            )
+        )
+        if len(field_time) == len(energy_times)
+        else math.inf
+    )
     field_time_alignment = (
         _increasing(field_time)
-        and abs(field_time[0] - energy_times[0]) <= 1.0e-12
-        and abs(field_time[-1] - energy_times[-1]) <= 1.0e-12
+        and maximum_field_energy_time_misalignment_s_observed
+        <= float(maximum_field_energy_time_misalignment_s)
     )
     kinetic_drop = 0.5 * reported_inertia * (
         energy_omega[0] ** 2 - energy_omega[-1] ** 2
@@ -322,6 +333,9 @@ def rotational_eddy_brake_energy_gate(
             "maximum_field_energy_adjacent_jump_fraction": (
                 maximum_field_energy_adjacent_jump_fraction_observed
             ),
+            "maximum_field_energy_time_misalignment_s": (
+                maximum_field_energy_time_misalignment_s_observed
+            ),
             "maximum_field_energy_curvature_outlier_ratio": (
                 maximum_field_energy_curvature_outlier_ratio_observed
             ),
@@ -338,6 +352,9 @@ def rotational_eddy_brake_energy_gate(
             ),
             "maximum_total_energy_residual": float(maximum_total_energy_residual),
             "maximum_replay_error_over_span": float(maximum_replay_error_over_span),
+            "maximum_field_energy_time_misalignment_s": float(
+                maximum_field_energy_time_misalignment_s
+            ),
             "maximum_field_energy_adjacent_jump_fraction": float(
                 maximum_field_energy_adjacent_jump_fraction
             ),

@@ -25,10 +25,10 @@ def _summary() -> dict:
         return {
             "label": label,
             "solve_seconds": 2.0,
-            "time_s": times,
-            "angular_velocity_rad_s": omega,
-            "braking_torque_nm": torque,
-            "joule_loss_w": joule,
+            "time_s": list(times),
+            "angular_velocity_rad_s": list(omega),
+            "braking_torque_nm": list(torque),
+            "joule_loss_w": list(joule),
         }
 
     return {
@@ -58,7 +58,7 @@ def _summary() -> dict:
         "replays": [replay("one"), replay("two")],
         "energy_replay": {
             **replay("energy"),
-            "field_energy_time_s": times,
+            "field_energy_time_s": list(times),
             "magnetic_energy_j": [0.3 for _ in times],
         },
         "timing_breakdown_s": {
@@ -205,4 +205,25 @@ def test_generalization_v6_public(case_id: str) -> None:
             summary["replays"][1]["joule_loss_w"]
         )
         summary["replays"][1]["joule_loss_w"][20] *= 1.05
+    assert gate(summary)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_segment_overlap_after_restart",
+        "v7_public_field_loss_timebase_skew",
+    ],
+)
+def test_generalization_v7_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v7_public_segment_overlap_after_restart":
+        for replay in [*summary["replays"], summary["energy_replay"]]:
+            replay["time_s"][101] = replay["time_s"][99]
+        summary["energy_replay"]["field_energy_time_s"][101] = summary[
+            "energy_replay"
+        ]["field_energy_time_s"][99]
+    else:
+        for index in range(60, 140):
+            summary["energy_replay"]["field_energy_time_s"][index] += 0.0125
     assert gate(summary)["status"] == "needs_attention"
