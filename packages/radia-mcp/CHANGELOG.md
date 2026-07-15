@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-07-15
+
+- **Motor HDiv-VIM lane**: documented the planar reduced-motor analysis,
+  notebook workbench route, torque cross-checks, and focused validation targets.
+
 ## [1.4.7] - 2026-07-15
 
 - **HDiv-VIM production stack**: documented the fixed/given magnetization,
