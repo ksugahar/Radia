@@ -199,9 +199,9 @@ def nonlinear_inductance_sweep_gate(
     representatives = []
     for current in levels:
         group = sorted(groups[current], key=lambda row: row["replay"])
-        replay_checks[current] = len(group) >= 2 and len(
-            {row["replay"] for row in group}
-        ) == len(group)
+        replay_checks[current] = len(group) == 2 and {
+            row["replay"] for row in group
+        } == {1, 2}
         reference = _flatten_replay_values(group[0])
         errors = [
             _relative_error(actual, expected)

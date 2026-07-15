@@ -117,7 +117,11 @@ def build123d_lofted_shell_handoff_gate(
     build = _mapping(summary.get("build"), "build")
     external = _mapping(summary.get("external"), "external")
     native = _mapping(build.get("native"), "build.native")
+    build_replays = _rows(build.get("replays"), "build.replays")
     same = _mapping(build.get("same_kernel_roundtrips"), "build.same_kernel_roundtrips")
+    declared_same_errors = _mapping(
+        build.get("same_kernel_errors"), "build.same_kernel_errors"
+    )
     step = _mapping(same.get("step"), "build.same_kernel_roundtrips.step")
     brep = _mapping(same.get("brep"), "build.same_kernel_roundtrips.brep")
     replays = _rows(external.get("replays"), "external.replays")
@@ -173,6 +177,12 @@ def build123d_lofted_shell_handoff_gate(
         )
         for row in snapshots
     ]
+    recomputed_same_errors = {
+        "step_volume_relative": step_volume_error,
+        "step_area_relative": step_area_error,
+        "brep_volume_relative": brep_volume_error,
+        "brep_area_relative": brep_area_error,
+    }
 
     by_mode: dict[str, list[Mapping[str, object]]] = {
         mode: [
@@ -212,6 +222,20 @@ def build123d_lofted_shell_handoff_gate(
         and step_area_error <= thresholds["max_step_area_relative_error"]
         and brep_volume_error <= thresholds["max_brep_relative_error"]
         and brep_area_error <= thresholds["max_brep_relative_error"],
+        "reported_same_kernel_errors_match_recomputation": all(
+            math.isclose(
+                _finite(
+                    declared_same_errors.get(name),
+                    f"build.same_kernel_errors.{name}",
+                ),
+                recomputed,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-15,
+            )
+            for name, recomputed in recomputed_same_errors.items()
+        ),
+        "two_source_replays_are_exact": len(build_replays) == 2
+        and build_replays[0] == build_replays[1],
         "four_external_replays_cover_heal_and_noheal_twice": len(replays) == 4
         and modes.count("heal") == 2
         and modes.count("noheal") == 2,
@@ -300,6 +324,9 @@ def build123d_loft_example_source_replay_gate(
     build = _mapping(summary.get("build"), "build")
     external = _mapping(summary.get("external"), "external")
     source = _mapping(build.get("source"), "build.source")
+    files = _mapping(build.get("files"), "build.files")
+    step_file = _mapping(files.get("step"), "build.files.step")
+    brep_file = _mapping(files.get("brep"), "build.files.brep")
     replays = _rows(build.get("replays"), "build.replays")
     source_checks = _mapping(build.get("checks"), "build.checks")
     process = _mapping(external.get("process"), "external.process")
@@ -318,6 +345,15 @@ def build123d_loft_example_source_replay_gate(
     )
     public_gate = build123d_lofted_shell_handoff_gate(summary)
 
+    def file_artifact_is_bound(row: Mapping[str, object]) -> bool:
+        digest = str(row.get("sha256", "")).lower()
+        return (
+            _finite(row.get("bytes"), "build.files.bytes") is not None
+            and float(row["bytes"]) > 0.0
+            and len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+        )
+
     checks = {
         "upstream_source_identity_bound": summary.get("source_kind")
         == "upstream-tagged-example-exact-replay-plus-headless-external-cad"
@@ -332,6 +368,10 @@ def build123d_loft_example_source_replay_gate(
         "viewer_stub_only_and_source_preserved": source.get("source_preserved")
         is True
         and source.get("display_stubbed_only") is True,
+        "step_and_brep_artifacts_are_nonempty_and_digest_bound": file_artifact_is_bound(
+            step_file
+        )
+        and file_artifact_is_bound(brep_file),
         "two_exact_source_replays_match": len(replays) == 2
         and replays[0] == replays[1]
         and source_checks.get("source_replays_are_deterministic") is True,

@@ -108,3 +108,28 @@ def test_generalization_v3s_rejects_nonzero_open_secondary_current():
     bad = copy.deepcopy(_summary())
     bad["runs"][0]["current_A"][1] = 1.0
     assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_apparent_symmetry", "v4_flux_identity", "v4_negative_energy", "v4_duplicate_current_level", "v4_saturation_reversal"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "v4_apparent_symmetry":
+        bad["runs"][0]["apparent_inductance_H"][0][1] *= 0.25
+    elif case_id == "v4_flux_identity":
+        bad["runs"][0]["flux_linkage_Vs"][0] *= 1.2
+    elif case_id == "v4_negative_energy":
+        bad["runs"][0]["energy_J"] = -1.0
+    elif case_id == "v4_duplicate_current_level":
+        bad["runs"][2]["current_A_requested"] = bad["runs"][0]["current_A_requested"]
+    else:
+        bad["runs"][6]["apparent_inductance_H"][0][0] *= 10.0
+    assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_noncanonical_replay_index():
+    bad = copy.deepcopy(_summary())
+    bad["runs"][0]["replay"] = 3
+    assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"

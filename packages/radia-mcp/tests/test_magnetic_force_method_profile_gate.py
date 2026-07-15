@@ -103,3 +103,30 @@ def test_generalization_v3s_rejects_unsupported_position_unit() -> None:
     summary = copy.deepcopy(_summary())
     summary["position_unit"] = "inch"
     assert magnetic_force_method_profile_gate(summary)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_invalid_comparison_axis", "v4_position_order", "v4_element_force_sign", "v4_element_force_nonfinite", "v4_missing_target_signal"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v4_invalid_comparison_axis":
+        summary["comparison_axis"] = "unsupported"
+    elif case_id == "v4_position_order":
+        summary["positions"][2] = summary["positions"][1]
+    elif case_id == "v4_element_force_sign":
+        summary["moving_body_element_force"][1] *= -1.0
+    elif case_id == "v4_element_force_nonfinite":
+        summary["moving_body_element_force"][4] = float("nan")
+    else:
+        summary["moving_body_element_force"] = [0.0] * len(summary["moving_body_element_force"])
+    result = json.loads(mcp_magnetic_force_method_profile_gate(json.dumps(summary)))
+    assert result["status"] in {"needs_attention", "invalid_input"}
+
+
+def test_generalization_v5_rejects_short_target_force_profile() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["moving_body_element_force"].pop()
+    with pytest.raises(ValueError, match="same length"):
+        magnetic_force_method_profile_gate(summary)
