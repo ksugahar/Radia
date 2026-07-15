@@ -5,6 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.13 - Mapped RT2 HDiv-VIM for hex and wedge meshes
+
+Released 2026-07-16.
+
+- Added production mapped RT2 charge-basis and ChargeGram paths for curved
+  hexahedral and wedge meshes, alongside the existing tetrahedral and planar
+  paths, with one central topology/order capability contract.
+- Moved affine HEX moments into the native C++ analytic path and retained the
+  curved numerical geometry path, with symmetric direct-entry and solve
+  validation for real order-2 `.vol` meshes.
+- Replaced unstable scalar NGSolve `GetTrafo` lattice extraction with mapped
+  integration-rule coordinate evaluation, eliminating first-touch geometry
+  corruption while reducing one-time curved-geometry materialization cost.
+- Updated the reduced-motor and HDiv-VIM APIs, policies, docs, MCP knowledge,
+  focused tests, and compute-host validation driver for the RT2 matrix.
+
 - **Fix native heap corruption (0xC0000374/0xC0000005) in batch field
   evaluation on TrfOrnt-transformed containers and in RadiaField assembly** —
   three stacked thread-unsafety bugs fixed:

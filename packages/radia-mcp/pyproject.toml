@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-mcp"
-version = "1.4.8"
+version = "1.4.9"
 # IMPORTANT: PyPI Warehouse enforces Summary max length = 512 chars.
 # 0.72.0-0.74.0 silently failed publish-pypi (twine reject) because
 # the per-release changelog accumulated >512 chars here.  Keep this

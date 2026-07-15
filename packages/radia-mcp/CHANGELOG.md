@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-07-16
+
+- **Mapped RT2 HDiv-VIM**: documented the supported 2D, tetrahedral,
+  hexahedral, and wedge order/geometry combinations and the curved-mesh
+  compute-host validation route.
+- **Validation-learning gates**: retained counterfactual evidence and added
+  focused curriculum gates for geometry handoff, nonlinear energy balance,
+  force-method selection, inverse regularization, and minor-loop behavior.
+
 ## [1.4.8] - 2026-07-15
 
 - **Motor HDiv-VIM lane**: documented the planar reduced-motor analysis,
