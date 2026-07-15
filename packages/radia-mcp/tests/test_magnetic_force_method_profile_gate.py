@@ -59,7 +59,7 @@ def test_rejects_method_disagreement_and_nonexact_replay() -> None:
     summary["replay"]["parsed_max_abs"] = 1.0e-6
     result = magnetic_force_method_profile_gate(summary)
     assert result["status"] == "needs_attention"
-    assert result["checks"]["target_method_closure_within_tolerance"] is False
+    assert result["checks"]["independent_stress_replay_within_tolerance"] is False
     assert result["checks"]["parsed_replay_is_exact_enough"] is False
 
 
@@ -68,3 +68,38 @@ def test_rejects_profile_length_mismatch() -> None:
     summary["all_body_element_force"].pop()
     with pytest.raises(ValueError, match="same length"):
         magnetic_force_method_profile_gate(summary)
+
+
+def test_rejects_independent_surface_outlier_and_replay_drift() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["independent_closed_surface_force"][2] *= 1.5
+    summary["replay"]["parsed_max_abs"] = 1.0e-4
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["independent_stress_replay_within_tolerance"] is False
+    assert result["checks"]["parsed_replay_is_exact_enough"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["quantity_dimension", "force_unit", "selection_control", "stress_method", "binary_replay"],
+)
+def test_counterfactual_curriculum90_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "quantity_dimension":
+        summary["quantity_dimension"] = "2d_per_length"
+    elif case_id == "force_unit":
+        summary["force_unit"] = "mN"
+    elif case_id == "selection_control":
+        summary["all_body_element_force"] = list(summary["moving_body_element_force"])
+    elif case_id == "stress_method":
+        summary["closed_surface_maxwell_stress_force"][2] *= 2.0
+    else:
+        summary["replay"]["binary_nonlog_outputs_exact"] = False
+    assert magnetic_force_method_profile_gate(summary)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_unsupported_position_unit() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["position_unit"] = "inch"
+    assert magnetic_force_method_profile_gate(summary)["status"] == "needs_attention"

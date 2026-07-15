@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import json
 
+import pytest
+
 from radia_mcp.radia_ngsolve.hysteresis_minor_loop_gate import (
     hysteresis_minor_loop_replay_gate as evaluate_gate,
 )
@@ -82,3 +84,41 @@ def test_stdio_wrapper_returns_json_and_invalid_input() -> None:
     invalid = json.loads(hysteresis_minor_loop_replay_gate("[]"))
     assert invalid["status"] == "invalid_input"
     assert "summary must be an object" in invalid["error"]
+
+
+def test_rejects_single_knot_iron_hysteresis_power_disagreement() -> None:
+    bad = copy.deepcopy(_summary())
+    bad["losses"]["iron_power_W"] = list(bad["losses"]["iron_power_W"])
+    bad["losses"]["iron_power_W"][20] += 0.01
+    result = evaluate_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["iron_power_equals_hysteresis_power"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["fresh_repeat", "serialized_knots", "drive_polarity", "joule_loss", "signed_loss"],
+)
+def test_counterfactual_curriculum90_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    if case_id == "fresh_repeat":
+        bad["repeat"]["response"] = list(bad["repeat"]["response"])
+        bad["repeat"]["response"][20] *= 1.2
+    elif case_id == "serialized_knots":
+        bad["saved_reference"]["time_s"].pop(0)
+    elif case_id == "drive_polarity":
+        bad["fresh"]["drive"] = list(bad["fresh"]["drive"])
+        bad["fresh"]["drive"][3] = 1.0
+    elif case_id == "joule_loss":
+        bad["losses"]["joule_power_W"][20] = 0.1
+    else:
+        bad["losses"]["hysteresis_power_W"] = [-1.0] * 49
+    result = json.loads(hysteresis_minor_loop_replay_gate(json.dumps(bad)))
+    assert result["status"] in {"needs_attention", "invalid_input"}
+
+
+def test_generalization_v3s_rejects_historical_response_drift() -> None:
+    bad = copy.deepcopy(_summary())
+    bad["historical_reference"]["response_magnitude"][20] *= 1.5
+    result = evaluate_gate(bad)
+    assert result["status"] == "needs_attention"

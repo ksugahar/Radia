@@ -4,6 +4,8 @@ import copy
 import json
 import math
 
+import pytest
+
 from radia_mcp.radia_ngsolve.rotational_eddy_brake_energy_gate import (
     rotational_eddy_brake_energy_gate as gate,
 )
@@ -106,3 +108,54 @@ def test_rejects_nonreplaying_torque_history() -> None:
     result = gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"]["fresh_replay_fields_match"] is False
+
+
+def test_rejects_joule_history_inconsistent_with_motion_energy() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["energy_replay"]["joule_loss_w"] = [
+        1.4 * value for value in summary["energy_replay"]["joule_loss_w"]
+    ]
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["kinetic_magnetic_joule_energy_closes"] is False
+
+
+def test_rejects_isolated_magnetic_energy_spike() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["energy_replay"]["magnetic_energy_j"][10] *= 4.0
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "field_energy_history_is_nonnegative_and_has_no_isolated_jump"
+        ]
+        is False
+    )
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["disc_radius", "momentum_contract", "torque_replay", "torque_unit", "field_energy"],
+)
+def test_counterfactual_curriculum90_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "disc_radius":
+        summary["disc"]["radius_m"] *= 1.2
+    elif case_id == "momentum_contract":
+        summary["contract"]["angular_momentum_balance"] = "unchecked"
+    elif case_id == "torque_replay":
+        summary["replays"][1]["braking_torque_nm"] = list(
+            summary["replays"][1]["braking_torque_nm"]
+        )
+        summary["replays"][1]["braking_torque_nm"][25] *= 1.25
+    elif case_id == "torque_unit":
+        summary["units"]["torque"] = "kg"
+    else:
+        summary["energy_replay"]["magnetic_energy_j"][10] *= 4.0
+    assert gate(summary)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_negative_field_energy() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["energy_replay"]["magnetic_energy_j"][17] = -0.1
+    assert gate(summary)["status"] == "needs_attention"
