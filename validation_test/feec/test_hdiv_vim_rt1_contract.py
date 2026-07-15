@@ -1,10 +1,10 @@
 """Golden: the HDiv-VIM RT1/RT2 production contract.
 
-RT1 supports pure-TET, pure-HEX, pure-WEDGE, 2D, IMA, and field evaluation.
-RT2 is a production pure-TET material/operator route; its specialized topology,
-image, and field kernels fail loud until implemented and validated.
-Pyramid / mixed meshes, pm_M mixing, and curved IMA are not in the HDiv-VIM
-production path.
+RT1 supports pure-TET, pure-HEX, pure-WEDGE, 2D, IMA, curved geometry, and field evaluation.
+RT2 is the production pure-TET higher-order route, including flat/curved IMA and the persistent C++
+field evaluator.  Specialized planar/HEX/WEDGE charge kernels remain RT1.  Pyramid / mixed meshes and
+The deleted region-dictionary PM API is absent; fixed M uses an independent
+MagnetizationSource HDiv space.
 
 HEX/WEDGE were UNLOCKED 2026-07-04: the wired RT1 charge Grams + the Gram-agnostic solve path already
 solve them, so the auto guard is now pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
@@ -23,7 +23,7 @@ pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 
 import ngsolve as ng  # noqa: E402
-from netgen.occ import Sphere, OCCGeometry, Pnt  # noqa: E402
+from netgen.occ import Box, Sphere, OCCGeometry, Pnt  # noqa: E402
 
 import radia as rad  # noqa: E402
 from radia.vim import Solve, MeshSoftIron, DemagOperator, ChargeGram  # noqa: E402
@@ -33,6 +33,10 @@ _HEXT = ng.CoefficientFunction((0, 0, 1e4))
 
 def _sphere(maxh=0.5):
     return ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=maxh))
+
+
+def _half_box(maxh=2.0):
+    return ng.Mesh(OCCGeometry(Box(Pnt(0, -1, -1), Pnt(1, 1, 1))).GenerateMesh(maxh=maxh))
 
 
 # ---------------------------------------------------------------- RT1 happy path (the SUPPORTED config)
@@ -63,20 +67,25 @@ def test_public_rt2_pure_tet_solves():
     assert 0.31 < result["demag"] < 0.345, result["demag"]
 
 
-def test_pm_mixing_retired():
-    """pm_M (permanent-magnet mixing) is retired -- HDiv-VIM is a soft-iron solver."""
-    mesh = _sphere()
-    with pytest.raises(NotImplementedError):
-        with ng.TaskManager():
-            Solve(mesh, mu_r=100.0, H_ext=_HEXT, pm_M={"default": [0, 0, 1.0]})
+def test_deleted_pm_region_api_has_no_compatibility_alias():
+    """Fixed M uses MagnetizationSource; deleted pm_M is absent, not a compatibility alias."""
+    import inspect
+
+    from radia.vim import MagnetizationSource
+
+    assert "pm_M" not in inspect.signature(Solve).parameters
+    assert MagnetizationSource.__name__ == "MagnetizationSource"
 
 
-def test_curved_image_symmetry_retired():
-    """Curved IMA is not wired."""
-    mesh = _sphere()
-    with pytest.raises(NotImplementedError):
-        with ng.TaskManager():
-            Solve(mesh, mu_r=100.0, H_ext=_HEXT, image="+x", curve_order=2)
+def test_curved_image_symmetry_is_wired():
+    """Curve(2) and IMA share the configured C++ solve and field evaluator."""
+    mesh = _half_box()
+    with ng.TaskManager():
+        result = Solve(mesh, mu_r=100.0, H_ext=_HEXT, image="+x", curve_order=2)
+    assert result["curve_order"] == 2 and result["image"] == "+x"
+    assert result["symmetry_constrained_dofs"] > 0
+    assert result["_charge_gram"].constraint_count == 0  # removed by NGSolve Compress before assembly
+    assert result["field_evaluator_stats"]["image_count"] == 1
 
 
 def test_operator_and_gram_support_pure_tet_rt1_rt2():
@@ -95,17 +104,24 @@ def test_operator_and_gram_support_pure_tet_rt1_rt2():
     assert abs(values[2] - values[1]) < 2e-3, values
 
 
-def test_rt2_rejects_ima_until_the_high_order_image_contract_is_validated():
-    mesh = _sphere(maxh=0.8)
-    with pytest.raises(NotImplementedError, match="RT2.*IMA"):
-        Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2, image="+x")
+def test_rt2_ima_uses_the_high_order_cpp_operator_and_field_evaluator():
+    mesh = _half_box()
+    with ng.TaskManager():
+        result = Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2, image="+x")
+    assert result["order"] == 2 and result["image"] == "+x"
+    assert result["_charge_gram"].operator_configured
+    assert result["symmetry_constrained_dofs"] > 0
+    assert result["field_evaluator_stats"]["image_count"] == 1
 
 
-def test_rt2_rejects_curved_geometry_until_the_high_order_build_is_fast_enough():
-    mesh = _sphere(maxh=0.8)
+def test_rt2_curved_geometry_is_wired():
+    mesh = _half_box()
     mesh.Curve(2)
-    with pytest.raises(NotImplementedError, match="flat pure-TET"):
-        Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2)
+    with ng.TaskManager():
+        result = Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2)
+    assert result["order"] == 2 and result["curve_order"] == 2
+    assert result["_charge_gram"].operator_configured
+    assert result["field_evaluator_stats"]["source_count"] > 0
 
 
 # ---------------------------------------------------------------- pure HEX/WEDGE -> HDiv-VIM eligibility

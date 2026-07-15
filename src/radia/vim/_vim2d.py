@@ -28,41 +28,22 @@ import numpy as np
 import ngsolve as ng
 import scipy.sparse as sp
 
-from ._vim import build_charge_gram, _charge_basis_2d, _prod_tri01, _g01
+from ._vim import build_charge_gram
 from radia.planar_materials import law_from_table as _law_from_table
 
 MU0 = 4e-7 * np.pi
 
-_TRIREF_V = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
-_QUADREF_V = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
-_QUADREF_TRIS = ((0, 1, 2), (0, 2, 3))
-
-
-def _tri6_shape(p):
-    x, y = p
-    l0, l1, l2 = x, y, 1.0 - x - y
-    return np.array([l0 * (2 * l0 - 1), l1 * (2 * l1 - 1), l2 * (2 * l2 - 1),
-                     4 * l0 * l1, 4 * l1 * l2, 4 * l2 * l0])
-
-
-def _lag3(t):
-    return np.array([2 * (t - 0.5) * (t - 1.0), 4 * t * (1.0 - t), 2 * t * (t - 0.5)])
-
-
-def _quad9_shape(p):
-    vx, vy = _lag3(p[0]), _lag3(p[1])
-    return np.array([vx[i] * vy[j] for j in range(3) for i in range(3)])
-
-
 class PlanarDemagBody:
     """One planar soft-iron body on the matrix-free C++ 2D charge Gram."""
 
-    def __init__(self, mesh, eta=2.0, glin=6, gledge=12, cg_tol=1e-10, cg_maxit=5000):
+    def __init__(self, mesh, eta=2.0, cg_tol=1e-10, cg_maxit=5000,
+                 image_masks=None, image_signs=None):
         if mesh.dim != 2:
             raise ValueError("PlanarDemagBody: mesh.dim must be 2 (got %d)" % mesh.dim)
         self.mesh = mesh
         self.fes = ng.HDiv(mesh, order=1)
-        self.B, self.G, self.Mm = build_charge_gram(self.fes, eta=eta)
+        self.B, self.G, self.Mm = build_charge_gram(
+            self.fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
         chk = self.G.hex_state_check()
         if chk["ctor"] != chk["now"]:
             raise RuntimeError("PlanarDemagBody: 2D Gram state canary mismatch %r" % (chk,))
@@ -74,8 +55,6 @@ class PlanarDemagBody:
         self.cg_maxit = int(cg_maxit)
         self.last_linear_iterations = 0
         self.last_solve_timings = {}
-        self._B_arrays = self._csr_arrays(self.B)
-        self._mass_arrays = self._coo_arrays(self.Mm)
         # ---- sparse per-element averaging operator E [2*nel, ndof] + areas ----
         fesL = ng.VectorL2(mesh, order=0)
         u = self.fes.TrialFunction()
@@ -116,52 +95,10 @@ class PlanarDemagBody:
             dn = self._fes0.GetDofNrs(el)
             self._el2dof0[el.nr] = dn[0]
         self._gfchi = ng.GridFunction(self._fes0)
-        # ---- charge quadrature clouds (analytic exterior field evaluation) ----
-        cb = _charge_basis_2d(self.fes)
-        otp, otw = _prod_tri01(glin)
-        gle, gwe = _g01(gledge)
-        kind, host, expo = cb["kind"], cb["host"], cb["expo"]
-        cn = np.asarray(cb["cell_nodes9"], float).reshape(-1, 9, 2)
-        en = np.asarray(cb["edge_nodes3"], float).reshape(-1, 3, 2)
-        clouds = []
-        for a in range(len(kind)):
-            if kind[a] == 0:
-                ct = cb["cell_type"][host[a]]
-                nd = cn[host[a]]
-                subs = [_QUADREF_V[list(t)] for t in _QUADREF_TRIS] if ct == 1 else [_TRIREF_V]
-                pts, ws = [], []
-                for V2 in subs:
-                    lam = np.stack([1 - otp[:, 0] - otp[:, 1], otp[:, 0], otp[:, 1]], axis=1)
-                    xi = lam @ V2
-                    e1 = V2[1] - V2[0]
-                    e2 = V2[2] - V2[0]
-                    sc = abs(e1[0] * e2[1] - e1[1] * e2[0])
-                    sh = (np.array([_quad9_shape(p) for p in xi]) if ct == 1
-                          else np.array([_tri6_shape(p) for p in xi[:, :2]])[:, :6])
-                    X = sh @ (nd if ct == 1 else nd[:6])
-                    ei, ej = expo[3 * a], expo[3 * a + 1]
-                    pts.append(X)
-                    ws.append(otw * sc * (xi[:, 0] ** ei) * (xi[:, 1] ** ej))
-                clouds.append((np.vstack(pts), np.concatenate(ws)))
-            else:
-                nd = en[host[a]]
-                sh = np.array([_lag3(t) for t in gle])
-                X = sh @ nd
-                ei = expo[3 * a]
-                clouds.append((X, gwe * (gle ** ei)))
-        self._Xq = np.vstack([X for X, _ in clouds])
-        self._wq = [w for _, w in clouds]
+        self._field_coefficients = None
+        self._field_evaluator = None
 
     # ---------------- projections / solves ----------------
-    @staticmethod
-    def _csr_arrays(matrix):
-        matrix = matrix.tocsr()
-        return (
-            np.ascontiguousarray(matrix.indptr, dtype=np.int32),
-            np.ascontiguousarray(matrix.indices, dtype=np.int32),
-            np.ascontiguousarray(matrix.data, dtype=np.float64),
-        )
-
     @staticmethod
     def _coo_arrays(matrix):
         matrix = matrix.tocoo()
@@ -176,19 +113,21 @@ class PlanarDemagBody:
 
     def apply_demag(self, m):
         """Apply N m = B^T G B m in C++ without materializing N."""
-        return np.asarray(self.G.apply_demag_arrays(
-            *self._B_arrays, self.ndof,
-            np.ascontiguousarray(m, dtype=np.float64), True), dtype=float)
+        return self.G.apply_configured_demag(
+            np.ascontiguousarray(m, dtype=np.float64), True)
 
     def _mass_riesz(self, rhs):
-        return np.asarray(self.G.apply_mass_riesz_arrays(
-            *self._mass_arrays, self.ndof,
-            np.ascontiguousarray(rhs, dtype=np.float64)), dtype=float)
+        return self.G.apply_configured_mass_riesz(
+            np.ascontiguousarray(rhs, dtype=np.float64))
 
     def _solve_mass_system(self, mass, inv_chi, rhs, x0=None):
-        mI, mJ, mV = self._coo_arrays(mass)
-        result = self.G.solve_linear_material_mass_riesz_arrays(
-            *self._B_arrays, self.ndof, mI, mJ, mV, float(inv_chi),
+        if sp.issparse(mass):
+            mI, mJ, mV = self._coo_arrays(mass)
+            self.G.configure_mass_matrix(mI, mJ, mV, self.ndof)
+        else:
+            self.G.configure_mass_matrix_ngsolve(mass)
+        result = self.G.solve_configured_linear_material_mass_riesz(
+            float(inv_chi),
             np.ascontiguousarray(rhs, dtype=np.float64), self.cg_tol,
             self.cg_maxit, True,
             None if x0 is None else np.ascontiguousarray(x0, dtype=np.float64))
@@ -214,12 +153,7 @@ class PlanarDemagBody:
         W = ng.BilinearForm(self.fes)
         W += self._gfchi * ng.InnerProduct(u, v) * ng.dx
         W.Assemble()
-        rows, cols, vals = W.mat.COO()
-        return sp.coo_matrix(
-            (np.asarray(vals, dtype=float),
-             (np.asarray(rows, dtype=np.int64), np.asarray(cols, dtype=np.int64))),
-            shape=(self.ndof, self.ndof),
-        ).tocsr()
+        return W.mat
 
     def solve_linear(self, chi, mu_ext):
         """(M/chi + B^T G B) m = M mu_ext via C++ mass-Riesz CG."""
@@ -297,13 +231,18 @@ class PlanarDemagBody:
     def H_at(self, P, m):
         """Exterior H of the body's charges at P [n,2] (branch-free; valid outside the body).
 
-        Delegates the point-charge-cloud field to the shared C++ kernel
-        (radia.planar_charges.charge_field); this HDiv-VIM feeds its own native quadrature cloud
-        (self._Xq, q=B@m)."""
-        from radia.planar_charges import charge_field
-        q = self.B @ m
-        Q = np.concatenate([q[a] * self._wq[a] for a in range(len(self._wq))])
-        return charge_field(self._Xq, Q, np.asarray(P, float))
+        The solved source is materialized and cached in the persistent C++ evaluator."""
+        evaluator = self.field_evaluator(m)
+        return np.asarray(evaluator.field(np.ascontiguousarray(P, dtype=np.float64).reshape(-1, 2)), float)
+
+    def field_evaluator(self, m):
+        """Return the immutable C++ evaluator for ``m``, rebuilding only when coefficients change."""
+        coefficients = np.ascontiguousarray(m, dtype=np.float64).reshape(-1)
+        if (self._field_evaluator is None or self._field_coefficients is None
+                or not np.array_equal(coefficients, self._field_coefficients)):
+            self._field_evaluator = self.G.create_planar_field_evaluator(coefficients)
+            self._field_coefficients = coefficients.copy()
+        return self._field_evaluator
 
     def Az_at(self, P, m):
         """Exterior A_z of the body's charges: A = +mu0 q/(2 pi) atan2(dy, dx) summed over the
@@ -317,11 +256,9 @@ class PlanarDemagBody:
         (dA/dphi = mu0 r H_r anchored on the cut-free +x axis; closure over 2 pi is exact by
         Gauss/zero-total-charge) -- see docs/electric_machine's helper module.
 
-        Delegates the atan2 A_z sum to the SHARED C++ kernel (radia.planar_charges.charge_az)."""
-        from radia.planar_charges import charge_az
-        q = self.B @ m
-        Q = np.concatenate([q[a] * self._wq[a] for a in range(len(self._wq))])
-        return charge_az(self._Xq, Q, np.asarray(P, float))
+        The solved source and all IMA copies are retained by the persistent C++ evaluator."""
+        evaluator = self.field_evaluator(m)
+        return np.asarray(evaluator.az(np.ascontiguousarray(P, dtype=np.float64).reshape(-1, 2)), float)
 
 
 def maxwell_torque_circle(H_total_at, Rc, n=1440, center=(0.0, 0.0)):
@@ -344,7 +281,7 @@ def maxwell_torque_circle(H_total_at, Rc, n=1440, center=(0.0, 0.0)):
 
 
 def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, eta=2.0,
-                       nl_tol=1e-6, nl_maxit=300):
+                       nl_tol=1e-6, nl_maxit=300, image_masks=None, image_signs=None):
     """The ``vim.PlanarSolve`` / ``vim.Solve`` 2D dispatch target: single-region planar soft-iron demag solve.
 
     ``magnets`` is an optional list of SEPARATE-body PERMANENT MAGNETS [(pm_mesh, M_fixed), ...]
@@ -370,7 +307,8 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
     if magnets:
         from radia.planar_charges import magnet_field_cf
         H_ext = H_ext + magnet_field_cf(magnets)             # rigid PM source (design A), shared CF
-    body = PlanarDemagBody(mesh, eta=eta)
+    body = PlanarDemagBody(
+        mesh, eta=eta, image_masks=image_masks, image_signs=image_signs)
     mu_ext = body.project(H_ext)
     if mu_r is not None:
         if not mu_r > 1.0:
@@ -383,6 +321,7 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
                                                 tol=nl_tol, maxit=nl_maxit)
         nonlinear = True
     Mx, My = body.M_avg(m)
+    field_evaluator = body.field_evaluator(m)
     return {
         "M": body.M_elem(m),
         "m": m,
@@ -398,4 +337,8 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
         "linear_iterations": body.last_linear_iterations,
         "solve_timings": body.last_solve_timings,
         "body": body,
+        "image_masks": [] if image_masks is None else list(image_masks),
+        "image_signs": [] if image_signs is None else list(image_signs),
+        "_field_evaluator": field_evaluator,
+        "field_evaluator_stats": dict(field_evaluator.stats()),
     }

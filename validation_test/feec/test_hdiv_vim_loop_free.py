@@ -34,13 +34,10 @@ def test_charge_free_mode_is_solved_without_loop_basis():
         loop /= np.linalg.norm(loop)
         assert np.linalg.norm(B @ loop) < 1e-10
 
-        mcoo = sp.coo_matrix(mass)
         inv_chi = 1.0 / 99.0
         rhs = inv_chi * np.asarray(mass @ loop).ravel()
-        result = gram.solve_linear_material_mass_riesz(
-            B.indptr.tolist(), B.indices.tolist(), B.data.tolist(), int(fes.ndof),
-            mcoo.row.tolist(), mcoo.col.tolist(), mcoo.data.tolist(),
-            inv_chi, rhs.tolist(), 1e-10, 200, True)
+        result = gram.solve_configured_linear_material_mass_riesz(
+            inv_chi, np.ascontiguousarray(rhs), 1e-10, 200, True)
 
     assert int(result["iters"]) < 200
     solved = np.asarray(result["m"], dtype=float)

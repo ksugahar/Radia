@@ -22,21 +22,41 @@ like `SingleLayerPotentialOperator(fes, ...).mat`:
 
 Convenience: ``N.DemagFactor(CF((0,0,1)))`` -> the Rayleigh quotient (the demag factor, ~1/3 for a sphere).
 
-Backend: the C++ charge-Gram H-matrix (radia._radia_pybind._ChargeGramHMatrix, the order-p mode merged in
-a27d1a5c).  The charge basis is element-local monomials (host reference coords); N = B^T G B is
-basis-invariant, so the demag matches the NGSolve-L2-basis dense reference.  Pure Python glue -- no dense
-O(N^2) operator is ever formed (the H-matrix gives the O(N log N) matvec).
+Backend: the C++ charge-Gram H-matrix (radia._radia_pybind._ChargeGramHMatrix).  The charge basis is
+element-local monomials (host reference coordinates); N = B^T G B is basis-invariant, so the demag matches
+the NGSolve-L2-basis dense reference.  Python declares NGSolve spaces/forms and prepares the one-time sparse
+charge topology.  The assembled charge map, mass matrices, persistent NGSolve ``BaseMatrix``, Krylov solve,
+and field source/evaluation live in C++; no dense O(N^2) operator is formed and no Python list is used on the
+solve/field hot path.
 
 TaskManager: per the caller-wraps policy, this module does NOT open a TaskManager; the CALLER wraps the
 DemagOperator construction + DemagFactor / solve in `with TaskManager():` (the ngsolve.bem idiom).
 """
 import numpy as np
 import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 import ngsolve as ng
 import time
 
 import radia._radia_pybind as _rp
+
+
+def _f64_buffer(value):
+    """Return the canonical contiguous float64 buffer for the C++ boundary."""
+    return np.ascontiguousarray(value, dtype=np.float64).reshape(-1)
+
+
+def _i32_buffer(value):
+    """Return the canonical contiguous int32 buffer for the C++ boundary."""
+    return np.ascontiguousarray(value, dtype=np.int32).reshape(-1)
+
+
+_EMPTY_F64 = np.empty(0, dtype=np.float64)
+_EMPTY_I32 = np.empty(0, dtype=np.int32)
+
+
+def _volume_vertex_counts(mesh):
+    """Unique volume-element vertex counts from the native MeshAccess."""
+    return frozenset(int(value) for value in _rp._volume_element_vertex_counts(mesh))
 
 
 # ------------------------------------------------------------------ reference Gauss-Duffy quadrature
@@ -124,6 +144,74 @@ def _tri_ref_sym5():
 
 _SYM5_TET = _tet_ref_sym5()
 _SYM5_TRI = _tri_ref_sym5()
+
+
+# Fully symmetric degree-10 simplex rules (Witherden--Vincent 2015).  Curved
+# RT2 uses these instead of a vertex-order-dependent collapsed product rule:
+# 81 tet / 25 tri points versus 216 / 36 at product order 6.  Orbit expansion
+# keeps the point set exactly closed under every reference-vertex permutation.
+def _tet_ref_sym10():
+    orbits = [
+        ((0.25, 0.25, 0.25, 0.25), 0.04739977355602074),
+    ]
+    for weight, a in zip(
+            (0.0269370599922687, 0.009869159716793382),
+            (0.3122500686951887, 0.1143096538573461)):
+        orbits.append(((a, a, a, 1.0 - 3.0*a), weight))
+    weights = (0.01139388122019523, 0.0003619443443392536,
+               0.02573973198045607, 0.01013587167975579,
+               0.006576147277035904, 0.01290703579886199)
+    aa = (0.4104307392189654, 0.006138008824790653,
+          0.1210501811455894, 0.03277946821644262,
+          0.03248528156482305, 0.174979342183939)
+    bb = (0.1654860256196111, 0.9429887673452049,
+          0.4771903799042804, 0.594256269480007,
+          0.8011772846583444, 0.628071845475366)
+    for weight, a, b in zip(weights, aa, bb):
+        orbits.append(((a, a, b, 1.0 - 2.0*a - b), weight))
+    points, rule_weights = [], []
+    for bary, weight in orbits:
+        for point in _sym_orbit(bary, 3):
+            points.append(point)
+            rule_weights.append(weight / 6.0)
+    return np.array(points), np.array(rule_weights)
+
+
+def _tri_ref_sym10():
+    orbits = [
+        ((1.0/3.0, 1.0/3.0, 1.0/3.0), 0.081743329146285973),
+    ]
+    for weight, a in zip(
+            (0.013352968813149567, 0.045957963604744731),
+            (0.032055373216943517, 0.14216110105656438)):
+        orbits.append(((a, a, 1.0 - 2.0*a), weight))
+    weights = (0.025297757707288385, 0.034184648162959429,
+               0.063904906396424044)
+    aa = (0.028367665339938453, 0.029619889488729734,
+          0.14813288578382056)
+    bb = (0.1637017337371825, 0.36914678182781102,
+          0.32181299528883545)
+    for weight, a, b in zip(weights, aa, bb):
+        orbits.append(((a, b, 1.0 - a - b), weight))
+    points, rule_weights = [], []
+    for bary, weight in orbits:
+        for point in _sym_orbit(bary, 2):
+            points.append(point)
+            rule_weights.append(weight * 0.5)
+    return np.array(points), np.array(rule_weights)
+
+
+_SYM10_TET = _tet_ref_sym10()
+_SYM10_TRI = _tri_ref_sym10()
+
+
+def _curved_outer_rules(order):
+    """Permutation-invariant curved Gram rules for production RT1/RT2."""
+    if int(order) == 1:
+        return _SYM5_TET, _SYM5_TRI
+    if int(order) == 2:
+        return _SYM10_TET, _SYM10_TRI
+    raise ValueError("curved HDiv production order must be 1 or 2")
 
 
 def _outer_tet(quad):
@@ -255,7 +343,7 @@ def _blockdiag_density_map(M, Bx, fes_dg, vorb, mesh):
     return (Minv @ Bx).tocsr()
 
 
-def _charge_basis(fes, quad):
+def _charge_basis(fes, quad, *, materialize_mass=True):
     """Shared geometry + monomial charge-density map for the RT1 HDiv-VIM operator.
 
     Returns B (CSR
@@ -278,7 +366,7 @@ def _charge_basis(fes, quad):
     # sparse spsolve on the CSC is O(N) (a dense solve was the >300s @ ~5000 tets build bottleneck).
     Bv_d = _blockdiag_density_map(_csr(mv), _csr(bv), L2v, ng.VOL, mesh)   # vol density map (block-diag inv)
     Bb_d = _blockdiag_density_map(_csr(mb), _csr(bb), L2b, ng.BND, mesh)   # surf density map (block-diag inv)
-    M_mass = _csr(mh)
+    M_mass = _csr(mh) if materialize_mass else None
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
     bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
@@ -324,9 +412,10 @@ def _charge_basis(fes, quad):
         for a, (i, j) in enumerate(mons_s):
             Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
     B = sp.vstack(Brows).tocsr()                                # (n_charge, ndof)
-    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, vV=vV, bV=bV,
-                cell_verts=np.concatenate([V.ravel() for V in vV]).tolist(),
-                face_verts=np.concatenate([V.ravel() for V in bV]).tolist(),
+    return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
+                host=host, kind=kind, expo=expo, vV=vV, bV=bV,
+                cell_verts=_f64_buffer(np.concatenate([V.ravel() for V in vV])),
+                face_verts=_f64_buffer(np.concatenate([V.ravel() for V in bV])),
                 mons_v=mons_v, mons_s=mons_s, n_el=len(vels))
 
 
@@ -398,7 +487,7 @@ def _ref_monomial_moment_transform(fe, mons, refP, refW, dim):
     return np.linalg.solve(M_shape.T, shape_to_mono.T).T
 
 
-def _charge_basis_curved(fes, quad):
+def _charge_basis_curved(fes, quad, *, materialize_mass=True):
     """CURVED (mesh.Curve(2)) analogue of `_charge_basis`: the charge map B is curved-correct (NGSolve
     integrates -div M / M.n on the curved mesh), the change-of-basis is reference-frame (g=pt), and the
     per-element P2 high-order nodes (10/tet, 6/tri, in the C++ convention) are extracted via GetTrafo.  CALLER
@@ -417,17 +506,19 @@ def _charge_basis_curved(fes, quad):
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
     Bv_d = _blockdiag_density_map(_csr(mv), _csr(bv), L2v, ng.VOL, mesh)
     Bb_d = _blockdiag_density_map(_csr(mb), _csr(bb), L2b, ng.BND, mesh)
-    M_mass = _csr(mh)
+    M_mass = _csr(mh) if materialize_mass else None
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
     bels = [ng.ElementId(ng.BND, i) for i in range(mesh.GetNE(ng.BND))]
     vdof = [list(L2v.GetDofNrs(e)) for e in vels]
     bdof = [list(L2b.GetDofNrs(e)) for e in bels]
     mons_v, mons_s = _monos_vol(pv), _monos_surf(p)
-    rtp, rtw = _tet_ref(quad); rsp, rsw = _tri_ref(quad)
+    (rtp, rtw), (rsp, rsw) = _curved_outer_rules(p)
 
     Brows, host, kind, expo = [], [], [], []
     cell_nodes, face_nodes = [], []
+    cell_vertices = [v.nr for e in vels for v in mesh[e].vertices]
+    face_vertices = [v.nr for e in bels for v in mesh[e].vertices]
     for c, e in enumerate(vels):
         cell_nodes.append(_trafo_lattice_nodes(mesh, e, _IR_TET_NODES))   # P2 nodes (curved geom, kept)
         if pv == 0:                                            # RT1: volume Sv == [[1]] (identity) -> Bv_d row direct
@@ -444,9 +535,13 @@ def _charge_basis_curved(fes, quad):
         for a, (i, j) in enumerate(mons_s):
             Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
     B = sp.vstack(Brows).tocsr()
-    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo,
-                cell_nodes=np.concatenate([V.ravel() for V in cell_nodes]).tolist() if cell_nodes else [],
-                face_nodes=np.concatenate([V.ravel() for V in face_nodes]).tolist() if face_nodes else [],
+    return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
+                host=host, kind=kind, expo=expo,
+                cell_nodes=(_f64_buffer(np.concatenate([V.ravel() for V in cell_nodes]))
+                            if cell_nodes else _EMPTY_F64),
+                face_nodes=(_f64_buffer(np.concatenate([V.ravel() for V in face_nodes]))
+                            if face_nodes else _EMPTY_F64),
+                cell_vertices=_i32_buffer(cell_vertices), face_vertices=_i32_buffer(face_vertices),
                 n_el=len(vels))
 
 
@@ -547,7 +642,7 @@ def _trafo_lattice_nodes(mesh, e, ir, max_tries=16):
         "extraction; abort and report the incident).")
 
 
-def _charge_basis_hex(fes, cob_quad=3):
+def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
     flat + curved ONE path).  fes = HDiv(hexmesh, order=1).  CALLER wraps TaskManager.  Flat NGSolve `.vol`
     hexes use direct NGSolve-reference lattice interpolation; curved meshes keep the GetTrafo source of truth.
@@ -574,7 +669,7 @@ def _charge_basis_hex(fes, cob_quad=3):
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
     Bv = _csr(bv)                            # REF-measure moments of q_ref (the physical J cancels)
     Bb = _csr(bb)
-    M_mass = _csr(mh)
+    M_mass = _csr(mh) if materialize_mass else None
     t_assembly = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
@@ -653,9 +748,11 @@ def _charge_basis_hex(fes, cob_quad=3):
     t_before_vstack = time.perf_counter()
     B = sp.vstack([Bvol, Bface]).tocsr()
     t_after_vstack = time.perf_counter()
-    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
-                cell_nodes=np.concatenate([n.ravel() for n in cell_nodes]).tolist(),
-                face_nodes=(np.concatenate([n.ravel() for n in face_nodes]).tolist() if face_nodes else []),
+    return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
+                host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
+                cell_nodes=_f64_buffer(np.concatenate([n.ravel() for n in cell_nodes])),
+                face_nodes=(_f64_buffer(np.concatenate([n.ravel() for n in face_nodes]))
+                            if face_nodes else _EMPTY_F64),
                 _timings={
                     "charge_basis_assembly_wall_s": t_assembly - t0,
                     "charge_basis_topology_wall_s": t_topology - t_assembly,
@@ -672,7 +769,8 @@ def _charge_basis_hex(fes, cob_quad=3):
 
 
 def _build_charge_gram_hex(fes, glout_n=4, glin_n=5, near_grade=0.5, far_inner=1.0,
-                           eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None):
+                           eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
+                           materialize_mass=True, build_hmatrix=True):
     """Pure-hex RT1 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glout_n = the 1D rule of the REF-frame graded OUTER Duffy rule.  The default 4 was
@@ -690,7 +788,7 @@ def _build_charge_gram_hex(fes, glout_n=4, glin_n=5, near_grade=0.5, far_inner=1
     restores 1.0006 for +4%% build).  The build also skips the strictly-lower H-matrix leaves (symmetric fill
     -- every apply of the Gram routes through the exactly-symmetric matvec, so they are never read)."""
     t0 = time.perf_counter()
-    cb = _charge_basis_hex(fes)
+    cb = _charge_basis_hex(fes, materialize_mass=materialize_mass)
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
@@ -698,16 +796,18 @@ def _build_charge_gram_hex(fes, glout_n=4, glin_n=5, near_grade=0.5, far_inner=1
     G = _rp._ChargeGramHMatrix(
         hex_cell_nodes=cb["cell_nodes"], quad_face_nodes=cb["face_nodes"],
         n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),
-        charge_host=list(cb["host"]), charge_kind=list(cb["kind"]), charge_expo=list(cb["expo"]),
-        sym_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), sym_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
-        sym_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), sym_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
-        gl_out=glo.tolist(), gw_out=gwo.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
-        far_tet_pts=ftp.ravel().tolist(), far_tet_w=ftw.tolist(),
-        far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        charge_host=_i32_buffer(cb["host"]), charge_kind=_i32_buffer(cb["kind"]),
+        charge_expo=_i32_buffer(cb["expo"]),
+        sym_tet_pts=_f64_buffer(_SYM5_TET[0]), sym_tet_w=_f64_buffer(_SYM5_TET[1]),
+        sym_tri_pts=_f64_buffer(_SYM5_TRI[0]), sym_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        gl_out=_f64_buffer(glo), gw_out=_f64_buffer(gwo),
+        gl_in=_f64_buffer(gli), gw_in=_f64_buffer(gwi),
+        far_tet_pts=_f64_buffer(ftp), far_tet_w=_f64_buffer(ftw),
+        far_tri_pts=_f64_buffer(_SYM5_TRI[0]), far_tri_w=_f64_buffer(_SYM5_TRI[1]),
         near_grade=near_grade, far_inner_factor=far_inner,
-        image_masks=([] if image_masks is None else list(image_masks)),
-        image_signs=([] if image_signs is None else list(image_signs)),
-        eps=eps, leaf=leafsize, eta=eta)
+        image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
+        image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
+        eps=eps, leaf=leafsize, eta=eta, build=bool(build_hmatrix))
     t2 = time.perf_counter()
     chk = G.hex_state_check()
     t3 = time.perf_counter()
@@ -722,7 +822,7 @@ def _build_charge_gram_hex(fes, glout_n=4, glin_n=5, near_grade=0.5, far_inner=1
             "hex charge Gram instance state was corrupted between construction and use "
             f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption "
             "(0xc0000374 class) -- do NOT trust this Gram; abort and report the incident.")
-    return cb["B"], G, cb["M_mass"]
+    return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
 
 
 # 2D PLANAR (motor cross-section) layer -- ref lattices handed to GetTrafo (order matches the C++ maps:
@@ -735,7 +835,7 @@ _MONS_QUAD2D = [(0, 0), (1, 0), (0, 1), (1, 1)]          # div(HDiv order-1 quad
 _MONS_EDGE2D = [(0,), (1,)]                              # (u.n)_ref on an edge is P1
 
 
-def _charge_basis_2d(fes, cob_quad=3):
+def _charge_basis_2d(fes, cob_quad=3, *, materialize_mass=True):
     """2D analogue of `_charge_basis_hex` (motor cross-sections; memory hdiv-vim-tri-quad-motor): charge
     map B + P2 lattice geometry for tri/quad cells and boundary edges, all in the NGSolve REF frame with
     the Piola-exact extraction (the dimension-independent J-cancellation identity).  Kernel side is the
@@ -749,7 +849,8 @@ def _charge_basis_2d(fes, cob_quad=3):
     bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
     bb = ng.BilinearForm(trialspace=fes, testspace=Sb2); bb += (u.Trace() * nn2) * Sb2.TestFunction() * ng.ds; bb.Assemble()
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
-    Bv = _csr(bv); Bb = _csr(bb); M_mass = _csr(mh)
+    Bv = _csr(bv); Bb = _csr(bb)
+    M_mass = _csr(mh) if materialize_mass else None
 
     g, gw = _g01(cob_quad)
     tp = np.array([[uu, vv*(1 - uu)] for uu in g for vv in g])            # Duffy on the NGSolve tri ref
@@ -797,11 +898,12 @@ def _charge_basis_2d(fes, cob_quad=3):
         for a, (mi,) in enumerate(_MONS_EDGE2D):
             Brows.append(sp.csr_matrix(blk[a])); host.append(f); kind.append(1); expo += [mi, 0, 0]
     B = sp.vstack(Brows).tocsr()
-    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo,
+    return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
+                host=host, kind=kind, expo=expo,
                 n_el=len(vels), n_be=len(bels),
-                cell_nodes9=np.concatenate([n.ravel() for n in cell_nodes9]).tolist(),
-                cell_type=cell_type,
-                edge_nodes3=np.concatenate([n.ravel() for n in edge_nodes3]).tolist())
+                cell_nodes9=_f64_buffer(np.concatenate([n.ravel() for n in cell_nodes9])),
+                cell_type=_i32_buffer(cell_type),
+                edge_nodes3=_f64_buffer(np.concatenate([n.ravel() for n in edge_nodes3])))
 
 
 def _prod_tri01(n):
@@ -815,7 +917,9 @@ def _prod_tri01(n):
 
 
 def _build_charge_gram_2d(fes, outer_n=4, glin_n=8, gledge_n=12, near_grade=0.6, far_inner=1.5,
-                          eps=1e-12, leafsize=64, eta=2.0):
+                          eps=1e-12, leafsize=64, eta=2.0,
+                          image_masks=None, image_signs=None, materialize_mass=True,
+                          build_hmatrix=True):
     """2D planar charge Gram via the C++ dim2 _ChargeGramHMatrix (kernel -ln(r)/(2pi)).  Regular
     (ungraded) outer everywhere -- but it MUST be the PRODUCT-GAUSS rule (outer_n^2/sub-tri), NOT a
     sparse symmetric rule: the outer integrand m_a(xi)*Phi_b(X(xi)) has C1 kinks where the source charge
@@ -826,26 +930,33 @@ def _build_charge_gram_2d(fes, outer_n=4, glin_n=8, gledge_n=12, near_grade=0.6,
     the projection parameter -- endpoint grading had the same coherent-overestimate disease), far cloud
     otherwise.  Gates: eig in [0,1] on tri/quad/distorted/disk/ellipse; disk demag 0.50000; ellipse
     0.3344/0.6656 vs 1/3, 2/3; 2D Clausius-Mossotti solve to 2-3e-4."""
-    cb = _charge_basis_2d(fes)
+    cb = _charge_basis_2d(fes, materialize_mass=materialize_mass)
     otp, otw = _prod_tri01(outer_n)
+    glq, gwq = _g01(outer_n)
     gli, gwi = _g01(glin_n)
     gle, gwe = _g01(gledge_n)
     G = _rp._ChargeGramHMatrix(
         dim2=2,
-        cell_nodes9=cb["cell_nodes9"], cell_type=list(cb["cell_type"]), edge_nodes3=cb["edge_nodes3"],
+        cell_nodes9=cb["cell_nodes9"], cell_type=cb["cell_type"], edge_nodes3=cb["edge_nodes3"],
         n_el=int(cb["n_el"]), n_be=int(cb["n_be"]),
-        charge_host=list(cb["host"]), charge_kind=list(cb["kind"]), charge_expo=list(cb["expo"]),
-        sym_tri_pts=otp.ravel().tolist(), sym_tri_w=otw.tolist(),
-        gl_edge=gle.tolist(), gw_edge=gwe.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
-        far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
-        near_grade=near_grade, far_inner_factor=far_inner, eps=eps, leaf=leafsize, eta=eta)
+        charge_host=_i32_buffer(cb["host"]), charge_kind=_i32_buffer(cb["kind"]),
+        charge_expo=_i32_buffer(cb["expo"]),
+        sym_tri_pts=_f64_buffer(otp), sym_tri_w=_f64_buffer(otw),
+        gl_quad=_f64_buffer(glq), gw_quad=_f64_buffer(gwq),
+        gl_edge=_f64_buffer(gle), gw_edge=_f64_buffer(gwe),
+        gl_in=_f64_buffer(gli), gw_in=_f64_buffer(gwi),
+        far_tri_pts=_f64_buffer(_SYM5_TRI[0]), far_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        near_grade=near_grade, far_inner_factor=far_inner,
+        image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
+        image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
+        eps=eps, leaf=leafsize, eta=eta, build=bool(build_hmatrix))
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
         raise RuntimeError(
             "2D charge Gram instance state was corrupted between construction and use "
             f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption "
             "(0xc0000374 class) -- do NOT trust this Gram; abort and report the incident.")
-    return cb["B"], G, cb["M_mass"]
+    return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
 
 
 # WEDGE (PRISM) RT1 (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated): the prism div-image is
@@ -888,7 +999,7 @@ def _prism_cob_quad(nz=3):
     return np.array(P), np.array(W)
 
 
-def _charge_basis_wedge(fes):
+def _charge_basis_wedge(fes, *, materialize_mass=True):
     """WEDGE (prism) analogue of `_charge_basis_hex`: charge map B + 18-node prism cell nodes + MIXED
     tri(6-node)/quad(9-node) face nodes (packed in 27-double 9-node slots, a tri fills the first 6) + a
     per-face type array, all via GetTrafo (flat + curved ONE path).  fes = HDiv(prismmesh, order=1).
@@ -903,7 +1014,8 @@ def _charge_basis_wedge(fes):
     bv = ng.BilinearForm(trialspace=fes, testspace=L2v); bv += (-ng.div(u)) * L2v.TestFunction() * ng.dx; bv.Assemble()
     bb = ng.BilinearForm(trialspace=fes, testspace=L2b); bb += (u.Trace() * nn) * L2b.TestFunction() * ng.ds; bb.Assemble()
     mh = ng.BilinearForm(fes); mh += u * fes.TestFunction() * ng.dx; mh.Assemble()
-    Bv = _csr(bv); Bb = _csr(bb); M_mass = _csr(mh)
+    Bv = _csr(bv); Bb = _csr(bb)
+    M_mass = _csr(mh) if materialize_mass else None
     t_forms = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
@@ -1012,10 +1124,11 @@ def _charge_basis_wedge(fes):
     t_face = time.perf_counter()
     B = sp.vstack([Bvol, Bface]).tocsr()
     t_vstack = time.perf_counter()
-    return dict(B=B, M_mass=M_mass, host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
-                cell_nodes=np.concatenate([n.ravel() for n in cell_nodes]).tolist(),
-                face_nodes=np.concatenate([n.ravel() for n in face_nodes]).tolist(),
-                face_type=face_type,
+    return dict(B=B, M_mass=M_mass, M_mass_ngsolve=mh.mat,
+                host=host, kind=kind, expo=expo, n_el=n_el, n_bf=len(bels),
+                cell_nodes=_f64_buffer(np.concatenate([n.ravel() for n in cell_nodes])),
+                face_nodes=_f64_buffer(np.concatenate([n.ravel() for n in face_nodes])),
+                face_type=_i32_buffer(face_type),
                 _timings={
                     "charge_basis_forms_wall_s": t_forms - t0,
                     "charge_basis_setup_wall_s": t_setup - t_forms,
@@ -1035,28 +1148,31 @@ def _charge_basis_wedge(fes):
 
 
 def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner=1.5,
-                             eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None):
+                             eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
+                             materialize_mass=True, build_hmatrix=True):
     """Pure-prism RT1 charge Gram via the wedge-mode C++ _ChargeGramHMatrix (mirror of _build_charge_gram_hex;
     FLAT + Curve(2) share ONE path).  numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3;
     demag_z ~ 1/3.  The wedge mode shares the hex block memo / symmetric-fill build, so the golden hex path
     is byte-for-byte untouched."""
     t0 = time.perf_counter()
-    cb = _charge_basis_wedge(fes)
+    cb = _charge_basis_wedge(fes, materialize_mass=materialize_mass)
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n); gli, gwi = _g01(glin_n)
     G = _rp._ChargeGramHMatrix(
-        wedge_cell_nodes=cb["cell_nodes"], face_nodes=cb["face_nodes"], face_type=list(cb["face_type"]),
+        wedge_cell_nodes=cb["cell_nodes"], face_nodes=cb["face_nodes"], face_type=cb["face_type"],
         n_el=int(cb["n_el"]), n_bf=int(cb["n_bf"]),
-        charge_host=list(cb["host"]), charge_kind=list(cb["kind"]), charge_expo=list(cb["expo"]),
-        sym_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), sym_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
-        sym_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), sym_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
-        gl_out=glo.tolist(), gw_out=gwo.tolist(), gl_in=gli.tolist(), gw_in=gwi.tolist(),
-        far_tet_pts=np.asarray(_SYM5_TET[0]).ravel().tolist(), far_tet_w=np.asarray(_SYM5_TET[1]).tolist(),
-        far_tri_pts=np.asarray(_SYM5_TRI[0]).ravel().tolist(), far_tri_w=np.asarray(_SYM5_TRI[1]).tolist(),
+        charge_host=_i32_buffer(cb["host"]), charge_kind=_i32_buffer(cb["kind"]),
+        charge_expo=_i32_buffer(cb["expo"]),
+        sym_tet_pts=_f64_buffer(_SYM5_TET[0]), sym_tet_w=_f64_buffer(_SYM5_TET[1]),
+        sym_tri_pts=_f64_buffer(_SYM5_TRI[0]), sym_tri_w=_f64_buffer(_SYM5_TRI[1]),
+        gl_out=_f64_buffer(glo), gw_out=_f64_buffer(gwo),
+        gl_in=_f64_buffer(gli), gw_in=_f64_buffer(gwi),
+        far_tet_pts=_f64_buffer(_SYM5_TET[0]), far_tet_w=_f64_buffer(_SYM5_TET[1]),
+        far_tri_pts=_f64_buffer(_SYM5_TRI[0]), far_tri_w=_f64_buffer(_SYM5_TRI[1]),
         near_grade=near_grade, far_inner_factor=far_inner,
-        image_masks=([] if image_masks is None else list(image_masks)),
-        image_signs=([] if image_signs is None else list(image_signs)),
-        eps=eps, leaf=leafsize, eta=eta)
+        image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
+        image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
+        eps=eps, leaf=leafsize, eta=eta, build=bool(build_hmatrix))
     t2 = time.perf_counter()
     chk = G.hex_state_check()
     t3 = time.perf_counter()
@@ -1071,19 +1187,32 @@ def _build_charge_gram_wedge(fes, glout_n=6, glin_n=5, near_grade=0.6, far_inner
             "wedge charge Gram instance state was corrupted between construction and use "
             f"(canary ctor={chk['ctor']!r} != now={chk['now']!r}): heap corruption (0xc0000374 class) -- "
             "do NOT trust this Gram; abort and report the incident.")
-    return cb["B"], G, cb["M_mass"]
+    return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
+
+
+def _configure_cpp_operator(B, G, M_mass, M_mass_ngsolve):
+    """Pin geometry/FESpace sparse topology in the persistent C++ operator."""
+    B = sp.csr_matrix(B)
+    if M_mass is not None:
+        M_mass = sp.csr_matrix(M_mass)
+    G.configure_charge_map(
+        _i32_buffer(B.indptr), _i32_buffer(B.indices), _f64_buffer(B.data), int(B.shape[1]))
+    G.configure_mass_matrix_ngsolve(M_mass_ngsolve)
+    G.configure_geometry_mass_matrix_ngsolve(M_mass_ngsolve)
+    return B, G, M_mass
 
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
-                      image_masks=None, image_signs=None):
+                      image_masks=None, image_signs=None, _materialize_mass=True,
+                      _build_hmatrix=True):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
 
     curve_order (None=flat, or 2=isoparametric P2): when set, build the CURVED charge Gram on the
     mesh.Curve(curve_order) geometry -- curved charge map B (reference-frame change-of-basis) + the C++ curved
-    Duffy Gram (curve_gauss = the inner Gauss-Legendre pts/dim, ~8 -> Duffy ~1e-4).  curve_order helps
+    Duffy Gram (curve_gauss = the inner Gauss-Legendre pts/dim, 8 for the production rule).  curve_order helps
     near-surface FIELD / FLUX accuracy (sigma=M.n on the true curved surface), NOT the demag FACTOR (which is
     curving-insensitive on a sphere, ~3e-5 in the de-risk sweep).  Only P2
     (curve_order=2) is wired; the mesh MUST already be mesh.Curve(2)'d by the caller.
@@ -1102,24 +1231,22 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     p = int(fes.globalorder)
     if p not in (1, 2):
         raise ValueError("vim.ChargeGram: production supports HDiv order in {1,2}; got order=%r." % (p,))
-    if p == 2 and (curve_order is not None or mesh.GetCurveOrder() >= 2):
-        raise NotImplementedError(
-            "vim.ChargeGram: RT2 is currently supported on flat pure-TET meshes only; use RT1 for "
-            "isoparametric P2 curved geometry.")
     image_masks = [] if image_masks is None else list(image_masks)   # robust for NumPy arrays (truth-value)
     image_signs = [] if image_signs is None else list(image_signs)
     if len(image_masks) != len(image_signs):
         raise ValueError("vim.ChargeGram: image_masks and image_signs must have the same length")
     if image_masks:
         # IMA (mirror-image charge folding): wired for the FLAT pure-TET (C++ m_highorder QuadDotRefl->PhiInner)
-        # AND pure-HEX / pure-WEDGE (the QuadBlockHex/Wedge(mask) reflected block) RT1 Grams.  Fail loud on the
-        # still-unwired 2D-planar + CURVED reduced models (No-Fallbacks) rather than silently drop the image.
-        _ivt = {len(el.vertices) for el in mesh.Elements(ng.VOL)} if mesh.dim == 3 else None
-        _curved = (curve_order is not None) or (mesh.dim == 3 and mesh.GetCurveOrder() >= 2)
-        if mesh.dim != 3 or _ivt not in ({4}, {8}, {6}) or _curved:
+        # AND pure-HEX / pure-WEDGE (the QuadBlockHex/Wedge(mask) reflected block), plus the planar log kernel.
+        # Fail loud on unsupported topology rather than silently dropping an image term.
+        _ivt = _volume_vertex_counts(mesh) if mesh.dim == 3 else None
+        if mesh.dim == 2:
+            if any(int(mask) < 1 or int(mask) > 3 for mask in image_masks):
+                raise ValueError("vim.ChargeGram: planar IMA masks use x/y bits only (1..3).")
+        elif _ivt not in ({4}, {8}, {6}):
             raise ValueError(
                 "vim.ChargeGram: image_masks (IMA) is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
-                "RT1 Gram only; 2D-planar and CURVED reduced models are not supported.  "
+                "RT1/RT2 Gram; 2D-planar reduced models use the planar image path.  "
                 "(got dim=%s, vtypes=%s, curve_order=%r)."
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
@@ -1127,26 +1254,32 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             raise NotImplementedError(
                 "vim.ChargeGram: the planar kernel is order 1 only; RT2 is supported on pure tetrahedral 3D meshes.")
         # 2D PLANAR (motor cross-section) layer: tri/quad cells + boundary-edge charges, log kernel.
-        return _build_charge_gram_2d(fes, eps=eps, leafsize=leafsize, eta=eta)
-    _vtypes = set(len(el.vertices) for el in mesh.Elements(ng.VOL))
+        return _configure_cpp_operator(
+            *_build_charge_gram_2d(
+                fes, eps=eps, leafsize=leafsize, eta=eta,
+                image_masks=image_masks, image_signs=image_signs,
+                materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
+    _vtypes = _volume_vertex_counts(mesh)
     if _vtypes == {8}:
         if p != 1:
             raise NotImplementedError("vim.ChargeGram: pure-HEX uses the specialized RT1 charge kernel.")
         # PURE-HEX RT1: the hex-mode charge Gram (Q1 volume charge + Q2 geometry; FLAT or Curve(2) one path).
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
-        return _build_charge_gram_hex(
+        return _configure_cpp_operator(*_build_charge_gram_hex(
             fes, eps=eps, leafsize=leafsize, eta=eta,
-            image_masks=image_masks, image_signs=image_signs)
+            image_masks=image_masks, image_signs=image_signs,
+            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
     if _vtypes == {6}:
         if p != 1:
             raise NotImplementedError("vim.ChargeGram: pure-WEDGE uses the specialized RT1 charge kernel.")
         # PURE-WEDGE (PRISM) RT1: the wedge-mode charge Gram (6-monomial volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
         # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
-        return _build_charge_gram_wedge(
+        return _configure_cpp_operator(*_build_charge_gram_wedge(
             fes, eps=eps, leafsize=leafsize, eta=eta,
-            image_masks=image_masks, image_signs=image_signs)
+            image_masks=image_masks, image_signs=image_signs,
+            materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
     if _vtypes != {4}:
         raise ValueError(
             "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
@@ -1186,23 +1319,37 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         if int(curve_order) != 2:
             raise NotImplementedError("vim.ChargeGram: only curve_order=2 (isoparametric P2) is wired "
                                       "(the C++ CurvedTet/TriPotential are P2); got %r." % (curve_order,))
-        cbk = _charge_basis_curved(fes, quad)
-        rtp, rtw = _tet_ref(quad); rsp, rsw = _tri_ref(quad)
+        cbk = _charge_basis_curved(fes, quad, materialize_mass=_materialize_mass)
+        (rtp, rtw), (rsp, rsw) = _curved_outer_rules(p)
         gx, gw = _g01(int(curve_gauss))
-        G = _rp._ChargeGramHMatrix(
-            cell_nodes=cbk["cell_nodes"], face_nodes=cbk["face_nodes"], n_el=cbk["n_el"], curve_order=2,
-            charge_host=cbk["host"], charge_kind=cbk["kind"], charge_expo=cbk["expo"],
-            ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
-            ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
-            curve_gl=gx.tolist(), curve_gw=gw.tolist(), eps=eps, leaf=leafsize, eta=eta)
-        return cbk["B"], G, cbk["M_mass"]
+        kw = dict(
+            cell_nodes=cbk["cell_nodes"], face_nodes=cbk["face_nodes"],
+            cell_vertices=cbk["cell_vertices"], face_vertices=cbk["face_vertices"],
+            n_el=cbk["n_el"], curve_order=2,
+            charge_host=_i32_buffer(cbk["host"]), charge_kind=_i32_buffer(cbk["kind"]),
+            charge_expo=_i32_buffer(cbk["expo"]),
+            ref_tet_pts=_f64_buffer(rtp), ref_tet_w=_f64_buffer(rtw),
+            ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
+            curve_gl=_f64_buffer(gx), curve_gw=_f64_buffer(gw),
+            image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs),
+            eps=eps, leaf=leafsize, eta=eta, build=bool(_build_hmatrix))
+        # Keep a permutation-invariant low rule for smooth, well-separated Gram blocks.  The persistent
+        # field evaluator retains curved P2 elements directly and does not reuse this approximation.
+        rtp_lo, rtw_lo = _outer_tet(far_quad)
+        rsp_lo, rsw_lo = _outer_tri(far_quad)
+        kw.update(ref_tet_pts_lo=_f64_buffer(rtp_lo), ref_tet_w_lo=_f64_buffer(rtw_lo),
+                  ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
+                  ho_far_factor=ho_far_factor)
+        G = _rp._ChargeGramHMatrix(**kw)
+        return _configure_cpp_operator(
+            cbk["B"], G, cbk["M_mass"], cbk["M_mass_ngsolve"])
     # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
     # singular part is carried EXACTLY by the analytic PhiTet/TriPotential base), so the inner sum uses a
     # COARSER rule than the outer -> another ~1.5-2x on the O(quad_out^3 * quad_in^3) near entries.  Floor at
     # max(quad-2, p+1); only passed to C++ when iq < quad (else inner = outer).  Validated to hold the same
     # demag accuracy as inner=outer by the nearfar/operator goldens + the uniform-1/3 metric.
     iq = inner_quad if inner_quad is not None else max(quad - 2, p + 1)
-    cb = _charge_basis(fes, quad)
+    cb = _charge_basis(fes, quad, materialize_mass=_materialize_mass)
     B, M_mass, host, kind, expo = cb["B"], cb["M_mass"], cb["host"], cb["kind"], cb["expo"]
     cell_verts, face_verts, n_el = cb["cell_verts"], cb["face_verts"], cb["n_el"]
     # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
@@ -1211,69 +1358,27 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # RT1/RT2 monomial-charge quadrature Gram.  By default, well-separated pairs
     # use the low-order rule while near/self pairs keep subtraction quadrature.
     kw = dict(cell_verts=cell_verts, face_verts=face_verts,
-              n_el=n_el, charge_host=host, charge_kind=kind, charge_expo=expo,
-              ref_tet_pts=rtp.ravel().tolist(), ref_tet_w=rtw.tolist(),
-              ref_tri_pts=rsp.ravel().tolist(), ref_tri_w=rsw.tolist(),
+              n_el=n_el, charge_host=_i32_buffer(host), charge_kind=_i32_buffer(kind),
+              charge_expo=_i32_buffer(expo),
+              ref_tet_pts=_f64_buffer(rtp), ref_tet_w=_f64_buffer(rtw),
+              ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
               eps=eps, leaf=leafsize, eta=eta)
     if np.isfinite(ho_far_factor):
         rtp_lo, rtw_lo = _outer_tet(far_quad)
         rsp_lo, rsw_lo = _outer_tri(far_quad)
-        kw.update(ref_tet_pts_lo=rtp_lo.ravel().tolist(), ref_tet_w_lo=rtw_lo.tolist(),
-                  ref_tri_pts_lo=rsp_lo.ravel().tolist(), ref_tri_w_lo=rsw_lo.tolist(),
+        kw.update(ref_tet_pts_lo=_f64_buffer(rtp_lo), ref_tet_w_lo=_f64_buffer(rtw_lo),
+                  ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
                   ho_far_factor=ho_far_factor)
     if iq < quad:
         rtp_in, rtw_in = _tet_ref(iq)
         rsp_in, rsw_in = _tri_ref(iq)
-        kw.update(ref_tet_pts_in=rtp_in.ravel().tolist(), ref_tet_w_in=rtw_in.tolist(),
-                  ref_tri_pts_in=rsp_in.ravel().tolist(), ref_tri_w_in=rsw_in.tolist())
+        kw.update(ref_tet_pts_in=_f64_buffer(rtp_in), ref_tet_w_in=_f64_buffer(rtw_in),
+                  ref_tri_pts_in=_f64_buffer(rsp_in), ref_tri_w_in=_f64_buffer(rsw_in))
     if image_masks:
-        if p != 1:
-            raise NotImplementedError(
-                "vim.ChargeGram: IMA image folding is RT1-only; RT2 requires a full pure-TET model.")
-        kw.update(image_masks=list(image_masks), image_signs=list(image_signs))
+        kw.update(image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs))
+    kw["build"] = bool(_build_hmatrix)
     G = _rp._ChargeGramHMatrix(**kw)
-    return B, G, M_mass
-
-
-class _DemagMat(ng.BaseMatrix):
-    """NGSolve BaseMatrix for N = B^T G B (HDiv-VIM demag): N x = B^T (G (B x)), G the C++ charge-Gram
-    H-matvec.  Symmetric (Mult == its own transpose).  Composes with NGSolve solvers / BlockMatrix."""
-    def __init__(self, fes, B, G):
-        super().__init__()
-        self._fes = fes
-        self._gf = ng.GridFunction(fes)          # template for CreateColVector/RowVector (HDiv has none)
-        self._B = B.tocsr()
-        self._BT = B.T.tocsr()
-        self._G = G
-
-    def IsComplex(self):
-        return False
-
-    def Height(self):
-        return self._fes.ndof
-
-    def Width(self):
-        return self._fes.ndof
-
-    def CreateRowVector(self):
-        return self._gf.vec.CreateVector()
-
-    def CreateColVector(self):
-        return self._gf.vec.CreateVector()
-
-    def _apply(self, xv):
-        c = self._B @ xv
-        Gc = np.asarray(self._G.matvec(c.tolist()))
-        return self._BT @ Gc
-
-    def Mult(self, x, y):
-        y.FV().NumPy()[:] = self._apply(x.FV().NumPy())
-
-    def MultAdd(self, scal, x, y):
-        y.FV().NumPy()[:] += scal * self._apply(x.FV().NumPy())
-
-    def MultTransAdd(self, scal, x, y):          # N symmetric -> transpose == itself
-        self.MultAdd(scal, x, y)
+    return _configure_cpp_operator(B, G, M_mass, cb["M_mass_ngsolve"])
 
 
 class DemagOperator:
@@ -1292,7 +1397,7 @@ class DemagOperator:
         p = int(fes.globalorder)
         if p not in (1, 2):
             raise ValueError("DemagOperator: production supports HDiv order in {1,2}; got order=%r." % (p,))
-        vtypes = {len(el.vertices) for el in fes.mesh.Elements(ng.VOL)}
+        vtypes = _volume_vertex_counts(fes.mesh)
         if p == 2 and vtypes != {4}:
             raise NotImplementedError(
                 "DemagOperator: RT2 is supported on pure-TET meshes only; got vertex counts %s."
@@ -1313,7 +1418,7 @@ class DemagOperator:
             fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
             far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
             curve_order=curve_order, curve_gauss=curve_gauss)
-        self.mat = _DemagMat(fes, self._B, self._G)
+        self.mat = self._G.demag_matrix()
 
     @property
     def ndof(self):
@@ -1324,7 +1429,8 @@ class DemagOperator:
         <c, G c> / <m, M_mass m>, c = B m, m = the HDiv projection of M_cf.  ~1/3 for a sphere/cube."""
         gfu = ng.GridFunction(self.space)
         gfu.Set(M_cf)
-        m = np.asarray(gfu.vec)
-        c = self._B @ m
-        Gc = np.asarray(self._G.matvec(c.tolist()))
-        return float(c @ Gc) / float(m @ (self._Mmass @ m))
+        demag = gfu.vec.CreateVector()
+        self.mat.Mult(gfu.vec, demag)
+        numerator = float(ng.InnerProduct(gfu.vec, demag))
+        denominator = float(ng.Integrate(ng.InnerProduct(gfu, gfu), self.space.mesh))
+        return numerator / denominator

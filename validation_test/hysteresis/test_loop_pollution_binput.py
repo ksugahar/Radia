@@ -51,7 +51,11 @@ import radia.vim as vim                                 # noqa: E402
 from radia.vim._hysteresis import (PlayHysteresisMaterial,      # noqa: E402
                                    _solve_pointwise_B, MU0)
 from radia.vim._vim import build_charge_gram            # noqa: E402
-from radia.vim._solve import _i32, _f64, _h_solve_mass_riesz   # noqa: E402
+from radia.vim._solve import (  # noqa: E402
+    _f64,
+    _h_solve_mass_riesz,
+    _configure_cpp_mass,
+)
 
 HERE = Path(__file__).resolve().parent
 FIX = HERE / "binput_play_fixture.npz"
@@ -95,11 +99,10 @@ def _run_harness(mesh, h_steps, material, eps_loop,
     Bc = sp.csr_matrix(B)
     n_face = fes.ndof
     n_el = mesh.GetNE(ng.VOL)
-    Bptr = _i32(Bc.indptr); Bidx = _i32(Bc.indices); Bdat = _f64(Bc.data)
-    Mm_coo = Mm.tocoo()
-    Wrow = _i32(Mm_coo.row); Wcol = _i32(Mm_coo.col); Wdat = _f64(Mm_coo.data)
+    _configure_cpp_mass(H, Mm, int(n_face))
 
     uf = fes.TrialFunction()
+    vf = fes.TestFunction()
     l2 = ng.L2(mesh, order=0)
     wl2 = l2.TestFunction()
     vol_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True), float)
@@ -126,11 +129,9 @@ def _run_harness(mesh, h_steps, material, eps_loop,
     L_el = (P @ z0).reshape(3, n_el).T / vol_el[:, None]
     L_rms = float(np.sqrt(np.mean(np.sum(L_el ** 2, axis=1))))
 
-    gfH = ng.GridFunction(fes)
-
     def solve_W0(rhs, x0=None):
-        res = _h_solve_mass_riesz(H, Bptr, Bidx, Bdat, int(n_face),
-                                  Wrow, Wcol, Wdat, float(nu0), rhs, tol, int(maxit), x0=x0)
+        res = _h_solve_mass_riesz(
+            H, None, int(n_face), float(nu0), rhs, tol, int(maxit), x0=x0)
         return np.asarray(res["m"], float)
 
     states = np.tile(material.state0()[None, :], (n_el, 1))
@@ -141,8 +142,10 @@ def _run_harness(mesh, h_steps, material, eps_loop,
     steps = []
     for istep in range(h_steps.shape[0]):
         hv = h_steps[istep]
-        gfH.Set(ng.CoefficientFunction(tuple(hv)))
-        rhs_src = np.asarray(Mm @ gfH.vec.FV().NumPy()).ravel()
+        source = ng.LinearForm(fes)
+        source += ng.InnerProduct(ng.CoefficientFunction(tuple(hv)), vf) * ng.dx
+        source.Assemble()
+        rhs_src = np.asarray(source.vec.FV().NumPy(), dtype=float).copy()
         d_prev = None
         for it in range(nl_maxit):
             m_new = solve_W0(rhs_src + PT @ s_el.T.ravel(), x0=m)

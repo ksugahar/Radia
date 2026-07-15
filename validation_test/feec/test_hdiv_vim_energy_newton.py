@@ -1,14 +1,13 @@
-"""Golden: the all-C++ SYMMETRIC ENERGY-NEWTON is the DEFAULT HDiv-VIM nonlinear soft-iron solver
-(radia.vim._solve._solve_nonlinear_energy_cpp), and it matches the forward (scipy splu + GMRES) Newton.
+"""Golden: all-C++ SYMMETRIC ENERGY-NEWTON is the default nonlinear HDiv-VIM solver.
 
 The nonlinear inner Newton step is now solved by the EXISTING C++ symmetric W-CG
-(solve_linear_material_mass_riesz, W = the differential-reluctivity tangent mass, mass-Riesz PARDISO, N
-H-matvec) -- bringing the nonlinear solve to C++ parity with the linear path (no scipy splu / GMRES /
+(configured C++ linear-material solve, W = the differential-reluctivity tangent mass, mass-Riesz PARDISO, N
+H-matvec) -- bringing the nonlinear solve to C++ parity with the linear path (no SciPy solve or
 M_mass^-1).  The co-energy form is robust through deep saturation via a hard-saturation barrier, a
 co-energy line search, and settled-step acceptance for the achievable-precision limit cycle of the M-form.
 
-Locks: (1) the default nonlinear solver is 'energy-newton-cpp'; (2) it agrees with the forward Newton
-(linear_solver='gmres') to ~1e-5 at moderate AND deep drive; (3) deep saturation converges to M ~ Msat.
+Locks: (1) the default nonlinear solver is 'energy-newton-cpp'; (2) moderate and deep drives converge;
+(3) deep saturation converges to M ~ Msat.
 """
 import numpy as np
 import pytest

@@ -29,3 +29,16 @@ Current rule:
   fixtures if needed.
 - Do not revive the public implementation plan unless the missing geometric
   transformation theory and validation for non-axis-aligned cells are added.
+
+## Reflection-invariance lesson (2026-07-15)
+
+- Mirroring only the stored upper triangle guarantees an algebraically
+  symmetric matrix, but it does not make a one-sided finite quadrature rule
+  invariant under replacement by an explicitly reflected mesh.
+- The former FAR one-sided HEX rule left a roughly `1e-5` reduced/full field
+  defect; increasing quadrature only hid it.  Explicitly averaging directed
+  `AB` and `BA` rules restored the multicell full-vs-image field comparison to
+  roundoff at the normal quadrature order.
+- Production HEX, WEDGE, and high-order TET FAR blocks therefore average both
+  directions.  The one-sided environment switches are diagnostic-only and
+  must not be used for release results.

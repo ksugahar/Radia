@@ -141,3 +141,31 @@ def test_hdiv_image_radfld_matches_unconstrained_explicit_full_to_roundoff():
 
     rel = np.linalg.norm(b_half - b_full) / max(np.linalg.norm(b_full), 1e-30)
     assert rel < 10.0 * np.finfo(float).eps
+
+
+def test_hdiv_multicell_hex_image_field_matches_full_to_roundoff():
+    """A multi-cell x reflection must not depend on directed FAR quadrature.
+
+    This geometry reaches separated cell/face blocks, unlike the minimal z-split
+    contract above.  A one-sided FAR block is matrix-symmetric after upper-triangle
+    mirroring but is not reflection-invariant at finite quadrature order.
+    """
+    H = ng.CoefficientFunction((0.0, 0.0, H0))
+    with ng.TaskManager():
+        full = vim.Solve(
+            _hexbox(-A, A, -A, A, -A, A, 2, 2, 2),
+            mu_r=MU_R, H_ext=H, gram_eps=1e-14, leaf=256,
+            tol=1e-14, maxit=10000,
+        )
+        half = vim.Solve(
+            _hexbox(0.0, A, -A, A, -A, A, 1, 2, 2),
+            mu_r=MU_R, H_ext=H, image="+x", gram_eps=1e-14, leaf=256,
+            tol=1e-14, maxit=10000,
+        )
+    full_field = vim.FieldFromSolution(full, PROBES, algorithm="direct")
+    half_field = vim.FieldFromSolution(half, PROBES, algorithm="direct")
+    relative = np.linalg.norm(full_field - half_field) / max(np.linalg.norm(full_field), 1e-30)
+    assert relative < 10.0 * np.finfo(float).eps
+    assert abs(full["demag"] - half["demag"]) < 10.0 * np.finfo(float).eps
+    assert half["symmetry_constrained_dofs"] == 16
+    assert full["hmat_stats"]["hex_far_one_sided_threshold"] == 0.0

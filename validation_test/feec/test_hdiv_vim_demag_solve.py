@@ -37,7 +37,7 @@ def test_sphere_linear_matches_analytic(mu_r):
     mesh = _sphere()
     with ng.TaskManager():
         res = Solve(mesh, mu_r, _HEXT)
-    assert res["linear_solver"] in {"cpp-hlu", "mass-riesz-cg", "mass-riesz-gmres"}  # default 'auto' = symmetric mass-riesz CG
+    assert res["linear_solver"] == "mass-riesz-cg"
     assert "hmat_stats" in res
     chi = mu_r - 1.0
     D = res["demag"]
@@ -64,22 +64,15 @@ def test_per_element_M_uniform_and_aligned():
 
 
 @pytest.mark.parametrize("mu_r", [1e2, 1e5])
-def test_default_symmetric_cg_matches_gmres(mu_r):
-    """The default 'auto' is the all-C++ SYMMETRIC mass-Riesz CG (the symmetric-HACApK matvec makes CG
-    mathematically valid); 'cpp-cg' is an explicit alias for it, and 'gmres' is the asymmetry-tolerant
-    cross-check.  All three converge to the SAME magnetization (the symmetric Gram is a robustness +
-    speed change, not an accuracy change)."""
+def test_default_symmetric_cg_matches_explicit_name(mu_r):
+    """The default and explicit names select the same all-C++ symmetric mass-Riesz CG."""
     mesh = _sphere(h=0.5)
     with ng.TaskManager():
         auto = Solve(mesh, mu_r, _HEXT)                          # default -> symmetric C++ CG
         cg = Solve(mesh, mu_r, _HEXT, linear_solver="cpp-cg")    # explicit alias
-        gm = Solve(mesh, mu_r, _HEXT, linear_solver="gmres")     # GMRES cross-check
     assert auto["linear_solver"] == "mass-riesz-cg"
     assert cg["linear_solver"] == "mass-riesz-cg"
-    assert gm["linear_solver"] == "mass-riesz-gmres"
-    rel = abs(auto["M_avg"][2] - gm["M_avg"][2]) / abs(gm["M_avg"][2])
-    assert rel < 1e-6, f"symmetric CG vs GMRES M_avg disagree: {rel:.2e}"
-    # Two independent TaskManager/PARDISO/CG runs of the same alias can differ by last-bit reduction order.
+    # Independent TaskManager/PARDISO/CG runs can differ by last-bit reduction order.
     assert abs(auto["M_avg"][2] - cg["M_avg"][2]) < 5e-9, "auto must equal the explicit cpp-cg alias"
 
 
@@ -118,11 +111,6 @@ def test_rt1_linear_solve_is_physically_sane():
     assert r["order"] == 1
     assert abs(r["demag"] - 1.0 / 3.0) < 1e-2, f"RT1 demag {r['demag']:.4f} not ~1/3"
     assert r["M_avg"][2] > 0, f"RT1 M_avg_z {r['M_avg'][2]:.0f} should respond +z to the applied field"
-
-
-# (test_order_gt0_unsupported_combos_fail_loud removed 2026-06-29: the retired-feature fail-loud guards
-#  (curved image / hlu / gauss / pm_M / unsupported topology) are now locked by
-#  test_hdiv_vim_rt1_contract.py.)
 
 
 def test_public_rt2_linear_solve():

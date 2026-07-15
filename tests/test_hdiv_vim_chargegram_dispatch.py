@@ -36,6 +36,13 @@ class _FES:
         self.mesh = mesh
 
 
+@pytest.fixture(autouse=True)
+def _mock_native_topology_query(monkeypatch):
+    monkeypatch.setattr(
+        V, "_volume_vertex_counts",
+        lambda mesh: frozenset(len(element.vertices) for element in mesh.Elements(None)))
+
+
 @pytest.mark.parametrize(
     ("mesh", "helper_name"),
     [
@@ -52,6 +59,7 @@ def test_chargegram_shortcuts_forward_hacapk_params(monkeypatch, mesh, helper_na
         return "B", "G", "M"
 
     monkeypatch.setattr(V, helper_name, fake_helper)
+    monkeypatch.setattr(V, "_configure_cpp_operator", lambda *args: args)
 
     result = V.build_charge_gram(_FES(mesh), eps=1.0e-4, leafsize=24, eta=1.75)
 
@@ -60,6 +68,24 @@ def test_chargegram_shortcuts_forward_hacapk_params(monkeypatch, mesh, helper_na
     assert calls[0]["eps"] == pytest.approx(1.0e-4)
     assert calls[0]["leafsize"] == 24
     assert calls[0]["eta"] == pytest.approx(1.75)
+    assert calls[0]["materialize_mass"] is True
+
+
+def test_chargegram_native_solve_skips_python_mass_materialization(monkeypatch):
+    calls = []
+
+    def fake_hex(_fes, **kwargs):
+        calls.append(kwargs)
+        return "B", "G", None
+
+    monkeypatch.setattr(V, "_build_charge_gram_hex", fake_hex)
+    monkeypatch.setattr(V, "_configure_cpp_operator", lambda *args: args)
+
+    result = V.build_charge_gram(
+        _FES(_Mesh(3, 8)), _materialize_mass=False)
+
+    assert result == ("B", "G", None)
+    assert calls[0]["materialize_mass"] is False
 
 
 def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
@@ -70,6 +96,7 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         return "B", "G", "M"
 
     monkeypatch.setattr(V, "_build_charge_gram_hex", fake_hex)
+    monkeypatch.setattr(V, "_configure_cpp_operator", lambda *args: args)
 
     V.build_charge_gram(
         _FES(_Mesh(3, 8)),
@@ -86,4 +113,6 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         "eta": 1.75,
         "image_masks": [1],
         "image_signs": [-1],
+        "materialize_mass": True,
+        "build_hmatrix": True,
     }]

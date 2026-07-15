@@ -958,24 +958,35 @@ double CurvedTetPotential(const double nodes[10][3], int e0, int e1, int e2, con
     static const int FC[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
     double acc = 0.0;
     for (int f = 0; f < 4; ++f) {
-        const double* b1=C[FC[f][0]]; const double* b2=C[FC[f][1]]; const double* b3=C[FC[f][2]];
-        double d1[3],d2[3],d3[3],e21[3],e32[3];
-        for (int k=0;k<3;++k){ d1[k]=b1[k]-xi0[k]; d2[k]=b2[k]-xi0[k]; d3[k]=b3[k]-xi0[k];
-                               e21[k]=b2[k]-b1[k]; e32[k]=b3[k]-b2[k]; }
-        const double cr[3]={d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2], d2[0]*d3[1]-d2[1]*d3[0]};
-        const double D=d1[0]*cr[0]+d1[1]*cr[1]+d1[2]*cr[2];
-        if (std::fabs(D) < 1e-300) continue;
-        for (int a=0;a<nq;++a){ const double u=gl[a];
-            for (int b=0;b<nq;++b){ const double v=gl[b];
-                for (int c=0;c<nq;++c){ const double w=gl[c];
-                    double z[3]; for (int k=0;k<3;++k) z[k]=xi0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
-                    double X[3], Jac[3][3]; CurvedTetEval(nodes, z[0], z[1], z[2], X, Jac);
-                    const double Jv = std::fabs(det3(Jac));
-                    const double dx=p[0]-X[0], dy=p[1]-X[1], dz=p[2]-X[2];
-                    const double r=std::sqrt(dx*dx+dy*dy+dz*dz);
-                    if (r<1e-300) continue;
-                    acc += gw[a]*gw[b]*gw[c]*(u*u*v*D)*Jv*_ipow(z[0],e0)*_ipow(z[1],e1)*_ipow(z[2],e2)/r;
-                }}}
+        // A product Duffy rule resolves the sharp angular variation near a
+        // curved boundary much better than a fixed-degree simplex cubature.
+        // Average its three cyclic face orderings: the nested w rule already
+        // makes the other two vertices exchange-symmetric, so this is fully
+        // permutation invariant without evaluating all six permutations.
+        for (int lead = 0; lead < 3; ++lead) {
+            const double* b1=C[FC[f][lead]];
+            const double* b2=C[FC[f][(lead+1)%3]];
+            const double* b3=C[FC[f][(lead+2)%3]];
+            double d1[3],d2[3],d3[3],e21[3],e32[3];
+            for (int k=0;k<3;++k){ d1[k]=b1[k]-xi0[k]; d2[k]=b2[k]-xi0[k]; d3[k]=b3[k]-xi0[k];
+                                   e21[k]=b2[k]-b1[k]; e32[k]=b3[k]-b2[k]; }
+            const double cr[3]={d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2],
+                                d2[0]*d3[1]-d2[1]*d3[0]};
+            const double D=d1[0]*cr[0]+d1[1]*cr[1]+d1[2]*cr[2];
+            if (std::fabs(D) < 1e-300) continue;
+            for (int a=0;a<nq;++a){ const double u=gl[a];
+                for (int b=0;b<nq;++b){ const double v=gl[b];
+                    for (int c=0;c<nq;++c){ const double w=gl[c];
+                        double z[3]; for (int k=0;k<3;++k) z[k]=xi0[k]+u*(d1[k]+v*(e21[k]+w*e32[k]));
+                        double X[3], Jac[3][3]; CurvedTetEval(nodes, z[0], z[1], z[2], X, Jac);
+                        const double Jv = std::fabs(det3(Jac));
+                        const double dx=p[0]-X[0], dy=p[1]-X[1], dz=p[2]-X[2];
+                        const double r=std::sqrt(dx*dx+dy*dy+dz*dz);
+                        if (r<1e-300) continue;
+                        acc += (gw[a]*gw[b]*gw[c]/3.0)*(u*u*v*D)*Jv
+                             *_ipow(z[0],e0)*_ipow(z[1],e1)*_ipow(z[2],e2)/r;
+                    }}}
+        }
     }
     return acc;
 }
