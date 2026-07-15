@@ -10,7 +10,8 @@ from .panel_design_common import append_value, calc_script, json_output
 
 ANALYSIS_TRANSIENT = "Transient"
 ANALYSIS_LAMINATION = "Lamination"
-MOTOR_ANALYSES = (ANALYSIS_TRANSIENT, ANALYSIS_LAMINATION)
+ANALYSIS_HDIV_REDUCED = "HDiv Reduced"
+MOTOR_ANALYSES = (ANALYSIS_TRANSIENT, ANALYSIS_LAMINATION, ANALYSIS_HDIV_REDUCED)
 TRANSIENT_METHODS = ("linearization", "coupled")
 LINEAR_SOLVERS = ("pardiso", "sparsecholesky", "umfpack")
 LAMINATION_MODES = ("cell", "global", "full")
@@ -57,6 +58,15 @@ class MotorDesignSpec:
     em_table: str = ""
     h_amplitude: str = "1000.0"
     freq: str = "1000.0"
+    field_angle_deg: str = "0.0"
+    rotor_angle_start_deg: str = "-45.0"
+    rotor_angle_stop_deg: str = "45.0"
+    rotor_angle_steps: int = 7
+    energy_delta_deg: str = "0.25"
+    circle_points: int = 1440
+    center_x: str = "0.0"
+    center_y: str = "0.0"
+    hdiv_eta: str = "2.0"
 
     def visible_fields(self) -> set[str]:
         fields = {"analysis"}
@@ -70,7 +80,7 @@ class MotorDesignSpec:
                 "omega_init", "t_end", "dt_fe", "dt_circ",
                 "n_steps_per_fe",
             })
-        else:
+        elif self.analysis == ANALYSIS_LAMINATION:
             fields.update({
                 "lamination_mode", "d_iron", "d_ins", "sigma",
                 "mu_r_iron", "b_list", "freq_list", "cell_n_elements",
@@ -80,16 +90,30 @@ class MotorDesignSpec:
                 fields.update({"vol", "h_amplitude", "freq", "fes_order"})
             if self.lamination_mode == "global":
                 fields.add("em_table")
+        elif self.analysis == ANALYSIS_HDIV_REDUCED:
+            fields.update({
+                "vol", "mu_r_iron", "h_amplitude", "field_angle_deg",
+                "rotor_angle_start_deg", "rotor_angle_stop_deg",
+                "rotor_angle_steps", "r_airgap_mid", "stack_length",
+                "energy_delta_deg", "circle_points", "center_x", "center_y",
+                "hdiv_eta",
+            })
+        else:
+            raise ValueError(f"Unknown motor analysis: {self.analysis}")
         return fields
 
     def missing_required_inputs(self) -> list[str]:
         if self.analysis == ANALYSIS_TRANSIENT:
             return [] if self.vol.strip() else ["Motor .vol"]
-        if self.lamination_mode in ("global", "full") and not self.vol.strip():
-            return ["Motor .vol"]
-        if self.lamination_mode == "global" and not self.em_table.strip():
-            return ["EM table JSON"]
-        return []
+        if self.analysis == ANALYSIS_HDIV_REDUCED:
+            return [] if self.vol.strip() else ["Rotor .vol"]
+        if self.analysis == ANALYSIS_LAMINATION:
+            if self.lamination_mode in ("global", "full") and not self.vol.strip():
+                return ["Motor .vol"]
+            if self.lamination_mode == "global" and not self.em_table.strip():
+                return ["EM table JSON"]
+            return []
+        raise ValueError(f"Unknown motor analysis: {self.analysis}")
 
     def is_runnable(self) -> bool:
         return not self.missing_required_inputs()
@@ -99,6 +123,8 @@ class MotorDesignSpec:
             return self._build_transient(python or sys.executable, panels_dir)
         if self.analysis == ANALYSIS_LAMINATION:
             return self._build_lamination(python or sys.executable, panels_dir)
+        if self.analysis == ANALYSIS_HDIV_REDUCED:
+            return self._build_hdiv_reduced(python or sys.executable, panels_dir)
         raise ValueError(f"Unknown motor analysis: {self.analysis}")
 
     def _build_transient(self, py: str, panels_dir) -> list[str]:
@@ -165,3 +191,26 @@ class MotorDesignSpec:
                 "--fes-order", str(self.fes_order),
             ]
         return cmd
+
+    def _build_hdiv_reduced(self, py: str, panels_dir) -> list[str]:
+        if not self.vol:
+            raise ValueError("HDiv Reduced motor analysis requires a rotor-only 2D .vol mesh.")
+        return [
+            py,
+            calc_script("calc_motor_hdiv_reduced.py", panels_dir),
+            "--vol", self.vol,
+            "--mu-r", str(self.mu_r_iron),
+            "--H-amplitude", str(self.h_amplitude),
+            "--field-angle-deg", str(self.field_angle_deg),
+            "--rotor-angle-start-deg", str(self.rotor_angle_start_deg),
+            "--rotor-angle-stop-deg", str(self.rotor_angle_stop_deg),
+            "--rotor-angle-steps", str(self.rotor_angle_steps),
+            "--maxwell-radius", str(self.r_airgap_mid),
+            "--stack-length", str(self.stack_length),
+            "--energy-delta-deg", str(self.energy_delta_deg),
+            "--circle-points", str(self.circle_points),
+            "--center-x", str(self.center_x),
+            "--center-y", str(self.center_y),
+            "--eta", str(self.hdiv_eta),
+            "--output", json_output(self.vol, "_motor_hdiv_reduced"),
+        ]

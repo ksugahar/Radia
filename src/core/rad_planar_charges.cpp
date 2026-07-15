@@ -13,6 +13,22 @@ namespace rad_planar_charges {
 static const double TWO_PI = 6.283185307179586476925286766559;
 static const double MU0 = 1.2566370614359172953850573533118e-6;   // 4 pi x 1e-7
 
+static inline void FieldPoint(int nq, const double* Xq, const double* Q,
+                              double px, double py, double* output)
+{
+	double hx = 0.0, hy = 0.0;
+	for(int a = 0; a < nq; a++){
+		double dx = px - Xq[2 * a], dy = py - Xq[2 * a + 1];
+		double r2 = dx * dx + dy * dy;
+		if(r2 <= 0.0) continue;
+		double f = Q[a] / r2;
+		hx += f * dx;
+		hy += f * dy;
+	}
+	output[0] = hx / TWO_PI;
+	output[1] = hy / TWO_PI;
+}
+
 void Field(int nq, const double* Xq, const double* Q,
            int nP, const double* P, double* Hout)
 {
@@ -23,17 +39,7 @@ void Field(int nq, const double* Xq, const double* Q,
 	// radTApplication::ComputeFieldBatch).
 	ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
 	ngcore::ParallelFor(ngcore::IntRange(nP), [&](int i){
-		double px = P[2 * i], py = P[2 * i + 1];
-		double hx = 0.0, hy = 0.0;
-		for(int a = 0; a < nq; a++){
-			double dx = px - Xq[2 * a], dy = py - Xq[2 * a + 1];
-			double r2 = dx * dx + dy * dy;
-			if(r2 <= 0.0) continue;                 // observation point ON a charge -> skip
-			double f = Q[a] / r2;
-			hx += f * dx; hy += f * dy;
-		}
-		Hout[2 * i] = hx / TWO_PI;
-		Hout[2 * i + 1] = hy / TWO_PI;
+		FieldPoint(nq, Xq, Q, P[2 * i], P[2 * i + 1], Hout + 2 * i);
 	});
 }
 
@@ -134,6 +140,15 @@ void PlanarFieldEvaluator::EvaluateField(
 {
 	Field(static_cast<int>(m_strengths.size()), m_positions.data(), m_strengths.data(),
 	      static_cast<int>(count), points, output);
+}
+
+void PlanarFieldEvaluator::EvaluateFieldSerial(
+    const double* points, std::size_t count, double* output) const
+{
+	const int source_count = static_cast<int>(m_strengths.size());
+	for(std::size_t i = 0; i < count; ++i)
+		FieldPoint(source_count, m_positions.data(), m_strengths.data(),
+		           points[2*i], points[2*i+1], output + 2*i);
 }
 
 void PlanarFieldEvaluator::EvaluateAz(

@@ -79,6 +79,7 @@ def test_lane_templates_expose_required_artifact_contracts():
         "validation_test/feec/test_hdiv_motor_minimal_contract.py"
         in hdiv["public_evidence"]
     )
+    assert "tests/test_motor_hdiv_reduced.py" in hdiv["public_evidence"]
 
 
 def test_hdiv_vim_artifact_gate_accepts_pickup_flux_contract():
