@@ -195,3 +195,18 @@ def test_generalization_v5_rejects_negative_series_resistance() -> None:
     bad["model_contract"]["series_resistance_ohm"] = -1.0
     with pytest.raises(ValueError):
         ideal_transformer_identity_gate(bad)
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_complex_power_drift", "v6_public_invalid_fit_window"],
+)
+def test_generalization_v6_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    if case_id == "v6_public_complex_power_drift":
+        bad["metrics"]["positive"]["transformer_input_complex_power_va"][0] *= 1.10
+    else:
+        bad["metrics"]["positive"]["fit_window_start_s"] = bad["metrics"][
+            "positive"
+        ]["fit_window_stop_s"]
+    assert ideal_transformer_identity_gate(bad)["status"] == "needs_attention"

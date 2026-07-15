@@ -37,6 +37,11 @@ def _summary():
                     "energy_J": energy,
                     "coenergy_J": current * flux[0] - energy,
                     "final_nonlinear_residual_log10": -7.0,
+                    "result_metadata": {
+                        "energy": {"run_id": 0},
+                        "coenergy": {"run_id": 0},
+                        "residual": {"run_id": 0},
+                    },
                 }
             )
     return {"runs": runs}
@@ -132,4 +137,17 @@ def test_counterfactual_curriculum90_v4_public(case_id):
 def test_generalization_v5_rejects_noncanonical_replay_index():
     bad = copy.deepcopy(_summary())
     bad["runs"][0]["replay"] = 3
+    assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_incremental_matrix_asymmetry", "v6_public_result_metadata_run_mismatch"],
+)
+def test_generalization_v6_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "v6_public_incremental_matrix_asymmetry":
+        bad["runs"][0]["incremental_inductance_H"][0][1] *= 0.50
+    else:
+        bad["runs"][0]["result_metadata"]["energy"]["run_id"] = "wrong-run"
     assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
