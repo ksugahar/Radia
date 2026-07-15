@@ -46,7 +46,7 @@ def _mock_native_topology_query(monkeypatch):
 @pytest.mark.parametrize(
     ("mesh", "helper_name"),
     [
-        (_Mesh(2), "_build_charge_gram_2d"),
+        (_Mesh(2, 3), "_build_charge_gram_2d"),
         (_Mesh(3, 8), "_build_charge_gram_hex"),
         (_Mesh(3, 6), "_build_charge_gram_wedge"),
     ],
