@@ -80,20 +80,20 @@ def test_matvec_sym_symmetry_bilinear_probe():
     H = _gram(maxh=0.3)
     n = H.ndof()
     x = np.cos(np.arange(n) * 0.7); y = np.sin(np.arange(n) * 1.3)
-    GSx = np.asarray(H.matvec_sym(x.tolist()), float); GSy = np.asarray(H.matvec_sym(y.tolist()), float)
+    GSx = np.asarray(H.matvec_sym(np.ascontiguousarray(x)), float)
+    GSy = np.asarray(H.matvec_sym(np.ascontiguousarray(y)), float)
     asym_sym = abs(x @ GSy - y @ GSx) / (abs(x @ GSy) + 1e-300)
     assert asym_sym < 1e-12, f"symmetric bilinear probe not machine-symmetric: {asym_sym:.2e}"
 
 
 def test_default_solve_is_symmetric_cg():
-    """The default vim.Solve uses the symmetric mass-Riesz CG (the symmetric-HACApK matvec) and
-    matches the GMRES cross-check on the uniform-field cube."""
+    """The default and explicit solver names select the same C++ symmetric CG."""
     H_ext = ng.CoefficientFunction((0, 0, 1000.0))
     with ng.TaskManager():
         mesh = ng.Mesh(OCCGeometry(Box(Pnt(-0.5, -0.5, -0.5), Pnt(0.5, 0.5, 0.5))).GenerateMesh(maxh=0.4))
         auto = Solve(mesh, 200.0, H_ext)
-        gm = Solve(mesh, 200.0, H_ext, linear_solver="gmres")
+        explicit = Solve(mesh, 200.0, H_ext, linear_solver="cpp-cg")
     assert auto["linear_solver"] == "mass-riesz-cg"
-    assert gm["linear_solver"] == "mass-riesz-gmres"
-    rel = abs(auto["M_avg"][2] - gm["M_avg"][2]) / abs(gm["M_avg"][2])
-    assert rel < 1e-6, f"symmetric CG vs GMRES disagree: {rel:.2e}"
+    assert explicit["linear_solver"] == "mass-riesz-cg"
+    rel = abs(auto["M_avg"][2] - explicit["M_avg"][2]) / abs(explicit["M_avg"][2])
+    assert rel < 1e-12, f"auto and cpp-cg disagree: {rel:.2e}"

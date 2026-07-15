@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <cmath>
+#include <stdexcept>
 
 namespace rad_planar_charges {
 
@@ -95,6 +96,51 @@ void MaxwellForceCircle(int nq, const double* Xq, const double* Q,
 	}
 	Fout[0] = MU0 * Rc * (TWO_PI / n) * fx;
 	Fout[1] = MU0 * Rc * (TWO_PI / n) * fy;
+}
+
+PlanarFieldEvaluator::PlanarFieldEvaluator(
+    std::vector<double> positions, std::vector<double> strengths,
+    std::vector<int> image_masks, std::vector<double> image_signs)
+{
+	if(positions.size() != 2*strengths.size())
+		throw std::invalid_argument("PlanarFieldEvaluator: position/strength size mismatch");
+	if(image_masks.size() != image_signs.size())
+		throw std::invalid_argument("PlanarFieldEvaluator: image mask/sign size mismatch");
+	m_baseSourceCount = strengths.size();
+	m_imageCount = image_masks.size();
+	m_positions.reserve(positions.size()*(image_masks.size()+1));
+	m_strengths.reserve(strengths.size()*(image_masks.size()+1));
+	m_positions.insert(m_positions.end(), positions.begin(), positions.end());
+	m_strengths.insert(m_strengths.end(), strengths.begin(), strengths.end());
+	for(std::size_t image = 0; image < image_masks.size(); ++image){
+		const int mask = image_masks[image];
+		if(mask < 1 || mask > 3)
+			throw std::invalid_argument("PlanarFieldEvaluator: 2D image mask must be in [1,3]");
+		if(!std::isfinite(image_signs[image]))
+			throw std::invalid_argument("PlanarFieldEvaluator: image sign must be finite");
+		for(std::size_t source = 0; source < strengths.size(); ++source){
+			double x = positions[2*source], y = positions[2*source+1];
+			if(mask & 1) x = -x;
+			if(mask & 2) y = -y;
+			m_positions.push_back(x);
+			m_positions.push_back(y);
+			m_strengths.push_back(image_signs[image]*strengths[source]);
+		}
+	}
+}
+
+void PlanarFieldEvaluator::EvaluateField(
+    const double* points, std::size_t count, double* output) const
+{
+	Field(static_cast<int>(m_strengths.size()), m_positions.data(), m_strengths.data(),
+	      static_cast<int>(count), points, output);
+}
+
+void PlanarFieldEvaluator::EvaluateAz(
+    const double* points, std::size_t count, double* output) const
+{
+	FieldAz(static_cast<int>(m_strengths.size()), m_positions.data(), m_strengths.data(),
+	        static_cast<int>(count), points, output);
 }
 
 } // namespace rad_planar_charges

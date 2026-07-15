@@ -16,6 +16,9 @@
 #ifndef __RAD_PLANAR_CHARGES_H
 #define __RAD_PLANAR_CHARGES_H
 
+#include <cstddef>
+#include <vector>
+
 namespace rad_planar_charges {
 
 // H at nP observation points from a cloud of nq planar point charges.
@@ -53,6 +56,25 @@ double MaxwellTorqueCircle(int nq, const double* Xq, const double* Q,
 void MaxwellForceCircle(int nq, const double* Xq, const double* Q,
                         double Rc, double cx, double cy, int n,
                         double hextx, double hexty, double* Fout);
+
+// Immutable solved-source evaluator.  Base and image sources are materialized once; field/Az calls then
+// cross the pybind boundary with target arrays only, matching NGSolve's persistent operator ownership.
+class PlanarFieldEvaluator {
+public:
+    PlanarFieldEvaluator(std::vector<double> positions, std::vector<double> strengths,
+                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
+    void EvaluateField(const double* points, std::size_t count, double* output) const;
+    void EvaluateAz(const double* points, std::size_t count, double* output) const;
+    std::size_t SourceCount() const { return m_strengths.size(); }
+    std::size_t BaseSourceCount() const { return m_baseSourceCount; }
+    std::size_t ImageCount() const { return m_imageCount; }
+
+private:
+    std::vector<double> m_positions;
+    std::vector<double> m_strengths;
+    std::size_t m_baseSourceCount = 0;
+    std::size_t m_imageCount = 0;
+};
 
 } // namespace rad_planar_charges
 

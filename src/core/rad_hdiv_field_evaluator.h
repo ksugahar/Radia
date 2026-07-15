@@ -41,12 +41,33 @@ public:
         std::vector<double> image_signs,
         const FieldEvaluatorOptions& options = {});
 
+    // Curved P2 tetrahedra retain their geometry and RT1/RT2 reference-charge
+    // polynomials.  Direct leaves integrate the actual element instead of a
+    // permanently sampled point cloud; tree nodes use moments built once.
+    // volume: [30 P2-node coordinates, 4 coefficients (1,xi,eta,zeta)]
+    // surface: [18 P2-node coordinates, 6 coefficients
+    //           (1,eta,eta^2,xi,xi*eta,xi^2)]
+    static std::shared_ptr<HDivFieldEvaluator> FromCurvedTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<double> gauss_points,
+        std::vector<double> gauss_weights,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {});
+
     ~HDivFieldEvaluator();
     HDivFieldEvaluator(const HDivFieldEvaluator&) = delete;
     HDivFieldEvaluator& operator=(const HDivFieldEvaluator&) = delete;
 
     void Evaluate(const double* observations, std::size_t n_observations,
                   double* output, Algorithm algorithm = Algorithm::Auto) const;
+
+    // Evaluate without opening a TaskManager region.  NGSolve calls
+    // CoefficientFunction::Evaluate from its existing worker threads, so the
+    // coefficient-function adapter must not create a nested parallel region.
+    void EvaluateSerial(const double* observations, std::size_t n_observations,
+                        double* output, Algorithm algorithm = Algorithm::Auto) const;
 
     Algorithm AlgorithmFor(std::size_t n_observations) const;
     static Algorithm ParseAlgorithm(const std::string& name);
@@ -61,6 +82,7 @@ public:
     std::size_t AutoMinWork() const;
     double TreeRelativeTolerance() const;
     int ProbeCount() const;
+    const char* SourceRepresentation() const;
     Algorithm LastAlgorithm() const;
     void Bounds(double lower[3], double upper[3]) const;
 
