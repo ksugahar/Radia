@@ -1684,8 +1684,8 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     renders both uniformly; R is taken from ``2 P_wp / I^2`` (energy),
     ``Delta_L`` from the coupled solve.
 
-    EXPERIMENTAL: the strong P_wp reduction is not yet validated vs FEM /
-    the Takahashi model (the committed demo is weakly coupled).  See
+    EXPERIMENTAL: the strong-loading response does not yet have a durable
+    independent reference case (the committed demo is weakly coupled).  See
     ``radia.peec_coupled_bem_solver`` module docstring.
     """
     from ngsolve import Mesh, BND
@@ -1739,8 +1739,8 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
         f"max_iter={args.coupling_max_iter} tol={args.coupling_tol:g} "
         f"relax={args.coupling_relax:g}")
     progress("COUPLED",
-        "WARNING: strong PEEC P_wp reduction not yet validated vs FEM / "
-        "Takahashi (demo is weakly coupled) -- treat absolute P_wp/dL as "
+        "WARNING: strong PEEC loading response has no durable independent "
+        "reference case (demo is weakly coupled) -- treat absolute P_wp/dL as "
         "unverified.")
     t0 = time.perf_counter()
     solver = CoupledPEECBEMSolver(
@@ -1814,20 +1814,23 @@ def _assemble_strong_output(args, coil_data, strong):
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
     # PEEC filament coil: relabel the coil backend and flag the path as
-    # experimental (the strong P_wp reduction is not yet validated vs FEM /
-    # the Takahashi model; the committed demo is weakly coupled).  Delta_R
+    # experimental (the strong-loading response has no durable independent
+    # reference case; the committed demo is weakly coupled).  Delta_R
     # from the coupled Z_port is surfaced only as a diagnostic (R itself is
     # taken from 2 P_wp / I^2 above, like the BEM-A path).
     if coil_data.get("source_type") == "filament":
         out["coil_bem_backend"] = "peec-loop-bundle"
         out["coupled_n_filaments"] = int(strong.get("n_filaments", 0))
+        out["coupling_converged"] = bool(strong.get("converged", False))
+        out["coupling_residual"] = float(strong.get(
+            "coupling_residual", float("inf")))
         if "Delta_R" in strong:
             out["coupled_delta_R_reaction_mOhm"] = float(strong["Delta_R"] * 1e3)
         out["experimental"] = True
         out["experimental_note"] = (
-            "strong PEEC coupling: the ~2.2x weak-path P_wp over-estimate "
-            "fix (coil-current redistribution) is NOT yet validated vs FEM "
-            "/ the Takahashi model -- the committed demo is weakly coupled. "
+            "strong PEEC coupling: the coil-current redistribution under "
+            "strong loading has no durable independent reference case; the "
+            "committed demo is weakly coupled. "
             "Treat absolute P_wp / delta_L as unverified.")
     return out
 
@@ -2051,6 +2054,15 @@ def run_inductance(args):
             return {"status": "error",
                     "error": "--coupling-mode strong requires a workpiece "
                              "--vol (there is nothing to couple to)."}
+        if args.coil_solver == "peec" and args.peec_proximity:
+            return {
+                "status": "error",
+                "error": "--coupling-mode strong with --coil-solver peec "
+                         "currently uses the isolated-wire Bessel bundle and "
+                         "cannot be combined consistently with "
+                         "--peec-proximity.  Pass --no-peec-proximity; "
+                         "proximity-aware strong coupling remains unsupported.",
+            }
 
     # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
     # / PEEC) in TaskManager so it runs in parallel: the helpers were
@@ -2284,14 +2296,16 @@ def build_argparser():
                              "iterative CoupledBEMSolver (per-DOF back-reaction; "
                              "coil current recomputed against the workpiece "
                              "reaction field, so ΔL includes the wp magnetic-"
-                             "energy term and P_wp is self-consistent -- "
-                             "requires --coil-solver bem-a).")
+                             "energy term and P_wp is self-consistent.  Supports "
+                             "bem-a, or experimental peec with "
+                             "--no-peec-proximity).")
     parser.add_argument("--coupling-max-iter", type=int, default=10,
                         help="strong: max Picard iterations for the coupled "
                              "coil<->wp back-reaction solve.")
     parser.add_argument("--coupling-tol", type=float, default=1e-3,
-                        help="strong: relative L_total convergence tolerance "
-                             "for the coupled Picard loop.")
+                        help="strong: relative coupled-state convergence "
+                             "tolerance for the Picard loop (L_total for BEM-A, "
+                             "terminal impedance for PEEC).")
     parser.add_argument("--coupling-relax", type=float, default=0.5,
                         help="strong: under-relaxation factor (0<relax<=1) on "
                              "the coupled back-reaction RHS.")

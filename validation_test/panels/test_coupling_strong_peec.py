@@ -1,9 +1,8 @@
 """Contract + self-consistency smoke for PEEC-coil strong coupling.
 
-Background (2026-07-15): the weak Telegen path evaluates workpiece heating
-from the INCIDENT (bare-coil) field, so its P_wp is ~2.2x over for a
-magnetic workpiece (Kubota Takahashi 7 kHz: 38 kW weak vs ~17 kW FEM).
-The BEM-A coil got a strong (self-consistent) path via
+The weak Telegen path evaluates workpiece heating from the INCIDENT
+(bare-coil) field, so it can over-estimate a strongly loaded magnetic
+workpiece.  The BEM-A coil has a strong (self-consistent) path via
 ``CoupledBEMSolver``; the PEEC coil shares the SAME incident-field weak
 path, so its P_wp is over by the same factor.  ``CoupledPEECBEMSolver``
 gives the PEEC coil the same strong coupling (filament back-EMF from the
@@ -20,10 +19,10 @@ These tests lock the WIRING + SELF-CONSISTENCY only:
      the coupled solve reduces to the weak forward when the workpiece
      barely loads the coil (and does not diverge).
 
-The strong P_wp REDUCTION physics (the ~2.2x fix) is NOT validated here:
+The strong-loading P_wp response is NOT validated here:
 the committed demo is weakly coupled (BEM-A weak == strong to ~2%), so it
 cannot exercise the coil-current redistribution.  That validation needs
-the strongly-coupled Takahashi model on an idle mdx -- see the
+a durable strongly-coupled reference case on a compute host -- see the
 ``radia.peec_coupled_bem_solver`` module docstring (VALIDATION STATUS).
 """
 from __future__ import annotations
@@ -73,6 +72,19 @@ def test_strong_peec_requires_workpiece_vol():
     assert "workpiece" in out["error"] and "--vol" in out["error"]
 
 
+def test_strong_peec_rejects_proximity_model_mismatch():
+    """Strong PEEC must not mix proximity and isolated-wire baselines."""
+    p = ci.build_argparser()
+    ns = p.parse_args([
+        "--coil-solver", "peec", "--frequency", "7000",
+        "--coil-step", "c.step", "--vol", "w.vol", "--sigma", "5.8e6",
+        "--coupling-mode", "strong",
+    ])
+    out = ci.run_inductance(ns)
+    assert out.get("status") == "error"
+    assert "--no-peec-proximity" in out["error"]
+
+
 # ----------------------------------------------------------------------
 # 2. end-to-end self-consistency on the committed demo
 # ----------------------------------------------------------------------
@@ -88,6 +100,7 @@ def _run_cli(mode, tmp_path, extra=None):
         "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
         "--frequency", "7000", "--current", "1",
         "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
+        "--no-peec-proximity",
         "--output", str(out_json),
     ] + (extra or [])
     env = dict(os.environ, MKL_NUM_THREADS="1", OMP_NUM_THREADS="1")
@@ -108,6 +121,8 @@ def test_peec_strong_end_to_end_self_consistent(tmp_path):
     assert d["method"] == "peec-bem-strong"
     assert d["coil_bem_backend"] == "peec-loop-bundle"
     assert int(d["coupling_iterations"]) >= 1
+    assert d["coupling_converged"] is True
+    assert d["coupling_residual"] <= 5e-3
 
     # Output-assembly identities (hold by construction, like the BEM-A path).
     assert math.isclose(d["L_total_nH"], d["L_coil_nH"] + d["delta_L_nH"],
