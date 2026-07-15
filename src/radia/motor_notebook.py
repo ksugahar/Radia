@@ -16,6 +16,8 @@ from .notebook_workbench import CommandWorkbench, NotebookFieldSpec, field_keys
 MOTOR_FIELD_SPECS = (
     NotebookFieldSpec("analysis", "Analysis", "dropdown", MOTOR_ANALYSES, "Study"),
     NotebookFieldSpec("vol", "Motor .vol", section="Inputs", width="620px"),
+    NotebookFieldSpec(
+        "rotor_vol", "Rotor-only 2D .vol", section="Inputs", width="620px"),
     NotebookFieldSpec("method", "Method", "dropdown", TRANSIENT_METHODS, "Transient"),
     NotebookFieldSpec("fes_order", "FES order", "int", section="Solver"),
     NotebookFieldSpec("linear_solver", "linear solver", "dropdown", LINEAR_SOLVERS, "Solver"),
@@ -60,6 +62,9 @@ MOTOR_FIELD_SPECS = (
     NotebookFieldSpec("circle_points", "circle points", "int", section="HDiv Reduced"),
     NotebookFieldSpec("center_x", "center x", section="HDiv Reduced"),
     NotebookFieldSpec("center_y", "center y", section="HDiv Reduced"),
+    NotebookFieldSpec("hdiv_mu_r", "rotor mu_r", section="Material"),
+    NotebookFieldSpec(
+        "hdiv_h_amplitude", "stator H [A/m]", section="Excitation"),
     NotebookFieldSpec("hdiv_eta", "H-matrix eta", section="HDiv Reduced"),
 )
 MOTOR_NOTEBOOK_FIELD_ORDER = field_keys(MOTOR_FIELD_SPECS)
