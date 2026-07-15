@@ -232,3 +232,15 @@ def test_generalization_v7_source(case_id: str):
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize("duplicate_location", ["required", "artifacts"])
+def test_source_gate_rejects_duplicate_export_artifact_names(duplicate_location: str):
+    row = summary()
+    if duplicate_location == "required":
+        row["export_artifacts"]["required"][1] = "mixed.msh"
+    else:
+        row["export_artifacts"]["artifacts"][1]["name"] = "mixed.msh"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_required_export_artifacts_are_fresh"] is False
