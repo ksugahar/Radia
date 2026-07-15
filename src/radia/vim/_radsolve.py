@@ -15,7 +15,7 @@ material getter), so this bridge keeps a registry populated at build time by
 magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
 ``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
 
-Element types: HDiv-VIM is RT1 (HDiv order 1) on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
+Element types: HDiv-VIM is RT1/RT2 on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
 radia's soft-iron demag route.  rad.Solve's 'auto' split
 (:func:`is_hdiv_eligible`) dispatches a mesh-backed TET / HEX / WEDGE iron to the HDiv-VIM
 (:func:`radia.vim.Solve`, order=1), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
@@ -179,7 +179,7 @@ def is_hdiv_eligible(top):
     try:
         mesh = _DEMAG_REGISTRY[iron]["mesh"]
         vts = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
-        return vts in ({4}, {8}, {6})            # pure tet / hex / wedge (HDiv-VIM RT1, incl. IMA)
+        return vts in ({4}, {8}, {6})            # pure tet / hex / wedge (HDiv-VIM RT1/RT2, incl. IMA)
     except Exception:
         return False
 
@@ -222,7 +222,7 @@ def dispatch(top, *solve_args, **solve_kwargs):
     import ngsolve
     from . import Solve
 
-    # IMA mirror symmetry is WIRED in HDiv-VIM for the FLAT pure-TET / pure-HEX / pure-WEDGE paths (tet
+    # IMA mirror symmetry is wired for flat/Curve(2) pure-TET / pure-HEX / pure-WEDGE paths (tet
     # QuadDotRefl + hex/wedge reflected-block).  Parse the image argument (kwarg or legacy 4th positional)
     # and pass it to Solve, which folds the mirror charges (or fails loud for the still-unwired
     # curved / mixed / pyramid cases).

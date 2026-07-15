@@ -30,6 +30,7 @@ def solve_motor_hdiv_reduced(
     center_x: float,
     center_y: float,
     eta: float,
+    order: int,
 ):
     setup_paths()
     if not vol_file or not os.path.isfile(vol_file):
@@ -51,7 +52,7 @@ def solve_motor_hdiv_reduced(
     with ng.TaskManager():
         motor = HDivReducedMotor(
             mesh, mu_r, stack_length=stack_length,
-            center=(center_x, center_y), eta=eta)
+            center=(center_x, center_y), eta=eta, order=order)
         progress(
             "MOTOR-HDIV",
             f"Gram built once: ndof={motor.body.ndof}, charges={motor.body.n_charge}")
@@ -69,7 +70,7 @@ def solve_motor_hdiv_reduced(
 
 def build_argparser():
     parser = argparse.ArgumentParser(
-        description="Planar RT1 HDiv-VIM reduced reluctance-motor sweep")
+        description="Planar RT1/RT2 HDiv-VIM reduced reluctance-motor sweep")
     parser.add_argument("--vol", required=True, help="rotor-only 2D Netgen .vol mesh")
     parser.add_argument("--mu-r", type=float, default=1000.0,
                         help="linear rotor relative permeability")
@@ -90,6 +91,8 @@ def build_argparser():
     parser.add_argument("--center-y", type=float, default=0.0)
     parser.add_argument("--eta", type=float, default=2.0,
                         help="charge-Gram admissibility parameter")
+    parser.add_argument("--order", type=int, choices=(1, 2), default=1,
+                        help="HDiv order: RT1 or RT2")
     return parser
 
 
@@ -102,7 +105,7 @@ def main():
             args.rotor_angle_start_deg, args.rotor_angle_stop_deg,
             args.rotor_angle_steps, args.maxwell_radius, args.stack_length,
             args.energy_delta_deg, args.circle_points,
-            args.center_x, args.center_y, args.eta)
+            args.center_x, args.center_y, args.eta, args.order)
 
     calc_main(run, parser)
 

@@ -128,7 +128,8 @@ LANES: dict[str, MotorValidationLane] = {
         support_note=(
             "The single-rotor planar reluctance path is implemented as "
             "radia.motor_hdiv.HDivReducedMotor and the radia_motor 'HDiv Reduced' "
-            "study. It reuses one symmetric RT1 charge Gram and checks torque "
+            "study. It reuses one symmetric RT1 or RT2 charge Gram (RT1/Q2 or "
+            "RT2/Q3 geometry) and checks torque "
             "through Maxwell stress, magnetization-volume coupling, and "
             "fixed-current coenergy. PlanarDemagBody.field_cf is the native "
             "rotating source/target-frame interface. A fixed-stator reduced-FEM "

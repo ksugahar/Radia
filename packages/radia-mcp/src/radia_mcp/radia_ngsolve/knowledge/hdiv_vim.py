@@ -95,12 +95,12 @@ Primary Python entry points:
   diagnostic operator, or `radia.vim.ChargeGram(...)` for its charge map and
   C++ H-matrix components
 - `radia.vim.FieldFromSolution(res, points)` -- batch demagnetizing H (A/m) at
-  points from the full RT1/RT2 pure-TET solution or the RT1 HEX/WEDGE/2D
+  points from the full RT1/RT2 TET/HEX/WEDGE solution or the planar RT1/RT2
   solution.  `rad.Fld` on a solved mesh-backed
   object dispatches to this same evaluator; per-element constant-M write-back
   is metadata/visualization only, not the field oracle.  Solve materializes an
   immutable C++ source evaluator once.  TET keeps analytic volume/triangle
-  near kernels; HEX/WEDGE/curved RT1 keeps an NGSolve quadrature cloud.  Calls
+  near kernels; HEX/WEDGE/curved sources keep an NGSolve quadrature cloud.  Calls
   pass contiguous NumPy target arrays without rebuilding source lists, and all
   IMA terms are accumulated in one TaskManager region.  Ordinary work uses the
   exact direct sum.  Very large non-IMA maps may use a quadrupole source tree
@@ -171,9 +171,9 @@ Fast tests should cover API contracts and small deterministic checks:
   and large non-IMA auto-tree output stays within its direct-probe contract;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
-- RT2 flat/curved pure-TET linear/nonlinear solves, IMA, and persistent field
-  reconstruction remain consistent with the analytic cube/sphere and image
-  gates; RT2 on HEX/WEDGE or 2D fails loudly rather than falling back to RT1.
+- RT2 flat/curved TET/HEX/WEDGE linear/nonlinear solves, IMA, and persistent
+  field reconstruction remain consistent with the analytic cube/sphere and
+  image gates; planar RT2 is supported through Q3 geometry.
 
 Validation-class tests live under `validation_test/feec/` and should cover:
 
@@ -283,11 +283,12 @@ _STATUS = r"""
 Current direction:
 
 - Radia soft iron: HDiv-VIM.
-- RT1: pure TET/HEX/WEDGE, planar 2D, IMA, and field evaluation.
-- RT2: public flat/curved pure-TET material/operator, IMA, and persistent-field
-  path.  HEX/WEDGE and planar 2D remain RT1.
+- RT1/RT2: flat and Curve(2) pure TET/HEX/WEDGE material/operator, IMA, and
+  persistent-field paths.  Planar RT1 is supported through Q2 and planar RT2
+  through Q3.  `radia.vim.hdiv_capabilities()` is the sole order-pair table;
+  geometry order is not inferred from one global p+1 rule.
 - Fixed/given 3D magnetization: source-owned HDiv projection and native C++
-  field coupling for RT1 TET/HEX/WEDGE and RT2 pure TET, including Curve(2)
+  field coupling for RT1/RT2 TET/HEX/WEDGE, including Curve(2)
   and IMA; planar 2D uses its existing `magnets=` source path.
 - Linear-recoil permanent magnet: scalar recoil permeability plus constant or
   spatial `B_r`, solved by the symmetric C++ HDiv path in 3D and planar 2D.
@@ -303,7 +304,7 @@ Open work:
 
 - extend 2D and 3D validation coverage around `rad.Fld`;
 - keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
-- continue RT1/RT2 pure-TET accuracy, memory, and timing measurements on mdx;
+- continue RT1/RT2 TET/HEX/WEDGE accuracy, memory, and timing measurements on mdx;
 - continue charge-Gram H-matrix performance checks on mdx;
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
   normal release to measure public `rad.Fld` on mdx/hibino;

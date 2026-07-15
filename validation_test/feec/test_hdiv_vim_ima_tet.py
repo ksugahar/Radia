@@ -7,7 +7,7 @@ The C++ highorder charge Gram folds the mirror-image charge interactions into ev
 with QuadDotRefl(tgt,src,mask) = the source's PhiInner potential at tgt's outer points reflected on the mask
 axes (mirror isometry).  Physics + reflection/sign convention validated against the analytic
 IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for flat/curved pure-TET RT1/RT2, and the
-HEX/WEDGE RT1 image-fold is locked separately by the low-level charge-Gram smoke tests.
+HEX/WEDGE RT1/RT2 image-fold is locked separately by topology-specific charge-Gram tests.
 """
 import numpy as np
 import pytest

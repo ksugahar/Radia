@@ -5,6 +5,7 @@ from __future__ import annotations
 from .motor_design import (
     LAMINATION_DRIVES,
     LAMINATION_MODES,
+    HDIV_ORDERS,
     LINEAR_SOLVERS,
     MOTOR_ANALYSES,
     MotorDesignSpec,
@@ -66,6 +67,7 @@ MOTOR_FIELD_SPECS = (
     NotebookFieldSpec(
         "hdiv_h_amplitude", "stator H [A/m]", section="Excitation"),
     NotebookFieldSpec("hdiv_eta", "H-matrix eta", section="HDiv Reduced"),
+    NotebookFieldSpec("hdiv_order", "HDiv order", "dropdown", HDIV_ORDERS, "HDiv Reduced"),
 )
 MOTOR_NOTEBOOK_FIELD_ORDER = field_keys(MOTOR_FIELD_SPECS)
 

@@ -18,7 +18,7 @@ the same gates the three CI workflows run (policy-lint.yml,
 radia-mcp-matrix.yml, build-test.yml "Run basic tests"), fast-first.
 
 Gates:
-  1. policy-lint        -- the 7 static policies (CblasColMajor etc.)
+  1. policy-lint        -- the 8 static policies (CblasColMajor etc.)
   2. version-consistency-- pyproject == __init__ for radia / radia-mcp / cme
   3. tools-md-drift     -- regenerate docs/TOOLS.md and diff (WIP-aware)
   4. radia-mcp-matrix   -- compile + meta_health + the FAST radia-mcp
@@ -97,11 +97,11 @@ def _sh(cmd, cwd=REPO, env=None, timeout=None):
 def gate_policy_lint():
     # SINGLE SOURCE OF TRUTH: tools/policy_lint.py is also what
     # .github/workflows/policy-lint.yml runs, so the local gate and CI can
-    # never drift (previously the 7 policies were re-implemented inline here).
+    # never drift (previously the policies were re-implemented inline here).
     rc, out = _sh([sys.executable, os.path.join(REPO, "tools", "policy_lint.py"),
                    "--quiet"])
     if rc == 0:
-        return True, "7 policies pass"
+        return True, "8 policies pass"
     fails = [ln[6:].strip() for ln in out.splitlines() if ln.startswith("FAIL")]
     return False, "; ".join(fails) if fails else (out.strip()[-200:] or "policy lint failed")
 
@@ -311,7 +311,7 @@ def gate_validation_run():
 
 
 ALL_GATES = [
-    ("policy",          "Policy Lint (7 static policies)",        gate_policy_lint),
+    ("policy",          "Policy Lint (8 static policies)",        gate_policy_lint),
     ("version",         "Version consistency (pyproject==init)",  gate_version_consistency),
     ("tools-md",        "TOOLS.md drift gate",                    gate_tools_md),
     ("radia-mcp",       "radia-mcp matrix (minimal-dep pytest)",  gate_radia_mcp_matrix),

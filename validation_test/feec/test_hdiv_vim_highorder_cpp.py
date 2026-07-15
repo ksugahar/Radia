@@ -1,8 +1,8 @@
 """Production validation for the public tetrahedral RT1/RT2 HDiv-VIM path.
 
-The test intentionally uses only ``radia.vim`` APIs.  Flat pure-TET RT2
+The test intentionally uses only ``radia.vim`` APIs.  Flat/Curve(2) TET RT2
 ``Solve``, ``ChargeGram``, and ``DemagOperator`` are public production routes.
-Specialized HEX/WEDGE and 2D kernels remain RT1.  The pure-TET RT2 route includes IMA,
+HEX/WEDGE RT2 is locked by its topology-specific tests.  The TET RT2 route includes IMA,
 Curve(2), and persistent C++ field evaluation and is locked by the contract tests.
 """
 
