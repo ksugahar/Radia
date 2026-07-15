@@ -5,6 +5,20 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.14 - Faster affine HEX RT2 HDiv-VIM
+
+Released 2026-07-16.
+
+- Accelerated affine HEX RT2 ChargeGram construction with exact polynomial
+  moments for self/near interactions and reflection-invariant tensor-product
+  quadrature for smooth far interactions, while preserving the public
+  topology/order contract and symmetric matrix path.
+- Avoided TaskManager startup overhead for small persistent field-evaluator
+  batches without changing the parallel path used for larger field maps.
+- Added compute-host RT2 cross-topology records for tetrahedral, hexahedral,
+  and wedge meshes at approximately 29,000 charge DoF, plus focused field,
+  entry, solve, symmetry, and curved-mesh regression coverage.
+
 ## 4.95.13 - Mapped RT2 HDiv-VIM for hex and wedge meshes
 
 Released 2026-07-16.

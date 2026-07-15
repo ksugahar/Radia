@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.10] - 2026-07-16
+
+- **Cubit mixed-mesh evidence gates**: require two-sided manifold transition
+  interfaces when recorded, verify every required export artifact is fresh,
+  nonempty, digest-bearing, and uniquely named, and lock replayed journal/model
+  identities to the pinned source evidence.
+- Preserve older summaries as readable evidence with explicit warnings when
+  per-artifact freshness or replay identity metadata was not recorded.
+
 ## [1.4.9] - 2026-07-16
 
 - **Mapped RT2 HDiv-VIM**: documented the supported 2D, tetrahedral,
