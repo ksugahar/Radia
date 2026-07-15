@@ -301,9 +301,31 @@
           "name": "coupling_mode",
           "default": "weak",
           "choices": [
-            "weak"
+            "weak",
+            "strong"
           ],
-          "help": "weak: back-reacted Telegen ΔL (only mode)"
+          "help": "weak: one-way coil->wp with back-reacted Telegen ΔL (coil current NOT recomputed).  strong: iterative CoupledBEMSolver (per-DOF back-reaction; coil current recomputed against the workpiece reaction field, so ΔL includes the wp magnetic-energy term and P_wp is self-consistent.  Supports bem-a, or experimental peec with --no-peec-proximity)."
+        },
+        {
+          "cli": "--coupling-max-iter",
+          "name": "coupling_max_iter",
+          "type": "int",
+          "default": 10,
+          "help": "strong: max Picard iterations for the coupled coil<->wp back-reaction solve."
+        },
+        {
+          "cli": "--coupling-tol",
+          "name": "coupling_tol",
+          "type": "float",
+          "default": 0.001,
+          "help": "strong: relative coupled-state convergence tolerance for the Picard loop (L_total for BEM-A, terminal impedance for PEEC)."
+        },
+        {
+          "cli": "--coupling-relax",
+          "name": "coupling_relax",
+          "type": "float",
+          "default": 0.5,
+          "help": "strong: under-relaxation factor (0<relax<=1) on the coupled back-reaction RHS."
         },
         {
           "cli": "--telegen-form",
@@ -1550,7 +1572,9 @@
           "name": "stack_length",
           "type": "float",
           "default": 0.05,
-          "help": "m, axial length"
+          "help": "m, axial length",
+          "ja": "積厚",
+          "physics": "2D単位長さトルクを実機トルクへ変換する軸方向長さ [m]"
         },
         {
           "cli": "--n-pole-pairs",
@@ -1768,7 +1792,9 @@
           "name": "H_amplitude",
           "type": "float",
           "default": 1000.0,
-          "help": "A/m, peak applied H field"
+          "help": "A/m, peak applied H field",
+          "ja": "固定子等価磁界振幅",
+          "physics": "回転子に印加する一様背景磁界 H [A/m]"
         },
         {
           "cli": "--freq",
@@ -1796,6 +1822,135 @@
             "umfpack"
           ],
           "help": "FE direct solver. pardiso=MKL (fastest, default); sparsecholesky=ngsolve built-in (no MKL) -- use on machines with a conflicting MKL on PATH (e.g. CST)."
+        }
+      ]
+    },
+    "motor_hdiv_reduced": {
+      "script": "calc_motor_hdiv_reduced.py",
+      "function": "run",
+      "ja_name": "HDiv-VIM 縮約リラクタンスモータ",
+      "ja_description": "回転子のみの2D .volで対称HDiv-VIM Gramを一度だけ構築し、固定子等価MMFに対する回転角スイープ、Maxwell応力、磁化体積トルク、共エネルギー差分を照合する。radia_motorパネルの'HDiv Reduced'モード。",
+      "method": "Planar RT1 HDiv-VIM reduced reluctance motor with cached symmetric charge Gram and three-way torque check",
+      "command_builder": "radia.motor_design:MotorDesignSpec.build_command",
+      "params": [
+        {
+          "cli": "--vol",
+          "name": "vol",
+          "required": true,
+          "help": "rotor-only 2D Netgen .vol mesh",
+          "ja": ".vol メッシュファイル",
+          "physics": "Netgen Vol 形式。材料・境界ラベル・高次要素を含む"
+        },
+        {
+          "cli": "--mu-r",
+          "name": "mu_r",
+          "type": "float",
+          "default": 1000.0,
+          "help": "linear rotor relative permeability",
+          "ja": "比透磁率",
+          "physics": "mu = mu_0 * mu_r"
+        },
+        {
+          "cli": "--H-amplitude",
+          "name": "H_amplitude",
+          "type": "float",
+          "default": 80000.0,
+          "help": "global stator-equivalent H amplitude [A/m]",
+          "ja": "固定子等価磁界振幅",
+          "physics": "回転子に印加する一様背景磁界 H [A/m]"
+        },
+        {
+          "cli": "--field-angle-deg",
+          "name": "field_angle_deg",
+          "type": "float",
+          "default": 0.0,
+          "help": "global applied-H angle [deg]",
+          "ja": "背景磁界角",
+          "physics": "固定した全体座標系での背景磁界方向 [deg]"
+        },
+        {
+          "cli": "--rotor-angle-start-deg",
+          "name": "rotor_angle_start_deg",
+          "type": "float",
+          "default": -45.0,
+          "ja": "回転子開始角",
+          "physics": "機械角スイープの開始角 [deg]"
+        },
+        {
+          "cli": "--rotor-angle-stop-deg",
+          "name": "rotor_angle_stop_deg",
+          "type": "float",
+          "default": 45.0,
+          "ja": "回転子終了角",
+          "physics": "機械角スイープの終了角 [deg]"
+        },
+        {
+          "cli": "--rotor-angle-steps",
+          "name": "rotor_angle_steps",
+          "type": "int",
+          "default": 7,
+          "ja": "回転角点数",
+          "physics": "開始角と終了角を含む機械角評価点数"
+        },
+        {
+          "cli": "--maxwell-radius",
+          "name": "maxwell_radius",
+          "type": "float",
+          "default": 0.05,
+          "help": "air-gap integration-circle radius [m]",
+          "ja": "Maxwell応力評価半径",
+          "physics": "回転子を囲み固定子を含まない空隙円の半径 [m]"
+        },
+        {
+          "cli": "--stack-length",
+          "name": "stack_length",
+          "type": "float",
+          "default": 0.05,
+          "help": "axial length [m]",
+          "ja": "積厚",
+          "physics": "2D単位長さトルクを実機トルクへ変換する軸方向長さ [m]"
+        },
+        {
+          "cli": "--energy-delta-deg",
+          "name": "energy_delta_deg",
+          "type": "float",
+          "default": 0.25,
+          "help": "coenergy central-difference half-step [deg]",
+          "ja": "共エネルギー差分角",
+          "physics": "固定電流共エネルギーの中心差分半幅 [deg]"
+        },
+        {
+          "cli": "--circle-points",
+          "name": "circle_points",
+          "type": "int",
+          "default": 1440,
+          "ja": "空隙円積分点数",
+          "physics": "Maxwell応力円周積分の等間隔点数"
+        },
+        {
+          "cli": "--center-x",
+          "name": "center_x",
+          "type": "float",
+          "default": 0.0,
+          "ja": "回転中心X",
+          "physics": "回転子と空隙円の共通回転中心X [m]"
+        },
+        {
+          "cli": "--center-y",
+          "name": "center_y",
+          "type": "float",
+          "default": 0.0,
+          "ja": "回転中心Y",
+          "physics": "回転子と空隙円の共通回転中心Y [m]"
+        },
+        {
+          "cli": "--eta",
+          "name": "eta",
+          "type": "float",
+          "default": 2.0,
+          "help": "charge-Gram admissibility parameter",
+          "ja": "H行列許容係数",
+          "physics": "Charge Gram H行列の幾何学的admissibility係数"
         }
       ]
     }

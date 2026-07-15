@@ -29,6 +29,7 @@ import ngsolve as ng
 import scipy.sparse as sp
 
 from ._vim import build_charge_gram
+import radia._radia_pybind as _rp
 from radia.planar_materials import law_from_table as _law_from_table
 
 MU0 = 4e-7 * np.pi
@@ -243,6 +244,19 @@ class PlanarDemagBody:
             self._field_evaluator = self.G.create_planar_field_evaluator(coefficients)
             self._field_coefficients = coefficients.copy()
         return self._field_evaluator
+
+    def field_cf(self, m, *, source_angle=0.0, target_angle=0.0, center=(0.0, 0.0)):
+        """Return the native NGSolve H-field in the target body's local frame.
+
+        ``source_angle`` and ``target_angle`` are rigid rotations in radians
+        about the common ``center``.  The returned two-component
+        CoefficientFunction evaluates the immutable solved source directly in
+        C++; it is suitable for HDiv projection and mutual body coupling inside
+        the caller's ``TaskManager`` region.
+        """
+        cx, cy = map(float, center)
+        return _rp._PlanarHDivFieldCoefficient(
+            self.field_evaluator(m), float(source_angle), float(target_angle), cx, cy)
 
     def Az_at(self, P, m):
         """Exterior A_z of the body's charges: A = +mu0 q/(2 pi) atan2(dy, dx) summed over the

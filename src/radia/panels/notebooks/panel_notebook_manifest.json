@@ -70,12 +70,13 @@
       "notebook": "src/radia/panels/notebooks/radia_motor.ipynb",
       "state": "active-local-runner",
       "adapter": "radia.motor_notebook.MotorWorkbench",
-      "status": "Promoted as a notebook workbench for transient and lamination motor analyses.",
+      "status": "Promoted as a notebook workbench for transient, lamination, and HDiv reduced-motor analyses.",
       "headless": [
         "src/radia/motor_design.py",
         "src/radia/motor_notebook.py",
         "src/radia/panels/calc_motor_transient.py",
-        "src/radia/panels/calc_motor_lamination.py"
+        "src/radia/panels/calc_motor_lamination.py",
+        "src/radia/panels/calc_motor_hdiv_reduced.py"
       ]
     },
     {

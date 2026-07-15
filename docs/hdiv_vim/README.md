@@ -310,6 +310,10 @@ host (`mdx` or `hibino`).  Required HDiv gates:
   memory/timing on idle `mdx` or `hibino`
   for large runs;
 - 2D planar motor saliency checks for the motor lane.
+- reduced-motor torque agreement among Maxwell stress, magnetization-volume
+  coupling, and fixed-current coenergy while reusing one charge Gram;
+- native planar source/target-frame `CoefficientFunction` agreement with the
+  explicit rigid-coordinate transform.
 
 ## Public Docs
 

@@ -5,8 +5,8 @@ into one score:
 
 * NGSolve+AGE for the finite-element air-gap machine path: torque, dq,
   eddy, and nonlinear machine quantities.
-* HDiv-VIM + reduced FEM as an experimental RFC for future rotor/source-field
-  plus fixed-stator reduced response coupling.
+* HDiv-VIM for the implemented reduced saliency/reluctance rotor path, with
+  fixed-stator reduced-FEM/AGE coupling still tracked as an experimental RFC.
 
 This module gives MCP clients a small contract for naming the lane, checking
 artifact metadata, and deciding which radia-motor knowledge should be updated
@@ -123,17 +123,22 @@ LANES: dict[str, MotorValidationLane] = {
     ),
     "hdiv_vim_reduced_fem": MotorValidationLane(
         lane_id="hdiv_vim_reduced_fem",
-        label="HDiv-VIM + reduced FEM (experimental RFC)",
+        label="HDiv-VIM + reduced FEM (reduced motor validated; coupling RFC)",
         support_status="experimental_rfc",
         support_note=(
-            "This is a new research coupling idea, not the historical "
-            "radia-motor supported path. Treat HDiv-VIM rotor plus reduced-FEM "
-            "stator as a design proposal until an interface operator and "
-            "reduced basis are implemented.  The standalone planar HDiv-VIM "
-            "saliency torque contract is solver-ready evidence for the VIM "
-            "operator, not proof of the full coupled machine path."
+            "The single-rotor planar reluctance path is implemented as "
+            "radia.motor_hdiv.HDivReducedMotor and the radia_motor 'HDiv Reduced' "
+            "study. It reuses one symmetric RT1 charge Gram and checks torque "
+            "through Maxwell stress, magnetization-volume coupling, and "
+            "fixed-current coenergy. PlanarDemagBody.field_cf is the native "
+            "rotating source/target-frame interface. A fixed-stator reduced-FEM "
+            "basis and full AGE/transient coupling are still RFC work and must "
+            "not be inferred from the validated reduced rotor path."
         ),
-        radia_path="proposed radia.vim HDiv rotor source-field lane plus fixed-stator reduced FEM",
+        radia_path=(
+            "radia.motor_hdiv.HDivReducedMotor + calc_motor_hdiv_reduced.py; "
+            "fixed-stator reduced FEM/AGE coupling remains proposed"
+        ),
         best_for=(
             "passive pickup flux and signed flux-linkage sweeps",
             "linear PM motor pickup-flux and thrust-trend reduced checks",
@@ -141,6 +146,8 @@ LANES: dict[str, MotorValidationLane] = {
             "permanent-magnet demagnetizing-field anchors",
             "source-field / surface-current intuition",
             "planar saliency torque sign and scale checks against closed form reluctance torque",
+            "reduced reluctance-motor angle sweeps with one cached charge Gram",
+            "three-way Maxwell/volume/coenergy torque consistency",
             "researching whether a rotor VIM source can drive a compact fixed-stator reduced FEM response",
         ),
         observable_families=(
@@ -169,6 +176,7 @@ LANES: dict[str, MotorValidationLane] = {
         ),
         public_evidence=(
             "analytic sign/scale checks",
+            "tests/test_motor_hdiv_reduced.py",
             "validation_test/feec/test_hdiv_motor_minimal_contract.py",
             "stored public-safe regression artifacts",
             "reduced FEM consistency checks",
@@ -199,11 +207,11 @@ can pass its own metadata gate, but it is not enough to say radia-motor learned.
 - `ngsolve_age`: NGSolve+AGE.  This is the current supported radia-motor
   finite-element air-gap machine lane for torque, dq quantities, cogging,
   eddy/slip, hysteresis, and nonlinear machine studies.
-- `hdiv_vim_reduced_fem`: HDiv-VIM plus reduced FEM.  This is an experimental
-  RFC lane.  The idea of using HDiv-VIM for the rotor and a reduced FEM model
-  for the fixed stator is new and intentionally unusual; do not describe it as
-  supported until a coupling/interface operator and reduced-basis regression
-  pass.
+- `hdiv_vim_reduced_fem`: the planar HDiv reduced saliency/reluctance rotor is
+  implemented and solver-validated.  The lane retains `experimental_rfc`
+  status because its larger promise includes a fixed-stator reduced FEM/AGE
+  model, which still needs a reduced-basis regression and complete coupling
+  solve.  State which of those two scopes an artifact exercised.
 
 Private product, lab-local, open-source, analytic, and stored-regression
 comparisons can all be reference sources.  The public MCP learning artifact

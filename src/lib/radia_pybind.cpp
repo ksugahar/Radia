@@ -2696,6 +2696,97 @@ public:
     }
 };
 
+// Persistent planar HDiv source field in a target body's local frame.  Both
+// bodies may rotate rigidly about the same center.  NGSolve owns the outer
+// TaskManager element loop, so the immutable source evaluator is called
+// serially for each integration rule.
+class PlanarHDivFieldCF : public CoefficientFunction
+{
+    std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> evaluator_;
+    double center_x_;
+    double center_y_;
+    double cos_delta_;
+    double sin_delta_;
+    double source_angle_;
+    double target_angle_;
+
+    void TargetToSource(double tx, double ty, double& sx, double& sy) const
+    {
+        const double dx = tx-center_x_;
+        const double dy = ty-center_y_;
+        // R(target-source) == R(-(source-target)).
+        sx = center_x_ + cos_delta_*dx + sin_delta_*dy;
+        sy = center_y_ - sin_delta_*dx + cos_delta_*dy;
+    }
+
+    void SourceFieldToTarget(double hsx, double hsy, double& htx, double& hty) const
+    {
+        // R(-target) R(source) == R(source-target).
+        htx = cos_delta_*hsx - sin_delta_*hsy;
+        hty = sin_delta_*hsx + cos_delta_*hsy;
+    }
+
+public:
+    PlanarHDivFieldCF(
+        std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> evaluator,
+        double source_angle = 0.0, double target_angle = 0.0,
+        double center_x = 0.0, double center_y = 0.0)
+        : CoefficientFunction(2), evaluator_(std::move(evaluator)),
+          center_x_(center_x), center_y_(center_y),
+          cos_delta_(std::cos(source_angle-target_angle)),
+          sin_delta_(std::sin(source_angle-target_angle)),
+          source_angle_(source_angle), target_angle_(target_angle)
+    {
+        if (!evaluator_)
+            throw std::invalid_argument(
+                "_PlanarHDivFieldCoefficient: evaluator must not be null");
+        if (!std::isfinite(source_angle_) || !std::isfinite(target_angle_)
+                || !std::isfinite(center_x_) || !std::isfinite(center_y_))
+            throw std::invalid_argument(
+                "_PlanarHDivFieldCoefficient: angles and center must be finite");
+    }
+
+    virtual double Evaluate(const BaseMappedIntegrationPoint&) const override
+    {
+        return 0.0;
+    }
+
+    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
+                          FlatVector<> result) const override
+    {
+        auto point = mip.GetPoint();
+        double source_point[2];
+        TargetToSource(point[0], point[1], source_point[0], source_point[1]);
+        double source_field[2];
+        evaluator_->EvaluateFieldSerial(source_point, 1, source_field);
+        SourceFieldToTarget(
+            source_field[0], source_field[1], result(0), result(1));
+    }
+
+    virtual void Evaluate(const BaseMappedIntegrationRule& mir,
+                          BareSliceMatrix<> result) const override
+    {
+        const std::size_t count = mir.Size();
+        thread_local std::vector<double> source_points;
+        thread_local std::vector<double> source_fields;
+        source_points.resize(2*count);
+        source_fields.resize(2*count);
+        for (std::size_t i = 0; i < count; ++i) {
+            auto point = mir[i].GetPoint();
+            TargetToSource(point[0], point[1],
+                           source_points[2*i], source_points[2*i+1]);
+        }
+        evaluator_->EvaluateFieldSerial(
+            source_points.data(), count, source_fields.data());
+        for (std::size_t i = 0; i < count; ++i)
+            SourceFieldToTarget(source_fields[2*i], source_fields[2*i+1],
+                                result(i, 0), result(i, 1));
+    }
+
+    double SourceAngle() const { return source_angle_; }
+    double TargetAngle() const { return target_angle_; }
+};
+
 } // namespace ngfem
 
 
@@ -3076,6 +3167,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def_property_readonly("algorithm", [](const ngfem::HDivFieldCF& field) {
             return std::string(field.AlgorithmName());
         });
+
+    py::class_<ngfem::PlanarHDivFieldCF,
+               std::shared_ptr<ngfem::PlanarHDivFieldCF>,
+               ngfem::CoefficientFunction>(m, "_PlanarHDivFieldCoefficient")
+        .def(py::init<std::shared_ptr<PlanarFieldEvaluator>, double, double, double, double>(),
+             py::arg("evaluator"), py::arg("source_angle") = 0.0,
+             py::arg("target_angle") = 0.0, py::arg("center_x") = 0.0,
+             py::arg("center_y") = 0.0,
+             "Native planar H-field CoefficientFunction with rigid source/target rotation.")
+        .def_property_readonly("source_angle", &ngfem::PlanarHDivFieldCF::SourceAngle)
+        .def_property_readonly("target_angle", &ngfem::PlanarHDivFieldCF::TargetAngle);
 
 
     // Charge-charge Coulomb Gram G as a HACApK H-matrix -- the UNSTRUCTURED / general-mesh path.

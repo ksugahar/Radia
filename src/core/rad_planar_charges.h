@@ -64,6 +64,9 @@ public:
     PlanarFieldEvaluator(std::vector<double> positions, std::vector<double> strengths,
                          std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
     void EvaluateField(const double* points, std::size_t count, double* output) const;
+    // NGSolve already parallelizes element integration rules.  Use this entry
+    // point from a CoefficientFunction to avoid opening a nested task region.
+    void EvaluateFieldSerial(const double* points, std::size_t count, double* output) const;
     void EvaluateAz(const double* points, std::size_t count, double* output) const;
     std::size_t SourceCount() const { return m_strengths.size(); }
     std::size_t BaseSourceCount() const { return m_baseSourceCount; }
