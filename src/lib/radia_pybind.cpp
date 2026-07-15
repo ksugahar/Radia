@@ -3494,6 +3494,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
              "[n_bf*27] = 9-node lattice, both from GetTrafo at the reference lattice, so ONE path covers "
              "flat AND curved (mesh.Curve(2)) hexes.  Quadrature = the numpy-validated eig<=1 scheme: "
+             "flat affine self/near host pairs use exact analytic source moments; smooth far host pairs use "
+             "a reflection-invariant whole-cube/quad tensor product that avoids degree-six moment recurrences; "
              "near sub pairs -> both-domains-graded Duffy (gl_out/gl_in 1D rules); far -> the regular "
              "symmetric rules (sym_* = Keast-15/Dunavant-7) + cheap far inner (far_*); the radial "
              "near/self inner fires only within far_inner_factor*size of a source sub (per outer point).  "

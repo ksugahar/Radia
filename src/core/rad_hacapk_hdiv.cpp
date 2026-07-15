@@ -2174,10 +2174,11 @@ static bool HexInv3(const double A[3][3], double B[3][3])
     return true;
 }
 
-// Exact affine-cell inner is mathematically clean but currently too expensive inside the HACApK entry loop:
-// each outer point triggers several closed-form tet potential recursions.  Keep the verified building block
-// available for future block-level formulas, but leave the production path on the faster shared quadrature.
+// Exact affine-cell inner is retained for self/near blocks, where the singularity and spectrum require it.
+// Smooth far blocks use the complete-host tensor product below; applying the degree-six recurrence to every
+// far outer point was the dominant RT2 HEX H-matrix build cost.
 static constexpr bool HEX_USE_AFFINE_EXACT_CELL_INNER = true;
+static constexpr double HEX_AFFINE_EXACT_NEAR_FACTOR = 1.0;
 
 // Build a Duffy-graded barycentric rule on a (dim+1)-vertex ref sub-simplex from the 1D rule (gl,gw),
 // graded at LOCAL vertex `corner` (swap-permuted to Duffy vertex 0, matching the validated
@@ -3019,6 +3020,7 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     std::vector<std::pair<std::string, double>> out;
     out.emplace_back("hex_cache_stats_enabled", m_hexCacheStatsEnabled ? 1.0 : 0.0);
     out.emplace_back("hex_far_one_sided_threshold", HexFarOneSidedThreshold());
+    out.emplace_back("hex_affine_exact_near_factor", HEX_AFFINE_EXACT_NEAR_FACTOR);
     out.emplace_back("wedge_far_one_sided_threshold", WedgeFarOneSidedThreshold());
     out.emplace_back("wedge_trans_cache_scope", (double)WedgeTransCacheScope());
     out.emplace_back("wedge_trans_cache_enabled", WedgeTransCacheScope() > 0 ? 1.0 : 0.0);
@@ -3247,6 +3249,85 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
         PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
 }
 
+// Smooth affine host pairs do not need degree-six analytic potential recurrences at every outer point.
+// Integrate both complete reference hosts with the same tensor Gauss rule instead.  The cube/quad rule is
+// invariant under axis reflections (unlike a fixed sub-tet diagonal), and all local charge modes share the
+// kernel evaluation.  Near/self pairs stay on QuadBlockHexAffineProduct's analytic source potential.
+std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
+    int kindT, int hT, int kindS, int hS, int mask) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> block((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+
+    struct PointRule {
+        std::vector<double> x, values;
+        std::vector<double> w;
+    };
+    auto make_rule = [&](int kind, int host, const std::vector<int>& charges) {
+        PointRule rule;
+        const bool cell = (kind == 0);
+        const int n1 = (int)m_glOut.size();
+        const int np = cell ? n1*n1*n1 : n1*n1;
+        const double* nodes = cell ? &m_hexNodes[(size_t)host*81]
+                                   : &m_quadNodes[(size_t)host*27];
+        rule.x.resize((size_t)np*3);
+        rule.w.resize(np);
+        rule.values.resize((size_t)np*charges.size());
+        int q = 0;
+        for (int iz = 0; iz < (cell ? n1 : 1); ++iz)
+            for (int iy = 0; iy < n1; ++iy)
+                for (int ix = 0; ix < n1; ++ix, ++q) {
+                    const double xi[3] = {
+                        m_glOut[ix], m_glOut[iy], cell ? m_glOut[iz] : 0.0};
+                    if (cell) HexQ2MapX(nodes, xi, &rule.x[(size_t)3*q]);
+                    else {
+                        const double uv[2] = {xi[0], xi[1]};
+                        QuadQ2MapX(nodes, uv, &rule.x[(size_t)3*q]);
+                    }
+                    rule.w[q] = m_gwOut[ix]*m_gwOut[iy]
+                              * (cell ? m_gwOut[iz] : 1.0);
+                    for (int local = 0; local < (int)charges.size(); ++local)
+                        rule.values[(size_t)q*charges.size() + local] =
+                            HexMonoEval(charges[local], xi);
+                }
+        return rule;
+    };
+
+    PointRule target = make_rule(kindT, hT, tgtG);
+    PointRule source = make_rule(kindS, hS, srcG);
+    std::vector<double> inner((size_t)nS, 0.0);
+    const int nqT = (int)target.w.size(), nqS = (int)source.w.size();
+    for (int qt = 0; qt < nqT; ++qt) {
+        const double reflected[3] = {
+            (mask & 1) ? -target.x[(size_t)3*qt]     : target.x[(size_t)3*qt],
+            (mask & 2) ? -target.x[(size_t)3*qt + 1] : target.x[(size_t)3*qt + 1],
+            (mask & 4) ? -target.x[(size_t)3*qt + 2] : target.x[(size_t)3*qt + 2]};
+        std::fill(inner.begin(), inner.end(), 0.0);
+        for (int qs = 0; qs < nqS; ++qs) {
+            const double dx = reflected[0] - source.x[(size_t)3*qs];
+            const double dy = reflected[1] - source.x[(size_t)3*qs + 1];
+            const double dz = reflected[2] - source.x[(size_t)3*qs + 2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;
+            const double kernel_weight = source.w[qs]/r;
+            const double* source_values = &source.values[(size_t)qs*nS];
+            for (int ls = 0; ls < nS; ++ls)
+                inner[ls] += kernel_weight*source_values[ls];
+        }
+        const double* target_values = &target.values[(size_t)qt*nT];
+        for (int lt = 0; lt < nT; ++lt) {
+            const double outer_weight = target.w[qt]*target_values[lt];
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += outer_weight*inner[ls];
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
+}
+
 void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                                             const std::vector<int>& srcG, double* inn) const
 {
@@ -3312,12 +3393,12 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
     }
 }
 
-// Affine-only product rule for the hex charge block.  The legacy path partitions the target cell/face
+// Affine self/near product rule for the hex charge block.  The legacy path partitions the target cell/face
 // along fixed diagonals before applying a barycentric rule; those diagonals are not invariant under mirror
 // reflection.  For flat Q2 hosts the geometry map is affine, so integrating over the complete reference
 // cube/quad with a symmetric tensor rule removes that artificial choice.  The source potential is summed
-// over all reference sub-tets/sub-triangles using the exact polynomial moment kernels above.  Curved hosts
-// continue through QuadBlockHex's graded path.
+// over all reference sub-tets/sub-triangles using the exact polynomial moment kernels above.  Smooth affine
+// far blocks use QuadBlockHexAffineFarProduct; curved hosts continue through QuadBlockHex's graded path.
 std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineProduct(int kindT, int hT, int kindS, int hS, int mask) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
@@ -3535,8 +3616,23 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
                        || kindT != 0 && face_affine(hT);
     const bool affineS = kindS == 0 && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]
                        || kindS != 0 && face_affine(hS);
-    if (affineT && affineS)
-        return QuadBlockHexAffineProduct(kindT, hT, kindS, hS, mask);
+    if (affineT && affineS) {
+        const std::vector<int>& aG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+        const std::vector<int>& bG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+        const int a = aG[0], b = bG[0];
+        const double reflected[3] = {
+            (mask & 1) ? -m_cent[(size_t)3*b]     : m_cent[(size_t)3*b],
+            (mask & 2) ? -m_cent[(size_t)3*b + 1] : m_cent[(size_t)3*b + 1],
+            (mask & 4) ? -m_cent[(size_t)3*b + 2] : m_cent[(size_t)3*b + 2]};
+        const double dx = m_cent[(size_t)3*a] - reflected[0];
+        const double dy = m_cent[(size_t)3*a + 1] - reflected[1];
+        const double dz = m_cent[(size_t)3*a + 2] - reflected[2];
+        const bool exact_near = std::sqrt(dx*dx + dy*dy + dz*dz)
+            <= HEX_AFFINE_EXACT_NEAR_FACTOR*(m_size[a] + m_size[b]);
+        return exact_near
+            ? QuadBlockHexAffineProduct(kindT, hT, kindS, hS, mask)
+            : QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, mask);
+    }
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
     // IMA (mask>0): couple the TARGET host with the source host REFLECTED on the 3-bit axis mask.  By the

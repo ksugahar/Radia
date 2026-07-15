@@ -583,6 +583,8 @@ private:
                                   const std::vector<int>& srcG, double* inn) const;
     void PhiInnerHexAffineFaceVec(int hS, const double p[3],
                                   const std::vector<int>& srcG, double* inn) const;
+    std::vector<double> QuadBlockHexAffineFarProduct(
+        int kindT, int hT, int kindS, int hS, int mask) const;
     // SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
     // anchor x0 = xiT, the outer point's OWN ref coords (the pulled-back kernel 1/|p-X(xi)| peaks there --
     // exact, no inverse), CLAMPED into the ref sub-simplex, then 4 signed radial sub-tets (3 signed
