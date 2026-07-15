@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 from typing import Any
 
 
@@ -83,6 +84,7 @@ def rotational_eddy_brake_energy_gate(
     maximum_total_energy_residual: float = 0.01,
     maximum_replay_error_over_span: float = 1.0e-6,
     maximum_field_energy_adjacent_jump_fraction: float = 0.1,
+    maximum_field_energy_curvature_outlier_ratio: float = 50.0,
     minimum_decay_fraction: float = 0.5,
 ) -> dict[str, Any]:
     """Gate free rotational braking with angular momentum and full energy storage.
@@ -196,6 +198,22 @@ def rotational_eddy_brake_energy_gate(
         if field_energy_scale > 0.0
         else math.inf
     )
+    field_energy_curvatures = [
+        abs(right - 2.0 * center + left)
+        for left, center, right in zip(
+            magnetic_energy[:-2],
+            magnetic_energy[1:-1],
+            magnetic_energy[2:],
+            strict=True,
+        )
+    ]
+    field_energy_curvature_baseline = statistics.median(field_energy_curvatures)
+    maximum_field_energy_curvature_outlier_ratio_observed = (
+        max(field_energy_curvatures)
+        / max(field_energy_curvature_baseline, 1.0e-15 * field_energy_scale)
+        if field_energy_curvatures and field_energy_scale > 0.0
+        else 0.0
+    )
     energy_times = energy["time_s"]
     energy_omega = energy["angular_velocity_rad_s"]
     energy_joule = energy["joule_loss_w"]
@@ -271,7 +289,9 @@ def rotational_eddy_brake_energy_gate(
         )
         >= 0.0
         and maximum_field_energy_adjacent_jump_fraction_observed
-        <= float(maximum_field_energy_adjacent_jump_fraction),
+        <= float(maximum_field_energy_adjacent_jump_fraction)
+        and maximum_field_energy_curvature_outlier_ratio_observed
+        <= float(maximum_field_energy_curvature_outlier_ratio),
         "field_energy_run_replays_primary_history": energy_replay_error
         <= float(maximum_replay_error_over_span),
         "kinetic_magnetic_joule_energy_closes": total_energy_error
@@ -302,6 +322,9 @@ def rotational_eddy_brake_energy_gate(
             "maximum_field_energy_adjacent_jump_fraction": (
                 maximum_field_energy_adjacent_jump_fraction_observed
             ),
+            "maximum_field_energy_curvature_outlier_ratio": (
+                maximum_field_energy_curvature_outlier_ratio_observed
+            ),
             "integrated_joule_loss_j": joule_energy,
             "total_energy_residual_relative": total_energy_error,
             "mechanical_joule_relative_diagnostic": max(
@@ -317,6 +340,9 @@ def rotational_eddy_brake_energy_gate(
             "maximum_replay_error_over_span": float(maximum_replay_error_over_span),
             "maximum_field_energy_adjacent_jump_fraction": float(
                 maximum_field_energy_adjacent_jump_fraction
+            ),
+            "maximum_field_energy_curvature_outlier_ratio": float(
+                maximum_field_energy_curvature_outlier_ratio
             ),
             "minimum_decay_fraction": float(minimum_decay_fraction),
         },

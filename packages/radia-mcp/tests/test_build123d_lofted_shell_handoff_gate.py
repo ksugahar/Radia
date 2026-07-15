@@ -115,6 +115,8 @@ def summary() -> dict:
         },
         "external": {
             "pass": True,
+            "source_native_volume_mm3": native["volume_mm3"],
+            "source_native_surface_area_mm2": native["surface_area_mm2"],
             "execution_mode": "headless_python_api_synchronous_commands",
             "headless_flags": ["-nographics", "-batch"],
             "gui_daemon_enabled": False,
@@ -326,5 +328,41 @@ def test_generalization_v5_rejects_cleared_cad_handoff_flag():
 def test_generalization_v5_rejects_stale_official_assertion_delta():
     row = summary()
     row["build"]["replays"][0]["official_assertion_delta_mm3"] = 1.0
+    result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v6_public_native_external_volume_disagreement",
+        "v6_public_stale_external_artifact",
+    ],
+)
+def test_generalization_v6_public(case_id):
+    row = summary()
+    if case_id == "v6_public_native_external_volume_disagreement":
+        row["external"]["source_native_volume_mm3"] *= 1.05
+    else:
+        row["external"]["process"]["result_artifact_fresh"] = False
+    result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v6_source_cross_format_digest_collision",
+        "v6_source_solver_ready_without_mesh",
+    ],
+)
+def test_generalization_v6_source(case_id):
+    row = summary()
+    if case_id == "v6_source_cross_format_digest_collision":
+        row["build"]["files"]["brep"]["sha256"] = row["build"]["files"][
+            "step"
+        ]["sha256"]
+    else:
+        row["external"]["solver_ready"] = True
     result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
     assert result["status"] == "needs_attention"

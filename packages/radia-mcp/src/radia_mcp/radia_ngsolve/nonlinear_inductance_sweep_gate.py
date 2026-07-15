@@ -68,6 +68,23 @@ def _flatten_replay_values(row: Mapping[str, Any]) -> list[float]:
     return result
 
 
+def _result_metadata_run_ids_are_consistent(raw: Mapping[str, Any]) -> bool:
+    metadata = raw.get("result_metadata")
+    if metadata is None:
+        return True
+    if not isinstance(metadata, Mapping) or not metadata:
+        return False
+    run_ids = []
+    for row in metadata.values():
+        if not isinstance(row, Mapping):
+            return False
+        run_id = row.get("run_id")
+        if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id < 0:
+            return False
+        run_ids.append(run_id)
+    return len(set(run_ids)) == 1
+
+
 def nonlinear_inductance_sweep_gate(
     summary: Mapping[str, Any],
     *,
@@ -170,6 +187,9 @@ def nonlinear_inductance_sweep_gate(
             <= max_identity_relative_error,
             "energy_and_coenergy_are_nonnegative": energy >= 0.0 and coenergy >= 0.0,
             "nonlinear_iteration_converged": residual <= maximum_residual_log10,
+            "result_metadata_run_ids_are_consistent": (
+                _result_metadata_run_ids_are_consistent(raw)
+            ),
         }
         row = {
             "current_A_requested": requested,

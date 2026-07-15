@@ -190,3 +190,19 @@ def test_generalization_v5_rejects_non_si_energy_unit() -> None:
     summary = copy.deepcopy(_summary())
     summary["units"]["energy"] = "mJ"
     assert gate(summary)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_energy_state_drift", "v6_public_replay_joule_drift"],
+)
+def test_generalization_v6_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v6_public_energy_state_drift":
+        summary["energy_replay"]["magnetic_energy_j"][20] *= 1.10
+    else:
+        summary["replays"][1]["joule_loss_w"] = list(
+            summary["replays"][1]["joule_loss_w"]
+        )
+        summary["replays"][1]["joule_loss_w"][20] *= 1.05
+    assert gate(summary)["status"] == "needs_attention"

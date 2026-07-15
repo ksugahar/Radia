@@ -146,3 +146,16 @@ def test_generalization_v5_rejects_surface_node_trace_mismatch():
     bad = copy.deepcopy(_summary())
     bad["mesh"]["surface_nodes"] = 3
     assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_lcurve_index_alpha_mismatch", "v6_public_crosscheck_objective_drift"],
+)
+def test_generalization_v6_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "v6_public_lcurve_index_alpha_mismatch":
+        bad["lcurve"]["selected_index"] += 1
+    else:
+        bad["crosscheck"]["max_regularized_objective_relative_error"] = 1.0e-2
+    assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"

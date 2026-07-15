@@ -147,3 +147,17 @@ def test_generalization_v5_rejects_historical_time_grid_drift() -> None:
     bad = copy.deepcopy(_summary())
     bad["historical_reference"]["time_s"][20] *= 1.1
     assert evaluate_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_iron_component_disagreement", "v6_public_historical_response_drift"],
+)
+def test_generalization_v6_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    if case_id == "v6_public_iron_component_disagreement":
+        bad["losses"]["iron_power_W"] = list(bad["losses"]["iron_power_W"])
+        bad["losses"]["iron_power_W"][20] *= 1.20
+    else:
+        bad["historical_reference"]["response_magnitude"][20] *= 1.30
+    assert evaluate_gate(bad)["status"] == "needs_attention"

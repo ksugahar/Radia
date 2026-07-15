@@ -130,3 +130,16 @@ def test_generalization_v5_rejects_short_target_force_profile() -> None:
     summary["moving_body_element_force"].pop()
     with pytest.raises(ValueError, match="same length"):
         magnetic_force_method_profile_gate(summary)
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_closed_surface_force_drift", "v6_public_force_dimension_unit_mismatch"],
+)
+def test_generalization_v6_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v6_public_closed_surface_force_drift":
+        summary["closed_surface_maxwell_stress_force"][3] *= 1.30
+    else:
+        summary["force_unit"] = "N/m"
+    assert magnetic_force_method_profile_gate(summary)["status"] == "needs_attention"

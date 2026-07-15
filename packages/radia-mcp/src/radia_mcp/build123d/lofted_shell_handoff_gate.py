@@ -134,6 +134,15 @@ def build123d_lofted_shell_handoff_gate(
     native_area = _positive(
         native.get("surface_area_mm2"), "build.native.surface_area_mm2"
     )
+    declared_external_native_volume = _positive(
+        external.get("source_native_volume_mm3"),
+        "external.source_native_volume_mm3",
+    )
+    declared_external_native_area = _positive(
+        external.get("source_native_surface_area_mm2"),
+        "external.source_native_surface_area_mm2",
+    )
+    external_process = _mapping(external.get("process"), "external.process")
     step_volume_error = _relative_error(
         _positive(step.get("volume_mm3"), "step.volume_mm3"), native_volume
     )
@@ -215,6 +224,22 @@ def build123d_lofted_shell_handoff_gate(
         "native_valid_positive_single_solid": native.get("is_valid") is True
         and native_topology[0] == 1
         and min(native_topology) > 0,
+        "external_source_native_metrics_match_build_native": math.isclose(
+            declared_external_native_volume,
+            native_volume,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        )
+        and math.isclose(
+            declared_external_native_area,
+            native_area,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-12,
+        ),
+        "external_result_artifact_is_fresh": external_process.get(
+            "result_artifact_fresh"
+        )
+        is True,
         "step_and_brep_topology_match_native": step_topology == native_topology
         and brep_topology == native_topology,
         "same_kernel_mass_is_within_strict_budgets": step_volume_error
@@ -372,6 +397,10 @@ def build123d_loft_example_source_replay_gate(
             step_file
         )
         and file_artifact_is_bound(brep_file),
+        "step_and_brep_artifacts_have_distinct_digests": str(
+            step_file.get("sha256", "")
+        ).lower()
+        != str(brep_file.get("sha256", "")).lower(),
         "two_exact_source_replays_match": len(replays) == 2
         and replays[0] == replays[1]
         and source_checks.get("source_replays_are_deterministic") is True,

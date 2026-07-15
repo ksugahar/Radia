@@ -157,3 +157,19 @@ def test_generalization_v5_rejects_stale_radius_dependent_analytic_value():
     bad["problem_contract"]["sphere_radius_m"] *= 1.5
     result = json.loads(mcp_gate(json.dumps(bad)))
     assert result["status"] in {"needs_attention", "invalid_input"}
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v6_public_voltage_reversal_energy_drift",
+        "v6_public_charge_energy_disagreement",
+    ],
+)
+def test_generalization_v6_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "v6_public_voltage_reversal_energy_drift":
+        bad["cases"][4]["stored_energy_J"] *= 1.01
+    else:
+        bad["cases"][2]["conductor"][1] *= 1.02
+    assert grounded_sphere_capacitance_convergence_gate(bad)["status"] == "needs_attention"
