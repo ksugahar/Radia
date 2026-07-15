@@ -159,3 +159,34 @@ def test_generalization_v3s_rejects_negative_field_energy() -> None:
     summary = copy.deepcopy(_summary())
     summary["energy_replay"]["magnetic_energy_j"][17] = -0.1
     assert gate(summary)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v4_time_duplicate",
+        "v4_velocity_local_rise",
+        "v4_positive_braking_torque",
+        "v4_negative_joule_loss",
+        "v4_field_time_shift",
+    ],
+)
+def test_counterfactual_curriculum90_v4_public(case_id: str) -> None:
+    summary = copy.deepcopy(_summary())
+    if case_id == "v4_time_duplicate":
+        summary["replays"][0]["time_s"][20] = summary["replays"][0]["time_s"][19]
+    elif case_id == "v4_velocity_local_rise":
+        summary["replays"][0]["angular_velocity_rad_s"][25] *= 1.5
+    elif case_id == "v4_positive_braking_torque":
+        summary["replays"][0]["braking_torque_nm"][20] = 1.0
+    elif case_id == "v4_negative_joule_loss":
+        summary["energy_replay"]["joule_loss_w"][12] = -1.0
+    else:
+        summary["energy_replay"]["field_energy_time_s"][30] *= 1.1
+    assert gate(summary)["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_non_si_energy_unit() -> None:
+    summary = copy.deepcopy(_summary())
+    summary["units"]["energy"] = "mJ"
+    assert gate(summary)["status"] == "needs_attention"

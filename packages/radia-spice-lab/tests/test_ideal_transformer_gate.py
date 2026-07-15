@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import math
 
+import pytest
+
 from ltspice_converter.ideal_transformer_gate import ideal_transformer_identity_gate
 
 
@@ -129,3 +131,67 @@ def test_rejects_non_mapping_input() -> None:
         assert "object" in str(exc)
     else:
         raise AssertionError("non-mapping input was accepted")
+
+
+def test_rejects_source_phasor_breaking_kvl_and_power_balance() -> None:
+    bad = copy.deepcopy(_summary())
+    bad["metrics"]["positive"]["source_voltage_phasor_rms_v"][0] *= 1.15
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["load_reflection_and_series_source_network_close"] is False
+    assert result["checks"]["complex_and_instantaneous_power_are_conserved"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["topology", "reflected_load", "fit_density", "replay_error", "primary_current"],
+)
+def test_counterfactual_curriculum90_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    if case_id == "topology":
+        bad["model_contract"]["topology"] = "unknown"
+    elif case_id == "reflected_load":
+        bad["model_contract"]["expected_reflected_load_ohm"] *= 1.1
+    elif case_id == "fit_density":
+        bad["metrics"]["positive"]["fit_point_count"] = 20
+    elif case_id == "replay_error":
+        bad["metrics"]["maximum_phasor_replay_relative_error"] = 0.1
+    else:
+        bad["metrics"]["positive"]["primary_current_phasor_rms_a"][0] *= 0.8
+    assert ideal_transformer_identity_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_secondary_voltage_drift() -> None:
+    bad = copy.deepcopy(_summary())
+    bad["metrics"]["positive"]["secondary_voltage_phasor_rms_v"][0] *= 1.2
+    assert ideal_transformer_identity_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_turns_ratio", "v4_source_offset", "v4_frequency", "v4_load_resistance", "v4_timing_stage"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    if case_id == "v4_turns_ratio":
+        bad["model_contract"]["turns_ratio_primary_to_secondary"] = 0.0
+    elif case_id == "v4_source_offset":
+        bad["model_contract"]["source_offset_v"] = 1.0
+    elif case_id == "v4_frequency":
+        bad["model_contract"]["frequency_hz"] = 0.0
+    elif case_id == "v4_load_resistance":
+        bad["model_contract"]["load_resistance_ohm"] = -100.0
+    else:
+        bad["timing_breakdown_s"].pop("serialization")
+    try:
+        result = ideal_transformer_identity_gate(bad)
+    except ValueError:
+        return
+    assert result["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_negative_series_resistance() -> None:
+    bad = copy.deepcopy(_summary())
+    bad["model_contract"]["series_resistance_ohm"] = -1.0
+    with pytest.raises(ValueError):
+        ideal_transformer_identity_gate(bad)

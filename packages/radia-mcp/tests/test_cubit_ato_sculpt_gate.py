@@ -240,3 +240,53 @@ def test_generalization_v3s_rejects_short_help_digest():
     bad = copy.deepcopy(_source_summary())
     bad["source_doc_sha256"] = "0" * 63
     assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_source_tets", "v4_iso_triangles", "v4_refinement_direction", "v4_gmsh_format", "v4_mbg_volume"],
+)
+def test_counterfactual_curriculum90_v4_public(case_id):
+    bad = copy.deepcopy(_public_summary())
+    if case_id == "v4_source_tets":
+        bad["source_tet_count"] = 0
+    elif case_id == "v4_iso_triangles":
+        bad["iso_triangle_count"] = 0
+    elif case_id == "v4_refinement_direction":
+        bad["mesh_series"][1]["cell_size"] = 1.0
+    elif case_id == "v4_gmsh_format":
+        bad["mesh_series"][0]["gmsh"]["mesh_format"] = "2.2"
+    else:
+        bad["mbg_volume"] = 0.0
+    assert cubit_levelset_sculpt_hex_validation_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v4_source_kind", "v4_source_name", "v4_source_doc", "v4_binary_name", "v4_obsolete_migration"],
+)
+def test_counterfactual_curriculum90_v4_source(case_id):
+    bad = copy.deepcopy(_source_summary())
+    if case_id == "v4_source_kind":
+        bad["source_kind"] = "generated_fixture"
+    elif case_id == "v4_source_name":
+        bad["source_name"] = "other.exo"
+    elif case_id == "v4_source_doc":
+        bad["source_doc_name"] = "other.htm"
+    elif case_id == "v4_binary_name":
+        bad["binary_name"] = "cubit.exe"
+    else:
+        bad["obsolete_stl_negative_control"]["migration"] = "retry obsolete STL export"
+    assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_duplicate_mesh_labels():
+    bad = copy.deepcopy(_public_summary())
+    bad["mesh_series"][1]["label"] = bad["mesh_series"][0]["label"]
+    assert cubit_levelset_sculpt_hex_validation_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v5_rejects_single_source_replay():
+    bad = copy.deepcopy(_source_summary())
+    bad["deterministic_replay"]["repeat_count"] = 1
+    assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"
