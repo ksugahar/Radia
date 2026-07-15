@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
+import os
 import platform
 import socket
 import time
@@ -20,6 +22,26 @@ import ngsolve as ng
 import radia
 
 from radia.vim import ChargeGram, FieldFromSolution, Solve
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _jsonable(value):
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    return value
 
 
 def _run(path: Path, topology: str, solve: bool) -> dict:
@@ -39,6 +61,7 @@ def _run(path: Path, topology: str, solve: bool) -> dict:
     entries = [float(gram.entry(i, j)) for i, j in ((0, 0), (0, 1), (1, 0))]
     record = {
         "mesh": path.name,
+        "mesh_sha256": _sha256(path),
         "topology": topology,
         "curve_order": 2,
         "hdiv_order": 2,
@@ -63,7 +86,21 @@ def _run(path: Path, topology: str, solve: bool) -> dict:
             "iterations": int(result["iters"]),
             "demag": float(result["demag"]),
             "M_avg": np.asarray(result["M_avg"], dtype=float).tolist(),
+            "solve_settings": {
+                "mu_r": 100.0,
+                "H_ext_A_per_m": [0.0, 0.0, 1000.0],
+                "tol": 1.0e-9,
+            },
         })
+        for key in (
+            "linear_solver", "preconditioner", "setup_wall_s", "solve_wall_s",
+            "post_wall_s", "total_wall_s_internal", "fes_wall_s",
+            "charge_gram_wall_s", "charge_basis_wall_s", "charge_gram_cpp_wall_s",
+            "hex_state_check_wall_s", "projection_wall_s", "demag_probe_wall_s",
+            "cpp_solve_timings", "hmat_stats",
+        ):
+            if key in result and result[key] is not None:
+                record[key] = _jsonable(result[key])
         vertices = np.asarray([mesh[v].point for v in mesh.vertices], dtype=float)
         center = 0.5 * (vertices.min(axis=0) + vertices.max(axis=0))
         span = np.maximum(vertices.max(axis=0) - vertices.min(axis=0), 1.0e-12)
@@ -71,7 +108,9 @@ def _run(path: Path, topology: str, solve: bool) -> dict:
             center + (2.0 * span[0], 0.0, 0.0),
             center + (0.0, 0.0, 2.0 * span[2]),
         ])
+        field_t0 = time.perf_counter()
         field = np.asarray(FieldFromSolution(result, points, algorithm="direct"))
+        record["field_eval_2_points_s"] = time.perf_counter() - field_t0
         record["field_finite"] = bool(np.isfinite(field).all())
     return record
 
@@ -87,12 +126,16 @@ def main() -> int:
         parser.error("at least one of --hex-vol or --wedge-vol is required")
 
     data = {
+        "schema": "radia.hdiv_rt2_curved.v1",
+        "timing_scope": "single-run compute-host validation; do not infer host performance from one run",
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "hostname": socket.gethostname(),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
         "radia_version": radia.__version__,
         "ngsolve_version": getattr(ng, "__version__", "unknown"),
+        "cpu_count": os.cpu_count(),
+        "ngsolve_threads": int(ng.ngsglobals.numthreads),
         "cases": [],
     }
     if args.hex_vol:
