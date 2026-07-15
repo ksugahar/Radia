@@ -290,3 +290,29 @@ def test_generalization_v5_rejects_single_source_replay():
     bad = copy.deepcopy(_source_summary())
     bad["deterministic_replay"]["repeat_count"] = 1
     assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_public_gmsh_hex_count_drift", "v6_public_gmsh_volume_drift"],
+)
+def test_generalization_v6_public(case_id):
+    bad = copy.deepcopy(_public_summary())
+    if case_id == "v6_public_gmsh_hex_count_drift":
+        bad["mesh_series"][1]["gmsh"]["hex_count"] += 1
+    else:
+        bad["mesh_series"][1]["gmsh"]["total_volume"] *= 1.10
+    assert cubit_levelset_sculpt_hex_validation_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["v6_source_projection_replay_drift", "v6_source_public_gate_disagreement"],
+)
+def test_generalization_v6_source(case_id):
+    bad = copy.deepcopy(_source_summary())
+    if case_id == "v6_source_projection_replay_drift":
+        bad["deterministic_replay"]["stable_fields_match"] = False
+    else:
+        bad["public_gate"]["status"] = "needs_attention"
+    assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"
