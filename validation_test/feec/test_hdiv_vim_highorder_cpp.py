@@ -2,8 +2,8 @@
 
 The test intentionally uses only ``radia.vim`` APIs.  Flat pure-TET RT2
 ``Solve``, ``ChargeGram``, and ``DemagOperator`` are public production routes.
-Specialized HEX/WEDGE, 2D, IMA, and field evaluation
-remain RT1-only and are locked by the contract tests.
+Specialized HEX/WEDGE and 2D kernels remain RT1.  The pure-TET RT2 route includes IMA,
+Curve(2), and persistent C++ field evaluation and is locked by the contract tests.
 """
 
 import numpy as np

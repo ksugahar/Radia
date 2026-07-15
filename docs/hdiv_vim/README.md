@@ -1,6 +1,6 @@
 # HDiv-Type VIM
 
-HDiv-VIM is Radia's production soft-iron demagnetization route.  It keeps the
+HDiv-VIM is Radia's production magnet and soft-iron demagnetization route.  It keeps the
 magnetization, material state, charge map, and reduced-FEM handoff in NGSolve
 mesh/function-space vocabulary, then uses Radia's C++ charge-Gram H-matrix for
 the open-boundary integral operator.
@@ -20,17 +20,149 @@ field = rad.Fld(model, "b", [0, 0, 0.02])
 For direct VIM use, call `radia.vim.Solve(mesh, mu_r=... | bh_table=...,
 H_ext=..., image=...)`.
 
+## Permanent-magnet model ladder
+
+Radia deliberately exposes four permanent-magnet levels.  Select the least
+complex level that represents the physics; all four use the same HDiv charge
+and field machinery.
+
+| Level | Model | Production API | Use when |
+|---|---|---|---|
+| 1 | Fixed/given magnetization | `vim.MagnetizationSource(mesh, M_given)` | The manufactured magnetization distribution is prescribed and does not change. |
+| 2 | Linear recoil/demagnetization | `vim.Solve(mesh, mu_r=mu_rec, B_r=B_r, H_ext=...)` | Reversible load-line motion and self-demagnetization are needed, but no hysteretic state is required. |
+| 3 | Simplified Play hysteresis | `vim.PlayHysteresisMaterial(...)` with `vim.SolveHysteresis(...)` | A compact engineering history model is sufficient. |
+| 4 | Full B-input EnergyStop | `vim.EnergyStopMaterial(...)` with `vim.SolveHysteresis(...)` | Irreversible demagnetization, vector/rotational histories, convex energy structure, and explicit restart state are required. |
+
+Level 2 uses the recoil law
+
+```text
+B = mu0 * mu_rec * H + B_r
+```
+
+where `B_r` is in tesla and may be either a constant vector or a spatial
+NGSolve `CoefficientFunction`.  The implementation is not a Python-side
+iteration: it shifts the right-hand side of the existing symmetric C++ HDiv
+system exactly, so the unknown and returned field remain the total
+magnetization.  `mu_rec` must be greater than one.  The rigid `mu_rec = 1`
+limit belongs to level 1 rather than a numerically singular recoil solve.
+The spatial field must belong to one physically continuous magnet body.  If
+two segments have a jump in normal magnetization, they require separate HDiv
+spaces to retain the interface charge.  Level 1 already supports this by using
+one `MagnetizationSource` per fixed segment; mutually coupled level-2 recoil
+segments require the multi-body block coupling and must not be approximated as
+one conforming space.
+
+```python
+with ng.TaskManager():
+    pm = vim.Solve(
+        pm_mesh,
+        mu_r=1.05,                         # recoil relative permeability
+        B_r=ng.CoefficientFunction((0, 0, 1.2)),  # T, spatial CF allowed
+        H_ext=coil_field,                  # optional; zero is the default
+    )
+```
+
+Given or manufactured magnetization distributions use a separate source-owned
+HDiv space:
+
+```python
+import ngsolve as ng
+import radia.vim as vim
+
+with ng.TaskManager():
+    pm = vim.MagnetizationSource(pm_mesh, M_given, order=1)
+    result = vim.Solve(
+        iron_mesh,
+        mu_r=1000,
+        magnetization_sources=[pm],
+        H_ext=coil_field,  # optional when the prescribed sources are sufficient
+    )
+
+H_pm = pm.Field(points)  # A/m
+H_pm_cf = pm.field_cf    # native NGSolve CoefficientFunction
+```
+
+`MagnetizationSource` performs a true mass-Riesz/L2 projection of `M_given`
+into an independent HDiv space, then materializes the corresponding immutable
+C++ charge source without building a ChargeGram H-matrix.  `Solve` assembles
+the source field directly into the iron LinearForm and L2-projects the combined
+applied field.  PM coefficients are never solve unknowns.  The PM and iron must
+use separate mesh objects/spaces; this preserves the physical normal jump and
+surface charge even when the bodies touch.  Multiple sources superpose, and
+the result retains them in `_magnetization_sources`.
+
+The 3D source supports RT1 TET/HEX/WEDGE, RT2 pure TET, Curve(2), and IMA on the
+same geometry/field kernels as the solve.  Planar 2D keeps its established
+`magnets=[(mesh, M), ...]` path.  This API represents a fixed prescribed
+magnetization; it does not advance a material history.
+If `M_given` itself has an internal normal discontinuity (for example, distinct
+magnet segments), represent each segment as a separate `MagnetizationSource`;
+one conforming HDiv space intentionally enforces normal continuity inside its
+own source mesh.
+
+For a permanent magnet whose state changes under reverse field, use the C++
+vector B-input Stop law on the PM mesh:
+
+```python
+material = vim.EnergyStopMaterial(
+    eta_T,
+    g_tables,                 # [(r_T, g_A_per_m), ...], monotone per branch
+    alpha=5.0,                # positive reversible reluctivity floor
+    gamma=0.0,                # hard Stop; positive values use the convex prox
+    b_max=1.5,                # calibrated operating limit (optional)
+)
+
+with ng.TaskManager():
+    result = vim.SolveHysteresis(
+        pm_mesh,
+        applied_field_steps,  # 3-vectors or NGSolve CoefficientFunctions
+        material=material,
+        initial_b_path=manufacturing_B_history,
+    )
+    # Continue without replaying or hiding the constitutive history.
+    continued = vim.SolveHysteresis(
+        pm_mesh, next_steps, material=material, initial_state=result["state"]
+    )
+
+H_demag = vim.FieldFromSolution(continued, observation_points)
+```
+
+Each Stop state lives in the fixed ball `|s_k| <= eta_k`.  Non-negative,
+non-decreasing radial tables give convex branch energies; malformed tables are
+rejected at construction.  Trial `forward(B, state)` calls are pure, and state
+is committed only after the coupled HDiv step converges.  The C++ batch kernel
+runs under TaskManager with the GIL released.  `initial_b_path` is an explicit
+constitutive initializer for a manufactured magnet state, not a substitute for
+modelling the magnetizing fixture.  Reverse-field/unload and restart are locked
+by `validation_test/hysteresis/test_energy_stop_irreversible_pm.py`.
+The returned final state owns the same persistent C++ field evaluator as
+`vim.Solve`, so `FieldFromSolution` evaluates its external demagnetizing field
+without collapsing the RT1 magnetization to element constants.
+
+This history-dependent path currently solves PM self-demagnetization under an
+arbitrary prescribed NGSolve applied field.  A mutually coupled evolving PM
+plus nonlinear soft-iron block iteration is separate open work; do not describe
+the fixed `MagnetizationSource` coupling as that nonlinear PM model.
+
+For level 3, construct `vim.PlayHysteresisMaterial(K, eta, f_k_tables)` and
+pass it as `material=` to the same `SolveHysteresis` stepping API.  It retains
+branch history and is useful as the simplified engineering model.  It is not
+the level-4 claim: EnergyStop additionally fixes every vector Stop state to a
+bounded domain, derives the branch update from a convex energy/proximal law,
+and exposes the explicit manufacturing/restart state used for irreversible
+demagnetization studies.
+
 The public three-dimensional VIM contract supports RT1 on pure TET/HEX/WEDGE
-meshes and RT2 on flat pure TET meshes.  RT2 uses the same C++ charge-Gram,
-mass-Riesz CG, and energy-Newton material paths; HEX/WEDGE, 2D, IMA, and
-`rad.Fld` field reconstruction remain RT1-only and fail loudly at RT2.
-Curved geometry remains a production route through RT1 on an isoparametric P2
-mesh; curved RT2 is gated until its Duffy-build cost is acceptable.
+meshes and RT2 on pure TET meshes.  RT2 uses the same C++ charge-Gram,
+mass-Riesz CG, energy-Newton, IMA, and persistent-field paths on flat and
+isoparametric-P2 TET meshes.  HEX/WEDGE and planar 2D remain RT1 and fail
+loudly at RT2 instead of falling back to a lower order.
 For a geometrically and topologically symmetric reduced/full hex
 pair, `rad.Fld` after an image solve must agree with the explicit full solve at
 the roundoff contract (`< 10 eps` relative error), not merely within a percent.
 
-An RT1 solve also materializes one immutable C++ field evaluator.  TET sources
+Every supported 3D solve also materializes one immutable C++ field evaluator.
+TET RT1/RT2 sources
 retain analytic volume/triangle kernels; HEX/WEDGE and curved sources retain the
 NGSolve quadrature cloud.  Repeated `rad.Fld` calls pass contiguous NumPy target
 arrays directly to that evaluator, with no repeated source packing.  IMA terms
@@ -41,6 +173,15 @@ probe below the configured tolerance and a measured speed benefit.  The result
 records `field_evaluator_stats` and `field_evaluator_build_wall_s`.  IMA stays
 on the direct evaluator in automatic mode so the reduced/full roundoff contract
 is not weakened by different source-tree truncations.
+
+The implementation follows NGSolve's Python-front-end/C++-execution boundary.
+Python declares `HDiv`, `L2`, `SurfaceL2`, coefficient functions, and bilinear
+forms and prepares the one-time sparse charge topology.  NGSolve assembles the
+forms in C++; pybind extracts their native sparse matrices directly.  The
+persistent C++ operator then owns B/BT, geometric and material mass matrices,
+the NGSolve `BaseMatrix`, Krylov iterations, and the immutable field source.
+Only vectors and target arrays cross the NumPy boundary; Python and SciPy are
+not in the per-iteration solve or repeated-field path.
 
 The production 3D solve uses symmetric C++ CG on the SPD `W + B^T G B`
 system.  The public default is `preconditioner="auto"`: linear solves and
@@ -62,33 +203,27 @@ linear `.vol` vertices, and the Q1 shape-moment to monomial map is applied as a
 cached block-diagonal sparse transform.  Curved `.vol` meshes still use
 `GetTrafo` as the geometry source of truth.
 
-The hex charge-Gram build caches the already symmetrized host-pair block
-`0.5*(AB + BA^T)`.  For sufficiently far hex host pairs the product quadrature is
-orientation-symmetric, so the build uses the one-sided `AB` block directly in the
-symmetric H-matrix; near/self pairs still use the explicit `0.5*(AB + BA^T)`
-average.  The default far threshold is `1.0*(size_A + size_B)` and can be
-disabled with `RADIA_HDIV_HEX_FAR_ONESIDED=0` for diagnostics.  The C++ linear
-solve also reports `solve_*` timing fields, and Python passes sparse inputs
-through NumPy-array pybind entry points instead of materializing large Python
-lists.  The hot hex block-cache hit/miss counters are opt-in via
-`RADIA_HDIV_HEX_CACHE_STATS=1`; ordinary timing runs avoid the per-entry atomic
-counter overhead.  On the LAB N=20 cube smoke run, the current mass-Riesz path is
-about 15.6 s wall time with about 7.9 s in HACApK build, versus about 20.0 s and
-12.3 s before the far one-sided symmetric-block optimization.
+The charge-Gram build caches the symmetrized host-pair block
+`0.5*(AB + BA^T)`.  Production evaluates both directed FAR quadrature rules.
+Storing only an upper triangle makes a matrix algebraically symmetric, but a
+one-sided finite quadrature rule is not invariant when a reduced image model is
+replaced by its explicit reflected mesh.  The bidirectional rule keeps the
+multicell HEX full-vs-image `rad.Fld` contract below `10 eps` at the normal
+quadrature order.  `RADIA_HDIV_HEX_FAR_ONESIDED`,
+`RADIA_HDIV_WEDGE_FAR_ONESIDED`, and `RADIA_HDIV_HO_FAR_ONESIDED` are retained
+only for diagnostic timing experiments and must not be used for release
+results.  The C++ linear solve reports `solve_*` timing fields, while NumPy
+buffers replace Python lists at pybind boundaries.  Hot block-cache counters
+remain opt-in so ordinary timing runs avoid per-entry atomic overhead.
 
 The first mdx cube timing sweep on 2026-07-08 reached structured-hex N=40
 (`1.56M` HDiv DOF) in about `355 s` wall time and `116 s` H-matrix build time.
 The matching Netgen tet comparison showed that unstructured tet runs need a
 tighter ACA tolerance (`gram_eps=1e-8` to `1e-10`) to keep mass-Riesz CG near
 25--30 iterations; too-loose `1e-4` compression can inflate CG to hundreds of
-iterations or fail at 4000 iterations.  The hex far one-sided idea also applies
-to the flat high-order tet FAR path: `QuadDotFar(a,b)` is a symmetric low-order
-double integral, so the direct FAR term is one-sided by default
-(`RADIA_HDIV_HO_FAR_ONESIDED=0` restores the diagnostic average).  On mdx this
-cut tet H-matrix build by roughly 8--12% with machine-level `M_avg_z`
-agreement; the 1.37M-DOF tet cube moved from about `428 s` to `386 s`.  With
-the stable tet tolerance and this tet-side optimization, the optimized hex path
-is still faster than the current tet path at comparable cube DOF.  The
+iterations or fail at 4000 iterations.  Earlier one-sided FAR timing figures
+are not production claims because that rule did not satisfy explicit-reflection
+invariance.  The
 remaining performance focus is split by regime: charge-Gram build for linear
 or small-tet runs, and H-matrix apply count / nonlinear globalization for large
 hex-wedge energy-Newton runs.
@@ -108,12 +243,9 @@ drivers expose these timing defaults as `--nonlinear-profile mdx-scaling`
 `preconditioner=auto`); the default `strict` profile keeps solver-regression
 settings.
 
-The wedge/prism path uses the same block-serving infrastructure but is less
-optimized than the structured-hex path.  The first wedge mdx pass enabled a
-matching FAR host-pair one-sided block (`RADIA_HDIV_WEDGE_FAR_ONESIDED=0`
-restores the diagnostic average).  At wedge N=8 and N=12 this reduced
-H-matrix build by about 6--8% with `M_avg_z` changes below `6e-9` relative.
-Wedge now also uses translated host-block reuse by default:
+The wedge/prism path uses the same bidirectional FAR block-serving
+infrastructure but is less optimized than the structured-hex path.  Wedge also
+uses translated host-block reuse by default:
 `RADIA_HDIV_WEDGE_TRANS_CACHE=all` / `2` reuses cell-cell, cell-face, and
 face-face template blocks; `1` falls back to the older cell-cell-only subset;
 `0` disables the translation cache.  The earlier face-bearing drift was traced
@@ -149,6 +281,9 @@ universal default for all wedge geometries.
   `ker(B)`, so charge-free modes are field-null without hand-built loop bases.
 - NGSolve `Mesh`, `GridFunction`, `CoefficientFunction`, `BilinearForm`, and
   `TaskManager` are shared with reduced FEM and motor workflows.
+- Prescribed magnetization is projected once into a source-owned HDiv space;
+  its native C++ field CoefficientFunction couples to a separate iron space
+  without sampling through Radia objects.
 - Curved/high-order geometry uses the same finite-element geometry path instead
   of translating through a separate object discretization.
 - TET/HEX/WEDGE and 2D planar validation live in `validation_test/feec/`.
@@ -167,7 +302,11 @@ host (`mdx` or `hibino`).  Required HDiv gates:
 - persistent-field direct/tree accuracy and scaling through
   `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` on an idle
   compute host;
-- RT1/RT2 flat pure-TET accuracy and cost, plus charge-Gram H-matrix build stats and
+- prescribed-source L2 residual, direct-field/native-CF equality, source
+  immutability, superposition, and iron-response equality;
+- energy-Stop hard projection/proximal stationarity, non-negative vector-loop
+  dissipation, reverse-field remanence loss, and state-restart reproducibility;
+- RT1/RT2 flat/curved pure-TET accuracy and cost, plus charge-Gram H-matrix build stats and
   memory/timing on idle `mdx` or `hibino`
   for large runs;
 - 2D planar motor saliency checks for the motor lane.

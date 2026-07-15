@@ -91,14 +91,15 @@ def soft_iron_hex(vertices, mu_r=None, bh_table=None, nsub=4, material_filter=No
 # box, rad.ObjHexahedron for a general hexahedron.  They exist for API SYMMETRY with soft_iron_box/hex
 # and for the composition below.
 #
-# PM + SOFT IRON: the FEEC HDiv-VIM is a SOFT-IRON demag solver and does not mix fixed-M magnets (pm_M
-# raises).  A permanent magnet is instead a SOURCE: place the magnet element alongside a soft_iron_box in
+# PM + SOFT IRON: a permanent magnet is a SOURCE.  Place an analytic magnet element alongside a soft_iron_box in
 # one container and rad.Solve auto-routes the (registered) iron to the HDiv-VIM with the magnet's field as
 # the applied H_ext --
 #     iron = radia.vim.soft_iron_box(center=..., size=..., mu_r=1000)
 #     mag  = radia.vim.magnet_box(center=..., size=..., M=(0, 0, Br/MU0))
 #     res  = rad.Solve(rad.ObjCnt([iron, mag]))     # HDiv-VIM solves the iron in the magnet's field
 # (Br/MU0 converts a remanence Br [T] to the magnetization M [A/m]; MU0 = 4e-7*pi.)
+# A spatially distributed given M uses vim.MagnetizationSource(pm_mesh, M_given),
+# whose independent HDiv space supplies a native C++ field CF to the iron solve.
 
 
 def magnet_box(center, size, M):

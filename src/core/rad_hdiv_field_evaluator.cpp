@@ -50,12 +50,22 @@ struct TriSource {
     double hessian[3][3]{};
 };
 
+struct CurvedTetSource {
+    double nodes[10][3]{};
+    double coefficient[4]{}; // 1, xi, eta, zeta
+};
+
+struct CurvedTriSource {
+    double nodes[6][3]{};
+    double coefficient[6]{}; // 1, eta, eta^2, xi, xi*eta, xi^2
+};
+
 struct PointSource {
     Vec position{};
     double strength = 0.0;
 };
 
-enum class SourceKind : std::uint8_t { Tet, Triangle, Point };
+enum class SourceKind : std::uint8_t { Tet, Triangle, CurvedTet, CurvedTriangle, Point };
 
 struct SourceAtom {
     SourceKind kind = SourceKind::Point;
@@ -181,13 +191,64 @@ SourceAtom MakePointAtom(const PointSource& source, std::size_t index) {
     return atom;
 }
 
+double CurvedTetDensity(const CurvedTetSource& source, double xi, double eta, double zeta) {
+    return source.coefficient[0] + source.coefficient[1]*xi
+         + source.coefficient[2]*eta + source.coefficient[3]*zeta;
+}
+
+double CurvedTriDensity(const CurvedTriSource& source, double xi, double eta) {
+    return source.coefficient[0] + source.coefficient[1]*eta
+         + source.coefficient[2]*eta*eta + source.coefficient[3]*xi
+         + source.coefficient[4]*xi*eta + source.coefficient[5]*xi*xi;
+}
+
+SourceAtom MakeCurvedTetAtom(const CurvedTetSource& source, std::size_t index) {
+    SourceAtom atom;
+    atom.kind = SourceKind::CurvedTet;
+    atom.index = index;
+    SetBounds(atom, source.nodes);
+    for (int ia = 0; ia < 4; ++ia) for (int ib = 0; ib < 4; ++ib) for (int ic = 0; ic < 4; ++ic) {
+        const double a = GL_X[ia], b = GL_X[ib], c = GL_X[ic];
+        const double xi = a;
+        const double eta = b*(1.0-a);
+        const double zeta = c*(1.0-a)*(1.0-b);
+        double x[3], jacobian;
+        CurvedTetMapMeasure(source.nodes, xi, eta, zeta, x, jacobian);
+        const double weight = GL_W[ia]*GL_W[ib]*GL_W[ic]
+                            *(1.0-a)*(1.0-a)*(1.0-b)*jacobian;
+        AddMoment(atom, {x[0], x[1], x[2]},
+                  CurvedTetDensity(source, xi, eta, zeta)*weight);
+    }
+    return atom;
+}
+
+SourceAtom MakeCurvedTriAtom(const CurvedTriSource& source, std::size_t index) {
+    SourceAtom atom;
+    atom.kind = SourceKind::CurvedTriangle;
+    atom.index = index;
+    SetBounds(atom, source.nodes);
+    for (int iu = 0; iu < 4; ++iu) for (int iv = 0; iv < 4; ++iv) {
+        const double xi = GL_X[iu];
+        const double eta = GL_X[iv]*(1.0-xi);
+        double x[3], jacobian;
+        CurvedTriMapMeasure(source.nodes, xi, eta, x, jacobian);
+        const double weight = GL_W[iu]*GL_W[iv]*(1.0-xi)*jacobian;
+        AddMoment(atom, {x[0], x[1], x[2]}, CurvedTriDensity(source, xi, eta)*weight);
+    }
+    return atom;
+}
+
 } // namespace
 
 struct HDivFieldEvaluator::Impl {
     FieldEvaluatorOptions options;
     std::vector<TetSource> tets;
     std::vector<TriSource> triangles;
+    std::vector<CurvedTetSource> curved_tets;
+    std::vector<CurvedTriSource> curved_triangles;
     std::vector<PointSource> points;
+    std::vector<double> gauss_points;
+    std::vector<double> gauss_weights;
     std::vector<SourceAtom> atoms;
     std::vector<ImageTerm> images;
     std::vector<std::size_t> order;
@@ -293,6 +354,87 @@ struct HDivFieldEvaluator::Impl {
         upper = nodes[0].upper;
     }
 
+    void AddCurvedTet(const CurvedTetSource& source, const double r[3], double out[3]) const {
+        double xi0[3];
+        ClosestRefTet(source.nodes, r, xi0);
+        static const double corners[4][3] = {{0,0,0},{1,0,0},{0,1,0},{0,0,1}};
+        static const int faces[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
+        const int nq = static_cast<int>(gauss_points.size());
+        for (int face = 0; face < 4; ++face) {
+            for (int lead = 0; lead < 3; ++lead) {
+                const double* b1 = corners[faces[face][lead]];
+                const double* b2 = corners[faces[face][(lead+1)%3]];
+                const double* b3 = corners[faces[face][(lead+2)%3]];
+                double d1[3], d2[3], d3[3], e21[3], e32[3];
+                for (int k = 0; k < 3; ++k) {
+                    d1[k] = b1[k]-xi0[k]; d2[k] = b2[k]-xi0[k]; d3[k] = b3[k]-xi0[k];
+                    e21[k] = b2[k]-b1[k]; e32[k] = b3[k]-b2[k];
+                }
+                const double determinant = d1[0]*(d2[1]*d3[2]-d2[2]*d3[1])
+                                         + d1[1]*(d2[2]*d3[0]-d2[0]*d3[2])
+                                         + d1[2]*(d2[0]*d3[1]-d2[1]*d3[0]);
+                if (std::fabs(determinant) < 1e-300) continue;
+                for (int ia = 0; ia < nq; ++ia) {
+                    const double u = gauss_points[static_cast<std::size_t>(ia)];
+                    for (int ib = 0; ib < nq; ++ib) {
+                        const double v = gauss_points[static_cast<std::size_t>(ib)];
+                        for (int ic = 0; ic < nq; ++ic) {
+                            const double w = gauss_points[static_cast<std::size_t>(ic)];
+                            double xi[3];
+                            for (int k = 0; k < 3; ++k)
+                                xi[k] = xi0[k] + u*(d1[k] + v*(e21[k] + w*e32[k]));
+                            double x[3], jacobian;
+                            CurvedTetMapMeasure(source.nodes, xi[0], xi[1], xi[2], x, jacobian);
+                            const double dx = r[0]-x[0], dy = r[1]-x[1], dz = r[2]-x[2];
+                            const double distance2 = dx*dx + dy*dy + dz*dz;
+                            if (distance2 <= 1e-300) continue;
+                            const double weight = gauss_weights[static_cast<std::size_t>(ia)]
+                                                * gauss_weights[static_cast<std::size_t>(ib)]
+                                                * gauss_weights[static_cast<std::size_t>(ic)] / 3.0
+                                                * u*u*v*determinant*jacobian;
+                            const double scale = CurvedTetDensity(source, xi[0], xi[1], xi[2])
+                                               * weight/(distance2*std::sqrt(distance2));
+                            out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void AddCurvedTriangle(const CurvedTriSource& source, const double r[3], double out[3]) const {
+        double xi0[2];
+        ClosestRefTri(source.nodes, r, xi0);
+        static const double corners[3][2] = {{0,0},{1,0},{0,1}};
+        const int nq = static_cast<int>(gauss_points.size());
+        for (int edge = 0; edge < 3; ++edge) {
+            const double* a = corners[edge];
+            const double* b = corners[(edge+1)%3];
+            const double e1x = a[0]-xi0[0], e1y = a[1]-xi0[1];
+            const double e2x = b[0]-xi0[0], e2y = b[1]-xi0[1];
+            const double determinant = e1x*e2y-e1y*e2x;
+            for (int iu = 0; iu < nq; ++iu) {
+                const double u = gauss_points[static_cast<std::size_t>(iu)];
+                for (int iv = 0; iv < nq; ++iv) {
+                    const double v = gauss_points[static_cast<std::size_t>(iv)];
+                    const double xi = xi0[0] + u*e1x + u*v*(e2x-e1x);
+                    const double eta = xi0[1] + u*e1y + u*v*(e2y-e1y);
+                    double x[3], jacobian;
+                    CurvedTriMapMeasure(source.nodes, xi, eta, x, jacobian);
+                    const double dx = r[0]-x[0], dy = r[1]-x[1], dz = r[2]-x[2];
+                    const double distance2 = dx*dx + dy*dy + dz*dz;
+                    if (distance2 <= 1e-300) continue;
+                    const double weight = gauss_weights[static_cast<std::size_t>(iu)]
+                                        * gauss_weights[static_cast<std::size_t>(iv)]
+                                        * u*determinant*jacobian;
+                    const double scale = CurvedTriDensity(source, xi, eta)
+                                       * weight/(distance2*std::sqrt(distance2));
+                    out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
+                }
+            }
+        }
+    }
+
     void AddExact(const SourceAtom& atom, const double r[3], double out[3]) const {
         if (atom.kind == SourceKind::Tet) {
             const TetSource& source = tets[atom.index];
@@ -304,6 +446,10 @@ struct HDivFieldEvaluator::Impl {
             double value[3];
             QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
             for (int k = 0; k < 3; ++k) out[k] += value[k];
+        } else if (atom.kind == SourceKind::CurvedTet) {
+            AddCurvedTet(curved_tets[atom.index], r, out);
+        } else if (atom.kind == SourceKind::CurvedTriangle) {
+            AddCurvedTriangle(curved_triangles[atom.index], r, out);
         } else {
             const PointSource& source = points[atom.index];
             const double dx = r[0]-source.position[0];
@@ -369,6 +515,8 @@ struct HDivFieldEvaluator::Impl {
                 double value[3]; QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
                 for (int k = 0; k < 3; ++k) out[k] += value[k];
             }
+            for (const CurvedTetSource& source : curved_tets) AddCurvedTet(source, r, out);
+            for (const CurvedTriSource& source : curved_triangles) AddCurvedTriangle(source, r, out);
             for (const PointSource& source : points) {
                 const double dx = r[0]-source.position[0];
                 const double dy = r[1]-source.position[1];
@@ -518,6 +666,43 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCloud(
     return std::shared_ptr<HDivFieldEvaluator>(new HDivFieldEvaluator(std::move(impl)));
 }
 
+std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCurvedTet(
+    std::vector<double> volume, std::vector<double> surface,
+    std::vector<double> gauss_points, std::vector<double> gauss_weights,
+    std::vector<int> image_masks, std::vector<double> image_signs,
+    const FieldEvaluatorOptions& options) {
+    if (volume.size()%34 != 0 || surface.size()%24 != 0)
+        throw std::invalid_argument("HDivFieldEvaluator.from_curved_tet: volume/surface shape mismatch");
+    if (gauss_points.empty() || gauss_points.size() != gauss_weights.size())
+        throw std::invalid_argument("HDivFieldEvaluator.from_curved_tet: invalid Gauss rule");
+    auto impl = std::make_unique<Impl>();
+    impl->options = options;
+    impl->ValidateOptions();
+    impl->SetImages(std::move(image_masks), std::move(image_signs));
+    impl->gauss_points = std::move(gauss_points);
+    impl->gauss_weights = std::move(gauss_weights);
+    impl->curved_tets.resize(volume.size()/34);
+    for (std::size_t e = 0; e < impl->curved_tets.size(); ++e) {
+        CurvedTetSource& source = impl->curved_tets[e];
+        const double* block = volume.data()+34*e;
+        for (int i = 0; i < 10; ++i) for (int k = 0; k < 3; ++k)
+            source.nodes[i][k] = block[3*i+k];
+        for (int i = 0; i < 4; ++i) source.coefficient[i] = block[30+i];
+        impl->atoms.push_back(MakeCurvedTetAtom(source, e));
+    }
+    impl->curved_triangles.resize(surface.size()/24);
+    for (std::size_t e = 0; e < impl->curved_triangles.size(); ++e) {
+        CurvedTriSource& source = impl->curved_triangles[e];
+        const double* block = surface.data()+24*e;
+        for (int i = 0; i < 6; ++i) for (int k = 0; k < 3; ++k)
+            source.nodes[i][k] = block[3*i+k];
+        for (int i = 0; i < 6; ++i) source.coefficient[i] = block[18+i];
+        impl->atoms.push_back(MakeCurvedTriAtom(source, e));
+    }
+    impl->BuildTree();
+    return std::shared_ptr<HDivFieldEvaluator>(new HDivFieldEvaluator(std::move(impl)));
+}
+
 void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_observations,
                                   double* output, Algorithm algorithm) const {
     if (!observations || !output) {
@@ -538,6 +723,27 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
         output[3*index+1] = total[1];
         output[3*index+2] = total[2];
     });
+}
+
+void HDivFieldEvaluator::EvaluateSerial(const double* observations, std::size_t n_observations,
+                                        double* output, Algorithm algorithm) const {
+    if (!observations || !output) {
+        if (n_observations == 0) return;
+        throw std::invalid_argument("HDivFieldEvaluator.field: null observation/output buffer");
+    }
+    const bool automatic = algorithm == Algorithm::Auto;
+    if (automatic) algorithm = AlgorithmFor(n_observations);
+    if (automatic && algorithm == Algorithm::Tree && !m_impl->TreePassesProbe(observations, n_observations))
+        algorithm = Algorithm::Direct;
+    m_impl->last_algorithm.store(algorithm == Algorithm::Tree ? 1 : 0, std::memory_order_relaxed);
+    for (std::size_t index = 0; index < n_observations; ++index) {
+        const double* r = observations+3*index;
+        double total[3];
+        m_impl->EvaluatePhysical(r, total, algorithm);
+        output[3*index] = total[0];
+        output[3*index+1] = total[1];
+        output[3*index+2] = total[2];
+    }
 }
 
 HDivFieldEvaluator::Algorithm HDivFieldEvaluator::AlgorithmFor(std::size_t n_observations) const {
@@ -576,6 +782,11 @@ std::size_t HDivFieldEvaluator::TreeMinSources() const { return m_impl->options.
 std::size_t HDivFieldEvaluator::AutoMinWork() const { return m_impl->options.auto_min_work; }
 double HDivFieldEvaluator::TreeRelativeTolerance() const { return m_impl->options.tree_relative_tolerance; }
 int HDivFieldEvaluator::ProbeCount() const { return m_impl->options.probe_count; }
+const char* HDivFieldEvaluator::SourceRepresentation() const {
+    if (!m_impl->curved_tets.empty() || !m_impl->curved_triangles.empty()) return "curved-element-exact";
+    if (!m_impl->tets.empty() || !m_impl->triangles.empty()) return "analytic-tet";
+    return "element-cloud";
+}
 HDivFieldEvaluator::Algorithm HDivFieldEvaluator::LastAlgorithm() const {
     return m_impl->last_algorithm.load(std::memory_order_relaxed) == 1 ? Algorithm::Tree : Algorithm::Direct;
 }

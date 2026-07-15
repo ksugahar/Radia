@@ -5,7 +5,7 @@ test_hdiv_vim_curved_gram.py) is now wired to the symmetric energy-Newton nonlin
 (_solve_nonlinear_energy_cpp): Solve(mesh, bh_table=..., curve_order=2) lifts the former
 order>0-nonlinear NotImplementedError for the CURVED path.  The FLAT order>0 nonlinear path is now wired too
 (verified against the analytic fixed point below).  No new C++ -- the energy-Newton is Gram-AGNOSTIC
-(it consumes only H.matvec + H.solve_linear_material_mass_riesz, present on every high-order Gram object).
+(it consumes only the configured C++ Gram apply + mass-Riesz solve, present on every high-order Gram object).
 
 Locks: (1) curve_order=2 + bh_table runs + reports nonlinear=True, solver='energy-newton-cpp', curve_order=2;
 (2) a uniform sphere magnetizes to the analytic spheroid fixed point (~1e-2); (3) matches the analytic

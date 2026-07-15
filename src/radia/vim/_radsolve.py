@@ -253,9 +253,9 @@ def dispatch(top, *solve_args, **solve_kwargs):
             f"{len(M)} HDiv elements) -- mesh and registered handles are out of sync.")
     for h, m in zip(handles, M):
         rad.ObjSetM(h, [float(m[0]), float(m[1]), float(m[2])])
-    # Register the full RT1 solution for rad.Fld.  The iron handle contributes
+    # Register the full HDiv solution for rad.Fld.  The iron handle contributes
     # only its solved magnetization; the top handle also includes its Radia
-    # source objects.  IMA is evaluated from the RT1 field itself.
+    # source objects.  IMA is evaluated from the C++ RT1/RT2 field itself.
     _FIELD_SOLUTIONS[iron] = {"result": res, "source_object": None}
     keys = [iron]
     if top != iron:
@@ -266,7 +266,7 @@ def dispatch(top, *solve_args, **solve_kwargs):
         keys.append(top)
     reg["field_solution_keys"] = keys
     res["field_contract"] = (
-        "rad.Fld evaluates the C++ RT1 charge field; IMA reflects the RT1 solution without "
+        "rad.Fld evaluates the persistent C++ HDiv charge field; IMA reflects the solution without "
         "piecewise-constant image objects"
     )
     return res

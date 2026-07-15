@@ -138,6 +138,9 @@ def test_B_cyclic_loop_hysteretic():
         mesh = _hex_cube(3)
         res = vim.SolveHysteresis(mesh, h_steps, play=(K, eta, tables))
 
+    assert res["permanent_magnet_model"] == "simplified-play"
+    assert res["permanent_magnet_level"] == 3
+
     Hz_int = np.array([s["H_avg"][2] for s in res["steps"]])
     Bz = np.array([s["B_avg"][2] for s in res["steps"]])
 

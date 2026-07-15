@@ -142,9 +142,9 @@ def _table_tensor_tangent_multi(gfH, mesh, region_funcs, elem_region, Id):
 # The SYMMETRIC energy-Newton (the all-C++ nonlinear path, _solve._solve_nonlinear_energy_cpp) linearises the
 # residual R(m) = INT H(M).v dx + N m - M_mass h_ext (M = the flux field of m, H(M) the INVERSE BH reluctance
 # field) -> Jacobian J = W_tan + N, W_tan = INT nu_d u.v dx, nu_d = dH/dM = (dM/dH)^-1 (differential
-# reluctivity tensor).  Symmetric (N + the SPD reluctivity mass) -> CG-able by the EXISTING C++ W-CG
-# (solve_linear_material_mass_riesz), unlike the forward M-residual whose J = M_mass + T M_mass^-1 N needs
-# GMRES + an M_mass^-1.  Reduces to the linear (M_{1/chi}+N)m = M_mass h_ext when chi is constant.
+# reluctivity tensor).  Symmetric (N + the SPD reluctivity mass) -> solved by the existing C++ W-CG
+# (solve_configured_linear_material_mass_riesz), with no explicit M_mass^-1.  It reduces to the linear
+# (M_{1/chi}+N)m = M_mass h_ext when chi is constant.
 _CHI_DIFF_FLOOR = 1e-3     # nu_diff = 1/max(chi_diff, floor): cap the differential reluctivity in deep saturation
                            # (chi_diff = dM/d|H| -> 0).  Also the barrier slope Kbar = 1/floor for |M| > Mmax.
 

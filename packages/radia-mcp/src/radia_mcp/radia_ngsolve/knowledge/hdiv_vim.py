@@ -38,11 +38,65 @@ Primary Python entry points:
 - `radia.vim.MeshSoftIron(mesh, mu_r=... | bh_table=...)`
 - `radia.Solve(model, prec, maxiter, method, demag_backend="hdiv")`
 - `radia.vim.Solve(mesh, mu_r=... | bh_table=..., H_ext=..., image=...)`
+- Permanent magnets use one four-level model ladder, all on the HDiv charge and
+  field machinery:
+  1. fixed/given distribution:
+     `MagnetizationSource(mesh, M_given)`;
+  2. linear recoil/demagnetization:
+     `Solve(mesh, mu_r=mu_rec, B_r=B_r, H_ext=...)` with
+     `B = mu0*mu_rec*H + B_r`;
+  3. simplified Play:
+     `PlayHysteresisMaterial(...)` with `SolveHysteresis(...)`;
+  4. full B-input EnergyStop:
+     `EnergyStopMaterial(...)` with `SolveHysteresis(...)`.
+  `B_r` is in tesla and may be a constant vector or a spatial NGSolve
+  CoefficientFunction.  The linear-recoil path is the exact right-hand-side
+  shift of the symmetric C++ HDiv solve, requires scalar `mu_rec > 1`, and
+  defaults to zero applied field.  Use level 1 for the rigid `mu_rec=1` limit.
+  A spatial `B_r` belongs to one conforming body.  A jump in normal
+  magnetization requires separate body spaces to retain interface charge;
+  fixed segments already use separate MagnetizationSource objects, while
+  mutually coupled recoil segments require the multi-body block formulation.
+- `radia.vim.MagnetizationSource(pm_mesh, M_given, order=1|2)` followed by
+  `radia.vim.Solve(iron_mesh, ..., magnetization_sources=[source])` for fixed,
+  spatially distributed permanent/given magnetization.  The source owns a
+  separate HDiv space, is L2-projected once, and exposes `source.field_cf` as
+  a native NGSolve CoefficientFunction plus `source.Field(points)` for batch H.
+  Its charge geometry is materialized in C++ without building a Gram H-matrix.
+  Separate PM and iron spaces preserve their normal jump even at a touching
+  interface.  Multiple sources superpose; their coefficients are not solve
+  unknowns.  This is a fixed-M source, not a recoil/nonlinear PM law.  Planar
+  2D continues to use `magnets=[(mesh, M), ...]`.  Split physically distinct
+  magnet segments into separate sources when `M_given` has an internal normal
+  jump; one conforming source space enforces normal continuity within itself.
+- `radia.vim.EnergyStopMaterial(eta, g_tables, alpha=..., gamma=...,
+  b_max=...)` followed by `radia.vim.SolveHysteresis(pm_mesh, h_steps,
+  material=...)` for an evolving permanent-magnet state.  This is the C++
+  isotropic vector B-input Stop law: branch states live in fixed balls,
+  monotone radial `g_k` tables define convex branch energies, trial evaluation
+  is pure, and commit occurs only after the HDiv step converges.  `gamma=0`
+  gives the hard Stop projection; positive gamma uses the radial variational
+  proximal update.  `h_steps` accepts uniform vectors or 3D NGSolve
+  CoefficientFunctions.  Use `initial_b_path` for an explicit manufacturing
+  history and pass the returned `state` back as `initial_state` to continue.
+  Public Radia provides the generic kernel, not fitted proprietary magnet-grade
+  tables.  The returned final state owns a persistent C++ field evaluator, so
+  `FieldFromSolution(result, points)` provides its demagnetizing field.  This
+  currently covers PM self-demagnetization under prescribed fields; mutually
+  evolving PM plus nonlinear iron remains a separate block coupling task.  Do
+  not confuse this with fixed-M `MagnetizationSource`.
+- `radia.vim.PlayHysteresisMaterial(K, eta, f_k_tables)` implements the
+  simplified engineering Play level through the same `SolveHysteresis`
+  stepping protocol.  It carries branch history, but it is not the full
+  EnergyStop claim.  Level 4 adds fixed-domain vector Stop states, convex
+  branch energy/proximal updates, irreversible-demagnetization gates, and
+  explicit manufacturing/restart state.
 - `radia.vim.DemagOperator(HDiv(mesh, order=1|2), ...)` for the NGSolve-style
   diagnostic operator, or `radia.vim.ChargeGram(...)` for its charge map and
   C++ H-matrix components
 - `radia.vim.FieldFromSolution(res, points)` -- batch demagnetizing H (A/m) at
-  points from the full ORDER-1 solution.  `rad.Fld` on a solved mesh-backed
+  points from the full RT1/RT2 pure-TET solution or the RT1 HEX/WEDGE/2D
+  solution.  `rad.Fld` on a solved mesh-backed
   object dispatches to this same evaluator; per-element constant-M write-back
   is metadata/visualization only, not the field oracle.  Solve materializes an
   immutable C++ source evaluator once.  TET keeps analytic volume/triangle
@@ -57,10 +111,12 @@ Primary Python entry points:
 
 Core pieces:
 
-- `src/radia/vim/` handles mesh ingestion, dispatch, material setup, image
-  symmetry contracts, and field reconstruction.
+- `src/radia/vim/` declares NGSolve spaces/forms, handles dispatch and material
+  laws, and prepares the one-time sparse charge topology.
 - `src/core/rad_hdiv_vim.*` contains structured and unstructured HDiv assembly
   helpers.
+- `src/core/rad_hdiv_hysteresis.*` contains the TaskManager-parallel energy
+  Stop trial/commit kernel and its explicit restart state.
 - `src/core/rad_hdiv_field_evaluator.*` contains the persistent direct/tree RT1
   field source and NumPy-facing batch evaluator.
 - `src/core/rad_hacapk_hdiv.*` contains `_ChargeGramHMatrix`, the C++ H-matrix
@@ -72,6 +128,11 @@ Core pieces:
 TaskManager is assumed.  NGSolve assembly should run under
 `with ngsolve.TaskManager():`, and the C++ kernels use parallel loops for
 charge gather, dot products, preconditioner/vector updates, and sparse scatters.
+The assembled NGSolve mass matrices are extracted directly in pybind; the
+persistent C++ operator owns B/BT, mass CSR, Krylov iterations, and the immutable
+field source.  NumPy appears only at vector/target API boundaries, not inside the
+iteration loop.  This is the same Python-declaration/C++-execution split used by
+NGSolve rather than an attempt to reimplement FESpace construction in Radia.
 """
 
 _SCALING = r"""
@@ -110,9 +171,9 @@ Fast tests should cover API contracts and small deterministic checks:
   and large non-IMA auto-tree output stays within its direct-probe contract;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
-- RT2 flat pure-TET linear/nonlinear solves remain consistent with the analytic
-  cube/sphere gates; RT2 on HEX/WEDGE, 2D, IMA, or field reconstruction fails
-  loudly rather than falling back to RT1.
+- RT2 flat/curved pure-TET linear/nonlinear solves, IMA, and persistent field
+  reconstruction remain consistent with the analytic cube/sphere and image
+  gates; RT2 on HEX/WEDGE or 2D fails loudly rather than falling back to RT1.
 
 Validation-class tests live under `validation_test/feec/` and should cover:
 
@@ -121,6 +182,12 @@ Validation-class tests live under `validation_test/feec/` and should cover:
 - IMA/image symmetry for TET/HEX/WEDGE;
 - curved and high-order geometry where analytic demag truth exists;
 - reduced-FEM handoff through NGSolve fields/CoefficientFunctions.
+- prescribed-M source L2 projection, immutable coefficients, direct/native-CF
+  field equality, multiple-source superposition, and iron response against the
+  same field passed explicitly as `H_ext`.
+- energy-Stop table convexity guards, hard projection, positive-gamma proximal
+  stationarity, non-negative vector-loop dissipation, reverse-field remanence
+  loss, arbitrary CoefficientFunction loading, and split-run restart parity.
 """
 
 _NONLINEAR = r"""
@@ -179,6 +246,14 @@ Prefer analytic truth first: ellipsoid demag factors, cuboid permanent-magnet
 fields, dipole limits, and closed-form thin/axisymmetric cases.  When analytic
 truth is unavailable, use independent formulations:
 
+For the linear-recoil permanent-magnet level, a sphere has `N=I/3` and the
+exact vector load line
+
+    M = (B_r/mu0 + (mu_rec-1)*H_ext) / (1 + (mu_rec-1)/3).
+
+The curved-sphere validation must remain green before documenting a new recoil
+material or spatial-remanence workflow.
+
 - HDiv VIM on the NGSolve mesh;
 - volume FEM A/phi or reduced-potential FEM where appropriate;
 - boundary-element single-layer checks for surface-charge problems;
@@ -209,8 +284,17 @@ Current direction:
 
 - Radia soft iron: HDiv-VIM.
 - RT1: pure TET/HEX/WEDGE, planar 2D, IMA, and field evaluation.
-- RT2: public flat pure-TET material/operator path.  Curved geometry uses RT1
-  on an isoparametric P2 mesh until curved RT2 build cost is accepted.
+- RT2: public flat/curved pure-TET material/operator, IMA, and persistent-field
+  path.  HEX/WEDGE and planar 2D remain RT1.
+- Fixed/given 3D magnetization: source-owned HDiv projection and native C++
+  field coupling for RT1 TET/HEX/WEDGE and RT2 pure TET, including Curve(2)
+  and IMA; planar 2D uses its existing `magnets=` source path.
+- Linear-recoil permanent magnet: scalar recoil permeability plus constant or
+  spatial `B_r`, solved by the symmetric C++ HDiv path in 3D and planar 2D.
+- Simplified history level: PlayHysteresisMaterial plus SolveHysteresis.
+- Evolving 3D permanent magnet: C++ vector B-input EnergyStopMaterial plus
+  SolveHysteresis, explicit manufacturing/restart state, and arbitrary applied
+  CoefficientFunction steps on RT1 TET/HEX/WEDGE.
 - Planar 2D support: HDiv/planar shared geometry and material helpers.
 - Public docs: result-bearing HDiv notebooks plus synchronized JSON.
 - MCP: teach the live HDiv API and reduced-FEM coupling path.
@@ -224,6 +308,9 @@ Open work:
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
   normal release to measure public `rad.Fld` on mdx/hibino;
 - keep Cubit/GMSH mesh-export artifacts aligned with the HDiv API.
+- add mutually coupled evolving-PM/nonlinear-soft-iron block iteration; fixed-M
+  source coupling and history-dependent PM self-demag are intentionally
+  distinct current APIs.
 """
 
 _SECTIONS = {

@@ -12,6 +12,8 @@
 
 #include "rad_hacapk.h"     // RadHACApKBase
 #include "rad_hdiv_vim.h"   // analytic charge-potential kernels
+#include "rad_hdiv_field_evaluator.h"
+#include "rad_planar_charges.h"
 #include <unordered_map>
 #include <memory>
 #include <string>
@@ -131,8 +133,9 @@ public:
     // have zero monopole, so a monopole far is WRONG); it is just adaptive quadrature order, and the HACApK
     // ACA still compresses the well-separated low-rank blocks (now from cheap entries).  ho_far_factor
     // defaults to 1e30 (=> all pairs NEAR => the original all-high-quad behavior, golden-equivalent).
-    // The FAR low-quad double integral is symmetric in (a,b), so the direct FAR term is one-sided by default;
-    // set RADIA_HDIV_HO_FAR_ONESIDED=0 to restore the diagnostic 0.5*(ab+ba) average.
+    // The production path averages both FAR directions.  A one-sided block keeps matrix symmetry when the
+    // upper triangle is mirrored, but is not invariant under an explicit reflected mesh at finite quadrature
+    // order.  RADIA_HDIV_HO_FAR_ONESIDED=1 is therefore diagnostic/benchmark-only.
     RadHACApKChargeGram(std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
                         std::vector<int> charge_host, std::vector<int> charge_kind,
                         std::vector<int> charge_expo,
@@ -153,16 +156,24 @@ public:
     // NGSolve REFERENCE frame (the Python charge map B uses the SAME reference-frame change-of-basis, so B and
     // G share the basis).  The OUTER quadrature maps the reference Gauss-Duffy points (ref_tet_pts/ref_tri_pts)
     // through the curved P2 map X(xi) + curved measure (CurvedTet/TriMapMeasure), folding xi^expo at the
-    // REFERENCE point; the INNER potential is ALWAYS the curved Duffy (rad_hdiv::CurvedTet/TriPotential, gl/gw
-    // = an nq-point Gauss-Legendre rule on [0,1]).  No analytic moments (curved has none), no inner-subtraction
-    // table, no near/far split.  ROLE (de-risked 2026-06-28): curved helps NEAR-SURFACE FIELD / FLUX accuracy
+    // REFERENCE point; the INNER potential is the curved Duffy (rad_hdiv::CurvedTet/TriPotential, gl/gw = an
+    // nq-point Gauss-Legendre rule on [0,1]) for near/self pairs.  Optional ref_*_lo rules enable the same
+    // smooth-kernel far double-Gauss path as the flat high-order operator; all low points are mapped through
+    // the curved P2 geometry in C++.  No analytic curved moments and no inner-subtraction table.  ROLE
+    // (de-risked 2026-06-28): curved helps NEAR-SURFACE FIELD / FLUX accuracy
     // (sigma on the true curved surface), NOT the volume-averaged demag FACTOR (which is curving-insensitive on
     // a sphere, ~3e-5).  Accuracy is the Duffy ~1e-3..1e-5 (the order>=3 conditioning caveat applies on curved).
-    RadHACApKChargeGram(std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
+    RadHACApKChargeGram(std::vector<double> cell_nodes, std::vector<double> face_nodes,
+                        std::vector<int> cell_vertices, std::vector<int> face_vertices,
+                        int n_el, int curve_order,
                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
-                        std::vector<double> curve_gl, std::vector<double> curve_gw);
+                        std::vector<double> curve_gl, std::vector<double> curve_gw,
+                        std::vector<double> ref_tet_pts_lo = {}, std::vector<double> ref_tet_w_lo = {},
+                        std::vector<double> ref_tri_pts_lo = {}, std::vector<double> ref_tri_w_lo = {},
+                        double ho_far_factor = 1e30,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // CURVED POLYTOPE mode (curved hex/wedge): FULLY curved -- both the CELL volume charge AND the boundary
     // FACE surface charge live on the true mesh.Curve(2) geometry (the cell volume charge is DOMINANT for the
@@ -236,10 +247,12 @@ public:
                         std::vector<int> charge_host, std::vector<int> charge_kind,
                         std::vector<int> charge_expo,
                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> gl_quad, std::vector<double> gw_quad,
                         std::vector<double> gl_edge, std::vector<double> gw_edge,
                         std::vector<double> gl_in, std::vector<double> gw_in,
                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
-                        double near_grade, double far_inner_factor);
+                        double near_grade, double far_inner_factor,
+                        std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // WEDGE (PRISM) RT1 mode (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated): the RT1-prism
     // (HDiv(prismmesh, order=1)) charge Gram.  Volume charge = L2(prism,order=1) = tri-P1 (x) z-P1 =
@@ -292,6 +305,10 @@ public:
     // (for the symmetric operator they are the same map; the base implementations would silently read the
     // empty lower leaves -- the routing makes that failure mode unrepresentable).
     bool BuildHMatrix(const RadHACApKParams& params = RadHACApKParams());
+    // Initialize charge count/coordinates without allocating HACApK blocks.
+    // Used by prescribed-magnetization field sources, which need the exact
+    // charge geometry and B map but never apply the charge Gram matrix.
+    void PrepareGeometryOnly() { ExtractCoordinates(); }
     void MatVec(const std::vector<double>& x, std::vector<double>& y) { MatVecSym(x, y); }
     void MatVecTranspose(const std::vector<double>& x, std::vector<double>& y) { MatVecSym(x, y); }
 
@@ -335,6 +352,47 @@ public:
         const std::vector<int>& mI, const std::vector<int>& mJ,
         const std::vector<double>& mV, int n_face,
         const std::vector<double>& rhs);
+
+    // NGSolve-style persistent operator configuration.  The charge map B is geometry/FESpace data and is
+    // registered once with the Gram object; the material mass is replaced only when the constitutive tangent
+    // changes.  Production matvec/solve calls then cross Python with vectors only, instead of copying CSR/COO
+    // topology on every application.
+    void ConfigureChargeMap(
+        std::vector<int> B_indptr, std::vector<int> B_indices,
+        std::vector<double> B_data, int n_face);
+    void ConfigureMassMatrix(
+        std::vector<int> mI, std::vector<int> mJ,
+        std::vector<double> mV, int n_face);
+    void ConfigureGeometryMassMatrix(
+        std::vector<int> mI, std::vector<int> mJ,
+        std::vector<double> mV, int n_face);
+    bool HasConfiguredChargeMap() const { return m_operatorChargeConfigured; }
+    bool HasConfiguredMassMatrix() const { return m_operatorMassConfigured; }
+    bool HasConfiguredGeometryMassMatrix() const { return m_operatorGeometryMassConfigured; }
+    int ConfiguredNFace() const { return m_operatorNFace; }
+    int ConfiguredConstraintCount() const;
+    std::vector<double> ApplyConfiguredDemag(
+        const std::vector<double>& x, bool symmetric = true);
+    void ApplyConfiguredDemag(
+        const double* x, double* y, bool symmetric = true);
+    void ApplyConfiguredDemagAdd(
+        double scale, const double* x, double* y, bool symmetric = true);
+    std::vector<double> ApplyConfiguredGeometryMass(const std::vector<double>& x);
+    void ApplyConfiguredGeometryMass(const double* x, double* y);
+    std::vector<double> ApplyConfiguredMassRiesz(const std::vector<double>& rhs);
+    std::vector<double> SolveConfiguredLinearMaterial(
+        double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
+        int& iters_out, bool mass_riesz = true, bool symmetric = true,
+        const std::vector<double>* x0 = nullptr);
+    std::vector<double> SolveConfiguredLinearMaterialAutoPrec(
+        double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
+        int& iters_out, double& prec_min, double& prec_max,
+        const std::vector<double>* x0 = nullptr);
+    std::shared_ptr<rad_hdiv::HDivFieldEvaluator> CreateConfiguredFieldEvaluator(
+        const std::vector<double>& magnetization,
+        const rad_hdiv::FieldEvaluatorOptions& options = {}) const;
+    std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> CreateConfiguredPlanarFieldEvaluator(
+        const std::vector<double>& magnetization) const;
     std::vector<std::pair<std::string, double>> LastSolveTimings() const;
 
     // M3 (the NONLINEAR solve in C++): scalar-chi Picard for the isotropic nonlinear demag.
@@ -360,12 +418,14 @@ public:
 
 protected:
     void ExtractCoordinates() override;
-    void OnBeforeBuild() override {}
+    void OnBeforeBuild() override;
     void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
     bool IsVariableDOF() const override { return false; }
     int  GetUniformNFFC() const override { return 1; }
 
 private:
+    void ApplyConfiguredDemagImpl(
+        const double* x, double* y, double scale, bool add, bool symmetric);
     double PhiAt(int src, const double p[3]) const;   // exact analytic potential of source charge src at p
     double QuadDot(int tgt, int src) const;            // (1/4pi) sum_p w_p PhiAt(src, p) over tgt's outer quad
     // IMA image term: (1/4pi) sum_p w_p PhiAt(src, R_mask(p)) -- tgt's outer points reflected on the mask
@@ -408,7 +468,17 @@ private:
     bool m_curved = false;
     int  m_curve_order = 0;
     std::vector<double> m_cellNodes, m_faceNodes;      // [n_cell*30] (P2 tet), [n_bf*18] (P2 tri)
+    std::vector<int> m_cellVertices, m_faceVertices;   // [n_cell*4], [n_bf*3] global mesh vertex ids
     std::vector<double> m_gl, m_gw;                    // curved Duffy Gauss-Legendre rule on [0,1]
+    // Symmetric reference-triangle rule for the base of each radial Duffy
+    // sub-tet.  This removes reference-vertex-order dependence and reduces the
+    // inner curved kernel from nq^3 to nq*ntri evaluations.
+    std::vector<int> m_curvedTouchBlockIndex;          // canonical host-pair -> block slot, -1 if non-touching
+    std::vector<std::vector<double>> m_curvedTouchBlocks; // precomputed symmetric touching blocks
+    double m_curvedTouchBuildTime = 0.0;
+    void PrecomputeCurvedTouchBlocks();
+    bool CurvedTouchBlockValue(int kindA, int hostA, int localA,
+                               int kindB, int hostB, int localB, double& value) const;
 
     // CURVED POLYTOPE mode (curved hex/wedge): both cell volume charges and boundary face charges follow
     // the curved P2 geometry.  m_srcCurvedTets[c] holds the 10-node P2 sub-tets for a cell charge;
@@ -471,6 +541,29 @@ private:
     // bit-identical preconditioner: timing-only.  shared_ptr keeps the .h to a forward declaration.
     std::shared_ptr<RadMassRieszCache> m_massRieszCache;
     std::shared_ptr<RadMassRieszCache> m_geometryMassRieszCache;
+    std::vector<int> m_operatorBIndptr, m_operatorBIndices;
+    std::vector<double> m_operatorBData;
+    // Transposed charge map, built once at ConfigureChargeMap.  The production
+    // operator applies B^T by row gather, avoiding an atomic scatter for every
+    // H-matrix matvec and matching NGSolve's persistent BaseMatrix model.
+    std::vector<int> m_operatorBTIndptr, m_operatorBTIndices;
+    std::vector<double> m_operatorBTData;
+    std::vector<int> m_operatorMassI, m_operatorMassJ;
+    std::vector<double> m_operatorMassV;
+    // Material mass in CSR, built once when the COO tangent is registered.
+    // Krylov applications then use it directly instead of rebuilding sparse
+    // topology at the start of every C++ solve.
+    std::vector<int> m_operatorMassIndptr, m_operatorMassIndices;
+    std::vector<double> m_operatorMassData;
+    std::vector<int> m_operatorGeometryMassI, m_operatorGeometryMassJ;
+    std::vector<double> m_operatorGeometryMassV;
+    std::vector<int> m_operatorGeometryMassIndptr, m_operatorGeometryMassIndices;
+    std::vector<double> m_operatorGeometryMassData;
+    std::vector<unsigned char> m_operatorConstrained;
+    int m_operatorNFace = 0;
+    bool m_operatorChargeConfigured = false;
+    bool m_operatorMassConfigured = false;
+    bool m_operatorGeometryMassConfigured = false;
     // Get-or-build the persistent factor (the single shared implementation for both solve methods,
     // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
     // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to
@@ -571,13 +664,14 @@ private:
     std::vector<int>    m_d2CellType;    // [n_el] 0=tri, 1=quad
     std::vector<double> m_d2EdgeNodes;   // [n_be*6]  3-node lattice x 2D
     std::vector<double> m_d2SymTriP, m_d2SymTriW;   // OUTER tri rule (bary lam1..2; W sums 1/2)
+    std::vector<double> m_d2GlQ, m_d2GwQ;           // 1D [0,1] tensor outer rule for quads
     std::vector<double> m_d2GlE, m_d2GwE;           // 1D [0,1] edge outer rule
     std::vector<double> m_d2FarTriP, m_d2FarTriW;   // cheap FAR inner tri rule (bary; W sums 1/2)
-    // per-sub geometry (cells: up to 2 sub-tris; edges: 1) -- centroid/size for the near test + anchor
+    // per-sub geometry (cells: up to 4 sub-tris; edges: 1) -- centroid/size for the near test + anchor
     // SITES (tri sub: 3 corners + 3 edge mids + centroid = 7; edge: 2 ends + mid = 3), mapped positions.
-    std::vector<double> m_d2CellSubC, m_d2CellSubS;   // [n_el*2*2], [n_el*2]
+    std::vector<double> m_d2CellSubC, m_d2CellSubS;   // [n_el*4*2], [n_el*4] (quad D4 centre fan)
     std::vector<double> m_d2EdgeC, m_d2EdgeS;         // [n_be*2],   [n_be]
-    std::vector<double> m_d2CellSiteX;                // [n_el*2*7*2]
+    std::vector<double> m_d2CellSiteX;                // [n_el*4*7*2]
     std::vector<double> m_d2EdgeSiteX;                // [n_be*3*2]
     static void Tri6Map(const double* nd12, const double xi[2], double X[2]);
     static void Quad9Map(const double* nd18, const double xi[2], double X[2]);
@@ -587,7 +681,8 @@ private:
     // for near field points, the cached-rule far cloud otherwise.
     void PhiInner2DVec(int kindS, int hS, int subB, const double p[2], const double* xiT,
                        const std::vector<int>& srcG, double* inn) const;
-    std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS) const;  // directed block, 1/(2pi) folded
+    std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS,
+                                    int mask = 0) const;  // directed block, 1/(2pi) folded
 
     // ---- WEDGE (PRISM) RT1 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
     // (m_symTetP/W, m_symTriP/W, m_glOut/gwOut, m_glIn/gwIn, m_farTetP/W, m_farTriP/W, m_near_grade,
@@ -641,6 +736,10 @@ private:
     void InitHOPolynomialCoefficients();                    // flat order<=2 reference monomials -> physical A/B/C
     void PhiInnerHOHostVec(int kind, int host, const double p[3],
                            const std::vector<int>& charges, double* values) const;
+    void PhiInnerHOCurvedHostVec(int kind, int host, const double p[3],
+                                 const std::vector<int>& charges, double* values) const;
+    bool CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const;
+    std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS) const;
     std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
     const std::vector<double>& GetHOTetSymBlock(int kindA, int hostA, int kindB, int hostB) const;
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2

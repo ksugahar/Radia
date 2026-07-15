@@ -16,9 +16,26 @@ def test_ngsolve_style_hdiv_vim_names_are_public():
         "MeshSoftIron",
         "VolSoftIron",
         "PlanarSolve",
+        "SolveHysteresis",
+        "EnergyStopMaterial",
+        "PlayHysteresisMaterial",
+        "MagnetizationSource",
     ):
         assert callable(getattr(vim, name))
         assert name in vim.__all__
+
+
+def test_permanent_magnet_api_exposes_all_four_production_levels():
+    import inspect
+
+    assert "B_r" in inspect.signature(vim.Solve).parameters
+    assert callable(vim.MagnetizationSource)       # fixed/given M
+    assert callable(vim.Solve)                     # linear-recoil B_r + mu_r
+    assert callable(vim.PlayHysteresisMaterial)    # simplified Play
+    assert callable(vim.EnergyStopMaterial)        # full B-input EnergyStop
+    assert vim.MagnetizationSource.permanent_magnet_level == 1
+    assert vim.PlayHysteresisMaterial.permanent_magnet_level == 3
+    assert vim.EnergyStopMaterial.permanent_magnet_level == 4
 
 
 def test_legacy_hdiv_vim_names_are_not_public_aliases():

@@ -41,6 +41,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <optional>
+#include <cstring>
+#include <limits>
 
 // Radia core headers (after NGSolve to avoid EXP macro conflict)
 #include "radentry.h"
@@ -94,9 +96,11 @@ extern "C" {
 #include "rad_stream_function.h" // (ACA+)+TSVD stream-function coil solver
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
+#include "rad_hdiv_hysteresis.h" // Energy-based B-input vector Stop material
 #include "rad_hdiv_field_evaluator.h" // Persistent RT1 field source + target tree
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
+#include "rad_parallel.h"        // NGSolve TaskManager thread policy
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
@@ -131,6 +135,25 @@ std::vector<double> to_vector(const py::object& obj) {
     throw std::runtime_error("Expected list, tuple, or numpy array");
 }
 
+using F64Array = py::array_t<double, py::array::c_style | py::array::forcecast>;
+using I32Array = py::array_t<int, py::array::c_style | py::array::forcecast>;
+
+template <typename T>
+struct Array1DView {
+    const T* data = nullptr;
+    std::size_t size = 0;
+};
+
+template <typename T>
+Array1DView<T> array_1d_view(
+        py::array_t<T, py::array::c_style | py::array::forcecast> arr,
+        const char* name) {
+    auto buf = arr.request();
+    if (buf.ndim != 1)
+        throw std::runtime_error(std::string(name) + " must be a 1D contiguous array");
+    return {static_cast<const T*>(buf.ptr), static_cast<std::size_t>(buf.size)};
+}
+
 template <typename T>
 std::vector<T> to_1d_vector(
         py::array_t<T, py::array::c_style | py::array::forcecast> arr,
@@ -142,11 +165,124 @@ std::vector<T> to_1d_vector(
     return std::vector<T>(ptr, ptr + buf.size);
 }
 
+template <typename T>
+py::array_t<T> to_numpy_1d(const std::vector<T>& values) {
+    py::array_t<T> out(values.size());
+    if (!values.empty())
+        std::memcpy(out.mutable_data(), values.data(), values.size() * sizeof(T));
+    return out;
+}
+
+template <typename Factory>
+std::shared_ptr<RadHACApKChargeGram> build_charge_gram_released(
+        Factory&& factory, double eps, int leaf, double eta, bool build,
+        const char* failure_message) {
+    std::shared_ptr<RadHACApKChargeGram> manager;
+    {
+        py::gil_scoped_release release;
+        manager = factory();
+        if (build) {
+            RadHACApKParams params;
+            params.aca_eps = eps;
+            params.leaf_size = leaf;
+            params.eta = eta;
+            params.print_level = 0;
+            if (!manager->BuildHMatrix(params))
+                throw std::runtime_error(failure_message);
+        } else manager->PrepareGeometryOnly();
+    }
+    return manager;
+}
+
 py::dict solve_timings_dict(const RadHACApKChargeGram& s) {
     py::dict timings;
     for (const auto& kv : s.LastSolveTimings()) timings[py::str(kv.first)] = kv.second;
     return timings;
 }
+
+struct ScalarSparseCOO {
+    std::vector<int> rows;
+    std::vector<int> cols;
+    std::vector<double> values;
+    int size = 0;
+};
+
+ScalarSparseCOO extract_ngsolve_scalar_sparse(
+        const std::shared_ptr<ngla::BaseMatrix>& matrix, const char* caller) {
+    if (!matrix)
+        throw std::runtime_error(std::string(caller) + ": null NGSolve matrix");
+    if (matrix->VHeight() != matrix->VWidth())
+        throw std::runtime_error(std::string(caller) + ": matrix must be square");
+    const auto* sparse = dynamic_cast<const ngla::SparseMatrix<double>*>(matrix.get());
+    if (!sparse)
+        throw std::runtime_error(
+            std::string(caller) +
+            ": expected an assembled scalar ngla::SparseMatrix<double>; "
+            "assemble the NGSolve BilinearForm before configuring HDiv-VIM");
+
+    ScalarSparseCOO result;
+    result.size = matrix->VHeight();
+    result.rows.reserve(sparse->NZE());
+    result.cols.reserve(sparse->NZE());
+    result.values.reserve(sparse->NZE());
+    for (int row = 0; row < result.size; ++row) {
+        const auto indices = sparse->GetRowIndices(row);
+        const auto values = sparse->GetRowValues(row);
+        if (indices.Size() != values.Size())
+            throw std::runtime_error(std::string(caller) + ": inconsistent sparse row");
+        for (int local = 0; local < indices.Size(); ++local) {
+            result.rows.push_back(row);
+            result.cols.push_back(indices[local]);
+            result.values.push_back(values[local]);
+        }
+    }
+    return result;
+}
+
+// Native NGSolve matrix facade for N = B^T G B.  Keeping this in C++ means
+// ngsolve.krylovspace, BlockMatrix and BilinearForm compositions can apply the
+// persistent HDiv operator without NumPy buffers or Python callbacks.
+class RadHDivDemagMatrix final : public ngla::BaseMatrix {
+public:
+    explicit RadHDivDemagMatrix(std::shared_ptr<RadHACApKChargeGram> gram)
+        : gram_(std::move(gram)), ndof_(gram_ ? gram_->ConfiguredNFace() : 0) {
+        if (!gram_ || !gram_->HasConfiguredChargeMap())
+            throw std::runtime_error("HDivDemagMatrix: charge map is not configured");
+    }
+
+    void Mult(const ngla::BaseVector& x, ngla::BaseVector& y) const override {
+        auto xv = x.FV<double>();
+        auto yv = y.FV<double>();
+        if (xv.Size() != ndof_ || yv.Size() != ndof_)
+            throw std::runtime_error("HDivDemagMatrix.Mult: vector size mismatch");
+        gram_->ApplyConfiguredDemag(xv.Data(), yv.Data(), true);
+    }
+
+    void MultAdd(double scale, const ngla::BaseVector& x, ngla::BaseVector& y) const override {
+        auto xv = x.FV<double>();
+        auto yv = y.FV<double>();
+        if (xv.Size() != ndof_ || yv.Size() != ndof_)
+            throw std::runtime_error("HDivDemagMatrix.MultAdd: vector size mismatch");
+        gram_->ApplyConfiguredDemagAdd(scale, xv.Data(), yv.Data(), true);
+    }
+
+    void MultTransAdd(double scale, const ngla::BaseVector& x, ngla::BaseVector& y) const override {
+        MultAdd(scale, x, y);
+    }
+
+    int VHeight() const override { return ndof_; }
+    int VWidth() const override { return ndof_; }
+    ngla::AutoVector CreateRowVector() const override {
+        return std::make_unique<ngla::VVector<double>>(ndof_);
+    }
+    ngla::AutoVector CreateColVector() const override {
+        return std::make_unique<ngla::VVector<double>>(ndof_);
+    }
+
+private:
+    std::shared_ptr<RadHACApKChargeGram> gram_;
+    int ndof_;
+};
 
 /**
  * @brief Convert 2D Python list to flat array with vertex data
@@ -2489,6 +2625,77 @@ public:
 	}
 };
 
+// Immutable HDiv charge-source field exposed as a native NGSolve
+// CoefficientFunction.  The evaluator returns the unscaled Coulomb-gradient
+// integral; physical H therefore carries the conventional 1/(4*pi) factor.
+// Evaluation is serial inside each integration rule because NGSolve already
+// parallelizes element assembly with TaskManager.
+class HDivFieldCF : public CoefficientFunction
+{
+    std::shared_ptr<rad_hdiv::HDivFieldEvaluator> evaluator_;
+    rad_hdiv::HDivFieldEvaluator::Algorithm algorithm_;
+
+    static constexpr double scale_ = 0.079577471545947667884441881686257181;
+
+public:
+    HDivFieldCF(std::shared_ptr<rad_hdiv::HDivFieldEvaluator> evaluator,
+                const std::string& algorithm = "direct")
+        : CoefficientFunction(3), evaluator_(std::move(evaluator)),
+          algorithm_(rad_hdiv::HDivFieldEvaluator::ParseAlgorithm(algorithm))
+    {
+        if (!evaluator_)
+            throw std::invalid_argument("_HDivFieldCoefficient: evaluator must not be null");
+    }
+
+    virtual double Evaluate(const BaseMappedIntegrationPoint&) const override
+    {
+        return 0.0;
+    }
+
+    virtual void Evaluate(const BaseMappedIntegrationPoint& mip,
+                          FlatVector<> result) const override
+    {
+        auto point = mip.GetPoint();
+        const int dim = point.Size();
+        double observation[3] = {
+            point[0], (dim >= 2) ? point[1] : 0.0, (dim >= 3) ? point[2] : 0.0
+        };
+        double value[3];
+        evaluator_->EvaluateSerial(observation, 1, value, algorithm_);
+        result(0) = scale_*value[0];
+        result(1) = scale_*value[1];
+        result(2) = scale_*value[2];
+    }
+
+    virtual void Evaluate(const BaseMappedIntegrationRule& mir,
+                          BareSliceMatrix<> result) const override
+    {
+        const std::size_t count = mir.Size();
+        thread_local std::vector<double> observations;
+        thread_local std::vector<double> values;
+        observations.resize(3*count);
+        values.resize(3*count);
+        for (std::size_t i = 0; i < count; ++i) {
+            auto point = mir[i].GetPoint();
+            const int dim = point.Size();
+            observations[3*i] = point[0];
+            observations[3*i+1] = (dim >= 2) ? point[1] : 0.0;
+            observations[3*i+2] = (dim >= 3) ? point[2] : 0.0;
+        }
+        evaluator_->EvaluateSerial(observations.data(), count, values.data(), algorithm_);
+        for (std::size_t i = 0; i < count; ++i) {
+            result(i, 0) = scale_*values[3*i];
+            result(i, 1) = scale_*values[3*i+1];
+            result(i, 2) = scale_*values[3*i+2];
+        }
+    }
+
+    const std::shared_ptr<rad_hdiv::HDivFieldEvaluator>& Evaluator() const { return evaluator_; }
+    const char* AlgorithmName() const {
+        return rad_hdiv::HDivFieldEvaluator::AlgorithmName(algorithm_);
+    }
+};
+
 } // namespace ngfem
 
 
@@ -2590,8 +2797,113 @@ PYBIND11_MODULE(_radia_pybind, m) {
             B = rad.Fld(magnet, 'b', [0.05, 0, 0])
     )pbdoc";
 
+    // Register NGSolve's pybind base types before exporting native BaseMatrix
+    // and CoefficientFunction subclasses from this extension.
+    py::module_::import("ngsolve.la");
+    py::module_::import("ngsolve.comp");
+
     // Version info
     m.attr("__version__") = "1.4.0";
+
+    using EnergyStopMaterial = rad_hdiv::EnergyStopMaterial;
+    py::class_<EnergyStopMaterial, std::shared_ptr<EnergyStopMaterial>>(
+        m, "_EnergyStopMaterial")
+        .def(py::init([](F64Array eta_a, F64Array table_r_a,
+                         F64Array table_g_a, I32Array table_offsets_a,
+                         F64Array gamma_a, double alpha, double b_max) {
+            auto eta = to_1d_vector<double>(eta_a, "eta");
+            auto table_r = to_1d_vector<double>(table_r_a, "table_r");
+            auto table_g = to_1d_vector<double>(table_g_a, "table_g");
+            auto table_offsets = to_1d_vector<int>(table_offsets_a, "table_offsets");
+            auto gamma = to_1d_vector<double>(gamma_a, "gamma");
+            std::shared_ptr<EnergyStopMaterial> material;
+            {
+                py::gil_scoped_release release;
+                material = std::make_shared<EnergyStopMaterial>(
+                    std::move(eta), std::move(table_r), std::move(table_g),
+                    std::move(table_offsets), std::move(gamma), alpha, b_max);
+            }
+            return material;
+        }), py::arg("eta"), py::arg("table_r"), py::arg("table_g"),
+            py::arg("table_offsets"), py::arg("gamma"),
+            py::arg("alpha") = 5.0, py::arg("b_max") = 0.0,
+            "C++ isotropic vector B-input energy Stop material.")
+        .def("state0", [](const EnergyStopMaterial& material) {
+            py::array_t<double> output(material.StateSize());
+            material.State0(output.mutable_data());
+            return output;
+        })
+        .def("forward_batch", [](const EnergyStopMaterial& material,
+                F64Array B_a, F64Array states_a) {
+            auto B = B_a.request();
+            auto states = states_a.request();
+            if (B.ndim != 2 || B.shape[1] != 3)
+                throw std::runtime_error("_EnergyStopMaterial.forward_batch: B must have shape (n,3)");
+            if (states.ndim != 2 || states.shape[0] != B.shape[0] ||
+                states.shape[1] != static_cast<py::ssize_t>(material.StateSize()))
+                throw std::runtime_error("_EnergyStopMaterial.forward_batch: states must have shape (n,state_size)");
+            if (B.shape[0] > std::numeric_limits<int>::max())
+                throw std::runtime_error("_EnergyStopMaterial.forward_batch: too many rows");
+            py::array_t<double> output({B.shape[0], py::ssize_t(3)});
+            {
+                py::gil_scoped_release release;
+                material.ForwardBatch(static_cast<const double*>(B.ptr),
+                    static_cast<const double*>(states.ptr), static_cast<int>(B.shape[0]),
+                    output.mutable_data());
+            }
+            return output;
+        }, py::arg("B"), py::arg("states"))
+        .def("commit_batch", [](const EnergyStopMaterial& material,
+                F64Array B_a, F64Array states_a) {
+            auto B = B_a.request();
+            auto states = states_a.request();
+            if (B.ndim != 2 || B.shape[1] != 3)
+                throw std::runtime_error("_EnergyStopMaterial.commit_batch: B must have shape (n,3)");
+            if (states.ndim != 2 || states.shape[0] != B.shape[0] ||
+                states.shape[1] != static_cast<py::ssize_t>(material.StateSize()))
+                throw std::runtime_error("_EnergyStopMaterial.commit_batch: states must have shape (n,state_size)");
+            if (B.shape[0] > std::numeric_limits<int>::max())
+                throw std::runtime_error("_EnergyStopMaterial.commit_batch: too many rows");
+            py::array_t<double> output({B.shape[0], states.shape[1]});
+            {
+                py::gil_scoped_release release;
+                material.CommitBatch(static_cast<const double*>(B.ptr),
+                    static_cast<const double*>(states.ptr), static_cast<int>(B.shape[0]),
+                    output.mutable_data());
+            }
+            return output;
+        }, py::arg("B"), py::arg("states"))
+        .def("stored_energy_batch", [](const EnergyStopMaterial& material,
+                F64Array B_a, F64Array states_a) {
+            auto B = B_a.request();
+            auto states = states_a.request();
+            if (B.ndim != 2 || B.shape[1] != 3)
+                throw std::runtime_error("_EnergyStopMaterial.stored_energy_batch: B must have shape (n,3)");
+            if (states.ndim != 2 || states.shape[0] != B.shape[0] ||
+                states.shape[1] != static_cast<py::ssize_t>(material.StateSize()))
+                throw std::runtime_error("_EnergyStopMaterial.stored_energy_batch: states must have shape (n,state_size)");
+            if (B.shape[0] > std::numeric_limits<int>::max())
+                throw std::runtime_error("_EnergyStopMaterial.stored_energy_batch: too many rows");
+            py::array_t<double> output(B.shape[0]);
+            {
+                py::gil_scoped_release release;
+                material.StoredEnergyBatch(static_cast<const double*>(B.ptr),
+                    static_cast<const double*>(states.ptr), static_cast<int>(B.shape[0]),
+                    output.mutable_data());
+            }
+            return output;
+        }, py::arg("B"), py::arg("states"))
+        .def_property_readonly("branch_count", &EnergyStopMaterial::BranchCount)
+        .def_property_readonly("state_size", &EnergyStopMaterial::StateSize)
+        .def_property_readonly("alpha", &EnergyStopMaterial::Alpha)
+        .def_property_readonly("b_max", &EnergyStopMaterial::BMax)
+        .def_property_readonly("nu_bound", &EnergyStopMaterial::NuBound)
+        .def_property_readonly("eta", [](const EnergyStopMaterial& material) {
+            return to_numpy_1d(material.Eta());
+        })
+        .def_property_readonly("gamma", [](const EnergyStopMaterial& material) {
+            return to_numpy_1d(material.Gamma());
+        });
 
     using FieldEvaluator = rad_hdiv::HDivFieldEvaluator;
     py::class_<FieldEvaluator, std::shared_ptr<FieldEvaluator>>(m, "_HDivFieldEvaluator")
@@ -2614,10 +2926,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
             options.leaf_size = leaf_size; options.theta = theta;
             options.tree_min_sources = tree_min_sources; options.auto_min_work = auto_min_work;
             options.tree_relative_tolerance = tree_relative_tolerance; options.probe_count = probe_count;
-            return FieldEvaluator::FromTet(
-                std::vector<double>(vp, vp+v.size), std::vector<double>(sp, sp+s.size),
-                to_1d_vector<int>(image_masks, "image_masks"),
-                to_1d_vector<double>(image_signs, "image_signs"), options);
+            std::vector<double> volume_data(vp, vp+v.size);
+            std::vector<double> surface_data(sp, sp+s.size);
+            auto masks = to_1d_vector<int>(image_masks, "image_masks");
+            auto signs = to_1d_vector<double>(image_signs, "image_signs");
+            std::shared_ptr<FieldEvaluator> evaluator;
+            {
+                py::gil_scoped_release release;
+                evaluator = FieldEvaluator::FromTet(
+                    std::move(volume_data), std::move(surface_data),
+                    std::move(masks), std::move(signs), options);
+            }
+            return evaluator;
         }, py::arg("volume"), py::arg("surface"),
            py::arg("image_masks") = py::array_t<int>(0),
            py::arg("image_signs") = py::array_t<double>(0),
@@ -2644,10 +2964,18 @@ PYBIND11_MODULE(_radia_pybind, m) {
             options.leaf_size = leaf_size; options.theta = theta;
             options.tree_min_sources = tree_min_sources; options.auto_min_work = auto_min_work;
             options.tree_relative_tolerance = tree_relative_tolerance; options.probe_count = probe_count;
-            return FieldEvaluator::FromCloud(
-                std::vector<double>(xp, xp+x.size), std::vector<double>(qp, qp+q.size),
-                to_1d_vector<int>(image_masks, "image_masks"),
-                to_1d_vector<double>(image_signs, "image_signs"), options);
+            std::vector<double> positions(xp, xp+x.size);
+            std::vector<double> strengths(qp, qp+q.size);
+            auto masks = to_1d_vector<int>(image_masks, "image_masks");
+            auto signs = to_1d_vector<double>(image_signs, "image_signs");
+            std::shared_ptr<FieldEvaluator> evaluator;
+            {
+                py::gil_scoped_release release;
+                evaluator = FieldEvaluator::FromCloud(
+                    std::move(positions), std::move(strengths),
+                    std::move(masks), std::move(signs), options);
+            }
+            return evaluator;
         }, py::arg("xyz"), py::arg("strength"),
            py::arg("image_masks") = py::array_t<int>(0),
            py::arg("image_signs") = py::array_t<double>(0),
@@ -2692,9 +3020,61 @@ PYBIND11_MODULE(_radia_pybind, m) {
             result["auto_min_work"] = evaluator.AutoMinWork();
             result["tree_relative_tolerance"] = evaluator.TreeRelativeTolerance();
             result["probe_count"] = evaluator.ProbeCount();
+            result["source_representation"] = evaluator.SourceRepresentation();
             result["bounds_min"] = py::make_tuple(lower[0], lower[1], lower[2]);
             result["bounds_max"] = py::make_tuple(upper[0], upper[1], upper[2]);
             return result;
+        });
+
+    using PlanarFieldEvaluator = rad_planar_charges::PlanarFieldEvaluator;
+    py::class_<PlanarFieldEvaluator, std::shared_ptr<PlanarFieldEvaluator>>(
+        m, "_PlanarHDivFieldEvaluator")
+        .def("field", [](const PlanarFieldEvaluator& evaluator,
+                py::array_t<double, py::array::c_style | py::array::forcecast> points) {
+            auto input = points.request();
+            if (input.ndim != 2 || input.shape[1] != 2)
+                throw std::runtime_error("_PlanarHDivFieldEvaluator.field: points must have shape (n,2)");
+            const std::size_t count = static_cast<std::size_t>(input.shape[0]);
+            py::array_t<double> output({static_cast<py::ssize_t>(count), py::ssize_t(2)});
+            auto output_buffer = output.request();
+            {
+                py::gil_scoped_release release;
+                evaluator.EvaluateField(static_cast<const double*>(input.ptr), count,
+                                        static_cast<double*>(output_buffer.ptr));
+            }
+            return output;
+        }, py::arg("points"))
+        .def("az", [](const PlanarFieldEvaluator& evaluator,
+                py::array_t<double, py::array::c_style | py::array::forcecast> points) {
+            auto input = points.request();
+            if (input.ndim != 2 || input.shape[1] != 2)
+                throw std::runtime_error("_PlanarHDivFieldEvaluator.az: points must have shape (n,2)");
+            const std::size_t count = static_cast<std::size_t>(input.shape[0]);
+            py::array_t<double> output(static_cast<py::ssize_t>(count));
+            auto output_buffer = output.request();
+            {
+                py::gil_scoped_release release;
+                evaluator.EvaluateAz(static_cast<const double*>(input.ptr), count,
+                                     static_cast<double*>(output_buffer.ptr));
+            }
+            return output;
+        }, py::arg("points"))
+        .def("stats", [](const PlanarFieldEvaluator& evaluator) {
+            py::dict result;
+            result["base_source_count"] = evaluator.BaseSourceCount();
+            result["source_count"] = evaluator.SourceCount();
+            result["image_count"] = evaluator.ImageCount();
+            return result;
+        });
+
+    py::class_<ngfem::HDivFieldCF,
+               std::shared_ptr<ngfem::HDivFieldCF>,
+               ngfem::CoefficientFunction>(m, "_HDivFieldCoefficient")
+        .def(py::init<std::shared_ptr<FieldEvaluator>, const std::string&>(),
+             py::arg("evaluator"), py::arg("algorithm") = "direct",
+             "Native NGSolve H-field CoefficientFunction backed by an immutable HDiv charge source.")
+        .def_property_readonly("algorithm", [](const ngfem::HDivFieldCF& field) {
+            return std::string(field.AlgorithmName());
         });
 
 
@@ -2702,42 +3082,45 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Charges (cell rho + boundary-face sigma) extracted from an HDiv mesh; pass charge
     // centroids/measures + the caller-computed diagonal self-energies.  The
     // demag operator N = B^T G B is applied as B^T (matvec(B m)) with B the sparse charge map.
-    py::class_<RadHACApKChargeGram>(m, "_ChargeGramHMatrix")
-        .def(py::init([](std::vector<double> centroids, std::vector<double> measures,
-                         std::vector<double> self_energy, double eps, int leaf, double eta) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(centroids), std::move(measures),
-                                             std::move(self_energy)));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("charge Gram H-matrix build failed");
-                 return mgr;
+    py::class_<RadHDivDemagMatrix, std::shared_ptr<RadHDivDemagMatrix>, ngla::BaseMatrix>(
+        m, "_HDivDemagMatrix");
+
+    py::class_<RadHACApKChargeGram, std::shared_ptr<RadHACApKChargeGram>>(m, "_ChargeGramHMatrix")
+        .def(py::init([](F64Array centroids_a, F64Array measures_a,
+                         F64Array self_energy_a, double eps, int leaf, double eta) {
+                 auto centroids = to_1d_vector<double>(centroids_a, "centroids");
+                 auto measures = to_1d_vector<double>(measures_a, "measures");
+                 auto self_energy = to_1d_vector<double>(self_energy_a, "self_energy");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(centroids), std::move(measures), std::move(self_energy)); },
+                     eps, leaf, eta, true, "charge Gram H-matrix build failed");
              }),
              py::arg("centroids"), py::arg("measures"), py::arg("self_energy"),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              "Build the n_charge x n_charge Coulomb Gram G as a HACApK H-matrix over the charge "
              "centroids (G[a!=b] = meas_a meas_b/(4pi r), G[a][a] = self_energy[a]).")
-        .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts,
+        .def(py::init([](F64Array cell_verts_a, F64Array face_verts_a,
                          int n_el, double eps, int leaf, double eta, double near_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs, bool build,
+                         I32Array image_masks_a, F64Array image_signs_a, bool build,
                          int far_quad) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el, near_factor,
-                                             std::move(image_masks), std::move(image_signs), far_quad));
-                 if (build) {
-                     RadHACApKParams p;
-                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("analytic charge Gram H-matrix build failed");
-                 }
+                 auto cell_verts = to_1d_vector<double>(cell_verts_a, "cell_verts");
+                 auto face_verts = to_1d_vector<double>(face_verts_a, "face_verts");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
                  // build=False leaves the H-matrix UNBUILT: only the geometry (outer quadrature, centroids,
                  // sizes) is set up in the ctor, so .entry() works as a cheap analytic ENTRY ORACLE while
                  // .matvec() is unavailable (would raise).  The Gauss near-correction uses this to sample
                  // exact analytic near entries WITHOUT paying the full O(N log N) analytic H-matrix build.
-                 return mgr;
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(cell_verts), std::move(face_verts), n_el, near_factor,
+                         std::move(image_masks), std::move(image_signs), far_quad); },
+                     eps, leaf, eta, build, "analytic charge Gram H-matrix build failed");
              }),
              py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("near_factor") = 1e30,
-             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("build") = true, py::arg("far_quad") = 0,
              "ANALYTIC mode (M2b): build the EXACT charge Gram as a HACApK H-matrix from per-charge "
              "geometry (cell_verts [n_el*12] tets, face_verts [n_bf*9] triangles). Entry = analytic "
@@ -2747,28 +3130,36 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "double-quadrature of 1/r (degree-2 4-pt tet / 3-pt tri, O((size/r)^4)) that reproduces the "
              "all-analytic Gram at ~monopole cost -- the precision-preserving build speedup (use near_factor~2 "
              "+ far_quad=4). build=False skips BuildHMatrix -> a geometry-only ENTRY ORACLE (.entry() only).")
-        .def(py::init([](std::vector<double> cell_tris, std::vector<int> cell_troff,
-                         std::vector<double> cell_cent, std::vector<double> cell_meas,
-                         std::vector<double> face_tris, std::vector<int> face_troff,
-                         std::vector<double> face_cent, std::vector<double> face_meas,
+        .def(py::init([](F64Array cell_tris_a, I32Array cell_troff_a,
+                         F64Array cell_cent_a, F64Array cell_meas_a,
+                         F64Array face_tris_a, I32Array face_troff_a,
+                         F64Array face_cent_a, F64Array face_meas_a,
                          int n_el, double eps, int leaf, double eta, double near_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs, int far_quad) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(cell_tris), std::move(cell_troff),
-                                             std::move(cell_cent), std::move(cell_meas),
-                                             std::move(face_tris), std::move(face_troff),
-                                             std::move(face_cent), std::move(face_meas), n_el, near_factor,
-                                             std::move(image_masks), std::move(image_signs), far_quad));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("polytope charge Gram H-matrix build failed");
-                 return mgr;
+                         I32Array image_masks_a, F64Array image_signs_a, int far_quad) {
+                 auto cell_tris = to_1d_vector<double>(cell_tris_a, "cell_tris");
+                 auto cell_troff = to_1d_vector<int>(cell_troff_a, "cell_troff");
+                 auto cell_cent = to_1d_vector<double>(cell_cent_a, "cell_cent");
+                 auto cell_meas = to_1d_vector<double>(cell_meas_a, "cell_meas");
+                 auto face_tris = to_1d_vector<double>(face_tris_a, "face_tris");
+                 auto face_troff = to_1d_vector<int>(face_troff_a, "face_troff");
+                 auto face_cent = to_1d_vector<double>(face_cent_a, "face_cent");
+                 auto face_meas = to_1d_vector<double>(face_meas_a, "face_meas");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(cell_tris), std::move(cell_troff),
+                         std::move(cell_cent), std::move(cell_meas),
+                         std::move(face_tris), std::move(face_troff),
+                         std::move(face_cent), std::move(face_meas), n_el, near_factor,
+                         std::move(image_masks), std::move(image_signs), far_quad); },
+                     eps, leaf, eta, true, "polytope charge Gram H-matrix build failed");
              }),
              py::arg("cell_tris"), py::arg("cell_troff"), py::arg("cell_cent"), py::arg("cell_meas"),
              py::arg("face_tris"), py::arg("face_troff"), py::arg("face_cent"), py::arg("face_meas"),
              py::arg("n_el"), py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0,
              py::arg("near_factor") = 1e30,
-             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("far_quad") = 0,
              "POLYTOPE mode (hex/wedge cells + quad faces): the EXACT analytic charge Gram for any "
              "flat-faced convex cell, the triangulation supplied from Python.  cell_tris is a flat "
@@ -2779,26 +3170,38 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "centroid-fan / Dunavant outer quadrature (matches the independent analytic polytope reference). "
              "near_factor (default 1e30 = all-analytic); pass ~2 for the NEAR/FAR build speedup. far_quad>0 "
              "uses the precision-preserving low-order double-quad far (degree-2 on the sub-tets/sub-tris).")
-        .def(py::init([](std::vector<double> cell_curved_nodes, std::vector<int> cell_subtet_off,
-                         std::vector<double> cell_cent, std::vector<double> cell_meas,
-                         std::vector<double> face_curved_nodes, std::vector<int> face_subtri_off,
-                         std::vector<double> face_cent, std::vector<double> face_meas,
-                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
-                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
-                         std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el,
+        .def(py::init([](F64Array cell_curved_nodes_a, I32Array cell_subtet_off_a,
+                         F64Array cell_cent_a, F64Array cell_meas_a,
+                         F64Array face_curved_nodes_a, I32Array face_subtri_off_a,
+                         F64Array face_cent_a, F64Array face_meas_a,
+                         F64Array ref_tet_pts_a, F64Array ref_tet_w_a,
+                         F64Array ref_tri_pts_a, F64Array ref_tri_w_a,
+                         F64Array curve_gl_a, F64Array curve_gw_a, int n_el,
                          double eps, int leaf, double eta) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(cell_curved_nodes), std::move(cell_subtet_off),
-                                             std::move(cell_cent), std::move(cell_meas),
-                                             std::move(face_curved_nodes), std::move(face_subtri_off),
-                                             std::move(face_cent), std::move(face_meas),
-                                             std::move(ref_tet_pts), std::move(ref_tet_w),
-                                             std::move(ref_tri_pts), std::move(ref_tri_w),
-                                             std::move(curve_gl), std::move(curve_gw), n_el));
-                 RadHACApKParams p;
-                 p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                 if (!mgr->BuildHMatrix(p)) throw std::runtime_error("curved polytope charge Gram H-matrix build failed");
-                 return mgr;
+                 auto cell_curved_nodes = to_1d_vector<double>(cell_curved_nodes_a, "cell_curved_nodes");
+                 auto cell_subtet_off = to_1d_vector<int>(cell_subtet_off_a, "cell_subtet_off");
+                 auto cell_cent = to_1d_vector<double>(cell_cent_a, "cell_cent");
+                 auto cell_meas = to_1d_vector<double>(cell_meas_a, "cell_meas");
+                 auto face_curved_nodes = to_1d_vector<double>(face_curved_nodes_a, "face_curved_nodes");
+                 auto face_subtri_off = to_1d_vector<int>(face_subtri_off_a, "face_subtri_off");
+                 auto face_cent = to_1d_vector<double>(face_cent_a, "face_cent");
+                 auto face_meas = to_1d_vector<double>(face_meas_a, "face_meas");
+                 auto ref_tet_pts = to_1d_vector<double>(ref_tet_pts_a, "ref_tet_pts");
+                 auto ref_tet_w = to_1d_vector<double>(ref_tet_w_a, "ref_tet_w");
+                 auto ref_tri_pts = to_1d_vector<double>(ref_tri_pts_a, "ref_tri_pts");
+                 auto ref_tri_w = to_1d_vector<double>(ref_tri_w_a, "ref_tri_w");
+                 auto curve_gl = to_1d_vector<double>(curve_gl_a, "curve_gl");
+                 auto curve_gw = to_1d_vector<double>(curve_gw_a, "curve_gw");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(cell_curved_nodes), std::move(cell_subtet_off),
+                         std::move(cell_cent), std::move(cell_meas),
+                         std::move(face_curved_nodes), std::move(face_subtri_off),
+                         std::move(face_cent), std::move(face_meas),
+                         std::move(ref_tet_pts), std::move(ref_tet_w),
+                         std::move(ref_tri_pts), std::move(ref_tri_w),
+                         std::move(curve_gl), std::move(curve_gw), n_el); },
+                     eps, leaf, eta, true, "curved polytope charge Gram H-matrix build failed");
              }),
              py::arg("cell_curved_nodes"), py::arg("cell_subtet_off"), py::arg("cell_cent"), py::arg("cell_meas"),
              py::arg("face_curved_nodes"), py::arg("face_subtri_off"), py::arg("face_cent"), py::arg("face_meas"),
@@ -2811,45 +3214,60 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "cell_curved_nodes [n_cell_subtet*30] + cell_subtet_off [n_cell+1]; face_curved_nodes "
              "[n_bf_subtri*18] + face_subtri_off [n_bf+1]; ref_tet_pts/w + ref_tri_pts/w the outer quads; "
              "curve_gl/gw the inner Duffy rule. Both reuse the golden curved-tet/tri kernels.")
-        .def(py::init([](std::vector<double> cell_verts, std::vector<double> face_verts, int n_el,
-                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
-                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
-                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
-                         std::vector<double> ref_tet_pts_lo, std::vector<double> ref_tet_w_lo,
-                         std::vector<double> ref_tri_pts_lo, std::vector<double> ref_tri_w_lo,
+        .def(py::init([](F64Array cell_verts_a, F64Array face_verts_a, int n_el,
+                         I32Array charge_host_a, I32Array charge_kind_a, I32Array charge_expo_a,
+                         F64Array ref_tet_pts_a, F64Array ref_tet_w_a,
+                         F64Array ref_tri_pts_a, F64Array ref_tri_w_a,
+                         F64Array ref_tet_pts_lo_a, F64Array ref_tet_w_lo_a,
+                         F64Array ref_tri_pts_lo_a, F64Array ref_tri_w_lo_a,
                          double ho_far_factor,
-                         std::vector<double> ref_tet_pts_in, std::vector<double> ref_tet_w_in,
-                         std::vector<double> ref_tri_pts_in, std::vector<double> ref_tri_w_in,
-                         std::vector<int> image_masks, std::vector<double> image_signs,
+                         F64Array ref_tet_pts_in_a, F64Array ref_tet_w_in_a,
+                         F64Array ref_tri_pts_in_a, F64Array ref_tri_w_in_a,
+                         I32Array image_masks_a, F64Array image_signs_a,
                          double eps, int leaf, double eta, bool build) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(cell_verts), std::move(face_verts), n_el,
-                                             std::move(charge_host), std::move(charge_kind),
-                                             std::move(charge_expo), std::move(ref_tet_pts),
-                                             std::move(ref_tet_w), std::move(ref_tri_pts), std::move(ref_tri_w),
-                                             std::move(ref_tet_pts_lo), std::move(ref_tet_w_lo),
-                                             std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
-                                             std::move(ref_tet_pts_in), std::move(ref_tet_w_in),
-                                             std::move(ref_tri_pts_in), std::move(ref_tri_w_in),
-                                             std::move(image_masks), std::move(image_signs)));
-                 if (build) {
-                     RadHACApKParams p;
-                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("high-order charge Gram H-matrix build failed");
-                 }
+                 auto cell_verts = to_1d_vector<double>(cell_verts_a, "cell_verts");
+                 auto face_verts = to_1d_vector<double>(face_verts_a, "face_verts");
+                 auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
+                 auto charge_kind = to_1d_vector<int>(charge_kind_a, "charge_kind");
+                 auto charge_expo = to_1d_vector<int>(charge_expo_a, "charge_expo");
+                 auto ref_tet_pts = to_1d_vector<double>(ref_tet_pts_a, "ref_tet_pts");
+                 auto ref_tet_w = to_1d_vector<double>(ref_tet_w_a, "ref_tet_w");
+                 auto ref_tri_pts = to_1d_vector<double>(ref_tri_pts_a, "ref_tri_pts");
+                 auto ref_tri_w = to_1d_vector<double>(ref_tri_w_a, "ref_tri_w");
+                 auto ref_tet_pts_lo = to_1d_vector<double>(ref_tet_pts_lo_a, "ref_tet_pts_lo");
+                 auto ref_tet_w_lo = to_1d_vector<double>(ref_tet_w_lo_a, "ref_tet_w_lo");
+                 auto ref_tri_pts_lo = to_1d_vector<double>(ref_tri_pts_lo_a, "ref_tri_pts_lo");
+                 auto ref_tri_w_lo = to_1d_vector<double>(ref_tri_w_lo_a, "ref_tri_w_lo");
+                 auto ref_tet_pts_in = to_1d_vector<double>(ref_tet_pts_in_a, "ref_tet_pts_in");
+                 auto ref_tet_w_in = to_1d_vector<double>(ref_tet_w_in_a, "ref_tet_w_in");
+                 auto ref_tri_pts_in = to_1d_vector<double>(ref_tri_pts_in_a, "ref_tri_pts_in");
+                 auto ref_tri_w_in = to_1d_vector<double>(ref_tri_w_in_a, "ref_tri_w_in");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
                  // build=False -> geometry-only ENTRY ORACLE (.entry() only): the high-order Gauss near
                  // correction samples exact analytic high-order entries WITHOUT the full H-matrix build.
-                 return mgr;
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(cell_verts), std::move(face_verts), n_el,
+                         std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                         std::move(ref_tet_pts), std::move(ref_tet_w),
+                         std::move(ref_tri_pts), std::move(ref_tri_w),
+                         std::move(ref_tet_pts_lo), std::move(ref_tet_w_lo),
+                         std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
+                         std::move(ref_tet_pts_in), std::move(ref_tet_w_in),
+                         std::move(ref_tri_pts_in), std::move(ref_tri_w_in),
+                         std::move(image_masks), std::move(image_signs)); },
+                     eps, leaf, eta, build, "high-order charge Gram H-matrix build failed");
              }),
              py::arg("cell_verts"), py::arg("face_verts"), py::arg("n_el"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
              py::arg("ref_tet_pts"), py::arg("ref_tet_w"), py::arg("ref_tri_pts"), py::arg("ref_tri_w"),
-             py::arg("ref_tet_pts_lo") = std::vector<double>{}, py::arg("ref_tet_w_lo") = std::vector<double>{},
-             py::arg("ref_tri_pts_lo") = std::vector<double>{}, py::arg("ref_tri_w_lo") = std::vector<double>{},
+             py::arg("ref_tet_pts_lo") = F64Array(0), py::arg("ref_tet_w_lo") = F64Array(0),
+             py::arg("ref_tri_pts_lo") = F64Array(0), py::arg("ref_tri_w_lo") = F64Array(0),
              py::arg("ho_far_factor") = 1e30,
-             py::arg("ref_tet_pts_in") = std::vector<double>{}, py::arg("ref_tet_w_in") = std::vector<double>{},
-             py::arg("ref_tri_pts_in") = std::vector<double>{}, py::arg("ref_tri_w_in") = std::vector<double>{},
-             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("ref_tet_pts_in") = F64Array(0), py::arg("ref_tet_w_in") = F64Array(0),
+             py::arg("ref_tri_pts_in") = F64Array(0), py::arg("ref_tri_w_in") = F64Array(0),
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "HIGH-ORDER (order-p) mode: POLYNOMIAL charges (monomial basis per host). charge_host[c]/"
              "charge_kind[c] (0=cell,1=face)/charge_expo[3c] define each charge; ref_tet_pts[nqt*3]/ref_tet_w "
@@ -2857,63 +3275,110 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "monomial-weighted outer quad x the subtraction inner potential (matches the independent high-order analytic reference). "
              "ref_*_lo + ho_far_factor (<inf) enable the accuracy-preserving NEAR/FAR adaptive quadrature: far "
              "pairs (|c_a-c_b| > ho_far_factor*(size_a+size_b)) use the cheap LOW-quad plain double-Gauss.")
-        .def(py::init([](std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
-                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
-                         std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
-                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
-                         std::vector<double> curve_gl, std::vector<double> curve_gw,
+        .def(py::init([](F64Array cell_nodes_a, F64Array face_nodes_a,
+                         I32Array cell_vertices_a, I32Array face_vertices_a,
+                         int n_el, int curve_order,
+                         I32Array charge_host_a, I32Array charge_kind_a, I32Array charge_expo_a,
+                         F64Array ref_tet_pts_a, F64Array ref_tet_w_a,
+                         F64Array ref_tri_pts_a, F64Array ref_tri_w_a,
+                         F64Array curve_gl_a, F64Array curve_gw_a,
+                         F64Array ref_tet_pts_lo_a, F64Array ref_tet_w_lo_a,
+                         F64Array ref_tri_pts_lo_a, F64Array ref_tri_w_lo_a,
+                         double ho_far_factor,
+                         I32Array image_masks_a, F64Array image_signs_a,
                          double eps, int leaf, double eta, bool build) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(cell_nodes), std::move(face_nodes), n_el, curve_order,
-                                             std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
-                                             std::move(ref_tet_pts), std::move(ref_tet_w),
-                                             std::move(ref_tri_pts), std::move(ref_tri_w),
-                                             std::move(curve_gl), std::move(curve_gw)));
-                 if (build) {
-                     RadHACApKParams p;
-                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("curved charge Gram H-matrix build failed");
-                 }
-                 return mgr;
+                 auto cell_nodes = to_1d_vector<double>(cell_nodes_a, "cell_nodes");
+                 auto face_nodes = to_1d_vector<double>(face_nodes_a, "face_nodes");
+                 auto cell_vertices = to_1d_vector<int>(cell_vertices_a, "cell_vertices");
+                 auto face_vertices = to_1d_vector<int>(face_vertices_a, "face_vertices");
+                 auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
+                 auto charge_kind = to_1d_vector<int>(charge_kind_a, "charge_kind");
+                 auto charge_expo = to_1d_vector<int>(charge_expo_a, "charge_expo");
+                 auto ref_tet_pts = to_1d_vector<double>(ref_tet_pts_a, "ref_tet_pts");
+                 auto ref_tet_w = to_1d_vector<double>(ref_tet_w_a, "ref_tet_w");
+                 auto ref_tri_pts = to_1d_vector<double>(ref_tri_pts_a, "ref_tri_pts");
+                 auto ref_tri_w = to_1d_vector<double>(ref_tri_w_a, "ref_tri_w");
+                 auto curve_gl = to_1d_vector<double>(curve_gl_a, "curve_gl");
+                 auto curve_gw = to_1d_vector<double>(curve_gw_a, "curve_gw");
+                 auto ref_tet_pts_lo = to_1d_vector<double>(ref_tet_pts_lo_a, "ref_tet_pts_lo");
+                 auto ref_tet_w_lo = to_1d_vector<double>(ref_tet_w_lo_a, "ref_tet_w_lo");
+                 auto ref_tri_pts_lo = to_1d_vector<double>(ref_tri_pts_lo_a, "ref_tri_pts_lo");
+                 auto ref_tri_w_lo = to_1d_vector<double>(ref_tri_w_lo_a, "ref_tri_w_lo");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(cell_nodes), std::move(face_nodes),
+                         std::move(cell_vertices), std::move(face_vertices), n_el, curve_order,
+                         std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                         std::move(ref_tet_pts), std::move(ref_tet_w),
+                         std::move(ref_tri_pts), std::move(ref_tri_w),
+                         std::move(curve_gl), std::move(curve_gw),
+                         std::move(ref_tet_pts_lo), std::move(ref_tet_w_lo),
+                         std::move(ref_tri_pts_lo), std::move(ref_tri_w_lo), ho_far_factor,
+                         std::move(image_masks), std::move(image_signs)); },
+                     eps, leaf, eta, build, "curved charge Gram H-matrix build failed");
              }),
-             py::arg("cell_nodes"), py::arg("face_nodes"), py::arg("n_el"), py::arg("curve_order"),
+             py::arg("cell_nodes"), py::arg("face_nodes"),
+             py::arg("cell_vertices"), py::arg("face_vertices"),
+             py::arg("n_el"), py::arg("curve_order"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
              py::arg("ref_tet_pts"), py::arg("ref_tet_w"), py::arg("ref_tri_pts"), py::arg("ref_tri_w"),
              py::arg("curve_gl"), py::arg("curve_gw"),
+             py::arg("ref_tet_pts_lo") = F64Array(0), py::arg("ref_tet_w_lo") = F64Array(0),
+             py::arg("ref_tri_pts_lo") = F64Array(0), py::arg("ref_tri_w_lo") = F64Array(0),
+             py::arg("ho_far_factor") = 1e30,
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "CURVED HIGH-ORDER (isoparametric P2) mode: monomial charges on a mesh.Curve(2) geometry. "
-             "cell_nodes [n_el*30] (10 P2 nodes/tet), face_nodes [n_bf*18] (6 P2 nodes/tri); curve_order=2. "
-             "Outer quad = curved P2 map + curved measure; inner = the curved Duffy (curve_gl/gw = nq-pt "
-             "Gauss-Legendre on [0,1]). Curved helps near-surface FIELD/flux accuracy, NOT the demag factor.")
-        .def(py::init([](std::vector<double> hex_cell_nodes, std::vector<double> quad_face_nodes,
+             "cell_nodes [n_el*30] (10 P2 nodes/tet), face_nodes [n_bf*18] (6 P2 nodes/tri); "
+             "cell_vertices/face_vertices identify touching hosts for singular Duffy quadrature. "
+             "Outer quad = curved P2 map + curved measure; near inner = curved Duffy (curve_gl/gw = nq-pt "
+             "Gauss-Legendre on [0,1]); ref_*_lo + ho_far_factor enable curved low-order far pairs.")
+        .def(py::init([](F64Array hex_cell_nodes_a, F64Array quad_face_nodes_a,
                          int n_el, int n_bf,
-                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
-                         std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
-                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
-                         std::vector<double> gl_out, std::vector<double> gw_out,
-                         std::vector<double> gl_in, std::vector<double> gw_in,
-                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
-                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+                         I32Array charge_host_a, I32Array charge_kind_a, I32Array charge_expo_a,
+                         F64Array sym_tet_pts_a, F64Array sym_tet_w_a,
+                         F64Array sym_tri_pts_a, F64Array sym_tri_w_a,
+                         F64Array gl_out_a, F64Array gw_out_a,
+                         F64Array gl_in_a, F64Array gw_in_a,
+                         F64Array far_tet_pts_a, F64Array far_tet_w_a,
+                         F64Array far_tri_pts_a, F64Array far_tri_w_a,
                          double near_grade, double far_inner_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs,
+                         I32Array image_masks_a, F64Array image_signs_a,
                          double eps, int leaf, double eta, bool build) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(hex_cell_nodes), std::move(quad_face_nodes), n_el, n_bf,
-                                             std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
-                                             std::move(sym_tet_pts), std::move(sym_tet_w),
-                                             std::move(sym_tri_pts), std::move(sym_tri_w),
-                                             std::move(gl_out), std::move(gw_out),
-                                             std::move(gl_in), std::move(gw_in),
-                                             std::move(far_tet_pts), std::move(far_tet_w),
-                                             std::move(far_tri_pts), std::move(far_tri_w),
-                                             near_grade, far_inner_factor,
-                                             std::move(image_masks), std::move(image_signs)));
-                 if (build) {
-                     RadHACApKParams p;
-                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("hex RT1 charge Gram H-matrix build failed");
-                 }
-                 return mgr;
+                 auto hex_cell_nodes = to_1d_vector<double>(hex_cell_nodes_a, "hex_cell_nodes");
+                 auto quad_face_nodes = to_1d_vector<double>(quad_face_nodes_a, "quad_face_nodes");
+                 auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
+                 auto charge_kind = to_1d_vector<int>(charge_kind_a, "charge_kind");
+                 auto charge_expo = to_1d_vector<int>(charge_expo_a, "charge_expo");
+                 auto sym_tet_pts = to_1d_vector<double>(sym_tet_pts_a, "sym_tet_pts");
+                 auto sym_tet_w = to_1d_vector<double>(sym_tet_w_a, "sym_tet_w");
+                 auto sym_tri_pts = to_1d_vector<double>(sym_tri_pts_a, "sym_tri_pts");
+                 auto sym_tri_w = to_1d_vector<double>(sym_tri_w_a, "sym_tri_w");
+                 auto gl_out = to_1d_vector<double>(gl_out_a, "gl_out");
+                 auto gw_out = to_1d_vector<double>(gw_out_a, "gw_out");
+                 auto gl_in = to_1d_vector<double>(gl_in_a, "gl_in");
+                 auto gw_in = to_1d_vector<double>(gw_in_a, "gw_in");
+                 auto far_tet_pts = to_1d_vector<double>(far_tet_pts_a, "far_tet_pts");
+                 auto far_tet_w = to_1d_vector<double>(far_tet_w_a, "far_tet_w");
+                 auto far_tri_pts = to_1d_vector<double>(far_tri_pts_a, "far_tri_pts");
+                 auto far_tri_w = to_1d_vector<double>(far_tri_w_a, "far_tri_w");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(hex_cell_nodes), std::move(quad_face_nodes), n_el, n_bf,
+                         std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                         std::move(sym_tet_pts), std::move(sym_tet_w),
+                         std::move(sym_tri_pts), std::move(sym_tri_w),
+                         std::move(gl_out), std::move(gw_out),
+                         std::move(gl_in), std::move(gw_in),
+                         std::move(far_tet_pts), std::move(far_tet_w),
+                         std::move(far_tri_pts), std::move(far_tri_w),
+                         near_grade, far_inner_factor,
+                         std::move(image_masks), std::move(image_signs)); },
+                     eps, leaf, eta, build, "hex RT1 charge Gram H-matrix build failed");
              }),
              py::arg("hex_cell_nodes"), py::arg("quad_face_nodes"), py::arg("n_el"), py::arg("n_bf"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
@@ -2921,7 +3386,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
              py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 1.5,
-             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
              "HEX RT1 mode: Q1 monomial charges (8/hex volume + 4/quad-face surface) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
@@ -2932,36 +3397,51 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "near/self inner fires only within far_inner_factor*size of a source sub (per outer point).  "
              "The H-matrix build is SYMMETRIC-FILL: strictly-lower leaves are skipped (all applies route "
              "through matvec_sym; plain matvec/matvec_transpose are routed to it).")
-        .def(py::init([](std::vector<double> wedge_cell_nodes, std::vector<double> face_nodes,
-                         std::vector<int> face_type, int n_el, int n_bf,
-                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
-                         std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
-                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
-                         std::vector<double> gl_out, std::vector<double> gw_out,
-                         std::vector<double> gl_in, std::vector<double> gw_in,
-                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
-                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+        .def(py::init([](F64Array wedge_cell_nodes_a, F64Array face_nodes_a,
+                         I32Array face_type_a, int n_el, int n_bf,
+                         I32Array charge_host_a, I32Array charge_kind_a, I32Array charge_expo_a,
+                         F64Array sym_tet_pts_a, F64Array sym_tet_w_a,
+                         F64Array sym_tri_pts_a, F64Array sym_tri_w_a,
+                         F64Array gl_out_a, F64Array gw_out_a,
+                         F64Array gl_in_a, F64Array gw_in_a,
+                         F64Array far_tet_pts_a, F64Array far_tet_w_a,
+                         F64Array far_tri_pts_a, F64Array far_tri_w_a,
                          double near_grade, double far_inner_factor,
-                         std::vector<int> image_masks, std::vector<double> image_signs,
+                         I32Array image_masks_a, F64Array image_signs_a,
                          double eps, int leaf, double eta, bool build) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(
-                     new RadHACApKChargeGram(std::move(wedge_cell_nodes), std::move(face_nodes),
-                                             std::move(face_type), n_el, n_bf,
-                                             std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
-                                             std::move(sym_tet_pts), std::move(sym_tet_w),
-                                             std::move(sym_tri_pts), std::move(sym_tri_w),
-                                             std::move(gl_out), std::move(gw_out),
-                                             std::move(gl_in), std::move(gw_in),
-                                             std::move(far_tet_pts), std::move(far_tet_w),
-                                             std::move(far_tri_pts), std::move(far_tri_w),
-                                             near_grade, far_inner_factor,
-                                             std::move(image_masks), std::move(image_signs)));
-                 if (build) {
-                     RadHACApKParams p;
-                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("wedge RT1 charge Gram H-matrix build failed");
-                 }
-                 return mgr;
+                 auto wedge_cell_nodes = to_1d_vector<double>(wedge_cell_nodes_a, "wedge_cell_nodes");
+                 auto face_nodes = to_1d_vector<double>(face_nodes_a, "face_nodes");
+                 auto face_type = to_1d_vector<int>(face_type_a, "face_type");
+                 auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
+                 auto charge_kind = to_1d_vector<int>(charge_kind_a, "charge_kind");
+                 auto charge_expo = to_1d_vector<int>(charge_expo_a, "charge_expo");
+                 auto sym_tet_pts = to_1d_vector<double>(sym_tet_pts_a, "sym_tet_pts");
+                 auto sym_tet_w = to_1d_vector<double>(sym_tet_w_a, "sym_tet_w");
+                 auto sym_tri_pts = to_1d_vector<double>(sym_tri_pts_a, "sym_tri_pts");
+                 auto sym_tri_w = to_1d_vector<double>(sym_tri_w_a, "sym_tri_w");
+                 auto gl_out = to_1d_vector<double>(gl_out_a, "gl_out");
+                 auto gw_out = to_1d_vector<double>(gw_out_a, "gw_out");
+                 auto gl_in = to_1d_vector<double>(gl_in_a, "gl_in");
+                 auto gw_in = to_1d_vector<double>(gw_in_a, "gw_in");
+                 auto far_tet_pts = to_1d_vector<double>(far_tet_pts_a, "far_tet_pts");
+                 auto far_tet_w = to_1d_vector<double>(far_tet_w_a, "far_tet_w");
+                 auto far_tri_pts = to_1d_vector<double>(far_tri_pts_a, "far_tri_pts");
+                 auto far_tri_w = to_1d_vector<double>(far_tri_w_a, "far_tri_w");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         std::move(wedge_cell_nodes), std::move(face_nodes), std::move(face_type), n_el, n_bf,
+                         std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                         std::move(sym_tet_pts), std::move(sym_tet_w),
+                         std::move(sym_tri_pts), std::move(sym_tri_w),
+                         std::move(gl_out), std::move(gw_out),
+                         std::move(gl_in), std::move(gw_in),
+                         std::move(far_tet_pts), std::move(far_tet_w),
+                         std::move(far_tri_pts), std::move(far_tri_w),
+                         near_grade, far_inner_factor,
+                         std::move(image_masks), std::move(image_signs)); },
+                     eps, leaf, eta, build, "wedge RT1 charge Gram H-matrix build failed");
              }),
              py::arg("wedge_cell_nodes"), py::arg("face_nodes"), py::arg("face_type"),
              py::arg("n_el"), py::arg("n_bf"),
@@ -2970,7 +3450,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("gl_out"), py::arg("gw_out"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tet_pts"), py::arg("far_tet_w"), py::arg("far_tri_pts"), py::arg("far_tri_w"),
              py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
-             py::arg("image_masks") = std::vector<int>{}, py::arg("image_signs") = std::vector<double>{},
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
              "WEDGE (PRISM) RT1 mode: L2(prism,order=1) volume charges (6/prism = {1,x,y,z,xz,yz}, the "
              "prism div-image = a subset of the hex's 8 Q1 monomials) + SurfaceL2 face charges (tri P1 3, "
@@ -2980,38 +3460,57 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "both-domains-graded Duffy scheme on the 3-sub-tet / mixed 1-2 sub-tri decomposition "
              "(numpy de-risk eig(M^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3; demag_z ~ 1/3).  Shares the "
              "hex block memo / symmetric-fill build; the golden hex path is byte-for-byte untouched.")
-        .def(py::init([](int dim2, std::vector<double> cell_nodes9, std::vector<int> cell_type,
-                         std::vector<double> edge_nodes3, int n_el, int n_be,
-                         std::vector<int> charge_host, std::vector<int> charge_kind,
-                         std::vector<int> charge_expo,
-                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
-                         std::vector<double> gl_edge, std::vector<double> gw_edge,
-                         std::vector<double> gl_in, std::vector<double> gw_in,
-                         std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
+        .def(py::init([](int dim2, F64Array cell_nodes9_a, I32Array cell_type_a,
+                         F64Array edge_nodes3_a, int n_el, int n_be,
+                         I32Array charge_host_a, I32Array charge_kind_a,
+                         I32Array charge_expo_a,
+                         F64Array sym_tri_pts_a, F64Array sym_tri_w_a,
+                         F64Array gl_quad_a, F64Array gw_quad_a,
+                         F64Array gl_edge_a, F64Array gw_edge_a,
+                         F64Array gl_in_a, F64Array gw_in_a,
+                         F64Array far_tri_pts_a, F64Array far_tri_w_a,
                          double near_grade, double far_inner_factor,
+                         I32Array image_masks_a, F64Array image_signs_a,
                          double eps, int leaf, double eta, bool build) {
-                 auto mgr = std::unique_ptr<RadHACApKChargeGram>(new RadHACApKChargeGram(
-                     dim2, std::move(cell_nodes9), std::move(cell_type), std::move(edge_nodes3),
-                     n_el, n_be,
-                     std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
-                     std::move(sym_tri_pts), std::move(sym_tri_w),
-                     std::move(gl_edge), std::move(gw_edge), std::move(gl_in), std::move(gw_in),
-                     std::move(far_tri_pts), std::move(far_tri_w),
-                     near_grade, far_inner_factor));
-                 if (build) {
-                     RadHACApKParams p;
-                     p.aca_eps = eps; p.leaf_size = leaf; p.eta = eta; p.print_level = 0;
-                     if (!mgr->BuildHMatrix(p)) throw std::runtime_error("2D charge Gram H-matrix build failed");
-                 }
-                 return mgr;
+                 auto cell_nodes9 = to_1d_vector<double>(cell_nodes9_a, "cell_nodes9");
+                 auto cell_type = to_1d_vector<int>(cell_type_a, "cell_type");
+                 auto edge_nodes3 = to_1d_vector<double>(edge_nodes3_a, "edge_nodes3");
+                 auto charge_host = to_1d_vector<int>(charge_host_a, "charge_host");
+                 auto charge_kind = to_1d_vector<int>(charge_kind_a, "charge_kind");
+                 auto charge_expo = to_1d_vector<int>(charge_expo_a, "charge_expo");
+                 auto sym_tri_pts = to_1d_vector<double>(sym_tri_pts_a, "sym_tri_pts");
+                 auto sym_tri_w = to_1d_vector<double>(sym_tri_w_a, "sym_tri_w");
+                 auto gl_quad = to_1d_vector<double>(gl_quad_a, "gl_quad");
+                 auto gw_quad = to_1d_vector<double>(gw_quad_a, "gw_quad");
+                 auto gl_edge = to_1d_vector<double>(gl_edge_a, "gl_edge");
+                 auto gw_edge = to_1d_vector<double>(gw_edge_a, "gw_edge");
+                 auto gl_in = to_1d_vector<double>(gl_in_a, "gl_in");
+                 auto gw_in = to_1d_vector<double>(gw_in_a, "gw_in");
+                 auto far_tri_pts = to_1d_vector<double>(far_tri_pts_a, "far_tri_pts");
+                 auto far_tri_w = to_1d_vector<double>(far_tri_w_a, "far_tri_w");
+                 auto image_masks = to_1d_vector<int>(image_masks_a, "image_masks");
+                 auto image_signs = to_1d_vector<double>(image_signs_a, "image_signs");
+                 return build_charge_gram_released(
+                     [&]() { return std::make_shared<RadHACApKChargeGram>(
+                         dim2, std::move(cell_nodes9), std::move(cell_type), std::move(edge_nodes3),
+                         n_el, n_be, std::move(charge_host), std::move(charge_kind), std::move(charge_expo),
+                         std::move(sym_tri_pts), std::move(sym_tri_w),
+                         std::move(gl_quad), std::move(gw_quad),
+                         std::move(gl_edge), std::move(gw_edge), std::move(gl_in), std::move(gw_in),
+                         std::move(far_tri_pts), std::move(far_tri_w),
+                         near_grade, far_inner_factor,
+                         std::move(image_masks), std::move(image_signs)); },
+                     eps, leaf, eta, build, "2D charge Gram H-matrix build failed");
              }),
              py::arg("dim2"), py::arg("cell_nodes9"), py::arg("cell_type"), py::arg("edge_nodes3"),
              py::arg("n_el"), py::arg("n_be"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
              py::arg("sym_tri_pts"), py::arg("sym_tri_w"),
+             py::arg("gl_quad"), py::arg("gw_quad"),
              py::arg("gl_edge"), py::arg("gw_edge"), py::arg("gl_in"), py::arg("gw_in"),
              py::arg("far_tri_pts"), py::arg("far_tri_w"),
              py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
+             py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
              "2D PLANAR mode (motor cross-sections; memory hdiv-vim-tri-quad-motor): charges rho = -div M "
              "on tri/quad cells (tri P0, quad Q1 -- the 2D hex-gotcha twin) + sigma = M.n on boundary "
@@ -3022,20 +3521,32 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "radial-cone inner for near/self, cheap far cloud otherwise.  Gates: eig(M^-1 N) in [0,1]; "
              "disk demag == 1/2 exact; ellipse a:b -> b/(a+b); 2D Clausius-Mossotti chi/(1+chi/2).")
         .def("ndof", [](RadHACApKChargeGram& s) { return s.GetNDOF(); })
-        .def("matvec", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
+        .def("matvec", [](RadHACApKChargeGram& s, F64Array x_a) {
+                 auto x = to_1d_vector<double>(x_a, "x");
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
-                 s.MatVec(x, y);
-                 return y;
+                 {
+                     py::gil_scoped_release release;
+                     s.MatVec(x, y);
+                 }
+                 return to_numpy_1d(y);
              }, py::arg("x"), "G q (the O(N log N) Gram H-matvec).")
-        .def("matvec_transpose", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
+        .def("matvec_transpose", [](RadHACApKChargeGram& s, F64Array x_a) {
+                 auto x = to_1d_vector<double>(x_a, "x");
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
-                 s.MatVecTranspose(x, y);
-                 return y;
+                 {
+                     py::gil_scoped_release release;
+                     s.MatVecTranspose(x, y);
+                 }
+                 return to_numpy_1d(y);
              }, py::arg("x"), "G^T q (transpose H-matvec; for symmetry probes / 0.5*(G+G^T) apply).")
-        .def("matvec_sym", [](RadHACApKChargeGram& s, const std::vector<double>& x) {
+        .def("matvec_sym", [](RadHACApKChargeGram& s, F64Array x_a) {
+                 auto x = to_1d_vector<double>(x_a, "x");
                  std::vector<double> y((size_t)s.GetNDOF(), 0.0);
-                 s.MatVecSym(x, y);
-                 return y;
+                 {
+                     py::gil_scoped_release release;
+                     s.MatVecSym(x, y);
+                 }
+                 return to_numpy_1d(y);
              }, py::arg("x"),
              "G_sym q -- EXACTLY symmetric H-matvec (upper-triangular leaves define both triangles), "
              "so CG/MINRES on B^T G_sym B use a machine-symmetric operator (the ACA-asymmetry failure mode is removed).")
@@ -3064,276 +3575,227 @@ PYBIND11_MODULE(_radia_pybind, m) {
                  return d;
              },
              "Per-array checksum breakdown (flake forensics: WHICH array differs between instances).")
-        .def("solve_linear_material",
-             [](RadHACApKChargeGram& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> prec, std::vector<double> rhs,
-                double tol, int maxit) {
-                 int iters = 0;
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, prec, rhs,
-                                                               tol, maxit, iters);
-                 py::dict d; d["m"] = m; d["iters"] = iters; return d;
+        .def("configure_charge_map",
+             [](RadHACApKChargeGram& s, I32Array B_indptr_a, I32Array B_indices_a,
+                F64Array B_data_a, int n_face) {
+                 const auto indptr = array_1d_view<int>(B_indptr_a, "B_indptr");
+                 const auto indices = array_1d_view<int>(B_indices_a, "B_indices");
+                 const auto data = array_1d_view<double>(B_data_a, "B_data");
+                 py::gil_scoped_release release;
+                 std::vector<int> B_indptr(indptr.data, indptr.data + indptr.size);
+                 std::vector<int> B_indices(indices.data, indices.data + indices.size);
+                 std::vector<double> B_data(data.data, data.data + data.size);
+                 s.ConfigureChargeMap(std::move(B_indptr), std::move(B_indices),
+                                      std::move(B_data), n_face);
              },
              py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("prec"),
-             py::arg("rhs"), py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
-             "M3: solve the SPD HDiv-VIM linear material system ((1/chi)M_mass + B^T G B) m = rhs by "
-             "Jacobi-preconditioned CG (G applied as the charge-Gram H-matvec). Returns {m, iters}.")
-        .def("solve_linear_material_auto_prec",
-             [](RadHACApKChargeGram& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> rhs,
-                double tol, int maxit) {
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("solve_linear_material_auto_prec: rhs size mismatch");
-                 if ((int)B_indptr.size() < 1)
-                     throw std::runtime_error("solve_linear_material_auto_prec: empty B_indptr");
-                 std::vector<double> mass_diag((size_t)n_face, 0.0);
-                 for (size_t k = 0; k < mV.size(); ++k) {
-                     if (mI[k] == mJ[k] && mI[k] >= 0 && mI[k] < n_face) mass_diag[(size_t)mI[k]] += mV[k];
-                 }
-                 std::vector<std::vector<int>> supp_id((size_t)n_face);
-                 std::vector<std::vector<double>> supp_val((size_t)n_face);
-                 const int n_charge = (int)B_indptr.size() - 1;
-                 for (int a = 0; a < n_charge; ++a) {
-                     for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k) {
-                         int f = B_indices[(size_t)k];
-                         if (f < 0 || f >= n_face) throw std::runtime_error("solve_linear_material_auto_prec: B face index out of range");
-                         supp_id[(size_t)f].push_back(a);
-                         supp_val[(size_t)f].push_back(B_data[(size_t)k]);
-                     }
-                 }
-                 std::vector<double> prec((size_t)n_face, 0.0);
-                 for (int f = 0; f < n_face; ++f) {
-                     double ndiag = 0.0;
-                     const auto& ids = supp_id[(size_t)f];
-                     const auto& vals = supp_val[(size_t)f];
-                     for (size_t p = 0; p < ids.size(); ++p)
-                         for (size_t q = 0; q < ids.size(); ++q)
-                             ndiag += vals[p] * vals[q] * s.GetInteractionMatrixElement(ids[p], ids[q]);
-                     double v = inv_chi * mass_diag[(size_t)f] + ndiag;
-                     if (!(v > 0.0) || !std::isfinite(v)) v = 1.0;
-                     prec[(size_t)f] = v;
-                 }
-                 int iters = 0;
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, prec, rhs,
-                                                               tol, maxit, iters);
-                 double pmin = n_face ? prec[0] : 0.0, pmax = pmin;
-                 for (double v : prec) { if (v < pmin) pmin = v; if (v > pmax) pmax = v; }
-                 py::dict timings;
-                 for (const auto& kv : s.LastSolveTimings()) timings[py::str(kv.first)] = kv.second;
-                 py::dict d;
-                 d["m"] = m; d["iters"] = iters; d["prec_min"] = pmin; d["prec_max"] = pmax;
-                 d["timings"] = timings;
-                 return d;
+             "Register the geometry/FESpace charge map once on the persistent C++ operator.")
+        .def("configure_mass_matrix",
+             [](RadHACApKChargeGram& s, I32Array mI_a, I32Array mJ_a,
+                F64Array mV_a, int n_face) {
+                 const auto rows = array_1d_view<int>(mI_a, "mI");
+                 const auto cols = array_1d_view<int>(mJ_a, "mJ");
+                 const auto values = array_1d_view<double>(mV_a, "mV");
+                 py::gil_scoped_release release;
+                 std::vector<int> mI(rows.data, rows.data + rows.size);
+                 std::vector<int> mJ(cols.data, cols.data + cols.size);
+                 std::vector<double> mV(values.data, values.data + values.size);
+                 s.ConfigureMassMatrix(std::move(mI), std::move(mJ), std::move(mV), n_face);
              },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
-             py::arg("tol") = 1e-9, py::arg("maxit") = 5000,
-             "M3 production helper: build the exact Jacobi diagonal of ((1/chi)M_mass + B^T G B) in C++ "
-             "from sparse B + mass COO, then run SolveLinearMaterial. Returns {m, iters, prec_min, prec_max}.")
-        .def("solve_linear_material_auto_prec_arrays",
-             [](RadHACApKChargeGram& s,
-                py::array_t<int, py::array::c_style | py::array::forcecast> B_indptr_a,
-                py::array_t<int, py::array::c_style | py::array::forcecast> B_indices_a,
-                py::array_t<double, py::array::c_style | py::array::forcecast> B_data_a,
-                int n_face,
-                py::array_t<int, py::array::c_style | py::array::forcecast> mI_a,
-                py::array_t<int, py::array::c_style | py::array::forcecast> mJ_a,
-                py::array_t<double, py::array::c_style | py::array::forcecast> mV_a,
-                double inv_chi,
-                py::array_t<double, py::array::c_style | py::array::forcecast> rhs_a,
-                double tol, int maxit, py::object x0_obj) {
-                 auto B_indptr = to_1d_vector<int>(B_indptr_a, "B_indptr");
-                 auto B_indices = to_1d_vector<int>(B_indices_a, "B_indices");
-                 auto B_data = to_1d_vector<double>(B_data_a, "B_data");
-                 auto mI = to_1d_vector<int>(mI_a, "mI");
-                 auto mJ = to_1d_vector<int>(mJ_a, "mJ");
-                 auto mV = to_1d_vector<double>(mV_a, "mV");
-                 auto rhs = to_1d_vector<double>(rhs_a, "rhs");
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("solve_linear_material_auto_prec_arrays: rhs size mismatch");
-                 if ((int)B_indptr.size() < 1)
-                     throw std::runtime_error("solve_linear_material_auto_prec_arrays: empty B_indptr");
-                 std::vector<double> x0;
-                 const std::vector<double>* x0_ptr = nullptr;
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("n_face"),
+             "Register or replace the material mass matrix on the persistent C++ operator.")
+        .def("configure_mass_matrix_ngsolve",
+             [](RadHACApKChargeGram& s, std::shared_ptr<ngla::BaseMatrix> matrix) {
+                 py::gil_scoped_release release;
+                 auto mass = extract_ngsolve_scalar_sparse(matrix, "configure_mass_matrix_ngsolve");
+                 s.ConfigureMassMatrix(std::move(mass.rows), std::move(mass.cols),
+                                       std::move(mass.values), mass.size);
+             }, py::arg("matrix"),
+             "Register an assembled NGSolve scalar sparse mass matrix directly in C++.")
+        .def("configure_geometry_mass_matrix",
+             [](RadHACApKChargeGram& s, I32Array mI_a, I32Array mJ_a,
+                F64Array mV_a, int n_face) {
+                 const auto rows = array_1d_view<int>(mI_a, "mI");
+                 const auto cols = array_1d_view<int>(mJ_a, "mJ");
+                 const auto values = array_1d_view<double>(mV_a, "mV");
+                 py::gil_scoped_release release;
+                 std::vector<int> mI(rows.data, rows.data + rows.size);
+                 std::vector<int> mJ(cols.data, cols.data + cols.size);
+                 std::vector<double> mV(values.data, values.data + values.size);
+                 s.ConfigureGeometryMassMatrix(
+                     std::move(mI), std::move(mJ), std::move(mV), n_face);
+             },
+             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("n_face"),
+             "Register the immutable geometric HDiv mass used for local-field Riesz recovery.")
+        .def("configure_geometry_mass_matrix_ngsolve",
+             [](RadHACApKChargeGram& s, std::shared_ptr<ngla::BaseMatrix> matrix) {
+                 py::gil_scoped_release release;
+                 auto mass = extract_ngsolve_scalar_sparse(
+                     matrix, "configure_geometry_mass_matrix_ngsolve");
+                 s.ConfigureGeometryMassMatrix(std::move(mass.rows), std::move(mass.cols),
+                                               std::move(mass.values), mass.size);
+             }, py::arg("matrix"),
+             "Register the immutable geometric mass directly from an assembled NGSolve matrix.")
+        .def_property_readonly("operator_configured", [](const RadHACApKChargeGram& s) {
+                 return s.HasConfiguredChargeMap() && s.HasConfiguredMassMatrix() &&
+                        s.HasConfiguredGeometryMassMatrix();
+             })
+        .def_property_readonly("constraint_count", &RadHACApKChargeGram::ConfiguredConstraintCount)
+        .def("demag_matrix",
+             [](std::shared_ptr<RadHACApKChargeGram> s) {
+                 return std::make_shared<RadHDivDemagMatrix>(std::move(s));
+             },
+             "Return the persistent C++ N=B^T G B operator as an NGSolve BaseMatrix.")
+        .def("apply_configured_demag",
+             [](RadHACApKChargeGram& s, F64Array x_a, bool symmetric) {
+                 auto input = x_a.request();
+                 if (input.ndim != 1 || input.shape[0] != s.ConfiguredNFace())
+                     throw std::runtime_error("x must be a 1D array of configured operator size");
+                 py::array_t<double> output(input.shape[0]);
+                 auto result = output.request();
+                 {
+                     py::gil_scoped_release release;
+                     s.ApplyConfiguredDemag(static_cast<const double*>(input.ptr),
+                                            static_cast<double*>(result.ptr), symmetric);
+                 }
+                 return output;
+             },
+              py::arg("x"), py::arg("symmetric") = true,
+              "Apply the configured B^T G B operator in C++ without resending sparse topology.")
+        .def("apply_configured_geometry_mass",
+             [](RadHACApKChargeGram& s, F64Array x_a) {
+                 auto input = x_a.request();
+                 if (input.ndim != 1 || input.shape[0] != s.ConfiguredNFace())
+                     throw std::runtime_error("x must be a 1D array of configured operator size");
+                 py::array_t<double> output(input.shape[0]);
+                 auto result = output.request();
+                 {
+                     py::gil_scoped_release release;
+                     s.ApplyConfiguredGeometryMass(static_cast<const double*>(input.ptr),
+                                                   static_cast<double*>(result.ptr));
+                 }
+                 return output;
+             }, py::arg("x"),
+             "Apply the immutable NGSolve HDiv geometry mass in C++ without a SciPy round-trip.")
+        .def("apply_configured_mass_riesz",
+             [](RadHACApKChargeGram& s, F64Array rhs_a) {
+                 const auto input = array_1d_view<double>(rhs_a, "rhs");
+                 std::vector<double> y;
+                 {
+                     py::gil_scoped_release release;
+                     std::vector<double> rhs(input.data, input.data + input.size);
+                     y = s.ApplyConfiguredMassRiesz(rhs);
+                 }
+                 return to_numpy_1d(y);
+             }, py::arg("rhs"),
+             "Apply the configured persistent mass-Riesz map in C++.")
+        .def("solve_configured_linear_material_mass_riesz",
+             [](RadHACApKChargeGram& s, double inv_chi, F64Array rhs_a,
+                double tol, int maxit, bool symmetric, py::object x0_obj) {
+                 const auto rhs_view = array_1d_view<double>(rhs_a, "rhs");
+                 Array1DView<double> x0_view;
+                 std::optional<F64Array> x0_array;
                  if (!x0_obj.is_none()) {
-                     auto x0_a = py::cast<py::array_t<double, py::array::c_style | py::array::forcecast>>(x0_obj);
-                     x0 = to_1d_vector<double>(x0_a, "x0");
-                     if ((int)x0.size() != n_face)
-                         throw std::runtime_error("solve_linear_material_auto_prec_arrays: x0 size mismatch");
-                     x0_ptr = &x0;
-                 }
-                 std::vector<double> mass_diag((size_t)n_face, 0.0);
-                 for (size_t k = 0; k < mV.size(); ++k) {
-                     if (mI[k] == mJ[k] && mI[k] >= 0 && mI[k] < n_face) mass_diag[(size_t)mI[k]] += mV[k];
-                 }
-                 std::vector<std::vector<int>> supp_id((size_t)n_face);
-                 std::vector<std::vector<double>> supp_val((size_t)n_face);
-                 const int n_charge = (int)B_indptr.size() - 1;
-                 for (int a = 0; a < n_charge; ++a) {
-                     for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k) {
-                         int f = B_indices[(size_t)k];
-                         if (f < 0 || f >= n_face) throw std::runtime_error("solve_linear_material_auto_prec_arrays: B face index out of range");
-                         supp_id[(size_t)f].push_back(a);
-                         supp_val[(size_t)f].push_back(B_data[(size_t)k]);
-                     }
-                 }
-                 std::vector<double> prec((size_t)n_face, 0.0);
-                 for (int f = 0; f < n_face; ++f) {
-                     double ndiag = 0.0;
-                     const auto& ids = supp_id[(size_t)f];
-                     const auto& vals = supp_val[(size_t)f];
-                     for (size_t p = 0; p < ids.size(); ++p)
-                         for (size_t q = 0; q < ids.size(); ++q)
-                             ndiag += vals[p] * vals[q] * s.GetInteractionMatrixElement(ids[p], ids[q]);
-                     double v = inv_chi * mass_diag[(size_t)f] + ndiag;
-                     if (!(v > 0.0) || !std::isfinite(v)) v = 1.0;
-                     prec[(size_t)f] = v;
+                     x0_array.emplace(py::cast<F64Array>(x0_obj));
+                     x0_view = array_1d_view<double>(*x0_array, "x0");
                  }
                  int iters = 0;
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, prec, rhs,
-                                                               tol, maxit, iters,
-                                                               /*mass_riesz=*/false, /*symmetric=*/true,
-                                                               x0_ptr);
-                 double pmin = n_face ? prec[0] : 0.0, pmax = pmin;
-                 for (double v : prec) { if (v < pmin) pmin = v; if (v > pmax) pmax = v; }
+                 std::vector<double> m;
+                 {
+                     py::gil_scoped_release release;
+                     std::vector<double> rhs(rhs_view.data, rhs_view.data + rhs_view.size);
+                     std::vector<double> x0;
+                     const std::vector<double>* x0_ptr = nullptr;
+                     if (x0_view.data) {
+                         x0.assign(x0_view.data, x0_view.data + x0_view.size);
+                         x0_ptr = &x0;
+                     }
+                     m = s.SolveConfiguredLinearMaterial(inv_chi, rhs, tol, maxit, iters,
+                                                         /*mass_riesz=*/true, symmetric, x0_ptr);
+                 }
                  py::dict d;
-                 d["m"] = m; d["iters"] = iters; d["prec_min"] = pmin; d["prec_max"] = pmax;
+                 d["m"] = to_numpy_1d(m);
+                 d["iters"] = iters;
                  d["timings"] = solve_timings_dict(s);
                  return d;
              },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"), py::arg("rhs"),
-             py::arg("tol") = 1e-9, py::arg("maxit") = 5000, py::arg("x0") = py::none(),
-             "Array-input variant of solve_linear_material_auto_prec; avoids Python list materialization.")
-        .def("solve_linear_material_mass_riesz",
-             [](RadHACApKChargeGram& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                double inv_chi, std::vector<double> rhs,
-                double tol, int maxit, bool symmetric) {
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("solve_linear_material_mass_riesz: rhs size mismatch");
-                 int iters = 0;
-                 std::vector<double> noprec;   // mass_riesz=true ignores the diagonal prec
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, noprec, rhs,
-                                                               tol, maxit, iters, /*mass_riesz=*/true, symmetric);
-                 py::dict timings;
-                 for (const auto& kv : s.LastSolveTimings()) timings[py::str(kv.first)] = kv.second;
-                 py::dict d; d["m"] = m; d["iters"] = iters; d["timings"] = timings; return d;
-             },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
-             py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
-             "DEFAULT linear demag solve ENTIRELY in C++: SPD +N system ((1/chi)M_mass + B^T G B) m = rhs "
-             "by CG preconditioned with a PARDISO SPD factor of the HDiv mass M_mass (the MASS RIESZ map). "
-             "symmetric=true (default) applies G via the EXACTLY-symmetric H-matvec so CG sees a symmetric operator; "
-             "symmetric=false uses the general (asymmetric ACA) matvec. Returns {m, iters}.")
-        .def("solve_linear_material_mass_riesz_arrays",
-             [](RadHACApKChargeGram& s,
-                py::array_t<int, py::array::c_style | py::array::forcecast> B_indptr_a,
-                py::array_t<int, py::array::c_style | py::array::forcecast> B_indices_a,
-                py::array_t<double, py::array::c_style | py::array::forcecast> B_data_a,
-                int n_face,
-                py::array_t<int, py::array::c_style | py::array::forcecast> mI_a,
-                py::array_t<int, py::array::c_style | py::array::forcecast> mJ_a,
-                 py::array_t<double, py::array::c_style | py::array::forcecast> mV_a,
-                 double inv_chi,
-                 py::array_t<double, py::array::c_style | py::array::forcecast> rhs_a,
-                 double tol, int maxit, bool symmetric, py::object x0_obj) {
-                 auto B_indptr = to_1d_vector<int>(B_indptr_a, "B_indptr");
-                 auto B_indices = to_1d_vector<int>(B_indices_a, "B_indices");
-                 auto B_data = to_1d_vector<double>(B_data_a, "B_data");
-                 auto mI = to_1d_vector<int>(mI_a, "mI");
-                 auto mJ = to_1d_vector<int>(mJ_a, "mJ");
-                 auto mV = to_1d_vector<double>(mV_a, "mV");
-                 auto rhs = to_1d_vector<double>(rhs_a, "rhs");
-                 if ((int)rhs.size() != n_face)
-                     throw std::runtime_error("solve_linear_material_mass_riesz_arrays: rhs size mismatch");
-                 std::vector<double> x0;
-                 const std::vector<double>* x0_ptr = nullptr;
+             py::arg("inv_chi"), py::arg("rhs"), py::arg("tol") = 1e-8,
+             py::arg("maxit") = 5000, py::arg("symmetric") = true, py::arg("x0") = py::none(),
+             "Solve with the configured charge map and mass matrix; only vectors cross Python.")
+        .def("solve_configured_linear_material_auto_prec",
+             [](RadHACApKChargeGram& s, double inv_chi, F64Array rhs_a,
+                double tol, int maxit, py::object x0_obj) {
+                 const auto rhs_view = array_1d_view<double>(rhs_a, "rhs");
+                 Array1DView<double> x0_view;
+                 std::optional<F64Array> x0_array;
                  if (!x0_obj.is_none()) {
-                     auto x0_a = py::cast<py::array_t<double, py::array::c_style | py::array::forcecast>>(x0_obj);
-                     x0 = to_1d_vector<double>(x0_a, "x0");
-                     if ((int)x0.size() != n_face)
-                         throw std::runtime_error("solve_linear_material_mass_riesz_arrays: x0 size mismatch");
-                     x0_ptr = &x0;
+                     x0_array.emplace(py::cast<F64Array>(x0_obj));
+                     x0_view = array_1d_view<double>(*x0_array, "x0");
                  }
                  int iters = 0;
-                 std::vector<double> noprec;
-                 std::vector<double> m = s.SolveLinearMaterial(B_indptr, B_indices, B_data, n_face,
-                                                               mI, mJ, mV, inv_chi, noprec, rhs,
-                                                               tol, maxit, iters, /*mass_riesz=*/true, symmetric,
-                                                               x0_ptr);
-                 py::dict d; d["m"] = m; d["iters"] = iters; d["timings"] = solve_timings_dict(s); return d;
-              },
-              py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-              py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("inv_chi"),
-              py::arg("rhs"), py::arg("tol") = 1e-8, py::arg("maxit") = 5000, py::arg("symmetric") = true,
-               py::arg("x0") = py::none(),
-               "Array-input variant of solve_linear_material_mass_riesz; avoids Python list materialization.")
-        .def("apply_demag_arrays",
-             [](RadHACApKChargeGram& s,
-                py::array_t<int, py::array::c_style | py::array::forcecast> B_indptr_a,
-                py::array_t<int, py::array::c_style | py::array::forcecast> B_indices_a,
-                py::array_t<double, py::array::c_style | py::array::forcecast> B_data_a,
-                int n_face,
-                py::array_t<double, py::array::c_style | py::array::forcecast> x_a,
-                bool symmetric) {
-                 return s.ApplyDemagOperator(
-                     to_1d_vector<int>(B_indptr_a, "B_indptr"),
-                     to_1d_vector<int>(B_indices_a, "B_indices"),
-                     to_1d_vector<double>(B_data_a, "B_data"), n_face,
-                     to_1d_vector<double>(x_a, "x"), symmetric);
-             },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"),
-             py::arg("n_face"), py::arg("x"), py::arg("symmetric") = true,
-             "Apply the matrix-free HDiv demagnetizing operator B^T G B to x in C++.")
-        .def("apply_mass_riesz_arrays",
-             [](RadHACApKChargeGram& s,
-                py::array_t<int, py::array::c_style | py::array::forcecast> mI_a,
-                py::array_t<int, py::array::c_style | py::array::forcecast> mJ_a,
-                py::array_t<double, py::array::c_style | py::array::forcecast> mV_a,
-                int n_face,
-                py::array_t<double, py::array::c_style | py::array::forcecast> rhs_a) {
-                 return s.ApplyMassRiesz(
-                     to_1d_vector<int>(mI_a, "mI"),
-                     to_1d_vector<int>(mJ_a, "mJ"),
-                     to_1d_vector<double>(mV_a, "mV"), n_face,
-                     to_1d_vector<double>(rhs_a, "rhs"));
-             },
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"),
-             py::arg("n_face"), py::arg("rhs"),
-             "Apply the persistent C++ PARDISO mass-Riesz map M_mass^{-1} rhs.")
-        .def("solve_nonlinear_picard",
-             [](RadHACApKChargeGram& s,
-                std::vector<int> B_indptr, std::vector<int> B_indices, std::vector<double> B_data,
-                int n_face, std::vector<int> mI, std::vector<int> mJ, std::vector<double> mV,
-                std::vector<double> Mmass_diag, std::vector<double> N_diag, std::vector<double> mu,
-                double denom, double chi0, double Msat, double H0,
-                int picard_iters, double cg_tol, int cg_maxit) {
-                 auto r = s.SolveNonlinearPicard(B_indptr, B_indices, B_data, n_face, mI, mJ, mV,
-                                                 Mmass_diag, N_diag, mu, denom, chi0, Msat, H0,
-                                                 picard_iters, cg_tol, cg_maxit);
+                 double pmin = 0.0, pmax = 0.0;
+                 std::vector<double> m;
+                 {
+                     py::gil_scoped_release release;
+                     std::vector<double> rhs(rhs_view.data, rhs_view.data + rhs_view.size);
+                     std::vector<double> x0;
+                     const std::vector<double>* x0_ptr = nullptr;
+                     if (x0_view.data) {
+                         x0.assign(x0_view.data, x0_view.data + x0_view.size);
+                         x0_ptr = &x0;
+                     }
+                     m = s.SolveConfiguredLinearMaterialAutoPrec(
+                         inv_chi, rhs, tol, maxit, iters, pmin, pmax, x0_ptr);
+                 }
                  py::dict d;
-                 d["m"] = r.m; d["Mavg"] = r.Mavg; d["chi"] = r.chi; d["Dscal"] = r.Dscal;
-                 d["iters"] = r.iters;
+                 d["m"] = to_numpy_1d(m);
+                 d["iters"] = iters;
+                 d["prec_min"] = pmin;
+                 d["prec_max"] = pmax;
+                 d["timings"] = solve_timings_dict(s);
                  return d;
              },
-             py::arg("B_indptr"), py::arg("B_indices"), py::arg("B_data"), py::arg("n_face"),
-             py::arg("mI"), py::arg("mJ"), py::arg("mV"), py::arg("Mmass_diag"), py::arg("N_diag"),
-             py::arg("mu"), py::arg("denom"), py::arg("chi0"), py::arg("Msat"), py::arg("H0"),
-             py::arg("picard_iters") = 100, py::arg("cg_tol") = 1e-10, py::arg("cg_maxit") = 5000,
-             "M3 (nonlinear): scalar-chi Picard solve of the isotropic nonlinear demag M=Mof(H0-Dscal M) "
-             "entirely in C++ (each step a mass-Riesz SolveLinearMaterial + closed-form chi update; G via "
-             "the analytic H-matvec). Returns {m, Mavg, chi, Dscal, iters}.")
+             py::arg("inv_chi"), py::arg("rhs"), py::arg("tol") = 1e-9,
+             py::arg("maxit") = 5000, py::arg("x0") = py::none(),
+             "Build the configured Jacobi preconditioner and solve in C++; only vectors cross Python.")
+        .def("create_field_evaluator",
+             [](const RadHACApKChargeGram& s, F64Array magnetization_a,
+                int leaf_size, double theta, std::size_t tree_min_sources,
+                std::size_t auto_min_work, double tree_relative_tolerance,
+                int probe_count) {
+                 const auto input = array_1d_view<double>(magnetization_a, "magnetization");
+                 rad_hdiv::FieldEvaluatorOptions options;
+                 options.leaf_size = leaf_size;
+                 options.theta = theta;
+                 options.tree_min_sources = tree_min_sources;
+                 options.auto_min_work = auto_min_work;
+                 options.tree_relative_tolerance = tree_relative_tolerance;
+                 options.probe_count = probe_count;
+                 std::shared_ptr<rad_hdiv::HDivFieldEvaluator> evaluator;
+                 {
+                     py::gil_scoped_release release;
+                     std::vector<double> magnetization(input.data, input.data + input.size);
+                     evaluator = s.CreateConfiguredFieldEvaluator(magnetization, options);
+                 }
+                 return evaluator;
+             },
+             py::arg("magnetization"), py::arg("leaf_size") = 32,
+             py::arg("theta") = 0.05, py::arg("tree_min_sources") = 256,
+             py::arg("auto_min_work") = 500000000,
+             py::arg("tree_relative_tolerance") = 1.0e-5, py::arg("probe_count") = 16,
+             "Materialize the persistent RT1/RT2 field source from the configured C++ operator.")
+        .def("create_planar_field_evaluator",
+             [](const RadHACApKChargeGram& s, F64Array magnetization_a) {
+                 const auto input = array_1d_view<double>(magnetization_a, "magnetization");
+                 std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> evaluator;
+                 {
+                     py::gil_scoped_release release;
+                     std::vector<double> magnetization(input.data, input.data + input.size);
+                     evaluator = s.CreateConfiguredPlanarFieldEvaluator(magnetization);
+                 }
+                 return evaluator;
+             }, py::arg("magnetization"),
+             "Materialize the persistent planar HDiv field/Az source in C++.")
         .def("stats", [](RadHACApKChargeGram& s) {
                  const RadHACApKStats& st = s.GetStats();
                  py::dict d;
@@ -5080,6 +5542,23 @@ PYBIND11_MODULE(_radia_pybind, m) {
             elem_materials (list of str), elem_gmsh_types (list of int),
             elem_orig_idx (list of int), n_vertices (int)
     )pbdoc");
+
+    m.def("_volume_element_vertex_counts", [](std::shared_ptr<ngcomp::MeshAccess> ma) {
+        std::vector<int> counts;
+        {
+            py::gil_scoped_release release;
+            const std::size_t ne = ma->GetNE(ngcomp::VOL);
+            for (std::size_t i = 0; i < ne; ++i) {
+                const int count = static_cast<int>(
+                    ma->GetElement(ngcomp::ElementId(ngcomp::VOL, i)).Vertices().Size());
+                if (std::find(counts.begin(), counts.end(), count) == counts.end())
+                    counts.push_back(count);
+            }
+            std::sort(counts.begin(), counts.end());
+        }
+        return counts;
+    }, py::arg("mesh"),
+       "Return unique volume-element vertex counts via the native NGSolve MeshAccess.");
 
     // ========================================================================
     // HACApK PEEC adapter sanity check (Step 3 of HACApK-PEEC integration)

@@ -1,6 +1,7 @@
 """radia.vim._solve -- consolidated production demag-solve entry (productionization M1).
 
-`vim.Solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r), and
+`vim.Solve(mesh, mu_r=.., H_ext=..)`           -- LINEAR soft iron (scalar mu_r),
+`vim.Solve(mesh, mu_r=.., B_r=.., H_ext=..)`   -- LINEAR recoil permanent magnet, and
 `vim.Solve(mesh, bh_table=.., H_ext=..)`       -- NONLINEAR soft iron (real BH table),
 
 the production FEEC/HDiv soft-iron demag path used by `rad.Solve`.
@@ -21,12 +22,10 @@ analytic sphere to 1.4e-4); for PER-REGION chi it is the consistent generalizati
 linear region agree with its nonlinear-table equivalent (the 1/chi-weighted form differs at material
 interfaces by O(h)).  NONLINEAR iron solves the same projected residual by Newton (below).
 
-NONLINEAR -- a **damped matrix-free Newton** on the constitutive residual.  F(m) = M_mass m - b_M(H),
- H = h_ext - M_mass^-1 N m, b_M(H) = INT M(H).v dx (the HDiv projection of M(H)); consistent tensor
-Jacobian J = M_mass + T D_op (T = INT (dM/dH) u.v dx the tensor-tangent mass, D_op = M_mass^-1 N),
-applied MATRIX-FREE J v = M_mass v + T (M_mass^-1 (N v)); each Newton step is ONE M_mass^-1-GMRES on J
-+ an Armijo line search, after a scalar-chi LINEAR warmstart into the basin.  WHY Newton, not the
-earlier Anderson-Hantila fixed point: Hantila/Picard's contraction
+NONLINEAR -- a **symmetric energy-Newton** method on the co-energy residual.  Its Hessian is
+`W_tan + N`, with `W_tan` the differential-reluctivity HDiv mass and `N` the symmetric demag operator.
+Each Newton step is one all-C++ preconditioned CG solve plus an Armijo line search, after a scalar-chi
+linear warmstart.  WHY Newton, not the earlier Anderson-Hantila fixed point: Hantila/Picard's contraction
 rho = (chi_max - chi_min)/(chi_max + chi_min) -> 1 as the iron saturates (chi_max ~ 1e4 unsaturated,
 chi_min ~ 10 at the pole), so it STALLS on real silicon steel (measured: ~1e-2 residual after 300
 iters, NOT converged) -- Newton's quadratic step is immune to the chi-range.  VERIFIED: the real CEFC
@@ -35,34 +34,30 @@ Si-steel C-type at 3000 AT converges relF 0.55 -> 8e-7 in ~24 iters, gap B withi
 de-Rham loops sit in ker(N) and are carried by M_mass (no loop-star), and the scalable C++ charge-Gram
 H-matvec is the only O(N log N) cost.
 
-## Linear solve dispatch -- SYMMETRIC C++ CG default (symmetric HACApK), GMRES cross-check opt-in
+## Linear solve dispatch -- SYMMETRIC C++ CG (symmetric HACApK)
 For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the SPD +N system
 `((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL RT1 H(div) mass inverse
 `M_mass^{-1}` (the MASS RIESZ map), ENTIRELY in C++ (PARDISO mass factor + C++ Krylov, no Python glue).
-CG (not GMRES) because the charge-Gram is applied via the EXACTLY-SYMMETRIC H-matvec (`matvec_sym`): the
+CG is used because the charge-Gram is applied via the EXACTLY-SYMMETRIC H-matvec (`matvec_sym`): the
 HACApK H-matrix stores both (I,J) and (J,I) leaf blocks but ACA-truncates them INDEPENDENTLY, so the
 GENERAL matvec is only approximately symmetric; `matvec_sym` instead applies the UPPER-triangular leaves
 only -- each upper leaf supplies its own block AND the mirror as its exact transpose -- so the operator is
 machine-symmetric (||G - G^T|| == 0) regardless of the per-block truncation.  This makes CG robust BY
 CONSTRUCTION at all N (it removes the asymmetry failure mode entirely), and the symmetric matvec is ~1.4x
 FASTER than the general one (it touches half the leaves).  So CG is the default again (Sugahara 2026-06-27,
-"対称HACApKを実装しよう。CGがいいね").  `linear_solver="cpp-cg"` is an explicit alias for this symmetric C++ CG.
-`linear_solver="gmres"` is the asymmetry-tolerant cross-check/opt-in (mass-Riesz GMRES on the GENERAL matvec,
-Python recurrence) -- it was the default 2026-06-27 morning before the symmetric matvec landed.
-The opt-in `linear_solver="gmres"` is retained only as an asymmetry-tolerant
-cross-check; the production path is the all-C++ symmetric CG.  The old
-system-A H-LU and Python sparse-LU paths are removed from the HDiv-VIM
-backend.  (The mass Riesz makes the
+"対称HACApKを実装しよう。CGがいいね").  `linear_solver="cpp-cg"` is an explicit name for this symmetric C++ CG.
+The old Python nonsymmetric Krylov, system-A H-LU, and Python sparse-LU paths are removed from HDiv-VIM.
+(The mass Riesz makes the
 operator well-conditioned by construction -- the earlier "h-explosion => need AMS" was a monopole-Gram
 artifact; the accurate analytic Gram + mass Riesz needs no auxiliary-space preconditioner.)
 
-The uniform-linear Krylov paths (default CG = auto/cpp-cg, and the gmres cross-check) build the analytic Gram
+The uniform-linear C++ CG path (auto/cpp-cg) builds the analytic Gram
 at the tight `gram_eps=1e-12`; per-region / nonlinear keep `1e-10`.  (With the symmetric matvec the CG
 no longer NEEDS 1e-12 for symmetry -- symmetry is now STRUCTURAL, independent of the ACA accuracy -- 1e-12 is
 kept only for solution ACCURACY + golden stability.)  An explicit `gram_eps` always wins.  All material solve
 paths are fail-loud: a non-converged solve RAISES (No-Fallbacks) rather than returning a wrong M.
 
-ON THE EARLIER "+N CG SCALE WALL" (recorded honestly): the 2026-06-27-morning GMRES retreat was motivated by a
+ON THE EARLIER "+N CG SCALE WALL" (recorded honestly): an earlier nonsymmetric-solver retreat was motivated by a
 report that the GENERAL-matvec CG diverges past nf ~ 20k (the spurious ACA antisymmetry growing with N).  When
 the symmetric matvec was added, a re-measurement could NOT reproduce that divergence at HDiv scales: even with
 the lossy monopole far (max asymmetry) + a distorted hex + mu_r up to 1e6, the GENERAL-matvec CG converges
@@ -74,8 +69,9 @@ The Gram BUILD dominates the cost (the per-pair analytic quadrature; cube N=8 = 
 ~0.3 s mass-riesz solve; nonlinear sphere nf=9403 = 200 s exact build vs ~1 s/Newton-step solve).  Because
 N = B^T G B is GEOMETRY-ONLY (material-independent), the PRECISION-PRESERVING fast build is the default for
 the analytic-Gram material paths: uniform-linear `auto` / `cpp-cg` (symmetric mass-Riesz CG, already
-validated at tight Gram eps), plus per-region linear, PM-mixed, AND the nonlinear Newton (the latter
-paths stay on the GMRES/Newton asymmetry-tolerant formulations where needed; TET and polytope HEX/WEDGE).
+validated at tight Gram eps), plus per-region linear and nonlinear Newton.  Prescribed fixed-M sources
+enter only through the assembled applied-field LinearForm; all material paths use the same symmetric
+C++ operator on TET and polytope HEX/WEDGE.
 `ho_far_factor=2` (near pairs = exact analytic) + `far_quad=4` (far pairs = a low-order double-quadrature of
  1/r, O((size/r)^4) -- degree-2 4-pt tet / 3-pt tri, or, for hex/wedge, the same degree-2 rule on the
 centroid-fan sub-tets / sub-triangles).  This REPRODUCES the all-analytic Gram (uniform-linear sphere
@@ -93,38 +89,78 @@ the iron is meshed -- no air box / Kelvin needed.  The NONLINEAR path uses the a
 Per-region soft iron, LINEAR (`mu_r` scalar or `{material: mu_r}` dict) AND NONLINEAR (`bh_table` one
 [[H,B]] table or `{material: [[H,B]]}` dict).  N = B^T G B is geometry-only, so multi-grade iron enters
 ONLY through the (1/chi)-weighted HDiv mass (linear) / the per-element constitutive law (nonlinear).
-Mixed PM+iron (fixed-M source regions) and the larger-scale preconditioner are tracked in
-docs/hdiv_vim/PRODUCTIONIZATION.md.  This entry is the soft-iron demag backend used by `rad.Solve`.
+Permanent magnets use the documented four-level ladder: fixed/given MagnetizationSource, this solve's
+linear-recoil B_r law, simplified Play, and full B-input EnergyStop.  Fixed PM + iron source coupling is
+live; mutually evolving nonlinear PM + nonlinear iron remains separate block-coupling work.  This entry
+is also the soft-iron demag backend used by `rad.Solve`.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT
 open a TaskManager; the caller wraps the call in `with ng.TaskManager():`.
 """
-import inspect
 import os
 import time
 from math import pi as _PI
 
 import numpy as np
 import scipy.sparse as sp
-import scipy.sparse.linalg as spla
 import ngsolve as ng
 
 import radia._radia_pybind as _rp
 from . import _image
-from ._vim import build_charge_gram
+from ._vim import build_charge_gram, _volume_vertex_counts
 from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi,
                          _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi)
 
 _MU0 = 4e-7 * _PI
-# scipy renamed the Krylov tolerance kwarg 'tol' -> 'rtol' (scipy >= 1.12); detect once.
-_GMRES_TOL = "rtol" if "rtol" in inspect.signature(spla.gmres).parameters else "tol"
-_LINEAR_SOLVERS = {"auto", "cpp-cg", "gmres"}
+_LINEAR_SOLVERS = {"auto", "cpp-cg"}
 _NONLINEAR_SOLVERS = {"energy-newton", "picard-mass-riesz", "picard-energy"}
 _PRECONDITIONERS = {"auto", "mass-riesz", "jacobi"}
 _LAST_CPP_SOLVE_TIMINGS = {}
 _LAST_NONLINEAR_SOLVE_STATS = {}
 _AUTO_TET_JACOBI_NFACE_DEFAULT = 6000
 _AUTO_TET_JACOBI_NFACE_ENV = "RADIA_HDIV_AUTO_JACOBI_TET_NFACE"
+
+
+def _hdiv_space_with_image_constraints(mesh, order, image_planes):
+    """Create the NGSolve HDiv space, removing symmetry-odd normal traces.
+
+    An image plane with positive scalar-potential parity has odd normal
+    magnetization.  Its normal trace is therefore exactly zero on the cut
+    plane.  Leaving those trace unknowns in the reduced problem makes the
+    result depend on tiny quadrature cross-couplings; an explicit full mesh
+    has no corresponding internal-face charge.  NGSolve's compressed-space
+    wrapper is the natural FEEC representation of this essential trace
+    condition and keeps every assembled matrix on the native C++ path.
+    """
+    base = ng.HDiv(mesh, order=int(order))
+    constrained_axes = tuple(sorted({int(axis) for axis, sign in image_planes
+                                     if float(sign) > 0.0}))
+    if not constrained_axes:
+        return base, ()
+
+    scale = max((abs(float(value))
+                 for vertex in mesh.vertices for value in vertex.point), default=1.0)
+    plane_tol = 128.0 * np.finfo(float).eps * max(scale, 1.0)
+    axis_dofs = {axis: set() for axis in constrained_axes}
+    for element in mesh.Elements(ng.BND):
+        coordinates = np.asarray([mesh.vertices[v.nr].point for v in element.vertices], dtype=float)
+        for axis in constrained_axes:
+            if np.max(np.abs(coordinates[:, axis])) <= plane_tol:
+                axis_dofs[axis].update(int(dof) for dof in base.GetDofNrs(element) if int(dof) >= 0)
+
+    missing = ["xyz"[axis] for axis, dofs in axis_dofs.items() if not dofs]
+    if missing:
+        raise ValueError(
+            "vim.Solve: image symmetry requires a boundary face on the coordinate plane(s) %s=0; "
+            "no HDiv trace DOFs were found. The reduced mesh must end exactly on every image plane."
+            % ",".join(missing))
+
+    constrained = tuple(sorted(set().union(*axis_dofs.values())))
+    active = ng.BitArray(base.ndof)
+    active[:] = True
+    for dof in constrained:
+        active[dof] = False
+    return ng.Compress(base, active), constrained
 
 
 def _auto_tet_jacobi_nface_threshold():
@@ -211,58 +247,36 @@ def _f64(a):
     return np.ascontiguousarray(a, dtype=np.float64)
 
 
-def _as_i32_list(a):
-    return list(map(int, np.asarray(a).ravel()))
+def _configure_cpp_mass(H, mass, n_face):
+    """Keep NGSolve sparse matrices native; accept SciPy only for external callers."""
+    if sp.issparse(mass):
+        coo = sp.coo_matrix(mass)
+        H.configure_mass_matrix(
+            _i32(coo.row), _i32(coo.col), _f64(coo.data), int(n_face))
+    else:
+        H.configure_mass_matrix_ngsolve(mass)
 
 
-def _as_f64_list(a):
-    return list(map(float, np.asarray(a).ravel()))
+def _geometry_mass_apply(H, vector):
+    """Apply the immutable NGSolve HDiv mass through the persistent C++ operator."""
+    return np.asarray(H.apply_configured_geometry_mass(_f64(vector)), dtype=float)
 
 
-def _h_solve_auto_prec(H, Bptr, Bidx, Bdat, n_face, mI, mJ, mV, inv_chi, rhs, tol, maxit, *,
-                       x0=None):
-    """Call the diagonal-preconditioned C++ material solve.
-
-    New wheels expose NumPy-array pybind entry points.  Older PyPI wheels used
-    list-based entry points only; keep this binary compatibility so mdx can run
-    Python-only benchmark updates without manually copying a pyd.
-    """
-    if hasattr(H, "solve_linear_material_auto_prec_arrays"):
-        kwargs = {}
-        if x0 is not None:
-            kwargs["x0"] = _f64(x0)
-        return H.solve_linear_material_auto_prec_arrays(
-            _i32(Bptr), _i32(Bidx), _f64(Bdat), int(n_face),
-            _i32(mI), _i32(mJ), _f64(mV), float(inv_chi),
-            _f64(rhs), float(tol), int(maxit), **kwargs)
-    if x0 is not None:
-        raise NotImplementedError(
-            "vim.Solve: newton_cg_x0 with preconditioner='jacobi' requires a Radia wheel with "
-            "solve_linear_material_auto_prec_arrays(x0=...).")
-    return H.solve_linear_material_auto_prec(
-        _as_i32_list(Bptr), _as_i32_list(Bidx), _as_f64_list(Bdat), int(n_face),
-        _as_i32_list(mI), _as_i32_list(mJ), _as_f64_list(mV), float(inv_chi),
-        _as_f64_list(rhs), float(tol), int(maxit))
+def _h_solve_auto_prec(H, mass, n_face, inv_chi, rhs, tol, maxit, *, x0=None):
+    if mass is not None:
+        _configure_cpp_mass(H, mass, n_face)
+    kwargs = {"x0": None if x0 is None else _f64(x0)}
+    return H.solve_configured_linear_material_auto_prec(
+        float(inv_chi), _f64(rhs), float(tol), int(maxit), **kwargs)
 
 
-def _h_solve_mass_riesz(H, Bptr, Bidx, Bdat, n_face, mI, mJ, mV, inv_chi, rhs, tol, maxit, *,
+def _h_solve_mass_riesz(H, mass, n_face, inv_chi, rhs, tol, maxit, *,
                         symmetric=True, x0=None):
-    if hasattr(H, "solve_linear_material_mass_riesz_arrays"):
-        kwargs = {}
-        if x0 is not None:
-            kwargs["x0"] = _f64(x0)
-        return H.solve_linear_material_mass_riesz_arrays(
-            _i32(Bptr), _i32(Bidx), _f64(Bdat), int(n_face),
-            _i32(mI), _i32(mJ), _f64(mV), float(inv_chi),
-            _f64(rhs), float(tol), int(maxit), bool(symmetric), **kwargs)
-    if x0 is not None:
-        raise NotImplementedError(
-            "vim.Solve: newton_cg_x0 with preconditioner='mass-riesz' requires a Radia wheel with "
-            "solve_linear_material_mass_riesz_arrays(x0=...).")
-    return H.solve_linear_material_mass_riesz(
-        _as_i32_list(Bptr), _as_i32_list(Bidx), _as_f64_list(Bdat), int(n_face),
-        _as_i32_list(mI), _as_i32_list(mJ), _as_f64_list(mV), float(inv_chi),
-        _as_f64_list(rhs), float(tol), int(maxit), bool(symmetric))
+    if mass is not None:
+        _configure_cpp_mass(H, mass, n_face)
+    kwargs = {"x0": None if x0 is None else _f64(x0)}
+    return H.solve_configured_linear_material_mass_riesz(
+        float(inv_chi), _f64(rhs), float(tol), int(maxit), bool(symmetric), **kwargs)
 
 
 def _resolve_gram_params(*, gram_eps, far_quad, ho_far_factor):
@@ -280,51 +294,46 @@ def _resolve_gram_params(*, gram_eps, far_quad, ho_far_factor):
     }
 
 
-def _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit):
+def _solve_linear_mass_riesz_cpp(H, n_face, h_ext, chi, tol, maxit):
     """DEFAULT uniform-chi linear solve: mass-Riesz-preconditioned CG ENTIRELY in C++ on the SPD +N system
     ((1/chi)M_mass + B^T G B) m = M_mass h_ext, with G applied via the EXACTLY-SYMMETRIC charge-Gram
     H-matvec (`matvec_sym`: the upper-triangular leaves define both triangles, so the operator is
     machine-symmetric -- ||G - G^T|| == 0 -- regardless of the per-block ACA truncation).  This is why CG
     is the default again (Sugahara 2026-06-27, "対称HACApKを実装しよう。CGがいいね"): the symmetric Gram
     makes CG robust BY CONSTRUCTION at all N -- it removes the asymmetry failure mode that motivated the
-    earlier GMRES retreat (the spurious antisymmetric part of the GENERAL ACA matvec).  Mass-Riesz precond
+    earlier solver retreat (the spurious antisymmetric part of the GENERAL ACA matvec).  Mass-Riesz precond
     via a PARDISO SPD factor of the HDiv mass (eigenvalues vs M_mass are (1/chi)+d, d in [0,1], bounded ->
     ~3-5x fewer iters than diagonal Jacobi).  The whole Krylov loop (O(N log N) symmetric H-matvec +
     per-iteration PARDISO mass solve + vector ops) runs in C++ -- no Python per-iteration glue, no splu.
     The symmetric matvec is also ~1.4x FASTER than the general one (it skips the lower-triangle leaves).
-    `H.solve_linear_material_mass_riesz(..., symmetric=True)` is the default; pass symmetric=False only to
+    `H.solve_configured_linear_material_mass_riesz(..., symmetric=True)` is the default; pass
+    symmetric=False only to
     cross-check against the general (asymmetric) matvec."""
     inv_chi = 1.0 / float(chi)
-    rhs = np.asarray(Mm @ h_ext).ravel()
-    B = B.tocsr()
-    Mm_coo = sp.coo_matrix(Mm)
-    res = _h_solve_mass_riesz(H, B.indptr, B.indices, B.data, int(n_face),
-                              Mm_coo.row, Mm_coo.col, Mm_coo.data,
-                              inv_chi, rhs, tol, int(maxit))
+    rhs = _geometry_mass_apply(H, h_ext)
+    res = _h_solve_mass_riesz(
+        H, None, int(n_face), inv_chi, rhs, tol, int(maxit))
     _capture_cpp_solve_timings(res)
     iters = int(res["iters"])
     if iters >= int(maxit):                      # fail-loud (No-Fallbacks): never return a non-converged M
         raise RuntimeError(
             "vim.Solve (symmetric mass-riesz CG): did NOT converge in %d iters (n_face=%d).  The "
             "operator is the EXACTLY-symmetric SPD +N system, so CG should converge -- a non-convergence "
-            "here means an ill-conditioned material/mesh.  Tighten gram_eps or raise maxit; cross-check "
-            "with linear_solver='gmres' (mass-Riesz GMRES) to isolate." % (maxit, n_face))
+            "here means an ill-conditioned material/mesh. Tighten gram_eps or raise maxit."
+            % (maxit, n_face))
     return np.asarray(res["m"], float), iters
 
 
-def _solve_linear_jacobi_cpp(H, B, system_mass, rhs_mass, n_face, h_ext, inv_chi, tol, maxit):
+def _solve_linear_jacobi_cpp(H, system_mass, n_face, h_ext, inv_chi, tol, maxit):
     """Diagnostic linear solve: exact Jacobi diagonal of (inv_chi*system_mass + N), then C++ CG.
 
     This is intentionally not the default.  It gives the hex/H-matrix benchmark a direct apples-to-apples
     comparison against the production mass-Riesz preconditioner while keeping the same symmetric charge-Gram
     H-matvec and C++ Krylov loop.
     """
-    rhs = np.asarray(rhs_mass @ h_ext).ravel()
-    B = B.tocsr()
-    M_coo = sp.coo_matrix(system_mass)
-    res = _h_solve_auto_prec(H, B.indptr, B.indices, B.data, int(n_face),
-                             M_coo.row, M_coo.col, M_coo.data,
-                             float(inv_chi), rhs, tol, int(maxit))
+    rhs = _geometry_mass_apply(H, h_ext)
+    res = _h_solve_auto_prec(
+        H, system_mass, int(n_face), float(inv_chi), rhs, tol, int(maxit))
     _capture_cpp_solve_timings(res)
     iters = int(res["iters"])
     if iters >= int(maxit):
@@ -335,64 +344,36 @@ def _solve_linear_jacobi_cpp(H, B, system_mass, rhs_mass, n_face, h_ext, inv_chi
     return np.asarray(res["m"], float), iters
 
 
-def _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmres_restart):
-    """OPT-IN (`linear_solver="gmres"`) uniform-chi linear solve: mass-Riesz-preconditioned GMRES on the +N
-    system ((1/chi)M_mass + B^T G B) m = M_mass h_ext, using the GENERAL (possibly slightly asymmetric)
-    charge-Gram H-matvec.  GMRES is asymmetry-tolerant, so this is the cross-check / fallback for the
-    (default) symmetric C++ CG -- kept because GMRES does not require the operator to be symmetric.  Was the
-    default 2026-06-27 morning when the asymmetric ACA matvec was the only option; superseded the same day by
-    the symmetric matvec (`matvec_sym`), which makes CG robust by construction and is faster, so CG is the
-    default again.  The O(N log N) H-matvec stays the C++ kernel; the GMRES recurrence + sparse mass solve
-    are Python.  Fail-loud on non-convergence (No-Fallbacks)."""
-    inv_chi = 1.0 / float(chi)
-    rhs = np.asarray(Mm @ h_ext).ravel()
-    B = B.tocsr()
-    Mfac = spla.splu(sp.csc_matrix(Mm))
-    A = spla.LinearOperator((n_face, n_face),
-                            matvec=lambda v: inv_chi * np.asarray(Mm @ np.asarray(v, float)).ravel()
-                            + B.T @ np.asarray(H.matvec((B @ np.asarray(v, float)).tolist()), float))
-    Mprec = spla.LinearOperator((n_face, n_face), matvec=lambda v: Mfac.solve(np.asarray(v, float)))
-    it = {"n": 0}
-    cycles = max(2, int(np.ceil(maxit / gmres_restart)))
-    m, info = spla.gmres(A, rhs, M=Mprec, restart=int(gmres_restart), maxiter=cycles,
-                         callback=lambda _x: it.__setitem__("n", it["n"] + 1),
-                         callback_type="pr_norm", **{_GMRES_TOL: float(tol)})
-    if info != 0:                                # fail-loud (No-Fallbacks): never return a non-converged M
-        raise RuntimeError("vim.Solve (mass-riesz GMRES): did NOT converge (info=%d, n_face=%d, "
-                           "iters=%d). Tighten gram_eps or raise maxit." % (info, n_face, it["n"]))
-    return np.asarray(m, float), it["n"]
-
-
-def _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit):
+def _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit):
     """PER-REGION linear solve ENTIRELY in C++: the SYMMETRIC Galerkin system (M_{1/chi} + N) m = M_mass h_ext
     by symmetric mass-Riesz CG, where W = M_{1/chi} = INT (1/chi(x)) u.v dx is BOTH the system mass AND the
     Riesz preconditioner.  Passing W as the 'mass' COO with inv_chi=1.0 makes the C++ kernel
-    (`solve_linear_material_mass_riesz`, symmetric=True) compute A = 1.0*W + B^T G B and precondition with
+    (`solve_configured_linear_material_mass_riesz`, symmetric=True) computes A = 1.0*W + B^T G B and
+    preconditions with
     W^{-1} (PARDISO) -- the SAME all-C++ symmetric CG as the uniform path, generalized to per-region chi.
-    The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + PARDISO W-solve + vector ops); only
-    the NGSolve assembly of W and the RHS mass M_mass stays Python (assembly is NGSolve's job).  The
-    symmetric 1/chi-weighted Galerkin form is CG-able (W, N both symmetric); it differs from the form-1 GMRES
-    operator (M_mass + M_chi M_mass^-1 N) by O(h) at material interfaces -- both are consistent, and for a
-    UNIFORM region it is bit-identical to the scalar +N system."""
-    rhs = np.asarray(Mm @ h_ext).ravel()
-    B = B.tocsr(); W_coo = sp.coo_matrix(W)
-    res = _h_solve_mass_riesz(H, B.indptr, B.indices, B.data, int(n_face),
-                              W_coo.row, W_coo.col, W_coo.data,
-                              1.0, rhs, tol, int(maxit))
+    The whole Krylov loop runs in C++ (symmetric charge-Gram H-matvec + PARDISO W-solve + vector ops).
+    Python declares W and the geometric mass as NGSolve forms; NGSolve assembles them in C++, pybind extracts
+    their native sparse matrices directly, and the persistent C++ operator applies the geometric-mass RHS.
+    The
+    symmetric 1/chi-weighted Galerkin form is CG-able (W, N both symmetric), and for a UNIFORM region it is
+    bit-identical to the scalar +N system."""
+    rhs = _geometry_mass_apply(H, h_ext)
+    res = _h_solve_mass_riesz(
+        H, W, int(n_face), 1.0, rhs, tol, int(maxit))
     _capture_cpp_solve_timings(res)
     iters = int(res["iters"])
     if iters >= int(maxit):                      # fail-loud (No-Fallbacks)
         raise RuntimeError(
             "vim.Solve (per-region symmetric mass-riesz CG): did NOT converge in %d iters "
             "(n_face=%d).  The (M_{1/chi} + N) operator is SPD, so a non-convergence means an ill-"
-            "conditioned material/mesh; tighten gram_eps or raise maxit, or cross-check with "
-            "linear_solver='gmres' (the form-1 GMRES)." % (maxit, n_face))
+            "conditioned material/mesh; tighten gram_eps or raise maxit." % (maxit, n_face))
     return np.asarray(res["m"], float), iters
 
 
-def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, magnets=None,
+def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
+                     magnetization_sources=None, magnets=None,
                      image=None, gram_eps=None, leaf=32, eta=2.0, far_quad=None, tol=1e-8,
-                     maxit=4000, gmres_restart=400, nl_maxit=300, nl_tol=1e-6,
+                     maxit=4000, nl_maxit=300, nl_tol=1e-6,
                      nonlinear_solver="energy-newton",
                      preconditioner="auto",
                      linear_solver="auto", order=1,
@@ -402,54 +383,118 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
                      newton_cg_x0=False):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
-    Soft-iron spec (EXACTLY ONE, unless every region is a permanent magnet -> both may be omitted):
+    Material spec (EXACTLY ONE):
       mu_r     : float > 1 -> LINEAR isotropic soft iron (ONE region), OR a dict {material_name: mu_r}
                  for PER-REGION linear soft iron (multiple iron grades; each mu_r > 1).  N = B^T G B is
                  geometry-only, so per-region enters ONLY through the chi-weighted HDiv mass (form 1).
+      B_r      : optional vector remanent flux density (T), supplied with scalar ``mu_r``.  This selects
+                 the linear-recoil permanent-magnet law B = mu0*mu_r*H + B_r.  ``B_r`` may be a constant
+                 vector or a spatial NGSolve CoefficientFunction within one conforming magnet body.
+                 A normal-discontinuous segmented magnet requires separate body spaces so its internal
+                 surface charge is retained.  ``mu_r`` is the recoil permeability and must be > 1; the
+                 rigid mu_r=1 limit is ``vim.MagnetizationSource``.
       bh_table : [[H,B], ..] (A/m, T; the MatSatIsoTab data) -> NONLINEAR isotropic soft iron (ONE
                  region), OR a dict {material_name: [[H,B], ..]} for PER-REGION nonlinear soft iron.
                  N = B^T G B is geometry-only, so per-region nonlinear enters ONLY through the per-element
                  constitutive law + warmstart.
-      pm_M     : dict {material_name: [Mx,My,Mz]} (A/m) -> PERMANENT-MAGNET (fixed-M source) regions
-                 mixed alongside soft iron (or alone).  A PM region is the M = M_pm (tangent 0) special
-                 case of the same projected statement: it contributes a source b_pm = INT M_pm.v dx and
-                 its field reaches the iron through the full-m demag, while its own M stays pinned to
-                 M_pm.  With pm_M, the soft iron is given as EITHER mu_r (linear) OR bh_table (nonlinear)
-                  and covers the NON-PM regions (a scalar applies to every non-PM region; a dict names
-                  them).  PM directly TOUCHING soft iron is rejected (conforming HDiv cannot represent the
-                 PM-iron magnetization discontinuity) -- separate them with an air gap.
+      magnetization_sources : one or more ``vim.MagnetizationSource`` objects.  Each fixed/given
+                  magnetization is L2-projected in its OWN HDiv space and contributes its immutable C++
+                  field to the iron weak form.  The PM coefficients are never included among the unknowns;
+                  separate PM and iron spaces preserve their physical normal jump, including touching
+                  interfaces.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
-                 Biot-Savart field rad.RadiaField(coil,'h').  REQUIRED.
+                 Biot-Savart field rad.RadiaField(coil,'h').  Required unless ``B_r``, a magnetization
+                 source, or the planar magnets path supplies the drive.
     near/far Gram-build tuning:
       ho_far_factor -- the HDiv near/far separation threshold (pass inf to force the all-high-order
                        reference build).
     Returns dict: M (n_el,3) per-element magnetization, M_avg (3,), iters, demag (Rayleigh factor),
     ndof, n_el, n_charge, nonlinear(bool).  The caller must open `with ng.TaskManager():`.
     """
+    from ._magnetization_source import MagnetizationSource
+    if magnetization_sources is None:
+        sources = ()
+    elif isinstance(magnetization_sources, MagnetizationSource):
+        sources = (magnetization_sources,)
+    else:
+        try:
+            sources = tuple(magnetization_sources)
+        except TypeError as exc:
+            raise TypeError("vim.Solve: magnetization_sources must be a MagnetizationSource or iterable") from exc
+        if not all(isinstance(source, MagnetizationSource) for source in sources):
+            raise TypeError("vim.Solve: every magnetization_sources item must be a vim.MagnetizationSource")
+    linear_recoil_pm = B_r is not None
+    if linear_recoil_pm:
+        if bh_table is not None:
+            raise ValueError("vim.Solve: B_r selects the linear-recoil permanent-magnet law and cannot "
+                             "be combined with bh_table")
+        if isinstance(mu_r, dict):
+            raise NotImplementedError(
+                "vim.Solve: B_r currently requires one scalar recoil mu_r; per-region recoil materials "
+                "must be solved as separate permanent-magnet bodies")
+        try:
+            recoil_mu_r = float(mu_r)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("vim.Solve: B_r requires scalar recoil mu_r > 1") from exc
+        if not np.isfinite(recoil_mu_r) or recoil_mu_r <= 1.0:
+            raise ValueError(
+                "vim.Solve: linear-recoil B_r requires mu_r > 1; use vim.MagnetizationSource for the "
+                "rigid mu_r=1 fixed-magnetization limit")
+        dim = int(mesh.dim)
+        try:
+            uniform_B_r = np.asarray(B_r, dtype=float)
+        except (TypeError, ValueError):
+            uniform_B_r = None
+        if (uniform_B_r is not None and uniform_B_r.shape == (dim,)
+                and np.isfinite(uniform_B_r).all()):
+            B_r_cf = ng.CoefficientFunction(tuple(float(value) for value in uniform_B_r))
+        elif uniform_B_r is not None and uniform_B_r.shape == (dim,):
+            raise ValueError("vim.Solve: B_r vector must contain only finite values")
+        elif getattr(B_r, "dim", None) == dim:
+            B_r_cf = B_r
+        else:
+            raise ValueError(
+                "vim.Solve: B_r must be a length-%d vector or a %d-component NGSolve "
+                "CoefficientFunction (got %r)" % (dim, dim, B_r))
     if H_ext is None:
-        raise ValueError("vim.Solve: H_ext (applied-field CoefficientFunction) is required")
+        if linear_recoil_pm or sources or magnets is not None:
+            H_ext = ng.CoefficientFunction((0.0,) * int(mesh.dim))
+        else:
+            raise ValueError("vim.Solve: H_ext (applied-field CoefficientFunction) is required when no "
+                             "magnetization source is supplied")
+    if getattr(H_ext, "dim", None) != int(mesh.dim):
+        raise ValueError("vim.Solve: H_ext must be a %d-component NGSolve CoefficientFunction"
+                         % int(mesh.dim))
+    if linear_recoil_pm:
+        # M = chi*H + B_r/mu0 is exactly the existing symmetric linear HDiv system with
+        # H_ext shifted by B_r/(mu0*chi).  The unknown and returned field remain total M.
+        H_ext = H_ext + B_r_cf / (_MU0 * (recoil_mu_r - 1.0))
     # ---- HDiv-VIM scope: RT1 on TET/HEX/WEDGE and RT2 on pure TET ----
-    # The tetrahedral monomial-charge Gram is exact for orders 1 and 2.  The
-    # specialized HEX/WEDGE, planar, IMA, and field-reconstruction kernels are
-    # RT1-only and therefore reject RT2 explicitly.
+    # The tetrahedral monomial-charge Gram, IMA fold, and field evaluator are exact
+    # for orders 1 and 2.  Specialized HEX/WEDGE and planar kernels remain RT1.
     order = int(order)
     if order not in (1, 2):
         raise ValueError("HDiv-VIM production supports HDiv order in {1,2}; got order=%r." % (order,))
-    if pm_M is not None:
-        raise NotImplementedError(
-            "HDiv-VIM (RT1) is a SOFT-IRON (linear / nonlinear) demag solver and does not mix permanent "
-            "magnets (pm_M).  Place permanent magnets as applied-field sources folded into H_ext.")
-    # IMA mirror symmetry (image=) is wired for flat pure-TET / pure-HEX / pure-WEDGE RT1 (2026-07-04);
-    # reduced curved / mixed / pyramid cases fail loud downstream instead of silently dropping the image.
+    if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
+        curve_order = int(mesh.GetCurveOrder())
+    # IMA mirror symmetry is wired for flat/curved pure-TET RT1/RT2 and pure-HEX/WEDGE RT1.
+    # Mixed and pyramid cases fail loud downstream instead of silently dropping the image.
     if mesh.dim == 2:
+        if sources:
+            raise NotImplementedError(
+                "vim.Solve (2D): use the established magnets=[(mesh, M), ...] planar source path; "
+                "vim.MagnetizationSource is the 3D prescribed-source API.")
         if order != 1:
             raise NotImplementedError(
                 "vim.Solve (2D): the planar HDiv-VIM kernel is order 1 only; RT2 is currently supported "
                 "on pure tetrahedral 3D meshes.")
+        image_masks, image_signs = [], []
         if image is not None:
-            raise NotImplementedError(
-                "vim.Solve (2D): the planar HDiv-VIM layer does not support IMA image symmetry; "
-                "use a full (un-reduced) 2D model.")
+            for axes, sign in _image.image_group(_image.parse_image_string(image)):
+                if any(axis >= 2 for axis in axes):
+                    raise ValueError("vim.Solve (2D): image may contain x/y planes only.")
+                image_masks.append(int(sum(1 << axis for axis in axes)))
+                image_signs.append(float(sign))
         # ---- PLANAR (2D motor cross-section) branch: matrix-free C++ charge Gram + mass-Riesz CG ----
         # The 2D layer supports the core single-region surface: mu_r (linear) / bh_table
         # (nonlinear) + H_ext.  The 3D-only knobs must stay at their defaults -- fail loud.
@@ -467,13 +512,29 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
                 raise ValueError("vim.Solve (2D): %s is a 3D knob; the 2D Gram parameters "
                                  "are fixed by its own gates (got %r)" % (_nm, _val))
         from ._vim2d import solve_planar_demag
-        return solve_planar_demag(mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
-                                  eta=eta, nl_tol=nl_tol, nl_maxit=nl_maxit)
+        result = solve_planar_demag(
+            mesh, mu_r=mu_r, H_ext=H_ext, bh_table=bh_table, magnets=magnets,
+            eta=eta, nl_tol=nl_tol, nl_maxit=nl_maxit,
+            image_masks=image_masks, image_signs=image_signs)
+        result["image"] = image
+        if linear_recoil_pm:
+            result["permanent_magnet_model"] = "linear-recoil"
+            result["permanent_magnet_level"] = 2
+            result["recoil_mu_r"] = recoil_mu_r
+            result["B_r_supplied"] = True
+            result["_B_r"] = B_r_cf
+        return result
     if magnets is not None:
         raise NotImplementedError(
-            "vim.Solve: magnets= (separate-body permanent-magnet source) is wired for the 2D "
-            "planar layer only; in 3D fold the permanent-magnet field into H_ext.")
-    _vtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
+            "vim.Solve: magnets= is the 2D planar source API; in 3D construct "
+            "vim.MagnetizationSource and pass magnetization_sources=[...].")
+    for source in sources:
+        if source.mesh is mesh:
+            raise ValueError(
+                "vim.Solve: a prescribed magnetization source and soft iron must use separate mesh "
+                "objects/HDiv spaces; using the same mesh would erase the PM/iron normal jump.")
+        H_ext = H_ext + source.field_cf
+    _vtx = _volume_vertex_counts(mesh)
     if _vtx not in ({4}, {8}, {6}):
         raise ValueError(
             "HDiv-VIM (order 1) supports a pure-TET (4-vertex), pure-HEX (8-vertex), or pure-WEDGE/prism "
@@ -483,14 +544,6 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
         raise NotImplementedError(
             "HDiv-VIM RT2 is supported on pure-TET meshes only; HEX and WEDGE use their specialized RT1 "
             "charge kernels (got vertex counts %s)." % sorted(_vtx))
-    if order == 2 and (curve_order not in (None, 0) or mesh.GetCurveOrder() >= 2):
-        raise NotImplementedError(
-            "HDiv-VIM RT2 is currently supported on flat pure-TET meshes only.  Curved geometry remains "
-            "production-supported through RT1 on an isoparametric P2 mesh; curved RT2 requires a separate "
-            "Duffy-build performance gate.")
-    if order == 2 and image is not None:
-        raise NotImplementedError(
-            "HDiv-VIM RT2 does not yet support IMA image folding; use a full pure-TET model or order=1.")
     if linear_solver not in _LINEAR_SOLVERS:
         raise ValueError("vim.Solve: linear_solver must be one of %s (got %r)"
                          % (sorted(_LINEAR_SOLVERS), linear_solver))
@@ -500,13 +553,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     if preconditioner not in _PRECONDITIONERS:
         raise ValueError("vim.Solve: preconditioner must be one of %s (got %r)"
                          % (sorted(_PRECONDITIONERS), preconditioner))
-    if pm_M is None:
-        if (mu_r is None) == (bh_table is None):
-            raise ValueError("vim.Solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
-    else:
-        if (mu_r is not None) and (bh_table is not None):
-            raise ValueError("vim.Solve: with pm_M, give the iron as EITHER mu_r (linear) OR "
-                             "bh_table (nonlinear), not both")
+    if (mu_r is None) == (bh_table is None):
+        raise ValueError("vim.Solve: provide EXACTLY ONE of mu_r (linear) or bh_table (nonlinear)")
 
     # AUTO-MATCH: a CURVED mesh (mesh.GetCurveOrder()>=2) needs a Gram built on the SAME curved geometry as
     # B/M_mass, else N=B^T G B (straight Gram) is geometry-inconsistent and the demag DRIFTS with geometry order
@@ -526,19 +574,28 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, bh_table=None, pm_M=None, m
     # LINEAR (uniform-scalar OR per-region dict) mu_r AND flat/curved NONLINEAR (bh_table) are wired via the same
     # all-C++ symmetric mass-Riesz CG / energy-Newton.  RT2 reaches this path only on a pure-TET mesh.
     # Golden: validation_test/feec/test_hdiv_vim_demag_solve*, test_hdiv_vim_highorder_cpp.py.
-    return _solve_highorder(mesh, int(order), mu_r, bh_table, pm_M, H_ext, image, linear_solver,
-                            gram_eps, leaf, eta, far_quad, tol, maxit,
-                            gmres_restart, curve_order, curve_gauss, ho_far_factor, nl_maxit, nl_tol,
-                            nonlinear_solver, preconditioner, newton_inner_tol, newton_warmstart,
-                            newton_continuation, newton_reuse_tangent_steps, newton_cg_x0)
+    result = _solve_highorder(mesh, int(order), mu_r, bh_table, H_ext, image, linear_solver,
+                              gram_eps, leaf, eta, far_quad, tol, maxit,
+                              curve_order, curve_gauss, ho_far_factor, nl_maxit, nl_tol,
+                              nonlinear_solver, preconditioner, newton_inner_tol, newton_warmstart,
+                              newton_continuation, newton_reuse_tangent_steps, newton_cg_x0,
+                              vertex_counts=_vtx, magnetization_sources=sources)
+    if linear_recoil_pm:
+        result["permanent_magnet_model"] = "linear-recoil"
+        result["permanent_magnet_level"] = 2
+        result["recoil_mu_r"] = recoil_mu_r
+        result["B_r_supplied"] = True
+        result["_B_r"] = B_r_cf
+    return result
 
 
-def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_solver,
-                     gram_eps, leaf, eta, far_quad, tol, maxit, gmres_restart,
+def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
+                     gram_eps, leaf, eta, far_quad, tol, maxit,
                      curve_order=None, curve_gauss=8, ho_far_factor=None, nl_maxit=300, nl_tol=1e-6,
-                     nonlinear_solver="energy-newton", preconditioner="auto",
-                     newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
-                     newton_reuse_tangent_steps=1, newton_cg_x0=False):
+                      nonlinear_solver="energy-newton", preconditioner="auto",
+                      newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
+                      newton_reuse_tangent_steps=1, newton_cg_x0=False, vertex_counts=None,
+                      magnetization_sources=()):
     """RT1/RT2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -546,23 +603,23 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     all-C++ symmetric mass-Riesz CG as the production path; unsupported combinations fail loud (No-Fallbacks).
     The CALLER opens `with ng.TaskManager():` (same contract as vim.Solve)."""
     t_total = time.perf_counter()
+    vertex_counts = (_volume_vertex_counts(mesh) if vertex_counts is None
+                     else frozenset(vertex_counts))
     # IMA mirror symmetry: WIRED for the FLAT pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
     # pure-WEDGE (the C++ QuadBlockHex/Wedge(mask) reflected block) paths -- the Gram folds the mirror-image
-    # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  CURVED (curve_order) +
-    # MIXED / pyramid fail loud (not yet wired).
+    # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  The same fold is used
+    # on P2-curved TET/HEX/WEDGE geometry; MIXED / pyramid still fail loud.
     image_masks, image_signs = [], []
+    image_planes = []
     if image is not None:
-        if curve_order is not None:
-            raise NotImplementedError(
-                "vim.Solve: IMA image symmetry is not yet wired for the CURVED (curve_order) "
-                "HDiv-VIM path -- use a flat tet/hex/wedge mesh or a full unreduced curved model.")
-        _ivtx = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
+        _ivtx = vertex_counts
         if _ivtx not in ({4}, {8}, {6}):
             raise NotImplementedError(
                 "vim.Solve: IMA image symmetry is wired for the FLAT pure-TET / pure-HEX / pure-WEDGE "
                 "RT1 Gram; MIXED / pyramid reduced models are not supported.  Got vertex counts %s."
                 % sorted(_ivtx))
         _planes = _image.parse_image_string(image)
+        image_planes = list(_planes)
         # (2026-07-05) hex/wedge IMA now handles ANTISYMMETRIC (negative-sign, field-PERPENDICULAR) planes too:
         # the on-plane cut-face self-term is computed with the EXACT self-radial in the reflected block (the
         # QuadBlockHex/Wedge "R(host)==host -> self_pair" fix), so the large perpendicular cut-face charge
@@ -570,13 +627,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         for axes, sign in _image.image_group(_planes):
             image_masks.append(int(sum(1 << a for a in axes)))
             image_signs.append(float(sign))
-    if pm_M is not None:
-        raise NotImplementedError("vim.Solve: PM-mixed (pm_M) is not wired in the production HDiv path")
     # The flat nonlinear path uses the same high-order Gram as the curved path.  The symmetric energy-Newton
     # is Gram-agnostic and consumes only H.matvec plus the C++ mass-Riesz solve.
-    if linear_solver == "gmres" and preconditioner not in ("auto", "mass-riesz"):
-        raise NotImplementedError("vim.Solve: linear_solver='gmres' is wired only with "
-                                  "preconditioner='mass-riesz'")
     if int(order) > 2:
         # order<=2 uses the EXACT analytic-moment charge potential (machine precision).  For order>=3 the C++
         # Gram falls back to the Duffy singular quadrature (PhiInner -> PhiAtHO_Duffy), which is ~1e-3 accurate
@@ -599,39 +651,51 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         if int(curve_order) != 2:
             raise NotImplementedError("vim.Solve: only curve_order=2 (isoparametric P2) is wired.")
         mesh.Curve(int(curve_order))
-        fes = ng.HDiv(mesh, order=order)
+        fes, symmetry_constrained_dofs = _hdiv_space_with_image_constraints(mesh, order, image_planes)
         t_before_charge_gram = time.perf_counter()
         B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
+                                         far_quad=eff_far, ho_far_factor=eff_hofar,
                                          curve_order=int(curve_order), curve_gauss=int(curve_gauss),
-                                         nonlinear=bh_table is not None)
+                                         nonlinear=bh_table is not None,
+                                         image_masks=image_masks, image_signs=image_signs,
+                                         _materialize_mass=False)
     else:
-        fes = ng.HDiv(mesh, order=order)
+        fes, symmetry_constrained_dofs = _hdiv_space_with_image_constraints(mesh, order, image_planes)
         t_before_charge_gram = time.perf_counter()
         B, H, M_mass = build_charge_gram(fes, eps=eff_eps, leafsize=leaf, eta=eta,
                                          far_quad=eff_far, ho_far_factor=eff_hofar,
                                          nonlinear=bh_table is not None,
-                                         image_masks=image_masks, image_signs=image_signs)
+                                         image_masks=image_masks, image_signs=image_signs,
+                                         _materialize_mass=False)
     t_after_charge_gram = time.perf_counter()
     charge_build_timings = dict(getattr(build_charge_gram, "last_timings", {}) or {})
-    Mm = sp.csr_matrix(M_mass); B = sp.csr_matrix(B)
     n_face = fes.ndof; n_el = mesh.GetNE(ng.VOL); n_charge = B.shape[0]
+    del B, M_mass
     preconditioner_requested = preconditioner
     preconditioner, preconditioner_policy = _resolve_highorder_preconditioner(
         preconditioner,
         nonlinear=bh_table is not None,
         nonlinear_solver=nonlinear_solver,
-        vertex_counts={len(el.vertices) for el in mesh.Elements(ng.VOL)},
+        vertex_counts=vertex_counts,
         n_face=n_face,
     )
-    gfH = ng.GridFunction(fes); gfH.Set(H_ext); h_ext = gfH.vec.FV().NumPy().copy()
+    # True weak L2 projection of arbitrary applied fields, including the native
+    # C++ fields of prescribed HDiv magnetization sources.  GridFunction.Set is
+    # interpolation; assembling the LinearForm and applying the already-pinned
+    # mass Riesz map preserves the NGSolve Galerkin contract at PM/iron gaps and
+    # touching interfaces.
+    source_rhs = ng.LinearForm(fes)
+    source_rhs += H_ext * fes.TestFunction() * ng.dx
+    source_rhs.Assemble()
+    h_ext = np.asarray(H.apply_configured_mass_riesz(
+        _f64(source_rhs.vec.FV().NumPy())), dtype=float)
     gfMu = ng.GridFunction(fes); gfMu.Set(ng.CoefficientFunction((0, 0, 1)))
     mu = gfMu.vec.FV().NumPy().copy()
-    denom = float(mu @ np.asarray(Mm @ mu).ravel())
+    denom = float(mu @ _geometry_mass_apply(H, mu))
     t_after_projection = time.perf_counter()
 
     def N_apply(v):
-        v = np.asarray(v, float)
-        return B.T @ np.asarray(H.matvec((B @ v).tolist()), float)
+        return np.asarray(H.apply_configured_demag(_f64(v), True), float)
 
     D = float((mu @ N_apply(mu)) / denom)
     hmat_stats = dict(H.stats()) if hasattr(H, "stats") else None
@@ -655,15 +719,15 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             raise NotImplementedError("vim.Solve: nonlinear_solver=%r is wired only with "
                                       "preconditioner='mass-riesz' for now" % (nonlinear_solver,))
         if nonlinear_solver == "picard-mass-riesz":
-            m, iters = _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext,
+            m, iters = _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext,
                                                               tol, maxit, nl_maxit, nl_tol)
             solver_used = "picard-mass-riesz-cpp"
         elif nonlinear_solver == "picard-energy":
-            m0, it0 = _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext,
+            m0, it0 = _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext,
                                                              tol, maxit, min(nl_maxit, 12),
                                                              max(nl_tol, 1e-2),
                                                              require_convergence=False)
-            m, it1 = _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext,
+            m, it1 = _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext,
                                                  tol, maxit, nl_maxit, nl_tol, m0=m0,
                                                  inner_tol=newton_inner_tol,
                                                  warmstart="linear",
@@ -681,9 +745,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
             warm_iters = 0
             if newton_warmstart == "picard":
                 m0, warm_iters = _solve_nonlinear_picard_mass_riesz_cpp(
-                    mesh, fes, bh_table, H, B, Mm, n_face, h_ext, tol, maxit,
+                    mesh, fes, bh_table, H, n_face, h_ext, tol, maxit,
                     min(nl_maxit, 8), max(nl_tol, 5e-3), require_convergence=False)
-            m, iters = _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext,
+            m, iters = _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext,
                                                    tol, maxit, nl_maxit, nl_tol, m0=m0,
                                                    inner_tol=newton_inner_tol,
                                                    warmstart=newton_warmstart,
@@ -696,23 +760,20 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
     elif isinstance(mu_r, dict):                                # per-region linear: W = 1/chi-weighted HDiv mass
         W = _build_invchi_mass(mesh, fes, mu_r, n_face)
         if preconditioner == "jacobi":
-            m, iters = _solve_linear_jacobi_cpp(H, B, W, Mm, n_face, h_ext, 1.0, tol, maxit)
+            m, iters = _solve_linear_jacobi_cpp(H, W, n_face, h_ext, 1.0, tol, maxit)
             solver_used = "jacobi-cg"
         else:
-            m, iters = _solve_linear_W_cpp(H, B, W, Mm, n_face, h_ext, tol, maxit)
+            m, iters = _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit)
             solver_used = "mass-riesz-cg"
     else:                                                       # uniform-scalar linear
         chi = float(mu_r) - 1.0
         if chi <= 0.0:
             raise ValueError("vim.Solve: mu_r must be > 1 (got %r)" % (mu_r,))
-        if linear_solver == "gmres":
-            m, iters = _solve_linear_mass_riesz_gmres(H, B, Mm, n_face, h_ext, chi, tol, maxit, gmres_restart)
-            solver_used = "mass-riesz-gmres"
-        elif preconditioner == "jacobi":
-            m, iters = _solve_linear_jacobi_cpp(H, B, Mm, Mm, n_face, h_ext, 1.0 / chi, tol, maxit)
+        if preconditioner == "jacobi":
+            m, iters = _solve_linear_jacobi_cpp(H, None, n_face, h_ext, 1.0 / chi, tol, maxit)
             solver_used = "jacobi-cg"
         else:
-            m, iters = _solve_linear_mass_riesz_cpp(H, B, Mm, n_face, h_ext, chi, tol, maxit)
+            m, iters = _solve_linear_mass_riesz_cpp(H, n_face, h_ext, chi, tol, maxit)
             solver_used = "mass-riesz-cg"
     solve_wall_s = time.perf_counter() - t_solve
     cpp_solve_timings = dict(_LAST_CPP_SOLVE_TIMINGS)
@@ -746,7 +807,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
                n_charge=n_charge, nonlinear=bh_table is not None, linear_solver=solver_used,
                preconditioner=preconditioner, preconditioner_requested=preconditioner_requested,
                preconditioner_policy=preconditioner_policy,
-               order=int(order), curve_order=curve_order, image=image, setup_wall_s=setup_wall_s,
+               order=int(order), curve_order=curve_order, image=image,
+               symmetry_constrained_dofs=len(symmetry_constrained_dofs), setup_wall_s=setup_wall_s,
                solve_wall_s=solve_wall_s, post_wall_s=time.perf_counter() - t_post,
                total_wall_s_internal=time.perf_counter() - t_total,
                fes_wall_s=t_before_charge_gram - t_before_fes,
@@ -756,6 +818,10 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
                hex_state_check_wall_s=charge_build_timings.get("hex_state_check_wall_s"),
                projection_wall_s=t_after_projection - t_after_charge_gram,
                demag_probe_wall_s=t_after_demag_probe - t_after_projection)
+    out["_charge_gram"] = H
+    out["_m_coefficients"] = np.ascontiguousarray(m, dtype=np.float64)
+    out["_magnetization_sources"] = tuple(magnetization_sources)
+    out["magnetization_source_count"] = len(magnetization_sources)
     for _k, _v in charge_build_timings.items():
         out.setdefault(_k, _v)
     if cpp_solve_timings:
@@ -770,7 +836,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, pm_M, H_ext, image, linear_sol
         out["M_avg_reduced"] = M_avg_reduced
     if hmat_stats is not None:
         out["hmat_stats"] = hmat_stats
-    if int(order) == 1:
+    if int(order) in (1, 2):
         # rad.Fld is part of the solved-object contract.  Materialize its
         # immutable C++ charge source and source tree now, while gfM/mesh are
         # hot, instead of charging the first observation request and repeating
@@ -797,11 +863,10 @@ def _build_invchi_mass(mesh, fes, mu_r, n_face):
     invchi_cf = mesh.MaterialCF({r: 1.0 / (float(mu_r[r]) - 1.0) for r in mats})
     u, v = fes.TnT()
     a = ng.BilinearForm(fes); a += invchi_cf * u * v * ng.dx; a.Assemble()
-    r, c, val = a.mat.COO()
-    return sp.csr_matrix((np.array(val), (np.array(r), np.array(c))), shape=(n_face, n_face))
+    return a.mat
 
 
-def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg_tol, cg_maxit,
+def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, cg_maxit,
                                            nl_maxit, nl_tol, require_convergence=True):
     """Secant-reluctivity Picard with the same C++ mass-Riesz W-CG as the linear HDiv path.
 
@@ -810,14 +875,12 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face
 
         ( INT nu_sec(M_old) u.v dx + B^T G B ) m_new = M_mass h_ext
 
-    by `solve_linear_material_mass_riesz`, then refresh nu_sec from the inverse BH table.  It keeps the
+    by `solve_configured_linear_material_mass_riesz`, then refresh nu_sec from the inverse BH table.  It keeps the
     weak HDiv / NGSolve formulation (no scalar global chi shortcut) but avoids the energy-Newton tensor
     tangent and line search.  `energy-newton` remains available for hard saturation / robustness checks."""
-    Bc = sp.csr_matrix(B); Mmc = sp.csr_matrix(Mm)
-    rhs_src = np.asarray(Mmc @ h_ext).ravel()
+    rhs_src = _geometry_mass_apply(H, h_ext)
     uf, vf = fes.TnT()
     gfM = ng.GridFunction(fes); l2 = ng.L2(mesh, order=0); gfNu = ng.GridFunction(l2)
-    Bptr = _i32(Bc.indptr); Bidx = _i32(Bc.indices); Bdat = _f64(Bc.data)
 
     if isinstance(bh_table, dict):
         mats = list(mesh.GetMaterials())
@@ -864,19 +927,16 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face
         gfn.Set(ng.sqrt(ng.InnerProduct(gfM, gfM) + 1e-30))
         return np.maximum(gfn.vec.FV().NumPy(), 1e-30)
 
-    def _W_coo(nu_vals):
+    def _W_matrix(nu_vals):
         gfNu.vec.FV().NumPy()[:] = np.maximum(np.asarray(nu_vals, float), 1e-30)
         a = ng.BilinearForm(fes)
         a += gfNu * uf * vf * ng.dx
         a.Assemble()
-        r, c, v = a.mat.COO()
-        return sp.coo_matrix((np.array(v), (np.array(r), np.array(c))), shape=(n_face, n_face))
+        return a.mat
 
-    def _solve_W(W_coo, x0=None):
+    def _solve_W(W_matrix, x0=None):
         res = _h_solve_mass_riesz(
-            H, Bptr, Bidx, Bdat, int(n_face),
-            W_coo.row, W_coo.col, W_coo.data,
-            1.0, rhs_src, cg_tol, int(cg_maxit), x0=x0)
+            H, W_matrix, int(n_face), 1.0, rhs_src, cg_tol, int(cg_maxit), x0=x0)
         _capture_cpp_solve_timings(res)
         it = int(res["iters"])
         if it >= int(cg_maxit):
@@ -893,7 +953,7 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face
     relax = 0.7
     for it in range(int(nl_maxit)):
         nit = it + 1
-        m_new, _ = _solve_W(_W_coo(nu), x0=m if it > 0 else None)
+        m_new, _ = _solve_W(_W_matrix(nu), x0=m if it > 0 else None)
         rel_step = float(np.linalg.norm(m_new - m)) / (float(np.linalg.norm(m_new)) + 1e-30)
         m = m_new
         nu_new = np.maximum(_nu_sec_all(_Mmag(m)), 1e-30)
@@ -907,13 +967,13 @@ def _solve_nonlinear_picard_mass_riesz_cpp(mesh, fes, bh_table, H, B, Mm, n_face
                        "co-energy Newton path." % (rel_step, nl_tol, nit))
 
 
-def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg_tol, cg_maxit,
+def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, n_face, h_ext, cg_tol, cg_maxit,
                                 nl_maxit, nl_tol, m0=None, *, inner_tol="auto", warmstart="linear",
                                 continuation_steps=1, reuse_tangent_steps=1, cg_x0=False,
                                 inner_preconditioner="mass-riesz"):
     """SYMMETRIC ENERGY-NEWTON with an all-C++ inner solve -- the production nonlinear soft-iron path (brings
     the nonlinear solve to C++ parity with the linear mass-Riesz CG; the default for iron-only nonlinear,
-    replacing the forward `_solve_nonlinear` scipy-splu + scipy-GMRES Newton).
+    replacing the former Python nonlinear Newton path).
 
     Co-energy / reluctivity form -- SYMMETRIC + M_mass^-1-free.  The co-energy functional
       E(m) = INT W_co(|M|) dx + 1/2 m.(N m) - (M_mass h_ext).m   (M = the flux field of m; W_co = INT H dM)
@@ -922,10 +982,10 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
     and its Hessian (the Newton Jacobian) is SYMMETRIC
       J = W_tan + N,  W_tan = INT nu_d u.v dx  (nu_d = dH/dM = (dM/dH)^-1 differential reluctivity tensor),
     so each Newton step  (W_tan + N) dm = -R  is solved by the EXISTING C++ symmetric W-CG
-    (`solve_linear_material_mass_riesz`: W = W_tan as both the system mass AND the mass-Riesz PARDISO
+    (`solve_configured_linear_material_mass_riesz`: W = W_tan as both the system mass AND the mass-Riesz PARDISO
     preconditioner; N via the symmetric charge-Gram H-matvec).  For large exploratory scaling runs,
     `inner_preconditioner="jacobi"` switches only the inner W-CG preconditioner to the exact diagonal of
-    (W+N), avoiding per-CG PARDISO phase-33 solves.  NO scipy splu, NO scipy GMRES, NO M_mass^-1.
+    (W+N), avoiding per-CG PARDISO phase-33 solves.  No SciPy linear solve and no M_mass^-1 are used.
 
     Globalization: a chi0 (zero-field) LINEAR W-CG warmstart; an Armijo line search on the CONVEX ENERGY E
     (the merit -- ||R|| stalls in saturation where the inverse-BH
@@ -936,12 +996,11 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
     -- a settled-step acceptance (rel step < 3e-4 for 5 consecutive iters -> accept the best-energy iterate;
     the production order-1 limit-cycle plateau is ~1.5-1.9e-4, so the floor is 3e-4; M matched the
     analytic uniform sphere to ~2e-3 at H0 up to 5e6, knee*5000).  Single-region (scalar
-    bh_table) AND per-region (dict) iron; PM-mixed stays on the forward path.  CALLER opens TaskManager."""
-    Bc = sp.csr_matrix(B); Mmc = sp.csr_matrix(Mm)
-    rhs_src = np.asarray(Mmc @ h_ext).ravel()
+    bh_table) AND per-region (dict) iron; prescribed fixed-M sources enter through h_ext before this
+    constitutive solve.  CALLER opens TaskManager."""
+    rhs_src = _geometry_mass_apply(H, h_ext)
     Id = ng.Id(3); uf, vf = fes.TnT()
     gfM = ng.GridFunction(fes); l2 = ng.L2(mesh, order=0)
-    Bptr = _i32(Bc.indptr); Bidx = _i32(Bc.indices); Bdat = _f64(Bc.data)
     # element volumes (for the co-energy integral) = the L2(0) mass diagonal
     mvol = ng.BilinearForm(l2); mvol += l2.TrialFunction() * l2.TestFunction() * ng.dx; mvol.Assemble()
     rv, cv, vvv = mvol.mat.COO(); Vol = np.zeros(mesh.ne)
@@ -996,8 +1055,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
         _, nd0 = fields(np.array([1e-12])); chi0_e = np.full(mesh.ne, 1.0 / max(float(nd0[0]), 1e-30))
 
     def _N_apply(v):
-        v = np.asarray(v, float)
-        return Bc.T @ np.asarray(H.matvec((Bc @ v).tolist()), float)
+        return np.asarray(H.apply_configured_demag(_f64(v), True), float)
 
     def _Mmag(m):
         gfM.vec.FV().NumPy()[:] = m
@@ -1008,29 +1066,24 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
         lf = ng.LinearForm(fes); lf += H_cf * vf * ng.dx; lf.Assemble()
         return lf.vec.FV().NumPy().copy()
 
-    def _W_coo(weight_cf, tensor):
+    def _W_matrix(weight_cf, tensor):
         a = ng.BilinearForm(fes)
         a += (ng.InnerProduct(weight_cf * uf, vf) if tensor else weight_cf * uf * vf) * ng.dx
         a.Assemble()
-        r, c, v = a.mat.COO()
-        return sp.coo_matrix((np.array(v), (np.array(r), np.array(c))), shape=(n_face, n_face))
+        return a.mat
 
     if inner_preconditioner not in ("mass-riesz", "jacobi"):
         raise ValueError("vim.Solve: energy-newton inner_preconditioner must be 'mass-riesz' or 'jacobi' "
                          "(got %r)" % (inner_preconditioner,))
 
-    def _solve_W(W_coo, rhs, *, tol_override=None, x0=None):
+    def _solve_W(W_matrix, rhs, *, tol_override=None, x0=None):
         solve_tol = float(cg_tol if tol_override is None else max(float(cg_tol), float(tol_override)))
         if inner_preconditioner == "jacobi":
             res = _h_solve_auto_prec(
-                H, Bptr, Bidx, Bdat, int(n_face),
-                W_coo.row, W_coo.col, W_coo.data,
-                1.0, rhs, solve_tol, int(cg_maxit), x0=x0)
+                H, W_matrix, int(n_face), 1.0, rhs, solve_tol, int(cg_maxit), x0=x0)
         else:
             res = _h_solve_mass_riesz(
-                H, Bptr, Bidx, Bdat, int(n_face),
-                W_coo.row, W_coo.col, W_coo.data,
-                1.0, rhs, solve_tol, int(cg_maxit), x0=x0)
+                H, W_matrix, int(n_face), 1.0, rhs, solve_tol, int(cg_maxit), x0=x0)
         _capture_cpp_solve_timings(res)
         it = int(res["iters"])
         if it >= int(cg_maxit):
@@ -1090,7 +1143,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
             # chi0 (zero-field) LINEAR warmstart: (M_{1/chi0} + N) m = M_mass h_ext.
             invchi0 = ng.GridFunction(l2)
             invchi0.vec.FV().NumPy()[:] = 1.0 / np.maximum(chi0_e, 1.0)
-            m, it0 = _solve_W(_W_coo(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6))
+            m, it0 = _solve_W(
+                _W_matrix(invchi0, tensor=False), rhs_stage, tol_override=max(cg_tol, 1e-6))
             stats["nonlinear_warmstart_solves"] += 1
             stats["nonlinear_linear_inner_iters"] += int(it0)
 
@@ -1110,7 +1164,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
             R = _bH(H_cf) + _N_apply(m) - rhs_stage
             rebuild = cached_W is None or (it - cached_it) >= reuse_steps
             if rebuild:
-                cached_W = _W_coo(nud, tensor=True)
+                cached_W = _W_matrix(nud, tensor=True)
                 cached_it = it
                 stats["nonlinear_tangent_assemblies"] += 1
             else:
@@ -1131,7 +1185,7 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
             if lam <= 1e-10 and not rebuild:
                 # A reused/chord tangent can occasionally lose descent.  Pay for one fresh tangent before
                 # accepting a microscopic step.
-                cached_W = _W_coo(nud, tensor=True)
+                cached_W = _W_matrix(nud, tensor=True)
                 cached_it = it
                 stats["nonlinear_tangent_assemblies"] += 1
                 stats["nonlinear_fresh_tangent_retries"] += 1
@@ -1168,8 +1222,8 @@ def _solve_nonlinear_energy_cpp(mesh, fes, bh_table, H, B, Mm, n_face, h_ext, cg
             _capture_nonlinear_solve_stats(stats)
             raise RuntimeError("vim.Solve (energy-Newton): did NOT converge -- rel step=%.2e (tol %.1e), "
                                "%d settled iters after %d (returning M would be a silent wrong result).  For an "
-                               "extreme-saturation / ill-conditioned case, cross-check with linear_solver='gmres' "
-                               "(the forward H-form Newton)." % (rel_step, nl_tol, settled, total_nit))
+                               "extreme-saturation / ill-conditioned case, increase continuation or use the "
+                               "mass-Riesz preconditioner." % (rel_step, nl_tol, settled, total_nit))
         final_rel_step = rel_step
         final_settled = settled
         converged_final = stage_final

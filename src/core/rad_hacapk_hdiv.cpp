@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <chrono>
 #include <cstdlib>
+#include <limits>
 
 extern "C" {
 void HACApK_matvec_stats_reset(void);
@@ -566,9 +567,9 @@ static double HexFarOneSidedThreshold()
 {
     static const double threshold = []() -> double {
         const char* v = std::getenv("RADIA_HDIV_HEX_FAR_ONESIDED");
-        if (!v || v[0] == '\0') return 1.0;
+        if (!v || v[0] == '\0') return 0.0;
         const double parsed = std::atof(v);
-        return parsed >= 0.0 ? parsed : 1.0;
+        return parsed >= 0.0 ? parsed : 0.0;
     }();
     return threshold;
 }
@@ -577,9 +578,9 @@ static double WedgeFarOneSidedThreshold()
 {
     static const double threshold = []() -> double {
         const char* v = std::getenv("RADIA_HDIV_WEDGE_FAR_ONESIDED");
-        if (!v || v[0] == '\0') return 1.0;
+        if (!v || v[0] == '\0') return 0.0;
         const double parsed = std::atof(v);
-        return parsed >= 0.0 ? parsed : 1.0;
+        return parsed >= 0.0 ? parsed : 0.0;
     }();
     return threshold;
 }
@@ -602,7 +603,7 @@ static bool HOFarOneSidedEnabled()
 {
     static const bool enabled = []() -> bool {
         const char* v = std::getenv("RADIA_HDIV_HO_FAR_ONESIDED");
-        return !v || v[0] == '\0' || v[0] != '0';
+        return v && v[0] != '\0' && v[0] != '0';
     }();
     return enabled;
 }
@@ -890,21 +891,34 @@ RadHACApKChargeGram::RadHACApKChargeGram(
 // ---- CURVED HIGH-ORDER (isoparametric P2) constructor: monomial-charge Gram on a mesh.Curve(2) geometry. ----
 // Mirrors the flat HO build but uses the curved P2 map + curved measure for the OUTER quad (xi^expo folded at
 // the REFERENCE point, no affine inverse) and the curved Duffy for the INNER potential (PhiInner -> PhiAtHO_
-// Curved).  No analytic moments / inner-subtraction table / near-far split (m_ho_far_factor stays 1e30).
+// Curved).  No analytic moments / inner-subtraction table.  Well-separated pairs may use a lower curved
+// double-Gauss rule, matching the flat high-order near/far contract without crossing back into Python.
 RadHACApKChargeGram::RadHACApKChargeGram(
-    std::vector<double> cell_nodes, std::vector<double> face_nodes, int n_el, int curve_order,
+    std::vector<double> cell_nodes, std::vector<double> face_nodes,
+    std::vector<int> cell_vertices, std::vector<int> face_vertices,
+    int n_el, int curve_order,
     std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
     std::vector<double> ref_tet_pts, std::vector<double> ref_tet_w,
     std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
-    std::vector<double> curve_gl, std::vector<double> curve_gw)
+    std::vector<double> curve_gl, std::vector<double> curve_gw,
+    std::vector<double> ref_tet_pts_lo, std::vector<double> ref_tet_w_lo,
+    std::vector<double> ref_tri_pts_lo, std::vector<double> ref_tri_w_lo,
+    double ho_far_factor,
+    std::vector<int> image_masks, std::vector<double> image_signs)
     : m_n_el(n_el), m_curved(true), m_curve_order(curve_order),
       m_cellNodes(std::move(cell_nodes)), m_faceNodes(std::move(face_nodes)),
+      m_cellVertices(std::move(cell_vertices)), m_faceVertices(std::move(face_vertices)),
       m_gl(std::move(curve_gl)), m_gw(std::move(curve_gw)),
       m_highorder(true),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     const int n_cell = n_el;
     const int n_bf   = (int)(m_faceNodes.size() / 18);
+    if ((int)m_cellVertices.size() != 4*n_cell || (int)m_faceVertices.size() != 3*n_bf)
+        throw std::invalid_argument("curved high-order ChargeGram: cell_vertices/face_vertices size mismatch");
+    m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();           // GLOBAL unique id (shared with the high-order ctor)
     m_nmono.assign(m_n, 1);
@@ -912,6 +926,15 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         std::unordered_map<long long, int> cnt;
         for (int a = 0; a < m_n; ++a) cnt[(long long)m_host[a]*2 + m_kind[a]]++;
         for (int a = 0; a < m_n; ++a) m_nmono[a] = cnt[(long long)m_host[a]*2 + m_kind[a]];
+    }
+    m_hoLocalOf.assign((size_t)m_n, 0);
+    m_hoCellCharges.assign((size_t)n_cell, {});
+    m_hoFaceCharges.assign((size_t)n_bf, {});
+    for (int a = 0; a < m_n; ++a) {
+        std::vector<int>& group = (m_kind[a] == 0) ? m_hoCellCharges[m_host[a]]
+                                                   : m_hoFaceCharges[m_host[a]];
+        m_hoLocalOf[a] = (int)group.size();
+        group.push_back(a);
     }
     const int nqt = (int)ref_tet_w.size();
     const int nqr = (int)ref_tri_w.size();
@@ -990,6 +1013,74 @@ RadHACApKChargeGram::RadHACApKChargeGram(
             m_qw[a][q] = QM[q] * mono;
         }
     }
+
+    const bool any_low = !ref_tet_pts_lo.empty() || !ref_tet_w_lo.empty() ||
+                         !ref_tri_pts_lo.empty() || !ref_tri_w_lo.empty();
+    const bool valid_low = !ref_tet_w_lo.empty() && ref_tet_pts_lo.size() == 3*ref_tet_w_lo.size() &&
+                           !ref_tri_w_lo.empty() && ref_tri_pts_lo.size() == 2*ref_tri_w_lo.size();
+    if (any_low && !valid_low)
+        throw std::invalid_argument("curved high-order ChargeGram: incomplete or inconsistent low quadrature");
+    if (valid_low) {
+        m_ho_far_factor = ho_far_factor;
+        const int nqt_lo = (int)ref_tet_w_lo.size();
+        const int nqr_lo = (int)ref_tri_w_lo.size();
+        std::vector<std::vector<rad_hdiv::Vec3>> cellQP_lo(n_cell), faceQP_lo(n_bf);
+        std::vector<std::vector<double>> cellM_lo(n_cell), faceM_lo(n_bf);
+        for (int c = 0; c < n_cell; ++c) {
+            const double (*nodes)[3] = (const double(*)[3])&m_cellNodes[(size_t)c*30];
+            cellQP_lo[c].resize(nqt_lo); cellM_lo[c].resize(nqt_lo);
+            for (int q = 0; q < nqt_lo; ++q) {
+                double X[3], dV;
+                rad_hdiv::CurvedTetMapMeasure(nodes, ref_tet_pts_lo[3*q], ref_tet_pts_lo[3*q+1],
+                                              ref_tet_pts_lo[3*q+2], X, dV);
+                cellQP_lo[c][q] = {X[0], X[1], X[2]};
+                cellM_lo[c][q] = ref_tet_w_lo[q]*dV;
+            }
+        }
+        for (int f = 0; f < n_bf; ++f) {
+            const double (*nodes)[3] = (const double(*)[3])&m_faceNodes[(size_t)f*18];
+            faceQP_lo[f].resize(nqr_lo); faceM_lo[f].resize(nqr_lo);
+            for (int q = 0; q < nqr_lo; ++q) {
+                double X[3], dA;
+                rad_hdiv::CurvedTriMapMeasure(nodes, ref_tri_pts_lo[2*q], ref_tri_pts_lo[2*q+1], X, dA);
+                faceQP_lo[f][q] = {X[0], X[1], X[2]};
+                faceM_lo[f][q] = ref_tri_w_lo[q]*dA;
+            }
+        }
+        m_qp_lo.resize(m_n); m_qw_lo.resize(m_n);
+        m_inP_lo.resize(m_n); m_inW_lo.resize(m_n); m_srcval_lo.resize(m_n);
+        for (int a = 0; a < m_n; ++a) {
+            const int host = m_host[a];
+            const bool is_cell = m_kind[a] == 0;
+            const std::vector<rad_hdiv::Vec3>& points = is_cell ? cellQP_lo[host] : faceQP_lo[host];
+            const std::vector<double>& measures = is_cell ? cellM_lo[host] : faceM_lo[host];
+            const std::vector<double>& refs = is_cell ? ref_tet_pts_lo : ref_tri_pts_lo;
+            const int ref_stride = is_cell ? 3 : 2;
+            const int* e = &m_expo[(size_t)3*a];
+            m_qp_lo[a] = points;
+            m_qw_lo[a].resize(points.size());
+            m_srcval_lo[a].resize(points.size());
+            for (size_t q = 0; q < points.size(); ++q) {
+                double mono = rad_ipow(refs[ref_stride*q], e[0]) * rad_ipow(refs[ref_stride*q+1], e[1]);
+                if (is_cell) mono *= rad_ipow(refs[ref_stride*q+2], e[2]);
+                m_qw_lo[a][q] = measures[q]*mono;
+                m_srcval_lo[a][q] = mono;
+            }
+            m_inP_lo[a] = points;
+            m_inW_lo[a] = measures;
+        }
+    } else {
+        m_ho_far_factor = 1e30;
+    }
+}
+
+static bool CurvedDirectEnabled()
+{
+    static const bool enabled = []() {
+        const char* value = std::getenv("RADIA_HDIV_CURVED_DIRECT");
+        return !value || value[0] == '\0' || value[0] != '0';
+    }();
+    return enabled;
 }
 
 // monomial m_charge at physical point p, via the host's REFERENCE barycentric coords (extrapolates for p
@@ -1162,6 +1253,221 @@ void RadHACApKChargeGram::PhiInnerHOHostVec(
     }
 }
 
+// Curved P2 counterpart of PhiInnerHOHostVec.  A scalar PhiAtHO_Curved call repeats the closest-reference
+// search, curved map/Jacobian, kernel distance, and Duffy loop for every co-located monomial.  NGSolve-style
+// element kernels evaluate geometry once and all local shape functions together; do the same here and return
+// the complete source-host vector in one pass.  This is algebraically the same signed reference Duffy rule as
+// CurvedTetPotential/CurvedTriPotential, with only the monomial contractions vectorized across local modes.
+void RadHACApKChargeGram::PhiInnerHOCurvedHostVec(
+    int kind, int host, const double p[3], const std::vector<int>& charges, double* values) const
+{
+    std::fill(values, values + charges.size(), 0.0);
+    if (charges.empty()) return;
+    const double* gl = m_gl.data();
+    const double* gw = m_gw.data();
+    const int nq = (int)m_gl.size();
+
+    if (kind == 0) {
+        const double (*nodes)[3] = (const double(*)[3])&m_cellNodes[(size_t)host*30];
+        double xi0[3];
+        rad_hdiv::ClosestRefTet(nodes, p, xi0);
+        static const double C[4][3] = {{0,0,0},{1,0,0},{0,1,0},{0,0,1}};
+        static const int FC[4][3] = {{1,2,3},{0,3,2},{0,1,3},{2,1,0}};
+        for (int f = 0; f < 4; ++f) {
+            for (int lead = 0; lead < 3; ++lead) {
+                const double* b1 = C[FC[f][lead]];
+                const double* b2 = C[FC[f][(lead+1)%3]];
+                const double* b3 = C[FC[f][(lead+2)%3]];
+                double d1[3], d2[3], d3[3], e21[3], e32[3];
+                for (int k = 0; k < 3; ++k) {
+                    d1[k] = b1[k] - xi0[k]; d2[k] = b2[k] - xi0[k]; d3[k] = b3[k] - xi0[k];
+                    e21[k] = b2[k] - b1[k]; e32[k] = b3[k] - b2[k];
+                }
+                const double cr[3] = {d2[1]*d3[2]-d2[2]*d3[1], d2[2]*d3[0]-d2[0]*d3[2],
+                                      d2[0]*d3[1]-d2[1]*d3[0]};
+                const double D = d1[0]*cr[0] + d1[1]*cr[1] + d1[2]*cr[2];
+                if (std::fabs(D) < 1e-300) continue;
+                for (int a = 0; a < nq; ++a) {
+                    const double u = gl[a];
+                    for (int b = 0; b < nq; ++b) {
+                        const double v = gl[b];
+                        for (int c = 0; c < nq; ++c) {
+                            const double w = gl[c];
+                            double z[3];
+                            for (int k = 0; k < 3; ++k)
+                                z[k] = xi0[k] + u*(d1[k] + v*(e21[k] + w*e32[k]));
+                            double X[3], dV;
+                            rad_hdiv::CurvedTetMapMeasure(nodes, z[0], z[1], z[2], X, dV);
+                            const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                            if (r < 1e-300) continue;
+                            const double common = (gw[a]*gw[b]*gw[c]/3.0)*(u*u*v*D)*dV/r;
+                            for (size_t local = 0; local < charges.size(); ++local) {
+                                const int* e = &m_expo[(size_t)3*charges[local]];
+                                values[local] += common * rad_ipow(z[0], e[0]) * rad_ipow(z[1], e[1])
+                                                        * rad_ipow(z[2], e[2]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    const double (*nodes)[3] = (const double(*)[3])&m_faceNodes[(size_t)host*18];
+    double xi0[2];
+    rad_hdiv::ClosestRefTri(nodes, p, xi0);
+    static const double C[3][2] = {{0,0},{1,0},{0,1}};
+    for (int k = 0; k < 3; ++k) {
+        const double* A = C[k];
+        const double* B = C[(k+1)%3];
+        const double e1x = A[0]-xi0[0], e1y = A[1]-xi0[1];
+        const double e2x = B[0]-xi0[0], e2y = B[1]-xi0[1];
+        const double sgn2 = e1x*e2y - e1y*e2x;
+        for (int a = 0; a < nq; ++a) {
+            const double u = gl[a];
+            for (int b = 0; b < nq; ++b) {
+                const double v = gl[b];
+                const double xi = xi0[0] + u*e1x + u*v*(e2x-e1x);
+                const double eta = xi0[1] + u*e1y + u*v*(e2y-e1y);
+                double X[3], dA;
+                rad_hdiv::CurvedTriMapMeasure(nodes, xi, eta, X, dA);
+                const double dx = p[0]-X[0], dy = p[1]-X[1], dz = p[2]-X[2];
+                const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+                if (r < 1e-300) continue;
+                const double common = gw[a]*gw[b]*(u*sgn2)*dA/r;
+                for (size_t local = 0; local < charges.size(); ++local) {
+                    const int* e = &m_expo[(size_t)3*charges[local]];
+                    values[local] += common * rad_ipow(xi, e[0]) * rad_ipow(eta, e[1]);
+                }
+            }
+        }
+    }
+}
+
+bool RadHACApKChargeGram::CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const
+{
+    const int* a = kindA == 0 ? &m_cellVertices[(size_t)4*hostA]
+                              : &m_faceVertices[(size_t)3*hostA];
+    const int* b = kindB == 0 ? &m_cellVertices[(size_t)4*hostB]
+                              : &m_faceVertices[(size_t)3*hostB];
+    const int na = kindA == 0 ? 4 : 3;
+    const int nb = kindB == 0 ? 4 : 3;
+    int shared = 0;
+    for (int i = 0; i < na; ++i)
+        for (int j = 0; j < nb; ++j)
+            if (a[i] == b[j]) { ++shared; break; }
+    // A cell-cell vertex-only intersection is a zero-dimensional singular set in the 3-D double integral
+    // and the high-order direct product rule resolves it efficiently.  Keep Duffy whenever a boundary-face
+    // charge participates: its lower-dimensional support makes a vertex singularity more visible in H.
+    return shared >= 2 || (shared == 1 && (kindA == 1 || kindB == 1));
+}
+
+void RadHACApKChargeGram::PrecomputeCurvedTouchBlocks()
+{
+    const auto start = std::chrono::high_resolution_clock::now();
+    const int n_cell = (int)(m_cellVertices.size()/4);
+    const int n_face = (int)(m_faceVertices.size()/3);
+    const int n_host = n_cell + n_face;
+    m_curvedTouchBlockIndex.assign((size_t)n_host*n_host, -1);
+    std::vector<std::pair<int,int>> pairs;
+    for (int ga = 0; ga < n_host; ++ga) {
+        const int kindA = ga < n_cell ? 0 : 1;
+        const int hostA = ga < n_cell ? ga : ga-n_cell;
+        for (int gb = ga; gb < n_host; ++gb) {
+            const int kindB = gb < n_cell ? 0 : 1;
+            const int hostB = gb < n_cell ? gb : gb-n_cell;
+            if (!CurvedHostsTouch(kindA, hostA, kindB, hostB)) continue;
+            m_curvedTouchBlockIndex[(size_t)ga*n_host + gb] = (int)pairs.size();
+            pairs.emplace_back(ga, gb);
+        }
+    }
+    m_curvedTouchBlocks.clear();
+    m_curvedTouchBlocks.resize(pairs.size());
+    ngcore::ParallelFor(ngcore::IntRange(pairs.size()), [&](size_t pair_index) {
+        const int ga = pairs[pair_index].first, gb = pairs[pair_index].second;
+        const int kindA = ga < n_cell ? 0 : 1, hostA = ga < n_cell ? ga : ga-n_cell;
+        const int kindB = gb < n_cell ? 0 : 1, hostB = gb < n_cell ? gb : gb-n_cell;
+        const int nA = kindA == 0 ? (int)m_hoCellCharges[hostA].size()
+                                  : (int)m_hoFaceCharges[hostA].size();
+        const int nB = kindB == 0 ? (int)m_hoCellCharges[hostB].size()
+                                  : (int)m_hoFaceCharges[hostB].size();
+        std::vector<double> ab = QuadBlockHOTet(kindA, hostA, kindB, hostB);
+        std::vector<double> sym((size_t)nA*nB);
+        if (ga == gb) {
+            for (int la = 0; la < nA; ++la)
+                for (int lb = 0; lb < nB; ++lb)
+                    sym[(size_t)la*nB + lb] =
+                        0.5*(ab[(size_t)la*nB + lb] + ab[(size_t)lb*nA + la]);
+        } else {
+            std::vector<double> ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
+            for (int la = 0; la < nA; ++la)
+                for (int lb = 0; lb < nB; ++lb)
+                    sym[(size_t)la*nB + lb] =
+                        0.5*(ab[(size_t)la*nB + lb] + ba[(size_t)lb*nA + la]);
+        }
+        m_curvedTouchBlocks[pair_index] = std::move(sym);
+    });
+    const auto stop = std::chrono::high_resolution_clock::now();
+    m_curvedTouchBuildTime = std::chrono::duration<double>(stop-start).count();
+}
+
+bool RadHACApKChargeGram::CurvedTouchBlockValue(
+    int kindA, int hostA, int localA, int kindB, int hostB, int localB, double& value) const
+{
+    if (m_curvedTouchBlockIndex.empty()) return false;
+    const int n_cell = (int)(m_cellVertices.size()/4);
+    const int n_host = n_cell + (int)(m_faceVertices.size()/3);
+    const int ga = kindA == 0 ? hostA : n_cell+hostA;
+    const int gb = kindB == 0 ? hostB : n_cell+hostB;
+    const int lo = std::min(ga, gb), hi = std::max(ga, gb);
+    const int slot = m_curvedTouchBlockIndex[(size_t)lo*n_host + hi];
+    if (slot < 0) return false;
+    const int kind_hi = hi < n_cell ? 0 : 1;
+    const int host_hi = hi < n_cell ? hi : hi-n_cell;
+    const int n_hi = kind_hi == 0 ? (int)m_hoCellCharges[host_hi].size()
+                                  : (int)m_hoFaceCharges[host_hi].size();
+    if (ga <= gb) value = m_curvedTouchBlocks[(size_t)slot][(size_t)localA*n_hi + localB];
+    else value = m_curvedTouchBlocks[(size_t)slot][(size_t)localB*n_hi + localA];
+    return true;
+}
+
+// Smooth non-touching curved host pair.  Geometry and curved measures were materialized once by the
+// constructor; m_qw already folds each local monomial.  Evaluate the high-order tensor product directly,
+// avoiding a closest-point search and a curved Duffy map for every target quadrature point.  Touching pairs
+// stay on the singularity-resolving host-vector Duffy path.
+std::vector<double> RadHACApKChargeGram::QuadBlockHOCurvedDirect(
+    int kindT, int hostT, int kindS, int hostS) const
+{
+    const std::vector<int>& targets = kindT == 0 ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
+    const std::vector<int>& sources = kindS == 0 ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
+    const int nT = (int)targets.size(), nS = (int)sources.size();
+    std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+    const std::vector<rad_hdiv::Vec3>& target_points = m_qp[targets[0]];
+    const std::vector<rad_hdiv::Vec3>& source_points = m_qp[sources[0]];
+    for (size_t qt = 0; qt < target_points.size(); ++qt) {
+        std::fill(inner.begin(), inner.end(), 0.0);
+        const double x0 = target_points[qt][0], x1 = target_points[qt][1], x2 = target_points[qt][2];
+        for (size_t qs = 0; qs < source_points.size(); ++qs) {
+            const double dx = x0-source_points[qs][0], dy = x1-source_points[qs][1],
+                         dz = x2-source_points[qs][2];
+            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
+            if (r < 1e-300) continue;
+            const double invr = 1.0/r;
+            for (int ls = 0; ls < nS; ++ls) inner[ls] += m_qw[sources[ls]][qs]*invr;
+        }
+        for (int lt = 0; lt < nT; ++lt) {
+            const double wt = m_qw[targets[lt]][qt];
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += wt*inner[ls];
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
+}
+
 std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     int kindT, int hostT, int kindS, int hostS) const
 {
@@ -1170,11 +1476,14 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
     const int nT = (int)targets.size(), nS = (int)sources.size();
     std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
     if (nT == 0 || nS == 0) return block;
+    if (m_curved && CurvedDirectEnabled() && !CurvedHostsTouch(kindT, hostT, kindS, hostS))
+        return QuadBlockHOCurvedDirect(kindT, hostT, kindS, hostS);
 
     const std::vector<rad_hdiv::Vec3>& points = m_qp[targets[0]];
     for (size_t q = 0; q < points.size(); ++q) {
         const double p[3] = {points[q][0], points[q][1], points[q][2]};
-        PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
+        if (m_curved) PhiInnerHOCurvedHostVec(kindS, hostS, p, sources, inner.data());
+        else PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
         for (int lt = 0; lt < nT; ++lt) {
             const double weight = m_qw[targets[lt]][q];
             double* row = &block[(size_t)lt*nS];
@@ -1270,7 +1579,8 @@ double RadHACApKChargeGram::PhiAtHO_Curved(int src, const double p[3]) const
     const int nq = (int)m_gl.size();
     if (m_kind[src] == 0) {
         const double (*nd)[3] = (const double(*)[3])&m_cellNodes[(size_t)host*30];
-        return rad_hdiv::CurvedTetPotential(nd, e[0], e[1], e[2], p, m_gl.data(), m_gw.data(), nq);
+        return rad_hdiv::CurvedTetPotential(
+            nd, e[0], e[1], e[2], p, m_gl.data(), m_gw.data(), nq);
     }
     const double (*nd)[3] = (const double(*)[3])&m_faceNodes[(size_t)host*18];
     return rad_hdiv::CurvedTriPotential(nd, e[0], e[1], p, m_gl.data(), m_gw.data(), nq);
@@ -2642,6 +2952,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexCacheStats()
     out.emplace_back("hex_sym_block_hit_rate", sbtot > 0.0 ? ld(m_hexSymBlockHits) / sbtot : 0.0);
     out.emplace_back("hex_sym_trans_block_hit_rate", sttot > 0.0 ? ld(m_hexSymTransBlockHits) / sttot : 0.0);
     out.emplace_back("ho_sym_block_hit_rate", hotot > 0.0 ? ld(m_hoSymBlockHits) / hotot : 0.0);
+    out.emplace_back("curved_touch_blocks", (double)m_curvedTouchBlocks.size());
+    out.emplace_back("curved_touch_build_time", m_curvedTouchBuildTime);
     return out;
 }
 
@@ -3380,7 +3692,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, i
             HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockClears);
         }
         it = s_hex_block_cache.emplace(key,
-                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS)            // 2D image unsupported (mask==0 guaranteed)
+                   m_d2        ? QuadBlock2D(kindT, hT, kindS, hS, mask)
                  : m_wedgemode ? QuadBlockWedge(kindT, hT, kindS, hS, mask)
                  :               QuadBlockHex(kindT, hT, kindS, hS, mask)).first;
     } else HexStatAdd(m_hexCacheStatsEnabled, m_hexBlockHits);
@@ -3406,9 +3718,9 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
     };
     auto far_one_sided = [&]() {
         // HEX/WEDGE host-pair FAR blocks are smooth low-order double integrals in physical space.  The
-        // directed AB block is therefore the transpose of BA up to quadrature/roundoff, so the symmetric
-        // H-matrix can keep one directed block for sufficiently separated hosts.  NEAR/self and image blocks
-        // still use the explicit symmetrized average.
+        // A directed AB block is the transpose of BA only in exact arithmetic.  Finite product quadrature is
+        // orientation-dependent, so production averages both directions to preserve explicit-reflection
+        // invariance.  A positive environment threshold is retained only for diagnostic timing experiments.
         const double threshold = m_wedgemode ? WedgeFarOneSidedThreshold() : HexFarOneSidedThreshold();
         if (threshold <= 0.0 || mask != 0 || m_d2) return false;
         const std::vector<int>& aG = (kindA == 0) ? m_cellCharges[hA] : m_faceCharges[hA];
@@ -3499,12 +3811,16 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
         const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
                                     : (int)m_hoFaceCharges[hostB].size();
         std::vector<double> ab = QuadBlockHOTet(kindA, hostA, kindB, hostB);
-        std::vector<double> ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
+        const bool direct_curved = m_curved && CurvedDirectEnabled() &&
+                                   !CurvedHostsTouch(kindA, hostA, kindB, hostB);
+        std::vector<double> ba;
+        if (!direct_curved) ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
         std::vector<double> sym((size_t)nA*nB);
         for (int localA = 0; localA < nA; ++localA)
             for (int localB = 0; localB < nB; ++localB)
-                sym[(size_t)localA*nB + localB] =
-                    0.5*(ab[(size_t)localA*nB + localB] + ba[(size_t)localB*nA + localA]);
+                sym[(size_t)localA*nB + localB] = direct_curved
+                    ? ab[(size_t)localA*nB + localB]
+                    : 0.5*(ab[(size_t)localA*nB + localB] + ba[(size_t)localB*nA + localA]);
         it = s_ho_tet_sym_block_cache.emplace(key, std::move(sym)).first;
     } else HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockHits);
     return it->second;
@@ -3554,14 +3870,23 @@ void RadHACApKChargeGram::Edge3Map(const double* nd6, double t, double X[2])
     X[1] = v[0]*nd6[1] + v[1]*nd6[3] + v[2]*nd6[5];
 }
 
-// sub-tri ref vertices of cell host h, sub s (tri: itself; quad: 2 sub-tris of [0,1]^2)
+static int D2CellNSub(int cell_type)
+{
+    return (cell_type == 1) ? 4 : 1;
+}
+
+// Sub-triangle reference vertices.  A quad uses the four-triangle centre fan,
+// not a fixed diagonal: the set is invariant under every square reflection and
+// therefore preserves IMA parity in the assembled Gram operator.
 static void D2SubTri(int cell_type, int s, double V[3][2])
 {
     if (cell_type == 0) {
         for (int i = 0; i < 3; ++i) { V[i][0] = D2_TRIREF_V[i][0]; V[i][1] = D2_TRIREF_V[i][1]; }
     } else {
-        const int* tv = QUADREF_TRIS[s];
-        for (int i = 0; i < 3; ++i) { V[i][0] = QUADREF_V[tv[i]][0]; V[i][1] = QUADREF_V[tv[i]][1]; }
+        const int a = s & 3, b = (s + 1) & 3;
+        V[0][0] = 0.5; V[0][1] = 0.5;
+        V[1][0] = QUADREF_V[a][0]; V[1][1] = QUADREF_V[a][1];
+        V[2][0] = QUADREF_V[b][0]; V[2][1] = QUADREF_V[b][1];
     }
 }
 
@@ -3580,33 +3905,40 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
     int n_el, int n_be,
     std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
     std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+    std::vector<double> gl_quad, std::vector<double> gw_quad,
     std::vector<double> gl_edge, std::vector<double> gw_edge,
     std::vector<double> gl_in, std::vector<double> gw_in,
     std::vector<double> far_tri_pts, std::vector<double> far_tri_w,
-    double near_grade, double far_inner_factor)
+    double near_grade, double far_inner_factor,
+    std::vector<int> image_masks, std::vector<double> image_signs)
     : m_n_el(n_el),
       m_glIn(std::move(gl_in)), m_gwIn(std::move(gw_in)),
       m_near_grade(near_grade), m_far_inner_factor(far_inner_factor),
+      m_image_masks(std::move(image_masks)), m_image_signs(std::move(image_signs)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
+    ValidateImageVectors(m_image_masks, m_image_signs);
     m_d2 = true;
     m_d2_n_be = n_be;
     m_d2CellNodes = std::move(cell_nodes9);
     m_d2CellType  = std::move(cell_type);
     m_d2EdgeNodes = std::move(edge_nodes3);
     m_d2SymTriP = std::move(sym_tri_pts); m_d2SymTriW = std::move(sym_tri_w);
+    m_d2GlQ = std::move(gl_quad); m_d2GwQ = std::move(gw_quad);
     m_d2GlE = std::move(gl_edge); m_d2GwE = std::move(gw_edge);
     m_d2FarTriP = std::move(far_tri_pts); m_d2FarTriW = std::move(far_tri_w);
+    if (m_d2GlQ.empty() || m_d2GlQ.size() != m_d2GwQ.size())
+        throw std::invalid_argument("2D ChargeGram: quad outer Gauss nodes/weights must be non-empty and equal-sized");
     m_n = (int)m_host.size();
     m_build_id = NextChargeGramBuildId();
     m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     // ---- per-sub geometry: centroid/size (near test) + mapped anchor sites ----
-    m_d2CellSubC.assign((size_t)n_el*2*2, 0.0); m_d2CellSubS.assign((size_t)n_el*2, 0.0);
-    m_d2CellSiteX.assign((size_t)n_el*2*7*2, 0.0);
+    m_d2CellSubC.assign((size_t)n_el*4*2, 0.0); m_d2CellSubS.assign((size_t)n_el*4, 0.0);
+    m_d2CellSiteX.assign((size_t)n_el*4*7*2, 0.0);
     for (int c = 0; c < n_el; ++c) {
         const double* nd = &m_d2CellNodes[(size_t)c*18];
         const int ct = m_d2CellType[c];
-        const int nsub = (ct == 1) ? 2 : 1;
+        const int nsub = D2CellNSub(ct);
         for (int s = 0; s < nsub; ++s) {
             double V[3][2];
             D2SubTri(ct, s, V);
@@ -3615,19 +3947,19 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
                 if (ct == 0) Tri6Map(nd, V[i], P[i]); else Quad9Map(nd, V[i], P[i]);
                 cen[0] += P[i][0]/3.0; cen[1] += P[i][1]/3.0;
             }
-            double* pc = &m_d2CellSubC[((size_t)c*2 + s)*2];
+            double* pc = &m_d2CellSubC[((size_t)c*4 + s)*2];
             pc[0] = cen[0]; pc[1] = cen[1];
             double sz = 0.0;
             for (int i = 0; i < 3; ++i) {
                 const double dx = P[i][0]-cen[0], dy = P[i][1]-cen[1];
                 sz = std::max(sz, std::sqrt(dx*dx + dy*dy));
             }
-            m_d2CellSubS[(size_t)c*2 + s] = sz;
+            m_d2CellSubS[(size_t)c*4 + s] = sz;
             for (int k = 0; k < 7; ++k) {
                 double x0[2], X[2];
                 D2SiteRef(V, k, x0);
                 if (ct == 0) Tri6Map(nd, x0, X); else Quad9Map(nd, x0, X);
-                double* out = &m_d2CellSiteX[(((size_t)c*2 + s)*7 + k)*2];
+                double* out = &m_d2CellSiteX[(((size_t)c*4 + s)*7 + k)*2];
                 out[0] = X[0]; out[1] = X[1];
             }
         }
@@ -3650,16 +3982,16 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
         const int h = m_host[a];
         if (m_kind[a] == 0) {
             const int ct = m_d2CellType[h];
-            const int nsub = (ct == 1) ? 2 : 1;
+            const int nsub = D2CellNSub(ct);
             double cen[2] = {0, 0}, sz = 0.0;
             for (int s = 0; s < nsub; ++s) {
-                cen[0] += m_d2CellSubC[((size_t)h*2 + s)*2] / nsub;
-                cen[1] += m_d2CellSubC[((size_t)h*2 + s)*2 + 1] / nsub;
+                cen[0] += m_d2CellSubC[((size_t)h*4 + s)*2] / nsub;
+                cen[1] += m_d2CellSubC[((size_t)h*4 + s)*2 + 1] / nsub;
             }
             for (int s = 0; s < nsub; ++s) {
-                const double dx = m_d2CellSubC[((size_t)h*2 + s)*2] - cen[0];
-                const double dy = m_d2CellSubC[((size_t)h*2 + s)*2 + 1] - cen[1];
-                sz = std::max(sz, m_d2CellSubS[(size_t)h*2 + s] + std::sqrt(dx*dx + dy*dy));
+                const double dx = m_d2CellSubC[((size_t)h*4 + s)*2] - cen[0];
+                const double dy = m_d2CellSubC[((size_t)h*4 + s)*2 + 1] - cen[1];
+                sz = std::max(sz, m_d2CellSubS[(size_t)h*4 + s] + std::sqrt(dx*dx + dy*dy));
             }
             m_cent[3*a] = cen[0]; m_cent[3*a + 1] = cen[1]; m_size[a] = sz;
         } else {
@@ -3691,8 +4023,8 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
         const double* nd = &m_d2CellNodes[(size_t)hS*18];
         double V[3][2];
         D2SubTri(ct, subB, V);
-        const double* cs = &m_d2CellSubC[((size_t)hS*2 + subB)*2];
-        const double sz = m_d2CellSubS[(size_t)hS*2 + subB];
+        const double* cs = &m_d2CellSubC[((size_t)hS*4 + subB)*2];
+        const double sz = m_d2CellSubS[(size_t)hS*4 + subB];
         const double dxc = p[0]-cs[0], dyc = p[1]-cs[1];
         if (std::sqrt(dxc*dxc + dyc*dyc) > m_far_inner_factor*sz) {
             // FAR: smooth -ln(r), the fixed bary tri rule mapped on the fly (2D is cheap)
@@ -3723,7 +4055,7 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
             const double xr[2] = {xiT[0], xiT[1]};
             ClosestPointTri2D(V, xr, x0);
         } else {
-            const double* sx = &m_d2CellSiteX[(((size_t)hS*2 + subB)*7)*2];
+            const double* sx = &m_d2CellSiteX[(((size_t)hS*4 + subB)*7)*2];
             int best = 0; double bd = 1e300;
             for (int k = 0; k < 7; ++k) {
                 const double dx = p[0]-sx[2*k], dy = p[1]-sx[2*k + 1];
@@ -3825,20 +4157,25 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
 // Whole DIRECTED 2D host-pair block (target outer x source inner), 1/(2pi) folded.  Regular symmetric
 // outer everywhere (numpy-validated: the log kernel needs no graded outer); the SELF host pair passes the
 // outer point's own ref coords as the inner anchor.
-std::vector<double> RadHACApKChargeGram::QuadBlock2D(int kindT, int hT, int kindS, int hS) const
+std::vector<double> RadHACApKChargeGram::QuadBlock2D(
+    int kindT, int hT, int kindS, int hS, int mask) const
 {
     const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
     const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
     const int nT = (int)tgtG.size(), nS = (int)srcG.size();
     std::vector<double> blk((size_t)nT*nS, 0.0);
     if (nT == 0 || nS == 0) return blk;
-    const bool self_pair = (kindT == kindS && hT == hS);
-    const int nsubS = (kindS == 0) ? ((m_d2CellType[hS] == 1) ? 2 : 1) : 1;
+    const bool self_pair = (mask == 0 && kindT == kindS && hT == hS);
+    const int nsubS = (kindS == 0) ? D2CellNSub(m_d2CellType[hS]) : 1;
     std::vector<double> inn(nS);
     auto accumulate = [&](const double xiA[2], double wg, const double Xp[2]) {
+        const double Peval[2] = {
+            (mask & 1) ? -Xp[0] : Xp[0],
+            (mask & 2) ? -Xp[1] : Xp[1]
+        };
         for (int sB = 0; sB < nsubS; ++sB) {
             for (int ls = 0; ls < nS; ++ls) inn[ls] = 0.0;
-            PhiInner2DVec(kindS, hS, sB, Xp, self_pair ? xiA : nullptr, srcG, inn.data());
+            PhiInner2DVec(kindS, hS, sB, Peval, self_pair ? xiA : nullptr, srcG, inn.data());
             for (int lt = 0; lt < nT; ++lt) {
                 const int* e = &m_expo[(size_t)3*tgtG[lt]];
                 const double ma = (kindT == 0) ? D2MonoCell(e, xiA) : (e[0] ? xiA[0] : 1.0);
@@ -3850,20 +4187,29 @@ std::vector<double> RadHACApKChargeGram::QuadBlock2D(int kindT, int hT, int kind
     if (kindT == 0) {
         const int ct = m_d2CellType[hT];
         const double* nd = &m_d2CellNodes[(size_t)hT*18];
-        const int nsubT = (ct == 1) ? 2 : 1;
-        const int nq = (int)m_d2SymTriW.size();
-        for (int sA = 0; sA < nsubT; ++sA) {
+        if (ct == 1) {
+            // Tensor Gauss is invariant under xi -> 1-xi / eta -> 1-eta and avoids both the
+            // fixed-diagonal defect and the vertex-order dependence of a Duffy triangle rule.
+            const int nq = (int)m_d2GlQ.size();
+            for (int j = 0; j < nq; ++j) for (int i = 0; i < nq; ++i) {
+                const double xiA[2] = {m_d2GlQ[i], m_d2GlQ[j]};
+                double Xp[2];
+                Quad9Map(nd, xiA, Xp);
+                accumulate(xiA, m_d2GwQ[i]*m_d2GwQ[j], Xp);
+            }
+        } else {
+            const int nq = (int)m_d2SymTriW.size();
             double V[3][2];
-            D2SubTri(ct, sA, V);
+            D2SubTri(ct, 0, V);
             const double e1u = V[1][0]-V[0][0], e1v = V[1][1]-V[0][1];
             const double e2u = V[2][0]-V[0][0], e2v = V[2][1]-V[0][1];
-            const double sc = std::fabs(e1u*e2v - e1v*e2u);            // 2*A_sub(ref)
+            const double sc = std::fabs(e1u*e2v - e1v*e2u);
             for (int q = 0; q < nq; ++q) {
                 const double l1 = m_d2SymTriP[2*q], l2 = m_d2SymTriP[2*q + 1];
                 const double xiA[2] = {V[0][0] + l1*e1u + l2*e2u, V[0][1] + l1*e1v + l2*e2v};
                 double Xp[2];
-                if (ct == 0) Tri6Map(nd, xiA, Xp); else Quad9Map(nd, xiA, Xp);
-                accumulate(xiA, m_d2SymTriW[q]*sc, Xp);                // W sums 1/2 -> x sc = ref area
+                Tri6Map(nd, xiA, Xp);
+                accumulate(xiA, m_d2SymTriW[q]*sc, Xp);
             }
         }
     } else {
@@ -3901,6 +4247,11 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     const bool ok = RadHACApKBase::BuildHMatrix(params);
     cHACApK_set_sym_fill(0);
     return ok;
+}
+
+void RadHACApKChargeGram::OnBeforeBuild()
+{
+    if (m_curved) PrecomputeCurvedTouchBlocks();
 }
 
 // ============================================ WEDGE (PRISM) RT1 compute (2026-07-04) ===================
@@ -4352,7 +4703,11 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
         const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
         const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
-        return GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
+        double base = GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
+        for (size_t i = 0; i < m_image_masks.size(); ++i)
+            base += m_image_signs[i]
+                  * GetHexSymBlock(kA, hA, kB, hB, m_image_masks[i])[(size_t)la*nB + lb];
+        return base;
     }
     if (m_hexmode || m_wedgemode) {
         // HEX / WEDGE RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
@@ -4386,22 +4741,28 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         const bool far_pair = a != b && m_ho_far_factor < 1e29 &&
             [&]{ const double dx = m_cent[3*a]-m_cent[3*b], dy = m_cent[3*a+1]-m_cent[3*b+1],
                               dz = m_cent[3*a+2]-m_cent[3*b+2];
-                 return std::sqrt(dx*dx + dy*dy + dz*dz) > m_ho_far_factor * (m_size[a] + m_size[b]); }();
+                 return std::sqrt(dx*dx + dy*dy + dz*dz) >
+                        m_ho_far_factor * (m_size[a] + m_size[b]); }();
         double base;
-        if (!m_curved && m_hoAnalyticBlock && HOAnalyticBlockEnabled() && !far_pair) {
-            // Flat order<=2 NEAR/self: all monomial charges on a host share the same geometric moments at
-            // every outer point.  Build and memoize the complete symmetrized host-pair block so PhiTet /
-            // TriPotential / Moment1/2 are evaluated once, then contracted with every local monomial.
+        const bool use_host_block = m_curved ||
+            (m_hoAnalyticBlock && HOAnalyticBlockEnabled());
+        if (use_host_block && !far_pair) {
+            // Flat order<=2 and curved P2 NEAR/self: all monomial charges on a host share the geometry and
+            // kernel work at every outer point.  Build and memoize the complete symmetrized host-pair block;
+            // the curved path evaluates one Duffy rule for all local modes instead of one rule per entry.
             const int kindA = m_kind[a], hostA = m_host[a], kindB = m_kind[b], hostB = m_host[b];
             const int localA = m_hoLocalOf[a], localB = m_hoLocalOf[b];
             const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
                                        : (int)m_hoFaceCharges[hostB].size();
-            base = GetHOTetSymBlock(kindA, hostA, kindB, hostB)[(size_t)localA*nB + localB];
+            if (!m_curved ||
+                !CurvedTouchBlockValue(kindA, hostA, localA, kindB, hostB, localB, base))
+                base = GetHOTetSymBlock(kindA, hostA, kindB, hostB)[(size_t)localA*nB + localB];
         } else if (a == b) {
             base = QuadDot(a, a);                                // curved self fallback
         } else if (far_pair) {
-            // FAR: cheap low-quad plain double-Gauss.  The plain double integral is symmetric in
-            // (a,b), so one directed evaluation is enough; keep the env switch as an A/B diagnostic.
+            // FAR: cheap low-quad plain double-Gauss.  Production evaluates both directed rules because a
+            // one-sided finite rule is not invariant under explicit mesh reflection.  Keep the environment
+            // switch only as a diagnostic timing probe.
             base = HOFarOneSidedEnabled()
                 ? QuadDotFar(a, b)
                 : 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));
@@ -4470,6 +4831,20 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     HACApK_matvec_stats_reset();
     const auto t_total0 = Clock::now();
     const int n_charge = (int)B_indptr.size() - 1;     // B is n_charge x n_face (CSR over charges)
+    if ((int)rhs.size() != n_face)
+        throw std::runtime_error("SolveLinearMaterial: rhs size mismatch");
+    const bool constrained = m_operatorConstrained.size() == (size_t)n_face &&
+        std::any_of(m_operatorConstrained.begin(), m_operatorConstrained.end(),
+                    [](unsigned char value) { return value != 0; });
+    const bool configured_charge_map = m_operatorChargeConfigured &&
+        &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
+        &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
+    auto project = [&](std::vector<double>& value) {
+        if (!constrained) return;
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t i) {
+            if (m_operatorConstrained[i]) value[i] = 0.0;
+        });
+    };
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): keep the pool up across
     // the whole CG loop so the Gram H-matvec is parallel without a caller `with TaskManager()`.
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -4492,7 +4867,26 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     std::shared_ptr<RadMassRieszCache> mrKeep;
     MassRieszPardiso* mr = nullptr;
     if (mass_riesz) {
-        mrKeep = EnsureMassRieszFactor(mI, mJ, mV, n_face, "SolveLinearMaterial",
+        const std::vector<int>* factorI = &mI;
+        const std::vector<int>* factorJ = &mJ;
+        const std::vector<double>* factorV = &mV;
+        std::vector<int> projectedI, projectedJ;
+        std::vector<double> projectedV;
+        if (constrained) {
+            projectedI.reserve(mI.size() + (size_t)n_face);
+            projectedJ.reserve(mJ.size() + (size_t)n_face);
+            projectedV.reserve(mV.size() + (size_t)n_face);
+            for (size_t k = 0; k < mV.size(); ++k) {
+                const int i = mI[k], j = mJ[k];
+                if (m_operatorConstrained[(size_t)i] || m_operatorConstrained[(size_t)j]) continue;
+                projectedI.push_back(i); projectedJ.push_back(j); projectedV.push_back(mV[k]);
+            }
+            for (int i = 0; i < n_face; ++i) if (m_operatorConstrained[(size_t)i]) {
+                projectedI.push_back(i); projectedJ.push_back(i); projectedV.push_back(1.0);
+            }
+            factorI = &projectedI; factorJ = &projectedJ; factorV = &projectedV;
+        }
+        mrKeep = EnsureMassRieszFactor(*factorI, *factorJ, *factorV, n_face, "SolveLinearMaterial",
                                        &m_lastSolveTiming.factor_s);
         mr = &mrKeep->factor;
     }
@@ -4501,27 +4895,43 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         throw std::runtime_error("SolveLinearMaterial: mass Riesz preconditioner requires MKL PARDISO "
                                  "(HAVE_LAPACK)");
 #endif
-    std::vector<int> mass_indptr((size_t)n_face + 1, 0);
-    for (size_t k = 0; k < mV.size(); ++k) {
-        const int i = mI[k];
-        if (i >= 0 && i < n_face && mJ[k] >= 0 && mJ[k] < n_face) ++mass_indptr[(size_t)i + 1];
+    const bool configured_mass = m_operatorMassConfigured &&
+        &mI == &m_operatorMassI && &mJ == &m_operatorMassJ && &mV == &m_operatorMassV &&
+        m_operatorMassIndptr.size() == (size_t)n_face + 1;
+    std::vector<int> local_mass_indptr, local_mass_col;
+    std::vector<double> local_mass_val;
+    if (!configured_mass) {
+        local_mass_indptr.assign((size_t)n_face + 1, 0);
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k];
+            if (i >= 0 && i < n_face && mJ[k] >= 0 && mJ[k] < n_face)
+                ++local_mass_indptr[(size_t)i + 1];
+        }
+        for (int i = 0; i < n_face; ++i)
+            local_mass_indptr[(size_t)i + 1] += local_mass_indptr[(size_t)i];
+        local_mass_col.resize((size_t)local_mass_indptr[(size_t)n_face]);
+        local_mass_val.resize((size_t)local_mass_indptr[(size_t)n_face]);
+        std::vector<int> mass_cur = local_mass_indptr;
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k], j = mJ[k];
+            if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
+            const int p = mass_cur[(size_t)i]++;
+            local_mass_col[(size_t)p] = j;
+            local_mass_val[(size_t)p] = mV[k];
+        }
     }
-    for (int i = 0; i < n_face; ++i) mass_indptr[(size_t)i + 1] += mass_indptr[(size_t)i];
-    std::vector<int> mass_col((size_t)mass_indptr[(size_t)n_face]);
-    std::vector<double> mass_val((size_t)mass_indptr[(size_t)n_face]);
-    std::vector<int> mass_cur = mass_indptr;
-    for (size_t k = 0; k < mV.size(); ++k) {
-        const int i = mI[k], j = mJ[k];
-        if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
-        const int p = mass_cur[(size_t)i]++;
-        mass_col[(size_t)p] = j;
-        mass_val[(size_t)p] = mV[k];
-    }
+    const std::vector<int>& mass_indptr = configured_mass
+        ? m_operatorMassIndptr : local_mass_indptr;
+    const std::vector<int>& mass_col = configured_mass
+        ? m_operatorMassIndices : local_mass_col;
+    const std::vector<double>& mass_val = configured_mass
+        ? m_operatorMassData : local_mass_val;
     auto applyPrec = [&](const std::vector<double>& rr, std::vector<double>& zz) {
         const auto t0 = Clock::now();
 #ifdef HAVE_LAPACK
         if (mass_riesz) {
             mr->Solve(rr.data(), zz.data());
+            project(zz);
             m_lastSolveTiming.prec_s += elapsed(t0, Clock::now());
             ++m_lastSolveTiming.prec_count;
             return;
@@ -4550,10 +4960,21 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         const auto tg1 = Clock::now();
         y.assign((size_t)n_face, 0.0);
         const auto tt0 = Clock::now();
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-            double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
-        });
+        if (configured_charge_map) {
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                double sum = 0.0;
+                for (int k = m_operatorBTIndptr[f]; k < m_operatorBTIndptr[f + 1]; ++k)
+                    sum += m_operatorBTData[(size_t)k] * Gq[(size_t)m_operatorBTIndices[(size_t)k]];
+                y[f] = sum;
+            });
+        }
+        else {
+            ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
+                const double ga = Gq[a];
+                for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
+                    ngcore::AtomicAdd(y[(size_t)B_indices[(size_t)k]], B_data[(size_t)k] * ga);
+            });
+        }
         const auto tt1 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t i) {
             double s = 0.0;
@@ -4561,6 +4982,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
                 s += mass_val[(size_t)k] * x[mass_col[(size_t)k]];
             y[i] += inv_chi * s;
         });
+        project(y);
         const auto ta1 = Clock::now();
         const double bx = elapsed(tb0, tb1);
         const double gm = elapsed(tg0, tg1);
@@ -4588,18 +5010,21 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         return s;
     };
     // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
-    std::vector<double> x((size_t)n_face, 0.0), r = rhs, z((size_t)n_face), p((size_t)n_face), Ap;
+    std::vector<double> rhs_projected = rhs;
+    project(rhs_projected);
+    std::vector<double> x((size_t)n_face, 0.0), r = rhs_projected, z((size_t)n_face), p((size_t)n_face), Ap;
     if (x0) {
         if ((int)x0->size() != n_face)
             throw std::runtime_error("SolveLinearMaterial: x0 size mismatch");
         x = *x0;
+        project(x);
         applyA(x, Ap);
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { r[f] = rhs[f] - Ap[f]; });
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { r[f] = rhs_projected[f] - Ap[f]; });
     }
     applyPrec(r, z);
     p = z;
     double rz = dot(r, z);
-    double bnorm = dot(rhs, rhs);
+    double bnorm = dot(rhs_projected, rhs_projected);
     bnorm = std::sqrt(bnorm); if (bnorm == 0.0) bnorm = 1.0;
     int it = 0;
     for (; it < maxit; ++it) {
@@ -4614,6 +5039,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         double rz_new = dot(r, z);
         double beta = rz_new / rz;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { p[f] = z[f] + beta * p[f]; });
+        project(x); project(r); project(p);
         m_lastSolveTiming.pcg_update_s += elapsed(tu0, Clock::now());
         rz = rz_new;
     }
@@ -4693,15 +5119,748 @@ std::vector<double> RadHACApKChargeGram::ApplyMassRiesz(
 #ifdef HAVE_LAPACK
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
     radia::MKLThreadGuard solve_mkl_guard(1);
-    auto keep = EnsureMassRieszFactor(mI, mJ, mV, n_face,
+    const bool constrained = m_operatorConstrained.size() == (size_t)n_face &&
+        std::any_of(m_operatorConstrained.begin(), m_operatorConstrained.end(),
+                    [](unsigned char value) { return value != 0; });
+    const std::vector<int>* factorI = &mI;
+    const std::vector<int>* factorJ = &mJ;
+    const std::vector<double>* factorV = &mV;
+    std::vector<int> projectedI, projectedJ;
+    std::vector<double> projectedV;
+    std::vector<double> projectedRhs = rhs;
+    if (constrained) {
+        projectedI.reserve(mI.size() + (size_t)n_face);
+        projectedJ.reserve(mJ.size() + (size_t)n_face);
+        projectedV.reserve(mV.size() + (size_t)n_face);
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k], j = mJ[k];
+            if (m_operatorConstrained[(size_t)i] || m_operatorConstrained[(size_t)j]) continue;
+            projectedI.push_back(i); projectedJ.push_back(j); projectedV.push_back(mV[k]);
+        }
+        for (int i = 0; i < n_face; ++i) if (m_operatorConstrained[(size_t)i]) {
+            projectedI.push_back(i); projectedJ.push_back(i); projectedV.push_back(1.0);
+            projectedRhs[(size_t)i] = 0.0;
+        }
+        factorI = &projectedI; factorJ = &projectedJ; factorV = &projectedV;
+    }
+    auto keep = EnsureMassRieszFactor(*factorI, *factorJ, *factorV, n_face,
                                       "ApplyMassRiesz", nullptr,
                                       /*geometry_cache=*/true);
     std::vector<double> x(static_cast<size_t>(n_face), 0.0);
-    keep->factor.Solve(rhs.data(), x.data());
+    keep->factor.Solve(projectedRhs.data(), x.data());
+    if (constrained)
+        for (int i = 0; i < n_face; ++i) if (m_operatorConstrained[(size_t)i]) x[(size_t)i] = 0.0;
     return x;
 #else
     throw std::runtime_error("ApplyMassRiesz requires MKL PARDISO (HAVE_LAPACK)");
 #endif
+}
+
+void RadHACApKChargeGram::ConfigureChargeMap(
+    std::vector<int> B_indptr, std::vector<int> B_indices,
+    std::vector<double> B_data, int n_face)
+{
+    if (n_face < 0 || static_cast<int>(B_indptr.size()) != m_ndof + 1)
+        throw std::runtime_error("ConfigureChargeMap: B row count must equal charge-Gram ndof");
+    if (B_indices.size() != B_data.size() || B_indptr.empty() || B_indptr.front() != 0 ||
+        B_indptr.back() != static_cast<int>(B_data.size()))
+        throw std::runtime_error("ConfigureChargeMap: invalid B CSR arrays");
+    for (size_t row = 0; row + 1 < B_indptr.size(); ++row) {
+        if (B_indptr[row] > B_indptr[row + 1])
+            throw std::runtime_error("ConfigureChargeMap: B_indptr must be nondecreasing");
+    }
+    for (int col : B_indices) {
+        if (col < 0 || col >= n_face)
+            throw std::runtime_error("ConfigureChargeMap: B column index out of range");
+    }
+    if (m_operatorMassConfigured && m_operatorNFace != n_face)
+        throw std::runtime_error("ConfigureChargeMap: n_face differs from configured mass matrix");
+    m_operatorBTIndptr.assign((size_t)n_face + 1, 0);
+    for (int col : B_indices) ++m_operatorBTIndptr[(size_t)col + 1];
+    for (int col = 0; col < n_face; ++col)
+        m_operatorBTIndptr[(size_t)col + 1] += m_operatorBTIndptr[(size_t)col];
+    m_operatorBTIndices.resize(B_indices.size());
+    m_operatorBTData.resize(B_data.size());
+    std::vector<int> bt_cursor = m_operatorBTIndptr;
+    for (int row = 0; row < m_ndof; ++row) {
+        for (int k = B_indptr[(size_t)row]; k < B_indptr[(size_t)row + 1]; ++k) {
+            const int col = B_indices[(size_t)k];
+            const int dst = bt_cursor[(size_t)col]++;
+            m_operatorBTIndices[(size_t)dst] = row;
+            m_operatorBTData[(size_t)dst] = B_data[(size_t)k];
+        }
+    }
+    m_operatorConstrained.assign((size_t)n_face, 0);
+    if (!m_image_masks.empty() && m_kind.size() == (size_t)m_ndof) {
+        const int dimension = m_d2 ? 2 : 3;
+        bool positive_axis[3] = {false, false, false};
+        for (size_t image = 0; image < m_image_masks.size(); ++image)
+            for (int axis = 0; axis < dimension; ++axis)
+                if (m_image_masks[image] == (1 << axis) && m_image_signs[image] > 0.0)
+                    positive_axis[axis] = true;
+        const std::vector<double>* face_nodes = nullptr;
+        int stride = 0;
+        if (m_d2) { face_nodes = &m_d2EdgeNodes; stride = 6; }
+        else if (m_hexmode) { face_nodes = &m_quadNodes; stride = 27; }
+        else if (m_wedgemode) { face_nodes = &m_wFaceNodes; stride = 27; }
+        else if (m_curved) { face_nodes = &m_faceNodes; stride = 18; }
+        else if (m_highorder) { face_nodes = &m_faceV; stride = 9; }
+        double scale = 1.0;
+        if (face_nodes)
+            for (double value : *face_nodes) scale = std::max(scale, std::fabs(value));
+        const double plane_tol = 128.0 * std::numeric_limits<double>::epsilon() * scale;
+        for (int a = 0; face_nodes && a < m_ndof; ++a) {
+            if (m_kind[(size_t)a] != 1) continue;
+            const int host = m_host[(size_t)a];
+            const double* nodes = &(*face_nodes)[(size_t)host*(size_t)stride];
+            int node_count = 0;
+            if (m_d2) node_count = 3;
+            else if (m_hexmode) node_count = 9;
+            else if (m_wedgemode) node_count = m_wFaceType[(size_t)host] == 0 ? 6 : 9;
+            else if (m_curved) node_count = 6;
+            else node_count = 3;
+            bool on_positive_plane = false;
+            for (int axis = 0; axis < dimension; ++axis) if (positive_axis[axis]) {
+                bool on_plane = true;
+                for (int node = 0; node < node_count; ++node)
+                    on_plane = on_plane && std::fabs(nodes[dimension*node + axis]) <= plane_tol;
+                on_positive_plane = on_positive_plane || on_plane;
+            }
+            if (!on_positive_plane) continue;
+            for (int k = B_indptr[(size_t)a]; k < B_indptr[(size_t)a + 1]; ++k)
+                if (std::fabs(B_data[(size_t)k]) > 0.0)
+                    m_operatorConstrained[(size_t)B_indices[(size_t)k]] = 1;
+        }
+    }
+    m_operatorBIndptr = std::move(B_indptr);
+    m_operatorBIndices = std::move(B_indices);
+    m_operatorBData = std::move(B_data);
+    m_operatorNFace = n_face;
+    m_operatorChargeConfigured = true;
+}
+
+int RadHACApKChargeGram::ConfiguredConstraintCount() const
+{
+    return (int)std::count_if(m_operatorConstrained.begin(), m_operatorConstrained.end(),
+                              [](unsigned char value) { return value != 0; });
+}
+
+void RadHACApKChargeGram::ConfigureMassMatrix(
+    std::vector<int> mI, std::vector<int> mJ,
+    std::vector<double> mV, int n_face)
+{
+    if (n_face < 0 || mI.size() != mJ.size() || mI.size() != mV.size())
+        throw std::runtime_error("ConfigureMassMatrix: invalid COO arrays");
+    if (m_operatorChargeConfigured && m_operatorNFace != n_face)
+        throw std::runtime_error("ConfigureMassMatrix: n_face differs from configured charge map");
+    for (size_t k = 0; k < mV.size(); ++k) {
+        if (mI[k] < 0 || mI[k] >= n_face || mJ[k] < 0 || mJ[k] >= n_face)
+            throw std::runtime_error("ConfigureMassMatrix: COO index out of range");
+        if (!std::isfinite(mV[k]))
+            throw std::runtime_error("ConfigureMassMatrix: non-finite COO value");
+    }
+    m_operatorMassI = std::move(mI);
+    m_operatorMassJ = std::move(mJ);
+    m_operatorMassV = std::move(mV);
+    m_operatorMassIndptr.assign((size_t)n_face + 1, 0);
+    for (int row : m_operatorMassI)
+        ++m_operatorMassIndptr[(size_t)row + 1];
+    for (int row = 0; row < n_face; ++row)
+        m_operatorMassIndptr[(size_t)row + 1] += m_operatorMassIndptr[(size_t)row];
+    m_operatorMassIndices.resize(m_operatorMassJ.size());
+    m_operatorMassData.resize(m_operatorMassV.size());
+    std::vector<int> mass_cursor = m_operatorMassIndptr;
+    for (size_t k = 0; k < m_operatorMassV.size(); ++k) {
+        const int dst = mass_cursor[(size_t)m_operatorMassI[k]]++;
+        m_operatorMassIndices[(size_t)dst] = m_operatorMassJ[k];
+        m_operatorMassData[(size_t)dst] = m_operatorMassV[k];
+    }
+    m_operatorNFace = n_face;
+    m_operatorMassConfigured = true;
+}
+
+void RadHACApKChargeGram::ConfigureGeometryMassMatrix(
+    std::vector<int> mI, std::vector<int> mJ,
+    std::vector<double> mV, int n_face)
+{
+    if (n_face < 0 || mI.size() != mJ.size() || mI.size() != mV.size())
+        throw std::runtime_error("ConfigureGeometryMassMatrix: invalid COO arrays");
+    if (m_operatorChargeConfigured && m_operatorNFace != n_face)
+        throw std::runtime_error("ConfigureGeometryMassMatrix: n_face differs from configured charge map");
+    for (size_t k = 0; k < mV.size(); ++k) {
+        if (mI[k] < 0 || mI[k] >= n_face || mJ[k] < 0 || mJ[k] >= n_face)
+            throw std::runtime_error("ConfigureGeometryMassMatrix: COO index out of range");
+        if (!std::isfinite(mV[k]))
+            throw std::runtime_error("ConfigureGeometryMassMatrix: non-finite COO value");
+    }
+    m_operatorGeometryMassI = std::move(mI);
+    m_operatorGeometryMassJ = std::move(mJ);
+    m_operatorGeometryMassV = std::move(mV);
+    m_operatorGeometryMassIndptr.assign((size_t)n_face + 1, 0);
+    for (int row : m_operatorGeometryMassI)
+        ++m_operatorGeometryMassIndptr[(size_t)row + 1];
+    for (int row = 0; row < n_face; ++row)
+        m_operatorGeometryMassIndptr[(size_t)row + 1] += m_operatorGeometryMassIndptr[(size_t)row];
+    m_operatorGeometryMassIndices.resize(m_operatorGeometryMassJ.size());
+    m_operatorGeometryMassData.resize(m_operatorGeometryMassV.size());
+    std::vector<int> geometry_mass_cursor = m_operatorGeometryMassIndptr;
+    for (size_t k = 0; k < m_operatorGeometryMassV.size(); ++k) {
+        const int dst = geometry_mass_cursor[(size_t)m_operatorGeometryMassI[k]]++;
+        m_operatorGeometryMassIndices[(size_t)dst] = m_operatorGeometryMassJ[k];
+        m_operatorGeometryMassData[(size_t)dst] = m_operatorGeometryMassV[k];
+    }
+    m_operatorNFace = n_face;
+    m_operatorGeometryMassConfigured = true;
+}
+
+std::vector<double> RadHACApKChargeGram::ApplyConfiguredDemag(
+    const std::vector<double>& x, bool symmetric)
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error("ApplyConfiguredDemag: charge map is not configured");
+    if ((int)x.size() != m_operatorNFace)
+        throw std::runtime_error("ApplyConfiguredDemag: x size mismatch");
+    std::vector<double> y((size_t)m_operatorNFace, 0.0);
+    ApplyConfiguredDemag(x.data(), y.data(), symmetric);
+    return y;
+}
+
+void RadHACApKChargeGram::ApplyConfiguredDemag(
+    const double* x, double* y, bool symmetric)
+{
+    ApplyConfiguredDemagImpl(x, y, 1.0, false, symmetric);
+}
+
+void RadHACApKChargeGram::ApplyConfiguredDemagAdd(
+    double scale, const double* x, double* y, bool symmetric)
+{
+    ApplyConfiguredDemagImpl(x, y, scale, true, symmetric);
+}
+
+void RadHACApKChargeGram::ApplyConfiguredDemagImpl(
+    const double* x, double* y, double scale, bool add, bool symmetric)
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error("ApplyConfiguredDemag: charge map is not configured");
+    if (!x || !y)
+        throw std::runtime_error("ApplyConfiguredDemag: null vector data");
+
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    // BaseMatrix matvecs are called repeatedly from NGSolve Krylov solvers.
+    // Keep one workspace per calling thread so repeated applications allocate
+    // neither charge vectors nor output temporaries and remain re-entrant.
+    static thread_local std::vector<double> q;
+    static thread_local std::vector<double> Gq;
+    q.resize((size_t)m_ndof);
+    Gq.resize((size_t)m_ndof);
+    std::fill(Gq.begin(), Gq.end(), 0.0);
+    double* const q_data = q.data();
+    ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t a) {
+        double sum = 0.0;
+        for (int k = m_operatorBIndptr[a]; k < m_operatorBIndptr[a + 1]; ++k)
+            sum += m_operatorBData[(size_t)k] * x[(size_t)m_operatorBIndices[(size_t)k]];
+        q_data[a] = sum;
+    });
+    if (symmetric) MatVecSym(q, Gq);
+    else MatVec(q, Gq);
+    const double* const Gq_data = Gq.data();
+    ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](size_t f) {
+        double sum = 0.0;
+        for (int k = m_operatorBTIndptr[f]; k < m_operatorBTIndptr[f + 1]; ++k)
+            sum += m_operatorBTData[(size_t)k] * Gq_data[(size_t)m_operatorBTIndices[(size_t)k]];
+        const double value = m_operatorConstrained[f] ? 0.0 : scale * sum;
+        if (add) y[f] += value;
+        else y[f] = value;
+    });
+}
+
+std::vector<double> RadHACApKChargeGram::ApplyConfiguredGeometryMass(
+    const std::vector<double>& x)
+{
+    if ((int)x.size() != m_operatorNFace)
+        throw std::runtime_error("ApplyConfiguredGeometryMass: x size mismatch");
+    std::vector<double> y((size_t)m_operatorNFace, 0.0);
+    ApplyConfiguredGeometryMass(x.data(), y.data());
+    return y;
+}
+
+void RadHACApKChargeGram::ApplyConfiguredGeometryMass(const double* x, double* y)
+{
+    if (!m_operatorGeometryMassConfigured)
+        throw std::runtime_error("ApplyConfiguredGeometryMass: geometry mass matrix is not configured");
+    if (!x || !y)
+        throw std::runtime_error("ApplyConfiguredGeometryMass: null vector data");
+    ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    ngcore::ParallelFor(ngcore::IntRange(m_operatorNFace), [&](size_t row) {
+        double value = 0.0;
+        for (int k = m_operatorGeometryMassIndptr[row];
+             k < m_operatorGeometryMassIndptr[row + 1]; ++k)
+            value += m_operatorGeometryMassData[(size_t)k] *
+                     x[(size_t)m_operatorGeometryMassIndices[(size_t)k]];
+        y[row] = m_operatorConstrained[row] ? 0.0 : value;
+    });
+}
+
+std::vector<double> RadHACApKChargeGram::ApplyConfiguredMassRiesz(
+    const std::vector<double>& rhs)
+{
+    if (!m_operatorGeometryMassConfigured)
+        throw std::runtime_error("ApplyConfiguredMassRiesz: geometry mass matrix is not configured");
+    return ApplyMassRiesz(m_operatorGeometryMassI, m_operatorGeometryMassJ,
+                          m_operatorGeometryMassV,
+                          m_operatorNFace, rhs);
+}
+
+std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterial(
+    double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
+    int& iters_out, bool mass_riesz, bool symmetric, const std::vector<double>* x0)
+{
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error("SolveConfiguredLinearMaterial: charge map and mass matrix must be configured");
+    std::vector<double> no_prec;
+    return SolveLinearMaterial(m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+                               m_operatorNFace, m_operatorMassI, m_operatorMassJ,
+                               m_operatorMassV, inv_chi, no_prec, rhs, tol, maxit,
+                               iters_out, mass_riesz, symmetric, x0);
+}
+
+std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrec(
+    double inv_chi, const std::vector<double>& rhs, double tol, int maxit,
+    int& iters_out, double& prec_min, double& prec_max,
+    const std::vector<double>* x0)
+{
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "SolveConfiguredLinearMaterialAutoPrec: charge map and mass matrix must be configured");
+    const int n_face = m_operatorNFace;
+    if (static_cast<int>(rhs.size()) != n_face)
+        throw std::runtime_error("SolveConfiguredLinearMaterialAutoPrec: rhs size mismatch");
+
+    std::vector<double> mass_diag(static_cast<size_t>(n_face), 0.0);
+    for (size_t k = 0; k < m_operatorMassV.size(); ++k) {
+        if (m_operatorMassI[k] == m_operatorMassJ[k])
+            mass_diag[static_cast<size_t>(m_operatorMassI[k])] += m_operatorMassV[k];
+    }
+    std::vector<std::vector<int>> support_id(static_cast<size_t>(n_face));
+    std::vector<std::vector<double>> support_value(static_cast<size_t>(n_face));
+    for (int a = 0; a < m_ndof; ++a) {
+        for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
+             k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k) {
+            const int f = m_operatorBIndices[static_cast<size_t>(k)];
+            support_id[static_cast<size_t>(f)].push_back(a);
+            support_value[static_cast<size_t>(f)].push_back(m_operatorBData[static_cast<size_t>(k)]);
+        }
+    }
+    std::vector<double> prec(static_cast<size_t>(n_face), 0.0);
+    {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+            double ndiag = 0.0;
+            const auto& ids = support_id[f];
+            const auto& vals = support_value[f];
+            for (size_t p = 0; p < ids.size(); ++p)
+                for (size_t q = 0; q < ids.size(); ++q)
+                    ndiag += vals[p] * vals[q] * GetInteractionMatrixElement(ids[p], ids[q]);
+            double value = inv_chi * mass_diag[f] + ndiag;
+            if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+            prec[f] = value;
+        });
+    }
+    prec_min = n_face ? prec[0] : 0.0;
+    prec_max = prec_min;
+    for (double value : prec) {
+        prec_min = std::min(prec_min, value);
+        prec_max = std::max(prec_max, value);
+    }
+    return SolveLinearMaterial(m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+                               n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+                               inv_chi, prec, rhs, tol, maxit, iters_out,
+                               /*mass_riesz=*/false, /*symmetric=*/true, x0);
+}
+
+std::shared_ptr<rad_hdiv::HDivFieldEvaluator>
+RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
+    const std::vector<double>& magnetization,
+    const rad_hdiv::FieldEvaluatorOptions& options) const
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error("CreateConfiguredFieldEvaluator: charge map is not configured");
+    if (static_cast<int>(magnetization.size()) != m_operatorNFace)
+        throw std::runtime_error("CreateConfiguredFieldEvaluator: magnetization size mismatch");
+    if (m_d2)
+        throw std::runtime_error("CreateConfiguredFieldEvaluator: use the planar 2D field evaluator");
+
+    std::vector<double> charge(static_cast<size_t>(m_ndof), 0.0);
+    for (int a = 0; a < m_ndof; ++a) {
+        double value = 0.0;
+        for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
+             k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k)
+            value += m_operatorBData[static_cast<size_t>(k)] *
+                     magnetization[static_cast<size_t>(m_operatorBIndices[static_cast<size_t>(k)])];
+        charge[static_cast<size_t>(a)] = value;
+    }
+
+    // Flat TET RT1/RT2: convert reference monomials to physical polynomials once and retain the exact
+    // analytic volume/triangle field kernels at every target, including near-surface targets.
+    bool analytic_tet = m_highorder && !m_curved && !m_hexmode && !m_wedgemode;
+    if (analytic_tet) {
+        for (int a = 0; a < m_ndof; ++a) {
+            const int* e = &m_expo[static_cast<size_t>(3*a)];
+            const int degree = e[0] + e[1] + e[2];
+            if ((m_kind[a] == 0 && degree > 1) || (m_kind[a] == 1 && degree > 2)) {
+                analytic_tet = false;
+                break;
+            }
+        }
+    }
+    if (analytic_tet) {
+        const int n_cells = m_n_el;
+        const int n_faces = static_cast<int>(m_faceV.size()/9);
+        std::vector<double> volume(static_cast<size_t>(n_cells)*16, 0.0);
+        std::vector<double> surface(static_cast<size_t>(n_faces)*22, 0.0);
+        for (int c = 0; c < n_cells; ++c)
+            std::copy_n(&m_cellV[static_cast<size_t>(c)*12], 12,
+                        &volume[static_cast<size_t>(c)*16]);
+        for (int f = 0; f < n_faces; ++f)
+            std::copy_n(&m_faceV[static_cast<size_t>(f)*9], 9,
+                        &surface[static_cast<size_t>(f)*22]);
+
+        for (int a = 0; a < m_ndof; ++a) {
+            const double coefficient = charge[static_cast<size_t>(a)];
+            if (coefficient == 0.0) continue;
+            const int host = m_host[static_cast<size_t>(a)];
+            const int* e = &m_expo[static_cast<size_t>(3*a)];
+            if (m_kind[static_cast<size_t>(a)] == 0) {
+                double* out = &volume[static_cast<size_t>(host)*16];
+                const int degree = e[0] + e[1] + e[2];
+                if (degree == 0) {
+                    out[12] += coefficient;
+                } else {
+                    const int axis = e[0] ? 0 : (e[1] ? 1 : 2);
+                    const double* inv = &m_cellInv[static_cast<size_t>(host)*9];
+                    double gradient[3] = {
+                        coefficient*inv[3*axis],
+                        coefficient*inv[3*axis + 1],
+                        coefficient*inv[3*axis + 2]
+                    };
+                    out[12] -= gradient[0]*out[0] + gradient[1]*out[1] + gradient[2]*out[2];
+                    for (int k = 0; k < 3; ++k) out[13+k] += gradient[k];
+                }
+                continue;
+            }
+
+            double* out = &surface[static_cast<size_t>(host)*22];
+            const double* vertices = &m_faceV[static_cast<size_t>(host)*9];
+            const double e1[3] = {vertices[3]-vertices[0], vertices[4]-vertices[1], vertices[5]-vertices[2]};
+            const double e2[3] = {vertices[6]-vertices[0], vertices[7]-vertices[1], vertices[8]-vertices[2]};
+            const double* gi = &m_faceGinv[static_cast<size_t>(host)*4];
+            double L[2][3];
+            for (int k = 0; k < 3; ++k) {
+                L[0][k] = gi[0]*e1[k] + gi[1]*e2[k];
+                L[1][k] = gi[2]*e1[k] + gi[3]*e2[k];
+            }
+            const double b[2] = {
+                -(L[0][0]*vertices[0] + L[0][1]*vertices[1] + L[0][2]*vertices[2]),
+                -(L[1][0]*vertices[0] + L[1][1]*vertices[1] + L[1][2]*vertices[2])
+            };
+            const int i = e[0], j = e[1];
+            if (i == 0 && j == 0) {
+                out[9] += coefficient;
+            } else if (i + j == 1) {
+                const int axis = i ? 0 : 1;
+                out[9] += coefficient*b[axis];
+                for (int k = 0; k < 3; ++k) out[10+k] += coefficient*L[axis][k];
+            } else {
+                const int first = (i == 2) ? 0 : (j == 2 ? 1 : 0);
+                const int second = (i == 2) ? 0 : (j == 2 ? 1 : 1);
+                out[9] += coefficient*b[first]*b[second];
+                for (int k = 0; k < 3; ++k)
+                    out[10+k] += coefficient*(b[first]*L[second][k] + b[second]*L[first][k]);
+                for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) {
+                    const double h = (first == second)
+                        ? coefficient*L[first][r]*L[first][c]
+                        : 0.5*coefficient*(L[first][r]*L[second][c] + L[second][r]*L[first][c]);
+                    out[13 + 3*r + c] += h;
+                }
+            }
+        }
+        return rad_hdiv::HDivFieldEvaluator::FromTet(
+            std::move(volume), std::move(surface), m_image_masks, m_image_signs, options);
+    }
+
+    // Curved HEX/WEDGE use their shared host quadrature directly.  Co-located charge modes are combined at
+    // each physical point, so the source count scales with elements, not with element modes.
+    if (m_hexmode || m_wedgemode) {
+        std::vector<double> xyz;
+        std::vector<double> strength;
+        auto append_cloud = [&](const HexQuadCloud& cloud, const std::vector<int>& group) {
+            for (size_t q = 0; q < cloud.wgeo.size(); ++q) {
+                const double* xi = &cloud.xi[3*q];
+                double density = 0.0;
+                for (int charge_id : group)
+                    density += charge[static_cast<size_t>(charge_id)]*HexMonoEval(charge_id, xi);
+                xyz.push_back(cloud.pts[3*q]);
+                xyz.push_back(cloud.pts[3*q + 1]);
+                xyz.push_back(cloud.pts[3*q + 2]);
+                strength.push_back(cloud.wgeo[q]*density);
+            }
+        };
+        if (m_hexmode) {
+            // A tensor-product rule is invariant under every signed permutation of the HEX reference
+            // axes.  That is essential for the IMA field contract: the explicit lower-half element and
+            // the reflected upper-half element must materialize the same physical point sources.  The
+            // Kuhn 6-tet / 2-tri split used by the near Gram integration is deliberately not reused here,
+            // because its diagonal selects an orientation and produced O(1e-4) full-vs-image field drift.
+            for (int host = 0; host < m_n_el; ++host) {
+                const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
+                HexQuadCloud cloud;
+                const size_t ng = m_glOut.size();
+                cloud.pts.reserve(3*ng*ng*ng);
+                cloud.xi.reserve(3*ng*ng*ng);
+                cloud.wgeo.reserve(ng*ng*ng);
+                for (size_t iz = 0; iz < ng; ++iz)
+                    for (size_t iy = 0; iy < ng; ++iy)
+                        for (size_t ix = 0; ix < ng; ++ix) {
+                            const double xi[3] = {m_glOut[ix], m_glOut[iy], m_glOut[iz]};
+                            double X[3], J[3][3];
+                            HexQ2Map(nodes, xi, X, J);
+                            cloud.pts.insert(cloud.pts.end(), X, X+3);
+                            cloud.xi.insert(cloud.xi.end(), xi, xi+3);
+                            cloud.wgeo.push_back(m_gwOut[ix]*m_gwOut[iy]*m_gwOut[iz]);
+                        }
+                append_cloud(cloud, m_cellCharges[static_cast<size_t>(host)]);
+            }
+            for (int host = 0; host < m_hex_n_bf; ++host) {
+                const double* nodes = &m_quadNodes[static_cast<size_t>(host)*27];
+                HexQuadCloud cloud;
+                const size_t ng = m_glOut.size();
+                cloud.pts.reserve(3*ng*ng);
+                cloud.xi.reserve(3*ng*ng);
+                cloud.wgeo.reserve(ng*ng);
+                for (size_t iv = 0; iv < ng; ++iv)
+                    for (size_t iu = 0; iu < ng; ++iu) {
+                        const double uv[2] = {m_glOut[iu], m_glOut[iv]};
+                        double X[3], T[3][2];
+                        QuadQ2Map(nodes, uv, X, T);
+                        cloud.pts.insert(cloud.pts.end(), X, X+3);
+                        cloud.xi.push_back(uv[0]);
+                        cloud.xi.push_back(uv[1]);
+                        cloud.xi.push_back(0.0);
+                        cloud.wgeo.push_back(m_gwOut[iu]*m_gwOut[iv]);
+                    }
+                append_cloud(cloud, m_faceCharges[static_cast<size_t>(host)]);
+            }
+        } else {
+            // Prism product quadrature is invariant under triangle-vertex permutations and axial
+            // reflection.  Keep the 3-tet decomposition for singular Gram integration only.
+            for (int host = 0; host < m_n_el; ++host) {
+                const double* nodes = &m_wCellNodes[static_cast<size_t>(host)*54];
+                HexQuadCloud cloud;
+                const size_t nt = m_symTriW.size(), ng = m_glOut.size();
+                cloud.pts.reserve(3*nt*ng);
+                cloud.xi.reserve(3*nt*ng);
+                cloud.wgeo.reserve(nt*ng);
+                for (size_t iw = 0; iw < ng; ++iw)
+                    for (size_t iq = 0; iq < nt; ++iq) {
+                        const double xi[3] = {
+                            m_symTriP[2*iq], m_symTriP[2*iq + 1], m_glOut[iw]
+                        };
+                        double X[3];
+                        WedgeQ2MapX(nodes, xi, X);
+                        cloud.pts.insert(cloud.pts.end(), X, X+3);
+                        cloud.xi.insert(cloud.xi.end(), xi, xi+3);
+                        cloud.wgeo.push_back(m_symTriW[iq]*m_gwOut[iw]);
+                    }
+                append_cloud(cloud, m_cellCharges[static_cast<size_t>(host)]);
+            }
+            for (int host = 0; host < m_wedge_n_bf; ++host) {
+                const int face_type = m_wFaceType[static_cast<size_t>(host)];
+                const double* nodes = &m_wFaceNodes[static_cast<size_t>(host)*27];
+                HexQuadCloud cloud;
+                if (face_type == 0) {
+                    const size_t nt = m_symTriW.size();
+                    cloud.pts.reserve(3*nt);
+                    cloud.xi.reserve(3*nt);
+                    cloud.wgeo.reserve(nt);
+                    for (size_t iq = 0; iq < nt; ++iq) {
+                        const double uv[2] = {m_symTriP[2*iq], m_symTriP[2*iq + 1]};
+                        double X[3];
+                        TriSurfMap(nodes, uv, X);
+                        cloud.pts.insert(cloud.pts.end(), X, X+3);
+                        cloud.xi.push_back(uv[0]);
+                        cloud.xi.push_back(uv[1]);
+                        cloud.xi.push_back(0.0);
+                        cloud.wgeo.push_back(m_symTriW[iq]);
+                    }
+                } else {
+                    const size_t ng = m_glOut.size();
+                    cloud.pts.reserve(3*ng*ng);
+                    cloud.xi.reserve(3*ng*ng);
+                    cloud.wgeo.reserve(ng*ng);
+                    for (size_t iv = 0; iv < ng; ++iv)
+                        for (size_t iu = 0; iu < ng; ++iu) {
+                            const double uv[2] = {m_glOut[iu], m_glOut[iv]};
+                            double X[3];
+                            QuadQ2MapX(nodes, uv, X);
+                            cloud.pts.insert(cloud.pts.end(), X, X+3);
+                            cloud.xi.push_back(uv[0]);
+                            cloud.xi.push_back(uv[1]);
+                            cloud.xi.push_back(0.0);
+                            cloud.wgeo.push_back(m_gwOut[iu]*m_gwOut[iv]);
+                        }
+                }
+                append_cloud(cloud, m_faceCharges[static_cast<size_t>(host)]);
+            }
+        }
+        if (strength.empty()) {
+            xyz = {0.0, 0.0, 0.0};
+            strength = {0.0};
+        }
+        return rad_hdiv::HDivFieldEvaluator::FromCloud(
+            std::move(xyz), std::move(strength), m_image_masks, m_image_signs, options);
+    }
+
+    // Curved TET: retain P2 geometry and the combined RT1/RT2 reference
+    // polynomial per host.  The persistent evaluator integrates exact element
+    // leaves at observation time and uses prebuilt moments only for accepted
+    // tree nodes.  This avoids both Python source packing and the near-field
+    // error of freezing a low-order quadrature cloud at solve time.
+    const int n_cells = static_cast<int>(m_cellNodes.size()/30);
+    const int n_faces = static_cast<int>(m_faceNodes.size()/18);
+    std::vector<double> volume(static_cast<size_t>(n_cells)*34, 0.0);
+    std::vector<double> surface(static_cast<size_t>(n_faces)*24, 0.0);
+    for (int host = 0; host < n_cells; ++host)
+        std::copy_n(&m_cellNodes[static_cast<size_t>(host)*30], 30,
+                    &volume[static_cast<size_t>(host)*34]);
+    for (int host = 0; host < n_faces; ++host)
+        std::copy_n(&m_faceNodes[static_cast<size_t>(host)*18], 18,
+                    &surface[static_cast<size_t>(host)*24]);
+    for (int a = 0; a < m_ndof; ++a) {
+        const double coefficient = charge[static_cast<size_t>(a)];
+        if (coefficient == 0.0) continue;
+        const int host = m_host[static_cast<size_t>(a)];
+        const int* e = &m_expo[static_cast<size_t>(3*a)];
+        if (m_kind[static_cast<size_t>(a)] == 0) {
+            int local = 0;
+            if (e[0] == 1 && e[1] == 0 && e[2] == 0) local = 1;
+            else if (e[0] == 0 && e[1] == 1 && e[2] == 0) local = 2;
+            else if (e[0] == 0 && e[1] == 0 && e[2] == 1) local = 3;
+            else if (e[0] != 0 || e[1] != 0 || e[2] != 0)
+                throw std::runtime_error("CreateConfiguredFieldEvaluator: curved volume charge degree > 1");
+            volume[static_cast<size_t>(host)*34 + 30 + local] += coefficient;
+        } else {
+            int local = -1;
+            if (e[0] == 0 && e[1] == 0) local = 0;
+            else if (e[0] == 0 && e[1] == 1) local = 1;
+            else if (e[0] == 0 && e[1] == 2) local = 2;
+            else if (e[0] == 1 && e[1] == 0) local = 3;
+            else if (e[0] == 1 && e[1] == 1) local = 4;
+            else if (e[0] == 2 && e[1] == 0) local = 5;
+            if (local < 0)
+                throw std::runtime_error("CreateConfiguredFieldEvaluator: curved surface charge degree > 2");
+            surface[static_cast<size_t>(host)*24 + 18 + local] += coefficient;
+        }
+    }
+    return rad_hdiv::HDivFieldEvaluator::FromCurvedTet(
+        std::move(volume), std::move(surface), m_gl, m_gw,
+        m_image_masks, m_image_signs, options);
+}
+
+std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator>
+RadHACApKChargeGram::CreateConfiguredPlanarFieldEvaluator(
+    const std::vector<double>& magnetization) const
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error("CreateConfiguredPlanarFieldEvaluator: charge map is not configured");
+    if (!m_d2)
+        throw std::runtime_error("CreateConfiguredPlanarFieldEvaluator: Gram is not planar");
+    if (static_cast<int>(magnetization.size()) != m_operatorNFace)
+        throw std::runtime_error("CreateConfiguredPlanarFieldEvaluator: magnetization size mismatch");
+
+    std::vector<double> charge(static_cast<size_t>(m_ndof), 0.0);
+    for (int a = 0; a < m_ndof; ++a)
+        for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
+             k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k)
+            charge[static_cast<size_t>(a)] += m_operatorBData[static_cast<size_t>(k)]
+                * magnetization[static_cast<size_t>(m_operatorBIndices[static_cast<size_t>(k)])];
+
+    std::vector<double> positions;
+    std::vector<double> strengths;
+    auto append_cell_point = [&](int host, const double xi[2], double weight) {
+        double density = 0.0;
+        for (int a : m_cellCharges[static_cast<size_t>(host)])
+            density += charge[static_cast<size_t>(a)]
+                     * D2MonoCell(&m_expo[static_cast<size_t>(3*a)], xi);
+        double X[2];
+        const double* nodes = &m_d2CellNodes[static_cast<size_t>(host)*18];
+        if (m_d2CellType[static_cast<size_t>(host)] == 0) Tri6Map(nodes, xi, X);
+        else Quad9Map(nodes, xi, X);
+        positions.push_back(X[0]);
+        positions.push_back(X[1]);
+        strengths.push_back(weight*density);
+    };
+
+    for (int host = 0; host < m_n_el; ++host) {
+        if (m_d2CellType[static_cast<size_t>(host)] == 1) {
+            // Tensor Gauss is invariant under the signed reference-axis permutations used by IMA.
+            for (size_t j = 0; j < m_glIn.size(); ++j)
+                for (size_t i = 0; i < m_glIn.size(); ++i) {
+                    const double xi[2] = {m_glIn[i], m_glIn[j]};
+                    append_cell_point(host, xi, m_gwIn[i]*m_gwIn[j]);
+                }
+            continue;
+        }
+
+        // Four congruent sub-triangles times a symmetric Dunavant rule retain every vertex permutation.
+        const double V[3][2] = {
+            {D2_TRIREF_V[0][0], D2_TRIREF_V[0][1]},
+            {D2_TRIREF_V[1][0], D2_TRIREF_V[1][1]},
+            {D2_TRIREF_V[2][0], D2_TRIREF_V[2][1]}
+        };
+        const double M01[2] = {0.5*(V[0][0]+V[1][0]), 0.5*(V[0][1]+V[1][1])};
+        const double M12[2] = {0.5*(V[1][0]+V[2][0]), 0.5*(V[1][1]+V[2][1])};
+        const double M20[2] = {0.5*(V[2][0]+V[0][0]), 0.5*(V[2][1]+V[0][1])};
+        const double sub[4][3][2] = {
+            {{V[0][0],V[0][1]}, {M01[0],M01[1]}, {M20[0],M20[1]}},
+            {{M01[0],M01[1]}, {V[1][0],V[1][1]}, {M12[0],M12[1]}},
+            {{M20[0],M20[1]}, {M12[0],M12[1]}, {V[2][0],V[2][1]}},
+            {{M01[0],M01[1]}, {M12[0],M12[1]}, {M20[0],M20[1]}}
+        };
+        for (const auto& T : sub) {
+            const double e1[2] = {T[1][0]-T[0][0], T[1][1]-T[0][1]};
+            const double e2[2] = {T[2][0]-T[0][0], T[2][1]-T[0][1]};
+            const double scale = std::fabs(e1[0]*e2[1]-e1[1]*e2[0]);
+            for (size_t q = 0; q < m_d2FarTriW.size(); ++q) {
+                const double l1 = m_d2FarTriP[2*q], l2 = m_d2FarTriP[2*q+1];
+                const double xi[2] = {T[0][0]+l1*e1[0]+l2*e2[0],
+                                      T[0][1]+l1*e1[1]+l2*e2[1]};
+                append_cell_point(host, xi, scale*m_d2FarTriW[q]);
+            }
+        }
+    }
+
+    for (int host = 0; host < m_d2_n_be; ++host) {
+        const double* nodes = &m_d2EdgeNodes[static_cast<size_t>(host)*6];
+        for (size_t q = 0; q < m_d2GlE.size(); ++q) {
+            const double t = m_d2GlE[q];
+            double density = 0.0;
+            for (int a : m_faceCharges[static_cast<size_t>(host)]) {
+                const int exponent = m_expo[static_cast<size_t>(3*a)];
+                density += charge[static_cast<size_t>(a)]*(exponent ? t : 1.0);
+            }
+            double X[2];
+            Edge3Map(nodes, t, X);
+            positions.push_back(X[0]);
+            positions.push_back(X[1]);
+            strengths.push_back(m_d2GwE[q]*density);
+        }
+    }
+    if (strengths.empty()) {
+        positions = {0.0, 0.0};
+        strengths = {0.0};
+    }
+    return std::make_shared<rad_planar_charges::PlanarFieldEvaluator>(
+        std::move(positions), std::move(strengths), m_image_masks, m_image_signs);
 }
 
 std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTimings() const

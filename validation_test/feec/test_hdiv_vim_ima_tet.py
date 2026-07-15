@@ -6,9 +6,8 @@ The C++ highorder charge Gram folds the mirror-image charge interactions into ev
   G_IMA(a,b) = G(a,b) + sum_i sign_i * 0.5*(QuadDotRefl(a,b,mask_i) + QuadDotRefl(b,a,mask_i))
 with QuadDotRefl(tgt,src,mask) = the source's PhiInner potential at tgt's outer points reflected on the mask
 axes (mirror isometry).  Physics + reflection/sign convention validated against the analytic
-IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for the FLAT pure-TET RT1 path, and the
-HEX/WEDGE RT1 image-fold is locked separately by the low-level charge-Gram smoke tests.  Curved reduced
-models still fail loud (locked below).
+IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for flat/curved pure-TET RT1/RT2, and the
+HEX/WEDGE RT1 image-fold is locked separately by the low-level charge-Gram smoke tests.
 """
 import numpy as np
 import pytest
@@ -52,13 +51,3 @@ def test_tet_reduced_without_image_is_wrong():
     passing image cases above are genuinely the IMA folding, not a coincidence)."""
     D, _ = _demag((0, -2, -2), None)
     assert D < 0.30, f"half-model no-image demag {D:.4f} should be well below 1/3"
-
-
-def test_curved_ima_fails_loud():
-    """Curved reduced models are still not IMA-wired; never silently drop the image."""
-    # curved tet + image also fails loud
-    tetm = _sphere((0, -2, -2))
-    with pytest.raises((ValueError, NotImplementedError), match="CURVED|curve"):
-        with ng.TaskManager():
-            Solve(tetm, mu_r=100.0, H_ext=ng.CoefficientFunction((0, 0, _H0)),
-                             image="+x", curve_order=2)
