@@ -82,6 +82,7 @@ def rotational_eddy_brake_energy_gate(
     maximum_angular_impulse_residual: float = 0.01,
     maximum_total_energy_residual: float = 0.01,
     maximum_replay_error_over_span: float = 1.0e-6,
+    maximum_field_energy_adjacent_jump_fraction: float = 0.1,
     minimum_decay_fraction: float = 0.5,
 ) -> dict[str, Any]:
     """Gate free rotational braking with angular momentum and full energy storage.
@@ -185,6 +186,16 @@ def rotational_eddy_brake_energy_gate(
     energy = _parse_replay(energy_row)
     field_time = _series(energy_row, "field_energy_time_s")
     magnetic_energy = _series(energy_row, "magnetic_energy_j")
+    field_energy_scale = max(abs(value) for value in magnetic_energy)
+    maximum_field_energy_adjacent_jump_fraction_observed = (
+        max(
+            abs(right - left)
+            for left, right in zip(magnetic_energy, magnetic_energy[1:])
+        )
+        / field_energy_scale
+        if field_energy_scale > 0.0
+        else math.inf
+    )
     energy_times = energy["time_s"]
     energy_omega = energy["angular_velocity_rad_s"]
     energy_joule = energy["joule_loss_w"]
@@ -255,6 +266,12 @@ def rotational_eddy_brake_energy_gate(
         <= float(maximum_replay_error_over_span),
         "field_energy_history_is_present_and_aligned": energy_cardinality
         and field_time_alignment,
+        "field_energy_history_is_nonnegative_and_has_no_isolated_jump": min(
+            magnetic_energy
+        )
+        >= 0.0
+        and maximum_field_energy_adjacent_jump_fraction_observed
+        <= float(maximum_field_energy_adjacent_jump_fraction),
         "field_energy_run_replays_primary_history": energy_replay_error
         <= float(maximum_replay_error_over_span),
         "kinetic_magnetic_joule_energy_closes": total_energy_error
@@ -282,6 +299,9 @@ def rotational_eddy_brake_energy_gate(
             ),
             "kinetic_energy_drop_j": kinetic_drop,
             "magnetic_energy_drop_j": magnetic_drop,
+            "maximum_field_energy_adjacent_jump_fraction": (
+                maximum_field_energy_adjacent_jump_fraction_observed
+            ),
             "integrated_joule_loss_j": joule_energy,
             "total_energy_residual_relative": total_energy_error,
             "mechanical_joule_relative_diagnostic": max(
@@ -295,6 +315,9 @@ def rotational_eddy_brake_energy_gate(
             ),
             "maximum_total_energy_residual": float(maximum_total_energy_residual),
             "maximum_replay_error_over_span": float(maximum_replay_error_over_span),
+            "maximum_field_energy_adjacent_jump_fraction": float(
+                maximum_field_energy_adjacent_jump_fraction
+            ),
             "minimum_decay_fraction": float(minimum_decay_fraction),
         },
         "lesson": (
