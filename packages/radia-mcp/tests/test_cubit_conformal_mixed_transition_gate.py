@@ -90,6 +90,29 @@ def summary() -> dict:
             "result_artifact_fresh": True,
             "owned_processes_remaining": 0,
         },
+        "export_artifacts": {
+            "required": ["mixed.msh", "mixed.vol"],
+            "artifacts": [
+                {
+                    "name": "mixed.msh",
+                    "fresh": True,
+                    "bytes": 1233,
+                    "sha256": "b" * 64,
+                },
+                {
+                    "name": "mixed.vol",
+                    "fresh": True,
+                    "bytes": 900,
+                    "sha256": "c" * 64,
+                },
+            ],
+        },
+        "replay_identity": {
+            "pinned_journal_sha256": "a" * 64,
+            "pinned_source_model_sha256": "c" * 64,
+            "replayed_journal_sha256": "a" * 64,
+            "replayed_source_model_sha256": "c" * 64,
+        },
         "timing_breakdown_s": {
             "source_replay": 0.2,
             "mesh_inventory": 0.3,
@@ -127,6 +150,7 @@ def test_interface_gate_rejects_reconstructed_volume_drift_at_small_si_scale():
 def test_source_gate_accepts_classified_headless_exit_and_quality_fallback():
     result = json.loads(cubit_mixed_transition_source_gate(summary()))
     assert result["status"] == "ok"
+    assert result["warnings"] == []
     assert result["process_exit_code"] == 3
     assert result["checks"]["unsupported_aggregate_quality_probe_is_diagnosed"] is True
     assert result["checks"]["independent_interface_gate_passed"] is True
@@ -154,3 +178,57 @@ def test_server_rejects_missing_independent_gmsh_volume_inventory():
     result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
     assert result["status"] == "invalid_input"
     assert "gmsh_volume_inventory" in result["error"]
+
+
+def test_legacy_source_identity_is_accepted_with_warnings():
+    row = summary()
+    row.pop("export_artifacts")
+    row.pop("replay_identity")
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "ok"
+    assert set(result["warnings"]) == {
+        "per_artifact_export_freshness_not_recorded",
+        "journal_model_replay_identity_not_recorded",
+    }
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_hex_orientation_negative_jacobian",
+        "v7_public_pyramid_transition_nonmanifold",
+    ],
+)
+def test_generalization_v7_public(case_id: str):
+    row = summary()
+    if case_id == "v7_public_hex_orientation_negative_jacobian":
+        row["quality"]["hex"]["scaled_jacobian"]["min"] = -0.01
+        expected = "all_volume_families_above_quality_threshold"
+    else:
+        row["interface_face_ownership"][0]["tet_owners"] = [7]
+        row["interface_surfaces"][0]["face_incidence_count"] = 3
+        expected = "interface_quads_are_two_sided_manifold"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_source_batch_partial_export_success",
+        "v7_source_journal_model_digest_mismatch",
+    ],
+)
+def test_generalization_v7_source(case_id: str):
+    row = summary()
+    if case_id == "v7_source_batch_partial_export_success":
+        row["process"]["exit_code"] = 0
+        row["export_artifacts"]["artifacts"][1]["fresh"] = False
+        expected = "all_required_export_artifacts_are_fresh"
+    else:
+        row["replay_identity"]["replayed_source_model_sha256"] = "d" * 64
+        expected = "journal_and_source_model_identity_match_replay"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False

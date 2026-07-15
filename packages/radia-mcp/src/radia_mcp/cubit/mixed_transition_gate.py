@@ -100,6 +100,9 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         for row in interfaces
         for connectivity in (row.get("face_connectivity") or [])
     ]
+    interface_face_incidence_counts = [
+        int(row.get("face_incidence_count", 2)) for row in interfaces
+    ]
 
     geometry = _mapping(summary.get("geometry"), "geometry")
     cad_total = _finite(geometry.get("cad_total_volume_m3"), "geometry.cad_total_volume_m3")
@@ -161,6 +164,14 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             and len(list(row.get("pyramid_owners") or [])) == 1
             for row in ownership
         ),
+        "interface_quads_are_two_sided_manifold": bool(interfaces)
+        and all(count == 2 for count in interface_face_incidence_counts)
+        and all(
+            not list(row.get("tet_owners") or [])
+            and not list(row.get("wedge_owners") or [])
+            and not list(row.get("other_owners") or [])
+            for row in ownership
+        ),
         "every_pyramid_serves_the_transition": int(summary.get("matched_pyramid_count", -1))
         == totals["pyramid"],
         "gmsh_export_is_fresh_nonempty_digest": int(export.get("bytes", 0)) > 0
@@ -220,6 +231,56 @@ def cubit_mixed_transition_source_gate(
     quality_probe = _mapping(summary.get("quality_probe"), "quality_probe")
     process = _mapping(summary.get("process"), "process")
     timing = _mapping(summary.get("timing_breakdown_s"), "timing_breakdown_s")
+    export_artifacts_value = summary.get("export_artifacts")
+    export_artifacts_present = isinstance(export_artifacts_value, Mapping)
+    export_artifacts_ok = True
+    if export_artifacts_present:
+        required_raw = export_artifacts_value.get("required")
+        if isinstance(required_raw, (str, bytes)) or not isinstance(
+            required_raw, Sequence
+        ):
+            raise ValueError("export_artifacts.required must be a sequence")
+        required = list(required_raw)
+        artifact_rows = _rows(
+            export_artifacts_value.get("artifacts"), "export_artifacts.artifacts"
+        )
+        required_names = {str(name) for name in required}
+        artifact_by_name = {str(row.get("name", "")): row for row in artifact_rows}
+        export_artifacts_ok = bool(required_names) and set(artifact_by_name) == required_names
+        export_artifacts_ok = export_artifacts_ok and all(
+            row.get("fresh") is True
+            and int(row.get("bytes", 0)) > 0
+            and len(str(row.get("sha256", ""))) == 64
+            for row in artifact_by_name.values()
+        )
+
+    replay_identity_value = summary.get("replay_identity")
+    replay_identity_present = isinstance(replay_identity_value, Mapping)
+    replay_identity_ok = True
+    if replay_identity_present:
+        pinned_journal = str(replay_identity_value.get("pinned_journal_sha256", ""))
+        pinned_model = str(replay_identity_value.get("pinned_source_model_sha256", ""))
+        replayed_journal = str(
+            replay_identity_value.get("replayed_journal_sha256", "")
+        )
+        replayed_model = str(
+            replay_identity_value.get("replayed_source_model_sha256", "")
+        )
+        replay_identity_ok = (
+            all(
+                len(value) == 64
+                and all(character.lower() in "0123456789abcdef" for character in value)
+                for value in (
+                    pinned_journal,
+                    pinned_model,
+                    replayed_journal,
+                    replayed_model,
+                )
+            )
+            and pinned_journal == replayed_journal
+            and pinned_model == replayed_model
+            and pinned_journal == str(summary.get("source_sha256", ""))
+        )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -279,16 +340,24 @@ def cubit_mixed_transition_source_gate(
         "nonzero_exit_is_semantically_classified": exit_explained,
         "fresh_artifact_and_no_owned_process_leak": process.get("result_artifact_fresh") is True
         and int(process.get("owned_processes_remaining", -1)) == 0,
+        "all_required_export_artifacts_are_fresh": export_artifacts_ok,
+        "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),
         "independent_interface_gate_passed": public_gate["status"] == "ok",
     }
     issues = [name for name, ok in checks.items() if not ok]
+    warnings = []
+    if not export_artifacts_present:
+        warnings.append("per_artifact_export_freshness_not_recorded")
+    if not replay_identity_present:
+        warnings.append("journal_model_replay_identity_not_recorded")
     return {
         "policy": "cubit_mixed_transition_source_gate_v1",
         "status": "ok" if not issues else "needs_attention",
         "checks": checks,
         "issues": issues,
+        "warnings": warnings,
         "source_journal": Path(str(summary.get("source_journal", ""))).name,
         "process_exit_code": exit_code,
         "public_gate_status": public_gate["status"],
