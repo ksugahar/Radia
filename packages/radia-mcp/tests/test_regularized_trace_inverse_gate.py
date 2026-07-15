@@ -1,6 +1,8 @@
 import copy
 import json
 
+import pytest
+
 from radia_mcp.radia_ngsolve.regularized_trace_inverse_gate import (
     regularized_trace_inverse_path_gate,
 )
@@ -84,3 +86,38 @@ def test_regularized_trace_inverse_mcp_dispatches_and_rejects_bad_shape():
     assert result["status"] == "ok"
     invalid = json.loads(mcp_gate('{"path": {}}'))
     assert invalid["status"] == "invalid_input"
+
+
+def test_regularized_trace_inverse_rejects_gradient_and_replay_drift():
+    bad = copy.deepcopy(_summary())
+    bad["path"]["gradient_check_max_abs_errors"][3] = 1.0e-2
+    bad["replay"]["max_relative_error"] = 0.1
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["finite_difference_gradients_close"] is False
+    assert result["checks"]["deterministic_replay_closes"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["boundary_element", "alpha_order", "weighted_residual", "lcurve_choice", "reference_error"],
+)
+def test_counterfactual_curriculum90_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "boundary_element":
+        bad["mesh"]["boundary_element"] = "quadrilateral"
+    elif case_id == "alpha_order":
+        bad["path"]["alphas"][3] = 5.0e-4
+    elif case_id == "weighted_residual":
+        bad["path"]["weighted_trace_residuals"][4] = 0.0
+    elif case_id == "lcurve_choice":
+        bad["lcurve"]["selected_index"] = 2
+    else:
+        bad["crosscheck"]["max_solution_relative_error"] = 1.0e-2
+    assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_trace_sparsity_mismatch():
+    bad = copy.deepcopy(_summary())
+    bad["mesh"]["trace_nnz"] = 1
+    assert regularized_trace_inverse_path_gate(bad)["status"] == "needs_attention"

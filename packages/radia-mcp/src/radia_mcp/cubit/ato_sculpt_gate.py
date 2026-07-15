@@ -250,7 +250,8 @@ def cubit_ato_levelset_sculpt_source_replay_gate(
         == "export iso blocks to Exodus, reconstruct MBG, then sculpt volume",
         "headless_process_errors_are_classified": process.get("acceptable") is True
         and process.get("result_artifact_fresh") is True
-        and not list(process.get("unexpected_error_lines", [])),
+        and not list(process.get("unexpected_error_lines", []))
+        and int(process.get("owned_processes_remaining", -1)) == 0,
         "public_mesh_gate_passed_without_solver_promotion": public_gate.get(
             "status"
         )

@@ -1,6 +1,8 @@
 import copy
 import json
 
+import pytest
+
 from radia_mcp.radia_ngsolve.nonlinear_inductance_sweep_gate import (
     nonlinear_inductance_sweep_gate,
 )
@@ -73,3 +75,36 @@ def test_nonlinear_inductance_sweep_mcp_dispatches_and_rejects_bad_shape():
     assert result["status"] == "ok"
     invalid = json.loads(mcp_gate('{"runs": []}'))
     assert invalid["status"] == "invalid_input"
+
+
+def test_nonlinear_inductance_sweep_rejects_indefinite_tangent_matrix():
+    bad = copy.deepcopy(_summary())
+    bad["runs"][0]["incremental_inductance_H"][0][0] *= -1.0
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["all_run_identities_and_matrices_close"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["matrix_symmetry", "requested_current", "legendre_duality", "replay_matrix", "nonlinear_residual"],
+)
+def test_counterfactual_curriculum90_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "matrix_symmetry":
+        bad["runs"][0]["incremental_inductance_H"][0][1] *= 0.5
+    elif case_id == "requested_current":
+        bad["runs"][0]["current_A"][0] *= 0.5
+    elif case_id == "legendre_duality":
+        bad["runs"][0]["coenergy_J"] *= 0.5
+    elif case_id == "replay_matrix":
+        bad["runs"][1]["apparent_inductance_H"][0][0] *= 1.1
+    else:
+        bad["runs"][0]["final_nonlinear_residual_log10"] = -2.0
+    assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_nonzero_open_secondary_current():
+    bad = copy.deepcopy(_summary())
+    bad["runs"][0]["current_A"][1] = 1.0
+    assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"

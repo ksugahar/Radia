@@ -1,6 +1,8 @@
 import copy
 import json
 
+import pytest
+
 from radia_mcp.cubit.ato_sculpt_gate import (
     cubit_ato_levelset_sculpt_source_replay_gate,
     cubit_levelset_sculpt_hex_validation_gate,
@@ -100,6 +102,7 @@ def _source_summary():
             "acceptable": True,
             "result_artifact_fresh": True,
             "unexpected_error_lines": [],
+            "owned_processes_remaining": 0,
         },
         "public_gate": public,
         "deterministic_replay": {"repeat_count": 2, "stable_fields_match": True},
@@ -177,3 +180,63 @@ def test_rejects_stale_source_counts_and_unmatched_replay():
     assert result["checks"]["source_levelset_counts_recorded"] is False
     assert result["checks"]["documented_iso_blocks_recorded"] is False
     assert result["checks"]["two_replays_match"] is False
+
+
+def test_rejects_gui_daemon_and_owned_process_leak():
+    bad = copy.deepcopy(_source_summary())
+    bad["gui_daemon_enabled"] = True
+    bad["process"]["owned_processes_remaining"] = 1
+    result = cubit_ato_levelset_sculpt_source_replay_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["headless_execution_recorded"] is False
+    assert result["checks"]["headless_process_errors_are_classified"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["gmsh_count", "mixed_cell", "solver_overclaim", "volume_closure", "quality_floor"],
+)
+def test_counterfactual_curriculum90_public(case_id):
+    bad = copy.deepcopy(_public_summary())
+    if case_id == "gmsh_count":
+        bad["mesh_series"][1]["gmsh"]["hex_count"] = 20000
+    elif case_id == "mixed_cell":
+        bad["mesh_series"][1]["other_volume_count"] = 1
+    elif case_id == "solver_overclaim":
+        bad["solver_ready"] = True
+    elif case_id == "volume_closure":
+        bad["mesh_series"][1]["gmsh"]["total_volume"] *= 0.7
+    else:
+        bad["mesh_series"][1]["source_minimum_quality"] = 0.0
+    assert cubit_levelset_sculpt_hex_validation_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["source_digest", "batch_flag", "source_count", "replay_stability", "public_handoff"],
+)
+def test_counterfactual_curriculum90_source(case_id):
+    bad = copy.deepcopy(_source_summary())
+    if case_id == "source_digest":
+        bad["source_sha256"] = "0" * 63
+    elif case_id == "batch_flag":
+        bad["headless_flags"] = ["-nographics"]
+    elif case_id == "source_count":
+        bad["source_mesh"]["tet_count"] = 47000
+    elif case_id == "replay_stability":
+        bad["deterministic_replay"]["stable_fields_match"] = False
+    else:
+        bad["public_gate"]["status"] = "needs_attention"
+    assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_binary_gmsh_artifact():
+    bad = copy.deepcopy(_public_summary())
+    bad["mesh_series"][1]["gmsh"]["binary"] = True
+    assert cubit_levelset_sculpt_hex_validation_gate(bad)["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_short_help_digest():
+    bad = copy.deepcopy(_source_summary())
+    bad["source_doc_sha256"] = "0" * 63
+    assert cubit_ato_levelset_sculpt_source_replay_gate(bad)["status"] == "needs_attention"

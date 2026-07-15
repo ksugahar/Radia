@@ -166,6 +166,13 @@ def build123d_lofted_shell_handoff_gate(
     step_topology = _native_topology(step)
     brep_topology = _native_topology(brep)
     external_topologies = [_external_topology(row) for row in snapshots]
+    external_positive_entity_counts = [
+        (
+            int(row.get("positive_volume_count", -1)),
+            int(row.get("positive_surface_count", -1)),
+        )
+        for row in snapshots
+    ]
 
     by_mode: dict[str, list[Mapping[str, object]]] = {
         mode: [
@@ -218,6 +225,15 @@ def build123d_lofted_shell_handoff_gate(
         "external_topology_matches_native": all(
             topology == native_topology for topology in external_topologies
         ),
+        "external_positive_entity_counts_match_topology": all(
+            positive_volume_count == topology[0]
+            and positive_surface_count == topology[1]
+            for (positive_volume_count, positive_surface_count), topology in zip(
+                external_positive_entity_counts,
+                external_topologies,
+                strict=True,
+            )
+        ),
         "external_replays_are_repeatable_and_heal_invariant": mode_repeat_match
         and cross_mode_volume_spread <= thresholds["max_mode_relative_spread"]
         and cross_mode_area_spread <= thresholds["max_mode_relative_spread"],
@@ -259,6 +275,9 @@ def build123d_lofted_shell_handoff_gate(
             "brep_area_relative_error": brep_area_error,
             "external_volume_relative_errors": external_volume_errors,
             "external_area_relative_errors": external_area_errors,
+            "external_positive_entity_counts": [
+                list(counts) for counts in external_positive_entity_counts
+            ],
             "cross_mode_volume_relative_spread": cross_mode_volume_spread,
             "cross_mode_area_relative_spread": cross_mode_area_spread,
             "thresholds": thresholds,

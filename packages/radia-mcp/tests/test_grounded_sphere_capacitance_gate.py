@@ -79,6 +79,14 @@ def test_rejects_stale_voltage_sign_reversal():
     assert result["checks"]["voltage_reversal_has_odd_charge_and_even_energy"] is False
 
 
+def test_rejects_positive_charge_at_negative_voltage():
+    bad = copy.deepcopy(_summary())
+    bad["cases"][4]["conductor"][1] = abs(bad["cases"][4]["conductor"][1])
+    result = grounded_sphere_capacitance_convergence_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["voltage_reversal_has_odd_charge_and_even_energy"] is False
+
+
 def test_rejects_a_sphere_intersecting_the_ground_plane():
     bad = _summary()
     bad["problem_contract"]["sphere_center_height_m"] = 20.0
@@ -95,3 +103,30 @@ def test_mcp_wrapper_returns_json_and_handles_invalid_input():
         mcp_gate(json.dumps(_summary()), max_corrected_energy_relative_error=-1.0)
     )
     assert bad_tolerance["status"] == "invalid_input"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["problem_type", "open_order", "case_order", "replay_charge", "mixed_energy"],
+)
+def test_counterfactual_curriculum90_public(case_id):
+    bad = copy.deepcopy(_summary())
+    if case_id == "problem_type":
+        bad["problem_contract"]["problem_type"] = "planar"
+    elif case_id == "open_order":
+        bad["problem_contract"]["open_boundary_asymptotic_order"] = 1
+    elif case_id == "case_order":
+        bad["cases"][3]["case"] = "repeat_unknown"
+    elif case_id == "replay_charge":
+        bad["cases"][3]["conductor"][1] *= 1.1
+    else:
+        bad["cases"][2]["mixed_boundary_energy_J"] = 0.0
+    result = json.loads(mcp_gate(json.dumps(bad)))
+    assert result["status"] in {"needs_attention", "invalid_input"}
+
+
+def test_generalization_v3s_rejects_open_boundary_not_enclosing_conductor():
+    bad = copy.deepcopy(_summary())
+    bad["problem_contract"]["outer_radius_m"] = 50.0
+    result = json.loads(mcp_gate(json.dumps(bad)))
+    assert result["status"] in {"needs_attention", "invalid_input"}

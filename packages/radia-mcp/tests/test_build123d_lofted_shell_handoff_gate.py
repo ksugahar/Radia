@@ -1,6 +1,8 @@
 import copy
 import json
 
+import pytest
+
 from radia_mcp.build123d.server import (
     build123d_loft_example_source_replay_gate,
     build123d_lofted_shell_handoff_gate,
@@ -154,6 +156,17 @@ def test_public_gate_rejects_solver_ready_overclaim():
     assert result["checks"]["cad_handoff_without_mesh_or_solver_overclaim"] is False
 
 
+def test_public_gate_rejects_nonpositive_external_entities():
+    row = summary()
+    row["external"]["replays"][2]["snapshot"]["positive_volume_count"] = 0
+    result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["external_positive_entity_counts_match_topology"]
+        is False
+    )
+
+
 def test_source_gate_accepts_immutable_official_loft_replay():
     result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(summary())))
     assert result["status"] == "ok"
@@ -182,9 +195,72 @@ def test_source_gate_rejects_stale_external_process():
     assert result["checks"]["external_process_is_fresh_classified_and_clean"] is False
 
 
+def test_source_gate_rejects_modified_source_digest_contract():
+    row = summary()
+    row["build"]["source"]["source_preserved"] = False
+    row["build"]["source"]["sha256"] = "0" * 64
+    result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["viewer_stub_only_and_source_preserved"] is False
+
+
 def test_server_rejects_missing_external_replays():
     row = summary()
     del row["external"]["replays"]
     result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
     assert result["status"] == "invalid_input"
     assert "external.replays" in result["error"]
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["volume_budget", "topology", "command_failure", "solver_overclaim", "external_pass"],
+)
+def test_counterfactual_curriculum90_public(case_id):
+    row = summary()
+    if case_id == "volume_budget":
+        row["external"]["replays"][0]["snapshot"]["volume_sum_mm3"] *= 1.1
+    elif case_id == "topology":
+        row["external"]["replays"][0]["snapshot"]["surface_count"] *= 2
+    elif case_id == "command_failure":
+        row["external"]["replays"][0]["command"]["returned"] = False
+    elif case_id == "solver_overclaim":
+        row["external"]["solver_ready"] = True
+    else:
+        row["external"]["pass"] = False
+    result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    ["repository", "tag", "path", "license", "process"],
+)
+def test_counterfactual_curriculum90_source(case_id):
+    row = summary()
+    if case_id == "repository":
+        row["build"]["source"]["repository"] = "example/other"
+    elif case_id == "tag":
+        row["build"]["source"]["tag"] = "v0.9.0"
+    elif case_id == "path":
+        row["build"]["source"]["path"] = "examples/other.py"
+    elif case_id == "license":
+        row["build"]["source"]["license"] = "unknown"
+    else:
+        row["external"]["process"]["acceptable"] = False
+    result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_nonpositive_external_surfaces():
+    row = summary()
+    row["external"]["replays"][1]["snapshot"]["positive_surface_count"] = 0
+    result = json.loads(build123d_lofted_shell_handoff_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
+
+
+def test_generalization_v3s_rejects_nonstubbed_viewer_claim():
+    row = summary()
+    row["build"]["source"]["display_stubbed_only"] = False
+    result = json.loads(build123d_loft_example_source_replay_gate(json.dumps(row)))
+    assert result["status"] == "needs_attention"
