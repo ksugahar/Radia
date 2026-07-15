@@ -75,6 +75,7 @@ from ._field_batch import (  # noqa: F401  (batch exterior field of the RT1/RT2 
 )
 from ._magnetization_source import MagnetizationSource  # noqa: F401
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
+from ._capabilities import HDivCapability, hdiv_capabilities  # noqa: F401
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
     """
@@ -138,5 +139,6 @@ __all__ = [
     "magnet_box", "magnet_hex",
     "SolveHysteresis", "EnergyStopMaterial", "PlayHysteresisMaterial",
     "FieldFromSolution", "MagnetizationSource",
+    "HDivCapability", "hdiv_capabilities",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]

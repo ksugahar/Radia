@@ -25,6 +25,7 @@ def test_motor_design_builds_hdiv_reduced_cli_command():
         rotor_vol="rotor.vol",
         hdiv_mu_r="1200",
         rotor_angle_steps=5,
+        hdiv_order=2,
     )
 
     command = spec.build_command(python="python", panels_dir="panels")
@@ -32,9 +33,11 @@ def test_motor_design_builds_hdiv_reduced_cli_command():
     assert any("calc_motor_hdiv_reduced.py" in part for part in command)
     assert command[command.index("--mu-r") + 1] == "1200"
     assert command[command.index("--rotor-angle-steps") + 1] == "5"
+    assert command[command.index("--order") + 1] == "2"
     assert spec.visible_fields() >= {
         "rotor_vol", "hdiv_h_amplitude", "r_airgap_mid", "energy_delta_deg"
     }
+    assert "hdiv_order" in spec.visible_fields()
     assert "vol" not in spec.visible_fields()
     defaults = MotorDesignSpec(
         analysis=ANALYSIS_HDIV_REDUCED, rotor_vol="rotor.vol").build_command(

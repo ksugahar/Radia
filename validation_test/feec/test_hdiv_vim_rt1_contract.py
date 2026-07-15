@@ -1,13 +1,12 @@
 """Golden: the HDiv-VIM RT1/RT2 production contract.
 
-RT1 supports pure-TET, pure-HEX, pure-WEDGE, 2D, IMA, curved geometry, and field evaluation.
-RT2 is the production pure-TET higher-order route, including flat/curved IMA and the persistent C++
-field evaluator.  Specialized planar/HEX/WEDGE charge kernels remain RT1.  Pyramid / mixed meshes and
+RT1/RT2 support pure-TET, pure-HEX, pure-WEDGE, IMA, curved geometry, and field evaluation.
+The planar tri/quad route supports RT1 through Q2 and RT2 through Q3 geometry.  Pyramid / mixed meshes and
 The deleted region-dictionary PM API is absent; fixed M uses an independent
 MagnetizationSource HDiv space.
 
-HEX/WEDGE were UNLOCKED 2026-07-04: the wired RT1 charge Grams + the Gram-agnostic solve path already
-solve them, so the auto guard is now pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
+HEX/WEDGE RT2 use their Q2 volume/face charge bases and the same Gram-agnostic solve path, so the auto
+guard is pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
 lock lives in test_hdiv_vim_hex_public_solve.py; wedge spectrum/cube locks live in
 test_hdiv_vim_wedge_spectrum.py.
 
@@ -138,8 +137,6 @@ def test_hex_soft_iron_auto_is_hdiv_eligible():
     mp = lambda x, y, z: (0.01 * (x - 0.5), 0.01 * (y - 0.5), 0.01 * (z - 0.5))  # noqa: E731
     with ng.TaskManager():
         hexm = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3, mapping=mp)
-    with pytest.raises(NotImplementedError, match="RT2.*pure-TET"):
-        Solve(hexm, mu_r=100.0, H_ext=_HEXT, order=2)
     iron = MeshSoftIron(hexm, mu_r=1000.0)
     top = rad.ObjCnt([iron])
     assert _radsolve.is_hdiv_eligible(top)

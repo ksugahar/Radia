@@ -46,6 +46,12 @@ double TetPotentialPolynomial(const double V[4][3], const double r[3],
                               const std::vector<double>& coeffs);                 /* SUM c_a INT_V x^a/R dV */
 void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3],
                               double out[20]);                                    /* total-degree <= 3 moments */
+void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3],
+                              double out[84]);                                    /* total-degree <= 6 moments */
+void TriPotentialMomentsUpTo4(const double V[3][3], const double r[3],
+                              double out[35]);                                    /* total-degree <= 4 moments */
+void TriPotentialMomentsUpTo2(const double V[3][3], const double r[3],
+                              double out[10]);                                    /* total-degree <= 2 moments */
 void TetVolFieldLinear(const double V[4][3], const double r[3], double rho0,
                        const double g[3], double out[3]);                          /* linear volume charge */
 void TetVolFieldQuadratic(const double V[4][3], const double r[3], double rho0,

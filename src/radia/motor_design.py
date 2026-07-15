@@ -16,6 +16,7 @@ TRANSIENT_METHODS = ("linearization", "coupled")
 LINEAR_SOLVERS = ("pardiso", "sparsecholesky", "umfpack")
 LAMINATION_MODES = ("cell", "global", "full")
 LAMINATION_DRIVES = ("meanB", "current", "voltage")
+HDIV_ORDERS = (1, 2)
 
 
 @dataclass(slots=True)
@@ -70,6 +71,7 @@ class MotorDesignSpec:
     hdiv_mu_r: str = "1000.0"
     hdiv_h_amplitude: str = "80000.0"
     hdiv_eta: str = "2.0"
+    hdiv_order: int = 1
 
     def visible_fields(self) -> set[str]:
         fields = {"analysis"}
@@ -100,6 +102,7 @@ class MotorDesignSpec:
                 "rotor_angle_steps", "r_airgap_mid", "stack_length",
                 "energy_delta_deg", "circle_points", "center_x", "center_y",
                 "hdiv_eta",
+                "hdiv_order",
             })
         else:
             raise ValueError(f"Unknown motor analysis: {self.analysis}")
@@ -215,5 +218,6 @@ class MotorDesignSpec:
             "--center-x", str(self.center_x),
             "--center-y", str(self.center_y),
             "--eta", str(self.hdiv_eta),
+            "--order", str(self.hdiv_order),
             "--output", json_output(self.rotor_vol, "_motor_hdiv_reduced"),
         ]

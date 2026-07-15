@@ -285,7 +285,7 @@ void TetMoment1(const double V[4][3], const double r[3], double out[3])
 
 namespace {
 
-constexpr int POLY_MAX_DEG = 5;
+constexpr int POLY_MAX_DEG = 6;
 
 static inline double small_comb(int n, int k)
 {
@@ -493,6 +493,90 @@ static double SurfacePotentialMonomial(const double P[3][3], const double r[3],
     return s;
 }
 
+static int PotentialMomentIndex(int ax, int ay, int az)
+{
+    const int degree = ax + ay + az;
+    int idx = 0;
+    for (int d = 0; d < degree; ++d) idx += (d + 1)*(d + 2)/2;
+    for (int x = 0; x < ax; ++x) idx += degree - x + 1;
+    return idx + ay;
+}
+
+static void SurfacePotentialMomentsUpTo(const double P[3][3], const double r[3],
+                                        int degree, double* out)
+{
+    double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    TriPolySetup g;
+    triangle_inplane_A_moments(P, r, degree, A, g);
+    int idx = 0;
+    for (int total = 0; total <= degree; ++total)
+        for (int ax = 0; ax <= total; ++ax)
+            for (int ay = 0; ay <= total - ax; ++ay) {
+                const int alpha[3] = {ax, ay, total - ax - ay};
+                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+                int poly_degree = 0;
+                poly[0][0] = 1.0;
+                for (int coord = 0; coord < 3; ++coord)
+                    for (int p = 0; p < alpha[coord]; ++p)
+                        poly2_mul_linear(poly, poly_degree, g.rp[coord], g.e1[coord], g.e2[coord]);
+                double s = 0.0;
+                for (int a = 0; a <= poly_degree; ++a)
+                    for (int b = 0; b <= poly_degree - a; ++b) s += poly[a][b]*A[a][b];
+                out[idx++] = s;
+            }
+}
+
+static void TetPotentialMomentsUpTo(const double V[4][3], const double r[3],
+                                    int degree, double* out)
+{
+    constexpr int NMAX = 84;
+    static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    double face_moments[4][NMAX] = {};
+    double h[4] = {};
+    double cen[3] = {0,0,0};
+    for (int i = 0; i < 4; ++i)
+        for (int k = 0; k < 3; ++k) cen[k] += 0.25*V[i][k];
+    for (int fi = 0; fi < 4; ++fi) {
+        double Fv[3][3];
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k) Fv[j][k] = V[FACES[fi][j]][k];
+        double e1[3], e2[3], nrm[3];
+        for (int k = 0; k < 3; ++k) { e1[k] = Fv[1][k]-Fv[0][k]; e2[k] = Fv[2][k]-Fv[0][k]; }
+        v3cross(e1, e2, nrm);
+        const double nl = v3nrm(nrm);
+        if (nl < 1e-300) continue;
+        for (int k = 0; k < 3; ++k) nrm[k] /= nl;
+        double fc[3] = {0,0,0};
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k) fc[k] += Fv[j][k]/3.0;
+        double outward[3];
+        for (int k = 0; k < 3; ++k) outward[k] = fc[k]-cen[k];
+        if (v3dot(outward, nrm) < 0.0)
+            for (int k = 0; k < 3; ++k) nrm[k] = -nrm[k];
+        double rmf[3];
+        for (int k = 0; k < 3; ++k) rmf[k] = r[k]-Fv[0][k];
+        h[fi] = v3dot(rmf, nrm);
+        SurfacePotentialMomentsUpTo(Fv, r, degree, face_moments[fi]);
+    }
+    out[0] = PhiTet(V, r);
+    for (int total = 1; total <= degree; ++total)
+        for (int ax = 0; ax <= total; ++ax)
+            for (int ay = 0; ay <= total - ax; ++ay) {
+                const int az = total - ax - ay;
+                const int idx = PotentialMomentIndex(ax, ay, az);
+                double s = 0.0;
+                for (int fi = 0; fi < 4; ++fi) s -= h[fi]*face_moments[fi][idx];
+                const int alpha[3] = {ax, ay, az};
+                for (int k = 0; k < 3; ++k)
+                    if (alpha[k] > 0) {
+                        int lower[3] = {ax, ay, az};
+                        --lower[k];
+                        s += r[k]*alpha[k]*out[PotentialMomentIndex(lower[0], lower[1], lower[2])];
+                    }
+                out[idx] = s/(total + 2.0);
+            }
+}
+
 struct TetMomentMemo {
     bool seen[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
     double val[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
@@ -563,16 +647,22 @@ double TetPotentialPolynomial(const double V[4][3], const double r[3],
 
 void TetPotentialMomentsUpTo3(const double V[4][3], const double r[3], double out[20])
 {
-    TetMomentMemo memo;
-    int idx = 0;
-    for (int deg = 0; deg <= 3; ++deg) {
-        for (int ax = 0; ax <= deg; ++ax) {
-            for (int ay = 0; ay <= deg - ax; ++ay) {
-                const int alpha[3] = {ax, ay, deg - ax - ay};
-                out[idx++] = TetPotentialMomentRec(V, r, alpha, 3, memo);
-            }
-        }
-    }
+    TetPotentialMomentsUpTo(V, r, 3, out);
+}
+
+void TetPotentialMomentsUpTo6(const double V[4][3], const double r[3], double out[84])
+{
+    TetPotentialMomentsUpTo(V, r, 6, out);
+}
+
+void TriPotentialMomentsUpTo4(const double V[3][3], const double r[3], double out[35])
+{
+    SurfacePotentialMomentsUpTo(V, r, 4, out);
+}
+
+void TriPotentialMomentsUpTo2(const double V[3][3], const double r[3], double out[10])
+{
+    SurfacePotentialMomentsUpTo(V, r, 2, out);
 }
 
 // INT_V (rho0 + g.r')(r-r')/R^3 dV' (linear volume charge) = SUM_f n_f[rho0 I0_f + g.M1_f] - g PhiTet.

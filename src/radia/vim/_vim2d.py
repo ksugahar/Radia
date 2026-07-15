@@ -1,6 +1,6 @@
-"""Planar (2D) HDiv-VIM soft-iron demag layer -- the motor-cross-section twin of the tet RT1 solve.
+"""Planar (2D) HDiv-VIM soft-iron demag layer -- RT1/Q2 and RT2/Q3 motor cross-sections.
 
-The C++ 2D log-kernel charge Gram (``build_charge_gram`` auto-routes ``HDiv(mesh2d, order=1)``:
+The C++ 2D log-kernel charge Gram (``build_charge_gram`` auto-routes ``HDiv(mesh2d, order=1|2)``:
 charges = -div M on tri/quad cells + M.n on boundary edges, kernel -ln(r)/(2 pi)) supplies the
 matrix-free demag operator N = B^T G B.
 
@@ -29,6 +29,7 @@ import ngsolve as ng
 import scipy.sparse as sp
 
 from ._vim import build_charge_gram
+from ._capabilities import validate_hdiv_configuration
 import radia._radia_pybind as _rp
 from radia.planar_materials import law_from_table as _law_from_table
 
@@ -37,12 +38,18 @@ MU0 = 4e-7 * np.pi
 class PlanarDemagBody:
     """One planar soft-iron body on the matrix-free C++ 2D charge Gram."""
 
-    def __init__(self, mesh, eta=2.0, cg_tol=1e-10, cg_maxit=5000,
+    def __init__(self, mesh, order=1, eta=2.0, cg_tol=1e-10, cg_maxit=5000,
                  image_masks=None, image_signs=None):
         if mesh.dim != 2:
             raise ValueError("PlanarDemagBody: mesh.dim must be 2 (got %d)" % mesh.dim)
         self.mesh = mesh
-        self.fes = ng.HDiv(mesh, order=1)
+        self.order = int(order)
+        self.geometry_order = max(1, int(mesh.GetCurveOrder()))
+        validate_hdiv_configuration(
+            2, {len(el.vertices) for el in mesh.Elements(ng.VOL)},
+            self.order, self.geometry_order)
+        self.fes = ng.HDiv(mesh, order=self.order)
+        self._bonus_intorder = 2*self.geometry_order
         self.B, self.G, self.Mm = build_charge_gram(
             self.fes, eta=eta, image_masks=image_masks, image_signs=image_signs)
         chk = self.G.hex_state_check()
@@ -61,9 +68,11 @@ class PlanarDemagBody:
         u = self.fes.TrialFunction()
         vL = fesL.TestFunction()
         mixed = ng.BilinearForm(trialspace=self.fes, testspace=fesL)
-        mixed += ng.InnerProduct(u, vL) * ng.dx
+        mixed += ng.InnerProduct(u, vL) * ng.dx(bonus_intorder=self._bonus_intorder)
         mixed.Assemble()
-        areas = ng.Integrate(ng.CoefficientFunction(1.0), mesh, element_wise=True)
+        areas = ng.Integrate(
+            ng.CoefficientFunction(1.0), mesh, element_wise=True,
+            order=max(4, 2*self.geometry_order+2))
         rows, cols, vals = mixed.mat.COO()
         self.nel = mesh.ne
         self.areas = np.array([areas[k] for k in range(self.nel)])
@@ -152,7 +161,8 @@ class PlanarDemagBody:
         arr[self._el2dof0] = invchi_e
         u, v = self.fes.TnT()
         W = ng.BilinearForm(self.fes)
-        W += self._gfchi * ng.InnerProduct(u, v) * ng.dx
+        W += self._gfchi * ng.InnerProduct(u, v) * ng.dx(
+            bonus_intorder=self._bonus_intorder)
         W.Assemble()
         return W.mat
 
@@ -294,8 +304,9 @@ def maxwell_torque_circle(H_total_at, Rc, n=1440, center=(0.0, 0.0)):
     return MU0 * Rc * Rc * (2 * np.pi / n) * acc
 
 
-def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, eta=2.0,
-                       nl_tol=1e-6, nl_maxit=300, image_masks=None, image_signs=None):
+def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=None, order=1, eta=2.0,
+                       cg_tol=1e-10, cg_maxit=5000, nl_tol=1e-6, nl_maxit=300,
+                       image_masks=None, image_signs=None):
     """The ``vim.PlanarSolve`` / ``vim.Solve`` 2D dispatch target: single-region planar soft-iron demag solve.
 
     ``magnets`` is an optional list of SEPARATE-body PERMANENT MAGNETS [(pm_mesh, M_fixed), ...]
@@ -322,7 +333,8 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
         from radia.planar_charges import magnet_field_cf
         H_ext = H_ext + magnet_field_cf(magnets)             # rigid PM source (design A), shared CF
     body = PlanarDemagBody(
-        mesh, eta=eta, image_masks=image_masks, image_signs=image_signs)
+        mesh, order=order, eta=eta, cg_tol=cg_tol, cg_maxit=cg_maxit,
+        image_masks=image_masks, image_signs=image_signs)
     mu_ext = body.project(H_ext)
     if mu_r is not None:
         if not mu_r > 1.0:
@@ -344,6 +356,8 @@ def solve_planar_demag(mesh, mu_r=None, H_ext=None, bh_table=None, *, magnets=No
         "iters": iters,
         "residual": res,
         "ndof": body.ndof,
+        "order": body.order,
+        "geometry_order": body.geometry_order,
         "n_el": body.nel,
         "n_charge": body.n_charge,
         "nonlinear": nonlinear,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""The 7 Radia source policies as ONE reusable module.
+"""The 8 Radia source policies as ONE reusable module.
 
 Single source of truth for BOTH:
   - .github/workflows/policy-lint.yml   (the CI gate)
@@ -11,7 +11,7 @@ silently miss it).  Mirrors the historical inline bash greps; uses
 `git grep` / `git ls-files` so it sees TRACKED working-tree content (what
 CI checks out on a fresh runner).
 
-    python tools/policy_lint.py        # run all 7; exit 1 on any violation
+    python tools/policy_lint.py        # run all 8; exit 1 on any violation
     python tools/policy_lint.py --quiet
 
 Policies (see CLAUDE.md):
@@ -19,10 +19,12 @@ Policies (see CLAUDE.md):
   2 no tracked binaries                  6 no legacy src/python import path
   3 no Helmholtz WAVE kernel in core     7 README.md in every examples/ dir
   4 no CblasColMajor in core (allowlist)
+  8 HDiv geometry/field pairs use the central capability table
 """
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -56,7 +58,7 @@ def _git_grep(pattern, pathspecs, extra=()):
 
 
 def check_all():
-    """Return list of (policy_name, ok, detail) for all 7 policies."""
+    """Return list of (policy_name, ok, detail) for all 8 policies."""
     results = []
 
     # 1: no FldUnits() in examples/*.py
@@ -114,6 +116,52 @@ def check_all():
     results.append(("Policy 7: README.md in every example dir", not missing,
                     str(missing[:3]) if missing else "ok"))
 
+    # 8: Piola-mapped HDiv field and geometry orders are dimension-dependent.
+    # Keep one explicit table instead of reintroducing a tempting but incorrect
+    # global relation such as ``geometry_order <= hdiv_order + 1``.
+    cap = os.path.join(REPO, "src", "radia", "vim", "_capabilities.py")
+    required = {
+        "_vim.py": "validate_hdiv_configuration",
+        "_vim2d.py": "validate_hdiv_configuration",
+        "_solve.py": "validate_hdiv_configuration",
+    }
+    bad = []
+    try:
+        with open(cap, encoding="utf-8") as f:
+            cap_text = f.read()
+        for token in ('HDivCapability(2, "quad", 2, (1, 2, 3), 3)',
+                      'HDivCapability(3, "hex", 2, (1, 2), 2)',
+                      'HDivCapability(3, "wedge", 2, (1, 2), 2)'):
+            if token not in cap_text:
+                bad.append(f"_capabilities.py missing {token}")
+    except OSError as exc:
+        bad.append(f"cannot read _capabilities.py: {exc}")
+
+    vim_dir = os.path.join(REPO, "src", "radia", "vim")
+    relation = re.compile(
+        r"(?:geometry_order|curve_order)\s*(?:<=|>=|<|>)\s*"
+        r"(?:self\.)?(?:order|p)(?:\s*[+-]\s*\d+)?|"
+        r"(?:self\.)?(?:order|p)(?:\s*[+-]\s*\d+)?\s*"
+        r"(?:<=|>=|<|>)\s*(?:geometry_order|curve_order)")
+    for name in sorted(os.listdir(vim_dir)):
+        if not name.endswith(".py") or name == "_capabilities.py":
+            continue
+        path = os.path.join(vim_dir, name)
+        try:
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+        except OSError as exc:
+            bad.append(f"cannot read {name}: {exc}")
+            continue
+        if name in required and required[name] not in text:
+            bad.append(f"{name} does not use the central HDiv capability validator")
+        match = relation.search(text)
+        if match:
+            line = text.count("\n", 0, match.start()) + 1
+            bad.append(f"{name}:{line}: ad-hoc HDiv geometry/order relation")
+    results.append(("Policy 8: central HDiv geometry/order capabilities", not bad,
+                    bad[0] if bad else "ok"))
+
     return results
 
 
@@ -129,10 +177,10 @@ def main(argv=None):
             nfail += 1
             print(f"FAIL  {name}: {detail}")
     if nfail:
-        print(f"\n{nfail}/7 policies FAILED", file=sys.stderr)
+        print(f"\n{nfail}/8 policies FAILED", file=sys.stderr)
         return 1
     if not quiet:
-        print("\nall 7 policies pass")
+        print("\nall 8 policies pass")
     return 0
 
 

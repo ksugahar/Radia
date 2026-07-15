@@ -1807,7 +1807,7 @@ double RadHACApKChargeGram::QuadDotFarLow(int a, int b) const
     return s * RAD_INV_FOUR_PI;
 }
 
-// ===================================================================== HEX RT1 mode (2026-07-02)
+// ===================================================================== HEX RT1/RT2 mode
 // Direct Q2 isoparametric geometry + the numpy-validated eig(M^-1 N)<=1 quadrature scheme (see the header
 // ctor doc).  Reference tables: the unit hex [0,1]^3 with its Kuhn 6-sub-tet split (shared main diagonal
 // 0-6) and the unit quad [0,1]^2 with its 2-sub-tri split -- the SAME tables as the Python contract.
@@ -1993,15 +1993,17 @@ static inline double QuadSubTwoAref(int s)
 
 double RadHACApKChargeGram::HexMonoEval(int charge, const double xi[3]) const
 {
-    const int* e = &m_expo[(size_t)3*charge];       // Q1: e in {0,1} -> a plain conditional product
+    const int* e = &m_expo[(size_t)3*charge];
     double v = 1.0;
-    if (e[0]) v *= xi[0];
-    if (e[1]) v *= xi[1];
-    if (e[2]) v *= xi[2];                            // face charges carry e[2] = 0
+    for (int d = 0; d < 3; ++d)
+        for (int k = 0; k < e[d]; ++k) v *= xi[d];
     return v;
 }
 
-static inline int HexPolyIdxDeg3(int ax, int ay, int az)
+static constexpr int HEX_AFFINE_POLY_N = 84;
+static constexpr int QUAD_AFFINE_POLY_N = 35;
+
+static inline int HexPolyIdx(int ax, int ay, int az)
 {
     const int deg = ax + ay + az;
     int idx = 0;
@@ -2011,24 +2013,24 @@ static inline int HexPolyIdxDeg3(int ax, int ay, int az)
     return idx;
 }
 
-static void HexPolyMulLinearDeg3(double poly[20], int& deg, const double lin[4])
+static void HexPolyMulLinear(double* poly, int& deg, const double lin[4], int ncoeff)
 {
-    double tmp[20] = {};
+    double tmp[HEX_AFFINE_POLY_N] = {};
     for (int total = 0; total <= deg; ++total) {
         for (int ax = 0; ax <= total; ++ax) {
             for (int ay = 0; ay <= total - ax; ++ay) {
                 const int az = total - ax - ay;
-                const double c = poly[HexPolyIdxDeg3(ax, ay, az)];
+                const double c = poly[HexPolyIdx(ax, ay, az)];
                 if (c == 0.0) continue;
-                tmp[HexPolyIdxDeg3(ax,     ay,     az    )] += c * lin[0];
-                tmp[HexPolyIdxDeg3(ax + 1, ay,     az    )] += c * lin[1];
-                tmp[HexPolyIdxDeg3(ax,     ay + 1, az    )] += c * lin[2];
-                tmp[HexPolyIdxDeg3(ax,     ay,     az + 1)] += c * lin[3];
+                tmp[HexPolyIdx(ax,     ay,     az    )] += c * lin[0];
+                tmp[HexPolyIdx(ax + 1, ay,     az    )] += c * lin[1];
+                tmp[HexPolyIdx(ax,     ay + 1, az    )] += c * lin[2];
+                tmp[HexPolyIdx(ax,     ay,     az + 1)] += c * lin[3];
             }
         }
     }
     ++deg;
-    for (int i = 0; i < 20; ++i) poly[i] = tmp[i];
+    for (int i = 0; i < ncoeff; ++i) poly[i] = tmp[i];
 }
 
 static bool HexAffineInverseForms(const double* nd27, double lin[3][4], double& inv_abs_det)
@@ -2082,6 +2084,40 @@ static bool HexAffineInverseForms(const double* nd27, double lin[3][4], double& 
         lin[q][3] = B[q][2];
     }
     inv_abs_det = 1.0 / std::fabs(det);
+    return true;
+}
+
+static bool QuadAffineInverseForms(const double* nd9, double lin[2][4], double& inv_surface_jac)
+{
+    const double* o = &nd9[0];
+    const double* pu = &nd9[6];
+    const double* pv = &nd9[18];
+    double a[3], b[3];
+    for (int k = 0; k < 3; ++k) { a[k] = pu[k] - o[k]; b[k] = pv[k] - o[k]; }
+    const double aa = a[0]*a[0] + a[1]*a[1] + a[2]*a[2];
+    const double ab = a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+    const double bb = b[0]*b[0] + b[1]*b[1] + b[2]*b[2];
+    const double det = aa*bb - ab*ab;
+    if (det <= 1e-300) return false;
+    const double scale = std::max(std::sqrt(aa), std::sqrt(bb));
+    const double tol = 1e-10*scale + 1e-12;
+    for (int j = 0; j < 3; ++j)
+        for (int i = 0; i < 3; ++i) {
+            const double u = 0.5*i, v = 0.5*j;
+            const double* q = &nd9[3*(i + 3*j)];
+            const double dx = q[0] - (o[0] + u*a[0] + v*b[0]);
+            const double dy = q[1] - (o[1] + u*a[1] + v*b[1]);
+            const double dz = q[2] - (o[2] + u*a[2] + v*b[2]);
+            if (dx*dx + dy*dy + dz*dz > tol*tol) return false;
+        }
+    const double i00 = bb/det, i01 = -ab/det, i11 = aa/det;
+    for (int k = 0; k < 3; ++k) {
+        lin[0][k+1] = i00*a[k] + i01*b[k];
+        lin[1][k+1] = i01*a[k] + i11*b[k];
+    }
+    lin[0][0] = -(lin[0][1]*o[0] + lin[0][2]*o[1] + lin[0][3]*o[2]);
+    lin[1][0] = -(lin[1][1]*o[0] + lin[1][2]*o[1] + lin[1][3]*o[2]);
+    inv_surface_jac = 1.0/std::sqrt(det);
     return true;
 }
 
@@ -2213,6 +2249,11 @@ RadHACApKChargeGram::RadHACApKChargeGram(
 {
     ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
+    if (m_kind.size() != m_host.size() || m_expo.size() != 3*m_host.size())
+        throw std::invalid_argument("HEX ChargeGram charge metadata sizes are inconsistent");
+    for (int exponent : m_expo)
+        if (exponent < 0 || exponent > 2)
+            throw std::invalid_argument("HEX ChargeGram supports reference exponents in {0,1,2}");
     m_build_id = NextChargeGramBuildId();
     m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     // ---- per-host sub-simplex physical geometry (corners, centroid, size) via the Q2 maps ----
@@ -2308,23 +2349,62 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexLocalOf[a] = (int)grp.size();
         grp.push_back(a);
     }
-    // ---- affine hex source-cell exact path: Q1(ref) -> cubic physical polynomial / |det dX/dxi| ----
+    // ---- affine HEX source exact path, matching the flat-TET RT2 design: reference Q2 charges become
+    // physical-coordinate polynomials and the source inner is evaluated by analytic moments. ----
+    m_hexAffineOrder = 1;
+    for (int exponent : m_expo) m_hexAffineOrder = std::max(m_hexAffineOrder, exponent);
+    const int affineAxisCount = m_hexAffineOrder + 1;
+    m_hexAffineMonoCount = affineAxisCount*affineAxisCount*affineAxisCount;
+    m_hexAffinePolyCount = (3*m_hexAffineOrder + 1)*(3*m_hexAffineOrder + 2)
+                           *(3*m_hexAffineOrder + 3)/6;
+    m_quadAffineMonoCount = affineAxisCount*affineAxisCount;
+    m_quadAffinePolyCount = (2*m_hexAffineOrder + 1)*(2*m_hexAffineOrder + 2)
+                            *(2*m_hexAffineOrder + 3)/6;
     m_hexAffineCell.assign((size_t)n_el, 0);
-    m_hexAffineCoeff.assign((size_t)n_el * 8 * 20, 0.0);
+    m_hexAffineCoeff.assign((size_t)n_el * m_hexAffineMonoCount * m_hexAffinePolyCount, 0.0);
     if (HEX_USE_AFFINE_EXACT_CELL_INNER) {
         for (int c = 0; c < n_el; ++c) {
             double lin[3][4], inv_abs_det = 0.0;
             if (!HexAffineInverseForms(&m_hexNodes[(size_t)c*81], lin, inv_abs_det)) continue;
             m_hexAffineCell[c] = 1;
-            for (int mono = 0; mono < 8; ++mono) {
-                double poly[20] = {};
+            for (int ez = 0; ez <= m_hexAffineOrder; ++ez)
+              for (int ey = 0; ey <= m_hexAffineOrder; ++ey)
+               for (int ex = 0; ex <= m_hexAffineOrder; ++ex) {
+                const int mono = ex + affineAxisCount*ey + affineAxisCount*affineAxisCount*ez;
+                double poly[HEX_AFFINE_POLY_N] = {};
                 int deg = 0;
                 poly[0] = 1.0;
-                for (int d = 0; d < 3; ++d)
-                    if (mono & (1 << d)) HexPolyMulLinearDeg3(poly, deg, lin[d]);
-                double* dst = &m_hexAffineCoeff[((size_t)c*8 + mono)*20];
-                for (int i = 0; i < 20; ++i) dst[i] = inv_abs_det * poly[i];
+                for (int repeat = 0; repeat < ex; ++repeat)
+                    HexPolyMulLinear(poly, deg, lin[0], m_hexAffinePolyCount);
+                for (int repeat = 0; repeat < ey; ++repeat)
+                    HexPolyMulLinear(poly, deg, lin[1], m_hexAffinePolyCount);
+                for (int repeat = 0; repeat < ez; ++repeat)
+                    HexPolyMulLinear(poly, deg, lin[2], m_hexAffinePolyCount);
+                double* dst = &m_hexAffineCoeff[
+                    ((size_t)c*m_hexAffineMonoCount + mono)*m_hexAffinePolyCount];
+                for (int i = 0; i < m_hexAffinePolyCount; ++i) dst[i] = inv_abs_det * poly[i];
             }
+        }
+    }
+    m_quadAffineFace.assign((size_t)n_bf, 0);
+    m_quadAffineCoeff.assign((size_t)n_bf * m_quadAffineMonoCount * m_quadAffinePolyCount, 0.0);
+    for (int f = 0; f < n_bf; ++f) {
+        double lin[2][4], inv_surface_jac = 0.0;
+        if (!QuadAffineInverseForms(&m_quadNodes[(size_t)f*27], lin, inv_surface_jac)) continue;
+        m_quadAffineFace[f] = 1;
+        for (int ev = 0; ev <= m_hexAffineOrder; ++ev)
+          for (int eu = 0; eu <= m_hexAffineOrder; ++eu) {
+            const int mono = eu + affineAxisCount*ev;
+            double poly[HEX_AFFINE_POLY_N] = {};
+            int deg = 0;
+            poly[0] = 1.0;
+            for (int repeat = 0; repeat < eu; ++repeat)
+                HexPolyMulLinear(poly, deg, lin[0], m_quadAffinePolyCount);
+            for (int repeat = 0; repeat < ev; ++repeat)
+                HexPolyMulLinear(poly, deg, lin[1], m_quadAffinePolyCount);
+            double* dst = &m_quadAffineCoeff[
+                ((size_t)f*m_quadAffineMonoCount + mono)*m_quadAffinePolyCount];
+            for (int i = 0; i < m_quadAffinePolyCount; ++i) dst[i] = inv_surface_jac * poly[i];
         }
     }
     // Structured affine meshes (e.g. the cube scaling benchmark) repeat the same cell-cell block for
@@ -2464,6 +2544,11 @@ RadHACApKChargeGram::RadHACApKChargeGram(
 {
     ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
+    if (m_kind.size() != m_host.size() || m_expo.size() != 3*m_host.size())
+        throw std::invalid_argument("WEDGE ChargeGram charge metadata sizes are inconsistent");
+    for (int exponent : m_expo)
+        if (exponent < 0 || exponent > 2)
+            throw std::invalid_argument("WEDGE ChargeGram supports reference exponents in {0,1,2}");
     m_build_id = NextChargeGramBuildId();
     m_hexCacheStatsEnabled = HexCacheStatsEnabledByEnv();
     // ---- cell sub-tet physical geometry (3 sub-tets per prism) ----
@@ -2738,9 +2823,13 @@ void RadHACApKChargeGram::BuildHexSiteTables()
                             for (int iz = 0; iz < 3; ++iz)
                                 for (int iy = 0; iy < 3; ++iy)
                                     for (int ix = 0; ix < 3; ++ix) R.S.push_back(vx[ix]*vy[iy]*vz[iz]);
-                            const double m1 = y[0], m2 = y[1], m4 = y[2];   // Q1 monomials, idx = e0+2e1+4e2
-                            R.M.push_back(1.0);   R.M.push_back(m1);    R.M.push_back(m2);    R.M.push_back(m1*m2);
-                            R.M.push_back(m4);    R.M.push_back(m1*m4); R.M.push_back(m2*m4); R.M.push_back(m1*m2*m4);
+                            const double px[3] = {1.0, y[0], y[0]*y[0]};
+                            const double py[3] = {1.0, y[1], y[1]*y[1]};
+                            const double pz[3] = {1.0, y[2], y[2]*y[2]};
+                            for (int ez = 0; ez < 3; ++ez)
+                                for (int ey = 0; ey < 3; ++ey)
+                                    for (int ex = 0; ex < 3; ++ex)
+                                        R.M.push_back(px[ex]*py[ey]*pz[ez]);
                         }
                     }
                 }
@@ -2772,7 +2861,10 @@ void RadHACApKChargeGram::BuildHexSiteTables()
                         HexLag3(yu, vu, duu); HexLag3(yv, vv, dvu);
                         for (int iv = 0; iv < 3; ++iv)
                             for (int iu = 0; iu < 3; ++iu) R.S.push_back(vu[iu]*vv[iv]);
-                        R.M.push_back(1.0); R.M.push_back(yu); R.M.push_back(yv); R.M.push_back(yu*yv);
+                        const double pu[3] = {1.0, yu, yu*yu};
+                        const double pv[3] = {1.0, yv, yv*yv};
+                        for (int ev = 0; ev < 3; ++ev)
+                            for (int eu = 0; eu < 3; ++eu) R.M.push_back(pu[eu]*pv[ev]);
                     }
                 }
             }
@@ -2842,7 +2934,18 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
         for (unsigned char x : m_hexAffineCell) s += (double)x;
         out.emplace_back("hexAffineCell", s);
     }
+    out.emplace_back("hexAffineOrder", (double)m_hexAffineOrder);
+    out.emplace_back("hexAffineMonoCount", (double)m_hexAffineMonoCount);
+    out.emplace_back("hexAffinePolyCount", (double)m_hexAffinePolyCount);
     add("hexAffineCoeff", m_hexAffineCoeff);
+    {
+        double s = 0.0;
+        for (unsigned char x : m_quadAffineFace) s += (double)x;
+        out.emplace_back("quadAffineFace", s);
+    }
+    out.emplace_back("quadAffineMonoCount", (double)m_quadAffineMonoCount);
+    out.emplace_back("quadAffinePolyCount", (double)m_quadAffinePolyCount);
+    add("quadAffineCoeff", m_quadAffineCoeff);
     out.emplace_back("hexUniformAffineCells", m_hexUniformAffineCells ? 1.0 : 0.0);
     addi("hexCellLattice", m_hexCellLattice);
     out.emplace_back("hexUniformTransHosts", m_hexUniformTransHosts ? 1.0 : 0.0);
@@ -2862,7 +2965,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::HexStateBreakdo
     }
     add("cellSiteX", m_cellSiteX); add("faceSiteX", m_faceSiteX);
     // 2D planar mode arrays (empty in the hex mode and vice versa)
-    add("d2CellNodes", m_d2CellNodes); add("d2EdgeNodes", m_d2EdgeNodes);
+    add("d2CellMap", m_d2CellMap); add("d2EdgeMap", m_d2EdgeMap);
+    out.emplace_back("d2GeometryOrder", static_cast<double>(m_d2GeometryOrder));
     addi("d2CellType", m_d2CellType);
     add("d2SymTriP", m_d2SymTriP); add("d2SymTriW", m_d2SymTriW);
     add("d2GlE", m_d2GlE); add("d2GwE", m_d2GwE);
@@ -3057,12 +3161,12 @@ void RadHACApKChargeGram::PhiInnerHexSiteVec(int kindS, int hS, int subB, const 
     const HexSiteRad& R = cell ? m_cellSiteRad[(size_t)subB*15 + best] : m_faceSiteRad[(size_t)subB*7 + best];
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
     const int nn = cell ? 27 : 9;
-    const int nm = cell ? 8 : 4;
+    const int nm = cell ? 27 : 9;
     const int nS = (int)srcG.size();
-    int col[8];
+    std::vector<int> col((size_t)nS);
     for (int ls = 0; ls < nS; ++ls) {
         const int* e = &m_expo[(size_t)3*srcG[ls]];
-        col[ls] = e[0] + 2*e[1] + (cell ? 4*e[2] : 0);
+        col[ls] = e[0] + 3*e[1] + (cell ? 9*e[2] : 0);
     }
     for (int q = 0; q < R.nq; ++q) {
         const double* Sq = &R.S[(size_t)q*nn];
@@ -3088,98 +3192,44 @@ void RadHACApKChargeGram::PhiInnerHexAffineCellSubVec(int hS, int subB, const do
     double V[4][3];
     for (int i = 0; i < 4; ++i)
         for (int k = 0; k < 3; ++k) V[i][k] = sv[3*i + k];
-    double moments[20];
-    rad_hdiv::TetPotentialMomentsUpTo3(V, p, moments);
+    double moments[HEX_AFFINE_POLY_N];
+    if (m_hexAffineOrder == 1) rad_hdiv::TetPotentialMomentsUpTo3(V, p, moments);
+    else                       rad_hdiv::TetPotentialMomentsUpTo6(V, p, moments);
     for (int ls = 0; ls < (int)srcG.size(); ++ls) {
         const int* e = &m_expo[(size_t)3*srcG[ls]];
-        const int mono = e[0] + 2*e[1] + 4*e[2];
-        const double* coeff = &m_hexAffineCoeff[((size_t)hS*8 + mono)*20];
+        const int axisCount = m_hexAffineOrder + 1;
+        const int mono = e[0] + axisCount*e[1] + axisCount*axisCount*e[2];
+        const double* coeff = &m_hexAffineCoeff[
+            ((size_t)hS*m_hexAffineMonoCount + mono)*m_hexAffinePolyCount];
         double s = 0.0;
-        for (int i = 0; i < 20; ++i) s += coeff[i] * moments[i];
+        for (int i = 0; i < m_hexAffinePolyCount; ++i) s += coeff[i] * moments[i];
         inn[ls] += s;
     }
 }
 void RadHACApKChargeGram::PhiInnerHexAffineFaceSubVec(int hS, int subB, const double p[3],
                                                       const std::vector<int>& srcG, double* inn) const
 {
-    // A flat Q2 face is affine on the whole quad.  On either reference sub-triangle, every Q1 face
-    // monomial is therefore an affine physical-coordinate polynomial of degree at most two.  Evaluate its
-    // potential from the exact triangle moments instead of the static-site near rule.  Besides removing the
-    // near quadrature bias, this makes a reflection of an affine face commute with the Gram entry to
-    // roundoff, which is required by the full-vs-IMA rad.Fld contract.
+    // A flat Q2 face is affine on the whole quad.  Convert all Q2 reference monomials to physical
+    // polynomials (degree <= 4) once in the constructor and apply the same analytic surface-moment
+    // strategy used by the flat-TET RT2 path.
     const int* tv = QUADREF_TRIS[subB];
-    double U[3][2], V[3][3];
+    double V[3][3];
     for (int i = 0; i < 3; ++i) {
-        U[i][0] = QUADREF_V[tv[i]][0];
-        U[i][1] = QUADREF_V[tv[i]][1];
         const double* v = &m_faceSubV[(((size_t)hS * 2 + subB) * 3 + i) * 3];
         for (int k = 0; k < 3; ++k) V[i][k] = v[k];
     }
-
-    double e1[3], e2[3];
-    for (int k = 0; k < 3; ++k) { e1[k] = V[1][k] - V[0][k]; e2[k] = V[2][k] - V[0][k]; }
-    const double g00 = e1[0]*e1[0] + e1[1]*e1[1] + e1[2]*e1[2];
-    const double g01 = e1[0]*e2[0] + e1[1]*e2[1] + e1[2]*e2[2];
-    const double g11 = e2[0]*e2[0] + e2[1]*e2[1] + e2[2]*e2[2];
-    const double det = g00*g11 - g01*g01;
-    if (det <= 1e-300) return;
-    const double ref_e1[2] = {U[1][0] - U[0][0], U[1][1] - U[0][1]};
-    const double ref_e2[2] = {U[2][0] - U[0][0], U[2][1] - U[0][1]};
-    const double ref_jac = std::fabs(ref_e1[0]*ref_e2[1] - ref_e1[1]*ref_e2[0]);
-    const double phys_jac = std::sqrt(det);
-    const double ref_over_phys = ref_jac / phys_jac;
-    const double i00 = g11 / det, i01 = -g01 / det, i11 = g00 / det;
-    double qa[3], qb[3];
-    for (int k = 0; k < 3; ++k) {
-        qa[k] = i00*e1[k] + i01*e2[k];
-        qb[k] = i01*e1[k] + i11*e2[k];
-    }
-
-    // u(y) and v(y) on the source sub-triangle, in the form alpha + beta.y.
-    double beta[2][3] = {{0,0,0},{0,0,0}}, alpha[2] = {U[0][0], U[0][1]};
-    const double du1 = U[1][0] - U[0][0], du2 = U[2][0] - U[0][0];
-    const double dv1 = U[1][1] - U[0][1], dv2 = U[2][1] - U[0][1];
-    for (int k = 0; k < 3; ++k) {
-        beta[0][k] = du1*qa[k] + du2*qb[k];
-        beta[1][k] = dv1*qa[k] + dv2*qb[k];
-        alpha[0] -= beta[0][k] * V[0][k];
-        alpha[1] -= beta[1][k] * V[0][k];
-    }
-
-    const double I0 = rad_hdiv::TriPotential(V, p);
-    double M1[3]; rad_hdiv::TriMoment1(V, p, M1);
-    double M2[3][3]; rad_hdiv::TriMoment2(V, p, M2);
-    for (size_t idx = 0; idx < srcG.size(); ++idx) {
-        const int ls = srcG[idx];
-        const int* ex = &m_expo[(size_t)3*ls];
-        double polyA = 1.0, polyB[3] = {0,0,0}, polyC[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-        for (int factor = 0; factor < 2; ++factor) {
-            const int power = ex[factor];
-            for (int repeat = 0; repeat < power; ++repeat) {
-                const double* be = beta[factor];
-                const double al = alpha[factor];
-                const double nextA = polyA * al;
-                double nextB[3], nextC[3][3];
-                for (int k = 0; k < 3; ++k) nextB[k] = polyA*be[k] + al*polyB[k];
-                for (int k = 0; k < 3; ++k)
-                    for (int j = 0; j < 3; ++j)
-                        nextC[k][j] = al*polyC[k][j]
-                                    + 0.5*(polyB[k]*be[j] + be[k]*polyB[j]);
-                polyA = nextA;
-                for (int k = 0; k < 3; ++k) {
-                    polyB[k] = nextB[k];
-                    for (int j = 0; j < 3; ++j) polyC[k][j] = nextC[k][j];
-                }
-            }
-        }
-        double value = polyA*I0;
-        for (int k = 0; k < 3; ++k) value += polyB[k]*M1[k];
-        if (ex[0] + ex[1] >= 2)
-            for (int k = 0; k < 3; ++k)
-                for (int j = 0; j < 3; ++j) value += polyC[k][j]*M2[k][j];
-        // TriMoment* integrates physical surface measure.  The Piola charge basis uses reference face
-        // measure (surface Jacobian cancels in sigma = (u.n)_ref / J_s), so restore the reference scaling.
-        inn[idx] += ref_over_phys * value;
+    double moments[QUAD_AFFINE_POLY_N];
+    if (m_hexAffineOrder == 1) rad_hdiv::TriPotentialMomentsUpTo2(V, p, moments);
+    else                       rad_hdiv::TriPotentialMomentsUpTo4(V, p, moments);
+    for (int ls = 0; ls < (int)srcG.size(); ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        const int axisCount = m_hexAffineOrder + 1;
+        const int mono = e[0] + axisCount*e[1];
+        const double* coeff = &m_quadAffineCoeff[
+            ((size_t)hS*m_quadAffineMonoCount + mono)*m_quadAffinePolyCount];
+        double value = 0.0;
+        for (int i = 0; i < m_quadAffinePolyCount; ++i) value += coeff[i]*moments[i];
+        inn[ls] += value;
     }
 }
 
@@ -3202,7 +3252,8 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
 {
     const bool cell = (kindS == 0);
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
-    if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
+    if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell
+            && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
         PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
         return;
     }
@@ -3226,7 +3277,8 @@ void RadHACApKChargeGram::PhiInnerHexSubVec(int kindS, int hS, int subB, const d
                 const double dz = q[2] - (p0[2] + xi*(px[2]-p0[2]) + eta*(py[2]-p0[2]));
                 affine = dx*dx + dy*dy + dz*dz <= tol*tol;
             }
-        if (affine) {
+        if (affine
+                && hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]) {
             PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
             return;
         }
@@ -3353,8 +3405,14 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
     if (!xiT)
         throw std::logic_error("PhiInnerHexRadialVec: xiT required (SELF-only; non-self near uses the site radial)");
     const bool cell = (kindS == 0);
-    if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
+    if (HEX_USE_AFFINE_EXACT_CELL_INNER && cell
+            && hS >= 0 && hS < (int)m_hexAffineCell.size() && m_hexAffineCell[hS]) {
         PhiInnerHexAffineCellSubVec(hS, subB, p, srcG, inn);
+        return;
+    }
+    if (!cell
+            && hS >= 0 && hS < (int)m_quadAffineFace.size() && m_quadAffineFace[hS]) {
+        PhiInnerHexAffineFaceSubVec(hS, subB, p, srcG, inn);
         return;
     }
     const double* nd = cell ? &m_hexNodes[(size_t)hS*81] : &m_quadNodes[(size_t)hS*27];
@@ -3362,8 +3420,7 @@ void RadHACApKChargeGram::PhiInnerHexRadialVec(int kindS, int hS, int subB, cons
     const double* GL = m_glIn.data();
     const double* GW = m_gwIn.data();
     const int nS = (int)srcG.size();
-    double acc[8];
-    for (int ls = 0; ls < nS; ++ls) acc[ls] = 0.0;
+    std::vector<double> acc((size_t)nS, 0.0);
 
     if (cell) {
         const int* tv = HEXREF_TETS[subB];
@@ -3833,41 +3890,67 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
 // radial-cone inner for near/self, cheap far cloud otherwise.  See the header ctor doc.
 static const double D2_TRIREF_V[3][2] = {{1, 0}, {0, 1}, {0, 0}};   // NGSolve trig reference
 
+static inline double D2Pow(double x, int exponent)
+{
+    if (exponent == 0) return 1.0;
+    if (exponent == 1) return x;
+    if (exponent == 2) return x*x;
+    return x*x*x;
+}
+
 static inline double D2MonoCell(const int* e, const double xi[2])
 {
-    double v = 1.0;
-    if (e[0]) v *= xi[0];
-    if (e[1]) v *= xi[1];
-    return v;
+    return D2Pow(xi[0], e[0]) * D2Pow(xi[1], e[1]);
 }
 
-void RadHACApKChargeGram::Tri6Map(const double* nd12, const double xi[2], double X[2])
+static inline double D2MonoEdge(const int* e, double t)
 {
-    const double l0 = xi[0], l1 = xi[1], l2 = 1.0 - xi[0] - xi[1];
-    const double s[6] = {l0*(2*l0 - 1), l1*(2*l1 - 1), l2*(2*l2 - 1), 4*l0*l1, 4*l1*l2, 4*l2*l0};
+    return D2Pow(t, e[0]);
+}
+
+void RadHACApKChargeGram::D2CellMap(
+    int cell_type, const double* coeff, const double xi[2], double X[2]) const
+{
     X[0] = X[1] = 0.0;
-    for (int k = 0; k < 6; ++k) { X[0] += s[k]*nd12[2*k]; X[1] += s[k]*nd12[2*k + 1]; }
+    int k = 0;
+    if (cell_type == 0) {
+        for (int total = 0; total <= m_d2GeometryOrder; ++total)
+            for (int j = 0; j <= total; ++j, ++k) {
+                const int i = total - j;
+                const double s = D2Pow(xi[0], i)*D2Pow(xi[1], j);
+                X[0] += s*coeff[2*k]; X[1] += s*coeff[2*k + 1];
+            }
+    } else {
+        for (int j = 0; j <= m_d2GeometryOrder; ++j)
+            for (int i = 0; i <= m_d2GeometryOrder; ++i, ++k) {
+                const double s = D2Pow(xi[0], i)*D2Pow(xi[1], j);
+                X[0] += s*coeff[2*k]; X[1] += s*coeff[2*k + 1];
+            }
+    }
 }
 
-void RadHACApKChargeGram::Quad9Map(const double* nd18, const double xi[2], double X[2])
+void RadHACApKChargeGram::D2EdgeMap(const double* coeff, double t, double X[2]) const
 {
-    double vx[3], dx[3], vy[3], dy[3];
-    HexLag3(xi[0], vx, dx); HexLag3(xi[1], vy, dy);
     X[0] = X[1] = 0.0;
-    for (int j = 0; j < 3; ++j)
-        for (int i = 0; i < 3; ++i) {
-            const double s = vx[i]*vy[j];
-            const double* nd = &nd18[2*(i + 3*j)];
-            X[0] += s*nd[0]; X[1] += s*nd[1];
-        }
+    double p = 1.0;
+    for (int k = 0; k <= m_d2GeometryOrder; ++k, p *= t) {
+        X[0] += p*coeff[2*k]; X[1] += p*coeff[2*k + 1];
+    }
 }
 
-void RadHACApKChargeGram::Edge3Map(const double* nd6, double t, double X[2])
+void RadHACApKChargeGram::D2EdgeTangent(const double* coeff, double t, double T[2]) const
 {
-    double v[3], d[3];
-    HexLag3(t, v, d);
-    X[0] = v[0]*nd6[0] + v[1]*nd6[2] + v[2]*nd6[4];
-    X[1] = v[0]*nd6[1] + v[1]*nd6[3] + v[2]*nd6[5];
+    T[0] = T[1] = 0.0;
+    double p = 1.0;
+    for (int k = 1; k <= m_d2GeometryOrder; ++k, p *= t) {
+        T[0] += k*p*coeff[2*k]; T[1] += k*p*coeff[2*k + 1];
+    }
+}
+
+static void ValidateD2GeometryOrder(int geometry_order)
+{
+    if (geometry_order < 1 || geometry_order > 3)
+        throw std::invalid_argument("2D ChargeGram: geometry_order must be in {1,2,3}");
 }
 
 static int D2CellNSub(int cell_type)
@@ -3900,8 +3983,8 @@ static void D2SiteRef(const double V[3][2], int k, double x0[2])
     } else          { x0[0] = (V[0][0]+V[1][0]+V[2][0])/3.0; x0[1] = (V[0][1]+V[1][1]+V[2][1])/3.0; }
 }
 
-RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
-    std::vector<double> cell_nodes9, std::vector<int> cell_type, std::vector<double> edge_nodes3,
+RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/, int geometry_order,
+    std::vector<double> cell_map, std::vector<int> cell_type, std::vector<double> edge_map,
     int n_el, int n_be,
     std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
     std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
@@ -3918,11 +4001,22 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
     ValidateImageVectors(m_image_masks, m_image_signs);
+    ValidateD2GeometryOrder(geometry_order);
     m_d2 = true;
     m_d2_n_be = n_be;
-    m_d2CellNodes = std::move(cell_nodes9);
+    m_d2GeometryOrder = geometry_order;
+    m_d2CellMapStride = 2*(geometry_order + 1)*(geometry_order + 1);
+    m_d2EdgeMapStride = 2*(geometry_order + 1);
+    m_d2CellMap = std::move(cell_map);
     m_d2CellType  = std::move(cell_type);
-    m_d2EdgeNodes = std::move(edge_nodes3);
+    m_d2EdgeMap = std::move(edge_map);
+    if (m_d2CellType.size() != static_cast<size_t>(n_el)
+            || m_d2CellMap.size() != static_cast<size_t>(n_el*m_d2CellMapStride)
+            || m_d2EdgeMap.size() != static_cast<size_t>(n_be*m_d2EdgeMapStride))
+        throw std::invalid_argument("2D ChargeGram: geometry map array size mismatch");
+    for (int ct : m_d2CellType)
+        if (ct < 0 || ct > 1)
+            throw std::invalid_argument("2D ChargeGram: cell_type must be 0 (tri) or 1 (quad)");
     m_d2SymTriP = std::move(sym_tri_pts); m_d2SymTriW = std::move(sym_tri_w);
     m_d2GlQ = std::move(gl_quad); m_d2GwQ = std::move(gw_quad);
     m_d2GlE = std::move(gl_edge); m_d2GwE = std::move(gw_edge);
@@ -3936,7 +4030,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
     m_d2CellSubC.assign((size_t)n_el*4*2, 0.0); m_d2CellSubS.assign((size_t)n_el*4, 0.0);
     m_d2CellSiteX.assign((size_t)n_el*4*7*2, 0.0);
     for (int c = 0; c < n_el; ++c) {
-        const double* nd = &m_d2CellNodes[(size_t)c*18];
+        const double* map = &m_d2CellMap[(size_t)c*m_d2CellMapStride];
         const int ct = m_d2CellType[c];
         const int nsub = D2CellNSub(ct);
         for (int s = 0; s < nsub; ++s) {
@@ -3944,7 +4038,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
             D2SubTri(ct, s, V);
             double cen[2] = {0, 0}, P[3][2];
             for (int i = 0; i < 3; ++i) {
-                if (ct == 0) Tri6Map(nd, V[i], P[i]); else Quad9Map(nd, V[i], P[i]);
+                D2CellMap(ct, map, V[i], P[i]);
                 cen[0] += P[i][0]/3.0; cen[1] += P[i][1]/3.0;
             }
             double* pc = &m_d2CellSubC[((size_t)c*4 + s)*2];
@@ -3958,7 +4052,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
             for (int k = 0; k < 7; ++k) {
                 double x0[2], X[2];
                 D2SiteRef(V, k, x0);
-                if (ct == 0) Tri6Map(nd, x0, X); else Quad9Map(nd, x0, X);
+                D2CellMap(ct, map, x0, X);
                 double* out = &m_d2CellSiteX[(((size_t)c*4 + s)*7 + k)*2];
                 out[0] = X[0]; out[1] = X[1];
             }
@@ -3967,9 +4061,9 @@ RadHACApKChargeGram::RadHACApKChargeGram(int /*dim2_tag*/,
     m_d2EdgeC.assign((size_t)n_be*2, 0.0); m_d2EdgeS.assign((size_t)n_be, 0.0);
     m_d2EdgeSiteX.assign((size_t)n_be*3*2, 0.0);
     for (int f = 0; f < n_be; ++f) {
-        const double* nd = &m_d2EdgeNodes[(size_t)f*6];
+        const double* map = &m_d2EdgeMap[(size_t)f*m_d2EdgeMapStride];
         double P0[2], P1[2], Pm[2];
-        Edge3Map(nd, 0.0, P0); Edge3Map(nd, 1.0, P1); Edge3Map(nd, 0.5, Pm);
+        D2EdgeMap(map, 0.0, P0); D2EdgeMap(map, 1.0, P1); D2EdgeMap(map, 0.5, Pm);
         m_d2EdgeC[(size_t)f*2] = Pm[0]; m_d2EdgeC[(size_t)f*2 + 1] = Pm[1];
         const double dx = P1[0]-P0[0], dy = P1[1]-P0[1];
         m_d2EdgeS[f] = 0.5*std::sqrt(dx*dx + dy*dy);
@@ -4020,7 +4114,7 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
     const double* GW = m_gwIn.data();
     if (kindS == 0) {
         const int ct = m_d2CellType[hS];
-        const double* nd = &m_d2CellNodes[(size_t)hS*18];
+        const double* map = &m_d2CellMap[(size_t)hS*m_d2CellMapStride];
         double V[3][2];
         D2SubTri(ct, subB, V);
         const double* cs = &m_d2CellSubC[((size_t)hS*4 + subB)*2];
@@ -4034,7 +4128,7 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
                 const double xi[2] = {V[0][0] + l1*(V[1][0]-V[0][0]) + l2*(V[2][0]-V[0][0]),
                                       V[0][1] + l1*(V[1][1]-V[0][1]) + l2*(V[2][1]-V[0][1])};
                 double X[2];
-                if (ct == 0) Tri6Map(nd, xi, X); else Quad9Map(nd, xi, X);
+                D2CellMap(ct, map, xi, X);
                 const double dx = p[0]-X[0], dy = p[1]-X[1];
                 const double r = std::sqrt(dx*dx + dy*dy);
                 if (r < 1e-300) continue;
@@ -4075,7 +4169,7 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
                     const double xi[2] = {x0[0] + u*(ea[0] + v*(eb[0]-ea[0])),
                                           x0[1] + u*(ea[1] + v*(eb[1]-ea[1]))};
                     double X[2];
-                    if (ct == 0) Tri6Map(nd, xi, X); else Quad9Map(nd, xi, X);
+                    D2CellMap(ct, map, xi, X);
                     const double dx = p[0]-X[0], dy = p[1]-X[1];
                     const double r = std::sqrt(dx*dx + dy*dy);
                     if (r < 1e-300) continue;
@@ -4093,7 +4187,7 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
     // OUTER point's own parameter t* -- split [0,t*] + [t*,1] and grade each piece INTO t* (s = t* -/+
     // len*g^2 turns the integrand into the smooth u*ln(u) class).  Near non-self: grade toward the
     // nearest endpoint (the projection of p); far: plain Gauss.
-    const double* nd = &m_d2EdgeNodes[(size_t)hS*6];
+    const double* map = &m_d2EdgeMap[(size_t)hS*m_d2EdgeMapStride];
     const double* ec = &m_d2EdgeC[(size_t)hS*2];
     const double es = m_d2EdgeS[hS];
     const double dxc = p[0]-ec[0], dyc = p[1]-ec[1];
@@ -4101,14 +4195,14 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
     const int nq = (int)m_d2GwE.size();
     auto accum = [&](double t, double w) {
         double X[2];
-        Edge3Map(nd, t, X);
+        D2EdgeMap(map, t, X);
         const double dx = p[0]-X[0], dy = p[1]-X[1];
         const double r = std::sqrt(dx*dx + dy*dy);
         if (r < 1e-300) return;
         const double g2 = w*(-std::log(r));
         for (int ls = 0; ls < nS; ++ls) {
             const int* e = &m_expo[(size_t)3*srcG[ls]];
-            inn[ls] += g2*(e[0] ? t : 1.0);
+            inn[ls] += g2*D2MonoEdge(e, t);
         }
     };
     if (far_pt) {
@@ -4125,18 +4219,15 @@ void RadHACApKChargeGram::PhiInner2DVec(int kindS, int hS, int subB, const doubl
         ts = std::min(1.0, std::max(0.0, xiT[0]));
     } else {
         double P0[2], P1[2];
-        Edge3Map(nd, 0.0, P0); Edge3Map(nd, 1.0, P1);
+        D2EdgeMap(map, 0.0, P0); D2EdgeMap(map, 1.0, P1);
         const double du = P1[0]-P0[0], dv = P1[1]-P0[1];
         const double L2 = du*du + dv*dv;
         ts = (L2 > 1e-300) ? ((p[0]-P0[0])*du + (p[1]-P0[1])*dv)/L2 : 0.5;
         ts = std::min(1.0, std::max(0.0, ts));
-        for (int it = 0; it < 3; ++it) {                   // Newton polish on the quadratic map
-            double v[3], d[3];
-            HexLag3(ts, v, d);
-            const double X0 = v[0]*nd[0] + v[1]*nd[2] + v[2]*nd[4];
-            const double X1 = v[0]*nd[1] + v[1]*nd[3] + v[2]*nd[5];
-            const double T0 = d[0]*nd[0] + d[1]*nd[2] + d[2]*nd[4];
-            const double T1 = d[0]*nd[1] + d[1]*nd[3] + d[2]*nd[5];
+        for (int it = 0; it < 4; ++it) {
+            double X[2], T[2];
+            D2EdgeMap(map, ts, X); D2EdgeTangent(map, ts, T);
+            const double X0 = X[0], X1 = X[1], T0 = T[0], T1 = T[1];
             const double g1 = (X0-p[0])*T0 + (X1-p[1])*T1;  // d/dt |X-p|^2 / 2
             const double h2 = T0*T0 + T1*T1;                // + curvature term dropped (small, quadratic map)
             if (h2 < 1e-300) break;
@@ -4178,7 +4269,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlock2D(
             PhiInner2DVec(kindS, hS, sB, Peval, self_pair ? xiA : nullptr, srcG, inn.data());
             for (int lt = 0; lt < nT; ++lt) {
                 const int* e = &m_expo[(size_t)3*tgtG[lt]];
-                const double ma = (kindT == 0) ? D2MonoCell(e, xiA) : (e[0] ? xiA[0] : 1.0);
+                const double ma = (kindT == 0) ? D2MonoCell(e, xiA) : D2MonoEdge(e, xiA[0]);
                 double* row = &blk[(size_t)lt*nS];
                 for (int ls = 0; ls < nS; ++ls) row[ls] += wg*ma*inn[ls];
             }
@@ -4186,7 +4277,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlock2D(
     };
     if (kindT == 0) {
         const int ct = m_d2CellType[hT];
-        const double* nd = &m_d2CellNodes[(size_t)hT*18];
+        const double* map = &m_d2CellMap[(size_t)hT*m_d2CellMapStride];
         if (ct == 1) {
             // Tensor Gauss is invariant under xi -> 1-xi / eta -> 1-eta and avoids both the
             // fixed-diagonal defect and the vertex-order dependence of a Duffy triangle rule.
@@ -4194,7 +4285,7 @@ std::vector<double> RadHACApKChargeGram::QuadBlock2D(
             for (int j = 0; j < nq; ++j) for (int i = 0; i < nq; ++i) {
                 const double xiA[2] = {m_d2GlQ[i], m_d2GlQ[j]};
                 double Xp[2];
-                Quad9Map(nd, xiA, Xp);
+                D2CellMap(ct, map, xiA, Xp);
                 accumulate(xiA, m_d2GwQ[i]*m_d2GwQ[j], Xp);
             }
         } else {
@@ -4208,18 +4299,18 @@ std::vector<double> RadHACApKChargeGram::QuadBlock2D(
                 const double l1 = m_d2SymTriP[2*q], l2 = m_d2SymTriP[2*q + 1];
                 const double xiA[2] = {V[0][0] + l1*e1u + l2*e2u, V[0][1] + l1*e1v + l2*e2v};
                 double Xp[2];
-                Tri6Map(nd, xiA, Xp);
+                D2CellMap(ct, map, xiA, Xp);
                 accumulate(xiA, m_d2SymTriW[q]*sc, Xp);
             }
         }
     } else {
-        const double* nd = &m_d2EdgeNodes[(size_t)hT*6];
+        const double* map = &m_d2EdgeMap[(size_t)hT*m_d2EdgeMapStride];
         const int nq = (int)m_d2GwE.size();
         for (int q = 0; q < nq; ++q) {
             const double t = m_d2GlE[q];
             const double xiA[2] = {t, 0.0};
             double Xp[2];
-            Edge3Map(nd, t, Xp);
+            D2EdgeMap(map, t, Xp);
             accumulate(xiA, m_d2GwE[q], Xp);
         }
     }
@@ -4374,9 +4465,13 @@ void RadHACApKChargeGram::BuildWedgeSiteTables()
                             R.w.push_back(sgnT*GW[a]*GW[b]*GW[c]*(u*u*v*D));
                             double st[6], vz[3], dz[3]; TriP2Shape(y[0], y[1], st); HexLag3(y[2], vz, dz);
                             for (int iz = 0; iz < 3; ++iz) for (int t = 0; t < 6; ++t) R.S.push_back(st[t]*vz[iz]);
-                            const double m1 = y[0], m2 = y[1], m4 = y[2];   // Q1 monomials, idx = e0+2e1+4e2
-                            R.M.push_back(1.0);   R.M.push_back(m1);    R.M.push_back(m2);    R.M.push_back(m1*m2);
-                            R.M.push_back(m4);    R.M.push_back(m1*m4); R.M.push_back(m2*m4); R.M.push_back(m1*m2*m4);
+                            const double px[3] = {1.0, y[0], y[0]*y[0]};
+                            const double py[3] = {1.0, y[1], y[1]*y[1]};
+                            const double pz[3] = {1.0, y[2], y[2]*y[2]};
+                            for (int ez = 0; ez < 3; ++ez)
+                                for (int ey = 0; ey < 3; ++ey)
+                                    for (int ex = 0; ex < 3; ++ex)
+                                        R.M.push_back(px[ex]*py[ey]*pz[ez]);
                         }
                     }
                 }
@@ -4406,7 +4501,10 @@ void RadHACApKChargeGram::BuildWedgeSiteTables()
                             if (face_type == 0) { double st[6]; TriP2Shape(yu, yv, st); for (int t = 0; t < 6; ++t) R.S.push_back(st[t]); }
                             else { double vu[3], duu[3], vv[3], dvu[3]; HexLag3(yu, vu, duu); HexLag3(yv, vv, dvu);
                                    for (int iv = 0; iv < 3; ++iv) for (int iu = 0; iu < 3; ++iu) R.S.push_back(vu[iu]*vv[iv]); }
-                            R.M.push_back(1.0); R.M.push_back(yu); R.M.push_back(yv); R.M.push_back(yu*yv);
+                            const double pu[3] = {1.0, yu, yu*yu};
+                            const double pv[3] = {1.0, yv, yv*yv};
+                            for (int ev = 0; ev < 3; ++ev)
+                                for (int eu = 0; eu < 3; ++eu) R.M.push_back(pu[eu]*pv[ev]);
                         }
                     }
                 }
@@ -4467,10 +4565,13 @@ void RadHACApKChargeGram::PhiInnerWedgeSiteVec(int kindS, int hS, int subB, cons
                                           : m_wFaceSiteRadQuad[(size_t)subB*7 + best]);
     const double* nd = cell ? &m_wCellNodes[(size_t)hS*54] : &m_wFaceNodes[(size_t)hS*27];
     const int nn = cell ? 18 : (ft == 0 ? 6 : 9);
-    const int nm = cell ? 8 : 4;
+    const int nm = cell ? 27 : 9;
     const int nS = (int)srcG.size();
-    int col[8];
-    for (int ls = 0; ls < nS; ++ls) { const int* e = &m_expo[(size_t)3*srcG[ls]]; col[ls] = e[0] + 2*e[1] + (cell ? 4*e[2] : 0); }
+    std::vector<int> col((size_t)nS);
+    for (int ls = 0; ls < nS; ++ls) {
+        const int* e = &m_expo[(size_t)3*srcG[ls]];
+        col[ls] = e[0] + 3*e[1] + (cell ? 9*e[2] : 0);
+    }
     for (int q = 0; q < R.nq; ++q) {
         const double* Sq = &R.S[(size_t)q*nn];
         double X0 = 0.0, X1 = 0.0, X2 = 0.0;
@@ -4528,8 +4629,7 @@ void RadHACApKChargeGram::PhiInnerWedgeRadialVec(int kindS, int hS, int subB, co
     const double* GL = m_glIn.data();
     const double* GW = m_gwIn.data();
     const int nS = (int)srcG.size();
-    double acc[8];
-    for (int ls = 0; ls < nS; ++ls) acc[ls] = 0.0;
+    std::vector<double> acc((size_t)nS, 0.0);
     if (cell) {
         const int* tv = WEDGEREF_TETS[subB];
         double V[4][3];
@@ -5200,7 +5300,7 @@ void RadHACApKChargeGram::ConfigureChargeMap(
                     positive_axis[axis] = true;
         const std::vector<double>* face_nodes = nullptr;
         int stride = 0;
-        if (m_d2) { face_nodes = &m_d2EdgeNodes; stride = 6; }
+        if (m_d2) { face_nodes = &m_d2EdgeMap; stride = m_d2EdgeMapStride; }
         else if (m_hexmode) { face_nodes = &m_quadNodes; stride = 27; }
         else if (m_wedgemode) { face_nodes = &m_wFaceNodes; stride = 27; }
         else if (m_curved) { face_nodes = &m_faceNodes; stride = 18; }
@@ -5214,7 +5314,7 @@ void RadHACApKChargeGram::ConfigureChargeMap(
             const int host = m_host[(size_t)a];
             const double* nodes = &(*face_nodes)[(size_t)host*(size_t)stride];
             int node_count = 0;
-            if (m_d2) node_count = 3;
+            if (m_d2) node_count = m_d2GeometryOrder + 1;
             else if (m_hexmode) node_count = 9;
             else if (m_wedgemode) node_count = m_wFaceType[(size_t)host] == 0 ? 6 : 9;
             else if (m_curved) node_count = 6;
@@ -5792,9 +5892,8 @@ RadHACApKChargeGram::CreateConfiguredPlanarFieldEvaluator(
             density += charge[static_cast<size_t>(a)]
                      * D2MonoCell(&m_expo[static_cast<size_t>(3*a)], xi);
         double X[2];
-        const double* nodes = &m_d2CellNodes[static_cast<size_t>(host)*18];
-        if (m_d2CellType[static_cast<size_t>(host)] == 0) Tri6Map(nodes, xi, X);
-        else Quad9Map(nodes, xi, X);
+        const double* map = &m_d2CellMap[static_cast<size_t>(host)*m_d2CellMapStride];
+        D2CellMap(m_d2CellType[static_cast<size_t>(host)], map, xi, X);
         positions.push_back(X[0]);
         positions.push_back(X[1]);
         strengths.push_back(weight*density);
@@ -5840,16 +5939,16 @@ RadHACApKChargeGram::CreateConfiguredPlanarFieldEvaluator(
     }
 
     for (int host = 0; host < m_d2_n_be; ++host) {
-        const double* nodes = &m_d2EdgeNodes[static_cast<size_t>(host)*6];
+        const double* map = &m_d2EdgeMap[static_cast<size_t>(host)*m_d2EdgeMapStride];
         for (size_t q = 0; q < m_d2GlE.size(); ++q) {
             const double t = m_d2GlE[q];
             double density = 0.0;
             for (int a : m_faceCharges[static_cast<size_t>(host)]) {
                 const int exponent = m_expo[static_cast<size_t>(3*a)];
-                density += charge[static_cast<size_t>(a)]*(exponent ? t : 1.0);
+                density += charge[static_cast<size_t>(a)]*D2Pow(t, exponent);
             }
             double X[2];
-            Edge3Map(nodes, t, X);
+            D2EdgeMap(map, t, X);
             positions.push_back(X[0]);
             positions.push_back(X[1]);
             strengths.push_back(m_d2GwE[q]*density);
