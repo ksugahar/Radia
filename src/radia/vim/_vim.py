@@ -788,8 +788,10 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     """Pure-hex RT1/RT2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glout_n = the 1D outer rule.  RT1 keeps the validated default 4.  Flat RT2 uses
-    the TET-style analytic polynomial source moments plus a whole-host tensor outer; order 5 keeps the
-    one-cell generalized Gram spectrum at 1 + 2e-6 while the batched moment recurrence makes it sub-second.
+    the TET-style analytic polynomial source moments plus a whole-host tensor outer for self/near hosts.
+    Smooth far hosts use a reflection-invariant tensor-product rule on both complete reference domains,
+    avoiding degree-six moment recurrences without changing the accepted spectrum or IMA contracts.
+    Order 5 keeps the one-cell generalized Gram spectrum at 1 + 2e-6.
     Curved RT2 retains order 6 and the reference-frame graded Duffy path.  The RT1 default 4 was
     selected by the RT1 hex spectrum/demag gates: 3 breaks the mass-normalized Gram spectrum, while 5/6
     were slower without improving the accepted affine/distorted regression cases.  glin_n = the 1D rule

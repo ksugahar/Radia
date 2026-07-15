@@ -9,6 +9,7 @@ pytest.importorskip("ngsolve")
 
 import ngsolve as ng  # noqa: E402
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
+import radia._radia_pybind as _rp  # noqa: E402
 
 from radia.vim import (  # noqa: E402
     ChargeGram, FieldFromSolution, MagnetizationSource, Solve,
@@ -99,3 +100,46 @@ def test_rt2_demag_spectrum_is_physical(kind):
         operator, sp.csr_matrix(mass).toarray(), eigvals_only=True)
     assert eigenvalues.min() > -1e-10
     assert eigenvalues.max() <= 1.0 + 2e-5
+
+
+def test_rt2_hex_far_block_uses_accurate_complete_tensor_rule():
+    """A separated affine pair exercises the fast far block, not the exact near recurrence."""
+    x5, w5 = np.polynomial.legendre.leggauss(5)
+    x5, w5 = 0.5*(x5 + 1.0), 0.5*w5
+
+    def nodes(offset):
+        return np.asarray([
+            (offset + ix/2, iy/2, iz/2)
+            for iz in range(3) for iy in range(3) for ix in range(3)
+        ], dtype=float)
+
+    gram = _rp._ChargeGramHMatrix(
+        hex_cell_nodes=np.concatenate([nodes(0.0), nodes(4.0)]).ravel(),
+        quad_face_nodes=np.empty(0), n_el=2, n_bf=0,
+        charge_host=np.asarray([0, 1], dtype=np.int32),
+        charge_kind=np.asarray([0, 0], dtype=np.int32),
+        charge_expo=np.zeros(6, dtype=np.int32),
+        sym_tet_pts=np.asarray([0.25, 0.25, 0.25]),
+        sym_tet_w=np.asarray([1.0/6.0]),
+        sym_tri_pts=np.asarray([1.0/3.0, 1.0/3.0]),
+        sym_tri_w=np.asarray([0.5]),
+        gl_out=x5, gw_out=w5, gl_in=x5, gw_in=w5,
+        far_tet_pts=np.asarray([0.25, 0.25, 0.25]),
+        far_tet_w=np.asarray([1.0/6.0]),
+        far_tri_pts=np.asarray([1.0/3.0, 1.0/3.0]),
+        far_tri_w=np.asarray([0.5]),
+        near_grade=0.5, far_inner_factor=1.0, build=False,
+    )
+
+    x10, w10 = np.polynomial.legendre.leggauss(10)
+    x10, w10 = 0.5*(x10 + 1.0), 0.5*w10
+    q = np.asarray([(x, y, z) for z in x10 for y in x10 for x in x10])
+    qw = np.asarray([wx*wy*wz for wz in w10 for wy in w10 for wx in w10])
+    reference = 0.0
+    source = q + np.asarray([4.0, 0.0, 0.0])
+    for target, weight in zip(q, qw):
+        reference += weight*np.sum(qw/np.linalg.norm(target - source, axis=1))
+    reference /= 4.0*np.pi
+
+    assert gram.stats()["hex_affine_exact_near_factor"] == 1.0
+    assert abs(gram.entry(0, 1) - reference) <= 2e-12*abs(reference)
