@@ -43,6 +43,8 @@ def force_coenergy_displacement_gate(
     eddy_loss_material_frequency_ok = True
     weighted_stress_mask_mesh_identity_ok = True
     complex_current_phasor_basis_identity_ok = True
+    axisymmetric_force_radius_jacobian_coordinate_identity_ok = True
+    nonlinear_bh_interpolation_extrapolation_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -56,6 +58,8 @@ def force_coenergy_displacement_gate(
         eddy_loss_material_frequency_ok = False
         weighted_stress_mask_mesh_identity_ok = False
         complex_current_phasor_basis_identity_ok = False
+        axisymmetric_force_radius_jacobian_coordinate_identity_ok = False
+        nonlinear_bh_interpolation_extrapolation_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -358,6 +362,123 @@ def force_coenergy_displacement_gate(
                 == phasor_basis.get("solve_generation")
             )
 
+        radius_jacobian = artifact_identity.get(
+            "axisymmetric_force_radius_jacobian_coordinate_identity"
+        )
+        if radius_jacobian is not None:
+            length_units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            radius_unit = (
+                str(radius_jacobian.get("radius_length_unit", "")).strip()
+                if isinstance(radius_jacobian, dict)
+                else ""
+            )
+            stress_unit = (
+                str(radius_jacobian.get("stress_coordinate_length_unit", "")).strip()
+                if isinstance(radius_jacobian, dict)
+                else ""
+            )
+            radius_digest = str(
+                radius_jacobian.get("radius_coordinate_sha256", "")
+                if isinstance(radius_jacobian, dict)
+                else ""
+            ).lower()
+            try:
+                radius_scale = float(radius_jacobian.get("radius_scale_to_m"))
+                stress_scale = float(
+                    radius_jacobian.get("stress_coordinate_scale_to_m")
+                )
+            except (AttributeError, TypeError, ValueError):
+                radius_scale = math.nan
+                stress_scale = math.nan
+            coordinate_generation = (
+                radius_jacobian.get("coordinate_generation")
+                if isinstance(radius_jacobian, dict)
+                else None
+            )
+            solution_generation = (
+                radius_jacobian.get("field_solution_generation")
+                if isinstance(radius_jacobian, dict)
+                else None
+            )
+            expected_scale = length_units.get(radius_unit)
+            axisymmetric_force_radius_jacobian_coordinate_identity_ok = (
+                isinstance(radius_jacobian, dict)
+                and bool(solution_generation)
+                and radius_jacobian.get("stress_field_solution_generation")
+                == solution_generation
+                and bool(coordinate_generation)
+                and radius_jacobian.get("stress_coordinate_generation")
+                == coordinate_generation
+                and radius_jacobian.get("radius_jacobian_coordinate_generation")
+                == coordinate_generation
+                and radius_jacobian.get("force_integration_coordinate_generation")
+                == coordinate_generation
+                and radius_jacobian.get("radius_coordinate_frame") == "cylindrical-rz"
+                and radius_jacobian.get("stress_coordinate_frame")
+                == radius_jacobian.get("radius_coordinate_frame")
+                and expected_scale is not None
+                and stress_unit == radius_unit
+                and math.isclose(radius_scale, expected_scale, rel_tol=0.0, abs_tol=0.0)
+                and math.isclose(stress_scale, radius_scale, rel_tol=0.0, abs_tol=0.0)
+                and len(radius_digest) == 64
+                and all(character in "0123456789abcdef" for character in radius_digest)
+                and radius_jacobian.get("force_radius_coordinate_sha256")
+                == radius_digest
+                and radius_jacobian.get("integration_measure") == "2*pi*r*dr*dz"
+            )
+
+        bh_interpolation = artifact_identity.get(
+            "nonlinear_bh_interpolation_extrapolation_identity"
+        )
+        if bh_interpolation is not None:
+            table_digest = str(
+                bh_interpolation.get("bh_table_sha256", "")
+                if isinstance(bh_interpolation, dict)
+                else ""
+            ).lower()
+            material_generation = (
+                bh_interpolation.get("material_generation")
+                if isinstance(bh_interpolation, dict)
+                else None
+            )
+            interpolation_method = (
+                bh_interpolation.get("interpolation_method")
+                if isinstance(bh_interpolation, dict)
+                else None
+            )
+            endpoint_branch = (
+                bh_interpolation.get("endpoint_extrapolation_branch")
+                if isinstance(bh_interpolation, dict)
+                else None
+            )
+            solve_generation = (
+                bh_interpolation.get("solve_generation")
+                if isinstance(bh_interpolation, dict)
+                else None
+            )
+            nonlinear_bh_interpolation_extrapolation_identity_ok = (
+                isinstance(bh_interpolation, dict)
+                and bool(material_generation)
+                and bh_interpolation.get("bh_table_material_generation")
+                == material_generation
+                and bh_interpolation.get("field_solution_material_generation")
+                == material_generation
+                and len(table_digest) == 64
+                and all(character in "0123456789abcdef" for character in table_digest)
+                and bh_interpolation.get("field_bh_table_sha256") == table_digest
+                and interpolation_method in {"monotone_piecewise_linear", "cubic_hermite"}
+                and bh_interpolation.get("field_interpolation_method")
+                == interpolation_method
+                and endpoint_branch in {"last_segment_slope", "constant_mu0"}
+                and bh_interpolation.get("field_endpoint_extrapolation_branch")
+                == endpoint_branch
+                and bh_interpolation.get("evaluation_region")
+                in {"inside_table", "lower_endpoint_extrapolation", "upper_endpoint_extrapolation"}
+                and bool(solve_generation)
+                and bh_interpolation.get("field_state_solve_generation")
+                == solve_generation
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -420,6 +541,12 @@ def force_coenergy_displacement_gate(
         ),
         "complex_current_force_and_loss_share_phasor_basis": (
             complex_current_phasor_basis_identity_ok
+        ),
+        "axisymmetric_force_radius_jacobian_uses_current_coordinates": (
+            axisymmetric_force_radius_jacobian_coordinate_identity_ok
+        ),
+        "nonlinear_bh_state_uses_one_interpolation_and_extrapolation_branch": (
+            nonlinear_bh_interpolation_extrapolation_identity_ok
         ),
     }
     return {
