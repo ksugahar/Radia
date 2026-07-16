@@ -293,6 +293,44 @@ def _force_selection_topology_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _weak_form_coordinate_transform_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get("weak_form_coordinate_transform_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    generation = str(identity.get("mapped_coordinate_generation") or "")
+    digest = str(identity.get("jacobian_orientation_sha256") or "")
+    return (
+        bool(generation)
+        and identity.get("field_coordinate_generation") == generation
+        and identity.get("jacobian_coordinate_generation") == generation
+        and identity.get("jacobian_orientation") == "right_handed_positive"
+        and identity.get("integration_orientation") == "right_handed_positive"
+        and len(digest) == 64
+        and identity.get("integration_orientation_sha256") == digest
+    )
+
+
+def _time_harmonic_phasor_convention_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get("time_harmonic_phasor_convention_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    convention = str(identity.get("source_time_convention") or "")
+    generation = str(identity.get("phasor_generation") or "")
+    return (
+        convention in {"exp(+jwt)", "exp(-jwt)"}
+        and identity.get("field_time_convention") == convention
+        and identity.get("phase_sensitive_result_time_convention") == convention
+        and identity.get("complex_power_formula") == "0.5*V*conj(I)"
+        and identity.get("phase_sensitive_result_formula") == "0.5*V*conj(I)"
+        and bool(generation)
+        and identity.get("result_phasor_generation") == generation
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -401,6 +439,12 @@ def rotational_eddy_brake_energy_gate(
     )
     force_selection_topology_identity_ok = _force_selection_topology_identity_ok(
         summary
+    )
+    weak_form_coordinate_transform_identity_ok = (
+        _weak_form_coordinate_transform_identity_ok(summary)
+    )
+    time_harmonic_phasor_convention_identity_ok = (
+        _time_harmonic_phasor_convention_identity_ok(summary)
     )
     all_cardinalities = True
     all_times_increase = True
@@ -596,6 +640,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "force_selection_matches_current_geometry_topology": (
             force_selection_topology_identity_ok
+        ),
+        "weak_form_uses_current_jacobian_orientation": (
+            weak_form_coordinate_transform_identity_ok
+        ),
+        "harmonic_fields_share_one_complex_time_convention": (
+            time_harmonic_phasor_convention_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
