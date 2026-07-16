@@ -37,6 +37,8 @@ def force_coenergy_displacement_gate(
     force_frame_ok = True
     force_normalization_ok = True
     force_body_selection_ok = True
+    virtual_work_constraint_basis_ok = True
+    eddy_loss_harmonic_basis_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -44,6 +46,8 @@ def force_coenergy_displacement_gate(
         force_frame_ok = False
         force_normalization_ok = False
         force_body_selection_ok = False
+        virtual_work_constraint_basis_ok = False
+        eddy_loss_harmonic_basis_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -147,6 +151,60 @@ def force_coenergy_displacement_gate(
                 and roles.get("0") == "air"
                 and bool(selection.get("selection_generation"))
             )
+        constraint_basis = artifact_identity.get("virtual_work_constraint_basis")
+        if constraint_basis is not None:
+            virtual_work_constraint_basis_ok = (
+                isinstance(constraint_basis, dict)
+                and constraint_basis.get("direct_force_constraint") == "fixed_current"
+                and constraint_basis.get("coenergy_derivative_constraint")
+                == "fixed_current"
+                and bool(constraint_basis.get("current_control_generation"))
+                and constraint_basis.get("derivative_control_generation")
+                == constraint_basis.get("current_control_generation")
+                and constraint_basis.get("flux_constraint_active") is False
+            )
+        harmonic_basis = artifact_identity.get("eddy_loss_harmonic_basis")
+        if harmonic_basis is not None:
+            amplitude_frequencies = (
+                harmonic_basis.get("harmonic_frequency_hz")
+                if isinstance(harmonic_basis, dict)
+                else None
+            )
+            material_frequencies = (
+                harmonic_basis.get("skin_depth_state_frequency_hz")
+                if isinstance(harmonic_basis, dict)
+                else None
+            )
+            frequency_rows_valid = (
+                isinstance(amplitude_frequencies, list)
+                and isinstance(material_frequencies, list)
+                and bool(amplitude_frequencies)
+                and len(amplitude_frequencies) == len(material_frequencies)
+                and all(
+                    isinstance(value, (int, float))
+                    and math.isfinite(float(value))
+                    and float(value) > 0.0
+                    for value in amplitude_frequencies + material_frequencies
+                )
+            )
+            eddy_loss_harmonic_basis_ok = (
+                isinstance(harmonic_basis, dict)
+                and frequency_rows_valid
+                and [float(value) for value in amplitude_frequencies]
+                == [float(value) for value in material_frequencies]
+                and all(
+                    right > left
+                    for left, right in zip(
+                        amplitude_frequencies, amplitude_frequencies[1:]
+                    )
+                )
+                and bool(harmonic_basis.get("amplitude_basis_id"))
+                and harmonic_basis.get("material_state_basis_id")
+                == harmonic_basis.get("amplitude_basis_id")
+                and bool(harmonic_basis.get("solve_generation"))
+                and harmonic_basis.get("material_state_solve_generation")
+                == harmonic_basis.get("solve_generation")
+            )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -193,6 +251,12 @@ def force_coenergy_displacement_gate(
         "force_vectors_share_transformed_frame": force_frame_ok,
         "axisymmetric_force_is_already_total_3d": force_normalization_ok,
         "weighted_stress_selects_only_target_magnetic_body": force_body_selection_ok,
+        "force_and_coenergy_use_same_fixed_current_constraint": (
+            virtual_work_constraint_basis_ok
+        ),
+        "eddy_loss_harmonics_share_frequency_and_material_basis": (
+            eddy_loss_harmonic_basis_ok
+        ),
     }
     return {
         "policy": "force_coenergy_displacement_gate_v1",

@@ -50,6 +50,21 @@ def _artifact_identity(sample_count):
             "excluded_air_group_ids": [0],
             "selection_generation": "selection-12",
         },
+        "virtual_work_constraint_basis": {
+            "direct_force_constraint": "fixed_current",
+            "coenergy_derivative_constraint": "fixed_current",
+            "current_control_generation": "current-control-13",
+            "derivative_control_generation": "current-control-13",
+            "flux_constraint_active": False,
+        },
+        "eddy_loss_harmonic_basis": {
+            "harmonic_frequency_hz": [50.0, 150.0, 250.0],
+            "skin_depth_state_frequency_hz": [50.0, 150.0, 250.0],
+            "amplitude_basis_id": "harmonic-basis-13",
+            "material_state_basis_id": "harmonic-basis-13",
+            "solve_generation": "solve-13",
+            "material_state_solve_generation": "solve-13",
+        },
     }
 
 
@@ -208,6 +223,45 @@ def test_generalization_v10_public(case_id, failed_check):
         identity["force_body_selection"][
             "weighted_stress_selected_group_ids"
         ] = [0, 1]
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][failed_check] is False
+
+
+@pytest.mark.parametrize(
+    ("case_id", "failed_check"),
+    [
+        (
+            "v11_public_force_coenergy_constraint_basis_mismatch",
+            "force_and_coenergy_use_same_fixed_current_constraint",
+        ),
+        (
+            "v11_public_eddy_loss_frequency_harmonic_basis_mismatch",
+            "eddy_loss_harmonics_share_frequency_and_material_basis",
+        ),
+    ],
+)
+def test_generalization_v11_public(case_id, failed_check):
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    if case_id == "v11_public_force_coenergy_constraint_basis_mismatch":
+        identity["virtual_work_constraint_basis"].update(
+            {
+                "coenergy_derivative_constraint": "fixed_flux",
+                "derivative_control_generation": "flux-control-13",
+                "flux_constraint_active": True,
+            }
+        )
+    else:
+        identity["eddy_loss_harmonic_basis"].update(
+            {
+                "skin_depth_state_frequency_hz": [60.0, 180.0, 300.0],
+                "material_state_basis_id": "harmonic-basis-12",
+                "material_state_solve_generation": "solve-12",
+            }
+        )
     result = force_coenergy_displacement_gate(
         positions, coenergy, forces, artifact_identity=identity
     )
