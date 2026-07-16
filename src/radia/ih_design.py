@@ -153,18 +153,17 @@ class IHDesignSpec:
     # not a panel knob.
     wp_loop_dof: str | bool = "auto"
 
-    # calc_inductance weak-path workpiece extensions (genus-1 ring/tube
-    # workpieces, Takahashi-validated 2026-07-17): the solved shorted-turn
-    # loop DOF (--wp-loop-dof) and the surface-Poisson incident potential
-    # (--wp-phi-inc; wall-free, ~25x faster).  Default "auto" = the FIXED
-    # behavior wherever it applies: with the "Dense LU (small)" solver
-    # preset (= intree-dense backend) + linear SIBC + order 1, a genus-1
-    # workpiece gets the loop DOF and the P1 path gets the poisson
-    # phi_inc automatically; inapplicable cases skip with a recorded
-    # wp_loop_dof_skip_reason.  "on" makes unmet prerequisites fail loud;
-    # "off"/"path" force the legacy behavior (genus-1 caveat applies).
+    # calc_inductance weak-path genus-1 loop DOF (Takahashi-validated
+    # 2026-07-17).  "auto" (default) applies it whenever it can: with the
+    # "Dense LU (small)" solver preset (= intree-dense backend) + linear
+    # SIBC + order 1, a genus-1 workpiece gets the solved shorted-turn
+    # current automatically; inapplicable cases skip with a recorded
+    # wp_loop_dof_skip_reason + caveat.  "on" makes unmet prerequisites
+    # fail loud.  There is deliberately no "off" (the un-extended genus-1
+    # solve is a known +25-30% over-estimate), and the incident potential
+    # is basis-determined in calc_inductance (P1 -> surface-Poisson),
+    # not a panel knob.
     wp_loop_dof: str = "auto"
-    wp_phi_inc: str = "auto"
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
