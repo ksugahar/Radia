@@ -198,6 +198,31 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         positive.get("maximum_phasor_fit_relative_residual"),
         "maximum_phasor_fit_relative_residual",
     )
+    fit_frequency_matches_source = True
+    if "phasor_fit_frequency_hz" in positive:
+        fit_frequency = _finite(
+            positive.get("phasor_fit_frequency_hz"),
+            "phasor_fit_frequency_hz",
+            positive=True,
+        )
+        fit_frequency_matches_source = (
+            abs(fit_frequency - frequency) <= 1.0e-12 * max(frequency, 1.0)
+        )
+
+    expected_current_roles = {
+        "source_delivery_current_phasor_rms_a": "source_delivery_into_network",
+        "primary_current_phasor_rms_a": "transformer_primary_absorption",
+        "secondary_current_phasor_rms_a": "transformer_secondary_delivery_to_load",
+    }
+    role_contract = positive.get("current_role_contract")
+    observed_roles = positive.get("phasor_current_roles")
+    role_evidence_present = role_contract is not None or observed_roles is not None
+    current_roles_match_contract = not role_evidence_present or (
+        isinstance(role_contract, Mapping)
+        and isinstance(observed_roles, Mapping)
+        and dict(role_contract) == expected_current_roles
+        and dict(observed_roles) == expected_current_roles
+    )
     point_count = int(_finite(positive.get("point_count"), "point_count", positive=True))
     fit_point_count = int(
         _finite(positive.get("fit_point_count"), "fit_point_count", positive=True)
@@ -259,6 +284,8 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         and fit_point_count >= 500
         and fit_stop - fit_start >= 1.9 / frequency
         and fit_residual <= 2.0e-5,
+        "phasor_fit_frequency_matches_source_contract": fit_frequency_matches_source,
+        "current_phasor_roles_match_terminal_contract": current_roles_match_contract,
         "positive_phasor_replay_is_deterministic": replay_error <= 1.0e-12,
         "exactly_four_timing_stages": timing_ok,
     }
@@ -282,5 +309,6 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
             "For the chosen dot/sign convention, V_secondary=-V_primary/N and I_secondary=-N*I_primary.",
             "The load reflected to the primary is N^2*R_load; include source resistance in the analytic RMS reference.",
             "Turns-ratio agreement alone is insufficient: require instantaneous and complex-power conservation plus deterministic replay.",
+            "When phasor frequency or terminal-current role metadata is supplied, bind it to the source and sign contract before accepting scalar power closure.",
         ],
     }
