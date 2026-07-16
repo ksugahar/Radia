@@ -65,6 +65,29 @@ def _artifact_identity(sample_count):
             "solve_generation": "solve-13",
             "material_state_solve_generation": "solve-13",
         },
+        "axisymmetric_force_measure_identity": {
+            "formulation": "axisymmetric",
+            "integration_measure": "2*pi*r*dr*dz",
+            "reference_integration_measure": "2*pi*r*dr*dz",
+            "radius_weighting_basis_id": "axisymmetric-radius-weighted-v1",
+            "force_result_basis_id": "axisymmetric-radius-weighted-v1",
+            "radius_coordinate_frame": "cylindrical-rz",
+            "force_component_frame": "global-z",
+            "solve_generation": "solve-14",
+            "integration_solve_generation": "solve-14",
+        },
+        "eddy_loss_material_frequency_identity": {
+            "field_solution_frequency_hz": 1000.0,
+            "loss_evaluation_frequency_hz": 1000.0,
+            "material_state_frequency_hz": 1000.0,
+            "material_assignment_generation": "materials-14",
+            "conductivity_material_generation": "materials-14",
+            "lamination_material_generation": "materials-14",
+            "solve_generation": "solve-14",
+            "material_state_solve_generation": "solve-14",
+            "conductivity_sha256": "1" * 64,
+            "lamination_state_sha256": "2" * 64,
+        },
     }
 
 
@@ -267,3 +290,41 @@ def test_generalization_v11_public(case_id, failed_check):
     )
     assert result["status"] == "needs_attention"
     assert result["checks"][failed_check] is False
+
+
+def test_v12_public_axisymmetric_force_radius_weighting_basis_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["axisymmetric_force_measure_identity"].update(
+        {
+            "integration_measure": "dx*dy",
+            "force_result_basis_id": "planar-per-depth-v1",
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["axisymmetric_force_uses_radius_weighted_measure"] is False
+
+
+def test_v12_public_eddy_loss_frequency_material_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["eddy_loss_material_frequency_identity"].update(
+        {
+            "conductivity_material_generation": "materials-13",
+            "lamination_material_generation": "materials-13",
+            "material_state_solve_generation": "solve-13",
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "eddy_loss_uses_current_frequency_and_material_generation"
+        ]
+        is False
+    )
