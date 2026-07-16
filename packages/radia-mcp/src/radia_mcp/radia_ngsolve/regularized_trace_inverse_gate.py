@@ -130,6 +130,12 @@ def regularized_trace_inverse_path_gate(
     curvature_parameterization_ok = (
         _optional_curvature_parameterization_is_aligned(reported_lcurve)
     )
+    design_variable_identity_ok = _optional_design_variable_identity_is_aligned(
+        summary
+    )
+    convolution_quadrature_identity_ok = (
+        _optional_convolution_quadrature_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -171,6 +177,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "lcurve_curvature_uses_recorded_path_parameterization": (
             curvature_parameterization_ok
+        ),
+        "adjoint_and_finite_difference_share_design_variable_order": (
+            design_variable_identity_ok
+        ),
+        "cq_weights_match_current_time_grid_and_method": (
+            convolution_quadrature_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -379,6 +391,68 @@ def _optional_curvature_parameterization_is_aligned(
         and value.get("path_coordinate") == "log10_alpha"
         and value.get("curvature_coordinate") == "log10_alpha"
         and value.get("coordinate_transform_recorded") is True
+    )
+
+
+def _optional_design_variable_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("design_variable_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    names = (
+        "design_variable_ids",
+        "adjoint_gradient_design_variable_ids",
+        "finite_difference_design_variable_ids",
+    )
+    rows = []
+    for name in names:
+        row = value.get(name)
+        if not isinstance(row, Sequence) or isinstance(row, (str, bytes)):
+            return False
+        normalized = [str(item).strip() for item in row]
+        if not normalized or not all(normalized) or len(set(normalized)) != len(normalized):
+            return False
+        rows.append(normalized)
+    generations = [
+        str(value.get(name, "")).strip()
+        for name in (
+            "design_generation",
+            "adjoint_gradient_design_generation",
+            "finite_difference_design_generation",
+        )
+    ]
+    return rows[0] == rows[1] == rows[2] and len(set(generations)) == 1 and bool(
+        generations[0]
+    )
+
+
+def _optional_convolution_quadrature_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("convolution_quadrature_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        time_grid_step = _finite_float(value, "time_grid_step_s")
+        weight_step = _finite_float(value, "weight_generation_step_s")
+    except (KeyError, TypeError, ValueError):
+        return False
+    time_grid_method = str(value.get("time_grid_method", "")).strip()
+    weight_method = str(value.get("weight_generation_method", "")).strip()
+    time_grid_generation = str(value.get("time_grid_generation", "")).strip()
+    weight_generation = str(value.get("weight_time_grid_generation", "")).strip()
+    return (
+        time_grid_step > 0.0
+        and _close(time_grid_step, weight_step)
+        and bool(time_grid_method)
+        and time_grid_method == weight_method
+        and bool(time_grid_generation)
+        and time_grid_generation == weight_generation
     )
 
 
