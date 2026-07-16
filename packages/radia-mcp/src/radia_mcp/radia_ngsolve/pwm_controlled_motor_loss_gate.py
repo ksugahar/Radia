@@ -90,6 +90,8 @@ def pwm_controlled_motor_loss_gate(
     torque_ripple_aggregation_ok = True
     efficiency_average_window_ok = True
     demag_temperature_material_state_ok = True
+    torque_angle_basis_identity_ok = True
+    loss_harmonic_rotor_window_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -99,6 +101,8 @@ def pwm_controlled_motor_loss_gate(
         torque_ripple_aggregation_ok = False
         efficiency_average_window_ok = False
         demag_temperature_material_state_ok = False
+        torque_angle_basis_identity_ok = False
+        loss_harmonic_rotor_window_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -265,6 +269,93 @@ def pwm_controlled_motor_loss_gate(
                 == state_generation
                 and demag_state.get("knee_curve_state_generation")
                 == state_generation
+            )
+
+        torque_basis_value = identity_value.get("torque_angle_basis_identity")
+        if torque_basis_value is not None:
+            torque_basis = (
+                torque_basis_value if isinstance(torque_basis_value, dict) else {}
+            )
+            pole_pairs = torque_basis.get("pole_pairs")
+            reference_scale = torque_basis.get("reference_to_electrical_scale")
+            candidate_scale = torque_basis.get("candidate_to_electrical_scale")
+            reference_grid = str(
+                torque_basis.get("reference_angle_grid_generation", "")
+            )
+            candidate_grid = str(
+                torque_basis.get("candidate_angle_grid_generation", "")
+            )
+            torque_angle_basis_identity_ok = (
+                isinstance(pole_pairs, int)
+                and not isinstance(pole_pairs, bool)
+                and pole_pairs > 0
+                and torque_basis.get("reference_angle_basis") == "mechanical"
+                and torque_basis.get("candidate_angle_basis") == "mechanical"
+                and torque_basis.get("waveform_alignment_basis") == "mechanical"
+                and bool(reference_grid)
+                and reference_grid == candidate_grid
+                and isinstance(reference_scale, (int, float))
+                and not isinstance(reference_scale, bool)
+                and isinstance(candidate_scale, (int, float))
+                and not isinstance(candidate_scale, bool)
+                and math.isfinite(float(reference_scale))
+                and math.isfinite(float(candidate_scale))
+                and math.isclose(float(reference_scale), float(pole_pairs))
+                and math.isclose(float(candidate_scale), float(pole_pairs))
+            )
+
+        loss_window_value = identity_value.get(
+            "loss_harmonic_rotor_window_identity"
+        )
+        if loss_window_value is not None:
+            loss_window = (
+                loss_window_value if isinstance(loss_window_value, dict) else {}
+            )
+            sample_generations = loss_window.get(
+                "sample_rotor_position_generations"
+            )
+            pole_pairs = loss_window.get("pole_pairs")
+            try:
+                start_deg = float(loss_window["window_start_deg"])
+                end_deg = float(loss_window["window_end_deg"])
+                expected_span_deg = float(
+                    loss_window["expected_electrical_span_deg"]
+                )
+            except (KeyError, TypeError, ValueError):
+                start_deg = end_deg = expected_span_deg = math.nan
+            rotor_generation = str(
+                loss_window.get("rotor_position_generation", "")
+            )
+            loss_solve_generation = str(
+                loss_window.get("loss_solve_generation", "")
+            )
+            loss_harmonic_rotor_window_identity_ok = (
+                loss_window.get("window_angle_basis") == "mechanical"
+                and isinstance(pole_pairs, int)
+                and not isinstance(pole_pairs, bool)
+                and pole_pairs > 0
+                and all(
+                    math.isfinite(value)
+                    for value in (start_deg, end_deg, expected_span_deg)
+                )
+                and end_deg > start_deg
+                and expected_span_deg > 0.0
+                and math.isclose(
+                    float(pole_pairs) * (end_deg - start_deg),
+                    expected_span_deg,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-12,
+                )
+                and bool(rotor_generation)
+                and isinstance(sample_generations, list)
+                and bool(sample_generations)
+                and all(
+                    generation == rotor_generation
+                    for generation in sample_generations
+                )
+                and bool(loss_solve_generation)
+                and loss_window.get("harmonic_transform_solve_generation")
+                == loss_solve_generation
             )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
@@ -478,6 +569,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "demag_margin_uses_current_temperature_material_state": (
             demag_temperature_material_state_ok
+        ),
+        "motor_torque_waveforms_share_mechanical_angle_basis": (
+            torque_angle_basis_identity_ok
+        ),
+        "loss_harmonic_window_uses_one_rotor_position_generation": (
+            loss_harmonic_rotor_window_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]

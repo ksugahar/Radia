@@ -118,6 +118,27 @@ def _with_artifact_identity(payload: dict) -> dict:
             "recoil_curve_state_generation": "magnet-state-13",
             "knee_curve_state_generation": "magnet-state-13",
         },
+        "torque_angle_basis_identity": {
+            "pole_pairs": 4,
+            "reference_angle_basis": "mechanical",
+            "candidate_angle_basis": "mechanical",
+            "waveform_alignment_basis": "mechanical",
+            "reference_angle_grid_generation": "angle-grid-14",
+            "candidate_angle_grid_generation": "angle-grid-14",
+            "reference_to_electrical_scale": 4.0,
+            "candidate_to_electrical_scale": 4.0,
+        },
+        "loss_harmonic_rotor_window_identity": {
+            "window_angle_basis": "mechanical",
+            "window_start_deg": 0.0,
+            "window_end_deg": 90.0,
+            "pole_pairs": 4,
+            "expected_electrical_span_deg": 360.0,
+            "rotor_position_generation": "rotor-position-14",
+            "sample_rotor_position_generations": ["rotor-position-14"] * 8,
+            "loss_solve_generation": "loss-solve-14",
+            "harmonic_transform_solve_generation": "loss-solve-14",
+        },
     }
     return payload
 
@@ -288,6 +309,37 @@ def test_v11_public_demag_margin_temperature_material_state_mismatch() -> None:
     assert (
         result["checks"][
             "demag_margin_uses_current_temperature_material_state"
+        ]
+        is False
+    )
+
+
+def test_v12_public_motor_torque_electrical_mechanical_angle_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["torque_angle_basis_identity"].update(
+        {
+            "candidate_angle_basis": "electrical",
+            "candidate_to_electrical_scale": 1.0,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["motor_torque_waveforms_share_mechanical_angle_basis"]
+        is False
+    )
+
+
+def test_v12_public_loss_harmonic_window_rotor_position_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["loss_harmonic_rotor_window_identity"][
+        "sample_rotor_position_generations"
+    ][3] = "rotor-position-13"
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "loss_harmonic_window_uses_one_rotor_position_generation"
         ]
         is False
     )
