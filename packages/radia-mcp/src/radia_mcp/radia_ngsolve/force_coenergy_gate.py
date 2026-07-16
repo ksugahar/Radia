@@ -45,6 +45,8 @@ def force_coenergy_displacement_gate(
     complex_current_phasor_basis_identity_ok = True
     axisymmetric_force_radius_jacobian_coordinate_identity_ok = True
     nonlinear_bh_interpolation_extrapolation_identity_ok = True
+    weighted_stress_mask_material_interface_identity_ok = True
+    axisymmetric_coil_voltage_measure_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -60,6 +62,8 @@ def force_coenergy_displacement_gate(
         complex_current_phasor_basis_identity_ok = False
         axisymmetric_force_radius_jacobian_coordinate_identity_ok = False
         nonlinear_bh_interpolation_extrapolation_identity_ok = False
+        weighted_stress_mask_material_interface_identity_ok = False
+        axisymmetric_coil_voltage_measure_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -479,6 +483,130 @@ def force_coenergy_displacement_gate(
                 == solve_generation
             )
 
+        material_interface = artifact_identity.get(
+            "weighted_stress_mask_material_interface_identity"
+        )
+        if material_interface is not None:
+            solve_generation = (
+                material_interface.get("field_solution_generation")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            material_generation = (
+                material_interface.get("material_generation")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            topology_generation = (
+                material_interface.get("mesh_topology_generation")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            integration_material_ids = (
+                material_interface.get("integration_material_ids")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            mask_material_ids = (
+                material_interface.get("mask_material_ids")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            interface_face_ids = (
+                material_interface.get("material_interface_face_ids")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            excluded_face_ids = (
+                material_interface.get("mask_excluded_interface_face_ids")
+                if isinstance(material_interface, dict)
+                else None
+            )
+            mask_digest = str(
+                material_interface.get("mask_sha256", "")
+                if isinstance(material_interface, dict)
+                else ""
+            ).lower()
+            weighted_stress_mask_material_interface_identity_ok = (
+                isinstance(material_interface, dict)
+                and bool(solve_generation)
+                and material_interface.get("stress_mask_solution_generation")
+                == solve_generation
+                and bool(material_generation)
+                and material_interface.get("mask_material_generation")
+                == material_generation
+                and bool(topology_generation)
+                and material_interface.get("mask_topology_generation")
+                == topology_generation
+                and isinstance(integration_material_ids, list)
+                and bool(integration_material_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in integration_material_ids
+                )
+                and len(set(integration_material_ids))
+                == len(integration_material_ids)
+                and mask_material_ids == integration_material_ids
+                and isinstance(interface_face_ids, list)
+                and bool(interface_face_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in interface_face_ids
+                )
+                and len(set(interface_face_ids)) == len(interface_face_ids)
+                and excluded_face_ids == interface_face_ids
+                and len(mask_digest) == 64
+                and all(character in "0123456789abcdef" for character in mask_digest)
+                and str(material_interface.get("stress_mask_sha256", "")).lower()
+                == mask_digest
+            )
+
+        coil_voltage = artifact_identity.get(
+            "axisymmetric_coil_voltage_measure_identity"
+        )
+        if coil_voltage is not None:
+            solve_generation = (
+                coil_voltage.get("solve_generation")
+                if isinstance(coil_voltage, dict)
+                else None
+            )
+            coordinate_generation = (
+                coil_voltage.get("radius_coordinate_generation")
+                if isinstance(coil_voltage, dict)
+                else None
+            )
+            radius_digest = str(
+                coil_voltage.get("radius_coordinate_sha256", "")
+                if isinstance(coil_voltage, dict)
+                else ""
+            ).lower()
+            factor_count = (
+                coil_voltage.get("two_pi_radius_factor_count")
+                if isinstance(coil_voltage, dict)
+                else None
+            )
+            axisymmetric_coil_voltage_measure_identity_ok = (
+                isinstance(coil_voltage, dict)
+                and bool(solve_generation)
+                and coil_voltage.get("winding_voltage_generation")
+                == solve_generation
+                and bool(coordinate_generation)
+                and coil_voltage.get("voltage_radius_coordinate_generation")
+                == coordinate_generation
+                and coil_voltage.get("potential_voltage_basis") == "per_radian"
+                and coil_voltage.get("reported_voltage_basis") == "total_3d"
+                and coil_voltage.get("integration_measure") == "2*pi*r*dr*dz"
+                and isinstance(factor_count, int)
+                and not isinstance(factor_count, bool)
+                and factor_count == 1
+                and len(radius_digest) == 64
+                and all(character in "0123456789abcdef" for character in radius_digest)
+                and str(
+                    coil_voltage.get("voltage_radius_coordinate_sha256", "")
+                ).lower()
+                == radius_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -547,6 +675,12 @@ def force_coenergy_displacement_gate(
         ),
         "nonlinear_bh_state_uses_one_interpolation_and_extrapolation_branch": (
             nonlinear_bh_interpolation_extrapolation_identity_ok
+        ),
+        "weighted_stress_mask_excludes_current_material_interfaces": (
+            weighted_stress_mask_material_interface_identity_ok
+        ),
+        "axisymmetric_coil_voltage_applies_two_pi_radius_once": (
+            axisymmetric_coil_voltage_measure_identity_ok
         ),
     }
     return {

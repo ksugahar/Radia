@@ -141,6 +141,32 @@ def _artifact_identity(sample_count):
             "solve_generation": "solve-16",
             "field_state_solve_generation": "solve-16",
         },
+        "weighted_stress_mask_material_interface_identity": {
+            "field_solution_generation": "solve-17",
+            "stress_mask_solution_generation": "solve-17",
+            "material_generation": "materials-17",
+            "mask_material_generation": "materials-17",
+            "mesh_topology_generation": "topology-17",
+            "mask_topology_generation": "topology-17",
+            "integration_material_ids": [1],
+            "mask_material_ids": [1],
+            "material_interface_face_ids": [101, 102],
+            "mask_excluded_interface_face_ids": [101, 102],
+            "mask_sha256": "1" * 64,
+            "stress_mask_sha256": "1" * 64,
+        },
+        "axisymmetric_coil_voltage_measure_identity": {
+            "solve_generation": "solve-17",
+            "winding_voltage_generation": "solve-17",
+            "radius_coordinate_generation": "coordinates-17",
+            "voltage_radius_coordinate_generation": "coordinates-17",
+            "potential_voltage_basis": "per_radian",
+            "reported_voltage_basis": "total_3d",
+            "integration_measure": "2*pi*r*dr*dz",
+            "two_pi_radius_factor_count": 1,
+            "radius_coordinate_sha256": "2" * 64,
+            "voltage_radius_coordinate_sha256": "2" * 64,
+        },
     }
 
 
@@ -458,6 +484,69 @@ def test_v14_public_nonlinear_bh_interpolation_extrapolation_branch_mismatch() -
     assert (
         result["checks"][
             "nonlinear_bh_state_uses_one_interpolation_and_extrapolation_branch"
+        ]
+        is False
+    )
+
+
+def test_v15_public_weighted_stress_mask_material_interface_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["weighted_stress_mask_material_interface_identity"].update(
+        {
+            "mask_material_generation": "materials-16",
+            "mask_topology_generation": "topology-16",
+            "mask_excluded_interface_face_ids": [101],
+            "stress_mask_sha256": "4" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "weighted_stress_mask_excludes_current_material_interfaces"
+        ]
+        is False
+    )
+
+
+def test_v15_public_axisymmetric_coil_voltage_per_radian_two_pi_jacobian_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["axisymmetric_coil_voltage_measure_identity"].update(
+        {
+            "reported_voltage_basis": "per_radian",
+            "two_pi_radius_factor_count": 0,
+            "voltage_radius_coordinate_sha256": "4" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "axisymmetric_coil_voltage_applies_two_pi_radius_once"
+        ]
+        is False
+    )
+
+
+def test_weighted_stress_material_interface_rejects_non_integer_face_ids() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["weighted_stress_mask_material_interface_identity"][
+        "material_interface_face_ids"
+    ] = [[101]]
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "weighted_stress_mask_excludes_current_material_interfaces"
         ]
         is False
     )
