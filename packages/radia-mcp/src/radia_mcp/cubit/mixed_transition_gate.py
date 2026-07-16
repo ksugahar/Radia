@@ -243,6 +243,63 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             )
         )
 
+    signed_jacobian_value = summary.get("signed_jacobian_identity")
+    signed_jacobian_present = signed_jacobian_value is not None
+    signed_jacobian = (
+        signed_jacobian_value
+        if isinstance(signed_jacobian_value, Mapping)
+        else {}
+    )
+    signed_jacobian_ok = True
+    if signed_jacobian_present:
+        try:
+            minimum_signed = float(signed_jacobian.get("minimum_signed_jacobian"))
+            maximum_signed = float(signed_jacobian.get("maximum_signed_jacobian"))
+            sign_changes = int(signed_jacobian.get("interior_sign_change_count"))
+        except (TypeError, ValueError):
+            minimum_signed = math.nan
+            maximum_signed = math.nan
+            sign_changes = -1
+        signed_jacobian_ok = (
+            bool(signed_jacobian.get("mesh_generation"))
+            and math.isfinite(minimum_signed)
+            and math.isfinite(maximum_signed)
+            and minimum_signed > 0.0
+            and maximum_signed >= minimum_signed
+            and sign_changes == 0
+            and signed_jacobian.get("absolute_volume_matches_cad") is True
+        )
+
+    coordinate_scale_value = summary.get("coordinate_scale_identity")
+    coordinate_scale_present = coordinate_scale_value is not None
+    coordinate_scale = (
+        coordinate_scale_value
+        if isinstance(coordinate_scale_value, Mapping)
+        else {}
+    )
+    coordinate_scale_ok = True
+    if coordinate_scale_present:
+        try:
+            coordinate_to_si = float(coordinate_scale.get("coordinate_scale_to_si"))
+            volume_to_si = float(coordinate_scale.get("volume_scale_to_si"))
+        except (TypeError, ValueError):
+            coordinate_to_si = math.nan
+            volume_to_si = math.nan
+        coordinate_scale_ok = (
+            coordinate_scale.get("source_geometry_unit") == "mm"
+            and coordinate_scale.get("export_coordinate_unit") == "m"
+            and math.isclose(coordinate_to_si, 0.001, rel_tol=0.0, abs_tol=1.0e-15)
+            and math.isclose(
+                volume_to_si,
+                coordinate_to_si**3,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-24,
+            )
+            and bool(coordinate_scale.get("coordinate_scale_generation"))
+            and coordinate_scale.get("volume_scale_generation")
+            == coordinate_scale.get("coordinate_scale_generation")
+        )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -258,6 +315,10 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "quality_report_matches_current_mesh_generation": mesh_quality_identity_ok,
         "quality_histogram_covers_the_complete_mesh_scope": quality_scope_ok,
         "partition_aggregation_excludes_ghost_elements": partition_aggregation_ok,
+        "signed_jacobians_remain_positive_inside_high_order_hexes": (
+            signed_jacobian_ok
+        ),
+        "mesh_coordinates_and_volume_use_one_length_scale": coordinate_scale_ok,
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
             quality_minima[family] >= threshold for family in ("hex", "pyramid", "tet")
@@ -505,6 +566,52 @@ def cubit_mixed_transition_source_gate(
             and declared_scale == 0.001
             and effective_scale == declared_scale
         )
+
+    exodus_connectivity_value = summary.get("exodus_connectivity_identity")
+    exodus_connectivity_present = exodus_connectivity_value is not None
+    exodus_connectivity = (
+        exodus_connectivity_value
+        if isinstance(exodus_connectivity_value, Mapping)
+        else {}
+    )
+    connectivity_digest = str(
+        exodus_connectivity.get("permuted_connectivity_sha256") or ""
+    )
+    exodus_connectivity_ok = not exodus_connectivity_present or (
+        bool(exodus_connectivity.get("connectivity_permutation_generation"))
+        and exodus_connectivity.get("sideset_face_ordinal_generation")
+        == exodus_connectivity.get("connectivity_permutation_generation")
+        and len(connectivity_digest) == 64
+        and exodus_connectivity.get("sideset_connectivity_sha256")
+        == connectivity_digest
+        and exodus_connectivity.get("target_ordering")
+        == "solver-target-ordering-v1"
+    )
+
+    quality_generation_value = summary.get("quality_report_generation_identity")
+    quality_generation_present = quality_generation_value is not None
+    quality_generation = (
+        quality_generation_value
+        if isinstance(quality_generation_value, Mapping)
+        else {}
+    )
+    try:
+        final_smoothing_sequence = int(
+            quality_generation.get("final_smoothing_sequence")
+        )
+        report_sequence = int(
+            quality_generation.get("quality_report_after_operation_sequence")
+        )
+    except (TypeError, ValueError):
+        final_smoothing_sequence = -1
+        report_sequence = -2
+    quality_generation_ok = not quality_generation_present or (
+        bool(quality_generation.get("final_mesh_generation"))
+        and quality_generation.get("quality_report_mesh_generation")
+        == quality_generation.get("final_mesh_generation")
+        and final_smoothing_sequence >= 0
+        and report_sequence >= final_smoothing_sequence
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -569,6 +676,8 @@ def cubit_mixed_transition_source_gate(
         "batch_log_and_exports_share_invocation_identity": batch_invocation_ok,
         "exports_follow_the_final_geometry_operation": operation_dag_ok,
         "length_scale_is_applied_exactly_once": length_scale_ok,
+        "exodus_sidesets_follow_connectivity_permutation": exodus_connectivity_ok,
+        "quality_report_follows_final_smoothing_generation": quality_generation_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),
