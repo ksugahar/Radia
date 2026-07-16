@@ -332,3 +332,52 @@ def test_generalization_v9_public(case_id: str) -> None:
     result = gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"][expected_check] is False
+
+
+def _with_v10_ownership(summary: dict) -> dict:
+    summary["force_selection_identity"] = {
+        "geometry_generation": "geometry-generation-12",
+        "solution_geometry_generation": "geometry-generation-12",
+        "integration_selection_generation": "geometry-generation-12",
+        "selection_entity_digest": "d" * 64,
+        "force_result_selection_digest": "d" * 64,
+    }
+    summary["excitation_basis_identity"] = {
+        "sweep_generation": "sweep-generation-42",
+        "solve_amplitude_basis": "rms",
+        "extract_amplitude_basis": "rms",
+        "solve_scale_to_rms": 1.0,
+        "extract_scale_to_rms": 1.0,
+        "torque_loss_normalization_basis": "rms_excitation",
+    }
+    return summary
+
+
+def test_v10_public_force_selection_generation_changed() -> None:
+    summary = _with_v10_ownership(copy.deepcopy(_summary()))
+    summary["force_selection_identity"].update(
+        {
+            "integration_selection_generation": "geometry-generation-13",
+            "selection_entity_digest": "c" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["force_integral_uses_current_geometry_selection"]
+        is False
+    )
+
+
+def test_v10_public_excitation_peak_rms_sweep_basis_mismatch() -> None:
+    summary = _with_v10_ownership(copy.deepcopy(_summary()))
+    summary["excitation_basis_identity"].update(
+        {
+            "extract_amplitude_basis": "peak",
+            "extract_scale_to_rms": 2.0**-0.5,
+            "torque_loss_normalization_basis": "compensated_mixed_basis",
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["sweep_excitation_uses_one_rms_basis"] is False

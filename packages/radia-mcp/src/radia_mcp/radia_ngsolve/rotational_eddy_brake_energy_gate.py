@@ -152,6 +152,46 @@ def _convergence_provenance_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _force_selection_identity_ok(summary: dict[str, Any]) -> bool:
+    if "force_selection_identity" not in summary:
+        return True
+    identity = summary.get("force_selection_identity")
+    if not isinstance(identity, dict):
+        return False
+    geometry = identity.get("geometry_generation")
+    selection_digest = str(identity.get("selection_entity_digest") or "")
+    return (
+        isinstance(geometry, str)
+        and bool(geometry)
+        and identity.get("solution_geometry_generation") == geometry
+        and identity.get("integration_selection_generation") == geometry
+        and len(selection_digest) == 64
+        and identity.get("force_result_selection_digest") == selection_digest
+    )
+
+
+def _excitation_basis_identity_ok(summary: dict[str, Any]) -> bool:
+    if "excitation_basis_identity" not in summary:
+        return True
+    identity = summary.get("excitation_basis_identity")
+    if not isinstance(identity, dict):
+        return False
+    try:
+        solve_scale = float(identity.get("solve_scale_to_rms"))
+        extract_scale = float(identity.get("extract_scale_to_rms"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(identity.get("sweep_generation"))
+        and identity.get("solve_amplitude_basis") == "rms"
+        and identity.get("extract_amplitude_basis")
+        == identity.get("solve_amplitude_basis")
+        and math.isclose(solve_scale, 1.0, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(extract_scale, solve_scale, rel_tol=0.0, abs_tol=1.0e-15)
+        and identity.get("torque_loss_normalization_basis") == "rms_excitation"
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -251,6 +291,8 @@ def rotational_eddy_brake_energy_gate(
         [*replays, energy_row]
     )
     convergence_provenance_ok = _convergence_provenance_ok(summary)
+    force_selection_identity_ok = _force_selection_identity_ok(summary)
+    excitation_basis_identity_ok = _excitation_basis_identity_ok(summary)
     all_cardinalities = True
     all_times_increase = True
     nonnegative_dissipation = True
@@ -430,6 +472,10 @@ def rotational_eddy_brake_energy_gate(
         "artifact_series_share_their_solve_generation": artifact_generations_ok,
         "artifact_series_share_one_coordinate_frame": artifact_coordinate_frames_ok,
         "convergence_table_matches_result_iteration": convergence_provenance_ok,
+        "force_integral_uses_current_geometry_selection": (
+            force_selection_identity_ok
+        ),
+        "sweep_excitation_uses_one_rms_basis": excitation_basis_identity_ok,
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
         and field_time_alignment,
