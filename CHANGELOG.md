@@ -5,6 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.15 - Complete RT2 HDiv-VIM production paths
+
+Released 2026-07-16.
+
+- Added the persistent `HDivSolver` and mutually coupled independent-body
+  solves, including linear-recoil permanent magnets, nonlinear iron, and
+  stateful EnergyStop/Play hysteresis bodies with geometry-operator reuse.
+- Completed RT2 nonlinear and hysteresis solves for tetrahedral, hexahedral,
+  and wedge meshes, with quadrature-point constitutive state, restart
+  validation, curved-field reconstruction, and deterministic native kernels.
+- Routed multi-body `rad.Solve` and `rad.Fld` through the coupled HDiv result,
+  preserving each body's full RT1/RT2 field while summing ordinary Radia
+  sources, and exposed RT1/RT2 selection in the accelerator HDiv workbench.
+- Synchronized panel registry metadata so accelerator and reduced-motor HDiv
+  order controls are represented explicitly as RT1/RT2 settings.
+
 ## 4.95.14 - Faster affine HEX RT2 HDiv-VIM
 
 Released 2026-07-16.
