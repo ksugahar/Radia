@@ -441,6 +441,89 @@ def _port_deembed_reference_plane_unit_is_bound(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _sparameter_renormalization_matches_reference_impedance(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("sparameter_reference_impedance_renormalization_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        reference_impedance = complex(
+            float(identity["reference_impedance_real_ohm"]),
+            float(identity["reference_impedance_imag_ohm"]),
+        )
+        result_impedance = complex(
+            float(identity["result_reference_impedance_real_ohm"]),
+            float(identity["result_reference_impedance_imag_ohm"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    port_generation = str(identity.get("port_setup_generation", "")).strip()
+    renormalization_generation = str(
+        identity.get("renormalization_generation", "")
+    ).strip()
+    source_digest = str(identity.get("sparameter_array_sha256", "")).lower()
+    result_digest = str(identity.get("renormalized_array_sha256", "")).lower()
+    return (
+        identity.get("reference_impedance_basis") == "complex_ohm"
+        and identity.get("result_reference_impedance_basis") == "complex_ohm"
+        and math.isfinite(reference_impedance.real)
+        and math.isfinite(reference_impedance.imag)
+        and reference_impedance.real > 0.0
+        and result_impedance == reference_impedance
+        and bool(port_generation)
+        and identity.get("sparameter_result_generation") == port_generation
+        and identity.get("renormalization_applied") is True
+        and bool(renormalization_generation)
+        and identity.get("result_renormalization_generation")
+        == renormalization_generation
+        and len(source_digest) == len(result_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in source_digest + result_digest
+        )
+        and result_digest == source_digest
+    )
+
+
+def _farfield_ludwig_polarization_basis_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("farfield_ludwig_polarization_basis_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    result_generation = str(
+        identity.get("farfield_result_generation", "")
+    ).strip()
+    frame = str(identity.get("coordinate_frame_id", "")).strip()
+    ludwig_basis = str(identity.get("ludwig_basis_definition", "")).strip()
+    reference_axis = str(identity.get("polarization_reference_axis", "")).strip()
+    basis_digest = str(identity.get("polarization_basis_sha256", "")).lower()
+    result_digest = str(
+        identity.get("co_cross_polarization_basis_sha256", "")
+    ).lower()
+    return (
+        bool(result_generation)
+        and identity.get("co_cross_result_generation") == result_generation
+        and bool(frame)
+        and identity.get("co_cross_coordinate_frame_id") == frame
+        and ludwig_basis in {"ludwig_1", "ludwig_2", "ludwig_3"}
+        and identity.get("co_cross_ludwig_basis_definition") == ludwig_basis
+        and bool(reference_axis)
+        and identity.get("co_cross_polarization_reference_axis") == reference_axis
+        and len(basis_digest) == len(result_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in basis_digest + result_digest
+        )
+        and result_digest == basis_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -634,6 +717,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "port_deembed_reference_plane_uses_explicit_length_unit": (
                 _port_deembed_reference_plane_unit_is_bound(raw)
+            ),
+            "sparameter_renormalization_matches_complex_reference_impedance": (
+                _sparameter_renormalization_matches_reference_impedance(raw)
+            ),
+            "farfield_co_cross_uses_current_ludwig_polarization_basis": (
+                _farfield_ludwig_polarization_basis_is_current(raw)
             ),
         }
         row = {
