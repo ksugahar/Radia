@@ -779,6 +779,61 @@ def _with_v16_sweep_jacobian_and_source_identity(row: dict) -> dict:
     return row
 
 
+def _with_v17_periodic_transition_and_export_identity(row: dict) -> dict:
+    row = _with_v16_sweep_jacobian_and_source_identity(row)
+    row["periodic_hex_node_pair_transform_frame_identity"] = {
+        "mesh_generation": "periodic-hex-mesh-51",
+        "node_pair_mesh_generation": "periodic-hex-mesh-51",
+        "periodic_transform_frame_mesh_generation": "periodic-hex-mesh-51",
+        "periodic_transform_generation": "periodic-transform-51",
+        "node_pair_periodic_transform_generation": "periodic-transform-51",
+        "source_node_ids": [101, 102, 103, 104],
+        "target_node_ids": [201, 202, 203, 204],
+        "paired_source_node_ids": [101, 102, 103, 104],
+        "paired_target_node_ids": [201, 202, 203, 204],
+        "coordinate_frame": "global_cartesian",
+        "node_pair_coordinate_frame": "global_cartesian",
+        "transform_matrix_sha256": "1" * 64,
+        "applied_transform_matrix_sha256": "1" * 64,
+    }
+    row["pyramid_transition_face_diagonal_convention_identity"] = {
+        "transition_mesh_generation": "transition-mesh-51",
+        "tet_neighbor_mesh_generation": "transition-mesh-51",
+        "hex_neighbor_mesh_generation": "transition-mesh-51",
+        "pyramid_face_ids": [301, 302],
+        "tet_neighbor_face_ids": [301, 302],
+        "hex_neighbor_face_ids": [301, 302],
+        "diagonal_convention": "canonical_node_0_to_2",
+        "tet_neighbor_diagonal_convention": "canonical_node_0_to_2",
+        "hex_neighbor_diagonal_convention": "canonical_node_0_to_2",
+        "transition_face_connectivity_sha256": "2" * 64,
+        "neighbor_face_connectivity_sha256": "2" * 64,
+    }
+    row["block_attribute_material_id_merge_identity"] = {
+        "final_merge_generation": "merge-51",
+        "block_attribute_merge_generation": "merge-51",
+        "material_id_map_merge_generation": "merge-51",
+        "block_ids": [11, 12],
+        "block_attribute_block_ids": [11, 12],
+        "material_ids": [101, 102],
+        "exported_material_ids": [101, 102],
+        "block_material_map_sha256": "3" * 64,
+        "exported_block_material_map_sha256": "3" * 64,
+    }
+    row["high_order_exodus_node_permutation_export_order_identity"] = {
+        "export_order_generation": "exodus-order-51",
+        "permutation_table_export_order_generation": "exodus-order-51",
+        "writer_export_order_generation": "exodus-order-51",
+        "element_order": 2,
+        "source_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "permutation_table": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "written_node_order": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        "node_permutation_sha256": "4" * 64,
+        "written_node_permutation_sha256": "4" * 64,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -1141,3 +1196,83 @@ def test_v16_source_exodus_sideset_outward_normal_topology_generation_mismatch()
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["exodus_sideset_normals_follow_current_topology"] is False
+
+
+def test_v17_positive_periodic_transition_and_export_identity():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+
+
+def test_v17_public_periodic_hex_node_pair_transform_frame_generation_mismatch():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["periodic_hex_node_pair_transform_frame_identity"].update(
+        {
+            "periodic_transform_frame_mesh_generation": "periodic-hex-mesh-50",
+            "node_pair_periodic_transform_generation": "periodic-transform-50",
+            "node_pair_coordinate_frame": "periodic_local_previous",
+            "applied_transform_matrix_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["periodic_hex_node_pairs_use_current_transform_frame"]
+        is False
+    )
+
+
+def test_v17_public_pyramid_transition_face_diagonal_convention_neighbor_mismatch():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["pyramid_transition_face_diagonal_convention_identity"].update(
+        {
+            "hex_neighbor_diagonal_convention": "canonical_node_1_to_3",
+            "neighbor_face_connectivity_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "pyramid_transition_neighbors_share_one_face_diagonal_convention"
+        ]
+        is False
+    )
+
+
+def test_v17_source_block_attribute_material_id_previous_merge_generation():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["block_attribute_material_id_merge_identity"].update(
+        {
+            "block_attribute_merge_generation": "merge-50",
+            "exported_material_ids": [102, 101],
+            "exported_block_material_map_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["block_material_attributes_follow_final_merge_generation"]
+        is False
+    )
+
+
+def test_v17_source_high_order_exodus_node_permutation_previous_export_order_generation():
+    row = _with_v17_periodic_transition_and_export_identity(summary())
+    row["high_order_exodus_node_permutation_export_order_identity"].update(
+        {
+            "permutation_table_export_order_generation": "exodus-order-50",
+            "permutation_table": [1, 3, 2, 4, 5, 6, 7, 8, 9, 10],
+            "written_node_permutation_sha256": "5" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "high_order_exodus_nodes_use_current_export_order_permutation"
+        ]
+        is False
+    )
