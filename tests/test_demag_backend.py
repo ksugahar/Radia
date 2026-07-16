@@ -107,3 +107,27 @@ def test_mesh_backed_wedge_is_hdiv_auto_eligible():
 
     rad.UtiDelAll()
     rad.set_demag_backend("auto")
+
+
+def test_multiple_mesh_backed_irons_are_hdiv_auto_eligible():
+    ng = pytest.importorskip("ngsolve")
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim import MeshSoftIron, _radsolve
+
+    rad.UtiDelAll()
+    meshes = [
+        MakeStructured3DMesh(
+            hexes=True, nx=1, ny=1, nz=1,
+            mapping=lambda x, y, z, shift=shift: (
+                0.01*(x-0.5)+shift, 0.01*(y-0.5), 0.01*(z-0.5)))
+        for shift in (-0.02, 0.02)
+    ]
+    with ng.TaskManager():
+        irons = [MeshSoftIron(mesh, mu_r=20.0) for mesh in meshes]
+    top = rad.ObjCnt(irons)
+
+    assert _radsolve.registered_iron_count(top) == 2
+    assert _radsolve.is_hdiv_eligible(top)
+
+    rad.UtiDelAll()
+    rad.set_demag_backend("auto")

@@ -85,6 +85,10 @@ production checklist, not a migration archive.
   CoefficientFunctions exchange body fields, each ChargeGram is built once,
   and nonconvergence is fail-loud.  This is also the production segmented-PM
   path for normal-discontinuous `B_r`.
+- A `rad.Solve` container with multiple eligible `vim.MeshSoftIron` bodies
+  dispatches to the same coupled solve.  Per-body magnetization is written back
+  independently, while top-level `rad.Fld` sums every persistent RT1/RT2 field
+  and the ordinary Radia source objects.
 - `vim.CoupledHistoryBody` and `vim.SolveCoupledHysteresis` couple one stateful
   EnergyStop/Play PM to independent linear/nonlinear HDiv bodies.  Every outer
   trial starts from the same committed history state; only the converged

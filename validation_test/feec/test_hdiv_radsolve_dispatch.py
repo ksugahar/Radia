@@ -80,3 +80,55 @@ def test_meshless_hex_soft_iron_not_registered_fails_loud():
         rad.Solve(cont, 1e-6, 100, 0)
     rad.UtiDelAll()
     rad.set_demag_backend("auto")
+
+
+def test_radsolve_multiple_irons_dispatches_coupled_hdiv_and_sums_field():
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim import _radsolve
+
+    def body_mesh(shift):
+        return MakeStructured3DMesh(
+            hexes=True, nx=1, ny=1, nz=1,
+            mapping=lambda x, y, z: (
+                0.01*(x-0.5)+shift, 0.01*(y-0.5), 0.01*(z-0.5)))
+
+    rad.UtiDelAll()
+    _radsolve.clear_registry()
+    meshes = [body_mesh(-0.015), body_mesh(0.015)]
+    applied = ng.CoefficientFunction((0.0, 0.0, H0))
+    specs = [
+        vim.CoupledBody(meshes[0], "left", mu_r=40.0),
+        vim.CoupledBody(meshes[1], "right", mu_r=80.0),
+    ]
+    with ng.TaskManager():
+        direct = vim.SolveCoupled(specs, H_ext=applied)
+        irons = [
+            vim.MeshSoftIron(meshes[0], mu_r=40.0),
+            vim.MeshSoftIron(meshes[1], mu_r=80.0),
+        ]
+        background = rad.ObjBckg(lambda _p: [0.0, 0.0, MU0*H0])
+        top = rad.ObjCnt([*irons, background])
+        result = rad.Solve(top, 1.0e-6, 1000, 0)
+
+    assert result["hdiv_body_count"] == 2
+    assert result["converged"] is True
+    for got, expected in zip(result["bodies"], direct["bodies"]):
+        np.testing.assert_allclose(
+            got["_m_coefficients"], expected["_m_coefficients"],
+            rtol=2.0e-12, atol=1.0e-8)
+
+    probes = np.array([[0.0, 0.0, 0.04], [0.03, -0.01, 0.02]])
+    got_b = np.asarray(rad.Fld(top, "b", probes), dtype=float)
+    expected_b = MU0*(
+        vim.FieldFromCoupledSolution(direct, probes)
+        + np.array([0.0, 0.0, H0]))
+    np.testing.assert_allclose(got_b, expected_b, rtol=2.0e-13, atol=1.0e-14)
+
+    for iron, body_result in zip(irons, result["bodies"]):
+        got_body_b = np.asarray(rad.Fld(iron, "b", probes), dtype=float)
+        expected_body_b = MU0*vim.FieldFromSolution(body_result, probes)
+        np.testing.assert_allclose(
+            got_body_b, expected_body_b, rtol=2.0e-13, atol=1.0e-14)
+
+    rad.UtiDelAll()
+    _radsolve.clear_registry()

@@ -9,11 +9,12 @@ material getter), so this bridge keeps a registry populated at build time by
 
     {iron_container -> dict(mesh, mu_r, bh_table, handles)}
 
-``rad.Solve(cont, demag_backend='hdiv')`` then looks up the registered iron in
-``cont``, builds the applied field ``H_ext`` from the remaining (source) members
-(``rad.RadiaField(.., 'h')``), runs ``radia.vim.Solve``, and writes the per-element
-magnetization back onto the iron's Radia elements via ``ObjSetM`` so that
-``rad.Fld`` / ``rad.ObjM`` reflect the HDiv-VIM solution.
+``rad.Solve(cont, demag_backend='hdiv')`` then looks up every registered iron in
+``cont``, builds the applied field ``H_ext`` from the remaining source members
+(``rad.RadiaField(.., 'h')``), and runs ``radia.vim.Solve`` for one body or
+``radia.vim.SolveCoupled`` for several.  It writes each element magnetization
+back through ``ObjSetM`` and registers the persistent RT field evaluators so
+that ``rad.Fld`` / ``rad.ObjM`` reflect the coupled HDiv-VIM solution.
 
 Element types: HDiv-VIM is RT1/RT2 on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
 radia's soft-iron demag route.  rad.Solve's 'auto' split
@@ -32,7 +33,7 @@ import radia as rad
 
 _DEMAG_REGISTRY = {}   # iron container handle -> dict(mesh, mu_r, bh_table, handles)
 _KNOWN_CONTAINER_MEMBERS = {}  # container handle -> member handles known to be safe for ObjCntStuf-free lookup
-_FIELD_SOLUTIONS = {}  # solved handle -> dict(result=<vim.Solve dict>, sources=[Radia handles])
+_FIELD_SOLUTIONS = {}  # solved handle -> one/more vim results plus an optional Radia source object
 
 
 def clear_registry():
@@ -96,7 +97,7 @@ def _clear_image_field_handles(iron, reg):
 
 
 def field_solution_for(handle):
-    """Return the solved RT1 field record for ``handle``, or ``None``."""
+    """Return the solved RT1/RT2 field record for ``handle``, or ``None``."""
     return _FIELD_SOLUTIONS.get(handle)
 
 
@@ -172,62 +173,59 @@ def is_registered(top):
 
 
 def is_hdiv_eligible(top):
-    """True if ``top``'s registered soft-iron mesh is PURE-TET, PURE-HEX, or PURE-WEDGE -- the 'auto'
-    eligibility for the FEEC HDiv-VIM, radia's soft-iron demag route.
+    """True if every registered soft-iron mesh is pure TET, HEX, or WEDGE.
+
+    This is the ``auto`` eligibility for the FEEC HDiv-VIM, Radia's soft-iron
+    demag route.  Multiple eligible bodies dispatch through ``vim.SolveCoupled``.
     A MIXED / pyramid mesh-backed iron is NOT yet HDiv-covered, so rad.Solve's 'auto' split rejects it.
     Mesh-less surface-charge soft iron is retired in Radia.  Read-only, never raises."""
     import ngsolve as ng
-    iron = top if top in _DEMAG_REGISTRY else None
-    if iron is None:
-        irons = [m for m in _KNOWN_CONTAINER_MEMBERS.get(top, []) if m in _DEMAG_REGISTRY]
-        iron = irons[0] if len(irons) == 1 else None
-    if iron is None:
+    irons = ([top] if top in _DEMAG_REGISTRY else [
+        member for member in _KNOWN_CONTAINER_MEMBERS.get(top, [])
+        if member in _DEMAG_REGISTRY])
+    if not irons:
         return False
     try:
-        mesh = _DEMAG_REGISTRY[iron]["mesh"]
-        vts = {len(el.vertices) for el in mesh.Elements(ng.VOL)}
-        return vts in ({4}, {8}, {6})            # pure tet / hex / wedge (HDiv-VIM RT1/RT2, incl. IMA)
+        return all(
+            {len(el.vertices) for el in _DEMAG_REGISTRY[iron]["mesh"].Elements(ng.VOL)}
+            in ({4}, {8}, {6})
+            for iron in irons)
     except Exception:
         return False
 
 
 def registered_iron_count(top):
-    """Number of HDiv-registered soft-iron bodies inside ``top`` (0, 1, or >1).  rad.Solve's 'auto' split
-    uses this to FAIL LOUD on a MULTI-iron container -- which is_hdiv_eligible rejects (its len!=1 guard).
-    Read-only, never raises."""
+    """Number of HDiv-registered soft-iron bodies inside ``top``."""
     if top in _DEMAG_REGISTRY:
         return 1
     return sum(1 for m in _KNOWN_CONTAINER_MEMBERS.get(top, []) if m in _DEMAG_REGISTRY)
 
 
-def _find_registered_iron(top):
-    """Return (iron_handle, [source_handles]) for a top-level rad.Solve object: the registered
-    iron container plus the other (source) members.  ``top`` may be the iron handle itself or an
-    ``ObjCnt([iron, sources...])``."""
+def _find_registered_irons(top):
+    """Return (iron handles, source handles) for a top-level solve object."""
     if top in _DEMAG_REGISTRY:
-        return top, []
+        return [top], []
     members = _KNOWN_CONTAINER_MEMBERS.get(top, [])
     irons = [m for m in members if m in _DEMAG_REGISTRY]
-    if len(irons) == 1:
-        iron = irons[0]
-        return iron, [m for m in members if m != iron]
-    if not irons:
+    if irons:
+        iron_set = set(irons)
+        return irons, [member for member in members if member not in iron_set]
+    else:
         raise NotImplementedError(
             "demag_backend='hdiv': rad.Solve received no HDiv-registered soft-iron body.  Build the "
             "iron via radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=) so rad.Solve can dispatch "
             "the FEEC HDiv-VIM, or call radia.vim.Solve(mesh, ...) directly.")
-    raise NotImplementedError(
-        "demag_backend='hdiv': multiple HDiv-registered iron bodies in one rad.Solve container is not "
-        "supported yet -- solve them separately or call radia.vim.Solve directly.")
 
 
 def dispatch(top, *solve_args, **solve_kwargs):
-    """``rad.Solve(demag_backend='hdiv')`` handler.  Solves the registered iron's demag with the
-    FEEC HDiv-VIM, writes per-element M back via ``ObjSetM``, and returns the ``radia.vim.Solve``
-    result dict (note: a richer return than the legacy C++ rad.Solve tuple).  The legacy
-    ``solve_args`` (prec, maxiter, method) are not used by the HDiv path."""
+    """Solve registered HDiv iron bodies and write their magnetization back.
+
+    One body returns ``vim.Solve``'s result; several return
+    ``vim.SolveCoupled``'s result.  The legacy ``solve_args`` (prec, maxiter,
+    method) are not used by the HDiv path.
+    """
     import ngsolve
-    from . import Solve
+    from . import CoupledBody, Solve, SolveCoupled
 
     # IMA mirror symmetry is wired for flat/Curve(2) pure-TET / pure-HEX / pure-WEDGE paths (tet
     # QuadDotRefl + hex/wedge reflected-block).  Parse the image argument (kwarg or legacy 4th positional)
@@ -239,10 +237,10 @@ def dispatch(top, *solve_args, **solve_kwargs):
     if solve_kwargs:
         raise TypeError(f"unsupported rad.Solve keyword(s) for HDiv-VIM dispatch: {sorted(solve_kwargs)}")
 
-    iron, sources = _find_registered_iron(top)
-    reg = _DEMAG_REGISTRY[iron]
-    mesh = reg["mesh"]
-    _clear_image_field_handles(iron, reg)
+    irons, sources = _find_registered_irons(top)
+    registrations = [_DEMAG_REGISTRY[iron] for iron in irons]
+    for iron, reg in zip(irons, registrations):
+        _clear_image_field_handles(iron, reg)
 
     # applied field H_ext = the source members' H field (coils / ObjBckg), as an NGSolve CF
     if sources:
@@ -250,32 +248,58 @@ def dispatch(top, *solve_args, **solve_kwargs):
     else:
         H_ext = ngsolve.CoefficientFunction((0.0, 0.0, 0.0))
 
-    res = Solve(
-        mesh, mu_r=reg["mu_r"], H_ext=H_ext, bh_table=reg["bh_table"],
-        image=image, order=reg["order"])
+    if len(irons) == 1:
+        reg = registrations[0]
+        result = Solve(
+            reg["mesh"], mu_r=reg["mu_r"], H_ext=H_ext,
+            bh_table=reg["bh_table"], image=image, order=reg["order"])
+        body_results = [result]
+        returned = result
+    else:
+        solve_options = {} if image is None else {"image": image}
+        body_specs = [
+            CoupledBody(
+                reg["mesh"], "iron-%s" % iron,
+                mu_r=reg["mu_r"], bh_table=reg["bh_table"],
+                order=reg["order"], solve_options=solve_options)
+            for iron, reg in zip(irons, registrations)
+        ]
+        returned = SolveCoupled(body_specs, H_ext=H_ext)
+        body_results = list(returned["bodies"])
 
-    M = res["M"]
-    handles = reg["handles"]
-    if len(handles) != len(M):
-        raise RuntimeError(
-            f"demag_backend='hdiv': element/M count mismatch ({len(handles)} Radia handles vs "
-            f"{len(M)} HDiv elements) -- mesh and registered handles are out of sync.")
-    for h, m in zip(handles, M):
-        rad.ObjSetM(h, [float(m[0]), float(m[1]), float(m[2])])
+    for iron, reg, result in zip(irons, registrations, body_results):
+        M = result["M"]
+        handles = reg["handles"]
+        if len(handles) != len(M):
+            raise RuntimeError(
+                f"demag_backend='hdiv': element/M count mismatch ({len(handles)} Radia handles vs "
+                f"{len(M)} HDiv elements) -- mesh and registered handles are out of sync.")
+        for handle, magnetization in zip(handles, M):
+            rad.ObjSetM(handle, [float(value) for value in magnetization])
     # Register the full HDiv solution for rad.Fld.  The iron handle contributes
     # only its solved magnetization; the top handle also includes its Radia
     # source objects.  IMA is evaluated from the C++ RT1/RT2 field itself.
-    _FIELD_SOLUTIONS[iron] = {"result": res, "source_object": None}
-    keys = [iron]
-    if top != iron:
+        _FIELD_SOLUTIONS[iron] = {
+            "result": result, "results": (result,), "source_object": None}
+        reg["field_solution_keys"] = [iron]
+
+    if len(irons) == 1 and top == irons[0]:
+        keys = [irons[0]]
+    else:
         source_object = None
         if sources:
             source_object = sources[0] if len(sources) == 1 else rad.ObjCnt(list(sources))
-        _FIELD_SOLUTIONS[top] = {"result": res, "source_object": source_object}
-        keys.append(top)
-    reg["field_solution_keys"] = keys
-    res["field_contract"] = (
+        record = {"results": tuple(body_results), "source_object": source_object}
+        if len(body_results) == 1:
+            record["result"] = body_results[0]
+        _FIELD_SOLUTIONS[top] = record
+        keys = [top]
+        for reg in registrations:
+            reg["field_solution_keys"].append(top)
+
+    returned["field_contract"] = (
         "rad.Fld evaluates the persistent C++ HDiv charge field; IMA reflects the solution without "
         "piecewise-constant image objects"
     )
-    return res
+    returned["hdiv_body_count"] = len(body_results)
+    return returned

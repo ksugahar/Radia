@@ -20,6 +20,13 @@ field = rad.Fld(model, "b", [0, 0, 0.02])
 For direct VIM use, call `radia.vim.Solve(mesh, mu_r=... | bh_table=...,
 H_ext=..., image=...)`.
 
+`rad.Solve` also accepts a container with multiple independently registered
+`vim.MeshSoftIron` bodies.  Eligible pure TET/HEX/WEDGE bodies dispatch through
+`vim.SolveCoupled`; each body keeps its own HDiv normal trace, and `rad.Fld` on
+the top container sums all persistent C++ RT1/RT2 fields plus ordinary Radia
+source objects.  A single registered iron retains the ordinary `vim.Solve`
+result shape.
+
 ## Permanent-magnet model ladder
 
 Radia deliberately exposes four permanent-magnet levels.  Select the least
