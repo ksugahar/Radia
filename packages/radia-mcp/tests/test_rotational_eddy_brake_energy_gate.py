@@ -353,6 +353,30 @@ def _with_v10_ownership(summary: dict) -> dict:
     return summary
 
 
+def _with_v11_artifact_ownership(summary: dict) -> dict:
+    summary = _with_v10_ownership(summary)
+    summary["live_stored_force_identity"] = {
+        "live_geometry_sha256": "1" * 64,
+        "stored_force_geometry_sha256": "1" * 64,
+        "live_solution_generation": "solution-generation-43",
+        "stored_force_solution_generation": "solution-generation-43",
+        "live_selection_digest": "2" * 64,
+        "stored_force_selection_digest": "2" * 64,
+    }
+    summary["loss_partition_identity"] = {
+        "aggregation_generation": "loss-aggregation-43",
+        "reported_total_generation": "loss-aggregation-43",
+        "partition_ownership_ids": [
+            "rotor-domain",
+            "stator-domain",
+            "interface-layer",
+        ],
+        "ownership_overlap_count": 0,
+        "signed_compensation_term_w": 0.0,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -381,3 +405,34 @@ def test_v10_public_excitation_peak_rms_sweep_basis_mismatch() -> None:
     result = gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"]["sweep_excitation_uses_one_rms_basis"] is False
+
+
+def test_v11_public_force_live_stored_geometry_digest_mismatch() -> None:
+    summary = _with_v11_artifact_ownership(copy.deepcopy(_summary()))
+    summary["live_stored_force_identity"].update(
+        {
+            "stored_force_geometry_sha256": "5" * 64,
+            "stored_force_solution_generation": "solution-generation-42",
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["stored_force_matches_live_geometry_solution_and_selection"]
+        is False
+    )
+
+
+def test_v11_public_loss_partition_double_counts_interface() -> None:
+    summary = _with_v11_artifact_ownership(copy.deepcopy(_summary()))
+    summary["loss_partition_identity"].update(
+        {"ownership_overlap_count": 1, "signed_compensation_term_w": -0.25}
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "loss_partitions_have_unique_ownership_without_compensation"
+        ]
+        is False
+    )

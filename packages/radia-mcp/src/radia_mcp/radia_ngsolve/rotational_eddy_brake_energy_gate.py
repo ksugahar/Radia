@@ -192,6 +192,52 @@ def _excitation_basis_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _live_stored_force_identity_ok(summary: dict[str, Any]) -> bool:
+    if "live_stored_force_identity" not in summary:
+        return True
+    identity = summary.get("live_stored_force_identity")
+    if not isinstance(identity, dict):
+        return False
+    geometry_digest = str(identity.get("live_geometry_sha256") or "")
+    selection_digest = str(identity.get("live_selection_digest") or "")
+    solution_generation = str(identity.get("live_solution_generation") or "")
+    return (
+        len(geometry_digest) == 64
+        and identity.get("stored_force_geometry_sha256") == geometry_digest
+        and bool(solution_generation)
+        and identity.get("stored_force_solution_generation") == solution_generation
+        and len(selection_digest) == 64
+        and identity.get("stored_force_selection_digest") == selection_digest
+    )
+
+
+def _loss_partition_identity_ok(summary: dict[str, Any]) -> bool:
+    if "loss_partition_identity" not in summary:
+        return True
+    identity = summary.get("loss_partition_identity")
+    if not isinstance(identity, dict):
+        return False
+    ownership = identity.get("partition_ownership_ids")
+    if not isinstance(ownership, list):
+        return False
+    normalized = [str(item).strip() for item in ownership]
+    try:
+        overlap_count = int(identity.get("ownership_overlap_count"))
+        compensation = float(identity.get("signed_compensation_term_w"))
+    except (TypeError, ValueError):
+        return False
+    generation = str(identity.get("aggregation_generation") or "")
+    return (
+        bool(generation)
+        and identity.get("reported_total_generation") == generation
+        and bool(normalized)
+        and all(normalized)
+        and len(set(normalized)) == len(normalized)
+        and overlap_count == 0
+        and math.isclose(compensation, 0.0, rel_tol=0.0, abs_tol=1.0e-15)
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -293,6 +339,8 @@ def rotational_eddy_brake_energy_gate(
     convergence_provenance_ok = _convergence_provenance_ok(summary)
     force_selection_identity_ok = _force_selection_identity_ok(summary)
     excitation_basis_identity_ok = _excitation_basis_identity_ok(summary)
+    live_stored_force_identity_ok = _live_stored_force_identity_ok(summary)
+    loss_partition_identity_ok = _loss_partition_identity_ok(summary)
     all_cardinalities = True
     all_times_increase = True
     nonnegative_dissipation = True
@@ -476,6 +524,12 @@ def rotational_eddy_brake_energy_gate(
             force_selection_identity_ok
         ),
         "sweep_excitation_uses_one_rms_basis": excitation_basis_identity_ok,
+        "stored_force_matches_live_geometry_solution_and_selection": (
+            live_stored_force_identity_ok
+        ),
+        "loss_partitions_have_unique_ownership_without_compensation": (
+            loss_partition_identity_ok
+        ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
         and field_time_alignment,
