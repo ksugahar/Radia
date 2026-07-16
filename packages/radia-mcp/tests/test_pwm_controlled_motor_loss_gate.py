@@ -244,6 +244,34 @@ def _with_artifact_identity(payload: dict) -> dict:
             "element_volume_sha256": "6" * 64,
             "loss_volume_weight_sha256": "6" * 64,
         },
+        "dq_torque_map_park_transform_angle_sign_identity": {
+            "torque_map_generation": "torque-map-19",
+            "park_transform_torque_map_generation": "torque-map-19",
+            "dq_current_map_torque_map_generation": "torque-map-19",
+            "park_transform_generation": "park-19",
+            "torque_map_park_transform_generation": "park-19",
+            "electrical_angle_origin": "rotor_d_axis",
+            "torque_map_electrical_angle_origin": "rotor_d_axis",
+            "q_axis_sign": 1,
+            "torque_map_q_axis_sign": 1,
+            "park_matrix_sha256": "1" * 64,
+            "torque_map_park_matrix_sha256": "1" * 64,
+        },
+        "efficiency_map_power_averaging_window_identity": {
+            "efficiency_map_generation": "efficiency-map-19",
+            "electrical_input_power_map_generation": "efficiency-map-19",
+            "mechanical_output_power_map_generation": "efficiency-map-19",
+            "steady_cycle_generation": "steady-cycle-19",
+            "electrical_power_window_cycle_generation": "steady-cycle-19",
+            "mechanical_power_window_cycle_generation": "steady-cycle-19",
+            "loss_power_window_cycle_generation": "steady-cycle-19",
+            "window_start_sample": 401,
+            "window_end_sample": 800,
+            "electrical_power_window": [401, 800],
+            "mechanical_power_window": [401, 800],
+            "power_window_sha256": "2" * 64,
+            "efficiency_power_window_sha256": "2" * 64,
+        },
     }
     return payload
 
@@ -606,6 +634,47 @@ def test_v16_public_iron_loss_spatial_harmonic_mesh_volume_weight_generation_mis
     assert (
         result["checks"][
             "iron_loss_spatial_harmonics_use_current_mesh_volume_weights"
+        ]
+        is False
+    )
+
+
+def test_v17_public_dq_torque_map_park_transform_angle_sign_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "dq_torque_map_park_transform_angle_sign_identity"
+    ].update(
+        {
+            "torque_map_park_transform_generation": "park-18",
+            "torque_map_electrical_angle_origin": "stator_phase_a_axis",
+            "torque_map_q_axis_sign": -1,
+            "torque_map_park_matrix_sha256": "5" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["dq_torque_map_uses_current_park_angle_and_q_axis_sign"]
+        is False
+    )
+
+
+def test_v17_public_efficiency_map_power_averaging_window_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "efficiency_map_power_averaging_window_identity"
+    ].update(
+        {
+            "mechanical_power_window_cycle_generation": "steady-cycle-18",
+            "mechanical_power_window": [201, 600],
+            "efficiency_power_window_sha256": "5" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "efficiency_map_powers_share_current_steady_cycle_window"
         ]
         is False
     )

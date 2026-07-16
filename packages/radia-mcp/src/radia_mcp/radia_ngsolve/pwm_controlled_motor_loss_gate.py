@@ -100,6 +100,8 @@ def pwm_controlled_motor_loss_gate(
     demag_recoil_temperature_operating_point_identity_ok = True
     torque_ripple_fft_angle_endpoint_generation_identity_ok = True
     iron_loss_spatial_harmonic_mesh_volume_identity_ok = True
+    dq_torque_map_park_transform_angle_sign_identity_ok = True
+    efficiency_map_power_averaging_window_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -119,6 +121,8 @@ def pwm_controlled_motor_loss_gate(
         demag_recoil_temperature_operating_point_identity_ok = False
         torque_ripple_fft_angle_endpoint_generation_identity_ok = False
         iron_loss_spatial_harmonic_mesh_volume_identity_ok = False
+        dq_torque_map_park_transform_angle_sign_identity_ok = False
+        efficiency_map_power_averaging_window_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -804,6 +808,102 @@ def pwm_controlled_motor_loss_gate(
                 == volume_digest
             )
 
+        dq_torque_map_value = identity_value.get(
+            "dq_torque_map_park_transform_angle_sign_identity"
+        )
+        if dq_torque_map_value is not None:
+            dq_torque_map = (
+                dq_torque_map_value
+                if isinstance(dq_torque_map_value, dict)
+                else {}
+            )
+            map_generation = str(dq_torque_map.get("torque_map_generation", ""))
+            park_generation = str(
+                dq_torque_map.get("park_transform_generation", "")
+            )
+            park_digest = str(dq_torque_map.get("park_matrix_sha256", "")).lower()
+            q_axis_sign = dq_torque_map.get("q_axis_sign")
+            dq_torque_map_park_transform_angle_sign_identity_ok = (
+                bool(map_generation)
+                and dq_torque_map.get("park_transform_torque_map_generation")
+                == map_generation
+                and dq_torque_map.get("dq_current_map_torque_map_generation")
+                == map_generation
+                and bool(park_generation)
+                and dq_torque_map.get("torque_map_park_transform_generation")
+                == park_generation
+                and dq_torque_map.get("electrical_angle_origin") == "rotor_d_axis"
+                and dq_torque_map.get("torque_map_electrical_angle_origin")
+                == dq_torque_map.get("electrical_angle_origin")
+                and q_axis_sign in (-1, 1)
+                and dq_torque_map.get("torque_map_q_axis_sign") == q_axis_sign
+                and len(park_digest) == 64
+                and all(character in "0123456789abcdef" for character in park_digest)
+                and str(
+                    dq_torque_map.get("torque_map_park_matrix_sha256", "")
+                ).lower()
+                == park_digest
+            )
+
+        efficiency_window_value = identity_value.get(
+            "efficiency_map_power_averaging_window_identity"
+        )
+        if efficiency_window_value is not None:
+            efficiency_window = (
+                efficiency_window_value
+                if isinstance(efficiency_window_value, dict)
+                else {}
+            )
+            map_generation = str(
+                efficiency_window.get("efficiency_map_generation", "")
+            )
+            cycle_generation = str(
+                efficiency_window.get("steady_cycle_generation", "")
+            )
+            window_digest = str(
+                efficiency_window.get("power_window_sha256", "")
+            ).lower()
+            try:
+                start = int(efficiency_window.get("window_start_sample"))
+                end = int(efficiency_window.get("window_end_sample"))
+                electrical_window = [
+                    int(value)
+                    for value in efficiency_window.get("electrical_power_window", [])
+                ]
+                mechanical_window = [
+                    int(value)
+                    for value in efficiency_window.get("mechanical_power_window", [])
+                ]
+            except (TypeError, ValueError):
+                start = end = -1
+                electrical_window = []
+                mechanical_window = []
+            efficiency_map_power_averaging_window_identity_ok = (
+                bool(map_generation)
+                and efficiency_window.get("electrical_input_power_map_generation")
+                == map_generation
+                and efficiency_window.get("mechanical_output_power_map_generation")
+                == map_generation
+                and bool(cycle_generation)
+                and efficiency_window.get("electrical_power_window_cycle_generation")
+                == cycle_generation
+                and efficiency_window.get("mechanical_power_window_cycle_generation")
+                == cycle_generation
+                and efficiency_window.get("loss_power_window_cycle_generation")
+                == cycle_generation
+                and 0 <= start < end
+                and electrical_window == [start, end]
+                and mechanical_window == [start, end]
+                and len(window_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in window_digest
+                )
+                and str(
+                    efficiency_window.get("efficiency_power_window_sha256", "")
+                ).lower()
+                == window_digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -1045,6 +1145,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "iron_loss_spatial_harmonics_use_current_mesh_volume_weights": (
             iron_loss_spatial_harmonic_mesh_volume_identity_ok
+        ),
+        "dq_torque_map_uses_current_park_angle_and_q_axis_sign": (
+            dq_torque_map_park_transform_angle_sign_identity_ok
+        ),
+        "efficiency_map_powers_share_current_steady_cycle_window": (
+            efficiency_map_power_averaging_window_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
