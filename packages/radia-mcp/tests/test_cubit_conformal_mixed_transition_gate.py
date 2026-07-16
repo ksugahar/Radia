@@ -194,6 +194,34 @@ def summary() -> dict:
             "scale_application_stages": ["source-command"],
             "effective_scale": 0.001,
         },
+        "signed_jacobian_identity": {
+            "mesh_generation": "mesh-generation-42",
+            "minimum_signed_jacobian": 0.31,
+            "maximum_signed_jacobian": 1.24,
+            "interior_sign_change_count": 0,
+            "absolute_volume_matches_cad": True,
+        },
+        "coordinate_scale_identity": {
+            "source_geometry_unit": "mm",
+            "export_coordinate_unit": "m",
+            "coordinate_scale_to_si": 0.001,
+            "volume_scale_to_si": 1.0e-9,
+            "coordinate_scale_generation": "scale-generation-42",
+            "volume_scale_generation": "scale-generation-42",
+        },
+        "exodus_connectivity_identity": {
+            "connectivity_permutation_generation": "exodus-ordering-42",
+            "sideset_face_ordinal_generation": "exodus-ordering-42",
+            "permuted_connectivity_sha256": "a" * 64,
+            "sideset_connectivity_sha256": "a" * 64,
+            "target_ordering": "solver-target-ordering-v1",
+        },
+        "quality_report_generation_identity": {
+            "final_mesh_generation": "mesh-generation-42",
+            "quality_report_mesh_generation": "mesh-generation-42",
+            "final_smoothing_sequence": 8,
+            "quality_report_after_operation_sequence": 8,
+        },
         "timing_breakdown_s": {
             "source_replay": 0.2,
             "mesh_inventory": 0.3,
@@ -430,6 +458,66 @@ def test_generalization_v9_source(case_id: str):
             }
         )
         expected = "length_scale_is_applied_exactly_once"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v10_public_signed_jacobian_folded_hex_abs_volume_passes",
+        "v10_public_export_coordinate_scale_mesh_cad_mismatch",
+    ],
+)
+def test_generalization_v10_public(case_id: str):
+    row = summary()
+    if case_id == "v10_public_signed_jacobian_folded_hex_abs_volume_passes":
+        row["signed_jacobian_identity"].update(
+            {
+                "minimum_signed_jacobian": -0.08,
+                "interior_sign_change_count": 3,
+            }
+        )
+        expected = "signed_jacobians_remain_positive_inside_high_order_hexes"
+    else:
+        row["coordinate_scale_identity"].update(
+            {
+                "coordinate_scale_to_si": 1.0,
+                "coordinate_scale_generation": "scale-generation-41",
+            }
+        )
+        expected = "mesh_coordinates_and_volume_use_one_length_scale"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v10_source_exodus_connectivity_permuted_sideset_stale",
+        "v10_source_quality_report_before_final_smoothing",
+    ],
+)
+def test_generalization_v10_source(case_id: str):
+    row = summary()
+    if case_id == "v10_source_exodus_connectivity_permuted_sideset_stale":
+        row["exodus_connectivity_identity"].update(
+            {
+                "sideset_face_ordinal_generation": "exodus-ordering-41",
+                "sideset_connectivity_sha256": "b" * 64,
+            }
+        )
+        expected = "exodus_sidesets_follow_connectivity_permutation"
+    else:
+        row["quality_report_generation_identity"].update(
+            {
+                "quality_report_mesh_generation": "mesh-generation-41",
+                "quality_report_after_operation_sequence": 7,
+            }
+        )
+        expected = "quality_report_follows_final_smoothing_generation"
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"][expected] is False
