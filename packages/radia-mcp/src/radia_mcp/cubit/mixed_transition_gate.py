@@ -43,6 +43,26 @@ def _counts(value: object, field: str) -> dict[str, int]:
     return result
 
 
+def _opposed_transition_face_orientation_ok(identity: object) -> bool:
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        shared = [int(value) for value in identity.get("shared_face_node_ids", [])]
+        pyramid = [int(value) for value in identity.get("pyramid_face_node_ids", [])]
+        hex_face = [int(value) for value in identity.get("hex_face_node_ids", [])]
+        normal_dot = float(identity.get("opposed_outward_normal_dot"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        len(shared) >= 3
+        and len(set(shared)) == len(shared)
+        and set(pyramid) == set(shared) == set(hex_face)
+        and pyramid == shared
+        and hex_face == list(reversed(pyramid))
+        and math.isclose(normal_dot, -1.0, rel_tol=0.0, abs_tol=1.0e-12)
+    )
+
+
 def cubit_conformal_hex_pyramid_tet_interface_gate(
     summary: Mapping[str, object],
     *,
@@ -432,6 +452,32 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         and face_node_count > 0
     )
 
+    block_material = summary.get("hex_block_material_topology_identity")
+    block_material_ok = block_material is None or (
+        isinstance(block_material, Mapping)
+        and bool(block_material.get("final_imprint_generation"))
+        and bool(block_material.get("final_topology_generation"))
+        and block_material.get("block_topology_generation")
+        == block_material.get("final_topology_generation")
+        and block_material.get("material_assignment_topology_generation")
+        == block_material.get("final_topology_generation")
+        and list(block_material.get("block_volume_ids") or [])
+        == list(block_material.get("material_assignment_volume_ids") or [])
+        and len(str(block_material.get("block_material_map_sha256") or "")) == 64
+        and block_material.get("resolved_material_map_sha256")
+        == block_material.get("block_material_map_sha256")
+    )
+    transition_orientation = summary.get("pyramid_transition_face_orientation_identity")
+    transition_orientation_ok = transition_orientation is None or (
+        isinstance(transition_orientation, Mapping)
+        and bool(transition_orientation.get("transition_generation"))
+        and transition_orientation.get("pyramid_face_generation")
+        == transition_orientation.get("transition_generation")
+        and transition_orientation.get("hex_face_generation")
+        == transition_orientation.get("transition_generation")
+        and _opposed_transition_face_orientation_ok(transition_orientation)
+    )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -458,6 +504,10 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         "sidesets_follow_final_webcut_topology": webcut_sideset_ok,
         "high_order_export_nodes_match_current_mesh_and_curving_generation": (
             curved_node_ok
+        ),
+        "hex_block_materials_follow_final_imprint_topology": block_material_ok,
+        "pyramid_hex_transition_faces_have_opposed_orientation": (
+            transition_orientation_ok
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -865,6 +915,32 @@ def cubit_mixed_transition_source_gate(
         and higher_order_node_count > 0
         and len(netgen_export_digest) == 64
     )
+    headless_block = summary.get("headless_block_material_manifest_identity")
+    headless_block_ok = headless_block is None or (
+        isinstance(headless_block, Mapping)
+        and bool(headless_block.get("batch_invocation_id"))
+        and headless_block.get("manifest_invocation_id")
+        == headless_block.get("batch_invocation_id")
+        and bool(headless_block.get("final_imprint_generation"))
+        and bool(headless_block.get("active_topology_generation"))
+        and headless_block.get("manifest_topology_generation")
+        == headless_block.get("active_topology_generation")
+        and list(headless_block.get("manifest_volume_ids") or [])
+        == list(headless_block.get("live_volume_ids") or [])
+        and len(str(headless_block.get("manifest_material_map_sha256") or "")) == 64
+        and headless_block.get("live_material_map_sha256")
+        == headless_block.get("manifest_material_map_sha256")
+    )
+    export_orientation = summary.get("mesh_export_transition_orientation_identity")
+    export_orientation_ok = export_orientation is None or (
+        isinstance(export_orientation, Mapping)
+        and bool(export_orientation.get("export_generation"))
+        and export_orientation.get("pyramid_face_export_generation")
+        == export_orientation.get("export_generation")
+        and export_orientation.get("hex_face_export_generation")
+        == export_orientation.get("export_generation")
+        and _opposed_transition_face_orientation_ok(export_orientation)
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -939,6 +1015,8 @@ def cubit_mixed_transition_source_gate(
         "netgen_high_order_nodes_match_current_mesh_and_model_generation": (
             high_order_export_ok
         ),
+        "headless_block_material_manifest_follows_final_imprint": headless_block_ok,
+        "mesh_export_transition_faces_have_opposed_orientation": export_orientation_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),

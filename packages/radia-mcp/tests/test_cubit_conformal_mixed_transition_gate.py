@@ -604,6 +604,30 @@ def _with_v12_topology_generation_identity(row: dict) -> dict:
     return row
 
 
+def _with_v13_block_orientation_identity(row: dict) -> dict:
+    row = _with_v12_topology_generation_identity(row)
+    row["hex_block_material_topology_identity"] = {
+        "final_imprint_generation": "imprint-generation-45", "final_topology_generation": "topology-generation-45",
+        "block_topology_generation": "topology-generation-45", "material_assignment_topology_generation": "topology-generation-45",
+        "block_volume_ids": [1, 2, 3], "material_assignment_volume_ids": [1, 2, 3],
+        "block_material_map_sha256": "c" * 64, "resolved_material_map_sha256": "c" * 64,
+    }
+    row["pyramid_transition_face_orientation_identity"] = {
+        "transition_generation": "transition-generation-45", "pyramid_face_generation": "transition-generation-45", "hex_face_generation": "transition-generation-45",
+        "shared_face_node_ids": [101, 102, 103, 104], "pyramid_face_node_ids": [101, 102, 103, 104], "hex_face_node_ids": [104, 103, 102, 101], "opposed_outward_normal_dot": -1.0,
+    }
+    row["headless_block_material_manifest_identity"] = {
+        "batch_invocation_id": "batch-invocation-45", "manifest_invocation_id": "batch-invocation-45", "final_imprint_generation": "imprint-generation-45",
+        "active_topology_generation": "topology-generation-45", "manifest_topology_generation": "topology-generation-45",
+        "manifest_volume_ids": [1, 2, 3], "live_volume_ids": [1, 2, 3], "manifest_material_map_sha256": "d" * 64, "live_material_map_sha256": "d" * 64,
+    }
+    row["mesh_export_transition_orientation_identity"] = {
+        "export_generation": "mesh-export-45", "pyramid_face_export_generation": "mesh-export-45", "hex_face_export_generation": "mesh-export-45",
+        "shared_face_node_ids": [101, 102, 103, 104], "pyramid_face_node_ids": [101, 102, 103, 104], "hex_face_node_ids": [104, 103, 102, 101], "opposed_outward_normal_dot": -1.0,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -727,3 +751,35 @@ def test_v12_source_high_order_export_curved_node_generation_mismatch():
         ]
         is False
     )
+
+
+def test_v13_public_hex_block_material_assignment_after_imprint_generation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["hex_block_material_topology_identity"].update({"material_assignment_topology_generation": "topology-generation-44", "resolved_material_map_sha256": "e" * 64})
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["hex_block_materials_follow_final_imprint_topology"] is False
+
+
+def test_v13_public_pyramid_transition_face_orientation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["pyramid_transition_face_orientation_identity"].update({"hex_face_node_ids": [101, 102, 103, 104], "opposed_outward_normal_dot": 1.0})
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["pyramid_hex_transition_faces_have_opposed_orientation"] is False
+
+
+def test_v13_source_hex_block_material_assignment_after_imprint_generation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["headless_block_material_manifest_identity"].update({"manifest_topology_generation": "topology-generation-44", "manifest_material_map_sha256": "f" * 64})
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["headless_block_material_manifest_follows_final_imprint"] is False
+
+
+def test_v13_source_pyramid_transition_face_orientation_mismatch():
+    row = _with_v13_block_orientation_identity(summary())
+    row["mesh_export_transition_orientation_identity"].update({"hex_face_node_ids": [101, 102, 103, 104], "opposed_outward_normal_dot": 1.0})
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["mesh_export_transition_faces_have_opposed_orientation"] is False
