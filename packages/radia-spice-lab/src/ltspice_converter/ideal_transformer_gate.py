@@ -543,6 +543,113 @@ def _monte_carlo_percentile_sample_filter_identity_ok(
     )
 
 
+def _measure_crossing_interpolation_grid_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "measure_crossing_interpolation_time_grid_generation_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    bracket = contract.get("bracket_sample_indices")
+    interpolation_bracket = contract.get(
+        "interpolation_bracket_sample_indices"
+    )
+    if not all(
+        isinstance(values, Sequence) and not isinstance(values, (str, bytes))
+        for values in (bracket, interpolation_bracket)
+    ):
+        return False
+    try:
+        ordinal = int(contract.get("crossing_ordinal"))
+        crossing_time = _finite(contract.get("crossing_time_s"), "crossing_time_s")
+        reported_time = _finite(
+            contract.get("reported_crossing_time_s"),
+            "reported_crossing_time_s",
+        )
+        bracket_indices = [int(index) for index in bracket]
+        interpolation_indices = [int(index) for index in interpolation_bracket]
+    except (TypeError, ValueError):
+        return False
+    transient_generation = str(contract.get("transient_generation_id") or "")
+    grid_generation = str(
+        contract.get("accepted_step_grid_generation_id") or ""
+    )
+    grid_digest = str(contract.get("accepted_step_grid_sha256") or "")
+    return (
+        bool(transient_generation)
+        and contract.get("measure_generation_id") == transient_generation
+        and bool(grid_generation)
+        and contract.get("interpolation_grid_generation_id") == grid_generation
+        and contract.get("crossing_bracket_grid_generation_id") == grid_generation
+        and ordinal > 0
+        and contract.get("crossing_direction") in {"rising", "falling", "either"}
+        and contract.get("interpolation_method") == "linear"
+        and crossing_time >= 0.0
+        and math.isclose(reported_time, crossing_time, rel_tol=1.0e-12, abs_tol=0.0)
+        and len(bracket_indices) == 2
+        and bracket_indices[0] >= 0
+        and bracket_indices[1] == bracket_indices[0] + 1
+        and interpolation_indices == bracket_indices
+        and _is_sha256(grid_digest)
+        and contract.get("interpolation_grid_sha256") == grid_digest
+    )
+
+
+def _fourier_phase_reference_time_origin_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get(
+        "fourier_harmonic_phase_reference_time_origin_identity"
+    )
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        frequency = _finite(
+            contract.get("fundamental_frequency_hz"),
+            "fundamental_frequency_hz",
+            positive=True,
+        )
+        harmonic = int(contract.get("harmonic_number"))
+        origin = _finite(
+            contract.get("reference_time_origin_s"), "reference_time_origin_s"
+        )
+        fourier_origin = _finite(
+            contract.get("fourier_reference_time_origin_s"),
+            "fourier_reference_time_origin_s",
+        )
+        comparison_origin = _finite(
+            contract.get("comparison_reference_time_origin_s"),
+            "comparison_reference_time_origin_s",
+        )
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("waveform_generation_id") or "")
+    phase_basis = str(contract.get("phase_basis") or "")
+    time_digest = str(contract.get("waveform_time_axis_sha256") or "")
+    return (
+        bool(generation)
+        and contract.get("fourier_result_waveform_generation_id") == generation
+        and contract.get("harmonic_table_waveform_generation_id") == generation
+        and frequency > 0.0
+        and harmonic > 0
+        and phase_basis in {"cosine", "sine"}
+        and contract.get("reported_phase_basis") == phase_basis
+        and math.isclose(fourier_origin, origin, rel_tol=0.0, abs_tol=1.0e-18)
+        and math.isclose(comparison_origin, origin, rel_tol=0.0, abs_tol=1.0e-18)
+        and contract.get("reference_time_origin_convention")
+        == "absolute_transient_time"
+        and contract.get("comparison_time_origin_convention")
+        == "absolute_transient_time"
+        and _is_sha256(time_digest)
+        and contract.get("fourier_time_axis_sha256") == time_digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -851,6 +958,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "monte_carlo_percentiles_use_current_filtered_sample_set": (
             _monte_carlo_percentile_sample_filter_identity_ok(positive)
+        ),
+        "measure_crossings_use_current_accepted_step_grid": (
+            _measure_crossing_interpolation_grid_identity_ok(positive)
+        ),
+        "fourier_harmonic_phases_share_reference_time_origin": (
+            _fourier_phase_reference_time_origin_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
