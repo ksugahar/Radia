@@ -100,6 +100,24 @@ def _with_artifact_identity(payload: dict) -> dict:
             "repeated_cycle_endpoint_present": True,
             "repeated_endpoint_removed_before_aggregation": True,
         },
+        "efficiency_average_window": {
+            "input_window_start_sample": 75,
+            "input_window_end_sample_exclusive": 100,
+            "output_window_start_sample": 75,
+            "output_window_end_sample_exclusive": 100,
+            "periodic_cycle_generation": "periodic-cycle-8",
+            "input_power_cycle_generation": "periodic-cycle-8",
+            "output_power_cycle_generation": "periodic-cycle-8",
+            "startup_samples_excluded": True,
+        },
+        "demag_temperature_material_state": {
+            "magnet_temperature_c": 120.0,
+            "recoil_curve_temperature_c": 120.0,
+            "knee_curve_temperature_c": 120.0,
+            "magnet_state_generation": "magnet-state-13",
+            "recoil_curve_state_generation": "magnet-state-13",
+            "knee_curve_state_generation": "magnet-state-13",
+        },
     }
     return payload
 
@@ -231,6 +249,45 @@ def test_v10_public_torque_ripple_duplicate_cycle_endpoint() -> None:
     assert (
         result["checks"][
             "torque_ripple_aggregation_excludes_repeated_cycle_endpoint"
+        ]
+        is False
+    )
+
+
+def test_v11_public_motor_efficiency_average_window_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["efficiency_average_window"].update(
+        {
+            "input_window_start_sample": 0,
+            "input_power_cycle_generation": "startup-cycle-8",
+            "startup_samples_excluded": False,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "efficiency_input_and_output_share_periodic_average_window"
+        ]
+        is False
+    )
+
+
+def test_v11_public_demag_margin_temperature_material_state_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["demag_temperature_material_state"].update(
+        {
+            "recoil_curve_temperature_c": 20.0,
+            "knee_curve_temperature_c": 20.0,
+            "recoil_curve_state_generation": "magnet-state-12",
+            "knee_curve_state_generation": "magnet-state-12",
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "demag_margin_uses_current_temperature_material_state"
         ]
         is False
     )
