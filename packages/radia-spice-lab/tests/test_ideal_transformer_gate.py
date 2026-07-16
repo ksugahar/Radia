@@ -33,6 +33,25 @@ def _summary() -> dict:
         "fit_window_start_s": 1.0 / 60.0,
         "fit_window_stop_s": 3.0 / 60.0,
         "phasor_fit_frequency_hz": 60.0,
+        "phasor_replay_evidence": [
+            {
+                "fit_id": "positive-replay-1",
+                "raw_generation_id": "raw-generation-41",
+                "trace_group_generation_id": "raw-generation-41",
+                "scalar_phasor_digest": "a" * 64,
+            },
+            {
+                "fit_id": "positive-replay-2",
+                "raw_generation_id": "raw-generation-42",
+                "trace_group_generation_id": "raw-generation-42",
+                "scalar_phasor_digest": "a" * 64,
+            },
+        ],
+        "fit_window_segment_contract": {
+            "fit_run_generation_id": "transient-generation-42",
+            "sample_run_generation_ids": ["transient-generation-42"],
+            "restart_discontinuities_s": [],
+        },
         "current_role_contract": {
             "source_delivery_current_phasor_rms_a": "source_delivery_into_network",
             "primary_current_phasor_rms_a": "transformer_primary_absorption",
@@ -250,4 +269,35 @@ def test_generalization_v7_public(case_id: str) -> None:
         if case_id == "v7_public_phasor_source_frequency_mismatch"
         else "current_phasor_roles_match_terminal_contract"
     )
+    assert result["checks"][expected_check] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v8_public_phasor_replay_mixed_raw_generation",
+        "v8_public_fit_window_crosses_restart_discontinuity",
+    ],
+)
+def test_generalization_v8_public(case_id: str) -> None:
+    bad = copy.deepcopy(_summary())
+    positive = bad["metrics"]["positive"]
+    if case_id == "v8_public_phasor_replay_mixed_raw_generation":
+        positive["phasor_replay_evidence"][1][
+            "trace_group_generation_id"
+        ] = "raw-generation-41"
+        expected_check = "phasor_replays_bind_each_fit_to_one_raw_generation"
+    else:
+        positive["fit_window_segment_contract"].update(
+            {
+                "sample_run_generation_ids": [
+                    "transient-generation-41",
+                    "transient-generation-42",
+                ],
+                "restart_discontinuities_s": [0.025],
+            }
+        )
+        expected_check = "phasor_fit_window_does_not_cross_a_restart_segment"
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
     assert result["checks"][expected_check] is False
