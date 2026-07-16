@@ -111,6 +111,26 @@ def _with_artifact_identity(summary: dict) -> dict:
             "recoil_line_state_generation": "magnet-material-14",
             "recoil_line_sha256": "4" * 64,
         },
+        "bem_demag_surface_normal_generation_identity": {
+            "active_surface_mesh_generation": "surface-mesh-15",
+            "surface_element_generation": "surface-mesh-15",
+            "surface_normal_generation": "surface-mesh-15",
+            "demag_evaluation_surface_generation": "surface-mesh-15",
+            "normal_orientation": "outward",
+            "demag_kernel_normal_orientation": "outward",
+            "surface_normal_sha256": "6" * 64,
+            "demag_kernel_normal_sha256": "6" * 64,
+        },
+        "cogging_torque_periodic_sector_symmetry_identity": {
+            "active_periodic_sector_count": 12,
+            "torque_result_periodic_sector_count": 12,
+            "symmetry_multiplier": 12.0,
+            "sector_torque_scope": "one_periodic_sector",
+            "reported_torque_scope": "full_machine",
+            "periodic_topology_generation": "periodic-topology-15",
+            "torque_result_topology_generation": "periodic-topology-15",
+            "multiplier_topology_generation": "periodic-topology-15",
+        },
     }
     return summary
 
@@ -401,6 +421,45 @@ def test_v12_public_demag_recoil_line_temperature_generation_mismatch() -> None:
     assert (
         result["checks"][
             "demag_recoil_line_matches_evaluation_temperature_generation"
+        ]
+        is False
+    )
+
+
+def test_v13_public_bem_demag_surface_normal_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "bem_demag_surface_normal_generation_identity"
+    ].update(
+        {
+            "surface_normal_generation": "surface-mesh-14",
+            "surface_normal_sha256": "8" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["bem_demag_normals_match_current_surface_mesh_generation"]
+        is False
+    )
+
+
+def test_v13_public_cogging_torque_periodic_sector_symmetry_multiplier_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "cogging_torque_periodic_sector_symmetry_identity"
+    ].update(
+        {
+            "torque_result_periodic_sector_count": 6,
+            "symmetry_multiplier": 6.0,
+            "multiplier_topology_generation": "periodic-topology-14",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cogging_torque_symmetry_multiplier_matches_periodic_sector"
         ]
         is False
     )
