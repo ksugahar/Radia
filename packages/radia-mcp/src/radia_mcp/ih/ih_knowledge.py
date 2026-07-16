@@ -1686,12 +1686,21 @@ Validated: analytic shorted ring |alpha|/|I| = 0.983 / phase 0.2 deg,
 frozen(alpha=0) == plain production solve exactly
 (``validation_test/bem/test_loop_extension_ring.py``); Takahashi
 P_wp 21.5 -> **18.4 kW**, H_t 50.1 -> **46.3 kA/m** vs 17.0-17.7 kW /
-46.1 kA/m references (H_t to 0.5 %).  Entry point:
+46.1 kA/m references (H_t to 0.5 %).  Entry points:
 ``radia.bem_loop_extension.solve_loop_extended(solver, phi_inc, Z_s,
-omega, A_inc_fn)``; CLI wiring into the calc_inductance weak/strong
-paths (incl. the Telegen dL interplay) is the open next step.
-Full resolution chain: 38.2 kW (winding bug) -> 22.5 (winding fix) ->
-21.5 (psi incident) -> 18.4 kW (loop DOF) vs 17.0-17.7 kW references.
+omega, A_inc_fn)`` and the CLI flag ``calc_inductance.py --wp-loop-dof``
+(weak coupling, linear SIBC, ``--wp-bem-backend intree-dense``,
+``--h1-order 1``; works with BOTH coil sources -- surface panels or PEEC
+filaments via the exact ``A_from_filaments``).  With the flag, P_wp /
+H_t are replaced by the loop-extended values, the Telegen delta_L keeps
+the plain-phi convention, the genus ``P_wp_caveat`` becomes a
+``P_wp_note``, and ``wp_loop_alpha_A`` reports the shorted-turn current;
+a built-in frozen-vs-plain cross-check refuses to report on operator
+mismatch.  Measured CLI end-to-end on Takahashi (path-integral
+incident): 22.50 -> **19.29 kW** / 51.2 -> **47.4 kA/m**
+(alpha = 5603 A).  Full resolution chain: 38.2 kW (winding bug) ->
+22.5 (winding fix) -> 19.3 kW (--wp-loop-dof) [-> 18.4 kW with the
+psi-Poisson incident, not yet CLI-wired] vs 17.0-17.7 kW references.
 
 Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
 + ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
