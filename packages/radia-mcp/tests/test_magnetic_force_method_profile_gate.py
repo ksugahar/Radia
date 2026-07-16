@@ -157,6 +157,43 @@ def _with_artifact_identity(summary: dict) -> dict:
             "force_derivative_grid_sha256": "b" * 64,
             "force_from_energy_convention": "negative_energy_gradient",
         },
+        "bem_near_singular_quadrature_target_scale_identity": {
+            "active_surface_mesh_generation": "surface-mesh-17",
+            "source_panel_mesh_generation": "surface-mesh-17",
+            "target_panel_mesh_generation": "surface-mesh-17",
+            "target_separation_generation": "target-separation-17",
+            "quadrature_target_separation_generation": "target-separation-17",
+            "source_panel_id": 101,
+            "target_panel_id": 205,
+            "target_panel_separation_m": 1.0e-4,
+            "target_panel_characteristic_length_m": 1.0e-2,
+            "normalized_target_separation": 1.0e-2,
+            "quadrature_normalized_target_separation": 1.0e-2,
+            "quadrature_rule": "adaptive_duffy",
+            "quadrature_order": 12,
+            "target_pair_sha256": "1" * 64,
+            "quadrature_target_pair_sha256": "1" * 64,
+        },
+        "force_torque_reference_origin_length_unit_identity": {
+            "solve_generation": "force-solve-17",
+            "force_result_generation": "force-solve-17",
+            "torque_result_generation": "force-solve-17",
+            "force_frame_id": "global-cartesian",
+            "torque_frame_id": "global-cartesian",
+            "force_unit": "N",
+            "torque_unit": "N*m",
+            "reference_origin_length_unit": "m",
+            "force_reference_origin_length_unit": "m",
+            "torque_reference_origin_length_unit": "m",
+            "reference_origin_scale_to_m": 1.0,
+            "force_reference_origin_scale_to_m": 1.0,
+            "torque_reference_origin_scale_to_m": 1.0,
+            "reference_origin_coordinates": [0.01, 0.0, -0.02],
+            "force_reference_origin_coordinates": [0.01, 0.0, -0.02],
+            "torque_reference_origin_coordinates": [0.01, 0.0, -0.02],
+            "reference_origin_sha256": "2" * 64,
+            "torque_reference_origin_sha256": "2" * 64,
+        },
     }
     return summary
 
@@ -530,5 +567,45 @@ def test_v14_public_demag_energy_force_displacement_length_unit_mismatch() -> No
         result["checks"][
             "demag_energy_force_derivative_uses_one_displacement_length_unit"
         ]
+        is False
+    )
+
+
+def test_v15_public_bem_near_singular_quadrature_target_scale_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "bem_near_singular_quadrature_target_scale_identity"
+    ].update(
+        {
+            "quadrature_target_separation_generation": "target-separation-16",
+            "quadrature_normalized_target_separation": 5.0e-2,
+            "quadrature_target_pair_sha256": "5" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "bem_near_singular_quadrature_uses_current_target_pair_scale"
+        ]
+        is False
+    )
+
+
+def test_v15_public_force_torque_reference_origin_length_unit_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "force_torque_reference_origin_length_unit_identity"
+    ].update(
+        {
+            "torque_reference_origin_length_unit": "mm",
+            "torque_reference_origin_scale_to_m": 1.0e-3,
+            "torque_reference_origin_sha256": "5" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["force_and_torque_share_reference_origin_length_unit"]
         is False
     )

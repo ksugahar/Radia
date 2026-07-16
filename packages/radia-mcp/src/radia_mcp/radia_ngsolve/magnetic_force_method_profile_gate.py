@@ -117,6 +117,8 @@ def magnetic_force_method_profile_gate(
     cogging_torque_periodic_sector_symmetry_identity_ok = True
     bem_self_term_solid_angle_orientation_identity_ok = True
     demag_energy_force_displacement_length_unit_identity_ok = True
+    bem_near_singular_quadrature_target_scale_identity_ok = True
+    force_torque_reference_origin_length_unit_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -132,6 +134,8 @@ def magnetic_force_method_profile_gate(
         cogging_torque_periodic_sector_symmetry_identity_ok = False
         bem_self_term_solid_angle_orientation_identity_ok = False
         demag_energy_force_displacement_length_unit_identity_ok = False
+        bem_near_singular_quadrature_target_scale_identity_ok = False
+        force_torque_reference_origin_length_unit_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -554,6 +558,163 @@ def magnetic_force_method_profile_gate(
                 == "negative_energy_gradient"
             )
 
+        near_singular_value = identity_value.get(
+            "bem_near_singular_quadrature_target_scale_identity"
+        )
+        if near_singular_value is not None:
+            near_singular = (
+                near_singular_value
+                if isinstance(near_singular_value, Mapping)
+                else {}
+            )
+            try:
+                source_panel_id = int(near_singular.get("source_panel_id"))
+                target_panel_id = int(near_singular.get("target_panel_id"))
+                separation = float(
+                    near_singular.get("target_panel_separation_m")
+                )
+                characteristic_length = float(
+                    near_singular.get("target_panel_characteristic_length_m")
+                )
+                normalized_separation = float(
+                    near_singular.get("normalized_target_separation")
+                )
+                quadrature_separation = float(
+                    near_singular.get("quadrature_normalized_target_separation")
+                )
+                quadrature_order = int(near_singular.get("quadrature_order"))
+            except (TypeError, ValueError):
+                source_panel_id = target_panel_id = -1
+                separation = characteristic_length = math.nan
+                normalized_separation = quadrature_separation = math.nan
+                quadrature_order = -1
+            mesh_generation = str(
+                near_singular.get("active_surface_mesh_generation", "")
+            )
+            separation_generation = str(
+                near_singular.get("target_separation_generation", "")
+            )
+            target_digest = str(
+                near_singular.get("target_pair_sha256", "")
+            ).lower()
+            bem_near_singular_quadrature_target_scale_identity_ok = (
+                bool(mesh_generation)
+                and near_singular.get("source_panel_mesh_generation")
+                == mesh_generation
+                and near_singular.get("target_panel_mesh_generation")
+                == mesh_generation
+                and bool(separation_generation)
+                and near_singular.get("quadrature_target_separation_generation")
+                == separation_generation
+                and source_panel_id >= 0
+                and target_panel_id >= 0
+                and source_panel_id != target_panel_id
+                and math.isfinite(separation)
+                and separation > 0.0
+                and math.isfinite(characteristic_length)
+                and characteristic_length > 0.0
+                and math.isfinite(normalized_separation)
+                and math.isclose(
+                    normalized_separation,
+                    separation / characteristic_length,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-15,
+                )
+                and math.isfinite(quadrature_separation)
+                and math.isclose(
+                    quadrature_separation,
+                    normalized_separation,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-15,
+                )
+                and near_singular.get("quadrature_rule") == "adaptive_duffy"
+                and quadrature_order >= 2
+                and len(target_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in target_digest
+                )
+                and str(
+                    near_singular.get("quadrature_target_pair_sha256", "")
+                ).lower()
+                == target_digest
+            )
+
+        reference_origin_value = identity_value.get(
+            "force_torque_reference_origin_length_unit_identity"
+        )
+        if reference_origin_value is not None:
+            reference_origin = (
+                reference_origin_value
+                if isinstance(reference_origin_value, Mapping)
+                else {}
+            )
+            length_units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            reference_unit = str(
+                reference_origin.get("reference_origin_length_unit", "")
+            )
+            try:
+                reference_scale = float(
+                    reference_origin.get("reference_origin_scale_to_m")
+                )
+                force_scale = float(
+                    reference_origin.get("force_reference_origin_scale_to_m")
+                )
+                torque_scale = float(
+                    reference_origin.get("torque_reference_origin_scale_to_m")
+                )
+                origin = [
+                    float(value)
+                    for value in reference_origin.get(
+                        "reference_origin_coordinates", []
+                    )
+                ]
+            except (TypeError, ValueError):
+                reference_scale = force_scale = torque_scale = math.nan
+                origin = []
+            solve_generation = str(reference_origin.get("solve_generation", ""))
+            origin_digest = str(
+                reference_origin.get("reference_origin_sha256", "")
+            ).lower()
+            expected_scale = length_units.get(reference_unit)
+            force_torque_reference_origin_length_unit_identity_ok = (
+                bool(solve_generation)
+                and reference_origin.get("force_result_generation")
+                == solve_generation
+                and reference_origin.get("torque_result_generation")
+                == solve_generation
+                and reference_origin.get("force_frame_id") == "global-cartesian"
+                and reference_origin.get("torque_frame_id")
+                == reference_origin.get("force_frame_id")
+                and reference_origin.get("force_unit") == "N"
+                and reference_origin.get("torque_unit") == "N*m"
+                and expected_scale is not None
+                and reference_origin.get("force_reference_origin_length_unit")
+                == reference_unit
+                and reference_origin.get("torque_reference_origin_length_unit")
+                == reference_unit
+                and math.isclose(
+                    reference_scale, expected_scale, rel_tol=0.0, abs_tol=0.0
+                )
+                and math.isclose(force_scale, reference_scale, rel_tol=0.0, abs_tol=0.0)
+                and math.isclose(
+                    torque_scale, reference_scale, rel_tol=0.0, abs_tol=0.0
+                )
+                and len(origin) == 3
+                and all(math.isfinite(value) for value in origin)
+                and reference_origin.get("force_reference_origin_coordinates")
+                == origin
+                and reference_origin.get("torque_reference_origin_coordinates")
+                == origin
+                and len(origin_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in origin_digest
+                )
+                and str(
+                    reference_origin.get("torque_reference_origin_sha256", "")
+                ).lower()
+                == origin_digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -653,6 +814,12 @@ def magnetic_force_method_profile_gate(
         ),
         "demag_energy_force_derivative_uses_one_displacement_length_unit": (
             demag_energy_force_displacement_length_unit_identity_ok
+        ),
+        "bem_near_singular_quadrature_uses_current_target_pair_scale": (
+            bem_near_singular_quadrature_target_scale_identity_ok
+        ),
+        "force_and_torque_share_reference_origin_length_unit": (
+            force_torque_reference_origin_length_unit_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
