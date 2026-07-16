@@ -111,6 +111,8 @@ def magnetic_force_method_profile_gate(
     remanence_frame_binding_ok = True
     force_surface_body_ownership_ok = True
     demag_branch_interpolation_ok = True
+    linear_motor_thrust_phase_identity_ok = True
+    demag_recoil_temperature_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -120,6 +122,8 @@ def magnetic_force_method_profile_gate(
         remanence_frame_binding_ok = False
         force_surface_body_ownership_ok = False
         demag_branch_interpolation_ok = False
+        linear_motor_thrust_phase_identity_ok = False
+        demag_recoil_temperature_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -311,6 +315,75 @@ def magnetic_force_method_profile_gate(
                 and len(set(bracket_ids)) == 2
             )
 
+        phase_value = identity_value.get("linear_motor_thrust_phase_identity")
+        if phase_value is not None:
+            phase_identity = phase_value if isinstance(phase_value, Mapping) else {}
+            winding_sequence = phase_identity.get("winding_phase_sequence")
+            thrust_sequence = phase_identity.get("thrust_phase_sequence")
+            winding_direction = phase_identity.get(
+                "winding_electrical_angle_direction"
+            )
+            thrust_direction = phase_identity.get(
+                "thrust_electrical_angle_direction"
+            )
+            phase_generation = str(
+                phase_identity.get("phase_convention_generation", "")
+            )
+            linear_motor_thrust_phase_identity_ok = (
+                isinstance(winding_sequence, list)
+                and len(winding_sequence) == 3
+                and all(isinstance(name, str) and name for name in winding_sequence)
+                and len(set(winding_sequence)) == 3
+                and thrust_sequence == winding_sequence
+                and type(winding_direction) is int
+                and type(thrust_direction) is int
+                and winding_direction in {-1, 1}
+                and thrust_direction == winding_direction
+                and bool(phase_generation)
+                and phase_identity.get("thrust_observable_phase_generation")
+                == phase_generation
+            )
+
+        recoil_value = identity_value.get("demag_recoil_temperature_identity")
+        if recoil_value is not None:
+            recoil_identity = (
+                recoil_value if isinstance(recoil_value, Mapping) else {}
+            )
+            try:
+                evaluation_temperature = float(
+                    recoil_identity["evaluation_temperature_c"]
+                )
+                material_temperature = float(
+                    recoil_identity["magnet_material_temperature_c"]
+                )
+                recoil_temperature = float(
+                    recoil_identity["recoil_line_temperature_c"]
+                )
+            except (KeyError, TypeError, ValueError):
+                evaluation_temperature = material_temperature = math.nan
+                recoil_temperature = math.nan
+            material_generation = str(
+                recoil_identity.get("material_state_generation", "")
+            )
+            recoil_digest = str(recoil_identity.get("recoil_line_sha256", ""))
+            demag_recoil_temperature_identity_ok = (
+                all(
+                    math.isfinite(value)
+                    for value in (
+                        evaluation_temperature,
+                        material_temperature,
+                        recoil_temperature,
+                    )
+                )
+                and material_temperature == evaluation_temperature
+                and recoil_temperature == evaluation_temperature
+                and bool(material_generation)
+                and recoil_identity.get("recoil_line_state_generation")
+                == material_generation
+                and len(recoil_digest) == 64
+                and all(character in "0123456789abcdef" for character in recoil_digest)
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -392,6 +465,12 @@ def magnetic_force_method_profile_gate(
         "force_surface_encloses_only_target_body": force_surface_body_ownership_ok,
         "demag_operating_point_uses_active_branch_interpolation": (
             demag_branch_interpolation_ok
+        ),
+        "linear_motor_thrust_uses_winding_phase_and_electrical_angle_direction": (
+            linear_motor_thrust_phase_identity_ok
+        ),
+        "demag_recoil_line_matches_evaluation_temperature_generation": (
+            demag_recoil_temperature_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
