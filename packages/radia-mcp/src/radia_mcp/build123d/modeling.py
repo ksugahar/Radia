@@ -3418,6 +3418,95 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    mass_inertia_frame_evidence_present = any(
+        row.get("mass_inertia_reference_frame_placement_identity") is not None
+        for row in identity_rows
+    )
+
+    def mass_inertia_reference_frame_placement_identity(row):
+        value = row.get("mass_inertia_reference_frame_placement_identity")
+        if not isinstance(value, dict):
+            return None
+        shape_generation = str(value.get("shape_generation", "")).strip()
+        placement_generation = str(value.get("placement_generation", "")).strip()
+        frame = str(value.get("mass_reference_frame", "")).strip()
+        shape_digest = str(value.get("placed_shape_sha256", "")).lower()
+        if (
+            not shape_generation
+            or value.get("mass_property_shape_generation") != shape_generation
+            or not placement_generation
+            or value.get("mass_property_placement_generation")
+            != placement_generation
+            or frame != "world"
+            or value.get("inertia_reference_frame") != frame
+            or value.get("center_of_mass_reference_frame") != frame
+            or not valid_sha256(shape_digest)
+            or value.get("mass_property_shape_sha256") != shape_digest
+        ):
+            return None
+        return shape_generation, placement_generation, frame, shape_digest
+
+    reference_mass_inertia_frames = {
+        str(row.get("name", "")): mass_inertia_reference_frame_placement_identity(row)
+        for row in reference
+    }
+    mass_inertia_frame_identity_ok = not mass_inertia_frame_evidence_present
+    if mass_inertia_frame_evidence_present:
+        mass_inertia_frame_identity_ok = bool(reference_mass_inertia_frames) and all(
+            value is not None for value in reference_mass_inertia_frames.values()
+        )
+        for _, rows in normalized_sets:
+            mass_inertia_frame_identity_ok = mass_inertia_frame_identity_ok and all(
+                mass_inertia_reference_frame_placement_identity(row)
+                == reference_mass_inertia_frames.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    loft_seam_evidence_present = any(
+        row.get("loft_wire_correspondence_seam_identity") is not None
+        for row in identity_rows
+    )
+
+    def loft_wire_correspondence_seam_identity(row):
+        value = row.get("loft_wire_correspondence_seam_identity")
+        if not isinstance(value, dict):
+            return None
+        loft_generation = str(value.get("loft_generation", "")).strip()
+        seam_generation = str(
+            value.get("seam_normalization_generation", "")
+        ).strip()
+        wire_ids = list(value.get("section_wire_ids") or [])
+        digest = str(value.get("wire_correspondence_sha256", "")).lower()
+        if (
+            not loft_generation
+            or value.get("section_wire_loft_generation") != loft_generation
+            or not seam_generation
+            or value.get("wire_correspondence_seam_generation") != seam_generation
+            or not wire_ids
+            or len(set(wire_ids)) != len(wire_ids)
+            or list(value.get("loft_section_wire_ids") or []) != wire_ids
+            or not valid_sha256(digest)
+            or value.get("loft_wire_correspondence_sha256") != digest
+        ):
+            return None
+        return loft_generation, seam_generation, tuple(wire_ids), digest
+
+    reference_loft_seams = {
+        str(row.get("name", "")): loft_wire_correspondence_seam_identity(row)
+        for row in reference
+    }
+    loft_seam_identity_ok = not loft_seam_evidence_present
+    if loft_seam_evidence_present:
+        loft_seam_identity_ok = bool(reference_loft_seams) and all(
+            value is not None for value in reference_loft_seams.values()
+        )
+        for _, rows in normalized_sets:
+            loft_seam_identity_ok = loft_seam_identity_ok and all(
+                loft_wire_correspondence_seam_identity(row)
+                == reference_loft_seams.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3495,6 +3584,12 @@ def shape_mass_property_crosscheck_summary(
         "nested_assembly_placements_use_parent_then_child_order": (
             nested_placement_identity_ok
         ),
+        "mass_inertia_uses_final_world_placement_frame": (
+            mass_inertia_frame_identity_ok
+        ),
+        "loft_sections_use_current_seam_normalized_correspondence": (
+            loft_seam_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3531,6 +3626,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("boolean tolerance is not bound to the model length basis")
     if not checks["nested_assembly_placements_use_parent_then_child_order"]:
         issues.append("nested assembly placements use a stale or reversed transform order")
+    if not checks["mass_inertia_uses_final_world_placement_frame"]:
+        issues.append("mass and inertia properties do not use the final world placement frame")
+    if not checks["loft_sections_use_current_seam_normalized_correspondence"]:
+        issues.append("loft wire correspondence predates seam normalization")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
