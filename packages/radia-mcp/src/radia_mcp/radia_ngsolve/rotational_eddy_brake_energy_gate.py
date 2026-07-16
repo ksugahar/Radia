@@ -399,6 +399,69 @@ def _ale_material_derivative_time_level_identity_ok(
     )
 
 
+def _harmonic_reference_time_origin_identity_ok(summary: dict[str, Any]) -> bool:
+    identity = summary.get("harmonic_reference_time_origin_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    solve_generation = str(identity.get("harmonic_solve_generation") or "")
+    phase_digest = str(identity.get("field_phase_origin_sha256") or "")
+    try:
+        angular_frequency = float(identity.get("angular_frequency_rad_s"))
+        field_time = float(identity.get("field_reference_time_s"))
+        power_time = float(identity.get("complex_power_reference_time_s"))
+        phase_offset = math.remainder(
+            angular_frequency * (power_time - field_time), 2.0 * math.pi
+        )
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(solve_generation)
+        and identity.get("field_phasor_generation") == solve_generation
+        and identity.get("complex_power_generation") == solve_generation
+        and math.isfinite(angular_frequency)
+        and angular_frequency > 0.0
+        and math.isfinite(field_time)
+        and math.isfinite(power_time)
+        and abs(phase_offset) <= 1.0e-12
+        and len(phase_digest) == 64
+        and all(character in "0123456789abcdef" for character in phase_digest)
+        and identity.get("power_phase_origin_sha256") == phase_digest
+    )
+
+
+def _deformed_domain_integral_jacobian_identity_ok(
+    summary: dict[str, Any],
+) -> bool:
+    identity = summary.get("deformed_domain_integral_jacobian_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, dict):
+        return False
+    solve_generation = str(identity.get("field_solve_generation") or "")
+    geometry_generation = str(identity.get("geometry_generation") or "")
+    selection_digest = str(identity.get("domain_selection_sha256") or "")
+    jacobian_digest = str(identity.get("volume_jacobian_sha256") or "")
+    digests = (selection_digest, jacobian_digest)
+    return (
+        bool(solve_generation)
+        and identity.get("integral_field_generation") == solve_generation
+        and bool(geometry_generation)
+        and identity.get("integral_geometry_generation") == geometry_generation
+        and identity.get("volume_jacobian_geometry_generation")
+        == geometry_generation
+        and all(
+            len(digest) == 64
+            and all(character in "0123456789abcdef" for character in digest)
+            for digest in digests
+        )
+        and identity.get("integrated_domain_selection_sha256")
+        == selection_digest
+        and identity.get("integral_volume_jacobian_sha256") == jacobian_digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -519,6 +582,12 @@ def rotational_eddy_brake_energy_gate(
     )
     ale_material_derivative_time_level_identity_ok = (
         _ale_material_derivative_time_level_identity_ok(summary)
+    )
+    harmonic_reference_time_origin_identity_ok = (
+        _harmonic_reference_time_origin_identity_ok(summary)
+    )
+    deformed_domain_integral_jacobian_identity_ok = (
+        _deformed_domain_integral_jacobian_identity_ok(summary)
     )
     all_cardinalities = True
     all_times_increase = True
@@ -726,6 +795,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "ale_material_derivative_uses_current_mesh_velocity_time_level": (
             ale_material_derivative_time_level_identity_ok
+        ),
+        "harmonic_field_and_power_share_reference_time_origin": (
+            harmonic_reference_time_origin_identity_ok
+        ),
+        "deformed_domain_integral_uses_current_geometry_jacobian": (
+            deformed_domain_integral_jacobian_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
