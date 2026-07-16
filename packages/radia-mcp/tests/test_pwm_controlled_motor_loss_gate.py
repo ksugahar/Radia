@@ -188,6 +188,35 @@ def _with_artifact_identity(payload: dict) -> dict:
             "solve_generation": "loss-solve-16",
             "loss_result_solve_generation": "loss-solve-16",
         },
+        "dq_park_transform_power_invariant_scaling_identity": {
+            "solve_generation": "dq-solve-17",
+            "dq_voltage_result_generation": "dq-solve-17",
+            "dq_current_result_generation": "dq-solve-17",
+            "voltage_park_transform_basis": "power_invariant",
+            "current_park_transform_basis": "power_invariant",
+            "reported_power_basis": "power_invariant",
+            "abc_instantaneous_power_w": 500.0,
+            "dq0_instantaneous_power_w": 500.0,
+            "dq0_power_scale_to_abc": 1.0,
+            "power_scale_application_count": 1,
+            "park_transform_sha256": "1" * 64,
+            "power_closure_transform_sha256": "1" * 64,
+        },
+        "demag_recoil_temperature_operating_point_identity": {
+            "material_generation": "magnet-material-17",
+            "recoil_curve_material_generation": "magnet-material-17",
+            "field_solution_material_generation": "magnet-material-17",
+            "temperature_state_generation": "temperature-17",
+            "recoil_curve_temperature_state_generation": "temperature-17",
+            "operating_point_temperature_state_generation": "temperature-17",
+            "magnet_temperature_k": 393.15,
+            "recoil_curve_temperature_k": 393.15,
+            "operating_point_temperature_k": 393.15,
+            "solve_generation": "demag-solve-17",
+            "operating_point_solve_generation": "demag-solve-17",
+            "recoil_curve_sha256": "2" * 64,
+            "operating_point_recoil_curve_sha256": "2" * 64,
+        },
     }
     return payload
 
@@ -463,6 +492,50 @@ def test_v14_public_lamination_stacking_factor_loss_conductivity_basis_mismatch(
     assert (
         result["checks"][
             "lamination_loss_uses_consistent_stacking_factor_and_conductivity_basis"
+        ]
+        is False
+    )
+
+
+def test_v15_public_dq_park_transform_power_invariant_scaling_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "dq_park_transform_power_invariant_scaling_identity"
+    ].update(
+        {
+            "current_park_transform_basis": "amplitude_invariant",
+            "dq0_power_scale_to_abc": 1.5,
+            "dq0_instantaneous_power_w": 750.0,
+            "power_closure_transform_sha256": "5" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "dq_power_uses_one_power_invariant_park_transform_scaling"
+        ]
+        is False
+    )
+
+
+def test_v15_public_demag_recoil_temperature_operating_point_generation_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"][
+        "demag_recoil_temperature_operating_point_identity"
+    ].update(
+        {
+            "recoil_curve_temperature_state_generation": "temperature-16",
+            "recoil_curve_temperature_k": 353.15,
+            "operating_point_solve_generation": "demag-solve-16",
+            "operating_point_recoil_curve_sha256": "5" * 64,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "demag_operating_point_uses_current_recoil_temperature_state"
         ]
         is False
     )
