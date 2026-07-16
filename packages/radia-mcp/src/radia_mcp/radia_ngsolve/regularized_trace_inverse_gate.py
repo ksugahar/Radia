@@ -154,6 +154,12 @@ def regularized_trace_inverse_path_gate(
     cq_fft_normalization_identity_ok = (
         _optional_cq_inverse_z_transform_fft_normalization_is_aligned(summary)
     )
+    sesquilinear_identity_ok = (
+        _optional_fembem_sesquilinear_inner_product_is_aligned(summary)
+    )
+    hmatrix_tolerance_norm_identity_ok = (
+        _optional_hmatrix_low_rank_tolerance_norm_basis_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -219,6 +225,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_inverse_z_transform_uses_matching_fft_normalization": (
             cq_fft_normalization_identity_ok
+        ),
+        "fembem_operators_share_sesquilinear_conjugation_convention": (
+            sesquilinear_identity_ok
+        ),
+        "hmatrix_low_rank_acceptance_uses_calibrated_norm_basis": (
+            hmatrix_tolerance_norm_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -675,6 +687,76 @@ def _optional_cq_inverse_z_transform_fft_normalization_is_aligned(
         and convention
         == "forward_negative_exponent_inverse_positive_exponent"
         and value.get("reconstruction_transform_convention") == convention
+    )
+
+
+def _optional_fembem_sesquilinear_inner_product_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("fembem_sesquilinear_inner_product_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    generation = str(value.get("coupling_generation", "")).strip()
+    convention = str(value.get("inner_product_convention", "")).strip()
+    operator_digest = str(value.get("operator_metadata_sha256", "")).lower()
+    assembled_digest = str(
+        value.get("assembled_operator_metadata_sha256", "")
+    ).lower()
+    return (
+        bool(generation)
+        and value.get("fem_operator_generation") == generation
+        and value.get("bem_operator_generation") == generation
+        and value.get("trace_operator_generation") == generation
+        and convention == "conjugate_test_linear_trial"
+        and value.get("fem_inner_product_convention") == convention
+        and value.get("bem_inner_product_convention") == convention
+        and value.get("trace_inner_product_convention") == convention
+        and value.get("test_argument_conjugated") is True
+        and value.get("trial_argument_conjugated") is False
+        and _is_sha256(operator_digest)
+        and assembled_digest == operator_digest
+    )
+
+
+def _optional_hmatrix_low_rank_tolerance_norm_basis_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("hmatrix_low_rank_tolerance_norm_basis_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        tolerance = _finite_float(value, "compression_tolerance")
+        measured_error = _finite_float(value, "measured_relative_error")
+    except (KeyError, TypeError, ValueError):
+        return False
+    assembly_generation = str(
+        value.get("hmatrix_assembly_generation", "")
+    ).strip()
+    tolerance_generation = str(
+        value.get("tolerance_calibration_generation", "")
+    ).strip()
+    norm_basis = str(value.get("tolerance_norm_basis", "")).strip()
+    dense_digest = str(value.get("dense_block_sha256", "")).lower()
+    source_digest = str(value.get("accepted_block_source_sha256", "")).lower()
+    return (
+        tolerance >= 0.0
+        and measured_error >= 0.0
+        and measured_error <= tolerance
+        and bool(assembly_generation)
+        and value.get("low_rank_factor_generation") == assembly_generation
+        and norm_basis
+        in {"relative_frobenius", "relative_spectral", "relative_max"}
+        and value.get("measured_error_norm_basis") == norm_basis
+        and value.get("acceptance_norm_basis") == norm_basis
+        and bool(tolerance_generation)
+        and value.get("acceptance_tolerance_generation")
+        == tolerance_generation
+        and _is_sha256(dense_digest)
+        and source_digest == dense_digest
     )
 
 
