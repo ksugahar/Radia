@@ -290,6 +290,30 @@ def _with_v14_bindings(summary):
             "basis_transform_sha256": "6" * 64,
             "comparison_basis_transform_sha256": "6" * 64,
         }
+        row["mixed_mode_sparameter_port_pair_order_identity"] = {
+            "port_calibration_generation": "port-calibration-19",
+            "single_ended_result_port_calibration_generation": "port-calibration-19",
+            "mixed_mode_pairing_port_calibration_generation": "port-calibration-19",
+            "single_ended_port_order": ["P1+", "P1-", "P2+", "P2-"],
+            "mixed_mode_pair_order": [["P1+", "P1-"], ["P2+", "P2-"]],
+            "mixed_mode_pair_polarity": [1, 1],
+            "transform_pair_order": [["P1+", "P1-"], ["P2+", "P2-"]],
+            "transform_pair_polarity": [1, 1],
+            "pairing_sha256": "1" * 64,
+            "transform_pairing_sha256": "1" * 64,
+        }
+        row["nearfield_farfield_phase_center_coordinate_frame_identity"] = {
+            "nearfield_result_generation": "nearfield-19",
+            "farfield_transform_nearfield_generation": "nearfield-19",
+            "phase_center_coordinate_frame_generation": "phase-frame-19",
+            "farfield_phase_center_frame_generation": "phase-frame-19",
+            "phase_center_coordinate_frame": "global_cartesian",
+            "farfield_phase_center_coordinate_frame": "global_cartesian",
+            "phase_center_coordinates_m": [0.01, -0.02, 0.03],
+            "farfield_phase_center_coordinates_m": [0.01, -0.02, 0.03],
+            "phase_center_sha256": "2" * 64,
+            "farfield_phase_center_sha256": "2" * 64,
+        }
     return summary
 
 
@@ -765,6 +789,47 @@ def test_v16_public_farfield_polarization_theta_phi_ludwig_basis_mismatch():
     assert (
         result["runs"][0]["checks"][
             "farfield_comparison_uses_explicit_current_polarization_transform"
+        ]
+        is False
+    )
+
+
+def test_v17_public_mixed_mode_sparameter_port_pair_order_generation_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0]["mixed_mode_sparameter_port_pair_order_identity"].update(
+        {
+            "mixed_mode_pairing_port_calibration_generation": "port-calibration-18",
+            "transform_pair_order": [["P1+", "P2-"], ["P2+", "P1-"]],
+            "transform_pair_polarity": [1, -1],
+            "transform_pairing_sha256": "5" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "mixed_mode_sparameters_use_current_port_pair_order_and_polarity"
+        ]
+        is False
+    )
+
+
+def test_v17_public_nearfield_farfield_phase_center_coordinate_frame_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0][
+        "nearfield_farfield_phase_center_coordinate_frame_identity"
+    ].update(
+        {
+            "farfield_phase_center_coordinate_frame": "antenna_local",
+            "farfield_phase_center_coordinates_m": [0.0, 0.0, 0.0],
+            "farfield_phase_center_sha256": "5" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "nearfield_farfield_phase_center_uses_one_global_coordinate_frame"
         ]
         is False
     )
