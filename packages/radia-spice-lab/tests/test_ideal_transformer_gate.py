@@ -400,6 +400,38 @@ def _with_v12_cycle_and_seed_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v13_phase_and_derivative_identity(summary: dict) -> dict:
+    summary = _with_v12_cycle_and_seed_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["ac_phase_coordinate_identity"] = {
+        "ac_sweep_generation_id": "ac-sweep-45",
+        "phase_trace_sweep_generation_id": "ac-sweep-45",
+        "reference_phase_trace_sweep_generation_id": "ac-sweep-45",
+        "phase_coordinate_unit": "degree",
+        "reference_phase_coordinate_unit": "degree",
+        "phase_coordinate_convention": "principal_degree_minus180_180",
+        "reference_phase_coordinate_convention": (
+            "principal_degree_minus180_180"
+        ),
+        "phase_trace_value_sha256": "a" * 64,
+        "reference_phase_trace_value_sha256": "a" * 64,
+    }
+    positive["transient_derivative_adaptive_history_identity"] = {
+        "transient_generation_id": "transient-45",
+        "accepted_step_generation_id": "transient-45",
+        "derivative_history_generation_id": "transient-45",
+        "current_sample_generation_id": "transient-45",
+        "derivative_sample_generation_id": "transient-45",
+        "accepted_time_grid_sha256": "b" * 64,
+        "derivative_history_time_grid_sha256": "b" * 64,
+        "accepted_step_count": 257,
+        "derivative_history_step_count": 257,
+        "derivative_scheme": "variable_step_bdf2",
+        "history_derivative_scheme": "variable_step_bdf2",
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -511,6 +543,45 @@ def test_v12_public_monte_carlo_seed_parameter_order_mismatch() -> None:
     assert (
         result["checks"][
             "monte_carlo_statistics_preserve_named_parameter_seed_order"
+        ]
+        is False
+    )
+
+
+def test_v13_public_ac_phase_degree_radian_coordinate_mismatch() -> None:
+    bad = _with_v13_phase_and_derivative_identity(_summary())
+    bad["metrics"]["positive"]["ac_phase_coordinate_identity"].update(
+        {
+            "reference_phase_coordinate_unit": "radian",
+            "reference_phase_coordinate_convention": (
+                "principal_radian_minuspi_pi"
+            ),
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["ac_phase_traces_share_coordinate_unit_and_convention"]
+        is False
+    )
+
+
+def test_v13_public_transient_derivative_adaptive_timestep_history_mismatch() -> None:
+    bad = _with_v13_phase_and_derivative_identity(_summary())
+    bad["metrics"]["positive"][
+        "transient_derivative_adaptive_history_identity"
+    ].update(
+        {
+            "derivative_history_generation_id": "transient-44",
+            "derivative_history_time_grid_sha256": "c" * 64,
+            "derivative_history_step_count": 241,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "transient_derivatives_use_current_accepted_timestep_history"
         ]
         is False
     )
