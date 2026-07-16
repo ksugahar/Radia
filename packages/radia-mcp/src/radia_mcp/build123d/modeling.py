@@ -3317,6 +3317,107 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    boolean_tolerance_evidence_present = any(
+        row.get("boolean_tolerance_length_unit_identity") is not None
+        for row in identity_rows
+    )
+
+    def boolean_tolerance_length_unit_identity(row):
+        value = row.get("boolean_tolerance_length_unit_identity")
+        if not isinstance(value, dict):
+            return None
+        units = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3, "um": 1.0e-6}
+        model_unit = str(value.get("model_length_unit", "")).strip()
+        tolerance_unit = str(value.get("tolerance_unit", "")).strip()
+        generation = str(value.get("boolean_generation", "")).strip()
+        input_digest = str(value.get("input_shape_sha256", "")).lower()
+        try:
+            tolerance_value = float(value.get("tolerance_value"))
+            tolerance_scale = float(value.get("tolerance_scale_to_m"))
+            kernel_tolerance = float(value.get("kernel_tolerance_m"))
+        except (TypeError, ValueError):
+            return None
+        expected_scale = units.get(tolerance_unit)
+        tolerance_m = tolerance_value * tolerance_scale
+        if (
+            model_unit not in units
+            or expected_scale is None
+            or not math.isclose(
+                tolerance_scale, expected_scale, rel_tol=0.0, abs_tol=0.0
+            )
+            or not math.isfinite(tolerance_m)
+            or tolerance_m <= 0.0
+            or not math.isclose(
+                kernel_tolerance,
+                tolerance_m,
+                rel_tol=1.0e-12,
+                abs_tol=1.0e-30,
+            )
+            or not generation
+            or value.get("result_geometry_generation") != generation
+            or not valid_sha256(input_digest)
+            or value.get("boolean_input_shape_sha256") != input_digest
+        ):
+            return None
+        return generation, model_unit, tolerance_m, input_digest
+
+    reference_boolean_tolerances = {
+        str(row.get("name", "")): boolean_tolerance_length_unit_identity(row)
+        for row in reference
+    }
+    boolean_tolerance_identity_ok = not boolean_tolerance_evidence_present
+    if boolean_tolerance_evidence_present:
+        boolean_tolerance_identity_ok = bool(reference_boolean_tolerances) and all(
+            value is not None for value in reference_boolean_tolerances.values()
+        )
+        for _, rows in normalized_sets:
+            boolean_tolerance_identity_ok = boolean_tolerance_identity_ok and all(
+                boolean_tolerance_length_unit_identity(row)
+                == reference_boolean_tolerances.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    nested_placement_evidence_present = any(
+        row.get("nested_assembly_placement_order_identity") is not None
+        for row in identity_rows
+    )
+
+    def nested_assembly_placement_order_identity(row):
+        value = row.get("nested_assembly_placement_order_identity")
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("assembly_generation", "")).strip()
+        placement_digest = str(value.get("placement_chain_sha256", "")).lower()
+        order = str(value.get("multiplication_order", "")).strip()
+        if (
+            not generation
+            or value.get("parent_placement_generation") != generation
+            or value.get("child_placement_generation") != generation
+            or value.get("world_placement_generation") != generation
+            or order != "parent_then_child"
+            or value.get("applied_multiplication_order") != order
+            or not valid_sha256(placement_digest)
+            or value.get("world_transform_sha256") != placement_digest
+        ):
+            return None
+        return generation, order, placement_digest
+
+    reference_nested_placements = {
+        str(row.get("name", "")): nested_assembly_placement_order_identity(row)
+        for row in reference
+    }
+    nested_placement_identity_ok = not nested_placement_evidence_present
+    if nested_placement_evidence_present:
+        nested_placement_identity_ok = bool(reference_nested_placements) and all(
+            value is not None for value in reference_nested_placements.values()
+        )
+        for _, rows in normalized_sets:
+            nested_placement_identity_ok = nested_placement_identity_ok and all(
+                nested_assembly_placement_order_identity(row)
+                == reference_nested_placements.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3388,6 +3489,12 @@ def shape_mass_property_crosscheck_summary(
         "compound_labels_resolve_on_final_boolean_topology": label_topology_identity_ok,
         "center_of_mass_density_and_volume_share_length_unit_covariance": mass_unit_identity_ok,
         "periodic_face_selectors_follow_final_fillet_topology": periodic_selector_identity_ok,
+        "boolean_tolerance_uses_one_physical_model_length_basis": (
+            boolean_tolerance_identity_ok
+        ),
+        "nested_assembly_placements_use_parent_then_child_order": (
+            nested_placement_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3420,6 +3527,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("center of mass, density, volume, and mass use inconsistent unit covariance")
     if not checks["periodic_face_selectors_follow_final_fillet_topology"]:
         issues.append("periodic face selectors belong to a pre-fillet topology")
+    if not checks["boolean_tolerance_uses_one_physical_model_length_basis"]:
+        issues.append("boolean tolerance is not bound to the model length basis")
+    if not checks["nested_assembly_placements_use_parent_then_child_order"]:
+        issues.append("nested assembly placements use a stale or reversed transform order")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]

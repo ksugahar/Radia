@@ -328,6 +328,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     selector_cache_shape_identity_ok = True
     step_assembly_placement_unit_identity_ok = True
     brep_serialization_tolerance_kernel_identity_ok = True
+    step_color_label_topology_identity_ok = True
+    brep_surface_parameter_orientation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -345,6 +347,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         selector_cache_shape_identity_ok = False
         step_assembly_placement_unit_identity_ok = False
         brep_serialization_tolerance_kernel_identity_ok = False
+        step_color_label_topology_identity_ok = False
+        brep_surface_parameter_orientation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -803,6 +807,79 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and all(character in "0123456789abcdef" for character in shape_digest)
                 and brep_cache.get("cached_shape_sha256") == shape_digest
             )
+
+        step_attributes = replay_identity_value.get(
+            "step_color_label_topology_identity"
+        )
+        if step_attributes is not None:
+            step_attributes = (
+                step_attributes if isinstance(step_attributes, Mapping) else {}
+            )
+            topology_generation = str(
+                step_attributes.get("topology_generation", "")
+            ).strip()
+            face_ids = list(step_attributes.get("face_ids") or [])
+            attribute_digest = str(
+                step_attributes.get("attribute_map_sha256", "")
+            ).lower()
+            step_color_label_topology_identity_ok = (
+                bool(str(step_attributes.get("step_import_generation", "")).strip())
+                and bool(topology_generation)
+                and step_attributes.get("attribute_map_topology_generation")
+                == topology_generation
+                and bool(face_ids)
+                and len(set(face_ids)) == len(face_ids)
+                and list(step_attributes.get("attribute_face_ids") or []) == face_ids
+                and len(list(step_attributes.get("labels") or [])) == len(face_ids)
+                and len(list(step_attributes.get("colors_rgb") or []))
+                == len(face_ids)
+                and len(attribute_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in attribute_digest
+                )
+                and step_attributes.get("resolved_attribute_map_sha256")
+                == attribute_digest
+            )
+
+        surface_parameters = replay_identity_value.get(
+            "brep_surface_parameter_orientation_identity"
+        )
+        if surface_parameters is not None:
+            surface_parameters = (
+                surface_parameters
+                if isinstance(surface_parameters, Mapping)
+                else {}
+            )
+            serialization_generation = str(
+                surface_parameters.get("serialization_generation", "")
+            ).strip()
+            surface_ids = list(surface_parameters.get("surface_ids") or [])
+            parameter_digest = str(
+                surface_parameters.get("parameter_range_sha256", "")
+            ).lower()
+            parameter_orientation = str(
+                surface_parameters.get("parameter_orientation", "")
+            ).strip()
+            brep_surface_parameter_orientation_identity_ok = (
+                bool(serialization_generation)
+                and surface_parameters.get("surface_parameter_generation")
+                == serialization_generation
+                and bool(surface_ids)
+                and len(set(surface_ids)) == len(surface_ids)
+                and list(surface_parameters.get("exported_surface_ids") or [])
+                == surface_ids
+                and parameter_orientation == "u_cross_v_outward"
+                and surface_parameters.get("exported_parameter_orientation")
+                == parameter_orientation
+                and len(parameter_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in parameter_digest
+                )
+                and surface_parameters.get("exported_parameter_range_sha256")
+                == parameter_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -860,6 +937,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "brep_cache_uses_current_kernel_tolerance_and_shape": (
             brep_serialization_tolerance_kernel_identity_ok
+        ),
+        "step_color_labels_follow_current_topology_generation": (
+            step_color_label_topology_identity_ok
+        ),
+        "brep_surface_parameter_ranges_preserve_outward_orientation": (
+            brep_surface_parameter_orientation_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
