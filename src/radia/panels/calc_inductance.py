@@ -1591,7 +1591,14 @@ def _solve_workpiece_strong_coupled(args):
     #     saddle internally; we only hand it the mesh + source/sink names) ---
     t0 = time.perf_counter()
     progress("COUPLED", f"load coil surface from {os.path.basename(args.coil_vol)}")
-    coil_mesh = Mesh(args.coil_vol)
+    # Use the SAME loader as the vacuum BEM-A path: it validates the
+    # source/sink labels AND converts a volume .vol to the pure surface
+    # mesh HDivSurface needs.  Loading Mesh(args.coil_vol) directly here
+    # reproduced the known 2026-05-12 failure (keiko gapped_torus) on the
+    # Takahashi coil_only.vol (volume tets): HDivSurface picked up 11,595
+    # extra null modes (n_J 17,799 instead of 6,204), the coupled saddle
+    # LU went singular, and the solve died with NaNs (2026-07-16).
+    coil_mesh = _build_bema_coil_mesh(args)
     # Same fail-loud source/sink check as the vacuum BEM-A path: the coupled
     # solver drives the coil EFIE from these labels, so a shortcut placement
     # would silently poison L_air / Delta_L / P_wp too.
@@ -1656,12 +1663,31 @@ def _solve_workpiece_strong_coupled(args):
         tol=float(args.coupling_tol),
         relax=float(args.coupling_relax))
     t_solve = time.perf_counter() - t0
+
+    # CoupledBEMSolver drives the coil EFIE at UNIT terminal current (its
+    # g_red constraint is normalised; solve() takes no current).  The
+    # problem is linear, so scale the current-dependent outputs to
+    # --current here: fields ~ I, dissipation ~ I^2.  Inductances
+    # (L_air / L_total / Delta_L) are per-unit-current energies and stay.
+    # Missing this scale was the Kubota 2026-07-16 incident: at 6700 A the
+    # panel reported P_wp = 8.3e-4 W / H_t = 9.84 A/m -- 1 A-drive values,
+    # I^2 = 4.5e7x low -- while Delta_L came out sane, masking the bug.
+    # (The PEEC strong driver passes I_port to its solver, so both drivers
+    # now return REAL-current-scaled P_total / H_t_rms / J arrays to the
+    # shared _assemble_strong_output.)
+    I_term = float(args.current)
+    sol["P_total"] = float(sol["P_total"]) * I_term * I_term
+    sol["H_t_rms"] = float(sol["H_t_rms"]) * abs(I_term)
+    for key in ("wp_J_re", "wp_J_im", "J_coil_re", "J_coil_im"):
+        if sol.get(key) is not None:
+            sol[key] = sol[key] * I_term
+
     progress("COUPLED",
         f"converged in {int(sol['iterations'])} iter: "
         f"L_total={sol['L_total'] * 1e9:.2f} nH "
         f"dL={sol['Delta_L'] * 1e9:+.2f} nH "
         f"P_wp={sol['P_total']:.4e} W H_t={sol['H_t_rms']:.2f} A/m "
-        f"({t_solve:.1f}s)")
+        f"@ I={I_term:g} A ({t_solve:.1f}s)")
 
     sol["wp_mesh_nv"] = int(wp_mesh.nv)
     sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
@@ -1813,6 +1839,21 @@ def _assemble_strong_output(args, coil_data, strong):
     out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
+    # P_wp caveat -- applies to BOTH strong drivers (they share the same
+    # workpiece scalar-BIE-SIBC H_t evaluation).  Measured on Takahashi
+    # 7 kHz (2026-07-16): the coupled solve converges and Delta_L is sane
+    # (+1.53 nH, same sign as full-FEM), but the coil-current
+    # redistribution is small, so P_wp stays at the weak-path level
+    # (~2x the FEM / impedance-BC references, ~35 kW vs ~17 kW).  The
+    # bias lives in the workpiece-side H_t evaluation, not in the missing
+    # coil re-solve; until that path passes an analytic mu_r-swept SIBC
+    # benchmark, absolute P_wp / H_t from BOTH coupling modes carry it.
+    out["P_wp_caveat"] = (
+        "scalar-BIE-SIBC H_t path over-estimates P_wp ~2x on magnetic "
+        "workpieces vs FEM / impedance-BC references (Takahashi 7 kHz, "
+        "mu_r=100); strong coupling does NOT remove this bias -- it is "
+        "workpiece-side, not a coil-recompute effect.  delta_L is "
+        "unaffected.")
     # PEEC filament coil: relabel the coil backend and flag the path as
     # experimental (the strong-loading response has no durable independent
     # reference case; the committed demo is weakly coupled).  Delta_R

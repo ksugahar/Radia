@@ -91,14 +91,14 @@ def test_strong_peec_rejects_proximity_model_mismatch():
 _SKIP = not (_DEMO_COIL_STEP.is_file() and _DEMO_VOL.is_file())
 
 
-def _run_cli(mode, tmp_path, extra=None):
-    out_json = tmp_path / f"peec_{mode}.json"
+def _run_cli(mode, tmp_path, extra=None, current=1.0):
+    out_json = tmp_path / f"peec_{mode}_I{current:g}.json"
     cmd = [
         sys.executable, str(_CALC),
         "--coil-solver", "peec", "--coupling-mode", mode,
         "--coil-step", str(_DEMO_COIL_STEP),
         "--vol", str(_DEMO_VOL), "--wp-label", "sibc",
-        "--frequency", "7000", "--current", "1",
+        "--frequency", "7000", "--current", str(current),
         "--sigma", "5.8e6", "--mu-r", "100", "--half-thickness", "0.005",
         "--no-peec-proximity",
         "--output", str(out_json),
@@ -165,3 +165,29 @@ def test_peec_strong_reduces_to_weak_on_weak_coupling(tmp_path):
     assert rel < 0.05, (
         f"strong P_wp={strong['P_wp_W']:.4e} vs weak P_wp={weak['P_wp_W']:.4e} "
         f"differ by {rel:.1%} on a weakly-coupled demo (expected <5%)")
+
+
+@pytest.mark.skipif(_SKIP, reason="demo coil STEP / workpiece .vol not present")
+def test_peec_strong_output_scales_with_terminal_current(tmp_path):
+    """P_wp ~ I^2, H_t ~ I; dL and dR current-independent (PEEC driver).
+
+    Companion of test_coupling_strong.py::
+    test_strong_output_scales_with_terminal_current (the BEM-A driver,
+    which forgot the unit-current rescale -- Kubota 2026-07-16, P_wp
+    4.5e7x low at 6700 A).  The PEEC driver passes I_port to its solver,
+    so it was already real-current-scaled; this locks the shared
+    "strong drivers return REAL-current-scaled P_total / H_t" contract
+    on the PEEC side too.
+    """
+    knobs = ["--coupling-max-iter", "4", "--coupling-tol", "5e-3"]
+    d1 = _run_cli("strong", tmp_path, extra=knobs, current=1.0)
+    d5 = _run_cli("strong", tmp_path, extra=knobs, current=5.0)
+
+    assert d1["P_wp_W"] > 0
+    assert math.isclose(d5["P_wp_W"], 25.0 * d1["P_wp_W"], rel_tol=1e-6)
+    assert math.isclose(d5["H_t_rms_A_per_m"], 5.0 * d1["H_t_rms_A_per_m"],
+                        rel_tol=1e-6)
+    assert math.isclose(d5["delta_L_nH"], d1["delta_L_nH"],
+                        rel_tol=1e-6, abs_tol=1e-12)
+    assert math.isclose(d5["delta_R_mOhm"], d1["delta_R_mOhm"],
+                        rel_tol=1e-6, abs_tol=1e-12)

@@ -1618,6 +1618,47 @@ Refs: ``docs/peec/VOLUME_PEEC_DESIGN.md``,
 ``docs/esim/R_MISMATCH_PEEC_VS_BEMA.md``,
 ``validation_test/bem/test_coil_bem_a_impedance_efie.py``.
 
+## Strong coupling (--coupling-mode strong): status + known P_wp limit
+
+Both coil solvers have an iterative self-consistent coupling path since
+2026-07-15 (``--coupling-mode strong``): BEM-A coil ->
+``radia.bem_coupled_solver.CoupledBEMSolver`` (per-DOF EFIE back-reaction),
+PEEC coil -> ``radia.peec_coupled_bem_solver.CoupledPEECBEMSolver``
+(per-filament back-EMF into the loop bundle; EXPERIMENTAL flag in output).
+
+**Current scaling (fixed 2026-07-16)**: ``CoupledBEMSolver`` drives the
+coil EFIE at UNIT terminal current (its ``solve()`` takes no current);
+the strong driver now rescales P_wp ~ I^2 and H_t ~ I to ``--current``.
+Before the fix, a 6700 A Takahashi run reported P_wp = 8.3e-4 W /
+H_t = 9.84 A/m (1 A-drive values, I^2 = 4.5e7x low) while delta_L came
+out sane (+1.53 nH) and masked the bug.  Regression:
+``test_strong_output_scales_with_terminal_current`` (BEM-A + PEEC).
+
+**MEASURED LIMIT (Takahashi 7 kHz coarse wp, 2026-07-16): strong coupling
+does NOT close the ~2x P_wp over-estimate.**  Scaled strong P_wp ~= 35-37
+kW ~= weak 38.2 kW, still ~2x the validated references (Radia FEM A-V
+17.7 kW, impedance-BC general FEM 17.0 kW); H_t dropped only ~4-5 %
+(65.9 vs 69.0 kA/m weak, references ~46 kA/m).  The coupled interaction
+itself works (delta_L = +1.53 nH, same sign as full-FEM), but the
+coil-current redistribution is a percent-level effect here -- so the x1.5
+H_t / x2 P_wp bias is NOT "missing coil re-solve": it lives in the
+WORKPIECE-side scalar-BIE-SIBC H_t evaluation shared by weak AND strong
+(and by both coil solvers).  Outputs carry a ``P_wp_caveat`` key.
+
+Implication for method choice: for absolute workpiece heating on magnetic
+workpieces, use FEM A-V (``calc_fem_coilmesh.py``) until the BIE-SIBC
+H_t path is fixed; BEM weak/strong remain fine for L, R_coil, delta_L,
+and relative/trend studies.  Root-cause lane (open): audit the scalar
+BIE-SIBC formulation against an analytic mu_r-swept SIBC benchmark
+(sphere/plate closed forms in ``radia.analytical_formulas``) and/or a
+P_wp head-to-head vs FEM-Kelvin SIBC on one mesh -- note the historical
+``CoupledBEMSolver`` cross-check validated L only (Cu +0.3 %, steel
++1.7 %), NEVER P_wp.  Candidate suspects, in order: the phi_inc
+branch-cut path integration on non-bore geometries
+(``compute_phi_inc_from_*`` axis-ray assumption), the Robin
+``gamma SL M^-1 K`` block's mu_r sensitivity, and the H_t extraction
+``|grad_s phi_total|`` convention.
+
 ## When to use this
 
 - Workpiece moves/rotates relative to coil (different relative position per step)
