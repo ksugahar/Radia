@@ -308,6 +308,39 @@ def _with_v12_identity(summary):
     return summary
 
 
+def _with_v13_identity(summary):
+    summary = _with_v12_identity(summary)
+    summary["fembem_trace_surface_normal_orientation_identity"] = {
+        "boundary_mesh_generation": "boundary-mesh-15",
+        "fem_trace_boundary_mesh_generation": "boundary-mesh-15",
+        "bem_surface_mesh_generation": "boundary-mesh-15",
+        "fem_outward_normal_generation": "surface-normal-15",
+        "bem_normal_generation": "surface-normal-15",
+        "trace_operator_normal_generation": "surface-normal-15",
+        "fem_normal_orientation": "outward",
+        "bem_normal_orientation": "outward",
+        "trace_normal_sign": 1,
+        "fem_boundary_triangle_sha256": "b" * 64,
+        "bem_boundary_triangle_sha256": "b" * 64,
+    }
+    summary["cq_inverse_z_transform_fft_normalization_identity"] = {
+        "frequency_sample_count": 128,
+        "time_sample_count": 128,
+        "forward_fft_normalization": "unscaled",
+        "inverse_fft_normalization": "one_over_n",
+        "inverse_fft_scale": 1.0 / 128.0,
+        "cq_frequency_generation": "cq-frequency-15",
+        "inverse_transform_frequency_generation": "cq-frequency-15",
+        "transform_convention": (
+            "forward_negative_exponent_inverse_positive_exponent"
+        ),
+        "reconstruction_transform_convention": (
+            "forward_negative_exponent_inverse_positive_exponent"
+        ),
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -453,6 +486,44 @@ def test_v12_public_hmatrix_cluster_permutation_boundary_mesh_mismatch():
     assert (
         result["checks"][
             "hmatrix_cluster_permutation_matches_boundary_triangle_order"
+        ]
+        is False
+    )
+
+
+def test_v13_public_fembem_trace_surface_normal_orientation_mismatch():
+    bad = _with_v13_identity(_summary())
+    bad["fembem_trace_surface_normal_orientation_identity"].update(
+        {
+            "bem_normal_generation": "surface-normal-14",
+            "bem_normal_orientation": "inward",
+            "trace_normal_sign": -1,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "fembem_trace_and_surface_share_outward_normal_orientation"
+        ]
+        is False
+    )
+
+
+def test_v13_public_cq_inverse_z_transform_fft_normalization_mismatch():
+    bad = _with_v13_identity(_summary())
+    bad["cq_inverse_z_transform_fft_normalization_identity"].update(
+        {
+            "inverse_fft_normalization": "unscaled",
+            "inverse_fft_scale": 1.0,
+            "reconstruction_transform_convention": "legacy_unscaled_inverse",
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cq_inverse_z_transform_uses_matching_fft_normalization"
         ]
         is False
     )

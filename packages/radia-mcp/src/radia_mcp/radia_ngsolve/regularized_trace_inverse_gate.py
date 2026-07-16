@@ -148,6 +148,12 @@ def regularized_trace_inverse_path_gate(
     hmatrix_permutation_identity_ok = (
         _optional_hmatrix_cluster_permutation_identity_is_aligned(summary)
     )
+    trace_surface_normal_identity_ok = (
+        _optional_fembem_trace_surface_normal_orientation_is_aligned(summary)
+    )
+    cq_fft_normalization_identity_ok = (
+        _optional_cq_inverse_z_transform_fft_normalization_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -207,6 +213,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "hmatrix_cluster_permutation_matches_boundary_triangle_order": (
             hmatrix_permutation_identity_ok
+        ),
+        "fembem_trace_and_surface_share_outward_normal_orientation": (
+            trace_surface_normal_identity_ok
+        ),
+        "cq_inverse_z_transform_uses_matching_fft_normalization": (
+            cq_fft_normalization_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -598,6 +610,77 @@ def _optional_hmatrix_cluster_permutation_identity_is_aligned(
         and bool(permutation_generation)
         and value.get("hmatrix_assembly_permutation_generation")
         == permutation_generation
+    )
+
+
+def _optional_fembem_trace_surface_normal_orientation_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("fembem_trace_surface_normal_orientation_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    mesh_generation = str(value.get("boundary_mesh_generation", "")).strip()
+    normal_generation = str(
+        value.get("fem_outward_normal_generation", "")
+    ).strip()
+    fem_triangles = str(value.get("fem_boundary_triangle_sha256", "")).lower()
+    bem_triangles = str(value.get("bem_boundary_triangle_sha256", "")).lower()
+    try:
+        trace_normal_sign = _integer(value, "trace_normal_sign")
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        bool(mesh_generation)
+        and value.get("fem_trace_boundary_mesh_generation") == mesh_generation
+        and value.get("bem_surface_mesh_generation") == mesh_generation
+        and bool(normal_generation)
+        and value.get("bem_normal_generation") == normal_generation
+        and value.get("trace_operator_normal_generation") == normal_generation
+        and value.get("fem_normal_orientation") == "outward"
+        and value.get("bem_normal_orientation") == "outward"
+        and trace_normal_sign == 1
+        and _is_sha256(fem_triangles)
+        and bem_triangles == fem_triangles
+    )
+
+
+def _optional_cq_inverse_z_transform_fft_normalization_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("cq_inverse_z_transform_fft_normalization_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        frequency_count = _positive_integer(value, "frequency_sample_count")
+        time_count = _positive_integer(value, "time_sample_count")
+        inverse_scale = _finite_float(value, "inverse_fft_scale")
+    except (KeyError, TypeError, ValueError):
+        return False
+    frequency_generation = str(
+        value.get("cq_frequency_generation", "")
+    ).strip()
+    convention = str(value.get("transform_convention", "")).strip()
+    return (
+        frequency_count == time_count
+        and value.get("forward_fft_normalization") == "unscaled"
+        and value.get("inverse_fft_normalization") == "one_over_n"
+        and _close(inverse_scale, 1.0 / frequency_count)
+        and bool(frequency_generation)
+        and value.get("inverse_transform_frequency_generation")
+        == frequency_generation
+        and convention
+        == "forward_negative_exponent_inverse_positive_exponent"
+        and value.get("reconstruction_transform_convention") == convention
+    )
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
     )
 
 
