@@ -109,6 +109,8 @@ def magnetic_force_method_profile_gate(
     force_normalization_ok = True
     hysteresis_branch_state_ok = True
     remanence_frame_binding_ok = True
+    force_surface_body_ownership_ok = True
+    demag_branch_interpolation_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -116,6 +118,8 @@ def magnetic_force_method_profile_gate(
         force_normalization_ok = False
         hysteresis_branch_state_ok = False
         remanence_frame_binding_ok = False
+        force_surface_body_ownership_ok = False
+        demag_branch_interpolation_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -237,6 +241,75 @@ def magnetic_force_method_profile_gate(
                 and remanence_frame.get("remanence_transform_revision")
                 == remanence_frame.get("geometry_rotation_revision")
             )
+        surface_ownership = identity_value.get("force_surface_body_ownership")
+        if surface_ownership is not None:
+            target_body = (
+                str(surface_ownership.get("target_body_id", ""))
+                if isinstance(surface_ownership, Mapping)
+                else ""
+            )
+            enclosed = (
+                surface_ownership.get("enclosed_body_ids")
+                if isinstance(surface_ownership, Mapping)
+                else None
+            )
+            enclosed_ids = (
+                [str(value) for value in enclosed]
+                if isinstance(enclosed, Sequence)
+                and not isinstance(enclosed, (str, bytes))
+                else []
+            )
+            selection_generation = (
+                str(surface_ownership.get("surface_selection_generation", ""))
+                if isinstance(surface_ownership, Mapping)
+                else ""
+            )
+            force_surface_body_ownership_ok = (
+                isinstance(surface_ownership, Mapping)
+                and bool(target_body)
+                and enclosed_ids == [target_body]
+                and len(set(enclosed_ids)) == len(enclosed_ids)
+                and bool(selection_generation)
+                and surface_ownership.get("force_integration_generation")
+                == selection_generation
+                and surface_ownership.get("compensating_body_force_allowed")
+                is False
+            )
+        branch_interpolation = identity_value.get("demag_branch_interpolation")
+        if branch_interpolation is not None:
+            operating_branch = (
+                str(branch_interpolation.get("operating_point_branch", ""))
+                if isinstance(branch_interpolation, Mapping)
+                else ""
+            )
+            brackets = (
+                branch_interpolation.get("bracketing_sample_ids")
+                if isinstance(branch_interpolation, Mapping)
+                else None
+            )
+            bracket_ids = (
+                [str(value) for value in brackets]
+                if isinstance(brackets, Sequence)
+                and not isinstance(brackets, (str, bytes))
+                else []
+            )
+            branch_generation = (
+                str(branch_interpolation.get("branch_state_generation", ""))
+                if isinstance(branch_interpolation, Mapping)
+                else ""
+            )
+            demag_branch_interpolation_ok = (
+                isinstance(branch_interpolation, Mapping)
+                and operating_branch in {"ascending", "descending"}
+                and branch_interpolation.get("interpolation_source_branch")
+                == operating_branch
+                and bool(branch_generation)
+                and branch_interpolation.get("interpolation_state_generation")
+                == branch_generation
+                and len(bracket_ids) == 2
+                and all(bracket_ids)
+                and len(set(bracket_ids)) == 2
+            )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -315,6 +388,10 @@ def magnetic_force_method_profile_gate(
         ),
         "remanence_vector_is_transformed_from_material_to_assembly_frame": (
             remanence_frame_binding_ok
+        ),
+        "force_surface_encloses_only_target_body": force_surface_body_ownership_ok,
+        "demag_operating_point_uses_active_branch_interpolation": (
+            demag_branch_interpolation_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
