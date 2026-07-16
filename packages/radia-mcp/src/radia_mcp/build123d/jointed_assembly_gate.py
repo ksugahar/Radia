@@ -330,6 +330,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     brep_serialization_tolerance_kernel_identity_ok = True
     step_color_label_topology_identity_ok = True
     brep_surface_parameter_orientation_identity_ok = True
+    step_assembly_child_parent_unit_identity_ok = True
+    selector_normal_world_frame_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -880,6 +882,84 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and surface_parameters.get("exported_parameter_range_sha256")
                 == parameter_digest
             )
+
+        assembly_units = replay_identity_value.get(
+            "step_assembly_child_parent_unit_identity"
+        )
+        if assembly_units is not None:
+            assembly_units = (
+                assembly_units if isinstance(assembly_units, Mapping) else {}
+            )
+            import_generation = str(
+                assembly_units.get("step_import_generation", "")
+            ).strip()
+            unit = str(assembly_units.get("assembly_length_unit", "")).strip()
+            unit_scales = {"m": 1.0, "cm": 1.0e-2, "mm": 1.0e-3}
+            digest = str(
+                assembly_units.get("assembly_placement_sha256", "")
+            ).lower()
+            try:
+                assembly_scale = float(assembly_units.get("assembly_scale_to_m"))
+                child_scale = float(
+                    assembly_units.get("child_placement_scale_to_m")
+                )
+                parent_scale = float(
+                    assembly_units.get("parent_placement_scale_to_m")
+                )
+            except (TypeError, ValueError):
+                assembly_scale = child_scale = parent_scale = math.nan
+            expected_scale = unit_scales.get(unit)
+            step_assembly_child_parent_unit_identity_ok = (
+                bool(import_generation)
+                and assembly_units.get("child_placement_import_generation")
+                == import_generation
+                and assembly_units.get("parent_placement_import_generation")
+                == import_generation
+                and expected_scale is not None
+                and assembly_units.get("child_placement_length_unit") == unit
+                and assembly_units.get("parent_placement_length_unit") == unit
+                and math.isclose(
+                    assembly_scale, expected_scale, rel_tol=0.0, abs_tol=0.0
+                )
+                and child_scale == assembly_scale
+                and parent_scale == assembly_scale
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and assembly_units.get("resolved_assembly_placement_sha256")
+                == digest
+            )
+
+        selector_frame = replay_identity_value.get(
+            "selector_normal_world_frame_identity"
+        )
+        if selector_frame is not None:
+            selector_frame = (
+                selector_frame if isinstance(selector_frame, Mapping) else {}
+            )
+            shape_generation = str(
+                selector_frame.get("shape_generation", "")
+            ).strip()
+            placement_generation = str(
+                selector_frame.get("placement_generation", "")
+            ).strip()
+            face_ids = list(selector_frame.get("selected_face_ids") or [])
+            digest = str(selector_frame.get("normal_table_sha256", "")).lower()
+            selector_normal_world_frame_identity_ok = (
+                bool(shape_generation)
+                and selector_frame.get("selector_shape_generation")
+                == shape_generation
+                and bool(placement_generation)
+                and selector_frame.get("selector_placement_generation")
+                == placement_generation
+                and selector_frame.get("normal_predicate_frame") == "world"
+                and selector_frame.get("evaluated_normal_frame") == "world"
+                and bool(face_ids)
+                and len(set(face_ids)) == len(face_ids)
+                and list(selector_frame.get("resolved_face_ids") or []) == face_ids
+                and len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                and selector_frame.get("evaluated_normal_table_sha256") == digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -943,6 +1023,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "brep_surface_parameter_ranges_preserve_outward_orientation": (
             brep_surface_parameter_orientation_identity_ok
+        ),
+        "step_assembly_child_parent_placements_share_length_unit": (
+            step_assembly_child_parent_unit_identity_ok
+        ),
+        "selector_normals_use_final_world_placement_frame": (
+            selector_normal_world_frame_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
