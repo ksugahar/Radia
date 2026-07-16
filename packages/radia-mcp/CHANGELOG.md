@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.12] - 2026-07-17
+
+- Added genus-aware induction-heating guidance for surface orientation,
+  cohomology loop-current closure, surface-Poisson incident potentials, and
+  strong-coupling current normalization, grounded in analytic sphere and ring
+  contracts.
+- Strengthened evidence-lineage gates across build123d, Cubit, COMSOL, FEMM,
+  MATLAB, NGSolve, motor, RF, inverse-problem, and SPICE workflows so reported
+  quantities remain bound to their active mesh, basis, frame, units, source,
+  operating point, and artifact generation.
+- Extended counterfactual coverage for mixed-mesh exports, nonlinear
+  inductance, force/coenergy, motor loss, regularized traces, rotational eddy
+  braking, PWM loss, and CAD assembly gates.
+
 ## [1.4.11] - 2026-07-16
 
 - **HDiv-VIM production completeness**: documented the persistent solver,
