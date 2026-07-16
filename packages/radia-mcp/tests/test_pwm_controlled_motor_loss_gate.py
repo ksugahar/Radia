@@ -85,6 +85,21 @@ def _with_artifact_identity(payload: dict) -> dict:
             "phase_count": 3,
             "per_phase_to_total_applied": True,
         },
+        "dq_phase_order": {
+            "winding_connection_phase_order": ["U", "V", "W"],
+            "current_table_phase_order": ["U", "V", "W"],
+            "abc_to_dq_input_phase_order": ["U", "V", "W"],
+            "phase_order_generation": "phase-order-12",
+        },
+        "torque_ripple_aggregation": {
+            "cycle_generation": "periodic-cycle-8",
+            "cycle_start_sample": 0,
+            "cycle_end_sample_exclusive": 100,
+            "exported_sample_count": 101,
+            "aggregation_sample_count": 100,
+            "repeated_cycle_endpoint_present": True,
+            "repeated_endpoint_removed_before_aggregation": True,
+        },
     }
     return payload
 
@@ -188,3 +203,34 @@ def test_v9_public_per_phase_total_copper_loss_mix() -> None:
     result = pwm_controlled_motor_loss_gate(payload)
     assert result["status"] == "needs_attention"
     assert result["checks"]["loss_components_share_total_machine_scope"] is False
+
+
+def test_v10_public_dq_transform_phase_order_mismatch() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["dq_phase_order"][
+        "abc_to_dq_input_phase_order"
+    ] = ["U", "W", "V"]
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["abc_to_dq_phase_order_matches_winding_connection"]
+        is False
+    )
+
+
+def test_v10_public_torque_ripple_duplicate_cycle_endpoint() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["torque_ripple_aggregation"].update(
+        {
+            "aggregation_sample_count": 101,
+            "repeated_endpoint_removed_before_aggregation": False,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "torque_ripple_aggregation_excludes_repeated_cycle_endpoint"
+        ]
+        is False
+    )
