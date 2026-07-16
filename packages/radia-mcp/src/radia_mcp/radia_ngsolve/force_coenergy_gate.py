@@ -47,6 +47,8 @@ def force_coenergy_displacement_gate(
     nonlinear_bh_interpolation_extrapolation_identity_ok = True
     weighted_stress_mask_material_interface_identity_ok = True
     axisymmetric_coil_voltage_measure_identity_ok = True
+    nonlinear_energy_coenergy_bh_iteration_identity_ok = True
+    virtual_displacement_force_geometry_field_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -64,6 +66,8 @@ def force_coenergy_displacement_gate(
         nonlinear_bh_interpolation_extrapolation_identity_ok = False
         weighted_stress_mask_material_interface_identity_ok = False
         axisymmetric_coil_voltage_measure_identity_ok = False
+        nonlinear_energy_coenergy_bh_iteration_identity_ok = False
+        virtual_displacement_force_geometry_field_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -607,6 +611,131 @@ def force_coenergy_displacement_gate(
                 == radius_digest
             )
 
+        nonlinear_energy = artifact_identity.get(
+            "nonlinear_energy_coenergy_bh_iteration_identity"
+        )
+        if nonlinear_energy is not None:
+            field_generation = (
+                nonlinear_energy.get("field_solve_generation")
+                if isinstance(nonlinear_energy, dict)
+                else None
+            )
+            iteration = (
+                nonlinear_energy.get("nonlinear_iteration")
+                if isinstance(nonlinear_energy, dict)
+                else None
+            )
+            branch_generation = (
+                nonlinear_energy.get("bh_branch_generation")
+                if isinstance(nonlinear_energy, dict)
+                else None
+            )
+            state_digest = str(
+                nonlinear_energy.get("bh_state_sha256", "")
+                if isinstance(nonlinear_energy, dict)
+                else ""
+            ).lower()
+            nonlinear_energy_coenergy_bh_iteration_identity_ok = (
+                isinstance(nonlinear_energy, dict)
+                and bool(field_generation)
+                and nonlinear_energy.get("energy_field_solve_generation")
+                == field_generation
+                and nonlinear_energy.get("coenergy_field_solve_generation")
+                == field_generation
+                and isinstance(iteration, int)
+                and not isinstance(iteration, bool)
+                and iteration >= 0
+                and nonlinear_energy.get("energy_nonlinear_iteration") == iteration
+                and nonlinear_energy.get("coenergy_nonlinear_iteration") == iteration
+                and bool(branch_generation)
+                and nonlinear_energy.get("energy_bh_branch_generation")
+                == branch_generation
+                and nonlinear_energy.get("coenergy_bh_branch_generation")
+                == branch_generation
+                and len(state_digest) == 64
+                and all(character in "0123456789abcdef" for character in state_digest)
+                and str(nonlinear_energy.get("energy_bh_state_sha256", "")).lower()
+                == state_digest
+                and str(nonlinear_energy.get("coenergy_bh_state_sha256", "")).lower()
+                == state_digest
+            )
+
+        virtual_displacement = artifact_identity.get(
+            "virtual_displacement_force_geometry_field_identity"
+        )
+        if virtual_displacement is not None:
+            base_geometry = (
+                virtual_displacement.get("base_geometry_generation")
+                if isinstance(virtual_displacement, dict)
+                else None
+            )
+            perturbed_geometry = (
+                virtual_displacement.get("perturbed_geometry_generation")
+                if isinstance(virtual_displacement, dict)
+                else None
+            )
+            base_solve = (
+                virtual_displacement.get("base_field_solve_generation")
+                if isinstance(virtual_displacement, dict)
+                else None
+            )
+            perturbed_solve = (
+                virtual_displacement.get("perturbed_field_solve_generation")
+                if isinstance(virtual_displacement, dict)
+                else None
+            )
+            base_digest = str(
+                virtual_displacement.get("base_field_sha256", "")
+                if isinstance(virtual_displacement, dict)
+                else ""
+            ).lower()
+            perturbed_digest = str(
+                virtual_displacement.get("perturbed_field_sha256", "")
+                if isinstance(virtual_displacement, dict)
+                else ""
+            ).lower()
+            try:
+                displacement_step = float(virtual_displacement["displacement_step_m"])
+                field_displacement_step = float(
+                    virtual_displacement["field_displacement_step_m"]
+                )
+            except (KeyError, TypeError, ValueError):
+                displacement_step = math.nan
+                field_displacement_step = math.nan
+            virtual_displacement_force_geometry_field_identity_ok = (
+                isinstance(virtual_displacement, dict)
+                and bool(virtual_displacement.get("force_evaluation_generation"))
+                and bool(base_geometry)
+                and bool(perturbed_geometry)
+                and base_geometry != perturbed_geometry
+                and virtual_displacement.get("base_field_geometry_generation")
+                == base_geometry
+                and virtual_displacement.get("perturbed_field_geometry_generation")
+                == perturbed_geometry
+                and bool(base_solve)
+                and virtual_displacement.get("force_base_field_solve_generation")
+                == base_solve
+                and bool(perturbed_solve)
+                and virtual_displacement.get("force_perturbed_field_solve_generation")
+                == perturbed_solve
+                and math.isfinite(displacement_step)
+                and displacement_step > 0.0
+                and field_displacement_step == displacement_step
+                and len(base_digest) == len(perturbed_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in base_digest + perturbed_digest
+                )
+                and str(
+                    virtual_displacement.get("force_base_field_sha256", "")
+                ).lower()
+                == base_digest
+                and str(
+                    virtual_displacement.get("force_perturbed_field_sha256", "")
+                ).lower()
+                == perturbed_digest
+            )
+
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
     rows = []
@@ -681,6 +810,12 @@ def force_coenergy_displacement_gate(
         ),
         "axisymmetric_coil_voltage_applies_two_pi_radius_once": (
             axisymmetric_coil_voltage_measure_identity_ok
+        ),
+        "nonlinear_energy_and_coenergy_share_current_bh_iteration": (
+            nonlinear_energy_coenergy_bh_iteration_identity_ok
+        ),
+        "virtual_displacement_force_uses_paired_geometry_field_generations": (
+            virtual_displacement_force_geometry_field_identity_ok
         ),
     }
     return {

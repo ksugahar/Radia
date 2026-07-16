@@ -167,6 +167,37 @@ def _artifact_identity(sample_count):
             "radius_coordinate_sha256": "2" * 64,
             "voltage_radius_coordinate_sha256": "2" * 64,
         },
+        "nonlinear_energy_coenergy_bh_iteration_identity": {
+            "field_solve_generation": "solve-18",
+            "energy_field_solve_generation": "solve-18",
+            "coenergy_field_solve_generation": "solve-18",
+            "nonlinear_iteration": 12,
+            "energy_nonlinear_iteration": 12,
+            "coenergy_nonlinear_iteration": 12,
+            "bh_branch_generation": "bh-18-iteration-12",
+            "energy_bh_branch_generation": "bh-18-iteration-12",
+            "coenergy_bh_branch_generation": "bh-18-iteration-12",
+            "bh_state_sha256": "5" * 64,
+            "energy_bh_state_sha256": "5" * 64,
+            "coenergy_bh_state_sha256": "5" * 64,
+        },
+        "virtual_displacement_force_geometry_field_identity": {
+            "force_evaluation_generation": "force-18",
+            "base_geometry_generation": "geometry-18-base",
+            "base_field_geometry_generation": "geometry-18-base",
+            "perturbed_geometry_generation": "geometry-18-perturbed",
+            "perturbed_field_geometry_generation": "geometry-18-perturbed",
+            "base_field_solve_generation": "solve-18-base",
+            "force_base_field_solve_generation": "solve-18-base",
+            "perturbed_field_solve_generation": "solve-18-perturbed",
+            "force_perturbed_field_solve_generation": "solve-18-perturbed",
+            "displacement_step_m": 1.0e-4,
+            "field_displacement_step_m": 1.0e-4,
+            "base_field_sha256": "6" * 64,
+            "force_base_field_sha256": "6" * 64,
+            "perturbed_field_sha256": "7" * 64,
+            "force_perturbed_field_sha256": "7" * 64,
+        },
     }
 
 
@@ -547,6 +578,50 @@ def test_weighted_stress_material_interface_rejects_non_integer_face_ids() -> No
     assert (
         result["checks"][
             "weighted_stress_mask_excludes_current_material_interfaces"
+        ]
+        is False
+    )
+
+
+def test_v16_public_nonlinear_energy_coenergy_bh_branch_iteration_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["nonlinear_energy_coenergy_bh_iteration_identity"].update(
+        {
+            "coenergy_nonlinear_iteration": 11,
+            "coenergy_bh_branch_generation": "bh-18-iteration-11",
+            "coenergy_bh_state_sha256": "4" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "nonlinear_energy_and_coenergy_share_current_bh_iteration"
+        ]
+        is False
+    )
+
+
+def test_v16_public_virtual_displacement_force_geometry_field_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["virtual_displacement_force_geometry_field_identity"].update(
+        {
+            "perturbed_field_geometry_generation": "geometry-17-perturbed",
+            "force_perturbed_field_solve_generation": "solve-17-perturbed",
+            "force_perturbed_field_sha256": "4" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "virtual_displacement_force_uses_paired_geometry_field_generations"
         ]
         is False
     )
