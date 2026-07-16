@@ -141,6 +141,64 @@ def _artifact_units_are_consistent(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _matrix_sweep_generations_match(raw: Mapping[str, Any]) -> bool:
+    names = (
+        "solve_sweep_generation",
+        "apparent_matrix_sweep_generation",
+        "incremental_matrix_sweep_generation",
+    )
+    if not any(name in raw for name in names):
+        return True
+    values = [str(raw.get(name, "")).strip() for name in names]
+    return all(values) and len(set(values)) == 1
+
+
+def _energy_history_restart_offsets_close(
+    summary: Mapping[str, Any], run_count: int
+) -> bool:
+    segments = summary.get("energy_history_segments")
+    if segments is None:
+        return True
+    if (
+        not isinstance(segments, Sequence)
+        or isinstance(segments, (str, bytes))
+        or not segments
+    ):
+        return False
+    previous_end = -1
+    previous_offset_out = None
+    generations = set()
+    for segment in segments:
+        if not isinstance(segment, Mapping):
+            return False
+        generation = str(segment.get("segment_generation", "")).strip()
+        try:
+            start = int(segment["start_run_index"])
+            end = int(segment["end_run_index"])
+            offset_in = float(segment["coenergy_offset_in_J"])
+            offset_out = float(segment["coenergy_offset_out_J"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if (
+            not generation
+            or generation in generations
+            or start != previous_end + 1
+            or end < start
+            or end >= run_count
+            or not math.isfinite(offset_in)
+            or not math.isfinite(offset_out)
+        ):
+            return False
+        if previous_offset_out is not None and not math.isclose(
+            offset_in, previous_offset_out, rel_tol=1.0e-12, abs_tol=1.0e-15
+        ):
+            return False
+        generations.add(generation)
+        previous_end = end
+        previous_offset_out = offset_out
+    return previous_end == run_count - 1
+
+
 def nonlinear_inductance_sweep_gate(
     summary: Mapping[str, Any],
     *,
@@ -256,6 +314,9 @@ def nonlinear_inductance_sweep_gate(
             "reported_and_artifact_units_are_consistent_si": (
                 _artifact_units_are_consistent(raw)
             ),
+            "inductance_matrices_share_solve_sweep_generation": (
+                _matrix_sweep_generations_match(raw)
+            ),
         }
         row = {
             "current_A_requested": requested,
@@ -326,6 +387,9 @@ def nonlinear_inductance_sweep_gate(
         <= (1.0 - minimum_saturation_drop) * peak_apparent,
         "high_current_incremental_inductance_drops_from_peak": incremental_primary[-1]
         <= (1.0 - minimum_saturation_drop) * peak_incremental,
+        "restart_energy_history_offsets_are_continuous": (
+            _energy_history_restart_offsets_close(summary, len(runs))
+        ),
     }
     return {
         "policy": "nonlinear_inductance_sweep_gate_v1",
