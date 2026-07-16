@@ -19,7 +19,8 @@ from ngsolve import TaskManager
 
 
 def step_to_coil_vol(step_path, vol_path, maxh=0.012,
-                       source_name="source", sink_name="sink"):
+                       source_name="source", sink_name="sink",
+                       volume_mesh=False):
     """Mesh ``step_path`` into ``vol_path`` with source/sink boundary labels.
 
     Parameters
@@ -34,6 +35,14 @@ def step_to_coil_vol(step_path, vol_path, maxh=0.012,
         value used in the retired BEM-A panel default).
     source_name, sink_name : str
         Boundary labels written to the .vol.
+    volume_mesh : bool
+        False (default): surface-only mesh (Glue of the labelled faces),
+        the classic helper output.  True: mesh the SOLID with volume
+        tetrahedra -- the common Cubit-export shape.  Used by the
+        regression test for the volume-coil-vol failure class (a raw
+        ``Mesh(coil.vol)`` handed to HDivSurface picks up extra null
+        modes and the EFIE saddle LU goes singular; keiko gapped_torus
+        2026-05-12, Takahashi coil_only.vol 2026-07-16).
 
     Returns
     -------
@@ -120,7 +129,12 @@ def step_to_coil_vol(step_path, vol_path, maxh=0.012,
             f.name = "body"
 
     with TaskManager():
-        ngmesh = OCCGeometry(Glue(faces)).GenerateMesh(
+        # volume_mesh: mesh the original solid (face names set above are
+        # carried on the TopoDS faces, so boundary labels survive) -> the
+        # .vol contains volume tets like a Cubit export.  Default: Glue the
+        # faces for the classic surface-only mesh.
+        mesh_shape = shape if volume_mesh else Glue(faces)
+        ngmesh = OCCGeometry(mesh_shape).GenerateMesh(
             mp=MeshingParameters(maxh=maxh, curvaturesafety=1.0,
                                   segmentsperedge=1))
         vol_path = os.path.abspath(vol_path)
