@@ -1669,17 +1669,29 @@ propagation + per-component signed-volume outward), wired into BOTH
 extractors.  No-op on consistent meshes (sphere benchmark unchanged).
 Takahashi weak now returns 22.5 kW / 51.2 kA/m.
 
-**Part 2 (remaining +27-32 % on P_wp, +11 % on H_t): genus-1 missing
-loop current.**  chi = V - E + F = 0 -> genus 1; the coil flux links the
-bore, and the BIE's ``J_s = n x (-grad phi)`` with single-valued phi
-carries ZERO net current through any cut -- the shorted-turn eddy
-current and its Lenz screening are unrepresentable.  The loop-DOF
-extension (cut-open mesh + a Theta carrier field + Faraday closure;
-membrane term cancels analytically against Theta's own exterior
-identity, alpha column = SL(gamma M^-1 K Theta - q_Theta)) is PROTOTYPED
-and validated on the analytic thin-wire shorted ring: net current to
-2-3 %, phase 0.3 deg, at two mesh resolutions.  Takahashi integration
-is follow-up work (the same prototype exposed the winding bug).
+**Part 2 (was +27-32 % on P_wp, +11 % on H_t): genus-1 missing loop
+current -- SOLVED by ``radia.bem_loop_extension`` (2026-07-17).**
+chi = V - E + F = 0 -> genus 1; the coil flux links the bore, and the
+BIE's ``J_s = n x (-grad phi)`` with single-valued phi carries ZERO net
+current through any cut -- the shorted-turn eddy current and its Lenz
+screening are unrepresentable.  The extension adds ONE DOF alpha (the
+net toroidal current): ``phi = phi_u + alpha Theta`` with Theta the
+potential of a unit mid-wall ring (ray-cast from the homology cut, same
+class -> single-valued on the cut-open mesh, verified +-1 jump), alpha
+column = ``SL(gamma M^-1 K(Theta) - q_Theta)`` (the membrane term
+cancels against Theta's own identity), closed by Faraday on the cut
+loop.  BEM operators stay on the CLOSED mesh (assembling on the open
+mesh poisons the regular quadrature via coincident duplicated vertices).
+Validated: analytic shorted ring |alpha|/|I| = 0.983 / phase 0.2 deg,
+frozen(alpha=0) == plain production solve exactly
+(``validation_test/bem/test_loop_extension_ring.py``); Takahashi
+P_wp 21.5 -> **18.4 kW**, H_t 50.1 -> **46.3 kA/m** vs 17.0-17.7 kW /
+46.1 kA/m references (H_t to 0.5 %).  Entry point:
+``radia.bem_loop_extension.solve_loop_extended(solver, phi_inc, Z_s,
+omega, A_inc_fn)``; CLI wiring into the calc_inductance weak/strong
+paths (incl. the Telegen dL interplay) is the open next step.
+Full resolution chain: 38.2 kW (winding bug) -> 22.5 (winding fix) ->
+21.5 (psi incident) -> 18.4 kW (loop DOF) vs 17.0-17.7 kW references.
 
 Detection is built in: ``bem_sibc_solver.surface_euler_characteristic``
 + ``calc_inductance._wp_genus_check`` -- every weak/strong run logs a
