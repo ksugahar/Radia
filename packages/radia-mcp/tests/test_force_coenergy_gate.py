@@ -1,4 +1,5 @@
 import json
+import math
 
 import pytest
 
@@ -44,3 +45,21 @@ def test_force_coenergy_gate_requires_constant_current_semantics():
     )
     assert result["status"] == "needs_attention"
     assert result["checks"]["constant_current_coenergy_recorded"] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_force_energy_derivative_sign_conflict",
+        "v7_public_axisymmetric_two_pi_double_count",
+    ],
+)
+def test_generalization_v7_public(case_id):
+    positions, coenergy, forces = _quadratic_case()
+    if case_id == "v7_public_force_energy_derivative_sign_conflict":
+        forces = [-force for force in forces]
+    else:
+        forces = [2.0 * math.pi * force for force in forces]
+    result = force_coenergy_displacement_gate(positions, coenergy, forces)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["central_virtual_work_matches_direct_force"] is False
