@@ -361,6 +361,97 @@ def _transient_derivative_adaptive_history_identity_ok(
     )
 
 
+def _noise_spectral_density_sidedness_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("noise_spectral_density_sidedness_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("noise_generation_id") or "")
+    target_basis = str(contract.get("density_sidedness_basis") or "")
+    reference_basis = str(
+        contract.get("reference_density_sidedness_basis") or ""
+    )
+    bases = {
+        "one_sided_positive_frequency",
+        "two_sided_full_frequency",
+    }
+    if target_basis not in bases or reference_basis not in bases:
+        return False
+    if target_basis == reference_basis:
+        expected_scale = 1.0
+    elif reference_basis == "two_sided_full_frequency":
+        expected_scale = math.sqrt(2.0)
+    else:
+        expected_scale = 1.0 / math.sqrt(2.0)
+    try:
+        scale = _finite(
+            contract.get("reference_to_density_amplitude_scale"),
+            "reference_to_density_amplitude_scale",
+            positive=True,
+        )
+    except ValueError:
+        return False
+    value_digest = str(contract.get("density_trace_value_sha256") or "")
+    return (
+        bool(generation)
+        and contract.get("density_trace_generation_id") == generation
+        and contract.get("reference_density_trace_generation_id") == generation
+        and contract.get("density_quantity") == "amplitude_spectral_density"
+        and contract.get("density_unit") == "V/sqrt(Hz)"
+        and contract.get("integration_sidedness_basis") == target_basis
+        and math.isclose(scale, expected_scale, rel_tol=1.0e-12, abs_tol=0.0)
+        and _is_sha256(value_digest)
+        and contract.get("reference_density_trace_value_sha256") == value_digest
+    )
+
+
+def _stepped_parameter_interpolation_coordinate_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("stepped_parameter_interpolation_coordinate_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    source_values = contract.get("source_parameter_values")
+    interpolation_values = contract.get("interpolation_parameter_values")
+    if (
+        not isinstance(source_values, Sequence)
+        or isinstance(source_values, (str, bytes))
+        or not isinstance(interpolation_values, Sequence)
+        or isinstance(interpolation_values, (str, bytes))
+    ):
+        return False
+    try:
+        source = [float(value) for value in source_values]
+        interpolated = [float(value) for value in interpolation_values]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("step_generation_id") or "")
+    coordinate = str(contract.get("source_parameter_coordinate") or "")
+    axis_digest = str(contract.get("source_parameter_axis_sha256") or "")
+    return (
+        bool(generation)
+        and contract.get("source_step_generation_id") == generation
+        and contract.get("interpolated_result_step_generation_id") == generation
+        and bool(str(contract.get("parameter_name") or ""))
+        and bool(str(contract.get("parameter_unit") or ""))
+        and coordinate in {"linear_value", "log10_value"}
+        and contract.get("target_parameter_coordinate") == coordinate
+        and contract.get("interpolation_parameter_coordinate") == coordinate
+        and len(source) >= 2
+        and len(interpolated) == len(source)
+        and all(math.isfinite(value) and value > 0.0 for value in source)
+        and all(right > left for left, right in zip(source, source[1:]))
+        and interpolated == source
+        and _is_sha256(axis_digest)
+        and contract.get("interpolation_source_axis_sha256") == axis_digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -657,6 +748,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "transient_derivatives_use_current_accepted_timestep_history": (
             _transient_derivative_adaptive_history_identity_ok(positive)
+        ),
+        "noise_density_sidedness_uses_required_amplitude_conversion": (
+            _noise_spectral_density_sidedness_identity_ok(positive)
+        ),
+        "stepped_results_share_parameter_interpolation_coordinate": (
+            _stepped_parameter_interpolation_coordinate_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
