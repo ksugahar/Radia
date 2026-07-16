@@ -316,11 +316,15 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     kernel_version_identity_ok = True
     export_follows_replay_ok = True
     kernel_session_identity_ok = True
+    topology_replay_identity_ok = True
+    unit_conversion_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
         export_follows_replay_ok = False
         kernel_session_identity_ok = False
+        topology_replay_identity_ok = False
+        unit_conversion_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -420,6 +424,53 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
             and len(session_starts) == 1
             and all(session_starts)
         )
+
+        topology_value = replay_identity_value.get("topology_replay_identity")
+        if topology_value is not None:
+            topology = topology_value if isinstance(topology_value, Mapping) else {}
+            source_topology = str(topology.get("source_topology_sha256", "")).lower()
+            imports = topology.get("imports")
+            import_rows_valid = isinstance(imports, list) and all(
+                isinstance(row, Mapping) for row in imports
+            )
+            import_modes = (
+                {str(row.get("mode", "")) for row in imports}
+                if import_rows_valid
+                else set()
+            )
+            topology_replay_identity_ok = (
+                len(source_topology) == 64
+                and import_rows_valid
+                and import_modes == {"heal", "noheal"}
+                and all(
+                    str(row.get("topology_sha256", "")).lower()
+                    == source_topology
+                    for row in imports
+                )
+            )
+
+        unit_value = replay_identity_value.get("unit_conversion_identity")
+        if unit_value is not None:
+            unit_identity = unit_value if isinstance(unit_value, Mapping) else {}
+            try:
+                length_scale = float(unit_identity.get("length_scale_to_target"))
+                volume_scale = float(
+                    unit_identity.get("declared_volume_scale_to_target")
+                )
+            except (TypeError, ValueError):
+                length_scale = math.nan
+                volume_scale = math.nan
+            unit_conversion_identity_ok = (
+                unit_identity.get("source_geometry_unit") == "mm"
+                and unit_identity.get("target_geometry_unit") == "m"
+                and unit_identity.get("external_measurement_stage")
+                == "after_unit_conversion"
+                and unit_identity.get("external_volume_unit") == "m^3"
+                and math.isfinite(length_scale)
+                and math.isfinite(volume_scale)
+                and length_scale == 0.001
+                and volume_scale == 1.0
+            )
     joint_names = {
         str(name)
         for row in components
@@ -454,6 +505,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         "external_kernel_versions_are_replay_invariant": kernel_version_identity_ok,
         "neutral_cad_export_follows_source_replay": export_follows_replay_ok,
         "external_kernel_session_generation_is_continuous": kernel_session_identity_ok,
+        "heal_and_noheal_imports_record_topology_identity": topology_replay_identity_ok,
+        "external_volume_is_measured_after_unit_conversion": unit_conversion_identity_ok,
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,
