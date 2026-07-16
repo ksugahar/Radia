@@ -96,6 +96,8 @@ def pwm_controlled_motor_loss_gate(
     dq_current_phase_convention_identity_ok = True
     torque_average_period_angle_basis_identity_ok = True
     lamination_stacking_factor_loss_conductivity_identity_ok = True
+    dq_park_transform_power_invariant_scaling_identity_ok = True
+    demag_recoil_temperature_operating_point_identity_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -111,6 +113,8 @@ def pwm_controlled_motor_loss_gate(
         dq_current_phase_convention_identity_ok = False
         torque_average_period_angle_basis_identity_ok = False
         lamination_stacking_factor_loss_conductivity_identity_ok = False
+        dq_park_transform_power_invariant_scaling_identity_ok = False
+        demag_recoil_temperature_operating_point_identity_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -597,6 +601,124 @@ def pwm_controlled_motor_loss_gate(
                 == solve_generation
             )
 
+        dq_power_value = identity_value.get(
+            "dq_park_transform_power_invariant_scaling_identity"
+        )
+        if dq_power_value is not None:
+            dq_power = dq_power_value if isinstance(dq_power_value, dict) else {}
+            try:
+                abc_power = float(dq_power.get("abc_instantaneous_power_w"))
+                dq0_power = float(dq_power.get("dq0_instantaneous_power_w"))
+                power_scale = float(dq_power.get("dq0_power_scale_to_abc"))
+                scale_count = int(dq_power.get("power_scale_application_count"))
+            except (TypeError, ValueError):
+                abc_power = dq0_power = power_scale = math.nan
+                scale_count = -1
+            solve_generation = str(dq_power.get("solve_generation", ""))
+            transform_digest = str(
+                dq_power.get("park_transform_sha256", "")
+            ).lower()
+            dq_park_transform_power_invariant_scaling_identity_ok = (
+                bool(solve_generation)
+                and dq_power.get("dq_voltage_result_generation")
+                == solve_generation
+                and dq_power.get("dq_current_result_generation")
+                == solve_generation
+                and dq_power.get("voltage_park_transform_basis")
+                == "power_invariant"
+                and dq_power.get("current_park_transform_basis")
+                == "power_invariant"
+                and dq_power.get("reported_power_basis") == "power_invariant"
+                and all(
+                    math.isfinite(value)
+                    for value in (abc_power, dq0_power, power_scale)
+                )
+                and math.isclose(power_scale, 1.0, rel_tol=0.0, abs_tol=0.0)
+                and scale_count == 1
+                and math.isclose(
+                    dq0_power * power_scale,
+                    abc_power,
+                    rel_tol=1.0e-12,
+                    abs_tol=1.0e-12,
+                )
+                and len(transform_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in transform_digest
+                )
+                and str(
+                    dq_power.get("power_closure_transform_sha256", "")
+                ).lower()
+                == transform_digest
+            )
+
+        demag_value = identity_value.get(
+            "demag_recoil_temperature_operating_point_identity"
+        )
+        if demag_value is not None:
+            demag = demag_value if isinstance(demag_value, dict) else {}
+            try:
+                magnet_temperature = float(demag.get("magnet_temperature_k"))
+                recoil_temperature = float(
+                    demag.get("recoil_curve_temperature_k")
+                )
+                operating_temperature = float(
+                    demag.get("operating_point_temperature_k")
+                )
+            except (TypeError, ValueError):
+                magnet_temperature = recoil_temperature = math.nan
+                operating_temperature = math.nan
+            material_generation = str(demag.get("material_generation", ""))
+            temperature_generation = str(
+                demag.get("temperature_state_generation", "")
+            )
+            solve_generation = str(demag.get("solve_generation", ""))
+            recoil_digest = str(demag.get("recoil_curve_sha256", "")).lower()
+            demag_recoil_temperature_operating_point_identity_ok = (
+                bool(material_generation)
+                and demag.get("recoil_curve_material_generation")
+                == material_generation
+                and demag.get("field_solution_material_generation")
+                == material_generation
+                and bool(temperature_generation)
+                and demag.get("recoil_curve_temperature_state_generation")
+                == temperature_generation
+                and demag.get("operating_point_temperature_state_generation")
+                == temperature_generation
+                and all(
+                    math.isfinite(value)
+                    for value in (
+                        magnet_temperature,
+                        recoil_temperature,
+                        operating_temperature,
+                    )
+                )
+                and magnet_temperature > 0.0
+                and math.isclose(
+                    recoil_temperature,
+                    magnet_temperature,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-12,
+                )
+                and math.isclose(
+                    operating_temperature,
+                    magnet_temperature,
+                    rel_tol=0.0,
+                    abs_tol=1.0e-12,
+                )
+                and bool(solve_generation)
+                and demag.get("operating_point_solve_generation")
+                == solve_generation
+                and len(recoil_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in recoil_digest
+                )
+                and str(
+                    demag.get("operating_point_recoil_curve_sha256", "")
+                ).lower()
+                == recoil_digest
+            )
+
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
     count = len(time_s)
     angle_deg = _vector(time_series.get("angle_deg"), "time_series.angle_deg", minimum=count)
@@ -826,6 +948,12 @@ def pwm_controlled_motor_loss_gate(
         ),
         "lamination_loss_uses_consistent_stacking_factor_and_conductivity_basis": (
             lamination_stacking_factor_loss_conductivity_identity_ok
+        ),
+        "dq_power_uses_one_power_invariant_park_transform_scaling": (
+            dq_park_transform_power_invariant_scaling_identity_ok
+        ),
+        "demag_operating_point_uses_current_recoil_temperature_state": (
+            demag_recoil_temperature_operating_point_identity_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
