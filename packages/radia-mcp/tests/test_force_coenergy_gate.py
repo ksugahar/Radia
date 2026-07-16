@@ -88,6 +88,28 @@ def _artifact_identity(sample_count):
             "conductivity_sha256": "1" * 64,
             "lamination_state_sha256": "2" * 64,
         },
+        "weighted_stress_mask_mesh_identity": {
+            "active_air_mesh_generation": "air-mesh-15",
+            "field_solution_mesh_generation": "air-mesh-15",
+            "weighted_mask_mesh_generation": "air-mesh-15",
+            "force_integration_mesh_generation": "air-mesh-15",
+            "weighted_mask_sha256": "5" * 64,
+            "force_mask_sha256": "5" * 64,
+            "mask_basis": "nodal_weighting_function",
+            "force_method": "weighted_stress_tensor",
+        },
+        "complex_current_phasor_basis_identity": {
+            "source_current_basis": "rms_phasor",
+            "field_current_basis": "rms_phasor",
+            "force_loss_current_basis": "rms_phasor",
+            "source_scale_to_rms": 1.0,
+            "field_scale_to_rms": 1.0,
+            "force_loss_scale_to_rms": 1.0,
+            "complex_time_convention": "exp(+jwt)",
+            "result_time_convention": "exp(+jwt)",
+            "solve_generation": "solve-15",
+            "result_generation": "solve-15",
+        },
     }
 
 
@@ -326,5 +348,43 @@ def test_v12_public_eddy_loss_frequency_material_generation_mismatch() -> None:
         result["checks"][
             "eddy_loss_uses_current_frequency_and_material_generation"
         ]
+        is False
+    )
+
+
+def test_v13_public_weighted_stress_mask_mesh_generation_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["weighted_stress_mask_mesh_identity"].update(
+        {
+            "weighted_mask_mesh_generation": "air-mesh-14",
+            "weighted_mask_sha256": "7" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["weighted_stress_mask_matches_current_air_mesh_generation"]
+        is False
+    )
+
+
+def test_v13_public_complex_current_peak_rms_phasor_basis_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["complex_current_phasor_basis_identity"].update(
+        {
+            "field_current_basis": "peak_phasor",
+            "field_scale_to_rms": 1.0 / math.sqrt(2.0),
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["complex_current_force_and_loss_share_phasor_basis"]
         is False
     )
