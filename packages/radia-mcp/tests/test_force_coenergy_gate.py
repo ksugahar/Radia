@@ -25,6 +25,18 @@ def _artifact_identity(sample_count):
             "time_s": 0.025,
         },
         "coenergy_mesh_family_generations": ["mesh-family-7"] * sample_count,
+        "displacement_axis": {
+            "numeric_unit": "m",
+            "derivative_unit": "m",
+            "scale_to_si": 1.0,
+        },
+        "force_frame": {
+            "direct_frame_id": "model-frame",
+            "derivative_frame_id": "model-frame",
+            "direct_axis": [0.0, -1.0, 0.0],
+            "derivative_axis": [0.0, -1.0, 0.0],
+            "reflection_applied": True,
+        },
     }
 
 
@@ -113,6 +125,44 @@ def test_generalization_v8_public(case_id, failed_check):
         )
     else:
         identity["coenergy_mesh_family_generations"][4] = "mesh-family-8"
+    result = force_coenergy_displacement_gate(
+        positions,
+        coenergy,
+        forces,
+        artifact_identity=identity,
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][failed_check] is False
+
+
+@pytest.mark.parametrize(
+    ("case_id", "failed_check"),
+    [
+        (
+            "v9_public_virtual_work_displacement_unit_mismatch",
+            "displacement_axis_uses_one_si_unit",
+        ),
+        (
+            "v9_public_force_direction_frame_reflected",
+            "force_vectors_share_transformed_frame",
+        ),
+    ],
+)
+def test_generalization_v9_public(case_id, failed_check):
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    if case_id == "v9_public_virtual_work_displacement_unit_mismatch":
+        identity["displacement_axis"].update(
+            {"numeric_unit": "mm", "derivative_unit": "m", "scale_to_si": 1.0}
+        )
+    else:
+        identity["force_frame"].update(
+            {
+                "direct_frame_id": "reflected-frame",
+                "direct_axis": [0.0, 1.0, 0.0],
+                "reflection_applied": False,
+            }
+        )
     result = force_coenergy_displacement_gate(
         positions,
         coenergy,
