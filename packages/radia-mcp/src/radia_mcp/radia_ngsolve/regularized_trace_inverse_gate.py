@@ -136,6 +136,12 @@ def regularized_trace_inverse_path_gate(
     convolution_quadrature_identity_ok = (
         _optional_convolution_quadrature_identity_is_aligned(summary)
     )
+    cq_contour_branch_identity_ok = (
+        _optional_cq_contour_branch_identity_is_aligned(summary)
+    )
+    trace_orientation_identity_ok = (
+        _optional_trace_orientation_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -183,6 +189,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "cq_weights_match_current_time_grid_and_method": (
             convolution_quadrature_identity_ok
+        ),
+        "cq_transfer_samples_share_inverse_laplace_contour_branch": (
+            cq_contour_branch_identity_ok
+        ),
+        "fembem_trace_orientation_matches_current_volume_mesh": (
+            trace_orientation_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -453,6 +465,69 @@ def _optional_convolution_quadrature_identity_is_aligned(
         and time_grid_method == weight_method
         and bool(time_grid_generation)
         and time_grid_generation == weight_generation
+    )
+
+
+def _optional_cq_contour_branch_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("cq_inverse_laplace_contour_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    laplace_ids = value.get("laplace_sample_ids")
+    transfer_ids = value.get("transfer_sample_ids")
+    branches = value.get("sqrt_branch_conventions")
+    if not all(
+        isinstance(row, Sequence) and not isinstance(row, (str, bytes))
+        for row in (laplace_ids, transfer_ids, branches)
+    ):
+        return False
+    laplace = [str(item).strip() for item in laplace_ids]
+    transfer = [str(item).strip() for item in transfer_ids]
+    branch_values = [str(item).strip() for item in branches]
+    expected_branch = str(
+        value.get("inverse_laplace_branch_convention", "")
+    ).strip()
+    contour_generation = str(value.get("contour_generation", "")).strip()
+    return (
+        bool(laplace)
+        and all(laplace)
+        and len(set(laplace)) == len(laplace)
+        and transfer == laplace
+        and len(branch_values) == len(laplace)
+        and bool(expected_branch)
+        and all(branch == expected_branch for branch in branch_values)
+        and bool(contour_generation)
+        and value.get("transfer_sample_contour_generation")
+        == contour_generation
+    )
+
+
+def _optional_trace_orientation_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("fembem_trace_orientation_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    volume_digest = str(value.get("volume_mesh_sha256", "")).lower()
+    trace_digest = str(value.get("trace_mesh_sha256", "")).lower()
+    volume_generation = str(value.get("volume_mesh_generation", "")).strip()
+    triangle_digest = str(value.get("trace_boundary_triangle_digest", "")).strip()
+    return (
+        len(volume_digest) == 64
+        and all(character in "0123456789abcdef" for character in volume_digest)
+        and trace_digest == volume_digest
+        and bool(volume_generation)
+        and value.get("trace_mesh_generation") == volume_generation
+        and value.get("boundary_orientation_mesh_generation")
+        == volume_generation
+        and bool(triangle_digest)
+        and value.get("oriented_boundary_triangle_digest") == triangle_digest
+        and value.get("outward_orientation_verified") is True
     )
 
 
