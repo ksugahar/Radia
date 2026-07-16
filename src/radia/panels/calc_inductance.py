@@ -616,6 +616,46 @@ def _delta_L_telegen_phiB_from_surface_J(
 # ======================================================================
 # Workpiece weak-coupled BEM-SIBC block (shared by both coil solvers)
 # ======================================================================
+def _wp_genus_check(wp_mesh, tag="BEM"):
+    """Euler characteristic / genus of the extracted workpiece surface.
+
+    Returns ``(chi, genus)`` and logs a WARNING for genus >= 1: the scalar
+    potential BIE (J_s = n x -grad phi, single-valued phi) carries ZERO net
+    current through any cut of the surface, so on a handle that links the
+    coil flux the physical shorted-turn eddy current -- and its Lenz
+    screening -- is unrepresentable.  Measured on the Takahashi tube
+    (genus 1, 7 kHz, mu_r=100): H_t x1.44 / P_wp x2.2 vs the FEM A-V and
+    impedance-BC references, while the SAME solver matches the analytic
+    genus-0 sphere benchmark to 0.3% (mu_r 1..100).  L / delta_L remain
+    usable; absolute P_wp needs FEM A-V until the cohomology loop-DOF
+    extension lands.
+    """
+    from radia.bem_sibc_solver import surface_euler_characteristic
+    chi = surface_euler_characteristic(wp_mesh)
+    genus = (2 - chi) // 2
+    if chi != 2:
+        progress(tag,
+            f"WARNING: workpiece surface has genus={genus} (Euler chi={chi}, "
+            f"e.g. a tube/ring).  The scalar-potential BIE cannot carry a net "
+            f"circulating (shorted-turn) eddy current on the handle, so its "
+            f"Lenz screening is LOST: H_t / P_wp are over-estimated when the "
+            f"coil flux links the handle (Takahashi: H_t x1.44, P_wp x2.2 vs "
+            f"FEM).  L / delta_L remain usable.  For absolute heating use FEM "
+            f"A-V (calc_fem_coilmesh.py).")
+    return chi, genus
+
+
+_GENUS_P_WP_CAVEAT = (
+    "workpiece surface genus >= 1 (Euler chi != 2): the scalar-potential "
+    "BIE cannot represent the net circulating (shorted-turn) eddy current "
+    "on the handle, so its Lenz screening is missing and H_t / P_wp are "
+    "over-estimated when the coil flux links the handle (measured on the "
+    "Takahashi tube: H_t x1.44, P_wp x2.2 vs FEM A-V / impedance-BC "
+    "references; the same solver matches the analytic genus-0 sphere "
+    "benchmark to 0.3%).  delta_L is unaffected.  Use FEM A-V for "
+    "absolute heating until the cohomology loop-DOF extension lands.")
+
+
 def _solve_workpiece_weak_coupled(args, coil_data):
     """Workpiece BEM-SIBC + Telegen ΔL using whichever coil source exists.
 
@@ -696,6 +736,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
     t_wp_mesh = time.perf_counter() - t0
     progress("BEM",
         f"wp nv={wp_mesh.nv} ne(BND)={wp_mesh.GetNE(BND)} ({t_wp_mesh:.1f}s)")
+    wp_chi, wp_genus = _wp_genus_check(wp_mesh)
 
     # 2. ESIM prerequisite check (Karl iteration needs a BH curve).
     if args.impedance_model == "esim" and not args.bh_file:
@@ -1378,6 +1419,8 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "delta_L_nH": delta_L_nH, "delta_R_mOhm": delta_R_mOhm,
         "wp_dissipation_R_mOhm": wp_dissipation_R_mOhm,
         "wp_mesh_nv": int(wp_mesh.nv),
+        "wp_euler_chi": int(wp_chi),
+        "wp_genus": int(wp_genus),
         "wp_mesh_n_tris": int(wp_mesh.GetNE(BND)),
         "wp_ndof": int(bem.ndof),
         "wp_basis_order": int(basis_order),
@@ -1524,6 +1567,13 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["wp_dissipation_R_mOhm"] = wp_data["wp_dissipation_R_mOhm"]
     out["wp_mesh_nv"] = wp_data["wp_mesh_nv"]
     out["wp_mesh_n_tris"] = wp_data["wp_mesh_n_tris"]
+    # Topology context + genus caveat (see _wp_genus_check): on a genus>=1
+    # workpiece the scalar BIE drops the shorted-turn eddy current, so the
+    # absolute P_wp / H_t carry a known over-estimate.
+    out["wp_euler_chi"] = int(wp_data.get("wp_euler_chi", 2))
+    out["wp_genus"] = int(wp_data.get("wp_genus", 0))
+    if out["wp_genus"] != 0:
+        out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
     # so the JSON retains the same numbers users see in the console log.
     out["wp_ndof"] = int(wp_data.get("wp_ndof", 0))
@@ -1626,6 +1676,7 @@ def _solve_workpiece_strong_coupled(args):
             f"wp_label {args.wp_label!r} not found in materials "
             f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
     t_wp_mesh = time.perf_counter() - t0
+    wp_chi, wp_genus = _wp_genus_check(wp_mesh, tag="COUPLED")
 
     # --- global Leontovich Z_s (delta includes mu_r), same convention as
     #     the linear weak path: Z_s = (1+j) * rho / delta ---
@@ -1691,6 +1742,8 @@ def _solve_workpiece_strong_coupled(args):
 
     sol["wp_mesh_nv"] = int(wp_mesh.nv)
     sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
+    sol["wp_euler_chi"] = int(wp_chi)
+    sol["wp_genus"] = int(wp_genus)
     sol["delta_wp_mm"] = float(delta_wp * 1e3)
     sol["t_wp_mesh_s"] = float(t_wp_mesh)
     sol["t_coupled_solve_s"] = float(t_solve)
@@ -1752,6 +1805,7 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
             f"wp_label {args.wp_label!r} not found in materials "
             f"({sorted(mats)}) or boundaries ({sorted(bnds)})")
     t_wp_mesh = time.perf_counter() - t0
+    wp_chi, wp_genus = _wp_genus_check(wp_mesh, tag="COUPLED")
 
     mat_wp = EMMaterial(name="wp", sigma=args.sigma, mu_r=args.mu_r)
     delta_wp = mat_wp.skin_depth(args.frequency)
@@ -1792,6 +1846,8 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     sol["n_J_coil"] = int(sol["n_filaments"])
     sol["wp_mesh_nv"] = int(wp_mesh.nv)
     sol["wp_mesh_n_tris"] = int(wp_mesh.GetNE(BND))
+    sol["wp_euler_chi"] = int(wp_chi)
+    sol["wp_genus"] = int(wp_genus)
     sol["delta_wp_mm"] = float(delta_wp * 1e3)
     sol["t_wp_mesh_s"] = float(t_wp_mesh)
     sol["t_coupled_solve_s"] = float(t_solve)
@@ -1839,21 +1895,19 @@ def _assemble_strong_output(args, coil_data, strong):
     out["coil_bem_backend"] = "hacapk_cocr" if strong.get("coil_hacapk") else "dense-lu"
     out["t_wp_mesh_s"] = float(strong["t_wp_mesh_s"])
     out["t_coupled_solve_s"] = float(strong["t_coupled_solve_s"])
-    # P_wp caveat -- applies to BOTH strong drivers (they share the same
-    # workpiece scalar-BIE-SIBC H_t evaluation).  Measured on Takahashi
-    # 7 kHz (2026-07-16): the coupled solve converges and Delta_L is sane
-    # (+1.53 nH, same sign as full-FEM), but the coil-current
-    # redistribution is small, so P_wp stays at the weak-path level
-    # (~2x the FEM / impedance-BC references, ~35 kW vs ~17 kW).  The
-    # bias lives in the workpiece-side H_t evaluation, not in the missing
-    # coil re-solve; until that path passes an analytic mu_r-swept SIBC
-    # benchmark, absolute P_wp / H_t from BOTH coupling modes carry it.
-    out["P_wp_caveat"] = (
-        "scalar-BIE-SIBC H_t path over-estimates P_wp ~2x on magnetic "
-        "workpieces vs FEM / impedance-BC references (Takahashi 7 kHz, "
-        "mu_r=100); strong coupling does NOT remove this bias -- it is "
-        "workpiece-side, not a coil-recompute effect.  delta_L is "
-        "unaffected.")
+    # Topology context + genus-conditional P_wp caveat (root cause found
+    # 2026-07-16): the scalar BIE matches the analytic genus-0 sphere
+    # benchmark to 0.3% (mu_r 1..100), but on a genus>=1 workpiece it
+    # cannot carry the net shorted-turn eddy current on the handle, so its
+    # Lenz screening is lost and P_wp / H_t are over-estimated when the
+    # coil flux links the handle (Takahashi tube: H_t x1.44, P_wp x2.2 vs
+    # FEM).  Strong coupling does NOT remove this (coil-current
+    # redistribution is percent-level); it is a workpiece-side missing
+    # loop DOF, shared by weak AND strong and by both coil solvers.
+    out["wp_euler_chi"] = int(strong.get("wp_euler_chi", 2))
+    out["wp_genus"] = int(strong.get("wp_genus", 0))
+    if out["wp_genus"] != 0:
+        out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # PEEC filament coil: relabel the coil backend and flag the path as
     # experimental (the strong-loading response has no durable independent
     # reference case; the committed demo is weakly coupled).  Delta_R
