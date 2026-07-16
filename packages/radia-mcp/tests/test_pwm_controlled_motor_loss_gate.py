@@ -53,6 +53,28 @@ def _payload() -> dict:
     }
 
 
+def _with_artifact_identity(payload: dict) -> dict:
+    payload["artifact_identity"] = {
+        "torque_cycle_generation": "periodic-cycle-8",
+        "loss_cycle_generation": "periodic-cycle-8",
+        "waveform_segments": [
+            {
+                "segment_id": "initial",
+                "phase_origin_deg": 0.0,
+                "start_time_s": 0.0,
+                "end_time_s": 0.0049,
+            },
+            {
+                "segment_id": "restart",
+                "phase_origin_deg": 0.0,
+                "start_time_s": 0.005,
+                "end_time_s": 0.01,
+            },
+        ],
+    }
+    return payload
+
+
 def test_pwm_motor_loss_gate_accepts_balanced_control_and_summary_row_semantics() -> None:
     result = pwm_controlled_motor_loss_gate(_payload())
     assert result["status"] == "ok"
@@ -101,3 +123,25 @@ def test_generalization_v7_public_loss_component_resampling_alias() -> None:
     result = pwm_controlled_motor_loss_gate(payload)
     assert result["status"] == "needs_attention"
     assert result["checks"]["power_component_time_axes_match_common_axis_knotwise"] is False
+
+
+def test_accepts_bound_cycle_generation_and_restart_phase_origin() -> None:
+    result = pwm_controlled_motor_loss_gate(_with_artifact_identity(_payload()))
+    assert result["status"] == "ok"
+    assert result["warnings"] == []
+
+
+def test_v8_public_torque_loss_cycle_generation_mix() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["loss_cycle_generation"] = "periodic-cycle-7"
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["torque_and_loss_share_periodic_cycle_generation"] is False
+
+
+def test_v8_public_restart_phase_origin_shift() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["waveform_segments"][1]["phase_origin_deg"] = 30.0
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["restart_segments_preserve_phase_origin"] is False
