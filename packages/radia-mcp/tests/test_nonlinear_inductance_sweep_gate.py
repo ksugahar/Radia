@@ -203,6 +203,39 @@ def _with_v13_bindings(summary):
     return summary
 
 
+def _with_v14_bindings(summary):
+    summary = _with_v13_bindings(summary)
+    for row in summary["runs"]:
+        row["sparameter_reference_impedance_renormalization_identity"] = {
+            "port_setup_generation": "port-setup-16",
+            "sparameter_result_generation": "port-setup-16",
+            "reference_impedance_basis": "complex_ohm",
+            "result_reference_impedance_basis": "complex_ohm",
+            "reference_impedance_real_ohm": 50.0,
+            "reference_impedance_imag_ohm": 0.0,
+            "result_reference_impedance_real_ohm": 50.0,
+            "result_reference_impedance_imag_ohm": 0.0,
+            "renormalization_applied": True,
+            "renormalization_generation": "renormalization-16",
+            "result_renormalization_generation": "renormalization-16",
+            "sparameter_array_sha256": "c" * 64,
+            "renormalized_array_sha256": "c" * 64,
+        }
+        row["farfield_ludwig_polarization_basis_identity"] = {
+            "farfield_result_generation": "farfield-result-16",
+            "co_cross_result_generation": "farfield-result-16",
+            "coordinate_frame_id": "global-spherical",
+            "co_cross_coordinate_frame_id": "global-spherical",
+            "ludwig_basis_definition": "ludwig_3",
+            "co_cross_ludwig_basis_definition": "ludwig_3",
+            "polarization_reference_axis": "global-x",
+            "co_cross_polarization_reference_axis": "global-x",
+            "polarization_basis_sha256": "e" * 64,
+            "co_cross_polarization_basis_sha256": "e" * 64,
+        }
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -548,6 +581,53 @@ def test_v13_public_port_deembed_reference_plane_length_unit_mismatch():
     assert (
         result["runs"][0]["checks"][
             "port_deembed_reference_plane_uses_explicit_length_unit"
+        ]
+        is False
+    )
+
+
+def test_accepts_v14_sparameter_and_farfield_basis_lineage():
+    result = nonlinear_inductance_sweep_gate(_with_v14_bindings(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v14_public_sparameter_reference_impedance_renormalization_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0][
+        "sparameter_reference_impedance_renormalization_identity"
+    ].update(
+        {
+            "result_reference_impedance_real_ohm": 75.0,
+            "result_reference_impedance_imag_ohm": 5.0,
+            "result_renormalization_generation": "renormalization-15",
+            "renormalized_array_sha256": "d" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameter_renormalization_matches_complex_reference_impedance"
+        ]
+        is False
+    )
+
+
+def test_v14_public_farfield_ludwig_polarization_basis_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0]["farfield_ludwig_polarization_basis_identity"].update(
+        {
+            "co_cross_result_generation": "farfield-result-15",
+            "co_cross_ludwig_basis_definition": "ludwig_2",
+            "co_cross_polarization_reference_axis": "global-y",
+            "co_cross_polarization_basis_sha256": "0" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "farfield_co_cross_uses_current_ludwig_polarization_basis"
         ]
         is False
     )
