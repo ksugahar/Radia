@@ -110,26 +110,21 @@ jobs:
           $repo = "${{ github.repository }}"
           $refUri = "https://api.github.com/repos/$repo/git/ref/heads/main"
           $tip = $null
-          foreach ($attempt in 1..5) {
+          foreach ($attempt in 1..3) {
             try {
               $mainRef = Invoke-RestMethod -Method Get -Uri $refUri -Headers $headers
               $tip = $mainRef.object.sha
               break
             } catch {
-              Write-Host "::warning::GitHub API ref lookup attempt $attempt/5 failed: $($_.Exception.Message)"
-              if ($attempt -lt 5) {
+              Write-Host "::warning::GitHub API ref lookup attempt $attempt/3 failed: $($_.Exception.Message)"
+              if ($attempt -lt 3) {
                 Start-Sleep -Seconds (5 * $attempt)
               }
             }
           }
           if (-not $tip) {
-            Write-Host "::warning::GitHub API ref lookup unavailable; falling back to git ls-remote."
-            $remoteLine = git ls-remote origin refs/heads/main
-            if ($LASTEXITCODE -ne 0 -or -not $remoteLine) {
-              Write-Host "::error::Could not resolve refs/heads/main via GitHub API or git remote."
-              exit 1
-            }
-            $tip = ($remoteLine -split '\s+')[0]
+            Write-Host "::warning::Main-ref freshness check unavailable; continuing because stale-run cancellation is an optimization."
+            $tip = $env:GITHUB_SHA
           }
           Write-Host "origin/main tip: $tip"
           Write-Host "this run sha: $env:GITHUB_SHA"
