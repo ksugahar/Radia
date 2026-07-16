@@ -7,6 +7,7 @@ numerical solver.  The command generated for the HDiv-VIM method must call
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -76,6 +77,18 @@ def test_hdiv_fes_order_reaches_cli():
     assert cmd[cmd.index("--hdiv-order") + 1] == "2"
     rc, err = _argparse_dry_run(cmd)
     assert rc == 0, err
+
+
+def test_hdiv_order_registry_metadata_is_domain_specific():
+    registry_path = REPO / "src" / "radia" / "panels" / "panel_registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))["panels"]
+    for panel_id, cli in (
+        ("accel_hdiv", "--hdiv-order"),
+        ("motor_hdiv_reduced", "--order"),
+    ):
+        param = next(p for p in registry[panel_id]["params"] if p["cli"] == cli)
+        assert param["ja"] == "HDiv 次数"
+        assert param["physics"] == "1=RT1, 2=RT2"
 
 
 def test_hdiv_ima_passthrough():
