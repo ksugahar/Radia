@@ -83,6 +83,63 @@ def _fit_window_stays_in_one_segment(
     )
 
 
+def _phasor_basis_contract_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get("phasor_basis_contract")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    bases = contract.get("quantity_basis")
+    factors = contract.get("normalization_factor_to_rms")
+    names = {
+        "source_voltage_phasor_rms_v",
+        "primary_voltage_phasor_rms_v",
+        "secondary_voltage_phasor_rms_v",
+        "source_delivery_current_phasor_rms_a",
+        "primary_current_phasor_rms_a",
+        "secondary_current_phasor_rms_a",
+    }
+    if not isinstance(bases, Mapping) or not isinstance(factors, Mapping):
+        return False
+    try:
+        factors_are_rms = all(
+            math.isclose(float(factors.get(name)), 1.0, rel_tol=0.0, abs_tol=1.0e-15)
+            for name in names
+        )
+    except (TypeError, ValueError):
+        return False
+    return (
+        set(bases) == names
+        and set(factors) == names
+        and all(bases.get(name) == "rms" for name in names)
+        and factors_are_rms
+        and contract.get("complex_power_formula")
+        == "rms_voltage_times_conjugate_rms_current"
+    )
+
+
+def _phase_unwrap_contract_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get("phase_unwrap_contract")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    try:
+        period = float(contract.get("branch_period_rad"))
+    except (TypeError, ValueError):
+        return False
+    fitted = str(contract.get("fit_branch_sign_digest") or "")
+    replayed = str(contract.get("replay_branch_sign_digest") or "")
+    return (
+        contract.get("phase_unit") == "radian"
+        and math.isclose(period, 2.0 * math.pi, rel_tol=0.0, abs_tol=1.0e-12)
+        and contract.get("unwrap_convention") == "continuous_signed_phase"
+        and contract.get("reference_trace") == "source_voltage_phasor_rms_v"
+        and len(fitted) == 64
+        and replayed == fitted
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -344,6 +401,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         "phasor_fit_window_does_not_cross_a_restart_segment": (
             _fit_window_stays_in_one_segment(positive, fit_start, fit_stop)
         ),
+        "all_phasors_share_one_rms_normalization_basis": (
+            _phasor_basis_contract_ok(positive)
+        ),
+        "phase_replay_preserves_unwrap_branch_orientation": (
+            _phase_unwrap_contract_ok(positive)
+        ),
         "exactly_four_timing_stages": timing_ok,
     }
     return {
@@ -368,5 +431,7 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
             "Turns-ratio agreement alone is insufficient: require instantaneous and complex-power conservation plus deterministic replay.",
             "When phasor frequency or terminal-current role metadata is supplied, bind it to the source and sign contract before accepting scalar power closure.",
             "A matching scalar phasor is not replay evidence when its fitted traces mix RAW generations or cross a transient restart.",
+            "Peak, RMS, and phasor quantities must declare one normalization basis before turns-ratio or complex-power closure is compared.",
+            "Phase replay must retain the fitted unwrap branch orientation; equal magnitudes do not resolve a sign-changing branch alias.",
         ],
     }
