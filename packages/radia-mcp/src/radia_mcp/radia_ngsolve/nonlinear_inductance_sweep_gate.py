@@ -524,6 +524,100 @@ def _farfield_ludwig_polarization_basis_is_current(
     )
 
 
+def _sparameter_power_wave_normalization_is_current(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("sparameter_power_wave_normalization_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        impedance = complex(
+            float(identity["reference_impedance_real_ohm"]),
+            float(identity["reference_impedance_imag_ohm"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    port_generation = str(identity.get("port_setup_generation", "")).strip()
+    normalization_generation = str(
+        identity.get("modal_normalization_generation", "")
+    ).strip()
+    modal_digest = str(identity.get("modal_normalization_sha256", "")).lower()
+    result_digest = str(
+        identity.get("sparameter_normalization_sha256", "")
+    ).lower()
+    return (
+        bool(port_generation)
+        and identity.get("modal_result_port_setup_generation") == port_generation
+        and identity.get("sparameter_result_port_setup_generation")
+        == port_generation
+        and identity.get("incident_modal_amplitude_normalization") == "power_wave"
+        and identity.get("reflected_modal_amplitude_normalization")
+        == "power_wave"
+        and identity.get("sparameter_normalization") == "power_wave"
+        and identity.get("reference_impedance_basis") == "complex_ohm"
+        and math.isfinite(impedance.real)
+        and math.isfinite(impedance.imag)
+        and impedance.real > 0.0
+        and bool(normalization_generation)
+        and identity.get("sparameter_normalization_generation")
+        == normalization_generation
+        and len(modal_digest) == len(result_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in modal_digest + result_digest
+        )
+        and result_digest == modal_digest
+    )
+
+
+def _fft_window_coherent_gain_is_current(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("time_domain_fft_window_coherent_gain_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        sample_count = int(identity["sample_count"])
+        coherent_gain = float(identity["coherent_gain"])
+        gain_correction = float(identity["fft_coherent_gain_correction"])
+        application_count = int(identity["coherent_gain_application_count"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    trace_generation = str(identity.get("time_trace_generation", "")).strip()
+    window_generation = str(identity.get("window_generation", "")).strip()
+    window_digest = str(identity.get("window_coefficients_sha256", "")).lower()
+    result_digest = str(
+        identity.get("fft_window_coefficients_sha256", "")
+    ).lower()
+    return (
+        bool(trace_generation)
+        and identity.get("fft_input_trace_generation") == trace_generation
+        and bool(window_generation)
+        and identity.get("coherent_gain_window_generation") == window_generation
+        and identity.get("fft_result_window_generation") == window_generation
+        and identity.get("window_definition") == "periodic_hann"
+        and sample_count >= 2
+        and math.isfinite(coherent_gain)
+        and math.isclose(coherent_gain, 0.5, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isfinite(gain_correction)
+        and math.isclose(
+            gain_correction,
+            1.0 / coherent_gain,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and application_count == 1
+        and len(window_digest) == len(result_digest) == 64
+        and all(
+            character in "0123456789abcdef"
+            for character in window_digest + result_digest
+        )
+        and result_digest == window_digest
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -723,6 +817,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "farfield_co_cross_uses_current_ludwig_polarization_basis": (
                 _farfield_ludwig_polarization_basis_is_current(raw)
+            ),
+            "sparameters_use_one_power_wave_normalization_generation": (
+                _sparameter_power_wave_normalization_is_current(raw)
+            ),
+            "fft_window_uses_current_coherent_gain_correction": (
+                _fft_window_coherent_gain_is_current(raw)
             ),
         }
         row = {

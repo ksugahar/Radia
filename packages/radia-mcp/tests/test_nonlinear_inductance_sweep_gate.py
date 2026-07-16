@@ -233,6 +233,35 @@ def _with_v14_bindings(summary):
             "polarization_basis_sha256": "e" * 64,
             "co_cross_polarization_basis_sha256": "e" * 64,
         }
+        row["sparameter_power_wave_normalization_identity"] = {
+            "port_setup_generation": "port-setup-17",
+            "modal_result_port_setup_generation": "port-setup-17",
+            "sparameter_result_port_setup_generation": "port-setup-17",
+            "incident_modal_amplitude_normalization": "power_wave",
+            "reflected_modal_amplitude_normalization": "power_wave",
+            "sparameter_normalization": "power_wave",
+            "reference_impedance_basis": "complex_ohm",
+            "reference_impedance_real_ohm": 50.0,
+            "reference_impedance_imag_ohm": 5.0,
+            "modal_normalization_generation": "modal-normalization-17",
+            "sparameter_normalization_generation": "modal-normalization-17",
+            "modal_normalization_sha256": "1" * 64,
+            "sparameter_normalization_sha256": "1" * 64,
+        }
+        row["time_domain_fft_window_coherent_gain_identity"] = {
+            "time_trace_generation": "time-trace-17",
+            "fft_input_trace_generation": "time-trace-17",
+            "window_generation": "fft-window-17",
+            "coherent_gain_window_generation": "fft-window-17",
+            "fft_result_window_generation": "fft-window-17",
+            "window_definition": "periodic_hann",
+            "sample_count": 1024,
+            "coherent_gain": 0.5,
+            "fft_coherent_gain_correction": 2.0,
+            "coherent_gain_application_count": 1,
+            "window_coefficients_sha256": "2" * 64,
+            "fft_window_coefficients_sha256": "2" * 64,
+        }
     return summary
 
 
@@ -628,6 +657,46 @@ def test_v14_public_farfield_ludwig_polarization_basis_mismatch():
     assert (
         result["runs"][0]["checks"][
             "farfield_co_cross_uses_current_ludwig_polarization_basis"
+        ]
+        is False
+    )
+
+
+def test_v15_public_sparameter_power_wave_pseudo_wave_normalization_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0]["sparameter_power_wave_normalization_identity"].update(
+        {
+            "reflected_modal_amplitude_normalization": "pseudo_wave",
+            "sparameter_normalization": "pseudo_wave",
+            "sparameter_normalization_generation": "modal-normalization-16",
+            "sparameter_normalization_sha256": "5" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameters_use_one_power_wave_normalization_generation"
+        ]
+        is False
+    )
+
+
+def test_v15_public_time_domain_fft_window_coherent_gain_normalization_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0]["time_domain_fft_window_coherent_gain_identity"].update(
+        {
+            "coherent_gain_window_generation": "fft-window-16",
+            "coherent_gain": 1.0,
+            "fft_coherent_gain_correction": 1.0,
+            "fft_window_coefficients_sha256": "5" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "fft_window_uses_current_coherent_gain_correction"
         ]
         is False
     )
