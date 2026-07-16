@@ -432,6 +432,39 @@ def _with_v13_phase_and_derivative_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v14_noise_and_step_coordinate_identity(summary: dict) -> dict:
+    summary = _with_v13_phase_and_derivative_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["noise_spectral_density_sidedness_identity"] = {
+        "noise_generation_id": "noise-46",
+        "density_trace_generation_id": "noise-46",
+        "reference_density_trace_generation_id": "noise-46",
+        "density_quantity": "amplitude_spectral_density",
+        "density_unit": "V/sqrt(Hz)",
+        "density_sidedness_basis": "one_sided_positive_frequency",
+        "reference_density_sidedness_basis": "one_sided_positive_frequency",
+        "integration_sidedness_basis": "one_sided_positive_frequency",
+        "reference_to_density_amplitude_scale": 1.0,
+        "density_trace_value_sha256": "6" * 64,
+        "reference_density_trace_value_sha256": "6" * 64,
+    }
+    positive["stepped_parameter_interpolation_coordinate_identity"] = {
+        "step_generation_id": "step-sweep-46",
+        "source_step_generation_id": "step-sweep-46",
+        "interpolated_result_step_generation_id": "step-sweep-46",
+        "parameter_name": "RLOAD",
+        "parameter_unit": "Ohm",
+        "source_parameter_coordinate": "linear_value",
+        "target_parameter_coordinate": "linear_value",
+        "interpolation_parameter_coordinate": "linear_value",
+        "source_parameter_values": [10.0, 100.0, 1000.0],
+        "interpolation_parameter_values": [10.0, 100.0, 1000.0],
+        "source_parameter_axis_sha256": "7" * 64,
+        "interpolation_source_axis_sha256": "7" * 64,
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -582,6 +615,53 @@ def test_v13_public_transient_derivative_adaptive_timestep_history_mismatch() ->
     assert (
         result["checks"][
             "transient_derivatives_use_current_accepted_timestep_history"
+        ]
+        is False
+    )
+
+
+def test_accepts_v14_noise_sidedness_and_step_coordinate_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v14_noise_and_step_coordinate_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v14_public_noise_spectral_density_one_two_sided_basis_mismatch() -> None:
+    bad = _with_v14_noise_and_step_coordinate_identity(_summary())
+    bad["metrics"]["positive"][
+        "noise_spectral_density_sidedness_identity"
+    ].update(
+        {
+            "reference_density_sidedness_basis": "two_sided_full_frequency",
+            "reference_to_density_amplitude_scale": 1.0,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "noise_density_sidedness_uses_required_amplitude_conversion"
+        ]
+        is False
+    )
+
+
+def test_v14_public_stepped_parameter_interpolation_log_linear_axis_mismatch() -> None:
+    bad = _with_v14_noise_and_step_coordinate_identity(_summary())
+    bad["metrics"]["positive"][
+        "stepped_parameter_interpolation_coordinate_identity"
+    ].update(
+        {
+            "interpolated_result_step_generation_id": "step-sweep-45",
+            "interpolation_parameter_coordinate": "log10_value",
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "stepped_results_share_parameter_interpolation_coordinate"
         ]
         is False
     )
