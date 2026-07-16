@@ -456,6 +456,32 @@ def _with_v14_mode_ale_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v15_reference_jacobian_identity(summary: dict) -> dict:
+    summary = _with_v14_mode_ale_identity(summary)
+    summary["harmonic_reference_time_origin_identity"] = {
+        "harmonic_solve_generation": "harmonic-solve-47",
+        "field_phasor_generation": "harmonic-solve-47",
+        "complex_power_generation": "harmonic-solve-47",
+        "angular_frequency_rad_s": 3141.592653589793,
+        "field_reference_time_s": 0.0,
+        "complex_power_reference_time_s": 0.0,
+        "field_phase_origin_sha256": "1" * 64,
+        "power_phase_origin_sha256": "1" * 64,
+    }
+    summary["deformed_domain_integral_jacobian_identity"] = {
+        "field_solve_generation": "deformed-solve-47",
+        "integral_field_generation": "deformed-solve-47",
+        "geometry_generation": "deformed-geometry-47",
+        "integral_geometry_generation": "deformed-geometry-47",
+        "volume_jacobian_geometry_generation": "deformed-geometry-47",
+        "domain_selection_sha256": "2" * 64,
+        "integrated_domain_selection_sha256": "2" * 64,
+        "volume_jacobian_sha256": "3" * 64,
+        "integral_volume_jacobian_sha256": "3" * 64,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -605,5 +631,45 @@ def test_v14_public_ale_mesh_velocity_material_time_level_mismatch() -> None:
         result["checks"][
             "ale_material_derivative_uses_current_mesh_velocity_time_level"
         ]
+        is False
+    )
+
+
+def test_v15_public_positive_reference_time_and_jacobian_identity() -> None:
+    result = gate(_with_v15_reference_jacobian_identity(copy.deepcopy(_summary())))
+    assert result["status"] == "ok"
+    assert result["checks"]["harmonic_field_and_power_share_reference_time_origin"]
+    assert result["checks"]["deformed_domain_integral_uses_current_geometry_jacobian"]
+
+
+def test_v15_public_harmonic_field_power_reference_time_origin_mismatch() -> None:
+    summary = _with_v15_reference_jacobian_identity(copy.deepcopy(_summary()))
+    summary["harmonic_reference_time_origin_identity"].update(
+        {
+            "complex_power_generation": "harmonic-solve-46",
+            "complex_power_reference_time_s": 0.00025,
+            "power_phase_origin_sha256": "6" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["harmonic_field_and_power_share_reference_time_origin"]
+        is False
+    )
+
+
+def test_v15_public_deformed_domain_integral_geometry_jacobian_generation_mismatch() -> None:
+    summary = _with_v15_reference_jacobian_identity(copy.deepcopy(_summary()))
+    summary["deformed_domain_integral_jacobian_identity"].update(
+        {
+            "volume_jacobian_geometry_generation": "deformed-geometry-46",
+            "integral_volume_jacobian_sha256": "6" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["deformed_domain_integral_uses_current_geometry_jacobian"]
         is False
     )
