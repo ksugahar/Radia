@@ -285,6 +285,29 @@ def _with_v11_identity(summary):
     return summary
 
 
+def _with_v12_identity(summary):
+    summary = _with_v11_identity(summary)
+    summary["cq_starting_weights_identity"] = {
+        "multistep_method": "BDF2",
+        "multistep_order": 2,
+        "convolution_weight_method": "BDF2",
+        "startup_correction_method": "BDF2_starting_correction",
+        "startup_correction_order": 2,
+        "weight_generation": "cq-weights-14",
+        "startup_correction_weight_generation": "cq-weights-14",
+    }
+    summary["hmatrix_cluster_permutation_identity"] = {
+        "boundary_mesh_sha256": "8" * 64,
+        "boundary_triangle_ordering_sha256": "9" * 64,
+        "cluster_permutation_triangle_ordering_sha256": "9" * 64,
+        "boundary_mesh_generation": "boundary-mesh-14",
+        "cluster_permutation_mesh_generation": "boundary-mesh-14",
+        "cluster_permutation_generation": "cluster-permutation-14",
+        "hmatrix_assembly_permutation_generation": "cluster-permutation-14",
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -394,6 +417,42 @@ def test_v11_public_fembem_trace_orientation_mesh_mismatch():
     assert (
         result["checks"][
             "fembem_trace_orientation_matches_current_volume_mesh"
+        ]
+        is False
+    )
+
+
+def test_v12_public_cq_starting_weights_multistep_startup_mismatch():
+    bad = _with_v12_identity(_summary())
+    bad["cq_starting_weights_identity"].update(
+        {
+            "startup_correction_method": "BDF1_starting_correction",
+            "startup_correction_order": 1,
+            "startup_correction_weight_generation": "cq-weights-13",
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["cq_starting_weights_match_multistep_startup_scheme"]
+        is False
+    )
+
+
+def test_v12_public_hmatrix_cluster_permutation_boundary_mesh_mismatch():
+    bad = _with_v12_identity(_summary())
+    bad["hmatrix_cluster_permutation_identity"].update(
+        {
+            "cluster_permutation_triangle_ordering_sha256": "a" * 64,
+            "cluster_permutation_mesh_generation": "boundary-mesh-13",
+            "hmatrix_assembly_permutation_generation": "cluster-permutation-13",
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hmatrix_cluster_permutation_matches_boundary_triangle_order"
         ]
         is False
     )

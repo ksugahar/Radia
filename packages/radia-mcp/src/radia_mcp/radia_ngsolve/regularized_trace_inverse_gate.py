@@ -142,6 +142,12 @@ def regularized_trace_inverse_path_gate(
     trace_orientation_identity_ok = (
         _optional_trace_orientation_identity_is_aligned(summary)
     )
+    cq_starting_weights_identity_ok = (
+        _optional_cq_starting_weights_identity_is_aligned(summary)
+    )
+    hmatrix_permutation_identity_ok = (
+        _optional_hmatrix_cluster_permutation_identity_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -195,6 +201,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_trace_orientation_matches_current_volume_mesh": (
             trace_orientation_identity_ok
+        ),
+        "cq_starting_weights_match_multistep_startup_scheme": (
+            cq_starting_weights_identity_ok
+        ),
+        "hmatrix_cluster_permutation_matches_boundary_triangle_order": (
+            hmatrix_permutation_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -528,6 +540,64 @@ def _optional_trace_orientation_identity_is_aligned(
         and bool(triangle_digest)
         and value.get("oriented_boundary_triangle_digest") == triangle_digest
         and value.get("outward_orientation_verified") is True
+    )
+
+
+def _optional_cq_starting_weights_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("cq_starting_weights_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    method = str(value.get("multistep_method", "")).strip()
+    weight_method = str(value.get("convolution_weight_method", "")).strip()
+    startup_method = str(value.get("startup_correction_method", "")).strip()
+    try:
+        order = _positive_integer(value, "multistep_order")
+        startup_order = _positive_integer(value, "startup_correction_order")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("weight_generation", "")).strip()
+    return (
+        bool(method)
+        and weight_method == method
+        and startup_method == f"{method}_starting_correction"
+        and startup_order == order
+        and bool(generation)
+        and value.get("startup_correction_weight_generation") == generation
+    )
+
+
+def _optional_hmatrix_cluster_permutation_identity_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("hmatrix_cluster_permutation_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    mesh_digest = str(value.get("boundary_mesh_sha256", "")).lower()
+    triangle_digest = str(
+        value.get("boundary_triangle_ordering_sha256", "")
+    ).lower()
+    mesh_generation = str(value.get("boundary_mesh_generation", "")).strip()
+    permutation_generation = str(
+        value.get("cluster_permutation_generation", "")
+    ).strip()
+    return (
+        len(mesh_digest) == 64
+        and all(character in "0123456789abcdef" for character in mesh_digest)
+        and len(triangle_digest) == 64
+        and all(character in "0123456789abcdef" for character in triangle_digest)
+        and value.get("cluster_permutation_triangle_ordering_sha256")
+        == triangle_digest
+        and bool(mesh_generation)
+        and value.get("cluster_permutation_mesh_generation") == mesh_generation
+        and bool(permutation_generation)
+        and value.get("hmatrix_assembly_permutation_generation")
+        == permutation_generation
     )
 
 
