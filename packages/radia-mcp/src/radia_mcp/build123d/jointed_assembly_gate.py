@@ -322,6 +322,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     tessellation_identity_ok = True
     step_export_tolerance_identity_ok = True
     assembly_replacement_identity_ok = True
+    assembly_mass_property_coordinate_identity_ok = True
+    boolean_final_shape_report_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -333,6 +335,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         tessellation_identity_ok = False
         step_export_tolerance_identity_ok = False
         assembly_replacement_identity_ok = False
+        assembly_mass_property_coordinate_identity_ok = False
+        boolean_final_shape_report_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -623,6 +627,74 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                     for row in replacement_rows
                 )
             )
+
+        coordinate_value = replay_identity_value.get(
+            "assembly_mass_property_coordinate_identity"
+        )
+        if coordinate_value is not None:
+            coordinate = coordinate_value if isinstance(coordinate_value, Mapping) else {}
+            placement_generation = str(
+                coordinate.get("placement_matrix_generation", "")
+            ).strip()
+            coordinate_frame = str(coordinate.get("coordinate_frame_id", "")).strip()
+            placement_digest = str(
+                coordinate.get("placement_matrix_sha256", "")
+            ).lower()
+            assembly_mass_property_coordinate_identity_ok = (
+                bool(coordinate.get("assembly_generation"))
+                and bool(placement_generation)
+                and coordinate.get("centroid_transform_generation")
+                == placement_generation
+                and coordinate.get("inertia_transform_generation")
+                == placement_generation
+                and bool(coordinate_frame)
+                and coordinate.get("centroid_coordinate_frame_id")
+                == coordinate_frame
+                and coordinate.get("inertia_coordinate_frame_id")
+                == coordinate_frame
+                and len(placement_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in placement_digest
+                )
+                and coordinate.get("centroid_placement_matrix_sha256")
+                == placement_digest
+                and coordinate.get("inertia_placement_matrix_sha256")
+                == placement_digest
+            )
+
+        final_shape_value = replay_identity_value.get(
+            "boolean_final_shape_report_identity"
+        )
+        if final_shape_value is not None:
+            final_shape = (
+                final_shape_value if isinstance(final_shape_value, Mapping) else {}
+            )
+            final_generation = str(
+                final_shape.get("final_shape_generation", "")
+            ).strip()
+            pre_heal_digest = str(
+                final_shape.get("pre_heal_brep_sha256", "")
+            ).lower()
+            final_digest = str(final_shape.get("final_brep_sha256", "")).lower()
+            digests_valid = all(
+                len(digest) == 64
+                and all(character in "0123456789abcdef" for character in digest)
+                for digest in (pre_heal_digest, final_digest)
+            )
+            boolean_final_shape_report_identity_ok = (
+                bool(final_shape.get("boolean_result_generation"))
+                and bool(final_shape.get("healing_generation"))
+                and bool(final_generation)
+                and digests_valid
+                and pre_heal_digest != final_digest
+                and final_shape.get("mass_property_shape_generation")
+                == final_generation
+                and final_shape.get("validity_shape_generation") == final_generation
+                and final_shape.get("topology_shape_generation") == final_generation
+                and final_shape.get("mass_property_brep_sha256") == final_digest
+                and final_shape.get("validity_brep_sha256") == final_digest
+                and final_shape.get("topology_brep_sha256") == final_digest
+            )
     joint_names = {
         str(name)
         for row in components
@@ -666,6 +738,12 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         ),
         "replacement_rotates_instance_uuid_and_rebinds_placement": (
             assembly_replacement_identity_ok
+        ),
+        "assembly_mass_property_report_uses_current_placement_frame": (
+            assembly_mass_property_coordinate_identity_ok
+        ),
+        "final_shape_report_uses_one_post_heal_generation": (
+            boolean_final_shape_report_identity_ok
         ),
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"

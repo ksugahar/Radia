@@ -3056,6 +3056,96 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    assembly_coordinate_evidence_present = any(
+        row.get("assembly_mass_property_coordinate_identity") is not None
+        for row in identity_rows
+    )
+
+    def assembly_mass_property_coordinate_identity(row):
+        value = row.get("assembly_mass_property_coordinate_identity")
+        if not isinstance(value, dict):
+            return None
+        assembly_generation = str(value.get("assembly_generation", "")).strip()
+        placement_generation = str(
+            value.get("placement_matrix_generation", "")
+        ).strip()
+        coordinate_frame = str(value.get("coordinate_frame_id", "")).strip()
+        placement_digest = str(value.get("placement_matrix_sha256", "")).lower()
+        if (
+            not assembly_generation
+            or not placement_generation
+            or not coordinate_frame
+            or value.get("centroid_transform_generation") != placement_generation
+            or value.get("inertia_transform_generation") != placement_generation
+            or value.get("centroid_coordinate_frame_id") != coordinate_frame
+            or value.get("inertia_coordinate_frame_id") != coordinate_frame
+            or not valid_sha256(placement_digest)
+            or value.get("centroid_placement_matrix_sha256") != placement_digest
+            or value.get("inertia_placement_matrix_sha256") != placement_digest
+        ):
+            return None
+        return assembly_generation, placement_generation, coordinate_frame, placement_digest
+
+    reference_assembly_coordinates = {
+        str(row.get("name", "")): assembly_mass_property_coordinate_identity(row)
+        for row in reference
+    }
+    assembly_coordinate_identity_ok = not assembly_coordinate_evidence_present
+    if assembly_coordinate_evidence_present:
+        assembly_coordinate_identity_ok = bool(reference_assembly_coordinates) and all(
+            value is not None for value in reference_assembly_coordinates.values()
+        )
+        for _, rows in normalized_sets:
+            assembly_coordinate_identity_ok = assembly_coordinate_identity_ok and all(
+                assembly_mass_property_coordinate_identity(row)
+                == reference_assembly_coordinates.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    final_shape_evidence_present = any(
+        row.get("boolean_final_shape_identity") is not None for row in identity_rows
+    )
+
+    def boolean_final_shape_identity(row):
+        value = row.get("boolean_final_shape_identity")
+        if not isinstance(value, dict):
+            return None
+        pre_heal = str(value.get("pre_heal_brep_sha256", "")).lower()
+        final = str(value.get("final_brep_sha256", "")).lower()
+        final_generation = str(value.get("final_shape_generation", "")).strip()
+        if (
+            not value.get("boolean_result_generation")
+            or not value.get("healing_generation")
+            or not final_generation
+            or not valid_sha256(pre_heal)
+            or not valid_sha256(final)
+            or pre_heal == final
+            or value.get("mass_property_shape_generation") != final_generation
+            or value.get("validity_shape_generation") != final_generation
+            or value.get("topology_shape_generation") != final_generation
+            or value.get("mass_property_brep_sha256") != final
+            or value.get("validity_brep_sha256") != final
+            or value.get("topology_brep_sha256") != final
+        ):
+            return None
+        return final_generation, final
+
+    reference_final_shapes = {
+        str(row.get("name", "")): boolean_final_shape_identity(row)
+        for row in reference
+    }
+    final_shape_identity_ok = not final_shape_evidence_present
+    if final_shape_evidence_present:
+        final_shape_identity_ok = bool(reference_final_shapes) and all(
+            value is not None for value in reference_final_shapes.values()
+        )
+        for _, rows in normalized_sets:
+            final_shape_identity_ok = final_shape_identity_ok and all(
+                boolean_final_shape_identity(row)
+                == reference_final_shapes.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3117,6 +3207,12 @@ def shape_mass_property_crosscheck_summary(
         "mirrored_inertia_tensor_uses_final_global_frame": (
             inertia_tensor_identity_ok
         ),
+        "assembly_mass_properties_use_final_coordinate_frame": (
+            assembly_coordinate_identity_ok
+        ),
+        "boolean_validity_topology_and_mass_share_final_healed_shape": (
+            final_shape_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -3141,6 +3237,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("mass properties belong to the pre-heal or another BREP generation")
     if not checks["mirrored_inertia_tensor_uses_final_global_frame"]:
         issues.append("mirrored inertia tensor is not expressed in the final global frame")
+    if not checks["assembly_mass_properties_use_final_coordinate_frame"]:
+        issues.append("assembly mass properties are not expressed in the final placement frame")
+    if not checks["boolean_validity_topology_and_mass_share_final_healed_shape"]:
+        issues.append("boolean validity, topology, and mass belong to different heal generations")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
