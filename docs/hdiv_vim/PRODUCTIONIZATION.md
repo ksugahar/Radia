@@ -10,7 +10,7 @@ production checklist, not a migration archive.
 - TET/HEX/WEDGE and 2D planar paths have validation coverage under
   `validation_test/feec/`.
 - `rad.Fld` is part of the public contract after HDiv write-back.
-- RT1 solve results own a persistent C++ field evaluator: NumPy target buffers,
+- RT1/RT2 solve results own a persistent C++ field evaluator: NumPy target buffers,
   one-pass IMA, TaskManager observation parallelism, analytic tet near kernels,
   and a guarded large-map quadrupole tree.  IMA auto evaluation remains direct
   to preserve the reduced/full roundoff contract.
@@ -30,6 +30,10 @@ production checklist, not a migration archive.
   to C++ without SciPy/list materialization.  The persistent C++ operator owns
   B/BT, the geometric and material mass matrices, Krylov iterations, and field
   source evaluation; Python is not in the per-iteration solve/field path.
+- NGSolve owns element orientation, Piola maps, curved geometry, local/global
+  DOF transforms, quadrature, and weak assembly.  RT2 hysteresis therefore uses
+  `IntegrationRuleSpace` interpolation and mixed weak forms instead of a
+  Python reconstruction of the physical high-order basis.
 - Production FAR Gram blocks average both directed quadrature evaluations.
   Upper-triangle mirroring alone makes the stored matrix symmetric, but a
   one-sided finite quadrature rule is not invariant under an explicit reflected
@@ -73,6 +77,14 @@ production checklist, not a migration archive.
   remanence loss, and split-run restart agreement.
 - `validation_test/hysteresis/test_linear_recoil_permanent_magnet.py` locks the
   level-2 curved-sphere load line against its analytic `N=I/3` solution.
+- `vim.SolveHysteresis(..., order=2)` keeps constitutive state at NGSolve
+  integration-rule points and records that layout/order in restart state.  RT1
+  retains the established element-average state contract.
+- `vim.CoupledBody` and `vim.SolveCoupled` couple independent linear-recoil PM,
+  linear iron, and nonlinear iron spaces.  Persistent C++ field
+  CoefficientFunctions exchange body fields, each ChargeGram is built once,
+  and nonconvergence is fail-loud.  This is also the production segmented-PM
+  path for normal-discontinuous `B_r`.
 
 ## Release Gate
 
@@ -106,12 +118,8 @@ Before release or `mdx`/`hibino` deployment:
 - extend force/energy tests around motor workflows;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
 - continue mdx scaling measurements for charge-Gram build and solve time.
-- add a mutually coupled evolving-PM/nonlinear-soft-iron block iteration; the
+- add a mutually coupled evolving EnergyStop-PM/nonlinear-soft-iron history
+  iteration; the
   current EnergyStop path covers PM self-demagnetization under prescribed
-  NGSolve applied fields, while MagnetizationSource remains fixed-M coupling.
-- add mutually coupled multi-body linear-recoil PM blocks for segmented magnets
-  with normal-discontinuous `B_r`.
-- promote `SolveHysteresis` from RT1 element-average constitutive states to an
-  RT2 quadrature-point state/update path before advertising high-order Play or
-  EnergyStop magnets; merely changing the HDiv space order would under-resolve
-  the material history.
+  NGSolve applied fields.  `SolveCoupled` covers linear-recoil PM + nonlinear
+  iron, while `MagnetizationSource` remains fixed-M coupling.

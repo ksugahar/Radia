@@ -14,10 +14,11 @@ Public API (NGSolve-aligned validated solve primitives):
          matching the NGSolve convention that solve/operator objects use short CamelCase names inside
          their owning namespace.  Scalar recoil mu_r plus a constant/spatial B_r selects the level-2
          linear permanent-magnet law.
-  SolveHysteresis(mesh, h_steps, play=(K, eta, f_k_tables))
-      -> quasi-static B-input hysteresis stepping on the SAME RT1 charge Gram: the chi-free
-         H-matrix is built ONCE and reused by every step / nonlinear iteration; per-element
-         committed material states advance only after each converged step.
+  SolveHysteresis(mesh, h_steps, play=(K, eta, f_k_tables), order=1|2)
+      -> quasi-static B-input hysteresis stepping on the SAME charge Gram: the chi-free
+         H-matrix is built ONCE and reused by every step / nonlinear iteration.  RT1 keeps
+         element-average states; RT2 uses NGSolve IntegrationRuleSpace quadrature states.
+         Committed material states advance only after each converged step.
          EnergyStopMaterial supplies the production C++ vector B-input Stop law for hard magnets;
          explicit state supports irreversible demagnetization, recoil, restart, and persistent
          final-field evaluation.
@@ -30,6 +31,9 @@ Public API (NGSolve-aligned validated solve primitives):
   MagnetizationSource(mesh, M_given, order=1)
       -> a fixed/given magnetization L2-projected into its own HDiv space, with a persistent native C++
          H-field CoefficientFunction for coupling to a separate soft-iron Solve.
+  SolveCoupled([CoupledBody(...), ...])
+      -> block Gauss-Seidel coupling for independent linear-recoil PM and linear/nonlinear
+         iron spaces.  Each geometry-only ChargeGram is built once and reused.
 
 Permanent-magnet levels are canonical: (1) MagnetizationSource fixed/given M,
 (2) Solve with recoil mu_r+B_r, (3) PlayHysteresisMaterial, and
@@ -71,9 +75,15 @@ from ._hysteresis import (  # noqa: F401  (B-input hysteresis stepping: ONE Gram
     SolveHysteresis,
 )
 from ._field_batch import (  # noqa: F401  (batch exterior field of the RT1/RT2 solution)
+    field_coefficient_from_solution as _field_coefficient_from_solution_impl,
     field_from_solution as _field_from_solution_impl,
 )
 from ._magnetization_source import MagnetizationSource  # noqa: F401
+from ._coupled import (  # noqa: F401
+    CoupledBody,
+    field_from_coupled_solution as _field_from_coupled_solution_impl,
+    solve_coupled as _solve_coupled_impl,
+)
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
 from ._capabilities import HDivCapability, hdiv_capabilities  # noqa: F401
 def Solve(*args, **kwargs):
@@ -121,6 +131,21 @@ def FieldFromSolution(*args, **kwargs):
     return _field_from_solution_impl(*args, **kwargs)
 
 
+def FieldCoefficientFromSolution(*args, **kwargs):
+    """Persistent NGSolve demagnetizing-field CoefficientFunction."""
+    return _field_coefficient_from_solution_impl(*args, **kwargs)
+
+
+def SolveCoupled(*args, **kwargs):
+    """Mutually coupled independent HDiv bodies with cached ChargeGrams."""
+    return _solve_coupled_impl(*args, **kwargs)
+
+
+def FieldFromCoupledSolution(*args, **kwargs):
+    """Batch magnetization field summed over a SolveCoupled result."""
+    return _field_from_coupled_solution_impl(*args, **kwargs)
+
+
 for _new, _old in [
     (Solve, _solve_impl),
     (ChargeGram, _charge_gram_impl),
@@ -128,6 +153,9 @@ for _new, _old in [
     (VolSoftIron, _vol_soft_iron_impl),
     (PlanarSolve, _solve_planar_demag),
     (FieldFromSolution, _field_from_solution_impl),
+    (FieldCoefficientFromSolution, _field_coefficient_from_solution_impl),
+    (SolveCoupled, _solve_coupled_impl),
+    (FieldFromCoupledSolution, _field_from_coupled_solution_impl),
 ]:
     _new.__signature__ = _inspect.signature(_old)
 
@@ -138,7 +166,8 @@ __all__ = [
     "soft_iron_box", "soft_iron_hex",
     "magnet_box", "magnet_hex",
     "SolveHysteresis", "EnergyStopMaterial", "PlayHysteresisMaterial",
-    "FieldFromSolution", "MagnetizationSource",
+    "FieldFromSolution", "FieldCoefficientFromSolution", "MagnetizationSource",
+    "CoupledBody", "SolveCoupled", "FieldFromCoupledSolution",
     "HDivCapability", "hdiv_capabilities",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]

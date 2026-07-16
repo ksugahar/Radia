@@ -100,6 +100,20 @@ def field_from_solution(res, points, algorithm="auto"):
     return np.asarray(evaluator.field(pts, str(algorithm)), float)/(4.0*np.pi)
 
 
+def field_coefficient_from_solution(res, algorithm="direct"):
+    """Return the persistent HDiv demagnetizing field as an NGSolve CF.
+
+    This is the zero-copy coupling surface for another independently meshed
+    HDiv body.  Independent spaces preserve normal-magnetization jumps at
+    touching permanent-magnet/iron and segmented-magnet interfaces.
+    """
+    if algorithm not in ("direct", "tree"):
+        raise ValueError(
+            "vim.FieldCoefficientFromSolution: algorithm must be 'direct' or 'tree'")
+    evaluator = _materialize_field_evaluator(res)
+    return _rp._HDivFieldCoefficient(evaluator, str(algorithm))
+
+
 def magnetization_from_solution(res, points):
     """Evaluate the RT1 magnetization inside the solved mesh, zero outside."""
     import ngsolve as ng
