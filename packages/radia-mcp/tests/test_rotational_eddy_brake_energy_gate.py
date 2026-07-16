@@ -377,6 +377,30 @@ def _with_v11_artifact_ownership(summary: dict) -> dict:
     return summary
 
 
+def _with_v12_parameter_topology_identity(summary: dict) -> dict:
+    summary = _with_v11_artifact_ownership(summary)
+    summary["material_property_parameter_identity"] = {
+        "parameter_name": "sigma_scale",
+        "parameter_value": 1.25,
+        "material_evaluation_parameter_value": 1.25,
+        "parameter_unit": "1",
+        "material_evaluation_parameter_unit": "1",
+        "parameter_generation": "parameter-row-44",
+        "material_property_parameter_generation": "parameter-row-44",
+    }
+    summary["force_selection_topology_identity"] = {
+        "geometry_rebuild_generation": "geometry-rebuild-44",
+        "topology_generation": "topology-44",
+        "selection_topology_generation": "topology-44",
+        "force_integration_topology_generation": "topology-44",
+        "selection_entity_ids": [17, 18, 19],
+        "force_integration_entity_ids": [17, 18, 19],
+        "selection_digest": "8" * 64,
+        "force_selection_digest": "8" * 64,
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -434,5 +458,39 @@ def test_v11_public_loss_partition_double_counts_interface() -> None:
         result["checks"][
             "loss_partitions_have_unique_ownership_without_compensation"
         ]
+        is False
+    )
+
+
+def test_v12_public_material_property_parameter_unit_generation_mismatch() -> None:
+    summary = _with_v12_parameter_topology_identity(copy.deepcopy(_summary()))
+    summary["material_property_parameter_identity"].update(
+        {
+            "material_evaluation_parameter_unit": "mS/m",
+            "material_property_parameter_generation": "parameter-row-43",
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "material_property_uses_current_parameter_unit_and_generation"
+        ]
+        is False
+    )
+
+
+def test_v12_public_force_selection_geometry_topology_generation_mismatch() -> None:
+    summary = _with_v12_parameter_topology_identity(copy.deepcopy(_summary()))
+    summary["force_selection_topology_identity"].update(
+        {
+            "selection_topology_generation": "topology-43",
+            "force_selection_digest": "a" * 64,
+        }
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["force_selection_matches_current_geometry_topology"]
         is False
     )

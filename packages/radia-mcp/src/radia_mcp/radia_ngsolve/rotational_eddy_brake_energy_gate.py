@@ -238,6 +238,61 @@ def _loss_partition_identity_ok(summary: dict[str, Any]) -> bool:
     )
 
 
+def _material_property_parameter_identity_ok(summary: dict[str, Any]) -> bool:
+    if "material_property_parameter_identity" not in summary:
+        return True
+    identity = summary.get("material_property_parameter_identity")
+    if not isinstance(identity, dict):
+        return False
+    try:
+        parameter_value = float(identity.get("parameter_value"))
+        evaluation_value = float(identity.get("material_evaluation_parameter_value"))
+    except (TypeError, ValueError):
+        return False
+    parameter_generation = str(identity.get("parameter_generation") or "")
+    return (
+        bool(identity.get("parameter_name"))
+        and math.isfinite(parameter_value)
+        and math.isclose(
+            evaluation_value, parameter_value, rel_tol=1.0e-12, abs_tol=1.0e-15
+        )
+        and bool(identity.get("parameter_unit"))
+        and identity.get("material_evaluation_parameter_unit")
+        == identity.get("parameter_unit")
+        and bool(parameter_generation)
+        and identity.get("material_property_parameter_generation")
+        == parameter_generation
+    )
+
+
+def _force_selection_topology_identity_ok(summary: dict[str, Any]) -> bool:
+    if "force_selection_topology_identity" not in summary:
+        return True
+    identity = summary.get("force_selection_topology_identity")
+    if not isinstance(identity, dict):
+        return False
+    selection_ids = identity.get("selection_entity_ids")
+    integration_ids = identity.get("force_integration_entity_ids")
+    if not isinstance(selection_ids, list) or not isinstance(integration_ids, list):
+        return False
+    if not selection_ids or any(not isinstance(item, int) for item in selection_ids):
+        return False
+    selection_digest = str(identity.get("selection_digest") or "")
+    topology_generation = str(identity.get("topology_generation") or "")
+    return (
+        bool(identity.get("geometry_rebuild_generation"))
+        and bool(topology_generation)
+        and identity.get("selection_topology_generation") == topology_generation
+        and identity.get("force_integration_topology_generation")
+        == topology_generation
+        and len(set(selection_ids)) == len(selection_ids)
+        and integration_ids == selection_ids
+        and len(selection_digest) == 64
+        and all(character in "0123456789abcdef" for character in selection_digest)
+        and identity.get("force_selection_digest") == selection_digest
+    )
+
+
 def _restart_energy_offsets_ok(row: dict[str, Any], sample_count: int) -> bool:
     if "restart_boundaries" not in row:
         return True
@@ -341,6 +396,12 @@ def rotational_eddy_brake_energy_gate(
     excitation_basis_identity_ok = _excitation_basis_identity_ok(summary)
     live_stored_force_identity_ok = _live_stored_force_identity_ok(summary)
     loss_partition_identity_ok = _loss_partition_identity_ok(summary)
+    material_property_parameter_identity_ok = (
+        _material_property_parameter_identity_ok(summary)
+    )
+    force_selection_topology_identity_ok = _force_selection_topology_identity_ok(
+        summary
+    )
     all_cardinalities = True
     all_times_increase = True
     nonnegative_dissipation = True
@@ -529,6 +590,12 @@ def rotational_eddy_brake_energy_gate(
         ),
         "loss_partitions_have_unique_ownership_without_compensation": (
             loss_partition_identity_ok
+        ),
+        "material_property_uses_current_parameter_unit_and_generation": (
+            material_property_parameter_identity_ok
+        ),
+        "force_selection_matches_current_geometry_topology": (
+            force_selection_topology_identity_ok
         ),
         "restart_energy_offsets_are_continuous": restart_energy_offsets_ok,
         "field_energy_history_is_present_and_aligned": energy_cardinality
