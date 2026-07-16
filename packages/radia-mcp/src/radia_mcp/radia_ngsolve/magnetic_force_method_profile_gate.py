@@ -119,6 +119,8 @@ def magnetic_force_method_profile_gate(
     demag_energy_force_displacement_length_unit_identity_ok = True
     bem_near_singular_quadrature_target_scale_identity_ok = True
     force_torque_reference_origin_length_unit_identity_ok = True
+    bem_solid_angle_surface_winding_identity_ok = True
+    maglev_stiffness_force_displacement_generation_identity_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
@@ -136,6 +138,8 @@ def magnetic_force_method_profile_gate(
         demag_energy_force_displacement_length_unit_identity_ok = False
         bem_near_singular_quadrature_target_scale_identity_ok = False
         force_torque_reference_origin_length_unit_identity_ok = False
+        bem_solid_angle_surface_winding_identity_ok = False
+        maglev_stiffness_force_displacement_generation_identity_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -715,6 +719,83 @@ def magnetic_force_method_profile_gate(
                 == origin_digest
             )
 
+        winding_value = identity_value.get(
+            "bem_solid_angle_surface_winding_identity"
+        )
+        if winding_value is not None:
+            winding = winding_value if isinstance(winding_value, Mapping) else {}
+            mesh_generation = str(winding.get("surface_mesh_generation", ""))
+            component_ids = winding.get("surface_component_ids")
+            winding_digest = str(
+                winding.get("surface_winding_sha256", "")
+            ).lower()
+            bem_solid_angle_surface_winding_identity_ok = (
+                bool(mesh_generation)
+                and winding.get("normalized_surface_winding_generation")
+                == mesh_generation
+                and winding.get("solid_angle_sign_generation") == mesh_generation
+                and winding.get("self_term_assembly_generation") == mesh_generation
+                and winding.get("surface_winding_normalized") is True
+                and winding.get("solid_angle_sign_convention") == "outward_positive"
+                and winding.get("self_term_sign_convention")
+                == winding.get("solid_angle_sign_convention")
+                and isinstance(component_ids, list)
+                and bool(component_ids)
+                and all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in component_ids
+                )
+                and len(set(component_ids)) == len(component_ids)
+                and winding.get("solid_angle_component_ids") == component_ids
+                and len(winding_digest) == 64
+                and all(
+                    character in "0123456789abcdef" for character in winding_digest
+                )
+                and str(winding.get("solid_angle_winding_sha256", "")).lower()
+                == winding_digest
+            )
+
+        stiffness_value = identity_value.get(
+            "maglev_stiffness_force_displacement_generation_identity"
+        )
+        if stiffness_value is not None:
+            stiffness = stiffness_value if isinstance(stiffness_value, Mapping) else {}
+            perturbation_generation = str(
+                stiffness.get("perturbation_generation", "")
+            )
+            displacement_digest = str(
+                stiffness.get("displacement_sha256", "")
+            ).lower()
+            force_digest = str(stiffness.get("force_sample_sha256", "")).lower()
+            maglev_stiffness_force_displacement_generation_identity_ok = (
+                bool(perturbation_generation)
+                and stiffness.get("displacement_coordinate_generation")
+                == perturbation_generation
+                and stiffness.get("force_sample_generation")
+                == perturbation_generation
+                and stiffness.get("stiffness_derivative_generation")
+                == perturbation_generation
+                and stiffness.get("displacement_axis") == "global-z"
+                and stiffness.get("force_component_axis")
+                == stiffness.get("displacement_axis")
+                and stiffness.get("displacement_unit") == "m"
+                and stiffness.get("force_unit") == "N"
+                and stiffness.get("stiffness_unit") == "N/m"
+                and len(displacement_digest) == len(force_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in displacement_digest + force_digest
+                )
+                and str(
+                    stiffness.get("stiffness_displacement_sha256", "")
+                ).lower()
+                == displacement_digest
+                and str(
+                    stiffness.get("stiffness_force_sample_sha256", "")
+                ).lower()
+                == force_digest
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -820,6 +901,12 @@ def magnetic_force_method_profile_gate(
         ),
         "force_and_torque_share_reference_origin_length_unit": (
             force_torque_reference_origin_length_unit_identity_ok
+        ),
+        "bem_self_term_uses_current_normalized_surface_winding": (
+            bem_solid_angle_surface_winding_identity_ok
+        ),
+        "maglev_stiffness_uses_one_force_displacement_perturbation_generation": (
+            maglev_stiffness_force_displacement_generation_identity_ok
         ),
     }
     issues = [name for name, ok in checks.items() if not ok]
