@@ -1,4 +1,4 @@
-/* rad_hdiv_vim.cpp -- analytic charge-potential kernels for RT1 HDiv-VIM. */
+/* rad_hdiv_vim.cpp -- analytic charge-potential kernels for BDM1 HDiv-VIM. */
 #include "rad_hdiv_vim.h"
 #include <cmath>
 #include <array>

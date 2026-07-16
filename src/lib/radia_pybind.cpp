@@ -94,10 +94,12 @@ extern "C" {
 #include "rad_equivalence_source.h"    // Stratton-Chu equivalence-theorem reconstruction
 #include "rad_average_field.h" // Closed-form cuboid average B (Wakao Part 6 §7)
 #include "rad_stream_function.h" // (ACA+)+TSVD stream-function coil solver
+#include "rad_evrs_tmethod.h" // EVRS/T-method algebra kernel (T --curl--> J)
+#include "rad_hybrid_vim_schur.h" // Complex Schur/SIBC helper kernels for hybrid VIM
 #include "rad_peec_matrices.h"  // PEECMatrixBuilder for filament input
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hdiv_hysteresis.h" // Energy-based B-input vector Stop material
-#include "rad_hdiv_field_evaluator.h" // Persistent RT1 field source + target tree
+#include "rad_hdiv_field_evaluator.h" // Persistent BDM1 field source + target tree
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include "rad_parallel.h"        // NGSolve TaskManager thread policy
@@ -170,6 +172,59 @@ py::array_t<T> to_numpy_1d(const std::vector<T>& values) {
     py::array_t<T> out(values.size());
     if (!values.empty())
         std::memcpy(out.mutable_data(), values.data(), values.size() * sizeof(T));
+    return out;
+}
+
+struct Matrix2D {
+    std::vector<double> values;
+    int rows = 0;
+    int cols = 0;
+};
+
+struct ComplexMatrix2D {
+    std::vector<std::complex<double>> values;
+    int rows = 0;
+    int cols = 0;
+};
+
+Matrix2D to_matrix_2d(F64Array arr, const char* name) {
+    auto buf = arr.request();
+    if (buf.ndim != 2)
+        throw std::runtime_error(std::string(name) + " must be a 2D contiguous array");
+    Matrix2D out;
+    out.rows = static_cast<int>(buf.shape[0]);
+    out.cols = static_cast<int>(buf.shape[1]);
+    const double* ptr = static_cast<const double*>(buf.ptr);
+    out.values.assign(ptr, ptr + buf.size);
+    return out;
+}
+
+ComplexMatrix2D to_complex_matrix_2d(
+        py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> arr,
+        const char* name) {
+    auto buf = arr.request();
+    if (buf.ndim != 2)
+        throw std::runtime_error(std::string(name) + " must be a 2D contiguous array");
+    ComplexMatrix2D out;
+    out.rows = static_cast<int>(buf.shape[0]);
+    out.cols = static_cast<int>(buf.shape[1]);
+    const auto* ptr = static_cast<const std::complex<double>*>(buf.ptr);
+    out.values.assign(ptr, ptr + buf.size);
+    return out;
+}
+
+py::array_t<double> to_numpy_2d(const std::vector<double>& values, int rows, int cols) {
+    py::array_t<double> out({rows, cols});
+    if (!values.empty())
+        std::memcpy(out.mutable_data(), values.data(), values.size() * sizeof(double));
+    return out;
+}
+
+py::array_t<std::complex<double>> to_numpy_complex_2d(
+        const std::vector<std::complex<double>>& values, int rows, int cols) {
+    py::array_t<std::complex<double>> out({rows, cols});
+    if (!values.empty())
+        std::memcpy(out.mutable_data(), values.data(), values.size() * sizeof(std::complex<double>));
     return out;
 }
 
@@ -2896,6 +2951,144 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // Version info
     m.attr("__version__") = "1.4.0";
 
+    m.def("_EVRSTMethodAlgebra", [](
+            F64Array curl_map_a,
+            F64Array div_map_a,
+            F64Array grad_map_a,
+            F64Array evrs_map_a,
+            F64Array resistance_current_a,
+            F64Array inductance_current_a,
+            F64Array port_current_a) {
+        auto C = to_matrix_2d(curl_map_a, "curl_map");
+        auto D = to_matrix_2d(div_map_a, "div_map");
+        auto G = to_matrix_2d(grad_map_a, "grad_map");
+        auto Q = to_matrix_2d(evrs_map_a, "evrs_map");
+        auto MR = to_matrix_2d(resistance_current_a, "resistance_current");
+        auto ML = to_matrix_2d(inductance_current_a, "inductance_current");
+        auto P = to_matrix_2d(port_current_a, "port_current");
+
+        radia::evrs::TMethodAlgebraResult r;
+        {
+            py::gil_scoped_release release;
+            r = radia::evrs::BuildTMethodAlgebra(
+                C.values, C.rows, C.cols,
+                D.values, D.rows, D.cols,
+                G.values, G.rows, G.cols,
+                Q.values, Q.rows, Q.cols,
+                MR.values, MR.rows, MR.cols,
+                ML.values, ML.rows, ML.cols,
+                P.values, P.rows, P.cols);
+        }
+
+        py::dict diagnostics;
+        diagnostics["n_current"] = r.n_current;
+        diagnostics["n_t"] = r.n_t;
+        diagnostics["n_phi"] = r.n_phi;
+        diagnostics["n_evrs"] = r.n_evrs;
+        diagnostics["n_ports"] = r.n_ports;
+        diagnostics["n_rho"] = r.n_rho;
+        diagnostics["div_curl_norm"] = r.div_curl_norm;
+        diagnostics["div_evrs_norm"] = r.div_evrs_norm;
+        diagnostics["resistance_gauge_norm"] = r.resistance_gauge_norm;
+        diagnostics["inductance_gauge_norm"] = r.inductance_gauge_norm;
+        diagnostics["port_gauge_norm"] = r.port_gauge_norm;
+        diagnostics["resistance_symmetry_norm"] = r.resistance_symmetry_norm;
+        diagnostics["inductance_symmetry_norm"] = r.inductance_symmetry_norm;
+        diagnostics["evrs_resistance_symmetry_norm"] = r.evrs_resistance_symmetry_norm;
+        diagnostics["evrs_inductance_symmetry_norm"] = r.evrs_inductance_symmetry_norm;
+        diagnostics["evrs_resistance_galerkin_residual"] = r.evrs_resistance_galerkin_residual;
+        diagnostics["evrs_inductance_galerkin_residual"] = r.evrs_inductance_galerkin_residual;
+
+        py::dict out;
+        out["current_evrs"] = to_numpy_2d(r.current_evrs, r.n_current, r.n_evrs);
+        out["resistance_t"] = to_numpy_2d(r.resistance_t, r.n_t, r.n_t);
+        out["inductance_t"] = to_numpy_2d(r.inductance_t, r.n_t, r.n_t);
+        out["resistance_evrs"] = to_numpy_2d(r.resistance_evrs, r.n_evrs, r.n_evrs);
+        out["inductance_evrs"] = to_numpy_2d(r.inductance_evrs, r.n_evrs, r.n_evrs);
+        out["port_t"] = to_numpy_2d(r.port_t, r.n_t, r.n_ports);
+        out["port_evrs"] = to_numpy_2d(r.port_evrs, r.n_evrs, r.n_ports);
+        out["diagnostics"] = diagnostics;
+        return out;
+    }, py::arg("curl_map"), py::arg("div_map"), py::arg("grad_map"),
+       py::arg("evrs_map"), py::arg("resistance_current"),
+       py::arg("inductance_current"), py::arg("port_current"),
+       R"pbdoc(
+        EVRS/T-method algebra kernel.
+
+        Given the discrete maps phi --G--> T --C--> J --D--> rho, an EVRS map Q,
+        current-space symmetric matrices M_R/M_L, and current-space port matrix P,
+        returns C Q, C^T M C matrices, EVRS-projected matrices, port reductions,
+        and residual diagnostics for the de Rham/gauge identities.
+       )pbdoc");
+
+    m.def("_HybridVIMSchurComplement", [](
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> keep_keep_a,
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> keep_eliminate_a,
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> eliminate_keep_a,
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> eliminate_eliminate_a) {
+        auto kk = to_complex_matrix_2d(keep_keep_a, "keep_keep");
+        auto ke = to_complex_matrix_2d(keep_eliminate_a, "keep_eliminate");
+        auto ek = to_complex_matrix_2d(eliminate_keep_a, "eliminate_keep");
+        auto ee = to_complex_matrix_2d(eliminate_eliminate_a, "eliminate_eliminate");
+        std::vector<std::complex<double>> schur;
+        {
+            py::gil_scoped_release release;
+            schur = radia::hybrid_vim::DenseSchurComplement(
+                kk.values, kk.rows, kk.cols,
+                ke.values, ke.rows, ke.cols,
+                ek.values, ek.rows, ek.cols,
+                ee.values, ee.rows, ee.cols);
+        }
+        return to_numpy_complex_2d(schur, kk.rows, kk.cols);
+    }, py::arg("keep_keep"), py::arg("keep_eliminate"),
+       py::arg("eliminate_keep"), py::arg("eliminate_eliminate"),
+       R"pbdoc(
+        Dense complex Schur complement for hybrid VIM / mixed Galerkin blocks.
+
+       Returns K_kk - K_ke K_ee^{-1} K_ek for row-major dense matrices.
+       )pbdoc");
+
+    m.def("_HybridVIMSolve", [](
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> matrix_a,
+            py::array_t<std::complex<double>, py::array::c_style | py::array::forcecast> rhs_a) {
+        auto matrix = to_complex_matrix_2d(matrix_a, "matrix");
+        auto rhs = to_complex_matrix_2d(rhs_a, "rhs");
+        std::vector<std::complex<double>> solution;
+        {
+            py::gil_scoped_release release;
+            solution = radia::hybrid_vim::DenseSolve(
+                matrix.values, matrix.rows, matrix.cols,
+                rhs.values, rhs.rows, rhs.cols);
+        }
+        return to_numpy_complex_2d(solution, matrix.rows, rhs.cols);
+    }, py::arg("matrix"), py::arg("rhs"),
+       R"pbdoc(
+        Dense row-major complex solve for reduced hybrid VIM systems.
+
+        The right-hand side is a two-dimensional matrix, so all excitation
+        ports are factored and solved in one native call.
+       )pbdoc");
+
+    m.def("_SkinImpedance", [](std::complex<double> s, double sigma, double mu) {
+        return radia::hybrid_vim::SkinImpedance(s, sigma, mu);
+    }, py::arg("s"), py::arg("sigma"), py::arg("mu"),
+       R"pbdoc(Half-space SIBC impedance sqrt(mu*s/sigma).)pbdoc");
+
+    m.def("_SIBCAdmittanceTail", [](std::complex<double> s, double surface_measure, double sigma, double mu) {
+        return radia::hybrid_vim::SIBCAdmittanceTail(s, surface_measure, sigma, mu);
+    }, py::arg("s"), py::arg("surface_measure"), py::arg("sigma"), py::arg("mu"),
+       R"pbdoc(Leading SIBC admittance tail S*sqrt(sigma/(mu*s)).)pbdoc");
+
+    m.def("_SIBCSchurTerminationImpedance", [](std::complex<double> s, double k_sibc, double d) {
+        return radia::hybrid_vim::SIBCSchurTerminationImpedance(s, k_sibc, d);
+    }, py::arg("s"), py::arg("k_sibc"), py::arg("d") = 0.0,
+       R"pbdoc(Schur/Warburg scalar impedance (s+d)/(K_SIBC*sqrt(s)).)pbdoc");
+
+    m.def("_SIBCSchurTerminationAdmittance", [](std::complex<double> s, double k_sibc, double d) {
+        return radia::hybrid_vim::SIBCSchurTerminationAdmittance(s, k_sibc, d);
+    }, py::arg("s"), py::arg("k_sibc"), py::arg("d") = 0.0,
+       R"pbdoc(Inverse of _SIBCSchurTerminationImpedance.)pbdoc");
+
     using EnergyStopMaterial = rad_hdiv::EnergyStopMaterial;
     py::class_<EnergyStopMaterial, std::shared_ptr<EnergyStopMaterial>>(
         m, "_EnergyStopMaterial")
@@ -3035,7 +3228,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
            py::arg("leaf_size") = 32, py::arg("theta") = 0.05,
            py::arg("tree_min_sources") = 256, py::arg("auto_min_work") = 500000000,
            py::arg("tree_relative_tolerance") = 1.0e-5, py::arg("probe_count") = 16,
-           "Materialize an immutable RT1 tet/triangle source evaluator. Source arrays are copied once.")
+           "Materialize an immutable BDM1 tet/triangle source evaluator. Source arrays are copied once.")
         .def_static("from_cloud", [](
                 py::array_t<double, py::array::c_style | py::array::forcecast> xyz,
                 py::array_t<double, py::array::c_style | py::array::forcecast> strength,
@@ -3073,7 +3266,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
            py::arg("leaf_size") = 32, py::arg("theta") = 0.05,
            py::arg("tree_min_sources") = 256, py::arg("auto_min_work") = 500000000,
            py::arg("tree_relative_tolerance") = 1.0e-5, py::arg("probe_count") = 16,
-           "Materialize an immutable RT1 quadrature-cloud evaluator. Source arrays are copied once.")
+           "Materialize an immutable BDM1 quadrature-cloud evaluator. Source arrays are copied once.")
         .def("field", [](const FieldEvaluator& evaluator,
                 py::array_t<double, py::array::c_style | py::array::forcecast> observations,
                 const std::string& algorithm) {
@@ -3480,7 +3673,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(far_tri_pts), std::move(far_tri_w),
                          near_grade, far_inner_factor,
                          std::move(image_masks), std::move(image_signs)); },
-                     eps, leaf, eta, build, "hex RT1/RT2 charge Gram H-matrix build failed");
+                     eps, leaf, eta, build, "hex BDM1/BDM2 charge Gram H-matrix build failed");
              }),
              py::arg("hex_cell_nodes"), py::arg("quad_face_nodes"), py::arg("n_el"), py::arg("n_bf"),
              py::arg("charge_host"), py::arg("charge_kind"), py::arg("charge_expo"),
@@ -3490,7 +3683,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("near_grade") = 1.5, py::arg("far_inner_factor") = 1.5,
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-4, py::arg("leaf") = 32, py::arg("eta") = 2.0, py::arg("build") = true,
-             "HEX RT1/RT2 mode: Q1/Q2 monomial charges (8/27 per hex volume + 4/9 per quad-face) on the DIRECT Q2 "
+             "HEX BDM1/BDM2 mode: Q1/Q2 monomial charges (8/27 per hex volume + 4/9 per quad-face) on the DIRECT Q2 "
              "isoparametric geometry -- hex_cell_nodes [n_el*81] = 27-node lattice, quad_face_nodes "
              "[n_bf*27] = 9-node lattice, both from GetTrafo at the reference lattice, so ONE path covers "
              "flat AND curved (mesh.Curve(2)) hexes.  Quadrature = the numpy-validated eig<=1 scheme: "
@@ -3549,7 +3742,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                          std::move(far_tri_pts), std::move(far_tri_w),
                          near_grade, far_inner_factor,
                          std::move(image_masks), std::move(image_signs)); },
-                     eps, leaf, eta, build, "wedge RT1/RT2 charge Gram H-matrix build failed");
+                     eps, leaf, eta, build, "wedge BDM1/BDM2 charge Gram H-matrix build failed");
              }),
              py::arg("wedge_cell_nodes"), py::arg("face_nodes"), py::arg("face_type"),
              py::arg("n_el"), py::arg("n_bf"),
@@ -3561,7 +3754,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("near_grade") = 0.6, py::arg("far_inner_factor") = 1.5,
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
-             "WEDGE (PRISM) RT1/RT2 mode: tri-Pp by z-Pp volume charges (6/18 per prism) + SurfaceL2 "
+             "WEDGE (PRISM) BDM1/BDM2 mode: tri-Pp by z-Pp volume charges (6/18 per prism) + SurfaceL2 "
              "face charges (tri P1/P2 3/6, quad Q1/Q2 4/9) on the direct 18-node tri-P2(x)z-P2 "
              "(wedge_cell_nodes [n_el*54]) + mixed-face "
              "(face_nodes [n_bf*27] 9-node slots, a tri fills the first 6; face_type [n_bf] 0=tri/1=quad) "
@@ -3623,7 +3816,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("image_masks") = I32Array(0), py::arg("image_signs") = F64Array(0),
              py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0, py::arg("build") = true,
              "2D PLANAR mode (motor cross-sections; memory hdiv-vim-tri-quad-motor): charges rho = -div M "
-             "on tri/quad cells (RT1: tri P0/quad Q1; RT2: tri P1/quad Q2) + sigma = M.n on boundary "
+             "on tri/quad cells (BDM1: tri P0/quad Q1; BDM2: tri P1/quad Q2) + sigma = M.n on boundary "
              "EDGES (P1/P2), Piola-exact REF measures, kernel -ln(r)/(2pi) (the ln-scale shift is killed by "
              "the zero-total-charge dof columns).  Geometry = polynomial maps of order 1..3 fitted from "
              "GetTrafo (cell_type 0=tri 1=quad) -> flat + curved one path.  "
@@ -3899,7 +4092,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("theta") = 0.05, py::arg("tree_min_sources") = 256,
              py::arg("auto_min_work") = 500000000,
              py::arg("tree_relative_tolerance") = 1.0e-5, py::arg("probe_count") = 16,
-             "Materialize the persistent RT1/RT2 field source from the configured C++ operator.")
+             "Materialize the persistent BDM1/BDM2 field source from the configured C++ operator.")
         .def("create_planar_field_evaluator",
              [](const RadHACApKChargeGram& s, F64Array magnetization_a) {
                  const auto input = array_1d_view<double>(magnetization_a, "magnetization");

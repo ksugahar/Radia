@@ -1176,8 +1176,8 @@ void RadHACApKChargeGram::InitHOPolynomialCoefficients()
             for (int l=0;l<3;++l) m_hoPolyC[(size_t)9*src+3*k+l] = C[k][l];
         }
     }
-    // RT1's one/three-charge groups are already cheap on the scalar memo path; whole-host blocks add more
-    // cache bookkeeping than kernel work there.  The production win starts at RT2's six quadratic face modes.
+    // BDM1's one/three-charge groups are already cheap on the scalar memo path; whole-host blocks add more
+    // cache bookkeeping than kernel work there.  The production win starts at BDM2's six quadratic face modes.
     m_hoAnalyticBlock = m_hoAnalyticBlock && has_quadratic_face_mode;
 }
 
@@ -1807,7 +1807,7 @@ double RadHACApKChargeGram::QuadDotFarLow(int a, int b) const
     return s * RAD_INV_FOUR_PI;
 }
 
-// ===================================================================== HEX RT1/RT2 mode
+// ===================================================================== HEX BDM1/BDM2 mode
 // Direct Q2 isoparametric geometry + the numpy-validated eig(M^-1 N)<=1 quadrature scheme (see the header
 // ctor doc).  Reference tables: the unit hex [0,1]^3 with its Kuhn 6-sub-tet split (shared main diagonal
 // 0-6) and the unit quad [0,1]^2 with its 2-sub-tri split -- the SAME tables as the Python contract.
@@ -1888,7 +1888,7 @@ void RadHACApKChargeGram::QuadQ2MapX(const double* nd9, const double uv[2], doub
         }
 }
 
-// ============================================ WEDGE (PRISM) RT1 geometry (2026-07-04) ===================
+// ============================================ WEDGE (PRISM) BDM1 geometry (2026-07-04) ===================
 // Prism ref domain: (u,v) in the triangle {u>=0, v>=0, u+v<=1}, w in [0,1].  Corners 0-2 = bottom tri at
 // z=0, 3-5 = top tri at z=1.  The 3-sub-tet split tiles the prism (each 6*vol_ref = 1; total 3*(1/6) =
 // 1/2 = the prism ref volume).  A tri FACE ref = the same triangle (Tri6 corner order (1,0),(0,1),(0,0),
@@ -2350,7 +2350,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexLocalOf[a] = (int)grp.size();
         grp.push_back(a);
     }
-    // ---- affine HEX source exact path, matching the flat-TET RT2 design: reference Q2 charges become
+    // ---- affine HEX source exact path, matching the flat-TET BDM2 design: reference Q2 charges become
     // physical-coordinate polynomials and the source inner is evaluated by analytic moments. ----
     m_hexAffineOrder = 1;
     for (int exponent : m_expo) m_hexAffineOrder = std::max(m_hexAffineOrder, exponent);
@@ -2513,7 +2513,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
 }
 
-// WEDGE (PRISM) RT1 ctor -- mirror of the hex ctor with 3-sub-tet prism cells + mixed tri/quad faces (see
+// WEDGE (PRISM) BDM1 ctor -- mirror of the hex ctor with 3-sub-tet prism cells + mixed tri/quad faces (see
 // the header doc).  Reuses the hex-mode quadrature-table + block-serving members; fills only the wedge
 // geometry.  Initializer list is in member DECLARATION order (m_n_el, the shared quad tables, the wedge
 // nodes, then m_host/m_kind/m_expo) to avoid -Wreorder.
@@ -3217,7 +3217,7 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceSubVec(int hS, int subB, const do
 {
     // A flat Q2 face is affine on the whole quad.  Convert all Q2 reference monomials to physical
     // polynomials (degree <= 4) once in the constructor and apply the same analytic surface-moment
-    // strategy used by the flat-TET RT2 path.
+    // strategy used by the flat-TET BDM2 path.
     const int* tv = QUADREF_TRIS[subB];
     double V[3][3];
     for (int i = 0; i < 3; ++i) {
@@ -4445,7 +4445,7 @@ void RadHACApKChargeGram::OnBeforeBuild()
     if (m_curved) PrecomputeCurvedTouchBlocks();
 }
 
-// ============================================ WEDGE (PRISM) RT1 compute (2026-07-04) ===================
+// ============================================ WEDGE (PRISM) BDM1 compute (2026-07-04) ===================
 // A faithful mirror of the hex-mode compute path (BuildHexSiteTables / PhiInnerHex{Site,Sub,Radial}Vec /
 // QuadBlockHex) with two structural changes: (1) the CELL is a prism -> 3 sub-tets (WEDGEREF_TETS), 18-node
 // map (WedgeQ2MapX); (2) the boundary FACE is MIXED -> a per-face type (m_wFaceType) selects tri (1 sub-tri,
@@ -4910,7 +4910,7 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
         return base;
     }
     if (m_hexmode || m_wedgemode) {
-        // HEX / WEDGE RT1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
+        // HEX / WEDGE BDM1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
         // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.
         // The wedge mode shares this block-serving path verbatim (GetHexBlock -> QuadBlockWedge dispatch).
         // Served from the whole-host-pair block memo (the 64x co-location win) -- bit-identical to
@@ -5739,7 +5739,7 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         charge[static_cast<size_t>(a)] = value;
     }
 
-    // Flat TET RT1/RT2: convert reference monomials to physical polynomials once and retain the exact
+    // Flat TET BDM1/BDM2: convert reference monomials to physical polynomials once and retain the exact
     // analytic volume/triangle field kernels at every target, including near-surface targets.
     bool analytic_tet = m_highorder && !m_curved && !m_hexmode && !m_wedgemode;
     if (analytic_tet) {
@@ -5959,7 +5959,7 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             std::move(xyz), std::move(strength), m_image_masks, m_image_signs, options);
     }
 
-    // Curved TET: retain P2 geometry and the combined RT1/RT2 reference
+    // Curved TET: retain P2 geometry and the combined BDM1/BDM2 reference
     // polynomial per host.  The persistent evaluator integrates exact element
     // leaves at observation time and uses prebuilt moments only for accepted
     // tree nodes.  This avoids both Python source packing and the near-field

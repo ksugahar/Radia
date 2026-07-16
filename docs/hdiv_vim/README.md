@@ -5,6 +5,15 @@ magnetization, material state, charge map, and reduced-FEM handoff in NGSolve
 mesh/function-space vocabulary, then uses Radia's C++ charge-Gram H-matrix for
 the open-boundary integral operator.
 
+## NGSolve Family Convention
+
+Radia's established production path constructs `HDiv(mesh, order=1|2)` without
+the `RT=True` flag.  In NGSolve this is the Brezzi--Douglas--Marini family, so
+the production spaces are **BDM1 and BDM2**.  Raviart--Thomas is a different
+family and must be requested explicitly as `HDiv(mesh, order=p, RT=True)`.
+Historical Radia material that called the production spaces RT1/RT2 was using
+the wrong name; the solver and stored results were BDM.
+
 ## Live API
 
 ```python
@@ -119,7 +128,7 @@ use separate mesh objects/spaces; this preserves the physical normal jump and
 surface charge even when the bodies touch.  Multiple sources superpose, and
 the result retains them in `_magnetization_sources`.
 
-The 3D source supports RT1/RT2 TET/HEX/WEDGE, Curve(2), and IMA on the same
+The 3D source supports BDM1/BDM2 TET/HEX/WEDGE, Curve(2), and IMA on the same
 geometry/field kernels as the solve.  Planar 2D keeps its established
 `magnets=[(mesh, M), ...]` path.  This API represents a fixed prescribed
 magnetization; it does not advance a material history.
@@ -165,7 +174,7 @@ modelling the magnetizing fixture.  Reverse-field/unload and restart are locked
 by `validation_test/hysteresis/test_energy_stop_irreversible_pm.py`.
 The returned final state owns the same persistent C++ field evaluator as
 `vim.Solve`, so `FieldFromSolution` evaluates its external demagnetizing field
-without collapsing the RT1/RT2 magnetization to element constants.
+without collapsing the BDM1/BDM2 magnetization to element constants.
 
 This history-dependent path currently solves PM self-demagnetization under an
 arbitrary prescribed NGSolve applied field.  RT1 keeps one committed
@@ -208,27 +217,27 @@ bounded domain, derives the branch update from a convex energy/proximal law,
 and exposes the explicit manufacturing/restart state used for irreversible
 demagnetization studies.
 
-The public VIM contract supports RT1 and RT2 on pure TET/HEX/WEDGE meshes.
+The public VIM contract supports BDM1 and BDM2 on pure TET/HEX/WEDGE meshes.
 Both orders use the same C++ charge-Gram, mass-Riesz CG, energy-Newton, IMA,
 and persistent-field paths on flat and isoparametric-P2 geometry.  Flat HEX
-RT2 uses batched analytic source moments for its Q2 volume/face charge blocks;
-WEDGE RT2 uses the corresponding tri-P2 by z-P2 charge basis.  Curve(2)
+BDM2 uses batched analytic source moments for its Q2 volume/face charge blocks;
+WEDGE BDM2 uses the corresponding tri-P2 by z-P2 charge basis.  Curve(2)
 HEX/WEDGE retain their mapped high-order integration path.
 
 Geometry order and HDiv order are independent Piola-FEM choices.  The
-authoritative table is `radia.vim.hdiv_capabilities()`: in 2D, RT1 supports
-geometry orders 1/2 (Q2 recommended) and RT2 supports 1/2/3 (Q3 recommended);
-in 3D, TET/HEX/WEDGE RT1 and RT2 support geometry orders 1/2 (P2/Q2
+authoritative table is `radia.vim.hdiv_capabilities()`: in 2D, BDM1 supports
+geometry orders 1/2 (Q2 recommended) and BDM2 supports 1/2/3 (Q3 recommended);
+in 3D, TET/HEX/WEDGE BDM1 and BDM2 support geometry orders 1/2 (P2/Q2
 recommended).  A combination outside that table fails loudly.  In particular,
-RT1/Q3 is intentionally excluded in 2D: under the Q3 contravariant Piola map,
-the RT1 space does not reproduce a uniform physical field to roundoff, and an
-ellipse torque check showed no accuracy gain over RT1/Q2.
+BDM1/Q3 is intentionally excluded in 2D: under the Q3 contravariant Piola map,
+the BDM1 space does not reproduce a uniform physical field to roundoff, and an
+ellipse torque check showed no accuracy gain over BDM1/Q2.
 For a geometrically and topologically symmetric reduced/full hex
 pair, `rad.Fld` after an image solve must agree with the explicit full solve at
 the roundoff contract (`< 10 eps` relative error), not merely within a percent.
 
 Every supported 3D solve also materializes one immutable C++ field evaluator.
-TET RT1/RT2 sources retain analytic volume/triangle kernels; HEX/WEDGE and
+TET BDM1/BDM2 sources retain analytic volume/triangle kernels; HEX/WEDGE and
 curved sources retain the NGSolve quadrature cloud.  Repeated `rad.Fld` calls pass contiguous NumPy target
 arrays directly to that evaluator, with no repeated source packing.  IMA terms
 are accumulated inside the same TaskManager region.  Ordinary batches use the
@@ -266,7 +275,7 @@ The result artifact records both `preconditioner_requested` and the resolved
 `preconditioner="mass-riesz"` and `preconditioner="jacobi"` remain explicit
 diagnostic overrides.
 
-For flat pure-hex `.vol` meshes, the RT1/RT2 charge-basis path follows the
+For flat pure-hex `.vol` meshes, the BDM1/BDM2 charge-basis path follows the
 NGSolve reference ordering directly: the Q2 geometry lattice is built from the
 linear `.vol` vertices, and the Q1/Q2 shape-moment to monomial map is applied as a
 cached block-diagonal sparse transform.  Curved `.vol` meshes still use
@@ -375,7 +384,7 @@ host (`mdx` or `hibino`).  Required HDiv gates:
   immutability, superposition, and iron-response equality;
 - energy-Stop hard projection/proximal stationarity, non-negative vector-loop
   dissipation, reverse-field remanence loss, and state-restart reproducibility;
-- RT1/RT2 flat/curved TET/HEX/WEDGE accuracy and cost, plus charge-Gram H-matrix build stats and
+- BDM1/BDM2 flat/curved TET/HEX/WEDGE accuracy and cost, plus charge-Gram H-matrix build stats and
   memory/timing on idle `mdx` or `hibino`
   for large runs;
 - 2D planar motor saliency checks for the motor lane.

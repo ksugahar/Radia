@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-12T14:33:07Z",
   "notebook": "docs/hysteresis/hdiv_real_material.ipynb",
-  "notebook_sha256": "ee9a73bf76110936e63ceef19c3ce6a97bb9ffedfc82f91e00e93febb2ff5d09",
+  "notebook_sha256": "22c99d635cde616ade60aec28b84cfefb84990a0cd9ede75861ef70b9faa79f9",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

@@ -1,4 +1,4 @@
-"""Golden: RT1 pure-TET HDiv-VIM supports IMA (image method / mirror symmetry).
+"""Golden: BDM1 pure-TET HDiv-VIM supports IMA (image method / mirror symmetry).
 A reduced (1/2, 1/4, 1/8) symmetry model WITH the mirror image reproduces the
 FULL model's demag factor (a z-magnetised sphere = 1/3), while the reduced model WITHOUT the image is wrong.
 
@@ -6,8 +6,8 @@ The C++ highorder charge Gram folds the mirror-image charge interactions into ev
   G_IMA(a,b) = G(a,b) + sum_i sign_i * 0.5*(QuadDotRefl(a,b,mask_i) + QuadDotRefl(b,a,mask_i))
 with QuadDotRefl(tgt,src,mask) = the source's PhiInner potential at tgt's outer points reflected on the mask
 axes (mirror isometry).  Physics + reflection/sign convention validated against the analytic
-IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for flat/curved pure-TET RT1/RT2, and the
-HEX/WEDGE RT1/RT2 image-fold is locked separately by topology-specific charge-Gram tests.
+IMA (memory hdiv-tet-hex-coupling-pyramid-gated).  IMA is wired for flat/curved pure-TET BDM1/BDM2, and the
+HEX/WEDGE BDM1/BDM2 image-fold is locked separately by topology-specific charge-Gram tests.
 """
 import numpy as np
 import pytest

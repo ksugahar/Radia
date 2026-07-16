@@ -20,7 +20,7 @@ Read this when:
   from the Mathematica canonical form.
 
 The MCP server exposes this via basis_functions(topic=...). Topics:
-theory_overview, code_gen_pattern,
+theory_overview, hdiv_rt_bdm, code_gen_pattern,
 triangle_h1_lagrange, triangle_h1_hierarchical,
 triangle_rwg, triangle_l2,
 tet_h1_lagrange, tet_rwg,
@@ -45,7 +45,7 @@ Phase 1 scope (radia-mcp 0.38.0):
 * Tetrahedron H1 Lagrange P1, P2, P3
 * Tetrahedron HDiv RT₀ (= 3D RWG, future BEM-A volumetric extension)
 
-Topics: theory_overview, code_gen_pattern,
+Topics: theory_overview, hdiv_rt_bdm, code_gen_pattern,
         triangle_h1_lagrange, triangle_h1_hierarchical,
         triangle_rwg, triangle_l2,
         tet_h1_lagrange, tet_rwg,
@@ -80,6 +80,68 @@ Topics: theory_overview, code_gen_pattern,
   Barycentric λ₀ = 1−ξ−η−ζ, λ₁ = ξ, λ₂ = η, λ₃ = ζ.
 * Edge ordering: (0,1), (1,2), (2,0) for triangle; (0,1), (0,2),
   (0,3), (1,2), (1,3), (2,3) for tetrahedron.
+
+============================================================
+## hdiv_rt_bdm — executable Mathematica study of both HDiv families
+============================================================
+
+The current NGSolve convention is explicit:
+
+```python
+HDiv(mesh, order=p)           # BDM on simplices
+HDiv(mesh, order=p, RT=True)  # Raviart--Thomas on simplices
+```
+
+The corresponding Mathematica study API lives in
+`mathematica/basis_functions/simplex_ho.wls`:
+
+```mathematica
+HDivTetBDM[p]   (* [P_p]^3, p >= 1 *)
+HDivTetRT[p]    (* [P_p]^3 + x Ptilde_p *)
+HDivTrigBDM[p]  (* [P_p]^2, p >= 1 *)
+HDivTrigRT[p]   (* [P_p]^2 + x Ptilde_p *)
+
+HDivTetFamilyLedger[p]
+HDivTrigFamilyLedger[p]
+```
+
+For equal simplex order `p`,
+
+* `div(BDM_p) = P_(p-1)`;
+* `div(RT_p) = P_p`;
+* `BDM_p` is a strict subspace of `RT_p`;
+* both families have the same `ker(div)` dimension and the same degree-`p`
+  normal-trace space.
+
+The first three tetrahedral orders are:
+
+| p | BDM DoF | RT DoF | BDM div DoF | RT div DoF | shared ker(div) |
+|---:|--------:|-------:|------------:|-----------:|----------------:|
+| 1 | 12 | 15 | 1 | 4 | 11 |
+| 2 | 30 | 36 | 4 | 10 | 26 |
+| 3 | 60 | 70 | 10 | 20 | 50 |
+| 6 | 252 | 280 | 56 | 84 | 196 |
+
+For triangles the corresponding rows are `6/8`, `12/15`, and `20/24` total
+DoFs.  RT's equal-order increment is entirely in charge-carrying divergence
+modes; it does not add loop modes.  This is the structural reason BDM is the
+production default when its lower-order charge space is accurate enough.
+
+Hex/Quad are different.  NGSolve uses one tensor-product H(div) space for both
+settings of the `RT` selector.  `hdiv.wls` therefore exposes intentional aliases:
+
+```mathematica
+HDivHexBDM[p] === HDivHexRT[p]
+HDivQuadBDM[p] === HDivQuadRT[p]
+```
+
+Both `.wls` files self-test dimensions, polynomial independence, normal-trace
+rank, divergence rank, de Rham inclusion, and the shared-kernel identity.  Run:
+
+```powershell
+wolframscript -file simplex_ho.wls
+wolframscript -file hdiv.wls
+```
 
 ============================================================
 ## code_gen_pattern — Mathematica → NumPy / SymPy / MATLAB
@@ -502,7 +564,7 @@ runtime ~5 sec for the full Phase 1 matrix.
 
 
 _TOPICS = (
-    "theory_overview", "code_gen_pattern",
+    "theory_overview", "hdiv_rt_bdm", "code_gen_pattern",
     "triangle_h1_lagrange", "triangle_h1_hierarchical",
     "triangle_rwg", "triangle_l2",
     "tet_h1_lagrange", "tet_rwg",

@@ -300,7 +300,7 @@ def solve_hdiv(coil_script="", vol_file="",
                          % (n_tet, n_hex, n_wedge)}
     hdiv_order = int(hdiv_order)
     if hdiv_order not in (1, 2):
-        return {"error": "hdiv_order must be 1 (RT1) or 2 (RT2)"}
+        return {"error": "hdiv_order must be 1 (BDM1) or 2 (BDM2)"}
     if ima:
         return {"error": "IMA/image symmetry is not exposed by this panel yet. Run the full "
                          "HDiv-VIM model with --ima empty."}
@@ -313,7 +313,7 @@ def solve_hdiv(coil_script="", vol_file="",
         _log(f"MAT:nonlinear BH ({len(bh_data)} pts) (HDiv-VIM)")
     model = rad.ObjCnt([iron, coil_container])
     topology = "tet" if n_tet else ("hex" if n_hex else "wedge")
-    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM RT{hdiv_order}/{topology}), "
+    _log(f"SOLVE:backend=hdiv (FEEC HDiv-VIM BDM{hdiv_order}/{topology}), "
          f"tol={tol}, maxiter={max_iter}")
     t_solve_start = time.perf_counter()
     with _TM():

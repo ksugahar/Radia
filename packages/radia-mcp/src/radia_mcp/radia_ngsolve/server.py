@@ -1188,12 +1188,13 @@ def hdiv_vim(topic: str = "overview") -> str:
     NGSolve RegionTaskManager; direct diagnostic `.matvec()` calls plus Python/NGSolve assembly
     follow caller-wraps `with ng.TaskManager():`.  The C++ HDiv CG/MINRES/Picard kernels use
     ParallelFor/ParallelForRange for charge gather, dot products, preconditioner/vector updates,
-    and AtomicAdd for sparse face-vector scatters.  Solved RT1 objects also own a persistent C++
+    and AtomicAdd for sparse face-vector scatters.  Solved BDM1 objects also own a persistent C++
     rad.Fld evaluator with NumPy target buffers, one-pass IMA, analytic tet near kernels, and a
     direct-probed large-map source tree; IMA automatic evaluation stays exact-direct.
 
     Args:
         topic: One of:
+            "family"         - BDM default versus explicit Raviart--Thomas; Radia production uses BDM1/BDM2
             "overview"       - what it is + why (symmetric, loops field-null, mu_r-independent) [DEFAULT]
             "implementation" - C++/pybind/Python files + APIs (rad_hdiv_vim, _ChargeGramHMatrix, ...)
             "scaling"        - charge-Gram H-matrix + persistent rad.Fld direct/tree scaling

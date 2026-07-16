@@ -779,7 +779,7 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
 * **Cross-checked with a second, independent field engine — and the error budget revised
   (2026-07-13).** `hdiv_scoff_study` swaps the reduced-Ω FEM for the **FEEC HDiv-VIM**
   (`radia.vim`): iron-only tet mesh, *no air discretization*, exact open boundary, mid-plane
-  map from one batch `rad.Fld` (the full solved RT1 charge field); ~10×
+  map from one batch `rad.Fld` (the full solved BDM1 charge field); ~10×
   faster per case. `ΔK_in` agrees to 0.8% at matched edge-mesh density (absolute-`ΔK`
   scatter across engines/meshes ±3%), and `ΔK_in`/model stays at **0.92–0.95 in every
   configuration** — so the −5…−7% deficit is **engine-independent real 3D physics, not the
@@ -790,7 +790,7 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
   vertical edge focusing by ~5% for this geometry; the **effective** edge angle is a
   magnet-specific quantity this chain extracts.  The production field route no longer uses
   the historical piecewise-constant write-back: solved HDiv objects retain a persistent full
-  RT1 evaluator, so fringe-map convergence now reflects the FE solution rather than a separate
+  BDM1 evaluator, so fringe-map convergence now reflects the FE solution rather than a separate
   postprocessing collapse.
 * **Magnet-design lessons the measurement exposed** (each a measured failure of the campaign):
   a straight coil front across a tilted iron edge leaves the iso-field tilt far below the

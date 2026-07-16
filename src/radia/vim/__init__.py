@@ -1,6 +1,6 @@
 """radia.vim -- HDiv-type VIM demag operator.
 
-The FEEC H(div) RT production demag path: a SYMMETRIC demag
+The FEEC H(div) BDM production demag path: a SYMMETRIC demag
 operator N = B^T G B whose loop modes are field-null by construction (de Rham), giving mu_r-independent
 convergence with no hand-crafted loop-star.
 
@@ -19,9 +19,9 @@ Public API (NGSolve-aligned validated solve primitives):
          bodies.  It owns the HDiv space and geometry-only ChargeGram; result
          dictionaries contain no reusable-operator handle.
   SolveHysteresis(mesh, h_steps, play=(K, eta, f_k_tables), order=1|2)
-      -> quasi-static B-input hysteresis stepping on the SAME charge Gram: the chi-free
-         H-matrix is built ONCE and reused by every step / nonlinear iteration.  RT1 keeps
-         element-average states; RT2 uses NGSolve IntegrationRuleSpace quadrature states.
+      -> quasi-static B-input hysteresis stepping on the SAME BDM charge Gram: the chi-free
+         H-matrix is built ONCE and reused by every step / nonlinear iteration.  BDM1 keeps
+         element-average states; BDM2 uses NGSolve IntegrationRuleSpace quadrature states.
          Committed material states advance only after each converged step.
          EnergyStopMaterial supplies the production C++ vector B-input Stop law for hard magnets;
          explicit state supports irreversible demagnetization, recoil, restart, and persistent
@@ -49,7 +49,7 @@ Permanent-magnet levels are canonical: (1) MagnetizationSource fixed/given M,
   MeshSoftIron(mesh, mu_r=/bh_table=, order=1|2) / VolSoftIron(path, mu_r=/bh_table=, order=1|2)
       -> method-layer constructors for mesh-backed Radia soft iron.  For ordinary user code prefer the
          user-intent API `rad.SoftIron(geometry, mu_r=...).solve(...)`.  When `rad.Solve(..., image=...)`
-          is used on a MeshSoftIron, `rad.Fld(iron, ...)` evaluates the solved RT field and its reflected
+          is used on a MeshSoftIron, `rad.Fld(iron, ...)` evaluates the solved BDM field and its reflected
           IMA contributions directly; `M_avg_reduced` is the
          reduced-domain diagnostic and `M_avg` is the physical full-domain average.  Unconstrained explicit
          full-solve `rad.Fld` parity is a separate 10-eps validation target, not a percent-level tolerance.
@@ -83,7 +83,7 @@ from ._hysteresis import (  # noqa: F401  (B-input hysteresis stepping: ONE Gram
     PlayHysteresisMaterial,
     SolveHysteresis as _solve_hysteresis_impl,
 )
-from ._field_batch import (  # noqa: F401  (batch exterior field of the RT1/RT2 solution)
+from ._field_batch import (  # noqa: F401  (batch exterior field of the BDM1/BDM2 solution)
     field_coefficient_from_solution as _field_coefficient_from_solution_impl,
     field_from_solution as _field_from_solution_impl,
 )
@@ -98,6 +98,86 @@ from ._coupled import (  # noqa: F401
 )
 from ._shapes import soft_iron_box, soft_iron_hex, magnet_box, magnet_hex  # noqa: F401  (mesh-less-SHAPE intent constructors: soft iron -> HDiv-VIM; PM -> analytic)
 from ._capabilities import HDivCapability, hdiv_capabilities  # noqa: F401
+from ._eddy_hybrid import (  # noqa: F401  (reduced HCurl/T + surface-Omega/SIBC eddy-current VIM primitives)
+    MU0,
+    EddyTracePolynomialDim,
+    EddyParentOrderLedger,
+    SampledCurrentBasis,
+    SampledMagnetizationBasis,
+    VolumeCurrentBasis,
+    MagnetizationBasis,
+    SurfaceOmegaBasis,
+    EddyFaceTopology,
+    EddyConductorGraphEdge,
+    EddyConductorCycle,
+    EddyConductorGraph,
+    EddyMeshTopology,
+    EddyDofPolicy,
+    EddyReductionPlan,
+    EddyBubbleDecomposition,
+    EddyBubbleHCurlBasis,
+    EddyBubbleReduction,
+    ClassifyNgsolveEddyTopology,
+    NgsolveEddyDofPolicy,
+    NgsolveEddyBubbleReduction,
+    NgsolveEddyBubbleHCurlBasis,
+    NgsolveBridgeCycleCurrentBasis,
+    SampleNgsolveVectorCFs,
+    NgsolveVolumeCurrentBasis,
+    NgsolveMagnetizationBasis,
+    NgsolveHDivMagnetizationBasis,
+    HDivMultipolePortSet,
+    PlanarHarmonicPortSet,
+    NgsolveHDivRegularSolidHarmonicPorts,
+    NgsolvePlanarHarmonicPorts,
+    NgsolveHDivExternalFieldRHS,
+    HDivMMMReducedModel,
+    NgsolveHDivMMMReduction,
+    NgsolveHDivMMMResponseReduction,
+    NgsolveBDMHDivMMMResponseReduction,
+    PlanarHDivMMMReducedSolution,
+    PlanarHDivMMMReducedModel,
+    NgsolvePlanarHDivMMMResponseReduction,
+    NgsolveHCurlCurlBasis,
+    NgsolveSurfaceOmegaBasis,
+    NgsolveMatrixToDense,
+    NgsolveVectorToArray,
+    NgsolveCouplingDofMasks,
+    ResponseBasis,
+    EVRSBasis,
+    BlockKrylovBasis,
+    NgsolveBlockKrylovBasis,
+    NgsolveOperatorBlockKrylovBasis,
+    NgsolveStaticCondensedBlockKrylovBasis,
+    SampledLaplaceInteraction,
+    ReducedInteractionMatrix,
+    CurrentMagneticFluxDensitySamples,
+    MagnetizationCurrentCoupling,
+    EVRSTMethodAlgebra,
+    ReducedPortAdmittance,
+    ReducedPortImpedance,
+    SharedMeshMaterialModel,
+    HCurlVIMHDivMMMSolution,
+    CoupledHDivEVRSSystem,
+    CoupledHDivHybridVIMSystem,
+    HCurlVIMHDivMMMSystem,
+    CoupleHDivMagnetizationToEVRS,
+    CoupleHCurlVIMWithHDivMMM,
+    CoupleHybridVIMWithHDivMMM,
+    CoupleEddyBubbleHCurlBasisWithHDivMMM,
+    HybridVIMSystem,
+    AssembleHybridVIM,
+    TopologyAwareHybridVIM,
+    NgsolveTopologyAwareHybridVIM,
+    NgsolveEddyBubbleHybridVIM,
+    NgsolveHCurlVIMHDivMMM,
+    NgsolveBDMEddyBubbleVIM,
+    SkinImpedance,
+    SIBCAdmittanceTail,
+    SIBCSchurTerminationImpedance,
+    SIBCSchurTerminationAdmittance,
+    ExternalVectorPotentialRHS,
+)
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
     """
@@ -147,7 +227,7 @@ def PlanarSolve(*args, **kwargs):
 
 
 def FieldFromSolution(*args, **kwargs):
-    """Batch demagnetizing H (A/m) from the full RT1/RT2 HDiv solution.
+    """Batch demagnetizing H (A/m) from the full BDM1/BDM2 HDiv solution.
 
     Pass ``vim.Solve``'s result dict.  The solve owns a persistent C++ source
     evaluator; ordinary batches use exact flat/curved element leaves, while very
@@ -212,5 +292,41 @@ __all__ = [
     "CoupledBody", "SolveCoupled", "FieldFromCoupledSolution",
     "CoupledHistoryBody", "SolveCoupledHysteresis", "FieldFromCoupledHysteresis",
     "HDivCapability", "hdiv_capabilities",
+    "MU0", "EddyTracePolynomialDim", "EddyParentOrderLedger",
+    "SampledCurrentBasis", "SampledMagnetizationBasis",
+    "VolumeCurrentBasis", "MagnetizationBasis", "SurfaceOmegaBasis",
+    "EddyFaceTopology", "EddyConductorGraphEdge", "EddyConductorCycle",
+    "EddyConductorGraph", "EddyMeshTopology", "EddyDofPolicy",
+    "EddyReductionPlan", "EddyBubbleDecomposition", "EddyBubbleHCurlBasis",
+    "EddyBubbleReduction",
+    "ClassifyNgsolveEddyTopology", "NgsolveEddyDofPolicy", "NgsolveEddyBubbleReduction",
+    "NgsolveEddyBubbleHCurlBasis",
+    "NgsolveBridgeCycleCurrentBasis", "SampleNgsolveVectorCFs", "NgsolveVolumeCurrentBasis",
+    "NgsolveMagnetizationBasis", "NgsolveHDivMagnetizationBasis",
+    "HDivMultipolePortSet", "PlanarHarmonicPortSet",
+    "NgsolveHDivRegularSolidHarmonicPorts", "NgsolvePlanarHarmonicPorts",
+    "NgsolveHDivExternalFieldRHS", "HDivMMMReducedModel", "NgsolveHDivMMMReduction",
+    "NgsolveHDivMMMResponseReduction", "NgsolveBDMHDivMMMResponseReduction",
+    "PlanarHDivMMMReducedSolution", "PlanarHDivMMMReducedModel",
+    "NgsolvePlanarHDivMMMResponseReduction",
+    "NgsolveHCurlCurlBasis", "NgsolveSurfaceOmegaBasis",
+    "NgsolveMatrixToDense", "NgsolveVectorToArray", "NgsolveCouplingDofMasks",
+    "ResponseBasis", "EVRSBasis", "BlockKrylovBasis", "NgsolveBlockKrylovBasis",
+    "NgsolveOperatorBlockKrylovBasis", "NgsolveStaticCondensedBlockKrylovBasis",
+    "SampledLaplaceInteraction", "ReducedInteractionMatrix", "HybridVIMSystem",
+    "CurrentMagneticFluxDensitySamples", "MagnetizationCurrentCoupling",
+    "EVRSTMethodAlgebra", "ReducedPortAdmittance", "ReducedPortImpedance",
+    "SharedMeshMaterialModel", "HCurlVIMHDivMMMSolution",
+    "CoupledHDivEVRSSystem", "CoupledHDivHybridVIMSystem",
+    "HCurlVIMHDivMMMSystem",
+    "CoupleHDivMagnetizationToEVRS", "CoupleHCurlVIMWithHDivMMM",
+    "CoupleHybridVIMWithHDivMMM",
+    "CoupleEddyBubbleHCurlBasisWithHDivMMM",
+    "AssembleHybridVIM", "TopologyAwareHybridVIM", "NgsolveTopologyAwareHybridVIM",
+    "NgsolveEddyBubbleHybridVIM", "NgsolveHCurlVIMHDivMMM",
+    "NgsolveBDMEddyBubbleVIM",
+    "SkinImpedance", "SIBCAdmittanceTail",
+    "SIBCSchurTerminationImpedance", "SIBCSchurTerminationAdmittance",
+    "ExternalVectorPotentialRHS",
     "_nonlinear", "_vim", "_solve", "_radsolve", "_hysteresis",
 ]

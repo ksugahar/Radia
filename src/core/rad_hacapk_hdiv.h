@@ -1,4 +1,4 @@
-/* rad_hacapk_hdiv.h -- HACApK H-matrix for the symmetric RT1 HDiv-VIM charge Gram.
+/* rad_hacapk_hdiv.h -- HACApK H-matrix for the symmetric BDM1 HDiv-VIM charge Gram.
  *
  * Production stores the Coulomb Gram G and applies the demagnetizing operator as
  * N = B^T G B.  Symmetric-fill HACApK plus MatVecSym makes N exactly symmetric at
@@ -29,7 +29,7 @@ struct RadMassRieszCache;
 //-------------------------------------------------------------------------
 
 /* The general-mesh production path.  Charges = volume and boundary charge-basis functions
- * extracted from the supported NGSolve RT1 HDiv space.
+ * extracted from the supported NGSolve BDM1 HDiv space.
  * This manager builds the n_charge x n_charge
  * Coulomb Gram G as a HACApK H-matrix (a clean 1/r kernel over the charge centroids):
  *   G[a][b] = meas_a meas_b / (4pi |c_a - c_b|)   (a != b, centroid monopole)
@@ -194,7 +194,7 @@ public:
                         std::vector<double> ref_tri_pts, std::vector<double> ref_tri_w,
                         std::vector<double> curve_gl, std::vector<double> curve_gw, int n_el);
 
-    // HEX RT1/RT2 mode: the HDiv(hexmesh, order=p) charge Gram uses tensor Qp monomial charges
+    // HEX BDM1/BDM2 mode: the HDiv(hexmesh, order=p) charge Gram uses tensor Qp monomial charges
     // (8/27 per volume and 4/9 per quad face at p=1/2) over the DIRECT Q2 isoparametric geometry:
     // hex_cell_nodes [n_el*81] = 27-node triquadratic lattice (n = ix + 3*iy + 9*iz, ref (ix/2,iy/2,iz/2)),
     // quad_face_nodes [n_bf*27] = 9-node biquadratic lattice (n = iu + 3*iv), both extracted via GetTrafo at
@@ -225,13 +225,13 @@ public:
                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
     // 2D PLANAR mode (2026-07-03, the motor cross-section layer; memory hdiv-vim-tri-quad-motor):
-    // charges rho = -div M on 2D cells (RT1: TRI P0 / QUAD Q1; RT2: TRI P1 / QUAD Q2)
+    // charges rho = -div M on 2D cells (BDM1: TRI P0 / QUAD Q1; BDM2: TRI P1 / QUAD Q2)
     // + sigma = M.n on boundary EDGES (P1/P2), all in the NGSolve REF
     // frame with the Piola-exact extraction (the dimension-independent J-cancellation identity).  Kernel
     // = the 2D Laplace Green's function -ln(r)/(2*pi); the ln-scale shift is killed because every HDiv
     // dof's total charge is zero (divergence theorem), so N = B^T G B is scale-invariant.  Geometry =
     // Q1..Q3 polynomial maps fitted from GetTrafo (cell_type 0=tri/1=quad) -> ONE path flat/curved.
-    // RT1 admits geometry through Q2; RT2 admits geometry through Q3.  Quadrature
+    // BDM1 admits geometry through Q2; BDM2 admits geometry through Q3.  Quadrature
     // (numpy-validated, C:\temp\vim2d_proto.py): REGULAR symmetric outer everywhere (the log kernel's
     // single-layer potentials are continuous, so NO graded outer is needed -- simpler than 3D); inner =
     // signed radial cones from the nearest anchor SITE for near field points, cheap far cloud otherwise.
@@ -252,7 +252,7 @@ public:
                         double near_grade, double far_inner_factor,
                         std::vector<int> image_masks = {}, std::vector<double> image_signs = {});
 
-    // WEDGE (PRISM) RT1/RT2 mode: the HDiv(prismmesh, order=p) charge Gram uses tri-Pp (x) z-Pp
+    // WEDGE (PRISM) BDM1/BDM2 mode: the HDiv(prismmesh, order=p) charge Gram uses tri-Pp (x) z-Pp
     // volume charges (6/18 per prism) over the 18-node tri-P2 (x) z-P2 lattice (node n = t + 6*iz,
     // t = the Tri6 node 0..5, iz = the z level 0..2).  Boundary faces are MIXED (2 tri caps + 3 quad
     // sides per prism): a tri face -> SurfaceL2 P1/P2 (3/6 monomials, 1 sub-tri), a quad
@@ -487,7 +487,7 @@ private:
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 6>>> m_srcCurvedTris;  // [n] curved-face P2 sub-tri nodes
     std::vector<std::vector<std::array<rad_hdiv::Vec3, 10>>> m_srcCurvedTets; // [n] curved-cell P2 sub-tet nodes
 
-    // HEX RT1/RT2 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
+    // HEX BDM1/BDM2 mode (direct Q2 isoparametric geometry; see the hex ctor doc).  The charge monomial lives in
     // the HEX/QUAD REFERENCE frame (evaluated directly at ref coords -- no physical->ref inverse), geometry +
     // measure come from the Q2 lattice maps.  Entries are served block-wise (GetHexBlock); the inner is the
     // ref-frame radial decomposition (PhiInnerHexRadialVec) for near/self, cached far clouds otherwise.
@@ -506,10 +506,10 @@ private:
     std::vector<double> m_faceSubC, m_faceSubS, m_faceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3] (sub-tri)
     std::vector<unsigned char> m_hexAffineCell;              // [n_el] true when the Q2 lattice is affine
     int m_hexAffineOrder = 1, m_hexAffineMonoCount = 8, m_hexAffinePolyCount = 20;
-    std::vector<double> m_hexAffineCoeff;                    // [n_el*mono*moment], RT1 8x20; RT2 27x84
+    std::vector<double> m_hexAffineCoeff;                    // [n_el*mono*moment], BDM1 8x20; BDM2 27x84
     std::vector<unsigned char> m_quadAffineFace;             // [n_bf] true when the Q2 face lattice is affine
     int m_quadAffineMonoCount = 4, m_quadAffinePolyCount = 10;
-    std::vector<double> m_quadAffineCoeff;                   // [n_bf*mono*moment], RT1 4x10; RT2 9x35
+    std::vector<double> m_quadAffineCoeff;                   // [n_bf*mono*moment], BDM1 4x10; BDM2 9x35
     bool m_hexUniformAffineCells = false;                    // same affine cell map for every cell -> translation block cache
     std::vector<int> m_hexCellLattice;                       // [n_el*3] integer lattice coordinate for uniform affine cells
     bool m_hexUniformTransHosts = false;                      // cell/face hosts are translated template copies
@@ -692,7 +692,7 @@ private:
     std::vector<double> QuadBlock2D(int kindT, int hT, int kindS, int hS,
                                     int mask = 0) const;  // directed block, 1/(2pi) folded
 
-    // ---- WEDGE (PRISM) RT1/RT2 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
+    // ---- WEDGE (PRISM) BDM1/BDM2 mode (see the wedge ctor doc) ----  Reuses the hex-mode quadrature tables
     // (m_symTetP/W, m_symTriP/W, m_glOut/gwOut, m_glIn/gwIn, m_farTetP/W, m_farTriP/W, m_near_grade,
     // m_far_inner_factor) and the block-serving infra (m_hexLocalOf, m_cellCharges, m_faceCharges,
     // m_cent, m_size) verbatim; only the geometry (prism cells + mixed tri/quad faces) is wedge-specific.
@@ -730,7 +730,7 @@ private:
     std::vector<double> m_faceGinv;                    // [n_bf*4] 2x2 (a.a) Gram inverse per face (for 2D ref coords)
     std::vector<int> m_hoPolyDegree;                   // [n] physical-polynomial degree (flat order<=2)
     std::vector<double> m_hoPolyA, m_hoPolyB, m_hoPolyC; // [n], [n*3], [n*9]: A + B.y + y^T C y
-    bool m_hoAnalyticBlock = false;                    // flat RT2: all charges covered and quadratic face modes present
+    bool m_hoAnalyticBlock = false;                    // flat BDM2: all charges covered and quadratic face modes present
     std::vector<std::vector<rad_hdiv::Vec3>> m_inP;    // [n] FIXED inner-potential Gauss points per HOST (cell/face)
     std::vector<std::vector<double>>          m_inW;   // [n] inner-potential Gauss weights (sum = host measure)
     std::vector<std::vector<double>>          m_srcval; // [n] PRECOMPUTED m_src(y_q) at the FIXED m_inP points -- bit-exact hoist of EvalMono out of the PhiAtHO inner loop (value depends only on (src,q))

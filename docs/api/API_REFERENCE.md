@@ -923,7 +923,7 @@ cf = rad.RadiaField(radia_obj, field_type='b', origin=None, u=None, v=None, w=No
 ```python
 # Basic usage
 B_cf = rad.RadiaField(magnet, 'b')
-fes = HDiv(mesh, order=2)
+fes = HDiv(mesh, order=2)  # BDM2; use RT=True for Raviart--Thomas
 gf = GridFunction(fes)
 gf.Set(B_cf)
 

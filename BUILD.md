@@ -254,7 +254,7 @@ mesh = Mesh(OCCGeometry(box).GenerateMesh(maxh=0.01))
 
 # Project to GridFunction
 from ngsolve import *
-fes = HDiv(mesh, order=2)
+fes = HDiv(mesh, order=2)  # BDM2; add RT=True for Raviart--Thomas
 B_gf = GridFunction(fes)
 B_gf.Set(B_cf)
 ```

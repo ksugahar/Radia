@@ -61,7 +61,7 @@ def test_sphere_end_to_end_and_fail_loud():
     assert "gfM" in res
     assert "_field_evaluator" in res
     evaluator = res["_field_evaluator"]
-    assert res["field_evaluator_stats"]["source_kind"] == "analytic-tet-rt1"
+    assert res["field_evaluator_stats"]["source_kind"] == "analytic-tet-bdm1"
     with ng.TaskManager():
         V_el = np.asarray(ng.Integrate(ng.CoefficientFunction(1.0), mesh, ng.VOL,
                                        element_wise=True), float)

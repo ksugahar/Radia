@@ -21,41 +21,41 @@ Released 2026-07-17.
   notebook workbench, command builder, and generated panel registry, with
   automatic topology-aware defaults and explicit legacy modes.
 
-## 4.95.15 - Complete RT2 HDiv-VIM production paths
+## 4.95.15 - Complete BDM2 HDiv-VIM production paths
 
 Released 2026-07-16.
 
 - Added the persistent `HDivSolver` and mutually coupled independent-body
   solves, including linear-recoil permanent magnets, nonlinear iron, and
   stateful EnergyStop/Play hysteresis bodies with geometry-operator reuse.
-- Completed RT2 nonlinear and hysteresis solves for tetrahedral, hexahedral,
+- Completed BDM2 nonlinear and hysteresis solves for tetrahedral, hexahedral,
   and wedge meshes, with quadrature-point constitutive state, restart
   validation, curved-field reconstruction, and deterministic native kernels.
 - Routed multi-body `rad.Solve` and `rad.Fld` through the coupled HDiv result,
-  preserving each body's full RT1/RT2 field while summing ordinary Radia
-  sources, and exposed RT1/RT2 selection in the accelerator HDiv workbench.
+  preserving each body's full BDM1/BDM2 field while summing ordinary Radia
+  sources, and exposed BDM1/BDM2 selection in the accelerator HDiv workbench.
 - Synchronized panel registry metadata so accelerator and reduced-motor HDiv
-  order controls are represented explicitly as RT1/RT2 settings.
+  order controls are represented explicitly as BDM1/BDM2 settings.
 
-## 4.95.14 - Faster affine HEX RT2 HDiv-VIM
+## 4.95.14 - Faster affine HEX BDM2 HDiv-VIM
 
 Released 2026-07-16.
 
-- Accelerated affine HEX RT2 ChargeGram construction with exact polynomial
+- Accelerated affine HEX BDM2 ChargeGram construction with exact polynomial
   moments for self/near interactions and reflection-invariant tensor-product
   quadrature for smooth far interactions, while preserving the public
   topology/order contract and symmetric matrix path.
 - Avoided TaskManager startup overhead for small persistent field-evaluator
   batches without changing the parallel path used for larger field maps.
-- Added compute-host RT2 cross-topology records for tetrahedral, hexahedral,
+- Added compute-host BDM2 cross-topology records for tetrahedral, hexahedral,
   and wedge meshes at approximately 29,000 charge DoF, plus focused field,
   entry, solve, symmetry, and curved-mesh regression coverage.
 
-## 4.95.13 - Mapped RT2 HDiv-VIM for hex and wedge meshes
+## 4.95.13 - Mapped BDM2 HDiv-VIM for hex and wedge meshes
 
 Released 2026-07-16.
 
-- Added production mapped RT2 charge-basis and ChargeGram paths for curved
+- Added production mapped BDM2 charge-basis and ChargeGram paths for curved
   hexahedral and wedge meshes, alongside the existing tetrahedral and planar
   paths, with one central topology/order capability contract.
 - Moved affine HEX moments into the native C++ analytic path and retained the
@@ -65,7 +65,7 @@ Released 2026-07-16.
   integration-rule coordinate evaluation, eliminating first-touch geometry
   corruption while reducing one-time curved-geometry materialization cost.
 - Updated the reduced-motor and HDiv-VIM APIs, policies, docs, MCP knowledge,
-  focused tests, and compute-host validation driver for the RT2 matrix.
+  focused tests, and compute-host validation driver for the BDM2 matrix.
 
 - **Fix native heap corruption (0xC0000374/0xC0000005) in batch field
   evaluation on TrfOrnt-transformed containers and in RadiaField assembly** —
@@ -121,7 +121,7 @@ Released 2026-07-15.
 
 - Added fixed/given magnetization sources, linear-recoil permanent magnets,
   and the native energy-stop hysteresis material to the HDiv-VIM API.
-- Added persistent native NGSolve matrices and field evaluators, with RT2/IMA
+- Added persistent native NGSolve matrices and field evaluators, with BDM2/IMA
   coverage and fail-loud API contracts.
 - Refreshed the native-path hysteresis validation records after review.
 

@@ -31,3 +31,25 @@ def test_hdiv_vim_knowledge_lists_irreversible_pm_validation_gates():
     assert "stationarity" in verification
     assert "reverse-field remanence loss" in verification
     assert "split-run restart parity" in verification
+
+
+def test_hdiv_vim_knowledge_identifies_the_ngsolve_hdiv_family():
+    family = " ".join(get_hdiv_vim_documentation("family").split())
+    overview = " ".join(get_hdiv_vim_documentation("overview").split())
+
+    assert "HDiv(mesh, order=p)" in family
+    assert "BDM, the NGSolve default" in family
+    assert "HDiv(mesh, order=p, RT=True)" in family
+    assert "Raviart--Thomas" in family
+    assert "BDM1/BDM2" in overview
+    assert "requires `RT=True`" in overview
+
+
+def test_hdiv_vim_knowledge_exposes_bdm_eddy_bubble_production_path():
+    coupled = " ".join(get_hdiv_vim_documentation("eddy_bubble").split())
+
+    assert "NgsolveBDMEddyBubbleVIM" in coupled
+    assert "NgsolveBDMHDivMMMResponseReduction" in coupled
+    assert 'parent_family="BDM"' in coupled
+    assert "Only conductor faces touching air are SIBC faces" in coupled
+    assert "eddy_flux_density(points)" in coupled

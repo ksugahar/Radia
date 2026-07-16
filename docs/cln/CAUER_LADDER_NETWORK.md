@@ -36,6 +36,11 @@ circuits.
   switching transients.
 - **Sensitivity analysis**: ladder parameters depend smoothly on
   geometry / material, suitable for optimization.
+- **High-order response compression**: use NGSolve `HCurl(p)` as a parent
+  space, keep only the Eddy-Visible Response Space (EVRS), eliminate
+  Eddy-Invisible DoFs (EIDs / eddy bubbles), and connect the resulting
+  `curl(T)` current basis to HDiv-MMM/VIM/BEM/SIBC branches.  See
+  [`HCURL_RESPONSE_COMPRESSION.md`](HCURL_RESPONSE_COMPRESSION.md).
 
 ---
 

@@ -1,17 +1,17 @@
-"""Golden: the HDiv-VIM RT1/RT2 production contract.
+"""Golden: the HDiv-VIM BDM1/BDM2 production contract.
 
-RT1/RT2 support pure-TET, pure-HEX, pure-WEDGE, IMA, curved geometry, and field evaluation.
-The planar tri/quad route supports RT1 through Q2 and RT2 through Q3 geometry.  Pyramid / mixed meshes and
+BDM1/BDM2 support pure-TET, pure-HEX, pure-WEDGE, IMA, curved geometry, and field evaluation.
+The planar tri/quad route supports BDM1 through Q2 and BDM2 through Q3 geometry.  Pyramid / mixed meshes and
 The deleted region-dictionary PM API is absent; fixed M uses an independent
 MagnetizationSource HDiv space.
 
-HEX/WEDGE RT2 use their Q2 volume/face charge bases and the same Gram-agnostic solve path, so the auto
+HEX/WEDGE BDM2 use their Q2 volume/face charge bases and the same Gram-agnostic solve path, so the auto
 guard is pure-TET / pure-HEX / pure-WEDGE.  The per-element hex correctness
 lock lives in test_hdiv_vim_hex_public_solve.py; wedge spectrum/cube locks live in
 test_hdiv_vim_wedge_spectrum.py.
 
 This test LOCKS the production fail-loud boundaries (No-Fallbacks: the raise IS
-the feature), the RT1/RT2 happy paths, and the rad.Solve 'auto' split.
+the feature), the BDM1/BDM2 happy paths, and the rad.Solve 'auto' split.
 
 NGSolve + Netgen required.  See memory/hdiv_rt1_field_production.md.
 """
@@ -38,18 +38,18 @@ def _half_box(maxh=2.0):
     return ng.Mesh(OCCGeometry(Box(Pnt(0, -1, -1), Pnt(1, 1, 1))).GenerateMesh(maxh=maxh))
 
 
-# ---------------------------------------------------------------- RT1 happy path (the SUPPORTED config)
+# --------------------------------------------------------------- BDM1 happy path (the SUPPORTED config)
 def test_rt1_is_the_default_order_and_solves():
-    """The default order is now 1 (RT1); a linear tet solve gives the sphere demag ~1/3."""
+    """The default order is now 1 (BDM1); a linear tet solve gives the sphere demag ~1/3."""
     mesh = _sphere()
     with ng.TaskManager():
-        r = Solve(mesh, mu_r=100.0, H_ext=_HEXT)     # no order= -> default RT1
+        r = Solve(mesh, mu_r=100.0, H_ext=_HEXT)     # no order= -> default BDM1
     assert r.get("order", 1) == 1
     assert 0.31 < r["demag"] < 0.345, r["demag"]
 
 
 def test_rt1_nonlinear_solves():
-    """Flat RT1 nonlinear (the energy-Newton on the high-order Gram) runs at the default order."""
+    """Flat BDM1 nonlinear (the energy-Newton on the high-order Gram) runs at the default order."""
     BH = [[0.0, 0.0], [500.0, 1.3], [5000.0, 1.85], [5e5, 2.4]]
     mesh = _sphere()
     with ng.TaskManager():
@@ -58,7 +58,7 @@ def test_rt1_nonlinear_solves():
 
 
 def test_public_rt2_pure_tet_solves():
-    """RT2 is a supported public material solve on pure tetrahedra."""
+    """BDM2 is a supported public material solve on pure tetrahedra."""
     mesh = _sphere()
     with ng.TaskManager():
         result = Solve(mesh, mu_r=100.0, H_ext=_HEXT, order=2)

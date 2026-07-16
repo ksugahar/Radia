@@ -2,7 +2,7 @@
 (* ::Package:: *)
 
 (*
-  hdiv.wls -- NGSolve-style H(div) (Raviart-Thomas / BDM) shape functions, clean wls.
+  hdiv.wls -- NGSolve-style tensor H(div) plus lowest-order simplex RT shapes.
   THE space the HDiv-VIM solver needs: the magnetization face-normal density lives
   in H(div), and the de Rham property  div(curl(H(curl))) = 0  is exactly what makes
   the div-free magnetization circulations ("loops", ker N) field-null by construction
@@ -18,8 +18,12 @@
    (2) The TENSOR de Rham construction on the cube (the HEX, = VIM main target):
        H1 = W(x)W(x)W,  H(curl) = Q(x)W(x)W (+cyc),  H(div) = W(x)Q(x)Q (+cyc),
        L2 = Q(x)Q(x)Q,  with the 1D exact sequence  d: W -> Q  (W = integrated
-       Legendre / H1, Q = Legendre / L2).  This spans NGSolve's RT_p hex space
-       (HDiv(mesh,order=p)); a clean explicit-polynomial basis, ideal for the
+       Legendre / H1, Q = Legendre / L2).  On Hex/Quad, NGSolve's RT selector
+       does not change the local tensor-product space: bare HDiv and RT=True
+       have identical local dimensions and polynomial spans.  We therefore
+       expose explicit RT and BDM aliases to the same tensor space.  The
+       genuinely distinct BDM/RT simplex spaces are implemented in
+       simplex_ho.wls.  This is a clean explicit-polynomial basis, ideal for the
        analytical VIM field operator.  The de Rham exactness is SHOWN: curl of the
        H(curl)-hex lands in H(div)-hex and is div-free to symbolic zero.
 
@@ -53,9 +57,9 @@ uDvDwMinusDuvDw[u_, v_, w_] := u Cross[gradd[v], gradd[w]] - v Cross[gradd[u], g
 (* div-free face/cell bubble: curl of the H(curl) fn  w (u grad v - v grad u) *)
 curlUDvwMinusDuvw[u_, v_, w_] := Curl[w (u gradd[v] - v gradd[u]), {x, y, z}];
 
-(* ===================== HEX (tensor de Rham, RT_p) ====================== *)
+(* ===================== HEX (shared tensor de Rham space) ============== *)
 (* x-family: W(x) (x) Q(y) (x) Q(z) e_x ; +cyclic.  dim = 3 (p+2)(p+1)^2. *)
-HDivHex[p_] := Module[{Wf, Qf, xf, yf, zf},
+HDivHexTensor[p_] := Module[{Wf, Qf, xf, yf, zf},
   Wf[t_] := oneDH1[p + 1, t]; Qf[t_] := oneDL2[p + 1, t];
   xf = Flatten[Table[{Wf[x][[a]] Qf[y][[b]] Qf[z][[c]], 0, 0},
        {a, p + 2}, {b, p + 1}, {c, p + 1}], 2];
@@ -64,6 +68,9 @@ HDivHex[p_] := Module[{Wf, Qf, xf, yf, zf},
   zf = Flatten[Table[{0, 0, Qf[x][[a]] Qf[y][[b]] Wf[z][[c]]},
        {a, p + 1}, {b, p + 1}, {c, p + 2}], 2];
   Join[xf, yf, zf]];
+HDivHex[p_] := HDivHexTensor[p];                 (* legacy neutral name *)
+HDivHexRT[p_] := HDivHexTensor[p];
+HDivHexBDM[p_] := HDivHexTensor[p];
 
 (* H(curl) hex, x-family only (enough to SHOW curl(H(curl)) c H(div), div-free):
    Q(x) (x) W(y) (x) W(z) e_x. *)
@@ -72,13 +79,16 @@ HCurlHexXfam[p_] := Module[{Wf, Qf},
   Flatten[Table[{Qf[x][[a]] Wf[y][[b]] Wf[z][[c]], 0, 0},
        {a, p + 1}, {b, p + 2}, {c, p + 2}], 2]];
 
-(* ===================== QUAD (2D tensor de Rham, RT_p) ================== *)
+(* ===================== QUAD (shared tensor de Rham space) ============= *)
 div2[V_]  := D[V[[1]], x] + D[V[[2]], y];
-HDivQuad[p_] := Module[{Wf, Qf, xf, yf},
+HDivQuadTensor[p_] := Module[{Wf, Qf, xf, yf},
   Wf[t_] := oneDH1[p + 1, t]; Qf[t_] := oneDL2[p + 1, t];
   xf = Flatten[Table[{Wf[x][[a]] Qf[y][[b]], 0}, {a, p + 2}, {b, p + 1}], 1];
   yf = Flatten[Table[{0, Qf[x][[a]] Wf[y][[b]]}, {a, p + 1}, {b, p + 2}], 1];
   Join[xf, yf]];
+HDivQuad[p_] := HDivQuadTensor[p];               (* legacy neutral name *)
+HDivQuadRT[p_] := HDivQuadTensor[p];
+HDivQuadBDM[p_] := HDivQuadTensor[p];
 (* 2D H1 (for the rot-grad showcase): W(x) (x) W(y). *)
 H1QuadT[p_] := Module[{Wf}, Wf[t_] := oneDH1[p + 1, t];
   Flatten[Table[Wf[x][[a]] Wf[y][[b]], {a, p + 2}, {b, p + 2}]]];
@@ -124,7 +134,7 @@ Module[{ok = True, chk, u, v, w, idDF, idCyc, idT2, pts, rB, rA, p, dims, divs},
          MatrixRank[Table[Join[dW, Q] /. t -> tt, {tt, RandomReal[{0, 1}, 12]}],
                     Tolerance -> 1*^-9] == q], {q, 1, 5}]];
 
-  (* ---- (3) HEX tensor RT_p: dimension, div in L2, RT0 normal trace ---- *)
+  (* ---- (3) HEX shared tensor space: dimension, div, family aliases ---- *)
   chk["dim HDivHex(p) = 3 (p+2)(p+1)^2, p=0..2",
       And @@ Table[Length[HDivHex[p]] == 3 (p + 2) (p + 1)^2, {p, 0, 2}]];
   chk["HDivHex(0) = 6 RT0 face funcs, each div = const",
@@ -136,6 +146,8 @@ Module[{ok = True, chk, u, v, w, idDF, idCyc, idT2, pts, rB, rA, p, dims, divs},
   divs = Simplify[divv[#]] & /@ HDivHex[p];
   chk["div(HDivHex(1)) spans L2 = Q(x)Q(x)Q (rank (p+1)^3 = 8)",
       MatrixRank[Table[d /. pt, {d, divs}, {pt, pts}], Tolerance -> 1*^-9] == (p + 1)^3];
+  chk["Hex RT and BDM names are aliases of the same tensor space",
+      And @@ Table[HDivHexRT[p] === HDivHexBDM[p] && HDivHex[p] === HDivHexRT[p], {p, 0, 2}]];
 
   (* ---- (4) de Rham SHOWCASE: curl(H(curl)-hex) c H(div)-hex AND div-free ---- *)
   Module[{curls},
@@ -147,12 +159,14 @@ Module[{ok = True, chk, u, v, w, idDF, idCyc, idT2, pts, rB, rA, p, dims, divs},
    chk["curl(HCurlHex) lies IN span(HDivHex)  (de Rham: curl H(curl) c H(div))",
        rA == rB]];
 
-  (* ---- (5) QUAD 2D RT_p + 2D rot-grad showcase ---- *)
+  (* ---- (5) QUAD shared tensor space + 2D rot-grad showcase ---- *)
   chk["dim HDivQuad(p) = 2 (p+2)(p+1), p=0..2",
       And @@ Table[Length[HDivQuad[p]] == 2 (p + 2) (p + 1), {p, 0, 2}]];
   chk["HDivQuad(0) = 4 edge funcs, div const",
       Length[HDivQuad[0]] == 4 &&
       And @@ (FreeQ[Simplify[div2[#]], x | y] & /@ HDivQuad[0])];
+  chk["Quad RT and BDM names are aliases of the same tensor space",
+      And @@ Table[HDivQuadRT[p] === HDivQuadBDM[p] && HDivQuad[p] === HDivQuadRT[p], {p, 0, 2}]];
   Module[{rg, pts2, ra, rb},
    (* 2D de Rham: rot(grad s) = (d_y s, -d_x s) c H(div), div-free *)
    rg = ({D[#, y], -D[#, x]} & /@ H1QuadT[1]);

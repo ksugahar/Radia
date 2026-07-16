@@ -1,0 +1,944 @@
+{
+  "schema": "radia.validation.hcurl_vim_hdiv_mmm_end_to_end.v5",
+  "generated_at_utc": "2026-07-16T22:14:11.591907+00:00",
+  "validation_host": "lab",
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "note": "Desktop correctness smoke; elapsed time is not benchmark data.",
+  "configuration": {
+    "geometry": "notched-box",
+    "parent_order": 6,
+    "krylov_steps": 8,
+    "frequencies_Hz": [
+      100.0,
+      10000.0
+    ],
+    "maxh": 2.5,
+    "sigma": 58000000.0,
+    "mu_r": 1001.0,
+    "intorder": 2,
+    "hdiv_order": 2,
+    "hdiv_family": "rt",
+    "hdiv_intorder": 4,
+    "demag_eps": 1e-07,
+    "demag_eta": 2.0,
+    "multipole_degree": 3,
+    "hdiv_pod_rtol": 1e-10,
+    "hdiv_max_modes": null,
+    "hdiv_solve_tol": 1e-10,
+    "kernel_epsilon": 0.12,
+    "coupling_kernel_epsilon": 0.12,
+    "parent_order_ledger": {
+      "bulk_degree": 4,
+      "bridge_trace_degree": 0,
+      "surface_current_degree": 2,
+      "surface_omega_degree": 3,
+      "face_family": "simplex",
+      "bridge_trace_dim": 1,
+      "required_parent_order": 4,
+      "parent_order": 6,
+      "parent_order_admissible": true,
+      "parent_order_excess": 2
+    }
+  },
+  "hcurl_parent_ndof": 3557,
+  "hdiv_reduction": {
+    "parent_space": "HDiv",
+    "parent_ndof": 942,
+    "reduced_modes": 15,
+    "compression_ratio": 0.01592356687898089,
+    "mu_r": 1001.0,
+    "chi": 1000.0,
+    "materials": [
+      "cond"
+    ],
+    "mass_hermitian_error": 0.0,
+    "demag_hermitian_error": 0.0,
+    "operator_hermitian_error": 0.0,
+    "min_mass_eigenvalue": 3.665715413292729,
+    "min_demag_eigenvalue": 0.002180859681489777,
+    "min_operator_eigenvalue": 0.9999999999999947,
+    "demag_frobenius_norm": 1.7250401574151093,
+    "has_rhs": true,
+    "rhs_columns": 2,
+    "demag_backend": "DemagOperator",
+    "basis_generation": {
+      "construction": "hdiv-mmm-response-energy-pod",
+      "snapshot_backend": "radia-cpp-mass-riesz-cg",
+      "snapshot_port_count": 17,
+      "physical_rhs_columns": 2,
+      "training_port_count": 15,
+      "port_names": [
+        "H_stator_x",
+        "H_stator_y",
+        "rsh_l1_x",
+        "rsh_l1_y",
+        "rsh_l1_z",
+        "rsh_l2_xy",
+        "rsh_l2_xz",
+        "rsh_l2_yz",
+        "rsh_l2_x2_y2",
+        "rsh_l2_z2",
+        "rsh_l3_z3",
+        "rsh_l3_xz2",
+        "rsh_l3_yz2",
+        "rsh_l3_z_x2_y2",
+        "rsh_l3_xyz",
+        "rsh_l3_x3_3xy2",
+        "rsh_l3_3x2y_y3"
+      ],
+      "normalize_ports": true,
+      "port_weights": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "snapshot_iterations": [
+        47,
+        47,
+        47,
+        47,
+        46,
+        57,
+        58,
+        58,
+        59,
+        58,
+        59,
+        59,
+        59,
+        58,
+        58,
+        59,
+        59
+      ],
+      "snapshot_relative_residuals": [
+        9.393307683783262e-11,
+        9.082114973829456e-11,
+        9.393307086658882e-11,
+        9.082142334237624e-11,
+        6.406437520480696e-11,
+        9.306518502322117e-11,
+        7.435838433035754e-11,
+        5.908858125388688e-11,
+        7.421043178621399e-11,
+        6.988552588330237e-11,
+        9.898800465218251e-11,
+        8.771897502562072e-11,
+        8.136720109445805e-11,
+        9.483766643274735e-11,
+        9.746615353642828e-11,
+        9.738891474534827e-11,
+        9.544450813714936e-11
+      ],
+      "max_snapshot_relative_residual": 9.898800465218251e-11,
+      "pod_rtol": 1e-10,
+      "protected_physical_modes": 2,
+      "protected_eigenvalues": [
+        1.2258954917062157,
+        0.774104508293783
+      ],
+      "training_response_modes": 13,
+      "pod_eigenvalues": [
+        1.8489777822682676,
+        1.724549083456925,
+        1.381513692593061,
+        1.3521438096024907,
+        1.188636486583213,
+        1.0309885014020441,
+        0.9574553411838106,
+        0.7769438869098504,
+        0.6914445653477823,
+        0.5774863623416837,
+        0.5513105191283828,
+        0.4916059924062494,
+        0.4269439767762334
+      ],
+      "available_modes": 15,
+      "retained_modes": 15,
+      "discarded_modes": 2,
+      "dependent_port_directions": 2,
+      "dependent_training_ports": [
+        "rsh_l1_x",
+        "rsh_l1_y"
+      ],
+      "pod_truncated_modes": 0,
+      "pod_truncation_curve": [
+        {
+          "rank": 1,
+          "max_all_response_relative_energy_error": 0.9999999970532528,
+          "rms_all_response_relative_energy_error": 0.9249959563231885,
+          "max_physical_response_relative_energy_error": 0.6221352378322481
+        },
+        {
+          "rank": 2,
+          "max_all_response_relative_energy_error": 0.9999999806838735,
+          "rms_all_response_relative_energy_error": 0.8740418377720487,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 3,
+          "max_all_response_relative_energy_error": 0.9999386359160378,
+          "rms_all_response_relative_energy_error": 0.8094866414085402,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 4,
+          "max_all_response_relative_energy_error": 0.9986173351013625,
+          "rms_all_response_relative_energy_error": 0.7442176817174444,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 5,
+          "max_all_response_relative_energy_error": 0.9985422162201281,
+          "rms_all_response_relative_energy_error": 0.6876571597190891,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 6,
+          "max_all_response_relative_energy_error": 0.9984767736024547,
+          "rms_all_response_relative_energy_error": 0.6272516115506989,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 7,
+          "max_all_response_relative_energy_error": 0.9970856787942844,
+          "rms_all_response_relative_energy_error": 0.5688076247785541,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 8,
+          "max_all_response_relative_energy_error": 0.769832769826823,
+          "rms_all_response_relative_energy_error": 0.5127341568698933,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 9,
+          "max_all_response_relative_energy_error": 0.6609986377813717,
+          "rms_all_response_relative_energy_error": 0.4545070806701421,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 10,
+          "max_all_response_relative_energy_error": 0.5561195057811443,
+          "rms_all_response_relative_energy_error": 0.40113576530663825,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 11,
+          "max_all_response_relative_energy_error": 0.5149798553521289,
+          "rms_all_response_relative_energy_error": 0.3467827143679197,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 12,
+          "max_all_response_relative_energy_error": 0.4979927711084898,
+          "rms_all_response_relative_energy_error": 0.29398702602525484,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 13,
+          "max_all_response_relative_energy_error": 0.491299897423389,
+          "rms_all_response_relative_energy_error": 0.23239945866425898,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 14,
+          "max_all_response_relative_energy_error": 0.4702339699725587,
+          "rms_all_response_relative_energy_error": 0.1584126938445214,
+          "max_physical_response_relative_energy_error": 5.847786630453884e-12
+        },
+        {
+          "rank": 15,
+          "max_all_response_relative_energy_error": 2.4349425076252604e-11,
+          "rms_all_response_relative_energy_error": 7.213345527730809e-12,
+          "max_physical_response_relative_energy_error": 7.624028902824036e-12
+        }
+      ],
+      "energy_orthonormality_error": 2.028094989345871e-15,
+      "response_relative_energy_errors": [
+        7.624028902824036e-12,
+        4.5492049055079506e-12,
+        7.624095906280583e-12,
+        4.549209519167505e-12,
+        2.4349425076252604e-11,
+        4.564024154240793e-12,
+        4.162288878016502e-12,
+        1.3378375821549153e-12,
+        1.786693926881119e-12,
+        2.982085630771709e-12,
+        3.624370272692214e-12,
+        1.1681412610747472e-12,
+        9.727195124129108e-13,
+        5.895261210668047e-12,
+        5.06748086994792e-12,
+        2.2602860252433676e-12,
+        9.966153438885259e-13
+      ],
+      "max_response_relative_energy_error": 2.4349425076252604e-11,
+      "multipole_training": {
+        "family": "regular-solid-harmonic-gradient",
+        "count": 15,
+        "degrees": [
+          1,
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        "degree_counts": {
+          "1": 3,
+          "2": 5,
+          "3": 7
+        },
+        "names": [
+          "rsh_l1_x",
+          "rsh_l1_y",
+          "rsh_l1_z",
+          "rsh_l2_xy",
+          "rsh_l2_xz",
+          "rsh_l2_yz",
+          "rsh_l2_x2_y2",
+          "rsh_l2_z2",
+          "rsh_l3_z3",
+          "rsh_l3_xz2",
+          "rsh_l3_yz2",
+          "rsh_l3_z_x2_y2",
+          "rsh_l3_xyz",
+          "rsh_l3_x3_3xy2",
+          "rsh_l3_3x2y_y3"
+        ],
+        "center": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "radius": 0.8660254037844386
+      }
+    }
+  },
+  "mixed_system": {
+    "hdiv_modes": 15,
+    "hdiv_mmm_modes": 15,
+    "hcurl_vim_modes": 33,
+    "evrs_modes": 33,
+    "hybrid_blocks": {
+      "volume": [
+        0,
+        16
+      ],
+      "volume1": [
+        16,
+        30
+      ],
+      "surface": [
+        30,
+        33
+      ]
+    },
+    "eddy_basis_count": 3,
+    "eddy_basis_modes": [
+      16,
+      14,
+      3
+    ],
+    "coupling_rows": 15,
+    "coupling_cols": 33,
+    "coupling_frobenius_norm": 3.624132093112892e-06,
+    "has_shared_material_model": true,
+    "has_shared_mesh_material_model": true,
+    "has_magnetic_operator": true,
+    "has_magnetic_rhs": true,
+    "has_eddy_rhs": true,
+    "has_response_basis": true,
+    "has_eddy_bubbling": true,
+    "has_hdiv_reduction": true,
+    "hdiv_reduction": {
+      "parent_space": "HDiv",
+      "parent_ndof": 942,
+      "reduced_modes": 15,
+      "compression_ratio": 0.01592356687898089,
+      "mu_r": 1001.0,
+      "chi": 1000.0,
+      "materials": [
+        "cond"
+      ],
+      "mass_hermitian_error": 0.0,
+      "demag_hermitian_error": 0.0,
+      "operator_hermitian_error": 0.0,
+      "min_mass_eigenvalue": 3.665715413292729,
+      "min_demag_eigenvalue": 0.002180859681489777,
+      "min_operator_eigenvalue": 0.9999999999999947,
+      "demag_frobenius_norm": 1.7250401574151093,
+      "has_rhs": true,
+      "rhs_columns": 2,
+      "demag_backend": "DemagOperator",
+      "basis_generation": {
+        "construction": "hdiv-mmm-response-energy-pod",
+        "snapshot_backend": "radia-cpp-mass-riesz-cg",
+        "snapshot_port_count": 17,
+        "physical_rhs_columns": 2,
+        "training_port_count": 15,
+        "port_names": [
+          "H_stator_x",
+          "H_stator_y",
+          "rsh_l1_x",
+          "rsh_l1_y",
+          "rsh_l1_z",
+          "rsh_l2_xy",
+          "rsh_l2_xz",
+          "rsh_l2_yz",
+          "rsh_l2_x2_y2",
+          "rsh_l2_z2",
+          "rsh_l3_z3",
+          "rsh_l3_xz2",
+          "rsh_l3_yz2",
+          "rsh_l3_z_x2_y2",
+          "rsh_l3_xyz",
+          "rsh_l3_x3_3xy2",
+          "rsh_l3_3x2y_y3"
+        ],
+        "normalize_ports": true,
+        "port_weights": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "snapshot_iterations": [
+          47,
+          47,
+          47,
+          47,
+          46,
+          57,
+          58,
+          58,
+          59,
+          58,
+          59,
+          59,
+          59,
+          58,
+          58,
+          59,
+          59
+        ],
+        "snapshot_relative_residuals": [
+          9.393307683783262e-11,
+          9.082114973829456e-11,
+          9.393307086658882e-11,
+          9.082142334237624e-11,
+          6.406437520480696e-11,
+          9.306518502322117e-11,
+          7.435838433035754e-11,
+          5.908858125388688e-11,
+          7.421043178621399e-11,
+          6.988552588330237e-11,
+          9.898800465218251e-11,
+          8.771897502562072e-11,
+          8.136720109445805e-11,
+          9.483766643274735e-11,
+          9.746615353642828e-11,
+          9.738891474534827e-11,
+          9.544450813714936e-11
+        ],
+        "max_snapshot_relative_residual": 9.898800465218251e-11,
+        "pod_rtol": 1e-10,
+        "protected_physical_modes": 2,
+        "protected_eigenvalues": [
+          1.2258954917062157,
+          0.774104508293783
+        ],
+        "training_response_modes": 13,
+        "pod_eigenvalues": [
+          1.8489777822682676,
+          1.724549083456925,
+          1.381513692593061,
+          1.3521438096024907,
+          1.188636486583213,
+          1.0309885014020441,
+          0.9574553411838106,
+          0.7769438869098504,
+          0.6914445653477823,
+          0.5774863623416837,
+          0.5513105191283828,
+          0.4916059924062494,
+          0.4269439767762334
+        ],
+        "available_modes": 15,
+        "retained_modes": 15,
+        "discarded_modes": 2,
+        "dependent_port_directions": 2,
+        "dependent_training_ports": [
+          "rsh_l1_x",
+          "rsh_l1_y"
+        ],
+        "pod_truncated_modes": 0,
+        "pod_truncation_curve": [
+          {
+            "rank": 1,
+            "max_all_response_relative_energy_error": 0.9999999970532528,
+            "rms_all_response_relative_energy_error": 0.9249959563231885,
+            "max_physical_response_relative_energy_error": 0.6221352378322481
+          },
+          {
+            "rank": 2,
+            "max_all_response_relative_energy_error": 0.9999999806838735,
+            "rms_all_response_relative_energy_error": 0.8740418377720487,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 3,
+            "max_all_response_relative_energy_error": 0.9999386359160378,
+            "rms_all_response_relative_energy_error": 0.8094866414085402,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 4,
+            "max_all_response_relative_energy_error": 0.9986173351013625,
+            "rms_all_response_relative_energy_error": 0.7442176817174444,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 5,
+            "max_all_response_relative_energy_error": 0.9985422162201281,
+            "rms_all_response_relative_energy_error": 0.6876571597190891,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 6,
+            "max_all_response_relative_energy_error": 0.9984767736024547,
+            "rms_all_response_relative_energy_error": 0.6272516115506989,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 7,
+            "max_all_response_relative_energy_error": 0.9970856787942844,
+            "rms_all_response_relative_energy_error": 0.5688076247785541,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 8,
+            "max_all_response_relative_energy_error": 0.769832769826823,
+            "rms_all_response_relative_energy_error": 0.5127341568698933,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 9,
+            "max_all_response_relative_energy_error": 0.6609986377813717,
+            "rms_all_response_relative_energy_error": 0.4545070806701421,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 10,
+            "max_all_response_relative_energy_error": 0.5561195057811443,
+            "rms_all_response_relative_energy_error": 0.40113576530663825,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 11,
+            "max_all_response_relative_energy_error": 0.5149798553521289,
+            "rms_all_response_relative_energy_error": 0.3467827143679197,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 12,
+            "max_all_response_relative_energy_error": 0.4979927711084898,
+            "rms_all_response_relative_energy_error": 0.29398702602525484,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 13,
+            "max_all_response_relative_energy_error": 0.491299897423389,
+            "rms_all_response_relative_energy_error": 0.23239945866425898,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 14,
+            "max_all_response_relative_energy_error": 0.4702339699725587,
+            "rms_all_response_relative_energy_error": 0.1584126938445214,
+            "max_physical_response_relative_energy_error": 5.847786630453884e-12
+          },
+          {
+            "rank": 15,
+            "max_all_response_relative_energy_error": 2.4349425076252604e-11,
+            "rms_all_response_relative_energy_error": 7.213345527730809e-12,
+            "max_physical_response_relative_energy_error": 7.624028902824036e-12
+          }
+        ],
+        "energy_orthonormality_error": 2.028094989345871e-15,
+        "response_relative_energy_errors": [
+          7.624028902824036e-12,
+          4.5492049055079506e-12,
+          7.624095906280583e-12,
+          4.549209519167505e-12,
+          2.4349425076252604e-11,
+          4.564024154240793e-12,
+          4.162288878016502e-12,
+          1.3378375821549153e-12,
+          1.786693926881119e-12,
+          2.982085630771709e-12,
+          3.624370272692214e-12,
+          1.1681412610747472e-12,
+          9.727195124129108e-13,
+          5.895261210668047e-12,
+          5.06748086994792e-12,
+          2.2602860252433676e-12,
+          9.966153438885259e-13
+        ],
+        "max_response_relative_energy_error": 2.4349425076252604e-11,
+        "multipole_training": {
+          "family": "regular-solid-harmonic-gradient",
+          "count": 15,
+          "degrees": [
+            1,
+            1,
+            1,
+            2,
+            2,
+            2,
+            2,
+            2,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "degree_counts": {
+            "1": 3,
+            "2": 5,
+            "3": 7
+          },
+          "names": [
+            "rsh_l1_x",
+            "rsh_l1_y",
+            "rsh_l1_z",
+            "rsh_l2_xy",
+            "rsh_l2_xz",
+            "rsh_l2_yz",
+            "rsh_l2_x2_y2",
+            "rsh_l2_z2",
+            "rsh_l3_z3",
+            "rsh_l3_xz2",
+            "rsh_l3_yz2",
+            "rsh_l3_z_x2_y2",
+            "rsh_l3_xyz",
+            "rsh_l3_x3_3xy2",
+            "rsh_l3_3x2y_y3"
+          ],
+          "center": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "radius": 0.8660254037844386
+        }
+      }
+    },
+    "conductivity": 58000000.0
+  },
+  "eddy_bubbling": {
+    "rule": "topology-aware-eddy-bubbling",
+    "free_dofs": 3557,
+    "structural_keep_dofs": 1857,
+    "eddy_bubble_candidate_dofs": 1700,
+    "eddy_bubble_candidate_fraction": 0.4779308405960079,
+    "classes": {
+      "sibc_surface": 855,
+      "non_sibc_trace": 0,
+      "loop_bridge": 1002,
+      "ordinary_bulk_eddy_bubble": 1700
+    },
+    "policy": {
+      "ndof": 3557,
+      "free_dofs": 3557,
+      "sibc_surface_dofs": 903,
+      "surface_candidate_dofs": 903,
+      "non_sibc_trace_dofs": 0,
+      "loop_bridge_dofs": 1002,
+      "sibc_loop_bridge_overlap_dofs": 48,
+      "sibc_surface_only_dofs": 855,
+      "ordinary_evrs_candidate_dofs": 1700,
+      "partitioned_free_dofs": 3557,
+      "local_bubble_dofs": 1700,
+      "interface_dofs": 1780,
+      "wirebasket_dofs": 77,
+      "loop_bridge_fraction": 0.28169806016305876,
+      "sibc_surface_fraction": 0.25386561709305594,
+      "non_sibc_trace_fraction": 0.0,
+      "ordinary_evrs_fraction": 0.4779308405960079
+    },
+    "plan": {
+      "rule": "conductor-air/exterior-to-sibc; conductor-insulator-to-non-sibc-trace; conductor-conductor-to-loop-bridge; interior-to-evrs",
+      "free_dofs": 3557,
+      "loop_bridge_keep_dofs": 1002,
+      "loop_bridge_reduced_modes": 14,
+      "loop_bridge_reduction_strategy": "cycle-basis",
+      "loop_bridge_reduction_savings": 988,
+      "sibc_surface_trace_dofs": 903,
+      "sibc_surface_only_dofs": 855,
+      "non_sibc_trace_dofs": 0,
+      "non_sibc_trace_modes": 0,
+      "sibc_loop_bridge_overlap_dofs": 48,
+      "ordinary_evrs_candidate_dofs": 1700,
+      "conservative_structural_keep_dofs": 1857,
+      "evrs_rank": 16,
+      "surface_modes": 3,
+      "conservative_estimated_reduced_modes": 1021,
+      "estimated_reduced_modes": 33,
+      "estimated_reduction_ratio": 0.009277481023334271,
+      "ordinary_evrs_candidate_fraction": 0.4779308405960079,
+      "conservative_structural_keep_fraction": 0.5220691594039921
+    },
+    "topology": {
+      "face_count": 89,
+      "roles": [
+        "conductor-conductor",
+        "conductor-exterior"
+      ],
+      "conductive_materials": [
+        "cond"
+      ],
+      "air_materials": [
+        "air",
+        "vacuum"
+      ],
+      "conductive_element_count": 34,
+      "conductive_component_count": 1,
+      "conductive_graph_edge_count": 47,
+      "conductive_graph_cycle_rank": 14,
+      "surface_face_count": 42,
+      "sibc_face_count": 42,
+      "non_sibc_trace_face_count": 0,
+      "loop_bridge_face_count": 47,
+      "conductor_exterior_face_count": 42,
+      "conductor_air_face_count": 0,
+      "conductor_insulator_face_count": 0,
+      "conductor_conductor_face_count": 47,
+      "conductive_interface_face_count": 0
+    },
+    "conductor_graph": {
+      "node_count": 34,
+      "edge_count": 47,
+      "component_count": 1,
+      "cycle_rank": 14,
+      "fundamental_cycle_count": 14,
+      "material_interface_edge_count": 0
+    },
+    "parent_order": 6,
+    "parent_order_ledger": {
+      "bulk_degree": 4,
+      "bridge_trace_degree": 0,
+      "surface_current_degree": 2,
+      "surface_omega_degree": 3,
+      "face_family": "simplex",
+      "bridge_trace_dim": 1,
+      "required_parent_order": 4,
+      "parent_order": 6,
+      "parent_order_admissible": true,
+      "parent_order_excess": 2,
+      "evrs_rank": 16,
+      "cycle_rank": 14,
+      "surface_modes": 3,
+      "non_sibc_trace_modes": 0,
+      "bridge_modes": 14,
+      "estimated_reduced_modes": 33
+    }
+  },
+  "frequency_rows": [
+    {
+      "frequency_Hz": 100.0,
+      "s": {
+        "real": 0.0,
+        "imag": 628.3185307179587
+      },
+      "surface_impedance": {
+        "real": 2.6089506942234867e-06,
+        "imag": 2.6089506942234863e-06
+      },
+      "n_excitations": 2,
+      "magnetization_modes": 15,
+      "eddy_modes": 33,
+      "parent_t_dofs": 3557,
+      "parent_hdiv_dofs": 942,
+      "eddy_blocks": [
+        "volume",
+        "volume1",
+        "surface"
+      ],
+      "eddy_block_sample_counts": [
+        136,
+        47,
+        126
+      ],
+      "sampled_magnetization_norm": 147.502089194127,
+      "sampled_eddy_current_norms": [
+        245257.23506092597,
+        23165.721883599683,
+        61879.50729836038
+      ],
+      "average_joule_loss": [
+        97.69252758549831,
+        119.93382676432287
+      ],
+      "residual_relative_norm": 1.6864628410380816e-14,
+      "solver_backend": "radia-cpp-dense",
+      "mixed_operator_condition": 5.85873925140057e+16,
+      "parent_t_coefficient_norm": 704703715.3546906,
+      "parent_hdiv_coefficient_norm": 77.98586589930672,
+      "port_response": {
+        "shape": [
+          2,
+          2
+        ],
+        "real": [
+          [
+            198.24465922316668,
+            10.254057009619602
+          ],
+          [
+            10.254057009484367,
+            242.72729697375158
+          ]
+        ],
+        "imag": [
+          [
+            -9308.261833934184,
+            1586.06398935797
+          ],
+          [
+            1586.0639893563207,
+            -10641.97302009205
+          ]
+        ]
+      }
+    },
+    {
+      "frequency_Hz": 10000.0,
+      "s": {
+        "real": 0.0,
+        "imag": 62831.853071795864
+      },
+      "surface_impedance": {
+        "real": 2.6089506942234864e-05,
+        "imag": 2.6089506942234864e-05
+      },
+      "n_excitations": 2,
+      "magnetization_modes": 15,
+      "eddy_modes": 33,
+      "parent_t_dofs": 3557,
+      "parent_hdiv_dofs": 942,
+      "eddy_blocks": [
+        "volume",
+        "volume1",
+        "surface"
+      ],
+      "eddy_block_sample_counts": [
+        136,
+        47,
+        126
+      ],
+      "sampled_magnetization_norm": 147.41537376826545,
+      "sampled_eddy_current_norms": [
+        2410.400197719813,
+        240.05736414994718,
+        647.9515068726324
+      ],
+      "average_joule_loss": [
+        0.10570811114238875,
+        0.13013159303650895
+      ],
+      "residual_relative_norm": 1.456668305520181e-14,
+      "solver_backend": "radia-cpp-dense",
+      "mixed_operator_condition": 2.2495194878346948e+16,
+      "parent_t_coefficient_norm": 8420336.993552824,
+      "parent_hdiv_coefficient_norm": 77.07719122114665,
+      "port_response": {
+        "shape": [
+          2,
+          2
+        ],
+        "real": [
+          [
+            3.0710764767249787,
+            -0.6330144639162337
+          ],
+          [
+            -0.6330144639160697,
+            3.119945414607053
+          ]
+        ],
+        "imag": [
+          [
+            -94.9916668160486,
+            15.741511654259613
+          ],
+          [
+            15.741511654279638,
+            -108.77044006643474
+          ]
+        ]
+      }
+    }
+  ],
+  "checks": {
+    "parent_order_admissible": true,
+    "hdiv_parent_order_admissible": true,
+    "all_residuals_below_1e-10": true,
+    "all_losses_nonnegative": true,
+    "parent_t_reconstructed": true,
+    "parent_hdiv_reconstructed": true,
+    "demag_operator_is_active": true,
+    "reduced_magnetic_operator_is_positive": true,
+    "hdiv_response_snapshots_converged": true,
+    "hdiv_training_responses_preserved": true,
+    "physical_hdiv_responses_are_protected": true,
+    "all_three_eddy_blocks_reconstructed": true,
+    "passed": true
+  },
+  "elapsed_seconds_desktop_smoke": 3.6668559999670833
+}

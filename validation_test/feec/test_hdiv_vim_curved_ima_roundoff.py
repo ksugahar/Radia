@@ -76,5 +76,5 @@ def test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff():
     assert magnetization_error < 32.0*np.finfo(float).eps
     assert field_component_error < eps10
     assert field_vector_error < np.sqrt(3.0)*eps10
-    assert full["field_evaluator_stats"]["source_kind"] == "curved-element-exact-rt2"
-    assert half["field_evaluator_stats"]["source_kind"] == "curved-element-exact-rt2"
+    assert full["field_evaluator_stats"]["source_kind"] == "curved-element-exact-bdm2"
+    assert half["field_evaluator_stats"]["source_kind"] == "curved-element-exact-bdm2"

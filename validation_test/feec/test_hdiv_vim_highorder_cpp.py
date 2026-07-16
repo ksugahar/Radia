@@ -1,8 +1,8 @@
-"""Production validation for the public tetrahedral RT1/RT2 HDiv-VIM path.
+"""Production validation for the public tetrahedral BDM1/BDM2 HDiv-VIM path.
 
-The test intentionally uses only ``radia.vim`` APIs.  Flat/Curve(2) TET RT2
+The test intentionally uses only ``radia.vim`` APIs.  Flat/Curve(2) TET BDM2
 ``Solve``, ``ChargeGram``, and ``DemagOperator`` are public production routes.
-HEX/WEDGE RT2 is locked by its topology-specific tests.  The TET RT2 route includes IMA,
+HEX/WEDGE BDM2 is locked by its topology-specific tests.  The TET BDM2 route includes IMA,
 Curve(2), and persistent C++ field evaluation and is locked by the contract tests.
 """
 
@@ -23,7 +23,7 @@ def _cube(h=0.9):
 
 
 def test_public_rt2_uniform_demag_is_order_invariant():
-    """Uniform cube magnetization gives the analytic one-third factor at RT1 and RT2."""
+    """Uniform cube magnetization gives the analytic one-third factor at BDM1 and BDM2."""
     mesh = _cube()
     with ng.TaskManager():
         values = {
@@ -36,7 +36,7 @@ def test_public_rt2_uniform_demag_is_order_invariant():
 
 
 def test_public_rt2_nonuniform_operator_improves_with_order():
-    """The nonuniform M=(0,0,z) energy moves toward the high-order limit at RT2."""
+    """The nonuniform M=(0,0,z) energy moves toward the high-order limit at BDM2."""
     mesh = _cube()
     with ng.TaskManager():
         values = {
@@ -48,7 +48,7 @@ def test_public_rt2_nonuniform_operator_improves_with_order():
 
 
 def test_public_rt2_linear_and_nonlinear_material_solve():
-    """RT2 uses the all-C++ mass-Riesz CG and energy-Newton material paths."""
+    """BDM2 uses the all-C++ mass-Riesz CG and energy-Newton material paths."""
     mesh = _cube(h=1.2)
     applied = ng.CF((0, 0, 1000.0))
     mu0 = 4e-7 * np.pi

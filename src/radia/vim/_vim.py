@@ -149,7 +149,7 @@ _SYM5_TRI = _tri_ref_sym5()
 
 
 # Fully symmetric degree-10 simplex rules (Witherden--Vincent 2015).  Curved
-# RT2 uses these instead of a vertex-order-dependent collapsed product rule:
+# BDM2 uses these instead of a vertex-order-dependent collapsed product rule:
 # 81 tet / 25 tri points versus 216 / 36 at product order 6.  Orbit expansion
 # keeps the point set exactly closed under every reference-vertex permutation.
 def _tet_ref_sym10():
@@ -208,7 +208,7 @@ _SYM10_TRI = _tri_ref_sym10()
 
 
 def _curved_outer_rules(order):
-    """Permutation-invariant curved Gram rules for production RT1/RT2."""
+    """Permutation-invariant curved Gram rules for production BDM1/BDM2."""
     if int(order) == 1:
         return _SYM5_TET, _SYM5_TRI
     if int(order) == 2:
@@ -346,7 +346,7 @@ def _blockdiag_density_map(M, Bx, fes_dg, vorb, mesh):
 
 
 def _charge_basis(fes, quad, *, materialize_mass=True):
-    """Shared geometry + monomial charge-density map for the RT1 HDiv-VIM operator.
+    """Shared geometry + monomial charge-density map for the BDM1 HDiv-VIM operator.
 
     Returns B (CSR
     n_charge x ndof), M_mass (CSR), the per-charge (host, kind, flat expo) in the cell_verts reference
@@ -395,7 +395,7 @@ def _charge_basis(fes, quad, *, materialize_mass=True):
     rtq, rsq = _tet_ref(quad), _tri_ref(quad)
     Brows, host, kind, expo = [], [], [], []
     if pv == 0:
-        # RT1 fast path: the VOLUME change-of-basis is the IDENTITY (Sv == [[1.0]], geometry-INDEPENDENT -- the
+        # BDM1 fast path: the VOLUME change-of-basis is the IDENTITY (Sv == [[1.0]], geometry-INDEPENDENT -- the
         # single constant monomial IS the L2-order-0 constant shape; verified max spread 0.0).  Take the Bv_d rows
         # directly, skipping ~1056 redundant per-cell _change_of_basis calls (~0.8s, the bulk of the loop).
         for c in range(len(vels)):
@@ -523,7 +523,7 @@ def _charge_basis_curved(fes, quad, *, materialize_mass=True):
     face_vertices = [v.nr for e in bels for v in mesh[e].vertices]
     for c, e in enumerate(vels):
         cell_nodes.append(_trafo_lattice_nodes(mesh, e, _IR_TET_NODES))   # P2 nodes (curved geom, kept)
-        if pv == 0:                                            # RT1: volume Sv == [[1]] (identity) -> Bv_d row direct
+        if pv == 0:                                            # BDM1: volume Sv == [[1]] (identity) -> Bv_d row direct
             Brows.append(Bv_d[vdof[c], :]); host.append(c); kind.append(0); expo += [0, 0, 0]
         else:
             Sv = sp.csr_matrix(_change_of_basis_ref(L2v.GetFE(e), mons_v, rtp, rtw, dim=3))
@@ -538,7 +538,7 @@ def _charge_basis_curved(fes, quad, *, materialize_mass=True):
             Brows.append(blk[a]); host.append(f); kind.append(1); expo += [i, j, 0]
     B = sp.vstack(Brows).tocsr()
     # The reference Piola extraction has exact structural zeros.  The dense
-    # local solves leave O(1e-14..1e-11) fill in those slots at RT2; retaining
+    # local solves leave O(1e-14..1e-11) fill in those slots at BDM2; retaining
     # it breaks reflection parity after a high-mu solve.  Snap only values at
     # the roundoff floor relative to this dimensionless reference map.
     if B.nnz:
@@ -555,12 +555,12 @@ def _charge_basis_curved(fes, quad, *, materialize_mass=True):
                 n_el=len(vels))
 
 
-# ----------------------------------------------------------- HEX RT1/RT2 charge basis ---
-# The hex volume charge = -div(HDiv-hex order-p) lives in tensor Qp: 8 modes at RT1 and 27 at RT2.
+# ----------------------------------------------------------- HEX BDM1/BDM2 charge basis ---
+# The hex volume charge = -div(HDiv-hex order-p) lives in tensor Qp: 8 modes at BDM1 and 27 at BDM2.
 # Testing only the tet-like total-degree space pollutes ker(N), so keep the complete tensor product.
 # Geometry = 27-node triquadratic (Q2) lattice via GetTrafo -> ONE code path for FLAT (trilinear subset of Q2,
 # exact) AND CURVED (mesh.Curve(2)) hexes.  Face charge is SurfaceL2(order=p), with 4/9 modes per
-# quad face at RT1/RT2.  The C++
+# quad face at BDM1/BDM2.  The C++
 # RadHACApKChargeGram hex mode decomposes each hex into 6 sub-tets (quad face -> 2 sub-tris) as an INTEGRATION
 # device and does the both-domains-graded Duffy singular quadrature that keeps eig(M_mass^-1 N) <= 1.  See
 # the de-risk + block-memo perf fix in memory hdiv-tet-hex-coupling-pyramid-gated.
@@ -614,7 +614,7 @@ def _quad_q2_lattice_nodes_ngsolve_linear(mesh, e):
 
 
 def _ref_prod_gauss(n, dim):
-    """Product Gauss rule on the reference tensor cell for RT1/RT2 basis transforms."""
+    """Product Gauss rule on the reference tensor cell for BDM1/BDM2 basis transforms."""
     g, gw = _g01(n)
     P, W = [], []
     if dim == 3:
@@ -785,15 +785,15 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True):
 def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                            materialize_mass=True, build_hmatrix=True):
-    """Pure-hex RT1/RT2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
+    """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
-    mesh for curved).  glout_n = the 1D outer rule.  RT1 keeps the validated default 4.  Flat RT2 uses
+    mesh for curved).  glout_n = the 1D outer rule.  BDM1 keeps the validated default 4.  Flat BDM2 uses
     the TET-style analytic polynomial source moments plus a whole-host tensor outer for self/near hosts.
     Smooth far hosts use a reflection-invariant tensor-product rule on both complete reference domains,
     avoiding degree-six moment recurrences without changing the accepted spectrum or IMA contracts.
     Order 5 keeps the one-cell generalized Gram spectrum at 1 + 2e-6.
-    Curved RT2 retains order 6 and the reference-frame graded Duffy path.  The RT1 default 4 was
-    selected by the RT1 hex spectrum/demag gates: 3 breaks the mass-normalized Gram spectrum, while 5/6
+    Curved BDM2 retains order 6 and the reference-frame graded Duffy path.  The BDM1 default 4 was
+    selected by the BDM1 hex spectrum/demag gates: 3 breaks the mass-normalized Gram spectrum, while 5/6
     were slower without improving the accepted affine/distorted regression cases.  glin_n = the 1D rule
     of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
     -- robust on distorted/curved hexes, where graded clouds left eig > 1 on the real cylinder mesh);
@@ -801,7 +801,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     far_inner = the PER-OUTER-POINT radial reach: an outer point farther than far_inner*size from a source
     sub-simplex integrates it with the cheap CACHED far cloud instead of the per-point radial rule.  1.0
     keeps the radial on self / genuinely touching near geometry while moving smooth shell points onto the
-    cached far cloud; the affine/distorted RT1 spectrum gates and the cube N=8/10 demag regression keep this
+    cached far cloud; the affine/distorted BDM1 spectrum gates and the cube N=8/10 demag regression keep this
     from silently becoming a coarse approximation.  The far TET cloud is the SAME Keast-15 degree-5 rule as
     the outer (a degree-3 WV rule at reach 1.5 ate the flat-cylinder eig margin, 1.0005 -> 1.0044; Keast-15
     restores 1.0006 for +4%% build).  The build also skips the strictly-lower H-matrix leaves (symmetric fill
@@ -1022,7 +1022,7 @@ def _build_charge_gram_2d(fes, outer_n=None, glin_n=None, gledge_n=None, near_gr
         near_grade=near_grade, far_inner_factor=far_inner,
         image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
         image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
-        # Small RT2 reduced models must remain dense: an ACA leaf can amplify a
+        # Small BDM2 reduced models must remain dense: an ACA leaf can amplify a
         # nominal 1e-12 block error through high-mu solves and destroy the IMA
         # roundoff contract.  Larger models still split/compress normally.
         eps=eps, leaf=max(64, int(leafsize)), eta=eta, build=bool(build_hmatrix))
@@ -1035,7 +1035,7 @@ def _build_charge_gram_2d(fes, outer_n=None, glin_n=None, gledge_n=None, near_gr
     return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
 
 
-# WEDGE (PRISM) RT1/RT2: the prism div-image is tri-Pp (x) z-Pp: 6 modes at RT1, 18 at RT2;
+# WEDGE (PRISM) BDM1/BDM2: the prism div-image is tri-Pp (x) z-Pp: 6 modes at BDM1, 18 at BDM2;
 # boundary faces are MIXED tri (SurfaceL2 Pp, 3/6) + quad (SurfaceL2 Qp, 4/9).  Geometry = the 18-node tri-P2
 # (x) z-P2 lattice (n = t + 6*iz, t = _TRI6_LAT node) via GetTrafo -> flat + curved ONE path.
 def _mons_tri(order):
@@ -1068,7 +1068,7 @@ def _tri_q2_lattice_nodes_ngsolve_linear(mesh, e):
 def _prism_cob_quad(nz=3):
     """Ref-prism change-of-basis quadrature: SYM5 tri (u,v) x nz-pt Gauss (w).
 
-    It integrates the degree<=4 RT2 L2-shape x monomial products exactly in
+    It integrates the degree<=4 BDM2 L2-shape x monomial products exactly in
     the triangular and axial reference coordinates.
     """
     tp, tw = np.asarray(_SYM5_TRI[0]), np.asarray(_SYM5_TRI[1])
@@ -1236,7 +1236,7 @@ def _charge_basis_wedge(fes, *, materialize_mass=True):
 def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far_inner=1.5,
                              eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                              materialize_mass=True, build_hmatrix=True):
-    """Pure-prism RT1/RT2 charge Gram via the wedge-mode C++ _ChargeGramHMatrix (mirror of _build_charge_gram_hex;
+    """Pure-prism BDM1/BDM2 charge Gram via the wedge-mode C++ _ChargeGramHMatrix (mirror of _build_charge_gram_hex;
     FLAT + Curve(2) share ONE path).  numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3;
     demag_z ~ 1/3.  The wedge mode shares the hex block memo / symmetric-fill build, so the golden hex path
     is byte-for-byte untouched."""
@@ -1353,18 +1353,18 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         elif _ivt not in ({4}, {8}, {6}):
             raise ValueError(
                 "vim.ChargeGram: image_masks (IMA) is wired for flat/Curve(2) pure-TET / pure-HEX / pure-WEDGE "
-                "RT1/RT2 Gram; 2D-planar reduced models use the planar image path.  "
+                "BDM1/BDM2 Gram; 2D-planar reduced models use the planar image path.  "
                 "(got dim=%s, vtypes=%s, curve_order=%r)."
                 % (mesh.dim, sorted(_ivt) if _ivt else None, curve_order))
     if mesh.dim == 2:
-        # 2D PLANAR (motor cross-section) layer: RT1/RT2 tri/quad cells + boundary-edge charges, log kernel.
+        # 2D PLANAR (motor cross-section) layer: BDM1/BDM2 tri/quad cells + boundary-edge charges, log kernel.
         return _configure_cpp_operator(
             *_build_charge_gram_2d(
                 fes, eps=eps, leafsize=leafsize, eta=eta,
                 image_masks=image_masks, image_signs=image_signs,
                 materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
     if _vtypes == {8}:
-        # PURE-HEX RT1/RT2: tensor Qp charge basis + Q2 geometry; FLAT or Curve(2) one path.
+        # PURE-HEX BDM1/BDM2: tensor Qp charge basis + Q2 geometry; FLAT or Curve(2) one path.
         # curve_order is IGNORED for hex -- curved is automatic (GetTrafo picks up mesh.Curve(2)); the caller
         # Curve(2)'s the mesh before this call, exactly like the tet curved path.  Uses the hex-gated params.
         return _configure_cpp_operator(*_build_charge_gram_hex(
@@ -1372,7 +1372,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             image_masks=image_masks, image_signs=image_signs,
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
     if _vtypes == {6}:
-        # PURE-WEDGE (PRISM) RT1/RT2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
+        # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
         # automatic via GetTrafo picking up mesh.Curve(2)), same as the hex path.
         return _configure_cpp_operator(*_build_charge_gram_wedge(
@@ -1396,10 +1396,10 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # O(quad^6) but only on NEAR pairs (far pairs keep far_quad); intorder OVERRIDES (intorder < 2*(3p)-1 may be
     # NON-PSD -- use only for a fast demag-factor estimate, NEVER for an energy/eigenvalue solve).  See
     # tests/feec/test_hdiv_vim_psd.py.
-    # DEFAULT depends on the USE (2026-06-30).  The LINEAR demag only needs the 3*p PSD FLOOR (RT1 -> quad=3):
+    # DEFAULT depends on the USE (2026-06-30).  The LINEAR demag only needs the 3*p PSD FLOOR (BDM1 -> quad=3):
     # that makes the NEAR build ~1.8-2.1x cheaper (the near U-list is 98% of the build = the dominant lever) and
     # is VALIDATED to preserve demag (7e-6), per-element leak + magnetic moment, and PSD (min eig ~0).  The
-    # NONLINEAR energy-Newton KEEPS the +1 margin (max(3*p,4) -> quad=4 for RT1): the energy HESSIAN wants more
+    # NONLINEAR energy-Newton KEEPS the +1 margin (max(3*p,4) -> quad=4 for BDM1): the energy HESSIAN wants more
     # than the linear near accuracy at DEEP saturation -- with the OLD product _tet_ref(3) (effective degree 3)
     # deep saturation still converged to M->Msat but took ~2x more Newton iters (195 vs <100).  quad=4 buys the
     # effective degree 5 the energy solve needs.  NOTE (2026-07-02): both quad==3 and quad==4 now route through
@@ -1454,7 +1454,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     # OUTER Gram quadrature: symmetric degree-5 (Keast-15/Dunavant-7) at quad in {3,4}; else product.
     rtp, rtw = _outer_tet(quad)
     rsp, rsw = _outer_tri(quad)
-    # RT1/RT2 monomial-charge quadrature Gram.  By default, well-separated pairs
+    # BDM1/BDM2 monomial-charge quadrature Gram.  By default, well-separated pairs
     # use the low-order rule while near/self pairs keep subtraction quadrature.
     kw = dict(cell_verts=cell_verts, face_verts=face_verts,
               n_el=n_el, charge_host=_i32_buffer(host), charge_kind=_i32_buffer(kind),

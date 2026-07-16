@@ -5,7 +5,7 @@ benchmark used in the 2026-08-25 static/rotating-machine MMPM manuscript.
 
 The driver is intentionally separate from the older hexahedron/tetrahedron
 benchmark scripts because those results came from the retired six-face MMPM
-path.  Current Radia soft-iron demag validation should use the RT1 HDiv-VIM
+path.  Current Radia soft-iron demag validation should use the BDM1 HDiv-VIM
 entry:
 
 ```powershell
@@ -22,7 +22,7 @@ Problem definition:
 - Structured pure-hex `N x N x N` mesh.
 - Applied field `H0 = 200 kA/m` in `+z`.
 - Linear `mu_r=1000` or nonlinear BH table.
-- Solver: `radia.vim.Solve`, RT1 HDiv-VIM, analytic HACApK charge Gram.
+- Solver: `radia.vim.Solve`, BDM1 HDiv-VIM, analytic HACApK charge Gram.
 
 Recorded fields include `n_el`, `ndof`, `n_charge`, `iters`, `M_avg`,
 `demag`, wall time, memory snapshot, and the solver's `hmat_stats`.
@@ -51,7 +51,7 @@ change of `4.6e-7`.
 
 ## Tet Comparison
 
-Use `bench_hdiv_tet_cube.py` for the current RT1 HDiv-VIM unstructured-tet
+Use `bench_hdiv_tet_cube.py` for the current BDM1 HDiv-VIM unstructured-tet
 comparison.  Do not use the older `validation_test/cube_uniform_field/tetrahedron`
 scripts for HDiv timing claims; those belong to the retired Radia object/MMPM
 path.

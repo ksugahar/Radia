@@ -3,7 +3,7 @@
 The mesh-less soft-iron capability (build the iron from a simple SHAPE, no external NGSolve mesh) is KEPT
 by these intent constructors.  Each internally STRUCTURE-MESHES the shape into a subdivided structured hex
 mesh and registers it via :func:`radia.vim.MeshSoftIron`, so ``rad.Solve`` auto-routes it to the FEEC HDiv-VIM
-(RT1).  This is the API-compatible replacement for the retired ``ObjHexahedron + MatApl(MatLin) +
+(BDM1).  This is the API-compatible replacement for the retired ``ObjHexahedron + MatApl(MatLin) +
 rad.Solve`` mesh-less surface-charge route.
 
 Why a constructor and not transparent ``ObjHexahedron`` interception: Radia exposes no per-element vertex
@@ -13,7 +13,7 @@ given up front.  These constructors take the shape explicitly (the intent-based 
 container.
 
 The returned container IS the subdivided mesh's Radia hex elements (built by ``vim.MeshSoftIron``), so
-``rad.Solve(cont)`` -> HDiv-VIM RT1 and ``rad.Fld(cont, ...)`` reflects the resolved per-sub-element M --
+``rad.Solve(cont)`` -> HDiv-VIM BDM1 and ``rad.Fld(cont, ...)`` reflects the resolved per-sub-element M --
 NO write-back plumbing is needed (the container already is the sub-mesh).  Exactly one of ``mu_r`` (linear)
 or ``bh_table`` (nonlinear ``[[H,B],...]``) per iron.  The caller opens ``with ng.TaskManager():``.
 """
@@ -34,10 +34,10 @@ def soft_iron_box(center, size, mu_r=None, bh_table=None, nsub=4, material_filte
     """Axis-aligned soft-iron BOX -> subdivided structured hex mesh -> HDiv-VIM.
 
     center = (cx,cy,cz), size = (sx,sy,sz) in METERS; the box spans ``center +- size/2``.  nsub = the
-    subdivision count per dimension (int, or (nx,ny,nz)) -- the RT1 mesh resolution; nsub=4 (=64 hexes)
+    subdivision count per dimension (int, or (nx,ny,nz)) -- the BDM1 mesh resolution; nsub=4 (=64 hexes)
     gives the converged cube demag ~1/3.  Exactly one of ``mu_r`` (linear, > 1) or ``bh_table`` (nonlinear
     [[H,B],...]).  Returns a :func:`radia.vim.MeshSoftIron` container (a mesh-backed hex iron): ``rad.Solve(cont)``
-    -> HDiv-VIM RT1, ``rad.Fld(cont, ...)`` reflects the resolved M.  (Caller opens ``with ng.TaskManager():``.)"""
+    -> HDiv-VIM BDM1, ``rad.Fld(cont, ...)`` reflects the resolved M.  (Caller opens ``with ng.TaskManager():``.)"""
     from ._radsolve import soft_iron_from_mesh as _mesh_soft_iron_impl
     cx, cy, cz = (float(v) for v in center)
     sx, sy, sz = (float(v) for v in size)
@@ -62,7 +62,7 @@ def soft_iron_hex(vertices, mu_r=None, bh_table=None, nsub=4, material_filter=No
 
     vertices = 8 corners in the ``rad.ObjHexahedron`` CHEXA order (bottom face 0-3 CCW, top face 4-7 CCW),
     in METERS.  nsub = subdivisions per dimension.  Exactly one of ``mu_r`` / ``bh_table``.  Returns a
-    :func:`radia.vim.MeshSoftIron` container (rad.Solve -> HDiv-VIM RT1)."""
+    :func:`radia.vim.MeshSoftIron` container (rad.Solve -> HDiv-VIM BDM1)."""
     from ._radsolve import soft_iron_from_mesh as _mesh_soft_iron_impl
     V = np.asarray(vertices, float)
     if V.shape != (8, 3):

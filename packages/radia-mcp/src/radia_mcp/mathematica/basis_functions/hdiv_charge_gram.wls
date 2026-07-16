@@ -2,10 +2,10 @@
 (* ::Package:: *)
 
 (*
-  hdiv_charge_gram.wls -- closed-form building blocks for the RT1 hex charge Coulomb Gram (the HDiv-VIM demag
-  operator N = B^T G B, with G_ab = INT INT c_a(x) c_b(y)/|x-y| over box hexes; c = div of the RT1 basis).
+  hdiv_charge_gram.wls -- closed-form building blocks for the production BDM1 hex charge Coulomb Gram (the
+  HDiv-VIM demag operator N = B^T G B, with G_ab = INT INT c_a(x) c_b(y)/|x-y| over box hexes).
 
-  WHY: the C++ RT1 hex ChargeGram carries a tiny (~1e-5) NEAR-PAIR reflection-symmetry defect -- a symmetric
+  WHY: the C++ BDM1 hex ChargeGram carries a tiny (~1e-5) NEAR-PAIR reflection-symmetry defect -- a symmetric
   cube full solve gets a spurious transverse M -- because the ref-fixed hex->6-tet split (body diagonal 0-6) +
   the Duffy near grading are reflection-asymmetric.  A symmetric-DECOMPOSITION quadrature fix costs ~16x
   (QuadBlockHex is a 24x24 sub-tet double loop).  This module is the CHEAP, EXACT alternative:
@@ -14,8 +14,9 @@
     outer  INT_A c_a(x) [...] dx   = SYMMETRIC tensor Gauss-Legendre over box A  (smooth integrand now)
 
   The symmetric outer rule commutes with the box reflections, so a symmetry-forbidden (transverse) Gram entry
-  is machine-zero BY CONSTRUCTION -- no 6-tet, no Duffy, no 16x.  Since the VIM is RT1-only the charges are the
-  small Q1 = Q(x)Q(y)Q(z) trilinear space (see hdiv.wls HDivHex[1]; div(HDivHex[1]) = 21 polynomials spanning
+  is machine-zero BY CONSTRUCTION -- no 6-tet, no Duffy, no 16x.  This derivation targets the BDM1 production
+  charge image, the small Q1 = Q(x)Q(y)Q(z) trilinear space.  The tensor RT certificate in hdiv.wls has the
+  same Q1 divergence target (HDivHex[1] has 21 vector polynomials spanning
   the 8-dim monomial basis {1,x,y,z,xy,xz,yz,xyz}), so the closed forms stay tractable.  Companion of the
   analytical_formulas closed-form-reference layer.
 

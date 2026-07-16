@@ -275,7 +275,7 @@ def _build_payload(args: argparse.Namespace, rows: list[dict[str, Any]], bh_sour
         "problem": {
             "geometry": "1 m cube centered at origin",
             "mesh": "Netgen CSG unstructured tet cube, maxh-controlled",
-            "method": "RT1 HDiv-VIM via radia.vim.Solve",
+            "method": "BDM1 HDiv-VIM via radia.vim.Solve",
             "H_ext_A_per_m": args.h_ext,
             "mu_r_linear": args.mu_r,
             "bh_table_source": bh_source,

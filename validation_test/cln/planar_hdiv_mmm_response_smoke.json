@@ -1,0 +1,212 @@
+{
+  "schema": "radia.validation.planar_hdiv_mmm_response.v1",
+  "generated_at_utc": "2026-07-16T22:20:16.721143+00:00",
+  "validation_host": "lab",
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "note": "Desktop correctness smoke; elapsed time is not benchmark data.",
+  "configuration": {
+    "geometry": "L-shaped re-entrant corner",
+    "hdiv_order": 1,
+    "hdiv_family": "bdm",
+    "harmonic_degree": 2,
+    "maxh": 0.35,
+    "mu_r": 1001.0,
+    "pod_rtol": 1e-10,
+    "cg_tol": 1e-10,
+    "corner_radius": 0.35
+  },
+  "mesh": {
+    "elements": 10,
+    "corner_elements": 5
+  },
+  "reduction": {
+    "parent_space": "PlanarHDiv",
+    "parent_family": "BDM",
+    "parent_order": 1,
+    "parent_ndof": 42,
+    "reduced_modes": 4,
+    "compression_ratio": 0.09523809523809523,
+    "mu_r": 1001.0,
+    "chi": 1000.0,
+    "mass_hermitian_error": 0.0,
+    "demag_hermitian_error": 0.0,
+    "operator_hermitian_error": 0.0,
+    "min_operator_eigenvalue": 0.999999999999999,
+    "has_rhs": true,
+    "rhs_columns": 2,
+    "basis_generation": {
+      "construction": "planar-hdiv-mmm-response-energy-pod",
+      "snapshot_backend": "radia-cpp-mass-riesz-cg-2d",
+      "snapshot_port_count": 6,
+      "physical_rhs_columns": 2,
+      "training_port_count": 4,
+      "port_names": [
+        "H_x",
+        "H_y",
+        "ph_l1_cos",
+        "ph_l1_sin",
+        "ph_l2_cos",
+        "ph_l2_sin"
+      ],
+      "snapshot_iterations": [
+        26,
+        26,
+        26,
+        26,
+        21,
+        20
+      ],
+      "snapshot_relative_residuals": [
+        3.0673649353583783e-11,
+        3.10652313867882e-11,
+        3.0673649353583783e-11,
+        3.10652313867882e-11,
+        1.3105057835486584e-11,
+        3.9981279304011644e-11
+      ],
+      "max_snapshot_relative_residual": 3.9981279304011644e-11,
+      "planar_harmonic_training": {
+        "family": "planar-harmonic-gradient",
+        "count": 4,
+        "max_degree": 2,
+        "degrees": [
+          1,
+          1,
+          2,
+          2
+        ],
+        "degree_counts": {
+          "1": 2,
+          "2": 2
+        },
+        "names": [
+          "ph_l1_cos",
+          "ph_l1_sin",
+          "ph_l2_cos",
+          "ph_l2_sin"
+        ],
+        "center": [
+          0.5,
+          0.5
+        ],
+        "radius": 0.7071067811865476
+      },
+      "normalize_ports": true,
+      "port_weights": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "pod_rtol": 1e-10,
+      "protected_physical_modes": 2,
+      "protected_eigenvalues": [
+        1.215548256975243,
+        0.7844517430247565
+      ],
+      "training_response_modes": 2,
+      "pod_eigenvalues": [
+        1.0000008018197266,
+        0.9999991981802723
+      ],
+      "available_modes": 4,
+      "retained_modes": 4,
+      "discarded_modes": 2,
+      "dependent_port_directions": 2,
+      "dependent_training_ports": [
+        "ph_l1_cos",
+        "ph_l1_sin"
+      ],
+      "pod_truncated_modes": 0,
+      "pod_truncation_curve": [
+        {
+          "rank": 1,
+          "max_all_response_relative_energy_error": 0.9999999999997513,
+          "rms_all_response_relative_energy_error": 0.770368246016346,
+          "max_physical_response_relative_energy_error": 0.6262793877405185
+        },
+        {
+          "rank": 2,
+          "max_all_response_relative_energy_error": 0.9959417255984787,
+          "rms_all_response_relative_energy_error": 0.5329551195274244,
+          "max_physical_response_relative_energy_error": 4.047372462246581e-12
+        },
+        {
+          "rank": 3,
+          "max_all_response_relative_energy_error": 0.7042368655958346,
+          "rms_all_response_relative_energy_error": 0.37685602800687695,
+          "max_physical_response_relative_energy_error": 4.047372462246581e-12
+        },
+        {
+          "rank": 4,
+          "max_all_response_relative_energy_error": 1.5834855817772195e-11,
+          "rms_all_response_relative_energy_error": 8.029076201958465e-12,
+          "max_physical_response_relative_energy_error": 4.905806033604354e-12
+        }
+      ],
+      "energy_orthonormality_error": 2.013658044362002e-16,
+      "response_relative_energy_errors": [
+        4.725701997179403e-12,
+        4.905806033604354e-12,
+        4.725701997179403e-12,
+        4.905806033604354e-12,
+        6.576879561046575e-12,
+        1.5834855817772195e-11
+      ],
+      "max_response_relative_energy_error": 1.5834855817772195e-11
+    }
+  },
+  "solution": {
+    "n_excitations": 2,
+    "reduced_modes": 4,
+    "parent_dofs": 42,
+    "residual_relative_norm": 5.96362684659636e-17
+  },
+  "field_rows": [
+    {
+      "field": "H_x",
+      "parent_relative_energy_error": 4.725647390516429e-12,
+      "element_magnetization_relative_l2_error": 4.238153477827381e-12,
+      "corner_magnetization_relative_l2_error": 3.9517108307135065e-12,
+      "parent_average_magnetization": [
+        2.7076337256977543,
+        -0.5836252634384045
+      ],
+      "reduced_average_magnetization": [
+        2.7076337256977556,
+        -0.5836252634485296
+      ]
+    },
+    {
+      "field": "H_y",
+      "parent_relative_energy_error": 4.905574289556884e-12,
+      "element_magnetization_relative_l2_error": 4.486460641388305e-12,
+      "corner_magnetization_relative_l2_error": 4.186024640889382e-12,
+      "parent_average_magnetization": [
+        -0.5836252634378281,
+        2.7076293955894846
+      ],
+      "reduced_average_magnetization": [
+        -0.5836252634485289,
+        2.707629395589486
+      ]
+    }
+  ],
+  "checks": {
+    "rt_order_supported": true,
+    "harmonic_order_admissible": true,
+    "physical_responses_protected": true,
+    "snapshot_solves_converged": true,
+    "parent_energy_errors_below_1e-8": true,
+    "corner_errors_below_1e-8": true,
+    "reduced_residual_below_1e-12": true,
+    "passed": true
+  },
+  "elapsed_seconds_desktop_smoke": 0.5297995000146329
+}

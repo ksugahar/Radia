@@ -1,0 +1,259 @@
+{
+  "schema": "radia.validation.evrs_current_field_compare.v1",
+  "generated_at_utc": "2026-07-16T13:43:27.154639+00:00",
+  "validation_host": "lab",
+  "runtime": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "ngsolve_version": "6.2.2604"
+  },
+  "note": "LAB/desktop smoke only.  The parent solve uses the dimensionless (K + shift M) HCurl model; timings are not benchmark data.",
+  "configuration": {
+    "geometry": "notched-box",
+    "orders": [
+      6
+    ],
+    "krylov_steps": [
+      2,
+      4,
+      8,
+      12,
+      22
+    ],
+    "reference_order": 6,
+    "shifts": [
+      1.0
+    ],
+    "maxh": 2.0,
+    "sigma": 58000000.0,
+    "intorder": 2,
+    "corner_radius": 0.35,
+    "condense_from": 7,
+    "rtol": 1e-10
+  },
+  "cases": [
+    {
+      "kind": "full-reference",
+      "order": 6,
+      "krylov_steps": null,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 3557,
+      "compression_ratio": 1.0,
+      "current_samples": 136,
+      "max_relative_current_l2": 0.0,
+      "max_relative_energy_norm": 0.0,
+      "max_relative_joule_loss_error": 0.0,
+      "max_corner_relative_current_l2": 0.0,
+      "max_corner_peak_magnitude_relative_error": 0.0,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 6,
+      "krylov_steps": 2,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 4,
+      "compression_ratio": 0.001124543154343548,
+      "response_seconds_lab_smoke": 3.420080400072038,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 0.04578102691109548,
+          "relative_energy_norm": 0.04578102691109548,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 3.296139688334482e-11,
+          "relative_joule_loss_error": 0.06011387063096795,
+          "corner_relative_current_l2": 0.035903759087457424,
+          "corner_peak_magnitude_relative_error": 0.04274269061358008
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 0.02734902502213629,
+          "relative_energy_norm": 0.02734902502213629,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 8.694887743515095e-11,
+          "relative_joule_loss_error": 0.01871782174029598,
+          "corner_relative_current_l2": 0.023286050735444905,
+          "corner_peak_magnitude_relative_error": 0.020827324156722293
+        }
+      ],
+      "max_relative_current_l2": 0.04578102691109548,
+      "max_relative_energy_norm": 0.04578102691109548,
+      "max_relative_joule_loss_error": 0.06011387063096795,
+      "max_corner_relative_current_l2": 0.035903759087457424,
+      "max_corner_peak_magnitude_relative_error": 0.04274269061358008,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 6,
+      "krylov_steps": 4,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 8,
+      "compression_ratio": 0.002249086308687096,
+      "response_seconds_lab_smoke": 6.960581799969077,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 0.0018962074484024862,
+          "relative_energy_norm": 0.0018962074484024862,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 3.503098590219432e-11,
+          "relative_joule_loss_error": 0.0011000485167117153,
+          "corner_relative_current_l2": 0.0013257598942516956,
+          "corner_peak_magnitude_relative_error": 0.0016383876851035636
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 0.0007364038117950213,
+          "relative_energy_norm": 0.0007364038117950213,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 8.860270545233532e-11,
+          "relative_joule_loss_error": 5.3153408263853115e-05,
+          "corner_relative_current_l2": 0.0005585841729263837,
+          "corner_peak_magnitude_relative_error": 0.0005052019357572836
+        }
+      ],
+      "max_relative_current_l2": 0.0018962074484024862,
+      "max_relative_energy_norm": 0.0018962074484024862,
+      "max_relative_joule_loss_error": 0.0011000485167117153,
+      "max_corner_relative_current_l2": 0.0013257598942516956,
+      "max_corner_peak_magnitude_relative_error": 0.0016383876851035636,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 6,
+      "krylov_steps": 8,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 16,
+      "compression_ratio": 0.004498172617374192,
+      "response_seconds_lab_smoke": 18.660054699983448,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 1.0406277907955219e-05,
+          "relative_energy_norm": 1.0406277907955219e-05,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 3.506945460721267e-11,
+          "relative_joule_loss_error": 3.122849711112867e-06,
+          "corner_relative_current_l2": 7.871117865217828e-06,
+          "corner_peak_magnitude_relative_error": 1.0453996662455157e-05
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 1.8707565893179039e-06,
+          "relative_energy_norm": 1.8707565893179039e-06,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 8.860743310242823e-11,
+          "relative_joule_loss_error": 2.016081327646948e-07,
+          "corner_relative_current_l2": 1.5298702842073896e-06,
+          "corner_peak_magnitude_relative_error": 1.4851785482321216e-06
+        }
+      ],
+      "max_relative_current_l2": 1.0406277907955219e-05,
+      "max_relative_energy_norm": 1.0406277907955219e-05,
+      "max_relative_joule_loss_error": 3.122849711112867e-06,
+      "max_corner_relative_current_l2": 7.871117865217828e-06,
+      "max_corner_peak_magnitude_relative_error": 1.0453996662455157e-05,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 6,
+      "krylov_steps": 12,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 24,
+      "compression_ratio": 0.0067472589260612875,
+      "response_seconds_lab_smoke": 56.374377500033006,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 1.7911877707475057e-06,
+          "relative_energy_norm": 1.7911877707475057e-06,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 3.506956005375228e-11,
+          "relative_joule_loss_error": 1.1606755549858508e-07,
+          "corner_relative_current_l2": 1.172211064886217e-06,
+          "corner_peak_magnitude_relative_error": 1.0708583256118018e-06
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 1.4710182426257514e-06,
+          "relative_energy_norm": 1.4710182426257514e-06,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 8.860742026419209e-11,
+          "relative_joule_loss_error": 5.671917398639092e-08,
+          "corner_relative_current_l2": 1.0674342322614276e-06,
+          "corner_peak_magnitude_relative_error": 8.51302878604741e-07
+        }
+      ],
+      "max_relative_current_l2": 1.7911877707475057e-06,
+      "max_relative_energy_norm": 1.7911877707475057e-06,
+      "max_relative_joule_loss_error": 1.1606755549858508e-07,
+      "max_corner_relative_current_l2": 1.172211064886217e-06,
+      "max_corner_peak_magnitude_relative_error": 1.0708583256118018e-06,
+      "corner_sample_count": 50
+    },
+    {
+      "kind": "reduced",
+      "order": 6,
+      "krylov_steps": 22,
+      "shift": 1.0,
+      "condensed": false,
+      "ndof": 3557,
+      "active_dofs": 3557,
+      "rank": 44,
+      "compression_ratio": 0.012369974697779028,
+      "response_seconds_lab_smoke": 124.94053480005823,
+      "current_samples": 136,
+      "ports": [
+        {
+          "port": 0,
+          "relative_current_l2": 1.605009714912421e-06,
+          "relative_energy_norm": 1.605009714912421e-06,
+          "joule_loss_reference": 3.5069564124190863e-11,
+          "joule_loss_candidate": 3.5069561165997164e-11,
+          "relative_joule_loss_error": 8.435216612791457e-08,
+          "corner_relative_current_l2": 1.1123932187584044e-06,
+          "corner_peak_magnitude_relative_error": 9.454098955618898e-07
+        },
+        {
+          "port": 1,
+          "relative_current_l2": 9.437804702750012e-07,
+          "relative_energy_norm": 9.437804702750012e-07,
+          "joule_loss_reference": 8.860741523845269e-11,
+          "joule_loss_candidate": 8.860741679840991e-11,
+          "relative_joule_loss_error": 1.76052672030628e-08,
+          "corner_relative_current_l2": 7.224660233004704e-07,
+          "corner_peak_magnitude_relative_error": 7.126984130930735e-07
+        }
+      ],
+      "max_relative_current_l2": 1.605009714912421e-06,
+      "max_relative_energy_norm": 1.605009714912421e-06,
+      "max_relative_joule_loss_error": 8.435216612791457e-08,
+      "max_corner_relative_current_l2": 1.1123932187584044e-06,
+      "max_corner_peak_magnitude_relative_error": 9.454098955618898e-07,
+      "corner_sample_count": 50
+    }
+  ]
+}

@@ -162,7 +162,7 @@ foliated fields). The concrete open questions:
   The remaining obstacle to a *practical* field-exact nonlinear solve is **not
   conditioning but cost**: the exact-field operator is assembled by an
   element-by-element charge field, which is `O(N²)`.  Production solve results
-  now own a persistent C++ RT1 field evaluator: NumPy target buffers, one-pass
+now own a persistent C++ BDM1 field evaluator: NumPy target buffers, one-pass
   IMA, TaskManager observation parallelism, exact analytic tet leaves, and a
   direct-probed quadrupole source tree for large non-IMA maps.  IMA automatic
   evaluation remains direct to preserve the reduced/full roundoff contract.

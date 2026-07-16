@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-07-14T03:49:04Z",
   "notebook": "hdiv_curved_showcase.ipynb",
-  "notebook_sha256": "4e57d2a695729324b5ee2d5c58548373eac18a247c3049200e6ec67b65793c98",
+  "notebook_sha256": "0dd9cc4ec3f319d33f0366c91ca5a222a54130d83e1681b40b99444faee926ef",
   "versions": {
     "python_version": "3.12.10",
     "python_executable_name": "python.exe",

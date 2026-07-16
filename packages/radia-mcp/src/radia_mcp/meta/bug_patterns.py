@@ -915,7 +915,8 @@ PATTERNS: list[dict] = [
         "severity": "high",
         "first_seen": "2026-07-03",
         "last_seen": "2026-07-03",
-        "what": "The hex-RT1 affine wiring golden flaked (~2-8% of FRESH processes, bursty and "
+        "what": "The hex-BDM1 affine wiring golden (legacy filename says RT1) flaked "
+                "(~2-8% of FRESH processes, bursty and "
                 "machine-load-sensitive): the demag spectrum blew up to eig 1.9..9.9 while "
                 "B/M_mass stayed bit-exact.  Single coordinates of a few lattice points came "
                 "back as ~1e-310 denormals -- uninitialized memory from the scalar "
