@@ -62,19 +62,59 @@ def test_composes_with_loop_dof_flags():
     assert ns.wp_phi_inc == "poisson" and ns.wp_loop_dof is True
 
 
-def test_notebook_designspec_exposes_and_emits_both_controls():
-    spec = IHDesignSpec(
-        method=METHOD_PEEC_BEM,
-        peec_step="coil.step",
-        wp_vol="workpiece.vol",
-        solver="Dense LU (small)",
-        fes_order=1,
-        wp_phi_inc="poisson",
-        wp_loop_dof=True,
-    )
+def test_ih_designspec_roundtrips_wp_flags():
+    """The notebook-panel IHDesignSpec emits the flags and calc_inductance's
+    argparse accepts everything it emits (panel cannot silently drop or
+    misspell a flag)."""
+    from radia.ih_design import IHDesignSpec, METHOD_BEMA_BEM
 
-    assert {"wp_phi_inc", "wp_loop_dof"} <= spec.visible_fields()
-    assert {"wp_phi_inc", "wp_loop_dof"} <= set(IH_NOTEBOOK_FIELD_ORDER)
-    cmd = spec.build_command(python="python", panels_dir=_PANELS)
-    assert cmd[cmd.index("--wp-phi-inc") + 1] == "poisson"
+    def _calc_argv(cmd):
+        """Drop [python, script] and the calc_common-level '--output PATH'
+        pair (added by calc_main, not build_argparser); everything else
+        must parse STRICTLY."""
+        argv, skip = [], False
+        for a in cmd[2:]:
+            if skip:
+                skip = False
+                continue
+            if a == "--output":
+                skip = True
+                continue
+            argv.append(a)
+        return argv
+
+    spec = IHDesignSpec(method=METHOD_BEMA_BEM, coil_vol="c.vol",
+                        wp_vol="w.vol", solver="Dense LU (small)",
+                        wp_loop_dof=True, wp_phi_inc="poisson")
+    cmd = spec.build_command()
     assert "--wp-loop-dof" in cmd
+    assert cmd[cmd.index("--wp-phi-inc") + 1] == "poisson"
+    ns = ci.build_argparser().parse_args(_calc_argv(cmd))
+    assert ns.wp_loop_dof is True
+    assert ns.wp_phi_inc == "poisson"
+    assert ns.wp_bem_backend == "intree-dense"
+
+    # defaults stay off: no flag churn on the validated production argv
+    base = IHDesignSpec(method=METHOD_BEMA_BEM, coil_vol="c.vol",
+                        wp_vol="w.vol", solver="Dense LU (small)")
+    cmd0 = base.build_command()
+    assert "--wp-loop-dof" not in cmd0 and "--wp-phi-inc" not in cmd0
+    ns0 = ci.build_argparser().parse_args(_calc_argv(cmd0))
+    assert ns0.wp_loop_dof is False and ns0.wp_phi_inc == "path"
+
+
+def test_ih_designspec_exposes_wp_flags_for_weak_bem_only():
+    """visible_fields(): the flags appear on the calc_inductance weak
+    methods and stay hidden on strong / FEM-Kelvin (which do not take
+    them)."""
+    from radia.ih_design import (IHDesignSpec, METHOD_BEMA_BEM,
+                                 METHOD_BEMA_BEM_STRONG, METHOD_PEEC_BEM,
+                                 METHOD_PEEC_FEM_KELVIN)
+
+    for m in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
+        vis = IHDesignSpec(method=m).visible_fields()
+        assert {"wp_loop_dof", "wp_phi_inc"} <= vis, m
+    assert {"wp_loop_dof", "wp_phi_inc"} <= set(IH_NOTEBOOK_FIELD_ORDER)
+    for m in (METHOD_BEMA_BEM_STRONG, METHOD_PEEC_FEM_KELVIN):
+        vis = IHDesignSpec(method=m).visible_fields()
+        assert "wp_loop_dof" not in vis and "wp_phi_inc" not in vis, m
