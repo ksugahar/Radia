@@ -39,6 +39,8 @@ def force_coenergy_displacement_gate(
     force_body_selection_ok = True
     virtual_work_constraint_basis_ok = True
     eddy_loss_harmonic_basis_ok = True
+    axisymmetric_force_measure_ok = True
+    eddy_loss_material_frequency_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -48,6 +50,8 @@ def force_coenergy_displacement_gate(
         force_body_selection_ok = False
         virtual_work_constraint_basis_ok = False
         eddy_loss_harmonic_basis_ok = False
+        axisymmetric_force_measure_ok = False
+        eddy_loss_material_frequency_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -205,6 +209,78 @@ def force_coenergy_displacement_gate(
                 and harmonic_basis.get("material_state_solve_generation")
                 == harmonic_basis.get("solve_generation")
             )
+        force_measure = artifact_identity.get("axisymmetric_force_measure_identity")
+        if force_measure is not None:
+            axisymmetric_force_measure_ok = (
+                isinstance(force_measure, dict)
+                and force_measure.get("formulation") == "axisymmetric"
+                and force_measure.get("integration_measure") == "2*pi*r*dr*dz"
+                and force_measure.get("reference_integration_measure")
+                == force_measure.get("integration_measure")
+                and force_measure.get("radius_weighting_basis_id")
+                == "axisymmetric-radius-weighted-v1"
+                and force_measure.get("force_result_basis_id")
+                == force_measure.get("radius_weighting_basis_id")
+                and force_measure.get("radius_coordinate_frame") == "cylindrical-rz"
+                and force_measure.get("force_component_frame") == "global-z"
+                and bool(force_measure.get("solve_generation"))
+                and force_measure.get("integration_solve_generation")
+                == force_measure.get("solve_generation")
+            )
+        material_frequency = artifact_identity.get(
+            "eddy_loss_material_frequency_identity"
+        )
+        if material_frequency is not None:
+            try:
+                field_frequency = float(
+                    material_frequency.get("field_solution_frequency_hz")
+                )
+                loss_frequency = float(
+                    material_frequency.get("loss_evaluation_frequency_hz")
+                )
+                material_frequency_hz = float(
+                    material_frequency.get("material_state_frequency_hz")
+                )
+            except (AttributeError, TypeError, ValueError):
+                field_frequency = math.nan
+                loss_frequency = math.nan
+                material_frequency_hz = math.nan
+            assignment_generation = (
+                material_frequency.get("material_assignment_generation")
+                if isinstance(material_frequency, dict)
+                else None
+            )
+            conductivity_digest = str(
+                material_frequency.get("conductivity_sha256", "")
+                if isinstance(material_frequency, dict)
+                else ""
+            ).lower()
+            lamination_digest = str(
+                material_frequency.get("lamination_state_sha256", "")
+                if isinstance(material_frequency, dict)
+                else ""
+            ).lower()
+            eddy_loss_material_frequency_ok = (
+                isinstance(material_frequency, dict)
+                and math.isfinite(field_frequency)
+                and field_frequency > 0.0
+                and loss_frequency == field_frequency
+                and material_frequency_hz == field_frequency
+                and bool(assignment_generation)
+                and material_frequency.get("conductivity_material_generation")
+                == assignment_generation
+                and material_frequency.get("lamination_material_generation")
+                == assignment_generation
+                and bool(material_frequency.get("solve_generation"))
+                and material_frequency.get("material_state_solve_generation")
+                == material_frequency.get("solve_generation")
+                and len(conductivity_digest) == 64
+                and len(lamination_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in conductivity_digest + lamination_digest
+                )
+            )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -256,6 +332,12 @@ def force_coenergy_displacement_gate(
         ),
         "eddy_loss_harmonics_share_frequency_and_material_basis": (
             eddy_loss_harmonic_basis_ok
+        ),
+        "axisymmetric_force_uses_radius_weighted_measure": (
+            axisymmetric_force_measure_ok
+        ),
+        "eddy_loss_uses_current_frequency_and_material_generation": (
+            eddy_loss_material_frequency_ok
         ),
     }
     return {
