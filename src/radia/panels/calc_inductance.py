@@ -660,6 +660,83 @@ _GENUS_P_WP_CAVEAT = (
     "analytic shorted ring to 2-3%).")
 
 
+def _apply_wp_loop_dof(args, bem, phi_inc, Z_s_wp, omega, coil_data,
+                       res_bem, wp_genus, wp_chi):
+    """Apply the genus-1 loop-DOF extension to the linear-SIBC weak solve.
+
+    Replaces the reported P_wp / H_t_rms with the loop-extended values
+    (``radia.bem_loop_extension.solve_loop_extended``); ``phi_vec`` stays
+    the plain solve's, so the Telegen dL and the qsurf spatial pattern
+    keep their validated plain-phi convention (the loop DOF corrects the
+    DISSIPATION, not the reactive coupling -- cf. the genus caveat
+    "delta_L is unaffected").  Returns ``(res_bem_updated, loop_meta)``.
+    """
+    import cmath
+
+    if wp_genus != 1:
+        raise ValueError(
+            f"--wp-loop-dof requires a genus-1 workpiece surface "
+            f"(got genus={wp_genus}, Euler chi={wp_chi}).  A genus-0 "
+            f"workpiece needs no loop DOF (the sphere benchmark validates "
+            f"the plain solver to 0.3%); genus >= 2 is not implemented.")
+    from radia.bem_loop_extension import (solve_loop_extended,
+                                          A_from_filaments)
+    if coil_data["source_type"] == "filament":
+        def A_inc_fn(points):
+            return A_from_filaments(points, coil_data["paths"],
+                                    coil_data["I_fil"])
+    elif coil_data["source_type"] == "surface":
+        from radia.bem_sibc_solver import A_from_surface_J
+        coil_Jc = (complex(args.current)
+                   * coil_data["coil_J_per_tri"]).astype(complex)
+
+        def A_inc_fn(points):
+            A_re = A_from_surface_J(points, coil_data["coil_centroids"],
+                                    coil_data["coil_areas"],
+                                    np.real(coil_Jc))
+            A_im = A_from_surface_J(points, coil_data["coil_centroids"],
+                                    coil_data["coil_areas"],
+                                    np.imag(coil_Jc))
+            return A_re + 1j * A_im
+    else:
+        raise RuntimeError(
+            f"unknown coil source_type {coil_data['source_type']!r}")
+
+    t0 = time.perf_counter()
+    loop_out = solve_loop_extended(bem, phi_inc, Z_s_wp, omega, A_inc_fn)
+    t_loop = time.perf_counter() - t0
+
+    # sanity: the frozen sub-solve must reproduce the plain solve
+    P_plain = float(res_bem["P_density"]) * float(res_bem["area"])
+    frz_rel = abs(loop_out["P_frozen"] - P_plain) / max(P_plain, 1e-30)
+    if frz_rel > 1e-3:
+        raise RuntimeError(
+            f"loop-DOF frozen sub-solve disagrees with the plain BIE solve "
+            f"by {frz_rel:.2e} (P {loop_out['P_frozen']:.4e} vs "
+            f"{P_plain:.4e} W) -- operator mismatch, refusing to report "
+            f"loop-extended numbers.")
+
+    alpha = loop_out["alpha"]
+    progress("BEM",
+        f"loop-DOF: alpha={abs(alpha):.4g} A "
+        f"(phase {math.degrees(cmath.phase(alpha)):+.1f} deg), "
+        f"P_wp {P_plain:.4e} -> {loop_out['P_total']:.4e} W, "
+        f"H_t {res_bem['H_t_rms']:.4g} -> {loop_out['H_t_rms']:.4g} A/m "
+        f"({t_loop:.1f}s)")
+    res_bem = dict(res_bem)
+    res_bem["P_density"] = loop_out["P_total"] / float(res_bem["area"])
+    res_bem["H_t_rms"] = loop_out["H_t_rms"]
+    loop_meta = {
+        "wp_loop_dof": True,
+        "wp_loop_alpha_A": float(abs(alpha)),
+        "wp_loop_alpha_deg": float(math.degrees(cmath.phase(alpha))),
+        "wp_loop_theta_jump": float(loop_out["theta_jump"]),
+        "wp_loop_cut_n_vertices": int(loop_out["cut_n_vertices"]),
+        "t_loop_dof_s": float(t_loop),
+    }
+    return res_bem, loop_meta
+
+
 def _solve_workpiece_weak_coupled(args, coil_data):
     """Workpiece BEM-SIBC + Telegen ΔL using whichever coil source exists.
 
@@ -918,6 +995,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         progress("BEM",
             f"BIE solve Z_s={Z_s_wp:.3e} (model={args.impedance_model})")
     res_bem = None
+    loop_meta = None
     esim_history = []
     esim_converged = (esim_solver is None)
     H_t_rms_iter = 0.0
@@ -939,6 +1017,10 @@ def _solve_workpiece_weak_coupled(args, coil_data):
 
         if esim_solver is None:
             progress("BEM", f"BIE ({t_iter:.1f}s)")
+            if getattr(args, "wp_loop_dof", False):
+                res_bem, loop_meta = _apply_wp_loop_dof(
+                    args, bem, phi_inc, Z_s_wp, omega, coil_data,
+                    res_bem, wp_genus, wp_chi)
             break
 
         # Karl update.
@@ -1425,6 +1507,7 @@ def _solve_workpiece_weak_coupled(args, coil_data):
         "wp_mesh_nv": int(wp_mesh.nv),
         "wp_euler_chi": int(wp_chi),
         "wp_genus": int(wp_genus),
+        **(loop_meta or {}),
         "wp_mesh_n_tris": int(wp_mesh.GetNE(BND)),
         "wp_ndof": int(bem.ndof),
         "wp_basis_order": int(basis_order),
@@ -1579,10 +1662,25 @@ def _assemble_full_output(args, coil_data, wp_data):
     out["wp_mesh_n_tris"] = wp_data["wp_mesh_n_tris"]
     # Topology context + genus caveat (see _wp_genus_check): on a genus>=1
     # workpiece the scalar BIE drops the shorted-turn eddy current, so the
-    # absolute P_wp / H_t carry a known over-estimate.
+    # absolute P_wp / H_t carry a known over-estimate -- UNLESS the loop
+    # DOF is active (--wp-loop-dof), which solves that current explicitly.
     out["wp_euler_chi"] = int(wp_data.get("wp_euler_chi", 2))
     out["wp_genus"] = int(wp_data.get("wp_genus", 0))
-    if out["wp_genus"] != 0:
+    if wp_data.get("wp_loop_dof"):
+        out["wp_loop_dof"] = True
+        out["wp_loop_alpha_A"] = float(wp_data["wp_loop_alpha_A"])
+        out["wp_loop_alpha_deg"] = float(wp_data["wp_loop_alpha_deg"])
+        out["wp_loop_theta_jump"] = float(wp_data["wp_loop_theta_jump"])
+        out["wp_loop_cut_n_vertices"] = int(
+            wp_data["wp_loop_cut_n_vertices"])
+        out["t_loop_dof_s"] = float(wp_data["t_loop_dof_s"])
+        out["P_wp_note"] = (
+            "genus-1 loop DOF active: the net shorted-turn eddy current "
+            "(wp_loop_alpha_A) is solved and its Lenz screening is included "
+            "in P_wp / H_t (Takahashi validation: 18.4 kW / 46.3 kA/m vs "
+            "17.0-17.7 kW / 46.1 kA/m FEM references).  delta_L keeps the "
+            "plain-solve phi convention.")
+    elif out["wp_genus"] != 0:
         out["P_wp_caveat"] = _GENUS_P_WP_CAVEAT
     # workpiece BIE DoF context -- mirror of the "BEM ndof=..." log line
     # so the JSON retains the same numbers users see in the console log.
@@ -2169,6 +2267,34 @@ def run_inductance(args):
                          "proximity-aware strong coupling remains unsupported.",
             }
 
+    # Loop-DOF extension: fail fast on unsupported combinations BEFORE the
+    # expensive coil solve (the genus check itself needs the wp mesh and
+    # lives in the weak workpiece path).
+    if args.wp_loop_dof:
+        if args.coupling_mode != "weak":
+            return {"status": "error",
+                    "error": "--wp-loop-dof is a weak-coupling workpiece "
+                             "extension; strong coupling integration is not "
+                             "implemented yet."}
+        if args.coil_only or not args.vol:
+            return {"status": "error",
+                    "error": "--wp-loop-dof requires a workpiece --vol."}
+        if args.impedance_model != "sibc":
+            return {"status": "error",
+                    "error": "--wp-loop-dof supports the linear SIBC only "
+                             "(--impedance-model sibc); the ESIM Karl loop "
+                             "is not integrated with the loop DOF."}
+        if args.wp_bem_backend != "intree-dense":
+            return {"status": "error",
+                    "error": "--wp-loop-dof needs the dense operators: pass "
+                             "--wp-bem-backend intree-dense (the HACApK "
+                             "backend does not expose SL/DL for the loop "
+                             "column)."}
+        if int(args.h1_order) != 1:
+            return {"status": "error",
+                    "error": "--wp-loop-dof supports the P1 nodal path only "
+                             "(--h1-order 1)."}
+
     # Coil layer.  Wrap the NGSolve work (BEM-A LaplaceSL dense assembly
     # / PEEC) in TaskManager so it runs in parallel: the helpers were
     # de-wrapped under the "caller wraps, helper does NOT" policy
@@ -2386,6 +2512,19 @@ def build_argparser():
                         choices=["hacapk", "intree-dense"])
     parser.add_argument("--wp-aca-eps", type=float, default=1e-10)
     parser.add_argument("--wp-gmres-tol", type=float, default=1e-10)
+    parser.add_argument("--wp-loop-dof", action="store_true",
+                        help="Add the genus-1 loop DOF (net shorted-turn "
+                             "eddy current) to the workpiece scalar BIE "
+                             "(radia.bem_loop_extension).  Recovers the "
+                             "Lenz screening a single-valued potential "
+                             "cannot represent on a ring/tube workpiece "
+                             "whose bore links the coil flux (Takahashi "
+                             "7 kHz: P_wp 22.5 -> 18.4 kW vs 17.0-17.7 kW "
+                             "FEM references).  Requires: weak coupling, "
+                             "linear SIBC (--impedance-model sibc), "
+                             "--wp-bem-backend intree-dense, --h1-order 1, "
+                             "and a genus-1 workpiece (raises otherwise).  "
+                             "delta_L (Telegen) keeps the plain-solve phi.")
 
     # ----- Excitation -----
     parser.add_argument("--frequency", type=float, required=True,
