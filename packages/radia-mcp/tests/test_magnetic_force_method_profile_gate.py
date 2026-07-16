@@ -31,6 +31,26 @@ def _summary() -> dict:
     }
 
 
+def _with_artifact_identity(summary: dict) -> dict:
+    summary["artifact_identity"] = {
+        "position_force_sample_generations": ["sweep-42"]
+        * len(summary["positions"]),
+        "sample_acquired_at_utc": [
+            f"2026-07-16T05:00:0{index}Z"
+            for index in range(len(summary["positions"]))
+        ],
+        "magnet_geometry": {
+            "revision": "geometry-12",
+            "committed_at_utc": "2026-07-16T04:59:00Z",
+        },
+        "demag_reference": {
+            "geometry_revision": "geometry-12",
+            "generated_at_utc": "2026-07-16T04:59:30Z",
+        },
+    }
+    return summary
+
+
 def test_accepts_pinned_target_body_and_closed_surface_profiles() -> None:
     result = magnetic_force_method_profile_gate(_summary())
     assert result["status"] == "ok"
@@ -155,3 +175,33 @@ def test_v7_public_position_grid_unit_shadowing() -> None:
     result = magnetic_force_method_profile_gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"]["artifact_position_units_match_common_grid"] is False
+
+
+def test_accepts_bound_sweep_and_demag_geometry_generations() -> None:
+    result = magnetic_force_method_profile_gate(_with_artifact_identity(_summary()))
+    assert result["status"] == "ok"
+    assert result["warnings"] == []
+
+
+def test_v8_public_force_position_branch_timestamp_mix() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["position_force_sample_generations"] = [
+        "sweep-41" if index % 2 == 0 else "sweep-42"
+        for index in range(len(summary["positions"]))
+    ]
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["position_force_samples_share_one_sweep_generation"] is False
+
+
+def test_v8_public_demag_reference_older_than_geometry() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["demag_reference"].update(
+        {
+            "geometry_revision": "geometry-11",
+            "generated_at_utc": "2026-07-16T04:58:30Z",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["demag_reference_matches_current_geometry_revision"] is False

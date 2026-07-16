@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 
 
 _DIMENSION_UNITS = {
@@ -100,6 +101,57 @@ def magnetic_force_method_profile_gate(
     all_body = profiles["all_body_element_force"]
     increasing_positions = all(right > left for left, right in zip(positions, positions[1:]))
 
+    identity_value = summary.get("artifact_identity")
+    identity_present = isinstance(identity_value, Mapping)
+    one_sweep_generation_ok = True
+    demag_reference_ok = True
+    if identity_value is not None and not identity_present:
+        one_sweep_generation_ok = False
+        demag_reference_ok = False
+    elif identity_present:
+        generations = identity_value.get("position_force_sample_generations")
+        timestamps = identity_value.get("sample_acquired_at_utc")
+
+        def timestamp(value: object) -> float:
+            try:
+                return datetime.fromisoformat(
+                    str(value).replace("Z", "+00:00")
+                ).timestamp()
+            except (TypeError, ValueError):
+                return math.nan
+
+        parsed_times = (
+            [timestamp(value) for value in timestamps]
+            if isinstance(timestamps, Sequence)
+            and not isinstance(timestamps, (str, bytes))
+            else []
+        )
+        one_sweep_generation_ok = (
+            isinstance(generations, Sequence)
+            and not isinstance(generations, (str, bytes))
+            and len(generations) == len(positions)
+            and all(bool(str(value)) for value in generations)
+            and len({str(value) for value in generations if str(value)}) == 1
+            and len(parsed_times) == len(positions)
+            and all(math.isfinite(value) for value in parsed_times)
+            and all(right > left for left, right in zip(parsed_times, parsed_times[1:]))
+        )
+        geometry = identity_value.get("magnet_geometry")
+        reference = identity_value.get("demag_reference")
+        if not isinstance(geometry, Mapping) or not isinstance(reference, Mapping):
+            demag_reference_ok = False
+        else:
+            geometry_revision = str(geometry.get("revision", ""))
+            committed_at = timestamp(geometry.get("committed_at_utc"))
+            generated_at = timestamp(reference.get("generated_at_utc"))
+            demag_reference_ok = (
+                bool(geometry_revision)
+                and str(reference.get("geometry_revision", "")) == geometry_revision
+                and math.isfinite(committed_at)
+                and math.isfinite(generated_at)
+                and generated_at >= committed_at
+            )
+
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
     selection_differences = [
@@ -166,6 +218,8 @@ def magnetic_force_method_profile_gate(
             "binary_nonlog_outputs_exact"
         )
         is True,
+        "position_force_samples_share_one_sweep_generation": one_sweep_generation_ok,
+        "demag_reference_matches_current_geometry_revision": demag_reference_ok,
     }
     issues = [name for name, ok in checks.items() if not ok]
     return {
@@ -173,6 +227,7 @@ def magnetic_force_method_profile_gate(
         "status": "ok" if not issues else "needs_attention",
         "checks": checks,
         "issues": issues,
+        "warnings": [] if identity_present else ["artifact_identity_not_recorded"],
         "metrics": {
             "sample_count": len(positions),
             "maximum_method_relative_difference": method_difference,
