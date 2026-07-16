@@ -155,13 +155,16 @@ class IHDesignSpec:
 
     # calc_inductance weak-path workpiece extensions (genus-1 ring/tube
     # workpieces, Takahashi-validated 2026-07-17): the solved shorted-turn
-    # loop DOF (--wp-loop-dof; needs the "Dense LU (small)" solver preset
-    # = intree-dense backend, linear SIBC, order 1) and the surface-Poisson
-    # incident potential (--wp-phi-inc poisson; wall-free, ~25x faster).
-    # Invalid combinations are reported by calc_inductance's fail-fast
-    # guards -- the panel passes the flags through verbatim.
-    wp_loop_dof: bool = False
-    wp_phi_inc: str = "path"
+    # loop DOF (--wp-loop-dof) and the surface-Poisson incident potential
+    # (--wp-phi-inc; wall-free, ~25x faster).  Default "auto" = the FIXED
+    # behavior wherever it applies: with the "Dense LU (small)" solver
+    # preset (= intree-dense backend) + linear SIBC + order 1, a genus-1
+    # workpiece gets the loop DOF and the P1 path gets the poisson
+    # phi_inc automatically; inapplicable cases skip with a recorded
+    # wp_loop_dof_skip_reason.  "on" makes unmet prerequisites fail loud;
+    # "off"/"path" force the legacy behavior (genus-1 caveat applies).
+    wp_loop_dof: str = "auto"
+    wp_phi_inc: str = "auto"
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
