@@ -194,6 +194,34 @@ def _with_artifact_identity(summary: dict) -> dict:
             "reference_origin_sha256": "2" * 64,
             "torque_reference_origin_sha256": "2" * 64,
         },
+        "bem_solid_angle_surface_winding_identity": {
+            "surface_mesh_generation": "surface-mesh-18",
+            "normalized_surface_winding_generation": "surface-mesh-18",
+            "solid_angle_sign_generation": "surface-mesh-18",
+            "self_term_assembly_generation": "surface-mesh-18",
+            "surface_winding_normalized": True,
+            "solid_angle_sign_convention": "outward_positive",
+            "self_term_sign_convention": "outward_positive",
+            "surface_component_ids": [1, 2],
+            "solid_angle_component_ids": [1, 2],
+            "surface_winding_sha256": "5" * 64,
+            "solid_angle_winding_sha256": "5" * 64,
+        },
+        "maglev_stiffness_force_displacement_generation_identity": {
+            "perturbation_generation": "perturbation-18",
+            "displacement_coordinate_generation": "perturbation-18",
+            "force_sample_generation": "perturbation-18",
+            "stiffness_derivative_generation": "perturbation-18",
+            "displacement_axis": "global-z",
+            "force_component_axis": "global-z",
+            "displacement_unit": "m",
+            "force_unit": "N",
+            "stiffness_unit": "N/m",
+            "displacement_sha256": "6" * 64,
+            "stiffness_displacement_sha256": "6" * 64,
+            "force_sample_sha256": "7" * 64,
+            "stiffness_force_sample_sha256": "7" * 64,
+        },
     }
     return summary
 
@@ -607,5 +635,43 @@ def test_v15_public_force_torque_reference_origin_length_unit_mismatch() -> None
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["force_and_torque_share_reference_origin_length_unit"]
+        is False
+    )
+
+
+def test_v16_public_bem_solid_angle_self_term_surface_winding_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["bem_solid_angle_surface_winding_identity"].update(
+        {
+            "solid_angle_sign_generation": "surface-mesh-17",
+            "solid_angle_sign_convention": "inward_positive",
+            "solid_angle_winding_sha256": "4" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["bem_self_term_uses_current_normalized_surface_winding"]
+        is False
+    )
+
+
+def test_v16_public_maglev_stiffness_force_displacement_reference_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"][
+        "maglev_stiffness_force_displacement_generation_identity"
+    ].update(
+        {
+            "displacement_coordinate_generation": "perturbation-17",
+            "stiffness_displacement_sha256": "4" * 64,
+            "stiffness_force_sample_sha256": "4" * 64,
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "maglev_stiffness_uses_one_force_displacement_perturbation_generation"
+        ]
         is False
     )
