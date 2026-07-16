@@ -465,6 +465,42 @@ def _with_v14_noise_and_step_coordinate_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v15_fft_and_sample_filter_identity(summary: dict) -> dict:
+    summary = _with_v14_noise_and_step_coordinate_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["fft_window_coherent_gain_amplitude_basis_identity"] = {
+        "trace_generation_id": "fft-trace-47",
+        "fft_input_trace_generation_id": "fft-trace-47",
+        "window_generation_id": "fft-window-47",
+        "coherent_gain_window_generation_id": "fft-window-47",
+        "fft_result_window_generation_id": "fft-window-47",
+        "window_definition": "periodic_hann",
+        "sample_count": 1024,
+        "coherent_gain": 0.5,
+        "coherent_gain_correction": 2.0,
+        "input_amplitude_basis": "peak",
+        "fft_result_amplitude_basis": "peak",
+        "amplitude_basis_conversion_count": 0,
+        "window_coefficients_sha256": "1" * 64,
+        "fft_window_coefficients_sha256": "1" * 64,
+    }
+    positive["monte_carlo_percentile_sample_filter_identity"] = {
+        "statistics_generation_id": "statistics-47",
+        "raw_sample_statistics_generation_id": "statistics-47",
+        "sample_filter_statistics_generation_id": "statistics-47",
+        "percentile_statistics_generation_id": "statistics-47",
+        "raw_sample_count": 1000,
+        "included_sample_count": 980,
+        "excluded_sample_ids": list(range(981, 1001)),
+        "percentile": 95.0,
+        "sample_filter_policy": "finite_converged_only",
+        "percentile_sample_filter_policy": "finite_converged_only",
+        "sample_filter_sha256": "2" * 64,
+        "percentile_sample_filter_sha256": "2" * 64,
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -662,6 +698,54 @@ def test_v14_public_stepped_parameter_interpolation_log_linear_axis_mismatch() -
     assert (
         result["checks"][
             "stepped_results_share_parameter_interpolation_coordinate"
+        ]
+        is False
+    )
+
+
+def test_accepts_v15_fft_gain_and_monte_carlo_sample_filter_lineage() -> None:
+    result = ideal_transformer_identity_gate(
+        _with_v15_fft_and_sample_filter_identity(_summary())
+    )
+    assert result["status"] == "ok"
+
+
+def test_v15_public_fft_window_coherent_gain_peak_rms_basis_mismatch() -> None:
+    bad = _with_v15_fft_and_sample_filter_identity(_summary())
+    bad["metrics"]["positive"][
+        "fft_window_coherent_gain_amplitude_basis_identity"
+    ].update(
+        {
+            "coherent_gain_window_generation_id": "fft-window-46",
+            "coherent_gain": 1.0,
+            "coherent_gain_correction": 1.0,
+            "fft_result_amplitude_basis": "rms",
+            "amplitude_basis_conversion_count": 0,
+            "fft_window_coefficients_sha256": "5" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["fft_amplitudes_use_current_window_gain_and_basis"] is False
+
+
+def test_v15_public_monte_carlo_percentile_sample_filter_generation_mismatch() -> None:
+    bad = _with_v15_fft_and_sample_filter_identity(_summary())
+    bad["metrics"]["positive"][
+        "monte_carlo_percentile_sample_filter_identity"
+    ].update(
+        {
+            "sample_filter_statistics_generation_id": "statistics-46",
+            "percentile_statistics_generation_id": "statistics-46",
+            "included_sample_count": 990,
+            "percentile_sample_filter_sha256": "5" * 64,
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "monte_carlo_percentiles_use_current_filtered_sample_set"
         ]
         is False
     )

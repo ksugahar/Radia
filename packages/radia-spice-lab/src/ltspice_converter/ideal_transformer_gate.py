@@ -452,6 +452,97 @@ def _stepped_parameter_interpolation_coordinate_identity_ok(
     )
 
 
+def _fft_window_coherent_gain_amplitude_basis_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("fft_window_coherent_gain_amplitude_basis_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    trace_generation = str(contract.get("trace_generation_id") or "")
+    window_generation = str(contract.get("window_generation_id") or "")
+    input_basis = str(contract.get("input_amplitude_basis") or "")
+    result_basis = str(contract.get("fft_result_amplitude_basis") or "")
+    digest = str(contract.get("window_coefficients_sha256") or "")
+    try:
+        sample_count = int(contract.get("sample_count"))
+        coherent_gain = _finite(
+            contract.get("coherent_gain"), "coherent_gain", positive=True
+        )
+        correction = _finite(
+            contract.get("coherent_gain_correction"),
+            "coherent_gain_correction",
+            positive=True,
+        )
+        conversion_count = int(contract.get("amplitude_basis_conversion_count"))
+    except (TypeError, ValueError):
+        return False
+    bases = {"peak", "rms"}
+    expected_conversions = 0 if input_basis == result_basis else 1
+    return (
+        bool(trace_generation)
+        and contract.get("fft_input_trace_generation_id") == trace_generation
+        and bool(window_generation)
+        and contract.get("coherent_gain_window_generation_id")
+        == window_generation
+        and contract.get("fft_result_window_generation_id") == window_generation
+        and contract.get("window_definition") == "periodic_hann"
+        and sample_count >= 4
+        and math.isclose(coherent_gain, 0.5, rel_tol=0.0, abs_tol=1.0e-15)
+        and math.isclose(
+            correction, 1.0 / coherent_gain, rel_tol=1.0e-15, abs_tol=0.0
+        )
+        and input_basis in bases
+        and result_basis in bases
+        and conversion_count == expected_conversions
+        and _is_sha256(digest)
+        and contract.get("fft_window_coefficients_sha256") == digest
+    )
+
+
+def _monte_carlo_percentile_sample_filter_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("monte_carlo_percentile_sample_filter_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    excluded = contract.get("excluded_sample_ids")
+    if (
+        not isinstance(excluded, Sequence)
+        or isinstance(excluded, (str, bytes))
+    ):
+        return False
+    try:
+        raw_count = int(contract.get("raw_sample_count"))
+        included_count = int(contract.get("included_sample_count"))
+        percentile = _finite(contract.get("percentile"), "percentile")
+        excluded_ids = [int(sample_id) for sample_id in excluded]
+    except (TypeError, ValueError):
+        return False
+    generation = str(contract.get("statistics_generation_id") or "")
+    digest = str(contract.get("sample_filter_sha256") or "")
+    return (
+        bool(generation)
+        and contract.get("raw_sample_statistics_generation_id") == generation
+        and contract.get("sample_filter_statistics_generation_id") == generation
+        and contract.get("percentile_statistics_generation_id") == generation
+        and raw_count > 0
+        and 0 < included_count <= raw_count
+        and len(excluded_ids) == raw_count - included_count
+        and len(set(excluded_ids)) == len(excluded_ids)
+        and all(1 <= sample_id <= raw_count for sample_id in excluded_ids)
+        and 0.0 <= percentile <= 100.0
+        and contract.get("sample_filter_policy") == "finite_converged_only"
+        and contract.get("percentile_sample_filter_policy")
+        == "finite_converged_only"
+        and _is_sha256(digest)
+        and contract.get("percentile_sample_filter_sha256") == digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -754,6 +845,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "stepped_results_share_parameter_interpolation_coordinate": (
             _stepped_parameter_interpolation_coordinate_identity_ok(positive)
+        ),
+        "fft_amplitudes_use_current_window_gain_and_basis": (
+            _fft_window_coherent_gain_amplitude_basis_identity_ok(positive)
+        ),
+        "monte_carlo_percentiles_use_current_filtered_sample_set": (
+            _monte_carlo_percentile_sample_filter_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
