@@ -318,6 +318,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     kernel_session_identity_ok = True
     topology_replay_identity_ok = True
     unit_conversion_identity_ok = True
+    boolean_clean_identity_ok = True
+    tessellation_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -325,6 +327,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         kernel_session_identity_ok = False
         topology_replay_identity_ok = False
         unit_conversion_identity_ok = False
+        boolean_clean_identity_ok = False
+        tessellation_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -471,6 +475,53 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and length_scale == 0.001
                 and volume_scale == 1.0
             )
+
+        boolean_value = replay_identity_value.get("boolean_clean_identity")
+        if boolean_value is not None:
+            boolean_identity = (
+                boolean_value if isinstance(boolean_value, Mapping) else {}
+            )
+            boolean_digest = str(
+                boolean_identity.get("boolean_result_sha256", "")
+            ).lower()
+            cleaned_digest = str(
+                boolean_identity.get("cleaned_topology_sha256", "")
+            ).lower()
+            boolean_clean_identity_ok = (
+                len(boolean_digest) == 64
+                and boolean_identity.get("shape_clean_input_sha256")
+                == boolean_digest
+                and len(cleaned_digest) == 64
+                and boolean_identity.get("export_topology_sha256")
+                == cleaned_digest
+                and bool(boolean_identity.get("shape_generation"))
+                and boolean_identity.get("export_shape_generation")
+                == boolean_identity.get("shape_generation")
+            )
+
+        tessellation_value = replay_identity_value.get("tessellation_identity")
+        if tessellation_value is not None:
+            tessellation = (
+                tessellation_value if isinstance(tessellation_value, Mapping) else {}
+            )
+            try:
+                linear_deflection = float(tessellation.get("linear_deflection"))
+                angular_tolerance = float(
+                    tessellation.get("angular_tolerance_rad")
+                )
+            except (TypeError, ValueError):
+                linear_deflection = math.nan
+                angular_tolerance = math.nan
+            tessellation_identity_ok = (
+                bool(tessellation.get("shape_generation"))
+                and tessellation.get("tolerance_shape_generation")
+                == tessellation.get("shape_generation")
+                and math.isfinite(linear_deflection)
+                and linear_deflection > 0.0
+                and math.isfinite(angular_tolerance)
+                and 0.0 < angular_tolerance <= math.pi
+                and bool(tessellation.get("tessellation_generation"))
+            )
     joint_names = {
         str(name)
         for row in components
@@ -507,6 +558,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         "external_kernel_session_generation_is_continuous": kernel_session_identity_ok,
         "heal_and_noheal_imports_record_topology_identity": topology_replay_identity_ok,
         "external_volume_is_measured_after_unit_conversion": unit_conversion_identity_ok,
+        "boolean_export_follows_shape_clean_identity": boolean_clean_identity_ok,
+        "tessellation_tolerances_belong_to_current_shape": tessellation_identity_ok,
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,

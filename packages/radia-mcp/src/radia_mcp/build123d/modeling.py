@@ -2885,6 +2885,80 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    compound_evidence_present = any(
+        row.get("compound_volume_identity") is not None for row in identity_rows
+    )
+
+    def compound_volume_identity(row):
+        value = row.get("compound_volume_identity")
+        if not isinstance(value, dict):
+            return None
+        try:
+            overlap_volume = float(value.get("overlap_volume"))
+        except (TypeError, ValueError):
+            return None
+        generation = str(value.get("topology_generation", "")).strip()
+        volume_generation = str(value.get("volume_generation", "")).strip()
+        if (
+            value.get("topology_kind") != "physical_union_solid"
+            or value.get("reported_volume_basis") != "physical_union"
+            or overlap_volume < 0.0
+            or not generation
+            or volume_generation != generation
+        ):
+            return None
+        return generation, volume_generation
+
+    reference_compounds = {
+        str(row.get("name", "")): compound_volume_identity(row) for row in reference
+    }
+    compound_volume_identity_ok = not compound_evidence_present
+    if compound_evidence_present:
+        compound_volume_identity_ok = bool(reference_compounds) and all(
+            value is not None for value in reference_compounds.values()
+        )
+        for _, rows in normalized_sets:
+            compound_volume_identity_ok = compound_volume_identity_ok and all(
+                compound_volume_identity(row)
+                == reference_compounds.get(str(row.get("name", "")))
+                for row in rows
+            )
+
+    placement_evidence_present = any(
+        row.get("placement_transform_identity") is not None for row in identity_rows
+    )
+
+    def placement_transform_identity(row):
+        value = row.get("placement_transform_identity")
+        if not isinstance(value, dict):
+            return None
+        frame = str(value.get("center_of_mass_frame", "")).strip()
+        center_generation = str(
+            value.get("center_of_mass_transform_generation", "")
+        ).strip()
+        final_generation = str(
+            value.get("final_placement_transform_generation", "")
+        ).strip()
+        if not frame or not center_generation or center_generation != final_generation:
+            return None
+        return frame, final_generation
+
+    reference_placements = {
+        str(row.get("name", "")): placement_transform_identity(row)
+        for row in reference
+    }
+    placement_transform_identity_ok = not placement_evidence_present
+    if placement_evidence_present:
+        placement_transform_identity_ok = bool(reference_placements) and all(
+            value is not None for value in reference_placements.values()
+        )
+        for _, rows in normalized_sets:
+            placement_transform_identity_ok = placement_transform_identity_ok and all(
+                placement_transform_identity(row)
+                == reference_placements.get(str(row.get("name", "")))
+                for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -2936,6 +3010,12 @@ def shape_mass_property_crosscheck_summary(
         "assembly_children_match_reference_revision_map": assembly_identity_ok,
         "mass_property_centers_share_reference_frames": frame_identity_ok,
         "face_adjacency_matches_current_brep_revision": topology_identity_ok,
+        "compound_volume_uses_physical_union_not_child_sum": (
+            compound_volume_identity_ok
+        ),
+        "center_of_mass_uses_final_placement_transform": (
+            placement_transform_identity_ok
+        ),
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
@@ -2952,6 +3032,10 @@ def shape_mass_property_crosscheck_summary(
         issues.append("mass-property centers use a different reference frame")
     if not checks["face_adjacency_matches_current_brep_revision"]:
         issues.append("face adjacency belongs to another BREP revision")
+    if not checks["compound_volume_uses_physical_union_not_child_sum"]:
+        issues.append("compound volume is not bound to the physical union topology")
+    if not checks["center_of_mass_uses_final_placement_transform"]:
+        issues.append("center of mass belongs to a previous placement transform")
     volume_errors = [row["volume_rel_error"] or 0.0 for row in all_rows]
     area_errors = [row["area_rel_error"] or 0.0 for row in all_rows]
     bbox_errors = [row["bbox_abs_error"] or 0.0 for row in all_rows]
