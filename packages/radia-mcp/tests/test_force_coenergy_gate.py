@@ -14,6 +14,20 @@ def _quadratic_case():
     return positions, coenergy, forces
 
 
+def _artifact_identity(sample_count):
+    return {
+        "direct_force_snapshot": {
+            "load_step_id": "load-step-42",
+            "time_s": 0.025,
+        },
+        "coenergy_derivative_snapshot": {
+            "load_step_id": "load-step-42",
+            "time_s": 0.025,
+        },
+        "coenergy_mesh_family_generations": ["mesh-family-7"] * sample_count,
+    }
+
+
 def test_force_coenergy_gate_accepts_constant_current_virtual_work_identity():
     positions, coenergy, forces = _quadratic_case()
     result = force_coenergy_displacement_gate(positions, coenergy, forces)
@@ -21,6 +35,18 @@ def test_force_coenergy_gate_accepts_constant_current_virtual_work_identity():
     assert result["max_central_relative_error"] < 1.0e-12
     assert result["endpoint_errors_are_diagnostic_only"] is True
     assert result["rows"][0]["stencil"] == "forward"
+
+
+def test_force_coenergy_gate_accepts_bound_snapshot_and_mesh_family_identity():
+    positions, coenergy, forces = _quadratic_case()
+    result = force_coenergy_displacement_gate(
+        positions,
+        coenergy,
+        forces,
+        artifact_identity=_artifact_identity(len(positions)),
+    )
+    assert result["status"] == "ok"
+    assert result["warnings"] == []
 
 
 def test_force_coenergy_gate_rejects_force_with_wrong_projection_sign():
@@ -63,3 +89,35 @@ def test_generalization_v7_public(case_id):
     result = force_coenergy_displacement_gate(positions, coenergy, forces)
     assert result["status"] == "needs_attention"
     assert result["checks"]["central_virtual_work_matches_direct_force"] is False
+
+
+@pytest.mark.parametrize(
+    ("case_id", "failed_check"),
+    [
+        (
+            "v8_public_force_snapshot_time_skew",
+            "force_and_coenergy_share_load_step_snapshot",
+        ),
+        (
+            "v8_public_coenergy_derivative_mesh_generation_mix",
+            "coenergy_stencil_uses_one_mesh_family_generation",
+        ),
+    ],
+)
+def test_generalization_v8_public(case_id, failed_check):
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    if case_id == "v8_public_force_snapshot_time_skew":
+        identity["direct_force_snapshot"].update(
+            {"load_step_id": "load-step-43", "time_s": 0.026}
+        )
+    else:
+        identity["coenergy_mesh_family_generations"][4] = "mesh-family-8"
+    result = force_coenergy_displacement_gate(
+        positions,
+        coenergy,
+        forces,
+        artifact_identity=identity,
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][failed_check] is False
