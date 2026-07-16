@@ -74,6 +74,37 @@ def test_rt2_charge_solve_and_field_pipeline(kind, expected_fes_dofs,
 
 
 @pytest.mark.parametrize("kind", ["hex", "wedge"])
+def test_curved_rt2_nonlinear_material_uses_energy_newton(kind):
+    """Curve(2) RT2 polyhedra use the production C++ nonlinear path."""
+    mesh = _cube(kind)
+    mesh.Curve(2)
+    mu0 = 4.0e-7*np.pi
+    linear_bh = np.asarray([
+        [0.0, 0.0],
+        [1.0e3, mu0*100.0*1.0e3],
+        [1.0e5, mu0*100.0*1.0e5],
+    ])
+    with ng.TaskManager():
+        linear = Solve(
+            mesh, mu_r=100.0, H_ext=ng.CF((0, 0, 1000.0)),
+            order=2, curve_order=2, gram_eps=1e-7, tol=1e-9)
+        nonlinear = Solve(
+            mesh, bh_table=linear_bh, H_ext=ng.CF((0, 0, 1000.0)),
+            order=2, curve_order=2, gram_eps=1e-7, tol=1e-9,
+            nl_maxit=30)
+
+    assert nonlinear["order"] == 2
+    assert nonlinear["curve_order"] == 2
+    assert nonlinear["nonlinear"] is True
+    assert nonlinear["linear_solver"] == "energy-newton-cpp"
+    assert nonlinear["iters"] < 30
+    linear_m = np.asarray(linear["M_avg"], dtype=float)
+    nonlinear_m = np.asarray(nonlinear["M_avg"], dtype=float)
+    relative = np.linalg.norm(nonlinear_m-linear_m)/np.linalg.norm(linear_m)
+    assert relative < 1e-6, relative
+
+
+@pytest.mark.parametrize("kind", ["hex", "wedge"])
 def test_rt2_prescribed_magnetization_uses_the_native_field_path(kind):
     mesh = _cube(kind)
     with ng.TaskManager():
