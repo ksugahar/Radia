@@ -677,6 +677,58 @@ def _with_v14_high_order_id_width_identity(row: dict) -> dict:
     return row
 
 
+def _with_v15_interface_quadrature_identity(row: dict) -> dict:
+    row = _with_v14_high_order_id_width_identity(row)
+    row["mixed_interface_smoothing_orientation_identity"] = {
+        "smoothing_generation": "smoothing-47",
+        "interface_face_orientation_generation": "smoothing-47",
+        "interface_topology_generation": "interface-topology-47",
+        "orientation_topology_generation": "interface-topology-47",
+        "hex_interface_face_ids": [301, 302],
+        "pyramid_interface_face_ids": [401, 402],
+        "paired_orientation_products": [-1, -1],
+        "interface_pair_sha256": "1" * 64,
+        "oriented_interface_pair_sha256": "1" * 64,
+    }
+    row["high_order_jacobian_quadrature_identity"] = {
+        "high_order_mesh_generation": "high-order-mesh-47",
+        "quality_evaluation_mesh_generation": "high-order-mesh-47",
+        "element_order": 2,
+        "required_jacobian_exactness_degree": 4,
+        "jacobian_quadrature_exactness_degree": 4,
+        "quadrature_rule_generation": "jacobian-quadrature-47",
+        "quality_evaluation_quadrature_generation": "jacobian-quadrature-47",
+        "element_geometry_sha256": "2" * 64,
+        "quality_evaluation_geometry_sha256": "2" * 64,
+    }
+    row["imprint_merge_tolerance_unit_identity"] = {
+        "geometry_generation": "geometry-47",
+        "imprint_geometry_generation": "geometry-47",
+        "merge_geometry_generation": "geometry-47",
+        "tolerance_generation": "tolerance-47",
+        "imprint_tolerance_generation": "tolerance-47",
+        "merge_tolerance_generation": "tolerance-47",
+        "model_length_unit": "mm",
+        "imprint_tolerance_unit": "mm",
+        "merge_tolerance_unit": "mm",
+        "imprint_tolerance_value": 1.0e-6,
+        "merge_tolerance_value": 1.0e-6,
+        "tolerance_si_m": 1.0e-9,
+    }
+    row["exodus_block_sideset_renumber_identity"] = {
+        "renumber_generation": "renumber-47",
+        "block_map_generation": "renumber-47",
+        "sideset_map_generation": "renumber-47",
+        "block_ids": [11, 12],
+        "exported_block_ids": [11, 12],
+        "sideset_ids": [21, 22, 23],
+        "exported_sideset_ids": [21, 22, 23],
+        "entity_map_sha256": "3" * 64,
+        "exported_entity_map_sha256": "3" * 64,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -891,3 +943,83 @@ def test_v14_source_exodus_64bit_entity_id_width_truncation():
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"]["exodus_decoder_preserves_declared_64bit_entity_ids"] is False
+
+
+def test_v15_positive_interface_quadrature_and_source_lineage():
+    row = _with_v15_interface_quadrature_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+
+
+def test_v15_public_hex_pyramid_interface_face_orientation_after_smoothing_mismatch():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["mixed_interface_smoothing_orientation_identity"].update(
+        {
+            "interface_face_orientation_generation": "smoothing-46",
+            "paired_orientation_products": [1, -1],
+            "oriented_interface_pair_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "smoothed_hex_pyramid_interface_faces_keep_opposed_orientation"
+        ]
+        is False
+    )
+
+
+def test_v15_public_high_order_jacobian_quadrature_rule_generation_mismatch():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["high_order_jacobian_quadrature_identity"].update(
+        {
+            "jacobian_quadrature_exactness_degree": 2,
+            "quality_evaluation_quadrature_generation": "jacobian-quadrature-46",
+            "quality_evaluation_geometry_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["high_order_jacobian_uses_current_sufficient_quadrature"]
+        is False
+    )
+
+
+def test_v15_source_imprint_merge_tolerance_length_unit_basis_mismatch():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["imprint_merge_tolerance_unit_identity"].update(
+        {
+            "merge_tolerance_generation": "tolerance-46",
+            "merge_tolerance_unit": "m",
+            "merge_tolerance_value": 1.0e-6,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["imprint_merge_tolerances_share_one_physical_length_basis"]
+        is False
+    )
+
+
+def test_v15_source_exodus_block_sideset_map_previous_renumber_generation():
+    row = _with_v15_interface_quadrature_identity(summary())
+    row["exodus_block_sideset_renumber_identity"].update(
+        {
+            "block_map_generation": "renumber-46",
+            "exported_block_ids": [1, 2],
+            "exported_entity_map_sha256": "4" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "exodus_block_sideset_maps_follow_current_renumber_generation"
+        ]
+        is False
+    )

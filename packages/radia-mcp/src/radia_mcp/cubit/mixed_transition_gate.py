@@ -531,6 +531,65 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         and all(int(sign) == 1 for sign in outward_signs)
     )
 
+    smoothing_orientation = summary.get(
+        "mixed_interface_smoothing_orientation_identity"
+    )
+    try:
+        orientation_products = [
+            float(value)
+            for value in smoothing_orientation.get(
+                "paired_orientation_products", []
+            )
+        ]
+    except (AttributeError, TypeError, ValueError):
+        orientation_products = []
+    smoothing_orientation_ok = smoothing_orientation is None or (
+        isinstance(smoothing_orientation, Mapping)
+        and bool(smoothing_orientation.get("smoothing_generation"))
+        and smoothing_orientation.get("interface_face_orientation_generation")
+        == smoothing_orientation.get("smoothing_generation")
+        and bool(smoothing_orientation.get("interface_topology_generation"))
+        and smoothing_orientation.get("orientation_topology_generation")
+        == smoothing_orientation.get("interface_topology_generation")
+        and bool(list(smoothing_orientation.get("hex_interface_face_ids") or []))
+        and len(list(smoothing_orientation.get("hex_interface_face_ids") or []))
+        == len(list(smoothing_orientation.get("pyramid_interface_face_ids") or []))
+        == len(orientation_products)
+        and all(product < 0.0 for product in orientation_products)
+        and len(str(smoothing_orientation.get("interface_pair_sha256") or ""))
+        == 64
+        and smoothing_orientation.get("oriented_interface_pair_sha256")
+        == smoothing_orientation.get("interface_pair_sha256")
+    )
+
+    jacobian_quadrature = summary.get("high_order_jacobian_quadrature_identity")
+    try:
+        element_order = int(jacobian_quadrature.get("element_order", 0))
+        required_exactness = int(
+            jacobian_quadrature.get("required_jacobian_exactness_degree", 0)
+        )
+        actual_exactness = int(
+            jacobian_quadrature.get("jacobian_quadrature_exactness_degree", 0)
+        )
+    except (AttributeError, TypeError, ValueError):
+        element_order = required_exactness = actual_exactness = 0
+    jacobian_quadrature_ok = jacobian_quadrature is None or (
+        isinstance(jacobian_quadrature, Mapping)
+        and bool(jacobian_quadrature.get("high_order_mesh_generation"))
+        and jacobian_quadrature.get("quality_evaluation_mesh_generation")
+        == jacobian_quadrature.get("high_order_mesh_generation")
+        and element_order >= 2
+        and required_exactness >= 2 * element_order
+        and actual_exactness >= required_exactness
+        and bool(jacobian_quadrature.get("quadrature_rule_generation"))
+        and jacobian_quadrature.get("quality_evaluation_quadrature_generation")
+        == jacobian_quadrature.get("quadrature_rule_generation")
+        and len(str(jacobian_quadrature.get("element_geometry_sha256") or ""))
+        == 64
+        and jacobian_quadrature.get("quality_evaluation_geometry_sha256")
+        == jacobian_quadrature.get("element_geometry_sha256")
+    )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -567,6 +626,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         ),
         "merged_sideset_normals_follow_final_topology_owners": (
             sideset_normal_ok
+        ),
+        "smoothed_hex_pyramid_interface_faces_keep_opposed_orientation": (
+            smoothing_orientation_ok
+        ),
+        "high_order_jacobian_uses_current_sufficient_quadrature": (
+            jacobian_quadrature_ok
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -1053,6 +1118,56 @@ def cubit_mixed_transition_source_gate(
         and exodus_id_width.get("decoded_entity_id_stream_sha256")
         == exodus_id_width.get("entity_id_stream_sha256")
     )
+    tolerance_identity = summary.get("imprint_merge_tolerance_unit_identity")
+    unit_scales = {"m": 1.0, "mm": 1.0e-3, "um": 1.0e-6}
+    try:
+        tolerance_si = float(tolerance_identity.get("tolerance_si_m"))
+        imprint_tolerance_si = float(
+            tolerance_identity.get("imprint_tolerance_value")
+        ) * unit_scales[str(tolerance_identity.get("imprint_tolerance_unit"))]
+        merge_tolerance_si = float(
+            tolerance_identity.get("merge_tolerance_value")
+        ) * unit_scales[str(tolerance_identity.get("merge_tolerance_unit"))]
+    except (AttributeError, KeyError, TypeError, ValueError):
+        tolerance_si = imprint_tolerance_si = merge_tolerance_si = math.nan
+    tolerance_scale = max(abs(tolerance_si), 1.0e-30)
+    tolerance_identity_ok = tolerance_identity is None or (
+        isinstance(tolerance_identity, Mapping)
+        and bool(tolerance_identity.get("geometry_generation"))
+        and tolerance_identity.get("imprint_geometry_generation")
+        == tolerance_identity.get("geometry_generation")
+        and tolerance_identity.get("merge_geometry_generation")
+        == tolerance_identity.get("geometry_generation")
+        and bool(tolerance_identity.get("tolerance_generation"))
+        and tolerance_identity.get("imprint_tolerance_generation")
+        == tolerance_identity.get("tolerance_generation")
+        and tolerance_identity.get("merge_tolerance_generation")
+        == tolerance_identity.get("tolerance_generation")
+        and tolerance_identity.get("model_length_unit") in unit_scales
+        and math.isfinite(tolerance_si)
+        and tolerance_si > 0.0
+        and abs(imprint_tolerance_si - tolerance_si) / tolerance_scale <= 1.0e-12
+        and abs(merge_tolerance_si - tolerance_si) / tolerance_scale <= 1.0e-12
+    )
+
+    exodus_renumber = summary.get("exodus_block_sideset_renumber_identity")
+    exodus_renumber_ok = exodus_renumber is None or (
+        isinstance(exodus_renumber, Mapping)
+        and bool(exodus_renumber.get("renumber_generation"))
+        and exodus_renumber.get("block_map_generation")
+        == exodus_renumber.get("renumber_generation")
+        and exodus_renumber.get("sideset_map_generation")
+        == exodus_renumber.get("renumber_generation")
+        and bool(list(exodus_renumber.get("block_ids") or []))
+        and list(exodus_renumber.get("exported_block_ids") or [])
+        == list(exodus_renumber.get("block_ids") or [])
+        and bool(list(exodus_renumber.get("sideset_ids") or []))
+        and list(exodus_renumber.get("exported_sideset_ids") or [])
+        == list(exodus_renumber.get("sideset_ids") or [])
+        and len(str(exodus_renumber.get("entity_map_sha256") or "")) == 64
+        and exodus_renumber.get("exported_entity_map_sha256")
+        == exodus_renumber.get("entity_map_sha256")
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -1131,6 +1246,12 @@ def cubit_mixed_transition_source_gate(
         "mesh_export_transition_faces_have_opposed_orientation": export_orientation_ok,
         "journal_entity_ids_follow_current_reset_generation": journal_id_map_ok,
         "exodus_decoder_preserves_declared_64bit_entity_ids": exodus_id_width_ok,
+        "imprint_merge_tolerances_share_one_physical_length_basis": (
+            tolerance_identity_ok
+        ),
+        "exodus_block_sideset_maps_follow_current_renumber_generation": (
+            exodus_renumber_ok
+        ),
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),
