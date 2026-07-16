@@ -78,6 +78,48 @@ import numpy as np
 MU_0 = 4e-7 * math.pi
 
 
+def A_from_filaments(points, filament_paths, currents):
+    """Vector potential of straight filament segments (exact per segment).
+
+    ``A_seg(x) = (mu0 I / 4 pi) t_hat * ln((L - xi + R2) / (-xi + R1))``
+    with ``xi = (x - p1) . t_hat``, ``R1 = |x - p1|``, ``R2 = |x - p2|``.
+    Supports complex per-filament currents.  Used as the ``A_inc_fn`` of
+    ``solve_loop_extended`` for the PEEC (filament) coil source.
+
+    Args:
+        points: (n, 3) observation points [m].
+        filament_paths: list of K filaments, each a list of (p1, p2)
+            segment tuples (the ``coil_data["paths"]`` convention).
+        currents: length-K complex per-filament currents [A].
+
+    Returns:
+        (n, 3) complex vector potential [T m].
+    """
+    pts = np.asarray(points, dtype=float)
+    n = len(pts)
+    A = np.zeros((n, 3), dtype=complex)
+    for fil, Ik in zip(filament_paths, currents):
+        Ik = complex(Ik)
+        if Ik == 0:
+            continue
+        for (p1, p2) in fil:
+            p1 = np.asarray(p1, dtype=float)
+            p2 = np.asarray(p2, dtype=float)
+            dl = p2 - p1
+            L = float(np.linalg.norm(dl))
+            if L < 1e-15:
+                continue
+            t_hat = dl / L
+            xi = (pts - p1[None, :]) @ t_hat
+            R1 = np.linalg.norm(pts - p1[None, :], axis=1)
+            R2 = np.linalg.norm(pts - p2[None, :], axis=1)
+            num = np.maximum(L - xi + R2, 1e-30)
+            den = np.maximum(-xi + R1, 1e-30)
+            val = (MU_0 * Ik / (4.0 * math.pi)) * np.log(num / den)
+            A += val[:, None] * t_hat[None, :]
+    return A
+
+
 # ----------------------------------------------------------------------
 # topology
 # ----------------------------------------------------------------------
