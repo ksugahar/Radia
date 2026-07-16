@@ -88,6 +88,8 @@ def pwm_controlled_motor_loss_gate(
     loss_normalization_ok = True
     dq_phase_order_ok = True
     torque_ripple_aggregation_ok = True
+    efficiency_average_window_ok = True
+    demag_temperature_material_state_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
@@ -95,6 +97,8 @@ def pwm_controlled_motor_loss_gate(
         loss_normalization_ok = False
         dq_phase_order_ok = False
         torque_ripple_aggregation_ok = False
+        efficiency_average_window_ok = False
+        demag_temperature_material_state_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -201,6 +205,66 @@ def pwm_controlled_motor_loss_gate(
                 and aggregation.get("repeated_endpoint_removed_before_aggregation")
                 is True
                 and aggregation.get("cycle_generation") == torque_generation
+            )
+        efficiency_window = identity_value.get("efficiency_average_window")
+        if efficiency_window is not None:
+            try:
+                input_start = int(efficiency_window["input_window_start_sample"])
+                input_end = int(
+                    efficiency_window["input_window_end_sample_exclusive"]
+                )
+                output_start = int(
+                    efficiency_window["output_window_start_sample"]
+                )
+                output_end = int(
+                    efficiency_window["output_window_end_sample_exclusive"]
+                )
+            except (KeyError, TypeError, ValueError):
+                input_start = input_end = output_start = output_end = -1
+            efficiency_average_window_ok = (
+                isinstance(efficiency_window, dict)
+                and input_start >= 0
+                and input_end > input_start
+                and input_start == output_start
+                and input_end == output_end
+                and efficiency_window.get("periodic_cycle_generation")
+                == torque_generation
+                and efficiency_window.get("input_power_cycle_generation")
+                == torque_generation
+                and efficiency_window.get("output_power_cycle_generation")
+                == torque_generation
+                and efficiency_window.get("startup_samples_excluded") is True
+            )
+        demag_state = identity_value.get("demag_temperature_material_state")
+        if demag_state is not None:
+            try:
+                magnet_temperature = float(demag_state["magnet_temperature_c"])
+                recoil_temperature = float(
+                    demag_state["recoil_curve_temperature_c"]
+                )
+                knee_temperature = float(demag_state["knee_curve_temperature_c"])
+            except (KeyError, TypeError, ValueError):
+                magnet_temperature = recoil_temperature = knee_temperature = math.nan
+            state_generation = str(
+                demag_state.get("magnet_state_generation", "")
+            ) if isinstance(demag_state, dict) else ""
+            demag_temperature_material_state_ok = (
+                isinstance(demag_state, dict)
+                and all(
+                    math.isfinite(value)
+                    for value in (
+                        magnet_temperature,
+                        recoil_temperature,
+                        knee_temperature,
+                    )
+                )
+                and recoil_temperature == magnet_temperature
+                and knee_temperature == magnet_temperature
+                and bool(state_generation)
+                and demag_state.get("recoil_curve_state_generation")
+                == state_generation
+                and demag_state.get("knee_curve_state_generation")
+                == state_generation
             )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
@@ -408,6 +472,12 @@ def pwm_controlled_motor_loss_gate(
         "abc_to_dq_phase_order_matches_winding_connection": dq_phase_order_ok,
         "torque_ripple_aggregation_excludes_repeated_cycle_endpoint": (
             torque_ripple_aggregation_ok
+        ),
+        "efficiency_input_and_output_share_periodic_average_window": (
+            efficiency_average_window_ok
+        ),
+        "demag_margin_uses_current_temperature_material_state": (
+            demag_temperature_material_state_ok
         ),
     }
     tail_torque = torque_nm[tail_start:]
