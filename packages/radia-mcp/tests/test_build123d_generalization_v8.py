@@ -63,6 +63,18 @@ def _public() -> tuple[list[dict], dict[str, list[dict]]]:
                 "brep_sha256": digest,
                 "face_adjacency_sha256": ("1" if name == "frame" else "2") * 64,
             }
+            row["compound_volume_identity"] = {
+                "topology_kind": "physical_union_solid",
+                "reported_volume_basis": "physical_union",
+                "overlap_volume": 0.0,
+                "topology_generation": "compound-generation-42",
+                "volume_generation": "compound-generation-42",
+            }
+            row["placement_transform_identity"] = {
+                "center_of_mass_frame": "assembly-global-frame-42",
+                "center_of_mass_transform_generation": "assembly-transform-42",
+                "final_placement_transform_generation": "assembly-transform-42",
+            }
     return reference, {"external_cad": measured}
 
 
@@ -150,6 +162,21 @@ def _source() -> dict:
                 "external_measurement_stage": "after_unit_conversion",
                 "external_volume_unit": "m^3",
                 "declared_volume_scale_to_target": 1.0,
+            },
+            "boolean_clean_identity": {
+                "boolean_result_sha256": "4" * 64,
+                "shape_clean_input_sha256": "4" * 64,
+                "cleaned_topology_sha256": "5" * 64,
+                "export_topology_sha256": "5" * 64,
+                "shape_generation": "shape-generation-42",
+                "export_shape_generation": "shape-generation-42",
+            },
+            "tessellation_identity": {
+                "shape_generation": "shape-generation-42",
+                "tolerance_shape_generation": "shape-generation-42",
+                "linear_deflection": 0.01,
+                "angular_tolerance_rad": 0.1,
+                "tessellation_generation": "tessellation-generation-42",
             },
         },
     }
@@ -272,6 +299,64 @@ def test_generalization_v9_source(case_id: str) -> None:
             }
         )
         expected = "external_volume_is_measured_after_unit_conversion"
+    result = json.loads(
+        build123d_jointed_assembly_source_replay_gate(json.dumps(row))
+    )
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v10_public_compound_overlap_double_count_volume",
+        "v10_public_center_of_mass_frame_volume_frame_mismatch",
+    ],
+)
+def test_generalization_v10_public(case_id: str) -> None:
+    reference, measured = _public()
+    row = measured["external_cad"][0]
+    if case_id == "v10_public_compound_overlap_double_count_volume":
+        row["compound_volume_identity"].update(
+            {"reported_volume_basis": "child_volume_sum", "overlap_volume": 0.125}
+        )
+        expected = "compound_volume_uses_physical_union_not_child_sum"
+    else:
+        row["placement_transform_identity"][
+            "center_of_mass_transform_generation"
+        ] = "assembly-transform-41"
+        expected = "center_of_mass_uses_final_placement_transform"
+    result = _public_result(reference, measured)
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v10_source_boolean_result_digest_before_shape_clean",
+        "v10_source_tessellation_tolerance_previous_shape",
+    ],
+)
+def test_generalization_v10_source(case_id: str) -> None:
+    row = _source()
+    identity = row["replay_identity"]
+    if case_id == "v10_source_boolean_result_digest_before_shape_clean":
+        identity["boolean_clean_identity"].update(
+            {
+                "shape_clean_input_sha256": "3" * 64,
+                "export_shape_generation": "shape-generation-43",
+            }
+        )
+        expected = "boolean_export_follows_shape_clean_identity"
+    else:
+        identity["tessellation_identity"].update(
+            {
+                "tolerance_shape_generation": "shape-generation-41",
+                "tessellation_generation": "tessellation-generation-41",
+            }
+        )
+        expected = "tessellation_tolerances_belong_to_current_shape"
     result = json.loads(
         build123d_jointed_assembly_source_replay_gate(json.dumps(row))
     )
