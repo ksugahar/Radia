@@ -589,7 +589,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
     out = dict(
         steps=steps_out,
         ndof=int(n_face), n_el=int(n_el), n_charge=int(Bc.shape[0]),
-        gfM=gfM, order=1,
+        gfM=gfM, order=1, curve_order=(2 if int(mesh.GetCurveOrder()) >= 2 else None),
         nu0=float(nu0),
         t_setup_s=float(t_setup_s),
         charge_gram_wall_s=float(charge_gram_wall_s),

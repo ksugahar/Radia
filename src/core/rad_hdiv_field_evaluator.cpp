@@ -17,6 +17,28 @@
 namespace rad_hdiv {
 namespace {
 
+struct CompensatedVec3 {
+    double sum[3] = {0.0, 0.0, 0.0};
+    double correction[3] = {0.0, 0.0, 0.0};
+
+    void Add(int component, double value) {
+        const double next = sum[component] + value;
+        correction[component] += std::fabs(sum[component]) >= std::fabs(value)
+            ? (sum[component] - next) + value
+            : (value - next) + sum[component];
+        sum[component] = next;
+    }
+
+    void Add(const double value[3]) {
+        for (int component = 0; component < 3; ++component) Add(component, value[component]);
+    }
+
+    void Store(double out[3]) const {
+        for (int component = 0; component < 3; ++component)
+            out[component] = sum[component] + correction[component];
+    }
+};
+
 using Vec = std::array<double, 3>;
 
 double Dot(const Vec& a, const Vec& b) {
@@ -507,16 +529,25 @@ struct HDivFieldEvaluator::Impl {
         if (algorithm == HDivFieldEvaluator::Algorithm::Tree) {
             AddTree(0, r, out);
         } else {
+            CompensatedVec3 accumulated;
             for (const TetSource& source : tets) {
                 double value[3]; TetVolFieldLinear(source.v, r, source.rho0, source.gradient, value);
-                for (int k = 0; k < 3; ++k) out[k] += value[k];
+                accumulated.Add(value);
             }
             for (const TriSource& source : triangles) {
                 double value[3]; QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
-                for (int k = 0; k < 3; ++k) out[k] += value[k];
+                accumulated.Add(value);
             }
-            for (const CurvedTetSource& source : curved_tets) AddCurvedTet(source, r, out);
-            for (const CurvedTriSource& source : curved_triangles) AddCurvedTriangle(source, r, out);
+            for (const CurvedTetSource& source : curved_tets) {
+                double value[3] = {0.0, 0.0, 0.0};
+                AddCurvedTet(source, r, value);
+                accumulated.Add(value);
+            }
+            for (const CurvedTriSource& source : curved_triangles) {
+                double value[3] = {0.0, 0.0, 0.0};
+                AddCurvedTriangle(source, r, value);
+                accumulated.Add(value);
+            }
             for (const PointSource& source : points) {
                 const double dx = r[0]-source.position[0];
                 const double dy = r[1]-source.position[1];
@@ -524,13 +555,19 @@ struct HDivFieldEvaluator::Impl {
                 const double r2 = dx*dx + dy*dy + dz*dz;
                 if (r2 <= 1e-300) continue;
                 const double scale = source.strength/(r2*std::sqrt(r2));
-                out[0] += scale*dx; out[1] += scale*dy; out[2] += scale*dz;
+                accumulated.Add(0, scale*dx);
+                accumulated.Add(1, scale*dy);
+                accumulated.Add(2, scale*dz);
             }
+            accumulated.Store(out);
         }
     }
 
     void EvaluatePhysical(const double r[3], double out[3], HDivFieldEvaluator::Algorithm algorithm) const {
-        EvaluateBase(r, out, algorithm);
+        double base[3];
+        EvaluateBase(r, base, algorithm);
+        CompensatedVec3 accumulated;
+        accumulated.Add(base);
         for (const ImageTerm& image : images) {
             double reflected[3] = {r[0], r[1], r[2]};
             for (int axis = 0; axis < 3; ++axis) if (image.mask & (1 << axis)) reflected[axis] *= -1.0;
@@ -538,9 +575,10 @@ struct HDivFieldEvaluator::Impl {
             EvaluateBase(reflected, value, algorithm);
             for (int axis = 0; axis < 3; ++axis) {
                 if (image.mask & (1 << axis)) value[axis] *= -1.0;
-                out[axis] += image.sign*value[axis];
+                accumulated.Add(axis, image.sign*value[axis]);
             }
         }
+        accumulated.Store(out);
     }
 
     bool TreePassesProbe(const double* observations, std::size_t n_observations) const {

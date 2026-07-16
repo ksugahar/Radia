@@ -160,3 +160,22 @@ def test_rad_solve_auto_on_hex_uses_hdiv():
     assert float(M[:, 2].mean()) > 1e2
     rad.UtiDelAll()
     rad.set_demag_backend("auto")
+
+
+def test_rad_solve_auto_preserves_mesh_soft_iron_rt2_order():
+    """The user-intent bridge must not collapse an RT2 request back to RT1."""
+    rad.UtiDelAll()
+    rad.set_demag_backend("auto")
+    with ng.TaskManager():
+        iron = MeshSoftIron(_cube(2), mu_r=MU_R, order=2)
+    src = rad.ObjBckg(lambda p: [0.0, 0.0, MU0 * H0])
+    top = rad.ObjCnt([iron, src])
+    with ng.TaskManager():
+        res = rad.Solve(top, 1e-7, 3000, 0)
+
+    assert res["order"] == 2
+    assert res["n_el"] == 8
+    assert np.isfinite(res["M_avg"]).all()
+    assert float(res["M_avg"][2]) > 1e2
+    rad.UtiDelAll()
+    rad.set_demag_backend("auto")

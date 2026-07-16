@@ -270,6 +270,7 @@ public:
                         std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
                         std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
                         std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+                        std::vector<double> field_tri_pts, std::vector<double> field_tri_w,
                         std::vector<double> gl_out, std::vector<double> gw_out,
                         std::vector<double> gl_in, std::vector<double> gw_in,
                         std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
@@ -698,6 +699,7 @@ private:
     std::vector<double> m_wCellNodes;    // [n_el*54]  18-node tri-P2 (x) z-P2 prism lattice (n = t + 6*iz)
     std::vector<double> m_wFaceNodes;    // [n_bf*27]  9-node slots x 3D (a tri face fills the first 6 = 18)
     std::vector<int>    m_wFaceType;     // [n_bf] 0=tri (1 sub-tri, 6-node), 1=quad (2 sub-tris, 9-node)
+    std::vector<double> m_wFieldTriP, m_wFieldTriW; // higher symmetric tri rule used only by field materialization
     std::vector<double> m_wCellSubC, m_wCellSubS, m_wCellSubV;  // [n_el*3*3], [n_el*3], [n_el*3*4*3]  (3 sub-tets)
     std::vector<double> m_wFaceSubC, m_wFaceSubS, m_wFaceSubV;  // [n_bf*2*3], [n_bf*2], [n_bf*2*3*3]  (tri uses sub 0)
     std::vector<HexSiteRad> m_wCellSiteRad;     // [3*15]  per (sub-tet, site) ref-space radial tables

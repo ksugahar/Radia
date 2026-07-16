@@ -19,7 +19,8 @@ def _hex_mesh():
     )
 
 
-def test_linear_recoil_is_exactly_the_shifted_symmetric_hdiv_system():
+@pytest.mark.parametrize("order", [1, 2])
+def test_linear_recoil_is_exactly_the_shifted_symmetric_hdiv_system(order):
     mesh = _hex_mesh()
     mu_rec = 1.05
     B_r = np.array([0.1, -0.2, 1.15])
@@ -30,10 +31,10 @@ def test_linear_recoil_is_exactly_the_shifted_symmetric_hdiv_system():
 
     with ng.TaskManager():
         permanent_magnet = vim.Solve(
-            mesh, mu_r=mu_rec, B_r=B_r, H_ext=H_applied, tol=1.0e-10
+            mesh, mu_r=mu_rec, B_r=B_r, H_ext=H_applied, order=order, tol=1.0e-10
         )
         shifted_linear = vim.Solve(
-            mesh, mu_r=mu_rec, H_ext=equivalent_H, tol=1.0e-10
+            mesh, mu_r=mu_rec, H_ext=equivalent_H, order=order, tol=1.0e-10
         )
 
     np.testing.assert_allclose(
@@ -48,6 +49,7 @@ def test_linear_recoil_is_exactly_the_shifted_symmetric_hdiv_system():
     assert permanent_magnet["permanent_magnet_level"] == 2
     assert permanent_magnet["recoil_mu_r"] == pytest.approx(mu_rec)
     assert permanent_magnet["B_r_supplied"] is True
+    assert permanent_magnet["order"] == order
     assert permanent_magnet["nonlinear"] is False
     field = vim.FieldFromSolution(
         permanent_magnet, np.array([[0.0, 0.0, 0.5], [0.3, -0.2, 0.4]]),

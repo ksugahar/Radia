@@ -143,6 +143,9 @@ This history-dependent path currently solves PM self-demagnetization under an
 arbitrary prescribed NGSolve applied field.  A mutually coupled evolving PM
 plus nonlinear soft-iron block iteration is separate open work; do not describe
 the fixed `MagnetizationSource` coupling as that nonlinear PM model.
+It currently uses RT1 with one committed constitutive state per element.  RT2
+requires states and updates at material quadrature points; an order-only switch
+would not be a valid high-order hysteresis implementation.
 
 For level 3, construct `vim.PlayHysteresisMaterial(K, eta, f_k_tables)` and
 pass it as `material=` to the same `SolveHysteresis` stepping API.  It retains

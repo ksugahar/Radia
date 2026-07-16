@@ -175,7 +175,7 @@ except ImportError:
 #
 # DEFAULT = "auto":
 #   - mesh-BACKED pure TET / HEX / WEDGE soft iron
-#     (radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=) + rad.Solve) -> HDiv-VIM (RT1).
+#     (radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=, order=1|2) + rad.Solve) -> HDiv-VIM.
 #   - mesh-BACKED unsupported element mixes fail loud until HDiv coverage is added.
 #   - mesh-LESS surface-charge soft iron is retired; build a mesh and use MeshSoftIron/SoftIron.
 #   - permanent-magnet field objects and legacy non-soft-iron C++ operations are unchanged.
