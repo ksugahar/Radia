@@ -363,6 +363,7 @@ public:
     void ConfigureGeometryMassMatrix(
         std::vector<int> mI, std::vector<int> mJ,
         std::vector<double> mV, int n_face);
+    bool RestoreGeometryMassMatrix();
     bool HasConfiguredChargeMap() const { return m_operatorChargeConfigured; }
     bool HasConfiguredMassMatrix() const { return m_operatorMassConfigured; }
     bool HasConfiguredGeometryMassMatrix() const { return m_operatorGeometryMassConfigured; }
@@ -565,6 +566,7 @@ private:
     bool m_operatorChargeConfigured = false;
     bool m_operatorMassConfigured = false;
     bool m_operatorGeometryMassConfigured = false;
+    bool m_operatorMassIsGeometry = false;
     // Get-or-build the persistent factor (the single shared implementation for both solve methods,
     // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
     // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to

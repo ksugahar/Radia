@@ -43,8 +43,9 @@ def test_rt2_history_uses_quadrature_state_and_restarts():
     material = _TrackingLinearMaterial()
     varying_field = ng.CF((0.0, 0.0, 2.0e4*(1.0 + 0.4*ng.x)))
     with ng.TaskManager():
-        first = vim.SolveHysteresis(
-            mesh, [varying_field], material=material, order=2,
+        solver = vim.HDivSolver(mesh, order=2)
+        first = solver.SolveHysteresis(
+            [varying_field], material=material,
             tol=1.0e-10, maxit=500, nl_tol=1.0e-8)
 
     assert first["order"] == 2
@@ -57,13 +58,14 @@ def test_rt2_history_uses_quadrature_state_and_restarts():
     assert first["steps"][0]["M"].shape == (first["n_el"], 3)
 
     with ng.TaskManager():
-        continued = vim.SolveHysteresis(
-            mesh, [[0.0, 0.0, 1.0e4]], material=material, order=2,
+        continued = solver.SolveHysteresis(
+            [[0.0, 0.0, 1.0e4]], material=material,
             initial_state=first["state"], tol=1.0e-10, maxit=500,
-            nl_tol=1.0e-8, _prepared_operator=first["_prepared_operator"])
+            nl_tol=1.0e-8)
 
     assert continued["state"]["material_states"].shape == states.shape
     assert continued["state"]["state_layout"] == "quadrature"
-    assert continued["prepared_operator_reused"] is True
+    assert continued["operator_reused"] is True
+    assert solver.operator_build_count == 1
     assert continued["_charge_gram"] is first["_charge_gram"]
     assert continued["charge_gram_wall_s"] == 0.0

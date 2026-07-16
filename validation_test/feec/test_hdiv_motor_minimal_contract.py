@@ -59,3 +59,42 @@ def test_planar_hdiv_motor_saliency_angle_sweep_contract():
     ref = closed_form_torque(theta)
     assert abs(positive[0] - ref) / abs(ref) < 2e-2, \
         f"HDiv motor torque {positive[0]:.3g} vs closed form {ref:.3g}"
+
+
+def test_curved_rt2_motor_improves_the_q2_rt1_torque_contract():
+    """Q3+RT2 improves the same curved saliency problem without API drift."""
+    a_el, b_el = 0.2, 0.1
+    chi = 1000.0
+    H0 = 8.0e4
+    theta = np.radians(25.0)
+    area = np.pi*a_el*b_el
+    Na, Nb = b_el/(a_el+b_el), a_el/(a_el+b_el)
+    Ha, Hb = H0*np.cos(theta), H0*np.sin(theta)
+    reference = MU0*area*(
+        chi*Ha/(1.0+chi*Na)*Hb - chi*Hb/(1.0+chi*Nb)*Ha)
+
+    errors = {}
+    with ng.TaskManager():
+        for order, curve_order in ((1, 2), (2, 3)):
+            mesh = ng.Mesh(OCCGeometry(
+                WorkPlane().Ellipse(a_el, b_el).Face(), dim=2
+            ).GenerateMesh(maxh=b_el/2.5))
+            mesh.Curve(curve_order)
+            motor = HDivReducedMotor(mesh, chi+1.0, order=order)
+            state = motor.solve_angle(-theta, (H0, 0.0))
+            routes = (
+                motor.maxwell_torque(state, 0.28, circle_points=1440),
+                state.torque_volume_Nm,
+                motor.virtual_work_torque(
+                    -theta, (H0, 0.0), delta_angle=np.radians(0.1)),
+            )
+            spread = (max(routes)-min(routes))/max(
+                abs(value) for value in routes)
+            assert spread < 5.0e-5, (order, curve_order, routes)
+            assert motor.gram_build_count == 1
+            assert motor.body.geometry_order == curve_order
+            errors[order] = abs(routes[0]-reference)/abs(reference)
+
+    assert errors[1] < 5.0e-4
+    assert errors[2] < 1.0e-4
+    assert errors[2] < 0.5*errors[1], errors

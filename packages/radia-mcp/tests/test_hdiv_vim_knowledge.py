@@ -8,9 +8,11 @@ def test_hdiv_vim_knowledge_distinguishes_fixed_and_evolving_pm_paths():
     assert "MagnetizationSource" in implementation
     assert "fixed-M source" in implementation
     assert "EnergyStopMaterial" in implementation
+    assert "HDivSolver" in implementation
     assert "initial_b_path" in implementation
     assert "initial_state" in implementation
-    assert "mutually evolving PM plus nonlinear iron" in implementation
+    assert "SolveCoupledHysteresis([history_pm, ...]" in implementation
+    assert "all states commit together" in implementation
 
 
 def test_hdiv_vim_knowledge_exposes_the_four_level_permanent_magnet_ladder():

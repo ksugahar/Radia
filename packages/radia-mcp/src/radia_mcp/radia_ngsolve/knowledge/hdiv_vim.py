@@ -38,6 +38,9 @@ Primary Python entry points:
 - `radia.vim.MeshSoftIron(mesh, mu_r=... | bh_table=...)`
 - `radia.Solve(model, prec, maxiter, method, demag_backend="hdiv")`
 - `radia.vim.Solve(mesh, mu_r=... | bh_table=..., H_ext=..., image=...)`
+- `radia.vim.HDivSolver(mesh, order=1|2, ...)` for repeated 3D loads,
+  history, and coupled bodies.  It owns the HDiv space and geometry-only
+  ChargeGram; result mappings do not contain a reusable-operator token.
 - Permanent magnets use one four-level model ladder, all on the HDiv charge and
   field machinery:
   1. fixed/given distribution:
@@ -70,8 +73,11 @@ Primary Python entry points:
   magnet segments into separate sources when `M_given` has an internal normal
   jump; one conforming source space enforces normal continuity within itself.
 - `radia.vim.EnergyStopMaterial(eta, g_tables, alpha=..., gamma=...,
-  b_max=...)` followed by `radia.vim.SolveHysteresis(pm_mesh, h_steps,
-  material=...)` for an evolving permanent-magnet state.  This is the C++
+  b_max=...)` followed by
+  `solver = radia.vim.HDivSolver(pm_mesh, order=1|2)` and
+  `solver.SolveHysteresis(h_steps, material=...)` for an evolving
+  permanent-magnet state.  Reuse the same solver with the returned `state`
+  for continuation.  This is the C++
   isotropic vector B-input Stop law: branch states live in fixed balls,
   monotone radial `g_k` tables define convex branch energies, trial evaluation
   is pure, and commit occurs only after the HDiv step converges.  `gamma=0`
@@ -82,9 +88,10 @@ Primary Python entry points:
   Public Radia provides the generic kernel, not fitted proprietary magnet-grade
   tables.  The returned final state owns a persistent C++ field evaluator, so
   `FieldFromSolution(result, points)` provides its demagnetizing field.  This
-  currently covers PM self-demagnetization under prescribed fields; mutually
-  evolving PM plus nonlinear iron remains a separate block coupling task.  Do
-  not confuse this with fixed-M `MagnetizationSource`.
+  also feeds `SolveCoupledHysteresis([history_pm, ...], [iron, ...], h_steps)`:
+  each PM trial restarts from its own committed state and all states commit
+  together only after the coupled fixed point converges.  Do not confuse this
+  with fixed-M `MagnetizationSource`.
 - `radia.vim.PlayHysteresisMaterial(K, eta, f_k_tables)` implements the
   simplified engineering Play level through the same `SolveHysteresis`
   stepping protocol.  It carries branch history, but it is not the full
@@ -294,8 +301,10 @@ Current direction:
   spatial `B_r`, solved by the symmetric C++ HDiv path in 3D and planar 2D.
 - Simplified history level: PlayHysteresisMaterial plus SolveHysteresis.
 - Evolving 3D permanent magnet: C++ vector B-input EnergyStopMaterial plus
-  SolveHysteresis, explicit manufacturing/restart state, and arbitrary applied
-  CoefficientFunction steps on RT1 TET/HEX/WEDGE.
+  persistent HDivSolver.SolveHysteresis, explicit manufacturing/restart state,
+  and arbitrary applied CoefficientFunction steps on RT1 TET/HEX/WEDGE.
+- Coupled evolving magnets: one or more CoupledHistoryBody objects plus
+  independent recoil/linear/nonlinear bodies, each with one persistent Gram.
 - Planar 2D support: HDiv/planar shared geometry and material helpers.
 - Public docs: result-bearing HDiv notebooks plus synchronized JSON.
 - MCP: teach the live HDiv API and reduced-FEM coupling path.
@@ -309,9 +318,8 @@ Open work:
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
   normal release to measure public `rad.Fld` on mdx/hibino;
 - keep Cubit/GMSH mesh-export artifacts aligned with the HDiv API.
-- add mutually coupled evolving-PM/nonlinear-soft-iron block iteration; fixed-M
-  source coupling and history-dependent PM self-demag are intentionally
-  distinct current APIs.
+- extend application-level force validation while keeping the existing
+  curved motor Maxwell/volume/coenergy torque agreement green.
 """
 
 _SECTIONS = {
