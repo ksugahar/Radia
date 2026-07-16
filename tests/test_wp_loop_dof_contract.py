@@ -37,13 +37,17 @@ def _args(extra):
 
 
 def test_argparse_accepts_flag():
+    # bare --wp-loop-dof (the original store_true spelling) == "on"
     ns = _args(["--wp-bem-backend", "intree-dense"])
-    assert ns.wp_loop_dof is True
-    # default off
+    assert ns.wp_loop_dof == "on"
+    # default is auto (apply when genus-1 + prerequisites hold)
     p = ci.build_argparser()
     ns0 = p.parse_args(["--coil-solver", "peec", "--coil-step", "c.step",
                         "--frequency", "7000"])
-    assert ns0.wp_loop_dof is False
+    assert ns0.wp_loop_dof == "auto"
+    # explicit value spelling also parses
+    ns2 = _args(["off", "--wp-bem-backend", "intree-dense"])
+    assert ns2.wp_loop_dof == "off"
 
 
 @pytest.mark.parametrize("extra,frag", [
