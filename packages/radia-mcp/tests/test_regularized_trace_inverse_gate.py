@@ -341,6 +341,38 @@ def _with_v13_identity(summary):
     return summary
 
 
+def _with_v14_identity(summary):
+    summary = _with_v13_identity(summary)
+    summary["fembem_sesquilinear_inner_product_identity"] = {
+        "coupling_generation": "fembem-coupling-16",
+        "fem_operator_generation": "fembem-coupling-16",
+        "bem_operator_generation": "fembem-coupling-16",
+        "trace_operator_generation": "fembem-coupling-16",
+        "inner_product_convention": "conjugate_test_linear_trial",
+        "fem_inner_product_convention": "conjugate_test_linear_trial",
+        "bem_inner_product_convention": "conjugate_test_linear_trial",
+        "trace_inner_product_convention": "conjugate_test_linear_trial",
+        "test_argument_conjugated": True,
+        "trial_argument_conjugated": False,
+        "operator_metadata_sha256": "1" * 64,
+        "assembled_operator_metadata_sha256": "1" * 64,
+    }
+    summary["hmatrix_low_rank_tolerance_norm_basis_identity"] = {
+        "hmatrix_assembly_generation": "hmatrix-assembly-16",
+        "low_rank_factor_generation": "hmatrix-assembly-16",
+        "compression_tolerance": 1.0e-5,
+        "measured_relative_error": 8.0e-6,
+        "tolerance_norm_basis": "relative_frobenius",
+        "measured_error_norm_basis": "relative_frobenius",
+        "acceptance_norm_basis": "relative_frobenius",
+        "tolerance_calibration_generation": "hmatrix-tolerance-16",
+        "acceptance_tolerance_generation": "hmatrix-tolerance-16",
+        "dense_block_sha256": "2" * 64,
+        "accepted_block_source_sha256": "2" * 64,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -524,6 +556,51 @@ def test_v13_public_cq_inverse_z_transform_fft_normalization_mismatch():
     assert (
         result["checks"][
             "cq_inverse_z_transform_uses_matching_fft_normalization"
+        ]
+        is False
+    )
+
+
+def test_accepts_v14_sesquilinear_and_hmatrix_norm_lineage():
+    result = regularized_trace_inverse_path_gate(_with_v14_identity(_summary()))
+    assert result["status"] == "ok"
+
+
+def test_v14_public_fembem_sesquilinear_inner_product_conjugation_mismatch():
+    bad = _with_v14_identity(_summary())
+    bad["fembem_sesquilinear_inner_product_identity"].update(
+        {
+            "bem_operator_generation": "fembem-coupling-15",
+            "bem_inner_product_convention": "linear_test_conjugate_trial",
+            "test_argument_conjugated": False,
+            "trial_argument_conjugated": True,
+            "assembled_operator_metadata_sha256": "5" * 64,
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "fembem_operators_share_sesquilinear_conjugation_convention"
+        ]
+        is False
+    )
+
+
+def test_v14_public_hmatrix_low_rank_tolerance_norm_basis_mismatch():
+    bad = _with_v14_identity(_summary())
+    bad["hmatrix_low_rank_tolerance_norm_basis_identity"].update(
+        {
+            "measured_error_norm_basis": "relative_spectral",
+            "acceptance_norm_basis": "relative_spectral",
+            "acceptance_tolerance_generation": "hmatrix-tolerance-15",
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hmatrix_low_rank_acceptance_uses_calibrated_norm_basis"
         ]
         is False
     )
