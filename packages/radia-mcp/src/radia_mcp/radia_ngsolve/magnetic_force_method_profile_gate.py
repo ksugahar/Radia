@@ -107,11 +107,15 @@ def magnetic_force_method_profile_gate(
     demag_reference_ok = True
     coordinate_system_binding_ok = True
     force_normalization_ok = True
+    hysteresis_branch_state_ok = True
+    remanence_frame_binding_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
         coordinate_system_binding_ok = False
         force_normalization_ok = False
+        hysteresis_branch_state_ok = False
+        remanence_frame_binding_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -190,6 +194,49 @@ def magnetic_force_method_profile_gate(
                 and all(value == "total_3d" for value in profile_bases.values())
                 and force_normalization.get("per_length_to_total_applied") is True
             )
+        branch_state = identity_value.get("hysteresis_branch_state")
+        if branch_state is not None:
+            observable_branch = (
+                str(branch_state.get("observable_branch", ""))
+                if isinstance(branch_state, Mapping)
+                else ""
+            )
+            hysteresis_branch_state_ok = (
+                isinstance(branch_state, Mapping)
+                and observable_branch in {"ascending", "descending"}
+                and branch_state.get("state_memory_branch") == observable_branch
+                and branch_state.get("tangent_branch") == observable_branch
+                and bool(branch_state.get("branch_state_generation"))
+                and branch_state.get("tangent_state_generation")
+                == branch_state.get("branch_state_generation")
+            )
+        remanence_frame = identity_value.get("remanence_frame_binding")
+        if remanence_frame is not None:
+            vector_frame = (
+                str(remanence_frame.get("remanence_vector_frame_id", ""))
+                if isinstance(remanence_frame, Mapping)
+                else ""
+            )
+            assembly_frame = (
+                str(remanence_frame.get("assembly_frame_id", ""))
+                if isinstance(remanence_frame, Mapping)
+                else ""
+            )
+            remanence_frame_binding_ok = (
+                isinstance(remanence_frame, Mapping)
+                and bool(vector_frame)
+                and bool(assembly_frame)
+                and remanence_frame.get("transform_input_frame_id") == vector_frame
+                and remanence_frame.get("transform_output_frame_id")
+                == assembly_frame
+                and remanence_frame.get("transformed_vector_frame_id")
+                == assembly_frame
+                and remanence_frame.get("transform_applied")
+                is (vector_frame != assembly_frame)
+                and bool(remanence_frame.get("geometry_rotation_revision"))
+                and remanence_frame.get("remanence_transform_revision")
+                == remanence_frame.get("geometry_rotation_revision")
+            )
 
     method_difference = _maximum_relative_difference(target, stress)
     independent_stress_difference = _maximum_relative_difference(stress, independent_stress)
@@ -263,6 +310,12 @@ def magnetic_force_method_profile_gate(
             coordinate_system_binding_ok
         ),
         "force_profiles_share_total_3d_normalization": force_normalization_ok,
+        "hysteresis_observable_state_and_tangent_share_branch": (
+            hysteresis_branch_state_ok
+        ),
+        "remanence_vector_is_transformed_from_material_to_assembly_frame": (
+            remanence_frame_binding_ok
+        ),
     }
     issues = [name for name, ok in checks.items() if not ok]
     return {
@@ -289,6 +342,8 @@ def magnetic_force_method_profile_gate(
             "pinned. Bind every artifact's position grid to the same declared unit; equal "
             "numeric coordinates do not prove equal physical positions. Keep an all-body "
             "force as a negative control so a selection-scope "
-            "error cannot masquerade as disagreement between force formulations."
+            "error cannot masquerade as disagreement between force formulations. Bind "
+            "hysteresis observables to their active branch and transform material-frame "
+            "remanence vectors into the assembly frame before reuse."
         ),
     }

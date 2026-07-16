@@ -64,6 +64,23 @@ def _with_artifact_identity(summary: dict) -> dict:
             },
             "per_length_to_total_applied": True,
         },
+        "hysteresis_branch_state": {
+            "observable_branch": "descending",
+            "state_memory_branch": "descending",
+            "tangent_branch": "descending",
+            "branch_state_generation": "branch-state-12",
+            "tangent_state_generation": "branch-state-12",
+        },
+        "remanence_frame_binding": {
+            "remanence_vector_frame_id": "magnet-material-frame",
+            "transform_input_frame_id": "magnet-material-frame",
+            "assembly_frame_id": "assembly-global-frame",
+            "transform_output_frame_id": "assembly-global-frame",
+            "transformed_vector_frame_id": "assembly-global-frame",
+            "transform_applied": True,
+            "geometry_rotation_revision": "rotation-12",
+            "remanence_transform_revision": "rotation-12",
+        },
     }
     return summary
 
@@ -250,3 +267,41 @@ def test_v9_public_force_normalization_per_length_vs_total() -> None:
     result = magnetic_force_method_profile_gate(summary)
     assert result["status"] == "needs_attention"
     assert result["checks"]["force_profiles_share_total_3d_normalization"] is False
+
+
+def test_v10_public_hysteresis_branch_direction_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["hysteresis_branch_state"].update(
+        {
+            "state_memory_branch": "ascending",
+            "tangent_branch": "ascending",
+            "tangent_state_generation": "branch-state-11",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "hysteresis_observable_state_and_tangent_share_branch"
+        ]
+        is False
+    )
+
+
+def test_v10_public_remanence_vector_material_frame_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["remanence_frame_binding"].update(
+        {
+            "transform_applied": False,
+            "transformed_vector_frame_id": "magnet-material-frame",
+            "remanence_transform_revision": "rotation-11",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "remanence_vector_is_transformed_from_material_to_assembly_frame"
+        ]
+        is False
+    )
