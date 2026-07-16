@@ -261,6 +261,30 @@ def _with_v10_identity(summary):
     return summary
 
 
+def _with_v11_identity(summary):
+    summary = _with_v10_identity(summary)
+    summary["cq_inverse_laplace_contour_identity"] = {
+        "contour_generation": "cq-contour-43",
+        "transfer_sample_contour_generation": "cq-contour-43",
+        "laplace_sample_ids": ["s-0", "s-1", "s-2", "s-3"],
+        "transfer_sample_ids": ["s-0", "s-1", "s-2", "s-3"],
+        "sqrt_branch_conventions": ["principal_outgoing"] * 4,
+        "inverse_laplace_branch_convention": "principal_outgoing",
+    }
+    mesh_digest = "7" * 64
+    summary["fembem_trace_orientation_identity"] = {
+        "volume_mesh_sha256": mesh_digest,
+        "trace_mesh_sha256": mesh_digest,
+        "volume_mesh_generation": "vol-mesh-43",
+        "trace_mesh_generation": "vol-mesh-43",
+        "boundary_orientation_mesh_generation": "vol-mesh-43",
+        "trace_boundary_triangle_digest": "trace-triangles-43",
+        "oriented_boundary_triangle_digest": "trace-triangles-43",
+        "outward_orientation_verified": True,
+    }
+    return summary
+
+
 def test_accepts_v8_parameter_and_regularization_run_generations():
     result = regularized_trace_inverse_path_gate(_with_v8_generations(_summary()))
     assert result["status"] == "ok"
@@ -340,3 +364,36 @@ def test_v10_public_cq_weights_time_step_method_mismatch():
     result = regularized_trace_inverse_path_gate(bad)
     assert result["status"] == "needs_attention"
     assert result["checks"]["cq_weights_match_current_time_grid_and_method"] is False
+
+
+def test_v11_public_cq_inverse_laplace_contour_branch_mismatch():
+    bad = _with_v11_identity(_summary())
+    bad["cq_inverse_laplace_contour_identity"]["sqrt_branch_conventions"][
+        2
+    ] = "opposite_incoming"
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "cq_transfer_samples_share_inverse_laplace_contour_branch"
+        ]
+        is False
+    )
+
+
+def test_v11_public_fembem_trace_orientation_mesh_mismatch():
+    bad = _with_v11_identity(_summary())
+    bad["fembem_trace_orientation_identity"].update(
+        {
+            "boundary_orientation_mesh_generation": "vol-mesh-42",
+            "oriented_boundary_triangle_digest": "trace-triangles-42",
+        }
+    )
+    result = regularized_trace_inverse_path_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "fembem_trace_orientation_matches_current_volume_mesh"
+        ]
+        is False
+    )
