@@ -324,6 +324,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
     assembly_replacement_identity_ok = True
     assembly_mass_property_coordinate_identity_ok = True
     boolean_final_shape_report_identity_ok = True
+    step_geometry_unit_scale_identity_ok = True
+    selector_cache_shape_identity_ok = True
     if replay_identity_value is not None and not replay_identity_present:
         commit_identity_ok = False
         kernel_version_identity_ok = False
@@ -337,6 +339,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         assembly_replacement_identity_ok = False
         assembly_mass_property_coordinate_identity_ok = False
         boolean_final_shape_report_identity_ok = False
+        step_geometry_unit_scale_identity_ok = False
+        selector_cache_shape_identity_ok = False
     elif replay_identity_present:
         source_commit = str(replay_identity_value.get("source_commit", "")).lower()
         replayed_commit = str(
@@ -695,6 +699,41 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
                 and final_shape.get("validity_brep_sha256") == final_digest
                 and final_shape.get("topology_brep_sha256") == final_digest
             )
+
+        step_unit = replay_identity_value.get("step_geometry_unit_scale_identity")
+        if step_unit is not None:
+            step_unit = step_unit if isinstance(step_unit, Mapping) else {}
+            units = {"m": 1.0, "mm": 1.0e-3, "um": 1.0e-6}
+            geometry_unit = str(step_unit.get("geometry_length_unit", "")).strip()
+            metadata_unit = str(step_unit.get("metadata_length_unit", "")).strip()
+            try:
+                geometry_scale = float(step_unit.get("geometry_scale_to_m"))
+                metadata_scale = float(step_unit.get("metadata_scale_to_m"))
+            except (TypeError, ValueError):
+                geometry_scale = math.nan
+                metadata_scale = math.nan
+            generation = str(step_unit.get("step_import_generation", "")).strip()
+            step_geometry_unit_scale_identity_ok = (
+                geometry_unit in units and metadata_unit == geometry_unit
+                and math.isclose(geometry_scale, units[geometry_unit], rel_tol=0.0, abs_tol=0.0)
+                and math.isclose(metadata_scale, geometry_scale, rel_tol=0.0, abs_tol=0.0)
+                and bool(generation) and step_unit.get("geometry_coordinate_generation") == generation
+                and step_unit.get("metadata_generation") == generation
+            )
+
+        selector_cache = replay_identity_value.get("selector_cache_shape_identity")
+        if selector_cache is not None:
+            selector_cache = selector_cache if isinstance(selector_cache, Mapping) else {}
+            generation = str(selector_cache.get("active_shape_generation", "")).strip()
+            digest = str(selector_cache.get("selector_query_sha256", "")).lower()
+            selector_cache_shape_identity_ok = (
+                bool(generation) and selector_cache.get("selector_cache_shape_generation") == generation
+                and selector_cache.get("selected_face_shape_generation") == generation
+                and len(digest) == 64 and all(character in "0123456789abcdef" for character in digest)
+                and selector_cache.get("cached_selector_query_sha256") == digest
+                and list(selector_cache.get("selected_face_ids") or []) == list(selector_cache.get("live_face_ids") or [])
+                and bool(selector_cache.get("selected_face_ids"))
+            )
     joint_names = {
         str(name)
         for row in components
@@ -745,6 +784,8 @@ def jointed_assembly_source_replay_gate(summary: Mapping[str, object]) -> dict[s
         "final_shape_report_uses_one_post_heal_generation": (
             boolean_final_shape_report_identity_ok
         ),
+        "step_geometry_and_metadata_share_one_length_unit": step_geometry_unit_scale_identity_ok,
+        "selector_cache_belongs_to_active_shape_generation": selector_cache_shape_identity_ok,
         "component_closure_diagnosis_verified": summary.get("diagnosis_gate_status") == "ok"
         and summary.get("diagnosis") == "component_solid_closure_loss"
         and summary.get("solver_ready") is False,

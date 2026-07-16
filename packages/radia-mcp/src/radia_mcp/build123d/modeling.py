@@ -3146,6 +3146,73 @@ def shape_mass_property_crosscheck_summary(
                 for row in rows
             )
 
+    tessellation_unit_evidence_present = any(
+        row.get("tessellation_tolerance_unit_identity") is not None for row in identity_rows
+    )
+
+    def tessellation_tolerance_unit_identity(row):
+        value = row.get("tessellation_tolerance_unit_identity")
+        if not isinstance(value, dict):
+            return None
+        units = {"m": 1.0, "mm": 1.0e-3, "um": 1.0e-6}
+        unit = str(value.get("linear_deflection_unit", "")).strip()
+        evaluation_unit = str(value.get("area_evaluation_deflection_unit", "")).strip()
+        try:
+            scale = float(value.get("linear_deflection_scale_to_m"))
+            evaluation_scale = float(value.get("area_evaluation_deflection_scale_to_m"))
+            deflection = float(value.get("linear_deflection_value"))
+        except (TypeError, ValueError):
+            return None
+        generation = str(value.get("tessellation_generation", "")).strip()
+        if (
+            unit not in units or evaluation_unit != unit or deflection <= 0.0
+            or not math.isclose(scale, units[unit], rel_tol=0.0, abs_tol=0.0)
+            or not math.isclose(evaluation_scale, scale, rel_tol=0.0, abs_tol=0.0)
+            or not generation or value.get("surface_area_generation") != generation
+        ):
+            return None
+        return generation, deflection * scale
+
+    reference_tessellation_units = {str(row.get("name", "")): tessellation_tolerance_unit_identity(row) for row in reference}
+    tessellation_unit_identity_ok = not tessellation_unit_evidence_present
+    if tessellation_unit_evidence_present:
+        tessellation_unit_identity_ok = bool(reference_tessellation_units) and all(value is not None for value in reference_tessellation_units.values())
+        for _, rows in normalized_sets:
+            tessellation_unit_identity_ok = tessellation_unit_identity_ok and all(
+                tessellation_tolerance_unit_identity(row) == reference_tessellation_units.get(str(row.get("name", ""))) for row in rows
+            )
+
+    label_topology_evidence_present = any(row.get("compound_label_topology_identity") is not None for row in identity_rows)
+
+    def compound_label_topology_identity(row):
+        value = row.get("compound_label_topology_identity")
+        if not isinstance(value, dict):
+            return None
+        generation = str(value.get("boolean_generation", "")).strip()
+        digest = str(value.get("final_shape_sha256", "")).lower()
+        try:
+            topology_index = int(value.get("topology_index"))
+            label_index = int(value.get("label_topology_index"))
+        except (TypeError, ValueError):
+            return None
+        if (
+            not generation or value.get("label_table_boolean_generation") != generation
+            or value.get("selector_boolean_generation") != generation or not value.get("label")
+            or topology_index < 0 or label_index != topology_index or not valid_sha256(digest)
+            or value.get("selected_subshape_parent_sha256") != digest
+        ):
+            return None
+        return generation, str(value.get("label")), topology_index, digest
+
+    reference_label_topologies = {str(row.get("name", "")): compound_label_topology_identity(row) for row in reference}
+    label_topology_identity_ok = not label_topology_evidence_present
+    if label_topology_evidence_present:
+        label_topology_identity_ok = bool(reference_label_topologies) and all(value is not None for value in reference_label_topologies.values())
+        for _, rows in normalized_sets:
+            label_topology_identity_ok = label_topology_identity_ok and all(
+                compound_label_topology_identity(row) == reference_label_topologies.get(str(row.get("name", ""))) for row in rows
+            )
+
     inventory = shape_measurement_inventory_summary(reference)
     sets = []
     all_rows = []
@@ -3213,6 +3280,8 @@ def shape_mass_property_crosscheck_summary(
         "boolean_validity_topology_and_mass_share_final_healed_shape": (
             final_shape_identity_ok
         ),
+        "tessellated_area_uses_one_length_unit_tolerance": tessellation_unit_identity_ok,
+        "compound_labels_resolve_on_final_boolean_topology": label_topology_identity_ok,
     }
     issues = []
     if not checks["all_reference_shapes_valid"]:
