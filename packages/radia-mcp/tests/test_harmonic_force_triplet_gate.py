@@ -65,3 +65,11 @@ def test_rejects_total_force_labeled_as_per_length():
     result = call(payload)
     assert result["status"] == "needs_attention"
     assert result["checks"]["force_dimension_and_unit_consistent"] is False
+
+
+def test_v7_public_action_reaction_force_imbalance():
+    payload = copy.deepcopy(summary())
+    payload["methods"][2]["force"][2] = 0.80
+    result = call(payload)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["action_reaction_closure_within_tolerance"] is False

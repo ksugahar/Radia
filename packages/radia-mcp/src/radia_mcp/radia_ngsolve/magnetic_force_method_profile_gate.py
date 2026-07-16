@@ -126,6 +126,15 @@ def magnetic_force_method_profile_gate(
 
     replay = summary.get("replay")
     replay = replay if isinstance(replay, Mapping) else {}
+    position_unit = str(summary.get("position_unit") or "")
+    artifact_position_units = summary.get("artifact_position_units")
+    artifact_position_units = (
+        artifact_position_units if isinstance(artifact_position_units, Mapping) else None
+    )
+    artifact_units_match = artifact_position_units is None or (
+        bool(artifact_position_units)
+        and all(str(unit) == position_unit for unit in artifact_position_units.values())
+    )
     parsed_replay = float(replay.get("parsed_max_abs", math.inf))
     checks = {
         "sample_count_sufficient": len(positions) >= minimum_sample_count,
@@ -135,7 +144,8 @@ def magnetic_force_method_profile_gate(
             str(summary.get("force_unit") or ""),
         )
         in _DIMENSION_UNITS,
-        "position_unit_recorded": summary.get("position_unit") in {"m", "mm"},
+        "position_unit_recorded": position_unit in {"m", "mm"},
+        "artifact_position_units_match_common_grid": artifact_units_match,
         "comparison_axis_recorded": summary.get("comparison_axis") in {"x", "y", "z"},
         "target_methods_share_sign": same_sign,
         "target_methods_share_stepwise_trend": same_trend,
@@ -178,7 +188,9 @@ def magnetic_force_method_profile_gate(
         "lesson": (
             "Force-method closure is meaningful only when the target body, closed "
             "stress surface, comparison axis, units, and dimensional convention are "
-            "pinned. Keep an all-body force as a negative control so a selection-scope "
+            "pinned. Bind every artifact's position grid to the same declared unit; equal "
+            "numeric coordinates do not prove equal physical positions. Keep an all-body "
+            "force as a negative control so a selection-scope "
             "error cannot masquerade as disagreement between force formulations."
         ),
     }
