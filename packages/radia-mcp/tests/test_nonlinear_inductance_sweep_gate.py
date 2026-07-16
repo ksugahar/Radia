@@ -262,6 +262,34 @@ def _with_v14_bindings(summary):
             "window_coefficients_sha256": "2" * 64,
             "fft_window_coefficients_sha256": "2" * 64,
         }
+        row["sparameter_complex_impedance_renormalization_identity"] = {
+            "port_calibration_generation": "port-calibration-18",
+            "sparameter_result_port_calibration_generation": "port-calibration-18",
+            "renormalization_port_calibration_generation": "port-calibration-18",
+            "source_reference_impedance_basis": "complex_ohm",
+            "renormalization_reference_impedance_basis": "complex_ohm",
+            "source_reference_impedance_real_ohm": 50.0,
+            "source_reference_impedance_imag_ohm": 5.0,
+            "target_reference_impedance_real_ohm": 75.0,
+            "target_reference_impedance_imag_ohm": -2.0,
+            "renormalization_transform_generation": "renormalization-18",
+            "result_renormalization_transform_generation": "renormalization-18",
+            "renormalization_transform_sha256": "5" * 64,
+            "result_renormalization_transform_sha256": "5" * 64,
+        }
+        row["farfield_polarization_basis_transform_identity"] = {
+            "farfield_solve_generation": "farfield-solve-18",
+            "farfield_result_generation": "farfield-solve-18",
+            "source_polarization_basis": "spherical_theta_phi",
+            "comparison_polarization_basis": "ludwig_3",
+            "basis_transform_applied": True,
+            "basis_transform_generation": "polarization-transform-18",
+            "comparison_transform_generation": "polarization-transform-18",
+            "angular_coordinate_frame": "global_spherical",
+            "comparison_angular_coordinate_frame": "global_spherical",
+            "basis_transform_sha256": "6" * 64,
+            "comparison_basis_transform_sha256": "6" * 64,
+        }
     return summary
 
 
@@ -697,6 +725,46 @@ def test_v15_public_time_domain_fft_window_coherent_gain_normalization_mismatch(
     assert (
         result["runs"][0]["checks"][
             "fft_window_uses_current_coherent_gain_correction"
+        ]
+        is False
+    )
+
+
+def test_v16_public_sparameter_complex_reference_impedance_renormalization_generation_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0][
+        "sparameter_complex_impedance_renormalization_identity"
+    ].update(
+        {
+            "renormalization_port_calibration_generation": "port-calibration-17",
+            "result_renormalization_transform_generation": "renormalization-17",
+            "result_renormalization_transform_sha256": "4" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "sparameter_renormalization_uses_current_complex_impedance_calibration"
+        ]
+        is False
+    )
+
+
+def test_v16_public_farfield_polarization_theta_phi_ludwig_basis_mismatch():
+    bad = _with_v14_bindings(_summary())
+    bad["runs"][0]["farfield_polarization_basis_transform_identity"].update(
+        {
+            "basis_transform_applied": False,
+            "comparison_transform_generation": "polarization-transform-17",
+            "comparison_basis_transform_sha256": "4" * 64,
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "farfield_comparison_uses_explicit_current_polarization_transform"
         ]
         is False
     )
