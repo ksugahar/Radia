@@ -3356,6 +3356,7 @@ def force_coenergy_displacement_gate(
     energy_kind: str = "constant_current_coenergy",
     max_central_relative_error: float = 0.02,
     min_sample_count: int = 5,
+    artifact_identity: dict | None = None,
 ) -> str:
     """Gate direct force against the central derivative of magnetic coenergy."""
 
@@ -3367,6 +3368,7 @@ def force_coenergy_displacement_gate(
             energy_kind=energy_kind,
             max_central_relative_error=max_central_relative_error,
             min_sample_count=min_sample_count,
+            artifact_identity=artifact_identity,
         )
     except (TypeError, ValueError) as exc:
         result = {

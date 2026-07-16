@@ -12,6 +12,7 @@ def force_coenergy_displacement_gate(
     energy_kind: str = "constant_current_coenergy",
     max_central_relative_error: float = 0.02,
     min_sample_count: int = 5,
+    artifact_identity: dict | None = None,
 ):
     """Compare direct force with the central derivative of magnetic coenergy.
 
@@ -28,6 +29,41 @@ def force_coenergy_displacement_gate(
         raise ValueError("min_sample_count must be >= 5")
     if max_central_relative_error < 0.0:
         raise ValueError("max_central_relative_error must be >= 0")
+
+    identity_present = isinstance(artifact_identity, dict)
+    force_snapshot_ok = True
+    mesh_family_ok = True
+    if artifact_identity is not None and not identity_present:
+        force_snapshot_ok = False
+        mesh_family_ok = False
+    elif identity_present:
+        direct = artifact_identity.get("direct_force_snapshot")
+        derivative = artifact_identity.get("coenergy_derivative_snapshot")
+        if not isinstance(direct, dict) or not isinstance(derivative, dict):
+            force_snapshot_ok = False
+        else:
+            direct_step = str(direct.get("load_step_id", ""))
+            derivative_step = str(derivative.get("load_step_id", ""))
+            try:
+                direct_time = float(direct["time_s"])
+                derivative_time = float(derivative["time_s"])
+            except (KeyError, TypeError, ValueError):
+                direct_time = math.nan
+                derivative_time = math.nan
+            force_snapshot_ok = (
+                bool(direct_step)
+                and direct_step == derivative_step
+                and math.isfinite(direct_time)
+                and math.isfinite(derivative_time)
+                and direct_time == derivative_time
+            )
+        generations = artifact_identity.get("coenergy_mesh_family_generations")
+        mesh_family_ok = (
+            isinstance(generations, list)
+            and len(generations) == len(x)
+            and all(isinstance(value, str) and bool(value) for value in generations)
+            and len(set(generations)) == 1
+        )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -68,6 +104,8 @@ def force_coenergy_displacement_gate(
         "coenergy_nontrivial": finite and bool(w) and max(w) > min(w),
         "central_rows_available": len(central_errors) >= 3,
         "central_virtual_work_matches_direct_force": max_error <= max_central_relative_error,
+        "force_and_coenergy_share_load_step_snapshot": force_snapshot_ok,
+        "coenergy_stencil_uses_one_mesh_family_generation": mesh_family_ok,
     }
     return {
         "policy": "force_coenergy_displacement_gate_v1",
@@ -80,6 +118,7 @@ def force_coenergy_displacement_gate(
         ),
         "endpoint_errors_are_diagnostic_only": True,
         "checks": checks,
+        "warnings": [] if identity_present else ["artifact_identity_not_recorded"],
         "rows": rows,
         "lesson": (
             "At fixed current, direct force projected onto the displacement axis "
