@@ -92,8 +92,9 @@ ONLY through the (1/chi)-weighted HDiv mass (linear) / the per-element constitut
 Permanent magnets use the documented four-level ladder: fixed/given MagnetizationSource, this solve's
 linear-recoil B_r law, simplified Play, and full B-input EnergyStop.  Fixed PM + iron source coupling is
 live.  `vim.SolveCoupled` supplies mutually coupled linear-recoil PM + nonlinear iron and segmented
-linear-recoil bodies on independent spaces.  Mutually evolving EnergyStop PM + nonlinear iron remains
-separate history-coupling work.  This entry is also the soft-iron demag backend used by `rad.Solve`.
+linear-recoil bodies on independent spaces.  `vim.SolveCoupledHysteresis` supplies the stateful
+EnergyStop/Play PM + nonlinear-iron history coupling.  This entry is also the soft-iron demag backend
+used by `rad.Solve`.
 
 Per CLAUDE.md "TaskManager Wrap Policy: Caller Wraps, Helper Does NOT" -- this library helper does NOT
 open a TaskManager; the caller wraps the call in `with ng.TaskManager():`.

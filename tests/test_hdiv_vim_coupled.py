@@ -98,6 +98,59 @@ def test_segmented_recoil_magnets_keep_separate_normal_trace_spaces():
     assert all(body["prepared_operator_reused"] for body in result["bodies"])
 
 
+def test_energy_stop_pm_and_nonlinear_iron_commit_one_physical_step():
+    eta = np.array([0.15, 0.35, 0.65])
+    peaks = [2.0e4, 4.0e4, 7.0e4]
+    tables = [
+        (np.linspace(0.0, radius, 17), np.linspace(0.0, peak, 17))
+        for radius, peak in zip(eta, peaks)
+    ]
+    material = vim.EnergyStopMaterial(
+        eta, tables, alpha=5.0, gamma=0.0, b_max=1.5)
+    initial_b_path = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.9]])
+    pm = vim.CoupledHistoryBody(
+        _hex(-0.45, -0.25), "history-pm", material,
+        initial_b_path=initial_b_path,
+        solve_options={"gram_eps": 1.0e-8, "nl_tol": 3.0e-5})
+    iron = vim.CoupledBody(
+        _hex(0.25, 0.45), "nonlinear-iron",
+        bh_table=np.array([
+            [0.0, 0.0], [1.0e2, 0.8], [1.0e3, 1.35], [1.0e5, 1.8]]),
+        solve_options={
+            "gram_eps": 1.0e-8, "tol": 1.0e-8,
+            "nl_tol": 1.0e-6, "nl_maxit": 40})
+
+    with ng.TaskManager():
+        result = vim.SolveCoupledHysteresis(
+            pm, [iron], [[0.0, 0.0, 0.0]], tol=2.0e-6, maxit=12)
+        replay = vim.SolveHysteresis(
+            pm.mesh,
+            [vim.FieldCoefficientFromSolution(result["bodies"][0])],
+            material=material, initial_b_path=initial_b_path,
+            gram_eps=1.0e-8, nl_tol=3.0e-5,
+            _prepared_operator=result["history_body"]["_prepared_operator"])
+
+    step = result["steps"][0]
+    assert result["history_material_model"] == "b-input-energy-stop"
+    assert result["history_material_level"] == 4
+    assert result["nonlinear_iron_body_count"] == 1
+    assert 2 <= step["iterations"] <= 12
+    assert step["relative_step"] < 2.0e-6
+    assert result["history_body"]["prepared_operator_reused"] is True
+    assert result["bodies"][0]["prepared_operator_reused"] is True
+    assert result["history_body"]["charge_gram_wall_s"] == 0.0
+    assert result["bodies"][0]["charge_gram_wall_s"] == 0.0
+    np.testing.assert_allclose(
+        result["history_body"]["_m_coefficients"],
+        replay["_m_coefficients"], rtol=2.0e-11, atol=1.0e-8)
+    np.testing.assert_allclose(
+        result["state"]["material_states"],
+        replay["state"]["material_states"], rtol=0.0, atol=2.0e-12)
+    field = vim.FieldFromCoupledHysteresis(
+        result, [[0.0, 0.0, 0.0], [0.0, 0.0, 0.5]])
+    assert np.isfinite(field).all()
+
+
 def test_coupled_bodies_reject_a_shared_conforming_space():
     mesh = _hex(-0.1, 0.1)
     body_a = vim.CoupledBody(mesh, "a", mu_r=1.05, B_r=(1.0, 0.0, 0.0))
