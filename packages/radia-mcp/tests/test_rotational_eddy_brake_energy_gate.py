@@ -401,6 +401,29 @@ def _with_v12_parameter_topology_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v13_transform_identity(summary: dict) -> dict:
+    summary = _with_v12_parameter_topology_identity(summary)
+    summary["weak_form_coordinate_transform_identity"] = {
+        "mapped_coordinate_generation": "mapped-coordinates-45",
+        "field_coordinate_generation": "mapped-coordinates-45",
+        "jacobian_coordinate_generation": "mapped-coordinates-45",
+        "jacobian_orientation": "right_handed_positive",
+        "integration_orientation": "right_handed_positive",
+        "jacobian_orientation_sha256": "c" * 64,
+        "integration_orientation_sha256": "c" * 64,
+    }
+    summary["time_harmonic_phasor_convention_identity"] = {
+        "source_time_convention": "exp(+jwt)",
+        "field_time_convention": "exp(+jwt)",
+        "phase_sensitive_result_time_convention": "exp(+jwt)",
+        "complex_power_formula": "0.5*V*conj(I)",
+        "phase_sensitive_result_formula": "0.5*V*conj(I)",
+        "phasor_generation": "harmonic-solution-45",
+        "result_phasor_generation": "harmonic-solution-45",
+    }
+    return summary
+
+
 def test_v10_public_force_selection_generation_changed() -> None:
     summary = _with_v10_ownership(copy.deepcopy(_summary()))
     summary["force_selection_identity"].update(
@@ -494,3 +517,23 @@ def test_v12_public_force_selection_geometry_topology_generation_mismatch() -> N
         result["checks"]["force_selection_matches_current_geometry_topology"]
         is False
     )
+
+
+def test_v13_public_weak_form_coordinate_transform_jacobian_orientation_mismatch() -> None:
+    summary = _with_v13_transform_identity(copy.deepcopy(_summary()))
+    summary["weak_form_coordinate_transform_identity"].update(
+        {"jacobian_coordinate_generation": "mapped-coordinates-44", "jacobian_orientation": "left_handed_negative", "jacobian_orientation_sha256": "d" * 64}
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["weak_form_uses_current_jacobian_orientation"] is False
+
+
+def test_v13_public_time_harmonic_complex_field_phasor_sign_mismatch() -> None:
+    summary = _with_v13_transform_identity(copy.deepcopy(_summary()))
+    summary["time_harmonic_phasor_convention_identity"].update(
+        {"field_time_convention": "exp(-jwt)", "phase_sensitive_result_time_convention": "exp(-jwt)"}
+    )
+    result = gate(summary)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["harmonic_fields_share_one_complex_time_convention"] is False
