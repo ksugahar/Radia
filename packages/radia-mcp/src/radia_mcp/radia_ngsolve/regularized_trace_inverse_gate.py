@@ -172,6 +172,12 @@ def regularized_trace_inverse_path_gate(
     trace_boundary_node_generation_identity_ok = (
         _optional_fembem_trace_boundary_node_generation_is_aligned(summary)
     )
+    cq_frequency_contour_identity_ok = (
+        _optional_cq_frequency_contour_radius_damping_is_aligned(summary)
+    )
+    hmatrix_aca_pivot_permutation_identity_ok = (
+        _optional_hmatrix_aca_pivot_cluster_permutation_is_aligned(summary)
+    )
 
     checks = {
         "schema_is_regularized_trace_inverse_v1": (
@@ -255,6 +261,12 @@ def regularized_trace_inverse_path_gate(
         ),
         "fembem_trace_matrix_uses_current_boundary_node_generation": (
             trace_boundary_node_generation_identity_ok
+        ),
+        "cq_inverse_transform_uses_current_frequency_contour_metadata": (
+            cq_frequency_contour_identity_ok
+        ),
+        "hmatrix_aca_pivots_use_current_cluster_permutation": (
+            hmatrix_aca_pivot_permutation_identity_ok
         ),
         "lcurve_recomputation_passes": lcurve["status"] == "ok",
         "reported_lcurve_choice_matches": (
@@ -950,6 +962,96 @@ def _optional_fembem_trace_boundary_node_generation_is_aligned(
     )
 
 
+def _optional_cq_frequency_contour_radius_damping_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("cq_frequency_contour_radius_damping_generation_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        time_step = _finite_float(value, "time_step_s")
+        sample_time_step = _finite_float(value, "transfer_sample_time_step_s")
+        sample_count = _positive_integer(value, "sample_count")
+        transfer_count = _positive_integer(value, "transfer_sample_count")
+        contour_radius = _finite_float(value, "contour_radius")
+        inverse_radius = _finite_float(value, "inverse_transform_contour_radius")
+        damping = _finite_float(value, "damping_factor")
+        inverse_damping = _finite_float(value, "inverse_transform_damping_factor")
+    except (KeyError, TypeError, ValueError):
+        return False
+    generation = str(value.get("frequency_sampling_generation", "")).strip()
+    contour_digest = str(value.get("contour_metadata_sha256", "")).lower()
+    inverse_digest = str(
+        value.get("inverse_transform_contour_metadata_sha256", "")
+    ).lower()
+    return (
+        bool(generation)
+        and value.get("transfer_sample_frequency_generation") == generation
+        and value.get("contour_metadata_frequency_generation") == generation
+        and value.get("inverse_transform_frequency_generation") == generation
+        and time_step > 0.0
+        and _close(sample_time_step, time_step)
+        and transfer_count == sample_count
+        and 0.0 < contour_radius <= 1.0
+        and _close(inverse_radius, contour_radius)
+        and 0.0 < damping <= 1.0
+        and _close(inverse_damping, damping)
+        and _is_sha256(contour_digest)
+        and inverse_digest == contour_digest
+    )
+
+
+def _optional_hmatrix_aca_pivot_cluster_permutation_is_aligned(
+    summary: Mapping[str, Any],
+) -> bool:
+    value = summary.get("hmatrix_aca_pivot_cluster_permutation_generation_identity")
+    if value is None:
+        return True
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        row_pivots = _positive_integer_sequence(value, "row_pivot_global_ids")
+        aca_row_pivots = _positive_integer_sequence(
+            value, "aca_row_pivot_global_ids"
+        )
+        column_pivots = _positive_integer_sequence(
+            value, "column_pivot_global_ids"
+        )
+        aca_column_pivots = _positive_integer_sequence(
+            value, "aca_column_pivot_global_ids"
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+    tree_generation = str(value.get("cluster_tree_generation", "")).strip()
+    source_generation = str(
+        value.get("source_cluster_permutation_generation", "")
+    ).strip()
+    target_generation = str(
+        value.get("target_cluster_permutation_generation", "")
+    ).strip()
+    permutation_digest = str(value.get("cluster_permutation_sha256", "")).lower()
+    aca_digest = str(value.get("aca_cluster_permutation_sha256", "")).lower()
+    return (
+        bool(tree_generation)
+        and bool(source_generation)
+        and target_generation == source_generation
+        and value.get("aca_source_cluster_permutation_generation")
+        == source_generation
+        and value.get("aca_target_cluster_permutation_generation")
+        == target_generation
+        and len(row_pivots) == len(aca_row_pivots) > 0
+        and len(column_pivots) == len(aca_column_pivots) > 0
+        and len(set(row_pivots)) == len(row_pivots)
+        and len(set(column_pivots)) == len(column_pivots)
+        and aca_row_pivots == row_pivots
+        and aca_column_pivots == column_pivots
+        and _is_sha256(permutation_digest)
+        and aca_digest == permutation_digest
+    )
+
+
 def _is_sha256(value: str) -> bool:
     return len(value) == 64 and all(
         character in "0123456789abcdef" for character in value
@@ -961,6 +1063,16 @@ def _integer(parent: Mapping[str, Any], key: str) -> int:
     if isinstance(value, bool) or int(value) != float(value):
         raise ValueError(f"{key} must be an integer")
     return int(value)
+
+
+def _positive_integer_sequence(parent: Mapping[str, Any], key: str) -> tuple[int, ...]:
+    values = parent[key]
+    if not isinstance(values, (list, tuple)) or not values:
+        raise ValueError(f"{key} must be a nonempty integer sequence")
+    result = tuple(_integer({"value": value}, "value") for value in values)
+    if any(value <= 0 for value in result):
+        raise ValueError(f"{key} must contain positive integers")
+    return result
 
 
 def _positive_integer(parent: Mapping[str, Any], key: str) -> int:
