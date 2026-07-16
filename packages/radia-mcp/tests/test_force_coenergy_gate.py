@@ -199,15 +199,15 @@ def _artifact_identity(sample_count):
             "force_perturbed_field_sha256": "7" * 64,
         },
         "axisymmetric_weighted_stress_force_mask_mesh_identity": {
-            "force_mesh_generation": "axisym-mesh-19",
-            "mask_solve_mesh_generation": "axisym-mesh-19",
-            "weighted_stress_integral_mesh_generation": "axisym-mesh-19",
+            "force_mesh_generation": "air-mesh-15",
+            "mask_solve_mesh_generation": "air-mesh-15",
+            "weighted_stress_integral_mesh_generation": "air-mesh-15",
             "mask_solution_generation": "mask-solve-19",
             "force_mask_solution_generation": "mask-solve-19",
-            "axisymmetric_measure": "two_pi_r_dr_dz",
-            "force_integral_measure": "two_pi_r_dr_dz",
-            "mask_field_sha256": "1" * 64,
-            "force_mask_field_sha256": "1" * 64,
+            "axisymmetric_measure": "2*pi*r*dr*dz",
+            "force_integral_measure": "2*pi*r*dr*dz",
+            "mask_field_sha256": "5" * 64,
+            "force_mask_field_sha256": "5" * 64,
         },
         "lorentz_force_current_density_out_of_plane_orientation_identity": {
             "field_solve_generation": "planar-solve-19",
@@ -218,10 +218,18 @@ def _artifact_identity(sample_count):
             "current_density_component": "Jz",
             "current_density_positive_axis": "+z",
             "lorentz_cross_product": "J_cross_B",
+            "coordinate_handedness": "right_handed",
+            "magnetic_flux_density_frame": "global_cartesian",
+            "force_component_frame": "global_cartesian",
+            "force_component_formula": ["Fx=-Jz*By", "Fy=Jz*Bx", "Fz=0"],
             "orientation_sign": 1,
             "force_orientation_sign": 1,
             "current_density_sha256": "2" * 64,
             "force_current_density_sha256": "2" * 64,
+            "magnetic_flux_density_sha256": "3" * 64,
+            "force_magnetic_flux_density_sha256": "3" * 64,
+            "lorentz_force_sha256": "4" * 64,
+            "result_force_sha256": "4" * 64,
         },
     }
 
@@ -693,6 +701,47 @@ def test_v17_public_lorentz_force_current_density_out_of_plane_orientation_misma
     assert (
         result["checks"][
             "planar_lorentz_force_uses_current_jz_out_of_plane_orientation"
+        ]
+        is False
+    )
+
+
+def test_v17_public_lorentz_orientation_rejects_boolean_sign() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    orientation = identity[
+        "lorentz_force_current_density_out_of_plane_orientation_identity"
+    ]
+    orientation["orientation_sign"] = True
+    orientation["force_orientation_sign"] = True
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "planar_lorentz_force_uses_current_jz_out_of_plane_orientation"
+        ]
+        is False
+    )
+
+
+def test_v17_public_axisymmetric_mask_rejects_self_consistent_stale_mesh() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    axisymmetric = identity[
+        "axisymmetric_weighted_stress_force_mask_mesh_identity"
+    ]
+    axisymmetric["force_mesh_generation"] = "stale-mesh"
+    axisymmetric["mask_solve_mesh_generation"] = "stale-mesh"
+    axisymmetric["weighted_stress_integral_mesh_generation"] = "stale-mesh"
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "axisymmetric_weighted_stress_force_uses_current_mask_mesh"
         ]
         is False
     )
