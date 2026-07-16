@@ -351,6 +351,32 @@ def _with_v10_power_and_frequency_identity(summary: dict) -> dict:
     return summary
 
 
+def _with_v11_transient_and_noise_identity(summary: dict) -> dict:
+    summary = _with_v10_power_and_frequency_identity(summary)
+    positive = summary["metrics"]["positive"]
+    positive["transient_energy_window_event_identity"] = {
+        "event_type": "switch_turn_on",
+        "energy_window_start_event_index": 10,
+        "reference_window_start_event_index": 10,
+        "energy_window_duration_s": 2.0e-6,
+        "reference_window_duration_s": 2.0e-6,
+        "event_detection_generation": "switch-events-43",
+        "energy_window_event_generation": "switch-events-43",
+        "reference_window_event_generation": "switch-events-43",
+    }
+    positive["noise_density_band_identity"] = {
+        "noise_density_unit": "V/sqrt(Hz)",
+        "numerical_frequency_unit": "Hz",
+        "band_limit_unit": "Hz",
+        "numerical_frequency_scale_to_hz": 1.0,
+        "band_limit_scale_to_hz": 1.0,
+        "integrated_noise_unit": "V_rms",
+        "frequency_grid_generation": "noise-grid-43",
+        "band_integration_grid_generation": "noise-grid-43",
+    }
+    return summary
+
+
 def test_v9_public_peak_rms_phasor_basis_mixed() -> None:
     bad = _with_v9_phasor_identity(_summary())
     contract = bad["metrics"]["positive"]["phasor_basis_contract"]
@@ -401,5 +427,36 @@ def test_v10_public_ac_frequency_interpolation_scale_mismatch() -> None:
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["ac_traces_share_frequency_interpolation_coordinate"]
+        is False
+    )
+
+
+def test_v11_public_transient_energy_window_event_alignment_mismatch() -> None:
+    bad = _with_v11_transient_and_noise_identity(_summary())
+    bad["metrics"]["positive"]["transient_energy_window_event_identity"].update(
+        {
+            "reference_window_start_event_index": 11,
+            "reference_window_event_generation": "switch-events-42",
+        }
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["transient_energy_windows_share_switching_event_phase"]
+        is False
+    )
+
+
+def test_v11_public_noise_density_integrated_band_unit_mismatch() -> None:
+    bad = _with_v11_transient_and_noise_identity(_summary())
+    bad["metrics"]["positive"]["noise_density_band_identity"].update(
+        {"band_limit_unit": "kHz", "band_limit_scale_to_hz": 1.0}
+    )
+    result = ideal_transformer_identity_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "noise_density_and_band_limits_share_frequency_units"
+        ]
         is False
     )
