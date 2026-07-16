@@ -95,6 +95,22 @@ def _with_artifact_identity(summary: dict) -> dict:
             "interpolation_state_generation": "branch-state-13",
             "bracketing_sample_ids": ["desc-17", "desc-18"],
         },
+        "linear_motor_thrust_phase_identity": {
+            "winding_phase_sequence": ["U", "V", "W"],
+            "thrust_phase_sequence": ["U", "V", "W"],
+            "winding_electrical_angle_direction": 1,
+            "thrust_electrical_angle_direction": 1,
+            "phase_convention_generation": "phase-convention-14",
+            "thrust_observable_phase_generation": "phase-convention-14",
+        },
+        "demag_recoil_temperature_identity": {
+            "evaluation_temperature_c": 120.0,
+            "magnet_material_temperature_c": 120.0,
+            "recoil_line_temperature_c": 120.0,
+            "material_state_generation": "magnet-material-14",
+            "recoil_line_state_generation": "magnet-material-14",
+            "recoil_line_sha256": "4" * 64,
+        },
     }
     return summary
 
@@ -348,6 +364,43 @@ def test_v11_public_demag_operating_point_branch_interpolation_mismatch() -> Non
     assert (
         result["checks"][
             "demag_operating_point_uses_active_branch_interpolation"
+        ]
+        is False
+    )
+
+
+def test_v12_public_linear_motor_thrust_phase_sequence_electrical_angle_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["linear_motor_thrust_phase_identity"].update(
+        {
+            "thrust_phase_sequence": ["U", "W", "V"],
+            "thrust_electrical_angle_direction": -1,
+            "thrust_observable_phase_generation": "phase-convention-13",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "linear_motor_thrust_uses_winding_phase_and_electrical_angle_direction"
+        ]
+        is False
+    )
+
+
+def test_v12_public_demag_recoil_line_temperature_generation_mismatch() -> None:
+    summary = _with_artifact_identity(_summary())
+    summary["artifact_identity"]["demag_recoil_temperature_identity"].update(
+        {
+            "recoil_line_temperature_c": 20.0,
+            "recoil_line_state_generation": "magnet-material-13",
+        }
+    )
+    result = magnetic_force_method_profile_gate(summary)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "demag_recoil_line_matches_evaluation_temperature_generation"
         ]
         is False
     )
