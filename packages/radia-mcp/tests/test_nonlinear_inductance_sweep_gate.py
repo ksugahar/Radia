@@ -152,6 +152,28 @@ def _with_v11_bindings(summary):
     return summary
 
 
+def _with_v12_bindings(summary):
+    summary = _with_v11_bindings(summary)
+    for row in summary["runs"]:
+        row["mixed_mode_sparameter_basis_identity"] = {
+            "single_ended_port_order": ["P1+", "P1-", "P2+", "P2-"],
+            "sparameter_port_order": ["P1+", "P1-", "P2+", "P2-"],
+            "basis_matrix_port_order": ["P1+", "P1-", "P2+", "P2-"],
+            "port_order_generation": "port-order-14",
+            "basis_matrix_port_order_generation": "port-order-14",
+            "basis_matrix_sha256": "6" * 64,
+        }
+        row["farfield_realized_gain_power_frequency_identity"] = {
+            "farfield_frequency_hz": 2.45e9,
+            "accepted_power_frequency_hz": 2.45e9,
+            "farfield_adaptive_sample_id": "adaptive-frequency-14",
+            "accepted_power_adaptive_sample_id": "adaptive-frequency-14",
+            "farfield_result_generation": "farfield-result-14",
+            "accepted_power_result_generation": "farfield-result-14",
+        }
+    return summary
+
+
 def test_nonlinear_inductance_sweep_accepts_crossover_duality_and_replay():
     result = nonlinear_inductance_sweep_gate(_summary())
     assert result["status"] == "ok"
@@ -424,5 +446,42 @@ def test_v11_public_energy_q_factor_frequency_sample_mismatch():
     assert result["status"] == "needs_attention"
     assert (
         result["runs"][0]["checks"]["energy_and_loss_share_q_frequency_sample"]
+        is False
+    )
+
+
+def test_v12_public_mixed_mode_sparameter_basis_generation_mismatch():
+    bad = _with_v12_bindings(_summary())
+    bad["runs"][0]["mixed_mode_sparameter_basis_identity"].update(
+        {
+            "basis_matrix_port_order": ["P1+", "P1-", "P2-", "P2+"],
+            "basis_matrix_port_order_generation": "port-order-13",
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "mixed_mode_basis_matches_current_single_ended_port_order"
+        ]
+        is False
+    )
+
+
+def test_v12_public_farfield_realized_gain_power_frequency_sample_mismatch():
+    bad = _with_v12_bindings(_summary())
+    bad["runs"][0]["farfield_realized_gain_power_frequency_identity"].update(
+        {
+            "accepted_power_frequency_hz": 2.451e9,
+            "accepted_power_adaptive_sample_id": "adaptive-frequency-15",
+            "accepted_power_result_generation": "farfield-result-15",
+        }
+    )
+    result = nonlinear_inductance_sweep_gate(bad)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["runs"][0]["checks"][
+            "realized_gain_and_accepted_power_share_frequency_sample"
+        ]
         is False
     )

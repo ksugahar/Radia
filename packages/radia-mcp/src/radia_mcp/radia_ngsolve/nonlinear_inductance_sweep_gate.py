@@ -322,6 +322,57 @@ def _energy_q_frequency_sample_is_bound(raw: Mapping[str, Any]) -> bool:
     )
 
 
+def _mixed_mode_sparameter_basis_matches_port_order(
+    raw: Mapping[str, Any],
+) -> bool:
+    identity = raw.get("mixed_mode_sparameter_basis_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    port_order = identity.get("single_ended_port_order")
+    generation = str(identity.get("port_order_generation", "")).strip()
+    digest = str(identity.get("basis_matrix_sha256", "")).strip()
+    return (
+        isinstance(port_order, list)
+        and len(port_order) == 4
+        and all(isinstance(port, str) and port for port in port_order)
+        and len(set(port_order)) == len(port_order)
+        and identity.get("sparameter_port_order") == port_order
+        and identity.get("basis_matrix_port_order") == port_order
+        and bool(generation)
+        and identity.get("basis_matrix_port_order_generation") == generation
+        and len(digest) == 64
+        and all(character in "0123456789abcdef" for character in digest)
+    )
+
+
+def _farfield_gain_power_frequency_sample_is_bound(raw: Mapping[str, Any]) -> bool:
+    identity = raw.get("farfield_realized_gain_power_frequency_identity")
+    if identity is None:
+        return True
+    if not isinstance(identity, Mapping):
+        return False
+    try:
+        farfield_frequency = float(identity["farfield_frequency_hz"])
+        accepted_frequency = float(identity["accepted_power_frequency_hz"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    sample_id = str(identity.get("farfield_adaptive_sample_id", "")).strip()
+    result_generation = str(
+        identity.get("farfield_result_generation", "")
+    ).strip()
+    return (
+        math.isfinite(farfield_frequency)
+        and farfield_frequency > 0.0
+        and accepted_frequency == farfield_frequency
+        and bool(sample_id)
+        and identity.get("accepted_power_adaptive_sample_id") == sample_id
+        and bool(result_generation)
+        and identity.get("accepted_power_result_generation") == result_generation
+    )
+
+
 def _energy_history_restart_offsets_close(
     summary: Mapping[str, Any], run_count: int
 ) -> bool:
@@ -503,6 +554,12 @@ def nonlinear_inductance_sweep_gate(
             ),
             "energy_and_loss_share_q_frequency_sample": (
                 _energy_q_frequency_sample_is_bound(raw)
+            ),
+            "mixed_mode_basis_matches_current_single_ended_port_order": (
+                _mixed_mode_sparameter_basis_matches_port_order(raw)
+            ),
+            "realized_gain_and_accepted_power_share_frequency_sample": (
+                _farfield_gain_power_frequency_sample_is_bound(raw)
             ),
         }
         row = {
