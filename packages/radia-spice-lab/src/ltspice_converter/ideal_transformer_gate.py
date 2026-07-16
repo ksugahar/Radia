@@ -301,6 +301,72 @@ def _monte_carlo_parameter_seed_identity_ok(
     )
 
 
+def _ac_phase_coordinate_identity_ok(positive: Mapping[str, object]) -> bool:
+    contract = positive.get("ac_phase_coordinate_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("ac_sweep_generation_id") or "")
+    unit = str(contract.get("phase_coordinate_unit") or "")
+    convention = str(contract.get("phase_coordinate_convention") or "")
+    value_digest = str(contract.get("phase_trace_value_sha256") or "")
+    expected_conventions = {
+        "degree": "principal_degree_minus180_180",
+        "radian": "principal_radian_minuspi_pi",
+    }
+    return (
+        bool(generation)
+        and contract.get("phase_trace_sweep_generation_id") == generation
+        and contract.get("reference_phase_trace_sweep_generation_id")
+        == generation
+        and unit in expected_conventions
+        and contract.get("reference_phase_coordinate_unit") == unit
+        and convention == expected_conventions[unit]
+        and contract.get("reference_phase_coordinate_convention") == convention
+        and _is_sha256(value_digest)
+        and contract.get("reference_phase_trace_value_sha256") == value_digest
+    )
+
+
+def _transient_derivative_adaptive_history_identity_ok(
+    positive: Mapping[str, object],
+) -> bool:
+    contract = positive.get("transient_derivative_adaptive_history_identity")
+    if contract is None:
+        return True
+    if not isinstance(contract, Mapping):
+        return False
+    generation = str(contract.get("transient_generation_id") or "")
+    time_grid_digest = str(contract.get("accepted_time_grid_sha256") or "")
+    scheme = str(contract.get("derivative_scheme") or "")
+    try:
+        accepted_count = int(contract.get("accepted_step_count"))
+        history_count = int(contract.get("derivative_history_step_count"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        bool(generation)
+        and contract.get("accepted_step_generation_id") == generation
+        and contract.get("derivative_history_generation_id") == generation
+        and contract.get("current_sample_generation_id") == generation
+        and contract.get("derivative_sample_generation_id") == generation
+        and _is_sha256(time_grid_digest)
+        and contract.get("derivative_history_time_grid_sha256")
+        == time_grid_digest
+        and accepted_count > 2
+        and history_count == accepted_count
+        and scheme == "variable_step_bdf2"
+        and contract.get("history_derivative_scheme") == scheme
+    )
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(
+        character in "0123456789abcdef" for character in value
+    )
+
+
 def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, Any]:
     """Gate turns ratio, reflected impedance, network closure, power, and replay."""
     if not isinstance(summary, Mapping):
@@ -585,6 +651,12 @@ def ideal_transformer_identity_gate(summary: Mapping[str, object]) -> dict[str, 
         ),
         "monte_carlo_statistics_preserve_named_parameter_seed_order": (
             _monte_carlo_parameter_seed_identity_ok(positive)
+        ),
+        "ac_phase_traces_share_coordinate_unit_and_convention": (
+            _ac_phase_coordinate_identity_ok(positive)
+        ),
+        "transient_derivatives_use_current_accepted_timestep_history": (
+            _transient_derivative_adaptive_history_identity_ok(positive)
         ),
         "exactly_four_timing_stages": timing_ok,
     }
