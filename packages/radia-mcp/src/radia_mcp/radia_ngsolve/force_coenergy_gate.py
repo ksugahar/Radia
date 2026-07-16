@@ -41,6 +41,8 @@ def force_coenergy_displacement_gate(
     eddy_loss_harmonic_basis_ok = True
     axisymmetric_force_measure_ok = True
     eddy_loss_material_frequency_ok = True
+    weighted_stress_mask_mesh_identity_ok = True
+    complex_current_phasor_basis_identity_ok = True
     if artifact_identity is not None and not identity_present:
         force_snapshot_ok = False
         mesh_family_ok = False
@@ -52,6 +54,8 @@ def force_coenergy_displacement_gate(
         eddy_loss_harmonic_basis_ok = False
         axisymmetric_force_measure_ok = False
         eddy_loss_material_frequency_ok = False
+        weighted_stress_mask_mesh_identity_ok = False
+        complex_current_phasor_basis_identity_ok = False
     elif identity_present:
         direct = artifact_identity.get("direct_force_snapshot")
         derivative = artifact_identity.get("coenergy_derivative_snapshot")
@@ -281,6 +285,78 @@ def force_coenergy_displacement_gate(
                     for character in conductivity_digest + lamination_digest
                 )
             )
+        weighted_mask = artifact_identity.get("weighted_stress_mask_mesh_identity")
+        if weighted_mask is not None:
+            mask_digest = str(
+                weighted_mask.get("weighted_mask_sha256", "")
+                if isinstance(weighted_mask, dict)
+                else ""
+            ).lower()
+            force_mask_digest = str(
+                weighted_mask.get("force_mask_sha256", "")
+                if isinstance(weighted_mask, dict)
+                else ""
+            ).lower()
+            mesh_generations = (
+                [
+                    weighted_mask.get("active_air_mesh_generation"),
+                    weighted_mask.get("field_solution_mesh_generation"),
+                    weighted_mask.get("weighted_mask_mesh_generation"),
+                    weighted_mask.get("force_integration_mesh_generation"),
+                ]
+                if isinstance(weighted_mask, dict)
+                else []
+            )
+            weighted_stress_mask_mesh_identity_ok = (
+                isinstance(weighted_mask, dict)
+                and all(isinstance(value, str) and bool(value) for value in mesh_generations)
+                and len(set(mesh_generations)) == 1
+                and weighted_mask.get("mask_basis") == "nodal_weighting_function"
+                and weighted_mask.get("force_method") == "weighted_stress_tensor"
+                and len(mask_digest) == len(force_mask_digest) == 64
+                and all(
+                    character in "0123456789abcdef"
+                    for character in mask_digest + force_mask_digest
+                )
+                and force_mask_digest == mask_digest
+            )
+        phasor_basis = artifact_identity.get("complex_current_phasor_basis_identity")
+        if phasor_basis is not None:
+            try:
+                source_scale = float(phasor_basis.get("source_scale_to_rms"))
+                field_scale = float(phasor_basis.get("field_scale_to_rms"))
+                result_scale = float(phasor_basis.get("force_loss_scale_to_rms"))
+            except (AttributeError, TypeError, ValueError):
+                source_scale = math.nan
+                field_scale = math.nan
+                result_scale = math.nan
+            source_basis = (
+                phasor_basis.get("source_current_basis")
+                if isinstance(phasor_basis, dict)
+                else None
+            )
+            expected_scale = {
+                "rms_phasor": 1.0,
+                "peak_phasor": 1.0 / math.sqrt(2.0),
+            }.get(source_basis)
+            complex_current_phasor_basis_identity_ok = (
+                isinstance(phasor_basis, dict)
+                and expected_scale is not None
+                and phasor_basis.get("field_current_basis") == source_basis
+                and phasor_basis.get("force_loss_current_basis") == source_basis
+                and all(
+                    math.isfinite(value)
+                    and math.isclose(value, expected_scale, rel_tol=1.0e-12, abs_tol=1.0e-15)
+                    for value in (source_scale, field_scale, result_scale)
+                )
+                and phasor_basis.get("complex_time_convention")
+                in {"exp(+jwt)", "exp(-jwt)"}
+                and phasor_basis.get("result_time_convention")
+                == phasor_basis.get("complex_time_convention")
+                and bool(phasor_basis.get("solve_generation"))
+                and phasor_basis.get("result_generation")
+                == phasor_basis.get("solve_generation")
+            )
 
     finite = all(math.isfinite(value) for value in x + w + force)
     increasing = finite and all(right > left for left, right in zip(x, x[1:]))
@@ -338,6 +414,12 @@ def force_coenergy_displacement_gate(
         ),
         "eddy_loss_uses_current_frequency_and_material_generation": (
             eddy_loss_material_frequency_ok
+        ),
+        "weighted_stress_mask_matches_current_air_mesh_generation": (
+            weighted_stress_mask_mesh_identity_ok
+        ),
+        "complex_current_force_and_loss_share_phasor_basis": (
+            complex_current_phasor_basis_identity_ok
         ),
     }
     return {
