@@ -84,9 +84,13 @@ def pwm_controlled_motor_loss_gate(
     identity_present = isinstance(identity_value, dict)
     cycle_generation_ok = True
     restart_phase_origin_ok = True
+    angle_convention_ok = True
+    loss_normalization_ok = True
     if identity_value is not None and not identity_present:
         cycle_generation_ok = False
         restart_phase_origin_ok = False
+        angle_convention_ok = False
+        loss_normalization_ok = False
     elif identity_present:
         torque_generation = str(identity_value.get("torque_cycle_generation", ""))
         loss_generation = str(identity_value.get("loss_cycle_generation", ""))
@@ -122,6 +126,29 @@ def pwm_controlled_motor_loss_gate(
                 restart_phase_origin_ok
                 and bool(phase_origins)
                 and len(set(phase_origins)) == 1
+            )
+        angle_convention = identity_value.get("angle_convention")
+        if angle_convention is not None:
+            angle_convention_ok = (
+                isinstance(angle_convention, dict)
+                and angle_convention.get("torque_angle_basis") == "mechanical"
+                and angle_convention.get("dq_current_angle_basis") == "electrical"
+                and angle_convention.get("joined_angle_basis") == "mechanical"
+                and isinstance(angle_convention.get("pole_pairs"), int)
+                and angle_convention["pole_pairs"] > 0
+                and angle_convention.get("dq_to_joined_basis_transform_applied")
+                is True
+            )
+        loss_normalization = identity_value.get("loss_normalization")
+        if loss_normalization is not None:
+            loss_normalization_ok = (
+                isinstance(loss_normalization, dict)
+                and loss_normalization.get("copper_loss_scope") == "total_machine"
+                and loss_normalization.get("iron_loss_scope") == "total_machine"
+                and loss_normalization.get("magnet_loss_scope") == "total_machine"
+                and isinstance(loss_normalization.get("phase_count"), int)
+                and loss_normalization["phase_count"] >= 2
+                and loss_normalization.get("per_phase_to_total_applied") is True
             )
 
     time_s = _vector(time_series.get("time_s"), "time_series.time_s", minimum=5)
@@ -324,6 +351,8 @@ def pwm_controlled_motor_loss_gate(
         == "exclude_ratio_when_denominator_current_is_below_floor",
         "torque_and_loss_share_periodic_cycle_generation": cycle_generation_ok,
         "restart_segments_preserve_phase_origin": restart_phase_origin_ok,
+        "torque_and_dq_tables_share_transformed_angle_basis": angle_convention_ok,
+        "loss_components_share_total_machine_scope": loss_normalization_ok,
     }
     tail_torque = torque_nm[tail_start:]
     tail_torque_mean = sum(tail_torque) / len(tail_torque)

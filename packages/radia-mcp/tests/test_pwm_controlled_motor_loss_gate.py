@@ -71,6 +71,20 @@ def _with_artifact_identity(payload: dict) -> dict:
                 "end_time_s": 0.01,
             },
         ],
+        "angle_convention": {
+            "torque_angle_basis": "mechanical",
+            "dq_current_angle_basis": "electrical",
+            "joined_angle_basis": "mechanical",
+            "pole_pairs": 4,
+            "dq_to_joined_basis_transform_applied": True,
+        },
+        "loss_normalization": {
+            "copper_loss_scope": "total_machine",
+            "iron_loss_scope": "total_machine",
+            "magnet_loss_scope": "total_machine",
+            "phase_count": 3,
+            "per_phase_to_total_applied": True,
+        },
     }
     return payload
 
@@ -145,3 +159,32 @@ def test_v8_public_restart_phase_origin_shift() -> None:
     result = pwm_controlled_motor_loss_gate(payload)
     assert result["status"] == "needs_attention"
     assert result["checks"]["restart_segments_preserve_phase_origin"] is False
+
+
+def test_v9_public_electrical_mechanical_angle_convention_mix() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["angle_convention"].update(
+        {
+            "joined_angle_basis": "electrical",
+            "dq_to_joined_basis_transform_applied": False,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["torque_and_dq_tables_share_transformed_angle_basis"]
+        is False
+    )
+
+
+def test_v9_public_per_phase_total_copper_loss_mix() -> None:
+    payload = _with_artifact_identity(_payload())
+    payload["artifact_identity"]["loss_normalization"].update(
+        {
+            "copper_loss_scope": "per_phase",
+            "per_phase_to_total_applied": False,
+        }
+    )
+    result = pwm_controlled_motor_loss_gate(payload)
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["loss_components_share_total_machine_scope"] is False
