@@ -9,8 +9,27 @@ from ._field_batch import (
     field_coefficient_from_solution,
     field_from_solution,
 )
-from ._hysteresis import SolveHysteresis, _normalize_h_steps
-from ._solve import hdiv_demag_solve
+from ._hysteresis import _normalize_h_steps
+from ._solver import HDivSolver
+
+
+_GEOMETRY_OPTIONS = {
+    "image", "gram_eps", "leaf", "eta", "far_quad", "curve_order",
+    "curve_gauss", "ho_far_factor",
+}
+
+
+def _make_solver(body):
+    solve_options = dict(body.solve_options)
+    geometry_options = {
+        name: solve_options.pop(name)
+        for name in tuple(solve_options)
+        if name in _GEOMETRY_OPTIONS
+    }
+    return (
+        HDivSolver(body.mesh, order=body.order, **geometry_options),
+        solve_options,
+    )
 
 
 @dataclass
@@ -46,7 +65,7 @@ class CoupledBody:
         if self.order not in (1, 2):
             raise ValueError("vim.CoupledBody order must be 1 or 2")
         self.solve_options = dict(self.solve_options)
-        forbidden = {"mu_r", "B_r", "bh_table", "H_ext", "order", "_prepared_operator"}
+        forbidden = {"mu_r", "B_r", "bh_table", "H_ext", "order", "_operator_cache"}
         overlap = sorted(forbidden.intersection(self.solve_options))
         if overlap:
             raise ValueError(
@@ -94,7 +113,7 @@ class CoupledHistoryBody:
         self.solve_options = dict(self.solve_options)
         forbidden = {
             "play", "material", "initial_b_path", "initial_state", "order",
-            "_prepared_operator",
+            "_operator_cache",
         }
         overlap = sorted(forbidden.intersection(self.solve_options))
         if overlap:
@@ -138,6 +157,7 @@ def solve_coupled(bodies, H_ext=None, *, tol=1.0e-6, maxit=50):
     global_field = _field3(H_ext, "vim.SolveCoupled H_ext")
 
     results = [None] * len(bodies)
+    solver_pairs = [_make_solver(body) for body in bodies]
     relative_step = float("inf")
     history = []
     for iteration in range(1, maxit + 1):
@@ -153,13 +173,10 @@ def solve_coupled(bodies, H_ext=None, *, tol=1.0e-6, maxit=50):
                 if other_index != index and other_result is not None:
                     applied = applied + field_coefficient_from_solution(
                         other_result, algorithm="direct")
-            kwargs = dict(body.solve_options)
-            kwargs.update(
+            solver, solve_options = solver_pairs[index]
+            results[index] = solver.Solve(
                 mu_r=body.mu_r, B_r=body.B_r, bh_table=body.bh_table,
-                H_ext=applied, order=body.order,
-                _prepared_operator=(None if results[index] is None
-                                    else results[index]["_prepared_operator"]))
-            results[index] = hdiv_demag_solve(body.mesh, **kwargs)
+                H_ext=applied, **solve_options)
 
         if all(coefficients is not None for coefficients in previous):
             delta_squared = 0.0
@@ -190,6 +207,10 @@ def solve_coupled(bodies, H_ext=None, *, tol=1.0e-6, maxit=50):
         permanent_magnet_body_count=sum(body.B_r is not None for body in bodies),
         nonlinear_iron_body_count=sum(body.bh_table is not None for body in bodies),
         body_kinds={body.name: body.kind for body in bodies},
+        operator_build_counts={
+            body.name: solver.operator_build_count
+            for body, (solver, _) in zip(bodies, solver_pairs)
+        },
         _body_specs=bodies,
     )
 
@@ -210,26 +231,37 @@ def _relative_coefficient_step(previous, current, names):
     return float(relative_step), body_steps
 
 
-def solve_coupled_hysteresis(history_body, bodies, h_steps, H_ext=None, *,
+def solve_coupled_hysteresis(history_bodies, bodies, h_steps, H_ext=None, *,
                              tol=1.0e-6, maxit=50):
-    """Advance one stateful PM coupled to linear/nonlinear HDiv bodies.
+    """Advance stateful PM bodies coupled to other independent HDiv bodies.
 
-    Every outer trial starts from the same committed history state.  The trial
-    state is accepted only after the all-body coefficient fixed point converges,
-    preventing one physical field step from committing the constitutive model
-    multiple times.  The caller owns ``with ngsolve.TaskManager():``.
+    Every outer trial for every history body restarts from that body's same
+    committed state.  All trial states are accepted together only after the
+    global coefficient fixed point converges, so Gauss-Seidel iterations never
+    masquerade as physical history steps.  The caller owns
+    ``with ngsolve.TaskManager():``.
     """
-    if not isinstance(history_body, CoupledHistoryBody):
+    if isinstance(history_bodies, CoupledHistoryBody):
         raise TypeError(
-            "vim.SolveCoupledHysteresis requires a CoupledHistoryBody first")
-    bodies = tuple(bodies)
-    if not bodies or not all(isinstance(body, CoupledBody) for body in bodies):
+            "vim.SolveCoupledHysteresis requires a sequence of CoupledHistoryBody objects")
+    history_bodies = tuple(history_bodies)
+    if not history_bodies or not all(
+            isinstance(body, CoupledHistoryBody) for body in history_bodies):
         raise ValueError(
-            "vim.SolveCoupledHysteresis requires at least one CoupledBody")
-    names = [history_body.name] + [body.name for body in bodies]
+            "vim.SolveCoupledHysteresis requires one or more CoupledHistoryBody objects")
+    bodies = tuple(bodies)
+    if not all(isinstance(body, CoupledBody) for body in bodies):
+        raise ValueError(
+            "vim.SolveCoupledHysteresis bodies must contain only CoupledBody objects")
+    if len(history_bodies) + len(bodies) < 2:
+        raise ValueError(
+            "vim.SolveCoupledHysteresis requires at least two coupled bodies")
+    names = ([body.name for body in history_bodies]
+             + [body.name for body in bodies])
     if len(set(names)) != len(names):
         raise ValueError("vim.SolveCoupledHysteresis body names must be unique")
-    meshes = [history_body.mesh] + [body.mesh for body in bodies]
+    meshes = ([body.mesh for body in history_bodies]
+              + [body.mesh for body in bodies])
     if len({id(mesh) for mesh in meshes}) != len(meshes):
         raise ValueError(
             "vim.SolveCoupledHysteresis requires a distinct mesh object/HDiv space per body")
@@ -241,10 +273,11 @@ def solve_coupled_hysteresis(history_body, bodies, h_steps, H_ext=None, *,
 
     global_field = _field3(H_ext, "vim.SolveCoupledHysteresis H_ext")
     step_records = _normalize_h_steps(h_steps)
-    committed_state = history_body.initial_state
-    history_result = None
+    committed_states = [body.initial_state for body in history_bodies]
+    history_results = [None] * len(history_bodies)
     body_results = [None] * len(bodies)
-    history_operator = None
+    history_solver_pairs = [_make_solver(body) for body in history_bodies]
+    body_solver_pairs = [_make_solver(body) for body in bodies]
     outputs = []
 
     for step_index, (step_field, step_uniform, _) in enumerate(step_records):
@@ -252,53 +285,50 @@ def solve_coupled_hysteresis(history_body, bodies, h_steps, H_ext=None, *,
         convergence_history = []
         relative_step = float("inf")
         for iteration in range(1, maxit + 1):
-            previous_results = [history_result] + list(body_results)
+            previous_results = list(history_results) + list(body_results)
             previous = [
                 None if result is None else np.asarray(
                     result["_m_coefficients"], dtype=float).copy()
                 for result in previous_results
             ]
 
-            pm_applied = applied_global + _field3(
-                history_body.applied_field,
-                "vim.CoupledHistoryBody.applied_field")
-            for result in body_results:
-                if result is not None:
-                    pm_applied = pm_applied + field_coefficient_from_solution(
-                        result, algorithm="direct")
-            history_kwargs = dict(history_body.solve_options)
-            history_kwargs.update(
-                material=history_body.material, order=history_body.order,
-                initial_state=committed_state,
-                initial_b_path=(
-                    history_body.initial_b_path
-                    if committed_state is None else None),
-                _prepared_operator=history_operator,
-            )
-            history_result = SolveHysteresis(
-                history_body.mesh, [pm_applied], **history_kwargs)
-            history_operator = history_result["_prepared_operator"]
+            for history_index, history_body in enumerate(history_bodies):
+                pm_applied = applied_global + _field3(
+                    history_body.applied_field,
+                    "vim.CoupledHistoryBody.applied_field")
+                for other_index, result in enumerate(history_results):
+                    if other_index != history_index and result is not None:
+                        pm_applied = pm_applied + field_coefficient_from_solution(
+                            result, algorithm="direct")
+                for result in body_results:
+                    if result is not None:
+                        pm_applied = pm_applied + field_coefficient_from_solution(
+                            result, algorithm="direct")
+                solver, solve_options = history_solver_pairs[history_index]
+                history_results[history_index] = solver.SolveHysteresis(
+                    [pm_applied], material=history_body.material,
+                    initial_state=committed_states[history_index],
+                    initial_b_path=(
+                        history_body.initial_b_path
+                        if committed_states[history_index] is None else None),
+                    **solve_options)
 
             for index, body in enumerate(bodies):
                 applied = applied_global + _field3(
                     body.applied_field, "vim.CoupledBody.applied_field")
-                applied = applied + field_coefficient_from_solution(
-                    history_result, algorithm="direct")
+                for history_result in history_results:
+                    applied = applied + field_coefficient_from_solution(
+                        history_result, algorithm="direct")
                 for other_index, other_result in enumerate(body_results):
                     if other_index != index and other_result is not None:
                         applied = applied + field_coefficient_from_solution(
                             other_result, algorithm="direct")
-                kwargs = dict(body.solve_options)
-                kwargs.update(
+                solver, solve_options = body_solver_pairs[index]
+                body_results[index] = solver.Solve(
                     mu_r=body.mu_r, B_r=body.B_r, bh_table=body.bh_table,
-                    H_ext=applied, order=body.order,
-                    _prepared_operator=(
-                        None if body_results[index] is None
-                        else body_results[index]["_prepared_operator"]),
-                )
-                body_results[index] = hdiv_demag_solve(body.mesh, **kwargs)
+                    H_ext=applied, **solve_options)
 
-            current_results = [history_result] + list(body_results)
+            current_results = list(history_results) + list(body_results)
             current = [np.asarray(
                 result["_m_coefficients"], dtype=float) for result in current_results]
             relative_step, body_steps = _relative_coefficient_step(
@@ -314,25 +344,39 @@ def solve_coupled_hysteresis(history_body, bodies, h_steps, H_ext=None, *,
                 "iterations (relative step %.3e > %.3e)"
                 % (step_index, maxit, relative_step, tol))
 
-        committed_state = history_result["state"]
+        committed_states = [result["state"] for result in history_results]
         outputs.append(dict(
             step_index=int(step_index),
             h_applied=(None if step_uniform is None else step_uniform.copy()),
-            history_body=history_result, bodies=tuple(body_results),
+            history_bodies=tuple(history_results), bodies=tuple(body_results),
             iterations=int(iteration), relative_step=float(relative_step),
             convergence_history=convergence_history,
         ))
 
     return dict(
-        steps=outputs, history_body=history_result, bodies=tuple(body_results),
-        body_names=tuple(names), state=committed_state,
+        steps=outputs, history_bodies=tuple(history_results),
+        bodies=tuple(body_results), body_names=tuple(names),
+        states=tuple(committed_states),
         converged=True, block_solver="gauss-seidel-history-trial",
-        history_material_model=getattr(
-            history_body.material, "permanent_magnet_model", "custom-b-input"),
-        history_material_level=getattr(
-            history_body.material, "permanent_magnet_level", None),
+        history_material_models=tuple(
+            getattr(body.material, "permanent_magnet_model", "custom-b-input")
+            for body in history_bodies),
+        history_material_levels=tuple(
+            getattr(body.material, "permanent_magnet_level", None)
+            for body in history_bodies),
+        history_body_count=len(history_bodies),
         nonlinear_iron_body_count=sum(body.bh_table is not None for body in bodies),
-        _history_spec=history_body, _body_specs=bodies,
+        operator_build_counts={
+            **{
+                body.name: solver.operator_build_count
+                for body, (solver, _) in zip(history_bodies, history_solver_pairs)
+            },
+            **{
+                body.name: solver.operator_build_count
+                for body, (solver, _) in zip(bodies, body_solver_pairs)
+            },
+        },
+        _history_specs=history_bodies, _body_specs=bodies,
     )
 
 
@@ -348,13 +392,15 @@ def field_from_coupled_solution(result, points, algorithm="auto"):
 
 
 def field_from_coupled_hysteresis(result, points, algorithm="auto"):
-    """Sum the final history-body and ordinary-body magnetization fields."""
-    if not isinstance(result, dict) or "history_body" not in result:
+    """Sum final history-body and ordinary-body magnetization fields."""
+    if not isinstance(result, dict) or "history_bodies" not in result:
         raise TypeError(
             "vim.FieldFromCoupledHysteresis requires SolveCoupledHysteresis's result")
     points = np.asarray(points, dtype=float).reshape(-1, 3)
-    total = field_from_solution(
-        result["history_body"], points, algorithm=algorithm)
+    total = np.zeros((len(points), 3), dtype=float)
+    for history_result in result["history_bodies"]:
+        total += field_from_solution(
+            history_result, points, algorithm=algorithm)
     for body_result in result["bodies"]:
         total += field_from_solution(body_result, points, algorithm=algorithm)
     return total

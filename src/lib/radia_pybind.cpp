@@ -3746,6 +3746,12 @@ PYBIND11_MODULE(_radia_pybind, m) {
                                                std::move(mass.values), mass.size);
              }, py::arg("matrix"),
              "Register the immutable geometric mass directly from an assembled NGSolve matrix.")
+        .def("restore_geometry_mass_matrix",
+             [](RadHACApKChargeGram& s) {
+                 py::gil_scoped_release release;
+                 return s.RestoreGeometryMassMatrix();
+             },
+             "Restore the material mass to the immutable geometry mass; return whether it changed.")
         .def_property_readonly("operator_configured", [](const RadHACApKChargeGram& s) {
                  return s.HasConfiguredChargeMap() && s.HasConfiguredMassMatrix() &&
                         s.HasConfiguredGeometryMassMatrix();

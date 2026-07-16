@@ -14,6 +14,10 @@ Public API (NGSolve-aligned validated solve primitives):
          matching the NGSolve convention that solve/operator objects use short CamelCase names inside
          their owning namespace.  Scalar recoil mu_r plus a constant/spatial B_r selects the level-2
          linear permanent-magnet law.
+  HDivSolver(mesh, order=1|2, ...)
+      -> persistent 3D solve object for load sweeps, history, and coupled
+         bodies.  It owns the HDiv space and geometry-only ChargeGram; result
+         dictionaries contain no reusable-operator handle.
   SolveHysteresis(mesh, h_steps, play=(K, eta, f_k_tables), order=1|2)
       -> quasi-static B-input hysteresis stepping on the SAME charge Gram: the chi-free
          H-matrix is built ONCE and reused by every step / nonlinear iteration.  RT1 keeps
@@ -34,9 +38,10 @@ Public API (NGSolve-aligned validated solve primitives):
   SolveCoupled([CoupledBody(...), ...])
       -> block Gauss-Seidel coupling for independent linear-recoil PM and linear/nonlinear
          iron spaces.  Each geometry-only ChargeGram is built once and reused.
-  SolveCoupledHysteresis(CoupledHistoryBody(...), bodies, h_steps)
-      -> stateful EnergyStop/Play PM plus independent linear/nonlinear bodies.  Each outer
-         trial restarts from the committed history; only the converged all-body state commits.
+  SolveCoupledHysteresis(history_bodies, bodies, h_steps)
+      -> one or more stateful EnergyStop/Play PMs plus independent
+         linear/nonlinear bodies.  Each outer trial restarts every body from
+         its committed history; only the converged all-body state commits.
 
 Permanent-magnet levels are canonical: (1) MagnetizationSource fixed/given M,
 (2) Solve with recoil mu_r+B_r, (3) PlayHysteresisMaterial, and
@@ -63,6 +68,7 @@ from ._vim import (  # noqa: F401  (ngsolve.bem-style operator + .mat)
     build_charge_gram as _charge_gram_impl,
 )
 from ._solve import hdiv_demag_solve as _solve_impl  # noqa: F401  (production demag solve)
+from ._solver import HDivSolver  # noqa: F401
 from ._vim2d import (  # noqa: F401  (2D planar motor-cross-section layer; vim.Solve dispatches here)
     PlanarDemagBody,
     maxwell_torque_circle,
@@ -75,7 +81,7 @@ from ._radsolve import (  # noqa: F401  (.vol/mesh -> both-backend iron)
 from ._hysteresis import (  # noqa: F401  (B-input hysteresis stepping: ONE Gram build, per-step W-CG)
     EnergyStopMaterial,
     PlayHysteresisMaterial,
-    SolveHysteresis,
+    SolveHysteresis as _solve_hysteresis_impl,
 )
 from ._field_batch import (  # noqa: F401  (batch exterior field of the RT1/RT2 solution)
     field_coefficient_from_solution as _field_coefficient_from_solution_impl,
@@ -95,7 +101,20 @@ from ._capabilities import HDivCapability, hdiv_capabilities  # noqa: F401
 def Solve(*args, **kwargs):
     """NGSolve-style production HDiv-VIM one-call solve.
     """
+    if any(name.startswith("_") for name in kwargs):
+        raise TypeError(
+            "vim.Solve does not accept private operator-cache arguments; "
+            "use vim.HDivSolver for repeated solves")
     return _solve_impl(*args, **kwargs)
+
+
+def SolveHysteresis(*args, **kwargs):
+    """Quasi-static B-input history solve on one HDiv geometry."""
+    if any(name.startswith("_") for name in kwargs):
+        raise TypeError(
+            "vim.SolveHysteresis does not accept private operator-cache arguments; "
+            "use vim.HDivSolver.SolveHysteresis for continuation")
+    return _solve_hysteresis_impl(*args, **kwargs)
 
 
 def ChargeGram(*args, **kwargs):
@@ -164,6 +183,7 @@ def FieldFromCoupledHysteresis(*args, **kwargs):
 
 for _new, _old in [
     (Solve, _solve_impl),
+    (SolveHysteresis, _solve_hysteresis_impl),
     (ChargeGram, _charge_gram_impl),
     (MeshSoftIron, _mesh_soft_iron_impl),
     (VolSoftIron, _vol_soft_iron_impl),
@@ -175,10 +195,14 @@ for _new, _old in [
     (SolveCoupledHysteresis, _solve_coupled_hysteresis_impl),
     (FieldFromCoupledHysteresis, _field_from_coupled_hysteresis_impl),
 ]:
-    _new.__signature__ = _inspect.signature(_old)
+    _signature = _inspect.signature(_old)
+    _new.__signature__ = _signature.replace(parameters=[
+        parameter for parameter in _signature.parameters.values()
+        if not parameter.name.startswith("_")
+    ])
 
 __all__ = [
-    "Solve", "DemagOperator", "ChargeGram",
+    "Solve", "HDivSolver", "DemagOperator", "ChargeGram",
     "MeshSoftIron", "VolSoftIron", "PlanarSolve",
     "PlanarDemagBody", "maxwell_torque_circle",
     "soft_iron_box", "soft_iron_hex",

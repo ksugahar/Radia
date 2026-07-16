@@ -11,6 +11,7 @@ import radia.vim as vim
 def test_ngsolve_style_hdiv_vim_names_are_public():
     for name in (
         "Solve",
+        "HDivSolver",
         "DemagOperator",
         "ChargeGram",
         "MeshSoftIron",

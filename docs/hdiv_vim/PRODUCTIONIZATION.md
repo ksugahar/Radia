@@ -7,6 +7,9 @@ production checklist, not a migration archive.
 
 - Mesh-backed `radia.vim.MeshSoftIron` integrates with `rad.Solve`.
 - The charge-Gram backend is C++/HACApK based and TaskManager-aware.
+- `vim.HDivSolver` is the persistent 3D API for load sweeps, history, and
+  coupled bodies.  It owns the HDiv space and ChargeGram; result mappings do
+  not expose or transport geometry-cache dictionaries.
 - TET/HEX/WEDGE and 2D planar paths have validation coverage under
   `validation_test/feec/`.
 - `rad.Fld` is part of the public contract after HDiv write-back.
@@ -89,11 +92,15 @@ production checklist, not a migration archive.
   dispatches to the same coupled solve.  Per-body magnetization is written back
   independently, while top-level `rad.Fld` sums every persistent RT1/RT2 field
   and the ordinary Radia source objects.
-- `vim.CoupledHistoryBody` and `vim.SolveCoupledHysteresis` couple one stateful
-  EnergyStop/Play PM to independent linear/nonlinear HDiv bodies.  Every outer
-  trial starts from the same committed history state; only the converged
-  all-body trial commits.  The history and ordinary-body ChargeGrams are cached
-  across outer iterations and physical history steps.
+- `vim.CoupledHistoryBody` and `vim.SolveCoupledHysteresis` couple one or more
+  stateful EnergyStop/Play PMs to independent linear/nonlinear HDiv bodies.
+  Every outer trial restarts each PM from its own committed history state; all
+  states commit together only after global convergence.  Every body's
+  `HDivSolver` builds its ChargeGram once across outer iterations and physical
+  history steps.
+- The planar motor application locks curved Q2+RT1 and Q3+RT2 against the
+  analytic ellipse torque.  Maxwell stress, magnetization-volume torque, and
+  fixed-current coenergy agree, and Q3+RT2 reduces the same-mesh-family error.
 
 ## Release Gate
 
@@ -124,6 +131,6 @@ Before release or `mdx`/`hibino` deployment:
 
 ## Open Work
 
-- extend force/energy tests around motor workflows;
+- extend force tests around motor workflows; torque/coenergy are locked;
 - keep Cubit/GMSH mesh export aligned with the HDiv API;
 - continue mdx scaling measurements for charge-Gram build and solve time.

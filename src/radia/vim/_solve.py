@@ -114,6 +114,17 @@ from ._capabilities import validate_hdiv_configuration
 from ._nonlinear import (_bh_table_funcs, _table_tensor_tangent, _table_tensor_tangent_multi,
                          _bh_inverse_funcs, _reluctivity_tangent, _reluctivity_tangent_multi)
 
+
+class _OperatorBackedResult(dict):
+    """Mapping result with a private, non-mapping geometry-cache attachment."""
+
+    __slots__ = ("_operator_cache",)
+
+    def __init__(self, *args, operator_cache=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._operator_cache = operator_cache
+
+
 _MU0 = 4e-7 * _PI
 _LINEAR_SOLVERS = {"auto", "cpp-cg"}
 _NONLINEAR_SOLVERS = {"energy-newton", "picard-mass-riesz", "picard-energy"}
@@ -383,7 +394,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      curve_order=None, curve_gauss=8, ho_far_factor=None,
                      newton_inner_tol="auto", newton_warmstart="linear",
                      newton_continuation=1, newton_reuse_tangent_steps=1,
-                     newton_cg_x0=False, _prepared_operator=None):
+                     newton_cg_x0=False, _operator_cache=None):
     """HDiv-type VIM soft-iron demag solve (the +N physical material system).
 
     Material spec (EXACTLY ONE):
@@ -571,7 +582,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               nonlinear_solver, preconditioner, newton_inner_tol, newton_warmstart,
                               newton_continuation, newton_reuse_tangent_steps, newton_cg_x0,
                               vertex_counts=_vtx, magnetization_sources=sources,
-                              prepared_operator=_prepared_operator)
+                              operator_cache=_operator_cache)
     if linear_recoil_pm:
         result["permanent_magnet_model"] = "linear-recoil"
         result["permanent_magnet_level"] = 2
@@ -587,7 +598,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       nonlinear_solver="energy-newton", preconditioner="auto",
                       newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
                       newton_reuse_tangent_steps=1, newton_cg_x0=False, vertex_counts=None,
-                      magnetization_sources=(), prepared_operator=None):
+                      magnetization_sources=(), operator_cache=None):
     """RT1/RT2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -636,27 +647,27 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
     _gp = _resolve_gram_params(gram_eps=gram_eps, far_quad=far_quad, ho_far_factor=ho_far_factor)
     eff_eps = _gp["eps"]; eff_far = _gp["far_quad"]; eff_hofar = _gp["ho_far_factor"]
     t_before_fes = time.perf_counter()
-    operator_reused = prepared_operator is not None
+    operator_reused = operator_cache is not None
     if operator_reused:
-        if not isinstance(prepared_operator, dict):
-            raise TypeError("vim.Solve: _prepared_operator must be a cache returned by vim.Solve")
+        if not isinstance(operator_cache, dict):
+            raise TypeError("vim.Solve: internal operator cache must be owned by vim.HDivSolver")
         expected = dict(mesh=mesh, order=int(order), curve_order=curve_order, image=image,
                         vertex_counts=frozenset(vertex_counts),
                         nonlinear=bool(bh_table is not None))
         for key, value in expected.items():
-            cached = prepared_operator.get(key)
+            cached = operator_cache.get(key)
             matches = (cached is value) if key == "mesh" else (cached == value)
             if not matches:
                 raise ValueError(
                     "vim.Solve: prepared operator mismatch for %s (cached=%r, requested=%r)"
                     % (key, cached, value))
-        fes = prepared_operator["fes"]
-        H = prepared_operator["charge_gram"]
-        n_face = int(prepared_operator["n_face"])
-        n_el = int(prepared_operator["n_el"])
-        n_charge = int(prepared_operator["n_charge"])
+        fes = operator_cache["fes"]
+        H = operator_cache["charge_gram"]
+        n_face = int(operator_cache["n_face"])
+        n_el = int(operator_cache["n_el"])
+        n_charge = int(operator_cache["n_charge"])
         symmetry_constrained_dofs = tuple(
-            prepared_operator.get("symmetry_constrained_dofs", ()))
+            operator_cache.get("symmetry_constrained_dofs", ()))
         t_before_charge_gram = t_before_fes
         t_after_charge_gram = t_before_fes
         charge_build_timings = {}
@@ -706,8 +717,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         return np.asarray(H.apply_configured_demag(_f64(v), True), float)
 
     if operator_reused:
-        D = float(prepared_operator["demag"])
-        cached_stats = prepared_operator.get("hmat_stats")
+        D = float(operator_cache["demag"])
+        cached_stats = operator_cache.get("hmat_stats")
         hmat_stats = None if cached_stats is None else dict(cached_stats)
     else:
         gfMu = ng.GridFunction(fes)
@@ -725,7 +736,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                     hmat_stats["hex_uniform_trans_hosts"] = bool(_hex_diag["hexUniformTransHosts"])
             except Exception:
                 pass
-        prepared_operator = dict(
+        operator_cache = dict(
             mesh=mesh, order=int(order), curve_order=curve_order, image=image,
             vertex_counts=frozenset(vertex_counts), nonlinear=bool(bh_table is not None),
             fes=fes, charge_gram=H, n_face=int(n_face), n_el=int(n_el),
@@ -739,6 +750,13 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
     _clear_cpp_solve_timings()
     _clear_nonlinear_solve_stats()
     setup_wall_s = t_solve - t_total
+    if bh_table is None and not isinstance(mu_r, dict):
+        # Per-region and nonlinear solves replace the mutable material mass on
+        # the persistent C++ operator.  A later scalar-mu load case needs the
+        # immutable geometry mass again.  The C++ call is a no-op while the
+        # geometry mass is already active, preserving factor reuse for normal
+        # uniform load sweeps.
+        H.restore_geometry_mass_matrix()
     if bh_table is not None:
         if preconditioner != "mass-riesz" and nonlinear_solver != "energy-newton":
             raise NotImplementedError("vim.Solve: nonlinear_solver=%r is wired only with "
@@ -828,12 +846,13 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                 if ((-_s) if _c == _a else _s) < 0:      # component c odd across plane a -> cancels in full domain
                     M_avg[_c] = 0.0
                     break
-    out = dict(M=M_el, M_avg=M_avg, gfM=gfM, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
+    out = _OperatorBackedResult(
+               M=M_el, M_avg=M_avg, gfM=gfM, iters=int(iters), demag=D, ndof=n_face, n_el=n_el,
                n_charge=n_charge, nonlinear=bh_table is not None, linear_solver=solver_used,
                preconditioner=preconditioner, preconditioner_requested=preconditioner_requested,
                preconditioner_policy=preconditioner_policy,
                order=int(order), curve_order=curve_order, image=image,
-               prepared_operator_reused=bool(operator_reused),
+               operator_reused=bool(operator_reused),
                symmetry_constrained_dofs=len(symmetry_constrained_dofs), setup_wall_s=setup_wall_s,
                solve_wall_s=solve_wall_s, post_wall_s=time.perf_counter() - t_post,
                total_wall_s_internal=time.perf_counter() - t_total,
@@ -843,9 +862,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                charge_gram_cpp_wall_s=charge_build_timings.get("charge_gram_cpp_wall_s"),
                hex_state_check_wall_s=charge_build_timings.get("hex_state_check_wall_s"),
                projection_wall_s=t_after_projection - t_after_charge_gram,
-               demag_probe_wall_s=t_after_demag_probe - t_after_projection)
+               demag_probe_wall_s=t_after_demag_probe - t_after_projection,
+               operator_cache=operator_cache)
     out["_charge_gram"] = H
-    out["_prepared_operator"] = prepared_operator
     out["_m_coefficients"] = np.ascontiguousarray(m, dtype=np.float64)
     out["_magnetization_sources"] = tuple(magnetization_sources)
     out["magnetization_source_count"] = len(magnetization_sources)
