@@ -151,3 +151,46 @@ def test_generalization_v6_public(case_id):
     else:
         bad["runs"][0]["result_metadata"]["energy"]["run_id"] = "wrong-run"
     assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v7_public_operating_point_matrix_mix",
+        "v7_public_coenergy_unit_shadowing",
+    ],
+)
+def test_generalization_v7_public(case_id):
+    bad = copy.deepcopy(_summary())
+    for index, row in enumerate(bad["runs"]):
+        operating_point_id = f"op-{index // 2}"
+        row.update(
+            {
+                "operating_point_id": operating_point_id,
+                "apparent_matrix_operating_point_id": operating_point_id,
+                "incremental_matrix_operating_point_id": operating_point_id,
+                "apparent_matrix_current_A": list(row["current_A"]),
+                "incremental_matrix_current_A": list(row["current_A"]),
+                "reported_units": {
+                    "current": "A",
+                    "flux_linkage": "Vs",
+                    "inductance": "H",
+                    "energy": "J",
+                    "coenergy": "J",
+                },
+                "artifact_units": {
+                    "current": "A",
+                    "flux_linkage": "Vs",
+                    "inductance": "H",
+                    "energy": "J",
+                    "coenergy": "J",
+                },
+            }
+        )
+    if case_id == "v7_public_operating_point_matrix_mix":
+        for row in bad["runs"][:2]:
+            row["incremental_matrix_operating_point_id"] = "op-1"
+            row["incremental_matrix_current_A"] = [2.0, 0.0]
+    else:
+        bad["runs"][0]["artifact_units"]["coenergy"] = "mJ"
+    assert nonlinear_inductance_sweep_gate(bad)["status"] == "needs_attention"

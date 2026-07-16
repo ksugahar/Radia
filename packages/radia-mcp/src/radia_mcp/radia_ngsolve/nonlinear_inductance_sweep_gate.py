@@ -85,6 +85,62 @@ def _result_metadata_run_ids_are_consistent(raw: Mapping[str, Any]) -> bool:
     return len(set(run_ids)) == 1
 
 
+def _matrix_operating_point_identity_matches(
+    raw: Mapping[str, Any], currents: list[float]
+) -> tuple[bool, bool]:
+    identity_names = (
+        "operating_point_id",
+        "apparent_matrix_operating_point_id",
+        "incremental_matrix_operating_point_id",
+    )
+    current_names = (
+        "apparent_matrix_current_A",
+        "incremental_matrix_current_A",
+    )
+    identity_present = any(name in raw for name in identity_names)
+    current_present = any(name in raw for name in current_names)
+    identity_ok = True
+    current_ok = True
+    if identity_present:
+        values = [str(raw.get(name, "")).strip() for name in identity_names]
+        identity_ok = all(values) and len(set(values)) == 1
+    if current_present:
+        if not all(name in raw for name in current_names):
+            current_ok = False
+        else:
+            matrix_currents = [
+                _vector(raw[name], name) for name in current_names
+            ]
+            current_ok = all(
+                all(
+                    _relative_error(actual, expected) <= 1.0e-12
+                    for actual, expected in zip(value, currents)
+                )
+                for value in matrix_currents
+            )
+    return identity_ok, current_ok
+
+
+def _artifact_units_are_consistent(raw: Mapping[str, Any]) -> bool:
+    expected = {
+        "current": "A",
+        "flux_linkage": "Vs",
+        "inductance": "H",
+        "energy": "J",
+        "coenergy": "J",
+    }
+    reported = raw.get("reported_units")
+    artifact = raw.get("artifact_units")
+    if reported is None and artifact is None:
+        return True
+    if not isinstance(reported, Mapping) or not isinstance(artifact, Mapping):
+        return False
+    return all(
+        reported.get(name) == unit and artifact.get(name) == unit
+        for name, unit in expected.items()
+    )
+
+
 def nonlinear_inductance_sweep_gate(
     summary: Mapping[str, Any],
     *,
@@ -162,6 +218,9 @@ def nonlinear_inductance_sweep_gate(
         duality_target = currents[0] * flux[0] + currents[1] * flux[1]
         duality_error = _relative_error(energy + coenergy, duality_target)
         current_error = _relative_error(currents[0], requested)
+        matrix_identity_ok, matrix_current_ok = _matrix_operating_point_identity_matches(
+            raw, currents
+        )
 
         def matrix_ok(metrics: Mapping[str, float]) -> bool:
             scale = max(abs(metrics["diagonal_product_H2"]), 1.0e-300)
@@ -190,6 +249,13 @@ def nonlinear_inductance_sweep_gate(
             "result_metadata_run_ids_are_consistent": (
                 _result_metadata_run_ids_are_consistent(raw)
             ),
+            "apparent_and_incremental_matrix_operating_point_ids_match": (
+                matrix_identity_ok
+            ),
+            "matrix_operating_point_currents_match_run_current": matrix_current_ok,
+            "reported_and_artifact_units_are_consistent_si": (
+                _artifact_units_are_consistent(raw)
+            ),
         }
         row = {
             "current_A_requested": requested,
@@ -201,6 +267,9 @@ def nonlinear_inductance_sweep_gate(
             "energy_J": energy,
             "coenergy_J": coenergy,
             "final_nonlinear_residual_log10": residual,
+            "operating_point_id": raw.get("operating_point_id"),
+            "reported_units": raw.get("reported_units"),
+            "artifact_units": raw.get("artifact_units"),
             "differential_to_apparent_primary_ratio": incremental[0][0]
             / apparent[0][0],
             "flux_identity_relative_error": flux_error,
