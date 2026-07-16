@@ -105,9 +105,13 @@ def magnetic_force_method_profile_gate(
     identity_present = isinstance(identity_value, Mapping)
     one_sweep_generation_ok = True
     demag_reference_ok = True
+    coordinate_system_binding_ok = True
+    force_normalization_ok = True
     if identity_value is not None and not identity_present:
         one_sweep_generation_ok = False
         demag_reference_ok = False
+        coordinate_system_binding_ok = False
+        force_normalization_ok = False
     elif identity_present:
         generations = identity_value.get("position_force_sample_generations")
         timestamps = identity_value.get("sample_acquired_at_utc")
@@ -150,6 +154,41 @@ def magnetic_force_method_profile_gate(
                 and math.isfinite(committed_at)
                 and math.isfinite(generated_at)
                 and generated_at >= committed_at
+            )
+        coordinate_binding = identity_value.get("coordinate_system_binding")
+        if coordinate_binding is not None:
+            coordinate_system_binding_ok = (
+                isinstance(coordinate_binding, Mapping)
+                and bool(coordinate_binding.get("common_frame_id"))
+                and coordinate_binding.get("force_component_frame_id")
+                == coordinate_binding.get("common_frame_id")
+                and coordinate_binding.get("demag_metric_frame_id")
+                == coordinate_binding.get("common_frame_id")
+                and bool(coordinate_binding.get("geometry_rotation_revision"))
+                and coordinate_binding.get("force_transform_revision")
+                == coordinate_binding.get("geometry_rotation_revision")
+                and coordinate_binding.get("demag_transform_revision")
+                == coordinate_binding.get("geometry_rotation_revision")
+            )
+        force_normalization = identity_value.get("force_normalization")
+        if force_normalization is not None:
+            profile_bases = (
+                force_normalization.get("profile_bases")
+                if isinstance(force_normalization, Mapping)
+                else None
+            )
+            force_normalization_ok = (
+                isinstance(force_normalization, Mapping)
+                and force_normalization.get("comparison_basis") == "total_3d"
+                and isinstance(profile_bases, Mapping)
+                and set(profile_bases)
+                == {
+                    "moving_body_element_force",
+                    "closed_surface_maxwell_stress_force",
+                    "independent_closed_surface_force",
+                }
+                and all(value == "total_3d" for value in profile_bases.values())
+                and force_normalization.get("per_length_to_total_applied") is True
             )
 
     method_difference = _maximum_relative_difference(target, stress)
@@ -220,6 +259,10 @@ def magnetic_force_method_profile_gate(
         is True,
         "position_force_samples_share_one_sweep_generation": one_sweep_generation_ok,
         "demag_reference_matches_current_geometry_revision": demag_reference_ok,
+        "force_and_demag_share_transformed_coordinate_system": (
+            coordinate_system_binding_ok
+        ),
+        "force_profiles_share_total_3d_normalization": force_normalization_ok,
     }
     issues = [name for name, ok in checks.items() if not ok]
     return {
