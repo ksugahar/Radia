@@ -177,6 +177,72 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             )
         )
 
+    quality_scope_value = summary.get("quality_scope_identity")
+    quality_scope_present = quality_scope_value is not None
+    quality_scope = (
+        quality_scope_value if isinstance(quality_scope_value, Mapping) else {}
+    )
+    quality_scope_ok = True
+    if quality_scope_present:
+        mesh_volume_ids = {str(value) for value in per_volume}
+        minimum_volume_ids = {
+            str(value) for value in (quality_scope.get("minimum_quality_volume_ids") or [])
+        }
+        histogram_volume_ids = {
+            str(value) for value in (quality_scope.get("histogram_volume_ids") or [])
+        }
+        declared_mesh_volume_ids = {
+            str(value) for value in (quality_scope.get("mesh_volume_ids") or [])
+        }
+        histogram_counts = quality_scope.get("histogram_owned_element_counts")
+        quality_scope_ok = (
+            isinstance(histogram_counts, Mapping)
+            and mesh_volume_ids
+            == minimum_volume_ids
+            == histogram_volume_ids
+            == declared_mesh_volume_ids
+            and all(
+                int(histogram_counts.get(family, -1)) == totals[family]
+                for family in ("hex", "pyramid", "tet")
+            )
+        )
+
+    partition_value = summary.get("partition_aggregation")
+    partition_present = partition_value is not None
+    partition = partition_value if isinstance(partition_value, Mapping) else {}
+    partition_aggregation_ok = True
+    if partition_present:
+        try:
+            partition_rows = _rows(partition.get("partitions"), "partition_aggregation.partitions")
+        except ValueError:
+            partition_rows = []
+        families = ("hex", "pyramid", "tet")
+        owned_sums = {
+            family: sum(
+                int(
+                    (row.get("owned_counts") or {}).get(family, 0)
+                    if isinstance(row.get("owned_counts"), Mapping)
+                    else 0
+                )
+                for row in partition_rows
+            )
+            for family in families
+        }
+        reported = partition.get("reported_global_owned_counts")
+        partition_aggregation_ok = (
+            bool(partition_rows)
+            and len({row.get("partition_id") for row in partition_rows})
+            == len(partition_rows)
+            and partition.get("aggregation_policy") == "owned_elements_only"
+            and isinstance(reported, Mapping)
+            and all(
+                int(reported.get(family, -1))
+                == owned_sums[family]
+                == totals[family]
+                for family in families
+            )
+        )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -190,6 +256,8 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
             quality_counts[family] == totals[family] for family in ("hex", "pyramid", "tet")
         ),
         "quality_report_matches_current_mesh_generation": mesh_quality_identity_ok,
+        "quality_histogram_covers_the_complete_mesh_scope": quality_scope_ok,
+        "partition_aggregation_excludes_ghost_elements": partition_aggregation_ok,
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
             quality_minima[family] >= threshold for family in ("hex", "pyramid", "tet")
@@ -387,6 +455,56 @@ def cubit_mixed_transition_source_gate(
             and len(str(batch_log.get("sha256") or "")) == 64
             and batch_invocation.get("exports_invocation_id") == invocation_id
         )
+
+    operation_dag_value = summary.get("operation_dag_identity")
+    operation_dag_present = operation_dag_value is not None
+    operation_dag = (
+        operation_dag_value if isinstance(operation_dag_value, Mapping) else {}
+    )
+    export_manifest_for_dag = (
+        export_manifest_value if isinstance(export_manifest_value, Mapping) else {}
+    )
+    operation_dag_ok = True
+    if operation_dag_present:
+        try:
+            final_sequence = int(operation_dag.get("final_operation_sequence"))
+            export_sequence = int(operation_dag.get("export_after_operation_sequence"))
+        except (TypeError, ValueError):
+            final_sequence = -1
+            export_sequence = -2
+        operation_dag_ok = (
+            bool(operation_dag.get("final_model_generation"))
+            and operation_dag.get("export_model_generation")
+            == operation_dag.get("final_model_generation")
+            and export_manifest_for_dag.get("model_generation")
+            == operation_dag.get("final_model_generation")
+            and final_sequence >= 0
+            and export_sequence >= final_sequence
+        )
+
+    length_scale_value = summary.get("length_scale_identity")
+    length_scale_present = length_scale_value is not None
+    length_scale = (
+        length_scale_value if isinstance(length_scale_value, Mapping) else {}
+    )
+    length_scale_ok = True
+    if length_scale_present:
+        try:
+            declared_scale = float(length_scale.get("declared_source_to_export_scale"))
+            effective_scale = float(length_scale.get("effective_scale"))
+        except (TypeError, ValueError):
+            declared_scale = math.nan
+            effective_scale = math.nan
+        length_scale_ok = (
+            length_scale.get("source_geometry_unit") == "mm"
+            and length_scale.get("export_geometry_unit") == "m"
+            and list(length_scale.get("scale_application_stages") or [])
+            == ["source-command"]
+            and math.isfinite(declared_scale)
+            and math.isfinite(effective_scale)
+            and declared_scale == 0.001
+            and effective_scale == declared_scale
+        )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -449,6 +567,8 @@ def cubit_mixed_transition_source_gate(
         "all_required_export_artifacts_are_fresh": export_artifacts_ok,
         "export_manifest_uses_one_model_and_invocation_generation": export_manifest_ok,
         "batch_log_and_exports_share_invocation_identity": batch_invocation_ok,
+        "exports_follow_the_final_geometry_operation": operation_dag_ok,
+        "length_scale_is_applied_exactly_once": length_scale_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),

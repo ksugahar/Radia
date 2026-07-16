@@ -51,6 +51,28 @@ def summary() -> dict:
             "mesh_sha256": "d" * 64,
             "report_sha256": "e" * 64,
         },
+        "quality_scope_identity": {
+            "mesh_volume_ids": ["1", "2"],
+            "minimum_quality_volume_ids": ["1", "2"],
+            "histogram_volume_ids": ["1", "2"],
+            "histogram_owned_element_counts": {"hex": 1, "pyramid": 1, "tet": 10},
+        },
+        "partition_aggregation": {
+            "aggregation_policy": "owned_elements_only",
+            "reported_global_owned_counts": {"hex": 1, "pyramid": 1, "tet": 10},
+            "partitions": [
+                {
+                    "partition_id": 0,
+                    "owned_counts": {"hex": 1, "pyramid": 0, "tet": 4},
+                    "ghost_counts": {"hex": 0, "pyramid": 1, "tet": 2},
+                },
+                {
+                    "partition_id": 1,
+                    "owned_counts": {"hex": 0, "pyramid": 1, "tet": 6},
+                    "ghost_counts": {"hex": 1, "pyramid": 0, "tet": 0},
+                },
+            ],
+        },
         "boundary_sets": [
             {
                 "name": "interface",
@@ -158,6 +180,19 @@ def summary() -> dict:
                 "sha256": "1" * 64,
             },
             "exports_invocation_id": "batch-invocation-42",
+        },
+        "operation_dag_identity": {
+            "final_model_generation": "model-generation-42",
+            "final_operation_sequence": 6,
+            "export_model_generation": "model-generation-42",
+            "export_after_operation_sequence": 6,
+        },
+        "length_scale_identity": {
+            "source_geometry_unit": "mm",
+            "export_geometry_unit": "m",
+            "declared_source_to_export_scale": 0.001,
+            "scale_application_stages": ["source-command"],
+            "effective_scale": 0.001,
         },
         "timing_breakdown_s": {
             "source_replay": 0.2,
@@ -336,6 +371,65 @@ def test_generalization_v8_source(case_id: str):
             }
         )
         expected = "batch_log_and_exports_share_invocation_identity"
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_public_quality_histogram_entity_scope_mismatch",
+        "v9_public_partition_ghost_elements_double_counted",
+    ],
+)
+def test_generalization_v9_public(case_id: str):
+    row = summary()
+    if case_id == "v9_public_quality_histogram_entity_scope_mismatch":
+        row["quality_scope_identity"]["histogram_volume_ids"] = ["1"]
+        expected = "quality_histogram_covers_the_complete_mesh_scope"
+    else:
+        row["partition_aggregation"].update(
+            {
+                "aggregation_policy": "owned_plus_ghost_elements",
+                "reported_global_owned_counts": {
+                    "hex": 2,
+                    "pyramid": 2,
+                    "tet": 12,
+                },
+            }
+        )
+        expected = "partition_aggregation_excludes_ghost_elements"
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"][expected] is False
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "v9_source_export_precedes_final_geometry_operation",
+        "v9_source_export_length_scale_applied_twice",
+    ],
+)
+def test_generalization_v9_source(case_id: str):
+    row = summary()
+    if case_id == "v9_source_export_precedes_final_geometry_operation":
+        row["operation_dag_identity"].update(
+            {
+                "export_model_generation": "model-generation-41",
+                "export_after_operation_sequence": 5,
+            }
+        )
+        expected = "exports_follow_the_final_geometry_operation"
+    else:
+        row["length_scale_identity"].update(
+            {
+                "scale_application_stages": ["source-command", "export-manifest"],
+                "effective_scale": 1.0e-6,
+            }
+        )
+        expected = "length_scale_is_applied_exactly_once"
     result = json.loads(cubit_mixed_transition_source_gate(row))
     assert result["status"] == "needs_attention"
     assert result["checks"][expected] is False
