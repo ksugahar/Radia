@@ -110,6 +110,37 @@ def _artifact_identity(sample_count):
             "solve_generation": "solve-15",
             "result_generation": "solve-15",
         },
+        "axisymmetric_force_radius_jacobian_coordinate_identity": {
+            "field_solution_generation": "solve-16",
+            "stress_field_solution_generation": "solve-16",
+            "coordinate_generation": "coordinates-16",
+            "stress_coordinate_generation": "coordinates-16",
+            "radius_jacobian_coordinate_generation": "coordinates-16",
+            "force_integration_coordinate_generation": "coordinates-16",
+            "radius_coordinate_frame": "cylindrical-rz",
+            "stress_coordinate_frame": "cylindrical-rz",
+            "radius_length_unit": "m",
+            "stress_coordinate_length_unit": "m",
+            "radius_scale_to_m": 1.0,
+            "stress_coordinate_scale_to_m": 1.0,
+            "radius_coordinate_sha256": "a" * 64,
+            "force_radius_coordinate_sha256": "a" * 64,
+            "integration_measure": "2*pi*r*dr*dz",
+        },
+        "nonlinear_bh_interpolation_extrapolation_identity": {
+            "material_generation": "materials-16",
+            "bh_table_material_generation": "materials-16",
+            "field_solution_material_generation": "materials-16",
+            "bh_table_sha256": "b" * 64,
+            "field_bh_table_sha256": "b" * 64,
+            "interpolation_method": "monotone_piecewise_linear",
+            "field_interpolation_method": "monotone_piecewise_linear",
+            "endpoint_extrapolation_branch": "last_segment_slope",
+            "field_endpoint_extrapolation_branch": "last_segment_slope",
+            "evaluation_region": "upper_endpoint_extrapolation",
+            "solve_generation": "solve-16",
+            "field_state_solve_generation": "solve-16",
+        },
     }
 
 
@@ -386,5 +417,47 @@ def test_v13_public_complex_current_peak_rms_phasor_basis_mismatch() -> None:
     assert result["status"] == "needs_attention"
     assert (
         result["checks"]["complex_current_force_and_loss_share_phasor_basis"]
+        is False
+    )
+
+
+def test_v14_public_axisymmetric_force_radius_jacobian_coordinate_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["axisymmetric_force_radius_jacobian_coordinate_identity"].update(
+        {
+            "radius_jacobian_coordinate_generation": "coordinates-15",
+            "force_radius_coordinate_sha256": "d" * 64,
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "axisymmetric_force_radius_jacobian_uses_current_coordinates"
+        ]
+        is False
+    )
+
+
+def test_v14_public_nonlinear_bh_interpolation_extrapolation_branch_mismatch() -> None:
+    positions, coenergy, forces = _quadratic_case()
+    identity = _artifact_identity(len(positions))
+    identity["nonlinear_bh_interpolation_extrapolation_identity"].update(
+        {
+            "field_endpoint_extrapolation_branch": "constant_mu0",
+            "field_state_solve_generation": "solve-15",
+        }
+    )
+    result = force_coenergy_displacement_gate(
+        positions, coenergy, forces, artifact_identity=identity
+    )
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"][
+            "nonlinear_bh_state_uses_one_interpolation_and_extrapolation_branch"
+        ]
         is False
     )
