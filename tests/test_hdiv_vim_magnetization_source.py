@@ -94,10 +94,16 @@ def test_prescribed_source_geometry_only_path_covers_production_3d_elements():
     cases = [
         ("tet-rt2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, None, "analytic-tet-rt2"),
         ("tet-curved", _box_mesh(-0.3, 0.3, maxh=0.35), 1, 2, "curved-element-exact-rt1"),
+        ("tet-curved-rt2", _box_mesh(-0.3, 0.3, maxh=0.35), 2, 2,
+         "curved-element-exact-rt2"),
         ("hex-rt1", MakeStructured3DMesh(
             hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-rt1"),
+        ("hex-curved-rt2", MakeStructured3DMesh(
+            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-rt2"),
         ("wedge-rt1", MakeStructured3DMesh(
             prism=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-rt1"),
+        ("wedge-curved-rt2", MakeStructured3DMesh(
+            prism=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-rt2"),
     ]
     prescribed = ng.CoefficientFunction((1.0e5, 2.0e5, 3.0e5))
     for name, mesh, order, curve_order, expected_kind in cases:
@@ -106,6 +112,7 @@ def test_prescribed_source_geometry_only_path_covers_production_3d_elements():
                 mesh, prescribed, order=order, curve_order=curve_order)
         assert source.stats["hmatrix_built"] is False, name
         assert source.stats["field_evaluator"]["source_kind"] == expected_kind, name
+        assert source.stats["curve_order"] == curve_order, name
         assert np.isfinite(source.Field([[1.0, 0.0, 0.0]], "direct")).all(), name
 
 
@@ -148,3 +155,38 @@ def test_prescribed_source_image_reconstructs_full_cuboid_to_roundoff():
         rad.UtiDel(analytic_magnet)
     reduced = source.Field(points, "direct")
     assert np.allclose(reduced, analytic, rtol=2.0e-13, atol=1.0e-7)
+
+
+@pytest.mark.parametrize("kind, mesh_options", [
+    ("hex", {"hexes": True}),
+    ("wedge", {"prism": True}),
+])
+def test_curved_hex_wedge_rt2_field_matches_independent_ngsolve_boundary_integral(
+        kind, mesh_options):
+    mesh = MakeStructured3DMesh(
+        nx=1, ny=1, nz=1, **mesh_options,
+        mapping=lambda x, y, z: (x-0.5, y-0.5, z-0.5))
+    expected_vertices = 8 if kind == "hex" else 6
+    if {len(element.vertices) for element in mesh.Elements(ng.VOL)} != {expected_vertices}:
+        pytest.skip(f"structured {kind} generator returned a different topology")
+    mesh.Curve(2)
+    with ng.TaskManager():
+        source = vim.MagnetizationSource(
+            mesh, (1.0e5, 2.0e5, 3.0e5), order=2, curve_order=2)
+
+    points = np.asarray([[2.0, 0.0, 0.0], [0.0, 0.0, 2.0]])
+    normal = ng.specialcf.normal(3)
+    position = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    sigma = ng.InnerProduct(source.magnetization, normal)
+    reference = []
+    with ng.TaskManager():
+        for point in points:
+            delta = ng.CoefficientFunction(tuple(point)) - position
+            radius = ng.sqrt(ng.InnerProduct(delta, delta))
+            reference.append(ng.Integrate(
+                sigma*delta/(4.0*np.pi*radius**3), mesh, ng.BND, order=12))
+
+    reference = np.asarray(reference, dtype=float)
+    actual = source.Field(points, "direct")
+    relative = np.linalg.norm(actual-reference, axis=1) / np.linalg.norm(reference, axis=1)
+    assert relative.max() < 1.0e-5

@@ -2523,6 +2523,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
     std::vector<int> charge_host, std::vector<int> charge_kind, std::vector<int> charge_expo,
     std::vector<double> sym_tet_pts, std::vector<double> sym_tet_w,
     std::vector<double> sym_tri_pts, std::vector<double> sym_tri_w,
+    std::vector<double> field_tri_pts, std::vector<double> field_tri_w,
     std::vector<double> gl_out, std::vector<double> gw_out,
     std::vector<double> gl_in, std::vector<double> gw_in,
     std::vector<double> far_tet_pts, std::vector<double> far_tet_w,
@@ -2541,10 +2542,13 @@ RadHACApKChargeGram::RadHACApKChargeGram(
       m_wedgemode(true), m_wedge_n_bf(n_bf),
       m_wCellNodes(std::move(wedge_cell_nodes)), m_wFaceNodes(std::move(face_nodes)),
       m_wFaceType(std::move(face_type)),
+      m_wFieldTriP(std::move(field_tri_pts)), m_wFieldTriW(std::move(field_tri_w)),
       m_host(std::move(charge_host)), m_kind(std::move(charge_kind)), m_expo(std::move(charge_expo))
 {
     ValidateImageVectors(m_image_masks, m_image_signs);
     m_n = (int)m_host.size();
+    if (m_wFieldTriW.empty() || m_wFieldTriP.size() != 2*m_wFieldTriW.size())
+        throw std::invalid_argument("WEDGE ChargeGram field triangle rule sizes are inconsistent");
     if (m_kind.size() != m_host.size() || m_expo.size() != 3*m_host.size())
         throw std::invalid_argument("WEDGE ChargeGram charge metadata sizes are inconsistent");
     for (int exponent : m_expo)
@@ -5193,17 +5197,36 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         m_lastSolveTiming.ax_other_s += total - bx - gm - bt - ma;
         ++m_lastSolveTiming.apply_count;
     };
+    constexpr int dot_block_size = 4096;
+    const int dot_blocks = (n_face + dot_block_size - 1) / dot_block_size;
+    std::vector<double> dot_partial((size_t)dot_blocks, 0.0);
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
         const auto t0 = Clock::now();
-        double s = 0.0;
-        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
-            double local = 0.0;
-            for (auto f : r) local += a[f] * b[f];
-            ngcore::AtomicAdd(s, local);
-        });
+        auto sum_block = [&](size_t block) {
+            const int begin = static_cast<int>(block) * dot_block_size;
+            const int end = std::min(n_face, begin + dot_block_size);
+            double sum = 0.0, correction = 0.0;
+            for (int f = begin; f < end; ++f) {
+                const double value = a[(size_t)f] * b[(size_t)f];
+                const double next = sum + value;
+                correction += std::fabs(sum) >= std::fabs(value)
+                    ? (sum - next) + value : (value - next) + sum;
+                sum = next;
+            }
+            dot_partial[block] = sum + correction;
+        };
+        if (dot_blocks == 1) sum_block(0);
+        else ngcore::ParallelFor(ngcore::IntRange(dot_blocks), sum_block);
+        double s = 0.0, correction = 0.0;
+        for (double value : dot_partial) {
+            const double next = s + value;
+            correction += std::fabs(s) >= std::fabs(value)
+                ? (s - next) + value : (value - next) + s;
+            s = next;
+        }
         m_lastSolveTiming.dot_s += elapsed(t0, Clock::now());
         ++m_lastSolveTiming.dot_count;
-        return s;
+        return s + correction;
     };
     // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
     std::vector<double> rhs_projected = rhs;
@@ -5852,20 +5875,20 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             for (int host = 0; host < m_n_el; ++host) {
                 const double* nodes = &m_wCellNodes[static_cast<size_t>(host)*54];
                 HexQuadCloud cloud;
-                const size_t nt = m_symTriW.size(), ng = m_glOut.size();
+                const size_t nt = m_wFieldTriW.size(), ng = m_glOut.size();
                 cloud.pts.reserve(3*nt*ng);
                 cloud.xi.reserve(3*nt*ng);
                 cloud.wgeo.reserve(nt*ng);
                 for (size_t iw = 0; iw < ng; ++iw)
                     for (size_t iq = 0; iq < nt; ++iq) {
                         const double xi[3] = {
-                            m_symTriP[2*iq], m_symTriP[2*iq + 1], m_glOut[iw]
+                            m_wFieldTriP[2*iq], m_wFieldTriP[2*iq + 1], m_glOut[iw]
                         };
                         double X[3];
                         WedgeQ2MapX(nodes, xi, X);
                         cloud.pts.insert(cloud.pts.end(), X, X+3);
                         cloud.xi.insert(cloud.xi.end(), xi, xi+3);
-                        cloud.wgeo.push_back(m_symTriW[iq]*m_gwOut[iw]);
+                        cloud.wgeo.push_back(m_wFieldTriW[iq]*m_gwOut[iw]);
                     }
                 append_cloud(cloud, m_cellCharges[static_cast<size_t>(host)]);
             }
@@ -5874,19 +5897,19 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 const double* nodes = &m_wFaceNodes[static_cast<size_t>(host)*27];
                 HexQuadCloud cloud;
                 if (face_type == 0) {
-                    const size_t nt = m_symTriW.size();
+                    const size_t nt = m_wFieldTriW.size();
                     cloud.pts.reserve(3*nt);
                     cloud.xi.reserve(3*nt);
                     cloud.wgeo.reserve(nt);
                     for (size_t iq = 0; iq < nt; ++iq) {
-                        const double uv[2] = {m_symTriP[2*iq], m_symTriP[2*iq + 1]};
+                        const double uv[2] = {m_wFieldTriP[2*iq], m_wFieldTriP[2*iq + 1]};
                         double X[3];
                         TriSurfMap(nodes, uv, X);
                         cloud.pts.insert(cloud.pts.end(), X, X+3);
                         cloud.xi.push_back(uv[0]);
                         cloud.xi.push_back(uv[1]);
                         cloud.xi.push_back(0.0);
-                        cloud.wgeo.push_back(m_symTriW[iq]);
+                        cloud.wgeo.push_back(m_wFieldTriW[iq]);
                     }
                 } else {
                     const size_t ng = m_glOut.size();

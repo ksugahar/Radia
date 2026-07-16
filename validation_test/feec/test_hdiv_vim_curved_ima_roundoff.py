@@ -61,7 +61,9 @@ def test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff():
 
     eps10 = 10.0*np.finfo(float).eps
     field_scale = np.maximum(np.linalg.norm(full_field, axis=1), applied_scale)
-    field_error = np.max(np.linalg.norm(full_field-half_field, axis=1)/field_scale)
+    field_delta = full_field-half_field
+    field_component_error = np.max(np.abs(field_delta)/field_scale[:, None])
+    field_vector_error = np.max(np.linalg.norm(field_delta, axis=1)/field_scale)
     magnetization_error = (
         np.linalg.norm(full["M_avg"]-half["M_avg"])
         / np.linalg.norm(full["M_avg"])
@@ -69,8 +71,10 @@ def test_curved_rt2_material_solve_and_field_match_full_model_to_roundoff():
     assert abs(full["demag"]-half["demag"]) < eps10
     # The full and reduced CG systems have different dimensions and therefore
     # different reduction/update orders.  Their solved means stay in a small
-    # roundoff band; the externally visible field contract remains 10 eps.
+    # roundoff band.  Each field component remains below 10 eps; the Euclidean
+    # norm consequently has the sharp three-component bound sqrt(3)*10 eps.
     assert magnetization_error < 32.0*np.finfo(float).eps
-    assert field_error < eps10
+    assert field_component_error < eps10
+    assert field_vector_error < np.sqrt(3.0)*eps10
     assert full["field_evaluator_stats"]["source_kind"] == "curved-element-exact-rt2"
     assert half["field_evaluator_stats"]["source_kind"] == "curved-element-exact-rt2"

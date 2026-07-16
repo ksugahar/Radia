@@ -30,20 +30,24 @@ class SoftIron:
         Linear relative permeability.  Give exactly one of ``mu_r`` / ``bh_table``.
     bh_table : list[[H, B]], optional
         Nonlinear B-H curve.
+    order : int, optional
+        HDiv finite-element order, 1 (RT1) or 2 (RT2).
     """
 
-    def __init__(self, geometry, mu_r=None, bh_table=None, material_filter=None, verbose=False):
+    def __init__(self, geometry, mu_r=None, bh_table=None, material_filter=None, verbose=False,
+                 order=1):
         from radia.vim import MeshSoftIron, VolSoftIron
         if isinstance(geometry, (str, os.PathLike)):
             self.container = VolSoftIron(geometry, mu_r=mu_r, bh_table=bh_table,
-                                         material_filter=material_filter, verbose=verbose)
+                                         material_filter=material_filter, verbose=verbose, order=order)
             self._geometry = os.fspath(geometry)
         else:
             self.container = MeshSoftIron(geometry, mu_r=mu_r, bh_table=bh_table,
-                                          material_filter=material_filter, verbose=verbose)
+                                          material_filter=material_filter, verbose=verbose, order=order)
             self._geometry = "<ngsolve.Mesh>"
         self.mu_r = mu_r
         self.bh_table = bh_table
+        self.order = int(order)
         self.result = None          # last solve() return (HDiv dict)
         self._source = []           # last applied-field source members (for total-field queries)
 
@@ -85,4 +89,4 @@ class SoftIron:
 
     def __repr__(self):
         mat = f"mu_r={self.mu_r}" if self.mu_r is not None else "bh_table=<%d pts>" % len(self.bh_table or [])
-        return f"SoftIron({self._geometry!r}, {mat})"
+        return f"SoftIron({self._geometry!r}, {mat}, order={self.order})"
