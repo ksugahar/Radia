@@ -538,7 +538,7 @@ def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
                         face_maxh=None, nx=81, ny=401, xmax=0.05, ymax=0.26):
     """FEEC HDiv-VIM twin of ``fem_solve_midplane``: ``radia.vim.MeshSoftIron`` on the
     iron-only mesh + the same explicit CoilBuilder pair, ``rad.Solve`` auto-dispatch
-    (RT1), then one batch ``rad.Fld`` mid-plane map (all points in the gap/air, so the
+    (BDM1), then one batch ``rad.Fld`` mid-plane map (all points in the gap/air, so the
     analytic integrals are exact for the solved piecewise-constant M).  This is fully
     engine-independent of the reduced-Omega solve, which makes it a useful cross-check
     for separating the model deficit from discretization error (2026-07-13)."""
@@ -549,7 +549,7 @@ def hdiv_solve_midplane(beta_deg, mu_r=1000.0, maxh_iron=0.014, edge_maxh=0.004,
     mesh = hdiv_build_iron_mesh(beta_deg, maxh_iron, edge_maxh, face_maxh)
     iron = vim.MeshSoftIron(mesh, mu_r=mu_r)
     top = rad.ObjCnt([iron, coils])
-    rad.Solve(top)                                    # auto -> FEEC HDiv-VIM (RT1)
+    rad.Solve(top)                                    # auto -> FEEC HDiv-VIM (BDM1)
     xs = np.linspace(-xmax, xmax, nx)
     ys = np.linspace(-ymax, ymax, ny)
     X, Y = np.meshgrid(xs, ys, indexing="ij")
@@ -579,7 +579,7 @@ def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=
     in the JSON's `mesh_dependence_diagnosis`): the then-used write-back field had
     a piecewise-constant-M ripple over bulk-size GAP-FACING pole-face elements at
     20 mm standoff -- NOT the edge lines.  The current production `rad.Fld`
-    redirects solved HDiv objects to the full RT1 C++ evaluator, so this collapse
+    redirects solved HDiv objects to the full BDM1 C++ evaluator, so this collapse
     is no longer its field path.  In the historical run, face_maxh=0.006
     (~standoff/3) cures it (g_max 1.0245 -> 1.0001; K1g 7.8 -> 8.80 mm, matching
     reduced-Omega 8.85 to 0.6%); face 4 mm at bulk 14 mm exceeds the mass-Riesz CG

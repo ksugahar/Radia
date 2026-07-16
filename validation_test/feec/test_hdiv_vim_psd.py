@@ -39,7 +39,7 @@ def _N_dense(fes):
 
 @pytest.mark.parametrize("order", [1, 2])
 def test_charge_gram_is_psd(order):
-    """The production pure-TET RT1/RT2 charge Gram is positive semidefinite."""
+    """The production pure-TET BDM1/BDM2 charge Gram is positive semidefinite."""
     mesh = ng.Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0)).GenerateMesh(maxh=1.0))
     with ng.TaskManager():
         fes = ng.HDiv(mesh, order=order)

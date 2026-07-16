@@ -7,7 +7,7 @@ This is the HDiv counterpart of the MMPM cube benchmark used in the
   * 1 m x 1 m x 1 m cube, centered at the origin
   * structured pure-hex or pure-wedge mesh, N x N x N
   * applied field H0 = 200 kA/m in +z
-  * RT1 HDiv-VIM solve through radia.vim.Solve
+  * BDM1 HDiv-VIM solve through radia.vim.Solve
   * HACApK charge-Gram stats recorded from the solver result
 
 The script is intentionally in validation_test, not tests: useful sizes are
@@ -385,7 +385,7 @@ def main() -> int:
         "problem": {
             "geometry": "1 m cube centered at origin",
             "mesh": f"structured pure {args.mesh_kind} N x N x N",
-            "method": "RT1 HDiv-VIM via radia.vim.Solve",
+            "method": "BDM1 HDiv-VIM via radia.vim.Solve",
             "H_ext_A_per_m": args.h_ext,
             "mu_r_linear": args.mu_r,
             "bh_table_source": bh_source,

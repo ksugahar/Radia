@@ -8,7 +8,7 @@
   "drive": "virgin 4 + descending 8 + ascending 8",
   "material": "synthetic play K=3 (mu_r 200, thresholds 0/0.3/0.7 T)",
   "mesh": "structured hex NxNxN",
-  "order": "RT1",
+  "order": "BDM1",
   "source_commit": "d7998da2",
   "provenance": "branch wheel (radia 4.95.9 + commits through d7998da2) deployed to mdx via the pre-PyPI wheel pipe; mdx idle-gated (0 python procs, CPU 1% at launch)"
  },

@@ -3,6 +3,10 @@
 Radia soft iron is standardized on HDiv-VIM.  This note is the current
 production checklist, not a migration archive.
 
+NGSolve's bare `HDiv(mesh, order=p)` is BDM.  Accordingly, every established
+Radia production path described below uses BDM1/BDM2.  Actual Raviart--Thomas
+requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
+
 ## Done
 
 - Mesh-backed `radia.vim.MeshSoftIron` integrates with `rad.Solve`.
@@ -13,17 +17,17 @@ production checklist, not a migration archive.
 - TET/HEX/WEDGE and 2D planar paths have validation coverage under
   `validation_test/feec/`.
 - `rad.Fld` is part of the public contract after HDiv write-back.
-- RT1/RT2 solve results own a persistent C++ field evaluator: NumPy target buffers,
+- BDM1/BDM2 solve results own a persistent C++ field evaluator: NumPy target buffers,
   one-pass IMA, TaskManager observation parallelism, analytic tet near kernels,
   and a guarded large-map quadrupole tree.  IMA auto evaluation remains direct
   to preserve the reduced/full roundoff contract.
 - On geometrically and topologically symmetric full/reduced hex meshes,
   `rad.Fld` image parity is locked to the explicit full solve at the
   roundoff-level contract (`< 10 eps` relative error).
-- RT1 and RT2 are public for flat and isoparametric-P2 pure TET/HEX/WEDGE
+- BDM1 and BDM2 are public for flat and isoparametric-P2 pure TET/HEX/WEDGE
   linear/nonlinear material solves, IMA, persistent field evaluation, and the
-  NGSolve `ChargeGram`/`DemagOperator` surface.  Planar RT1 is public through
-  Q2 geometry and planar RT2 through Q3, including IMA and the persistent
+  NGSolve `ChargeGram`/`DemagOperator` surface.  Planar BDM1 is public through
+  Q2 geometry and planar BDM2 through Q3, including IMA and the persistent
   planar field evaluator.
 - `radia.vim.hdiv_capabilities()` is the sole field/geometry-order table.  Do
   not derive geometry order from HDiv order with one cross-dimensional p+1
@@ -48,7 +52,7 @@ production checklist, not a migration archive.
   CoefficientFunction.  `vim.Solve(..., magnetization_sources=[...])` assembles
   that field into the iron weak form; source coefficients stay immutable and
   PM/iron normal jumps remain representable because their spaces are separate.
-- Prescribed sources cover RT1/RT2 TET/HEX/WEDGE, Curve(2), and IMA.
+- Prescribed sources cover BDM1/BDM2 TET/HEX/WEDGE, Curve(2), and IMA.
   Planar 2D continues to use `magnets=[(mesh, M), ...]`.
 - The permanent-magnet material ladder is one canonical four-level contract:
   (1) fixed/given `MagnetizationSource`; (2) linear recoil

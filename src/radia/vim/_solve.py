@@ -9,7 +9,7 @@ Both modes take an ARBITRARY applied field `H_ext` (any NGSolve CoefficientFunct
 Biot-Savart field `rad.RadiaField(coil,'h')`, the C-type electromagnet driver) and return per-element M.
 
 ## Formulation (verified-first, 2026-06-15)
-ONE projected weak form everywhere -- the magnetization M is the RT1/RT2 primary, the constitutive law
+ONE projected weak form everywhere -- the magnetization M is the BDM1/BDM2 primary, the constitutive law
 M = M(H) is imposed in the L2 sense (M_mass m = INT M(H).v dx), and H = h_ext - M_mass^-1 N m is the
 weak total field (N = B^T G B, h_ext = H_ext L2-projected onto the selected HDiv order).  LINEAR soft iron is the
 CONSTANT-chi special case M = chi H, giving the form-1 system
@@ -36,7 +36,7 @@ H-matvec is the only O(N log N) cost.
 
 ## Linear solve dispatch -- SYMMETRIC C++ CG (symmetric HACApK)
 For the common scalar-mu_r case, `linear_solver="auto"` (the DEFAULT) solves the SPD +N system
-`((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL RT1 H(div) mass inverse
+`((1/chi)M_mass + N) m = M_mass h_ext` by CG, preconditioned with the FULL BDM1 H(div) mass inverse
 `M_mass^{-1}` (the MASS RIESZ map), ENTIRELY in C++ (PARDISO mass factor + C++ Krylov, no Python glue).
 CG is used because the charge-Gram is applied via the EXACTLY-SYMMETRIC H-matvec (`matvec_sym`): the
 HACApK H-matrix stores both (I,J) and (J,I) leaf blocks but ACA-truncates them INDEPENDENTLY, so the
@@ -193,7 +193,7 @@ def _auto_tet_jacobi_nface_threshold():
 
 
 def _resolve_highorder_preconditioner(preconditioner, *, nonlinear, nonlinear_solver, vertex_counts, n_face):
-    """Resolve the production preconditioner policy for RT1/RT2 HDiv-VIM.
+    """Resolve the production preconditioner policy for BDM1/BDM2 HDiv-VIM.
 
     The diagonal W+N preconditioner is dramatically faster for large hex/wedge nonlinear scaling runs because
     it avoids one PARDISO phase-33 mass solve per CG iteration.  Small tet problems still favor the exact
@@ -294,7 +294,7 @@ def _h_solve_mass_riesz(H, mass, n_face, inv_chi, rhs, tol, maxit, *,
 
 
 def _resolve_gram_params(*, gram_eps, far_quad, ho_far_factor):
-    """Resolve the production HDiv RT1/RT2 charge-Gram build defaults.
+    """Resolve the production HDiv BDM1/BDM2 charge-Gram build defaults.
 
     ``far_quad`` controls the smooth, well-separated rule and ``ho_far_factor``
     controls the near/far boundary.  ``inf`` forces the all-high-order
@@ -483,16 +483,16 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
         # M = chi*H + B_r/mu0 is exactly the existing symmetric linear HDiv system with
         # H_ext shifted by B_r/(mu0*chi).  The unknown and returned field remain total M.
         H_ext = H_ext + B_r_cf / (_MU0 * (recoil_mu_r - 1.0))
-    # ---- HDiv-VIM scope: RT1/RT2 on pure TET/HEX/WEDGE/planar meshes ----
+    # ---- HDiv-VIM scope: BDM1/BDM2 on pure TET/HEX/WEDGE/planar meshes ----
     # The tetrahedral monomial-charge Gram, IMA fold, and field evaluator are exact
-    # for orders 1 and 2.  The planar log kernel also supports RT1/Q2 and RT2/Q3;
+    # for orders 1 and 2.  The planar log kernel also supports BDM1/Q2 and BDM2/Q3;
     # specialized HEX/WEDGE kernels use the same order without fallback.
     order = int(order)
     if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
         curve_order = int(mesh.GetCurveOrder())
     _vtx = _volume_vertex_counts(mesh)
     validate_hdiv_configuration(mesh.dim, _vtx, order, mesh.GetCurveOrder())
-    # IMA mirror symmetry is wired for flat/curved pure-TET/HEX/WEDGE RT1/RT2.
+    # IMA mirror symmetry is wired for flat/curved pure-TET/HEX/WEDGE BDM1/BDM2.
     # Mixed and pyramid cases fail loud downstream instead of silently dropping the image.
     if mesh.dim == 2:
         if sources:
@@ -570,7 +570,7 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     elif curve_order == 0:
         curve_order = None
 
-    # ---- RT1/RT2 material solve ----
+    # ---- BDM1/BDM2 material solve ----
     # The per-element change-of-basis in `_vim._charge_basis` (2026-06-28, [[hdiv-highorder-material-solve-wrong]])
     # makes the order-p demag operator N = B^T G B valid (eig(M_mass^-1 N) in [0,1]; per-element M p-converges).
     # LINEAR (uniform-scalar OR per-region dict) mu_r AND flat/curved NONLINEAR (bh_table) are wired via the same
@@ -599,7 +599,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
                       newton_reuse_tangent_steps=1, newton_cg_x0=False, vertex_counts=None,
                       magnetization_sources=(), operator_cache=None):
-    """RT1/RT2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
+    """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
     (no 2x/4x blow-up).  Supports the LINEAR (uniform-scalar OR per-region dict) mu_r case via the SAME
@@ -619,7 +619,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         if _ivtx not in ({4}, {8}, {6}):
             raise NotImplementedError(
                 "vim.Solve: IMA image symmetry is wired for flat/Curve(2) pure-TET / pure-HEX / pure-WEDGE "
-                "RT1/RT2 Gram; MIXED / pyramid reduced models are not supported.  Got vertex counts %s."
+                "BDM1/BDM2 Gram; MIXED / pyramid reduced models are not supported.  Got vertex counts %s."
                 % sorted(_ivtx))
         _planes = _image.parse_image_string(image)
         image_planes = list(_planes)

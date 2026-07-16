@@ -1,7 +1,7 @@
-"""B-input hysteresis stepping for the HDiv-VIM charge-Gram demag solve.
+"""B-input hysteresis stepping for the HDiv-VIM BDM charge-Gram demag solve.
 
 Quasi-static hysteresis = MANY solves on ONE fixed geometry with an evolving
-material state.  RT1 uses one state per element; RT2 uses physical volume
+material state.  BDM1 uses one state per element; BDM2 uses physical volume
 quadrature points.  The charge Gram G (and hence the demag operator
 N = B^T G B) is chi-free geometry, so the HACApK H-matrix is built ONCE and
 every step / nonlinear iteration reuses it -- the per-step cost is the W-CG
@@ -48,7 +48,7 @@ constitutive equation in the element-averaged sense
 
     INT H_mat(M_avg).v + N m = M_mass h_ext - nu0 INT (m - M_avg).v dx
 
--- intra-element RT1 fluctuations are closed LINEARLY at nu0, a single-point
+-- intra-element BDM1 fluctuations are closed LINEARLY at nu0, a single-point
 discretization choice whose closure term vanishes under mesh refinement.
 H_mat is unrestricted in direction -- in particular ANTI-PARALLEL H/M on
 recoil branches beyond remanence, which a scalar secant nu = |H|/|M|
@@ -374,7 +374,7 @@ def SolveHysteresis(mesh, h_steps, play=None, material=None, *,
                     nl_maxit=200, nl_tol=1e-3,
                     initial_b_path=None, initial_state=None, order=1,
                     state_quadrature_order=None, _operator_cache=None):
-    """Quasi-static B-input hysteresis stepping on the HDiv-VIM charge Gram.
+    """Quasi-static B-input hysteresis stepping on the BDM HDiv-VIM charge Gram.
 
     The charge-Gram H-matrix is built ONCE (chi-free geometry) and reused by
     every step and every nonlinear iteration; each step runs the Hantila

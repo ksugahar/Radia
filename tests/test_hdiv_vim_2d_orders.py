@@ -1,4 +1,4 @@
-"""RT1/Q2 and RT2/Q3 contracts for the production planar HDiv-VIM path."""
+"""BDM1/Q2 and BDM2/Q3 contracts for the production planar HDiv-VIM path."""
 
 import numpy as np
 import pytest
@@ -58,15 +58,15 @@ def test_planar_rt1_and_rt2_agree_on_the_same_q2_mesh():
     mesh = _ellipse_mesh(2)
     applied = ng.CoefficientFunction((1.0e5/np.sqrt(2.0), 1.0e5/np.sqrt(2.0)))
     with ng.TaskManager():
-        rt1 = vim.Solve(mesh, order=1, mu_r=1000.0, H_ext=applied, tol=1e-11)
-        rt2 = vim.Solve(mesh, order=2, mu_r=1000.0, H_ext=applied, tol=1e-11)
+        bdm1 = vim.Solve(mesh, order=1, mu_r=1000.0, H_ext=applied, tol=1e-11)
+        bdm2 = vim.Solve(mesh, order=2, mu_r=1000.0, H_ext=applied, tol=1e-11)
 
-    np.testing.assert_allclose(rt1["M_avg"], rt2["M_avg"], rtol=5e-5)
-    assert rt2["ndof"] > rt1["ndof"]
+    np.testing.assert_allclose(bdm1["M_avg"], bdm2["M_avg"], rtol=5e-5)
+    assert bdm2["ndof"] > bdm1["ndof"]
 
 
-def test_planar_rt1_rejects_q3_geometry():
-    with pytest.raises(ValueError, match="does not support geometry order 3 for 2D tri RT1"):
+def test_planar_bdm1_rejects_q3_geometry():
+    with pytest.raises(ValueError, match="does not support geometry order 3 for 2D tri BDM1"):
         vim.PlanarDemagBody(_ellipse_mesh(3), order=1)
 
 

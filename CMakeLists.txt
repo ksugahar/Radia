@@ -226,7 +226,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_hacapk_bem.cpp            # HACApK scalar BEM adapter (Laplace SL/DL Galerkin)
 	${CORE_DIR}/rad_hdiv_vim.cpp              # Symmetric HDiv-type VIM demag operator (N = B^T G B)
 	${CORE_DIR}/rad_hdiv_hysteresis.cpp       # Energy-based B-input vector Stop material
-	${CORE_DIR}/rad_hdiv_field_evaluator.cpp  # Persistent direct/tree RT1 exterior-field evaluator
+	${CORE_DIR}/rad_hdiv_field_evaluator.cpp  # Persistent direct/tree BDM1 exterior-field evaluator
 	${CORE_DIR}/rad_hacapk_hdiv.cpp           # HACApK H-matrix for the HDiv-type VIM demag operator
 	${CORE_DIR}/rad_bem_galerkin.cpp          # Fast Galerkin SL/DL assembler (Sauter-Schwab + OpenMP)
 	${CORE_DIR}/rad_biot_savart_filaments.cpp # Fast Biot-Savart H/A from finite-segment filaments (complex I)
@@ -234,6 +234,8 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_equivalence_source.cpp    # Equivalence-theorem near-field source (Schelkunoff/Love static H, Phase A)
 	${CORE_DIR}/rad_average_field.cpp         # Closed-form average B over a target box (Wakao Part 6 §7)
 	${CORE_DIR}/rad_stream_function.cpp       # (ACA+)+TSVD stream-function solver (HACApK ACA+ + TSVD recompression)
+	${CORE_DIR}/rad_evrs_tmethod.cpp          # EVRS/T-method algebra kernel (T --curl--> J, reduced VIM/CLN projection)
+	${CORE_DIR}/rad_hybrid_vim_schur.cpp      # Complex Schur/SIBC helper kernels for hybrid VIM / mixed Galerkin reduction
 )
 
 # Radia ext sources

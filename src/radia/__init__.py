@@ -175,7 +175,7 @@ except ImportError:
 #
 # DEFAULT = "auto":
 #   - mesh-BACKED pure TET / HEX / WEDGE soft iron
-#     (radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=, order=1|2) + rad.Solve) -> HDiv-VIM.
+#     (radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=, order=1|2) + rad.Solve) -> HDiv-VIM (BDM1/BDM2).
 #   - mesh-BACKED unsupported element mixes fail loud until HDiv coverage is added.
 #   - mesh-LESS surface-charge soft iron is retired; build a mesh and use MeshSoftIron/SoftIron.
 #   - permanent-magnet field objects and legacy non-soft-iron C++ operations are unchanged.
@@ -245,7 +245,7 @@ if "Solve" in globals():
     def Solve(*args, **kwargs):   # noqa: F811  (thin wrapper: pick the soft-iron demag backend)
         """Radia relaxation solve with the HDiv-VIM soft-iron backend (see set_demag_backend):
           - mesh-BACKED pure TET / HEX / WEDGE soft iron (radia.vim.MeshSoftIron)
-            -> FEEC HDiv-VIM (RT1, default);
+            -> FEEC HDiv-VIM (BDM1, default);
           - mesh-BACKED unsupported element mixes fail loud until HDiv support lands;
           - mesh-LESS surface-charge soft iron is retired and rejected by the C++ relaxation layer;
           - permanent magnets and legacy non-soft-iron operations stay on the C++ path.
@@ -278,11 +278,11 @@ if "Solve" in globals():
 if "Fld" in globals():
     _cpp_Fld = globals()["Fld"]
 
-    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv RT1/RT2 field dispatch)
+    def Fld(obj, *args, **kwargs):   # noqa: F811  (HDiv BDM1/BDM2 field dispatch)
         """Evaluate Radia fields.
 
         Solved mesh-backed HDiv-VIM objects are evaluated from their full
-        RT1/RT2 fields by persistent C++ charge-field kernels.  A multi-body
+        BDM1/BDM2 fields by persistent C++ charge-field kernels.  A multi-body
         container sums every registered body plus its ordinary Radia sources.
         Other Radia objects call the ordinary C++ ``Fld`` unchanged.
         """
@@ -326,7 +326,7 @@ if "Fld" in globals():
             else:
                 raise NotImplementedError(
                     "rad.Fld on an HDiv-VIM solution supports b/h/m and Cartesian components; "
-                    f"{field_type!r} has no RT1/RT2 field contract"
+                    f"{field_type!r} has no BDM1/BDM2 field contract"
                 )
             if len(field_type) == 2 and field_type[1] in "xyz":
                 value = value[:, "xyz".index(field_type[1])]

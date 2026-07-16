@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-29T06:43:28Z",
   "notebook": "docs/ngsolve_integration/integration_basics.ipynb",
-  "notebook_sha256": "d328ccff55405faa467b1eeeb84470c9777318c07450f2398d097c179443edf6",
+  "notebook_sha256": "343f58c1778228d16645769fa3bdce0c2294d2724c414745a4614eca0d0b79ac",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

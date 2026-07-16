@@ -1,4 +1,4 @@
-/* rad_hdiv_field_evaluator.h -- persistent RT1 HDiv-VIM field evaluator.
+/* rad_hdiv_field_evaluator.h -- persistent BDM1 HDiv-VIM field evaluator.
  *
  * The solve owns one immutable evaluator.  Source packing and the source tree
  * are therefore paid once, while arbitrary observation batches can be applied
@@ -41,7 +41,7 @@ public:
         std::vector<double> image_signs,
         const FieldEvaluatorOptions& options = {});
 
-    // Curved P2 tetrahedra retain their geometry and RT1/RT2 reference-charge
+    // Curved P2 tetrahedra retain their geometry and BDM1/BDM2 reference-charge
     // polynomials.  Direct leaves integrate the actual element instead of a
     // permanently sampled point cloud; tree nodes use moments built once.
     // volume: [30 P2-node coordinates, 4 coefficients (1,xi,eta,zeta)]

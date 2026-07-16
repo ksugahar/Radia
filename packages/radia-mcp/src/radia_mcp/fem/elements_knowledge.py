@@ -1,4 +1,4 @@
-"""Element technology: edge (Nedelec/RT), high-order, XFEM, Isogeometric, DG."""
+"""Element technology: Nedelec, BDM/RT, high-order, XFEM, Isogeometric, DG."""
 
 CATALOG = r"""
 # Element technology for EM-FEM
@@ -7,13 +7,24 @@ CATALOG = r"""
 |--------|-------|------------|-----|
 | H1 (nodal Lagrange) | 1, 2, 3, ... p | full C^0 | scalar Omega, V, heat |
 | HCurl (Nedelec / edge) | 0, 1, 2, ... | tangential | vector A, T, H |
-| HDiv (RT / Raviart-Thomas) | 0, 1, 2, ... | normal | B, J (mixed formulations) |
+| HDiv (BDM default / RT explicit) | 0, 1, 2, ... | normal | B, J (mixed formulations) |
 | HDivSurface | 0, 1, 2, ... | tangential on surface | BEM surface currents (RWG) |
 | L2 | discontinuous | none | DG fluxes, dual cells |
 
 For magnetostatic / magnetodynamic EM, the natural pairing is:
 - **A in HCurl, B in HDiv, ω in H1** (the de Rham complex)
 - See `radia_mcp.differential_forms.complex` for the cohomology view
+
+NGSolve family selection must be written explicitly:
+
+```python
+fes_bdm = HDiv(mesh, order=p)           # Brezzi--Douglas--Marini
+fes_rt = HDiv(mesh, order=p, RT=True)   # Raviart--Thomas
+```
+
+Both are H(div)-conforming and normally continuous, but they have different
+polynomial spaces, divergence orders, and DoF counts.  Radia's established
+HDiv-VIM production path uses the default BDM family.
 
 ## Hierarchical vs nodal high-order
 
@@ -37,7 +48,7 @@ is the lab production choice.
 
 
 EDGE_ELEMENTS = r"""
-# Edge elements (Nédélec / Raviart-Thomas) — the foundation of HCurl FEM
+# Edge elements (Nedelec) -- the foundation of HCurl FEM
 
 Reference: Nédélec 1980, "Mixed finite elements in R^3", Numer. Math.
 35:315-341.

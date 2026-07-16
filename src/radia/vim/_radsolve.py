@@ -16,7 +16,7 @@ material getter), so this bridge keeps a registry populated at build time by
 back through ``ObjSetM`` and registers the persistent RT field evaluators so
 that ``rad.Fld`` / ``rad.ObjM`` reflect the coupled HDiv-VIM solution.
 
-Element types: HDiv-VIM is RT1/RT2 on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
+Element types: HDiv-VIM is BDM1/BDM2 on a pure-TET, pure-HEX, or pure-WEDGE mesh, and is
 radia's soft-iron demag route.  rad.Solve's 'auto' split
 (:func:`is_hdiv_eligible`) dispatches a mesh-backed TET / HEX / WEDGE iron to the HDiv-VIM
 (:func:`radia.vim.Solve`, order=1 or 2), INCLUDING IMA image symmetry (the tet QuadDotRefl + the hex/wedge
@@ -97,7 +97,7 @@ def _clear_image_field_handles(iron, reg):
 
 
 def field_solution_for(handle):
-    """Return the solved RT1/RT2 field record for ``handle``, or ``None``."""
+    """Return the solved BDM1/BDM2 field record for ``handle``, or ``None``."""
     return _FIELD_SOLUTIONS.get(handle)
 
 
@@ -278,7 +278,7 @@ def dispatch(top, *solve_args, **solve_kwargs):
             rad.ObjSetM(handle, [float(value) for value in magnetization])
     # Register the full HDiv solution for rad.Fld.  The iron handle contributes
     # only its solved magnetization; the top handle also includes its Radia
-    # source objects.  IMA is evaluated from the C++ RT1/RT2 field itself.
+    # source objects.  IMA is evaluated from the C++ BDM1/BDM2 field itself.
         _FIELD_SOLUTIONS[iron] = {
             "result": result, "results": (result,), "source_object": None}
         reg["field_solution_keys"] = [iron]

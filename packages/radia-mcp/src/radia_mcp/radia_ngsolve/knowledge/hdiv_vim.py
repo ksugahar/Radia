@@ -6,10 +6,45 @@ charge-Gram H-matrix.  It intentionally avoids retired solver history so MCP
 answers steer agents toward the live implementation.
 """
 
+_FAMILY = r"""
+# BDM versus Raviart--Thomas: mandatory terminology
+
+NGSolve's `HDiv` class supports two distinct H(div)-conforming families:
+
+```python
+fes_bdm = HDiv(mesh, order=p)           # BDM, the NGSolve default
+fes_rt  = HDiv(mesh, order=p, RT=True)  # Raviart--Thomas
+```
+
+Radia's established `vim.Solve`, `PlanarDemagBody`, `MagnetizationSource`,
+nonlinear material, IMA, charge-Gram, and persistent-field production paths
+construct the first form and therefore use **BDM1/BDM2**, not RT1/RT2.
+Historical Radia names and filenames containing `rt1` or `rt2` are legacy
+labels; they do not change the actual NGSolve family.  Never infer
+Raviart--Thomas from the class name `HDiv` alone.  Actual RT is selected only
+when the code contains `RT=True`; keep it labelled as an explicit comparison
+or research path until it has its own production promotion.
+
+On simplices, the useful polynomial distinction is
+`BDM_p = [P_p]^d`, with divergence in `P_(p-1)`, versus
+`RT_p = [P_p]^d + x P_p`, with divergence in `P_p`.  Both have continuous
+normal traces, but they are not interchangeable and have different DoF counts.
+The Mathematica study implementation is executable rather than descriptive:
+`simplex_ho.wls` exports `HDivTetBDM`, `HDivTetRT`, `HDivTrigBDM`,
+`HDivTrigRT`, and family ledgers that prove equal `ker(div)` dimensions.
+`hdiv.wls` exports the Hex/Quad RT/BDM names as aliases of NGSolve's shared
+tensor-product space, matching the fact that the `RT` selector does not change
+the local Hex/Quad space.
+"""
+
 _OVERVIEW = r"""
 # HDiv-type VIM demag operator
 
 Radia's soft-iron demag path is the HDiv-type volume integral method (VIM).
+Its production NGSolve space is BDM: bare `HDiv(mesh, order=p)` selects BDM,
+whereas Raviart--Thomas requires `RT=True`.  Never call the production
+BDM1/BDM2 path RT1/RT2 merely because both families conform to H(div); request
+the `family` topic for the polynomial and API distinction.
 The unknown magnetization is represented in an H(div) space on an NGSolve mesh;
 the demag operator is
 
@@ -28,6 +63,34 @@ Laplace single-layer/Coulomb Gram.  The important engineering properties are:
 Use this route for mesh-backed TET, HEX, and WEDGE soft iron, nonlinear BH
 curves, and planar motor cross sections.  Mesh-less soft-iron solves are not a
 supported Radia production path; create an NGSolve mesh and call the HDiv API.
+"""
+
+_EDDY_BUBBLE = r"""
+# BDM-MMM plus eddy-bubble HCurl-VIM
+
+The production 3-D coupled entry point is
+`radia.vim.NgsolveBDMEddyBubbleVIM`.  One shared NGSolve mesh and one
+`SharedMeshMaterialModel` feed two different conforming unknown spaces:
+
+- bare `HDiv(mesh, order=1|2)` supplies the BDM-MMM magnetization branch;
+- a high-order `HCurl` parent supplies `T`, with `J = curl(T)`, and is reduced
+  by external-response Krylov/EVRS plus topology classes.
+
+`NgsolveBDMHDivMMMResponseReduction` creates the BDM parent internally and
+records `parent_family="BDM"` and `parent_order` in diagnostics.  Physical
+stator/rotor applied-H responses are protected before energy-POD compression;
+regular-solid-harmonic or rotor-angle fields enrich the training complement.
+Use the lower-level `NgsolveHDivMMMResponseReduction` only when an explicit
+supplied BDM or `RT=True` comparison space is required.
+
+The eddy-bubble reduction is face- and topology-aware.  Bulk response modes,
+conductive-graph cycle/bridge modes, and surface-Omega modes are retained as
+separate blocks.  Only conductor faces touching air are SIBC faces; internal
+conductor-conductor faces are not SIBC.  `solve_frequency` reconstructs parent
+HCurl `T`, parent BDM magnetization, sampled currents in every retained block,
+average Joule loss, and residuals.  `solution.eddy_flux_density(points)` sums
+the quasi-static Biot--Savart field of bulk, bridge, and SIBC currents; pass a
+block name to inspect one contribution.
 """
 
 _IMPLEMENTATION = r"""
@@ -102,7 +165,7 @@ Primary Python entry points:
   diagnostic operator, or `radia.vim.ChargeGram(...)` for its charge map and
   C++ H-matrix components
 - `radia.vim.FieldFromSolution(res, points)` -- batch demagnetizing H (A/m) at
-  points from the full RT1/RT2 TET/HEX/WEDGE solution or the planar RT1/RT2
+  points from the full BDM1/BDM2 TET/HEX/WEDGE solution or the planar BDM1/BDM2
   solution.  `rad.Fld` on a solved mesh-backed
   object dispatches to this same evaluator; per-element constant-M write-back
   is metadata/visualization only, not the field oracle.  Solve materializes an
@@ -124,7 +187,7 @@ Core pieces:
   helpers.
 - `src/core/rad_hdiv_hysteresis.*` contains the TaskManager-parallel energy
   Stop trial/commit kernel and its explicit restart state.
-- `src/core/rad_hdiv_field_evaluator.*` contains the persistent direct/tree RT1
+- `src/core/rad_hdiv_field_evaluator.*` contains the persistent direct/tree BDM1
   field source and NumPy-facing batch evaluator.
 - `src/core/rad_hacapk_hdiv.*` contains `_ChargeGramHMatrix`, the C++ H-matrix
   backend for the Coulomb Gram.
@@ -178,9 +241,9 @@ Fast tests should cover API contracts and small deterministic checks:
   and large non-IMA auto-tree output stays within its direct-probe contract;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
-- RT2 flat/curved TET/HEX/WEDGE linear/nonlinear solves, IMA, and persistent
+- BDM2 flat/curved TET/HEX/WEDGE linear/nonlinear solves, IMA, and persistent
   field reconstruction remain consistent with the analytic cube/sphere and
-  image gates; planar RT2 is supported through Q3 geometry.
+  image gates; planar BDM2 is supported through Q3 geometry.
 
 Validation-class tests live under `validation_test/feec/` and should cover:
 
@@ -290,19 +353,19 @@ _STATUS = r"""
 Current direction:
 
 - Radia soft iron: HDiv-VIM.
-- RT1/RT2: flat and Curve(2) pure TET/HEX/WEDGE material/operator, IMA, and
-  persistent-field paths.  Planar RT1 is supported through Q2 and planar RT2
+- BDM1/BDM2: flat and Curve(2) pure TET/HEX/WEDGE material/operator, IMA, and
+  persistent-field paths.  Planar BDM1 is supported through Q2 and planar BDM2
   through Q3.  `radia.vim.hdiv_capabilities()` is the sole order-pair table;
   geometry order is not inferred from one global p+1 rule.
 - Fixed/given 3D magnetization: source-owned HDiv projection and native C++
-  field coupling for RT1/RT2 TET/HEX/WEDGE, including Curve(2)
+  field coupling for BDM1/BDM2 TET/HEX/WEDGE, including Curve(2)
   and IMA; planar 2D uses its existing `magnets=` source path.
 - Linear-recoil permanent magnet: scalar recoil permeability plus constant or
   spatial `B_r`, solved by the symmetric C++ HDiv path in 3D and planar 2D.
 - Simplified history level: PlayHysteresisMaterial plus SolveHysteresis.
 - Evolving 3D permanent magnet: C++ vector B-input EnergyStopMaterial plus
   persistent HDivSolver.SolveHysteresis, explicit manufacturing/restart state,
-  and arbitrary applied CoefficientFunction steps on RT1 TET/HEX/WEDGE.
+  and arbitrary applied CoefficientFunction steps on BDM1/BDM2 TET/HEX/WEDGE.
 - Coupled evolving magnets: one or more CoupledHistoryBody objects plus
   independent recoil/linear/nonlinear bodies, each with one persistent Gram.
 - Planar 2D support: HDiv/planar shared geometry and material helpers.
@@ -313,7 +376,7 @@ Open work:
 
 - extend 2D and 3D validation coverage around `rad.Fld`;
 - keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
-- continue RT1/RT2 TET/HEX/WEDGE accuracy, memory, and timing measurements on mdx;
+- continue BDM1/BDM2 TET/HEX/WEDGE accuracy, memory, and timing measurements on mdx;
 - continue charge-Gram H-matrix performance checks on mdx;
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
   normal release to measure public `rad.Fld` on mdx/hibino;
@@ -323,7 +386,9 @@ Open work:
 """
 
 _SECTIONS = {
+    "family": _FAMILY,
     "overview": _OVERVIEW,
+    "eddy_bubble": _EDDY_BUBBLE,
     "implementation": _IMPLEMENTATION,
     "scaling": _SCALING,
     "verification": _VERIFICATION,

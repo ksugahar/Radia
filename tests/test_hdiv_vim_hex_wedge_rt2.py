@@ -1,4 +1,8 @@
-"""Fast public-pipeline regression for flat HEX/WEDGE RT2 HDiv-VIM."""
+"""Fast public-pipeline regression for flat HEX/WEDGE BDM2 HDiv-VIM.
+
+The filename is a legacy label from before the NGSolve BDM/RT distinction was
+made explicit in Radia documentation.
+"""
 
 import numpy as np
 import pytest

@@ -1,4 +1,4 @@
-"""Golden: the WEDGE (PRISM) RT1 HDiv-VIM demag operator N = B^T G B is a VALID demag operator -- its
+"""Golden: the WEDGE (PRISM) BDM1 HDiv-VIM demag operator N = B^T G B is a VALID demag operator -- its
 generalized spectrum eig(M_mass^{-1} N) lies in [0, 1] (a true magnetostatic demag factor is bounded).
 
 This locks the C++ wedge-mode charge Gram (2026-07-04, memory hdiv-tet-hex-coupling-pyramid-gated): the
