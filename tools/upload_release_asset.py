@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -34,6 +35,32 @@ from gh_api import token as github_token
 
 API_BASE = "https://api.github.com"
 UPLOAD_BASE = "https://uploads.github.com"
+RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
+MAX_ATTEMPTS = 6
+
+
+def _urlopen_with_retry(req, *, timeout: int):
+    """Open a GitHub request, retrying transient API/upload failures."""
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            return urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            retryable = exc.code in RETRYABLE_HTTP_CODES
+            if not retryable or attempt == MAX_ATTEMPTS:
+                raise
+            reason = f"HTTP {exc.code} {exc.reason}"
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == MAX_ATTEMPTS:
+                raise
+            reason = f"network error: {exc}"
+        delay = min(5 * (2 ** (attempt - 1)), 30)
+        print(
+            f"  GitHub request attempt {attempt}/{MAX_ATTEMPTS} failed "
+            f"({reason}); retrying in {delay}s"
+        )
+        time.sleep(delay)
+
+    raise RuntimeError("unreachable GitHub retry state")
 
 
 def _headers() -> dict[str, str]:
@@ -53,7 +80,7 @@ def fetch_release(repo: str, tag: str) -> dict | None:
     url = f"{API_BASE}/repos/{repo}/releases/tags/{tag}"
     try:
         req = urllib.request.Request(url, headers=_headers())
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with _urlopen_with_retry(req, timeout=30) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
         if e.code == 404:
@@ -72,7 +99,7 @@ def create_release(repo: str, tag: str, title: str = "Binary Files",
     headers = _headers()
     headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=body, method="POST", headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with _urlopen_with_retry(req, timeout=30) as r:
         return json.load(r)
 
 
@@ -81,7 +108,7 @@ def delete_asset(repo: str, asset_id: int) -> None:
     url = f"{API_BASE}/repos/{repo}/releases/assets/{asset_id}"
     req = urllib.request.Request(url, method="DELETE", headers=_headers())
     try:
-        with urllib.request.urlopen(req, timeout=30):
+        with _urlopen_with_retry(req, timeout=30):
             pass
     except urllib.error.HTTPError as e:
         if e.code != 404:
@@ -111,7 +138,7 @@ def upload_asset(release: dict, file_path: Path) -> None:
     headers["Content-Length"] = str(len(body))
     req = urllib.request.Request(upload_url, data=body, method="POST",
                                     headers=headers)
-    with urllib.request.urlopen(req, timeout=300) as r:
+    with _urlopen_with_retry(req, timeout=300) as r:
         result = json.load(r)
     print(f"  Uploaded {name}: {result.get('size')} bytes "
             f"(state={result.get('state')})")
