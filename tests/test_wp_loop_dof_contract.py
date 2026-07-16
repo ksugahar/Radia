@@ -4,8 +4,7 @@ The numeric physics is locked by the analytic shorted-ring golden
 (validation_test/bem/test_loop_extension_ring.py); here we pin the CLI
 wiring: argparse accepts the flag, the unsupported combinations fail
 fast BEFORE any expensive solve, and a genus-0 workpiece raises with an
-actionable message (measured live on Takahashi: 22.5 -> 19.29 kW with
-the flag; genus-1 tube, bem-a coil).
+actionable message.
 """
 from __future__ import annotations
 

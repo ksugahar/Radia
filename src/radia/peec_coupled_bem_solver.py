@@ -72,19 +72,11 @@ strong-loading reference case still needs to be added to the validation
 lane on a compute host.  Until that check passes, treat absolute
 strong-PEEC P_wp / Delta_L as UNVERIFIED.
 
-MEASURED LIMIT (Takahashi 7 kHz, 2026-07-16, BEM-A strong sibling): strong
-coupling does NOT close the ~2x P_wp over-estimate of the weak path.  On
-the Takahashi coarse workpiece the coupled solve converged (Delta_L =
-+1.53 nH, same sign as full-FEM) but the coil-current redistribution is
-small (Delta_L ~1.5% of L_air; H_t dropped only ~4-5%), so P_wp stayed at
-the weak level (~35-37 kW scaled) vs the FEM / impedance-BC references
-(~17 kW).  The x2 therefore lives in the WORKPIECE-side scalar-BIE-SIBC
-H_t evaluation path (shared by weak and strong, and by this PEEC sibling),
-NOT in the missing coil re-solve.  Closing it needs a workpiece-side
-formulation audit against an analytic mu_r-swept SIBC benchmark (sphere /
-plate) or a head-to-head P_wp comparison vs FEM-Kelvin SIBC -- the
-existing CoupledBEMSolver cross-check validated L only (Cu +0.3%, steel
-+1.7%), never P_wp.
+Strong coupling does not supply the harmonic loop current omitted by a
+single-valued scalar potential on a flux-linked genus-1 workpiece.  That
+limitation is shared by the weak and strong workpiece paths; use the
+explicit loop-DOF extension where supported.  The analytic sphere and
+shorted-ring goldens lock the genus-0 and loop-extension contracts.
 
 Part of the Radia project.
 """

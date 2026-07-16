@@ -141,6 +141,8 @@ class IHDesignSpec:
     wp_sigma: str = "5.0e6"
     mu_r: str = "100"
     half_thickness: str = "0.0125"
+    wp_loop_dof: bool = False
+    wp_phi_inc: str = "path"
 
     impedance_model: str = "Linear SIBC"
     bh_file: str = ""
@@ -227,6 +229,12 @@ class IHDesignSpec:
                     fields.update({"esim_tol", "esim_relax"})
                 if self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM):
                     fields.add("esim_anderson_m")
+        if (
+            self.method in (METHOD_PEEC_BEM, METHOD_BEMA_BEM)
+            and self.impedance_model_cli() == "sibc"
+            and self.fes_order == 1
+        ):
+            fields.update({"wp_loop_dof", "wp_phi_inc"})
         if self.method == METHOD_BEMA_BEM_STRONG:
             # Strong coupling (CoupledBEMSolver) is linear-SIBC only:
             # workpiece material + Leontovich Z_s knobs, no impedance-model /
@@ -405,6 +413,9 @@ class IHDesignSpec:
         ]
         if coil_solver == "peec":
             cmd += ["--peec-n-peri", str(self.peec_n_peri)]
+        cmd += ["--wp-phi-inc", self.wp_phi_inc]
+        if self.wp_loop_dof:
+            cmd.append("--wp-loop-dof")
         self._append_esim_args(cmd, include_anderson=True, kelvin=False)
         return cmd
 
