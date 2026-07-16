@@ -590,6 +590,75 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         == jacobian_quadrature.get("element_geometry_sha256")
     )
 
+    sweep_correspondence = summary.get(
+        "hex_sweep_vertex_correspondence_heal_identity"
+    )
+    source_vertices = list(
+        sweep_correspondence.get("source_vertex_ids") or []
+    ) if isinstance(sweep_correspondence, Mapping) else []
+    target_vertices = list(
+        sweep_correspondence.get("target_vertex_ids") or []
+    ) if isinstance(sweep_correspondence, Mapping) else []
+    sweep_correspondence_ok = sweep_correspondence is None or (
+        isinstance(sweep_correspondence, Mapping)
+        and bool(sweep_correspondence.get("geometry_heal_generation"))
+        and sweep_correspondence.get("sweep_geometry_heal_generation")
+        == sweep_correspondence.get("geometry_heal_generation")
+        and sweep_correspondence.get("source_vertex_map_heal_generation")
+        == sweep_correspondence.get("geometry_heal_generation")
+        and sweep_correspondence.get("target_vertex_map_heal_generation")
+        == sweep_correspondence.get("geometry_heal_generation")
+        and bool(source_vertices)
+        and len(source_vertices) == len(target_vertices)
+        and len(set(source_vertices)) == len(source_vertices)
+        and len(set(target_vertices)) == len(target_vertices)
+        and list(sweep_correspondence.get("sweep_source_vertex_ids") or [])
+        == source_vertices
+        and list(sweep_correspondence.get("sweep_target_vertex_ids") or [])
+        == target_vertices
+        and len(str(sweep_correspondence.get("vertex_correspondence_sha256") or ""))
+        == 64
+        and sweep_correspondence.get("sweep_vertex_correspondence_sha256")
+        == sweep_correspondence.get("vertex_correspondence_sha256")
+    )
+
+    transition_jacobian = summary.get(
+        "transition_jacobian_parent_orientation_identity"
+    )
+    try:
+        signed_jacobian = float(
+            transition_jacobian.get("minimum_signed_jacobian")
+        )
+        absolute_jacobian = float(
+            transition_jacobian.get("minimum_absolute_jacobian")
+        )
+    except (AttributeError, TypeError, ValueError):
+        signed_jacobian = absolute_jacobian = math.nan
+    transition_jacobian_ok = transition_jacobian is None or (
+        isinstance(transition_jacobian, Mapping)
+        and bool(transition_jacobian.get("transition_mesh_generation"))
+        and transition_jacobian.get("jacobian_mesh_generation")
+        == transition_jacobian.get("transition_mesh_generation")
+        and transition_jacobian.get("parent_orientation_generation")
+        == transition_jacobian.get("transition_mesh_generation")
+        and transition_jacobian.get("parent_orientation_convention")
+        == "right_handed_positive"
+        and transition_jacobian.get("jacobian_orientation_convention")
+        == transition_jacobian.get("parent_orientation_convention")
+        and math.isfinite(signed_jacobian)
+        and signed_jacobian > 0.0
+        and math.isclose(
+            signed_jacobian,
+            absolute_jacobian,
+            rel_tol=1.0e-12,
+            abs_tol=1.0e-15,
+        )
+        and len(str(transition_jacobian.get("parent_orientation_sha256") or ""))
+        == 64
+        and transition_jacobian.get("jacobian_parent_orientation_sha256")
+        == transition_jacobian.get("parent_orientation_sha256")
+    )
+
     checks = {
         "two_distinct_partition_volumes_recorded": set(per_volume) == {mapped_id, transition_id},
         "mapped_volume_is_hex_only": mapped["hex"] > 0
@@ -632,6 +701,12 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
         ),
         "high_order_jacobian_uses_current_sufficient_quadrature": (
             jacobian_quadrature_ok
+        ),
+        "hex_sweep_uses_post_heal_vertex_correspondence": (
+            sweep_correspondence_ok
+        ),
+        "transition_jacobian_uses_current_parent_orientation": (
+            transition_jacobian_ok
         ),
         "boundary_sets_match_current_mesh_generation": boundary_sets_ok,
         "all_volume_families_above_quality_threshold": all(
@@ -1168,6 +1243,56 @@ def cubit_mixed_transition_source_gate(
         and exodus_renumber.get("exported_entity_map_sha256")
         == exodus_renumber.get("entity_map_sha256")
     )
+    journal_imprint = summary.get("journal_entity_id_imprint_identity")
+    journal_volume_ids = list(
+        journal_imprint.get("journal_volume_ids") or []
+    ) if isinstance(journal_imprint, Mapping) else []
+    journal_surface_ids = list(
+        journal_imprint.get("journal_surface_ids") or []
+    ) if isinstance(journal_imprint, Mapping) else []
+    journal_imprint_ok = journal_imprint is None or (
+        isinstance(journal_imprint, Mapping)
+        and bool(journal_imprint.get("imprint_generation"))
+        and journal_imprint.get("journal_entity_generation")
+        == journal_imprint.get("imprint_generation")
+        and journal_imprint.get("resolved_entity_generation")
+        == journal_imprint.get("imprint_generation")
+        and bool(journal_volume_ids)
+        and len(set(journal_volume_ids)) == len(journal_volume_ids)
+        and list(journal_imprint.get("resolved_volume_ids") or [])
+        == journal_volume_ids
+        and bool(journal_surface_ids)
+        and len(set(journal_surface_ids)) == len(journal_surface_ids)
+        and list(journal_imprint.get("resolved_surface_ids") or [])
+        == journal_surface_ids
+        and len(str(journal_imprint.get("entity_table_sha256") or "")) == 64
+        and journal_imprint.get("resolved_entity_table_sha256")
+        == journal_imprint.get("entity_table_sha256")
+    )
+
+    sideset_normal = summary.get(
+        "exodus_sideset_outward_normal_topology_identity"
+    )
+    sideset_ids = list(
+        sideset_normal.get("sideset_ids") or []
+    ) if isinstance(sideset_normal, Mapping) else []
+    sideset_normal_ok = sideset_normal is None or (
+        isinstance(sideset_normal, Mapping)
+        and bool(sideset_normal.get("topology_generation"))
+        and sideset_normal.get("sideset_map_topology_generation")
+        == sideset_normal.get("topology_generation")
+        and sideset_normal.get("normal_ownership_topology_generation")
+        == sideset_normal.get("topology_generation")
+        and bool(sideset_ids)
+        and len(set(sideset_ids)) == len(sideset_ids)
+        and list(sideset_normal.get("normal_ownership_sideset_ids") or [])
+        == sideset_ids
+        and sideset_normal.get("normal_orientation") == "outward"
+        and sideset_normal.get("exported_normal_orientation") == "outward"
+        and len(str(sideset_normal.get("normal_ownership_sha256") or "")) == 64
+        and sideset_normal.get("exported_normal_ownership_sha256")
+        == sideset_normal.get("normal_ownership_sha256")
+    )
     public_gate = cubit_conformal_hex_pyramid_tet_interface_gate(
         summary,
         mapped_volume_id=mapped_volume_id,
@@ -1252,6 +1377,8 @@ def cubit_mixed_transition_source_gate(
         "exodus_block_sideset_maps_follow_current_renumber_generation": (
             exodus_renumber_ok
         ),
+        "journal_entity_ids_follow_final_imprint_generation": journal_imprint_ok,
+        "exodus_sideset_normals_follow_current_topology": sideset_normal_ok,
         "journal_and_source_model_identity_match_replay": replay_identity_ok,
         "exactly_four_timing_stages_recorded": len(timing) == 4
         and all(_finite(value, f"timing_breakdown_s.{name}") >= 0.0 for name, value in timing.items()),

@@ -729,6 +729,56 @@ def _with_v15_interface_quadrature_identity(row: dict) -> dict:
     return row
 
 
+def _with_v16_sweep_jacobian_and_source_identity(row: dict) -> dict:
+    row = _with_v15_interface_quadrature_identity(row)
+    row["hex_sweep_vertex_correspondence_heal_identity"] = {
+        "geometry_heal_generation": "heal-50",
+        "sweep_geometry_heal_generation": "heal-50",
+        "source_vertex_map_heal_generation": "heal-50",
+        "target_vertex_map_heal_generation": "heal-50",
+        "source_vertex_ids": [101, 102, 103, 104],
+        "target_vertex_ids": [201, 202, 203, 204],
+        "sweep_source_vertex_ids": [101, 102, 103, 104],
+        "sweep_target_vertex_ids": [201, 202, 203, 204],
+        "vertex_correspondence_sha256": "5" * 64,
+        "sweep_vertex_correspondence_sha256": "5" * 64,
+    }
+    row["transition_jacobian_parent_orientation_identity"] = {
+        "transition_mesh_generation": "transition-mesh-50",
+        "jacobian_mesh_generation": "transition-mesh-50",
+        "parent_orientation_generation": "transition-mesh-50",
+        "parent_orientation_convention": "right_handed_positive",
+        "jacobian_orientation_convention": "right_handed_positive",
+        "minimum_signed_jacobian": 0.125,
+        "minimum_absolute_jacobian": 0.125,
+        "parent_orientation_sha256": "6" * 64,
+        "jacobian_parent_orientation_sha256": "6" * 64,
+    }
+    row["journal_entity_id_imprint_identity"] = {
+        "imprint_generation": "imprint-50",
+        "journal_entity_generation": "imprint-50",
+        "resolved_entity_generation": "imprint-50",
+        "journal_volume_ids": [11, 12],
+        "resolved_volume_ids": [11, 12],
+        "journal_surface_ids": [21, 22, 23],
+        "resolved_surface_ids": [21, 22, 23],
+        "entity_table_sha256": "7" * 64,
+        "resolved_entity_table_sha256": "7" * 64,
+    }
+    row["exodus_sideset_outward_normal_topology_identity"] = {
+        "topology_generation": "topology-50",
+        "sideset_map_topology_generation": "topology-50",
+        "normal_ownership_topology_generation": "topology-50",
+        "sideset_ids": [31, 32],
+        "normal_ownership_sideset_ids": [31, 32],
+        "normal_orientation": "outward",
+        "exported_normal_orientation": "outward",
+        "normal_ownership_sha256": "8" * 64,
+        "exported_normal_ownership_sha256": "8" * 64,
+    }
+    return row
+
+
 @pytest.mark.parametrize(
     "case_id",
     [
@@ -1023,3 +1073,71 @@ def test_v15_source_exodus_block_sideset_map_previous_renumber_generation():
         ]
         is False
     )
+
+
+def test_v16_positive_sweep_jacobian_and_source_lineage():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    public = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    source = json.loads(cubit_mixed_transition_source_gate(row))
+    assert public["status"] == "ok"
+    assert source["status"] == "ok"
+
+
+def test_v16_public_hex_sweep_source_target_vertex_map_after_heal_mismatch():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["hex_sweep_vertex_correspondence_heal_identity"].update(
+        {
+            "source_vertex_map_heal_generation": "heal-49",
+            "sweep_source_vertex_ids": [101, 103, 102, 104],
+            "sweep_vertex_correspondence_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["hex_sweep_uses_post_heal_vertex_correspondence"] is False
+
+
+def test_v16_public_transition_element_jacobian_parent_orientation_convention_mismatch():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["transition_jacobian_parent_orientation_identity"].update(
+        {
+            "parent_orientation_generation": "transition-mesh-49",
+            "jacobian_orientation_convention": "left_handed_negative",
+            "minimum_signed_jacobian": -0.125,
+            "jacobian_parent_orientation_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_conformal_hex_pyramid_tet_interface_gate(row))
+    assert result["status"] == "needs_attention"
+    assert (
+        result["checks"]["transition_jacobian_uses_current_parent_orientation"]
+        is False
+    )
+
+
+def test_v16_source_journal_entity_ids_previous_imprint_generation():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["journal_entity_id_imprint_identity"].update(
+        {
+            "journal_entity_generation": "imprint-49",
+            "resolved_surface_ids": [22, 23, 24],
+            "resolved_entity_table_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["journal_entity_ids_follow_final_imprint_generation"] is False
+
+
+def test_v16_source_exodus_sideset_outward_normal_topology_generation_mismatch():
+    row = _with_v16_sweep_jacobian_and_source_identity(summary())
+    row["exodus_sideset_outward_normal_topology_identity"].update(
+        {
+            "normal_ownership_topology_generation": "topology-49",
+            "exported_normal_orientation": "inward",
+            "exported_normal_ownership_sha256": "9" * 64,
+        }
+    )
+    result = json.loads(cubit_mixed_transition_source_gate(row))
+    assert result["status"] == "needs_attention"
+    assert result["checks"]["exodus_sideset_normals_follow_current_topology"] is False
